@@ -1,6 +1,6 @@
 import { base64Encode } from '@lib/utils/base64Encode'
 
-import __wbg_init, {
+import {
   KeygenSession,
   Keyshare,
   QcSession,
@@ -194,7 +194,7 @@ export class DKLS {
   }
 
   public async startKeygenWithRetry() {
-    await __wbg_init()
+    // await __wbg_init()
     for (let i = 0; i < 3; i++) {
       try {
         const result = await this.startKeygen(i)
@@ -300,7 +300,7 @@ export class DKLS {
   }
 
   public async startReshareWithRetry(keyshare: string | undefined) {
-    await __wbg_init()
+    // await __wbg_init()
     for (let i = 0; i < 3; i++) {
       try {
         const result = await this.startReshare(keyshare, i)

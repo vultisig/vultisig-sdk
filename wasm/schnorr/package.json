@@ -1,6 +1,5 @@
 {
   "name": "vs-schnorr-wasm",
-  "type": "module",
   "collaborators": [
     "Artem Mironov <artem.mironov@gmail.com>"
   ],
@@ -12,8 +11,5 @@
     "vs_schnorr_wasm.d.ts"
   ],
   "main": "vs_schnorr_wasm.js",
-  "types": "vs_schnorr_wasm.d.ts",
-  "sideEffects": [
-    "./snippets/*"
-  ]
+  "types": "vs_schnorr_wasm.d.ts"
 }
