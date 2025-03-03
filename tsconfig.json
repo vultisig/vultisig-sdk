@@ -30,6 +30,9 @@
     "paths": {
       "@lib/*": [
         "./lib/*"
+      ],
+      "@core/*": [
+        "./core/*"
       ]
     },
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */
