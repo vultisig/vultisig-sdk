@@ -4,7 +4,7 @@ import __wbg_init, {
   KeygenSession,
   Keyshare,
   QcSession,
-} from '../../wasm/dkls/vs_wasm'
+} from '../../wasm/schnorr/vs_schnorr_wasm'
 import { deleteRelayMessage } from '../relay/deleteRelayMessage'
 import { downloadRelayMessage, RelayMessage } from '../relay/downloadRelayMessage'
 import { waitForSetupMessage } from '../relay/downloadSetupMessage'
@@ -19,7 +19,7 @@ import { sendRelayMessage } from '../relay/sendRelayMessage'
 import { sleep } from '../sleep'
 import { uploadSetupMessage } from '../relay/uploadSetupMessage'
 
-export class DKLS {
+export class Schnorr {
   private readonly isInitiateDevice: boolean
   private readonly serverURL: string
   private readonly sessionId: string
@@ -38,7 +38,8 @@ export class DKLS {
     localPartyId: string,
     keygenCommittee: string[],
     oldKeygenCommittee: string[],
-    hexEncryptionKey: string
+    hexEncryptionKey: string,
+    setupMessage: Uint8Array // DKLS/Schnorr keygen only need to setup message once, thus for EdDSA , we could reuse the setup message from DKLS
   ) {
     this.isInitiateDevice = isInitiateDevice
     this.serverURL = serverURL
@@ -47,6 +48,7 @@ export class DKLS {
     this.keygenCommittee = keygenCommittee
     this.oldKeygenCommittee = oldKeygenCommittee
     this.hexEncryptionKey = hexEncryptionKey
+    this.setupMessage = setupMessage
   }
 
   private async processOutbound(session: KeygenSession | QcSession) {
@@ -137,41 +139,13 @@ export class DKLS {
   }
 
   private async startKeygen(attempt: number) {
+    if (this.setupMessage === undefined || this.setupMessage.length === 0) {
+      throw new Error('setup message is empty')
+    }
     console.log('startKeygen attempt:', attempt)
     console.log('session id:', this.sessionId)
     this.isKeygenComplete = false
     try {
-      if (this.isInitiateDevice) {
-        const threshold = getKeygenThreshold(this.keygenCommittee.length)
-        this.setupMessage = KeygenSession.setup(
-          undefined,
-          threshold,
-          this.keygenCommittee
-        )
-        // upload setup message to server
-        const encryptedSetupMsg = await encodeEncryptMessage(
-          this.setupMessage,
-          this.hexEncryptionKey
-        )
-
-        await uploadSetupMessage({
-          serverUrl: this.serverURL,
-          message: encryptedSetupMsg,
-          sessionId: this.sessionId,
-          messageId: undefined,
-          additionalHeaders: undefined,
-        })
-        console.log('uploaded setup message successfully')
-      } else {
-        const encodedEncryptedSetupMsg = await waitForSetupMessage({
-          serverURL: this.serverURL,
-          sessionId: this.sessionId,
-        })
-        this.setupMessage = await decodeDecryptMessage(
-          encodedEncryptedSetupMsg,
-          this.hexEncryptionKey
-        )
-      }
       const session = new KeygenSession(this.setupMessage, this.localPartyId)
       const outbound = this.processOutbound(session)
       const inbound = this.processInbound(session)
@@ -186,8 +160,8 @@ export class DKLS {
       }
     } catch (error) {
       if (error instanceof Error) {
-        console.error('DKLS keygen error:', error)
-        console.error('DKLS keygen error:', error.stack)
+        console.error('Schnorr keygen error:', error)
+        console.error('Schnorr keygen error:', error.stack)
       }
       throw error
     }
@@ -202,24 +176,24 @@ export class DKLS {
           return result
         }
       } catch (error) {
-        console.error('DKLS keygen error:', error)
+        console.error('Schnorr keygen error:', error)
       }
     }
   }
-  public getSetupMessage() {
-    return this.setupMessage
-  }
 
   private async startReshare(
-    dklsKeyshare: string | undefined,
+    rawSchnorrKeyshare: string | undefined,
     attempt: number
   ) {
-    console.log('startReshare dkls, attempt:', attempt)
+    console.log('startReshare schnorr, attempt:', attempt)
     this.isKeygenComplete = false
     let localKeyshare: Keyshare | null = null
-    if (dklsKeyshare !== undefined && dklsKeyshare.length > 0) {
-      localKeyshare = Keyshare.fromBytes(Buffer.from(dklsKeyshare, 'base64'))
+    if (rawSchnorrKeyshare !== undefined && rawSchnorrKeyshare.length > 0) {
+      localKeyshare = Keyshare.fromBytes(
+        Buffer.from(rawSchnorrKeyshare, 'base64')
+      )
     }
+
     try {
       let setupMessage: Uint8Array = new Uint8Array()
       if (this.isInitiateDevice) {
@@ -233,33 +207,31 @@ export class DKLS {
             keygenCommittee: this.keygenCommittee,
             oldKeygenCommittee: this.oldKeygenCommittee,
           })
-        const newCommitteeIdxUint8 = new Uint8Array(newCommitteeIdx)
-        const oldCommitteeIdxUint8 = new Uint8Array(oldCommitteeIdx)
         setupMessage = QcSession.setup(
           localKeyshare,
           allCommittee,
-          oldCommitteeIdxUint8,
+          new Uint8Array(oldCommitteeIdx),
           threshold,
-          newCommitteeIdxUint8
+          new Uint8Array(newCommitteeIdx)
         )
         // upload setup message to server
         const encryptedSetupMsg = await encodeEncryptMessage(
           setupMessage,
           this.hexEncryptionKey
         )
-        console.log('encrypted setup message:', encryptedSetupMsg)
         await uploadSetupMessage({
           serverUrl: this.serverURL,
           message: encryptedSetupMsg,
           sessionId: this.sessionId,
           messageId: undefined,
-          additionalHeaders: undefined,
+          additionalHeaders: 'eddsa',
         })
         console.log('uploaded setup message successfully')
       } else {
         const encodedEncryptedSetupMsg = await waitForSetupMessage({
           serverURL: this.serverURL,
           sessionId: this.sessionId,
+          additionalHeaders: 'eddsa',
         })
         setupMessage = await decodeDecryptMessage(
           encodedEncryptedSetupMsg,
@@ -277,24 +249,24 @@ export class DKLS {
         const inbound = this.processInbound(session)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
-          const keyShare = session.finish()
-          if (keyShare === undefined) {
-            throw new Error('keyshare is null, dkls reshare failed')
+          const finalKeyShare = session.finish()
+          if (finalKeyShare === undefined) {
+            throw new Error('keyshare is null, schnorr reshare failed')
           }
+
           return {
-            keyshare: base64Encode(keyShare.toBytes()),
-            publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
-            chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+            keyshare: base64Encode(finalKeyShare.toBytes()),
+            publicKey: Buffer.from(finalKeyShare.publicKey()).toString('hex'),
+            chaincode: Buffer.from(finalKeyShare.rootChainCode()).toString(
+              'hex'
+            ),
           }
         }
       } finally {
         session.free()
       }
     } catch (error) {
-      console.error('DKLS reshare error:', error)
-      if (error instanceof Error) {
-        console.error('DKLS reshare error:', error.stack)
-      }
+      console.error('schnorr reshare error:', error)
       throw error
     }
   }
@@ -308,7 +280,7 @@ export class DKLS {
           return result
         }
       } catch (error) {
-        console.error('DKLS reshare error:', error)
+        console.error('schnorr reshare error:', error)
       }
     }
   }
