@@ -4,6 +4,22 @@ imports['__wbindgen_placeholder__'] = module.exports;
 let wasm;
 const { TextDecoder, TextEncoder } = require(`util`);
 
+function logError(f, args) {
+    try {
+        return f.apply(this, args);
+    } catch (e) {
+        let error = (function () {
+            try {
+                return e instanceof Error ? `${e.message}\n\nStack:\n${e.stack}` : e.toString();
+            } catch(_) {
+                return "<failed to stringify thrown value>";
+            }
+        }());
+        console.error("wasm-bindgen: imported JS function that was not marked as `catch` threw an error:", error);
+        throw e;
+    }
+}
+
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();
     wasm.__wbindgen_export_2.set(idx, obj);
@@ -17,6 +33,10 @@ function handleError(f, args) {
         const idx = addToExternrefTable0(e);
         wasm.__wbindgen_exn_store(idx);
     }
+}
+
+function _assertNum(n) {
+    if (typeof(n) !== 'number') throw new Error(`expected a number argument, found ${typeof(n)}`);
 }
 
 let cachedTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true, fatal: true });
@@ -41,6 +61,71 @@ function isLikeNone(x) {
     return x === undefined || x === null;
 }
 
+function debugString(val) {
+    // primitive types
+    const type = typeof val;
+    if (type == 'number' || type == 'boolean' || val == null) {
+        return  `${val}`;
+    }
+    if (type == 'string') {
+        return `"${val}"`;
+    }
+    if (type == 'symbol') {
+        const description = val.description;
+        if (description == null) {
+            return 'Symbol';
+        } else {
+            return `Symbol(${description})`;
+        }
+    }
+    if (type == 'function') {
+        const name = val.name;
+        if (typeof name == 'string' && name.length > 0) {
+            return `Function(${name})`;
+        } else {
+            return 'Function';
+        }
+    }
+    // objects
+    if (Array.isArray(val)) {
+        const length = val.length;
+        let debug = '[';
+        if (length > 0) {
+            debug += debugString(val[0]);
+        }
+        for(let i = 1; i < length; i++) {
+            debug += ', ' + debugString(val[i]);
+        }
+        debug += ']';
+        return debug;
+    }
+    // Test for built-in
+    const builtInMatches = /\[object ([^\]]+)\]/.exec(toString.call(val));
+    let className;
+    if (builtInMatches && builtInMatches.length > 1) {
+        className = builtInMatches[1];
+    } else {
+        // Failed to match the standard '[object ClassName]'
+        return toString.call(val);
+    }
+    if (className == 'Object') {
+        // we're a user defined class or Object
+        // JSON.stringify avoids problems with cycles, and is generally much
+        // easier than looping through ownProperties of `val`.
+        try {
+            return 'Object(' + JSON.stringify(val) + ')';
+        } catch (_) {
+            return 'Object';
+        }
+    }
+    // errors
+    if (val instanceof Error) {
+        return `${val.name}: ${val.message}\n${val.stack}`;
+    }
+    // TODO we could test for more things here, like `Set`s and `Map`s.
+    return className;
+}
+
 let WASM_VECTOR_LEN = 0;
 
 let cachedTextEncoder = new TextEncoder('utf-8');
@@ -59,6 +144,8 @@ const encodeString = (typeof cachedTextEncoder.encodeInto === 'function'
 });
 
 function passStringToWasm0(arg, malloc, realloc) {
+
+    if (typeof(arg) !== 'string') throw new Error(`expected a string argument, found ${typeof(arg)}`);
 
     if (realloc === undefined) {
         const buf = cachedTextEncoder.encode(arg);
@@ -88,7 +175,7 @@ function passStringToWasm0(arg, malloc, realloc) {
         ptr = realloc(ptr, len, len = offset + arg.length * 3, 1) >>> 0;
         const view = getUint8ArrayMemory0().subarray(ptr + offset, ptr + len);
         const ret = encodeString(arg, view);
-
+        if (ret.read !== arg.length) throw new Error('failed to pass whole string');
         offset += ret.written;
         ptr = realloc(ptr, len, offset, 1) >>> 0;
     }
@@ -106,10 +193,17 @@ function getDataViewMemory0() {
     return cachedDataViewMemory0;
 }
 
-function _assertClass(instance, klass) {
-    if (!(instance instanceof klass)) {
-        throw new Error(`expected instance of ${klass.name}`);
+function _assertBoolean(n) {
+    if (typeof(n) !== 'boolean') {
+        throw new Error(`expected a boolean argument, found ${typeof(n)}`);
     }
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 function passArrayJsValueToWasm0(array, malloc) {
@@ -122,22 +216,21 @@ function passArrayJsValueToWasm0(array, malloc) {
     return ptr;
 }
 
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_2.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
+
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
-function passArray8ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 1, 1) >>> 0;
-    getUint8ArrayMemory0().set(arg, ptr / 1);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
-}
-
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_2.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
+function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+        throw new Error(`expected instance of ${klass.name}`);
+    }
 }
 
 function getArrayJsValueFromWasm0(ptr, len) {
@@ -156,6 +249,10 @@ const KeyExportSessionFinalization = (typeof FinalizationRegistry === 'undefined
     : new FinalizationRegistry(ptr => wasm.__wbg_keyexportsession_free(ptr >>> 0, 1));
 
 class KeyExportSession {
+
+    constructor() {
+        throw new Error('cannot invoke `new` directly');
+    }
 
     static __wrap(ptr) {
         ptr = ptr >>> 0;
@@ -183,6 +280,9 @@ class KeyExportSession {
      */
     static new(share, ids) {
         _assertClass(share, Keyshare);
+        if (share.__wbg_ptr === 0) {
+            throw new Error('Attempt to use a moved value');
+        }
         const ptr0 = passArrayJsValueToWasm0(ids, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.keyexportsession_new(share.__wbg_ptr, ptr0, len0);
@@ -193,6 +293,8 @@ class KeyExportSession {
      * @returns {Uint8Array}
      */
     get setup() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyexportsession_setup(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
@@ -209,6 +311,8 @@ class KeyExportSession {
      * @returns {boolean}
      */
     inputMessage(msg) {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ptr0 = passArray8ToWasm0(msg, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.keyexportsession_inputMessage(this.__wbg_ptr, ptr0, len0);
@@ -219,6 +323,8 @@ class KeyExportSession {
      * @returns {Uint8Array}
      */
     finish() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyexportsession_finish(this.__wbg_ptr);
         if (ret[3]) {
             throw takeFromExternrefTable0(ret[2]);
@@ -240,6 +346,9 @@ class KeyExportSession {
         const ptr1 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         _assertClass(share, Keyshare);
+        if (share.__wbg_ptr === 0) {
+            throw new Error('Attempt to use a moved value');
+        }
         const ret = wasm.keyexportsession_exportShare(ptr0, len0, ptr1, len1, share.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -285,6 +394,7 @@ class KeyImportInitiator {
     constructor(private_key, threshold, ids) {
         const ptr0 = passArray8ToWasm0(private_key, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
+        _assertNum(threshold);
         const ptr1 = passArrayJsValueToWasm0(ids, wasm.__wbindgen_malloc);
         const len1 = WASM_VECTOR_LEN;
         const ret = wasm.keyimportinitiator_new(ptr0, len0, threshold, ptr1, len1);
@@ -300,6 +410,8 @@ class KeyImportInitiator {
      * @returns {Uint8Array}
      */
     get setup() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyimportinitiator_setup(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
@@ -313,6 +425,8 @@ class KeyImportInitiator {
      * @returns {Message | undefined}
      */
     outputMessage() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyimportinitiator_outputMessage(this.__wbg_ptr);
         return ret === 0 ? undefined : Message.__wrap(ret);
     }
@@ -327,6 +441,8 @@ class KeyImportInitiator {
      * @returns {boolean}
      */
     inputMessage(msg) {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ptr0 = passArray8ToWasm0(msg, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.keyimportinitiator_inputMessage(this.__wbg_ptr, ptr0, len0);
@@ -337,6 +453,8 @@ class KeyImportInitiator {
      * @returns {Keyshare}
      */
     finish() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyimportinitiator_finish(this.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -393,6 +511,8 @@ class KeyImportSession {
      * @returns {Message | undefined}
      */
     outputMessage() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyimportsession_outputMessage(this.__wbg_ptr);
         return ret === 0 ? undefined : Message.__wrap(ret);
     }
@@ -407,6 +527,8 @@ class KeyImportSession {
      * @returns {boolean}
      */
     inputMessage(msg) {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ptr0 = passArray8ToWasm0(msg, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.keyimportsession_inputMessage(this.__wbg_ptr, ptr0, len0);
@@ -417,6 +539,8 @@ class KeyImportSession {
      * @returns {Keyshare}
      */
     finish() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyimportsession_finish(this.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -431,6 +555,10 @@ const KeyImporterSessionFinalization = (typeof FinalizationRegistry === 'undefin
     : new FinalizationRegistry(ptr => wasm.__wbg_keyimportersession_free(ptr >>> 0, 1));
 
 class KeyImporterSession {
+
+    constructor() {
+        throw new Error('cannot invoke `new` directly');
+    }
 
     static __wrap(ptr) {
         ptr = ptr >>> 0;
@@ -524,7 +652,48 @@ class KeygenSession {
         const ptr1 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
         _assertClass(old_keyshare, Keyshare);
+        if (old_keyshare.__wbg_ptr === 0) {
+            throw new Error('Attempt to use a moved value');
+        }
         const ret = wasm.keygensession_refresh(ptr0, len0, ptr1, len1, old_keyshare.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return KeygenSession.__wrap(ret[0]);
+    }
+    /**
+     * Allocate new key migration session
+     *
+     * # Arguments
+     *
+     * * `setup`     - A setup message created by `KeygenSession.setup`
+     *
+     * * `id`        - A human readable party identifier
+     *
+     * * `s_i_0` - The additive share of the party such that Σ(s_i_0) = private key , 0<=i<=n
+     *
+     * * `publickey` - The generic common public key
+     *
+     * * `rootChainCode` - The root chain code
+     * @param {Uint8Array} setup
+     * @param {string} id
+     * @param {Uint8Array} s_i_0
+     * @param {Uint8Array} public_key
+     * @param {Uint8Array} root_chain_code
+     * @returns {KeygenSession}
+     */
+    static migrate(setup, id, s_i_0, public_key, root_chain_code) {
+        const ptr0 = passArray8ToWasm0(setup, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray8ToWasm0(s_i_0, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ptr3 = passArray8ToWasm0(public_key, wasm.__wbindgen_malloc);
+        const len3 = WASM_VECTOR_LEN;
+        const ptr4 = passArray8ToWasm0(root_chain_code, wasm.__wbindgen_malloc);
+        const len4 = WASM_VECTOR_LEN;
+        const ret = wasm.keygensession_migrate(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -549,6 +718,7 @@ class KeygenSession {
     static setup(key_id, threshold, ids) {
         var ptr0 = isLikeNone(key_id) ? 0 : passArray8ToWasm0(key_id, wasm.__wbindgen_malloc);
         var len0 = WASM_VECTOR_LEN;
+        _assertNum(threshold);
         const ptr1 = passArrayJsValueToWasm0(ids, wasm.__wbindgen_malloc);
         const len1 = WASM_VECTOR_LEN;
         const ret = wasm.keygensession_setup(ptr0, len0, threshold, ptr1, len1);
@@ -580,6 +750,8 @@ class KeygenSession {
      * @returns {Message | undefined}
      */
     outputMessage() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keygensession_outputMessage(this.__wbg_ptr);
         return ret === 0 ? undefined : Message.__wrap(ret);
     }
@@ -594,6 +766,8 @@ class KeygenSession {
      * @returns {boolean}
      */
     inputMessage(msg) {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ptr0 = passArray8ToWasm0(msg, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.keygensession_inputMessage(this.__wbg_ptr, ptr0, len0);
@@ -604,6 +778,8 @@ class KeygenSession {
      * @returns {Keyshare}
      */
     finish() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keygensession_finish(this.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -618,6 +794,10 @@ const KeyshareFinalization = (typeof FinalizationRegistry === 'undefined')
     : new FinalizationRegistry(ptr => wasm.__wbg_keyshare_free(ptr >>> 0, 1));
 
 class Keyshare {
+
+    constructor() {
+        throw new Error('cannot invoke `new` directly');
+    }
 
     static __wrap(ptr) {
         ptr = ptr >>> 0;
@@ -643,6 +823,8 @@ class Keyshare {
      * @returns {Uint8Array}
      */
     publicKey() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyshare_publicKey(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
@@ -653,6 +835,8 @@ class Keyshare {
      * @returns {Uint8Array}
      */
     keyId() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyshare_keyId(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
@@ -663,6 +847,8 @@ class Keyshare {
      * @returns {Uint8Array}
      */
     toBytes() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyshare_toBytes(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
@@ -687,6 +873,8 @@ class Keyshare {
      * @returns {Uint8Array}
      */
     rootChainCode() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.keyshare_rootChainCode(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
@@ -700,6 +888,10 @@ const MessageFinalization = (typeof FinalizationRegistry === 'undefined')
     : new FinalizationRegistry(ptr => wasm.__wbg_message_free(ptr >>> 0, 1));
 
 class Message {
+
+    constructor() {
+        throw new Error('cannot invoke `new` directly');
+    }
 
     static __wrap(ptr) {
         ptr = ptr >>> 0;
@@ -725,6 +917,8 @@ class Message {
      * @returns {Uint8Array}
      */
     get body() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.message_body(this.__wbg_ptr);
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
@@ -735,6 +929,8 @@ class Message {
      * @returns {string[]}
      */
     get receivers() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.message_receivers(this.__wbg_ptr);
         var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
@@ -782,6 +978,9 @@ class QcSession {
         let ptr2 = 0;
         if (!isLikeNone(keyshare)) {
             _assertClass(keyshare, Keyshare);
+            if (keyshare.__wbg_ptr === 0) {
+                throw new Error('Attempt to use a moved value');
+            }
             ptr2 = keyshare.__destroy_into_raw();
         }
         const ret = wasm.qcsession_new(ptr0, len0, ptr1, len1, ptr2);
@@ -815,10 +1014,14 @@ class QcSession {
      */
     static setup(keyshare, ids, olds, threshold, news) {
         _assertClass(keyshare, Keyshare);
+        if (keyshare.__wbg_ptr === 0) {
+            throw new Error('Attempt to use a moved value');
+        }
         const ptr0 = passArrayJsValueToWasm0(ids, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passArray8ToWasm0(olds, wasm.__wbindgen_malloc);
         const len1 = WASM_VECTOR_LEN;
+        _assertNum(threshold);
         const ptr2 = passArray8ToWasm0(news, wasm.__wbindgen_malloc);
         const len2 = WASM_VECTOR_LEN;
         const ret = wasm.qcsession_setup(keyshare.__wbg_ptr, ptr0, len0, ptr1, len1, threshold, ptr2, len2);
@@ -850,6 +1053,8 @@ class QcSession {
      * @returns {Message | undefined}
      */
     outputMessage() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.qcsession_outputMessage(this.__wbg_ptr);
         return ret === 0 ? undefined : Message.__wrap(ret);
     }
@@ -864,6 +1069,8 @@ class QcSession {
      * @returns {boolean}
      */
     inputMessage(msg) {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ptr0 = passArray8ToWasm0(msg, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.qcsession_inputMessage(this.__wbg_ptr, ptr0, len0);
@@ -875,6 +1082,8 @@ class QcSession {
      * @returns {Keyshare | undefined}
      */
     finish() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.qcsession_finish(this.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -919,6 +1128,9 @@ class SignSession {
         const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         _assertClass(share, Keyshare);
+        if (share.__wbg_ptr === 0) {
+            throw new Error('Attempt to use a moved value');
+        }
         const ret = wasm.signsession_new(setup, ptr0, len0, share.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
@@ -1000,6 +1212,8 @@ class SignSession {
      * @returns {Message | undefined}
      */
     outputMessage() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.signsession_outputMessage(this.__wbg_ptr);
         return ret === 0 ? undefined : Message.__wrap(ret);
     }
@@ -1014,6 +1228,8 @@ class SignSession {
      * @returns {boolean}
      */
     inputMessage(msg) {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ptr0 = passArray8ToWasm0(msg, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.signsession_inputMessage(this.__wbg_ptr, ptr0, len0);
@@ -1024,6 +1240,8 @@ class SignSession {
      * @returns {Uint8Array}
      */
     finish() {
+        if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
+        _assertNum(this.__wbg_ptr);
         const ret = wasm.signsession_finish(this.__wbg_ptr);
         if (ret[3]) {
             throw takeFromExternrefTable0(ret[2]);
@@ -1035,10 +1253,10 @@ class SignSession {
 }
 module.exports.SignSession = SignSession;
 
-module.exports.__wbg_buffer_609cc3eee51ed158 = function(arg0) {
+module.exports.__wbg_buffer_609cc3eee51ed158 = function() { return logError(function (arg0) {
     const ret = arg0.buffer;
     return ret;
-};
+}, arguments) };
 
 module.exports.__wbg_call_672a4d21634d4a24 = function() { return handleError(function (arg0, arg1) {
     const ret = arg0.call(arg1);
@@ -1050,54 +1268,55 @@ module.exports.__wbg_call_7cccdd69e0791ae2 = function() { return handleError(fun
     return ret;
 }, arguments) };
 
-module.exports.__wbg_crypto_ed58b8e10a292839 = function(arg0) {
+module.exports.__wbg_crypto_ed58b8e10a292839 = function() { return logError(function (arg0) {
     const ret = arg0.crypto;
     return ret;
-};
+}, arguments) };
 
 module.exports.__wbg_getRandomValues_bcb4912f16000dc4 = function() { return handleError(function (arg0, arg1) {
     arg0.getRandomValues(arg1);
 }, arguments) };
 
-module.exports.__wbg_length_a446193dc22c12f8 = function(arg0) {
+module.exports.__wbg_length_a446193dc22c12f8 = function() { return logError(function (arg0) {
     const ret = arg0.length;
+    _assertNum(ret);
     return ret;
-};
+}, arguments) };
 
-module.exports.__wbg_msCrypto_0a36e2ec3a343d26 = function(arg0) {
+module.exports.__wbg_msCrypto_0a36e2ec3a343d26 = function() { return logError(function (arg0) {
     const ret = arg0.msCrypto;
     return ret;
-};
+}, arguments) };
 
-module.exports.__wbg_new_a12002a7f91c75be = function(arg0) {
+module.exports.__wbg_new_a12002a7f91c75be = function() { return logError(function (arg0) {
     const ret = new Uint8Array(arg0);
     return ret;
-};
+}, arguments) };
 
-module.exports.__wbg_newnoargs_105ed471475aaf50 = function(arg0, arg1) {
+module.exports.__wbg_newnoargs_105ed471475aaf50 = function() { return logError(function (arg0, arg1) {
     const ret = new Function(getStringFromWasm0(arg0, arg1));
     return ret;
-};
+}, arguments) };
 
-module.exports.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function(arg0, arg1, arg2) {
+module.exports.__wbg_newwithbyteoffsetandlength_d97e637ebe145a9a = function() { return logError(function (arg0, arg1, arg2) {
     const ret = new Uint8Array(arg0, arg1 >>> 0, arg2 >>> 0);
     return ret;
-};
+}, arguments) };
 
-module.exports.__wbg_newwithlength_a381634e90c276d4 = function(arg0) {
+module.exports.__wbg_newwithlength_a381634e90c276d4 = function() { return logError(function (arg0) {
     const ret = new Uint8Array(arg0 >>> 0);
     return ret;
-};
+}, arguments) };
 
-module.exports.__wbg_node_02999533c4ea02e3 = function(arg0) {
+module.exports.__wbg_node_02999533c4ea02e3 = function() { return logError(function (arg0) {
     const ret = arg0.node;
     return ret;
-};
+}, arguments) };
 
-module.exports.__wbg_process_5c1d670bc53614b8 = function(arg0) {
+module.exports.__wbg_process_5c1d670bc53614b8 = function() { return logError(function (arg0) {
     const ret = arg0.process;
     return ret;
-};
+}, arguments) };
 
 module.exports.__wbg_randomFillSync_ab2cfe79ebbf2740 = function() { return handleError(function (arg0, arg1) {
     arg0.randomFillSync(arg1);
@@ -1108,38 +1327,46 @@ module.exports.__wbg_require_79b1e9274cde3c87 = function() { return handleError(
     return ret;
 }, arguments) };
 
-module.exports.__wbg_set_65595bdd868b3009 = function(arg0, arg1, arg2) {
+module.exports.__wbg_set_65595bdd868b3009 = function() { return logError(function (arg0, arg1, arg2) {
     arg0.set(arg1, arg2 >>> 0);
-};
+}, arguments) };
 
-module.exports.__wbg_static_accessor_GLOBAL_88a902d13a557d07 = function() {
+module.exports.__wbg_static_accessor_GLOBAL_88a902d13a557d07 = function() { return logError(function () {
     const ret = typeof global === 'undefined' ? null : global;
     return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-};
+}, arguments) };
 
-module.exports.__wbg_static_accessor_GLOBAL_THIS_56578be7e9f832b0 = function() {
+module.exports.__wbg_static_accessor_GLOBAL_THIS_56578be7e9f832b0 = function() { return logError(function () {
     const ret = typeof globalThis === 'undefined' ? null : globalThis;
     return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-};
+}, arguments) };
 
-module.exports.__wbg_static_accessor_SELF_37c5d418e4bf5819 = function() {
+module.exports.__wbg_static_accessor_SELF_37c5d418e4bf5819 = function() { return logError(function () {
     const ret = typeof self === 'undefined' ? null : self;
     return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-};
+}, arguments) };
 
-module.exports.__wbg_static_accessor_WINDOW_5de37043a91a9c40 = function() {
+module.exports.__wbg_static_accessor_WINDOW_5de37043a91a9c40 = function() { return logError(function () {
     const ret = typeof window === 'undefined' ? null : window;
     return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
-};
+}, arguments) };
 
-module.exports.__wbg_subarray_aa9065fa9dc5df96 = function(arg0, arg1, arg2) {
+module.exports.__wbg_subarray_aa9065fa9dc5df96 = function() { return logError(function (arg0, arg1, arg2) {
     const ret = arg0.subarray(arg1 >>> 0, arg2 >>> 0);
     return ret;
-};
+}, arguments) };
 
-module.exports.__wbg_versions_c71aa1626a93e0a1 = function(arg0) {
+module.exports.__wbg_versions_c71aa1626a93e0a1 = function() { return logError(function (arg0) {
     const ret = arg0.versions;
     return ret;
+}, arguments) };
+
+module.exports.__wbindgen_debug_string = function(arg0, arg1) {
+    const ret = debugString(arg1);
+    const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+    getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
 };
 
 module.exports.__wbindgen_error_new = function(arg0, arg1) {
@@ -1160,22 +1387,26 @@ module.exports.__wbindgen_init_externref_table = function() {
 
 module.exports.__wbindgen_is_function = function(arg0) {
     const ret = typeof(arg0) === 'function';
+    _assertBoolean(ret);
     return ret;
 };
 
 module.exports.__wbindgen_is_object = function(arg0) {
     const val = arg0;
     const ret = typeof(val) === 'object' && val !== null;
+    _assertBoolean(ret);
     return ret;
 };
 
 module.exports.__wbindgen_is_string = function(arg0) {
     const ret = typeof(arg0) === 'string';
+    _assertBoolean(ret);
     return ret;
 };
 
 module.exports.__wbindgen_is_undefined = function(arg0) {
     const ret = arg0 === undefined;
+    _assertBoolean(ret);
     return ret;
 };
 

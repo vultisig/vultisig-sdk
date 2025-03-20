@@ -96,6 +96,22 @@ export class KeygenSession {
    */
   static refresh(setup: Uint8Array, id: string, old_keyshare: Keyshare): KeygenSession;
   /**
+   * Allocate new key migration session
+   *
+   * # Arguments
+   *
+   * * `setup`     - A setup message created by `KeygenSession.setup`
+   *
+   * * `id`        - A human readable party identifier
+   *
+   * * `s_i_0` - The additive share of the party such that Σ(s_i_0) = private key , 0<=i<=n
+   *
+   * * `publickey` - The generic common public key
+   *
+   * * `rootChainCode` - The root chain code
+   */
+  static migrate(setup: Uint8Array, id: string, s_i_0: Uint8Array, public_key: Uint8Array, root_chain_code: Uint8Array): KeygenSession;
+  /**
    * Create a new DKG setup message.
    *
    * # Arguments
