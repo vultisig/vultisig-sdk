@@ -1,0 +1,116 @@
+{
+  "name": "vultisig-sdk",
+  "version": "0.1.0-beta.1",
+  "description": "TypeScript SDK for secure multi-party computation and blockchain operations",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./wasm": {
+      "import": "./dist/wasm/index.esm.js",
+      "require": "./dist/wasm/index.js",
+      "types": "./dist/wasm/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "node --max-old-space-size=8192 node_modules/.bin/rollup -c rollup.config.js",
+    "build:types": "tsc --emitDeclarationOnly",
+    "dev": "rollup -c rollup.config.js -w",
+    "typecheck": "tsc --noEmit --skipLibCheck",
+    "test": "vitest",
+    "test:sdk": "tsx test-sdk.ts",
+    "lint": "eslint src/**/*.{ts,tsx}",
+    "lint:fix": "eslint src/**/*.{ts,tsx} --fix",
+    "prepublishOnly": "npm run typecheck",
+    "prepack": "echo 'Build skipped for development'"
+  },
+  "keywords": [
+    "vultisig",
+    "multi-party-computation",
+    "mpc",
+    "blockchain",
+    "cryptocurrency",
+    "wallet",
+    "security",
+    "threshold-signatures",
+    "web3"
+  ],
+  "author": {
+    "name": "Vultisig",
+    "email": "info@vultisig.com",
+    "url": "https://vultisig.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-windows.git",
+    "directory": "vultisig-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/vultisig/vultisig-windows/issues"
+  },
+  "homepage": "https://vultisig.com",
+  "dependencies": {
+    "@trustwallet/wallet-core": "^4.3.3",
+    "axios": "^1.8.3",
+    "uuid": "^11.1.0",
+    "viem": "^2.23.12",
+    "zod": "^3.24.2"
+  },
+  "bundledDependencies": [
+    "@core/chain",
+    "@core/config",
+    "@core/extension", 
+    "@core/inpage-provider",
+    "@core/mpc",
+    "@core/ui",
+    "@lib/dkls",
+    "@lib/schnorr",
+    "@lib/ui",
+    "@lib/utils"
+  ],
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.1",
+    "rollup-plugin-copy": "^3.5.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-typescript": "^12.1.1",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@types/node": "^22.13.10",
+    "rollup": "^4.32.1",
+    "rollup-plugin-dts": "^6.1.1",
+    "tsx": "^4.19.5",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
