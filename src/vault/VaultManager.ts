@@ -1,37 +1,37 @@
-import type { 
-  Vault,
-  VaultOptions,
-  VaultBackup,
-  VaultDetails,
-  VaultValidationResult,
-  ExportOptions,
-  VaultSecurityType,
-  ChainKind
-} from '../types'
-
-import { 
+import { fromBinary } from '@bufbuild/protobuf'
+import { fromCommVault } from '@core/mpc/types/utils/commVault'
+import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
+import {
+  decryptVaultKeyShares,
   encryptVaultKeyShares,
-  decryptVaultKeyShares
 } from '@core/ui/passcodeEncryption/core/vaultKeyShares'
 import { vaultBackupResultFromFileContent } from '@core/ui/vault/import/utils/vaultBackupResultFromString'
 import { vaultContainerFromString } from '@core/ui/vault/import/utils/vaultContainerFromString'
-import { fromBase64 } from '@lib/utils/fromBase64'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
-import { fromBinary } from '@bufbuild/protobuf'
-import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
-import { fromCommVault } from '@core/mpc/types/utils/commVault'
+import { fromBase64 } from '@lib/utils/fromBase64'
+
+import type {
+  ExportOptions,
+  Vault,
+  VaultBackup,
+  VaultDetails,
+  VaultOptions,
+  VaultSecurityType,
+  VaultValidationResult,
+} from '../types'
 
 /**
  * VaultManager handles all vault operations by wrapping existing core functionality
  */
 export class VaultManager {
-  
   /**
    * Create a new vault (placeholder - will integrate with MPC keygen)
    */
-  async createVault(options: VaultOptions): Promise<Vault> {
+  async createVault(_options: VaultOptions): Promise<Vault> {
     // This will be implemented to integrate with MPC keygen process
-    throw new Error('createVault not implemented yet - requires MPC keygen integration')
+    throw new Error(
+      'createVault not implemented yet - requires MPC keygen integration'
+    )
   }
 
   /**
@@ -50,11 +50,14 @@ export class VaultManager {
       return vault // Already encrypted
     }
 
-    const encryptedKeyShares = await encryptVaultKeyShares(vault.keyShares, passcode)
-    
+    const encryptedKeyShares = await encryptVaultKeyShares({
+      keyShares: vault.keyShares,
+      key: passcode,
+    })
+
     return {
       ...vault,
-      keyShares: encryptedKeyShares
+      keyShares: encryptedKeyShares,
     }
   }
 
@@ -67,13 +70,16 @@ export class VaultManager {
     }
 
     try {
-      const decryptedKeyShares = await decryptVaultKeyShares(vault.keyShares as string, passcode)
-      
+      const decryptedKeyShares = await decryptVaultKeyShares({
+        keyShares: vault.keyShares as any,
+        key: passcode,
+      })
+
       return {
         ...vault,
-        keyShares: decryptedKeyShares
+        keyShares: decryptedKeyShares,
       }
-    } catch (error) {
+    } catch {
       throw new Error('Failed to decrypt vault: Invalid passcode')
     }
   }
@@ -81,23 +87,33 @@ export class VaultManager {
   /**
    * Export vault to backup format
    */
-  async exportVault(vault: Vault, options?: ExportOptions): Promise<VaultBackup> {
+  async exportVault(
+    _vault: Vault,
+    _options?: ExportOptions
+  ): Promise<VaultBackup> {
     // This will integrate with existing backup mutation logic
-    throw new Error('exportVault not implemented yet - requires backup mutation integration')
+    throw new Error(
+      'exportVault not implemented yet - requires backup mutation integration'
+    )
   }
 
   /**
    * Import vault from backup
    */
-  async importVault(backup: VaultBackup, password?: string): Promise<Vault> {
+  async importVault(_backup: VaultBackup, _password?: string): Promise<Vault> {
     // This will integrate with existing import logic
-    throw new Error('importVault not implemented yet - requires import logic integration')
+    throw new Error(
+      'importVault not implemented yet - requires import logic integration'
+    )
   }
 
   /**
    * Import vault from file (ArrayBuffer or File)
    */
-  async importVaultFromFile(fileData: ArrayBuffer | File, password?: string): Promise<Vault> {
+  async importVaultFromFile(
+    fileData: ArrayBuffer | File,
+    password?: string
+  ): Promise<Vault> {
     let buffer: ArrayBuffer
     if (fileData instanceof File) {
       buffer = await fileData.arrayBuffer()
@@ -114,8 +130,12 @@ export class VaultManager {
         const container = vaultContainerFromString(valueAsString)
         const vaultBase64 = container.vault
         if (container.isEncrypted) {
-          if (!password) throw new Error('Password required for encrypted vault')
-          const decrypted = await decryptWithAesGcm({ key: password, value: fromBase64(vaultBase64) })
+          if (!password)
+            throw new Error('Password required for encrypted vault')
+          const decrypted = await decryptWithAesGcm({
+            key: password,
+            value: fromBase64(vaultBase64),
+          })
           const binary = new Uint8Array(decrypted)
           const comm = fromBinary(VaultSchema, binary)
           const vault = fromCommVault(comm)
@@ -134,13 +154,20 @@ export class VaultManager {
     // .dat (legacy) handling
     if (fileName.endsWith('.dat')) {
       try {
-        const result = vaultBackupResultFromFileContent({ value: buffer, extension: 'dat' as any })
+        const result = vaultBackupResultFromFileContent({
+          value: buffer,
+          extension: 'dat' as any,
+        })
         if ('vault' in result) {
           return this.normalizeVault(result.vault as any)
         }
         if ('encryptedVault' in result) {
-          if (!password) throw new Error('Password required for encrypted vault')
-          const decrypted = await decryptWithAesGcm({ key: password, value: result.encryptedVault })
+          if (!password)
+            throw new Error('Password required for encrypted vault')
+          const decrypted = await decryptWithAesGcm({
+            key: password,
+            value: Buffer.from(result.encryptedVault),
+          })
           const text = new TextDecoder().decode(decrypted)
           const data = JSON.parse(text)
           return this.parseVaultFromData(data)
@@ -183,7 +210,10 @@ export class VaultManager {
 
       if (name.endsWith('.dat')) {
         try {
-          const result = vaultBackupResultFromFileContent({ value: buffer, extension: 'dat' as any })
+          const result = vaultBackupResultFromFileContent({
+            value: buffer,
+            extension: 'dat' as any,
+          })
           return 'encryptedVault' in result
         } catch {
           return false
@@ -197,7 +227,7 @@ export class VaultManager {
       } catch {
         return false
       }
-    } catch (error) {
+    } catch {
       return false
     }
   }
@@ -207,15 +237,21 @@ export class VaultManager {
    */
   private isVaultDataEncrypted(vaultData: any): boolean {
     // Check for encryption markers in the vault data structure
-    return vaultData.encrypted === true || 
-           (typeof vaultData.keyShares === 'string' && vaultData.keyShares.startsWith('encrypted:')) ||
-           vaultData.encryptedKeyShares !== undefined
+    return (
+      vaultData.encrypted === true ||
+      (typeof vaultData.keyShares === 'string' &&
+        vaultData.keyShares.startsWith('encrypted:')) ||
+      vaultData.encryptedKeyShares !== undefined
+    )
   }
 
   /**
    * Helper method to decrypt vault data
    */
-  private async decryptVaultData(vaultData: any, password: string): Promise<any> {
+  private async decryptVaultData(
+    vaultData: any,
+    _password: string
+  ): Promise<any> {
     // This would integrate with the existing decryption logic from core
     // For now, return as-is (needs proper implementation)
     return vaultData
@@ -225,12 +261,21 @@ export class VaultManager {
    * Helper method to parse vault data into Vault object
    */
   private parseVaultFromData(vaultData: any): Vault {
-    const ecdsa = vaultData.public_key_ecdsa || vaultData.publicKeyEcdsa || vaultData.publicKeys?.ecdsa || ''
-    const eddsa = vaultData.public_key_eddsa || vaultData.publicKeyEddsa || vaultData.publicKeys?.eddsa || ''
+    const ecdsa =
+      vaultData.public_key_ecdsa ||
+      vaultData.publicKeyEcdsa ||
+      vaultData.publicKeys?.ecdsa ||
+      ''
+    const eddsa =
+      vaultData.public_key_eddsa ||
+      vaultData.publicKeyEddsa ||
+      vaultData.publicKeys?.eddsa ||
+      ''
     return this.normalizeVault({
       name: vaultData.name || 'Imported Vault',
       publicKeys: { ecdsa, eddsa },
-      localPartyId: vaultData.local_party_id || vaultData.localPartyId || 'imported',
+      localPartyId:
+        vaultData.local_party_id || vaultData.localPartyId || 'imported',
       signers: vaultData.signers || [],
       hexChainCode: vaultData.hex_chain_code || vaultData.hexChainCode || '',
       keyShares: vaultData.key_shares || vaultData.keyShares || {},
@@ -248,7 +293,7 @@ export class VaultManager {
       signers: v.signers,
       createdAt: v.createdAt ?? Date.now(),
       hexChainCode: v.hexChainCode,
-      keyShares: v.keyShares ?? {},
+      keyShares: v.keyShares ?? { ecdsa: '', eddsa: '' },
       localPartyId: v.localPartyId,
       resharePrefix: (v as any).resharePrefix,
       libType: v.libType ?? 'DKLS',
@@ -264,8 +309,9 @@ export class VaultManager {
    */
   getVaultDetails(vault: Vault): VaultDetails {
     // Determine security type based on signers count
-    const securityType: VaultSecurityType = vault.signers.length === 2 ? 'fast' : 'secure'
-    
+    const securityType: VaultSecurityType =
+      vault.signers.length === 2 ? 'fast' : 'secure'
+
     return {
       name: vault.name,
       id: vault.publicKeys.ecdsa || 'unknown',
@@ -274,7 +320,7 @@ export class VaultManager {
       participants: vault.signers.length,
       chains: [], // Will be derived from public keys - requires chain integration
       createdAt: vault.createdAt,
-      isBackedUp: vault.isBackedUp
+      isBackedUp: vault.isBackedUp,
     }
   }
 
@@ -311,14 +357,17 @@ export class VaultManager {
       warnings.push('Vault is not backed up')
     }
 
-    if (vault.createdAt && Date.now() - vault.createdAt > 365 * 24 * 60 * 60 * 1000) {
+    if (
+      vault.createdAt &&
+      Date.now() - vault.createdAt > 365 * 24 * 60 * 60 * 1000
+    ) {
       warnings.push('Vault is older than one year')
     }
 
     return {
       valid: errors.length === 0,
       errors,
-      warnings
+      warnings,
     }
   }
 }

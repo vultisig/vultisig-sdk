@@ -1,6 +1,6 @@
 // Local types for the react2 example
 
-export interface LoadedKeyshare {
+export type LoadedKeyshare = {
   id: string
   name: string
   size: number // File size in bytes

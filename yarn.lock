@@ -5189,15 +5189,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/readable-stream@npm:^4":
-  version: 4.0.21
-  resolution: "@types/readable-stream@npm:4.0.21"
-  dependencies:
-    "@types/node": "npm:*"
-  checksum: 10c0/5c0a69a994d7efb8de6c27a626a5353b0d5d510979dd6bddc344d3fe54630ad175bf5fafe48eeaa9f423cf22d60247d0b20264aad68ced2eb49318b071168fed
-  languageName: node
-  linkType: hard
-
 "@types/request@npm:^2.48.12":
   version: 2.48.12
   resolution: "@types/request@npm:2.48.12"
@@ -15502,7 +15493,6 @@ __metadata:
     "@types/path-browserify": "npm:^1"
     "@types/react": "npm:^19.0.11"
     "@types/react-dom": "npm:^19.0.4"
-    "@types/readable-stream": "npm:^4"
     "@vitejs/plugin-react": "npm:^4.3.4"
     buffer: "npm:^6.0.3"
     crypto-browserify: "npm:^3.12.0"
@@ -15519,10 +15509,11 @@ __metadata:
     vite-plugin-node-polyfills: "npm:^0.24.0"
     vite-plugin-wasm: "npm:^3.4.1"
     vm-browserify: "npm:^1.1.2"
+    vultisig-sdk: "workspace:*"
   languageName: unknown
   linkType: soft
 
-"vultisig-sdk@workspace:.":
+"vultisig-sdk@workspace:*, vultisig-sdk@workspace:.":
   version: 0.0.0-use.local
   resolution: "vultisig-sdk@workspace:."
   dependencies:
