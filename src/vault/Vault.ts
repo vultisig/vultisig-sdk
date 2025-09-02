@@ -19,11 +19,15 @@ type DeriveAddressInput = {
 export class Vault {
   private addressCache = new Map<string, string>()
 
-  constructor(private vaultData: CoreVault) {
+  constructor(
+    private vaultData: CoreVault,
+    private walletCore?: WalletCore
+  ) {
     console.log('Vault initialized:', {
       name: vaultData.name,
       publicKeys: vaultData.publicKeys,
       signers: vaultData.signers.length,
+      hasWalletCore: !!walletCore,
     })
   }
 
@@ -64,24 +68,42 @@ export class Vault {
   /**
    * Derive address for specified chain
    * Implements Bitcoin address derivation with debugging logs
+   * Uses WalletCore WASM for derivation logic
    */
-  async deriveAddress({
-    chain,
-    walletCore,
-  }: DeriveAddressInput): Promise<string> {
-    console.log('Deriving address for chain:', chain)
+  async deriveAddress(chain: string): Promise<string>
+  async deriveAddress(input: string | DeriveAddressInput): Promise<string> {
+    // Handle both signatures: deriveAddress(chain) and deriveAddress({ chain, walletCore })
+    let chainStr: string
+    let walletCoreToUse: WalletCore | undefined
+
+    if (typeof input === 'string') {
+      chainStr = input
+      walletCoreToUse = this.walletCore
+    } else {
+      chainStr = input.chain
+      walletCoreToUse = input.walletCore || this.walletCore
+    }
+
+    console.log('Deriving address for chain:', chainStr)
+    const startTime = performance.now()
 
     // Check cache first (permanent caching for addresses as per architecture)
-    const cacheKey = chain.toLowerCase()
+    const cacheKey = chainStr.toLowerCase()
     if (this.addressCache.has(cacheKey)) {
       const cachedAddress = this.addressCache.get(cacheKey)!
-      console.log('Using cached address for', chain, ':', cachedAddress)
+      console.log('Using cached address for', chainStr, ':', cachedAddress)
+      const derivationTime = performance.now() - startTime
+      console.log(
+        `Derivation time for cached ${chainStr}:`,
+        derivationTime.toFixed(2),
+        'ms'
+      )
       return cachedAddress
     }
 
     try {
       // Validate inputs
-      if (!walletCore) {
+      if (!walletCoreToUse) {
         throw new VaultError(
           VaultErrorCode.WalletCoreNotInitialized,
           'WalletCore instance is required for address derivation'
@@ -103,8 +125,8 @@ export class Vault {
       }
 
       // Map string to Chain enum
-      const chainEnum = this.mapStringToChain(chain)
-      console.log('Mapped chain string', chain, 'to enum:', chainEnum)
+      const chainEnum = this.mapStringToChain(chainStr)
+      console.log('Mapped chain string', chainStr, 'to enum:', chainEnum)
 
       // Special handling for Bitcoin
       if (chainEnum === Chain.Bitcoin) {
@@ -116,14 +138,14 @@ export class Vault {
       // Get the proper public key for this chain
       const publicKey = getPublicKey({
         chain: chainEnum,
-        walletCore,
+        walletCore: walletCoreToUse,
         hexChainCode: this.vaultData.hexChainCode,
         publicKeys: this.vaultData.publicKeys,
       })
 
       console.log(
         'Derived public key for',
-        chain,
+        chainStr,
         '- length:',
         publicKey.data().length
       )
@@ -132,25 +154,55 @@ export class Vault {
       const address = coreDerive({
         chain: chainEnum,
         publicKey,
-        walletCore,
+        walletCore: walletCoreToUse,
       })
 
-      console.log('Successfully derived address for', chain, ':', address)
+      console.log('Successfully derived address for', chainStr, ':', address)
 
       // Cache the address (permanent caching as per architecture)
       this.addressCache.set(cacheKey, address)
 
+      const derivationTime = performance.now() - startTime
+      console.log(
+        `Derivation time for ${chainStr}:`,
+        derivationTime.toFixed(2),
+        'ms'
+      )
+
       return address
     } catch (error) {
-      console.error('Failed to derive address for', chain, ':', error)
+      console.error('Failed to derive address for', chainStr, ':', error)
 
       if (error instanceof VaultError) {
         throw error
       }
 
+      // Check for specific error types and throw appropriate VaultError
+      if (
+        (error as Error).message.includes('chain') ||
+        (error as Error).message.includes('Chain')
+      ) {
+        throw new VaultError(
+          VaultErrorCode.ChainNotSupported,
+          `Chain not supported: ${chainStr}`,
+          error as Error
+        )
+      }
+
+      if (
+        (error as Error).message.includes('network') ||
+        (error as Error).message.includes('Network')
+      ) {
+        throw new VaultError(
+          VaultErrorCode.NetworkError,
+          `Network error during address derivation for ${chainStr}`,
+          error as Error
+        )
+      }
+
       throw new VaultError(
         VaultErrorCode.AddressDerivationFailed,
-        `Failed to derive address for ${chain}: ${(error as Error).message}`,
+        `Failed to derive address for ${chainStr}: ${(error as Error).message}`,
         error as Error
       )
     }
@@ -213,8 +265,8 @@ export class Vault {
     if (!mappedChain) {
       console.error('Unsupported chain:', chainStr)
       throw new VaultError(
-        VaultErrorCode.UnsupportedChain,
-        `Unsupported chain: ${chainStr}. Supported chains: ${Object.keys(chainMap).join(', ')}`
+        VaultErrorCode.ChainNotSupported,
+        `Chain not supported: ${chainStr}. Supported chains: ${Object.keys(chainMap).join(', ')}`
       )
     }
 
