@@ -3,6 +3,8 @@ import { VultisigSDK } from 'vultisig-sdk'
 type Vault = any
 import BalanceDisplay from './components/BalanceDisplay'
 import { CreateVaultForm } from './components/CreateVaultForm'
+import { CurrentVaultPanel } from './components/CurrentVaultPanel'
+import { ExportModal } from './components/ExportModal'
 import { KeysharesList } from './components/KeysharesList'
 import { LoadVaultModal } from './components/LoadVaultModal'
 import { ServerStatus } from './components/ServerStatus'
@@ -10,17 +12,18 @@ import { VaultDisplay } from './components/VaultDisplay'
 import { useKeysharesStorage } from './hooks/useKeysharesStorage'
 import { useServerStatus } from './hooks/useServerStatus'
 import type { LoadedKeyshare } from './types'
-import { CurrentVaultPanel } from './components/CurrentVaultPanel'
-import { ExportModal } from './components/ExportModal'
 import { buildVultFile } from './utils/exportVault'
 
 function App() {
-  const [sdk] = useState(() => new VultisigSDK({
-    serverEndpoints: {
-      fastVault: 'https://api.vultisig.com/vault',
-      messageRelay: 'https://api.vultisig.com/router'
-    }
-  }))
+  const [sdk] = useState(
+    () =>
+      new VultisigSDK({
+        serverEndpoints: {
+          fastVault: 'https://api.vultisig.com/vault',
+          messageRelay: 'https://api.vultisig.com/router',
+        },
+      })
+  )
   const [initialized, setInitialized] = useState(false)
   const serverStatus = useServerStatus(sdk)
   const keysharesStorage = useKeysharesStorage()
@@ -69,7 +72,9 @@ function App() {
   const handleVaultCreated = (vault: Vault) => {
     setVault(vault)
     setShowCreate(false)
-    keysharesStorage.saveVaultToStorage(vault, { name: vault.name }).catch(() => undefined)
+    keysharesStorage
+      .saveVaultToStorage(vault, { name: vault.name })
+      .catch(() => undefined)
   }
 
   const handleLoadKeyshare = (keyshare: LoadedKeyshare) => {
@@ -162,9 +167,7 @@ function App() {
           </div>
 
           {/* Tabs */}
-          <div
-            style={{ display: 'flex', gap: 8, marginBottom: 12 }}
-          >
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
             <button
               onClick={() => setActiveTab('vaults')}
               style={{
@@ -262,10 +265,17 @@ function App() {
                 vault={vault}
                 sdk={sdk}
                 serverVerified={serverVerified}
-                onDisconnect={() => { setVault(null); setServerVerified(false) }}
+                onDisconnect={() => {
+                  setVault(null)
+                  setServerVerified(false)
+                }}
                 onOpenExport={() => setShowExportModal(true)}
               />
-              <VaultDisplay vault={vault} sdk={sdk} fastVault={serverVerified} />
+              <VaultDisplay
+                vault={vault}
+                sdk={sdk}
+                fastVault={serverVerified}
+              />
               <BalanceDisplay sdk={sdk} vault={vault} />
             </>
           )}

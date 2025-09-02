@@ -1,5 +1,4 @@
-import type { StoredKeyshare } from '@vultisig/sdk'
-
+import type { StoredKeyshare } from '../hooks/useKeysharesStorage'
 import type { LoadedKeyshare } from '../types'
 
 type KeysharesListProps = {
@@ -87,7 +86,7 @@ export const KeysharesList = ({
                 {k.name}
               </span>
               <span style={{ color: '#999', fontSize: 12 }}>
-                ({Math.round(k.size / 1024)} KB)
+                ({Math.round((k.size ?? 0) / 1024)} KB)
               </span>
               <span style={{ color: '#999', fontSize: 10 }}>
                 {new Date(k.dateAdded).toLocaleDateString()}
@@ -120,14 +119,15 @@ export const KeysharesList = ({
             fontStyle: 'italic',
           }}
         >
-          To load these files, please re-upload them using "Add Vault" button.
+          To load these files, please re-upload them using &quot;Add Vault&quot;
+          button.
         </p>
       </div>
     )}
 
     {keyshares.length === 0 && storedKeyshares.length === 0 && (
       <p style={{ color: '#666', margin: 0 }}>
-        No vault files found. Use "Add Vault" to select .vult files.
+        No vault files found. Use &quot;Add Vault&quot; to select .vult files.
       </p>
     )}
   </div>
