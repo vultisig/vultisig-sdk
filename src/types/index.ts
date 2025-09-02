@@ -123,3 +123,19 @@ export type SDKConfig = {
     }
   }
 }
+
+// Address derivation types
+export type ChainConfig = {
+  name: string
+  symbol: string
+  derivationPath: string
+  addressFormat: 'legacy' | 'segwit' | 'bech32' | 'ethereum'
+  network?: 'mainnet' | 'testnet'
+}
+
+export type AddressResult = {
+  address: string
+  chain: string
+  derivationTime: number
+  cached: boolean
+}
