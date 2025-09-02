@@ -9,6 +9,7 @@ import { KeysharesList } from './components/KeysharesList'
 import { LoadVaultModal } from './components/LoadVaultModal'
 import { ServerStatus } from './components/ServerStatus'
 import { VaultDisplay } from './components/VaultDisplay'
+import { AddressDerivationTester } from './components/AddressDerivationTester'
 import { useKeysharesStorage } from './hooks/useKeysharesStorage'
 import { useServerStatus } from './hooks/useServerStatus'
 import type { LoadedKeyshare } from './types'
@@ -276,6 +277,7 @@ function App() {
                 sdk={sdk}
                 fastVault={serverVerified}
               />
+              <AddressDerivationTester vault={vault} sdk={sdk} />
               <BalanceDisplay sdk={sdk} vault={vault} />
             </>
           )}

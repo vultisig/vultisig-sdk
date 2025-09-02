@@ -9,6 +9,8 @@ export enum VaultErrorCode {
   AddressDerivationFailed = 'ADDRESS_DERIVATION_FAILED',
   WalletCoreNotInitialized = 'WALLET_CORE_NOT_INITIALIZED',
   UnsupportedChain = 'UNSUPPORTED_CHAIN',
+  ChainNotSupported = 'CHAIN_NOT_SUPPORTED',
+  NetworkError = 'NETWORK_ERROR',
   InvalidVault = 'INVALID_VAULT',
   InvalidPublicKey = 'INVALID_PUBLIC_KEY',
   InvalidChainCode = 'INVALID_CHAIN_CODE',
