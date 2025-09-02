@@ -1,6 +1,6 @@
+import { useCallback, useEffect, useState } from 'react'
+import type { Balance, Vault } from 'vultisig-sdk'
 import { VultisigSDK } from 'vultisig-sdk'
-import type { Vault, Balance } from 'vultisig-sdk'
-import { useEffect, useState } from 'react'
 
 type BalanceDisplayProps = {
   sdk: VultisigSDK
@@ -8,13 +8,11 @@ type BalanceDisplayProps = {
 }
 
 function BalanceDisplay({ sdk, vault }: BalanceDisplayProps) {
-  const [balances, setBalances] = useState<Record<string, Balance> | null>(
-    null
-  )
+  const [balances, setBalances] = useState<Record<string, Balance> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadBalances = async () => {
+  const loadBalances = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -25,13 +23,13 @@ function BalanceDisplay({ sdk, vault }: BalanceDisplayProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [sdk, vault])
 
   useEffect(() => {
     if (vault && !loading) {
       loadBalances()
     }
-  }, [vault])
+  }, [vault, loading, loadBalances])
 
   if (loading) {
     return (
@@ -145,13 +143,21 @@ function BalanceDisplay({ sdk, vault }: BalanceDisplayProps) {
               }
 
               // Simple formatting function since formatBalanceAmount was removed
-              const formatBalance = (value: string, decimals: number): string => {
+              const formatBalance = (
+                value: string,
+                decimals: number
+              ): string => {
                 const num = parseFloat(value)
                 if (num === 0) return '0'
-                return (num / Math.pow(10, decimals)).toFixed(decimals > 2 ? 4 : 2)
+                return (num / Math.pow(10, decimals)).toFixed(
+                  decimals > 2 ? 4 : 2
+                )
               }
-              
-              const formattedAmount = formatBalance(balance.amount, balance.decimals)
+
+              const formattedAmount = formatBalance(
+                balance.amount,
+                balance.decimals
+              )
               const isZero = formattedAmount === '0'
               const isBitcoin = coinId.toLowerCase() === 'bitcoin'
 
@@ -279,7 +285,7 @@ function BalanceDisplay({ sdk, vault }: BalanceDisplayProps) {
         >
           <p>No balances found</p>
           <p style={{ fontSize: '14px' }}>
-            This vault doesn't have any coins yet.
+            This vault doesn&apos;t have any coins yet.
           </p>
         </div>
       )}

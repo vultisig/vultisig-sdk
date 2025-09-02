@@ -17,7 +17,7 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@vultisig/sdk": ["../../src/index.ts"],
+      "vultisig-sdk": ["../../src/index.ts"],
       "@lib/utils/*": ["../../lib/utils/*"],
       "@core/*": ["../../core/*"]
     }

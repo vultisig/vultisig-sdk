@@ -94,5 +94,8 @@
     "typescript": "^5.8.2",
     "vite": "^6.2.2",
     "vitest": "^3.0.9"
+  },
+  "resolutions": {
+    "readable-stream": "3.6.2"
   }
 }

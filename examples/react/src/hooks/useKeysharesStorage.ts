@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { LoadedKeyshare } from '../types'
-import { fromBase64 } from '@lib/utils/fromBase64'
-import { base64Encode } from '@lib/utils/base64Encode'
 import { toBinary } from '@bufbuild/protobuf'
-import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
 import { toCommVault } from '@core/mpc/types/utils/commVault'
+import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
+import { base64Encode } from '@lib/utils/base64Encode'
 import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGcm'
+import { useCallback, useEffect, useState } from 'react'
 
-type StoredKeyshare = {
+import type { LoadedKeyshare } from '../types'
+
+export type StoredKeyshare = {
   id: string
   name: string
   size?: number
@@ -82,7 +82,10 @@ export type UseKeysharesStorageReturn = {
 
   // Actions
   saveKeyshare: (keyshare: LoadedKeyshare) => Promise<StoredKeyshare | null>
-  saveVaultToStorage: (vault: any, options?: { name?: string; password?: string }) => Promise<StoredKeyshare | null>
+  saveVaultToStorage: (
+    vault: any,
+    options?: { name?: string; password?: string }
+  ) => Promise<StoredKeyshare | null>
   removeKeyshare: (keyshareId: string) => Promise<boolean>
   clearAllKeyshares: () => Promise<boolean>
   refreshKeyshares: () => void
@@ -151,14 +154,20 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
 
   // Save a live vault object into storage as a .vult container (optionally encrypted)
   const saveVaultToStorage = useCallback(
-    async (vault: any, options?: { name?: string; password?: string }): Promise<StoredKeyshare | null> => {
+    async (
+      vault: any,
+      options?: { name?: string; password?: string }
+    ): Promise<StoredKeyshare | null> => {
       try {
         const comm = toCommVault(vault)
         const binary = toBinary(VaultSchema, comm)
         let containerVaultBase64: string
         let encrypted = false
         if (options?.password) {
-          const encryptedBytes = await encryptWithAesGcm({ key: options.password, value: binary })
+          const encryptedBytes = await encryptWithAesGcm({
+            key: options.password,
+            value: Buffer.from(binary),
+          })
           containerVaultBase64 = base64Encode(encryptedBytes)
           encrypted = true
         } else {
@@ -173,7 +182,9 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
         if (!item) throw new Error('Failed to save vault to storage')
         // attach payload
         const cur = readAll()
-        const withPayload = cur.map(k => (k.id === item.id ? { ...k, containerBase64: containerVaultBase64 } : k))
+        const withPayload = cur.map(k =>
+          k.id === item.id ? { ...k, containerBase64: containerVaultBase64 } : k
+        )
         writeAll(withPayload)
         loadKeyshares()
         return { ...item, containerBase64: containerVaultBase64 }
@@ -236,7 +247,10 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
     loadKeyshares()
   }, [loadKeyshares])
 
-  const getStoredKeyshareById = useCallback((id: string) => readAll().find(k => k.id === id), [])
+  const getStoredKeyshareById = useCallback(
+    (id: string) => readAll().find(k => k.id === id),
+    []
+  )
 
   // Load keyshares on mount
   useEffect(() => {

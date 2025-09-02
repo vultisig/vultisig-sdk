@@ -56,10 +56,10 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
 
     try {
       console.log('Starting Fast Vault creation with server...')
-      
+
       // Ensure SDK is initialized before creating vault
       await onInitialize()
-      
+
       console.log('Vault parameters:', {
         name: formData.name,
         email: formData.email,
@@ -112,7 +112,7 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
       verificationCode,
       codeLength: verificationCode.length,
       hasVaultId: !!vaultId,
-      hasCode: !!verificationCode
+      hasCode: !!verificationCode,
     })
 
     if (!verificationCode || !verificationCode.trim()) {
@@ -137,7 +137,9 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
       console.log('✅ Email verification response:', verified)
 
       if (!verified) {
-        setError('Wrong verification code. Please check your email and try again.')
+        setError(
+          'Wrong verification code. Please check your email and try again.'
+        )
         return
       }
 
@@ -155,8 +157,13 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
     } catch (err) {
       console.error('❌ Verification failed:', err)
       const errorMessage = (err as Error).message
-      if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
-        setError('Wrong verification code. Please check your email and try again.')
+      if (
+        errorMessage.includes('400') ||
+        errorMessage.includes('Bad Request')
+      ) {
+        setError(
+          'Wrong verification code. Please check your email and try again.'
+        )
       } else if (errorMessage.includes('404')) {
         setError('Vault not found. Please try creating the vault again.')
       } else {
@@ -167,10 +174,10 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
 
   const handleResendCode = async () => {
     if (!vaultId) return
-    
+
     setIsResending(true)
     setError(null)
-    
+
     try {
       console.log('🔄 Resending verification email...')
       await sdk.resendVaultVerification(vaultId)
@@ -257,7 +264,7 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
               borderRadius: '6px',
               fontSize: '14px',
               textAlign: 'center',
-              letterSpacing: '0.2em'
+              letterSpacing: '0.2em',
             }}
             required
           />
