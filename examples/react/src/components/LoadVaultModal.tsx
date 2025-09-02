@@ -1,5 +1,5 @@
-import type { Vault, VultisigSDK } from 'vultisig-sdk'
 import { useEffect, useState } from 'react'
+import type { Vault, VultisigSDK } from 'vultisig-sdk'
 
 import type { LoadedKeyshare } from '../types'
 
@@ -31,7 +31,9 @@ export const LoadVaultModal = ({
     const checkEncryption = async () => {
       try {
         setStatus('checking')
-        const encrypted = keyshare.file ? await sdk.isVaultFileEncrypted(keyshare.file) : false
+        const encrypted = keyshare.file
+          ? await sdk.isVaultFileEncrypted(keyshare.file)
+          : false
         if (!cancelled) {
           setIsEncrypted(encrypted)
           setStatus('idle')
@@ -67,7 +69,7 @@ export const LoadVaultModal = ({
           // If no file, use keyshare data directly (already loaded)
           vault = keyshare.data as Vault
         }
-      } catch (e) {
+      } catch {
         setStatus('error')
         setError('Wrong Password, Try Again')
         return
@@ -82,7 +84,8 @@ export const LoadVaultModal = ({
 
       // For encrypted vaults, try server verification with password
       setStatus('verifying')
-      const publicKeyECDSA = (vault as any).publicKeys?.ecdsa || (vault as any).publicKeyEcdsa
+      const publicKeyECDSA =
+        (vault as any).publicKeys?.ecdsa || (vault as any).publicKeyEcdsa
       if (publicKeyECDSA && password) {
         try {
           // Try to get the vault from server to verify it exists there
@@ -111,7 +114,7 @@ export const LoadVaultModal = ({
         onVaultLoaded(vault, { serverVerified: false })
         setStatus('done')
       }
-      
+
       onClose()
     } catch (e) {
       setStatus('error')
@@ -265,7 +268,15 @@ export const LoadVaultModal = ({
             >
               {keyshare.name}
             </div>
-            <div style={{ fontSize: '12px', color: '#666', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div
+              style={{
+                fontSize: '12px',
+                color: '#666',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
               {Math.round(keyshare.size / 1024)} KB
               {keyshare.encrypted && <span>🔒</span>}
             </div>
@@ -277,6 +288,7 @@ export const LoadVaultModal = ({
         {showPasswordInput && (
           <div style={{ marginBottom: '16px' }}>
             <label
+              htmlFor="password"
               style={{
                 display: 'block',
                 marginBottom: '8px',
@@ -287,6 +299,7 @@ export const LoadVaultModal = ({
               Vault Password
             </label>
             <input
+              id="password"
               type="password"
               placeholder="Enter your vault password"
               value={password}

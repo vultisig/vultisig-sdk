@@ -1,5 +1,5 @@
-import type { Vault, VultisigSDK } from 'vultisig-sdk'
 import { useEffect, useState } from 'react'
+import type { Vault, VultisigSDK } from 'vultisig-sdk'
 
 type AddressMap = Partial<Record<'BTC' | 'ETH' | 'SOL' | 'THOR', string>>
 
@@ -22,14 +22,14 @@ export const VaultDisplay = ({
       try {
         setLoading(true)
         setError(null)
-        
+
         // Ensure SDK is initialized before deriving addresses
         const isInitialized = await sdk.isInitialized()
         if (!isInitialized) {
           console.log('SDK not initialized, initializing now...')
           await sdk.initialize()
         }
-        
+
         const [btc, eth, sol, thor] = await Promise.all([
           sdk.deriveAddress(vault, 'bitcoin'),
           sdk.deriveAddress(vault, 'ethereum'),

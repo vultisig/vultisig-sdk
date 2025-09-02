@@ -4,41 +4,17 @@
  */
 
 // Re-export core types from their actual locations
-export type { 
-  Vault,
-  VaultKeyShares
-} from '@core/ui/vault/Vault'
-
-export type {
-  VaultFolder
-} from '@core/ui/vault/VaultFolder'
-
-export type {
-  VaultSecurityType
-} from '@core/ui/vault/VaultSecurityType'
-
-export type {
-  ChainKind
-} from '@core/chain/ChainKind'
-
-export type {
-  PublicKeys
-} from '@core/chain/publicKey/PublicKeys'
-
-export type {
-  MpcServerType
-} from '@core/mpc/MpcServerType'
-
-export type {
-  AccountCoin
-} from '@core/chain/coin/AccountCoin'
-
-export type {
-  Coin
-} from '@core/chain/coin/Coin'
+export type { ChainKind } from '@core/chain/ChainKind'
+export type { AccountCoin } from '@core/chain/coin/AccountCoin'
+export type { Coin } from '@core/chain/coin/Coin'
+export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
+export type { MpcServerType } from '@core/mpc/MpcServerType'
+export type { Vault, VaultKeyShares } from '@core/ui/vault/Vault'
+export type { VaultFolder } from '@core/ui/vault/VaultFolder'
+export type { VaultSecurityType } from '@core/ui/vault/VaultSecurityType'
 
 // SDK-specific types
-export interface VaultOptions {
+export type VaultOptions = {
   name: string
   threshold: number
   participants: string[]
@@ -47,7 +23,7 @@ export interface VaultOptions {
   serverAssisted?: boolean
 }
 
-export interface VaultBackup {
+export type VaultBackup = {
   data: ArrayBuffer | string
   format: 'DKLS' | 'GG20'
   encrypted: boolean
@@ -59,49 +35,60 @@ export type VaultDetails = {
   securityType: 'fast' | 'secure'
   threshold: number
   participants: number
-  chains: Array<'evm' | 'utxo' | 'cosmos' | 'solana' | 'sui' | 'polkadot' | 'ton' | 'ripple' | 'tron' | 'cardano'>
+  chains: Array<
+    | 'evm'
+    | 'utxo'
+    | 'cosmos'
+    | 'solana'
+    | 'sui'
+    | 'polkadot'
+    | 'ton'
+    | 'ripple'
+    | 'tron'
+    | 'cardano'
+  >
   createdAt?: number
   isBackedUp: boolean
 }
 
-export interface VaultValidationResult {
+export type VaultValidationResult = {
   valid: boolean
   errors: string[]
   warnings: string[]
 }
 
-export interface ExportOptions {
+export type ExportOptions = {
   password?: string
   format?: 'dat' | 'vult'
   includeMetadata?: boolean
 }
 
-export interface Balance {
+export type Balance = {
   amount: string
   decimals: number
   symbol: string
   value?: number // USD value
 }
 
-export interface SigningPayload {
+export type SigningPayload = {
   transaction: any // Chain-specific transaction data
   chain: any
   derivePath?: string
 }
 
-export interface Signature {
+export type Signature = {
   signature: string
   recovery?: number
   format: 'DER' | 'ECDSA' | 'EdDSA'
 }
 
-export interface ReshareOptions {
+export type ReshareOptions = {
   newThreshold: number
   newParticipants: string[]
   removeParticipants?: string[]
 }
 
-export interface ServerStatus {
+export type ServerStatus = {
   fastVault: {
     online: boolean
     latency?: number
@@ -122,7 +109,7 @@ export type KeygenProgressUpdate = {
   message?: string
 }
 
-export interface SDKConfig {
+export type SDKConfig = {
   serverEndpoints?: {
     fastVault?: string
     messageRelay?: string
