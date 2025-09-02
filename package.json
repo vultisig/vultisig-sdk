@@ -19,7 +19,8 @@
     "knip": "knip",
     "check:all": "yarn lint && yarn typecheck && yarn test && yarn knip",
     "knip:fix": "knip --fix --allow-remove-files",
-    "build:prod": "yarn workspace vultisig-sdk-react-example-2 build && yarn workspace vultisig-sdk-react-example-2 preview --port 5175 --strictPort --open=false"
+    "build:prod": "yarn workspace vultisig-sdk-react-example-2 build && yarn workspace vultisig-sdk-react-example-2 preview --port 5175 --strictPort --open=false",
+    "dev:react": "yarn workspace vultisig-sdk-react-example-2 dev"
   },
   "dependencies": {
     "7z-wasm": "^1.1.0",
@@ -94,5 +95,8 @@
     "typescript": "^5.8.2",
     "vite": "^6.2.2",
     "vitest": "^3.0.9"
+  },
+  "resolutions": {
+    "readable-stream": "3.6.2"
   }
 }
