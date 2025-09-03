@@ -1,7 +1,7 @@
+import * as fs from 'fs'
 import * as path from 'path'
-import { WASMManager } from 'vultisig-sdk'
-import { getKeyshareDir, findVultFiles } from '../utils/paths'
-import { VaultLoader } from '../vault/VaultLoader'
+import { VaultManager, VultisigSDK } from '../vultisig-sdk-mocked'
+import { getVaultsDir, findVultFiles } from '../utils/paths'
 import { promptForPasswordWithValidation } from '../utils/password'
 import { DaemonManager } from '../daemon/DaemonManager'
 
@@ -17,48 +17,82 @@ export class RunCommand {
   async run(options: RunOptions): Promise<void> {
     console.log('🚀 Starting Vultisig daemon...')
     
-    // Initialize WASM libraries first
-    console.log('⚙️ Initializing WASM libraries...')
-    const wasmManager = new WASMManager()
-    await wasmManager.initialize()
-    console.log('✅ WASM libraries initialized successfully')
+    // Initialize SDK first
+    console.log('⚙️ Initializing Vultisig SDK...')
+    const sdk = new VultisigSDK({
+      vaultManagerConfig: {
+        defaultChains: ['bitcoin', 'ethereum', 'solana'],
+        defaultCurrency: 'USD'
+      }
+    })
     
-    // Auto-discovery if no vault specified
-    let vaultPath = options.vault
-    if (!vaultPath) {
-      const keyshareDir = getKeyshareDir()
-      const vultFiles = await findVultFiles(keyshareDir)
+    await sdk.initialize()
+    console.log('✅ SDK initialized successfully')
+    
+    // Auto-discovery or load specific vault file
+    let vaultStorage
+    
+    if (options.vault) {
+      // Load specific vault file
+      console.log(`📂 Loading vault: ${options.vault}`)
+      const buffer = await fs.promises.readFile(options.vault)
+      const file = new File([buffer], path.basename(options.vault))
       
-      if (vultFiles.length === 0) {
-        throw new Error(`No keyshare files (.vult) found in ${keyshareDir}`)
+      // Check if encrypted from filename hint (for .vult files)
+      const fileName = path.basename(options.vault)
+      const isEncrypted = fileName.toLowerCase().includes('password') && !fileName.toLowerCase().includes('nopassword')
+      
+      let password = options.password
+      if (isEncrypted && !password) {
+        password = await promptForPasswordWithValidation(options.vault)
+      } else if (!isEncrypted) {
+        console.log('🔓 Vault is unencrypted, no password needed.')
       }
       
-      vaultPath = vultFiles[0]
-      console.log(`📄 Auto-discovered keyshare: ${path.basename(vaultPath)}`)
+      const vault = await VaultManager.add(file, password)
+      await VaultManager.load(vault, password)
+      vaultStorage = vault
+      
+    } else {
+      // Auto-discovery
+      const vaultsDir = getVaultsDir()
+      const vultFiles = await findVultFiles(vaultsDir)
+      
+      if (vultFiles.length === 0) {
+        throw new Error(`No vault files (.vult) found in ${vaultsDir}`)
+      }
+      
+      const vaultPath = vultFiles[0]
+      console.log(`📄 Auto-discovered vault: ${path.basename(vaultPath)}`)
+      
+      const buffer = await fs.promises.readFile(vaultPath)
+      const file = new File([buffer], path.basename(vaultPath))
+      
+      const fileName = path.basename(vaultPath)
+      const isEncrypted = fileName.toLowerCase().includes('password') && !fileName.toLowerCase().includes('nopassword')
+      
+      let password = options.password
+      if (isEncrypted && !password) {
+        password = await promptForPasswordWithValidation(vaultPath)
+      } else if (!isEncrypted) {
+        console.log('🔓 Vault is unencrypted, no password needed.')
+      }
+      
+      const vault = await VaultManager.add(file, password)
+      await VaultManager.load(vault, password)
+      vaultStorage = vault
     }
     
-    const vaultLoader = new VaultLoader()
-    
-    // Check if vault is encrypted
-    const isUnencrypted = await vaultLoader.checkIfUnencrypted(vaultPath)
-    
-    // Handle password for encrypted vaults
-    let password = options.password
-    if (!password && !isUnencrypted) {
-      password = await promptForPasswordWithValidation(vaultPath)
-    } else if (isUnencrypted) {
-      console.log('🔓 Vault is unencrypted, no password needed.')
-    }
-    
-    // Load and decrypt the vault
-    console.log(`📂 Loading vault: ${vaultPath}`)
-    const vault = await vaultLoader.loadVaultFromFile(vaultPath, password)
-    
+    const summary = vaultStorage.summary()
     console.log('✅ Vault loaded successfully!')
-    console.log(`📍 Vault: ${vault.name}`)
-    console.log(`🆔 Local Party ID: ${vault.localPartyId}`)
-    console.log(`👥 Signers: ${vault.signers.join(', ')}`)
-    console.log(`🔧 Library Type: ${vault.libType === 1 ? 'DKLS' : 'GG20'}`)
+    console.log(`📍 Vault: ${summary.name}`)
+    console.log(`🆔 Vault ID: ${summary.id}`)
+    console.log(`👥 Signers: ${summary.totalSigners} (threshold: ${summary.threshold})`)
+    console.log(`🏷️  Type: ${summary.type}`)
+    console.log(`💰 Currency: ${summary.currency}`)
+    
+    // Set as active vault
+    VaultManager.setActive(vaultStorage)
     
     if (options.config) {
       console.log(`📋 Config: ${options.config}`)
@@ -68,8 +102,8 @@ export class RunCommand {
     console.log('💡 You can now run "vultisig address" in another terminal')
     console.log('⏹️  Press Ctrl+C to stop\n')
     
-    // Start daemon
+    // Start daemon with the loaded vault storage
     const daemonManager = new DaemonManager()
-    await daemonManager.startDaemon(vaultPath, password, vault)
+    await daemonManager.startDaemon(vaultStorage)
   }
 }

@@ -1,9 +1,0 @@
-{
-  "to": "0x742e4C4B4F6F8e8eBd53aB6C5c5A6e1F8E5D4C3B",
-  "value": "100000000000000000",
-  "gasLimit": "21000",
-  "gasPrice": "20000000000",
-  "nonce": "42",
-  "data": "0x",
-  "chainId": "1"
-}

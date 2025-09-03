@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
+import { VultisigSDK } from './vultisig-sdk-mocked'
 import { InitCommand } from './commands/InitCommand'
 import { ListCommand } from './commands/ListCommand'
 import { RunCommand } from './commands/RunCommand'
@@ -17,6 +18,39 @@ program
   .description('Vultisig CLI - Multi-Party Computation wallet')
   .version('1.0.0')
 
+// Initialize SDK globally for CLI operations
+let sdk: VultisigSDK
+
+async function initializeSDK(): Promise<void> {
+  if (!sdk) {
+    sdk = new VultisigSDK({
+      vaultManagerConfig: {
+        defaultChains: ['bitcoin', 'ethereum', 'solana'],
+        defaultCurrency: 'USD'
+      }
+    })
+    
+    // SDK initialization is handled per-command as needed
+    // Some commands don't need full SDK initialization
+  }
+}
+
+// Helper function to wrap command execution with error handling
+function wrapCommand(commandInstance: any, requiresSDK: boolean = false) {
+  return async (options?: any) => {
+    try {
+      if (requiresSDK) {
+        await initializeSDK()
+      }
+      
+      await commandInstance.run(options)
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : error)
+      process.exit(1)
+    }
+  }
+}
+
 // Register all commands
 const initCommand = new InitCommand()
 const listCommand = new ListCommand()
@@ -27,119 +61,63 @@ const signCommand = new SignCommand()
 const quitCommand = new QuitCommand()
 const versionCommand = new VersionCommand()
 
-// Init command
+// Init command - doesn't need SDK
 program
   .command('init')
   .description(initCommand.description)
-  .action(async () => {
-    try {
-      await initCommand.run()
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  })
+  .action(wrapCommand(initCommand, false))
 
-// List command
+// List command - needs SDK for vault checking
 program
   .command('list')
   .description(listCommand.description)
-  .action(async () => {
-    try {
-      await listCommand.run()
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  })
+  .action(wrapCommand(listCommand, true))
 
-// Run command
+// Run command - handles SDK initialization internally
 program
   .command('run')
   .description(runCommand.description)
   .option('--vault <path>', 'Path to keyshare file (.vult)')
   .option('--password <password>', 'Password for encrypted keyshares')
   .option('--config <config>', 'Custom configuration file')
-  .action(async (options) => {
-    try {
-      await runCommand.run(options)
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  })
+  .action(wrapCommand(runCommand, false)) // RunCommand initializes SDK internally
 
-// Status command
+// Status command - uses daemon/SDK
 program
   .command('status')
   .description(statusCommand.description)
-  .action(async () => {
-    try {
-      await statusCommand.run()
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  })
+  .action(wrapCommand(statusCommand, true))
 
-// Address command
+// Address command - uses daemon/SDK
 program
   .command('address')
   .description(addressCommand.description)
   .option('--network <networks>', 'Networks (all, or comma-separated: btc,eth,sol)', 'all')
-  .action(async (options) => {
-    try {
-      await addressCommand.run(options)
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  })
+  .action(wrapCommand(addressCommand, true))
 
-// Sign command
+// Sign command - uses daemon/SDK
 program
   .command('sign')
   .description(signCommand.description)
   .requiredOption('--network <network>', 'Blockchain network (ETH, BTC, SOL, etc.)')
-  .option('--mode <mode>', 'Signing mode: local or relay', 'relay')
+  .option('--mode <mode>', 'Signing mode: local, relay, or fast', 'relay')
   .option('--session-id <id>', 'Custom session ID')
   .option('--payload-file <file>', 'Transaction payload JSON file')
   .option('--fast', 'Use fast mode with VultiServer (requires --password)')
   .option('--password <password>', 'VultiServer decryption password (required for --fast mode)')
-  .action(async (options) => {
-    try {
-      await signCommand.run(options)
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  })
+  .action(wrapCommand(signCommand, true))
 
-// Quit command
+// Quit command - daemon operation
 program
   .command('quit')
   .description(quitCommand.description)
-  .action(async () => {
-    try {
-      await quitCommand.run()
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  })
+  .action(wrapCommand(quitCommand, false))
 
-// Version command
+// Version command - no SDK needed
 program
   .command('version')
   .description(versionCommand.description)
-  .action(async () => {
-    try {
-      await versionCommand.run()
-    } catch (error) {
-      console.error('Error:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  })
+  .action(wrapCommand(versionCommand, false))
 
 // Parse command line arguments
 program.parse()

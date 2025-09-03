@@ -10,10 +10,10 @@ export function getVaultDir(): string {
   return path.join(getConfigDir(), 'vaults')
 }
 
-export function getKeyshareDir(): string {
-  // Use keyshares directory relative to current working directory
-  // This matches the intended usage: user has binary and keyshares folder together
-  return path.join(process.cwd(), 'keyshares')
+export function getVaultsDir(): string {
+  // Use vaults directory relative to current working directory
+  // This matches the intended usage: user has binary and vaults folder together
+  return path.join(process.cwd(), 'vaults')
 }
 
 export async function ensureDirectoryExists(dirPath: string): Promise<void> {
@@ -53,3 +53,7 @@ export async function findVultFiles(dir: string): Promise<string[]> {
   
   return vultFiles
 }
+
+// Legacy aliases for backward compatibility
+export const getVaultshareDir = getVaultsDir
+export const getKeyshareDir = getVaultsDir

@@ -17,21 +17,11 @@
     "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
-      "@core/*": ["../../core/*"],
-      "@lib/*": ["../../lib/*"],
       "vultisig-sdk": ["../../src"]
     }
   },
   "include": [
     "src/**/*"
-  ],
-  "references": [
-    { "path": "../../src" },
-    { "path": "../../core/mpc" },
-    { "path": "../../core/chain" },
-    { "path": "../../lib/dkls" },
-    { "path": "../../lib/schnorr" },
-    { "path": "../../lib/utils" }
   ],
   "exclude": [
     "node_modules",

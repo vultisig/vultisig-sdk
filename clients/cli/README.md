@@ -39,11 +39,11 @@ vultisig address
 
 ## 🏃 Quick Start
 
-### 1. Prepare Your Keyshares
-Create a `keyshares/` directory and copy your `.vult` files:
+### 1. Prepare Your Vaults
+Create a `vaults/` directory and copy your `.vult` files:
 ```bash
-mkdir keyshares
-cp ~/Downloads/MyVault-*.vult ./keyshares/
+mkdir vaults
+cp ~/Downloads/MyVault-*.vult ./vaults/
 vultisig list  # Verify files are detected
 ```
 
@@ -51,7 +51,7 @@ vultisig list  # Verify files are detected
 ```bash
 vultisig run
 # 🚀 Starting Vultisig daemon...
-# 📄 Auto-discovered keyshare: MyVault-share1of2.vult
+# 📄 Auto-discovered vault: MyVault-share1of2.vult
 # 🔓 Vault is unencrypted, no password needed.
 # ✅ Vault loaded successfully!
 # 📍 Vault: MyVault
@@ -119,7 +119,7 @@ vultisig init
 ---
 
 ### `vultisig list`
-List available keyshare files with encryption status.
+List available vault files with encryption status.
 
 **Usage:**
 ```bash
@@ -128,7 +128,7 @@ vultisig list
 
 **Example Output:**
 ```
-📁 Found 2 keyshare file(s) in ./keyshares:
+📁 Found 2 vault file(s) in ./vaults:
   📄 MyVault-share1of2.vult (🔓 unencrypted)
   📄 SecureVault-share2of2.vult (🔐 encrypted)
 ```
