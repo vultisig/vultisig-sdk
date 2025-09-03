@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "module": "CommonJS",
+    "outDir": "./dist",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["../../core/*"],
+      "@lib/*": ["../../lib/*"],
+      "vultisig-sdk": ["../../src"]
+    }
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "references": [
+    { "path": "../../src" },
+    { "path": "../../core/mpc" },
+    { "path": "../../core/chain" },
+    { "path": "../../lib/dkls" },
+    { "path": "../../lib/schnorr" },
+    { "path": "../../lib/utils" }
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

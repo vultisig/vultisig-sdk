@@ -1,0 +1,29 @@
+{
+  "name": "vultisig-sol-signer",
+  "version": "1.0.0",
+  "description": "Solana transaction signing via Vultisig MPC daemon",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "node --experimental-json-modules tests/basic.js"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "vultisig",
+    "solana",
+    "mpc",
+    "signer",
+    "web3"
+  ],
+  "author": "Vultisig",
+  "license": "MIT"
+}
