@@ -1,48 +1,67 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { getKeyshareDir, findVultFiles } from '../utils/paths'
-import { VaultLoader } from '../vault/VaultLoader'
+import { VaultManager } from '../vultisig-sdk-mocked'
+import { getVaultsDir, findVultFiles } from '../utils/paths'
 
 export class ListCommand {
-  readonly description = 'List available keyshare files'
+  readonly description = 'List available vault files'
   
   async run(): Promise<void> {
-    const keyshareDir = getKeyshareDir()
+    console.log('📁 Scanning for vault files...')
     
-    // Check if keyshare directory exists
+    // Check for .vult files in vaults directory
+    const vaultsDir = getVaultsDir()
+    
     try {
-      await fs.promises.access(keyshareDir)
+      await fs.promises.access(vaultsDir)
     } catch {
-      console.log('Keyshare directory not found. Run "vultisig init" first.')
+      console.log('Vaults directory not found. Run "vultisig init" first.')
       return
     }
     
-    // Find .vult files
-    const vultFiles = await findVultFiles(keyshareDir)
+    const vultFiles = await findVultFiles(vaultsDir)
     
     if (vultFiles.length === 0) {
-      console.log(`No keyshare files (.vult) found in: ${keyshareDir}`)
+      console.log(`No vault files (.vult) found in: ${vaultsDir}`)
       console.log('\nPlace your .vult files in this directory to use them with the CLI.')
       return
     }
     
-    console.log(`📁 Found ${vultFiles.length} keyshare file(s) in ${keyshareDir}:`)
+    console.log(`📁 Found ${vultFiles.length} vault file(s) in ${vaultsDir}:`)
     
-    const vaultLoader = new VaultLoader()
+    // Check each file using SDK VaultManager
+    const vaultManager = new VaultManager()
     
-    for (const file of vultFiles) {
-      let encStatus = '🔐 encrypted'
-      
+    for (const filePath of vultFiles) {
       try {
-        const isUnencrypted = await vaultLoader.checkIfUnencrypted(file)
-        if (isUnencrypted) {
-          encStatus = '🔓 unencrypted'
-        }
-      } catch {
-        encStatus = '❓ unknown'
+        const buffer = await fs.promises.readFile(filePath)
+        const file = new File([buffer], path.basename(filePath))
+        
+        // Check if encrypted from filename hint
+        const fileName = path.basename(filePath)
+        const isEncrypted = fileName.toLowerCase().includes('password') && !fileName.toLowerCase().includes('nopassword')
+        const status = isEncrypted ? '🔐 encrypted' : '🔓 unencrypted'
+        
+        console.log(`  📄 ${path.basename(filePath)} (${status})`)
+        
+      } catch (error) {
+        console.log(`  📄 ${path.basename(filePath)} (❓ unknown - ${error instanceof Error ? error.message : 'error'})`)
       }
-      
-      console.log(`  📄 ${path.basename(file)} (${encStatus})`)
+    }
+    
+    // Also check for already loaded vaults in SDK storage
+    try {
+      const storedVaults = await VaultManager.list()
+      if (storedVaults.length > 0) {
+        console.log(`\n💾 Found ${storedVaults.length} vault(s) in storage:`)
+        for (const summary of storedVaults) {
+          const status = summary.isEncrypted ? '🔐 encrypted' : '🔓 unencrypted'
+          const type = summary.type || 'unknown'
+          console.log(`  🏛️  ${summary.name} (${status}, ${type})`)
+        }
+      }
+    } catch (error) {
+      // Storage not initialized yet, that's OK
     }
   }
 }

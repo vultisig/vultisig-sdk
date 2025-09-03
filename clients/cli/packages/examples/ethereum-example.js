@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { JsonRpcProvider } from 'ethers'
-import { VultisigSigner } from 'vultisig-eth-signer'
+import { VultisigSigner } from '../vultisig-eth-signer/dist/index.js'
 
 async function testEthereumSigner() {
   console.log('🔐 Testing Vultisig Ethereum Signer...')

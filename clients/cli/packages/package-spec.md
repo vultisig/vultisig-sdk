@@ -143,9 +143,9 @@ class VultisigSigner {
 
 The CLI daemon (`vultisig run`) implements:
 1. **Unix socket listener** at `/tmp/vultisig.sock`
-2. **JSON-RPC request handler** in `network::handle_json_rpc_request()`
-3. **MPC coordination** for 2-of-2 threshold signatures
-4. **Mobile app integration** via WebSocket and QR codes
+2. **JSON-RPC request handler** for vault operations
+3. **MPC coordination** for threshold signatures
+4. **Vault management** via SDK integration
 
 ## Integration Patterns
 
@@ -194,7 +194,7 @@ const signature = await signer.sign(transactionBytes);
 
 ### Daemon Integration
 
-1. **Start daemon**: `vultisig run --vault /path/to/keyshare.vult`
+1. **Start daemon**: `vultisig run --vault /path/to/vault.vult`
 2. **Verify socket**: Check `/tmp/vultisig.sock` exists
 3. **Test requests**: Use packages or direct JSON-RPC calls
 
@@ -261,7 +261,7 @@ The `packages/examples/` directory demonstrates:
 
 ### Runtime Requirements
 - **Node.js**: ES modules support (Node 14+)
-- **Daemon**: Vultisig CLI running with keyshare loaded
+- **Daemon**: Vultisig CLI running with vault loaded
 - **Socket**: Unix domain socket at `/tmp/vultisig.sock`
 
 ### Build Requirements
