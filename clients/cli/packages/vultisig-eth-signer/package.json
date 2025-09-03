@@ -1,0 +1,29 @@
+{
+  "name": "vultisig-eth-signer",
+  "version": "1.0.0",
+  "description": "Ethereum transaction and message signing via Vultisig MPC daemon",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "node --experimental-json-modules tests/basic.js"
+  },
+  "dependencies": {
+    "ethers": "^6.13.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "vultisig",
+    "ethereum",
+    "mpc",
+    "signer",
+    "ethers"
+  ],
+  "author": "Vultisig",
+  "license": "MIT"
+}
