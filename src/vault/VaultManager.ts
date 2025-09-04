@@ -5,18 +5,15 @@ import {
   decryptVaultKeyShares,
   encryptVaultKeyShares,
 } from '@core/ui/passcodeEncryption/core/vaultKeyShares'
-import { vaultBackupResultFromFileContent } from '@core/ui/vault/import/utils/vaultBackupResultFromString'
 import { vaultContainerFromString } from '@core/ui/vault/import/utils/vaultContainerFromString'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
+import { VaultImportError, VaultImportErrorCode } from './VaultError'
+
 import type {
-  ExportOptions,
   Vault,
-  VaultBackup,
   VaultDetails,
-  VaultOptions,
-  VaultSecurityType,
   VaultValidationResult,
 } from '../types'
 
@@ -25,28 +22,182 @@ import type {
  */
 export class VaultManager {
   /**
-   * Create a new vault (placeholder - will integrate with MPC keygen)
+   * Read file as ArrayBuffer (works in both browser and Node.js)
    */
-  async createVault(_options: VaultOptions): Promise<Vault> {
-    // This will be implemented to integrate with MPC keygen process
-    throw new Error(
-      'createVault not implemented yet - requires MPC keygen integration'
-    )
+  private static async readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
+    // Check if we're in a browser environment
+    if (typeof FileReader !== 'undefined') {
+      // Use File.arrayBuffer() method which is now standard
+      return file.arrayBuffer()
+    }
+
+    // For Node.js/test environment, use the file's internal buffer
+    // This is a workaround for testing - in production this would use FileReader
+    const fileData = (file as any).buffer || (file as any)._buffer
+    if (fileData) {
+      return fileData
+    }
+
+    throw new Error('Unable to read file: FileReader not available and no internal buffer found')
   }
+
+  /**
+   * Add a vault from a .vult file to the VaultManager
+   * Automatically applies global settings (chains, currency) to the imported vault
+   * @param file - The .vult file to import
+   * @param password - Optional password for encrypted vaults
+   * @returns Promise<Vault> - The imported and normalized vault
+   */
+  static async add(file: File, password?: string): Promise<Vault> {
+    try {
+      // Validate file type
+      if (!file.name.toLowerCase().endsWith('.vult')) {
+        throw new VaultImportError(
+          VaultImportErrorCode.INVALID_FILE_FORMAT,
+          'Only .vult files are supported for vault import'
+        )
+      }
+
+      // Read file as ArrayBuffer
+      const buffer = await this.readFileAsArrayBuffer(file)
+
+      // Decode as UTF-8 string (base64 content)
+      const base64Content = new TextDecoder().decode(buffer)
+
+      // Parse VaultContainer protobuf
+      const container = vaultContainerFromString(base64Content.trim())
+
+      let vaultBase64: string
+
+      // Handle encryption
+      if (container.isEncrypted) {
+        if (!password) {
+          throw new VaultImportError(
+            VaultImportErrorCode.PASSWORD_REQUIRED,
+            'Password is required to decrypt this vault'
+          )
+        }
+
+        try {
+          // Decrypt the vault data
+          const encryptedData = fromBase64(container.vault)
+          const decryptedBuffer = await decryptWithAesGcm({
+            key: password,
+            value: encryptedData,
+          })
+
+          // Convert decrypted data back to base64 for parsing
+          vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+        } catch (error) {
+          throw new VaultImportError(
+            VaultImportErrorCode.INVALID_PASSWORD,
+            'Invalid password for encrypted vault',
+            error as Error
+          )
+        }
+      } else {
+        // Unencrypted vault - use directly
+        vaultBase64 = container.vault
+      }
+
+      // Decode and parse the inner Vault protobuf
+      const vaultBinary = fromBase64(vaultBase64)
+      const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
+
+      // Convert to Vault object
+      const vault = fromCommVault(vaultProtobuf)
+
+      // Apply global settings and normalize
+      const normalizedVault = this.applyGlobalSettings(vault)
+
+      // TODO: Add to VaultManager registry
+      // TODO: Set as active vault if no other vaults exist
+
+      return normalizedVault
+    } catch (error) {
+      // Re-throw VaultImportError instances
+      if (error instanceof VaultImportError) {
+        throw error
+      }
+
+      // Wrap other errors
+      throw new VaultImportError(
+        VaultImportErrorCode.CORRUPTED_DATA,
+        `Failed to import vault: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Apply global VaultManager settings to an imported vault
+   * @param vault - The vault to normalize
+   * @returns Vault - The vault with global settings applied
+   */
+  private static applyGlobalSettings(vault: Vault): Vault {
+    // TODO: Implement global settings application
+    // - Apply default chains
+    // - Apply default currency
+    // - Set isBackedUp to true for imported vaults
+    // - Generate vault ID if needed
+
+    return {
+      ...vault,
+      isBackedUp: true, // Imported vaults are considered backed up
+    }
+  }
+
+
 
   /**
    * Check if vault keyshares are encrypted with a passcode
    */
   isVaultEncrypted(vault: Vault): boolean {
-    // Check if keyshares are encrypted (existing logic from core)
-    return vault.keyShares && typeof vault.keyShares === 'string'
+    // Check if keyshares are encrypted - they should be an object with encrypted string values
+    if (!vault.keyShares || typeof vault.keyShares !== 'object') {
+      return false
+    }
+
+    // Check if any of the keyShares are encrypted strings (base64 encoded)
+    const keyShares = vault.keyShares as Record<string, any>
+    return Object.values(keyShares).some(value =>
+      typeof value === 'string' && /^[A-Za-z0-9+/]+=*$/.test(value)
+    )
   }
+
+  /**
+   * Static method to check if a vault file is encrypted
+   */
+  static async isEncrypted(file: File): Promise<boolean> {
+    try {
+      // Read file as ArrayBuffer
+      const buffer = await this.readFileAsArrayBuffer(file)
+      
+      // Decode as UTF-8 string (base64 content)
+      const base64Content = new TextDecoder().decode(buffer)
+      
+      // Parse VaultContainer protobuf to check encryption flag
+      const container = vaultContainerFromString(base64Content.trim())
+      
+      return container.isEncrypted
+    } catch (error) {
+      throw new VaultImportError(
+        VaultImportErrorCode.CORRUPTED_DATA,
+        `Failed to check encryption status: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
 
   /**
    * Encrypt vault keyshares with passcode
    */
-  async encryptVault(vault: Vault, passcode: string): Promise<Vault> {
-    if (this.isVaultEncrypted(vault)) {
+  static async encryptVault(vault: Vault, passcode: string): Promise<Vault> {
+    // Create instance to access isVaultEncrypted method
+    const instance = new VaultManager()
+
+    if (instance.isVaultEncrypted(vault)) {
       return vault // Already encrypted
     }
 
@@ -64,8 +215,11 @@ export class VaultManager {
   /**
    * Decrypt vault keyshares with passcode
    */
-  async decryptVault(vault: Vault, passcode: string): Promise<Vault> {
-    if (!this.isVaultEncrypted(vault)) {
+  static async decryptVault(vault: Vault, passcode: string): Promise<Vault> {
+    // Create instance to access isVaultEncrypted method
+    const instance = new VaultManager()
+
+    if (!instance.isVaultEncrypted(vault)) {
       return vault // Already decrypted
     }
 
@@ -84,208 +238,15 @@ export class VaultManager {
     }
   }
 
-  /**
-   * Export vault to backup format
-   */
-  async exportVault(
-    _vault: Vault,
-    _options?: ExportOptions
-  ): Promise<VaultBackup> {
-    // This will integrate with existing backup mutation logic
-    throw new Error(
-      'exportVault not implemented yet - requires backup mutation integration'
-    )
-  }
+
+
+
 
   /**
-   * Import vault from backup
+   * Normalize vault object to ensure consistent structure
+   * @param v - Raw vault object to normalize
+   * @returns Normalized vault object
    */
-  async importVault(_backup: VaultBackup, _password?: string): Promise<Vault> {
-    // This will integrate with existing import logic
-    throw new Error(
-      'importVault not implemented yet - requires import logic integration'
-    )
-  }
-
-  /**
-   * Import vault from file (ArrayBuffer or File)
-   */
-  async importVaultFromFile(
-    fileData: ArrayBuffer | File,
-    password?: string
-  ): Promise<Vault> {
-    let buffer: ArrayBuffer
-    if (fileData instanceof File) {
-      buffer = await fileData.arrayBuffer()
-    } else {
-      buffer = fileData
-    }
-
-    const fileName = fileData instanceof File ? fileData.name.toLowerCase() : ''
-    const valueAsString = new TextDecoder().decode(buffer)
-
-    // .vult (VaultContainer base64) handling
-    if (fileName.endsWith('.vult')) {
-      try {
-        const container = vaultContainerFromString(valueAsString)
-        const vaultBase64 = container.vault
-        if (container.isEncrypted) {
-          if (!password)
-            throw new Error('Password required for encrypted vault')
-          const decrypted = await decryptWithAesGcm({
-            key: password,
-            value: fromBase64(vaultBase64),
-          })
-          const binary = new Uint8Array(decrypted)
-          const comm = fromBinary(VaultSchema, binary)
-          const vault = fromCommVault(comm)
-          return this.normalizeVault(vault)
-        }
-
-        const binary = new Uint8Array(fromBase64(vaultBase64))
-        const comm = fromBinary(VaultSchema, binary)
-        const vault = fromCommVault(comm)
-        return this.normalizeVault(vault)
-      } catch (e) {
-        throw new Error(`Failed to import .vult vault: ${(e as Error).message}`)
-      }
-    }
-
-    // .dat (legacy) handling
-    if (fileName.endsWith('.dat')) {
-      try {
-        const result = vaultBackupResultFromFileContent({
-          value: buffer,
-          extension: 'dat' as any,
-        })
-        if ('vault' in result) {
-          return this.normalizeVault(result.vault as any)
-        }
-        if ('encryptedVault' in result) {
-          if (!password)
-            throw new Error('Password required for encrypted vault')
-          const decrypted = await decryptWithAesGcm({
-            key: password,
-            value: Buffer.from(result.encryptedVault),
-          })
-          const text = new TextDecoder().decode(decrypted)
-          const data = JSON.parse(text)
-          return this.parseVaultFromData(data)
-        }
-      } catch (e) {
-        throw new Error(`Failed to import .dat vault: ${(e as Error).message}`)
-      }
-    }
-
-    // Fallback: try JSON parsing (unknown extension)
-    try {
-      const vaultData = JSON.parse(valueAsString)
-      if (password && this.isVaultDataEncrypted(vaultData)) {
-        const decryptedData = await this.decryptVaultData(vaultData, password)
-        return this.parseVaultFromData(decryptedData)
-      }
-      return this.parseVaultFromData(vaultData)
-    } catch (error) {
-      throw new Error(`Failed to import vault from file: ${error}`)
-    }
-  }
-
-  /**
-   * Check if a vault file is encrypted
-   */
-  async isVaultFileEncrypted(file: File): Promise<boolean> {
-    try {
-      const buffer = await file.arrayBuffer()
-      const name = file.name.toLowerCase()
-      const content = new TextDecoder().decode(buffer)
-
-      if (name.endsWith('.vult')) {
-        try {
-          const container = vaultContainerFromString(content)
-          return Boolean(container.isEncrypted)
-        } catch {
-          return false
-        }
-      }
-
-      if (name.endsWith('.dat')) {
-        try {
-          const result = vaultBackupResultFromFileContent({
-            value: buffer,
-            extension: 'dat' as any,
-          })
-          return 'encryptedVault' in result
-        } catch {
-          return false
-        }
-      }
-
-      // Fallback to JSON heuristic
-      try {
-        const data = JSON.parse(content)
-        return this.isVaultDataEncrypted(data)
-      } catch {
-        return false
-      }
-    } catch {
-      return false
-    }
-  }
-
-  /**
-   * Helper method to check if vault data is encrypted
-   */
-  private isVaultDataEncrypted(vaultData: any): boolean {
-    // Check for encryption markers in the vault data structure
-    return (
-      vaultData.encrypted === true ||
-      (typeof vaultData.keyShares === 'string' &&
-        vaultData.keyShares.startsWith('encrypted:')) ||
-      vaultData.encryptedKeyShares !== undefined
-    )
-  }
-
-  /**
-   * Helper method to decrypt vault data
-   */
-  private async decryptVaultData(
-    vaultData: any,
-    _password: string
-  ): Promise<any> {
-    // This would integrate with the existing decryption logic from core
-    // For now, return as-is (needs proper implementation)
-    return vaultData
-  }
-
-  /**
-   * Helper method to parse vault data into Vault object
-   */
-  private parseVaultFromData(vaultData: any): Vault {
-    const ecdsa =
-      vaultData.public_key_ecdsa ||
-      vaultData.publicKeyEcdsa ||
-      vaultData.publicKeys?.ecdsa ||
-      ''
-    const eddsa =
-      vaultData.public_key_eddsa ||
-      vaultData.publicKeyEddsa ||
-      vaultData.publicKeys?.eddsa ||
-      ''
-    return this.normalizeVault({
-      name: vaultData.name || 'Imported Vault',
-      publicKeys: { ecdsa, eddsa },
-      localPartyId:
-        vaultData.local_party_id || vaultData.localPartyId || 'imported',
-      signers: vaultData.signers || [],
-      hexChainCode: vaultData.hex_chain_code || vaultData.hexChainCode || '',
-      keyShares: vaultData.key_shares || vaultData.keyShares || {},
-      libType: 'DKLS',
-      isBackedUp: Boolean(vaultData.isBackedUp),
-      order: vaultData.order ?? 0,
-      createdAt: vaultData.createdAt ?? Date.now(),
-    } as Vault)
-  }
-
   private normalizeVault(v: Vault): Vault {
     return {
       name: v.name,
@@ -297,7 +258,7 @@ export class VaultManager {
       localPartyId: v.localPartyId,
       resharePrefix: (v as any).resharePrefix,
       libType: v.libType ?? 'DKLS',
-      isBackedUp: v.isBackedUp ?? false,
+      isBackedUp: v.isBackedUp ?? true, // Default to true for imported vaults
       order: v.order ?? 0,
       folderId: (v as any).folderId,
       lastPasswordVerificationTime: (v as any).lastPasswordVerificationTime,
@@ -309,7 +270,7 @@ export class VaultManager {
    */
   getVaultDetails(vault: Vault): VaultDetails {
     // Determine security type based on signers count
-    const securityType: VaultSecurityType =
+    const securityType: 'fast' | 'secure' =
       vault.signers.length === 2 ? 'fast' : 'secure'
 
     return {

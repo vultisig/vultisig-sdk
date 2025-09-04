@@ -16,6 +16,17 @@ export enum VaultErrorCode {
   InvalidChainCode = 'INVALID_CHAIN_CODE',
 }
 
+/**
+ * Vault import error codes
+ */
+export enum VaultImportErrorCode {
+  INVALID_FILE_FORMAT = 'INVALID_FILE_FORMAT',
+  PASSWORD_REQUIRED = 'PASSWORD_REQUIRED',
+  INVALID_PASSWORD = 'INVALID_PASSWORD',
+  CORRUPTED_DATA = 'CORRUPTED_DATA',
+  UNSUPPORTED_FORMAT = 'UNSUPPORTED_FORMAT',
+}
+
 export class VaultError extends Error {
   constructor(
     public code: VaultErrorCode,
@@ -29,6 +40,30 @@ export class VaultError extends Error {
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, VaultError)
     }
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      code: this.code,
+      message: this.message,
+      stack: this.stack,
+      originalError: this.originalError?.message,
+    }
+  }
+}
+
+/**
+ * Vault import error class
+ */
+export class VaultImportError extends Error {
+  constructor(
+    public code: VaultImportErrorCode,
+    message: string,
+    public originalError?: Error
+  ) {
+    super(message)
+    this.name = 'VaultImportError'
   }
 
   toJSON() {
