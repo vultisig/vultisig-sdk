@@ -1,10 +1,6 @@
 import { fromBinary } from '@bufbuild/protobuf'
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
 import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
-import {
-  decryptVaultKeyShares,
-  encryptVaultKeyShares,
-} from '@core/ui/passcodeEncryption/core/vaultKeyShares'
 import { vaultContainerFromString } from '@core/ui/vault/import/utils/vaultContainerFromString'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
@@ -110,9 +106,6 @@ export class VaultManager {
       // Apply global settings and normalize
       const normalizedVault = this.applyGlobalSettings(vault)
 
-      // TODO: Add to VaultManager registry
-      // TODO: Set as active vault if no other vaults exist
-
       return normalizedVault
     } catch (error) {
       // Re-throw VaultImportError instances
@@ -147,26 +140,10 @@ export class VaultManager {
     }
   }
 
-
-
-  /**
-   * Check if vault keyshares are encrypted with a passcode
-   */
-  isVaultEncrypted(vault: Vault): boolean {
-    // Check if keyshares are encrypted - they should be an object with encrypted string values
-    if (!vault.keyShares || typeof vault.keyShares !== 'object') {
-      return false
-    }
-
-    // Check if any of the keyShares are encrypted strings (base64 encoded)
-    const keyShares = vault.keyShares as Record<string, any>
-    return Object.values(keyShares).some(value =>
-      typeof value === 'string' && /^[A-Za-z0-9+/]+=*$/.test(value)
-    )
-  }
-
   /**
    * Static method to check if a vault file is encrypted
+   * This checks the VaultContainer.is_encrypted property which indicates
+   * whether the entire vault file is password-encrypted with AES-256-GCM
    */
   static async isEncrypted(file: File): Promise<boolean> {
     try {
@@ -188,59 +165,6 @@ export class VaultManager {
       )
     }
   }
-
-
-  /**
-   * Encrypt vault keyshares with passcode
-   */
-  static async encryptVault(vault: Vault, passcode: string): Promise<Vault> {
-    // Create instance to access isVaultEncrypted method
-    const instance = new VaultManager()
-
-    if (instance.isVaultEncrypted(vault)) {
-      return vault // Already encrypted
-    }
-
-    const encryptedKeyShares = await encryptVaultKeyShares({
-      keyShares: vault.keyShares,
-      key: passcode,
-    })
-
-    return {
-      ...vault,
-      keyShares: encryptedKeyShares,
-    }
-  }
-
-  /**
-   * Decrypt vault keyshares with passcode
-   */
-  static async decryptVault(vault: Vault, passcode: string): Promise<Vault> {
-    // Create instance to access isVaultEncrypted method
-    const instance = new VaultManager()
-
-    if (!instance.isVaultEncrypted(vault)) {
-      return vault // Already decrypted
-    }
-
-    try {
-      const decryptedKeyShares = await decryptVaultKeyShares({
-        keyShares: vault.keyShares as any,
-        key: passcode,
-      })
-
-      return {
-        ...vault,
-        keyShares: decryptedKeyShares,
-      }
-    } catch {
-      throw new Error('Failed to decrypt vault: Invalid passcode')
-    }
-  }
-
-
-
-
 
   /**
    * Normalize vault object to ensure consistent structure
