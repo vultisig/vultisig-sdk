@@ -282,6 +282,27 @@ describe('VaultManager Import Tests', () => {
       expect(secureDetails.securityType).toBe('fast') // 2 signers = fast type
       expect(secureDetails.participants).toBe(2)
     })
+
+    test('should store threshold on vault when loaded', async () => {
+      // Test that threshold is calculated and stored when vault is loaded
+      const vaultFilePath = join(testVaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const vaultFileBuffer = readFileSync(vaultFilePath)
+      const vaultFileObj = new File([vaultFileBuffer], 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      ;(vaultFileObj as any).buffer = vaultFileBuffer
+
+      // Import vault using VaultManager
+      const loadedVault = await VaultManager.add(vaultFileObj)
+
+      // Verify that threshold is stored on the vault object
+      expect(loadedVault.threshold).toBeDefined()
+      expect(typeof loadedVault.threshold).toBe('number')
+      expect(loadedVault.threshold).toBe(2) // 2 signers -> threshold should be 2
+
+      // Verify that getVaultDetails uses the stored threshold
+      const instance = new VaultManager()
+      const details = instance.getVaultDetails(loadedVault)
+      expect(details.threshold).toBe(loadedVault.threshold)
+    })
   })
 
   describe('error handling', () => {
@@ -303,5 +324,63 @@ describe('VaultManager Import Tests', () => {
         VaultManager.add(malformedFile)
       ).rejects.toThrow(VaultImportError)
     })
+  })
+
+  describe('threshold calculation', () => {
+    test('should calculate correct threshold values', () => {
+      // Test various participant counts and their expected thresholds
+      const testCases = [
+        { participants: 2, expectedThreshold: 2 }, // 2/3 of 2 = 1.33 -> 2 (minimum)
+        { participants: 3, expectedThreshold: 2 }, // 2/3 of 3 = 2
+        { participants: 4, expectedThreshold: 3 }, // 2/3 of 4 = 2.67 -> 3 (rounded up)
+        { participants: 5, expectedThreshold: 4 }, // 2/3 of 5 = 3.33 -> 4 (rounded up)
+        { participants: 6, expectedThreshold: 4 }, // 2/3 of 6 = 4
+        { participants: 7, expectedThreshold: 5 }, // 2/3 of 7 = 4.67 -> 5 (rounded up)
+        { participants: 9, expectedThreshold: 6 }, // 2/3 of 9 = 6
+        { participants: 10, expectedThreshold: 7 }, // 2/3 of 10 = 6.67 -> 7 (rounded up)
+      ]
+
+      // Create a mock vault for each test case
+      testCases.forEach(({ participants, expectedThreshold }) => {
+        const mockVault: Vault = {
+          name: `Test Vault ${participants}`,
+          publicKeys: { ecdsa: 'test-key', eddsa: 'test-key' },
+          signers: Array(participants).fill(null).map((_, i) => `signer-${i}`),
+          createdAt: Date.now(),
+          hexChainCode: 'test-chain-code',
+          keyShares: { ecdsa: 'test-share', eddsa: 'test-share' },
+          localPartyId: 'local-party',
+          libType: 'DKLS',
+          isBackedUp: true,
+          order: 0,
+        }
+
+        const instance = new VaultManager()
+        const details = instance.getVaultDetails(mockVault)
+        
+        expect(details.threshold).toBe(expectedThreshold)
+        expect(details.participants).toBe(participants)
+      })
+    })
+
+    test('should throw error for insufficient participants', () => {
+      // Test that calculateThreshold throws for less than 2 participants
+      const mockVault: Vault = {
+        name: 'Invalid Vault',
+        publicKeys: { ecdsa: 'test-key', eddsa: 'test-key' },
+        signers: ['single-signer'], // Only 1 signer
+        createdAt: Date.now(),
+        hexChainCode: 'test-chain-code',
+        keyShares: { ecdsa: 'test-share', eddsa: 'test-share' },
+        localPartyId: 'local-party',
+        libType: 'DKLS',
+        isBackedUp: true,
+        order: 0,
+      }
+
+      const instance = new VaultManager()
+      expect(() => instance.getVaultDetails(mockVault)).toThrow('Vault must have at least 2 participants')
+    })
+
   })
 })

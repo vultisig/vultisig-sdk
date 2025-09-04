@@ -128,14 +128,12 @@ export class VaultManager {
    * @returns Vault - The vault with global settings applied
    */
   private static applyGlobalSettings(vault: Vault): Vault {
-    // TODO: Implement global settings application
-    // - Apply default chains
-    // - Apply default currency
-    // - Set isBackedUp to true for imported vaults
-    // - Generate vault ID if needed
+    // Calculate and store threshold based on signers count
+    const threshold = this.calculateThreshold(vault.signers.length)
 
     return {
       ...vault,
+      threshold,
       isBackedUp: true, // Imported vaults are considered backed up
     }
   }
@@ -182,11 +180,26 @@ export class VaultManager {
       localPartyId: v.localPartyId,
       resharePrefix: (v as any).resharePrefix,
       libType: v.libType ?? 'DKLS',
+      threshold: v.threshold ?? VaultManager.calculateThreshold(v.signers.length), // Calculate if not present
       isBackedUp: v.isBackedUp ?? true, // Default to true for imported vaults
       order: v.order ?? 0,
       folderId: (v as any).folderId,
       lastPasswordVerificationTime: (v as any).lastPasswordVerificationTime,
     }
+  }
+
+  /**
+   * Calculate the threshold for a given number of participants
+   * Formula: 2/3rds of participants (rounded up) with minimum of 2
+   */
+  private static calculateThreshold(participantCount: number): number {
+    if (participantCount < 2) {
+      throw new Error('Vault must have at least 2 participants')
+    }
+    
+    // Calculate 2/3rds and round up, with minimum of 2
+    const twoThirds = Math.ceil((participantCount * 2) / 3)
+    return Math.max(2, twoThirds)
   }
 
   /**
@@ -201,7 +214,7 @@ export class VaultManager {
       name: vault.name,
       id: vault.publicKeys.ecdsa || 'unknown',
       securityType,
-      threshold: vault.signers.length, // Simplified - actual threshold calculation needed
+      threshold: vault.threshold ?? VaultManager.calculateThreshold(vault.signers.length), // Fallback for legacy vaults
       participants: vault.signers.length,
       chains: [], // Will be derived from public keys - requires chain integration
       createdAt: vault.createdAt,
