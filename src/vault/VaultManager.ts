@@ -5,18 +5,46 @@ import { vaultContainerFromString } from '@core/ui/vault/import/utils/vaultConta
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
-import { VaultImportError, VaultImportErrorCode } from './VaultError'
-
 import type {
+  AddressBook,
+  AddressBookEntry,
+  KeygenMode,
+  Summary,
   Vault,
+  VaultCreationStep,
   VaultDetails,
+  VaultManagerConfig,
+  VaultType,
   VaultValidationResult,
 } from '../types'
+import { Vault as VaultClass } from './Vault'
+import { VaultImportError, VaultImportErrorCode } from './VaultError'
 
 /**
- * VaultManager handles all vault operations by wrapping existing core functionality
+ * VaultManager handles multiple vaults and global vault operations
+ * Following the vault-centric architecture with static methods
  */
 export class VaultManager {
+  // === GLOBAL SETTINGS ===
+  private static config: VaultManagerConfig = {
+    defaultChains: ['bitcoin', 'ethereum'],
+    defaultCurrency: 'USD',
+  }
+  private static sdkInstance: any | null = null
+  private static activeVault: VaultClass | null = null
+  private static vaultStorage = new Map<string, Vault>()
+  private static addressBookData: AddressBook = { saved: [], vaults: [] }
+  // === INITIALIZATION ===
+  /**
+   * Initialize VaultManager with SDK instance and configuration
+   */
+  static init(sdk: any, config?: Partial<VaultManagerConfig>): void {
+    this.sdkInstance = sdk
+    if (config) {
+      this.config = { ...this.config, ...config }
+    }
+  }
+
   /**
    * Read file as ArrayBuffer (works in both browser and Node.js)
    */
@@ -34,7 +62,29 @@ export class VaultManager {
       return fileData
     }
 
-    throw new Error('Unable to read file: FileReader not available and no internal buffer found')
+    throw new Error(
+      'Unable to read file: FileReader not available and no internal buffer found'
+    )
+  }
+
+  // === VAULT LIFECYCLE ===
+  /**
+   * Create new vault (automatically applies global chains/currency)
+   */
+  static async create(
+    _name: string,
+    _options?: {
+      type?: VaultType
+      keygenMode?: KeygenMode
+      password?: string
+      email?: string
+      onProgress?: (step: VaultCreationStep) => void
+    }
+  ): Promise<VaultClass> {
+    // TODO: Implement vault creation with MPC keygen
+    throw new Error(
+      'create() not implemented yet - requires MPC keygen integration'
+    )
   }
 
   /**
@@ -42,9 +92,9 @@ export class VaultManager {
    * Automatically applies global settings (chains, currency) to the imported vault
    * @param file - The .vult file to import
    * @param password - Optional password for encrypted vaults
-   * @returns Promise<Vault> - The imported and normalized vault
+   * @returns Promise<VaultClass> - The imported and normalized vault
    */
-  static async add(file: File, password?: string): Promise<Vault> {
+  static async add(file: File, password?: string): Promise<VaultClass> {
     try {
       // Validate file type
       if (!file.name.toLowerCase().endsWith('.vult')) {
@@ -106,7 +156,16 @@ export class VaultManager {
       // Apply global settings and normalize
       const normalizedVault = this.applyGlobalSettings(vault)
 
-      return normalizedVault
+      // Store the vault
+      this.vaultStorage.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
+
+      // Create VaultClass instance
+      const vaultInstance = new VaultClass(
+        normalizedVault,
+        this.sdkInstance?.wasmManager?.getWalletCore()
+      )
+
+      return vaultInstance
     } catch (error) {
       // Re-throw VaultImportError instances
       if (error instanceof VaultImportError) {
@@ -120,6 +179,237 @@ export class VaultManager {
         error as Error
       )
     }
+  }
+
+  /**
+   * Load vault, applies global settings (chains/currency), makes active
+   */
+  static async load(vault: VaultClass, _password?: string): Promise<void> {
+    // Apply global settings to the vault
+    this.applyConfig(vault)
+
+    // Set as active vault
+    this.setActive(vault)
+  }
+
+  /**
+   * List all stored vaults with their summaries
+   */
+  static async list(): Promise<Summary[]> {
+    const summaries: Summary[] = []
+
+    for (const [, vault] of this.vaultStorage) {
+      const vaultInstance = new VaultClass(
+        vault,
+        this.sdkInstance?.wasmManager?.getWalletCore()
+      )
+      const summary = vaultInstance.summary()
+
+      const fullSummary: Summary = {
+        id: summary.id,
+        name: summary.name,
+        type: summary.type as VaultType,
+        chains: summary.chains,
+        createdAt: summary.createdAt ?? Date.now(),
+        isBackedUp: () => vault.isBackedUp ?? false,
+        isEncrypted: false, // TODO: Determine if vault is encrypted
+        lastModified: vault.createdAt ?? Date.now(),
+        size: 0, // TODO: Calculate vault size
+        threshold:
+          vault.threshold ?? this.calculateThreshold(vault.signers.length),
+        totalSigners: vault.signers.length,
+        vaultIndex: vault.localPartyId ? parseInt(vault.localPartyId) : 0,
+        signers: vault.signers.map((signerId, index) => ({
+          id: signerId,
+          publicKey: '', // TODO: Map signer ID to public key if available
+          name: `Signer ${index + 1}`,
+        })),
+        keys: {
+          ecdsa: vault.publicKeys.ecdsa,
+          eddsa: vault.publicKeys.eddsa,
+          hexChainCode: vault.hexChainCode,
+          hexEncryptionKey: '', // TODO: Add encryption key if available
+        },
+        currency: this.config.defaultCurrency,
+        tokens: {}, // TODO: Implement token management
+      }
+
+      summaries.push(fullSummary)
+    }
+
+    return summaries
+  }
+
+  /**
+   * Remove vault from storage
+   */
+  static async remove(vault: VaultClass): Promise<void> {
+    const vaultId = vault.data.publicKeys.ecdsa
+    this.vaultStorage.delete(vaultId)
+
+    // Clear active vault if it was the removed one
+    if (this.activeVault?.data.publicKeys.ecdsa === vaultId) {
+      this.activeVault = null
+    }
+  }
+
+  /**
+   * Clear all stored vaults
+   */
+  static async clear(): Promise<void> {
+    this.vaultStorage.clear()
+    this.activeVault = null
+    this.addressBookData = { saved: [], vaults: [] }
+  }
+
+  // === ACTIVE VAULT MANAGEMENT ===
+  /**
+   * Set active vault
+   */
+  static setActive(vault: VaultClass): void {
+    this.activeVault = vault
+  }
+
+  /**
+   * Get current active vault
+   */
+  static getActive(): VaultClass | null {
+    return this.activeVault
+  }
+
+  /**
+   * Check if there's an active vault
+   */
+  static hasActive(): boolean {
+    return this.activeVault !== null
+  }
+
+  // === GLOBAL CONFIGURATION ===
+  /**
+   * Set global default chains
+   */
+  static async setDefaultChains(chains: string[]): Promise<void> {
+    this.config.defaultChains = chains
+    // TODO: Save config to storage
+  }
+
+  /**
+   * Get global default chains
+   */
+  static getDefaultChains(): string[] {
+    return this.config.defaultChains
+  }
+
+  /**
+   * Set global default currency
+   */
+  static async setDefaultCurrency(currency: string): Promise<void> {
+    this.config.defaultCurrency = currency
+    // TODO: Save config to storage
+  }
+
+  /**
+   * Get global default currency
+   */
+  static getDefaultCurrency(): string {
+    return this.config.defaultCurrency
+  }
+
+  /**
+   * Save configuration
+   */
+  static async saveConfig(config: Partial<VaultManagerConfig>): Promise<void> {
+    this.config = { ...this.config, ...config }
+    // TODO: Persist to storage
+  }
+
+  /**
+   * Get current configuration
+   */
+  static getConfig(): VaultManagerConfig {
+    return { ...this.config }
+  }
+
+  // === ADDRESS BOOK (GLOBAL) ===
+  /**
+   * Get address book entries
+   */
+  static async addressBook(chain?: string): Promise<AddressBook> {
+    if (chain) {
+      return {
+        saved: this.addressBookData.saved.filter(
+          entry => entry.chain === chain
+        ),
+        vaults: this.addressBookData.vaults.filter(
+          entry => entry.chain === chain
+        ),
+      }
+    }
+    return { ...this.addressBookData }
+  }
+
+  /**
+   * Add address book entries
+   */
+  static async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> {
+    for (const entry of entries) {
+      // Remove existing entry if it exists
+      this.addressBookData.saved = this.addressBookData.saved.filter(
+        existing =>
+          !(
+            existing.chain === entry.chain && existing.address === entry.address
+          )
+      )
+
+      // Add new entry
+      this.addressBookData.saved.push({
+        ...entry,
+        dateAdded: Date.now(),
+      })
+    }
+    // TODO: Persist to storage
+  }
+
+  /**
+   * Remove address book entries
+   */
+  static async removeAddressBookEntry(
+    addresses: Array<{ chain: string; address: string }>
+  ): Promise<void> {
+    for (const { chain, address } of addresses) {
+      this.addressBookData.saved = this.addressBookData.saved.filter(
+        entry => !(entry.chain === chain && entry.address === address)
+      )
+    }
+    // TODO: Persist to storage
+  }
+
+  /**
+   * Update address book entry name
+   */
+  static async updateAddressBookEntry(
+    chain: string,
+    address: string,
+    name: string
+  ): Promise<void> {
+    const entry = this.addressBookData.saved.find(
+      entry => entry.chain === chain && entry.address === address
+    )
+
+    if (entry) {
+      entry.name = name
+      // TODO: Persist to storage
+    }
+  }
+
+  // === VAULT SETTINGS INHERITANCE ===
+  /**
+   * Apply global chains/currency to vault
+   */
+  private static applyConfig(vault: VaultClass): VaultClass {
+    // TODO: Apply global settings to vault instance
+    // This would involve setting chains, currency, etc.
+    return vault
   }
 
   /**
@@ -147,13 +437,13 @@ export class VaultManager {
     try {
       // Read file as ArrayBuffer
       const buffer = await this.readFileAsArrayBuffer(file)
-      
+
       // Decode as UTF-8 string (base64 content)
       const base64Content = new TextDecoder().decode(buffer)
-      
+
       // Parse VaultContainer protobuf to check encryption flag
       const container = vaultContainerFromString(base64Content.trim())
-      
+
       return container.isEncrypted
     } catch (error) {
       throw new VaultImportError(
@@ -169,7 +459,7 @@ export class VaultManager {
    * @param v - Raw vault object to normalize
    * @returns Normalized vault object
    */
-  private normalizeVault(v: Vault): Vault {
+  private static normalizeVault(v: Vault): Vault {
     return {
       name: v.name,
       publicKeys: v.publicKeys,
@@ -180,7 +470,8 @@ export class VaultManager {
       localPartyId: v.localPartyId,
       resharePrefix: (v as any).resharePrefix,
       libType: v.libType ?? 'DKLS',
-      threshold: v.threshold ?? VaultManager.calculateThreshold(v.signers.length), // Calculate if not present
+      threshold:
+        v.threshold ?? VaultManager.calculateThreshold(v.signers.length), // Calculate if not present
       isBackedUp: v.isBackedUp ?? true, // Default to true for imported vaults
       order: v.order ?? 0,
       folderId: (v as any).folderId,
@@ -196,7 +487,7 @@ export class VaultManager {
     if (participantCount < 2) {
       throw new Error('Vault must have at least 2 participants')
     }
-    
+
     // Calculate 2/3rds and round up, with minimum of 2
     const twoThirds = Math.ceil((participantCount * 2) / 3)
     return Math.max(2, twoThirds)
@@ -205,7 +496,7 @@ export class VaultManager {
   /**
    * Get vault details and metadata
    */
-  getVaultDetails(vault: Vault): VaultDetails {
+  static getVaultDetails(vault: Vault): VaultDetails {
     // Determine security type based on signers count
     const securityType: 'fast' | 'secure' =
       vault.signers.length === 2 ? 'fast' : 'secure'
@@ -214,7 +505,9 @@ export class VaultManager {
       name: vault.name,
       id: vault.publicKeys.ecdsa || 'unknown',
       securityType,
-      threshold: vault.threshold ?? VaultManager.calculateThreshold(vault.signers.length), // Fallback for legacy vaults
+      threshold:
+        vault.threshold ??
+        VaultManager.calculateThreshold(vault.signers.length), // Fallback for legacy vaults
       participants: vault.signers.length,
       chains: [], // Will be derived from public keys - requires chain integration
       createdAt: vault.createdAt,
@@ -225,7 +518,7 @@ export class VaultManager {
   /**
    * Validate vault structure and integrity
    */
-  validateVault(vault: Vault): VaultValidationResult {
+  static validateVault(vault: Vault): VaultValidationResult {
     const errors: string[] = []
     const warnings: string[] = []
 
