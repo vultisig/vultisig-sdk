@@ -71,7 +71,7 @@ describe('VaultManager Multi-Vault Tests', () => {
       expect(secureSummary).toBeDefined()
       
       expect(fastSummary!.type).toBe('fast')
-      expect(secureSummary!.type).toBe('fast') // 2 signers = fast type
+      expect(secureSummary!.type).toBe('secure') // No Server- signers = secure type
       
       expect(fastSummary!.totalSigners).toBe(2)
       expect(secureSummary!.totalSigners).toBe(2)

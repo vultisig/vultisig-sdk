@@ -21,6 +21,20 @@ import { Vault as VaultClass } from './Vault'
 import { VaultImportError, VaultImportErrorCode } from './VaultError'
 
 /**
+ * Determine vault type based on signer names
+ * Fast vaults have one signer that starts with "Server-"
+ * Secure vaults have only device signers (no "Server-" prefix)
+ *
+ * TODO: When server endpoint is implemented, fast vaults should be validated
+ * against the server to ensure they are legitimate server-assisted vaults
+ */
+function determineVaultType(signers: string[]): 'fast' | 'secure' {
+  return signers.some(signer => signer.startsWith('Server-'))
+    ? 'fast'
+    : 'secure'
+}
+
+/**
  * VaultManager handles multiple vaults and global vault operations
  * Following the vault-centric architecture with static methods
  */
@@ -153,8 +167,12 @@ export class VaultManager {
       // Convert to Vault object
       const vault = fromCommVault(vaultProtobuf)
 
+      // Determine encryption status and security type (cache these to avoid repeated decoding)
+      const isEncrypted = container.isEncrypted
+      const securityType = determineVaultType(vault.signers)
+
       // Apply global settings and normalize
-      const normalizedVault = this.applyGlobalSettings(vault)
+      const normalizedVault = this.applyGlobalSettings(vault, isEncrypted, securityType)
 
       // Store the vault
       this.vaultStorage.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
@@ -164,6 +182,10 @@ export class VaultManager {
         normalizedVault,
         this.sdkInstance?.wasmManager?.getWalletCore()
       )
+
+      // Set cached properties on the Vault instance
+      vaultInstance.setCachedEncryptionStatus(isEncrypted)
+      vaultInstance.setCachedSecurityType(securityType)
 
       return vaultInstance
     } catch (error) {
@@ -212,7 +234,7 @@ export class VaultManager {
         chains: summary.chains,
         createdAt: summary.createdAt ?? Date.now(),
         isBackedUp: () => vault.isBackedUp ?? false,
-        isEncrypted: false, // TODO: Determine if vault is encrypted
+        isEncrypted: vaultInstance.getCachedEncryptionStatus() ?? false, // Use cached encryption status
         lastModified: vault.createdAt ?? Date.now(),
         size: 0, // TODO: Calculate vault size
         threshold:
@@ -415,9 +437,15 @@ export class VaultManager {
   /**
    * Apply global VaultManager settings to an imported vault
    * @param vault - The vault to normalize
+   * @param isEncrypted - Whether the vault file was encrypted (cached to avoid repeated decoding)
+   * @param securityType - The security type of the vault (cached to avoid repeated calculation)
    * @returns Vault - The vault with global settings applied
    */
-  private static applyGlobalSettings(vault: Vault): Vault {
+  private static applyGlobalSettings(
+    vault: Vault,
+    isEncrypted: boolean,
+    securityType: 'fast' | 'secure'
+  ): Vault {
     // Calculate and store threshold based on signers count
     const threshold = this.calculateThreshold(vault.signers.length)
 
@@ -425,7 +453,10 @@ export class VaultManager {
       ...vault,
       threshold,
       isBackedUp: true, // Imported vaults are considered backed up
-    }
+      // Store cached properties that will be used by Vault class
+      _cachedEncryptionStatus: isEncrypted,
+      _cachedSecurityType: securityType,
+    } as Vault & { _cachedEncryptionStatus: boolean; _cachedSecurityType: 'fast' | 'secure' }
   }
 
   /**
@@ -452,6 +483,68 @@ export class VaultManager {
         error as Error
       )
     }
+  }
+
+  /**
+   * Static method to get cached encryption status from a vault instance
+   * This avoids re-decoding the vault file if the status is already cached
+   */
+  static getCachedEncryptionStatus(vault: VaultClass): boolean | undefined {
+    return vault.getCachedEncryptionStatus()
+  }
+
+  /**
+   * Static method to get cached security type from a vault instance
+   * This avoids re-calculating the security type if it's already cached
+   */
+  static getCachedSecurityType(vault: VaultClass): 'fast' | 'secure' | undefined {
+    return vault.getCachedSecurityType()
+  }
+
+  /**
+   * Static method to get encryption status with fallback to file-based checking
+   * If the vault has cached encryption status, returns it; otherwise checks the file
+   */
+  static async getEncryptionStatus(vault: VaultClass, file?: File): Promise<boolean> {
+    // Try to get cached value first
+    const cached = this.getCachedEncryptionStatus(vault)
+    if (cached !== undefined) {
+      return cached
+    }
+
+    // If no file provided and no cache, we can't determine encryption status
+    if (!file) {
+      throw new VaultImportError(
+        VaultImportErrorCode.CORRUPTED_DATA,
+        'Cannot determine encryption status: no cached value and no file provided'
+      )
+    }
+
+    // Fall back to file-based checking
+    const isEncrypted = await this.isEncrypted(file)
+
+    // Cache the result for future use
+    vault.setCachedEncryptionStatus(isEncrypted)
+
+    return isEncrypted
+  }
+
+  /**
+   * Static method to get security type with fallback to calculation
+   * If the vault has cached security type, returns it; otherwise calculates it
+   */
+  static getSecurityType(vault: VaultClass): 'fast' | 'secure' {
+    // Try to get cached value first
+    const cached = this.getCachedSecurityType(vault)
+    if (cached !== undefined) {
+      return cached
+    }
+
+    // Calculate and cache the security type
+    const securityType = determineVaultType(vault.data.signers)
+    vault.setCachedSecurityType(securityType)
+
+    return securityType
   }
 
   /**
@@ -497,14 +590,10 @@ export class VaultManager {
    * Get vault details and metadata
    */
   static getVaultDetails(vault: Vault): VaultDetails {
-    // Determine security type based on signers count
-    const securityType: 'fast' | 'secure' =
-      vault.signers.length === 2 ? 'fast' : 'secure'
-
     return {
       name: vault.name,
       id: vault.publicKeys.ecdsa || 'unknown',
-      securityType,
+      securityType: determineVaultType(vault.signers),
       threshold:
         vault.threshold ??
         VaultManager.calculateThreshold(vault.signers.length), // Fallback for legacy vaults
