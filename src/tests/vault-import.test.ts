@@ -31,11 +31,6 @@ type TestVaultData = {
 }
 
 describe('VaultManager Import Tests', () => {
-  let vaultManager: VaultManager
-
-  beforeEach(() => {
-    vaultManager = new VaultManager()
-  })
 
   describe('importVaultFromFile', () => {
     const testVaultsDir = join(__dirname, 'vaults')
@@ -79,7 +74,8 @@ describe('VaultManager Import Tests', () => {
         ;(vaultFileObj as any).buffer = vaultFileBuffer
 
         // Import the vault using static method
-        const importedVault = await VaultManager.add(vaultFileObj, password)
+        const importedVaultInstance = await VaultManager.add(vaultFileObj, password)
+        const importedVault = importedVaultInstance.data
 
         // Verify the imported vault matches expected structure
         expect(importedVault).toBeDefined()
@@ -117,11 +113,11 @@ describe('VaultManager Import Tests', () => {
       ;(vaultFileObj as any).buffer = vaultFileBuffer
 
       // Import the vault using static method
-      const importedVault = await VaultManager.add(vaultFileObj, 'Password123!')
+      const importedVaultInstance = await VaultManager.add(vaultFileObj, 'Password123!')
+      const importedVault = importedVaultInstance.data
 
-      // Get vault details/summary using instance method
-      const instance = new VaultManager()
-      const vaultDetails = instance.getVaultDetails(importedVault)
+      // Get vault details/summary using static method
+      const vaultDetails = VaultManager.getVaultDetails(importedVault)
 
       // Verify vault details
       expect(vaultDetails).toBeDefined()
@@ -145,11 +141,11 @@ describe('VaultManager Import Tests', () => {
       ;(vaultFileObj as any).buffer = vaultFileBuffer
 
       // Import the vault using static method
-      const importedVault = await VaultManager.add(vaultFileObj)
+      const importedVaultInstance = await VaultManager.add(vaultFileObj)
+      const importedVault = importedVaultInstance.data
 
-      // Validate the vault using instance method
-      const instance = new VaultManager()
-      const validation = instance.validateVault(importedVault)
+      // Validate the vault using static method
+      const validation = VaultManager.validateVault(importedVault)
 
       // Should be valid with no errors
       expect(validation.valid).toBe(true)
@@ -236,7 +232,8 @@ describe('VaultManager Import Tests', () => {
       ;(vaultFile as any).buffer = vaultBuffer
 
       // Import using static method
-      const importedVault = await VaultManager.add(vaultFile)
+      const importedVaultInstance = await VaultManager.add(vaultFile)
+      const importedVault = importedVaultInstance.data
 
       // Verify import worked correctly
       expect(importedVault.name).toBe(expectedData.vault.name)
@@ -262,9 +259,9 @@ describe('VaultManager Import Tests', () => {
       // For Node.js testing, attach the buffer directly
       ;(fastVaultFile as any).buffer = fastVaultBuffer
 
-      const fastVault = await VaultManager.add(fastVaultFile, 'Password123!')
-      const instance = new VaultManager()
-      const fastDetails = instance.getVaultDetails(fastVault)
+      const fastVaultInstance = await VaultManager.add(fastVaultFile, 'Password123!')
+      const fastVault = fastVaultInstance.data
+      const fastDetails = VaultManager.getVaultDetails(fastVault)
 
       expect(fastDetails.securityType).toBe('fast')
       expect(fastDetails.participants).toBe(2)
@@ -276,8 +273,9 @@ describe('VaultManager Import Tests', () => {
       // For Node.js testing, attach the buffer directly
       ;(secureVaultFile as any).buffer = secureVaultBuffer
 
-      const secureVault = await VaultManager.add(secureVaultFile)
-      const secureDetails = instance.getVaultDetails(secureVault)
+      const secureVaultInstance = await VaultManager.add(secureVaultFile)
+      const secureVault = secureVaultInstance.data
+      const secureDetails = VaultManager.getVaultDetails(secureVault)
 
       expect(secureDetails.securityType).toBe('fast') // 2 signers = fast type
       expect(secureDetails.participants).toBe(2)
@@ -291,7 +289,8 @@ describe('VaultManager Import Tests', () => {
       ;(vaultFileObj as any).buffer = vaultFileBuffer
 
       // Import vault using VaultManager
-      const loadedVault = await VaultManager.add(vaultFileObj)
+      const loadedVaultInstance = await VaultManager.add(vaultFileObj)
+      const loadedVault = loadedVaultInstance.data
 
       // Verify that threshold is stored on the vault object
       expect(loadedVault.threshold).toBeDefined()
@@ -299,8 +298,7 @@ describe('VaultManager Import Tests', () => {
       expect(loadedVault.threshold).toBe(2) // 2 signers -> threshold should be 2
 
       // Verify that getVaultDetails uses the stored threshold
-      const instance = new VaultManager()
-      const details = instance.getVaultDetails(loadedVault)
+      const details = VaultManager.getVaultDetails(loadedVault)
       expect(details.threshold).toBe(loadedVault.threshold)
     })
   })
@@ -355,8 +353,7 @@ describe('VaultManager Import Tests', () => {
           order: 0,
         }
 
-        const instance = new VaultManager()
-        const details = instance.getVaultDetails(mockVault)
+        const details = VaultManager.getVaultDetails(mockVault)
         
         expect(details.threshold).toBe(expectedThreshold)
         expect(details.participants).toBe(participants)
@@ -378,8 +375,7 @@ describe('VaultManager Import Tests', () => {
         order: 0,
       }
 
-      const instance = new VaultManager()
-      expect(() => instance.getVaultDetails(mockVault)).toThrow('Vault must have at least 2 participants')
+      expect(() => VaultManager.getVaultDetails(mockVault)).toThrow('Vault must have at least 2 participants')
     })
 
   })
