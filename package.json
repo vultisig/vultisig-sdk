@@ -15,7 +15,7 @@
     "build:sdk": "yarn workspace vultisig-sdk build",
     "sync-packages": "syncpack fix-mismatches",
     "typecheck": "tsc --noEmit",
-    "test": "vitest",
+    "test": "vitest --run",
     "knip": "knip",
     "check:all": "yarn lint && yarn typecheck && yarn test && yarn knip",
     "knip:fix": "knip --fix --allow-remove-files",

@@ -12,12 +12,27 @@ type DeriveAddressInput = {
 }
 
 /**
+ * Determine vault type based on signer names
+ * Fast vaults have one signer that starts with "Server-"
+ * Secure vaults have only device signers (no "Server-" prefix)
+ */
+function determineVaultType(signers: string[]): 'fast' | 'secure' {
+  return signers.some(signer => signer.startsWith('Server-'))
+    ? 'fast'
+    : 'secure'
+}
+
+/**
  * Vault class for handling vault operations
  * Implements deriveAddress for Bitcoin and other chains
  * Following vault-centric architecture with debugging support
  */
 export class Vault {
   private addressCache = new Map<string, string>()
+
+  // Cached properties to avoid repeated decoding
+  private _isEncrypted?: boolean
+  private _securityType?: 'fast' | 'secure'
 
   constructor(
     private vaultData: CoreVault,
@@ -38,11 +53,39 @@ export class Vault {
     return {
       id: this.vaultData.publicKeys.ecdsa,
       name: this.vaultData.name,
-      type: this.vaultData.signers.length === 2 ? 'fast' : 'secure',
+      type: this._securityType ?? determineVaultType(this.vaultData.signers),
       chains: this.getSupportedChains(),
       createdAt: this.vaultData.createdAt,
       isBackedUp: this.vaultData.isBackedUp,
     }
+  }
+
+  /**
+   * Set cached encryption status (called during import to avoid repeated decoding)
+   */
+  setCachedEncryptionStatus(isEncrypted: boolean): void {
+    this._isEncrypted = isEncrypted
+  }
+
+  /**
+   * Get cached encryption status (returns undefined if not cached)
+   */
+  getCachedEncryptionStatus(): boolean | undefined {
+    return this._isEncrypted
+  }
+
+  /**
+   * Set cached security type (called during import to avoid repeated calculation)
+   */
+  setCachedSecurityType(securityType: 'fast' | 'secure'): void {
+    this._securityType = securityType
+  }
+
+  /**
+   * Get cached security type (returns undefined if not cached)
+   */
+  getCachedSecurityType(): 'fast' | 'secure' | undefined {
+    return this._securityType
   }
 
   /**
