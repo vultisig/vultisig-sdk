@@ -9,7 +9,13 @@ export type { AccountCoin } from '@core/chain/coin/AccountCoin'
 export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
-export type { Vault, VaultKeyShares } from '@core/ui/vault/Vault'
+import type { Vault as CoreVault } from '@core/ui/vault/Vault'
+export type { VaultKeyShares } from '@core/ui/vault/Vault'
+
+// SDK-extended vault type that includes calculated threshold
+export type Vault = CoreVault & {
+  threshold?: number
+}
 export type { VaultFolder } from '@core/ui/vault/VaultFolder'
 export type { VaultSecurityType } from '@core/ui/vault/VaultSecurityType'
 
@@ -138,4 +144,126 @@ export type AddressResult = {
   chain: string
   derivationTime: number
   cached: boolean
+}
+
+// VaultManager types
+export type VaultType = 'fast' | 'secure'
+export type KeygenMode = 'fast' | 'relay' | 'local'
+export type SigningMode = 'fast' | 'relay' | 'local'
+
+export type VaultManagerConfig = {
+  defaultChains: string[]
+  defaultCurrency: string
+}
+
+export type VaultCreationStep = {
+  step:
+    | 'initializing'
+    | 'keygen'
+    | 'deriving_addresses'
+    | 'fetching_balances'
+    | 'applying_tokens'
+    | 'complete'
+  progress: number
+  message: string
+  chainId?: string
+}
+
+export type SigningStep = {
+  step: 'preparing' | 'coordinating' | 'signing' | 'broadcasting' | 'complete'
+  progress: number
+  message: string
+  mode: SigningMode
+  participantCount?: number
+  participantsReady?: number
+}
+
+export type VaultSigner = {
+  id: string
+  publicKey: string
+  name?: string
+}
+
+export type Summary = {
+  id: string
+  name: string
+  isEncrypted: boolean
+  createdAt: number
+  lastModified: number
+  size: number
+  type: VaultType
+  currency: string
+  chains: string[]
+  tokens: Record<string, Token[]>
+  threshold: number
+  totalSigners: number
+  vaultIndex: number
+  signers: VaultSigner[]
+  isBackedUp: () => boolean
+  keys: {
+    ecdsa: string
+    eddsa: string
+    hexChainCode: string
+    hexEncryptionKey: string
+  }
+}
+
+export type AddressBookEntry = {
+  chain: string
+  address: string
+  name: string
+  source: 'saved' | 'vault'
+  vaultId?: string
+  vaultName?: string
+  dateAdded: number
+}
+
+export type AddressBook = {
+  saved: AddressBookEntry[]
+  vaults: AddressBookEntry[]
+}
+
+export type Token = {
+  id: string
+  symbol: string
+  name: string
+  decimals: number
+  contractAddress?: string
+  chainId: string
+  logoUrl?: string
+  isNative?: boolean
+}
+
+export type Value = {
+  amount: string
+  currency: string
+  symbol: string
+  rate: number
+  lastUpdated: number
+}
+
+export type GasInfo = {
+  chainId: string
+  gasPrice: string
+  gasPriceGwei?: string
+  priorityFee?: string
+  maxFeePerGas?: string
+  lastUpdated: number
+}
+
+export type GasEstimate = {
+  gasLimit: number
+  gasPrice: string
+  totalCost: {
+    baseToken: string
+    usd: string
+    symbol: string
+  }
+  breakdown?: {
+    gasLimit: number
+    gasPrice: string
+    priorityFee?: string
+    maxFeePerGas?: string
+  }
+  chainId: string
 }

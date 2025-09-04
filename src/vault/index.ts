@@ -4,29 +4,10 @@
  */
 
 export { Vault } from './Vault'
-export { VaultError, VaultErrorCode } from './VaultError'
+export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
 export { VaultManager } from './VaultManager'
 
-// Dynamic vault utilities that will be available at runtime
-export const encryptVaultKeyShares = async (
-  keyShares: any,
-  passcode: string
-): Promise<any> => {
-  const { encryptVaultKeyShares } = await import(
-    '@core/ui/passcodeEncryption/core/vaultKeyShares'
-  )
-  return encryptVaultKeyShares({ keyShares, key: passcode })
-}
-
-export const decryptVaultKeyShares = async (
-  encryptedData: any,
-  passcode: string
-): Promise<any> => {
-  const { decryptVaultKeyShares } = await import(
-    '@core/ui/passcodeEncryption/core/vaultKeyShares'
-  )
-  return decryptVaultKeyShares({ keyShares: encryptedData, key: passcode })
-}
+// Vault utilities - use VaultManager for encryption/decryption operations
 
 // Re-export main vault type with alias to avoid conflict
 export type { Vault as CoreVault } from '@core/ui/vault/Vault'

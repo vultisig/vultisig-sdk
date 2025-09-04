@@ -121,3 +121,6 @@ mcp.json
 task.md
 *storybook.log
 storybook-static
+
+# Development planning files
+plans/
