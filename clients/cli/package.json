@@ -1,0 +1,41 @@
+{
+  "name": "@vultisig/cli",
+  "version": "1.0.0",
+  "description": "Vultisig CLI - Multi-Party Computation wallet command-line interface",
+  "main": "dist/cli.js",
+  "bin": {
+    "vultisig": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc --noEmitOnError false && tsc-alias",
+    "dev": "ts-node src/cli.ts",
+    "start": "node dist/cli.js",
+    "clean": "rm -rf dist",
+    "test": "node tests/run-all-tests.js",
+    "test:vault": "node tests/vault-loader.test.js",
+    "test:address": "node tests/address-derivation.test.js",
+    "test:cli": "node tests/cli-integration.test.js"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "inquirer": "^12.9.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2",
+    "vultisig-sdk": "workspace:*"
+  },
+  "keywords": [
+    "vultisig",
+    "cli",
+    "mpc",
+    "threshold-signature",
+    "bitcoin",
+    "ethereum",
+    "solana",
+    "wallet"
+  ],
+  "author": "Vultisig",
+  "license": "MIT",
+  "devDependencies": {
+    "tsc-alias": "^1.8.16"
+  }
+}

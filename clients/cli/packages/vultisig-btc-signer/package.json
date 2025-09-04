@@ -1,0 +1,29 @@
+{
+  "name": "vultisig-btc-signer",
+  "version": "1.0.0",
+  "description": "Bitcoin PSBT signing via Vultisig MPC daemon",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "node --experimental-json-modules tests/basic.js"
+  },
+  "dependencies": {
+    "bitcoinjs-lib": "^6.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "vultisig",
+    "bitcoin",
+    "mpc",
+    "signer",
+    "psbt"
+  ],
+  "author": "Vultisig",
+  "license": "MIT"
+}
