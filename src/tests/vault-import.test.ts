@@ -9,6 +9,8 @@ import { join } from 'path'
 import { VaultManager } from '../vault/VaultManager'
 import { VaultImportError, VaultImportErrorCode } from '../vault/VaultError'
 
+import type { Vault } from '../types'
+
 type TestVaultData = {
   filename: string
   vault: {
@@ -241,42 +243,6 @@ describe('VaultManager Import Tests', () => {
       expect(importedVault.publicKeys.ecdsa).toBe(expectedData.vault.publicKeys.ecdsa)
     })
 
-    test('should handle vault encryption and decryption', async () => {
-      const vaultFilePath = join(testVaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const vaultFileBuffer = readFileSync(vaultFilePath)
-
-      // Create File object
-      const vaultFileObj = new File([vaultFileBuffer], 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      // For Node.js testing, attach the buffer directly
-      ;(vaultFileObj as any).buffer = vaultFileBuffer
-
-      // Import unencrypted vault using static method
-      const vault = await VaultManager.add(vaultFileObj)
-
-      // The imported vault keyShares are already strings (from protobuf)
-      // For this test, let's create a simple vault with object keyShares to test encryption
-      const testVault: Vault = {
-        ...vault,
-        keyShares: { ecdsa: 'test-key-share-ecdsa', eddsa: 'test-key-share-eddsa' }
-      }
-
-      const instance = new VaultManager()
-
-      // Check that unencrypted keyShares (objects) are detected as unencrypted
-      expect(instance.isVaultEncrypted(testVault)).toBe(false)
-
-      // Encrypt the vault using static method
-      const encryptedVault = await VaultManager.encryptVault(testVault, 'testpassword123')
-      expect(instance.isVaultEncrypted(encryptedVault)).toBe(true)
-
-      // Decrypt the vault using static method
-      const decryptedVault = await VaultManager.decryptVault(encryptedVault, 'testpassword123')
-      expect(instance.isVaultEncrypted(decryptedVault)).toBe(false)
-
-      // Verify decrypted vault matches original
-      expect(decryptedVault.name).toBe(testVault.name)
-      expect(decryptedVault.publicKeys.ecdsa).toBe(testVault.publicKeys.ecdsa)
-    })
 
     test('should fail with invalid vault data', async () => {
       // Test with invalid data

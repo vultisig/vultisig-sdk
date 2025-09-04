@@ -45,20 +45,6 @@ const VultisigSDKDemo = {
   },
   
   // Vault handling operations
-  isVaultEncrypted: (vault: any) => {
-    console.log('🔐 isVaultEncrypted called for vault:', vault.id)
-    return false
-  },
-  
-  encryptVault: async (vault: any, passcode: string) => {
-    console.log('🛡️ encryptVault called')
-    return vault
-  },
-  
-  decryptVault: async (vault: any, passcode: string) => {
-    console.log('🔓 decryptVault called')
-    return vault
-  },
   
   exportVault: async (vault: any, options?: any) => {
     console.log('📤 exportVault called')

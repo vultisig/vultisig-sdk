@@ -213,26 +213,6 @@ export class VultisigSDK {
 
   // ===== Vault handling operations (wrapping existing core/lib code) =====
 
-  /**
-   * Check if vault keyshares are encrypted
-   */
-  isVaultEncrypted(vault: Vault): boolean {
-    return this.vaultManager.isVaultEncrypted(vault)
-  }
-
-  /**
-   * Encrypt vault keyshares with passcode
-   */
-  async encryptVault(vault: Vault, passcode: string): Promise<Vault> {
-    return this.vaultManager.encryptVault(vault, passcode)
-  }
-
-  /**
-   * Decrypt vault keyshares with passcode
-   */
-  async decryptVault(vault: Vault, passcode: string): Promise<Vault> {
-    return this.vaultManager.decryptVault(vault, passcode)
-  }
 
   /**
    * Export vault to backup format
@@ -259,7 +239,7 @@ export class VultisigSDK {
    * Check if a vault file is encrypted
    */
   async isVaultFileEncrypted(file: File): Promise<boolean> {
-    return this.vaultManager.isVaultFileEncrypted(file)
+    return VaultManager.isEncrypted(file)
   }
 
   /**
