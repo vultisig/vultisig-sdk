@@ -15,7 +15,7 @@
     "build:sdk": "yarn workspace vultisig-sdk build",
     "sync-packages": "syncpack fix-mismatches",
     "typecheck": "tsc --noEmit",
-    "test": "vitest",
+    "test": "vitest --run",
     "knip": "knip",
     "check:all": "yarn lint && yarn typecheck && yarn test && yarn knip",
     "knip:fix": "knip --fix --allow-remove-files",
@@ -92,6 +92,7 @@
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-dts": "^6.2.3",
     "syncpack": "^13.0.3",
+    "tsx": "^4.20.5",
     "typescript": "^5.8.2",
     "vite": "^6.2.2",
     "vitest": "^3.0.9"
