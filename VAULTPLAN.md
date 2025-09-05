@@ -7,6 +7,7 @@ VultisigSDK is a clean, vault-centric architecture with three primary classes:
 - **`VultisigSDK`** - SDK
 - **`VaultManager`** - Vault manager for multiple vaults
 - **`Vault`** - Vault instance
+- **`.vult`** - Vault file (subset of Vault)
 
 ### Minimal Integration Example
 
