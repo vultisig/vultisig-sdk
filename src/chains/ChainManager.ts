@@ -1,18 +1,27 @@
 import { getCoinBalance } from '@core/chain/coin/balance'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { Chain } from '@core/chain/Chain'
 import { ChainKind } from '@core/chain/ChainKind'
 import type { Vault, Balance } from '../types'
 import type { WASMManager } from '../wasm/WASMManager'
+import { AddressDeriver } from './AddressDeriver'
 
 /**
  * ChainManager handles multi-chain blockchain operations
  * Integrates with WalletCore via WASM for address derivation and operations
  */
 export class ChainManager {
+  private addressDeriver = new AddressDeriver()
+
   constructor(private wasmManager: WASMManager) {}
+
+  /**
+   * Initialize ChainManager with WalletCore
+   */
+  async initialize(): Promise<void> {
+    const walletCore = await this.wasmManager.getWalletCore()
+    await this.addressDeriver.initialize(walletCore)
+  }
 
   /**
    * Get addresses for vault across specific chains
@@ -21,7 +30,8 @@ export class ChainManager {
     const addresses: Record<Chain, string> = {} as any
     
     for (const chain of chains) {
-      addresses[chain] = await this.deriveAddress(vault, chain)
+      const chainStr = chain.toLowerCase()
+      addresses[chain] = await this.addressDeriver.deriveAddress(vault, chainStr)
     }
     
     return addresses
@@ -37,7 +47,8 @@ export class ChainManager {
     for (const chainKind of chainKinds) {
       const primaryChain = this.getPrimaryChainForKind(chainKind)
       if (primaryChain) {
-        addresses[chainKind] = await this.deriveAddress(vault, primaryChain)
+        const chainStr = primaryChain.toLowerCase()
+        addresses[chainKind] = await this.addressDeriver.deriveAddress(vault, chainStr)
       }
     }
     
@@ -122,28 +133,6 @@ export class ChainManager {
     }
   }
 
-  /**
-   * Derive address for specific chain
-   */
-  private async deriveAddress(vault: Vault, chain: Chain): Promise<string> {
-    const walletCore = await this.wasmManager.getWalletCore()
-    if (!walletCore) {
-      throw new Error('WalletCore not initialized')
-    }
-
-    const publicKey = getPublicKey({
-      chain,
-      walletCore,
-      hexChainCode: vault.hexChainCode,
-      publicKeys: vault.publicKeys,
-    })
-
-    return deriveAddress({
-      chain,
-      publicKey,
-      walletCore,
-    })
-  }
 
   /**
    * Get balance for specific chain and address
