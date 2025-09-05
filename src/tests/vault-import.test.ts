@@ -9,7 +9,6 @@ import { join } from 'path'
 import type { Vault } from '../types'
 import { VaultImportError } from '../vault/VaultError'
 import { VaultManager } from '../vault/VaultManager'
-import { VultisigSDK } from '../VultisigSDK'
 
 type TestVaultData = {
   filename: string
@@ -31,17 +30,6 @@ type TestVaultData = {
 }
 
 describe('VaultManager Import Tests', () => {
-  let sdk: VultisigSDK
-
-  beforeAll(async () => {
-    // Initialize SDK with real WalletCore WASM
-    sdk = new VultisigSDK()
-    await sdk.initialize()
-
-    // Initialize VaultManager with real SDK
-    VaultManager.init(sdk)
-  }, 60000) // 60 second timeout for WASM initialization
-
   describe('importVaultFromFile', () => {
     const testVaultsDir = join(__dirname, 'vaults')
 
@@ -83,9 +71,8 @@ describe('VaultManager Import Tests', () => {
 
           // Create File object from buffer
           const vaultFileObj = new File([vaultFileBuffer], vaultFile)
-          // For Node.js testing, attach the buffer directly and add arrayBuffer method
+          // For Node.js testing, attach the buffer directly
           ;(vaultFileObj as any).buffer = vaultFileBuffer
-          ;(vaultFileObj as any).arrayBuffer = () => Promise.resolve(vaultFileBuffer.buffer.slice(vaultFileBuffer.byteOffset, vaultFileBuffer.byteOffset + vaultFileBuffer.byteLength))
 
           // Import the vault using static method
           const importedVaultInstance = await VaultManager.add(
@@ -144,9 +131,8 @@ describe('VaultManager Import Tests', () => {
         [vaultFileBuffer],
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      // For Node.js testing, attach the buffer directly and add arrayBuffer method
+      // For Node.js testing, attach the buffer directly
       ;(vaultFileObj as any).buffer = vaultFileBuffer
-      ;(vaultFileObj as any).arrayBuffer = () => Promise.resolve(vaultFileBuffer.buffer.slice(vaultFileBuffer.byteOffset, vaultFileBuffer.byteOffset + vaultFileBuffer.byteLength))
 
       // Import the vault using static method
       const importedVaultInstance = await VaultManager.add(
@@ -182,9 +168,8 @@ describe('VaultManager Import Tests', () => {
         [vaultFileBuffer],
         'TestSecureVault-cfa0-share2of2-NoPassword.vult'
       )
-      // For Node.js testing, attach the buffer directly and add arrayBuffer method
+      // For Node.js testing, attach the buffer directly
       ;(vaultFileObj as any).buffer = vaultFileBuffer
-      ;(vaultFileObj as any).arrayBuffer = () => Promise.resolve(vaultFileBuffer.buffer.slice(vaultFileBuffer.byteOffset, vaultFileBuffer.byteOffset + vaultFileBuffer.byteLength))
 
       // Import the vault using static method
       const importedVaultInstance = await VaultManager.add(vaultFileObj)
@@ -217,9 +202,8 @@ describe('VaultManager Import Tests', () => {
         [vaultFileBuffer],
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      // For Node.js testing, attach the buffer directly and add arrayBuffer method
+      // For Node.js testing, attach the buffer directly
       ;(vaultFileObj as any).buffer = vaultFileBuffer
-      ;(vaultFileObj as any).arrayBuffer = () => Promise.resolve(vaultFileBuffer.buffer.slice(vaultFileBuffer.byteOffset, vaultFileBuffer.byteOffset + vaultFileBuffer.byteLength))
 
       // Try to import encrypted vault without password
       await expect(VaultManager.add(vaultFileObj)).rejects.toThrow(
@@ -243,9 +227,8 @@ describe('VaultManager Import Tests', () => {
         [vaultFileBuffer],
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      // For Node.js testing, attach the buffer directly and add arrayBuffer method
+      // For Node.js testing, attach the buffer directly
       ;(vaultFileObj as any).buffer = vaultFileBuffer
-      ;(vaultFileObj as any).arrayBuffer = () => Promise.resolve(vaultFileBuffer.buffer.slice(vaultFileBuffer.byteOffset, vaultFileBuffer.byteOffset + vaultFileBuffer.byteLength))
 
       // Try to import with wrong password
       await expect(
@@ -313,7 +296,6 @@ describe('VaultManager Import Tests', () => {
       )
       // For Node.js testing, attach the buffer directly
       ;(vaultFile as any).buffer = vaultBuffer
-      ;(vaultFile as any).arrayBuffer = async () => vaultBuffer
 
       // Import using static method
       const importedVaultInstance = await VaultManager.add(vaultFile)
@@ -330,7 +312,6 @@ describe('VaultManager Import Tests', () => {
       // Test with invalid data
       const invalidData = Buffer.from('invalid vault data')
       const invalidFile = new File([invalidData], 'invalid.vult')
-      ;(invalidFile as any).arrayBuffer = async () => invalidData
 
       await expect(VaultManager.add(invalidFile)).rejects.toThrow(
         VaultImportError
@@ -350,7 +331,6 @@ describe('VaultManager Import Tests', () => {
       )
       // For Node.js testing, attach the buffer directly
       ;(fastVaultFile as any).buffer = fastVaultBuffer
-      ;(fastVaultFile as any).arrayBuffer = async () => fastVaultBuffer
 
       const fastVaultInstance = await VaultManager.add(
         fastVaultFile,

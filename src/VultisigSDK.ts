@@ -66,6 +66,7 @@ export class VultisigSDK {
 
   /**
    * Initialize the SDK and load WASM modules
+   * Automatically initializes VaultManager with this SDK instance
    */
   async initialize(): Promise<void> {
     if (this.initialized) return
@@ -77,6 +78,9 @@ export class VultisigSDK {
       
       // Initialize the AddressDeriver with WalletCore
       await this.addressDeriver.initialize(walletCore)
+      
+      // Auto-initialize VaultManager with this SDK instance
+      VaultManager.init(this)
       
       this.initialized = true
     } catch (error) {

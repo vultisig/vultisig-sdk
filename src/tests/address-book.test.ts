@@ -3,24 +3,18 @@ import { join } from 'path'
 import { readFileSync } from 'fs'
 
 import { VaultManager } from '../vault/VaultManager'
-import { VultisigSDK } from '../VultisigSDK'
 import type { AddressBookEntry } from '../types'
 
 const testVaultsDir = join(__dirname, 'vaults')
 
 describe('AddressBook Feature Tests', () => {
-  let sdk: VultisigSDK
-
   beforeEach(async () => {
     // Clear any existing address book data
     await VaultManager.clear()
 
-    // Initialize SDK with real WASM modules
-    sdk = new VultisigSDK()
-    await sdk.initialize()
-
-    // Initialize VaultManager with real SDK
-    VaultManager.init(sdk)
+    // VaultManager is auto-initialized when SDK is initialized
+    // For basic tests that don't need address derivation, we can init with null
+    VaultManager.init(null)
   })
 
   afterEach(async () => {
@@ -92,11 +86,7 @@ describe('AddressBook Feature Tests', () => {
       const vaultPath = join(testVaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
       const vaultBuffer = readFileSync(vaultPath)
       const vaultFile = new File([vaultBuffer], 'TestFastVault-44fd-share2of2-Password123!.vult')
-      // Use the mock File implementation from vitest setup
-      Object.defineProperty(vaultFile, 'arrayBuffer', {
-        value: () => Promise.resolve(vaultBuffer.buffer.slice(vaultBuffer.byteOffset, vaultBuffer.byteOffset + vaultBuffer.byteLength)),
-        writable: true
-      })
+      ;(vaultFile as any).buffer = vaultBuffer
 
       const vault = await VaultManager.add(vaultFile, 'Password123!')
 
@@ -144,15 +134,8 @@ describe('AddressBook Feature Tests', () => {
       const fastVaultFile = new File([fastVaultBuffer], 'TestFastVault-44fd-share2of2-Password123!.vult')
       const secureVaultFile = new File([secureVaultBuffer], 'TestSecureVault-cfa0-share2of2-Nopassword.vult')
 
-      // Use the mock File implementation from vitest setup
-      Object.defineProperty(fastVaultFile, 'arrayBuffer', {
-        value: () => Promise.resolve(fastVaultBuffer.buffer.slice(fastVaultBuffer.byteOffset, fastVaultBuffer.byteOffset + fastVaultBuffer.byteLength)),
-        writable: true
-      })
-      Object.defineProperty(secureVaultFile, 'arrayBuffer', {
-        value: () => Promise.resolve(secureVaultBuffer.buffer.slice(secureVaultBuffer.byteOffset, secureVaultBuffer.byteOffset + secureVaultBuffer.byteLength)),
-        writable: true
-      })
+      ;(fastVaultFile as any).buffer = fastVaultBuffer
+      ;(secureVaultFile as any).buffer = secureVaultBuffer
 
       const fastVault = await VaultManager.add(fastVaultFile, 'Password123!')
       const secureVault = await VaultManager.add(secureVaultFile)
@@ -442,7 +425,6 @@ describe('AddressBook Feature Tests', () => {
       const vaultBuffer = readFileSync(vaultPath)
       const vaultFile = new File([vaultBuffer], 'TestFastVault-44fd-share2of2-Password123!.vult')
       ;(vaultFile as any).buffer = vaultBuffer
-      ;(vaultFile as any).arrayBuffer = () => Promise.resolve(vaultBuffer.buffer.slice(vaultBuffer.byteOffset, vaultBuffer.byteOffset + vaultBuffer.byteLength))
 
       const vault = await VaultManager.add(vaultFile, 'Password123!')
 
