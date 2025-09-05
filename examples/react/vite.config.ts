@@ -15,7 +15,7 @@ export default defineConfig({
   assetsInclude: ['**/*.wasm'],
   define: {
     global: 'globalThis',
-    'process.env': '{}',
+    // Let Vite handle process.env properly for environment variables
   },
   resolve: {
     alias: {
