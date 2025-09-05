@@ -1,12 +1,17 @@
-import { Chain } from '@core/chain/Chain'
-import { deriveAddress as coreDerive } from '@core/chain/publicKey/address/deriveAddress'
+import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import type { Vault as CoreVault } from '@core/ui/vault/Vault'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { initWasm } from '@trustwallet/wallet-core'
 import type { WalletCore } from '@trustwallet/wallet-core'
 
+import { AddressDeriver } from '../chains/AddressDeriver'
 import { VaultError, VaultErrorCode } from './VaultError'
 
-type DeriveAddressInput = {
+// Use the same memoized WalletCore instance as the extension
+const getWalletCore = memoizeAsync(initWasm)
+
+type AddressInput = {
   chain: string
   walletCore: WalletCore
 }
@@ -29,6 +34,7 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  */
 export class Vault {
   private addressCache = new Map<string, string>()
+  private addressDeriver = new AddressDeriver()
 
   // Cached properties to avoid repeated decoding
   private _isEncrypted?: boolean
@@ -44,6 +50,11 @@ export class Vault {
       signers: vaultData.signers.length,
       hasWalletCore: !!walletCore,
     })
+
+    // Initialize the address deriver if we have WalletCore
+    if (walletCore) {
+      this.addressDeriver.initialize(walletCore)
+    }
   }
 
   /**
@@ -109,13 +120,12 @@ export class Vault {
   }
 
   /**
-   * Derive address for specified chain
-   * Implements Bitcoin address derivation with debugging logs
-   * Uses WalletCore WASM for derivation logic
+   * Get address for specified chain
+   * Uses AddressDeriver for consistent address derivation
    */
-  async deriveAddress(chain: string): Promise<string>
-  async deriveAddress(input: string | DeriveAddressInput): Promise<string> {
-    // Handle both signatures: deriveAddress(chain) and deriveAddress({ chain, walletCore })
+  async address(chain: string): Promise<string>
+  async address(input: string | AddressInput): Promise<string> {
+    // Handle both signatures: address(chain) and address({ chain, walletCore })
     let chainStr: string
     let walletCoreToUse: WalletCore | undefined
 
@@ -145,7 +155,7 @@ export class Vault {
     }
 
     try {
-      // Validate inputs
+      // Ensure we have WalletCore
       if (!walletCoreToUse) {
         throw new VaultError(
           VaultErrorCode.WalletCoreNotInitialized,
@@ -153,51 +163,25 @@ export class Vault {
         )
       }
 
-      if (!this.vaultData.publicKeys) {
-        throw new VaultError(
-          VaultErrorCode.InvalidVault,
-          'Vault public keys are missing'
-        )
-      }
+      // Get WalletCore using the same memoized instance as the extension
+      const walletCore = await getWalletCore()
 
-      if (!this.vaultData.hexChainCode) {
-        throw new VaultError(
-          VaultErrorCode.InvalidChainCode,
-          'Vault chain code is missing'
-        )
-      }
-
-      // Map string to Chain enum
-      const chainEnum = this.mapStringToChain(chainStr)
-      console.log('Mapped chain string', chainStr, 'to enum:', chainEnum)
-
-      // Special handling for Bitcoin
-      if (chainEnum === Chain.Bitcoin) {
-        console.log('Processing Bitcoin address derivation')
-        console.log('Vault public keys:', this.vaultData.publicKeys)
-        console.log('Vault chain code:', this.vaultData.hexChainCode)
-      }
+      // Map string to Chain enum (using AddressDeriver's mapping)
+      const chain = this.addressDeriver.mapStringToChain(chainStr)
 
       // Get the proper public key for this chain
       const publicKey = getPublicKey({
-        chain: chainEnum,
-        walletCore: walletCoreToUse,
+        chain,
+        walletCore,
         hexChainCode: this.vaultData.hexChainCode,
         publicKeys: this.vaultData.publicKeys,
       })
 
-      console.log(
-        'Derived public key for',
-        chainStr,
-        '- length:',
-        publicKey.data().length
-      )
-
       // Derive the address using core functionality
-      const address = coreDerive({
-        chain: chainEnum,
+      const address = deriveAddress({
+        chain,
         publicKey,
-        walletCore: walletCoreToUse,
+        walletCore,
       })
 
       console.log('Successfully derived address for', chainStr, ':', address)
@@ -222,8 +206,8 @@ export class Vault {
 
       // Check for specific error types and throw appropriate VaultError
       if (
-        (error as Error).message.includes('chain') ||
-        (error as Error).message.includes('Chain')
+        (error as Error).message.includes('Unsupported chain') ||
+        (error as Error).message.includes('Chain not supported')
       ) {
         throw new VaultError(
           VaultErrorCode.ChainNotSupported,
@@ -252,6 +236,34 @@ export class Vault {
   }
 
   /**
+   * Get addresses for multiple chains
+   * Implements the addresses() method from VAULTPLAN.md
+   */
+  async addresses(chains?: string[]): Promise<Record<string, string>> {
+    const chainsToDerive = chains || this.getDefaultChains()
+    const addresses: Record<string, string> = {}
+
+    for (const chain of chainsToDerive) {
+      try {
+        addresses[chain] = await this.address(chain)
+      } catch (error) {
+        console.warn(`Failed to derive address for ${chain}:`, error)
+        // Skip chains that fail to derive
+      }
+    }
+
+    return addresses
+  }
+
+  /**
+   * Get default chains for address derivation
+   */
+  private getDefaultChains(): string[] {
+    // Return commonly used chains as default
+    return ['bitcoin', 'ethereum', 'thorchain', 'cosmos', 'solana']
+  }
+
+  /**
    * Sign transaction (placeholder for future MPC implementation)
    */
   async signTransaction(tx: any, chain: string): Promise<any> {
@@ -271,51 +283,6 @@ export class Vault {
     )
   }
 
-  /**
-   * Map string chain names to Chain enum values
-   */
-  private mapStringToChain(chainStr: string): Chain {
-    const normalizedChain = chainStr.toLowerCase()
-    console.log('Mapping chain string:', normalizedChain)
-
-    // Map common string names to Chain enum values
-    const chainMap: Record<string, Chain> = {
-      bitcoin: Chain.Bitcoin,
-      btc: Chain.Bitcoin,
-      ethereum: Chain.Ethereum,
-      eth: Chain.Ethereum,
-      thorchain: Chain.THORChain,
-      thor: Chain.THORChain,
-      litecoin: Chain.Litecoin,
-      ltc: Chain.Litecoin,
-      bitcoincash: Chain.BitcoinCash,
-      bch: Chain.BitcoinCash,
-      dogecoin: Chain.Dogecoin,
-      doge: Chain.Dogecoin,
-      solana: Chain.Solana,
-      sol: Chain.Solana,
-      cosmos: Chain.Cosmos,
-      atom: Chain.Cosmos,
-      polygon: Chain.Polygon,
-      matic: Chain.Polygon,
-      avalanche: Chain.Avalanche,
-      avax: Chain.Avalanche,
-      bsc: Chain.BSC,
-      bnb: Chain.BSC,
-    }
-
-    const mappedChain = chainMap[normalizedChain]
-    if (!mappedChain) {
-      console.error('Unsupported chain:', chainStr)
-      throw new VaultError(
-        VaultErrorCode.ChainNotSupported,
-        `Chain not supported: ${chainStr}. Supported chains: ${Object.keys(chainMap).join(', ')}`
-      )
-    }
-
-    console.log('Successfully mapped', chainStr, 'to', mappedChain)
-    return mappedChain
-  }
 
   /**
    * Get list of supported chains for this vault
