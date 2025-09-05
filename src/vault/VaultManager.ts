@@ -4,6 +4,8 @@ import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@core/ui/vault/import/utils/vaultContainerFromString'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
+import { FastVaultClient } from '../server'
+import { AddressBookManager } from './AddressBookManager'
 
 import type {
   AddressBook,
@@ -21,17 +23,59 @@ import { Vault as VaultClass } from './Vault'
 import { VaultImportError, VaultImportErrorCode } from './VaultError'
 
 /**
- * Determine vault type based on signer names
- * Fast vaults have one signer that starts with "Server-"
- * Secure vaults have only device signers (no "Server-" prefix)
- *
- * TODO: When server endpoint is implemented, fast vaults should be validated
- * against the server to ensure they are legitimate server-assisted vaults
+ * Validate if a vault is a legitimate server-assisted fast vault
+ * Checks if the vault exists on the server with the provided password
  */
-function determineVaultType(signers: string[]): 'fast' | 'secure' {
-  return signers.some(signer => signer.startsWith('Server-'))
-    ? 'fast'
-    : 'secure'
+async function validateVaultWithServer(
+  vaultId: string,
+  password: string
+): Promise<boolean> {
+  try {
+    const client = new FastVaultClient()
+    console.log('Attempting server validation for vault:', vaultId)
+    const result = await client.getVault(vaultId, password)
+    console.log('Server validation successful:', result)
+    return true
+  } catch (error: any) {
+    console.error('Server validation failed for vault:', vaultId)
+    console.error('Error details:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      code: error.code
+    })
+    
+    // Check if it's a legitimate vault not found (404) vs server/network issues
+    if (error.response?.status === 404) {
+      console.log('Vault not found on server (404) - not a fast vault')
+      return false
+    }
+    
+    return false
+  }
+}
+
+/**
+ * Determine vault type based on server validation only
+ * Fast vaults must be validated against the server - no fallbacks
+ * All other vaults are classified as secure
+ */
+async function determineVaultType(
+  signers: string[],
+  vaultId?: string,
+  password?: string
+): Promise<'fast' | 'secure'> {
+  // Only attempt server validation if we have the necessary info
+  if (vaultId && password) {
+    const isValidServerVault = await validateVaultWithServer(vaultId, password)
+    if (isValidServerVault) {
+      return 'fast'
+    }
+  }
+
+  // If server validation fails or is unavailable, classify as secure
+  return 'secure'
 }
 
 /**
@@ -47,7 +91,8 @@ export class VaultManager {
   private static sdkInstance: any | null = null
   private static activeVault: VaultClass | null = null
   private static vaultStorage = new Map<string, Vault>()
-  private static addressBookData: AddressBook = { saved: [], vaults: [] }
+  private static vaultSecurityTypes = new Map<string, 'fast' | 'secure'>()
+  private static vaultPasswords = new Map<string, string>()
   // === INITIALIZATION ===
   /**
    * Initialize VaultManager with SDK instance and configuration
@@ -95,7 +140,6 @@ export class VaultManager {
       onProgress?: (step: VaultCreationStep) => void
     }
   ): Promise<VaultClass> {
-    // TODO: Implement vault creation with MPC keygen
     throw new Error(
       'create() not implemented yet - requires MPC keygen integration'
     )
@@ -167,14 +211,14 @@ export class VaultManager {
       // Convert to Vault object
       const vault = fromCommVault(vaultProtobuf)
 
-      // Determine encryption status and security type (cache these to avoid repeated decoding)
+      // Normalize vault with static properties
+      const normalizedVault = this.normalizeVault(vault)
+
+      // Fetch dynamic details including server validation
       const isEncrypted = container.isEncrypted
-      const securityType = determineVaultType(vault.signers)
+      const dynamicDetails = await this.fetchVaultDetails(normalizedVault, password)
 
-      // Apply global settings and normalize
-      const normalizedVault = this.applyGlobalSettings(vault, isEncrypted, securityType)
-
-      // Store the vault
+      // Store the vault data
       this.vaultStorage.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
 
       // Create VaultClass instance
@@ -185,7 +229,14 @@ export class VaultManager {
 
       // Set cached properties on the Vault instance
       vaultInstance.setCachedEncryptionStatus(isEncrypted)
-      vaultInstance.setCachedSecurityType(securityType)
+      vaultInstance.setCachedSecurityType(dynamicDetails.securityType)
+
+      // Store static properties in VaultManager
+      const vaultId = normalizedVault.publicKeys.ecdsa
+      this.vaultSecurityTypes.set(vaultId, dynamicDetails.securityType)
+      if (password) {
+        this.vaultPasswords.set(vaultId, password)
+      }
 
       return vaultInstance
     } catch (error) {
@@ -225,35 +276,39 @@ export class VaultManager {
         vault,
         this.sdkInstance?.wasmManager?.getWalletCore()
       )
-      const summary = vaultInstance.summary()
+      const summary = await vaultInstance.summary()
+      
+      // Get cached security type for this vault
+      const vaultId = vault.publicKeys.ecdsa
+      const cachedSecurityType = this.vaultSecurityTypes.get(vaultId) || 'secure'
 
       const fullSummary: Summary = {
         id: summary.id,
         name: summary.name,
-        type: summary.type as VaultType,
+        type: cachedSecurityType as VaultType,
         chains: summary.chains,
         createdAt: summary.createdAt ?? Date.now(),
         isBackedUp: () => vault.isBackedUp ?? false,
         isEncrypted: vaultInstance.getCachedEncryptionStatus() ?? false, // Use cached encryption status
         lastModified: vault.createdAt ?? Date.now(),
-        size: 0, // TODO: Calculate vault size
+        size: 0, // Vault size calculation not implemented
         threshold:
           vault.threshold ?? this.calculateThreshold(vault.signers.length),
         totalSigners: vault.signers.length,
         vaultIndex: vault.localPartyId ? parseInt(vault.localPartyId) : 0,
         signers: vault.signers.map((signerId, index) => ({
           id: signerId,
-          publicKey: '', // TODO: Map signer ID to public key if available
+          publicKey: '', // Signer public key mapping not implemented
           name: `Signer ${index + 1}`,
         })),
         keys: {
           ecdsa: vault.publicKeys.ecdsa,
           eddsa: vault.publicKeys.eddsa,
           hexChainCode: vault.hexChainCode,
-          hexEncryptionKey: '', // TODO: Add encryption key if available
+          hexEncryptionKey: '', // Encryption key not stored for security
         },
         currency: this.config.defaultCurrency,
-        tokens: {}, // TODO: Implement token management
+        tokens: {}, // Token management not implemented
       }
 
       summaries.push(fullSummary)
@@ -268,6 +323,8 @@ export class VaultManager {
   static async remove(vault: VaultClass): Promise<void> {
     const vaultId = vault.data.publicKeys.ecdsa
     this.vaultStorage.delete(vaultId)
+    this.vaultSecurityTypes.delete(vaultId)
+    this.vaultPasswords.delete(vaultId)
 
     // Clear active vault if it was the removed one
     if (this.activeVault?.data.publicKeys.ecdsa === vaultId) {
@@ -280,8 +337,10 @@ export class VaultManager {
    */
   static async clear(): Promise<void> {
     this.vaultStorage.clear()
+    this.vaultSecurityTypes.clear()
+    this.vaultPasswords.clear()
     this.activeVault = null
-    this.addressBookData = { saved: [], vaults: [] }
+    await AddressBookManager.clear()
   }
 
   // === ACTIVE VAULT MANAGEMENT ===
@@ -312,7 +371,6 @@ export class VaultManager {
    */
   static async setDefaultChains(chains: string[]): Promise<void> {
     this.config.defaultChains = chains
-    // TODO: Save config to storage
   }
 
   /**
@@ -327,7 +385,6 @@ export class VaultManager {
    */
   static async setDefaultCurrency(currency: string): Promise<void> {
     this.config.defaultCurrency = currency
-    // TODO: Save config to storage
   }
 
   /**
@@ -342,7 +399,6 @@ export class VaultManager {
    */
   static async saveConfig(config: Partial<VaultManagerConfig>): Promise<void> {
     this.config = { ...this.config, ...config }
-    // TODO: Persist to storage
   }
 
   /**
@@ -352,113 +408,39 @@ export class VaultManager {
     return { ...this.config }
   }
 
-  // === ADDRESS BOOK (GLOBAL) ===
+  // === ADDRESS BOOK (DELEGATED) ===
   /**
-   * Get address book entries
+   * Get address book entries (delegates to AddressBookManager)
    */
   static async addressBook(chain?: string): Promise<AddressBook> {
-    if (chain) {
-      return {
-        saved: this.addressBookData.saved.filter(
-          entry => entry.chain === chain
-        ),
-        vaults: this.addressBookData.vaults.filter(
-          entry => entry.chain === chain
-        ),
-      }
-    }
-    return { ...this.addressBookData }
+    return AddressBookManager.get(chain)
   }
 
   /**
-   * Add address book entries
+   * Add address book entries (delegates to AddressBookManager)
    */
   static async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> {
-    for (const entry of entries) {
-      // Route entry to appropriate array based on source
-      if (entry.source === 'vaults') {
-        // Remove existing vault entry if it exists
-        this.addressBookData.vaults = this.addressBookData.vaults.filter(
-          existing =>
-            !(
-              existing.chain === entry.chain &&
-              existing.address === entry.address &&
-              existing.vaultId === entry.vaultId
-            )
-        )
-
-        // Add new vault entry
-        this.addressBookData.vaults.push({
-          ...entry,
-          dateAdded: Date.now(),
-        })
-      } else {
-        // Check if saved entry already exists
-        const existingIndex = this.addressBookData.saved.findIndex(
-          existing => existing.chain === entry.chain && existing.address === entry.address
-        )
-
-        if (existingIndex === -1) {
-          // Add new saved entry if it doesn't exist
-          this.addressBookData.saved.push({
-            ...entry,
-            dateAdded: Date.now(),
-          })
-        }
-        // If it exists, do nothing (preserve original)
-      }
-    }
-    // TODO: Persist to storage
+    return AddressBookManager.add(entries)
   }
 
   /**
-   * Remove address book entries
+   * Remove address book entries (delegates to AddressBookManager)
    */
   static async removeAddressBookEntry(
     addresses: Array<{ chain: string; address: string }>
   ): Promise<void> {
-    for (const { chain, address } of addresses) {
-      // Remove from saved entries
-      this.addressBookData.saved = this.addressBookData.saved.filter(
-        entry => !(entry.chain === chain && entry.address === address)
-      )
-
-      // Remove from vault entries
-      this.addressBookData.vaults = this.addressBookData.vaults.filter(
-        entry => !(entry.chain === chain && entry.address === address)
-      )
-    }
-    // TODO: Persist to storage
+    return AddressBookManager.remove(addresses)
   }
 
   /**
-   * Update address book entry name
+   * Update address book entry name (delegates to AddressBookManager)
    */
   static async updateAddressBookEntry(
     chain: string,
     address: string,
     name: string
   ): Promise<void> {
-    // Try to find and update in saved entries
-    const savedEntry = this.addressBookData.saved.find(
-      entry => entry.chain === chain && entry.address === address
-    )
-
-    if (savedEntry) {
-      savedEntry.name = name
-      // TODO: Persist to storage
-      return
-    }
-
-    // Try to find and update in vault entries
-    const vaultEntry = this.addressBookData.vaults.find(
-      entry => entry.chain === chain && entry.address === address
-    )
-
-    if (vaultEntry) {
-      vaultEntry.name = name
-      // TODO: Persist to storage
-    }
+    return AddressBookManager.update(chain, address, name)
   }
 
   // === VAULT SETTINGS INHERITANCE ===
@@ -466,34 +448,43 @@ export class VaultManager {
    * Apply global chains/currency to vault
    */
   private static applyConfig(vault: VaultClass): VaultClass {
-    // TODO: Apply global settings to vault instance
-    // This would involve setting chains, currency, etc.
+    // Global settings application not implemented
     return vault
   }
 
   /**
-   * Apply global VaultManager settings to an imported vault
+   * Normalize vault with static properties that don't change
    * @param vault - The vault to normalize
-   * @param isEncrypted - Whether the vault file was encrypted (cached to avoid repeated decoding)
-   * @param securityType - The security type of the vault (cached to avoid repeated calculation)
-   * @returns Vault - The vault with global settings applied
+   * @returns Vault - The vault with static properties applied
    */
-  private static applyGlobalSettings(
-    vault: Vault,
-    isEncrypted: boolean,
-    securityType: 'fast' | 'secure'
-  ): Vault {
-    // Calculate and store threshold based on signers count
+  private static normalizeVault(vault: Vault): Vault {
     const threshold = this.calculateThreshold(vault.signers.length)
 
     return {
       ...vault,
       threshold,
       isBackedUp: true, // Imported vaults are considered backed up
-      // Store cached properties that will be used by Vault class
-      _cachedEncryptionStatus: isEncrypted,
-      _cachedSecurityType: securityType,
-    } as Vault & { _cachedEncryptionStatus: boolean; _cachedSecurityType: 'fast' | 'secure' }
+      createdAt: vault.createdAt ?? Date.now(),
+      keyShares: vault.keyShares ?? { ecdsa: '', eddsa: '' },
+      libType: vault.libType ?? 'DKLS',
+      order: vault.order ?? 0,
+    }
+  }
+
+  /**
+   * Fetch dynamic vault details that may change or require server validation
+   * @param vault - The vault to fetch details for
+   * @param password - Password for server validation
+   * @returns Object with dynamic properties
+   */
+  private static async fetchVaultDetails(vault: Vault, password?: string) {
+    const vaultId = vault.publicKeys.ecdsa
+    const securityType = await determineVaultType(vault.signers, vaultId, password)
+
+    return {
+      securityType,
+      // Future: balances, gas prices, etc. would go here
+    }
   }
 
   /**
@@ -567,47 +558,29 @@ export class VaultManager {
   }
 
   /**
-   * Static method to get security type with fallback to calculation
-   * If the vault has cached security type, returns it; otherwise calculates it
+   * Static method to get security type using cached value or server validation
+   * Uses cached security type if available, otherwise performs server validation
    */
-  static getSecurityType(vault: VaultClass): 'fast' | 'secure' {
-    // Try to get cached value first
-    const cached = this.getCachedSecurityType(vault)
-    if (cached !== undefined) {
-      return cached
+  static async getSecurityType(vault: VaultClass, password?: string): Promise<'fast' | 'secure'> {
+    const vaultId = vault.data.publicKeys.ecdsa
+
+    // Check if we have cached security type
+    const cachedSecurityType = this.vaultSecurityTypes.get(vaultId)
+    if (cachedSecurityType) {
+      return cachedSecurityType
     }
 
-    // Calculate and cache the security type
-    const securityType = determineVaultType(vault.data.signers)
+    // If not cached, perform server validation
+    const storedPassword = password || this.vaultPasswords.get(vaultId)
+    const securityType = await determineVaultType(vault.data.signers, vaultId, storedPassword)
+    
+    // Cache the result
+    this.vaultSecurityTypes.set(vaultId, securityType)
     vault.setCachedSecurityType(securityType)
 
     return securityType
   }
 
-  /**
-   * Normalize vault object to ensure consistent structure
-   * @param v - Raw vault object to normalize
-   * @returns Normalized vault object
-   */
-  private static normalizeVault(v: Vault): Vault {
-    return {
-      name: v.name,
-      publicKeys: v.publicKeys,
-      signers: v.signers,
-      createdAt: v.createdAt ?? Date.now(),
-      hexChainCode: v.hexChainCode,
-      keyShares: v.keyShares ?? { ecdsa: '', eddsa: '' },
-      localPartyId: v.localPartyId,
-      resharePrefix: (v as any).resharePrefix,
-      libType: v.libType ?? 'DKLS',
-      threshold:
-        v.threshold ?? VaultManager.calculateThreshold(v.signers.length), // Calculate if not present
-      isBackedUp: v.isBackedUp ?? true, // Default to true for imported vaults
-      order: v.order ?? 0,
-      folderId: (v as any).folderId,
-      lastPasswordVerificationTime: (v as any).lastPasswordVerificationTime,
-    }
-  }
 
   /**
    * Calculate the threshold for a given number of participants
@@ -626,11 +599,23 @@ export class VaultManager {
   /**
    * Get vault details and metadata
    */
-  static getVaultDetails(vault: Vault): VaultDetails {
+  static async getVaultDetails(vault: Vault, password?: string): Promise<VaultDetails> {
+    const vaultId = vault.publicKeys.ecdsa || 'unknown'
+    
+    // Get cached security type or perform server validation
+    const cachedSecurityType = this.vaultSecurityTypes.get(vaultId)
+    const securityType = cachedSecurityType || 
+      await determineVaultType(vault.signers, vaultId, password || this.vaultPasswords.get(vaultId))
+    
+    // Cache if not already cached
+    if (!cachedSecurityType) {
+      this.vaultSecurityTypes.set(vaultId, securityType)
+    }
+
     return {
       name: vault.name,
-      id: vault.publicKeys.ecdsa || 'unknown',
-      securityType: determineVaultType(vault.signers),
+      id: vaultId,
+      securityType,
       threshold:
         vault.threshold ??
         VaultManager.calculateThreshold(vault.signers.length), // Fallback for legacy vaults

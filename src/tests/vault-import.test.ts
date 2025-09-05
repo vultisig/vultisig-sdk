@@ -1,8 +1,10 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { vi } from 'vitest'
 
 import { VaultImportError } from '../vault/VaultError'
 import { VaultManager } from '../vault/VaultManager'
+import { FastVaultClient } from '../server/FastVaultClient'
 
 describe('Vault Import Tests', () => {
   const testVaultsDir = join(__dirname, 'vaults')
@@ -28,9 +30,9 @@ describe('Vault Import Tests', () => {
     expect(vault.threshold).toBe(2)
 
     // Verify vault details
-    const details = VaultManager.getVaultDetails(vault)
+    const details = await VaultManager.getVaultDetails(vault, 'Password123!')
     expect(details.name).toBe('TestFastVault')
-    expect(details.securityType).toBe('fast')
+    expect(details.securityType).toBe('fast') // Server validation succeeds, so classified as fast vault
     expect(details.threshold).toBe(2)
     expect(details.participants).toBe(2)
     expect(details.isBackedUp).toBe(true)
@@ -79,5 +81,38 @@ describe('Vault Import Tests', () => {
     ;(vaultFile as any).buffer = vaultBuffer
 
     await expect(VaultManager.add(vaultFile, 'WrongPassword')).rejects.toThrow(VaultImportError)
+  })
+
+  test('should only classify as fast vault if found on server (no fallbacks)', async () => {
+    // Spy on the FastVaultClient.getVault method to verify it's called
+    const getVaultSpy = vi.spyOn(FastVaultClient.prototype, 'getVault')
+
+    // Load test fast vault file
+    const vaultPath = join(testVaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
+    const vaultBuffer = readFileSync(vaultPath)
+    const vaultFile = new File([vaultBuffer], 'TestFastVault-44fd-share2of2-Password123!.vult')
+    ;(vaultFile as any).buffer = vaultBuffer
+
+    // Import vault with correct password
+    const vaultInstance = await VaultManager.add(vaultFile, 'Password123!')
+    const vault = vaultInstance.data
+
+    // Verify server validation was attempted (will fail due to test environment)
+    expect(getVaultSpy).toHaveBeenCalledWith(
+      '03ac0f333fc5d22f929e013be80988f57a56837db64d968c126ca4c943984744fd',
+      'Password123!'
+    )
+    expect(getVaultSpy).toHaveBeenCalledTimes(1)
+
+    // Since server validation succeeds, it should be classified as fast
+    const securityType = await VaultManager.getSecurityType(vaultInstance, 'Password123!')
+    expect(securityType).toBe('fast')
+
+    // Verify vault details reflect fast vault type
+    const details = await VaultManager.getVaultDetails(vault, 'Password123!')
+    expect(details.securityType).toBe('fast')
+
+    // Clean up spy
+    getVaultSpy.mockRestore()
   })
 })

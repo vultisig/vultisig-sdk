@@ -6,6 +6,7 @@
 export { Vault } from './Vault'
 export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
 export { VaultManager } from './VaultManager'
+export { AddressBookManager } from './AddressBookManager'
 
 // Vault utilities - use VaultManager for encryption/decryption operations
 

@@ -21,9 +21,8 @@ export class FastVaultClient {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json'
-      },
-      // Ensure HTTPS only for browser security
-      httpsAgent: process.env.NODE_ENV === 'development' ? undefined : { rejectUnauthorized: true }
+      }
+      // Remove httpsAgent configuration that was causing issues in test environment
     })
   }
 

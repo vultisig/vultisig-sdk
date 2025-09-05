@@ -7,6 +7,7 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 
 import { AddressDeriver } from '../chains/AddressDeriver'
 import { VaultError, VaultErrorCode } from './VaultError'
+import { VaultManager } from './VaultManager'
 
 // Use the same memoized WalletCore instance as the extension
 const getWalletCore = memoizeAsync(initWasm)
@@ -16,16 +17,6 @@ type AddressInput = {
   walletCore: WalletCore
 }
 
-/**
- * Determine vault type based on signer names
- * Fast vaults have one signer that starts with "Server-"
- * Secure vaults have only device signers (no "Server-" prefix)
- */
-function determineVaultType(signers: string[]): 'fast' | 'secure' {
-  return signers.some(signer => signer.startsWith('Server-'))
-    ? 'fast'
-    : 'secure'
-}
 
 /**
  * Vault class for handling vault operations
@@ -60,11 +51,11 @@ export class Vault {
   /**
    * Get vault summary information
    */
-  summary() {
+  async summary() {
     return {
       id: this.vaultData.publicKeys.ecdsa,
       name: this.vaultData.name,
-      type: this._securityType ?? determineVaultType(this.vaultData.signers),
+      type: this._securityType ?? await VaultManager.getSecurityType(this),
       chains: this.getSupportedChains(),
       createdAt: this.vaultData.createdAt,
       isBackedUp: this.vaultData.isBackedUp,
