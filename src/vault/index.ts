@@ -4,7 +4,12 @@
  */
 
 export { Vault } from './Vault'
-export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
+export {
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
+  VaultImportErrorCode,
+} from './VaultError'
 export { VaultManager } from './VaultManager'
 
 // Vault utilities - use VaultManager for encryption/decryption operations
