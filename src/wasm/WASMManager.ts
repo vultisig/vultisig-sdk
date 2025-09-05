@@ -1,4 +1,6 @@
 import { initializeMpcLib } from '@core/mpc/lib/initialize'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { initWasm } from '@trustwallet/wallet-core'
 
 /**
  * WASMManager handles initialization and management of all WASM modules
@@ -42,14 +44,14 @@ export class WASMManager {
   }
 
   private walletCoreInstance: any = null
+  private getWalletCore = memoizeAsync(initWasm)
 
   /**
    * Initialize Trust Wallet Core WASM
    */
   private async initializeWalletCore(): Promise<void> {
     try {
-      const { initWasm } = await import('@trustwallet/wallet-core')
-      this.walletCoreInstance = await initWasm()
+      this.walletCoreInstance = await this.getWalletCore()
       this.walletCoreReady = true
     } catch (error) {
       throw new Error(`Failed to initialize WalletCore WASM: ${error}`)
@@ -126,6 +128,13 @@ export class WASMManager {
     }
     
     return this.walletCoreInstance
+  }
+
+  /**
+   * Get the memoized WalletCore getter (same instance as used by extension)
+   */
+  getWalletCoreGetter() {
+    return this.getWalletCore
   }
 
   /**

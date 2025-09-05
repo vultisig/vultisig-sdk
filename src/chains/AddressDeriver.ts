@@ -46,38 +46,69 @@ export class AddressDeriver {
     }
   }
 
-  private mapStringToChain(chainStr: string): Chain {
+  mapStringToChain(chainStr: string): Chain {
     // Map common string names to Chain enum values
+    // Synchronized with core/chain/Chain.ts and core/chain/coin/coinType.ts
     const chainMap: Record<string, Chain> = {
-      'ethereum': Chain.Ethereum,
+      // UTXO chains (from UtxoChain enum)
       'bitcoin': Chain.Bitcoin,
-      'cosmos': Chain.Cosmos,
-      'thorchain': Chain.THORChain,
-      'solana': Chain.Solana,
-      'polkadot': Chain.Polkadot,
-      'ripple': Chain.Ripple,
-      'bsc': Chain.BSC,
-      'polygon': Chain.Polygon,
-      'avalanche': Chain.Avalanche,
-      'arbitrum': Chain.Arbitrum,
-      'optimism': Chain.Optimism,
-      'mayachain': Chain.MayaChain,
-      'cardano': Chain.Cardano,
-      'tron': Chain.Tron,
-      'ton': Chain.Ton,
+      'btc': Chain.Bitcoin,
+      'bitcoincash': Chain.BitcoinCash,
+      'bch': Chain.BitcoinCash,
       'litecoin': Chain.Litecoin,
+      'ltc': Chain.Litecoin,
       'dogecoin': Chain.Dogecoin,
+      'doge': Chain.Dogecoin,
       'dash': Chain.Dash,
       'zcash': Chain.Zcash,
-      'bitcoincash': Chain.BitcoinCash,
-      'sui': Chain.Sui,
+      
+      // EVM chains (from EvmChain)
+      'ethereum': Chain.Ethereum,
+      'eth': Chain.Ethereum,
+      'arbitrum': Chain.Arbitrum,
+      'base': Chain.Base,
+      'blast': Chain.Blast,
+      'optimism': Chain.Optimism,
+      'zksync': Chain.Zksync,
+      'mantle': Chain.Mantle,
+      'avalanche': Chain.Avalanche,
+      'avax': Chain.Avalanche,
+      'cronoschain': Chain.CronosChain,
+      'cronos': Chain.CronosChain,
+      'bsc': Chain.BSC,
+      'bnb': Chain.BSC,
+      'polygon': Chain.Polygon,
+      'matic': Chain.Polygon,
+      
+      // Cosmos chains (from CosmosChain)
+      'cosmos': Chain.Cosmos,
+      'atom': Chain.Cosmos,
       'osmosis': Chain.Osmosis,
-      'kujira': Chain.Kujira,
+      'osmo': Chain.Osmosis,
       'dydx': Chain.Dydx,
+      'kujira': Chain.Kujira,
       'terra': Chain.Terra,
       'terraclassic': Chain.TerraClassic,
       'noble': Chain.Noble,
-      'akash': Chain.Akash
+      'akash': Chain.Akash,
+      'thorchain': Chain.THORChain,
+      'thor': Chain.THORChain,
+      'mayachain': Chain.MayaChain,
+      'maya': Chain.MayaChain,
+      
+      // Other chains (from OtherChain enum)
+      'sui': Chain.Sui,
+      'solana': Chain.Solana,
+      'sol': Chain.Solana,
+      'polkadot': Chain.Polkadot,
+      'dot': Chain.Polkadot,
+      'ton': Chain.Ton,
+      'ripple': Chain.Ripple,
+      'xrp': Chain.Ripple,
+      'tron': Chain.Tron,
+      'trx': Chain.Tron,
+      'cardano': Chain.Cardano,
+      'ada': Chain.Cardano,
     }
     
     const mappedChain = chainMap[chainStr.toLowerCase()]
