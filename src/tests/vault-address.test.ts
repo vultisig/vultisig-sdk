@@ -33,12 +33,21 @@ describe('Vault Address Tests', () => {
 
   beforeAll(async () => {
     // Initialize SDK with real WalletCore WASM
+    // WASM file loading is handled globally by vitest.setup.ts
+    // VaultManager is automatically initialized by sdk.initialize()
     sdk = new VultisigSDK()
     await sdk.initialize()
+  }, 120000) // 2 minute timeout for WASM initialization
 
-    // Initialize VaultManager with the SDK instance
-    VaultManager.init(sdk)
-  }, 60000) // 60 second timeout for WASM initialization
+  beforeEach(async () => {
+    // Clear any existing data
+    await VaultManager.clear()
+  })
+
+  afterEach(async () => {
+    // Clean up after each test
+    await VaultManager.clear()
+  })
 
   describe('vault.address()', () => {
     const testVaultsDir = join(__dirname, 'vaults')
@@ -58,28 +67,25 @@ describe('Vault Address Tests', () => {
         readFileSync(expectedDataPath, 'utf-8')
       )
 
-      // Create File object
+      // Create File object (Node.js compatible)
       const vaultFileObj = new File(
         [vaultFileBuffer],
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      // Use the mock File implementation from vitest setup
-      Object.defineProperty(vaultFileObj, 'arrayBuffer', {
-        value: () => Promise.resolve(vaultFileBuffer.buffer.slice(vaultFileBuffer.byteOffset, vaultFileBuffer.byteOffset + vaultFileBuffer.byteLength)),
-        writable: true
-      })
+      // For Node.js testing, attach the buffer directly
+      ;(vaultFileObj as any).buffer = vaultFileBuffer
 
       // Import vault
       const vaultInstance = await VaultManager.add(vaultFileObj, 'Password123!')
 
-      // Test address derivation for bitcoin
+      // Test REAL address derivation for bitcoin
       const bitcoinAddress = await vaultInstance.address('bitcoin')
 
       // Verify perfect match against expected address
       expect(bitcoinAddress).toBe(expectedData.addresses.Bitcoin)
     })
 
-    test('should derive addresses for all expecteddata chains', async () => {
+    test('should derive addresses for all expected chains', async () => {
       // Load test vault
       const vaultFilePath = join(
         testVaultsDir,
@@ -94,16 +100,13 @@ describe('Vault Address Tests', () => {
         readFileSync(expectedDataPath, 'utf-8')
       )
 
-      // Create File object
+      // Create File object (Node.js compatible)
       const vaultFileObj = new File(
         [vaultFileBuffer],
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      // Use the mock File implementation from vitest setup
-      Object.defineProperty(vaultFileObj, 'arrayBuffer', {
-        value: () => Promise.resolve(vaultFileBuffer.buffer.slice(vaultFileBuffer.byteOffset, vaultFileBuffer.byteOffset + vaultFileBuffer.byteLength)),
-        writable: true
-      })
+      // For Node.js testing, attach the buffer directly
+      ;(vaultFileObj as any).buffer = vaultFileBuffer
 
       // Import vault
       const vaultInstance = await VaultManager.add(
@@ -111,7 +114,7 @@ describe('Vault Address Tests', () => {
         'Password123!'
       )
 
-      // Test all chains found in expected data using .addresses()
+      // Test REAL address derivation for all chains
       const chains = Object.keys(expectedData.addresses)
       const addresses = await vaultInstance.addresses(chains.map(c => c.toLowerCase()))
 

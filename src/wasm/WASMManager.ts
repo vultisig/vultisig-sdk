@@ -44,14 +44,14 @@ export class WASMManager {
   }
 
   private walletCoreInstance: any = null
-  private getWalletCore = memoizeAsync(initWasm)
+  private getWalletCoreInit = memoizeAsync(initWasm)
 
   /**
    * Initialize Trust Wallet Core WASM
    */
   private async initializeWalletCore(): Promise<void> {
     try {
-      this.walletCoreInstance = await this.getWalletCore()
+      this.walletCoreInstance = await this.getWalletCoreInit()
       this.walletCoreReady = true
     } catch (error) {
       throw new Error(`Failed to initialize WalletCore WASM: ${error}`)
@@ -134,7 +134,7 @@ export class WASMManager {
    * Get the memoized WalletCore getter (same instance as used by extension)
    */
   getWalletCoreGetter() {
-    return this.getWalletCore
+    return this.getWalletCoreInstance
   }
 
   /**

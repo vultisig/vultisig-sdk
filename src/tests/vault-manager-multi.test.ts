@@ -9,24 +9,19 @@ import { join } from 'path'
 import { VaultManager } from '../vault/VaultManager'
 import { Vault as VaultClass } from '../vault/Vault'
 import { VaultImportError } from '../vault/VaultError'
-import { VultisigSDK } from '../VultisigSDK'
 
 import type { Vault } from '../types'
 
 describe('VaultManager Multi-Vault Tests', () => {
   const testVaultsDir = join(__dirname, 'vaults')
-  let sdk: VultisigSDK
 
   beforeEach(async () => {
     // Clear all vaults and address book before each test
     await VaultManager.clear()
-
-    // Initialize SDK with real WASM modules
-    sdk = new VultisigSDK()
-    await sdk.initialize()
-
-    // Initialize VaultManager with real SDK
-    VaultManager.init(sdk)
+    
+    // VaultManager is auto-initialized when SDK is initialized
+    // For basic tests that don't need address derivation, we can init with null
+    VaultManager.init(null)
   })
 
   afterEach(async () => {
@@ -46,15 +41,9 @@ describe('VaultManager Multi-Vault Tests', () => {
       const fastVaultFile = new File([fastVaultBuffer], 'TestFastVault-44fd-share2of2-Password123!.vult')
       const secureVaultFile = new File([secureVaultBuffer], 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
 
-      // Use the mock File implementation from vitest setup
-      Object.defineProperty(fastVaultFile, 'arrayBuffer', {
-        value: () => Promise.resolve(fastVaultBuffer.buffer.slice(fastVaultBuffer.byteOffset, fastVaultBuffer.byteOffset + fastVaultBuffer.byteLength)),
-        writable: true
-      })
-      Object.defineProperty(secureVaultFile, 'arrayBuffer', {
-        value: () => Promise.resolve(secureVaultBuffer.buffer.slice(secureVaultBuffer.byteOffset, secureVaultBuffer.byteOffset + secureVaultBuffer.byteLength)),
-        writable: true
-      })
+      // For Node.js testing, attach the buffers directly
+      ;(fastVaultFile as any).buffer = fastVaultBuffer
+      ;(secureVaultFile as any).buffer = secureVaultBuffer
 
       // Add both vaults
       const fastVault = await VaultManager.add(fastVaultFile, 'Password123!')
@@ -94,7 +83,6 @@ describe('VaultManager Multi-Vault Tests', () => {
       const vaultBuffer = readFileSync(vaultPath)
       const vaultFile = new File([vaultBuffer], 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       ;(vaultFile as any).buffer = vaultBuffer
-      ;(vaultFile as any).arrayBuffer = async () => vaultBuffer
 
       const vault = await VaultManager.add(vaultFile)
       
@@ -109,7 +97,6 @@ describe('VaultManager Multi-Vault Tests', () => {
       const fastVaultBuffer = readFileSync(fastVaultPath)
       const fastVaultFile = new File([fastVaultBuffer], 'TestFastVault-44fd-share2of2-Password123!.vult')
       ;(fastVaultFile as any).buffer = fastVaultBuffer
-      ;(fastVaultFile as any).arrayBuffer = async () => fastVaultBuffer
 
       const fastVault = await VaultManager.add(fastVaultFile, 'Password123!')
       
@@ -132,9 +119,7 @@ describe('VaultManager Multi-Vault Tests', () => {
       const secureVaultFile = new File([secureVaultBuffer], 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
 
       ;(fastVaultFile as any).buffer = fastVaultBuffer
-      ;(fastVaultFile as any).arrayBuffer = async () => fastVaultBuffer
       ;(secureVaultFile as any).buffer = secureVaultBuffer
-      ;(secureVaultFile as any).arrayBuffer = async () => secureVaultBuffer
 
       const fastVault = await VaultManager.add(fastVaultFile, 'Password123!')
       const secureVault = await VaultManager.add(secureVaultFile)
@@ -172,9 +157,7 @@ describe('VaultManager Multi-Vault Tests', () => {
       const secureVaultFile = new File([secureVaultBuffer], 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
 
       ;(fastVaultFile as any).buffer = fastVaultBuffer
-      ;(fastVaultFile as any).arrayBuffer = async () => fastVaultBuffer
       ;(secureVaultFile as any).buffer = secureVaultBuffer
-      ;(secureVaultFile as any).arrayBuffer = async () => secureVaultBuffer
 
       const fastVault = await VaultManager.add(fastVaultFile, 'Password123!')
       const secureVault = await VaultManager.add(secureVaultFile)
@@ -360,7 +343,6 @@ describe('VaultManager Multi-Vault Tests', () => {
       const vaultBuffer = readFileSync(vaultPath)
       const vaultFile = new File([vaultBuffer], 'TestFastVault-44fd-share2of2-Password123!.vult')
       ;(vaultFile as any).buffer = vaultBuffer
-      ;(vaultFile as any).arrayBuffer = async () => vaultBuffer
 
       const vaultInstance = await VaultManager.add(vaultFile, 'Password123!')
       const vaultData = vaultInstance.data
@@ -382,7 +364,6 @@ describe('VaultManager Multi-Vault Tests', () => {
       const vaultBuffer = readFileSync(vaultPath)
       const vaultFile = new File([vaultBuffer], 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       ;(vaultFile as any).buffer = vaultBuffer
-      ;(vaultFile as any).arrayBuffer = async () => vaultBuffer
 
       const vaultInstance = await VaultManager.add(vaultFile)
       const vaultData = vaultInstance.data
@@ -399,7 +380,6 @@ describe('VaultManager Multi-Vault Tests', () => {
     test('should handle invalid vault files', async () => {
       const invalidData = Buffer.from('invalid vault data')
       const invalidFile = new File([invalidData], 'invalid.vult')
-      ;(invalidFile as any).arrayBuffer = async () => invalidData
 
       await expect(VaultManager.add(invalidFile)).rejects.toThrow(VaultImportError)
     })
@@ -407,7 +387,6 @@ describe('VaultManager Multi-Vault Tests', () => {
     test('should handle non-.vult files', async () => {
       const invalidData = Buffer.from('some data')
       const invalidFile = new File([invalidData], 'invalid.txt')
-      ;(invalidFile as any).arrayBuffer = async () => invalidData
 
       await expect(VaultManager.add(invalidFile)).rejects.toThrow(VaultImportError)
     })
@@ -426,8 +405,6 @@ describe('VaultManager Multi-Vault Tests', () => {
 
       ;(encryptedFile as any).buffer = encryptedBuffer
       ;(unencryptedFile as any).buffer = unencryptedBuffer
-      ;(encryptedFile as any).arrayBuffer = async () => encryptedBuffer
-      ;(unencryptedFile as any).arrayBuffer = async () => unencryptedBuffer
 
       const encryptedStatus = await VaultManager.isEncrypted(encryptedFile)
       const unencryptedStatus = await VaultManager.isEncrypted(unencryptedFile)
