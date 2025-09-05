@@ -57,9 +57,9 @@ export const CreateVaultForm = ({
   onInitialize,
 }: CreateVaultFormProps) => {
   const [createForm, setCreateForm] = useState({
-    name: 'TestVault',
-    email: 'cryptoforlyfe@gmail.com',
-    password: 'Password123!',
+    name: import.meta.env.VITE_VAULT_NAME || 'TestVault',
+    email: import.meta.env.VITE_VAULT_EMAIL || 'cryptoforlyfe@gmail.com',
+    password: import.meta.env.VITE_VAULT_PASSWORD || 'Password123!',
   })
   const [verificationCode, setVerificationCode] = useState('')
   const [step, setStep] = useState<CreateStep>('form')
@@ -200,7 +200,7 @@ export const CreateVaultForm = ({
         <input
           id="vault-name"
           type="text"
-          placeholder="My Vault"
+          placeholder={import.meta.env.VITE_VAULT_NAME || 'My Vault'}
           value={createForm.name}
           onChange={e =>
             setCreateForm(prev => ({ ...prev, name: e.target.value }))
@@ -225,7 +225,7 @@ export const CreateVaultForm = ({
         <input
           id="email"
           type="email"
-          placeholder="your@email.com"
+          placeholder={import.meta.env.VITE_VAULT_EMAIL || 'your@email.com'}
           value={createForm.email}
           onChange={e =>
             setCreateForm(prev => ({ ...prev, email: e.target.value }))
@@ -250,7 +250,9 @@ export const CreateVaultForm = ({
         <input
           id="password"
           type="password"
-          placeholder="Enter a strong password"
+          placeholder={
+            import.meta.env.VITE_VAULT_PASSWORD || 'Enter a strong password'
+          }
           value={createForm.password}
           onChange={e =>
             setCreateForm(prev => ({ ...prev, password: e.target.value }))
