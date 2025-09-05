@@ -34,9 +34,9 @@ describe('Vault Address Tests', () => {
   beforeAll(async () => {
     // Initialize SDK with real WalletCore WASM
     // WASM file loading is handled globally by vitest.setup.ts
-    // VaultManager is automatically initialized by sdk.initialize()
+    // VaultManager is automatically initialized by sdk.init()
     sdk = new VultisigSDK()
-    await sdk.initialize()
+    await sdk.init()
   }, 120000) // 2 minute timeout for WASM initialization
 
   beforeEach(async () => {

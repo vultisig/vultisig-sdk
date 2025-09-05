@@ -1,17 +1,8 @@
-import type { 
+import type {
   Vault,
-  VaultOptions,
-  VaultBackup,
-  VaultDetails,
-  VaultValidationResult,
-  ExportOptions,
   ChainKind,
   Balance,
-  SigningPayload,
-  Signature,
-  ReshareOptions,
-  ServerStatus,
-  KeygenProgressUpdate
+  ServerStatus
 } from './types'
 
 import { Chain } from '@core/chain/Chain'
@@ -34,7 +25,7 @@ import { WASMManager } from './wasm'
  * - Cross-device message relay
  */
 export class VultisigSDK {
-  private vaultManager: VaultManager
+  private _vaultManager: VaultManager
   private mpcManager: MPCManager
   private chainManager: ChainManager
   private addressDeriver: AddressDeriver
@@ -58,7 +49,7 @@ export class VultisigSDK {
   }) {
     this.wasmManager = new WASMManager(config?.wasmConfig)
     this.serverManager = new ServerManager(config?.serverEndpoints)
-    this.vaultManager = new VaultManager()
+    this._vaultManager = new VaultManager()
     this.mpcManager = new MPCManager(this.serverManager)
     this.chainManager = new ChainManager(this.wasmManager)
     this.addressDeriver = new AddressDeriver()
@@ -68,7 +59,7 @@ export class VultisigSDK {
    * Initialize the SDK and load WASM modules
    * Automatically initializes VaultManager with this SDK instance
    */
-  async initialize(): Promise<void> {
+  async init(): Promise<void> {
     if (this.initialized) return
     
     try {
@@ -95,82 +86,10 @@ export class VultisigSDK {
     return this.initialized
   }
 
-  // ===== VultiServer-based operations =====
+  // ===== VAULT OPERATIONS =====
+  /** Access to VaultManager static class */
+  get vaultManager() { return VaultManager }
 
-  /**
-   * Create a new vault using multi-device MPC (requires multiple devices)
-   */
-  async createVault(options: VaultOptions): Promise<Vault> {
-    return this.vaultManager.createVault(options)
-  }
-
-  /**
-   * Create a Fast Vault where VultiServer acts as the second device
-   * This is the most convenient method for single-device usage
-   */
-  async createFastVault(options: { name: string; email: string; password: string; onLog?: (message: string) => void; onProgress?: (u: KeygenProgressUpdate) => void }): Promise<{
-    vault: Vault
-    vaultId: string
-    verificationRequired: boolean
-  }> {
-    await this.initialize()
-    return this.serverManager.createFastVault(options)
-  }
-
-  /**
-   * Verify vault with email verification code
-   * @param vaultId The ECDSA public key that serves as the vault identifier
-   * @param code Email verification code
-   */
-  async verifyVault(vaultId: string, code: string): Promise<boolean> {
-    return this.serverManager.verifyVault(vaultId, code)
-  }
-
-  /**
-   * Verify vault email (alias for verifyVault for compatibility)
-   */
-  async verifyVaultEmail(vaultId: string, code: string): Promise<boolean> {
-    return this.verifyVault(vaultId, code)
-  }
-
-  /**
-   * Get verified vault from server after email verification
-   * @param vaultId The ECDSA public key that serves as the vault identifier
-   * @param password Vault decryption password
-   */
-  async getVault(vaultId: string, password: string): Promise<Vault> {
-    return this.serverManager.getVerifiedVault(vaultId, password)
-  }
-
-  /**
-   * Resend vault verification email
-   */
-  async resendVaultVerification(vaultId: string): Promise<void> {
-    return this.serverManager.resendVaultVerification(vaultId)
-  }
-
-  /**
-   * Get vault from VultiServer using password
-   * @param vaultId The ECDSA public key that serves as the vault identifier
-   * @param password Vault decryption password
-   */
-  async getVaultFromServer(vaultId: string, password: string): Promise<Vault> {
-    return this.serverManager.getVaultFromServer(vaultId, password)
-  }
-
-  /**
-   * Sign transaction using VultiServer
-   */
-  async signWithServer(vault: Vault, payload: SigningPayload): Promise<Signature> {
-    return this.serverManager.signWithServer(vault, payload)
-  }
-
-  /**
-   * Reshare vault participants
-   */
-  async reshareVault(vault: Vault, reshareOptions: ReshareOptions): Promise<Vault> {
-    return this.serverManager.reshareVault(vault, reshareOptions)
-  }
 
   // ===== Server status and health =====
 
@@ -181,32 +100,8 @@ export class VultisigSDK {
     return this.serverManager.checkServerStatus()
   }
 
-  // ===== Relay session helpers =====
-  async startRelaySession(params: { serverUrl: string; sessionId: string; devices: string[] }): Promise<void> {
-    return this.serverManager.startRelaySession(params)
-  }
 
-  async joinRelaySession(params: { serverUrl: string; sessionId: string; localPartyId: string }): Promise<void> {
-    return this.serverManager.joinRelaySession(params)
-  }
-
-  async getRelayPeerOptions(params: { serverUrl: string; sessionId: string; localPartyId: string }): Promise<string[]> {
-    return this.serverManager.getRelayPeerOptions(params)
-  }
-
-  // ===== FastVault helpers =====
-  async createFastVaultOnServer(params: {
-    name: string
-    sessionId: string
-    hexEncryptionKey: string
-    hexChainCode: string
-    localPartyId: string
-    encryptionPassword: string
-    email: string
-    libType: number
-  }): Promise<void> {
-    return this.serverManager.createFastVaultOnServer(params)
-  }
+  // ===== Server status and health =====
 
   /**
    * Get server status (alias for checkServerStatus)
@@ -215,123 +110,5 @@ export class VultisigSDK {
     return this.checkServerStatus()
   }
 
-  // ===== Vault handling operations (wrapping existing core/lib code) =====
 
-
-  /**
-   * Export vault to backup format
-   */
-  async exportVault(vault: Vault, options?: ExportOptions): Promise<VaultBackup> {
-    return this.vaultManager.exportVault(vault, options)
-  }
-
-  /**
-   * Import vault from backup
-   */
-  async importVault(backup: VaultBackup, password?: string): Promise<Vault> {
-    return this.vaultManager.importVault(backup, password)
-  }
-
-  /**
-   * Import vault from file (ArrayBuffer or File)
-   */
-  async importVaultFromFile(fileData: ArrayBuffer | File, password?: string): Promise<Vault> {
-    return this.vaultManager.importVaultFromFile(fileData, password)
-  }
-
-  /**
-   * Check if a vault file is encrypted
-   */
-  async isVaultFileEncrypted(file: File): Promise<boolean> {
-    return VaultManager.isEncrypted(file)
-  }
-
-  /**
-   * Get vault details and metadata
-   */
-  getVaultDetails(vault: Vault): VaultDetails {
-    return this.vaultManager.getVaultDetails(vault)
-  }
-
-  /**
-   * Validate vault structure and integrity
-   */
-  validateVault(vault: Vault): VaultValidationResult {
-    return this.vaultManager.validateVault(vault)
-  }
-
-  // ===== Chain operations =====
-
-  /**
-   * Get addresses for vault across specific chains
-   */
-  async getAddresses(vault: Vault, chains: Chain[]): Promise<Record<Chain, string>> {
-    return this.chainManager.getAddresses(vault, chains)
-  }
-
-  /**
-   * Get addresses for vault across chain kinds (categories)
-   */
-  async getAddressesByKind(vault: Vault, chainKinds: ChainKind[]): Promise<Record<ChainKind, string>> {
-    return this.chainManager.getAddressesByKind(vault, chainKinds)
-  }
-
-  /**
-   * Get balances for addresses across specific chains
-   */
-  async getBalances(addresses: Record<Chain, string>): Promise<Record<Chain, Balance>> {
-    return this.chainManager.getBalances(addresses)
-  }
-
-  /**
-   * Get balances for chain kinds
-   */
-  async getBalancesByKind(addresses: Record<ChainKind, string>): Promise<Record<ChainKind, Balance>> {
-    return this.chainManager.getBalancesByKind(addresses)
-  }
-
-  /**
-   * Get balances for a vault across common chains
-   */
-  async getVaultBalances(vault: Vault): Promise<Record<string, Balance>> {
-    await this.initialize()
-    
-    // Define common chains to check
-    const commonChains = ['bitcoin', 'ethereum', 'thorchain', 'litecoin']
-    
-    try {
-      // Get addresses for the vault using AddressDeriver
-      const addresses = await this.addressDeriver.deriveMultipleAddresses(vault, commonChains)
-      
-      // Get balances for each address (mock implementation for now)
-      const result: Record<string, Balance> = {}
-      for (const [chain, address] of Object.entries(addresses)) {
-        // For now, return zero balances - balance fetching can be implemented later
-        result[chain] = {
-          amount: '0',
-          decimals: 8,
-          symbol: chain.toUpperCase()
-        }
-      }
-      
-      return result
-    } catch (error) {
-      throw new Error(`Failed to get vault balances: ${error}`)
-    }
-  }
-
-  /**
-   * Derive address for a vault on a specific chain
-   */
-  async deriveAddress(vault: Vault, chain: string): Promise<string> {
-    await this.initialize()
-    return this.addressDeriver.deriveAddress(vault, chain)
-  }
-
-  /**
-   * Get chain client for specific blockchain
-   */
-  getChainClient(chain: Chain) {
-    return this.chainManager.getChainClient(chain)
-  }
 }

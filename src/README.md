@@ -38,7 +38,7 @@ import { VultisigSDK } from 'vultisig-sdk'
 const sdk = new VultisigSDK()
 
 // Initialize WASM modules
-await sdk.initialize()
+await sdk.init()
 ```
 
 ### 2. Create a Fast Vault (Server-Assisted)
@@ -128,7 +128,7 @@ function VaultApp() {
 
   useEffect(() => {
     // Initialize SDK on component mount
-    sdk.initialize().catch(console.error)
+    sdk.init().catch(console.error)
   }, [sdk])
 
   const createVault = async () => {

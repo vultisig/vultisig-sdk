@@ -22,11 +22,11 @@ export type { VaultSecurityType } from '@core/ui/vault/VaultSecurityType'
 // SDK-specific types
 export type VaultOptions = {
   name: string
-  threshold: number
-  participants: string[]
-  email?: string
+  type?: VaultType
+  keygenMode?: KeygenMode
   password?: string
-  serverAssisted?: boolean
+  email?: string
+  onProgress?: (step: VaultCreationStep) => void
 }
 
 export type VaultBackup = {

@@ -6,6 +6,7 @@ import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGc
 import { fromBase64 } from '@lib/utils/fromBase64'
 import { FastVaultClient } from '../server'
 import { AddressBookManager } from './AddressBookManager'
+import { VaultCreate } from './VaultCreate'
 
 import type {
   AddressBook,
@@ -131,8 +132,8 @@ export class VaultManager {
    * Create new vault (automatically applies global chains/currency)
    */
   static async create(
-    _name: string,
-    _options?: {
+    name: string,
+    options?: {
       type?: VaultType
       keygenMode?: KeygenMode
       password?: string
@@ -140,9 +141,32 @@ export class VaultManager {
       onProgress?: (step: VaultCreationStep) => void
     }
   ): Promise<VaultClass> {
-    throw new Error(
-      'create() not implemented yet - requires MPC keygen integration'
-    )
+    try {
+      // Delegate to VaultCreate class
+      const rawVault = await VaultCreate.create({
+        name,
+        options,
+        sdkInstance: this.sdkInstance,
+        config: this.config
+      })
+
+      // Normalize the vault with static properties
+      const normalizedVault = this.normalizeVault(rawVault)
+
+      // Register the vault with shared logic
+      return this.registerVault(
+        normalizedVault,
+        true, // Fast vaults are always encrypted
+        'fast',
+        options?.password
+      )
+    } catch (error) {
+      console.error('Vault creation failed:', error)
+      
+      // Re-throw with more context
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      throw new Error(`Failed to create vault: ${errorMessage}`)
+    }
   }
 
   /**
@@ -218,27 +242,13 @@ export class VaultManager {
       const isEncrypted = container.isEncrypted
       const dynamicDetails = await this.fetchVaultDetails(normalizedVault, password)
 
-      // Store the vault data
-      this.vaultStorage.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
-
-      // Create VaultClass instance
-      const vaultInstance = new VaultClass(
+      // Register the vault with shared logic
+      return this.registerVault(
         normalizedVault,
-        this.sdkInstance?.wasmManager?.getWalletCore()
+        isEncrypted,
+        dynamicDetails.securityType,
+        password
       )
-
-      // Set cached properties on the Vault instance
-      vaultInstance.setCachedEncryptionStatus(isEncrypted)
-      vaultInstance.setCachedSecurityType(dynamicDetails.securityType)
-
-      // Store static properties in VaultManager
-      const vaultId = normalizedVault.publicKeys.ecdsa
-      this.vaultSecurityTypes.set(vaultId, dynamicDetails.securityType)
-      if (password) {
-        this.vaultPasswords.set(vaultId, password)
-      }
-
-      return vaultInstance
     } catch (error) {
       // Re-throw VaultImportError instances
       if (error instanceof VaultImportError) {
@@ -408,6 +418,115 @@ export class VaultManager {
     return { ...this.config }
   }
 
+  // === RELAY SESSION OPERATIONS ===
+  /**
+   * Start a relay session for multi-device operations
+   */
+  static async startRelaySession(params: { serverUrl: string; sessionId: string; devices: string[] }): Promise<void> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.startRelaySession(params)
+  }
+
+  /**
+   * Join an existing relay session
+   */
+  static async joinRelaySession(params: { serverUrl: string; sessionId: string; localPartyId: string }): Promise<void> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.joinRelaySession(params)
+  }
+
+  /**
+   * Get available peer options in a relay session
+   */
+  static async getRelayPeerOptions(params: { serverUrl: string; sessionId: string; localPartyId: string }): Promise<string[]> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.getRelayPeerOptions(params)
+  }
+
+  // === VAULT SERVER OPERATIONS ===
+  /**
+   * Verify vault with email verification code
+   */
+  static async verifyVault(vaultId: string, code: string): Promise<boolean> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.verifyVault(vaultId, code)
+  }
+
+  /**
+   * Verify vault email (alias for verifyVault for compatibility)
+   */
+  static async verifyVaultEmail(vaultId: string, code: string): Promise<boolean> {
+    return this.verifyVault(vaultId, code)
+  }
+
+  /**
+   * Get verified vault from server after email verification
+   */
+  static async getVault(vaultId: string, password: string): Promise<Vault> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.getVerifiedVault(vaultId, password)
+  }
+
+  /**
+   * Get vault from VultiServer using password
+   */
+  static async getVaultFromServer(vaultId: string, password: string): Promise<Vault> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.getVaultFromServer(vaultId, password)
+  }
+
+  /**
+   * Resend vault verification email
+   */
+  static async resendVaultVerification(vaultId: string): Promise<void> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.resendVaultVerification(vaultId)
+  }
+
+  /**
+   * Sign transaction using VultiServer
+   */
+  static async signWithServer(vault: VaultClass, payload: any): Promise<any> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.signWithServer(vault.data, payload)
+  }
+
+  /**
+   * Reshare vault participants
+   */
+  static async reshareVault(vault: VaultClass, reshareOptions: any): Promise<VaultClass> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    const result = await serverManager.reshareVault(vault.data, reshareOptions)
+    return new VaultClass(result, this.sdkInstance?.wasmManager?.getWalletCore())
+  }
+
+  /**
+   * Create FastVault on server
+   */
+  static async createFastVaultOnServer(params: {
+    name: string
+    sessionId: string
+    hexEncryptionKey: string
+    hexChainCode: string
+    localPartyId: string
+    encryptionPassword: string
+    email: string
+    libType: number
+  }): Promise<void> {
+    const { ServerManager } = await import('../server/ServerManager')
+    const serverManager = new ServerManager()
+    return serverManager.createFastVaultOnServer(params)
+  }
+
   // === ADDRESS BOOK (DELEGATED) ===
   /**
    * Get address book entries (delegates to AddressBookManager)
@@ -450,6 +569,46 @@ export class VaultManager {
   private static applyConfig(vault: VaultClass): VaultClass {
     // Global settings application not implemented
     return vault
+  }
+
+  /**
+   * Register a vault with VaultManager - handles storage, caching, and instance creation
+   * @param normalizedVault - The normalized vault data
+   * @param isEncrypted - Whether the vault is encrypted
+   * @param securityType - The security type of the vault
+   * @param password - Optional password for the vault
+   * @returns VaultClass instance
+   */
+  private static registerVault(
+    normalizedVault: Vault,
+    isEncrypted: boolean,
+    securityType: 'fast' | 'secure',
+    password?: string
+  ): VaultClass {
+    // Store the vault data
+    const vaultId = normalizedVault.publicKeys.ecdsa
+    this.vaultStorage.set(vaultId, normalizedVault)
+
+    // Create VaultClass instance
+    const vaultInstance = new VaultClass(
+      normalizedVault,
+      this.sdkInstance?.wasmManager?.getWalletCore()
+    )
+
+    // Set cached properties
+    vaultInstance.setCachedEncryptionStatus(isEncrypted)
+    vaultInstance.setCachedSecurityType(securityType)
+
+    // Store static properties in VaultManager
+    this.vaultSecurityTypes.set(vaultId, securityType)
+    if (password) {
+      this.vaultPasswords.set(vaultId, password)
+    }
+
+    // Apply global configuration
+    this.applyConfig(vaultInstance)
+
+    return vaultInstance
   }
 
   /**
