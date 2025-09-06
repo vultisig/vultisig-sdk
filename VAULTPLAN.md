@@ -1,25 +1,22 @@
-# Vault-Centric Architecture Plan
+# Vultisig SDK - Simplified Architecture
 
 ## Executive Summary
 
-VultisigSDK is a clean, vault-centric architecture with three primary classes:
+VultisigSDK is a clean, vault-centric architecture with two primary classes:
 
-- **`VultisigSDK`** - SDK
-- **`VaultManager`** - Vault manager for multiple vaults
-- **`Vault`** - Vault instance
-- **`.vult`** - Vault file (subset of Vault)
-
-### Minimal Integration Example
+- **`Vultisig`** - Main SDK class with auto-initialization
+- **`Vault`** - Individual vault instance
+- **`.vult`** - Vault file format (Protocol Buffers with optional AES-256-GCM encryption)
 
 ### Minimal Integration Example
 
 ```typescript
-// 1. Import and initialize SDK
-import { VultisigSDK, VaultManager } from 'vultisig-sdk'
-const sdk = new VultisigSDK()
+// 1. Import and create Vultisig instance
+import { Vultisig } from 'vultisig-sdk'
+const vultisig = new Vultisig()
 
-// 2. Create vault with progress updates
-const vault = await VaultManager.create('My Vault', {
+// 2. Create vault with progress updates (auto-initializes SDK, sets as active)
+const vault = await vultisig.createVault('My Vault', {
   password: 'password',
   email: 'user@example.com',
   onProgress: (step) => {
@@ -28,7 +25,7 @@ const vault = await VaultManager.create('My Vault', {
 })
 await vault.verifyEmail('1234')
 
-// 3. Get address/balance for transaction
+// 3. Get address/balance for transaction (vault is automatically active)
 const ethAddress = await vault.address('ethereum')
 const ethBalance = await vault.balance('ethereum')          // Native ETH balance
 
@@ -47,8 +44,8 @@ console.log('Transaction signed:', signature.txHash)
 ### Secure Vault Example
 
 ```typescript
-// 1. Create secure vault with multi-device setup
-const vault = await VaultManager.create('My Secure Vault', {
+// 1. Create secure vault with multi-device setup (automatically sets as active)
+const vault = await vultisig.createVault('My Secure Vault', {
   type: 'secure',
   keygenMode: 'local',
   onProgress: (step) => {
@@ -73,69 +70,83 @@ const signature = await vault.sign({
 
 # Architecture
 
-## VultisigSDK Class
-The SDK exposes an API for vault operations that are not specific to a Vault or set of Vaults. 
-It contains SDK-wide config and holds the entry points for the underlying managers. 
+## Vultisig Class
+The main SDK class that provides a unified interface for all vault operations. Auto-initializes on first vault operation and manages global SDK state internally.
 
 ```typescript
-class VultisigSDK {
+class Vultisig {
   // === PRIVATE PROPERTIES ===
-  private vaultManager: VaultManager
+  private initialized: boolean = false
+  private vaults: Map<string, Vault> = new Map()
   private serverManager: ServerManager
   private wasmManager: WASMManager
+  private config: VultisigConfig
+  private defaultChains: string[] = []
+  private defaultCurrency: string = 'USD'
 
-  constructor(config?: SDKConfig) {
-    // Initialize managers
-    this.wasmManager = new WASMManager(config?.wasmConfig)
-    this.serverManager = new ServerManager(config?.serverEndpoints)
-    this.vaultManager = new VaultManager()
-
-    // Configure providers and settings
-    this.configureProviders(config)
-    
-    // Initialize VaultManager with SDK instance and config
-    VaultManager.init(this, config?.vaultManagerConfig)
-    
-    // Apply default settings
-    if (config?.vaultManagerConfig?.defaultChains) {
-      VaultManager.setDefaultChains(config.vaultManagerConfig.defaultChains)
-    }
-    if (config?.vaultManagerConfig?.defaultCurrency) {
-      VaultManager.setDefaultCurrency(config.vaultManagerConfig.defaultCurrency)
-    }
+  constructor(config?: VultisigConfig) {
+    this.config = { ...defaultConfig, ...config }
   }
 
-  // === INITIALIZATION ===
-  async initialize(): Promise<void>                           // Manual initialization (optional - auto-initializes on first use)
-  isInitialized(): boolean                                    // Check if SDK is initialized
+  // === AUTO-INITIALIZATION ===
   private async ensureInitialized(): Promise<void>           // Internal auto-initialization helper
+  isInitialized(): boolean                                    // Check if SDK is initialized
 
-  // === VAULT OPERATIONS ===
-  get vaultManager() { return VaultManager }                  // Access to VaultManager static class
+  // === VAULT LIFECYCLE ===
+  async createVault(
+    name: string, 
+    options?: CreateVaultOptions
+  ): Promise<Vault>                                           // Create new vault (auto-initializes SDK, sets as active)
+
+  async addVault(file: File, password?: string): Promise<Vault>  // Import vault from file (sets as active)
+  async listVaults(): Promise<VaultSummary[]>                 // List all stored vaults
+  async deleteVault(vault: Vault): Promise<void>              // Delete vault from storage (clears active if needed)
+  async clearVaults(): Promise<void>                          // Clear all stored vaults
+  
+  // === ACTIVE VAULT MANAGEMENT ===
+  setActiveVault(vault: Vault): void                          // Switch to different vault
+  getActiveVault(): Vault | null                              // Get current active vault
+  hasActiveVault(): boolean                                   // Check if there's an active vault
+
+  // === GLOBAL CONFIGURATION ===
+  setDefaultCurrency(currency: string): void                  // Set global default currency
+  getDefaultCurrency(): string                                // Get global default currency
+  updateConfig(config: Partial<VultisigConfig>): void         // Update SDK configuration
+  getConfig(): VultisigConfig                                 // Get current configuration
 
   // === CHAIN OPERATIONS ===
-  getSupportedChains(): string[]                              // Get all supported chains
+  getSupportedChains(): string[]                              // Get all hardcoded supported chains (immutable)
+  setDefaultChains(chains: string[]): void                    // Set SDK-level default chains for new vaults
+  getDefaultChains(): string[]                                // Get SDK-level default chains
   
   // === VALIDATION HELPERS ===
   static validateEmail(email: string): ValidationResult       // Validate email format
   static validatePassword(password: string): ValidationResult // Validate password strength
   static validateVaultName(name: string): ValidationResult    // Validate vault name
   
+  // === FILE OPERATIONS ===
+  async isVaultFileEncrypted(file: File): Promise<boolean>     // Check if .vult file is encrypted
+  
   // === SERVER STATUS ===
   async getServerStatus(): Promise<ServerStatus>              // Check server connectivity
-  
-  // === CONFIGURATION ===
-  getConfig(): SDKConfig                                      // Get current SDK configuration
-  updateConfig(config: Partial<SDKConfig>): Promise<void>     // Update SDK configuration
+  async getStatus(): Promise<VultisigStatus>                  // Get overall SDK status
+
+  // === ADDRESS BOOK (GLOBAL) ===
+  async getAddressBook(chain?: string): Promise<AddressBook>
+  async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
+  async removeAddressBookEntry(addresses: Array<{chain: string, address: string}>): Promise<void>
+  async updateAddressBookEntry(chain: string, address: string, name: string): Promise<void>
 
   // === PRIVATE METHODS ===
-  private configureProviders(config?: SDKConfig): void       // Set up RPC endpoints, APIs
+  private async initialize(): Promise<void>                   // Internal initialization
+  private configureProviders(): void                         // Set up RPC endpoints, APIs
+  private applyGlobalSettings(vault: Vault): void            // Apply global settings to vault
 }
 ```
-### SDK Interfaces
+### Vultisig Interfaces
 
 ```typescript
-interface SDKConfig {
+interface VultisigConfig {
   // Network configuration
   rpcEndpoints?: Record<string, string>     // Custom RPC endpoints per chain
   priceApiUrl?: string                      // Price API endpoint
@@ -169,91 +180,49 @@ interface SDKConfig {
       schnorr?: string                      // Custom Schnorr WASM path
     }
   }
+  
+  // Default settings
+  defaultChains?: string[]                  // Default chains for new vaults
+  defaultCurrency?: string                  // Default fiat currency
+}
+
+interface CreateVaultOptions {
+  type?: VaultType                          // Vault type (default: 'fast')
+  keygenMode?: KeygenMode                   // Keygen mode for secure vaults only (default: 'relay')
+  password?: string                         // Vault encryption password
+  email?: string                           // Email for fast vault verification
+  onProgress?: (step: VaultCreationStep) => void  // Progress callback
 }
 
 interface ServerStatus {
-  vultiServer: 'online' | 'offline'     // Fast vault server status
-  messageRelay: 'online' | 'offline'  // Message relay server status
-  lastChecked: number                               // Timestamp of last status check
+  vultiServer: 'online' | 'offline'        // Fast vault server status
+  messageRelay: 'online' | 'offline'       // Message relay server status
+  lastChecked: number                       // Timestamp of last status check
+}
+
+interface VultisigStatus {
+  initialized: boolean                      // Whether SDK is initialized
+  vaultCount: number                        // Number of stored vaults
+  serverStatus: ServerStatus                // Server connectivity status
+  wasmLoaded: boolean                       // Whether WASM modules are loaded
 }
 
 interface ValidationResult {
-  isValid: boolean                      // Whether validation passed
-  errors?: string[]                     // Specific validation errors (if any)
+  isValid: boolean                          // Whether validation passed
+  errors?: string[]                         // Specific validation errors (if any)
 }
-```
 
-## VaultManager Class
-Manages multiple vaults and the vault lifecycle. Holds a default config that new vaults inherit from. Manages anything that a set of vaults needs access to (ie, AddressBook)
-
-```typescript
-class VaultManager {
-  // === GLOBAL SETTINGS ===
-  static config: VaultManagerConfig
-  private static sdkInstance: VultisigSDK | null = null
-  private static activeVault: Vault | null = null
-
-  // === INITIALIZATION ===
-  static init(sdk: VultisigSDK, config?: Partial<VaultManagerConfig>): void
-
-  // === VAULT LIFECYCLE ===
-  // Create new vault (automatically applies global chains/currency)
-  static async create(
-    name: string, 
-    options?: {
-      type?: VaultType                           // Vault type (default: 'fast')
-      keygenMode?: KeygenMode                    // Keygen mode for secure vaults (default: 'relay')
-      password?: string
-      email?: string
-      onProgress?: (step: VaultCreationStep) => void
-    }
-  ): Promise<Vault>
-
-  // Add vault from file, applies global settings (chains/currency) to vault
-  static async add(file: File, password?: string): Promise<Vault>
-
-  // Load vault, applies global settings (chains/currency), makes active
-  static async load(vault: Vault, password?: string):Promise<void>
-
-  // List all stored vaults with their summaries
-  static async list(): Promise<Summary[]>
-
-  // Remove vault from storage
-  static async remove(vault: Vault): Promise<void>
-
-  // Clear all stored vaults
-  static async clear(): Promise<void>
-
-  // === ACTIVE VAULT MANAGEMENT ===
-  static setActive(vault: Vault): void                        // Set active vault
-  static getActive(): Vault | null                            // Get current active vault
-  static hasActive(): boolean                                 // Check if there's an active vault
-
-  // === GLOBAL CONFIGURATION ===
-  static setDefaultChains(chains: string[]): Promise<void>    // Set global default chains
-  static getDefaultChains(): string[]                         // Get global default chains
-  static setDefaultCurrency(currency: string): Promise<void>  // Set global default currency
-  static getDefaultCurrency(): string                         // Get global default currency
-  static saveConfig(config: Partial<VaultManagerConfig>): Promise<void>  // Save configuration
-  static getConfig(): VaultManagerConfig                      // Get current configuration
-
-  // === ADDRESS BOOK (GLOBAL) ===
-  static async addressBook(chain?: string): Promise<AddressBook>
-  static async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
-  static async removeAddressBookEntry(addresses: Array<{chain: string, address: string}>): Promise<void>
-  static async updateAddressBookEntry(chain: string, address: string, name: string): Promise<void>
-
-  // === VAULT SETTINGS INHERITANCE ===
-  private static applyConfig(vault: Vault): Vault    // Apply global chains/currency to vault
-}
-```
-
-### VaultManager Interfaces
-
-```typescript
-interface VaultManagerConfig {
-  defaultChains: string[]                   // Global default chains for all vaults
-  defaultCurrency: string                   // Global default currency for all vaults
+interface VaultSummary {
+  id: string                               // Vault ID (ECDSA public key)
+  name: string                             // Display name
+  isEncrypted: boolean                     // Whether vault is encrypted
+  createdAt: number                        // Timestamp added to storage
+  lastModified: number                     // Last modification timestamp
+  size: number                             // Estimated size in bytes
+  type: VaultType                          // Vault security type (derived from signers/threshold)
+  threshold: number                        // Minimum signers required
+  totalSigners: number                     // Total participants
+  vaultIndex: number                       // Which vault share this device owns
 }
 
 interface VaultCreationStep {
@@ -299,14 +268,14 @@ class Vault {
 
   // === VAULT OPERATIONS ===
   async export(password?: string): Promise<Blob>  // Export vault for backup
-  async delete(): Promise<void>                   // Delete vault from storage
   async rename(newName: string): Promise<void>    // Rename vault
 
-  // === CHAIN MANAGEMENT ===
-  setChains(chains: string[]): void               // Set active chains
-  addChain(chain: string): void                   // Add single chain
-  removeChain(chain: string): void                // Remove single chain
-  chains(): string[]                              // Get active chains
+  // === USER CHAIN MANAGEMENT ===
+  setChains(chains: string[]): Promise<void>      // Set user chains (triggers address/balance updates)
+  addChain(chain: string): Promise<void>          // Add single chain (triggers address/balance updates)
+  removeChain(chain: string): Promise<void>       // Remove single chain
+  getChains(): string[]                           // Get current user chains
+  resetToDefaultChains(): Promise<void>           // Reset to Vultisig default chains
 
   // === ADDRESS MANAGEMENT ===
   async address(chain: string): Promise<string>                  // Single address
@@ -353,7 +322,7 @@ class Vault {
 
 ```typescript
 type VaultType = 'fast' | 'secure'
-type KeygenMode = 'fast' | 'relay' | 'local'
+type KeygenMode = 'relay' | 'local'
 type SigningMode = 'fast' | 'relay' | 'local'
 
 
@@ -368,27 +337,28 @@ interface Config {
 }
 
 interface Summary {
-  id: string                    // Vault ID (ECDSA public key)
-  name: string                  // Display name
-  isEncrypted: boolean            // Whether vault is encrypted
-  createdAt: number            // Timestamp added to storage
-  lastModified: number         // Last modification timestamp
-  size: number                 // Estimated size in bytes
-  type: VaultType               // Vault security type
-  currency: string             // Preferred fiat currency (USD, EUR, etc.)
-  chains: string[]             // Chains enabled for this vault
-  tokens: Record<string, Token[]>  // Tokens per chain
+  id: string                          // Vault ID (ECDSA public key)
+  name: string                        // Display name
+  isEncrypted: boolean                // Whether vault is encrypted
+  createdAt: number                   // Timestamp added to storage
+  lastModified: number                // Last modification timestamp
+  size: number                        // Estimated size in bytes
+  type: VaultType                     // Vault security type (derived from signers/threshold)
   threshold: number                   // Minimum signers required
-  totalSigners: number               // Total participants
-  vaultIndex: number            // Which vault share this device owns
-  signers: VaultSigner[]             // All participant details
-  isBackedUp(): boolean        // Check if vault has been backed up
-  keys: {                     // Public keys
-    ecdsa: string
-    eddsa: string
-    hexChainCode: string
-    hexEncryptionKey: string
+  totalSigners: number                // Total participants
+  vaultIndex: number                  // Which vault share this device owns
+  signers: VaultSigner[]              // All participant details
+  isBackedUp(): boolean               // Check if vault has been backed up
+  keys: {                             // Public keys (from .vult file)
+    ecdsa: string                     // ECDSA public key
+    eddsa: string                     // EdDSA public key
+    hexChainCode: string              // BIP32 chain code
+    hexEncryptionKey: string          // Encryption key
   }
+  // Runtime properties (not in .vult file)
+  currency?: string                   // Current fiat currency preference
+  chains?: string[]                   // Currently active chains
+  tokens?: Record<string, Token[]>    // Tokens per chain
 }
 
 interface Balance {
@@ -458,6 +428,123 @@ interface Value {
 }
 ```
 
+## .vult File Format
+
+Vultisig keyshare files (`.vult`) use a layered approach with base64 encoding and Protocol Buffers serialization to store multi-party computation (MPC) threshold signature keyshares.
+
+**Important**: `.vult` files contain only cryptographic key material and vault metadata. They do NOT contain:
+- Chain configurations
+- Token lists  
+- Balance data
+- Currency preferences
+- Address caches
+
+These runtime properties are managed by the SDK and applied when vaults are loaded.
+
+### File Structure
+
+```
+.vult file
+├── Base64 encoding (outer layer)
+└── VaultContainer (protobuf)
+    ├── version: uint64
+    ├── is_encrypted: bool  
+    └── vault: string
+        ├── Base64 encoding (if unencrypted)
+        ├── OR AES-256-GCM encryption (if encrypted)
+        └── Vault (protobuf)
+            ├── name: string
+            ├── public_key_ecdsa: string (hex)
+            ├── public_key_eddsa: string (hex)
+            ├── signers: []string
+            ├── created_at: timestamp
+            ├── hex_chain_code: string (hex)
+            ├── key_shares: []KeyShare
+            ├── local_party_id: string
+            ├── reshare_prefix: string
+            └── lib_type: LibType
+```
+
+### Protocol Buffer Definitions
+
+```protobuf
+message VaultContainer {
+  uint64 version = 1;           // Data format version number
+  string vault = 2;             // Base64-encoded or encrypted vault data
+  bool is_encrypted = 3;        // Whether vault data is password-encrypted
+}
+
+message Vault {
+  string name = 1;                              // Human-readable vault name
+  string public_key_ecdsa = 2;                  // Hex-encoded compressed secp256k1 public key
+  string public_key_eddsa = 3;                  // Hex-encoded Ed25519 public key
+  repeated string signers = 4;                  // MPC participant identifiers
+  google.protobuf.Timestamp created_at = 5;     // Vault creation time
+  string hex_chain_code = 6;                    // BIP32 chain code for HD derivation
+  repeated KeyShare key_shares = 7;             // MPC threshold signature shares
+  string local_party_id = 8;                    // Local participant ID
+  string reshare_prefix = 9;                    // Prefix for key resharing
+  vultisig.keygen.v1.LibType lib_type = 10;     // MPC library type (GG20 = 0)
+}
+
+message KeyShare {
+  string public_key = 1;        // Public key for this share
+  string keyshare = 2;          // The actual key share data
+}
+```
+
+### Field Details
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `version` | uint64 | Data format version number |
+| `is_encrypted` | bool | Whether vault data is password-encrypted |
+| `vault` | string | Base64-encoded or encrypted vault data |
+| `name` | string | Human-readable vault name |
+| `public_key_ecdsa` | string | Hex-encoded compressed secp256k1 public key (66 chars) |
+| `public_key_eddsa` | string | Hex-encoded Ed25519 public key (64 chars) |
+| `signers` | []string | MPC participant identifiers |
+| `created_at` | timestamp | Vault creation time |
+| `hex_chain_code` | string | BIP32 chain code for HD derivation (64 chars) |
+| `key_shares` | []KeyShare | MPC threshold signature shares |
+| `local_party_id` | string | Local participant ID |
+| `reshare_prefix` | string | Prefix for key resharing |
+| `lib_type` | LibType | MPC library type (GG20 = 0) |
+
+### Encryption
+
+When `is_encrypted = true`, the vault data uses:
+
+- **Algorithm**: AES-256-GCM
+- **Key Derivation**: SHA256(password) 
+- **Nonce**: First 12 bytes of encrypted data
+- **Ciphertext**: Remaining bytes after nonce
+
+### File Operations
+
+```typescript
+// Import vault from .vult file
+const vault = await vultisig.addVault(file, password)
+
+// Export vault to .vult file
+const vaultBlob = await vault.export(password)
+
+// Check if file is encrypted
+const isEncrypted = await vultisig.isVaultFileEncrypted(file)
+```
+
+### Inspection
+
+Use the built-in inspector to analyze vault files:
+
+```bash
+# Inspect unencrypted vault
+npx tsx scripts/inspect_keyshare.ts vault.vult
+
+# Inspect encrypted vault  
+npx tsx scripts/inspect_keyshare.ts vault.vult mypassword123
+```
+
 
 ## Vault Modes
 
@@ -481,19 +568,102 @@ interface Value {
 - Override by specifying `signingMode` in transaction payload
 
 
+## Chain Management Hierarchy
+
+### **1. Supported Chains (SDK Level - Immutable)**
+- **Purpose**: All chains that Vultisig can technically support
+- **Scope**: Hardcoded in SDK, updated only with SDK releases
+- **Access**: `vultisig.getSupportedChains()`
+- **Cannot be overridden at runtime**
+
+### **2. Default Chains (SDK Level - Configurable)**
+- **Purpose**: SDK-wide default "nice to have" list (~5-6 common chains)
+- **Scope**: Can be updated by developers at runtime
+- **Access**: `vultisig.setDefaultChains()` / `vultisig.getDefaultChains()`
+- **Examples**: `['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']`
+
+### **3. User Chains (Vault Level - Dynamic)**
+- **Purpose**: Chains actively used by a specific vault
+- **Scope**: Set when vault is created/imported, can be updated anytime
+- **Access**: `vault.setChains()` / `vault.getChains()`
+- **Triggers**: Address derivation, balance fetching, gas estimation
+
 ### Auto-Population Behavior
 When a new vault is created:
-1. **Default Chains**: Automatically populate with `VaultManager.getDefaultChains()`
-2. **Addresses**: Derive addresses for all default chains and cache them
+1. **User Chains**: Inherit from `vultisig.getDefaultChains()`
+2. **Addresses**: Derive addresses for all user chains and cache them
 3. **Balances**: Fetch initial balances and cache
-4. **Currency**: Set vault currency to `VaultManager.getDefaultCurrency()`
-5. **Default Tokens**: Add popular tokens for each chain (USDC, USDT for Ethereum, etc.)
+4. **Currency**: Set vault currency to `vultisig.getDefaultCurrency()`
+5. **Default Tokens**: Add popular tokens for each user chain
 
 When a vault is imported from file:
-1. **Merge Global Settings**: Apply VaultManager's global chains to vault (union with existing chains)
-2. **Update Currency**: Set vault currency to VaultManager's global currency setting
-3. **Derive New Addresses**: Derive addresses for any newly added chains
-4. **Refresh Balances**: Optionally refresh balances for all chains
+1. **User Chains**: Inherit from `vultisig.getDefaultChains()` (no chain data in .vult file)
+2. **Update Currency**: Set vault currency to Vultisig's default currency
+3. **Derive Addresses**: Derive addresses for all user chains
+4. **Refresh Balances**: Optionally refresh balances for all user chains
+
+### Chain Update Triggers
+When `vault.setChains()`, `vault.addChain()`, or `vault.removeChain()` is called:
+1. **Address Derivation**: Automatically derive addresses for new chains
+2. **Balance Updates**: Fetch balances for new chains
+3. **Gas Estimation**: Update gas price data for new chains
+4. **Token Population**: Add default tokens for new chains
+
+### Usage Examples
+
+```typescript
+// 1. Check what chains are supported by the SDK
+const supportedChains = vultisig.getSupportedChains()
+console.log(supportedChains) // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon', 'avalanche', ...]
+
+// 2. Set SDK-wide default chains for new vaults
+vultisig.setDefaultChains(['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon'])
+
+// 3. Create vault - inherits default chains (automatically set as active)
+const vault = await vultisig.createVault('My Wallet')
+console.log(vault.getChains()) // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
+console.log(vultisig.getActiveVault() === vault) // true
+
+// 4. Add a chain to specific vault (triggers address/balance updates)
+await vault.addChain('avalanche')
+console.log(vault.getChains()) // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon', 'avalanche']
+
+// 5. Set completely different chains for vault
+await vault.setChains(['bitcoin', 'litecoin', 'dogecoin'])
+console.log(vault.getChains()) // ['bitcoin', 'litecoin', 'dogecoin']
+
+// 6. Reset vault to SDK defaults
+await vault.resetToDefaultChains()
+console.log(vault.getChains()) // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
+
+// 7. Import vault inherits SDK default chains (automatically set as active)
+const importedVault = await vultisig.addVault(file, password)
+console.log(importedVault.getChains()) // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
+console.log(vultisig.getActiveVault() === importedVault) // true
+
+// 8. Switch between multiple vaults
+const anotherVault = await vultisig.createVault('Second Wallet')
+console.log(vultisig.getActiveVault() === anotherVault) // true (newest is active)
+
+vultisig.setActiveVault(importedVault) // Switch back to imported vault
+console.log(vultisig.getActiveVault() === importedVault) // true
+
+// 9. Delete a vault (clears active if needed)
+await vultisig.deleteVault(anotherVault)
+console.log(vultisig.getActiveVault() === importedVault) // true (switched back)
+```
+
+### Chain Validation
+
+```typescript
+// Validate chain is supported before adding
+const chain = 'ethereum'
+if (vultisig.getSupportedChains().includes(chain)) {
+  await vault.addChain(chain)
+} else {
+  throw new Error(`Chain ${chain} not supported`)
+}
+```
 
 
 ## Caching Strategy
@@ -506,7 +676,7 @@ When a vault is imported from file:
 ### Balance Caching (TTL: 5 minutes)
 - Cache balances with timestamp
 - Automatic refresh after TTL expires
-- Manual refresh available via `vault.balances(chains, { refresh: true })`
+- Manual refresh available via `vault.updateBalances(chains, includeTokens)`
 
 ### Vault Instance Caching
 - Keep active vault in memory
