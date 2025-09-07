@@ -31,7 +31,7 @@ export type VaultOptions = {
 
 export type VaultBackup = {
   data: ArrayBuffer | string
-  format: 'DKLS' | 'GG20'
+  format: 'DKLS'
   encrypted: boolean
 }
 
