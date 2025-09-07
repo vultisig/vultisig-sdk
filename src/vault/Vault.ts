@@ -122,13 +122,77 @@ export class Vault {
   }
 
   /**
-   * Export vault data (placeholder for future implementation)
+   * Rename vault
    */
-  export(password?: string): Promise<ArrayBuffer> {
-    console.log('Exporting vault with password protection:', !!password)
-    throw new Error(
-      'export() not implemented yet - requires backup mutation integration'
-    )
+  async rename(newName: string): Promise<void> {
+    // Validate new name
+    const validationResult = this.validateVaultName(newName)
+    if (!validationResult.isValid) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        validationResult.errors?.[0] || 'Invalid vault name'
+      )
+    }
+
+    // Update vault through VaultManager to ensure proper storage handling
+    if (this._sdkInstance?.VaultManager) {
+      await this._sdkInstance.VaultManager.update(this, { name: newName })
+    } else {
+      // Fallback: update internal vault data directly
+      this.vaultData.name = newName
+    }
+  }
+
+  /**
+   * Validate vault name according to established rules
+   */
+  private validateVaultName(name: string): { isValid: boolean; errors?: string[] } {
+    const errors: string[] = []
+    
+    // Check if name is empty or only whitespace
+    if (!name || name.trim().length === 0) {
+      errors.push('Vault name cannot be empty')
+    }
+    
+    // Check minimum length (2 characters as per UI validation)
+    if (name.length < 2) {
+      errors.push('Vault name must be at least 2 characters long')
+    }
+    
+    // Check maximum length (50 characters as per UI validation)
+    if (name.length > 50) {
+      errors.push('Vault name cannot exceed 50 characters')
+    }
+    
+    // Check allowed characters (letters, numbers, spaces, hyphens, underscores)
+    if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
+      errors.push('Vault name can only contain letters, numbers, spaces, hyphens, and underscores')
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors: errors.length > 0 ? errors : undefined
+    }
+  }
+
+  /**
+   * Export vault data as a downloadable file
+   */
+  async export(password?: string): Promise<Blob> {
+    const { createVaultBackup, getExportFileName } = await import('./utils/export')
+    
+    const base64Data = await createVaultBackup(this.vaultData, password)
+    const filename = getExportFileName(this.vaultData)
+    
+    const blob = new Blob([base64Data], { type: 'application/octet-stream' })
+    
+    // Automatically download the file if we're in a browser environment
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const { initiateFileDownload } = await import('@lib/ui/utils/initiateFileDownload')
+      initiateFileDownload({ blob, name: filename })
+    }
+    
+    return blob
   }
 
   /**

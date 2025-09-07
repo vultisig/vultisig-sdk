@@ -265,6 +265,23 @@ export class VaultManager {
   }
 
   /**
+   * Update vault in storage
+   */
+  static async update(vault: VaultClass, updates: Partial<Vault>): Promise<void> {
+    const vaultId = vault.data.publicKeys.ecdsa
+    const storedVault = this.vaultStorage.get(vaultId)
+    
+    if (storedVault) {
+      // Apply updates to stored vault
+      Object.assign(storedVault, updates)
+      this.vaultStorage.set(vaultId, storedVault)
+      
+      // Update the vault instance data as well
+      Object.assign(vault.data, updates)
+    }
+  }
+
+  /**
    * Remove vault from storage
    */
   static async remove(vault: VaultClass): Promise<void> {
@@ -378,7 +395,7 @@ export class VaultManager {
   static async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> {
     for (const entry of entries) {
       // Route entry to appropriate array based on source
-      if (entry.source === 'vaults') {
+      if (entry.source === 'vault') {
         // Remove existing vault entry if it exists
         this.addressBookData.vaults = this.addressBookData.vaults.filter(
           existing =>
