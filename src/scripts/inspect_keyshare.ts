@@ -44,7 +44,7 @@ function decodeVault(buffer: Buffer) {
     })),
     localPartyId: vaultProtobuf.localPartyId,
     resharePrefix: vaultProtobuf.resharePrefix,
-    libType: vaultProtobuf.libType === 0 ? 'GG20' : 'DKLS'
+    libType: 'DKLS' // Always DKLS format
   }
 }
 
