@@ -44,7 +44,7 @@ export class Vultisig {
   private initialized = false
   private vaults = new Map<string, any>()
   private activeVault: any = null
-  private defaultChains: string[] = ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
+  private defaultChains: string[] = ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple']
   private defaultCurrency = 'USD'
 
   constructor(config?: {
@@ -254,21 +254,38 @@ export class Vultisig {
 
   /**
    * Get all hardcoded supported chains (immutable)
+   * Complete list from core/chain/Chain.ts - cannot be overridden at runtime
    */
   getSupportedChains(): string[] {
-    // TODO: This should come from a hardcoded list of all chains the SDK supports
     return [
-      'bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon', 'avalanche',
-      'litecoin', 'dogecoin', 'bsc', 'cosmos', 'cardano', 'polkadot', 
-      'ripple', 'tron', 'optimism', 'arbitrum', 'base', 'osmosis', 
-      'sui', 'mayachain', 'ton'
+      // EVM Chains
+      'Ethereum', 'Arbitrum', 'Base', 'Blast', 'Optimism', 'Zksync', 'Mantle',
+      'Avalanche', 'CronosChain', 'BSC', 'Polygon',
+      
+      // UTXO Chains  
+      'Bitcoin', 'Bitcoin-Cash', 'Litecoin', 'Dogecoin', 'Dash', 'Zcash',
+      
+      // Cosmos Chains
+      'THORChain', 'MayaChain', 'Cosmos', 'Osmosis', 'Dydx', 'Kujira', 
+      'Terra', 'TerraClassic', 'Noble', 'Akash',
+      
+      // Other Chains
+      'Sui', 'Solana', 'Polkadot', 'Ton', 'Ripple', 'Tron', 'Cardano'
     ]
   }
 
   /**
    * Set SDK-level default chains for new vaults
+   * Validates against supported chains list
    */
   setDefaultChains(chains: string[]): void {
+    const supportedChains = this.getSupportedChains()
+    const invalidChains = chains.filter(chain => !supportedChains.includes(chain))
+    
+    if (invalidChains.length > 0) {
+      throw new Error(`Unsupported chains: ${invalidChains.join(', ')}. Supported chains: ${supportedChains.join(', ')}`)
+    }
+    
     this.defaultChains = chains
     if (this.initialized) {
       VaultManager.setDefaultChains(chains)
@@ -276,7 +293,7 @@ export class Vultisig {
   }
 
   /**
-   * Get SDK-level default chains
+   * Get SDK-level default chains (5 top chains: BTC, ETH, SOL, THOR, XRP)
    */
   getDefaultChains(): string[] {
     return this.defaultChains

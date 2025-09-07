@@ -164,18 +164,18 @@ describe('Multi-Vault Tests', () => {
     test('should have proper chain hierarchy', async () => {
       // Test supported chains (immutable)
       const supportedChains = vultisig.getSupportedChains()
-      expect(supportedChains).toContain('bitcoin')
-      expect(supportedChains).toContain('ethereum')
-      expect(supportedChains).toContain('solana')
-      expect(supportedChains.length).toBeGreaterThan(15)
+      expect(supportedChains).toContain('Bitcoin')
+      expect(supportedChains).toContain('Ethereum')
+      expect(supportedChains).toContain('Solana')
+      expect(supportedChains.length).toBeGreaterThan(25)
       
       // Test default chains (configurable)
       const defaultChains = vultisig.getDefaultChains()
-      expect(defaultChains).toContain('bitcoin')
-      expect(defaultChains).toContain('ethereum')
+      expect(defaultChains).toContain('Bitcoin')
+      expect(defaultChains).toContain('Ethereum')
       
       // Should be able to update default chains
-      const newDefaults = ['bitcoin', 'ethereum', 'solana']
+      const newDefaults = ['Bitcoin', 'Ethereum', 'Solana']
       vultisig.setDefaultChains(newDefaults)
       expect(vultisig.getDefaultChains()).toEqual(newDefaults)
     })
@@ -191,7 +191,7 @@ describe('Multi-Vault Tests', () => {
   describe('SDK Configuration', () => {
     test('should support custom configuration', () => {
       const customConfig = {
-        defaultChains: ['bitcoin', 'ethereum'],
+        defaultChains: ['Bitcoin', 'Ethereum'],
         defaultCurrency: 'EUR',
         serverEndpoints: {
           fastVault: 'https://custom-server.com',
@@ -201,7 +201,7 @@ describe('Multi-Vault Tests', () => {
       
       const customVultisig = new Vultisig(customConfig)
       
-      expect(customVultisig.getDefaultChains()).toEqual(['bitcoin', 'ethereum'])
+      expect(customVultisig.getDefaultChains()).toEqual(['Bitcoin', 'Ethereum'])
       expect(customVultisig.getDefaultCurrency()).toBe('EUR')
     })
 

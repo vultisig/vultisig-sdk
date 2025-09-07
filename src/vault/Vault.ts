@@ -39,10 +39,16 @@ export class Vault {
   // Cached properties to avoid repeated decoding
   private _isEncrypted?: boolean
   private _securityType?: 'fast' | 'secure'
+  
+  // Runtime properties (not stored in .vult file)
+  private _userChains: string[] = []
+  private _currency: string = 'USD'
+  private _sdkInstance?: any // Reference to SDK for getting supported/default chains
 
   constructor(
     private vaultData: CoreVault,
-    private walletCore?: WalletCore
+    private walletCore?: WalletCore,
+    sdkInstance?: any
   ) {
     console.log('Vault initialized:', {
       name: vaultData.name,
@@ -50,6 +56,22 @@ export class Vault {
       signers: vaultData.signers.length,
       hasWalletCore: !!walletCore,
     })
+
+    // Store SDK reference for chain validation
+    this._sdkInstance = sdkInstance
+    
+    // Initialize user chains from SDK defaults if available
+    if (sdkInstance?.getDefaultChains) {
+      this._userChains = [...sdkInstance.getDefaultChains()]
+    } else {
+      // Fallback to basic chains if no SDK instance
+      this._userChains = ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple']
+    }
+    
+    // Initialize currency from SDK defaults if available
+    if (sdkInstance?.getDefaultCurrency) {
+      this._currency = sdkInstance.getDefaultCurrency()
+    }
 
     // Initialize the address deriver if we have WalletCore
     if (walletCore) {
@@ -255,12 +277,117 @@ export class Vault {
     return addresses
   }
 
+  // === USER CHAIN MANAGEMENT ===
+  
   /**
-   * Get default chains for address derivation
+   * Set user chains (triggers address/balance updates)
+   */
+  async setChains(chains: string[]): Promise<void> {
+    this.validateChains(chains)
+    this._userChains = [...chains]
+    
+    // Clear address cache for removed chains
+    const currentCacheKeys = Array.from(this.addressCache.keys())
+    const newChainKeys = chains.map(chain => chain.toLowerCase())
+    
+    for (const cacheKey of currentCacheKeys) {
+      if (!newChainKeys.includes(cacheKey)) {
+        this.addressCache.delete(cacheKey)
+      }
+    }
+    
+    // Pre-derive addresses for new chains
+    await this.addresses(chains)
+  }
+  
+  /**
+   * Add single chain (triggers address/balance updates)
+   */
+  async addChain(chain: string): Promise<void> {
+    this.validateChains([chain])
+    
+    if (!this._userChains.includes(chain)) {
+      this._userChains.push(chain)
+      // Pre-derive address for new chain
+      await this.address(chain)
+    }
+  }
+  
+  /**
+   * Remove single chain
+   */
+  removeChain(chain: string): void {
+    this._userChains = this._userChains.filter(c => c !== chain)
+    
+    // Clear address cache for removed chain
+    this.addressCache.delete(chain.toLowerCase())
+  }
+  
+  /**
+   * Get current user chains
+   */
+  getChains(): string[] {
+    return [...this._userChains]
+  }
+  
+  /**
+   * Reset to SDK default chains
+   */
+  async resetToDefaultChains(): Promise<void> {
+    const defaultChains = this.getSDKDefaultChains()
+    await this.setChains(defaultChains)
+  }
+  
+  // === CURRENCY MANAGEMENT ===
+  
+  /**
+   * Set vault currency
+   */
+  setCurrency(currency: string): void {
+    this._currency = currency
+  }
+  
+  /**
+   * Get vault currency
+   */
+  getCurrency(): string {
+    return this._currency
+  }
+  
+  // === PRIVATE HELPERS ===
+  
+  /**
+   * Validate chains against supported chains list
+   */
+  private validateChains(chains: string[]): void {
+    if (!this._sdkInstance?.getSupportedChains) {
+      return // Skip validation if no SDK instance
+    }
+    
+    const supportedChains = this._sdkInstance.getSupportedChains()
+    const invalidChains = chains.filter(chain => !supportedChains.includes(chain))
+    
+    if (invalidChains.length > 0) {
+      throw new Error(`Unsupported chains: ${invalidChains.join(', ')}. Supported chains: ${supportedChains.join(', ')}`)
+    }
+  }
+  
+  /**
+   * Get SDK default chains or fallback
+   */
+  private getSDKDefaultChains(): string[] {
+    if (this._sdkInstance?.getDefaultChains) {
+      return this._sdkInstance.getDefaultChains()
+    }
+    // Fallback to basic chains if no SDK instance
+    return ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple']
+  }
+  
+  /**
+   * Get default chains for address derivation (uses user chains)
    */
   private getDefaultChains(): string[] {
-    // Return commonly used chains as default
-    return ['bitcoin', 'ethereum', 'thorchain', 'cosmos', 'solana']
+    return this._userChains.length > 0 ? this._userChains : this.getSDKDefaultChains()
   }
 
   /**
@@ -285,12 +412,10 @@ export class Vault {
 
 
   /**
-   * Get list of supported chains for this vault
+   * Get list of supported chains for this vault (uses user chains)
    */
   private getSupportedChains(): string[] {
-    // For now, return a default set of chains
-    // This could be enhanced to detect supported chains based on vault configuration
-    return ['bitcoin', 'ethereum', 'thorchain', 'litecoin', 'solana']
+    return this.getChains()
   }
 
   /**
