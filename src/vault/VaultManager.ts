@@ -41,7 +41,7 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
 export class VaultManager {
   // === GLOBAL SETTINGS ===
   private static config: VaultManagerConfig = {
-    defaultChains: ['bitcoin', 'ethereum'],
+    defaultChains: ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple'],
     defaultCurrency: 'USD',
   }
   private static sdkInstance: any | null = null
@@ -180,7 +180,8 @@ export class VaultManager {
       // Create VaultClass instance
       const vaultInstance = new VaultClass(
         normalizedVault,
-        this.sdkInstance?.wasmManager?.getWalletCore()
+        this.sdkInstance?.wasmManager?.getWalletCore(),
+        this.sdkInstance
       )
 
       // Set cached properties on the Vault instance
@@ -223,7 +224,8 @@ export class VaultManager {
     for (const [, vault] of this.vaultStorage) {
       const vaultInstance = new VaultClass(
         vault,
-        this.sdkInstance?.wasmManager?.getWalletCore()
+        this.sdkInstance?.wasmManager?.getWalletCore(),
+        this.sdkInstance
       )
       const summary = vaultInstance.summary()
 
@@ -461,13 +463,20 @@ export class VaultManager {
     }
   }
 
+  // Note: Global configuration methods are already implemented above
+  
   // === VAULT SETTINGS INHERITANCE ===
   /**
    * Apply global chains/currency to vault
    */
-  private static applyConfig(vault: VaultClass): VaultClass {
-    // TODO: Apply global settings to vault instance
-    // This would involve setting chains, currency, etc.
+  private static async applyConfig(vault: VaultClass): Promise<VaultClass> {
+    // Apply global settings to vault instance
+    if (vault.setChains) {
+      await vault.setChains(this.config.defaultChains)
+    }
+    if (vault.setCurrency) {
+      vault.setCurrency(this.config.defaultCurrency)
+    }
     return vault
   }
 
