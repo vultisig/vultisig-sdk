@@ -56,16 +56,21 @@ console.log('Ethereum Address:', ethAddress)
 
 ### Setup
 
+This is a monorepo with workspace packages. **Always run `yarn install` from the root directory first.**
+
 ```bash
 # Clone the repository
 git clone https://github.com/vultisig/vultisig-sdk.git
 cd vultisig-sdk
 
-# Install dependencies
+# IMPORTANT: Install dependencies from root (sets up all workspaces)
 yarn install
 
-# Build the SDK
-cd src && npm run build
+# Build the SDK (bundles all workspace packages)
+yarn workspace @vultisig/sdk build
+
+# Run tests
+yarn workspace @vultisig/sdk test
 
 # Build and run the React example
 yarn build:prod
@@ -73,129 +78,58 @@ yarn build:prod
 
 ### Project Structure
 
+This is a **monorepo** where the SDK (`src/`) bundles functionality from workspace packages:
+
 ```
-├── src/                 # SDK source code
+├── src/                 # SDK source code (bundles core/ and lib/)
 │   ├── chains/         # Address derivation and chain management
 │   ├── mpc/           # Multi-party computation logic
 │   ├── vault/         # Vault creation and management
 │   ├── server/        # Fast vault server integration
+│   ├── tests/         # SDK test suite
 │   └── wasm/          # WASM module management
+├── core/              # Core blockchain functionality (bundled into SDK)
+│   ├── chain/         # Chain-specific implementations
+│   ├── mpc/           # MPC protocol implementations
+│   └── ui/            # UI components and utilities
+├── lib/               # Shared libraries and utilities (bundled into SDK)
+│   ├── utils/         # Common utilities
+│   ├── ui/            # UI library components
+│   └── dkls/          # DKLS WASM bindings
 ├── examples/
 │   └── react/         # React example application
-├── core/              # Core blockchain functionality
-├── lib/               # Shared libraries and utilities
-└── clients/           # Client applications
+└── clients/           # Client applications (extension, CLI)
 ```
 
-### Building
+### Build Process
 
-#### Build SDK Only
+The SDK uses **workspace bundling** - it includes all necessary code from `core/` and `lib/` packages into a single distributable bundle.
+
+#### Build SDK
 ```bash
-cd src
-npm run build
+# From root directory (after yarn install)
+yarn workspace @vultisig/sdk build
 ```
-This creates the distributable SDK package in `src/dist/`.
+This creates the distributable SDK package in `src/dist/` with all workspace dependencies bundled.
 
-#### Build & Run Example App
+#### Run Tests
 ```bash
-yarn build:prod
+# From root directory
+yarn workspace @vultisig/sdk test
 ```
-This command:
-1. Builds the React example app in production mode
-2. Starts a preview server at http://localhost:5175/
-3. Includes the full SDK with all dependencies (~4.4MB bundle)
 
-#### Development Mode
-```bash
-# Start React example in development mode
-cd examples/react
-yarn dev
-```
 
 ### Available Scripts
 
+- `yarn workspace @vultisig/sdk build` - Build the SDK with all workspace dependencies
+- `yarn workspace @vultisig/sdk test` - Run SDK tests
 - `yarn build:prod` - Build and serve the React example app
 - `yarn lint` - Run ESLint across all packages
 - `yarn typecheck` - Run TypeScript type checking
-- `yarn test` - Run tests with Vitest
 
 ## API Documentation
 
-### VultisigSDK Class
-
-#### Constructor
-```typescript
-const sdk = new VultisigSDK(options?: {
-  serverUrl?: string
-  mpcServerUrl?: string
-})
-```
-
-#### Core Methods
-
-##### `initialize(): Promise<void>`
-Initialize the SDK and WASM modules.
-
-##### `createFastVault(params): Promise<CreateVaultResult>`
-Create a server-assisted vault with email verification.
-```typescript
-const result = await sdk.createFastVault({
-  name: 'My Wallet',
-  email: 'user@example.com', 
-  password: 'secure-password'
-})
-```
-
-##### `deriveAddress(vault, chain): Promise<string>`
-Derive blockchain address for a specific chain.
-```typescript
-const address = await sdk.deriveAddress(vault, 'Bitcoin')
-```
-
-##### `importVaultFromFile(file, password?): Promise<Vault>`
-Import vault from encrypted backup file.
-
-##### `exportVault(vault, password?): Promise<string>`
-Export vault to encrypted JSON string.
-
-### Supported Chains
-
-- **Bitcoin**: BTC, BCH, LTC, DOGE, DASH
-- **Ethereum**: ETH, BSC, Polygon, Arbitrum, Optimism, Base
-- **Cosmos**: ATOM, OSMO, KUJI, THOR, MAYA
-- **Others**: Solana, Polkadot, Ripple, TON, TRON
-- **40+ chains total**
-
-## Examples
-
-### Creating a Secure Vault (Decentralized)
-```typescript
-// Secure vaults require multiple devices for MPC
-const vault = await sdk.createSecureVault({
-  name: 'Hardware Vault',
-  threshold: 2, // 2-of-3 multisig
-  participants: 3
-})
-```
-
-### Address Derivation
-```typescript
-// Derive addresses for multiple chains
-const addresses = await Promise.all([
-  sdk.deriveAddress(vault, 'Bitcoin'),
-  sdk.deriveAddress(vault, 'Ethereum'), 
-  sdk.deriveAddress(vault, 'Cosmos')
-])
-```
-
-### Vault Import/Export
-```typescript
-// Export vault with encryption
-const backupData = await sdk.exportVault(vault, 'backup-password')
-
-// Import from backup
-const importedVault = await sdk.importVaultFromFile(backupFile, 'backup-password')
-```
+TODO
 
 ## Security
 
