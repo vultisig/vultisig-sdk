@@ -5,7 +5,8 @@
     "core/*",
     "lib/*",
     "clients/*",
-    "examples/*"
+    "examples/*",
+    "src"
   ],
   "scripts": {
     "lint": "eslint 'clients/extension/src/**/*.{js,jsx,ts,tsx}' 'core/**/*.{js,jsx,ts,tsx}' 'lib/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
