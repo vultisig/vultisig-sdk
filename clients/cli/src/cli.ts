@@ -4,13 +4,13 @@ import { Command } from 'commander'
 
 // SDK will be made available globally by the launcher
 declare const VultisigSDK: any
+import { AddressCommand } from './commands/AddressCommand'
 import { InitCommand } from './commands/InitCommand'
 import { ListCommand } from './commands/ListCommand'
-import { RunCommand } from './commands/RunCommand'
-import { StatusCommand } from './commands/StatusCommand'
-import { AddressCommand } from './commands/AddressCommand'
-import { SignCommand } from './commands/SignCommand'
 import { QuitCommand } from './commands/QuitCommand'
+import { RunCommand } from './commands/RunCommand'
+import { SignCommand } from './commands/SignCommand'
+import { StatusCommand } from './commands/StatusCommand'
 import { VersionCommand } from './commands/VersionCommand'
 
 const program = new Command()
@@ -27,9 +27,9 @@ async function initializeSDK(): Promise<void> {
   if (!sdk) {
     sdk = new VultisigSDK({
       defaultChains: ['bitcoin', 'ethereum', 'solana'],
-      defaultCurrency: 'USD'
+      defaultCurrency: 'USD',
     })
-    
+
     // SDK will auto-initialize when methods are called
   }
 }
@@ -41,7 +41,7 @@ function wrapCommand(commandInstance: any, requiresSDK: boolean = false) {
       if (requiresSDK) {
         await initializeSDK()
       }
-      
+
       await commandInstance.run(options)
     } catch (error) {
       console.error('Error:', error instanceof Error ? error.message : error)
@@ -91,20 +91,29 @@ program
 program
   .command('address')
   .description(addressCommand.description)
-  .option('--network <networks>', 'Networks (all, or comma-separated: btc,eth,sol)', 'all')
+  .option(
+    '--network <networks>',
+    'Networks (all, or comma-separated: btc,eth,sol)',
+    'all'
+  )
   .action(wrapCommand(addressCommand, true))
-
 
 // Sign command - uses daemon/SDK
 program
   .command('sign')
   .description(signCommand.description)
-  .requiredOption('--network <network>', 'Blockchain network (ETH, BTC, SOL, etc.)')
+  .requiredOption(
+    '--network <network>',
+    'Blockchain network (ETH, BTC, SOL, etc.)'
+  )
   .option('--mode <mode>', 'Signing mode: local, relay, or fast', 'relay')
   .option('--session-id <id>', 'Custom session ID')
   .option('--payload-file <file>', 'Transaction payload JSON file')
   .option('--fast', 'Use fast mode with VultiServer (requires --password)')
-  .option('--password <password>', 'VultiServer decryption password (required for --fast mode)')
+  .option(
+    '--password <password>',
+    'VultiServer decryption password (required for --fast mode)'
+  )
   .action(wrapCommand(signCommand, true))
 
 // Quit command - daemon operation

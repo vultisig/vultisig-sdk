@@ -2,13 +2,13 @@
 declare const VultisigSDK: any
 type VaultClass = any
 
-export interface JsonRpcRequest {
+export type JsonRpcRequest = {
   id: number
   method: string
   params: any
 }
 
-export interface JsonRpcResponse {
+export type JsonRpcResponse = {
   id: number
   result?: any
   error?: {
@@ -23,47 +23,46 @@ export class JsonRpcServer {
   constructor(vault: VaultClass) {
     this.vault = vault
   }
-  
+
   async handleRequest(request: any): Promise<any> {
     const jsonRpcRequest = request as JsonRpcRequest
-    
+
     try {
-      
       switch (jsonRpcRequest.method) {
         case 'get_address':
           const chain = jsonRpcRequest.params?.network || 'ethereum'
           const address = await (this.vault as any).address(chain)
           const summary = (this.vault as any).summary()
-          
+
           return {
             id: jsonRpcRequest.id,
             result: {
               address,
-              pubkey: summary.id // Use the vault ID as pubkey
-            }
+              pubkey: summary.id, // Use the vault ID as pubkey
+            },
           }
-          
+
         case 'sign':
           const signature = await (this.vault as any).signTransaction(
             jsonRpcRequest.params?.payload,
             jsonRpcRequest.params?.network || 'ethereum'
           )
-          
+
           return {
             id: jsonRpcRequest.id,
             result: {
               signature: signature.signature,
-              raw: signature.txHash
-            }
+              raw: signature.txHash,
+            },
           }
-          
+
         default:
           return {
             id: jsonRpcRequest.id,
             error: {
               message: `Unknown JSON-RPC method: ${jsonRpcRequest.method}`,
-              code: -32601
-            }
+              code: -32601,
+            },
           }
       }
     } catch (error) {
@@ -71,8 +70,8 @@ export class JsonRpcServer {
         id: jsonRpcRequest?.id || 0,
         error: {
           message: error instanceof Error ? error.message : 'Unknown error',
-          code: -32603
-        }
+          code: -32603,
+        },
       }
     }
   }

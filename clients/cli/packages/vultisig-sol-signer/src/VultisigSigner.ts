@@ -1,6 +1,6 @@
 import * as net from 'net'
 
-export interface JsonRpcRequest {
+export type JsonRpcRequest = {
   id: number
   method: 'get_address' | 'sign'
   params: {
@@ -15,7 +15,7 @@ export interface JsonRpcRequest {
   }
 }
 
-export interface JsonRpcResponse {
+export type JsonRpcResponse = {
   id: number
   result?: {
     address?: string
@@ -32,19 +32,19 @@ export class VultisigSigner {
   private socketPath: string = '/tmp/vultisig.sock'
   private requestId: number = 1
 
-  async getAddress(): Promise<string> {
+  async address(): Promise<string> {
     const request: JsonRpcRequest = {
       id: this.requestId++,
       method: 'get_address',
       params: {
         scheme: 'eddsa',
         curve: 'ed25519',
-        network: 'sol'
-      }
+        network: 'sol',
+      },
     }
 
     const response = await this.sendRequest(request)
-    
+
     if (response.error) {
       throw new Error(`Failed to get address: ${response.error.message}`)
     }
@@ -69,13 +69,13 @@ export class VultisigSigner {
         network: 'sol',
         messageType: 'sol_tx',
         payload: {
-          bytes: bytesBase64
-        }
-      }
+          bytes: bytesBase64,
+        },
+      },
     }
 
     const response = await this.sendRequest(request)
-    
+
     if (response.error) {
       throw new Error(`Failed to sign transaction: ${response.error.message}`)
     }
@@ -97,9 +97,9 @@ export class VultisigSigner {
         socket.write(requestJson)
       })
 
-      socket.on('data', (data) => {
+      socket.on('data', data => {
         responseData += data.toString()
-        
+
         // Check if we have a complete JSON response (ends with newline)
         if (responseData.endsWith('\n')) {
           try {
@@ -113,7 +113,7 @@ export class VultisigSigner {
         }
       })
 
-      socket.on('error', (error) => {
+      socket.on('error', error => {
         reject(new Error(`Socket error: ${error.message}`))
       })
 
