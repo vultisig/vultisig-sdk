@@ -29,70 +29,32 @@ const external = [
   // Note: Workspace packages (@core/*, @lib/*) are now bundled by removing them from external
 ]
 
-// Node.js specific externals
-const nodeExternal = [
-  ...external,
-  // Node.js built-ins that should remain external
-  'fs',
-  'path',
-  'os',
-  'crypto',
-  'buffer',
-  'util',
-  'stream',
-  'events'
-]
-
-const browserPlugins = [
+const plugins = [
   resolve({
     preferBuiltins: false,
     browser: true,
     exportConditions: ['browser', 'module', 'import', 'default'],
     // Include workspace packages for bundling
-    skip: ['react', 'react-dom', 'axios', 'viem', 'zod', 'uuid', '@trustwallet/wallet-core']
-  }),
-  commonjs({
-    include: /node_modules/
-  }),
-  typescript({
-    tsconfig: './tsconfig.json',
-    outputToFilesystem: true,
-    exclude: ['**/*.test.*', '**/*.stories.*']
-  })
-]
-
-const nodePlugins = [
-  resolve({
-    preferBuiltins: true,
-    browser: false,
-    exportConditions: ['node', 'module', 'import', 'default'],
-    // Include workspace packages for bundling
     skip: ['react', 'react-dom', 'axios', 'viem', 'zod', 'uuid', '@trustwallet/wallet-core'],
-    // Resolve workspace packages from their source
-    alias: {
-      '@core/chain': '../core/chain',
-      '@core/config': '../core/config',
-      '@core/extension': '../core/extension',
-      '@core/inpage-provider': '../core/inpage-provider',
-      '@core/mpc': '../core/mpc',
-      '@core/ui': '../core/ui',
-      '@lib/codegen': '../lib/codegen',
-      '@lib/dkls': '../lib/dkls',
-      '@lib/extension': '../lib/extension',
-      '@lib/schnorr': '../lib/schnorr',
-      '@lib/ui': '../lib/ui',
-      '@lib/utils': '../lib/utils'
-    }
+    // Ensure workspace packages are resolved and bundled
+    dedupe: ['react', 'react-dom']
   }),
   commonjs({
     include: [/node_modules/, /\.\.\/core\//, /\.\.\/lib\//]
   }),
   typescript({
-    tsconfig: './tsconfig.json',
+      tsconfig: './tsconfig.json',
     outputToFilesystem: true,
     exclude: ['**/*.test.*', '**/*.stories.*'],
     // Include workspace packages in compilation
-    include: ['**/*', '../core/**/*', '../lib/**/*']
+    include: ['src/**/*', '../core/**/*', '../lib/**/*'],
+    // Ensure proper module resolution for workspace packages
+    compilerOptions: {
+      paths: {
+        '@core/*': ['../core/*'],
+        '@lib/*': ['../lib/*']
+      }
+    }
   })
 ]
 
@@ -100,83 +62,102 @@ const wasmCopyPlugin = copy({
   targets: [
     // Copy WASM files to dist for proper loading
     { 
-      src: '../lib/dkls/vs_wasm_bg.wasm', 
-      dest: './dist/wasm/',
+      src: 'lib/dkls/vs_wasm_bg.wasm', 
+      dest: 'src/dist/wasm/',
       rename: 'dkls.wasm'
     },
     { 
-      src: '../lib/schnorr/vs_schnorr_wasm_bg.wasm', 
-      dest: './dist/wasm/',
+      src: 'lib/schnorr/vs_schnorr_wasm_bg.wasm', 
+      dest: 'src/dist/wasm/',
       rename: 'schnorr.wasm' 
     },
-    // Copy wallet-core WASM from node_modules for Node.js usage
-    { 
-      src: '../node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm', 
-      dest: './dist/wasm/',
-      rename: 'wallet-core.wasm'
-    }
+    // wallet-core.wasm will be handled by the consuming application
   ]
 })
 
 export default defineConfig([
-  // ESM build for browsers
+  // ESM build for modern bundlers
   {
-    input: 'index.ts',
+    input: 'src/index.ts',
     output: {
-      file: './dist/index.esm.js',
+      file: 'src/dist/index.esm.js',
       format: 'es',
-      sourcemap: false // Disable sourcemaps to save memory
+      sourcemap: true,
+      // Preserve modules for better tree shaking
+      preserveModules: false
     },
     external,
-    plugins: [...browserPlugins, wasmCopyPlugin],
+    plugins: [...plugins, wasmCopyPlugin],
+    // Handle dynamic imports for WASM
     onwarn(warning, warn) {
-      // Suppress various warnings to reduce memory usage
+      // Suppress warnings about dynamic imports for WASM
       if (warning.code === 'DYNAMIC_IMPORT') return
-      if (warning.code === 'MISSING_GLOBAL_NAME') return
-      if (warning.code === 'UNRESOLVED_IMPORT') return
       warn(warning)
     }
   },
   
-  // CommonJS build for Node.js
+  // CommonJS build for Node.js environments
   {
-    input: 'index.ts',
+    input: 'src/index.ts',
     output: {
-      file: './dist/index.js',
+      file: 'src/dist/index.js',
       format: 'cjs',
-      sourcemap: false,
+      sourcemap: true,
       exports: 'named',
       interop: 'auto'
     },
-    external: nodeExternal,
-    plugins: nodePlugins,
-    onwarn(warning, warn) {
-      // Suppress various warnings
-      if (warning.code === 'DYNAMIC_IMPORT') return
-      if (warning.code === 'MISSING_GLOBAL_NAME') return
-      if (warning.code === 'UNRESOLVED_IMPORT') return
-      warn(warning)
-    }
+    external,
+    plugins
   },
-
-  // Node.js optimized build
+  
+  // UMD build for CDN/browser direct usage
   {
-    input: 'index.ts',
+    input: 'src/index.ts',
     output: {
-      file: './dist/index.node.js',
-      format: 'cjs',
-      sourcemap: false,
-      exports: 'named',
-      interop: 'auto'
+      file: 'src/dist/index.umd.js',
+      format: 'umd',
+      name: 'VultisigSDK',
+      sourcemap: true,
+      globals: {
+        'react': 'React',
+        'react-dom': 'ReactDOM',
+        'axios': 'axios',
+        'viem': 'viem',
+        'zod': 'zod',
+        '@trustwallet/wallet-core': 'WalletCore',
+        'crypto': 'crypto',
+        'buffer': 'Buffer'
+      }
     },
-    external: nodeExternal,
-    plugins: nodePlugins,
-    onwarn(warning, warn) {
-      // Suppress various warnings
-      if (warning.code === 'DYNAMIC_IMPORT') return
-      if (warning.code === 'MISSING_GLOBAL_NAME') return
-      if (warning.code === 'UNRESOLVED_IMPORT') return
-      warn(warning)
-    }
+    external,
+    plugins: [...plugins, terser({
+      compress: {
+        drop_console: true,
+        drop_debugger: true
+      },
+      mangle: {
+        reserved: ['VultisigSDK'] // Keep main export name
+      }
+    })]
+  },
+  
+  // Type definitions
+  {
+    input: 'src/index.ts',
+    output: {
+      file: 'src/dist/index.d.ts',
+      format: 'es'
+    },
+    external: [
+      ...external,
+      // Allow type-only imports
+      /^@types\//,
+    ],
+    plugins: [dts({
+      respectExternal: true,
+      compilerOptions: {
+        preserveSymlinks: false
+      }
+    })]
   }
 ])

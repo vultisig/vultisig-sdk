@@ -1,16 +1,18 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest'
 
-import { VaultManager } from '../vault/VaultManager'
+import { Vultisig } from '../VultisigSDK'
 import type { AddressBookEntry } from '../types'
 
 describe('AddressBook Tests', () => {
+  let vultisig: Vultisig
+
   beforeEach(async () => {
-    await VaultManager.clear()
-    VaultManager.init(null)
+    vultisig = new Vultisig()
+    await vultisig.clearVaults()
   })
 
   afterEach(async () => {
-    await VaultManager.clear()
+    await vultisig.clearVaults()
   })
 
   describe('Add/Remove Operations', () => {
@@ -23,16 +25,16 @@ describe('AddressBook Tests', () => {
       }
 
       // Add entry
-      await VaultManager.addAddressBookEntry([entry])
-      let addressBook = await VaultManager.addressBook()
+      await vultisig.addAddressBookEntry([entry])
+      let addressBook = await vultisig.getAddressBook()
       expect(addressBook.saved).toHaveLength(1)
       expect(addressBook.saved[0]).toMatchObject(entry)
 
       // Remove entry
-      await VaultManager.removeAddressBookEntry([
+      await vultisig.removeAddressBookEntry([
         { chain: 'bitcoin', address: 'bc1qsef7rshf0jwm53rnkttpry5rpveqcd6dyj6pn9' }
       ])
-      addressBook = await VaultManager.addressBook()
+      addressBook = await vultisig.getAddressBook()
       expect(addressBook.saved).toHaveLength(0)
     })
 
@@ -53,16 +55,16 @@ describe('AddressBook Tests', () => {
       ]
 
       // Add multiple entries
-      await VaultManager.addAddressBookEntry(entries)
-      let addressBook = await VaultManager.addressBook()
+      await vultisig.addAddressBookEntry(entries)
+      let addressBook = await vultisig.getAddressBook()
       expect(addressBook.saved).toHaveLength(2)
 
       // Remove all entries
-      await VaultManager.removeAddressBookEntry([
+      await vultisig.removeAddressBookEntry([
         { chain: 'bitcoin', address: 'bc1qsef7rshf0jwm53rnkttpry5rpveqcd6dyj6pn9' },
         { chain: 'ethereum', address: '0x8c4E1C2D3b9F88bBa6162F6Bd8dB05840Ca24F8c' }
       ])
-      addressBook = await VaultManager.addressBook()
+      addressBook = await vultisig.getAddressBook()
       expect(addressBook.saved).toHaveLength(0)
     })
   })
@@ -76,14 +78,14 @@ describe('AddressBook Tests', () => {
         source: 'saved'
       }
 
-      await VaultManager.addAddressBookEntry([entry])
-      await VaultManager.updateAddressBookEntry(
+      await vultisig.addAddressBookEntry([entry])
+      await vultisig.updateAddressBookEntry(
         'bitcoin',
         'bc1qsef7rshf0jwm53rnkttpry5rpveqcd6dyj6pn9',
         'Updated Name'
       )
 
-      const addressBook = await VaultManager.addressBook()
+      const addressBook = await vultisig.getAddressBook()
       expect(addressBook.saved[0].name).toBe('Updated Name')
     })
   })
@@ -105,10 +107,10 @@ describe('AddressBook Tests', () => {
         }
       ]
 
-      await VaultManager.addAddressBookEntry(entries)
+      await vultisig.addAddressBookEntry(entries)
 
-      const btcBook = await VaultManager.addressBook('bitcoin')
-      const ethBook = await VaultManager.addressBook('ethereum')
+      const btcBook = await vultisig.getAddressBook('bitcoin')
+      const ethBook = await vultisig.getAddressBook('ethereum')
 
       expect(btcBook.saved).toHaveLength(1)
       expect(btcBook.saved[0].chain).toBe('bitcoin')

@@ -5,7 +5,13 @@
 
 export { Vault } from './Vault'
 export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
-export { VaultManager } from './VaultManager'
+export { AddressBookManager } from './AddressBook'
+export { ChainManagement } from './ChainManagement'
+export { VaultManagement } from './VaultManagement'
+export { BalanceManagement } from './BalanceManagement'
+
+// Utilities
+export { ValidationHelpers } from './utils/validation'
 
 // Vault utilities - use VaultManager for encryption/decryption operations
 
