@@ -1,6 +1,6 @@
 import * as net from 'net'
 
-export interface JsonRpcRequest {
+export type JsonRpcRequest = {
   id: number
   method: 'get_address' | 'sign'
   params: {
@@ -15,7 +15,7 @@ export interface JsonRpcRequest {
   }
 }
 
-export interface JsonRpcResponse {
+export type JsonRpcResponse = {
   id: number
   result?: {
     address?: string
@@ -29,7 +29,7 @@ export interface JsonRpcResponse {
   }
 }
 
-export interface SignPsbtResult {
+export type SignPsbtResult = {
   signedPsbtBase64?: string
   finalTxHex?: string
 }
@@ -38,19 +38,19 @@ export class VultisigSigner {
   private socketPath: string = '/tmp/vultisig.sock'
   private requestId: number = 1
 
-  async getAddress(): Promise<string> {
+  async address(): Promise<string> {
     const request: JsonRpcRequest = {
       id: this.requestId++,
       method: 'get_address',
       params: {
         scheme: 'ecdsa',
         curve: 'secp256k1',
-        network: 'btc'
-      }
+        network: 'btc',
+      },
     }
 
     const response = await this.sendRequest(request)
-    
+
     if (response.error) {
       throw new Error(`Failed to get address: ${response.error.message}`)
     }
@@ -62,7 +62,7 @@ export class VultisigSigner {
     return response.result.address
   }
 
-  async signPsbt(psbtBase64: string): Promise<SignPsbtResult> {
+  async sign(psbtBase64: string): Promise<SignPsbtResult> {
     const request: JsonRpcRequest = {
       id: this.requestId++,
       method: 'sign',
@@ -72,20 +72,20 @@ export class VultisigSigner {
         network: 'btc',
         messageType: 'btc_psbt',
         payload: {
-          psbtBase64
-        }
-      }
+          psbtBase64,
+        },
+      },
     }
 
     const response = await this.sendRequest(request)
-    
+
     if (response.error) {
       throw new Error(`Failed to sign PSBT: ${response.error.message}`)
     }
 
     return {
       signedPsbtBase64: response.result?.signedPsbtBase64,
-      finalTxHex: response.result?.finalTxHex
+      finalTxHex: response.result?.finalTxHex,
     }
   }
 
@@ -99,9 +99,9 @@ export class VultisigSigner {
         socket.write(requestJson)
       })
 
-      socket.on('data', (data) => {
+      socket.on('data', data => {
         responseData += data.toString()
-        
+
         // Check if we have a complete JSON response (ends with newline)
         if (responseData.endsWith('\n')) {
           try {
@@ -115,7 +115,7 @@ export class VultisigSigner {
         }
       })
 
-      socket.on('error', (error) => {
+      socket.on('error', error => {
         reject(new Error(`Socket error: ${error.message}`))
       })
 

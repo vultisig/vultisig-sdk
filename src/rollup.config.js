@@ -29,7 +29,21 @@ const external = [
   // Note: Workspace packages (@core/*, @lib/*) are now bundled by removing them from external
 ]
 
-const plugins = [
+// Node.js specific externals
+const nodeExternal = [
+  ...external,
+  // Node.js built-ins that should remain external
+  'fs',
+  'path',
+  'os',
+  'crypto',
+  'buffer',
+  'util',
+  'stream',
+  'events'
+]
+
+const browserPlugins = [
   resolve({
     preferBuiltins: false,
     browser: true,
@@ -47,6 +61,41 @@ const plugins = [
   })
 ]
 
+const nodePlugins = [
+  resolve({
+    preferBuiltins: true,
+    browser: false,
+    exportConditions: ['node', 'module', 'import', 'default'],
+    // Include workspace packages for bundling
+    skip: ['react', 'react-dom', 'axios', 'viem', 'zod', 'uuid', '@trustwallet/wallet-core'],
+    // Resolve workspace packages from their source
+    alias: {
+      '@core/chain': '../core/chain',
+      '@core/config': '../core/config',
+      '@core/extension': '../core/extension',
+      '@core/inpage-provider': '../core/inpage-provider',
+      '@core/mpc': '../core/mpc',
+      '@core/ui': '../core/ui',
+      '@lib/codegen': '../lib/codegen',
+      '@lib/dkls': '../lib/dkls',
+      '@lib/extension': '../lib/extension',
+      '@lib/schnorr': '../lib/schnorr',
+      '@lib/ui': '../lib/ui',
+      '@lib/utils': '../lib/utils'
+    }
+  }),
+  commonjs({
+    include: [/node_modules/, /\.\.\/core\//, /\.\.\/lib\//]
+  }),
+  typescript({
+    tsconfig: './tsconfig.json',
+    outputToFilesystem: true,
+    exclude: ['**/*.test.*', '**/*.stories.*'],
+    // Include workspace packages in compilation
+    include: ['**/*', '../core/**/*', '../lib/**/*']
+  })
+]
+
 const wasmCopyPlugin = copy({
   targets: [
     // Copy WASM files to dist for proper loading
@@ -60,12 +109,17 @@ const wasmCopyPlugin = copy({
       dest: './dist/wasm/',
       rename: 'schnorr.wasm' 
     },
-    // wallet-core.wasm will be handled by the consuming application
+    // Copy wallet-core WASM from node_modules for Node.js usage
+    { 
+      src: '../node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm', 
+      dest: './dist/wasm/',
+      rename: 'wallet-core.wasm'
+    }
   ]
 })
 
 export default defineConfig([
-  // ESM build only for now
+  // ESM build for browsers
   {
     input: 'index.ts',
     output: {
@@ -74,9 +128,51 @@ export default defineConfig([
       sourcemap: false // Disable sourcemaps to save memory
     },
     external,
-    plugins: [...plugins, wasmCopyPlugin],
+    plugins: [...browserPlugins, wasmCopyPlugin],
     onwarn(warning, warn) {
       // Suppress various warnings to reduce memory usage
+      if (warning.code === 'DYNAMIC_IMPORT') return
+      if (warning.code === 'MISSING_GLOBAL_NAME') return
+      if (warning.code === 'UNRESOLVED_IMPORT') return
+      warn(warning)
+    }
+  },
+  
+  // CommonJS build for Node.js
+  {
+    input: 'index.ts',
+    output: {
+      file: './dist/index.js',
+      format: 'cjs',
+      sourcemap: false,
+      exports: 'named',
+      interop: 'auto'
+    },
+    external: nodeExternal,
+    plugins: nodePlugins,
+    onwarn(warning, warn) {
+      // Suppress various warnings
+      if (warning.code === 'DYNAMIC_IMPORT') return
+      if (warning.code === 'MISSING_GLOBAL_NAME') return
+      if (warning.code === 'UNRESOLVED_IMPORT') return
+      warn(warning)
+    }
+  },
+
+  // Node.js optimized build
+  {
+    input: 'index.ts',
+    output: {
+      file: './dist/index.node.js',
+      format: 'cjs',
+      sourcemap: false,
+      exports: 'named',
+      interop: 'auto'
+    },
+    external: nodeExternal,
+    plugins: nodePlugins,
+    onwarn(warning, warn) {
+      // Suppress various warnings
       if (warning.code === 'DYNAMIC_IMPORT') return
       if (warning.code === 'MISSING_GLOBAL_NAME') return
       if (warning.code === 'UNRESOLVED_IMPORT') return

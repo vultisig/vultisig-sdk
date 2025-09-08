@@ -2,13 +2,12 @@ import {
   AbstractSigner,
   Provider,
   TransactionRequest,
-  TransactionResponse,
   TypedDataDomain,
   TypedDataField,
 } from 'ethers'
 import * as net from 'net'
 
-export interface JsonRpcRequest {
+export type JsonRpcRequest = {
   id: number
   method: 'get_address' | 'sign'
   params: {
@@ -21,7 +20,7 @@ export interface JsonRpcRequest {
   }
 }
 
-export interface JsonRpcResponse {
+export type JsonRpcResponse = {
   id: number
   result?: {
     address?: string
@@ -44,18 +43,22 @@ export class VultisigSigner extends AbstractSigner {
   }
 
   async getAddress(): Promise<string> {
+    return this.address()
+  }
+
+  async address(): Promise<string> {
     const request: JsonRpcRequest = {
       id: this.requestId++,
       method: 'get_address',
       params: {
         scheme: 'ecdsa',
         curve: 'secp256k1',
-        network: 'eth'
-      }
+        network: 'eth',
+      },
     }
 
     const response = await this.sendRequest(request)
-    
+
     if (response.error) {
       throw new Error(`Failed to get address: ${response.error.message}`)
     }
@@ -68,6 +71,10 @@ export class VultisigSigner extends AbstractSigner {
   }
 
   async signTransaction(tx: TransactionRequest): Promise<string> {
+    return this.sign(tx)
+  }
+
+  async sign(tx: TransactionRequest): Promise<string> {
     // Ensure transaction has required fields
     const transaction = {
       to: tx.to,
@@ -76,10 +83,12 @@ export class VultisigSigner extends AbstractSigner {
       gasLimit: tx.gasLimit ? tx.gasLimit.toString() : '21000',
       gasPrice: tx.gasPrice ? tx.gasPrice.toString() : undefined,
       maxFeePerGas: tx.maxFeePerGas ? tx.maxFeePerGas.toString() : undefined,
-      maxPriorityFeePerGas: tx.maxPriorityFeePerGas ? tx.maxPriorityFeePerGas.toString() : undefined,
+      maxPriorityFeePerGas: tx.maxPriorityFeePerGas
+        ? tx.maxPriorityFeePerGas.toString()
+        : undefined,
       nonce: tx.nonce,
       type: tx.type || 2, // EIP-1559 by default
-      chainId: tx.chainId || 1
+      chainId: tx.chainId || 1,
     }
 
     const request: JsonRpcRequest = {
@@ -90,12 +99,12 @@ export class VultisigSigner extends AbstractSigner {
         curve: 'secp256k1',
         network: 'eth',
         messageType: 'eth_tx',
-        payload: transaction
-      }
+        payload: transaction,
+      },
     }
 
     const response = await this.sendRequest(request)
-    
+
     if (response.error) {
       throw new Error(`Failed to sign transaction: ${response.error.message}`)
     }
@@ -123,13 +132,13 @@ export class VultisigSigner extends AbstractSigner {
         payload: {
           domain,
           types,
-          value
-        }
-      }
+          value,
+        },
+      },
     }
 
     const response = await this.sendRequest(request)
-    
+
     if (response.error) {
       throw new Error(`Failed to sign typed data: ${response.error.message}`)
     }
@@ -142,7 +151,7 @@ export class VultisigSigner extends AbstractSigner {
   }
 
   // Not implemented yet - requires message signing support in daemon
-  async signMessage(message: string): Promise<string> {
+  async signMessage(_message: string): Promise<string> {
     throw new Error('Message signing not yet implemented')
   }
 
@@ -156,9 +165,9 @@ export class VultisigSigner extends AbstractSigner {
         socket.write(requestJson)
       })
 
-      socket.on('data', (data) => {
+      socket.on('data', data => {
         responseData += data.toString()
-        
+
         // Check if we have a complete JSON response (ends with newline)
         if (responseData.endsWith('\n')) {
           try {
@@ -172,7 +181,7 @@ export class VultisigSigner extends AbstractSigner {
         }
       })
 
-      socket.on('error', (error) => {
+      socket.on('error', error => {
         reject(new Error(`Socket error: ${error.message}`))
       })
 
