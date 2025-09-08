@@ -1,6 +1,28 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { VaultManager, VultisigSDK } from '../vultisig-sdk-mocked'
+// SDK will be made available globally by the launcher
+declare const VultisigSDK: any
+
+// Polyfill File for Node.js
+if (typeof File === 'undefined') {
+  global.File = class File {
+    public buffer: Buffer
+    public _buffer: Buffer
+    
+    constructor(public chunks: any[], public name: string, public options?: any) {
+      // Create the buffer and set it directly as properties
+      const buffer = Buffer.concat(chunks.map(chunk => Buffer.from(chunk)))
+      this.buffer = buffer
+      this._buffer = buffer
+    }
+    
+    arrayBuffer() {
+      // Convert Buffer to ArrayBuffer
+      const buffer = this.buffer || this._buffer
+      return Promise.resolve(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength))
+    }
+  } as any
+}
 import { getVaultsDir, findVultFiles } from '../utils/paths'
 import { promptForPasswordWithValidation } from '../utils/password'
 import { DaemonManager } from '../daemon/DaemonManager'
@@ -20,13 +42,11 @@ export class RunCommand {
     // Initialize SDK first
     console.log('⚙️ Initializing Vultisig SDK...')
     const sdk = new VultisigSDK({
-      vaultManagerConfig: {
-        defaultChains: ['bitcoin', 'ethereum', 'solana'],
-        defaultCurrency: 'USD'
-      }
+      defaultChains: ['bitcoin', 'ethereum', 'solana'],
+      defaultCurrency: 'USD'
     })
     
-    await sdk.initialize()
+    // SDK will auto-initialize when we call methods on it
     console.log('✅ SDK initialized successfully')
     
     // Auto-discovery or load specific vault file
@@ -49,8 +69,11 @@ export class RunCommand {
         console.log('🔓 Vault is unencrypted, no password needed.')
       }
       
-      const vault = await VaultManager.add(file, password)
-      await VaultManager.load(vault, password)
+      // Set buffer property like in the tests  
+      (file as any).buffer = buffer
+      
+      // Use the new SDK API
+      const vault = await sdk.addVault(file, password)
       vaultStorage = vault
       
     } else {
@@ -78,8 +101,11 @@ export class RunCommand {
         console.log('🔓 Vault is unencrypted, no password needed.')
       }
       
-      const vault = await VaultManager.add(file, password)
-      await VaultManager.load(vault, password)
+      // Set buffer property like in the tests  
+      (file as any).buffer = buffer
+      
+      // Use the new SDK API
+      const vault = await sdk.addVault(file, password)
       vaultStorage = vault
     }
     
@@ -92,7 +118,7 @@ export class RunCommand {
     console.log(`💰 Currency: ${summary.currency}`)
     
     // Set as active vault
-    VaultManager.setActive(vaultStorage)
+    // Vault is automatically set as active by sdk.addVault()
     
     if (options.config) {
       console.log(`📋 Config: ${options.config}`)

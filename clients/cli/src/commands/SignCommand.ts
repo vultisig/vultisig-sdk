@@ -1,5 +1,6 @@
 import * as fs from 'fs'
-import { VaultManager } from '../vultisig-sdk-mocked'
+// SDK will be made available globally by the launcher
+declare const VultisigSDK: any
 import { DaemonManager } from '../daemon/DaemonManager'
 
 export interface SignOptions {
@@ -85,17 +86,17 @@ export class SignCommand {
     }
     
     // Fallback to direct vault signing
-    const activeVault = VaultManager.getActive()
+    const sdk = new VultisigSDK()
+    const activeVault = sdk.getActiveVault()
     if (!activeVault) {
       throw new Error('No active vault found and no daemon running. Start with "vultisig run" first.')
     }
     
     try {
-      const signature = await activeVault.sign({
-        transaction: payloadData,
-        chain: options.network,
-        signingMode: mode as any
-      })
+      const signature = await activeVault.signTransaction(
+        payloadData,
+        options.network
+      )
       
       console.log('\n✅ Transaction signed successfully!')
       console.log('📝 Signature:', signature.signature)

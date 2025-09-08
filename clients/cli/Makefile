@@ -20,7 +20,7 @@ help:
 # Build standalone binary
 build:
 	@echo "🏗️  Building Vultisig CLI binary..."
-	./scripts/build.sh
+	./scripts/build-final.sh
 
 # Install to system PATH
 install:

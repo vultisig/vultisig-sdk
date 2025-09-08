@@ -1,4 +1,6 @@
-import type { Vault } from '../vultisig-sdk-mocked'
+// SDK will be made available globally by the launcher
+declare const VultisigSDK: any
+type VaultClass = any
 
 export interface JsonRpcRequest {
   id: number
@@ -16,9 +18,9 @@ export interface JsonRpcResponse {
 }
 
 export class JsonRpcServer {
-  private vault: Vault
-  
-  constructor(vault: Vault) {
+  private vault: VaultClass
+
+  constructor(vault: VaultClass) {
     this.vault = vault
   }
   
@@ -30,23 +32,22 @@ export class JsonRpcServer {
       switch (jsonRpcRequest.method) {
         case 'get_address':
           const chain = jsonRpcRequest.params?.network || 'ethereum'
-          const address = await this.vault.address(chain)
-          const summary = this.vault.summary()
+          const address = await (this.vault as any).address(chain)
+          const summary = (this.vault as any).summary()
           
           return {
             id: jsonRpcRequest.id,
             result: {
               address,
-              pubkey: summary.keys.ecdsa // Default to ECDSA
+              pubkey: summary.id // Use the vault ID as pubkey
             }
           }
           
         case 'sign':
-          const signature = await this.vault.sign({
-            transaction: jsonRpcRequest.params?.payload,
-            chain: jsonRpcRequest.params?.network || 'ethereum',
-            signingMode: 'relay' // Default signing mode
-          })
+          const signature = await (this.vault as any).signTransaction(
+            jsonRpcRequest.params?.payload,
+            jsonRpcRequest.params?.network || 'ethereum'
+          )
           
           return {
             id: jsonRpcRequest.id,

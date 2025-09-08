@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
-import { VultisigSDK } from './vultisig-sdk-mocked'
+
+// SDK will be made available globally by the launcher
+declare const VultisigSDK: any
 import { InitCommand } from './commands/InitCommand'
 import { ListCommand } from './commands/ListCommand'
 import { RunCommand } from './commands/RunCommand'
@@ -19,19 +21,16 @@ program
   .version('1.0.0')
 
 // Initialize SDK globally for CLI operations
-let sdk: VultisigSDK
+let sdk: any
 
 async function initializeSDK(): Promise<void> {
   if (!sdk) {
     sdk = new VultisigSDK({
-      vaultManagerConfig: {
-        defaultChains: ['bitcoin', 'ethereum', 'solana'],
-        defaultCurrency: 'USD'
-      }
+      defaultChains: ['bitcoin', 'ethereum', 'solana'],
+      defaultCurrency: 'USD'
     })
     
-    // SDK initialization is handled per-command as needed
-    // Some commands don't need full SDK initialization
+    // SDK will auto-initialize when methods are called
   }
 }
 
@@ -94,6 +93,7 @@ program
   .description(addressCommand.description)
   .option('--network <networks>', 'Networks (all, or comma-separated: btc,eth,sol)', 'all')
   .action(wrapCommand(addressCommand, true))
+
 
 // Sign command - uses daemon/SDK
 program

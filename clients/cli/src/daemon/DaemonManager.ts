@@ -1,7 +1,9 @@
 import * as net from 'net'
 import * as fs from 'fs'
 import * as path from 'path'
-import type { Vault } from '../vultisig-sdk-mocked'
+// SDK will be made available globally by the launcher
+declare const VultisigSDK: any
+type VaultClass = any
 import { JsonRpcServer } from './JsonRpcServer'
 
 export interface DaemonRequest {
@@ -27,7 +29,7 @@ export class DaemonManager {
   private readonly socketPath: string
   private readonly pidFile: string
   private jsonRpcServer?: JsonRpcServer
-  private vault?: Vault
+  private vault?: VaultClass
   
   constructor(
     socketPath: string = '/tmp/vultisig.sock',
@@ -37,7 +39,7 @@ export class DaemonManager {
     this.pidFile = pidFile
   }
   
-  async startDaemon(vault: Vault): Promise<void> {
+  async startDaemon(vault: VaultClass): Promise<void> {
     this.vault = vault
     
     // Create PID file
@@ -199,7 +201,7 @@ export class DaemonManager {
           
           for (const chain of chains) {
             try {
-              addresses[chain] = await this.vault.address(chain)
+              addresses[chain] = await (this.vault as any).address(chain)
             } catch (error) {
               addresses[chain] = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
             }
@@ -213,11 +215,10 @@ export class DaemonManager {
           }
           
           const signRequest = request.params as SignTransactionRequest
-          const signature = await this.vault.sign({
-            transaction: signRequest.payload,
-            chain: signRequest.network,
-            signingMode: signRequest.signingMode
-          })
+          const signature = await (this.vault as any).signTransaction(
+            signRequest.payload,
+            signRequest.network
+          )
           
           return { success: true, result: signature }
           
