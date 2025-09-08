@@ -86,21 +86,55 @@ export class SignCommand {
 
     // Fallback to direct vault signing
     const sdk = new VultisigSDK()
-    const activeVault = sdk.getActiveVault()
+    let activeVault = sdk.getActiveVault()
+    
+    // If no active vault, try to load from vaults directory
     if (!activeVault) {
-      throw new Error(
-        'No active vault found and no daemon running. Start with "vultisig run" first.'
-      )
+      console.log('📂 No active vault found, attempting to load from vaults directory...')
+      
+      const { findVultFiles, getVaultsDir } = await import('../utils/paths')
+      const vaultsDir = getVaultsDir()
+      const vultFiles = await findVultFiles(vaultsDir)
+      
+      if (vultFiles.length === 0) {
+        throw new Error(`No vault files found in ${vaultsDir}. Start with "vultisig run" first.`)
+      }
+      
+      // Load the first vault file (or HotVault.vult if it exists)
+      const hotVaultPath = vultFiles.find(f => f.includes('HotVault.vult'))
+      const vaultPath = hotVaultPath || vultFiles[0]
+      
+      console.log(`📄 Loading vault: ${vaultPath}`)
+      
+      const buffer = await fs.promises.readFile(vaultPath)
+      const file = new File([buffer], require('path').basename(vaultPath))
+      ;(file as any).buffer = buffer
+      
+      // For fast mode, password is required
+      if (mode === 'fast' && !options.password) {
+        throw new Error('Password is required for fast signing mode')
+      }
+      
+      activeVault = await sdk.addVault(file, options.password)
+      console.log('✅ Vault loaded successfully!')
     }
 
     try {
-      const signature = await activeVault.sign(payloadData, options.network)
+      // Create proper signing payload
+      const signingPayload = {
+        transaction: payloadData,
+        chain: options.network
+      }
+
+      // Use the new sign method
+      const signature = await activeVault.sign(mode as any, signingPayload, options.password)
 
       console.log('\n✅ Transaction signed successfully!')
       console.log('📝 Signature:', signature.signature)
+      console.log('📋 Format:', signature.format)
 
-      if (signature.txHash) {
-        console.log('🔗 Transaction Hash:', signature.txHash)
+      if (signature.recovery !== undefined) {
+        console.log('🔢 Recovery:', signature.recovery)
       }
     } catch (error) {
       console.error(

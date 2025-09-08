@@ -6,6 +6,7 @@
 export enum VaultErrorCode {
   InvalidConfig = 'INVALID_CONFIG',
   SigningFailed = 'SIGNING_FAILED',
+  NotImplemented = 'NOT_IMPLEMENTED',
   AddressDerivationFailed = 'ADDRESS_DERIVATION_FAILED',
   WalletCoreNotInitialized = 'WALLET_CORE_NOT_INITIALIZED',
   UnsupportedChain = 'UNSUPPORTED_CHAIN',

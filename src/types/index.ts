@@ -81,16 +81,29 @@ export type Balance = {
   value?: number // USD value
 }
 
+export type SigningMode = 'fast' | 'relay' | 'local'
+
 export type SigningPayload = {
   transaction: any // Chain-specific transaction data
   chain: any
   derivePath?: string
+  messageHashes?: string[] // Pre-computed message hashes for signing
 }
 
 export type Signature = {
   signature: string
   recovery?: number
   format: 'DER' | 'ECDSA' | 'EdDSA'
+}
+
+export type FastSigningInput = {
+  publicKey: string
+  messages: string[] // hex-encoded message hashes
+  session: string
+  hexEncryptionKey: string
+  derivePath: string
+  isEcdsa: boolean
+  vaultPassword: string
 }
 
 export type ReshareOptions = {
@@ -154,7 +167,6 @@ export type AddressResult = {
 // VaultManager types
 export type VaultType = 'fast' | 'secure'
 export type KeygenMode = 'fast' | 'relay' | 'local'
-export type SigningMode = 'fast' | 'relay' | 'local'
 
 export type VaultManagerConfig = {
   defaultChains: string[]
