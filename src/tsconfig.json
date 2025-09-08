@@ -9,7 +9,6 @@
     "declarationMap": true,
     "emitDeclarationOnly": false,
     "outDir": "./dist",
-    "rootDir": "./",
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
@@ -22,11 +21,20 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "incremental": true,
-    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "paths": {
+      "@core/*": ["../core/*"],
+      "@lib/*": ["../lib/*"]
+    },
+    "baseUrl": "."
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    "../core/**/*.ts",
+    "../core/**/*.tsx",
+    "../lib/**/*.ts",
+    "../lib/**/*.tsx"
   ],
   "exclude": [
     "node_modules",
@@ -34,6 +42,8 @@
     "**/*.test.ts",
     "**/*.test.tsx",
     "**/*.stories.ts",
-    "**/*.stories.tsx"
+    "**/*.stories.tsx",
+    "../**/node_modules",
+    "../**/dist"
   ]
 }

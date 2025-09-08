@@ -4,6 +4,7 @@ import type {
   VaultBackup,
   VaultDetails,
   VaultValidationResult,
+  ValidationResult,
   ExportOptions,
   ChainKind,
   Balance,
@@ -15,6 +16,8 @@ import type {
 } from './types'
 
 import { Chain } from '@core/chain/Chain'
+import { validateEmail } from '@lib/utils/validation/validateEmail'
+import { passwordLenghtConfig } from '@core/ui/security/password/config'
 
 import { VaultManager } from './vault'
 import { MPCManager } from './mpc'
@@ -24,7 +27,7 @@ import { ServerManager } from './server'
 import { WASMManager } from './wasm'
 
 /**
- * Main VultisigSDK class providing secure multi-party computation and blockchain operations
+ * Main Vultisig class providing secure multi-party computation and blockchain operations
  * 
  * Features:
  * - Multi-device vault creation and management
@@ -32,8 +35,9 @@ import { WASMManager } from './wasm'
  * - Multi-chain blockchain support  
  * - Server-assisted operations (Fast Vault)
  * - Cross-device message relay
+ * - Auto-initialization and simplified API
  */
-export class VultisigSDK {
+export class Vultisig {
   private vaultManager: VaultManager
   private mpcManager: MPCManager
   private chainManager: ChainManager
@@ -41,6 +45,10 @@ export class VultisigSDK {
   private serverManager: ServerManager
   private wasmManager: WASMManager
   private initialized = false
+  private vaults = new Map<string, any>()
+  private activeVault: any = null
+  private defaultChains: string[] = ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple']
+  private defaultCurrency = 'USD'
 
   constructor(config?: {
     serverEndpoints?: {
@@ -55,6 +63,8 @@ export class VultisigSDK {
         schnorr?: string
       }
     }
+    defaultChains?: string[]
+    defaultCurrency?: string
   }) {
     this.wasmManager = new WASMManager(config?.wasmConfig)
     this.serverManager = new ServerManager(config?.serverEndpoints)
@@ -62,13 +72,30 @@ export class VultisigSDK {
     this.mpcManager = new MPCManager(this.serverManager)
     this.chainManager = new ChainManager(this.wasmManager)
     this.addressDeriver = new AddressDeriver()
+    
+    // Apply config defaults
+    if (config?.defaultChains) {
+      this.defaultChains = config.defaultChains
+    }
+    if (config?.defaultCurrency) {
+      this.defaultCurrency = config.defaultCurrency
+    }
+  }
+
+  /**
+   * Internal auto-initialization helper
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize()
+    }
   }
 
   /**
    * Initialize the SDK and load WASM modules
    * Automatically initializes VaultManager with this SDK instance
    */
-  async initialize(): Promise<void> {
+  private async initialize(): Promise<void> {
     if (this.initialized) return
     
     try {
@@ -80,7 +107,10 @@ export class VultisigSDK {
       await this.addressDeriver.initialize(walletCore)
       
       // Auto-initialize VaultManager with this SDK instance
-      VaultManager.init(this)
+      VaultManager.init(this, {
+        defaultChains: this.defaultChains,
+        defaultCurrency: this.defaultCurrency
+      })
       
       this.initialized = true
     } catch (error) {
@@ -91,18 +121,197 @@ export class VultisigSDK {
   /**
    * Check if SDK is initialized
    */
-  async isInitialized(): Promise<boolean> {
+  isInitialized(): boolean {
     return this.initialized
   }
 
-  // ===== VultiServer-based operations =====
+  // ===== VAULT LIFECYCLE =====
 
   /**
-   * Create a new vault using multi-device MPC (requires multiple devices)
+   * Create new vault (auto-initializes SDK, sets as active)
    */
-  async createVault(options: VaultOptions): Promise<Vault> {
-    return this.vaultManager.createVault(options)
+  async createVault(
+    name: string, 
+    options?: {
+      type?: 'fast' | 'secure'
+      keygenMode?: 'relay' | 'local'
+      password?: string
+      email?: string
+      onProgress?: (step: any) => void
+    }
+  ): Promise<any> {
+    await this.ensureInitialized()
+    
+    // Use VaultManager to create the vault
+    const vault = await VaultManager.create(name, options)
+    
+    // Store and set as active
+    const vaultId = vault.data?.publicKeys?.ecdsa || vault.summary().id
+    this.vaults.set(vaultId, vault)
+    this.activeVault = vault
+    
+    return vault
   }
+
+  /**
+   * Import vault from file (sets as active)
+   */
+  async addVault(file: File, password?: string): Promise<any> {
+    await this.ensureInitialized()
+    
+    // Use VaultManager to add the vault
+    const vault = await VaultManager.add(file, password)
+    
+    // Store and set as active
+    const vaultId = vault.data?.publicKeys?.ecdsa || vault.summary().id
+    this.vaults.set(vaultId, vault)
+    this.activeVault = vault
+    
+    return vault
+  }
+
+  /**
+   * List all stored vaults
+   */
+  async listVaults(): Promise<any[]> {
+    await this.ensureInitialized()
+    return VaultManager.list()
+  }
+
+  /**
+   * Delete vault from storage (clears active if needed)
+   */
+  async deleteVault(vault: any): Promise<void> {
+    await this.ensureInitialized()
+    
+    const vaultId = vault.data?.publicKeys?.ecdsa || vault.summary().id
+    
+    // Remove from VaultManager
+    await VaultManager.remove(vault)
+    
+    // Remove from our local storage
+    this.vaults.delete(vaultId)
+    
+    // Clear active vault if it was the deleted one
+    if (this.activeVault === vault) {
+      this.activeVault = null
+    }
+  }
+
+
+  /**
+   * Clear all stored vaults
+   */
+  async clearVaults(): Promise<void> {
+    await this.ensureInitialized()
+    await VaultManager.clear()
+    this.vaults.clear()
+    this.activeVault = null
+  }
+
+  // ===== ACTIVE VAULT MANAGEMENT =====
+
+  /**
+   * Switch to different vault
+   */
+  setActiveVault(vault: any): void {
+    this.activeVault = vault
+    const vaultId = vault.data?.publicKeys?.ecdsa || vault.summary().id
+    this.vaults.set(vaultId, vault)
+  }
+
+  /**
+   * Get current active vault
+   */
+  getActiveVault(): any | null {
+    return this.activeVault
+  }
+
+  /**
+   * Check if there's an active vault
+   */
+  hasActiveVault(): boolean {
+    return this.activeVault !== null
+  }
+
+  // ===== GLOBAL CONFIGURATION =====
+
+  /**
+   * Set global default currency
+   */
+  setDefaultCurrency(currency: string): void {
+    this.defaultCurrency = currency
+    if (this.initialized) {
+      VaultManager.setDefaultCurrency(currency)
+    }
+  }
+
+  /**
+   * Get global default currency
+   */
+  getDefaultCurrency(): string {
+    return this.defaultCurrency
+  }
+
+  // ===== CHAIN OPERATIONS =====
+
+  /**
+   * Get all hardcoded supported chains (immutable)
+   * Complete list from core/chain/Chain.ts - cannot be overridden at runtime
+   */
+  getSupportedChains(): string[] {
+    return [
+      // EVM Chains
+      'Ethereum', 'Arbitrum', 'Base', 'Blast', 'Optimism', 'Zksync', 'Mantle',
+      'Avalanche', 'CronosChain', 'BSC', 'Polygon',
+      
+      // UTXO Chains  
+      'Bitcoin', 'Bitcoin-Cash', 'Litecoin', 'Dogecoin', 'Dash', 'Zcash',
+      
+      // Cosmos Chains
+      'THORChain', 'MayaChain', 'Cosmos', 'Osmosis', 'Dydx', 'Kujira', 
+      'Terra', 'TerraClassic', 'Noble', 'Akash',
+      
+      // Other Chains
+      'Sui', 'Solana', 'Polkadot', 'Ton', 'Ripple', 'Tron', 'Cardano'
+    ]
+  }
+
+  /**
+   * Set SDK-level default chains for new vaults
+   * Validates against supported chains list
+   */
+  setDefaultChains(chains: string[]): void {
+    const supportedChains = this.getSupportedChains()
+    const invalidChains = chains.filter(chain => !supportedChains.includes(chain))
+    
+    if (invalidChains.length > 0) {
+      throw new Error(`Unsupported chains: ${invalidChains.join(', ')}. Supported chains: ${supportedChains.join(', ')}`)
+    }
+    
+    this.defaultChains = chains
+    if (this.initialized) {
+      VaultManager.setDefaultChains(chains)
+    }
+  }
+
+  /**
+   * Get SDK-level default chains (5 top chains: BTC, ETH, SOL, THOR, XRP)
+   */
+  getDefaultChains(): string[] {
+    return this.defaultChains
+  }
+
+  // ===== FILE OPERATIONS =====
+
+  /**
+   * Check if .vult file is encrypted
+   */
+  async isVaultFileEncrypted(file: File): Promise<boolean> {
+    return VaultManager.isEncrypted(file)
+  }
+
+  // ===== SERVER-BASED OPERATIONS =====
 
   /**
    * Create a Fast Vault where VultiServer acts as the second device
@@ -113,7 +322,7 @@ export class VultisigSDK {
     vaultId: string
     verificationRequired: boolean
   }> {
-    await this.initialize()
+    await this.ensureInitialized()
     return this.serverManager.createFastVault(options)
   }
 
@@ -221,8 +430,11 @@ export class VultisigSDK {
   /**
    * Export vault to backup format
    */
-  async exportVault(vault: Vault, options?: ExportOptions): Promise<VaultBackup> {
-    return this.vaultManager.exportVault(vault, options)
+  async exportVault(vault: Vault, options?: ExportOptions): Promise<Blob> {
+    await this.ensureInitialized()
+    
+    // Use the vault's export method directly
+    return vault.export(options?.password)
   }
 
   /**
@@ -237,13 +449,6 @@ export class VultisigSDK {
    */
   async importVaultFromFile(fileData: ArrayBuffer | File, password?: string): Promise<Vault> {
     return this.vaultManager.importVaultFromFile(fileData, password)
-  }
-
-  /**
-   * Check if a vault file is encrypted
-   */
-  async isVaultFileEncrypted(file: File): Promise<boolean> {
-    return VaultManager.isEncrypted(file)
   }
 
   /**
@@ -294,7 +499,7 @@ export class VultisigSDK {
    * Get balances for a vault across common chains
    */
   async getVaultBalances(vault: Vault): Promise<Record<string, Balance>> {
-    await this.initialize()
+    await this.ensureInitialized()
     
     // Define common chains to check
     const commonChains = ['bitcoin', 'ethereum', 'thorchain', 'litecoin']
@@ -324,7 +529,7 @@ export class VultisigSDK {
    * Derive address for a vault on a specific chain
    */
   async deriveAddress(vault: Vault, chain: string): Promise<string> {
-    await this.initialize()
+    await this.ensureInitialized()
     return this.addressDeriver.deriveAddress(vault, chain)
   }
 
@@ -333,5 +538,89 @@ export class VultisigSDK {
    */
   getChainClient(chain: Chain) {
     return this.chainManager.getChainClient(chain)
+  }
+
+  // Static validation methods
+
+  /**
+   * Validate email address format
+   * @param email Email address to validate
+   * @returns ValidationResult with validity and error message if invalid
+   */
+  static validateEmail(email: string): ValidationResult {
+    const error = validateEmail(email)
+    return {
+      valid: !error,
+      error
+    }
+  }
+
+  /**
+   * Validate password strength and requirements
+   * @param password Password to validate
+   * @returns ValidationResult with validity and error message if invalid
+   */
+  static validatePassword(password: string): ValidationResult {
+    if (!password) {
+      return {
+        valid: false,
+        error: 'Password is required'
+      }
+    }
+
+    if (password.length < passwordLenghtConfig.min) {
+      return {
+        valid: false,
+        error: `Password must be at least ${passwordLenghtConfig.min} character${passwordLenghtConfig.min === 1 ? '' : 's'} long`
+      }
+    }
+
+    if (password.length > passwordLenghtConfig.max) {
+      return {
+        valid: false,
+        error: `Password must be no more than ${passwordLenghtConfig.max} characters long`
+      }
+    }
+
+    return { valid: true }
+  }
+
+  /**
+   * Validate vault name format and requirements
+   * @param name Vault name to validate
+   * @returns ValidationResult with validity and error message if invalid
+   */
+  static validateVaultName(name: string): ValidationResult {
+    if (!name) {
+      return {
+        valid: false,
+        error: 'Vault name is required'
+      }
+    }
+
+    if (typeof name !== 'string') {
+      return {
+        valid: false,
+        error: 'Vault name must be a string'
+      }
+    }
+
+    const trimmedName = name.trim()
+    
+    if (trimmedName.length < 2) {
+      return {
+        valid: false,
+        error: 'Vault name must be at least 2 characters long'
+      }
+    }
+
+    if (trimmedName.length > 50) {
+      return {
+        valid: false,
+        error: 'Vault name must be no more than 50 characters long'
+      }
+    }
+
+    return { valid: true }
   }
 }

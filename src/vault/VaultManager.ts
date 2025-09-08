@@ -41,7 +41,7 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
 export class VaultManager {
   // === GLOBAL SETTINGS ===
   private static config: VaultManagerConfig = {
-    defaultChains: ['bitcoin', 'ethereum'],
+    defaultChains: ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple'],
     defaultCurrency: 'USD',
   }
   private static sdkInstance: any | null = null
@@ -180,7 +180,8 @@ export class VaultManager {
       // Create VaultClass instance
       const vaultInstance = new VaultClass(
         normalizedVault,
-        this.sdkInstance?.wasmManager?.getWalletCore()
+        this.sdkInstance?.wasmManager?.getWalletCore(),
+        this.sdkInstance
       )
 
       // Set cached properties on the Vault instance
@@ -223,7 +224,8 @@ export class VaultManager {
     for (const [, vault] of this.vaultStorage) {
       const vaultInstance = new VaultClass(
         vault,
-        this.sdkInstance?.wasmManager?.getWalletCore()
+        this.sdkInstance?.wasmManager?.getWalletCore(),
+        this.sdkInstance
       )
       const summary = vaultInstance.summary()
 
@@ -260,6 +262,23 @@ export class VaultManager {
     }
 
     return summaries
+  }
+
+  /**
+   * Update vault in storage
+   */
+  static async update(vault: VaultClass, updates: Partial<Vault>): Promise<void> {
+    const vaultId = vault.data.publicKeys.ecdsa
+    const storedVault = this.vaultStorage.get(vaultId)
+    
+    if (storedVault) {
+      // Apply updates to stored vault
+      Object.assign(storedVault, updates)
+      this.vaultStorage.set(vaultId, storedVault)
+      
+      // Update the vault instance data as well
+      Object.assign(vault.data, updates)
+    }
   }
 
   /**
@@ -376,7 +395,7 @@ export class VaultManager {
   static async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> {
     for (const entry of entries) {
       // Route entry to appropriate array based on source
-      if (entry.source === 'vaults') {
+      if (entry.source === 'vault') {
         // Remove existing vault entry if it exists
         this.addressBookData.vaults = this.addressBookData.vaults.filter(
           existing =>
@@ -461,13 +480,20 @@ export class VaultManager {
     }
   }
 
+  // Note: Global configuration methods are already implemented above
+  
   // === VAULT SETTINGS INHERITANCE ===
   /**
    * Apply global chains/currency to vault
    */
-  private static applyConfig(vault: VaultClass): VaultClass {
-    // TODO: Apply global settings to vault instance
-    // This would involve setting chains, currency, etc.
+  private static async applyConfig(vault: VaultClass): Promise<VaultClass> {
+    // Apply global settings to vault instance
+    if (vault.setChains) {
+      await vault.setChains(this.config.defaultChains)
+    }
+    if (vault.setCurrency) {
+      vault.setCurrency(this.config.defaultCurrency)
+    }
     return vault
   }
 
