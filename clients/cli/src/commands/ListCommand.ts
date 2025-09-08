@@ -1,6 +1,17 @@
 import * as fs from 'fs'
 import * as path from 'path'
-import { VaultManager } from '../vultisig-sdk-mocked'
+// SDK will be made available globally by the launcher  
+declare const VultisigSDK: any
+
+// Polyfill File for Node.js
+if (typeof File === 'undefined') {
+  global.File = class File {
+    constructor(public chunks: any[], public name: string, public options?: any) {}
+    arrayBuffer() {
+      return Promise.resolve(Buffer.concat(this.chunks.map(chunk => Buffer.from(chunk))))
+    }
+  } as any
+}
 import { getVaultsDir, findVultFiles } from '../utils/paths'
 
 export class ListCommand {
@@ -29,8 +40,7 @@ export class ListCommand {
     
     console.log(`📁 Found ${vultFiles.length} vault file(s) in ${vaultsDir}:`)
     
-    // Check each file using SDK VaultManager
-    const vaultManager = new VaultManager()
+    // Check each file status
     
     for (const filePath of vultFiles) {
       try {
@@ -49,19 +59,16 @@ export class ListCommand {
       }
     }
     
-    // Also check for already loaded vaults in SDK storage
+    // Also check for active vault in SDK
     try {
-      const storedVaults = await VaultManager.list()
-      if (storedVaults.length > 0) {
-        console.log(`\n💾 Found ${storedVaults.length} vault(s) in storage:`)
-        for (const summary of storedVaults) {
-          const status = summary.isEncrypted ? '🔐 encrypted' : '🔓 unencrypted'
-          const type = summary.type || 'unknown'
-          console.log(`  🏛️  ${summary.name} (${status}, ${type})`)
-        }
+      const sdk = new VultisigSDK()
+      const activeVault = sdk.getActiveVault()
+      if (activeVault) {
+        const summary = activeVault.summary()
+        console.log(`\n📍 Active vault: ${summary.name} (${summary.type})`)
       }
     } catch (error) {
-      // Storage not initialized yet, that's OK
+      // No active vault
     }
   }
 }
