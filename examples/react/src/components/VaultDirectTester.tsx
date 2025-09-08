@@ -1,11 +1,11 @@
-import { useState } from 'react'
 // Note: For this demo, we'll show the concept but use SDK methods
 // In a real implementation, you'd import: import { Vault } from 'vultisig-sdk/src/vault'
 import type { WalletCore } from '@trustwallet/wallet-core'
+import { useState } from 'react'
 
 type VaultData = any
 
-interface DirectTestResult {
+type DirectTestResult = {
   success: boolean
   address?: string
   error?: string

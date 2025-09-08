@@ -134,13 +134,8 @@ export class Vault {
       )
     }
 
-    // Update vault through VaultManager to ensure proper storage handling
-    if (this._sdkInstance?.VaultManager) {
-      await this._sdkInstance.VaultManager.update(this, { name: newName })
-    } else {
-      // Fallback: update internal vault data directly
-      this.vaultData.name = newName
-    }
+    // Update internal vault data directly
+    this.vaultData.name = newName
   }
 
   /**
@@ -187,7 +182,7 @@ export class Vault {
     const blob = new Blob([base64Data], { type: 'application/octet-stream' })
     
     // Automatically download the file if we're in a browser environment
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    if (typeof globalThis !== 'undefined' && 'window' in globalThis && 'document' in globalThis) {
       const { initiateFileDownload } = await import('@lib/ui/utils/initiateFileDownload')
       initiateFileDownload({ blob, name: filename })
     }

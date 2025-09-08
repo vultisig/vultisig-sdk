@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
-
 // SDK will be made available globally by the launcher
 declare const VultisigSDK: any
 import { AddressCommand } from './commands/AddressCommand'
