@@ -321,14 +321,83 @@ See the `/examples` directory for complete sample applications:
 - **Server Trust**: Fast Vaults use VultiServer as one party in the MPC protocol
 - **WASM Integrity**: Ensure WASM files are served from trusted sources
 
+## Development
+
+### Prerequisites
+
+- Node.js 18+
+- Yarn 4.x
+
+### Setup
+
+This SDK is part of a monorepo. **Always install dependencies from the root directory:**
+
+```bash
+# Clone the repository
+git clone https://github.com/vultisig/vultisig-sdk.git
+cd vultisig-sdk
+
+# IMPORTANT: Install from root (sets up all workspace packages)
+yarn install
+```
+
+### Building
+
+The SDK bundles functionality from workspace packages (`core/` and `lib/`) into a single distributable package.
+
+```bash
+# Build the SDK (from root directory)
+yarn workspace @vultisig/sdk build
+
+# Or using npm scripts (from src/ directory)
+cd src && npm run build
+```
+
+This creates the distributable package in `src/dist/` with all dependencies bundled.
+
+### Testing
+
+```bash
+# Run tests (from root directory)
+yarn workspace @vultisig/sdk test
+
+# Or from src/ directory
+cd src && npm test
+```
+
+### Development Workflow
+
+1. **Make changes** to SDK code in `src/` or workspace packages in `core/`/`lib/`
+2. **Build**: `yarn workspace @vultisig/sdk build`
+3. **Test**: `yarn workspace @vultisig/sdk test`
+4. **Lint**: `yarn lint` (from root)
+
+### Project Structure
+
+```
+src/                     # SDK source code
+├── chains/             # Address derivation and chain management
+├── mpc/               # Multi-party computation logic
+├── vault/             # Vault creation and management
+├── server/            # Fast vault server integration
+├── wasm/              # WASM module management
+├── tests/             # Test suite
+├── rollup.config.js   # Build configuration
+└── package.json       # SDK package configuration
+
+# Workspace packages (bundled into SDK)
+../core/               # Core blockchain functionality
+../lib/                # Shared libraries and utilities
+```
+
 ## Contributing
 
-This SDK is part of the Vultisig ecosystem. For contributions and development:
-
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Run tests: `npm test`
-4. Build: `npm run build`
+1. Fork the repository
+2. Install dependencies from root: `yarn install`
+3. Make your changes in `src/` or workspace packages
+4. Run tests: `yarn workspace @vultisig/sdk test`
+5. Build: `yarn workspace @vultisig/sdk build`
+6. Submit a pull request
 
 ## License
 

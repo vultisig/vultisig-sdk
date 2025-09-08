@@ -38,7 +38,7 @@ export class FastVaultClient {
     localPartyId: string
     encryptionPassword: string
     email: string
-    libType: number // 0=GG20, 1=DKLS
+    libType: number // 1=DKLS (always use DKLS)
   }): Promise<void> {
     const payload = {
       name: params.name,

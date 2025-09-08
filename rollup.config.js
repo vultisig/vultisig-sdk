@@ -35,17 +35,26 @@ const plugins = [
     browser: true,
     exportConditions: ['browser', 'module', 'import', 'default'],
     // Include workspace packages for bundling
-    skip: ['react', 'react-dom', 'axios', 'viem', 'zod', 'uuid', '@trustwallet/wallet-core']
+    skip: ['react', 'react-dom', 'axios', 'viem', 'zod', 'uuid', '@trustwallet/wallet-core'],
+    // Ensure workspace packages are resolved and bundled
+    dedupe: ['react', 'react-dom']
   }),
   commonjs({
-    include: /node_modules/
+    include: [/node_modules/, /\.\.\/core\//, /\.\.\/lib\//]
   }),
   typescript({
     tsconfig: './src/tsconfig.json',
     outputToFilesystem: true,
     exclude: ['**/*.test.*', '**/*.stories.*'],
     // Include workspace packages in compilation
-    include: ['src/**/*', '../core/**/*', '../lib/**/*']
+    include: ['src/**/*', '../core/**/*', '../lib/**/*'],
+    // Ensure proper module resolution for workspace packages
+    compilerOptions: {
+      paths: {
+        '@core/*': ['../core/*'],
+        '@lib/*': ['../lib/*']
+      }
+    }
   })
 ]
 
