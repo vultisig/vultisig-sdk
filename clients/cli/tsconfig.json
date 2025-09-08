@@ -17,7 +17,7 @@
     "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
-      "vultisig-sdk": ["../../src"]
+      "@vultisig/sdk": ["../../src"]
     }
   },
   "include": [

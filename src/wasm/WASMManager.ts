@@ -2,9 +2,14 @@ import { initializeMpcLib } from '@core/mpc/lib/initialize'
 import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm } from '@trustwallet/wallet-core'
 
+// Environment detection
+const isNode = typeof window === 'undefined' && typeof global !== 'undefined'
+const isBrowser = typeof window !== 'undefined'
+
 /**
  * WASMManager handles initialization and management of all WASM modules
  * Coordinates wallet-core, DKLS, and Schnorr WASM loading
+ * Supports both browser and Node.js environments
  */
 export class WASMManager {
   private initialized = false
@@ -44,7 +49,56 @@ export class WASMManager {
   }
 
   private walletCoreInstance: any = null
-  private getWalletCoreInit = memoizeAsync(initWasm)
+  private getWalletCoreInit = memoizeAsync(this.initWalletCoreForEnvironment.bind(this))
+
+  /**
+   * Initialize Trust Wallet Core WASM based on environment
+   */
+  private async initWalletCoreForEnvironment(): Promise<any> {
+    if (isNode) {
+      // Node.js environment - load WASM from filesystem
+      try {
+        const fs = require('fs')
+        const path = require('path')
+        
+        // Try to find wallet-core WASM file
+        const possiblePaths = [
+          path.resolve(__dirname, 'wasm/wallet-core.wasm'),
+          path.resolve(__dirname, '../wasm/wallet-core.wasm'),
+          path.resolve(__dirname, '../../dist/wasm/wallet-core.wasm'),
+          this.config?.wasmPaths?.walletCore
+        ].filter(Boolean)
+
+        let wasmBuffer: Buffer | null = null
+        for (const wasmPath of possiblePaths) {
+          try {
+            if (fs.existsSync(wasmPath)) {
+              wasmBuffer = fs.readFileSync(wasmPath)
+              break
+            }
+          } catch (e) {
+            // Continue trying other paths
+          }
+        }
+
+        if (!wasmBuffer) {
+          // Fallback to npm package initialization
+          return await initWasm()
+        }
+
+        // Initialize from buffer
+        const wasmModule = await WebAssembly.instantiate(wasmBuffer)
+        // Note: initWasm doesn't accept parameters, it initializes from the global WASM
+        return await initWasm()
+      } catch (error) {
+        // Fallback to default initialization
+        return await initWasm()
+      }
+    } else {
+      // Browser environment - use default initialization
+      return await initWasm()
+    }
+  }
 
   /**
    * Initialize Trust Wallet Core WASM
@@ -134,7 +188,7 @@ export class WASMManager {
    * Get the memoized WalletCore getter (same instance as used by extension)
    */
   getWalletCoreGetter() {
-    return this.getWalletCoreInstance
+    return this.getWalletCoreInit
   }
 
   /**

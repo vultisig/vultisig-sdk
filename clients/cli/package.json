@@ -11,17 +11,19 @@
     "dev": "ts-node src/cli.ts",
     "start": "node dist/cli.js",
     "clean": "rm -rf dist",
-    "test": "node tests/run-all-tests.js",
-    "test:vault": "node tests/vault-loader.test.js",
-    "test:address": "node tests/address-derivation.test.js",
-    "test:cli": "node tests/cli-integration.test.js"
+    "test": "jest",
+    "test:all": "node src/tests/run-all-tests.js",
+    "test:commands": "jest src/tests/commands.test.js",
+    "test:addresses": "jest src/tests/address-validation.test.js",
+    "test:sdk": "jest src/tests/sdk-integration.test.js",
+    "test:regression": "jest src/tests/regression.test.js"
   },
   "dependencies": {
+    "@vultisig/sdk": "workspace:*",
     "commander": "^14.0.0",
     "inquirer": "^12.9.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.2",
-    "vultisig-sdk": "workspace:*"
+    "typescript": "^5.9.2"
   },
   "keywords": [
     "vultisig",
@@ -36,6 +38,7 @@
   "author": "Vultisig",
   "license": "MIT",
   "devDependencies": {
+    "jest": "^30.1.3",
     "tsc-alias": "^1.8.16"
   }
 }

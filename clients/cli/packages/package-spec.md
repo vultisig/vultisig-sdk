@@ -44,15 +44,21 @@ Each package follows a consistent structure:
 **API Methods**:
 ```typescript
 class VultisigSigner extends AbstractSigner {
+  // Standardized methods
+  async address(): Promise<string>
+  async sign(tx: TransactionRequest): Promise<string>
+  
+  // Ethers.js compatibility methods (delegate to standardized methods)
   async getAddress(): Promise<string>
   async signTransaction(tx: TransactionRequest): Promise<string>
+  
   async signTypedData(domain, types, value): Promise<string>
   // signMessage() - not yet implemented
 }
 ```
 
 **JSON-RPC Calls**:
-- `get_address`: `{scheme: "ecdsa", curve: "secp256k1", network: "eth"}`
+- `address`: `{scheme: "ecdsa", curve: "secp256k1", network: "eth"}`
 - `sign`: `{scheme: "ecdsa", curve: "secp256k1", network: "eth", messageType: "eth_tx|eth_typed", payload: {...}}`
 
 ### 2. vultisig-btc-signer
@@ -68,7 +74,8 @@ class VultisigSigner extends AbstractSigner {
 **API Methods**:
 ```typescript
 class VultisigSigner {
-  async signPsbt(psbtBase64: string): Promise<{signedPsbtBase64?: string; finalTxHex?: string}>
+  async address(): Promise<string>
+  async sign(psbtBase64: string): Promise<{signedPsbtBase64?: string; finalTxHex?: string}>
 }
 ```
 
@@ -88,13 +95,13 @@ class VultisigSigner {
 **API Methods**:
 ```typescript
 class VultisigSigner {
-  async getAddress(): Promise<string>
+  async address(): Promise<string>
   async sign(bytes: Uint8Array): Promise<string>
 }
 ```
 
 **JSON-RPC Calls**:
-- `get_address`: `{scheme: "eddsa", curve: "ed25519", network: "sol"}`
+- `address`: `{scheme: "eddsa", curve: "ed25519", network: "sol"}`
 - `sign`: `{scheme: "eddsa", curve: "ed25519", network: "sol", messageType: "sol_tx", payload: {bytes: base64}}`
 
 ## CLI Daemon Interface
@@ -111,7 +118,7 @@ class VultisigSigner {
 ```json
 {
   "id": 1,
-  "method": "get_address|sign",
+  "method": "address|sign",
   "params": {
     "scheme": "ecdsa|eddsa",
     "curve": "secp256k1|ed25519", 
@@ -159,7 +166,7 @@ const provider = new JsonRpcProvider("https://sepolia.infura.io/v3/...");
 const signer = new VultisigSigner(provider);
 
 // Use like any ethers signer
-const tx = await signer.sendTransaction({
+const tx = await signer.sign({
   to: "0x...",
   value: ethers.parseEther("0.1")
 });
@@ -171,7 +178,7 @@ const tx = await signer.sendTransaction({
 import { VultisigSigner } from "vultisig-btc-signer";
 
 const signer = new VultisigSigner();
-const result = await signer.signPsbt(psbtBase64);
+const result = await signer.sign(psbtBase64);
 ```
 
 ### 3. Solana Transaction Signing
