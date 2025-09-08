@@ -14,9 +14,11 @@ export type JsonRpcRequest = {
     scheme: 'ecdsa'
     curve: 'secp256k1'
     network: 'eth'
-    messageType?: 'eth_tx' | 'eth_typed'
+    messageType?: 'eth_tx' | 'eth_typed' | 'eth_message'
     payload?: any
     policyContext?: any
+    signingMode?: 'fast' | 'relay' | 'local'
+    password?: string
   }
 }
 
@@ -34,19 +36,34 @@ export type JsonRpcResponse = {
   }
 }
 
+export type VultisigSignerConfig = {
+  socketPath?: string
+  mode?: 'fast' | 'relay' | 'local'
+  password?: string
+}
+
 export class VultisigSigner extends AbstractSigner {
   private socketPath: string = '/tmp/vultisig.sock'
   private requestId: number = 1
+  private signingMode: 'fast' | 'relay' | 'local' = 'fast' // Default to fast
+  private password?: string
 
-  constructor(provider?: Provider) {
+  constructor(provider?: Provider, config?: VultisigSignerConfig) {
     super(provider)
+    
+    if (config?.socketPath) {
+      this.socketPath = config.socketPath
+    }
+    if (config?.mode) {
+      this.signingMode = config.mode
+    }
+    if (config?.password) {
+      this.password = config.password
+    }
   }
 
+  // Required by AbstractSigner interface
   async getAddress(): Promise<string> {
-    return this.address()
-  }
-
-  async address(): Promise<string> {
     const request: JsonRpcRequest = {
       id: this.requestId++,
       method: 'get_address',
@@ -70,11 +87,8 @@ export class VultisigSigner extends AbstractSigner {
     return response.result.address
   }
 
+  // Required by AbstractSigner interface
   async signTransaction(tx: TransactionRequest): Promise<string> {
-    return this.sign(tx)
-  }
-
-  async sign(tx: TransactionRequest): Promise<string> {
     // Ensure transaction has required fields
     const transaction = {
       to: tx.to,
@@ -100,6 +114,8 @@ export class VultisigSigner extends AbstractSigner {
         network: 'eth',
         messageType: 'eth_tx',
         payload: transaction,
+        signingMode: this.signingMode,
+        password: this.password
       },
     }
 
@@ -111,6 +127,11 @@ export class VultisigSigner extends AbstractSigner {
 
     if (!response.result?.signature) {
       throw new Error('No signature returned from daemon')
+    }
+
+    // Prefer serialized transaction if daemon provided it
+    if (response.result?.raw) {
+      return response.result.raw
     }
 
     return response.result.signature
@@ -134,6 +155,8 @@ export class VultisigSigner extends AbstractSigner {
           types,
           value,
         },
+        signingMode: this.signingMode,
+        password: this.password
       },
     }
 
@@ -150,9 +173,37 @@ export class VultisigSigner extends AbstractSigner {
     return response.result.signature
   }
 
-  // Not implemented yet - requires message signing support in daemon
-  async signMessage(_message: string): Promise<string> {
-    throw new Error('Message signing not yet implemented')
+  async signMessage(message: string | Uint8Array): Promise<string> {
+    // Convert message to string if it's Uint8Array
+    const messageStr = typeof message === 'string' 
+      ? message 
+      : new TextDecoder().decode(message)
+
+    const request: JsonRpcRequest = {
+      id: this.requestId++,
+      method: 'sign',
+      params: {
+        scheme: 'ecdsa',
+        curve: 'secp256k1',
+        network: 'eth',
+        messageType: 'eth_message',
+        payload: { message: messageStr },
+        signingMode: this.signingMode,
+        password: this.password
+      },
+    }
+
+    const response = await this.sendRequest(request)
+
+    if (response.error) {
+      throw new Error(`Failed to sign message: ${response.error.message}`)
+    }
+
+    if (!response.result?.signature) {
+      throw new Error('No signature returned from daemon')
+    }
+
+    return response.result.signature
   }
 
   private async sendRequest(request: JsonRpcRequest): Promise<JsonRpcResponse> {
@@ -197,6 +248,25 @@ export class VultisigSigner extends AbstractSigner {
 
   // Override connect method to return a new signer with provider
   connect(provider: Provider): VultisigSigner {
-    return new VultisigSigner(provider)
+    return new VultisigSigner(provider, {
+      socketPath: this.socketPath,
+      mode: this.signingMode,
+      password: this.password
+    })
+  }
+
+  // Get current signing mode
+  getSigningMode(): 'fast' | 'relay' | 'local' {
+    return this.signingMode
+  }
+
+  // Set signing mode
+  setSigningMode(mode: 'fast' | 'relay' | 'local'): void {
+    this.signingMode = mode
+  }
+
+  // Set password for fast signing
+  setPassword(password: string): void {
+    this.password = password
   }
 }

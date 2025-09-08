@@ -276,4 +276,14 @@ export class Vultisig {
   ): Promise<void> {
     return this.addressBookManager.updateAddressBookEntry(chain, address, name)
   }
+
+  // === INTERNAL ACCESS FOR VAULT ===
+
+  /**
+   * Get server manager instance (internal use by Vault class)
+   * @internal
+   */
+  getServerManager(): ServerManager {
+    return this.serverManager
+  }
 }
