@@ -27,9 +27,7 @@ export class MessageRelayClient {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json'
-      },
-      // Ensure HTTPS only for browser security
-      httpsAgent: process.env.NODE_ENV === 'development' ? undefined : { rejectUnauthorized: true }
+      }
     })
   }
 
@@ -83,11 +81,11 @@ export class MessageRelayClient {
   }
 
   /**
-   * Ping relay server for health check - GET /ping
+   * Ping relay server for health check
    */
   async ping(): Promise<number> {
     const start = Date.now()
-    await this.client.get('/ping')
+    await this.client.get('/ping', { timeout: 5000 })
     return Date.now() - start
   }
 

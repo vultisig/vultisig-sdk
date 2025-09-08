@@ -21,9 +21,7 @@ export class FastVaultClient {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json'
-      },
-      // Ensure HTTPS only for browser security
-      httpsAgent: process.env.NODE_ENV === 'development' ? undefined : { rejectUnauthorized: true }
+      }
     })
   }
 
@@ -210,13 +208,21 @@ export class FastVaultClient {
   }
 
   /**
-   * Ping server for health check
+   * Ping FastVault server for health check
    */
   async ping(): Promise<number> {
     const start = Date.now()
-    // Use relay server ping endpoint
-    await axios.get('https://api.vultisig.com/router/ping', { timeout: 10000 })
-    return Date.now() - start
+    try {
+      // FastVault doesn't have /ping, use root endpoint for connectivity test
+      await this.client.get('/', { timeout: 5000 })
+      return Date.now() - start
+    } catch (error: any) {
+      // If we get any HTTP response (even 404), server is reachable
+      if (error.response?.status) {
+        return Date.now() - start
+      }
+      throw error
+    }
   }
 
   /**
