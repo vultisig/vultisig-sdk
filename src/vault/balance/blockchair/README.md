@@ -20,7 +20,7 @@ import {
   blockchairClient,
   createSmartBalanceResolver,
   getBalanceWithBlockchair,
-} from '@lib/utils/blockchair'
+} from '@src/vault/balance/blockchair'
 ```
 
 ## 🔧 Quick Start
@@ -28,7 +28,7 @@ import {
 ### Basic Usage
 
 ```typescript
-import { blockchairClient } from '@lib/utils/blockchair'
+import { blockchairClient } from '@src/vault/balance/blockchair'
 
 // Get address information
 const addressData = await blockchairClient.getAddressInfo(
@@ -46,7 +46,7 @@ const stats = await blockchairClient.getStats('ethereum')
 ### Smart Balance Resolver
 
 ```typescript
-import { createSmartBalanceResolver } from '@lib/utils/blockchair'
+import { createSmartBalanceResolver } from '@src/vault/balance/blockchair'
 
 const resolver = createSmartBalanceResolver({
   enabled: true,
@@ -68,7 +68,7 @@ import {
   blockchairFirstResolver,
   rpcOnlyResolver,
   selectiveBlockchairResolver,
-} from '@lib/utils/blockchair'
+} from '@src/vault/balance/blockchair'
 
 // Use Blockchair first, fallback to RPC
 const balance = await blockchairFirstResolver.getBalance(account)
@@ -132,7 +132,7 @@ const resolver = createSmartBalanceResolver({
 ### Advanced Configuration
 
 ```typescript
-import { createBlockchairConfig } from '@lib/utils/blockchair'
+import { createBlockchairConfig } from '@src/vault/balance/blockchair'
 
 const config = createBlockchairConfig({
   enabled: true,
@@ -145,7 +145,7 @@ const config = createBlockchairConfig({
 })
 
 // Validate configuration
-import { validateBlockchairConfig } from '@lib/utils/blockchair'
+import { validateBlockchairConfig } from '@src/vault/balance/blockchair'
 const errors = validateBlockchairConfig(config)
 if (errors.length > 0) {
   console.error('Configuration errors:', errors)
@@ -261,19 +261,19 @@ The Blockchair integration includes comprehensive tests:
 
 ```bash
 # Run Blockchair tests
-yarn test lib/utils/blockchair/
+yarn test src/vault/balance/blockchair/
 
 # Run specific test files
-yarn test lib/utils/blockchair/index.test.ts
-yarn test lib/utils/blockchair/config.test.ts
-yarn test lib/utils/blockchair/integration.test.ts
+yarn test src/vault/balance/blockchair/index.test.ts
+yarn test src/vault/balance/blockchair/config.test.ts
+yarn test src/vault/balance/blockchair/integration.test.ts
 ```
 
 ### Mocking for Tests
 
 ```typescript
 import { vi } from 'vitest'
-import { blockchairClient } from '@lib/utils/blockchair'
+import { blockchairClient } from '@src/vault/balance/blockchair'
 
 // Mock the client
 vi.mocked(blockchairClient.getAddressInfo).mockResolvedValue(mockAddressData)
@@ -300,7 +300,7 @@ try {
 ### Unsupported Chains
 
 ```typescript
-import { isChainSupportedByBlockchair } from '@lib/utils/blockchair'
+import { isChainSupportedByBlockchair } from '@src/vault/balance/blockchair'
 
 if (!isChainSupportedByBlockchair(chain)) {
   // Use RPC fallback
@@ -351,7 +351,7 @@ _Benchmarks are approximate and depend on network conditions_
 #### "Chain not supported" Error
 
 ```typescript
-import { isChainSupportedByBlockchair } from '@lib/utils/blockchair'
+import { isChainSupportedByBlockchair } from '@src/vault/balance/blockchair'
 
 if (!isChainSupportedByBlockchair(chain)) {
   // Use RPC instead
