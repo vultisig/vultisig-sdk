@@ -105,13 +105,12 @@ program
     '--network <network>',
     'Blockchain network (ETH, BTC, SOL, etc.)'
   )
-  .option('--mode <mode>', 'Signing mode: local, relay, or fast', 'relay')
+  .option('--mode <mode>', 'Signing mode: local, relay, or fast', 'fast')
   .option('--session-id <id>', 'Custom session ID')
   .option('--payload-file <file>', 'Transaction payload JSON file')
-  .option('--fast', 'Use fast mode with VultiServer (requires --password)')
   .option(
     '--password <password>',
-    'VultiServer decryption password (required for --fast mode)'
+    'VultiServer decryption password (required for fast mode)'
   )
   .action(wrapCommand(signCommand, true))
 
