@@ -8,7 +8,6 @@ export type SignOptions = {
   mode?: string
   sessionId?: string
   payloadFile?: string
-  fast?: boolean
   password?: string
 }
 
@@ -21,14 +20,14 @@ export class SignCommand {
       throw new Error('--network is required')
     }
 
-    // Validate fast mode requirements
-    if (options.fast && !options.password) {
-      throw new Error('--password is mandatory when using --fast mode')
-    }
-
-    const mode = options.mode || 'relay'
+    const mode = options.mode || 'fast'
     if (mode !== 'local' && mode !== 'relay' && mode !== 'fast') {
       throw new Error('--mode must be "local", "relay", or "fast"')
+    }
+
+    // Validate fast mode requirements
+    if (mode === 'fast' && !options.password) {
+      throw new Error('--password is required when using fast mode')
     }
 
     // Read payload
