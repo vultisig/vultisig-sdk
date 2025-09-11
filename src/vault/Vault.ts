@@ -415,7 +415,7 @@ export class Vault {
       console.log(`Fetching fresh balance for ${chain}:${address}`)
       const balance = await this.chainManager.getBalances({
         [chain]: address,
-      } as Record<string, string>)
+      })
       const chainBalance = balance[chain as keyof typeof balance]
 
       if (!chainBalance) {
@@ -508,9 +508,8 @@ export class Vault {
         console.log(
           `Fetching fresh balances for ${Object.keys(addressesToFetch).length} chains`
         )
-        const freshBalances = await this.chainManager.getBalances(
-          addressesToFetch as Record<string, string>
-        )
+        const freshBalances =
+          await this.chainManager.getBalances(addressesToFetch)
 
         // Store results and add to cache
         for (const [chain, balance] of Object.entries(freshBalances)) {
@@ -579,7 +578,7 @@ export class Vault {
       console.log(`Force refreshing balance for ${chain}:${address}`)
       const balances = await this.chainManager.getBalances({
         [chain]: address,
-      } as Record<string, string>)
+      })
       const chainBalance = balances[chain as keyof typeof balances]
 
       if (!chainBalance) {
@@ -666,9 +665,8 @@ export class Vault {
         console.log(
           `Force refreshing balances for ${Object.keys(addressesToFetch).length} chains`
         )
-        const freshBalances = await this.chainManager.getBalances(
-          addressesToFetch as Record<string, string>
-        )
+        const freshBalances =
+          await this.chainManager.getBalances(addressesToFetch)
 
         // Store results and update cache
         for (const [chain, balance] of Object.entries(freshBalances)) {

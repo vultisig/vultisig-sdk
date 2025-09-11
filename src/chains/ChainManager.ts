@@ -72,24 +72,34 @@ export class ChainManager {
    * Get balances for addresses across multiple chains
    */
   async getBalances(
-    addresses: Record<Chain, string>
-  ): Promise<Record<Chain, Balance>> {
-    const balances: Record<Chain, Balance> = {} as any
+    addresses: Record<string, string>
+  ): Promise<Record<string, Balance>> {
+    const balances: Record<string, Balance> = {}
 
-    for (const [chain, address] of Object.entries(addresses)) {
+    for (const [chainStr, address] of Object.entries(addresses)) {
       try {
-        balances[chain as Chain] = await this.getChainBalance(
-          chain as Chain,
-          address
-        )
+        // Map string chain name to Chain enum
+        const chain = this.addressDeriver.mapStringToChain(chainStr)
+        const balance = await this.getChainBalance(chain, address)
+        balances[chainStr] = balance
       } catch (error) {
-        console.error(`Failed to get balance for ${chain}:`, error)
+        console.error(`Failed to get balance for ${chainStr}:`, error)
         // Return zero balance on error
-        const feeCoin = chainFeeCoin[chain as Chain]
-        balances[chain as Chain] = {
-          amount: '0',
-          decimals: feeCoin?.decimals || 18,
-          symbol: feeCoin?.ticker || chain.toUpperCase(),
+        try {
+          const chain = this.addressDeriver.mapStringToChain(chainStr)
+          const feeCoin = chainFeeCoin[chain]
+          balances[chainStr] = {
+            amount: '0',
+            decimals: feeCoin?.decimals || 18,
+            symbol: feeCoin?.ticker || chainStr.toUpperCase(),
+          }
+        } catch (mappingError) {
+          console.error(`Failed to map chain ${chainStr}:`, mappingError)
+          balances[chainStr] = {
+            amount: '0',
+            decimals: 18,
+            symbol: chainStr.toUpperCase(),
+          }
         }
       }
     }
