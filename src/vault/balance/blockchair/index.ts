@@ -10,8 +10,8 @@
  * API Documentation: https://blockchair.com/api/docs
  */
 
-import { memoize } from '../memoize'
-import { queryUrl } from '../query/queryUrl'
+import { memoize } from '@lib/utils/memoize'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 // Blockchair API base URL
 export const BLOCKCHAIR_API_BASE = 'https://api.blockchair.com'
