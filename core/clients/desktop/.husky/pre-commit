@@ -1,3 +1,0 @@
-npx lint-staged
-
-prettier --write 'clients/desktop/wailsjs/**/*.{ts,js}'

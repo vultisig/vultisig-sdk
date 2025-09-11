@@ -1,6 +1,6 @@
-# Git Subtree Synchronization
+# Directory Synchronization
 
-This document explains how the `core/` and `lib/` directories are synchronized with the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository using git subtrees.
+This document explains how the `core/` and `lib/` directories are synchronized with the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository using git sparse checkout.
 
 ## Overview
 
@@ -8,7 +8,7 @@ The `core/` and `lib/` directories in this repository are automatically synchron
 
 ## Setup
 
-The subtrees have been configured to pull from:
+The directories are synchronized from:
 - **Repository**: https://github.com/vultisig/vultisig-windows.git
 - **Branch**: main
 - **Directories**: `core/` and `lib/`
@@ -19,7 +19,7 @@ The subtrees have been configured to pull from:
 
 ```bash
 # Sync both core/ and lib/ directories
-yarn sync:subtrees
+yarn sync:directories
 
 # Sync only core/ directory
 yarn sync:core
@@ -27,41 +27,44 @@ yarn sync:core
 # Sync only lib/ directory  
 yarn sync:lib
 
-# Check subtree status
-yarn subtree:status
+# Check directory status
+yarn directories:status
 ```
 
 ### Using the script directly
 
 ```bash
 # Show all available commands
-./scripts/subtree-manager.sh help
+./scripts/sync-directories.sh help
 
-# Sync both subtrees
-./scripts/subtree-manager.sh sync
+# Sync both directories
+./scripts/sync-directories.sh sync
 
-# Sync individual subtrees
-./scripts/subtree-manager.sh sync-core
-./scripts/subtree-manager.sh sync-lib
+# Sync individual directories
+./scripts/sync-directories.sh sync-core
+./scripts/sync-directories.sh sync-lib
 
 # Check status
-./scripts/subtree-manager.sh status
+./scripts/sync-directories.sh status
 ```
 
 ## How It Works
 
-### Git Subtree Basics
+### Git Sparse Checkout
 
-Git subtrees allow you to include and synchronize external repositories as subdirectories in your main repository. Unlike git submodules, subtrees:
-- Store the actual files in your repository (not just references)
-- Don't require special commands for other developers to work with
-- Integrate seamlessly with normal git workflows
+The synchronization uses git sparse checkout to efficiently download only the specific directories we need from the vultisig-windows repository. This approach:
+- Downloads only the required directories (not the entire repository)
+- Creates clean, independent copies of the directories
+- Allows for easy updates without complex git history management
+- Maintains full compatibility with normal git workflows
 
 ### Synchronization Process
 
-1. **Fetch**: Downloads the latest changes from vultisig-windows
-2. **Merge**: Integrates changes using `git subtree pull`
-3. **Squash**: Combines all remote commits into a single commit to keep history clean
+1. **Clone**: Creates a temporary sparse checkout of vultisig-windows
+2. **Extract**: Copies only the specified directories (core/ or lib/)
+3. **Backup**: Automatically backs up existing directories before replacement
+4. **Replace**: Updates the local directories with fresh content from upstream
+5. **Cleanup**: Removes temporary files and reports status
 
 ## Workflow
 
