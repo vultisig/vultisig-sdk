@@ -1,1 +1,0 @@
-ALTER TABLE address_book ADD COLUMN "order" REAL NOT NULL DEFAULT 0;

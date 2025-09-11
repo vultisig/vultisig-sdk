@@ -1,1 +1,0 @@
-ALTER TABLE address_book DROP COLUMN "order";
