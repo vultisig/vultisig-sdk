@@ -1,6 +1,6 @@
 /**
  * VultisigSDK - TypeScript SDK for secure multi-party computation and blockchain operations
- * 
+ *
  * This SDK provides a clean interface to Vultisig's core functionality:
  * - Multi-device vault creation and management
  * - Secure transaction signing via MPC
@@ -33,15 +33,4 @@ export * from './types'
 // WASM utilities
 export * from './wasm'
 
-// Re-export core types that are part of the public API
-export type { 
-  Vault,
-  VaultKeyShares,
-  VaultFolder,
-  VaultSecurityType,
-  ChainKind,
-  PublicKeys,
-  MpcServerType,
-  AccountCoin,
-  Coin
-} from './types'
+// Types are already exported via export * from './types' above

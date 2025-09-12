@@ -1,4 +1,4 @@
-import type { 
+import type {
   Vault,
   VaultOptions,
   VaultBackup,
@@ -12,7 +12,7 @@ import type {
   Signature,
   ReshareOptions,
   ServerStatus,
-  KeygenProgressUpdate
+  KeygenProgressUpdate,
 } from './types'
 
 import { Chain } from '@core/chain/Chain'
@@ -28,11 +28,11 @@ import { WASMManager } from './wasm'
 
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
- * 
+ *
  * Features:
  * - Multi-device vault creation and management
  * - Secure transaction signing via MPC
- * - Multi-chain blockchain support  
+ * - Multi-chain blockchain support
  * - Server-assisted operations (Fast Vault)
  * - Cross-device message relay
  * - Auto-initialization and simplified API
@@ -47,7 +47,13 @@ export class Vultisig {
   private initialized = false
   private vaults = new Map<string, any>()
   private activeVault: any = null
-  private defaultChains: string[] = ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple']
+  private defaultChains: string[] = [
+    'Bitcoin',
+    'Ethereum',
+    'Solana',
+    'THORChain',
+    'Ripple',
+  ]
   private defaultCurrency = 'USD'
 
   constructor(config?: {
@@ -72,7 +78,7 @@ export class Vultisig {
     this.mpcManager = new MPCManager(this.serverManager)
     this.chainManager = new ChainManager(this.wasmManager)
     this.addressDeriver = new AddressDeriver()
-    
+
     // Apply config defaults
     if (config?.defaultChains) {
       this.defaultChains = config.defaultChains
@@ -95,23 +101,23 @@ export class Vultisig {
    * Initialize the SDK and load WASM modules
    * Automatically initializes VaultManager with this SDK instance
    */
-  private async initialize(): Promise<void> {
+  async initialize(): Promise<void> {
     if (this.initialized) return
-    
+
     try {
       // Initialize WASM directly like the working version
       await this.wasmManager.initialize()
       const walletCore = await this.wasmManager.getWalletCore()
-      
+
       // Initialize the AddressDeriver with WalletCore
       await this.addressDeriver.initialize(walletCore)
-      
+
       // Auto-initialize VaultManager with this SDK instance
       VaultManager.init(this, {
         defaultChains: this.defaultChains,
-        defaultCurrency: this.defaultCurrency
+        defaultCurrency: this.defaultCurrency,
       })
-      
+
       this.initialized = true
     } catch (error) {
       throw new Error('Failed to initialize SDK: ' + (error as Error).message)
@@ -131,7 +137,7 @@ export class Vultisig {
    * Create new vault (auto-initializes SDK, sets as active)
    */
   async createVault(
-    name: string, 
+    name: string,
     options?: {
       type?: 'fast' | 'secure'
       keygenMode?: 'relay' | 'local'
@@ -141,15 +147,15 @@ export class Vultisig {
     }
   ): Promise<any> {
     await this.ensureInitialized()
-    
+
     // Use VaultManager to create the vault
     const vault = await VaultManager.create(name, options)
-    
+
     // Store and set as active
     const vaultId = vault.data?.publicKeys?.ecdsa || vault.summary().id
     this.vaults.set(vaultId, vault)
     this.activeVault = vault
-    
+
     return vault
   }
 
@@ -158,15 +164,15 @@ export class Vultisig {
    */
   async addVault(file: File, password?: string): Promise<any> {
     await this.ensureInitialized()
-    
+
     // Use VaultManager to add the vault
     const vault = await VaultManager.add(file, password)
-    
+
     // Store and set as active
     const vaultId = vault.data?.publicKeys?.ecdsa || vault.summary().id
     this.vaults.set(vaultId, vault)
     this.activeVault = vault
-    
+
     return vault
   }
 
@@ -183,21 +189,20 @@ export class Vultisig {
    */
   async deleteVault(vault: any): Promise<void> {
     await this.ensureInitialized()
-    
+
     const vaultId = vault.data?.publicKeys?.ecdsa || vault.summary().id
-    
+
     // Remove from VaultManager
     await VaultManager.remove(vault)
-    
+
     // Remove from our local storage
     this.vaults.delete(vaultId)
-    
+
     // Clear active vault if it was the deleted one
     if (this.activeVault === vault) {
       this.activeVault = null
     }
   }
-
 
   /**
    * Clear all stored vaults
@@ -262,18 +267,46 @@ export class Vultisig {
   getSupportedChains(): string[] {
     return [
       // EVM Chains
-      'Ethereum', 'Arbitrum', 'Base', 'Blast', 'Optimism', 'Zksync', 'Mantle',
-      'Avalanche', 'CronosChain', 'BSC', 'Polygon',
-      
-      // UTXO Chains  
-      'Bitcoin', 'Bitcoin-Cash', 'Litecoin', 'Dogecoin', 'Dash', 'Zcash',
-      
+      'Ethereum',
+      'Arbitrum',
+      'Base',
+      'Blast',
+      'Optimism',
+      'Zksync',
+      'Mantle',
+      'Avalanche',
+      'CronosChain',
+      'BSC',
+      'Polygon',
+
+      // UTXO Chains
+      'Bitcoin',
+      'Bitcoin-Cash',
+      'Litecoin',
+      'Dogecoin',
+      'Dash',
+      'Zcash',
+
       // Cosmos Chains
-      'THORChain', 'MayaChain', 'Cosmos', 'Osmosis', 'Dydx', 'Kujira', 
-      'Terra', 'TerraClassic', 'Noble', 'Akash',
-      
+      'THORChain',
+      'MayaChain',
+      'Cosmos',
+      'Osmosis',
+      'Dydx',
+      'Kujira',
+      'Terra',
+      'TerraClassic',
+      'Noble',
+      'Akash',
+
       // Other Chains
-      'Sui', 'Solana', 'Polkadot', 'Ton', 'Ripple', 'Tron', 'Cardano'
+      'Sui',
+      'Solana',
+      'Polkadot',
+      'Ton',
+      'Ripple',
+      'Tron',
+      'Cardano',
     ]
   }
 
@@ -283,12 +316,16 @@ export class Vultisig {
    */
   setDefaultChains(chains: string[]): void {
     const supportedChains = this.getSupportedChains()
-    const invalidChains = chains.filter(chain => !supportedChains.includes(chain))
-    
+    const invalidChains = chains.filter(
+      chain => !supportedChains.includes(chain)
+    )
+
     if (invalidChains.length > 0) {
-      throw new Error(`Unsupported chains: ${invalidChains.join(', ')}. Supported chains: ${supportedChains.join(', ')}`)
+      throw new Error(
+        `Unsupported chains: ${invalidChains.join(', ')}. Supported chains: ${supportedChains.join(', ')}`
+      )
     }
-    
+
     this.defaultChains = chains
     if (this.initialized) {
       VaultManager.setDefaultChains(chains)
@@ -317,7 +354,13 @@ export class Vultisig {
    * Create a Fast Vault where VultiServer acts as the second device
    * This is the most convenient method for single-device usage
    */
-  async createFastVault(options: { name: string; email: string; password: string; onLog?: (message: string) => void; onProgress?: (u: KeygenProgressUpdate) => void }): Promise<{
+  async createFastVault(options: {
+    name: string
+    email: string
+    password: string
+    onLog?: (message: string) => void
+    onProgress?: (u: KeygenProgressUpdate) => void
+  }): Promise<{
     vault: Vault
     vaultId: string
     verificationRequired: boolean
@@ -370,14 +413,20 @@ export class Vultisig {
   /**
    * Sign transaction using VultiServer
    */
-  async signWithServer(vault: Vault, payload: SigningPayload): Promise<Signature> {
+  async signWithServer(
+    vault: Vault,
+    payload: SigningPayload
+  ): Promise<Signature> {
     return this.serverManager.signWithServer(vault, payload)
   }
 
   /**
    * Reshare vault participants
    */
-  async reshareVault(vault: Vault, reshareOptions: ReshareOptions): Promise<Vault> {
+  async reshareVault(
+    vault: Vault,
+    reshareOptions: ReshareOptions
+  ): Promise<Vault> {
     return this.serverManager.reshareVault(vault, reshareOptions)
   }
 
@@ -391,15 +440,27 @@ export class Vultisig {
   }
 
   // ===== Relay session helpers =====
-  async startRelaySession(params: { serverUrl: string; sessionId: string; devices: string[] }): Promise<void> {
+  async startRelaySession(params: {
+    serverUrl: string
+    sessionId: string
+    devices: string[]
+  }): Promise<void> {
     return this.serverManager.startRelaySession(params)
   }
 
-  async joinRelaySession(params: { serverUrl: string; sessionId: string; localPartyId: string }): Promise<void> {
+  async joinRelaySession(params: {
+    serverUrl: string
+    sessionId: string
+    localPartyId: string
+  }): Promise<void> {
     return this.serverManager.joinRelaySession(params)
   }
 
-  async getRelayPeerOptions(params: { serverUrl: string; sessionId: string; localPartyId: string }): Promise<string[]> {
+  async getRelayPeerOptions(params: {
+    serverUrl: string
+    sessionId: string
+    localPartyId: string
+  }): Promise<string[]> {
     return this.serverManager.getRelayPeerOptions(params)
   }
 
@@ -426,13 +487,12 @@ export class Vultisig {
 
   // ===== Vault handling operations (wrapping existing core/lib code) =====
 
-
   /**
    * Export vault to backup format
    */
   async exportVault(vault: Vault, options?: ExportOptions): Promise<Blob> {
     await this.ensureInitialized()
-    
+
     // Use the vault's export method directly
     return vault.export(options?.password)
   }
@@ -447,7 +507,10 @@ export class Vultisig {
   /**
    * Import vault from file (ArrayBuffer or File)
    */
-  async importVaultFromFile(fileData: ArrayBuffer | File, password?: string): Promise<Vault> {
+  async importVaultFromFile(
+    fileData: ArrayBuffer | File,
+    password?: string
+  ): Promise<Vault> {
     return this.vaultManager.importVaultFromFile(fileData, password)
   }
 
@@ -470,28 +533,38 @@ export class Vultisig {
   /**
    * Get addresses for vault across specific chains
    */
-  async getAddresses(vault: Vault, chains: Chain[]): Promise<Record<Chain, string>> {
+  async getAddresses(
+    vault: Vault,
+    chains: Chain[]
+  ): Promise<Record<Chain, string>> {
     return this.chainManager.getAddresses(vault, chains)
   }
 
   /**
    * Get addresses for vault across chain kinds (categories)
    */
-  async getAddressesByKind(vault: Vault, chainKinds: ChainKind[]): Promise<Record<ChainKind, string>> {
+  async getAddressesByKind(
+    vault: Vault,
+    chainKinds: ChainKind[]
+  ): Promise<Record<ChainKind, string>> {
     return this.chainManager.getAddressesByKind(vault, chainKinds)
   }
 
   /**
    * Get balances for addresses across specific chains
    */
-  async getBalances(addresses: Record<Chain, string>): Promise<Record<Chain, Balance>> {
+  async getBalances(
+    addresses: Record<Chain, string>
+  ): Promise<Record<Chain, Balance>> {
     return this.chainManager.getBalances(addresses)
   }
 
   /**
    * Get balances for chain kinds
    */
-  async getBalancesByKind(addresses: Record<ChainKind, string>): Promise<Record<ChainKind, Balance>> {
+  async getBalancesByKind(
+    addresses: Record<ChainKind, string>
+  ): Promise<Record<ChainKind, Balance>> {
     return this.chainManager.getBalancesByKind(addresses)
   }
 
@@ -500,14 +573,17 @@ export class Vultisig {
    */
   async getVaultBalances(vault: Vault): Promise<Record<string, Balance>> {
     await this.ensureInitialized()
-    
+
     // Define common chains to check
     const commonChains = ['bitcoin', 'ethereum', 'thorchain', 'litecoin']
-    
+
     try {
       // Get addresses for the vault using AddressDeriver
-      const addresses = await this.addressDeriver.deriveMultipleAddresses(vault, commonChains)
-      
+      const addresses = await this.addressDeriver.deriveMultipleAddresses(
+        vault,
+        commonChains
+      )
+
       // Get balances for each address (mock implementation for now)
       const result: Record<string, Balance> = {}
       for (const [chain, address] of Object.entries(addresses)) {
@@ -515,10 +591,10 @@ export class Vultisig {
         result[chain] = {
           amount: '0',
           decimals: 8,
-          symbol: chain.toUpperCase()
+          symbol: chain.toUpperCase(),
         }
       }
-      
+
       return result
     } catch (error) {
       throw new Error(`Failed to get vault balances: ${error}`)
@@ -551,7 +627,7 @@ export class Vultisig {
     const error = validateEmail(email)
     return {
       valid: !error,
-      error
+      error,
     }
   }
 
@@ -564,21 +640,21 @@ export class Vultisig {
     if (!password) {
       return {
         valid: false,
-        error: 'Password is required'
+        error: 'Password is required',
       }
     }
 
     if (password.length < passwordLenghtConfig.min) {
       return {
         valid: false,
-        error: `Password must be at least ${passwordLenghtConfig.min} character${passwordLenghtConfig.min === 1 ? '' : 's'} long`
+        error: `Password must be at least ${passwordLenghtConfig.min} character${passwordLenghtConfig.min === 1 ? '' : 's'} long`,
       }
     }
 
     if (password.length > passwordLenghtConfig.max) {
       return {
         valid: false,
-        error: `Password must be no more than ${passwordLenghtConfig.max} characters long`
+        error: `Password must be no more than ${passwordLenghtConfig.max} characters long`,
       }
     }
 
@@ -594,30 +670,30 @@ export class Vultisig {
     if (!name) {
       return {
         valid: false,
-        error: 'Vault name is required'
+        error: 'Vault name is required',
       }
     }
 
     if (typeof name !== 'string') {
       return {
         valid: false,
-        error: 'Vault name must be a string'
+        error: 'Vault name must be a string',
       }
     }
 
     const trimmedName = name.trim()
-    
+
     if (trimmedName.length < 2) {
       return {
         valid: false,
-        error: 'Vault name must be at least 2 characters long'
+        error: 'Vault name must be at least 2 characters long',
       }
     }
 
     if (trimmedName.length > 50) {
       return {
         valid: false,
-        error: 'Vault name must be no more than 50 characters long'
+        error: 'Vault name must be no more than 50 characters long',
       }
     }
 
