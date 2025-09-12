@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
-import { VultisigSDK } from 'vultisig-sdk'
+import { Vultisig } from 'vultisig-sdk'
 type Vault = any
+import { AddressDerivationTester } from './components/AddressDerivationTester'
 import BalanceDisplay from './components/BalanceDisplay'
 import { CreateVaultForm } from './components/CreateVaultForm'
 import { CurrentVaultPanel } from './components/CurrentVaultPanel'
@@ -9,7 +10,6 @@ import { KeysharesList } from './components/KeysharesList'
 import { LoadVaultModal } from './components/LoadVaultModal'
 import { ServerStatus } from './components/ServerStatus'
 import { VaultDisplay } from './components/VaultDisplay'
-import { AddressDerivationTester } from './components/AddressDerivationTester'
 import { useKeysharesStorage } from './hooks/useKeysharesStorage'
 import { useServerStatus } from './hooks/useServerStatus'
 import type { LoadedKeyshare } from './types'
@@ -18,7 +18,7 @@ import { buildVultFile } from './utils/exportVault'
 function App() {
   const [sdk] = useState(
     () =>
-      new VultisigSDK({
+      new Vultisig({
         serverEndpoints: {
           fastVault: 'https://api.vultisig.com/vault',
           messageRelay: 'https://api.vultisig.com/router',

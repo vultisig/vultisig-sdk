@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { Vault, VultisigSDK } from 'vultisig-sdk'
+import type { Vault, Vultisig } from 'vultisig-sdk'
 
 import type { LoadedKeyshare } from '../types'
 
 type LoadVaultModalProps = {
   keyshare: LoadedKeyshare
-  sdk: VultisigSDK
+  sdk: Vultisig
   onClose: () => void
   onVaultLoaded: (v: Vault, options?: { serverVerified?: boolean }) => void
   onInitialize: () => Promise<void>

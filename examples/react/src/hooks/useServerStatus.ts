@@ -1,9 +1,9 @@
 export type ServerStatus = 'checking' | 'online' | 'offline'
 
 import { useEffect, useState } from 'react'
-import { VultisigSDK } from 'vultisig-sdk'
+import { Vultisig } from 'vultisig-sdk'
 
-export function useServerStatus(sdk: VultisigSDK) {
+export function useServerStatus(sdk: Vultisig) {
   const [serverStatus, setServerStatus] = useState<ServerStatus>('checking')
 
   useEffect(() => {

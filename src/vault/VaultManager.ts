@@ -172,7 +172,11 @@ export class VaultManager {
       const securityType = determineVaultType(vault.signers)
 
       // Apply global settings and normalize
-      const normalizedVault = this.applyGlobalSettings(vault, isEncrypted, securityType)
+      const normalizedVault = this.applyGlobalSettings(
+        vault,
+        isEncrypted,
+        securityType
+      )
 
       // Store the vault
       this.vaultStorage.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
@@ -181,6 +185,7 @@ export class VaultManager {
       const vaultInstance = new VaultClass(
         normalizedVault,
         this.sdkInstance?.wasmManager?.getWalletCore(),
+        this.sdkInstance?.wasmManager,
         this.sdkInstance
       )
 
@@ -225,6 +230,7 @@ export class VaultManager {
       const vaultInstance = new VaultClass(
         vault,
         this.sdkInstance?.wasmManager?.getWalletCore(),
+        this.sdkInstance?.wasmManager,
         this.sdkInstance
       )
       const summary = vaultInstance.summary()
@@ -267,15 +273,18 @@ export class VaultManager {
   /**
    * Update vault in storage
    */
-  static async update(vault: VaultClass, updates: Partial<Vault>): Promise<void> {
+  static async update(
+    vault: VaultClass,
+    updates: Partial<Vault>
+  ): Promise<void> {
     const vaultId = vault.data.publicKeys.ecdsa
     const storedVault = this.vaultStorage.get(vaultId)
-    
+
     if (storedVault) {
       // Apply updates to stored vault
       Object.assign(storedVault, updates)
       this.vaultStorage.set(vaultId, storedVault)
-      
+
       // Update the vault instance data as well
       Object.assign(vault.data, updates)
     }
@@ -414,7 +423,8 @@ export class VaultManager {
       } else {
         // Check if saved entry already exists
         const existingIndex = this.addressBookData.saved.findIndex(
-          existing => existing.chain === entry.chain && existing.address === entry.address
+          existing =>
+            existing.chain === entry.chain && existing.address === entry.address
         )
 
         if (existingIndex === -1) {
@@ -481,7 +491,7 @@ export class VaultManager {
   }
 
   // Note: Global configuration methods are already implemented above
-  
+
   // === VAULT SETTINGS INHERITANCE ===
   /**
    * Apply global chains/currency to vault
@@ -519,7 +529,10 @@ export class VaultManager {
       // Store cached properties that will be used by Vault class
       _cachedEncryptionStatus: isEncrypted,
       _cachedSecurityType: securityType,
-    } as Vault & { _cachedEncryptionStatus: boolean; _cachedSecurityType: 'fast' | 'secure' }
+    } as Vault & {
+      _cachedEncryptionStatus: boolean
+      _cachedSecurityType: 'fast' | 'secure'
+    }
   }
 
   /**
@@ -560,7 +573,9 @@ export class VaultManager {
    * Static method to get cached security type from a vault instance
    * This avoids re-calculating the security type if it's already cached
    */
-  static getCachedSecurityType(vault: VaultClass): 'fast' | 'secure' | undefined {
+  static getCachedSecurityType(
+    vault: VaultClass
+  ): 'fast' | 'secure' | undefined {
     return vault.getCachedSecurityType()
   }
 
@@ -568,7 +583,10 @@ export class VaultManager {
    * Static method to get encryption status with fallback to file-based checking
    * If the vault has cached encryption status, returns it; otherwise checks the file
    */
-  static async getEncryptionStatus(vault: VaultClass, file?: File): Promise<boolean> {
+  static async getEncryptionStatus(
+    vault: VaultClass,
+    file?: File
+  ): Promise<boolean> {
     // Try to get cached value first
     const cached = this.getCachedEncryptionStatus(vault)
     if (cached !== undefined) {
