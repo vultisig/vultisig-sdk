@@ -1,11 +1,11 @@
-import type { VultisigSDK } from 'vultisig-sdk'
+import type { Vultisig } from 'vultisig-sdk'
 
 export const CurrentVaultPanel = ({
   onDisconnect,
   onOpenExport,
 }: {
   vault: any
-  sdk: VultisigSDK
+  sdk: Vultisig
   serverVerified: boolean
   onDisconnect: () => void
   onOpenExport: () => void
