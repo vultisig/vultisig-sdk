@@ -1,5 +1,6 @@
 import { ChainKind, getChainKind } from '@core/chain/ChainKind'
 
+import { BalanceLookupError, classifyBalanceError } from './errors'
 import { CoinBalanceResolver } from './resolver'
 import { getCardanoCoinBalance } from './resolvers/cardano'
 import { getCosmosCoinBalance } from './resolvers/cosmos'
@@ -11,10 +12,9 @@ import { getSuiCoinBalance } from './resolvers/sui'
 import { getTonCoinBalance } from './resolvers/ton'
 import { getTronCoinBalance } from './resolvers/tron'
 import { getUtxoCoinBalance } from './resolvers/utxo'
-import { classifyBalanceError, BalanceLookupError } from './errors'
 
 // Balance lookup monitoring and error tracking
-interface BalanceLookupResult {
+type BalanceLookupResult = {
   chain: string
   address: string
   success: boolean
