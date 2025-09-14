@@ -74,8 +74,9 @@ export class ServerManager {
   }
 
   /**
-   * Sign transaction using VultiServer (proper MPC flow)
-   * Uses existing core keysign functionality
+   * Sign transaction using VultiServer (two-step approach like extension)
+   * Step 1: Call FastVault server API to initiate signing
+   * Step 2: Use MPC keysign with server coordination (skipping setup message)
    */
   async signWithServer(vault: Vault, payload: SigningPayload, vaultPassword: string): Promise<Signature> {
     // Validate vault is a fast vault
@@ -84,8 +85,7 @@ export class ServerManager {
       throw new Error('Vault does not have VultiServer - fast signing not available')
     }
 
-    // Use existing core functionality for signing
-    const { keysign } = await import('@core/mpc/keysign')
+    // Import required core functions
     const { getChainKind } = await import('@core/chain/ChainKind')
     const { signatureAlgorithms } = await import('@core/chain/signing/SignatureAlgorithm')
     const { initWasm } = await import('@trustwallet/wallet-core')
@@ -93,6 +93,7 @@ export class ServerManager {
     const { AddressDeriver } = await import('../chains/AddressDeriver')
     const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
     const { shouldBePresent } = await import('@lib/utils/assert/shouldBePresent')
+    const { signWithServer: callFastVaultAPI } = await import('@core/mpc/fast/api/signWithServer')
 
     // Initialize required components
     const walletCore = await initWasm()
@@ -106,66 +107,59 @@ export class ServerManager {
     const chainKind = getChainKind(chain)
     const signatureAlgorithm = signatureAlgorithms[chainKind]
 
-    // Prepare messages for signing — use provided hex message hashes per spec
+    // Prepare messages for signing
     const messages = shouldBePresent(payload.messageHashes, 'payload.messageHashes')
 
     // Generate session parameters
     const sessionId = generateSessionId()
     const hexEncryptionKey = await generateEncryptionKey()
 
-    console.log('🔄 Starting fast signing with existing core functions...')
+    console.log('🔄 Starting fast signing with two-step approach...')
 
-    // Step 1: Join relay session FIRST and register local party
+    // STEP 1: Call FastVault server API (like extension's FastKeysignServerStep)
+    console.log('📡 Step 1: Calling FastVault server API...')
+    await callFastVaultAPI({
+      public_key: vault.publicKeys.ecdsa,
+      messages,
+      session: sessionId,
+      hex_encryption_key: hexEncryptionKey,
+      derive_path: derivePath,
+      is_ecdsa: signatureAlgorithm === 'ecdsa',
+      vault_password: vaultPassword
+    })
+
+    // STEP 2: Set up relay session and wait for server
+    console.log('🔗 Step 2: Setting up relay session...')
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       localPartyId: vault.localPartyId
     })
 
-    // Mark session started (helps some relay deployments accept setup-message)
+    // Mark session started
     try {
       await fetch(`${this.config.messageRelay}/start/${sessionId}`, { method: 'POST' })
     } catch (_) {
       // non-fatal; proceed regardless
     }
 
-    // Step 2: Kick off signing on FastVault server
-    await this.fastVaultClient.signWithServer({
-      publicKey: vault.publicKeys.ecdsa,
-      messages,
-      session: sessionId,
-      hexEncryptionKey,
-      derivePath: derivePath,
-      isEcdsa: signatureAlgorithm === 'ecdsa',
-      vaultPassword
-    })
-    
-    // Step 3: Wait for server to join session
+    // Wait for server to join session
     const devices = await this.waitForPeers(sessionId, vault.localPartyId)
-    
-    // Step 4: Use existing keysign function for MPC signing (handles its own session management)
-    const keyShare = vault.keyShares[signatureAlgorithm]
-      if (!keyShare) {
-        throw new Error(`No key share found for algorithm: ${signatureAlgorithm}`)
-      }
-      
     const peers = devices.filter(device => device !== vault.localPartyId)
     
-    // Sign the first message using existing core keysign
-        const signature = await keysign({
-          keyShare,
-          signatureAlgorithm: signatureAlgorithm as any,
+    // STEP 3: Use fast keysign (skip setup message since server is coordinating)
+    console.log('🔐 Step 3: Performing MPC keysign with server coordination...')
+    const signature = await this.performFastKeysign({
+      vault,
+      signatureAlgorithm,
       message: messages[0],
-      chainPath: derivePath.replaceAll("'", ''),
-      localPartyId: vault.localPartyId,
-          peers,
-      serverUrl: this.config.messageRelay,
+      derivePath,
+      peers,
       sessionId,
-      hexEncryptionKey: vault.hexChainCode,
-      isInitiatingDevice: true,
+      hexEncryptionKey
     })
     
-    console.log('✅ Fast signing completed using core functions!')
+    console.log('✅ Fast signing completed using two-step approach!')
 
     const recoveryId = signature.recovery_id
       ? parseInt(signature.recovery_id, 16)
@@ -181,6 +175,116 @@ export class ServerManager {
             : 'DER',
       recovery: recoveryId,
     }
+  }
+
+  /**
+   * Perform fast keysign with server coordination (bypasses setup message)
+   * Simplified version that uses core keysign with local setup message
+   */
+  private async performFastKeysign(params: {
+    vault: Vault
+    signatureAlgorithm: string
+    message: string
+    derivePath: string
+    peers: string[]
+    sessionId: string
+    hexEncryptionKey: string
+  }): Promise<any> {
+    // Import required core functions
+    const { initializeMpcLib } = await import('@core/mpc/lib/initialize')
+    const { makeSetupMessage } = await import('@core/mpc/keysign/setupMessage/make')
+    const { makeSignSession, SignSession } = await import('@core/mpc/lib/signSession')
+    const { getMessageHash } = await import('@core/mpc/getMessageHash')
+    const { shouldBePresent } = await import('@lib/utils/assert/shouldBePresent')
+    
+    const keyShare = params.vault.keyShares[params.signatureAlgorithm]
+    if (!keyShare) {
+      throw new Error(`No key share found for algorithm: ${params.signatureAlgorithm}`)
+    }
+
+    await initializeMpcLib(params.signatureAlgorithm as any)
+    const messageId = getMessageHash(params.message)
+
+    // Create setup message locally (skip server upload/download)
+    const devices = [params.vault.localPartyId, ...params.peers]
+    const setupMessage = makeSetupMessage({
+      keyShare,
+      chainPath: params.derivePath.replaceAll("'", ''),
+      message: params.message,
+      devices,
+      signatureAlgorithm: params.signatureAlgorithm as any,
+    })
+
+    const session = makeSignSession({
+      setupMessage,
+      localPartyId: params.vault.localPartyId,
+      keyShare,
+      signatureAlgorithm: params.signatureAlgorithm as any,
+    })
+
+    const setupMessageHash = shouldBePresent(
+      SignSession[params.signatureAlgorithm as any].setupMessageHash(setupMessage),
+      'Setup message hash'
+    )
+
+    if (params.message != Buffer.from(setupMessageHash).toString('hex')) {
+      throw new Error('Setup message hash does not match the original message')
+    }
+
+    // Use the existing core MPC message processing (simplified)
+    const { sendMpcRelayMessage } = await import('@core/mpc/message/relay/send')
+    const { getMpcRelayMessages } = await import('@core/mpc/message/relay/get')
+    const { deleteMpcRelayMessage } = await import('@core/mpc/message/relay/delete')
+    const { toMpcServerMessage, fromMpcServerMessage } = await import('@core/mpc/message/server')
+    
+    // Simple message exchange loop
+    while (!session.isFinished()) {
+      // Send outbound messages
+      const outboundMessages = session.outboundMessages()
+      for (const receiver of outboundMessages) {
+        const encryptedMessage = toMpcServerMessage(receiver.message, params.hexEncryptionKey)
+        await sendMpcRelayMessage({
+          serverUrl: this.config.messageRelay,
+          sessionId: params.sessionId,
+          messageId,
+          message: {
+            session_id: params.sessionId,
+            from: params.vault.localPartyId,
+            to: [receiver.to],
+            body: encryptedMessage,
+            hash: receiver.hash,
+            sequence_no: 0,
+          },
+        })
+      }
+
+      // Get inbound messages
+      const relayMessages = await getMpcRelayMessages({
+        serverUrl: this.config.messageRelay,
+        localPartyId: params.vault.localPartyId,
+        sessionId: params.sessionId,
+        messageId,
+      })
+
+      for (const msg of relayMessages) {
+        if (session.inputMessage(fromMpcServerMessage(msg.body, params.hexEncryptionKey))) {
+          // Delete processed message
+          await deleteMpcRelayMessage({
+            serverUrl: this.config.messageRelay,
+            localPartyId: params.vault.localPartyId,
+            sessionId: params.sessionId,
+            messageHash: msg.hash,
+            messageId,
+          })
+          return session.finish()
+        }
+      }
+
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+
+    return session.finish()
   }
 
   /**
