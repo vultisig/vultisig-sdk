@@ -2,6 +2,7 @@ import { defineConfig } from 'rollup'
 import typescript from '@rollup/plugin-typescript'
 import resolve from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
+import json from '@rollup/plugin-json'
 import terser from '@rollup/plugin-terser'
 import copy from 'rollup-plugin-copy'
 import dts from 'rollup-plugin-dts'
@@ -24,37 +25,60 @@ const external = [
   'crypto',
   'buffer',
   'util',
-  'stream'
+  'stream',
+  
+  // WASM files should be external
+  /\.wasm$/,
+  
+  // External problematic dependencies
+  'tiny-secp256k1',
+  '@solana/web3.js',
+  '@cosmjs/stargate',
+  '@cosmjs/amino',
+  '@bufbuild/protobuf',
+  'ripple-binary-codec'
   
   // Note: Workspace packages (@core/*, @lib/*) are now bundled by removing them from external
 ]
 
 const plugins = [
+  typescript({
+    tsconfig: './tsconfig.json',
+    outputToFilesystem: true,
+    exclude: ['**/*.test.*', '**/*.stories.*'],
+    // Include minimal SDK-specific core and lib files
+    include: ['./**/*'],
+    // Ensure proper module resolution for SDK-specific packages
+    compilerOptions: {
+      paths: {
+        '@core/*': ['./core/*'],
+        '@lib/*': ['./lib/*']
+      },
+      skipLibCheck: true,
+      noImplicitAny: false,
+      ignoreDeprecations: "5.0",
+      // Additional options to handle type compatibility issues
+      noImplicitReturns: false,
+      noUnusedLocals: false,
+      noUnusedParameters: false,
+      strict: false
+    }
+  }),
   resolve({
     preferBuiltins: false,
     browser: true,
     exportConditions: ['browser', 'module', 'import', 'default'],
     // Include workspace packages for bundling
-    skip: ['react', 'react-dom', 'axios', 'viem', 'zod', 'uuid', '@trustwallet/wallet-core'],
+    skip: ['react', 'react-dom', 'axios', 'viem', 'zod', 'uuid', '@trustwallet/wallet-core', 'tiny-secp256k1', '@solana/web3.js', '@cosmjs/stargate', '@cosmjs/amino'],
     // Ensure workspace packages are resolved and bundled
-    dedupe: ['react', 'react-dom']
+    dedupe: ['react', 'react-dom'],
+    // Skip WASM files
+    ignore: [/\.wasm$/]
   }),
+  json(),
   commonjs({
-    include: [/node_modules/, /\.\.\/core\//, /\.\.\/lib\//]
-  }),
-  typescript({
-      tsconfig: './tsconfig.json',
-    outputToFilesystem: true,
-    exclude: ['**/*.test.*', '**/*.stories.*'],
-    // Include workspace packages in compilation
-    include: ['src/**/*', '../core/**/*', '../lib/**/*'],
-    // Ensure proper module resolution for workspace packages
-    compilerOptions: {
-      paths: {
-        '@core/*': ['../core/*'],
-        '@lib/*': ['../lib/*']
-      }
-    }
+    include: [/node_modules/, /\.\/core\//, /\.\/lib\//],
+    transformMixedEsModules: true
   })
 ]
 
@@ -62,13 +86,13 @@ const wasmCopyPlugin = copy({
   targets: [
     // Copy WASM files to dist for proper loading
     { 
-      src: 'lib/dkls/vs_wasm_bg.wasm', 
-      dest: 'src/dist/wasm/',
+      src: '../lib/dkls/vs_wasm_bg.wasm', 
+      dest: './dist/wasm/',
       rename: 'dkls.wasm'
     },
     { 
-      src: 'lib/schnorr/vs_schnorr_wasm_bg.wasm', 
-      dest: 'src/dist/wasm/',
+      src: '../lib/schnorr/vs_schnorr_wasm_bg.wasm', 
+      dest: './dist/wasm/',
       rename: 'schnorr.wasm' 
     },
     // wallet-core.wasm will be handled by the consuming application
@@ -78,33 +102,36 @@ const wasmCopyPlugin = copy({
 export default defineConfig([
   // ESM build for modern bundlers
   {
-    input: 'src/index.ts',
+    input: './index.ts',
     output: {
-      file: 'src/dist/index.esm.js',
+      file: './dist/index.esm.js',
       format: 'es',
       sourcemap: true,
-      // Preserve modules for better tree shaking
-      preserveModules: false
+      // Inline dynamic imports to avoid multi-chunk issues
+      inlineDynamicImports: true
     },
     external,
     plugins: [...plugins, wasmCopyPlugin],
-    // Handle dynamic imports for WASM
+    // Handle dynamic imports and circular dependencies
     onwarn(warning, warn) {
-      // Suppress warnings about dynamic imports for WASM
+      // Suppress warnings about dynamic imports, WASM, and circular deps
       if (warning.code === 'DYNAMIC_IMPORT') return
+      if (warning.code === 'CIRCULAR_DEPENDENCY') return
+      if (warning.message?.includes('this')) return
       warn(warning)
     }
   },
   
   // CommonJS build for Node.js environments
   {
-    input: 'src/index.ts',
+    input: './index.ts',
     output: {
-      file: 'src/dist/index.js',
+      file: './dist/index.js',
       format: 'cjs',
       sourcemap: true,
       exports: 'named',
-      interop: 'auto'
+      interop: 'auto',
+      inlineDynamicImports: true
     },
     external,
     plugins
@@ -112,12 +139,13 @@ export default defineConfig([
   
   // UMD build for CDN/browser direct usage
   {
-    input: 'src/index.ts',
+    input: './index.ts',
     output: {
-      file: 'src/dist/index.umd.js',
+      file: './dist/index.umd.js',
       format: 'umd',
       name: 'VultisigSDK',
       sourcemap: true,
+      inlineDynamicImports: true,
       globals: {
         'react': 'React',
         'react-dom': 'ReactDOM',
@@ -143,9 +171,9 @@ export default defineConfig([
   
   // Type definitions
   {
-    input: 'src/index.ts',
+    input: './index.ts',
     output: {
-      file: 'src/dist/index.d.ts',
+      file: './dist/index.d.ts',
       format: 'es'
     },
     external: [

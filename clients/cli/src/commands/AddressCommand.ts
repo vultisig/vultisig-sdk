@@ -4,9 +4,12 @@ import * as path from 'path'
 // SDK will be made available globally by the launcher
 declare const VultisigSDK: any
 import { DaemonManager } from '../daemon/DaemonManager'
+import { getVaultConfig } from '../utils/env'
 
 export type AddressOptions = {
   network?: string
+  vault?: string
+  password?: string
 }
 
 export class AddressCommand {
@@ -19,25 +22,72 @@ export class AddressCommand {
     const networks = options.network || 'all'
     const requestedChains = this.parseNetworks(networks)
 
-    // Try to get addresses from running daemon first
-    try {
-      const daemonManager = new DaemonManager()
-      const addresses = await daemonManager.addresses(requestedChains)
+    // Get vault configuration with automatic fallback logic
+    const vaultConfig = getVaultConfig(options.vault, options.password)
 
-      console.log('\n=== Addresses (from daemon) ===')
-      for (const [chainKey, address] of Object.entries(addresses)) {
-        const chainName = this.getChainName(chainKey)
-        if (address.startsWith('Error:')) {
-          console.log(`  ❌ ${chainName}: ${address}`)
-        } else {
-          console.log(`  ✅ ${chainName}: ${address}`)
+    // Check if daemon is running or if we need to load vault directly
+    const daemonManager = new DaemonManager()
+    let shouldLoadDirectly = false
+    
+    if (vaultConfig.vaultPath || vaultConfig.vaultPassword) {
+      shouldLoadDirectly = await daemonManager.autoStartDaemonIfNeeded({
+        vault: vaultConfig.vaultPath,
+        password: vaultConfig.vaultPassword
+      })
+    }
+
+    // If daemon is running, get addresses from it
+    if (!shouldLoadDirectly) {
+      try {
+        const addresses = await daemonManager.addresses(requestedChains)
+
+        console.log('\n=== Addresses (from daemon) ===')
+        for (const [chainKey, address] of Object.entries(addresses)) {
+          const chainName = this.getChainName(chainKey)
+          if (address.startsWith('Error:')) {
+            console.log(`  ❌ ${chainName}: ${address}`)
+          } else {
+            console.log(`  ✅ ${chainName}: ${address}`)
+          }
         }
-      }
 
-      console.log('\n💡 Addresses retrieved from running daemon')
-      return
-    } catch (error) {
-      // Daemon not running, try to use active vault directly
+        console.log('\n💡 Addresses retrieved from running daemon')
+        return
+      } catch (error) {
+        // Daemon not running, continue to direct vault loading
+        shouldLoadDirectly = true
+      }
+    }
+
+    // Load vault directly for this operation
+    if (shouldLoadDirectly && (vaultConfig.vaultPath || vaultConfig.vaultPassword)) {
+      try {
+        await daemonManager.performEphemeralOperation(
+          {
+            vault: vaultConfig.vaultPath,
+            password: vaultConfig.vaultPassword
+          },
+          async (vault) => {
+            console.log('\n=== Addresses (ephemeral vault) ===')
+            for (const chain of requestedChains) {
+              try {
+                const address = await vault.address(chain)
+                const chainName = this.getChainName(chain)
+                console.log(`  ✅ ${chainName}: ${address}`)
+              } catch (error) {
+                const chainName = this.getChainName(chain)
+                console.log(`  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`)
+              }
+            }
+
+            console.log('\n💡 Addresses retrieved from ephemeral vault operation')
+            return true
+          }
+        )
+        return
+      } catch (error) {
+        console.log('⚠️  Could not perform ephemeral vault operation:', error instanceof Error ? error.message : error)
+      }
     }
 
     // Try to use Vultisig SDK to get active vault

@@ -10,26 +10,36 @@ import { JsonRpcProvider, parseEther, formatEther } from 'ethers'
 import * as fs from 'fs'
 import * as path from 'path'
 
-// Load environment variables from project root
+// Load environment variables from current directory or parent directories
 function loadEnv() {
-  try {
-    const envPath = path.join(process.cwd(), '../../../../.env')
-    const envContent = fs.readFileSync(envPath, 'utf8')
-    const lines = envContent.split('\n')
-    
-    for (const line of lines) {
-      const trimmedLine = line.trim()
-      if (trimmedLine && !trimmedLine.startsWith('#')) {
-        const [key, ...valueParts] = trimmedLine.split('=')
-        if (key && valueParts.length > 0) {
-          process.env[key.trim()] = valueParts.join('=').trim()
+  const possiblePaths = [
+    path.join(process.cwd(), '.env'),
+    path.join(process.cwd(), '..', '.env'),
+    path.join(process.cwd(), '..', '..', '.env'),
+    path.join(process.cwd(), '..', '..', '..', '..', '.env')
+  ]
+  
+  for (const envPath of possiblePaths) {
+    try {
+      const envContent = fs.readFileSync(envPath, 'utf8')
+      const lines = envContent.split('\n')
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+        if (trimmedLine && !trimmedLine.startsWith('#')) {
+          const [key, ...valueParts] = trimmedLine.split('=')
+          if (key && valueParts.length > 0) {
+            process.env[key.trim()] = valueParts.join('=').trim()
+          }
         }
       }
+      console.log(`📄 Loaded .env file from ${envPath}`)
+      return
+    } catch (error) {
+      // Continue to next path
     }
-    console.log('📄 Loaded .env file successfully')
-  } catch (error) {
-    console.log('No .env file found, using environment variables')
   }
+  console.log('No .env file found, using environment variables')
 }
 
 async function main() {
@@ -117,9 +127,7 @@ async function main() {
     } catch (error) {
       console.error('❌ Daemon not running or vault not loaded')
       console.error('\n💡 Please start the daemon first:')
-      console.error('   cd /Users/dev/dev/vultisig/vultisig-sdk/clients/cli')
-      console.error('   source ../../.env')
-      console.error('   ./bin/vultisig run --vault vaults/HotVault.vult --password $PASSWORD')
+      console.error('   vultisig run --vault /path/to/your/vault.vult --password $PASSWORD')
       process.exit(1)
     }
 
@@ -155,7 +163,7 @@ async function main() {
     
     if (error.message.includes('ENOENT') || error.message.includes('socket')) {
       console.error('\n💡 Make sure Vultisig daemon is running:')
-      console.error('   vultisig run --vault HotVault.vult --password $PASSWORD')
+      console.error('   vultisig run --vault /path/to/your/vault.vult --password $PASSWORD')
     } else if (error.message.includes('password')) {
       console.error('\n💡 Check your vault password in .env file')
     }
