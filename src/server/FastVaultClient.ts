@@ -7,6 +7,7 @@ import type {
   Signature, 
   ReshareOptions 
 } from '../types'
+import { pingServer } from './utils'
 
 /**
  * FastVaultClient handles VultiServer Fast Vault API operations
@@ -70,25 +71,6 @@ export class FastVaultClient {
     })
 
     return response.data
-  }
-
-  /**
-   * Migrate existing vault to server - POST /migrate
-   */
-  async migrateVault(params: {
-    publicKey: string
-    sessionId: string
-    hexEncryptionKey: string
-    encryptionPassword: string
-    email: string
-  }): Promise<void> {
-    await this.client.post('/migrate', {
-      public_key: params.publicKey,
-      session_id: params.sessionId,
-      hex_encryption_key: params.hexEncryptionKey,
-      encryption_password: params.encryptionPassword,
-      email: params.email
-    })
   }
 
   /**
@@ -211,18 +193,8 @@ export class FastVaultClient {
    * Ping FastVault server for health check
    */
   async ping(): Promise<number> {
-    const start = Date.now()
-    try {
-      // FastVault doesn't have /ping, use root endpoint for connectivity test
-      await this.client.get('/', { timeout: 5000 })
-      return Date.now() - start
-    } catch (error: any) {
-      // If we get any HTTP response (even 404), server is reachable
-      if (error.response?.status) {
-        return Date.now() - start
-      }
-      throw error
-    }
+    // FastVault doesn't have /ping, use root endpoint for connectivity test
+    return pingServer(this.client.defaults.baseURL!, '/')
   }
 
   /**

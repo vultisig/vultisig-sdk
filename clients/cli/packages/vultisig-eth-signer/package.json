@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "node --experimental-json-modules tests/basic.js"
+    "example": "node example.js",
+    "dev": "npm run build && npm run example"
   },
   "dependencies": {
     "ethers": "^6.13.2"

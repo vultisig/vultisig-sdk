@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// Load environment variables first
+import './utils/env'
+
 import { Command } from 'commander'
 // SDK will be made available globally by the launcher
 declare const VultisigSDK: any
@@ -95,6 +98,8 @@ program
     'Networks (all, or comma-separated: btc,eth,sol)',
     'all'
   )
+  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
+  .option('--password <password>', 'Password for encrypted keyshares')
   .action(wrapCommand(addressCommand, true))
 
 // Sign command - uses daemon/SDK
@@ -112,6 +117,7 @@ program
     '--password <password>',
     'VultiServer decryption password (required for fast mode)'
   )
+  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
   .action(wrapCommand(signCommand, true))
 
 // Quit command - daemon operation

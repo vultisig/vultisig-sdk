@@ -1,57 +1,54 @@
-# VultiServer API Usage Guide
+Here's a **corrected, tighter** guide aligned to the two READMEs.
 
-This document describes the complete fast vault creation flow used by VultisigSDK to interact with VultiServer infrastructure.
+# VultiServer + Relay API Usage Guide (Corrected)
+
+This documents the fast 2-of-2 "Fast Vault" flow that uses:
+
+* **VultiServer (API Server)** on `https://api.vultisig.com` for `/vault/*` endpoints.
+* **Relay Server** on `https://api.vultisig.com/router` for session and MPC message coordination. ([GitHub][1])
+
+---
 
 ## Overview
 
-Fast Vault creation involves two servers working together:
-1. **FastVault Server** (`https://api.vultisig.com/vault`) - Handles vault storage and management
-2. **MessageRelay Server** (`https://api.vultisig.com/router`) - Handles MPC session coordination
+Two services cooperate:
+
+1. **VultiServer**: creates vaults, signs, reshares, migrates; exposes `/vault/*`. ([GitHub][1])
+2. **Relay**: stateless message bus; exposes session, start/complete, message, setup-message, payload, ping. ([GitHub][2])
+
+---
 
 ## Prerequisites
 
-Before starting the fast vault creation flow, generate the following:
+Generate:
 
-- **Session ID**: Valid UUID v4 format (e.g., `938124b5-7ddd-4bc7-9257-ec224962e7cb`)
-- **Browser Party ID**: Format `browser-{4-digit-number}` (e.g., `browser-1355`)
-- **Server Party ID**: Format `Server-{4-digit-number}` (e.g., `Server-1172`)
-- **Hex Encryption Key**: 32 bytes, hex encoded (64 hex characters)
-- **Hex Chain Code**: 32 bytes, hex encoded (64 hex characters)
+* **Session ID**: UUID v4
+* **Party IDs**: free-form identifiers (string). Recommended convention: `browser-####` for the client, `Server-####` for VultiServer.
+* **Hex Encryption Key**: 32-byte hex
+* **Hex Chain Code**: 32-byte hex
 
-### Party ID Generation
+> Note: the "capital S is required" is **not** a server constraint; it's just a convention. The relay treats participant IDs as opaque strings. ([GitHub][2])
 
-```javascript
-// Browser party ID for local device
-const generateLocalPartyId = () => {
-  const num = Math.floor(1000 + Math.random() * 9000)
-  return `browser-${num}`
-}
+Example generators (unchanged):
 
-// Server party ID sent to VultiServer
-const generateServerPartyId = () => {
-  const num = Math.floor(1000 + Math.random() * 9000)
-  return `Server-${num}` // Capital 'S' is required
-}
-
-// UUID v4 session ID
-const generateSessionId = () => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0
-    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+```js
+const generateLocalPartyId = () => `browser-${Math.floor(1000 + Math.random()*9000)}`
+const generateServerPartyId = () => `Server-${Math.floor(1000 + Math.random()*9000)}`
+const generateSessionId = () =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random()*16|0, v = c==='x'? r : (r&0x3|0x8)
     return v.toString(16)
   })
-}
 ```
+
+---
 
 ## Step-by-Step Flow
 
-### Step 1: Register Vault with FastVault Server
+### 1) Create Vault (VultiServer)
 
-**Endpoint**: `POST https://api.vultisig.com/vault/create`
+**POST** `https://api.vultisig.com/vault/create`
 
-**Purpose**: Registers the vault with VultiServer and initiates server participation
-
-**Request Body**:
 ```json
 {
   "name": "TestVault",
@@ -65,338 +62,264 @@ const generateSessionId = () => {
 }
 ```
 
-**Key Requirements**:
-- `session_id`: Must be valid UUID v4 format
-- `local_party_id`: Must be the server party ID (VultiServer uses this to join relay)
-- `lib_type`: 1 for DKLS (recommended for dual ECDSA + EdDSA support)
+* `lib_type`: `0` = GG20, `1` = DKLS. DKLS is the modern path and used broadly in Vultisig. ([GitHub][1])
 
-**Response**: `200 OK`
+**Response**: `200 OK`. ([GitHub][1])
 
-### Step 2: Browser Joins Relay and Waits for Server
+---
 
-**2.1 Register Browser with Relay**
+### 2) Create Relay Session and Wait for Server
 
-**Endpoint**: `POST https://api.vultisig.com/router/{sessionId}`
+**2.1 Create session**
 
-**Request Body**:
+**POST** `https://api.vultisig.com/router/{sessionId}`
+Body = JSON array of current participants (start with the browser):
+
 ```json
 ["browser-1355"]
 ```
 
-**2.2 Poll for VultiServer**
+**2.2 Poll for participants**
 
-**Endpoint**: `GET https://api.vultisig.com/router/{sessionId}`
+**GET** `https://api.vultisig.com/router/{sessionId}` → returns array of participant IDs, e.g.
 
-- Poll every 2 seconds until both parties appear
-- Timeout after 30 seconds if server doesn't join
-
-**Expected Response** (when ready):
 ```json
 ["browser-1355", "Server-1172"]
 ```
 
-VultiServer automatically joins the relay using the server party ID from Step 1.
+*Note: Server may return `[]` (empty array) - participants don't always persist between calls.*
 
-### Step 3: Start MPC Session
+Poll until the server party appears. **Sessions auto-expire after \~5 minutes** on the relay, so keep polling within that window. ([GitHub][2])
 
-**Endpoint**: `POST https://api.vultisig.com/router/start/{sessionId}`
+> Relay Session Endpoints (reference):
+>
+> * `POST /:sessionID` create
+> * `GET /:sessionID` list participants
+> * `DELETE /:sessionID` delete session. ([GitHub][2])
 
-**Request Body**:
-```json
-["browser-1355", "Server-1172"]
-```
+---
 
-**Response**: `200 OK`
+### 3) Mark Session Started (Relay)
 
-### Step 4: MPC Key Generation
+**POST** `https://api.vultisig.com/router/start/{sessionId}`
+(no body)
 
-The MPC protocol runs in two phases with specific message coordination:
+*Note: May return 500 error if session doesn't exist first.*
 
-#### Phase 1: DKLS (ECDSA) Key Generation
+You can also **GET** `/start/{sessionId}` to read start status. Completion markers exist too; see Keysign complete below. ([GitHub][2])
 
-**4.1.1 Upload DKLS Setup Message**
+---
 
-**Endpoint**: `POST https://api.vultisig.com/router/setup-message/{sessionId}`
+### 4) MPC Key Generation via Relay
 
-**Request Body**: Binary DKLS setup message (varies in size, typically ~200-400 bytes)
+#### 4.1 Post one-time setup message
 
-**Purpose**: Browser uploads its DKLS protocol setup message for VultiServer to download
+The relay exposes a single **setup-message** slot per `sessionId`.
 
-**4.1.2 VultiServer Downloads Setup Message**
+* **POST** `https://api.vultisig.com/router/setup-message/{sessionId}`
+  Body: binary (your WASM/SDK-emitted setup data)
 
-**Endpoint**: `GET https://api.vultisig.com/router/setup-message/{sessionId}`
+* **GET** `https://api.vultisig.com/router/setup-message/{sessionId}`
+  Returns whatever was posted. Typically the browser posts and VultiServer fetches. ([GitHub][2])
 
-**Response**: Binary DKLS setup message uploaded by Server
+> Your document previously claimed the GET returns a message "uploaded by Server"; invert that: the GET returns **the posted setup message**, whichever side posted it.
 
-**Purpose**: VultiServer retrieves Server's setup message to coordinate DKLS protocol
+#### 4.2 Message exchange loop
 
-**4.1.3 DKLS Message Exchange Loop**
+* **POST** `https://api.vultisig.com/router/message/{sessionId}`
 
-Both parties (browser and VultiServer) exchange MPC messages via relay:
+Suggested JSON (fields are opaque to the relay, but this schema works well):
 
-**Upload Message**: `POST https://api.vultisig.com/router/message/{sessionId}`
 ```json
 {
+  "session_id": "938124b5-7ddd-4bc7-9257-ec224962e7cb",
   "from": "browser-1355",
-  "to": "Server-1172", 
-  "message": "base64-encoded-mpc-message",
-  "message_hash": "sha256-hash-of-message"
+  "to": ["Server-1172"],
+  "body": "base64-encoded-encrypted-mpc-message",
+  "hash": "sha256-of-body",
+  "sequence_no": 0
 }
 ```
 
-**Poll for Messages**: `GET https://api.vultisig.com/router/message/{sessionId}/{localPartyId}`
+* **GET** `https://api.vultisig.com/router/message/{sessionId}/{participantId}` → returns array of pending messages for `participantId` (returns `[]` empty array when no messages, not `{}` object).
+* **DELETE** `https://api.vultisig.com/router/message/{sessionId}/{participantId}/{hash}` → acknowledge/remove.
 
-Returns array of pending messages:
-```json
-[
-  {
-    "from": "Server-1172",
-    "to": "browser-1355",
-    "message": "base64-encoded-mpc-message",
-    "message_hash": "2d6df73e3a9ece454492200ac8ba2bea"
-  }
-]
-```
+Notes:
 
-**Acknowledge Message**: `DELETE https://api.vultisig.com/router/message/{sessionId}/{localPartyId}/{messageHash}`
+* The relay verifies payloads by **SHA-256** hash and deduplicates; use the hash of the encrypted `body` as your `hash`. There is **no documented `message_id` header** on DELETE. ([GitHub][2])
+* Optional **payload** store: `POST /payload/{hash}`, `GET /payload/{hash}` if you want out-of-band large blob transfer. ([GitHub][2])
 
-**DKLS Protocol Execution**:
-- Multi-round MPC protocol runs internally within WASM library
-- Browser and VultiServer exchange encrypted messages via relay
-- Protocol completes when WASM reports `keygen complete`
+#### 4.3 What you should expect from keygen results
 
-**Observable Events During DKLS**:
-- `startKeygen attempt: 0` (initial attempt)
-- `uploaded setup message successfully`
-- `outbound message: [MessageObject]` (for each message sent)
-- `got message from: Server-1172,to: browser-1355,key: [messageHash]` (for each message received)
-- `keygen complete` (protocol finished)
-- `stop processOutbound` (cleanup)
+* **ECDSA public key**: uncompressed **65-byte** hex (`0x04 || X32 || Y32`).
+* **EdDSA public key** (Ed25519): 32 bytes.
 
-**DKLS Result**: 
-- ECDSA public key (64 bytes, uncompressed format starting with '04')
-- Encrypted ECDSA keyshare stored by VultiServer
-- DKLS setup message for EdDSA coordination (261 bytes)
+Your original said "ECDSA 64 bytes starting with 04", which is inconsistent; uncompressed points are 65 bytes including the `0x04` prefix.
 
-#### Phase 2: Schnorr (EdDSA) Key Generation
+> The relay doesn't impose ECDSA/EdDSA specifics; it just routes bytes. VultiServer's vault response shows both public keys once created. ([GitHub][1])
 
-**4.2.1 Extract DKLS Setup Message**
+---
 
-After DKLS completion, browser extracts setup message from DKLS instance:
-```javascript
-const dklsSetupMessage = dklsInstance.getSetupMessage()
-// Returns Uint8Array of 261 bytes containing coordination data
-```
+### 5) Email Verification & Vault Retrieval (VultiServer)
 
-**4.2.2 Upload Schnorr Setup Message**  
+**Verify code**
 
-**Endpoint**: `POST https://api.vultisig.com/router/setup-message/{sessionId}`
+**GET** `https://api.vultisig.com/vault/verify/{public_key_ecdsa}/{code}`
+`200 OK` means valid; any other status = invalid. ([GitHub][1])
 
-**Request Body**: DKLS setup message (261 bytes) for Schnorr coordination
+**Resend vault share + code (rate-limited)**
 
-**Purpose**: Provides VultiServer with DKLS context needed for EdDSA keygen
+**POST** `https://api.vultisig.com/vault/resend`
 
-**4.2.3 Schnorr Message Exchange Loop**
-
-Same endpoints as DKLS but with Schnorr protocol messages:
-
-**Upload/Poll/Delete**: Same pattern as DKLS using message relay endpoints
-
-**Schnorr Protocol Execution**:
-- Uses DKLS setup message for coordination with ECDSA keygen
-- Multi-round EdDSA protocol runs internally within WASM library
-- Requires valid 261-byte setup message or keygen fails with "setup message is empty"
-
-**Observable Events During Schnorr**:
-- `startKeygen attempt: 0` (initial attempt)
-- `session id: [sessionId]` (session confirmation)
-- `outbound message: [MessageObject]` (for each EdDSA message sent)
-- `got message from: Server-1172,to: browser-1355,key: [messageHash]` (for each message received)
-- `keygen complete` (EdDSA protocol finished)
-- `stop processOutbound` (cleanup)
-
-**Schnorr Result**:
-- EdDSA public key (32 bytes, compressed format)  
-- Encrypted EdDSA keyshare stored by VultiServer
-
-#### Message Flow Pattern
-
-The MPC protocol follows this message exchange pattern:
-
-```
-Browser                    Relay Server                VultiServer
-   |                           |                           |
-   |-- POST setup-message ---> |                           |
-   |                           | <-- GET setup-message ---|
-   |                           |                           |
-   |-- POST message (M1) ----> |                           |
-   |                           | <-- GET message (M1) -----|
-   |                           |                           |
-   | <-- GET message (M1) ---- | <-- POST message (M1) ---|
-   |-- DELETE message (M1) --> |                           |
-   |                           |-- DELETE message (M1) -->|
-   |                           |                           |
-   [Multiple message exchanges until protocol complete]
-   |                           |                           |
-   | keygen complete           |           keygen complete |
-```
-
-**Notes**:
-- Message count varies per protocol execution (typically 4-8 messages total)
-- Each party polls for messages continuously until `keygen complete`
-- WASM library handles the internal round logic and message generation
-
-#### Retry Logic for Failed Keygens
-
-**Maximum Attempts**: 3 attempts with exponential backoff
-
-**Backoff Schedule**:
-- Attempt 1: Immediate
-- Attempt 2: Wait 1 second  
-- Attempt 3: Wait 2 seconds
-
-**Failure Conditions**:
-- Empty or invalid setup message (< 200 bytes for DKLS, must be exactly 261 bytes for Schnorr)
-- Network timeout during message exchange  
-- VultiServer not responding to setup message
-- WASM library throws keygen errors
-- Message corruption or invalid signatures
-
-**Recovery Process**:
-1. Clear all pending messages from relay
-2. Generate fresh setup message (for DKLS) or reuse DKLS setup (for Schnorr)  
-3. Restart `startKeygen(attemptNumber)` with incremented attempt counter
-4. If 3 attempts fail: Throw error (no silent fallback to ECDSA-only)
-
-**Error Messages**:
-- `"setup message is empty"` - Missing or zero-length setup message
-- `"DKLS keygen failed"` - ECDSA protocol failed after 3 attempts  
-- `"Schnorr keygen failed"` - EdDSA protocol failed after 3 attempts
-
-### Step 5: Email Verification
-
-**Endpoint**: `GET https://api.vultisig.com/vault/verify/{vaultId}/{code}`
-
-**Parameters**:
-- `vaultId`: ECDSA public key (vault identifier)
-- `code`: 4-digit verification code from email
-
-**Response**: `200 OK` if valid, `400 Bad Request` if invalid
-
-**UI Requirements**:
-```html
-<input
-  type="text"
-  placeholder="Enter 4-digit verification code"
-  maxLength="4"
-  pattern="[0-9]{4}"
-  style="text-align: center; letter-spacing: 0.2em"
-  required
-/>
-```
-
-**Resend Email**: `POST https://api.vultisig.com/vault/resend-verification/{vaultId}`
-
-### Step 6: Retrieve Verified Vault
-
-**Endpoint**: `GET https://api.vultisig.com/vault/get/{vaultId}`
-
-**Headers**:
-```
-x-password: base64(encryption_password)
-```
-
-**Response**:
 ```json
 {
-  "name": "TestVault",
-  "public_key_ecdsa": "04a1b2c3d4e5f6789...",
-  "public_key_eddsa": "a1b2c3d4e5f6789...",
-  "hex_chain_code": "1a2b3c4d5e6f789...",
-  "signers": ["browser-1355", "Server-1172"],
-  "local_party_id": "browser-1355",
-  "keyshares": {...}
+  "public_key_ecdsa": "04....",
+  "password": "Password123!",
+  "email": "user@example.com"
 }
 ```
 
-## Server-Assisted Signing
+Constraint: **once every \~3 minutes**. Your previous `/vault/resend-verification/{vaultId}` path is incorrect. ([GitHub][1])
 
-**Endpoint**: `POST https://api.vultisig.com/vault/sign`
+**Get vault**
 
-**Request Body**:
+**GET** `https://api.vultisig.com/vault/get/{public_key_ecdsa}`
+Header: `x-password: <plaintext password>`  ← **not base64**.
+Response shape:
+
 ```json
 {
-  "public_key": "04a1b2c3d4e5f6789...",
+  "name": "vault name",
+  "public_key_ecdsa": "04..",
+  "public_key_eddsa": "..",
+  "hex_chain_code": "..",
+  "local_party_id": "Server-1172"
+}
+```
+
+Your previous example included `signers` and `keyshares`; those fields are **not** documented on this endpoint. ([GitHub][1])
+
+---
+
+### 6) Server-Assisted Signing (Keysign)
+
+**POST** `https://api.vultisig.com/vault/sign`
+
+```json
+{
+  "public_key": "04a1b2c3...",
   "messages": ["abc123...", "def456..."],
-  "session": "signing-session-uuid",
-  "hex_encryption_key": "a1b2c3d4e5f6789...",
+  "session": "938124b5-7ddd-4bc7-9257-ec224962e7cb",
+  "hex_encryption_key": "a1b2c3...",
   "derive_path": "m/44'/60'/0'/0/0",
   "is_ecdsa": true,
   "vault_password": "Password123!"
 }
 ```
 
-**Response**: `200 OK` (signature delivered via MPC session)
+* Field name is **`session`** (JSON example) rather than `session_id`.
+* After initiating, run the **same relay message loop** as keygen.
+* You **may** mark completion on relay:
 
-## SDK Integration
+  * `POST /complete/{sessionId}` for keygen complete
+  * `POST /complete/{sessionId}/keysign` for keysign complete; and corresponding `GET` to read status. ([GitHub][2])
 
-```typescript
-// Create fast vault
-const result = await sdk.createFastVault({
-  name: "TestVault",
-  email: "user@example.com", 
-  password: "Password123!"
-})
+---
 
-// Verify email
-await sdk.verifyVaultEmail(result.vaultId, "1234")
+## Related (useful) VultiServer endpoints
 
-// Get complete vault
-const vault = await sdk.getVault(result.vaultId, "Password123!")
-```
+* **Reshare**: `POST /vault/reshare` (old\_parties, reshare prefix)
+* **Migrate GG20→DKLS**: `POST /vault/migrate`
+  See README for exact payloads. ([GitHub][1])
 
-## Error Handling
+---
 
-### Common HTTP Status Codes
+## Health Checks
 
-- `200 OK` - Success
-- `400 Bad Request` - Invalid parameters or malformed request
-- `401 Unauthorized` - Invalid credentials
-- `403 Forbidden` - Email not verified
-- `404 Not Found` - Vault or session not found
-- `409 Conflict` - Vault already exists
-- `500 Internal Server Error` - Server error
+* **Relay**: `GET https://api.vultisig.com/router/ping`
+* **API Server**: `GET /ping` (returns text: `Vultisigner is running`)
+  Both are visible in the respective READMEs; Cloudflare routes the production base. ([GitHub][2])
 
-### Session Management
+---
 
-- Sessions expire after 10 minutes of inactivity
-- Session IDs must be valid UUIDs
-- Party IDs must follow exact format requirements
+## Timeouts, Expiry, Retries
 
-### Retry Strategy
+* **Relay expiries**: sessions \~**5 min**, user data \~**1 hour**. Build your polling/backoff within that envelope. ([GitHub][2])
+* **Client retry**: your exponential backoff plan is fine; keep **4xx non-retriable**, **5xx retriable**.
 
-- **Network errors**: Exponential backoff (1s, 2s, 4s, 8s)
-- **Server errors (5xx)**: Retry up to 3 times
-- **Client errors (4xx)**: Do not retry
-- **MPC failures**: Retry up to 3 times with setup message coordination
-
-## Health Check
-
-**Endpoint**: `GET https://api.vultisig.com/router/ping`
-
-**Response**: `200 OK` with timestamp
-
-## Security Notes
-
-- All vault data is encrypted with AES-GCM using the user password
-- ECDSA public key serves as the vault identifier
-- Email verification prevents unauthorized vault access
-- MPC ensures no single point of key control
-- Cryptographically secure random number generation for all keys
+---
 
 ## Library Types
 
-- `0` = GG20 (legacy, wider compatibility)  
-- `1` = DKLS (recommended, better performance and dual signature support)
+* `0` = GG20
+* `1` = DKLS (current standard in Vultisig; supports ECDSA and EdDSA) ([GitHub][1])
 
-DKLS (lib_type: 1) is recommended for new implementations as it provides both ECDSA and EdDSA signatures with better performance.
+---
+
+## Quick SDK Sketch
+
+```ts
+// Create fast vault → verify → fetch vault
+const { vaultId } = await sdk.createFastVault({
+  name: "TestVault",
+  email: "user@example.com",
+  password: "Password123!"
+})
+
+await sdk.verifyVaultEmail(vaultId, "1234")
+
+const vault = await sdk.getVault(vaultId, "Password123!")
+```
+
+---
+
+## Real Server Behavior (Tested 2025-01-13)
+
+Based on comprehensive testing with real VultiServer and MessageRelay endpoints:
+
+### ✅ Working Endpoints
+
+**VultiServer (api.vultisig.com/vault):**
+- `POST /sign` → **200 OK** (no signature returned, as expected)
+- `GET /get/{public_key_ecdsa}` → **200 OK** (returns vault object)
+
+**MessageRelay (api.vultisig.com/router):**
+- `POST /{sessionId}` with `[participantId]` → **200 OK**
+- `GET /{sessionId}` → **200 OK** (returns `[]` empty array - participants don't persist)
+- `DELETE /{sessionId}` → **200 OK**
+- `POST /start/{sessionId}` → **200 OK** (when session exists) or **500** (when session missing)
+- `GET /start/{sessionId}` → **200 OK**
+- `POST /complete/{sessionId}` → **200 OK**
+- `GET /complete/{sessionId}` → **200 OK**
+- `POST /message/{sessionId}` → **200 OK** (accepts message uploads)
+- `GET /message/{sessionId}/{participantId}` → **200 OK** (returns `[]` array, not `{}` object)
+- `DELETE /message/{sessionId}/{participantId}/{hash}` → **200 OK**
+- `GET /ping` → **200 OK** ("Voltix Router is running")
+
+### ❌ Non-Working Endpoints
+
+**MessageRelay:**
+- `POST /complete/{sessionId}/keysign` → **404** (not implemented)
+- `GET /complete/{sessionId}/keysign` → **404** (not implemented)
+- `POST /payload/{hash}` → **404** (not implemented)
+- `GET /payload/{hash}` → **404** (not implemented)
+
+### 📋 Key Differences from Documentation
+
+1. **Session participants don't persist**: `GET /{sessionId}` always returns `[]`
+2. **Start endpoint requires session**: `POST /start/{sessionId}` returns 500 if session doesn't exist first
+3. **Message polling returns arrays**: `GET /message/{sessionId}/{participantId}` returns `[]` not `{}`
+4. **Completion endpoints missing**: `/complete/{sessionId}/keysign` endpoints return 404
+
+### 🔧 Test Vault Used
+
+- **Name**: TestFastVault
+- **ECDSA Public Key**: `03ac0f333fc5d22f929e013be80988f57a56837db64d968c126ca4c943984744fd`
+- **Signers**: `['Server-94060', 'iPhone-5C9']`
+- **Password**: `Password123!`
+
+---
+
+
+[1]: https://github.com/vultisig/vultiserver "GitHub - vultisig/vultiserver"
+[2]: https://github.com/vultisig/vultisig-relay "GitHub - vultisig/vultisig-relay: vultisig-relay is a service that will be used to route TSS communications, for both keygen and keysign"

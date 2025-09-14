@@ -6,3 +6,4 @@
 export { ServerManager } from './ServerManager'
 export { MessageRelayClient } from './MessageRelayClient'
 export { FastVaultClient } from './FastVaultClient'
+export * from './utils'

@@ -1,18 +1,10 @@
 import axios, { type AxiosInstance } from 'axios'
 import { toMpcServerMessage, fromMpcServerMessage } from '@core/mpc/message/server'
+import type { MpcRelayMessage } from '@core/mpc/message/relay'
+import { uploadMpcSetupMessage } from '@core/mpc/message/setup/upload'
+import { waitForSetupMessage } from '@core/mpc/message/setup/get'
 import { assertFetchResponse } from '@lib/utils/fetch/assertFetchResponse'
-
-/**
- * MPC Relay Message format from core/mpc/message/relay
- */
-export interface MpcRelayMessage {
-  session_id: string
-  from: string
-  to: string[]
-  body: string        // Encrypted with AES-GCM
-  hash: string        // SHA-256 hash for deduplication
-  sequence_no: number // Message ordering
-}
+import { pingServer } from './utils'
 
 /**
  * MessageRelayClient handles MPC message relay operations
@@ -56,20 +48,26 @@ export class MessageRelayClient {
   }
 
   /**
-   * Upload setup message for MPC session - POST /setup-message/{sessionId}
+   * Upload setup message for MPC session using core implementation
    * Used by initiating device to share session parameters
    */
   async uploadSetupMessage(sessionId: string, setupMessage: any): Promise<void> {
-    await this.client.post(`/setup-message/${sessionId}`, setupMessage)
+    await uploadMpcSetupMessage({
+      serverUrl: this.client.defaults.baseURL!,
+      sessionId,
+      message: setupMessage
+    })
   }
 
   /**
-   * Get setup message for MPC session - GET /setup-message/{sessionId}
+   * Get setup message for MPC session using core implementation with retry logic
    * Used by non-initiating devices to get session parameters
    */
   async getSetupMessage(sessionId: string): Promise<any> {
-    const response = await this.client.get(`/setup-message/${sessionId}`)
-    return response.data
+    return waitForSetupMessage({
+      serverUrl: this.client.defaults.baseURL!,
+      sessionId
+    })
   }
 
   /**
@@ -77,48 +75,30 @@ export class MessageRelayClient {
    * Registers party ID with session for message routing
    */
   async joinSession(sessionId: string, partyId: string): Promise<void> {
-    await this.client.post(`/${sessionId}`, { partyId })
+    // FAST-SIGNING.md: body should be an array of participant ids
+    await this.client.post(`/${sessionId}`, [partyId])
+  }
+
+  /**
+   * Mark session started - POST /start/{sessionId}
+   * Optional marker per FAST-SIGNING.md
+   */
+  async markSessionStarted(sessionId: string): Promise<void> {
+    await this.client.post(`/start/${sessionId}`)
   }
 
   /**
    * Ping relay server for health check
    */
   async ping(): Promise<number> {
-    const start = Date.now()
-    await this.client.get('/ping', { timeout: 5000 })
-    return Date.now() - start
+    return pingServer(this.client.defaults.baseURL!, '/ping')
   }
 
-  // ===== Message Encryption Utilities =====
-
-  /**
-   * Encrypt message body for relay server transmission
-   */
-  encryptMessage(body: Uint8Array, hexEncryptionKey: string): string {
-    return toMpcServerMessage(body, hexEncryptionKey)
-  }
-
-  /**
-   * Decrypt message body from relay server
-   */
-  decryptMessage(encryptedBody: string, hexEncryptionKey: string): Buffer {
-    return fromMpcServerMessage(encryptedBody, hexEncryptionKey)
-  }
 
   /**
    * Create message hash for deduplication (SHA-256)
-   * Uses Web Crypto in browsers, falls back to Node crypto when available
    */
   private async createMessageHash(message: Uint8Array): Promise<string> {
-    if (typeof globalThis !== 'undefined' && (globalThis as any).crypto?.subtle) {
-      const digest = await (globalThis as any).crypto.subtle.digest('SHA-256', message)
-      const bytes = new Uint8Array(digest)
-      let hex = ''
-      for (let i = 0; i < bytes.length; i++) {
-        hex += bytes[i].toString(16).padStart(2, '0')
-      }
-      return hex
-    }
     const { createHash } = await import('crypto')
     return createHash('sha256').update(Buffer.from(message)).digest('hex')
   }
@@ -136,7 +116,7 @@ export class MessageRelayClient {
     hexEncryptionKey: string
     sequenceNo: number
   }): Promise<void> {
-    const encryptedBody = this.encryptMessage(params.messageBody, params.hexEncryptionKey)
+    const encryptedBody = toMpcServerMessage(params.messageBody, params.hexEncryptionKey)
     const messageHash = await this.createMessageHash(params.messageBody)
 
     const relayMessage: MpcRelayMessage = {
@@ -168,7 +148,7 @@ export class MessageRelayClient {
     
     return messages.map(msg => ({
       from: msg.from,
-      body: this.decryptMessage(msg.body, hexEncryptionKey),
+      body: fromMpcServerMessage(msg.body, hexEncryptionKey),
       hash: msg.hash,
       sequenceNo: msg.sequence_no
     }))
