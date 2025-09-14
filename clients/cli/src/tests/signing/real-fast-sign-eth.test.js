@@ -1,7 +1,7 @@
 /**
  * CLI Real Fast Signing Test
  * Tests CLI ephemeral signing mode with fast vault and ETH transaction payload
- * Similar to src/tests/signing/real-fast-sign-eth.test.ts but using CLI interface
+ * Updated to reflect current fast signing flow that doesn't require setup messages
  */
 
 const { execSync, spawn } = require('child_process')
@@ -29,12 +29,12 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
     expect(fs.existsSync(payloadPath)).toBe(true)
   })
 
-  test('should load vault and sign ETH transaction using CLI ephemeral mode', () => {
+  test('should load vault and sign ETH transaction using CLI fast mode', () => {
     const vaultPath = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
     const payloadPath = path.join(__dirname, 'eth-tx-payload.json')
     const password = 'Password123!'
 
-    console.log('🔄 Starting CLI ephemeral signing test...')
+    console.log('🔄 Starting CLI fast signing test...')
     console.log('📂 Vault path:', vaultPath)
     console.log('📄 Payload path:', payloadPath)
 
@@ -63,12 +63,11 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
 
     console.log('✅ Transaction payload validation passed')
 
-    // Construct CLI command for ephemeral signing using fast mode (should work)
+    // Construct CLI command for fast mode signing (default mode)
     const cliCommand = [
       CLI_PATH,
       'sign',
       '--network', 'eth',
-      '--mode', 'fast',
       '--vault', vaultPath,
       '--password', password,
       '--payload-file', payloadPath
@@ -102,40 +101,9 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
       console.log('   Stderr:', error.stderr?.toString() || 'N/A')
       console.log('   Stdout:', error.stdout?.toString() || 'N/A')
 
-      // KNOWN ISSUE: FastVault server returns Method Not Allowed
-      if (error.message?.includes('Method Not Allowed')) {
-        console.log('🔍 Analysis: Method Not Allowed error detected')
-        console.log('   This is a KNOWN SERVER ISSUE - the FastVault API endpoint is rejecting the request')
-        console.log('   Fast signing is currently broken due to server configuration issue')
-        console.log('   Possible causes:')
-        console.log('   - Wrong HTTP method (GET vs POST)')
-        console.log('   - Incorrect API endpoint URL')
-        console.log('   - Missing required headers')
-        console.log('   - Server configuration issue')
-        console.log('   TODO: Fix FastVault server endpoint or API configuration')
-
-        // This is a known server issue - mark test as expected failure
-        expect(error.message).toContain('Method Not Allowed')
-        console.log('✅ Successfully identified the FastVault server Method Not Allowed issue!')
-        return
-      }
-
-      // KNOWN ISSUE: Server setup-message endpoint returns 404 (fallback case)
-      if (error.message?.includes('setup-message') && error.message?.includes('404')) {
-        console.log('🔍 Analysis: Setup message endpoint not implemented (404)')
-        console.log('   This is a KNOWN SERVER ISSUE - the /router/setup-message/{sessionId} endpoint returns 404')
-        console.log('   Fast signing is currently broken due to missing server endpoint')
-        console.log('   TODO: Fix server to implement setup-message endpoint or modify keysign to work without it')
-
-        // This is a known server issue - mark test as expected failure
-        expect(error.message).toContain('404')
-        console.log('✅ Successfully identified the server setup-message endpoint issue!')
-        return
-      }
-
-      // The signing should work - any other error is a real failure
+      // Fast signing should work now - any error is a real failure
       console.log('❌ CLI signing failed unexpectedly')
-      console.log('   This test expects the signing process to complete successfully')
+      console.log('   Fast signing should work with the updated flow that doesn\'t require setup messages')
       
       // Re-throw the error to fail the test
       throw error

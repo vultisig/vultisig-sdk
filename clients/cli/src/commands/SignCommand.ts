@@ -117,7 +117,7 @@ export class SignCommand {
               chain: options.network
             }
 
-            const signature = await vault.sign(mode as any, signingPayload, strippedPassword)
+            const signature = await vault.signWithPayload(signingPayload, strippedPassword)
 
             console.log('\n✅ Transaction signed successfully!')
             console.log('📝 Signature:', signature.signature)
@@ -174,8 +174,8 @@ export class SignCommand {
         chain: options.network
       }
 
-      // Use the new sign method
-      const signature = await activeVault.sign(mode as any, signingPayload, strippedPassword)
+      // Use the new signWithPayload method that handles raw transaction data
+      const signature = await activeVault.signWithPayload(signingPayload, strippedPassword)
 
       console.log('\n✅ Transaction signed successfully!')
       console.log('📝 Signature:', signature.signature)

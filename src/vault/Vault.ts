@@ -550,9 +550,27 @@ export class Vault {
   }
 
   /**
+   * Sign with raw transaction payload (public method for CLI)
+   * Converts raw transaction data to proper format and delegates to signTransaction
+   */
+  async signWithPayload(payload: SigningPayload, password?: string): Promise<Signature> {
+    try {
+      // For now, delegate to the existing signTransaction method
+      // The signTransaction method should handle the conversion internally
+      return await this.signTransaction(payload.transaction, payload.chain, password)
+    } catch (error) {
+      throw new VaultError(
+        VaultErrorCode.SigningFailed,
+        `Failed to sign with payload: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
    * Sign transaction (legacy method - deprecated, use sign() instead)
    */
-  async signTransaction(tx: any, chain: string): Promise<any> {
+  async signTransaction(tx: any, chain: string, password?: string): Promise<any> {
     console.log('Legacy signTransaction called for chain:', chain)
     console.warn('signTransaction() is deprecated, use sign() method instead')
     
@@ -565,7 +583,7 @@ export class Vault {
     // Default to fast mode for fast vaults, otherwise throw error
     const securityType = this._securityType ?? determineVaultType(this.vaultData.signers)
     if (securityType === 'fast') {
-      return this.sign('fast', payload)
+      return this.sign('fast', payload, password)
     }
     
     throw new Error(
