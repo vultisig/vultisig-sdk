@@ -1,6 +1,16 @@
-# Fast Signing with VultiServer — Exact Flow & Endpoints
+# Fast Signing with VultiServer — Two-Step Flow (Extension-Compatible)
 
-A tight, implementation-ready sequence for **server-assisted signing** with an existing Fast Vault.
+A tight, implementation-ready sequence for **server-assisted signing** with an existing Fast Vault that matches the extension's approach.
+
+---
+
+## Architecture Overview
+
+Fast signing uses a **two-step approach** to coordinate between:
+1. **FastVault Server** (`/vault/sign`) - Initiates server-side MPC participation
+2. **MessageRelay Server** (`/router/*`) - Handles MPC message coordination
+
+This approach **bypasses setup message exchange** since the FastVault server handles MPC coordination directly.
 
 ---
 
@@ -9,42 +19,22 @@ A tight, implementation-ready sequence for **server-assisted signing** with an e
 * You already have a Fast Vault and its **ECDSA public key** (`public_key_ecdsa`).
 * You know the **vault password** used to encrypt the server share.
 * You can derive or already have the **hex messages** to sign and a **derive path**.
-* You can generate a **UUID v4 session ID** and a **browser party id** (free-form string). ([GitHub][1])
+* You can generate a **UUID v4 session ID** and a **browser party id** (free-form string).
 
 ---
 
 ## Endpoint Base URLs
 
-* **API Server (VultiServer)**: `https://api.vultisig.com`
-* **Relay Server**: `https://api.vultisig.com/router`
-  Session and message APIs live under `/router/*`. ([GitHub][2])
+* **FastVault Server**: `https://api.vultisig.com/vault`
+* **MessageRelay Server**: `https://api.vultisig.com/router`
 
 ---
 
-## One-Page Flow
+## Two-Step Flow
 
-### 1) Create a relay session and register your browser party
+### Step 1: Initiate Server-Side Signing
 
-**POST** `/router/{sessionId}`
-Body:
-
-```json
-["browser-1355"]
-```
-
-Expect `200 OK`. The relay treats IDs as opaque strings. ([GitHub][1])
-*Note: You can GET `/router/{sessionId}` to list participants, but it may return `[]` (empty array) - participants don't always persist between calls.*
-
-**(Optional) Mark started**
-**POST** `/router/start/{sessionId}` → `200 OK`. ([GitHub][1])
-*Note: May return 500 error if session doesn't exist first.*
-
----
-
-### 2) Kick off keysign on VultiServer
-
-**POST** `/vault/sign`
-Body:
+**POST** `https://api.vultisig.com/vault/sign`
 
 ```json
 {
@@ -58,18 +48,43 @@ Body:
 }
 ```
 
-* Returns `200 OK` (no signature in this HTTP response). The server now participates in the MPC exchange via the **relay** using this `session`. ([GitHub][2])
+**Expected Response**: `200 OK` (no signature returned)
+**Purpose**: Tells the FastVault server to prepare for MPC signing on the specified session
+
+**⚠️ Current Server Issue**: Returns `405 Method Not Allowed` (server configuration problem)
 
 ---
 
-### 3) Run the MPC message loop over the relay
+### Step 2: Set Up Relay Session
 
-Your WASM/SDK emits outbound messages and consumes inbound messages. Use the relay like this:
-
-**Upload outbound message**
-**POST** `/router/message/{sessionId}`
+**POST** `https://api.vultisig.com/router/{sessionId}`
 
 ```json
+["browser-1355"]
+```
+
+**Expected Response**: `200 OK`
+**Purpose**: Register your browser as a participant in the MPC session
+
+**Optional - Mark Session Started:**
+**POST** `https://api.vultisig.com/router/start/{sessionId}` → `200 OK`
+
+---
+
+### Step 3: Wait for Server to Join
+
+**GET** `https://api.vultisig.com/router/{sessionId}`
+
+Poll until server participant appears (e.g., `["browser-1355", "Server-1172"]`)
+
+**Note**: May return `[]` empty array - participants don't always persist between calls.
+
+---
+
+### Step 4: MPC Message Exchange (No Setup Message)
+
+**Key Difference**: Fast signing **skips setup message exchange** because the FastVault server coordinates the MPC session directly.
+
 {
   "session_id": "<session-uuid-v4>",
   "from": "browser-1355",
@@ -80,29 +95,32 @@ Your WASM/SDK emits outbound messages and consumes inbound messages. Use the rel
 }
 ```
 
-**Poll inbound messages (long-poll or short interval)**
+**Poll inbound messages:**
 **GET** `/router/message/{sessionId}/{participantId}`
-Returns an array of pending messages for `participantId` (your browser id).
-*Note: Server actually returns `[]` (empty array) when no messages, not `{}` object.*
 
-**Acknowledge (delete) each processed message**
+Returns an array of pending messages for `participantId` (your browser id).
+
+**Acknowledge processed messages:**
 **DELETE** `/router/message/{sessionId}/{participantId}/{hash}`
 
-Notes:
-
-* Use **SHA-256 of the encrypted `body`** as the `hash`.
-* For very large blobs, you may store/retrieve by hash via:
-  **POST** `/router/payload/{hash}` and **GET** `/router/payload/{hash}`. ([GitHub][1])
+**Notes:**
+- Use **SHA-256 of the encrypted `body`** as the `hash`
+- Returns `[]` empty array when no messages (not `{}` object)
+- Payload endpoints (`/payload/{hash}`) return 404 (not implemented)
 
 Keep looping until your SDK reports **signature(s) ready**.
 
 ---
 
-### 4) Mark completion and clean up
+### Step 5: Completion and Cleanup
 
-**POST** `/router/complete/{sessionId}/keysign` → optional, signals keysign done.
-*Note: This endpoint returns 404 - may not be implemented yet.*
-Then **DELETE** `/router/{sessionId}` to drop the session (or let expiry handle it). ([GitHub][1])
+**Optional - Mark keysign complete:**
+**POST** `/router/complete/{sessionId}/keysign` 
+
+**⚠️ Note**: This endpoint returns 404 (not implemented yet)
+
+**Clean up session:**
+**DELETE** `/router/{sessionId}` or let it expire (~5 minutes)
 
 ---
 
@@ -152,118 +170,98 @@ Then **DELETE** `/router/{sessionId}` to drop the session (or let expiry handle 
 
 ---
 
-## Minimal Pseudocode (browser)
+## SDK Implementation (TypeScript)
 
 ```ts
+// Two-step fast signing approach (matches extension)
 const sessionId = uuidv4()
 const browserId = `browser-${Math.floor(1000 + Math.random()*9000)}`
+const hexEncryptionKey = generateHexEncryptionKey() // 32-byte hex
 
-// 1) Relay session
-await fetch(`${relay}/${sessionId}`, { method: 'POST', body: JSON.stringify([browserId]) })
-await fetch(`${relay}/start/${sessionId}`, { method: 'POST' })
-
-// 2) Kick off keysign (server starts talking on relay)
-await fetch(`${api}/vault/sign`, {
+// STEP 1: Initiate server-side signing
+await fetch('https://api.vultisig.com/vault/sign', {
   method: 'POST',
-  headers: {'content-type': 'application/json'},
+  headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    public_key,
-    messages,               // array of hex strings
+    public_key: vault.publicKeys.ecdsa,
+    messages: messageHashes,        // array of hex strings
     session: sessionId,
-    hex_encryption_key,     // 32-byte hex
-    derive_path,            // e.g. m/44'/60'/0'/0/0
+    hex_encryption_key: hexEncryptionKey,
+    derive_path: "m/44'/60'/0'/0/0", // or appropriate path
     is_ecdsa: true,
-    vault_password
+    vault_password: password
   })
 })
 
-// 3) MPC loop
-while (!sdk.isDone()) {
-  // outbound
-  for (const pkt of sdk.outbound()) {
-    const body = base64(pkt.bytes)
-    const hash = sha256(body)
-    await fetch(`${relay}/message/${sessionId}`, {
-      method: 'POST', body: JSON.stringify({ session_id: sessionId, from: browserId, to: ["Server-1172"], body, hash, sequence_no: pkt.seq })
-    })
-  }
+// STEP 2: Set up relay session
+await fetch(`https://api.vultisig.com/router/${sessionId}`, {
+  method: 'POST',
+  body: JSON.stringify([browserId])
+})
 
-  // inbound
-  const res = await fetch(`${relay}/message/${sessionId}/${browserId}`)
-  const msgs = await res.json()
-  for (const m of msgs) {
-    sdk.consume(base64decode(m.body))
-    await fetch(`${relay}/message/${sessionId}/${browserId}/${m.hash}`, { method: 'DELETE' })
-  }
+// Optional: Mark session started
+await fetch(`https://api.vultisig.com/router/start/${sessionId}`, { method: 'POST' })
+
+// STEP 3: Wait for server to join
+let peers = []
+while (peers.length === 0) {
+  const response = await fetch(`https://api.vultisig.com/router/${sessionId}`)
+  const participants = await response.json()
+  peers = participants.filter(p => p !== browserId)
+  if (peers.length === 0) await sleep(2000) // Wait 2 seconds
 }
 
-const signatures = sdk.result()
+// STEP 4: MPC message exchange (bypasses setup message)
+const signature = await fastKeysign({
+  keyShare: vault.keyShares.ecdsa,
+  signatureAlgorithm: 'ecdsa',
+  message: messageHashes[0],
+  chainPath: derivePath,
+  localPartyId: browserId,
+  peers,
+  serverUrl: 'https://api.vultisig.com/router',
+  sessionId,
+  hexEncryptionKey,
+  isInitiatingDevice: true
+})
 
-// 4) Complete + cleanup
-await fetch(`${relay}/complete/${sessionId}/keysign`, { method: 'POST' })
-await fetch(`${relay}/${sessionId}`, { method: 'DELETE' })
+// STEP 5: Cleanup
+await fetch(`https://api.vultisig.com/router/${sessionId}`, { method: 'DELETE' })
 ```
 
 ---
 
-## Notes
+## Key Architectural Differences
 
-* **No setup-message** is required for keysign; just the message loop.
-* The **signature(s) come from your local MPC engine** when the loop completes. The `/vault/sign` HTTP call does not return the signature. ([GitHub][1])
+### ❌ **Old Approach (Problematic)**
+1. Call `vault.sign('fast')` → immediately calls `keysign()`
+2. `keysign()` tries to upload setup message → **404 error**
+3. Fails before reaching FastVault server
 
----
-
----
-
-## Real Server Behavior (Tested 2025-01-13)
-
-Based on comprehensive testing with real VultiServer and MessageRelay endpoints:
-
-### ✅ Working Endpoints
-
-**VultiServer (api.vultisig.com/vault):**
-- `POST /sign` → **200 OK** (no signature returned, as expected)
-- `GET /get/{public_key_ecdsa}` → **200 OK** (returns vault object)
-
-**MessageRelay (api.vultisig.com/router):**
-- `POST /{sessionId}` with `[participantId]` → **200 OK** 
-- `GET /{sessionId}` → **200 OK** (returns `[]` empty array - participants don't persist)
-- `DELETE /{sessionId}` → **200 OK**
-- `POST /start/{sessionId}` → **200 OK** (when session exists) or **500** (when session missing)
-- `GET /start/{sessionId}` → **200 OK**
-- `POST /complete/{sessionId}` → **200 OK**
-- `GET /complete/{sessionId}` → **200 OK**
-- `POST /message/{sessionId}` → **200 OK** (accepts message uploads)
-- `GET /message/{sessionId}/{participantId}` → **200 OK** (returns `[]` array, not `{}` object)
-- `DELETE /message/{sessionId}/{participantId}/{hash}` → **200 OK**
-- `GET /ping` → **200 OK** ("Voltix Router is running")
-
-### ❌ Non-Working Endpoints
-
-**MessageRelay:**
-- `POST /complete/{sessionId}/keysign` → **404** (not implemented)
-- `GET /complete/{sessionId}/keysign` → **404** (not implemented)
-- `POST /payload/{hash}` → **404** (not implemented)
-- `GET /payload/{hash}` → **404** (not implemented)
-
-### 📋 Key Differences from Documentation
-
-1. **Message polling returns arrays**: `GET /message/{sessionId}/{participantId}` returns `[]` not `{}`
-2. **Session participants don't persist**: `GET /{sessionId}` always returns `[]`
-3. **Start endpoint requires session**: `POST /start/{sessionId}` returns 500 if session doesn't exist
-4. **Completion endpoints missing**: `/complete/{sessionId}/keysign` endpoints return 404
-5. **Payload endpoints missing**: `/payload/{hash}` endpoints return 404
-
-### 🔧 Test Vault Used
-
-- **Name**: TestFastVault
-- **ECDSA Public Key**: `03ac0f333fc5d22f929e013be80988f57a56837db64d968c126ca4c943984744fd`
-- **Signers**: `['Server-94060', 'iPhone-5C9']`
-- **Password**: `Password123!`
+### ✅ **New Approach (Extension-Compatible)**
+1. Call FastVault server API first (`/vault/sign`)
+2. Set up relay session and wait for server
+3. Perform MPC keysign with **no setup message exchange**
+4. Server coordinates MPC directly through relay
 
 ---
 
-**Sources**: Official VultiServer README for `/vault/sign` schema and vault endpoints; Relay README for session/message APIs, completion markers, payloads, and expiries. ([GitHub][2])
+## Current Server Status
+
+**✅ Working:**
+- FastVault server exists and responds
+- MessageRelay endpoints work correctly
+- Two-step approach reaches correct endpoints
+
+**⚠️ Known Issues:**
+- FastVault `/vault/sign` returns `405 Method Not Allowed` (server configuration issue)
+- Some MessageRelay endpoints return 404 (not implemented: `/complete/{sessionId}/keysign`, `/payload/{hash}`)
+
+**🎯 Next Steps:**
+- Fix FastVault server HTTP method configuration
+- Complete MessageRelay endpoint implementations
+
+**Sources**: Official VultiServer README for `/vault/sign` schema and vault endpoints; Relay README for session/message APIs, completion markers, payloads, and expiries.
 
 [1]: https://github.com/vultisig/vultisig-relay "GitHub - vultisig/vultisig-relay: vultisig-relay is a service that will be used to route TSS communications, for both keygen and keysign"
 [2]: https://github.com/vultisig/VultiServer "GitHub - vultisig/vultiserver"

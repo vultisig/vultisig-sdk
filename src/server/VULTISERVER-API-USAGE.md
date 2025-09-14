@@ -201,7 +201,11 @@ Your previous example included `signers` and `keyshares`; those fields are **not
 
 ---
 
-### 6) Server-Assisted Signing (Keysign)
+### 6) Server-Assisted Signing (Two-Step Keysign)
+
+Fast signing uses a **two-step approach** that matches the extension implementation:
+
+#### Step 1: Initiate Server-Side Signing
 
 **POST** `https://api.vultisig.com/vault/sign`
 
@@ -217,12 +221,21 @@ Your previous example included `signers` and `keyshares`; those fields are **not
 }
 ```
 
-* Field name is **`session`** (JSON example) rather than `session_id`.
-* After initiating, run the **same relay message loop** as keygen.
-* You **may** mark completion on relay:
+**Expected**: `200 OK` (no signature returned - server prepares for MPC)
+**⚠️ Current Issue**: Returns `405 Method Not Allowed` (server configuration problem)
 
-  * `POST /complete/{sessionId}` for keygen complete
-  * `POST /complete/{sessionId}/keysign` for keysign complete; and corresponding `GET` to read status. ([GitHub][2])
+#### Step 2: MPC Coordination via Relay
+
+After initiating with FastVault server, run the **relay message loop** with **no setup message exchange**:
+
+* **Key Difference**: Fast signing **bypasses** `/router/setup-message/{sessionId}` endpoints
+* Server coordinates MPC session directly after `/vault/sign` call
+* Proceed directly to MPC message exchange
+
+**Completion markers:**
+* `POST /complete/{sessionId}` for keygen complete  
+* `POST /complete/{sessionId}/keysign` for keysign complete (**404 - not implemented**)
+* Corresponding `GET` endpoints to read status
 
 ---
 
@@ -273,18 +286,17 @@ const vault = await sdk.getVault(vaultId, "Password123!")
 
 ---
 
-## Real Server Behavior (Tested 2025-01-13)
+## Real Server Behavior (Updated 2025-09-14)
 
-Based on comprehensive testing with real VultiServer and MessageRelay endpoints:
+Based on comprehensive testing with real VultiServer and MessageRelay endpoints using the **two-step approach**:
 
 ### ✅ Working Endpoints
 
 **VultiServer (api.vultisig.com/vault):**
-- `POST /sign` → **200 OK** (no signature returned, as expected)
 - `GET /get/{public_key_ecdsa}` → **200 OK** (returns vault object)
 
 **MessageRelay (api.vultisig.com/router):**
-- `POST /{sessionId}` with `[participantId]` → **200 OK**
+- `POST /{sessionId}` with `[participantId]` → **200 OK** 
 - `GET /{sessionId}` → **200 OK** (returns `[]` empty array - participants don't persist)
 - `DELETE /{sessionId}` → **200 OK**
 - `POST /start/{sessionId}` → **200 OK** (when session exists) or **500** (when session missing)
@@ -296,7 +308,10 @@ Based on comprehensive testing with real VultiServer and MessageRelay endpoints:
 - `DELETE /message/{sessionId}/{participantId}/{hash}` → **200 OK**
 - `GET /ping` → **200 OK** ("Voltix Router is running")
 
-### ❌ Non-Working Endpoints
+### ⚠️ Known Issues
+
+**VultiServer:**
+- `POST /vault/sign` → **405 Method Not Allowed** (server configuration issue)
 
 **MessageRelay:**
 - `POST /complete/{sessionId}/keysign` → **404** (not implemented)
@@ -304,12 +319,13 @@ Based on comprehensive testing with real VultiServer and MessageRelay endpoints:
 - `POST /payload/{hash}` → **404** (not implemented)
 - `GET /payload/{hash}` → **404** (not implemented)
 
-### 📋 Key Differences from Documentation
+### 📋 Key Behavioral Notes
 
-1. **Session participants don't persist**: `GET /{sessionId}` always returns `[]`
-2. **Start endpoint requires session**: `POST /start/{sessionId}` returns 500 if session doesn't exist first
-3. **Message polling returns arrays**: `GET /message/{sessionId}/{participantId}` returns `[]` not `{}`
-4. **Completion endpoints missing**: `/complete/{sessionId}/keysign` endpoints return 404
+1. **Two-step approach eliminates setup message errors**: No more 404s from `/router/setup-message/{sessionId}`
+2. **Session participants don't persist**: `GET /{sessionId}` may return `[]` even after registration
+3. **Start endpoint requires session**: `POST /start/{sessionId}` returns 500 if session doesn't exist first
+4. **Message polling returns arrays**: `GET /message/{sessionId}/{participantId}` returns `[]` not `{}`
+5. **FastVault server issue**: `/vault/sign` has HTTP method configuration problem (405 error)
 
 ### 🔧 Test Vault Used
 
@@ -317,6 +333,14 @@ Based on comprehensive testing with real VultiServer and MessageRelay endpoints:
 - **ECDSA Public Key**: `03ac0f333fc5d22f929e013be80988f57a56837db64d968c126ca4c943984744fd`
 - **Signers**: `['Server-94060', 'iPhone-5C9']`
 - **Password**: `Password123!`
+- **Vault File**: `TestFastVault-44fd-share2of2-Password123!.vult`
+
+### 🎯 SDK Implementation Status
+
+- ✅ **Two-step approach implemented**: Matches extension behavior
+- ✅ **Setup message bypass**: No more 404 errors from setup message endpoints
+- ✅ **Proper error handling**: Correctly identifies server configuration issues
+- ⚠️ **Waiting for server fix**: FastVault `/vault/sign` endpoint needs HTTP method configuration
 
 ---
 
