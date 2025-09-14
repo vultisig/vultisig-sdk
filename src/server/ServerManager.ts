@@ -78,7 +78,7 @@ export class ServerManager {
    * Step 1: Call FastVault server API to initiate signing
    * Step 2: Use MPC keysign with server coordination (skipping setup message)
    */
-  async signWithServer(vault: Vault, payload: SigningPayload, vaultPassword: string): Promise<Signature> {
+  async signWithServer(vault: any, payload: SigningPayload, vaultPassword: string): Promise<Signature> {
     // Validate vault is a fast vault
     const hasFastVaultServer = vault.signers.some(signer => signer.startsWith('Server-'))
     if (!hasFastVaultServer) {
@@ -107,8 +107,14 @@ export class ServerManager {
     const chainKind = getChainKind(chain)
     const signatureAlgorithm = signatureAlgorithms[chainKind]
 
-    // Prepare messages for signing
-    const messages = shouldBePresent(payload.messageHashes, 'payload.messageHashes')
+    // Prepare messages for signing - compute if not provided
+    let messages: string[]
+    if (payload.messageHashes) {
+      messages = payload.messageHashes
+    } else {
+      // Compute messageHashes from raw transaction data (like the extension does)
+      messages = await this.computeMessageHashesFromTransaction(payload, walletCore, chain, vault)
+    }
 
     // Generate session parameters
     const sessionId = generateSessionId()
@@ -469,6 +475,64 @@ export class ServerManager {
     }
     
     throw new Error('Timeout waiting for peers to join session')
+  }
+
+  /**
+   * Compute message hashes from raw transaction data
+   * Follows the same pattern as the extension's keysign flow
+   */
+  private async computeMessageHashesFromTransaction(
+    payload: SigningPayload, 
+    walletCore: any, 
+    chain: any,
+    vault: any
+  ): Promise<string[]> {
+    try {
+      // Import required functions
+      const { getPublicKey } = await import('@core/chain/publicKey/getPublicKey')
+      const { getTxInputData } = await import('@core/mpc/keysign/txInputData')
+      const { getPreSigningHashes } = await import('@core/chain/tx/preSigningHashes')
+      const { create } = await import('@bufbuild/protobuf')
+      const { CoinSchema } = await import('@core/mpc/types/vultisig/keysign/v1/coin_pb')
+      const { KeysignPayloadSchema } = await import('@core/mpc/types/vultisig/keysign/v1/keysign_message_pb')
+      const { getChainSpecific } = await import('@core/mpc/keysign/chainSpecific')
+
+      // For Ethereum transactions, we can compute the hash directly from the transaction data
+      // This is a simplified implementation for testing - a full implementation would
+      // follow the extension's getKeysignPayload logic for all chains
+      
+      if (payload.chain === 'ethereum' || payload.chain === 'eth') {
+        // Import viem for transaction serialization and hashing
+        const { serializeTransaction, keccak256 } = await import('viem')
+        
+        // Build EIP-1559 unsigned transaction
+        const tx = payload.transaction
+        const unsigned = {
+          type: 'eip1559' as const,
+          chainId: tx.chainId,
+          to: tx.to as `0x${string}`,
+          nonce: tx.nonce,
+          gas: BigInt(tx.gasLimit),
+          data: (tx.data || '0x') as `0x${string}`,
+          value: BigInt(tx.value),
+          maxFeePerGas: BigInt(tx.maxFeePerGas ?? tx.gasPrice ?? '0'),
+          maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0'),
+          accessList: [],
+        }
+        
+        // Serialize and hash the transaction
+        const serialized = serializeTransaction(unsigned)
+        const signingHash = keccak256(serialized).slice(2)
+        
+        return [signingHash]
+      }
+      
+      // For other chains, we would need to implement proper KeysignPayload conversion
+      throw new Error(`Message hash computation not yet implemented for chain: ${payload.chain}`)
+
+    } catch (error) {
+      throw new Error(`Failed to compute message hashes: ${(error as Error).message}`)
+    }
   }
 
 }

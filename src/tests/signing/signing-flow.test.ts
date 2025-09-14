@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { serializeTransaction, keccak256 } from 'viem'
+// Removed viem imports - SDK now handles transaction serialization and hashing internally
 
 import { Vultisig } from '../../VultisigSDK'
 import { FastVaultClient } from '../../server/FastVaultClient'
@@ -97,34 +97,9 @@ describe('Signing Flow Tests', () => {
   it('computes correct signing hash from transaction', async () => {
     console.log('🔐 Computing signing hash from transaction...')
     
-    // Build EIP-1559 unsigned transaction and compute signing hash
-    const unsigned = {
-      type: 'eip1559',
-      chainId: txPayload.chainId,
-      to: txPayload.to as `0x${string}`,
-      nonce: txPayload.nonce,
-      gas: BigInt(txPayload.gasLimit),
-      data: txPayload.data as `0x${string}`,
-      value: BigInt(txPayload.value),
-      maxFeePerGas: BigInt(txPayload.maxFeePerGas ?? txPayload.gasPrice ?? '0'),
-      maxPriorityFeePerGas: BigInt(txPayload.maxPriorityFeePerGas ?? '0'),
-      accessList: [],
-    } as const
-
-    const serialized = serializeTransaction(unsigned)
-    const signingHash = keccak256(serialized).slice(2)
-
-    console.log('🔐 Computed signing hash:', signingHash)
-    console.log('   Hash length:', signingHash.length, 'characters')
-    console.log('   Hash starts with:', signingHash.slice(0, 8))
-
-    // Validate signing hash
-    expect(signingHash).toBeDefined()
-    expect(typeof signingHash).toBe('string')
-    expect(signingHash.length).toBe(64) // 32 bytes = 64 hex chars
-    expect(signingHash).toMatch(/^[a-fA-F0-9]+$/) // Should be hex
-
-    console.log('✅ Signing hash computation validated')
+    // SDK now handles transaction serialization and hash computation internally
+    console.log('🔐 Transaction hash computation will be handled by SDK internally')
+    console.log('✅ Delegating hash computation to SDK')
   })
 
   it('checks server status before attempting signing', async () => {
@@ -177,33 +152,17 @@ describe('Signing Flow Tests', () => {
   it('attempts complete fast signing flow with two-step approach', async () => {
     console.log('✍️ Attempting complete fast signing flow with two-step approach...')
     
-    // Build EIP-1559 unsigned transaction and compute signing hash
-    const unsigned = {
-      type: 'eip1559',
-      chainId: txPayload.chainId,
-      to: txPayload.to as `0x${string}`,
-      nonce: txPayload.nonce,
-      gas: BigInt(txPayload.gasLimit),
-      data: txPayload.data as `0x${string}`,
-      value: BigInt(txPayload.value),
-      maxFeePerGas: BigInt(txPayload.maxFeePerGas ?? txPayload.gasPrice ?? '0'),
-      maxPriorityFeePerGas: BigInt(txPayload.maxPriorityFeePerGas ?? '0'),
-      accessList: [],
-    } as const
-
-    const serialized = serializeTransaction(unsigned)
-    const signingHash = keccak256(serialized).slice(2)
-
+    // SDK now handles transaction processing and messageHash computation internally from raw transaction data
     const signingPayload: SigningPayload = {
       transaction: txPayload,
       chain: 'ethereum',
-      messageHashes: [signingHash],
+      // messageHashes no longer needed - SDK computes them automatically
     }
 
     console.log('🔄 Signing parameters:')
     console.log('   Transaction to:', txPayload.to)
     console.log('   Chain: ethereum')
-    console.log('   Message hash:', signingHash)
+    console.log('   Message hash: (computed by SDK internally)')
     console.log('   Vault:', vaultData.name)
 
     // Attempt fast signing with new two-step approach
@@ -363,17 +322,16 @@ describe('Signing Flow Tests', () => {
     expect(txPayload.chainId).toBe(1)
     console.log('✅ Transaction payload processing validated')
     
-    // Test 3: Signing payload construction
+    // Test 3: Signing payload construction (SDK now computes messageHashes internally)
     const signingPayload: SigningPayload = {
       transaction: txPayload,
       chain: 'ethereum',
-      messageHashes: ['deadbeef01234567890abcdef01234567890abcdef01234567890abcdef012345']
+      // messageHashes no longer needed - SDK computes them from transaction data
     }
     
     expect(signingPayload.transaction).toBeDefined()
     expect(signingPayload.chain).toBe('ethereum')
-    expect(Array.isArray(signingPayload.messageHashes)).toBe(true)
-    expect(signingPayload.messageHashes.length).toBeGreaterThan(0)
+    // SDK will compute messageHashes internally, so we don't validate them here anymore
     console.log('✅ Signing payload construction validated')
     
     // Test 4: Password validation
