@@ -51,6 +51,11 @@ describe('Signing Flow Tests', () => {
     vault = await vultisig.addVault(vaultFile, password)
     vaultData = (vault as any).vaultData
 
+    // Load vault addresses from the details file
+    const vaultDetailsPath = join(__dirname, '..', 'vaults', 'vault-details-TestFastVault-44fd-share2of2-Password123!.json')
+    const vaultDetails = JSON.parse(readFileSync(vaultDetailsPath, 'utf8'))
+    vaultData.addresses = vaultDetails.addresses
+
     // Load ETH tx payload
     const txJsonPath = join(__dirname, 'eth-tx-payload.json')
     const txContent = readFileSync(txJsonPath, 'utf8')
