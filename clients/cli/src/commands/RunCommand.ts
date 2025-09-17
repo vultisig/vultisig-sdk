@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 // SDK will be made available globally by the launcher
-declare const VultisigSDK: any
+declare const Vultisig: any
 
 // Polyfill File for Node.js
 if (typeof File === 'undefined') {
@@ -33,9 +33,12 @@ if (typeof File === 'undefined') {
   } as any
 }
 import { DaemonManager } from '../daemon/DaemonManager'
-import { promptForPasswordWithValidation, stripPasswordQuotes } from '../utils/password'
-import { findVultFiles, getVaultsDir } from '../utils/paths'
 import { getVaultConfig } from '../utils/env'
+import {
+  promptForPasswordWithValidation,
+  stripPasswordQuotes,
+} from '../utils/password'
+import { findVultFiles, getVaultsDir } from '../utils/paths'
 
 export type RunOptions = {
   vault?: string
@@ -51,7 +54,7 @@ export class RunCommand {
 
     // Initialize SDK first
     console.log('⚙️ Initializing Vultisig SDK...')
-    const sdk = new VultisigSDK({
+    const sdk = new Vultisig({
       defaultChains: ['bitcoin', 'ethereum', 'solana'],
       defaultCurrency: 'USD',
     })
@@ -75,7 +78,9 @@ export class RunCommand {
         fileName.toLowerCase().includes('password') &&
         !fileName.toLowerCase().includes('nopassword')
 
-      let password = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
+      let password = vaultConfig.vaultPassword
+        ? stripPasswordQuotes(vaultConfig.vaultPassword)
+        : undefined
       if (isEncrypted && !password) {
         password = await promptForPasswordWithValidation(vaultConfig.vaultPath)
       } else if (!isEncrypted) {
@@ -94,7 +99,9 @@ export class RunCommand {
       const vultFiles = await findVultFiles(vaultsDir)
 
       if (vultFiles.length === 0) {
-        throw new Error(`No vault files (.vult) found in ${vaultsDir}. Configure VAULT_PATH in .env or use --vault option.`)
+        throw new Error(
+          `No vault files (.vult) found in ${vaultsDir}. Configure VAULT_PATH in .env or use --vault option.`
+        )
       }
 
       const vaultPath = vultFiles[0]
@@ -108,7 +115,9 @@ export class RunCommand {
         fileName.toLowerCase().includes('password') &&
         !fileName.toLowerCase().includes('nopassword')
 
-      let password = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
+      let password = vaultConfig.vaultPassword
+        ? stripPasswordQuotes(vaultConfig.vaultPassword)
+        : undefined
       if (isEncrypted && !password) {
         password = await promptForPasswordWithValidation(vaultPath)
       } else if (!isEncrypted) {

@@ -14,12 +14,14 @@ export const getVaultFromServer = async ({
 }: GetVaultFromServerInput) => {
   const url = `${fastVaultServerUrl}/get/${vaultId}`
 
-  const response = await queryUrl(url, {
+  await queryUrl(url, {
     headers: {
       'x-password': base64Encode(password),
     },
     responseType: 'json',
   })
 
-  return response
+  return {
+    password,
+  }
 }

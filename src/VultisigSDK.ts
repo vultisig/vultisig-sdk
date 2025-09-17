@@ -1,19 +1,16 @@
-import type { 
-  Vault,
-  ServerStatus,
-  KeygenProgressUpdate,
+import { ServerManager } from './server'
+import type {
   AddressBook,
   AddressBookEntry,
-  ValidationResult
+  ServerStatus,
+  ValidationResult,
 } from './types'
-
-import { ServerManager } from './server'
-import { WASMManager } from './wasm'
-import { Vault as VaultClass } from './vault/Vault'
 import { AddressBookManager } from './vault/AddressBook'
 import { ChainManagement } from './vault/ChainManagement'
-import { VaultManagement } from './vault/VaultManagement'
 import { ValidationHelpers } from './vault/utils/validation'
+import { Vault as VaultClass } from './vault/Vault'
+import { VaultManagement } from './vault/VaultManagement'
+import { WASMManager } from './wasm'
 
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
@@ -22,7 +19,7 @@ export class Vultisig {
   private serverManager: ServerManager
   private wasmManager: WASMManager
   private initialized = false
-  
+
   // Module managers
   private addressBookManager: AddressBookManager
   private chainManagement: ChainManagement
@@ -46,12 +43,12 @@ export class Vultisig {
   }) {
     this.wasmManager = new WASMManager(config?.wasmConfig)
     this.serverManager = new ServerManager(config?.serverEndpoints)
-    
+
     // Initialize module managers
     this.addressBookManager = new AddressBookManager()
     this.chainManagement = new ChainManagement({
       defaultChains: config?.defaultChains,
-      defaultCurrency: config?.defaultCurrency
+      defaultCurrency: config?.defaultCurrency,
     })
     this.vaultManagement = new VaultManagement(this.wasmManager, this)
   }
@@ -70,7 +67,7 @@ export class Vultisig {
    */
   private async initialize(): Promise<void> {
     if (this.initialized) return
-    
+
     try {
       await this.wasmManager.initialize()
       this.initialized = true
@@ -92,7 +89,7 @@ export class Vultisig {
    * Create new vault (auto-initializes SDK, sets as active)
    */
   async createVault(
-    name: string, 
+    name: string,
     options?: {
       type?: 'fast' | 'secure'
       keygenMode?: 'relay' | 'local'

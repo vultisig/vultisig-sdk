@@ -110,10 +110,8 @@ globalThis.fetch = async function (url) {
 
 // Load SDK globally for tests
 const sdkPath = path.resolve(__dirname, '../../../../src')
-const { Vultisig: VultisigSDK } = require(
-  path.resolve(sdkPath, 'dist/index.node.cjs')
-)
-globalThis.VultisigSDK = VultisigSDK
+const { Vultisig } = require(path.resolve(sdkPath, 'dist/index.node.cjs'))
+globalThis.Vultisig = Vultisig
 
 console.log('✅ CLI test environment setup complete')
 
@@ -122,7 +120,7 @@ const testFastVaultDetails = require('../../vaults/vault-details-TestFastVault-4
 const testSecureVaultDetails = require('../../vaults/vault-details-TestSecureVault-cfa0-share2of2-Nopassword.json')
 
 module.exports = {
-  VultisigSDK,
+  Vultisig,
   projectRoot: path.resolve(__dirname, '../../../..'),
   vaultsDir: path.resolve(__dirname, '../../vaults'),
   expectedAddresses: {

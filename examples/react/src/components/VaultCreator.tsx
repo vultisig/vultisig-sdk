@@ -3,12 +3,12 @@ import {
   validatePassword,
   validateVaultName,
   Vault,
-  VultisigSDK,
+  Vultisig,
 } from '@vultisig/sdk'
 import React, { useState } from 'react'
 
 type VaultCreatorProps = {
-  sdk: VultisigSDK
+  sdk: Vultisig
   onVaultCreated: (vault: Vault) => void
 }
 

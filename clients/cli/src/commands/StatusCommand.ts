@@ -1,5 +1,5 @@
 // SDK will be made available globally by the launcher
-declare const VultisigSDK: any
+declare const Vultisig: any
 import { DaemonManager } from '../daemon/DaemonManager'
 
 export class StatusCommand {
@@ -15,7 +15,7 @@ export class StatusCommand {
 
       // If daemon is running, get additional info
       try {
-        const sdk = new VultisigSDK()
+        const sdk = new Vultisig()
         const activeVault = sdk.getActiveVault()
         if (activeVault) {
           const summary = activeVault.summary()
@@ -31,7 +31,7 @@ export class StatusCommand {
 
       // Check if there are any stored vaults
       try {
-        const sdk = new VultisigSDK()
+        const sdk = new Vultisig()
         const vaults = await sdk.listVaults()
         if (vaults.length > 0) {
           console.log(
