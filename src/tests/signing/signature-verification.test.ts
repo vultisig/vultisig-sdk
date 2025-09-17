@@ -14,9 +14,9 @@ describe('Signature Verification Tests', () => {
     console.log('🔍 SIGNATURE VERIFICATION TEST')
     console.log('===============================')
     
-    // The signature we got from the successful signing test
+    // The signature we got from the successful eth-signer integration test
     const testSignature = {
-      signature: '304402207e6200dfa5e4b59374367f1014a5772519bd8dc980c9d5dbdc6280fcfbd76c0202201f90338f60a390631e2114803ddd1a7f752fd5364ef17bcb94b1d34f9c84ddbb',
+      signature: '3044022014a2845e394350b95e13e075cac23337ddc4a82f3b19e6a99db2270bef8844bf022016480c8c290920b6109a0ad00f016ce96aa937463f91eeebd2f524dfce0b0e34',
       format: 'ECDSA',
       recovery: 1
     }
@@ -133,9 +133,9 @@ describe('Signature Verification Tests', () => {
     console.log('\n🔗 ETHEREUM TRANSACTION VERIFICATION')
     console.log('====================================')
     
-    // The signature we got from the successful signing test
+    // The signature we got from the successful eth-signer integration test
     const testSignature = {
-      signature: '304402207e6200dfa5e4b59374367f1014a5772519bd8dc980c9d5dbdc6280fcfbd76c0202201f90338f60a390631e2114803ddd1a7f752fd5364ef17bcb94b1d34f9c84ddbb',
+      signature: '3044022014a2845e394350b95e13e075cac23337ddc4a82f3b19e6a99db2270bef8844bf022016480c8c290920b6109a0ad00f016ce96aa937463f91eeebd2f524dfce0b0e34',
       format: 'ECDSA',
       recovery: 1
     }
