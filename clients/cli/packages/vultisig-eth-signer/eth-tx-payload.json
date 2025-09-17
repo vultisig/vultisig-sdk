@@ -3,7 +3,6 @@
   "value": "1000000000000000",
   "data": "0x",
   "gasLimit": "21000",
-  "gasPrice": "20000000000",
   "nonce": 122,
   "type": 2,
   "chainId": 1,
