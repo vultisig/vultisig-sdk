@@ -10,7 +10,7 @@
  */
 
 import { VultisigSigner } from './dist/index.js'
-import { JsonRpcProvider, parseEther } from 'ethers'
+import { JsonRpcProvider, formatEther } from 'ethers'
 import { serializeTransaction, keccak256, recoverAddress } from 'viem'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -67,7 +67,7 @@ async function testCliSigning() {
   console.log('\n💰 2. Checking account balance...')
   const balance = await readProvider.getBalance(signerAddress)
   console.log('   Balance:', balance.toString(), 'wei')
-  console.log('   Balance ETH:', parseEther(balance.toString()).toString())
+  console.log('   Balance ETH:', formatEther(balance))
   
   console.log('\n🔢 3. Fetching current nonce from RPC...')
   const currentNonce = await readProvider.getTransactionCount(signerAddress, 'pending')
