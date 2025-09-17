@@ -17,6 +17,9 @@ const external = [
   'events',
   'os',
   
+  // Runtime globals that should not be bundled
+  'fetch',
+  
   // External npm packages
   'axios',
   'viem', 
