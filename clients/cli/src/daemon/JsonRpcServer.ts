@@ -74,13 +74,36 @@ export class JsonRpcServer {
               // --- ethers v6 canonical path ---
               const { serializeTransaction } = (await import('ethers')) as any
 
-              // --- parse 65-byte signature (r,s,v) from SDK ---
+              // --- parse DER signature from SDK and convert to r,s,v ---
               const sig = signature.signature
-              if (sig.length !== 132) throw new Error(`Unexpected sig length: ${sig.length}`)
-
-              let r = '0x' + sig.slice(2, 66)
-              let s = '0x' + sig.slice(66, 130)
-              const vByte = parseInt(sig.slice(130, 132), 16)
+              console.log('🔍 Signature format:', signature.format, 'Length:', sig.length)
+              
+              let r: string, s: string, vByte: number
+              
+              if (signature.format === 'ECDSA' && sig.length === 140) {
+                // DER-encoded signature - parse it
+                console.log('📝 Parsing DER signature...')
+                const rLength = parseInt(sig.substr(6, 2), 16)
+                const rHex = sig.substr(8, rLength * 2)
+                const sStart = 8 + rLength * 2 + 4
+                const sLength = parseInt(sig.substr(sStart - 2, 2), 16)
+                const sHex = sig.substr(sStart, sLength * 2)
+                
+                r = '0x' + rHex.padStart(64, '0')
+                s = '0x' + sHex.padStart(64, '0')
+                vByte = signature.recovery || 0
+                
+                console.log('   Parsed r:', r)
+                console.log('   Parsed s:', s)
+                console.log('   Recovery:', vByte)
+              } else if (sig.length === 132) {
+                // Raw r+s+v format (legacy)
+                r = '0x' + sig.slice(2, 66)
+                s = '0x' + sig.slice(66, 130)
+                vByte = parseInt(sig.slice(130, 132), 16)
+              } else {
+                throw new Error(`Unsupported signature format: ${signature.format}, length: ${sig.length}`)
+              }
 
               // Map to yParity ∈ {0,1} for EIP-1559
               let yParity = vByte & 1
