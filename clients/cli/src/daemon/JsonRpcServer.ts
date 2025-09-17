@@ -63,14 +63,65 @@ export class JsonRpcServer {
           console.log('  Signature value:', signature.signature)
           console.log('  Format:', signature.format)
 
-          // Return both the DER signature and any serialized transaction
+          // Create complete serialized transaction for immediate broadcast
+          let serializedTransaction = signature.signature
+          
+          if (params?.messageType === 'eth_tx') {
+            try {
+              const { serializeTransaction } = await import('viem')
+              
+              // Parse DER signature to get r, s, v components
+              const sig = signature.signature
+              console.log('🔧 Creating serialized transaction from DER signature...')
+              
+              if (signature.format === 'ECDSA' && sig.length >= 140) {
+                // Parse DER signature
+                const rLength = parseInt(sig.substr(6, 2), 16)
+                const rHex = sig.substr(8, rLength * 2)
+                const sStart = 8 + rLength * 2 + 4
+                const sLength = parseInt(sig.substr(sStart - 2, 2), 16)
+                const sHex = sig.substr(sStart, sLength * 2)
+                
+                const r = '0x' + rHex.padStart(64, '0')
+                const s = '0x' + sHex.padStart(64, '0')
+                const v = (signature.recovery || 0) + 27
+                
+                // Create complete transaction with signature
+                const tx = params.payload
+                const completeTransaction = {
+                  type: 'eip1559' as const,
+                  chainId: tx.chainId,
+                  nonce: tx.nonce,
+                  to: tx.to,
+                  value: BigInt(tx.value),
+                  data: tx.data || '0x',
+                  gas: BigInt(tx.gasLimit),
+                  maxFeePerGas: BigInt(tx.maxFeePerGas || tx.gasPrice),
+                  maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas || '0'),
+                  accessList: [],
+                  r,
+                  s,
+                  v: BigInt(v)
+                }
+                
+                // Serialize the complete signed transaction
+                serializedTransaction = serializeTransaction(completeTransaction)
+                console.log('✅ Complete signed transaction created for broadcast')
+                console.log('📏 Length:', serializedTransaction.length, 'characters')
+              }
+            } catch (error) {
+              console.log('❌ Failed to create serialized transaction:', error.message)
+              console.log('📝 Falling back to DER signature')
+            }
+          }
+
           return {
             id: jsonRpcRequest.id,
             result: {
               signature: signature.signature,
               format: signature.format,
               recovery: signature.recovery,
-              raw: signature.signature // For now, return the DER signature as raw
+              raw: serializedTransaction // Complete serialized transaction ready for broadcast
             }
           }
           

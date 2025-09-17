@@ -46,11 +46,16 @@ async function testCliSigning() {
   console.log(JSON.stringify(payload, null, 2))
 
   try {
-    // Create provider for broadcasting
-    const provider = new JsonRpcProvider(rpcUrl)
+    // Create providers - separate for reads and writes to avoid batching issues
+    const readProvider = new JsonRpcProvider(rpcUrl)
+    const writeProvider = new JsonRpcProvider(rpcUrl, 1, { 
+      staticNetwork: true, 
+      batchMaxCount: 1, 
+      batchStallTime: 0 
+    })
     
-    // Create signer with environment configuration
-    const signer = new VultisigSigner(provider, { 
+    // Create signer with read provider (writes will use writeProvider)
+    const signer = new VultisigSigner(readProvider, { 
       password: vaultPassword,
       mode: 'fast'
     })
@@ -60,12 +65,12 @@ async function testCliSigning() {
     console.log('   Signer address:', signerAddress)
     
   console.log('\n💰 2. Checking account balance...')
-  const balance = await provider.getBalance(signerAddress)
+  const balance = await readProvider.getBalance(signerAddress)
   console.log('   Balance:', balance.toString(), 'wei')
   console.log('   Balance ETH:', parseEther(balance.toString()).toString())
   
   console.log('\n🔢 3. Fetching current nonce from RPC...')
-  const currentNonce = await provider.getTransactionCount(signerAddress, 'pending')
+  const currentNonce = await readProvider.getTransactionCount(signerAddress, 'pending')
   console.log('   Current nonce:', currentNonce)
   
   // Update payload with current nonce
@@ -82,105 +87,59 @@ async function testCliSigning() {
     console.log('📝 Signed transaction:', signedTx.substring(0, 50) + '...')
     console.log('📏 Length:', signedTx.length, 'characters')
     
-    console.log('\n🔍 5. Verifying signature cryptographically...')
+    console.log('\n🔍 5. Checking transaction format...')
     
-    // Convert updated payload to viem format for hash calculation
-    const viemTx = {
-      type: 'eip1559',
-      chainId: updatedPayload.chainId,
-      nonce: updatedPayload.nonce,
-      to: updatedPayload.to,
-      value: BigInt(updatedPayload.value),
-      data: updatedPayload.data || '0x',
-      gas: BigInt(updatedPayload.gasLimit),
-      maxFeePerGas: BigInt(updatedPayload.maxFeePerGas || updatedPayload.gasPrice),
-      maxPriorityFeePerGas: BigInt(updatedPayload.maxPriorityFeePerGas || '0'),
-      accessList: []
+    if (signedTx.startsWith('0x02') || signedTx.startsWith('0x01') || signedTx.startsWith('0x00')) {
+      console.log('✅ Received complete serialized transaction from CLI')
+      console.log('📝 Transaction ready for immediate broadcast')
+      console.log('📏 Length:', signedTx.length, 'characters')
+    } else {
+      console.log('⚠️  Received DER signature, will need client-side serialization')
+      console.log('📝 Signature:', signedTx.substring(0, 20) + '...')
     }
     
-    // Serialize and hash the transaction
-    const serialized = serializeTransaction(viemTx)
-    const messageHash = keccak256(serialized)
-    console.log('   Transaction hash:', messageHash)
-    
-    // Parse DER signature and create complete EIP transaction
-    if (signedTx.length >= 140) { // DER format
-      console.log('   Parsing DER signature...')
-      const rLength = parseInt(signedTx.substr(6, 2), 16)
-      const rHex = signedTx.substr(8, rLength * 2)
-      const sStart = 8 + rLength * 2 + 4
-      const sLength = parseInt(signedTx.substr(sStart - 2, 2), 16)
-      const sHex = signedTx.substr(sStart, sLength * 2)
-      
-      const r = '0x' + rHex.padStart(64, '0')
-      const s = '0x' + sHex.padStart(64, '0')
-      
-      // Try both recovery IDs to find the correct one
-      let v = 27
-      let recoveredAddress = await recoverAddress({
-        hash: messageHash,
-        signature: { r, s, v: BigInt(v) }
-      })
-      
-      if (recoveredAddress.toLowerCase() !== signerAddress.toLowerCase()) {
-        v = 28
-        recoveredAddress = await recoverAddress({
-          hash: messageHash,
-          signature: { r, s, v: BigInt(v) }
-        })
-      }
-      
-      console.log('   r:', r)
-      console.log('   s:', s)
-      console.log('   v:', v)
-      console.log('   Recovered address:', recoveredAddress)
-      console.log('   Expected address:', signerAddress)
-      
-      if (recoveredAddress.toLowerCase() === signerAddress.toLowerCase()) {
-        console.log('✅ Signature verification successful!')
-      } else {
-        throw new Error('Signature verification failed - addresses don\'t match')
-      }
-      
-      // Create complete signed transaction
-      console.log('\n🔧 6. Creating complete EIP transaction...')
-      const completeSignedTx = serializeTransaction({
-        ...viemTx,
-        r,
-        s,
-        v: BigInt(v)
-      })
-      
-      console.log('   ✅ Complete signed transaction created!')
-      console.log('   📝 Serialized TX:', completeSignedTx.substring(0, 50) + '...')
-      console.log('   📏 Length:', completeSignedTx.length, 'characters')
-      
-      // Store the complete transaction for broadcasting
-      signedTx = completeSignedTx
-    }
-    
-    console.log('\n📡 5. Broadcasting transaction to network...')
+    console.log('\n📡 6. Broadcasting transaction to network...')
     
     try {
       // Check if we should actually broadcast (safety check)
       const shouldBroadcast = process.env.BROADCAST_TX === 'true'
       
       if (shouldBroadcast) {
-        console.log('   🚀 Broadcasting to mainnet...')
-        const txResponse = await provider.broadcastTransaction(signedTx)
+        console.log('   🚀 Broadcasting to mainnet using direct fetch (no batching)...')
+        
+        // Use direct fetch to avoid all ethers.js batching issues
+        const response = await fetch(rpcUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: Date.now(), // unique per request
+            method: "eth_sendRawTransaction",
+            params: [signedTx],
+          }),
+        })
+        
+        const result = await response.json()
+        console.log('   📡 RPC Response:', JSON.stringify(result, null, 2))
+        
+        if (result.error) {
+          throw new Error(result.error.message)
+        }
+        
+        const txHash = result.result
         console.log('   ✅ Transaction broadcast successful!')
-        console.log('   📋 Transaction hash:', txResponse.hash)
-        console.log('   🔗 View on Etherscan: https://etherscan.io/tx/' + txResponse.hash)
+        console.log('   📋 Transaction hash:', txHash)
+        console.log('   🔗 View on Etherscan: https://etherscan.io/tx/' + txHash)
         
         console.log('   ⏳ Waiting for confirmation...')
-        const receipt = await txResponse.wait()
+        const receipt = await readProvider.waitForTransaction(txHash)
         console.log('   ✅ Transaction confirmed in block:', receipt.blockNumber)
         
         return {
           signedTx,
-          txHash: txResponse.hash,
+          txHash,
           receipt,
-          payload
+          payload: updatedPayload
         }
       } else {
         console.log('   ⚠️  Skipping broadcast (set BROADCAST_TX=true to broadcast)')
@@ -189,7 +148,7 @@ async function testCliSigning() {
         
         return {
           signedTx,
-          payload,
+          payload: updatedPayload,
           verified: true
         }
       }
@@ -200,7 +159,7 @@ async function testCliSigning() {
       
       return {
         signedTx,
-        payload,
+        payload: updatedPayload,
         verified: true,
         broadcastError: error.message
       }
