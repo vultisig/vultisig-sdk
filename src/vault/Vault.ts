@@ -1,7 +1,7 @@
-import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import type { Vault as CoreVault } from '@core/ui/vault/Vault'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { deriveAddress } from '../core/chain/publicKey/address/deriveAddress'
+import { getPublicKey } from '../core/chain/publicKey/getPublicKey'
+import type { Vault as CoreVault } from '../core/ui/vault/Vault'
+import { memoizeAsync } from '../lib/utils/memoizeAsync'
 import { initWasm } from '@trustwallet/wallet-core'
 import type { WalletCore } from '@trustwallet/wallet-core'
 

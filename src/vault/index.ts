@@ -16,7 +16,7 @@ export { ValidationHelpers } from './utils/validation'
 // Vault utilities - use VaultManager for encryption/decryption operations
 
 // Re-export main vault type with alias to avoid conflict
-export type { Vault as CoreVault } from '@core/ui/vault/Vault'
+export type { Vault as CoreVault } from '../core/ui/vault/Vault'
 
 // Stub types for compilation - actual types come from core workspace
 export type VaultFolder = any

@@ -1,5 +1,5 @@
-import { initializeMpcLib } from '@core/mpc/lib/initialize'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { initializeMpcLib } from '../core/mpc/lib/initialize'
+import { memoizeAsync } from '../lib/utils/memoizeAsync'
 import { initWasm } from '@trustwallet/wallet-core'
 
 /**

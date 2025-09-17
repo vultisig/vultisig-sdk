@@ -4,20 +4,21 @@
  */
 
 // Re-export core types from their actual locations
-export type { ChainKind } from '@core/chain/ChainKind'
-export type { AccountCoin } from '@core/chain/coin/AccountCoin'
-export type { Coin } from '@core/chain/coin/Coin'
-export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
-export type { MpcServerType } from '@core/mpc/MpcServerType'
-import type { Vault as CoreVault } from '@core/ui/vault/Vault'
-export type { VaultKeyShares } from '@core/ui/vault/Vault'
+export type { ChainKind } from '../core/chain/ChainKind'
+export type { AccountCoin } from '../core/chain/coin/AccountCoin'
+export type { Coin } from '../core/chain/coin/Coin'
+export type { PublicKeys } from '../core/chain/publicKey/PublicKeys'
+export type { MpcServerType } from '../core/mpc/MpcServerType'
+import type { Vault as CoreVault } from '../core/ui/vault/Vault'
+export type { VaultKeyShares } from '../core/ui/vault/Vault'
 
 // SDK-extended vault type that includes calculated threshold
 export type Vault = CoreVault & {
   threshold?: number
 }
-export type { VaultFolder } from '@core/ui/vault/VaultFolder'
-export type { VaultSecurityType } from '@core/ui/vault/VaultSecurityType'
+// VaultFolder and VaultSecurityType not available in copied core - using local types
+export type VaultFolder = 'fast' | 'secure'
+export type VaultSecurityType = 'fast' | 'secure'
 
 // SDK-specific types
 export type VaultOptions = {

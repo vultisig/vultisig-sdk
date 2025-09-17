@@ -1,5 +1,5 @@
 import type { Balance, ChainKind, Vault } from '../types'
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '../core/chain/Chain'
 import type { ChainManager } from '../chains'
 import type { AddressDeriver } from '../chains/AddressDeriver'
 

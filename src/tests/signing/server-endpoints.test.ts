@@ -32,41 +32,38 @@ describe('Server Endpoints Tests', () => {
   })
 
   describe('FastVault Endpoints', () => {
-    it('GET /get/{public_key_ecdsa} - function works correctly (server operational)', async () => {
-      console.log('🔍 Testing vault retrieval function...')
+    it('GET /get/{public_key_ecdsa} - works with correct fetch implementation', async () => {
+      console.log('🔍 Testing vault retrieval with working fetch...')
       console.log('   VaultId:', vaultData.publicKeys.ecdsa)
       console.log('   Password: Password123!')
       
-      // Test with correct password
+      // Fix the broken Vitest fetch by using undici directly
+      const { fetch: undiciFetch } = await import('undici')
+      const originalFetch = globalThis.fetch
+      
       try {
+        // Temporarily replace the broken fetch with working undici fetch
+        globalThis.fetch = undiciFetch as any
+        
         const vaultResponse = await getVaultFromServer({
           vaultId: vaultData.publicKeys.ecdsa,
           password: 'Password123!'
         })
         
-        console.log('✅ Vault successfully retrieved with correct password')
+        console.log('✅ Vault successfully retrieved with working fetch!')
         console.log('   Server vault data:', vaultResponse)
         
         expect(vaultResponse).toBeDefined()
-        expect(vaultResponse.password).toBe('Password123!')
-        console.log('✅ Function works perfectly in test environment')
+        expect(vaultResponse.name).toBe('TestFastVault')
+        expect(vaultResponse.public_key_ecdsa).toBe(vaultData.publicKeys.ecdsa)
+        expect(vaultResponse.public_key_eddsa).toBe(vaultData.publicKeys.eddsa)
+        expect(vaultResponse.local_party_id).toBe('Server-94060')
+        expect(vaultResponse.hex_chain_code).toBeDefined()
+        console.log('✅ Function works perfectly with proper fetch implementation')
         
-      } catch (error: any) {
-        console.log('ℹ️ Test environment limitation (server is operational via curl/node):', error.message)
-        expect(error.message).toContain('Internal Server Error')
-        
-        // Test with incorrect password to verify both fail the same way (test env issue)
-        try {
-          await getVaultFromServer({
-            vaultId: vaultData.publicKeys.ecdsa,
-            password: 'WrongPassword!'
-          })
-        } catch (wrongPasswordError: any) {
-          console.log('ℹ️ Wrong password also gets same error (confirms test env issue):', wrongPasswordError.message)
-          expect(wrongPasswordError.message).toBe(error.message)
-        }
-        
-        console.log('✅ Function called correctly, server operational (verified externally)')
+      } finally {
+        // Restore original fetch
+        globalThis.fetch = originalFetch
       }
     })
 
