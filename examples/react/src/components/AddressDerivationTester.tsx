@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { VultisigSDK } from 'vultisig-sdk'
+import type { Vultisig } from 'vultisig-sdk'
 
 type Vault = any
 
@@ -15,7 +15,7 @@ export const AddressDerivationTester = ({
   sdk,
 }: {
   vault: Vault
-  sdk: VultisigSDK
+  sdk: Vultisig
 }) => {
   const [chain, setChain] = useState('bitcoin')
   const [loading, setLoading] = useState(false)

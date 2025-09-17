@@ -8,12 +8,12 @@ const path = require('path')
 
 // Load test setup
 require('./setup')
-const { VultisigSDK, vaultsDir, expectedAddresses } = require('./setup')
+const { Vultisig, vaultsDir, expectedAddresses } = require('./setup')
 
 describe('SDK Integration Tests', () => {
   describe('SDK API Usage', () => {
     test('should create Vultisig SDK instance', () => {
-      const sdk = new VultisigSDK({
+      const sdk = new Vultisig({
         defaultChains: ['bitcoin', 'ethereum', 'solana'],
         defaultCurrency: 'USD',
       })
@@ -25,7 +25,7 @@ describe('SDK Integration Tests', () => {
     })
 
     test('should load unencrypted vault using SDK API', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,
@@ -47,7 +47,7 @@ describe('SDK Integration Tests', () => {
     })
 
     test('should load encrypted vault using SDK API', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,
@@ -67,7 +67,7 @@ describe('SDK Integration Tests', () => {
     })
 
     test('should derive addresses using vault.address() method', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,
@@ -95,7 +95,7 @@ describe('SDK Integration Tests', () => {
     })
 
     test('should handle multiple vaults correctly', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       // Load first vault
       const vault1Path = path.join(
@@ -132,7 +132,7 @@ describe('SDK Integration Tests', () => {
 
   describe('WASM Integration Tests', () => {
     test('should initialize WalletCore correctly', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,
@@ -154,7 +154,7 @@ describe('SDK Integration Tests', () => {
     })
 
     test('should handle all supported WASM operations', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,
@@ -178,7 +178,7 @@ describe('SDK Integration Tests', () => {
 
   describe('Performance and Caching Tests', () => {
     test('should cache addresses for performance', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,
@@ -206,7 +206,7 @@ describe('SDK Integration Tests', () => {
     })
 
     test('should derive multiple addresses efficiently', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,
@@ -235,7 +235,7 @@ describe('SDK Integration Tests', () => {
 
   describe('Error Handling Tests', () => {
     test('should handle invalid vault files gracefully', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       // Create invalid file
       const invalidFile = new File(['invalid content'], 'invalid.vult')
@@ -245,7 +245,7 @@ describe('SDK Integration Tests', () => {
     })
 
     test('should handle missing passwords for encrypted vaults', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,
@@ -260,7 +260,7 @@ describe('SDK Integration Tests', () => {
     })
 
     test('should handle wrong passwords for encrypted vaults', async () => {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
 
       const vaultPath = path.join(
         vaultsDir,

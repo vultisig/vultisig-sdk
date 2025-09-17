@@ -2,7 +2,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 // SDK will be made available globally by the launcher
-declare const VultisigSDK: any
+declare const Vultisig: any
 import { DaemonManager } from '../daemon/DaemonManager'
 import { getVaultConfig } from '../utils/env'
 
@@ -28,11 +28,11 @@ export class AddressCommand {
     // Check if daemon is running or if we need to load vault directly
     const daemonManager = new DaemonManager()
     let shouldLoadDirectly = false
-    
+
     if (vaultConfig.vaultPath || vaultConfig.vaultPassword) {
       shouldLoadDirectly = await daemonManager.autoStartDaemonIfNeeded({
         vault: vaultConfig.vaultPath,
-        password: vaultConfig.vaultPassword
+        password: vaultConfig.vaultPassword,
       })
     }
 
@@ -60,14 +60,17 @@ export class AddressCommand {
     }
 
     // Load vault directly for this operation
-    if (shouldLoadDirectly && (vaultConfig.vaultPath || vaultConfig.vaultPassword)) {
+    if (
+      shouldLoadDirectly &&
+      (vaultConfig.vaultPath || vaultConfig.vaultPassword)
+    ) {
       try {
         await daemonManager.performEphemeralOperation(
           {
             vault: vaultConfig.vaultPath,
-            password: vaultConfig.vaultPassword
+            password: vaultConfig.vaultPassword,
           },
-          async (vault) => {
+          async vault => {
             console.log('\n=== Addresses (ephemeral vault) ===')
             for (const chain of requestedChains) {
               try {
@@ -76,23 +79,30 @@ export class AddressCommand {
                 console.log(`  ✅ ${chainName}: ${address}`)
               } catch (error) {
                 const chainName = this.getChainName(chain)
-                console.log(`  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`)
+                console.log(
+                  `  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`
+                )
               }
             }
 
-            console.log('\n💡 Addresses retrieved from ephemeral vault operation')
+            console.log(
+              '\n💡 Addresses retrieved from ephemeral vault operation'
+            )
             return true
           }
         )
         return
       } catch (error) {
-        console.log('⚠️  Could not perform ephemeral vault operation:', error instanceof Error ? error.message : error)
+        console.log(
+          '⚠️  Could not perform ephemeral vault operation:',
+          error instanceof Error ? error.message : error
+        )
       }
     }
 
     // Try to use Vultisig SDK to get active vault
     try {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
       const activeVault = sdk.getActiveVault()
 
       if (activeVault) {
@@ -156,7 +166,7 @@ export class AddressCommand {
       ;(file as any).buffer = fileBuffer
 
       // Create SDK instance and add vault
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
       const vault = await sdk.addVault(file)
 
       console.log('\n=== Addresses (from loaded vault) ===')
