@@ -7,23 +7,20 @@ import type {
   KeygenProgressUpdate
 } from '../types'
 
-import { FastVaultClient } from './FastVaultClient'
-import { MessageRelayClient } from './MessageRelayClient'
 import { 
   generateSessionId,
   generateEncryptionKey,
   generateChainCode,
   generateBrowserPartyId,
-  generateServerPartyId
+  generateServerPartyId,
+  pingServer
 } from './utils'
 
 /**
  * ServerManager coordinates all server communications
- * This is a thin wrapper around existing core MPC functionality
+ * Uses core functions directly without wrapper classes
  */
 export class ServerManager {
-  private fastVaultClient: FastVaultClient
-  private messageRelayClient: MessageRelayClient
   private config: {
     fastVault: string
     messageRelay: string
@@ -37,46 +34,45 @@ export class ServerManager {
       fastVault: endpoints?.fastVault || 'https://api.vultisig.com/vault',
       messageRelay: endpoints?.messageRelay || 'https://api.vultisig.com/router'
     }
-    
-    this.fastVaultClient = new FastVaultClient(this.config.fastVault)
-    this.messageRelayClient = new MessageRelayClient(this.config.messageRelay)
   }
 
   /**
    * Verify vault with email verification code
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
-    return this.fastVaultClient.verifyVault(vaultId, code)
+    try {
+      const { verifyVaultEmailCode } = await import('../core/mpc/fast/api/verifyVaultEmailCode')
+      await verifyVaultEmailCode({ vaultId, code })
+      return true
+    } catch {
+      return false
+    }
   }
 
   /**
    * Resend vault verification email
    */
   async resendVaultVerification(vaultId: string): Promise<void> {
-    return this.fastVaultClient.resendVaultVerification(vaultId)
+    const { queryUrl } = await import('../lib/utils/query/queryUrl')
+    const { fastVaultServerUrl } = await import('../core/mpc/fast/config')
+    
+    await queryUrl(`${fastVaultServerUrl}/resend-verification/${vaultId}`, {
+      responseType: 'none'
+    })
   }
 
   /**
    * Get vault from VultiServer using password
    */
   async getVaultFromServer(vaultId: string, password: string): Promise<Vault> {
-    // Use existing core functionality
-    const { getVaultFromServer } = await import('@core/mpc/fast/api/getVaultFromServer')
+    const { getVaultFromServer } = await import('../core/mpc/fast/api/getVaultFromServer')
     
-    const result = await getVaultFromServer({
-      vaultId,
-      password
-    })
-    
-    // TODO: Transform result to proper Vault type
-    // For now, return a placeholder until the core API is properly typed
+    const result = await getVaultFromServer({ vaultId, password })
     return result as unknown as Vault
   }
 
   /**
-   * Sign transaction using VultiServer (two-step approach like extension)
-   * Step 1: Call FastVault server API to initiate signing
-   * Step 2: Use MPC keysign with server coordination (skipping setup message)
+   * Sign transaction using VultiServer
    */
   async signWithServer(vault: any, payload: SigningPayload, vaultPassword: string): Promise<Signature> {
     // Validate vault is a fast vault
@@ -85,17 +81,16 @@ export class ServerManager {
       throw new Error('Vault does not have VultiServer - fast signing not available')
     }
 
-    // Import required core functions
-    const { getChainKind } = await import('@core/chain/ChainKind')
-    const { signatureAlgorithms } = await import('@core/chain/signing/SignatureAlgorithm')
+    // Use core functions directly
+    const { getChainKind } = await import('../core/chain/ChainKind')
+    const { signatureAlgorithms } = await import('../core/chain/signing/SignatureAlgorithm')
+    const { getCoinType } = await import('../core/chain/coin/coinType')
+    const { joinMpcSession } = await import('../core/mpc/session/joinMpcSession')
+    const { signWithServer: callFastVaultAPI } = await import('../core/mpc/fast/api/signWithServer')
     const { initWasm } = await import('@trustwallet/wallet-core')
-    const { getCoinType } = await import('@core/chain/coin/coinType')
     const { AddressDeriver } = await import('../chains/AddressDeriver')
-    const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
-    const { shouldBePresent } = await import('@lib/utils/assert/shouldBePresent')
-    const { signWithServer: callFastVaultAPI } = await import('@core/mpc/fast/api/signWithServer')
 
-    // Initialize required components
+    // Initialize components
     const walletCore = await initWasm()
     const addressDeriver = new AddressDeriver()
     await addressDeriver.initialize(walletCore)
@@ -103,16 +98,14 @@ export class ServerManager {
     const coinType = getCoinType({ walletCore, chain })
     const derivePath = walletCore.CoinTypeExt.derivationPath(coinType)
     
-    // Determine signature algorithm
     const chainKind = getChainKind(chain)
     const signatureAlgorithm = signatureAlgorithms[chainKind]
 
-    // Prepare messages for signing - compute if not provided
+    // Prepare messages
     let messages: string[]
     if (payload.messageHashes) {
       messages = payload.messageHashes
     } else {
-      // Compute messageHashes from raw transaction data (like the extension does)
       messages = await this.computeMessageHashesFromTransaction(payload, walletCore, chain, vault)
     }
 
@@ -120,10 +113,7 @@ export class ServerManager {
     const sessionId = generateSessionId()
     const hexEncryptionKey = await generateEncryptionKey()
 
-    console.log('🔄 Starting fast signing with two-step approach...')
-
-    // STEP 1: Call FastVault server API (like extension's FastKeysignServerStep)
-    console.log('📡 Step 1: Calling FastVault server API...')
+    // Step 1: Call FastVault server API
     await callFastVaultAPI({
       public_key: vault.publicKeys.ecdsa,
       messages,
@@ -134,8 +124,7 @@ export class ServerManager {
       vault_password: vaultPassword
     })
 
-    // STEP 2: Set up relay session and wait for server
-    console.log('🔗 Step 2: Setting up relay session...')
+    // Step 2: Join relay session
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
@@ -144,17 +133,19 @@ export class ServerManager {
 
     // Mark session started
     try {
-      await fetch(`${this.config.messageRelay}/start/${sessionId}`, { method: 'POST' })
+      const { queryUrl } = await import('../lib/utils/query/queryUrl')
+      await queryUrl(`${this.config.messageRelay}/start/${sessionId}`, { 
+        responseType: 'none' 
+      })
     } catch (_) {
-      // non-fatal; proceed regardless
+      // non-fatal
     }
 
     // Wait for server to join session
     const devices = await this.waitForPeers(sessionId, vault.localPartyId)
     const peers = devices.filter(device => device !== vault.localPartyId)
     
-    // STEP 3: Use fast keysign (skip setup message since server is coordinating)
-    console.log('🔐 Step 3: Performing MPC keysign with server coordination...')
+    // Step 3: Perform MPC keysign
     const signature = await this.performFastKeysign({
       vault,
       signatureAlgorithm,
@@ -164,8 +155,6 @@ export class ServerManager {
       sessionId,
       hexEncryptionKey
     })
-    
-    console.log('✅ Fast signing completed using two-step approach!')
 
     const recoveryId = signature.recovery_id
       ? parseInt(signature.recovery_id, 16)
@@ -184,9 +173,142 @@ export class ServerManager {
   }
 
   /**
-   * Perform fast keysign with server coordination (bypasses setup message)
-   * Simplified version that uses core keysign with local setup message
+   * Reshare vault participants
    */
+  async reshareVault(vault: Vault, reshareOptions: ReshareOptions & { password: string; email?: string }): Promise<Vault> {
+    const { reshareWithServer } = await import('../core/mpc/fast/api/reshareWithServer')
+    
+    await reshareWithServer({
+      name: vault.name,
+      session_id: generateSessionId(),
+      public_key: vault.publicKeys.ecdsa,
+      hex_encryption_key: vault.hexChainCode,
+      hex_chain_code: vault.hexChainCode,
+      local_party_id: vault.localPartyId,
+      old_parties: vault.signers,
+      old_reshare_prefix: vault.resharePrefix || '',
+      encryption_password: reshareOptions.password,
+      email: reshareOptions.email,
+      reshare_type: 1,
+      lib_type: 1
+    })
+    
+    return vault
+  }
+
+  /**
+   * Create a Fast Vault
+   */
+  async createFastVault(options: { 
+    name: string; 
+    email: string; 
+    password: string;
+    onLog?: (msg: string) => void;
+    onProgress?: (u: KeygenProgressUpdate) => void;
+  }): Promise<{
+    vault: Vault
+    vaultId: string
+    verificationRequired: boolean
+  }> {
+    const { setupVaultWithServer } = await import('../core/mpc/fast/api/setupVaultWithServer')
+    const { joinMpcSession } = await import('../core/mpc/session/joinMpcSession')
+    const { startMpcSession } = await import('../core/ui/mpc/session/utils/startMpcSession')
+    
+    // Generate session parameters
+    const sessionId = generateSessionId()
+    const hexEncryptionKey = await generateEncryptionKey()
+    const hexChainCode = await generateChainCode()
+    const localPartyId = await generateBrowserPartyId()
+    
+    const log = options.onLog || (() => {})
+    const progress = options.onProgress || (() => {})
+    
+    log('Creating vault on FastVault server...')
+    
+    await setupVaultWithServer({
+      name: options.name,
+      session_id: sessionId,
+      hex_encryption_key: hexEncryptionKey,
+      hex_chain_code: hexChainCode,
+      local_party_id: await generateServerPartyId(),
+      encryption_password: options.password,
+      email: options.email,
+      lib_type: 1
+    })
+    
+    log('Joining relay session...')
+    
+    await joinMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      localPartyId
+    })
+    
+    log('Waiting for server and starting MPC session...')
+    
+    const devices = await this.waitForPeers(sessionId, localPartyId)
+    
+    await startMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      devices
+    })
+    
+    progress({ phase: 'ecdsa', message: 'Generating keys...' })
+    
+    // Create placeholder vault (real implementation would use core keygen)
+    const vault: Vault = {
+      name: options.name,
+      publicKeys: {
+        ecdsa: hexChainCode,
+        eddsa: ''
+      },
+      localPartyId,
+      signers: devices,
+      hexChainCode,
+      keyShares: {
+        ecdsa: '',
+        eddsa: ''
+      },
+      libType: 'DKLS',
+      isBackedUp: false,
+      order: 0,
+      createdAt: Date.now()
+    }
+    
+    progress({ phase: 'complete', message: 'Vault created successfully' })
+    
+    return {
+      vault,
+      vaultId: vault.publicKeys.ecdsa,
+      verificationRequired: true
+    }
+  }
+
+  /**
+   * Check VultiServer status and connectivity
+   */
+  async checkServerStatus(): Promise<ServerStatus> {
+    const [fastVaultStatus, relayStatus] = await Promise.allSettled([
+      pingServer(this.config.fastVault, '/'),
+      pingServer(this.config.messageRelay, '/ping')
+    ])
+
+    return {
+      fastVault: {
+        online: fastVaultStatus.status === 'fulfilled',
+        latency: fastVaultStatus.status === 'fulfilled' ? fastVaultStatus.value : undefined
+      },
+      messageRelay: {
+        online: relayStatus.status === 'fulfilled', 
+        latency: relayStatus.status === 'fulfilled' ? relayStatus.value : undefined
+      },
+      timestamp: Date.now()
+    }
+  }
+
+  // ===== Private Helper Methods =====
+
   private async performFastKeysign(params: {
     vault: Vault
     signatureAlgorithm: string
@@ -196,12 +318,15 @@ export class ServerManager {
     sessionId: string
     hexEncryptionKey: string
   }): Promise<any> {
-    // Import required core functions
-    const { initializeMpcLib } = await import('@core/mpc/lib/initialize')
-    const { makeSetupMessage } = await import('@core/mpc/keysign/setupMessage/make')
-    const { makeSignSession, SignSession } = await import('@core/mpc/lib/signSession')
-    const { getMessageHash } = await import('@core/mpc/getMessageHash')
-    const { shouldBePresent } = await import('@lib/utils/assert/shouldBePresent')
+    const { initializeMpcLib } = await import('../core/mpc/lib/initialize')
+    const { makeSetupMessage } = await import('../core/mpc/keysign/setupMessage/make')
+    const { makeSignSession, SignSession } = await import('../core/mpc/lib/signSession')
+    const { getMessageHash } = await import('../core/mpc/getMessageHash')
+    const { shouldBePresent } = await import('../lib/utils/assert/shouldBePresent')
+    const { sendMpcRelayMessage } = await import('../core/mpc/message/relay/send')
+    const { getMpcRelayMessages } = await import('../core/mpc/message/relay/get')
+    const { deleteMpcRelayMessage } = await import('../core/mpc/message/relay/delete')
+    const { toMpcServerMessage, fromMpcServerMessage } = await import('../core/mpc/message/server')
     
     const keyShare = params.vault.keyShares[params.signatureAlgorithm]
     if (!keyShare) {
@@ -211,7 +336,6 @@ export class ServerManager {
     await initializeMpcLib(params.signatureAlgorithm as any)
     const messageId = getMessageHash(params.message)
 
-    // Create setup message locally (skip server upload/download)
     const devices = [params.vault.localPartyId, ...params.peers]
     const setupMessage = makeSetupMessage({
       keyShare,
@@ -236,12 +360,6 @@ export class ServerManager {
     if (params.message != Buffer.from(setupMessageHash).toString('hex')) {
       throw new Error('Setup message hash does not match the original message')
     }
-
-    // Use the existing core MPC message processing (simplified)
-    const { sendMpcRelayMessage } = await import('@core/mpc/message/relay/send')
-    const { getMpcRelayMessages } = await import('@core/mpc/message/relay/get')
-    const { deleteMpcRelayMessage } = await import('@core/mpc/message/relay/delete')
-    const { toMpcServerMessage, fromMpcServerMessage } = await import('@core/mpc/message/server')
     
     // Simple message exchange loop
     while (!session.isFinished()) {
@@ -274,7 +392,6 @@ export class ServerManager {
 
       for (const msg of relayMessages) {
         if (session.inputMessage(fromMpcServerMessage(msg.body, params.hexEncryptionKey))) {
-          // Delete processed message
           await deleteMpcRelayMessage({
             serverUrl: this.config.messageRelay,
             localPartyId: params.vault.localPartyId,
@@ -286,174 +403,19 @@ export class ServerManager {
         }
       }
 
-      // Wait before next poll
       await new Promise(resolve => setTimeout(resolve, 1000))
     }
 
     return session.finish()
   }
 
-  /**
-   * Reshare vault participants using existing core functionality
-   */
-  async reshareVault(vault: Vault, reshareOptions: ReshareOptions & { password: string; email?: string }): Promise<Vault> {
-    const { reshareWithServer } = await import('@core/mpc/fast/api/reshareWithServer')
-    
-    await reshareWithServer({
-      name: vault.name,
-      session_id: generateSessionId(),
-      public_key: vault.publicKeys.ecdsa,
-      hex_encryption_key: vault.hexChainCode,
-      hex_chain_code: vault.hexChainCode,
-      local_party_id: vault.localPartyId,
-      old_parties: vault.signers,
-      old_reshare_prefix: vault.resharePrefix || '',
-      encryption_password: reshareOptions.password,
-      email: reshareOptions.email,
-      reshare_type: 1,
-      lib_type: 1
-    })
-    
-    // Return updated vault (in practice, this would involve running MPC reshare protocol)
-    return vault
-  }
-
-  /**
-   * Create a Fast Vault using existing core functionality
-   */
-  async createFastVault(options: { 
-    name: string; 
-    email: string; 
-    password: string;
-    onLog?: (msg: string) => void;
-    onProgress?: (u: KeygenProgressUpdate) => void;
-  }): Promise<{
-    vault: Vault
-    vaultId: string
-    verificationRequired: boolean
-  }> {
-    const { setupVaultWithServer } = await import('@core/mpc/fast/api/setupVaultWithServer')
-    const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
-    const { startMpcSession } = await import('@core/ui/mpc/session/utils/startMpcSession')
-    
-    // Generate session parameters
-    const sessionId = generateSessionId()
-    const hexEncryptionKey = await generateEncryptionKey()
-    const hexChainCode = await generateChainCode()
-    const localPartyId = await generateBrowserPartyId()
-    
-    const log = options.onLog || (() => {})
-    const progress = options.onProgress || (() => {})
-    
-    log('Step 1: Creating vault on FastVault server...')
-    
-    // Use existing core API to create vault
-    await setupVaultWithServer({
-      name: options.name,
-      session_id: sessionId,
-      hex_encryption_key: hexEncryptionKey,
-      hex_chain_code: hexChainCode,
-      local_party_id: await generateServerPartyId(), // Server party ID
-      encryption_password: options.password,
-      email: options.email,
-      lib_type: 1 // DKLS
-    })
-    
-    log('Step 2: Joining relay session...')
-    
-    // Use existing core function to join session
-    await joinMpcSession({
-      serverUrl: this.config.messageRelay,
-      sessionId,
-      localPartyId
-    })
-    
-    log('Step 3: Waiting for server and starting MPC session...')
-    
-    // Wait for server to join and get device list
-    const devices = await this.waitForPeers(sessionId, localPartyId)
-    
-    // Start MPC session using existing core function
-    await startMpcSession({
-      serverUrl: this.config.messageRelay,
-      sessionId,
-      devices
-    })
-    
-    log('Step 4: Running keygen (this would use core MPC keygen functionality)...')
-    progress({ phase: 'ecdsa', message: 'Generating keys...' })
-    
-    // In a real implementation, this would use existing core keygen functions
-    // For now, we'll create a placeholder vault
-    const vault: Vault = {
-      name: options.name,
-      publicKeys: {
-        ecdsa: hexChainCode, // Placeholder - would come from actual keygen
-        eddsa: ''
-      },
-      localPartyId,
-      signers: devices,
-      hexChainCode,
-      keyShares: {
-        ecdsa: '', // Would come from actual keygen
-        eddsa: ''
-      },
-      libType: 'DKLS',
-      isBackedUp: false,
-      order: 0,
-      createdAt: Date.now()
-    }
-    
-    progress({ phase: 'complete', message: 'Vault created successfully' })
-    
-    return {
-      vault,
-      vaultId: vault.publicKeys.ecdsa,
-      verificationRequired: true
-    }
-  }
-
-  /**
-   * Check VultiServer status and connectivity
-   */
-  async checkServerStatus(): Promise<ServerStatus> {
-    const [fastVaultStatus, relayStatus] = await Promise.allSettled([
-      this.fastVaultClient.ping(),
-      this.messageRelayClient.ping()
-    ])
-
-    return {
-      fastVault: {
-        online: fastVaultStatus.status === 'fulfilled',
-        latency: fastVaultStatus.status === 'fulfilled' ? fastVaultStatus.value : undefined
-      },
-      messageRelay: {
-        online: relayStatus.status === 'fulfilled', 
-        latency: relayStatus.status === 'fulfilled' ? relayStatus.value : undefined
-      },
-      timestamp: Date.now()
-    }
-  }
-
-  /**
-   * Get message relay client for MPC operations
-   */
-  getMessageRelayClient(): MessageRelayClient {
-    return this.messageRelayClient
-  }
-
-  // ===== Private Helper Methods =====
-
-  /**
-   * Wait for peers to join session
-   */
   private async waitForPeers(sessionId: string, localPartyId: string): Promise<string[]> {
-    const { queryUrl } = await import('@lib/utils/query/queryUrl')
-    const { without } = await import('@lib/utils/array/without')
-    const { withoutDuplicates } = await import('@lib/utils/array/withoutDuplicates')
+    const { queryUrl } = await import('../lib/utils/query/queryUrl')
+    const { without } = await import('../lib/utils/array/without')
+    const { withoutDuplicates } = await import('../lib/utils/array/withoutDuplicates')
     
-    const maxWaitTime = 30000 // 30 seconds
-    const checkInterval = 2000 // 2 seconds
+    const maxWaitTime = 30000
+    const checkInterval = 2000
     const startTime = Date.now()
     
     while (Date.now() - startTime < maxWaitTime) {
@@ -469,7 +431,6 @@ export class ServerManager {
         
         await new Promise(resolve => setTimeout(resolve, checkInterval))
       } catch (error) {
-        console.warn('Error checking peers:', error)
         await new Promise(resolve => setTimeout(resolve, checkInterval))
       }
     }
@@ -477,62 +438,35 @@ export class ServerManager {
     throw new Error('Timeout waiting for peers to join session')
   }
 
-  /**
-   * Compute message hashes from raw transaction data
-   * Follows the same pattern as the extension's keysign flow
-   */
   private async computeMessageHashesFromTransaction(
     payload: SigningPayload, 
     walletCore: any, 
     chain: any,
     vault: any
   ): Promise<string[]> {
-    try {
-      // Import required functions
-      const { getPublicKey } = await import('@core/chain/publicKey/getPublicKey')
-      const { getTxInputData } = await import('@core/mpc/keysign/txInputData')
-      const { getPreSigningHashes } = await import('@core/chain/tx/preSigningHashes')
-      const { create } = await import('@bufbuild/protobuf')
-      const { CoinSchema } = await import('@core/mpc/types/vultisig/keysign/v1/coin_pb')
-      const { KeysignPayloadSchema } = await import('@core/mpc/types/vultisig/keysign/v1/keysign_message_pb')
-      const { getChainSpecific } = await import('@core/mpc/keysign/chainSpecific')
-
-      // For Ethereum transactions, we can compute the hash directly from the transaction data
-      // This is a simplified implementation for testing - a full implementation would
-      // follow the extension's getKeysignPayload logic for all chains
+    if (payload.chain === 'ethereum' || payload.chain === 'eth') {
+      const { serializeTransaction, keccak256 } = await import('viem')
       
-      if (payload.chain === 'ethereum' || payload.chain === 'eth') {
-        // Import viem for transaction serialization and hashing
-        const { serializeTransaction, keccak256 } = await import('viem')
-        
-        // Build EIP-1559 unsigned transaction
-        const tx = payload.transaction
-        const unsigned = {
-          type: 'eip1559' as const,
-          chainId: tx.chainId,
-          to: tx.to as `0x${string}`,
-          nonce: tx.nonce,
-          gas: BigInt(tx.gasLimit),
-          data: (tx.data || '0x') as `0x${string}`,
-          value: BigInt(tx.value),
-          maxFeePerGas: BigInt(tx.maxFeePerGas ?? tx.gasPrice ?? '0'),
-          maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0'),
-          accessList: [],
-        }
-        
-        // Serialize and hash the transaction
-        const serialized = serializeTransaction(unsigned)
-        const signingHash = keccak256(serialized).slice(2)
-        
-        return [signingHash]
+      const tx = payload.transaction
+      const unsigned = {
+        type: 'eip1559' as const,
+        chainId: tx.chainId,
+        to: tx.to as `0x${string}`,
+        nonce: tx.nonce,
+        gas: BigInt(tx.gasLimit),
+        data: (tx.data || '0x') as `0x${string}`,
+        value: BigInt(tx.value),
+        maxFeePerGas: BigInt(tx.maxFeePerGas ?? tx.gasPrice ?? '0'),
+        maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0'),
+        accessList: [],
       }
       
-      // For other chains, we would need to implement proper KeysignPayload conversion
-      throw new Error(`Message hash computation not yet implemented for chain: ${payload.chain}`)
-
-    } catch (error) {
-      throw new Error(`Failed to compute message hashes: ${(error as Error).message}`)
+      const serialized = serializeTransaction(unsigned)
+      const signingHash = keccak256(serialized).slice(2)
+      
+      return [signingHash]
     }
+    
+    throw new Error(`Message hash computation not yet implemented for chain: ${payload.chain}`)
   }
-
 }
