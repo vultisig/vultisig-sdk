@@ -6,7 +6,7 @@
 export { MPCManager } from './MPCManager'
 
 // Re-export available MPC types
-export type { MpcServerType } from '@core/mpc/MpcServerType'
+export type { MpcServerType } from '../core/mpc/MpcServerType'
 
 // Stub types for compilation - actual types come from core workspace
 export type KeysignResult = any

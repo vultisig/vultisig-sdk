@@ -1,5 +1,5 @@
-import { validateEmail } from '@lib/utils/validation/validateEmail'
-import { passwordLenghtConfig } from '@core/ui/security/password/config'
+import { validateEmail } from '../../lib/utils/validation/validateEmail'
+import { passwordLenghtConfig } from '../../core/ui/security/password/config'
 import type { ValidationResult } from '../../types'
 
 /**

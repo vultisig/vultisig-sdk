@@ -6,7 +6,7 @@
 export { WASMManager } from './WASMManager'
 
 // Re-export WASM initialization functions
-export { initializeMpcLib } from '@core/mpc/lib/initialize'
+export { initializeMpcLib } from '../core/mpc/lib/initialize'
 
 // WASM module types - stub for compilation
 export type WASMConfig = {

@@ -1,9 +1,9 @@
 import { fromBinary } from '@bufbuild/protobuf'
-import { fromCommVault } from '@core/mpc/types/utils/commVault'
-import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
-import { vaultContainerFromString } from '@core/ui/vault/import/utils/vaultContainerFromString'
-import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
-import { fromBase64 } from '@lib/utils/fromBase64'
+import { fromCommVault } from '../core/mpc/types/utils/commVault'
+import { VaultSchema } from '../core/mpc/types/vultisig/vault/v1/vault_pb'
+import { vaultContainerFromString } from '../core/ui/vault/import/utils/vaultContainerFromString'
+import { decryptWithAesGcm } from '../lib/utils/encryption/aesGcm/decryptWithAesGcm'
+import { fromBase64 } from '../lib/utils/fromBase64'
 
 import type {
   Vault,
