@@ -88,10 +88,29 @@ describe('Server Endpoints Tests', () => {
         vault_password: 'Password123!'
       }
 
-      // This should succeed - the server is operational
-      const result = await signWithServer(params)
-      expect(result).toBeUndefined() // No signature returned, just initiation
-      console.log('✅ VultiServer keysign initiated successfully (200 OK)')
+      // Fix Vitest's broken fetch by using undici directly
+      const { fetch: undiciFetch } = await import('undici')
+      const originalFetch = globalThis.fetch
+      
+      try {
+        // Temporarily replace the broken fetch with working undici fetch
+        globalThis.fetch = undiciFetch as any
+        
+        // This should succeed - the server is operational and returns a session ID
+        const result = await signWithServer(params)
+        
+        // Expect a session ID (UUID) to be returned
+        expect(result).toBeDefined()
+        expect(typeof result).toBe('string')
+        expect(result).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+        
+        console.log('✅ VultiServer keysign initiated successfully!')
+        console.log('   Returned session ID:', result)
+        
+      } finally {
+        // Restore original fetch
+        globalThis.fetch = originalFetch
+      }
     }, 15000)
   })
 
