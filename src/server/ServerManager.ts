@@ -110,51 +110,84 @@ export class ServerManager {
     }
 
     // Generate session parameters
-    const sessionId = generateSessionId()
+    const sessionId = generateSessionId() // Use our own session ID consistently
     const hexEncryptionKey = await generateEncryptionKey()
 
-    // Step 1: Call FastVault server API
-    await callFastVaultAPI({
+    // Step 1: Call FastVault server API with our session ID
+    console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
+    const serverResponse = await callFastVaultAPI({
       public_key: vault.publicKeys.ecdsa,
       messages,
-      session: sessionId,
+      session: sessionId, // Use our session ID, not server's returned one
       hex_encryption_key: hexEncryptionKey,
       derive_path: derivePath,
       is_ecdsa: signatureAlgorithm === 'ecdsa',
       vault_password: vaultPassword
     })
+    console.log(`✅ Server acknowledged session: ${serverResponse}`)
 
-    // Step 2: Join relay session
+    // Step 2: Join relay session as client
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       localPartyId: vault.localPartyId
     })
 
-    // Mark session started
+    // Step 2.5: Register server as participant (critical for server to join)
     try {
       const { queryUrl } = await import('../lib/utils/query/queryUrl')
-      await queryUrl(`${this.config.messageRelay}/start/${sessionId}`, { 
-        responseType: 'none' 
-      })
+      // Find the server signer from the vault
+      const serverSigner = vault.signers.find(signer => signer.startsWith('Server-'))
+      if (serverSigner) {
+        await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
+          body: [serverSigner],
+          responseType: 'none'
+        })
+      }
     } catch (_) {
       // non-fatal
     }
 
     // Wait for server to join session
+    console.log('⏳ Waiting for server to join session...')
     const devices = await this.waitForPeers(sessionId, vault.localPartyId)
     const peers = devices.filter(device => device !== vault.localPartyId)
+    console.log(`✅ All participants ready: [${devices.join(', ')}]`)
+    console.log(`🤝 Peer devices: [${peers.join(', ')}]`)
     
-    // Step 3: Perform MPC keysign
-    const signature = await this.performFastKeysign({
-      vault,
+    // Step 2.5: Start MPC session with devices list (CRITICAL MISSING STEP)
+    console.log('📡 Starting MPC session with devices list...')
+    const { startMpcSession } = await import('../core/ui/mpc/session/utils/startMpcSession')
+    await startMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      devices
+    })
+    console.log('✅ MPC session started with devices')
+    
+    // Step 3: Perform MPC keysign using core implementation
+    console.log('🔐 Starting core MPC keysign process...')
+    const { keysign } = await import('../core/mpc/keysign')
+    
+    const keyShare = vault.keyShares[signatureAlgorithm]
+    if (!keyShare) {
+      throw new Error(`No key share found for algorithm: ${signatureAlgorithm}`)
+    }
+    
+    const signature = await keysign({
+      keyShare,
       signatureAlgorithm,
       message: messages[0],
-      derivePath,
+      chainPath: derivePath.replaceAll("'", ''),
+      localPartyId: vault.localPartyId,
       peers,
+      serverUrl: this.config.messageRelay,
       sessionId,
-      hexEncryptionKey
+      hexEncryptionKey,
+      isInitiatingDevice: true,
     })
+    
+    console.log('✅ Core MPC keysign completed successfully!')
 
     const recoveryId = signature.recovery_id
       ? parseInt(signature.recovery_id, 16)
@@ -309,105 +342,6 @@ export class ServerManager {
 
   // ===== Private Helper Methods =====
 
-  private async performFastKeysign(params: {
-    vault: Vault
-    signatureAlgorithm: string
-    message: string
-    derivePath: string
-    peers: string[]
-    sessionId: string
-    hexEncryptionKey: string
-  }): Promise<any> {
-    const { initializeMpcLib } = await import('../core/mpc/lib/initialize')
-    const { makeSetupMessage } = await import('../core/mpc/keysign/setupMessage/make')
-    const { makeSignSession, SignSession } = await import('../core/mpc/lib/signSession')
-    const { getMessageHash } = await import('../core/mpc/getMessageHash')
-    const { shouldBePresent } = await import('../lib/utils/assert/shouldBePresent')
-    const { sendMpcRelayMessage } = await import('../core/mpc/message/relay/send')
-    const { getMpcRelayMessages } = await import('../core/mpc/message/relay/get')
-    const { deleteMpcRelayMessage } = await import('../core/mpc/message/relay/delete')
-    const { toMpcServerMessage, fromMpcServerMessage } = await import('../core/mpc/message/server')
-    
-    const keyShare = params.vault.keyShares[params.signatureAlgorithm]
-    if (!keyShare) {
-      throw new Error(`No key share found for algorithm: ${params.signatureAlgorithm}`)
-    }
-
-    await initializeMpcLib(params.signatureAlgorithm as any)
-    const messageId = getMessageHash(params.message)
-
-    const devices = [params.vault.localPartyId, ...params.peers]
-    const setupMessage = makeSetupMessage({
-      keyShare,
-      chainPath: params.derivePath.replaceAll("'", ''),
-      message: params.message,
-      devices,
-      signatureAlgorithm: params.signatureAlgorithm as any,
-    })
-
-    const session = makeSignSession({
-      setupMessage,
-      localPartyId: params.vault.localPartyId,
-      keyShare,
-      signatureAlgorithm: params.signatureAlgorithm as any,
-    })
-
-    const setupMessageHash = shouldBePresent(
-      SignSession[params.signatureAlgorithm as any].setupMessageHash(setupMessage),
-      'Setup message hash'
-    )
-
-    if (params.message != Buffer.from(setupMessageHash).toString('hex')) {
-      throw new Error('Setup message hash does not match the original message')
-    }
-    
-    // Simple message exchange loop
-    while (!session.isFinished()) {
-      // Send outbound messages
-      const outboundMessages = session.outboundMessages()
-      for (const receiver of outboundMessages) {
-        const encryptedMessage = toMpcServerMessage(receiver.message, params.hexEncryptionKey)
-        await sendMpcRelayMessage({
-          serverUrl: this.config.messageRelay,
-          sessionId: params.sessionId,
-          messageId,
-          message: {
-            session_id: params.sessionId,
-            from: params.vault.localPartyId,
-            to: [receiver.to],
-            body: encryptedMessage,
-            hash: receiver.hash,
-            sequence_no: 0,
-          },
-        })
-      }
-
-      // Get inbound messages
-      const relayMessages = await getMpcRelayMessages({
-        serverUrl: this.config.messageRelay,
-        localPartyId: params.vault.localPartyId,
-        sessionId: params.sessionId,
-        messageId,
-      })
-
-      for (const msg of relayMessages) {
-        if (session.inputMessage(fromMpcServerMessage(msg.body, params.hexEncryptionKey))) {
-          await deleteMpcRelayMessage({
-            serverUrl: this.config.messageRelay,
-            localPartyId: params.vault.localPartyId,
-            sessionId: params.sessionId,
-            messageHash: msg.hash,
-            messageId,
-          })
-          return session.finish()
-        }
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 1000))
-    }
-
-    return session.finish()
-  }
 
   private async waitForPeers(sessionId: string, localPartyId: string): Promise<string[]> {
     const { queryUrl } = await import('../lib/utils/query/queryUrl')
