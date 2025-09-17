@@ -21,7 +21,6 @@ const external = [
   'axios',
   'viem', 
   'zod',
-  'uuid',
   '@trustwallet/wallet-core',
   
   // React (not needed for CLI)
