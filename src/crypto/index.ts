@@ -4,14 +4,14 @@
  */
 
 // AES-GCM encryption/decryption - will be loaded dynamically at runtime
-export const encryptWithAesGcm = async (data: any, key: any): Promise<any> => {
+export const encryptWithAesGcm = async (params: { value: any, key: any }): Promise<any> => {
   const { encryptWithAesGcm } = await import('@lib/utils/encryption/aesGcm/encryptWithAesGcm')
-  return encryptWithAesGcm(data, key)
+  return encryptWithAesGcm(params)
 }
 
-export const decryptWithAesGcm = async (data: any, key: any): Promise<any> => {
+export const decryptWithAesGcm = async (params: { value: any, key: any }): Promise<any> => {
   const { decryptWithAesGcm } = await import('@lib/utils/encryption/aesGcm/decryptWithAesGcm')
-  return decryptWithAesGcm(data, key)
+  return decryptWithAesGcm(params)
 }
 
 // Base64 utilities

@@ -1,5 +1,21 @@
 import inquirer from 'inquirer'
 
+export function stripPasswordQuotes(password: string): string {
+  if (!password) return password
+  
+  // Strip surrounding quotes if they exist
+  const trimmed = password.trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  
+  return password
+}
+
+
 export async function promptForPassword(
   prompt: string,
   attempt: number,

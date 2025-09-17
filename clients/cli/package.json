@@ -21,6 +21,7 @@
   "dependencies": {
     "@vultisig/sdk": "workspace:*",
     "commander": "^14.0.0",
+    "dotenv": "^16.4.5",
     "inquirer": "^12.9.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"

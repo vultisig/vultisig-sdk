@@ -1,8 +1,8 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "target": "ES2021",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "declaration": true,
@@ -23,18 +23,18 @@
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "paths": {
-      "@core/*": ["../core/*"],
-      "@lib/*": ["../lib/*"]
+      "@core/*": ["./core/*"],
+      "@lib/*": ["./lib/*"]
     },
     "baseUrl": "."
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "../core/**/*.ts",
-    "../core/**/*.tsx",
-    "../lib/**/*.ts",
-    "../lib/**/*.tsx"
+    "./core/**/*.ts",
+    "./core/**/*.tsx",
+    "./lib/**/*.ts",
+    "./lib/**/*.tsx"
   ],
   "exclude": [
     "node_modules",

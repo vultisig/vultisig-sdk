@@ -2,14 +2,16 @@ import * as fs from 'fs'
 // SDK will be made available globally by the launcher
 declare const VultisigSDK: any
 import { DaemonManager } from '../daemon/DaemonManager'
+import { stripPasswordQuotes } from '../utils/password'
+import { getVaultConfig } from '../utils/env'
 
 export type SignOptions = {
   network: string
   mode?: string
   sessionId?: string
   payloadFile?: string
-  fast?: boolean
   password?: string
+  vault?: string
 }
 
 export class SignCommand {
@@ -21,14 +23,18 @@ export class SignCommand {
       throw new Error('--network is required')
     }
 
-    // Validate fast mode requirements
-    if (options.fast && !options.password) {
-      throw new Error('--password is mandatory when using --fast mode')
-    }
-
-    const mode = options.mode || 'relay'
+    const mode = options.mode || 'fast'
     if (mode !== 'local' && mode !== 'relay' && mode !== 'fast') {
       throw new Error('--mode must be "local", "relay", or "fast"')
+    }
+
+    // Get vault configuration with automatic fallback logic
+    const vaultConfig = getVaultConfig(options.vault, options.password)
+    const strippedPassword = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
+    
+    // Validate fast mode requirements
+    if (mode === 'fast' && !strippedPassword) {
+      throw new Error('--password is required when using fast mode (provide via --password or VAULT_PASSWORD in .env)')
     }
 
     // Read payload
@@ -57,50 +63,126 @@ export class SignCommand {
     console.log(`Network: ${options.network.toUpperCase()}`)
     console.log(`Mode: ${mode}`)
 
-    // Try daemon first
-    try {
-      const daemonManager = new DaemonManager()
-      const result = await daemonManager.signTransaction({
-        network: options.network,
-        payload: payloadData,
-        signingMode: mode as any,
-        sessionId: options.sessionId,
-        password: options.password,
+    // Check if daemon is running or if we need to load vault directly
+    const daemonManager = new DaemonManager()
+    let shouldLoadDirectly = false
+    
+    if (vaultConfig.vaultPath || strippedPassword) {
+      shouldLoadDirectly = await daemonManager.autoStartDaemonIfNeeded({
+        vault: vaultConfig.vaultPath,
+        password: strippedPassword
       })
+    }
 
-      console.log('\n✅ Transaction signed successfully!')
-      console.log('📝 Signature:', result.signature)
+    // If daemon is running, use it for signing
+    if (!shouldLoadDirectly) {
+      try {
+        const result = await daemonManager.signTransaction({
+          network: options.network,
+          payload: payloadData,
+          signingMode: mode as any,
+          sessionId: options.sessionId,
+          password: strippedPassword,
+        })
 
-      if (result.txHash) {
-        console.log('🔗 Transaction Hash:', result.txHash)
+        console.log('\n✅ Transaction signed successfully!')
+        console.log('📝 Signature:', result.signature)
+
+        if (result.txHash) {
+          console.log('🔗 Transaction Hash:', result.txHash)
+        }
+
+        if (result.raw) {
+          console.log('📋 Raw Transaction:', result.raw)
+        }
+
+        return
+      } catch (error) {
+        console.log('⚠️  Daemon not available, trying direct vault signing...')
+        shouldLoadDirectly = true
       }
+    }
 
-      if (result.raw) {
-        console.log('📋 Raw Transaction:', result.raw)
+    // Load vault directly for this operation
+    if (shouldLoadDirectly && (vaultConfig.vaultPath || strippedPassword)) {
+      try {
+        await daemonManager.performEphemeralOperation(
+          {
+            vault: vaultConfig.vaultPath,
+            password: strippedPassword
+          },
+          async (vault) => {
+            const signingPayload = {
+              transaction: payloadData,
+              chain: options.network
+            }
+
+            const signature = await vault.signWithPayload(signingPayload, strippedPassword)
+
+            console.log('\n✅ Transaction signed successfully!')
+            console.log('📝 Signature:', signature.signature)
+            console.log('📋 Format:', signature.format)
+
+            return signature
+          }
+        )
+        return
+      } catch (error) {
+        console.log('⚠️  Could not perform ephemeral signing operation:', error instanceof Error ? error.message : error)
       }
-
-      return
-    } catch (error) {
-      console.log('⚠️  Daemon not available, trying direct vault signing...')
     }
 
     // Fallback to direct vault signing
     const sdk = new VultisigSDK()
-    const activeVault = sdk.getActiveVault()
+    let activeVault = sdk.getActiveVault()
+    
+    // If no active vault, try to load from vaults directory
     if (!activeVault) {
-      throw new Error(
-        'No active vault found and no daemon running. Start with "vultisig run" first.'
-      )
+      console.log('📂 No active vault found, attempting to load from vaults directory...')
+      
+      const { findVultFiles, getVaultsDir } = await import('../utils/paths')
+      const vaultsDir = getVaultsDir()
+      const vultFiles = await findVultFiles(vaultsDir)
+      
+      if (vultFiles.length === 0) {
+        throw new Error(`No vault files found in ${vaultsDir}. Start with "vultisig run" first.`)
+      }
+      
+      // Load the first vault file (or HotVault.vult if it exists)
+      const hotVaultPath = vultFiles.find(f => f.includes('HotVault.vult'))
+      const vaultPath = hotVaultPath || vultFiles[0]
+      
+      console.log(`📄 Loading vault: ${vaultPath}`)
+      
+      const buffer = await fs.promises.readFile(vaultPath)
+      const file = new File([buffer], require('path').basename(vaultPath))
+      ;(file as any).buffer = buffer
+      
+      // For fast mode, password is required
+      if (mode === 'fast' && !strippedPassword) {
+        throw new Error('Password is required for fast signing mode')
+      }
+      
+      activeVault = await sdk.addVault(file, strippedPassword)
+      console.log('✅ Vault loaded successfully!')
     }
 
     try {
-      const signature = await activeVault.sign(payloadData, options.network)
+      // Create proper signing payload
+      const signingPayload = {
+        transaction: payloadData,
+        chain: options.network
+      }
+
+      // Use the new signWithPayload method that handles raw transaction data
+      const signature = await activeVault.signWithPayload(signingPayload, strippedPassword)
 
       console.log('\n✅ Transaction signed successfully!')
       console.log('📝 Signature:', signature.signature)
+      console.log('📋 Format:', signature.format)
 
-      if (signature.txHash) {
-        console.log('🔗 Transaction Hash:', signature.txHash)
+      if (signature.recovery !== undefined) {
+        console.log('🔢 Recovery:', signature.recovery)
       }
     } catch (error) {
       console.error(

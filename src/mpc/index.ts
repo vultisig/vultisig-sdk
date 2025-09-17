@@ -6,7 +6,7 @@
 export { MPCManager } from './MPCManager'
 
 // Re-export available MPC types
-export type { MpcServerType } from '@core/mpc/MpcServerType'
+export type { MpcServerType } from '../core/mpc/MpcServerType'
 
 // Stub types for compilation - actual types come from core workspace
 export type KeysignResult = any
@@ -27,7 +27,8 @@ export const toTssType = async (input: any): Promise<any> => {
   return toTssType(input)
 }
 
-export const generateLocalPartyId = async (): Promise<any> => {
+export const generateLocalPartyId = async (device?: any): Promise<any> => {
   const { generateLocalPartyId } = await import('@core/mpc/devices/localPartyId')
-  return generateLocalPartyId()
+  // TODO: Pass proper device parameter when available
+  return generateLocalPartyId(device || { name: 'SDK-Device' })
 }
