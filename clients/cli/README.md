@@ -16,18 +16,22 @@ Multi-Party Computation (MPC) wallet command-line interface for threshold signat
 
 ## ⚡ Quick Install
 
-**One-command installation:**
+**Complete installation:**
 ```bash
 git clone <repository>
-cd vultisig-windows/clients/cli-ts
-./build.sh
+cd vultisig-sdk
+yarn install                    # Setup workspace
+cd clients/cli
+make build                      # Build CLI binary
+make install                    # Install to system PATH
 ```
 
-That's it! The script will:
-- ✅ Build the standalone binary with monorepo integration
-- ✅ Install to `/usr/local/bin/vultisig`  
-- ✅ Make it executable
-- ✅ Verify the installation
+That's it! The build process will:
+- ✅ Build the SDK for Node.js with WASM support
+- ✅ Compile CLI TypeScript to JavaScript  
+- ✅ Create launcher script with SDK integration
+- ✅ Install to `/usr/local/bin/vultisig`
+- ✅ Make it executable and verify installation
 
 **Now use anywhere:**
 ```bash
@@ -224,32 +228,28 @@ vultisig sign --network <NETWORK> [options]
 
 **Options:**
 - `--network <network>` - **Required.** Blockchain network (ETH, BTC, SOL, etc.)
-- `--mode <mode>` - Signing mode: local or relay (default: relay)
+- `--mode <mode>` - Signing mode: `local`, `fast` or `relay` (default: `fast`)
 - `--session-id <id>` - Custom session ID (auto-generated if empty)
 - `--payload-file <file>` - Transaction payload JSON file (stdin if empty)
-- `--fast` - Use fast mode with VultiServer (requires `--password`)
-- `--password <password>` - VultiServer decryption password (mandatory for `--fast` mode)
+- `--password <password>` - VultiServer decryption password (required for `fast` mode)
 
 **Examples:**
 ```bash
-# Sign Ethereum transaction from file (standard mode)
-vultisig sign --network eth --payload-file transaction.json
+# Sign Ethereum transaction from file (fast mode - default)
+vultisig sign --network eth --password myVultiServerPassword --payload-file transaction.json
 
-# Sign Bitcoin transaction from stdin
-echo '{"to":"bc1...","amount":"0.001"}' | vultisig sign --network btc
+# Sign Bitcoin transaction from stdin (fast mode)
+echo '{"to":"bc1...","amount":"0.001"}' | vultisig sign --network btc --password myVultiServerPassword
 
 # Local signing mode
 vultisig sign --network sol --mode local --payload-file sol-tx.json
 
-# Fast mode with VultiServer (requires vault to be stored on VultiServer)
-vultisig sign --network eth --fast --password myVultiServerPassword --payload-file transaction.json
-
-# Fast mode from stdin
-echo '{"to":"0x...","amount":"0.1"}' | vultisig sign --network eth --fast --password myVultiServerPassword
+# Relay mode 
+vultisig sign --network eth --mode relay --payload-file transaction.json
 ```
 
 **⚡ Fast Mode with VultiServer:**
-Fast mode (`--fast`) enables MPC signing ceremony directly between CLI and VultiServer without requiring mobile devices. This mode:
+Fast mode enables MPC signing ceremony directly between CLI and VultiServer without requiring mobile devices. This mode:
 1. **Requires `--password`**: The VultiServer decryption password (not your local vault password)
 2. **Requires local vault**: CLI loads local vault keyshare to participate in MPC ceremony
 3. **MPC ceremony**: Both CLI and VultiServer participate in full MPC protocol using WASM libraries
@@ -440,21 +440,69 @@ src/
 ```
 
 ### Build Commands
+
+**Prerequisites:**
+- Node.js 18+ with WebAssembly support
+- yarn package manager (as specified in package.json)
+
+**Build Process:**
 ```bash
-# One-command build and install
-./build.sh
+# 1. Setup workspace (from repository root)
+cd /path/to/vultisig-sdk
+yarn install
 
-# Manual development workflow
-npm run build              # Compile TypeScript
-make build                # Build standalone binary  
-make install              # Install to system PATH
+# 2. Build SDK for Node.js (required first)
+cd src
+node --max-old-space-size=8192 ../node_modules/.bin/rollup -c rollup.node.config.js
+
+# 3. Build CLI (from CLI directory)
+cd ../clients/cli
+make build                # Uses scripts/build-final.sh internally
+
+# Alternative: Run build script directly
+./scripts/build-final.sh  # Complete build pipeline
+
+# 4. Install to system PATH
+make install              # Install to /usr/local/bin/vultisig
+# OR manually:
+sudo cp bin/vultisig /usr/local/bin/
+
+# 5. Test installation
 make test                 # Test binary functionality
-
-# Advanced build
-./scripts/build.sh        # Full build pipeline
-./scripts/install.sh      # System installation
-./scripts/uninstall.sh    # Remove from system
+vultisig --version        # Verify installation
 ```
+
+**Development Workflow:**
+```bash
+# Build SDK only (when SDK changes)
+cd src && yarn workspace @vultisig/sdk build
+
+# Build CLI only (when CLI changes)  
+cd clients/cli && yarn build
+
+# Complete rebuild
+cd clients/cli && make clean && make build
+
+# Uninstall
+make uninstall            # Remove from system PATH
+```
+
+**Build Troubleshooting:**
+
+*TypeScript compilation errors in core/lib files:*
+- These are expected - the CLI build script uses `--noEmitOnError false`
+- Browser-specific code (like `document.createElement`) causes errors in Node.js compilation
+- The build continues despite errors and produces working CLI output
+
+*WASM loading issues:*
+- Ensure Node.js 18+ with WebAssembly support
+- WASM files are automatically copied during SDK build
+- Check that `src/dist/index.node.cjs` exists after SDK build
+
+*Module resolution errors:*
+- Run `yarn install` from repository root first
+- Ensure workspace dependencies are properly linked
+- The launcher script handles SDK loading, not direct imports
 
 ## 🎯 Implementation Status
 

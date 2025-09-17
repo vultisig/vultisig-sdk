@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { Vultisig } from '../index'
-import { VaultManager } from '../vault/VaultManager'
 
 // Mock the file download functionality for testing
 vi.mock('@lib/ui/utils/initiateFileDownload', () => ({

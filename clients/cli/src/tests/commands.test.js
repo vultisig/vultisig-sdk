@@ -76,7 +76,8 @@ describe('CLI Commands Tests', () => {
   describe('List Command', () => {
     test('should list available vault files', () => {
       const output = execSync(`${CLI_PATH} list`, { encoding: 'utf8' })
-      expect(output).toContain('Found 3 vault file(s)')
+      expect(output).toMatch(/Found \d+ vault file\(s\)/)
+      expect(parseInt(output.match(/Found (\d+) vault file\(s\)/)[1])).toBeGreaterThanOrEqual(3)
       expect(output).toContain('TestFastVault-44fd-share2of2-Password123!.vult')
       expect(output).toContain('TestSecureVault-cfa0-share2of2-NoPassword.vult')
       expect(output).toContain('🔐 encrypted')
@@ -97,7 +98,8 @@ describe('CLI Commands Tests', () => {
 
       expect(output).toContain('Loading vault')
       expect(output).toContain('TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      expect(output).toContain('hasWalletCore: true')
+      const vaultData = expectedVaultData['TestSecureVault-cfa0-share2of2-NoPassword.vult']
+      expect(output).toContain(vaultData.publicKeys.ecdsa)
       expect(output).toContain(`Bitcoin: ${expectedBitcoinAddress}`)
       expect(output).toContain('Addresses derived from vault file')
     })

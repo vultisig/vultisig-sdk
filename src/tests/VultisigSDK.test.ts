@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Vultisig } from './VultisigSDK'
+import { Vultisig } from '../VultisigSDK'
 
 describe('Vultisig static validation methods', () => {
   describe('validateEmail', () => {

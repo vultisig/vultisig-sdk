@@ -1,0 +1,50 @@
+import { create } from '@bufbuild/protobuf'
+import { toChainAmount } from '../../../../chain/amount/toChainAmount'
+import { UtxoChain } from '../../../../chain/Chain'
+import { getUtxoStats } from '../../../../chain/chains/utxo/client/getUtxoStats'
+import { getCoinBalance } from '../../../../chain/coin/balance'
+import { adjustByteFee } from '../../../../chain/tx/fee/utxo/adjustByteFee'
+import { UtxoFeeSettings } from '../../../../chain/tx/fee/utxo/UtxoFeeSettings'
+import {
+  UTXOSpecific,
+  UTXOSpecificSchema,
+} from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
+
+import { ChainSpecificResolver } from '../resolver'
+
+const dustStats = 600n
+
+const getByteFee = async (chain: UtxoChain) => {
+  if (chain === UtxoChain.Zcash) {
+    return 1000
+  }
+
+  const { data } = await getUtxoStats(chain)
+  return data.suggested_transaction_fee_per_byte_sat
+}
+
+export const getUtxoSpecific: ChainSpecificResolver<
+  UTXOSpecific,
+  UtxoFeeSettings
+> = async ({ coin, feeSettings, amount, psbt }) => {
+  const chain = coin.chain as UtxoChain
+
+  let byteFee = await getByteFee(chain)
+  if (feeSettings) {
+    byteFee = adjustByteFee(byteFee, feeSettings)
+  }
+
+  const result = create(UTXOSpecificSchema, {
+    byteFee: byteFee.toString(),
+    // @ts-expect-error - @Ehsan-saradar remove this comment when commondata is updated
+    psbt: psbt?.toBase64(),
+  })
+
+  if (amount) {
+    const balance = await getCoinBalance(coin)
+    const requested = toChainAmount(amount, coin.decimals)
+    result.sendMaxAmount = balance - requested <= dustStats
+  }
+
+  return result
+}

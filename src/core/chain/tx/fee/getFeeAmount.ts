@@ -1,0 +1,31 @@
+import { Chain } from '../../Chain'
+import { cosmosGasLimitRecord } from '../../chains/cosmos/cosmosGasLimitRecord'
+import { polkadotConfig } from '../../chains/polkadot/config'
+import { solanaConfig } from '../../chains/solana/solanaConfig'
+import { tonConfig } from '../../chains/ton/config'
+import { rippleTxFee } from './ripple'
+import { KeysignChainSpecific } from '../../../mpc/keysign/chainSpecific/KeysignChainSpecific'
+import { matchDiscriminatedUnion } from '../../../../lib/utils/matchDiscriminatedUnion'
+
+import { nativeTxFeeRune } from './thorchain/config'
+
+export const getFeeAmount = (chainSpecific: KeysignChainSpecific): bigint =>
+  matchDiscriminatedUnion(chainSpecific, 'case', 'value', {
+    utxoSpecific: ({ byteFee }) => BigInt(byteFee) * BigInt(250), // assume the average size of an UTXO transaction is 250 vbytes
+    ethereumSpecific: ({ maxFeePerGasWei, gasLimit }) =>
+      BigInt(maxFeePerGasWei) * BigInt(gasLimit),
+    suicheSpecific: ({ referenceGasPrice }) => BigInt(referenceGasPrice),
+    solanaSpecific: ({ priorityFee }) =>
+      BigInt(priorityFee) == BigInt(0)
+        ? BigInt(solanaConfig.priorityFeeLimit)
+        : BigInt(priorityFee), // currently we hardcode the priority fee to 100_000 lamports
+    thorchainSpecific: ({ fee }) => BigInt(fee ?? nativeTxFeeRune),
+    mayaSpecific: () => BigInt(cosmosGasLimitRecord[Chain.MayaChain]),
+    cosmosSpecific: ({ gas }) =>
+      BigInt(gas ?? cosmosGasLimitRecord[Chain.Cosmos]),
+    polkadotSpecific: () => polkadotConfig.fee,
+    tonSpecific: () => tonConfig.fee,
+    tronSpecific: ({ gasEstimation }) => BigInt(gasEstimation || 0),
+    rippleSpecific: () => rippleTxFee,
+    cardano: ({ byteFee }) => BigInt(byteFee),
+  })
