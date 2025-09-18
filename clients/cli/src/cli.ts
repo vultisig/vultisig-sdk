@@ -7,6 +7,7 @@ import { Command } from 'commander'
 // SDK will be made available globally by the launcher
 declare const VultisigSDK: any
 import { AddressCommand } from './commands/AddressCommand'
+import { BalanceCommand } from './commands/BalanceCommand'
 import { InitCommand } from './commands/InitCommand'
 import { ListCommand } from './commands/ListCommand'
 import { QuitCommand } from './commands/QuitCommand'
@@ -58,6 +59,7 @@ const listCommand = new ListCommand()
 const runCommand = new RunCommand()
 const statusCommand = new StatusCommand()
 const addressCommand = new AddressCommand()
+const balanceCommand = new BalanceCommand()
 const signCommand = new SignCommand()
 const quitCommand = new QuitCommand()
 const versionCommand = new VersionCommand()
@@ -98,9 +100,28 @@ program
     'Networks (all, or comma-separated: btc,eth,sol)',
     'all'
   )
-  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
+  .option(
+    '--vault <path>',
+    'Path to keyshare file (.vult) - starts daemon if not running'
+  )
   .option('--password <password>', 'Password for encrypted keyshares')
   .action(wrapCommand(addressCommand, true))
+
+// Balance command - uses daemon/SDK
+program
+  .command('balance')
+  .description(balanceCommand.description)
+  .option(
+    '--network <network>',
+    'Network to query (all, or specific: btc,eth,sol)',
+    'all'
+  )
+  .option(
+    '--vault <path>',
+    'Path to keyshare file (.vult) - starts daemon if not running'
+  )
+  .option('--password <password>', 'Password for encrypted keyshares')
+  .action(wrapCommand(balanceCommand, true))
 
 // Sign command - uses daemon/SDK
 program
@@ -117,7 +138,10 @@ program
     '--password <password>',
     'VultiServer decryption password (required for fast mode)'
   )
-  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
+  .option(
+    '--vault <path>',
+    'Path to keyshare file (.vult) - starts daemon if not running'
+  )
   .action(wrapCommand(signCommand, true))
 
 // Quit command - daemon operation

@@ -12,7 +12,7 @@ export const getSplAssociatedAccount = async ({
   account,
   token,
 }: Input): Promise<{ address: PublicKey; isToken2022: boolean }> => {
-  const client = getSolanaClient()
+  const client = await getSolanaClient()
 
   const { value } = await client.getTokenAccountsByOwner(
     new PublicKey(account),

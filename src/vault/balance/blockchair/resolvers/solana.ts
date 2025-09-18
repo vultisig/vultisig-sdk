@@ -56,7 +56,7 @@ export const getBlockchairSolanaCoinBalance: CoinBalanceResolver =
         const { getSolanaClient } = await import(
           '@core/chain/chains/solana/client'
         )
-        const client = getSolanaClient()
+        const client = await getSolanaClient()
         const balance = await client.getBalance(new (await import('@solana/web3.js')).PublicKey(input.address))
         return BigInt(balance)
       }

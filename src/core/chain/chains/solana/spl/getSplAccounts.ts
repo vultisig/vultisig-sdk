@@ -5,7 +5,7 @@ import { token2022ProgramId } from '../config'
 import { splTokenProgramId } from '../config'
 
 export const getSplAccounts = async (address: string) => {
-  const client = getSolanaClient()
+  const client = await getSolanaClient()
   const programs = [splTokenProgramId, token2022ProgramId]
 
   const responses = await Promise.all(

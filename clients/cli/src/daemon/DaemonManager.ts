@@ -213,6 +213,21 @@ export class DaemonManager {
     }
   }
 
+  async balances(chains: string[]): Promise<Record<string, any>> {
+    try {
+      // Check if daemon is running first
+      await this.sendSocketCommand('ping', {})
+
+      // Request balances from daemon
+      const response = await this.sendSocketCommand('get_balances', { chains })
+      return response.balances || {}
+    } catch (error) {
+      throw new Error(
+        'No Vultisig daemon running, start with "vultisig run" first'
+      )
+    }
+  }
+
   async signTransaction(request: SignTransactionRequest): Promise<any> {
     try {
       // Check if daemon is running first
@@ -314,6 +329,29 @@ export class DaemonManager {
           }
 
           return { success: true, result: { addresses } }
+
+        case 'get_balances':
+          if (!this.vault) {
+            throw new Error('No vault loaded')
+          }
+
+          const balanceChains = request.params?.chains || [
+            'bitcoin',
+            'ethereum',
+            'solana',
+          ]
+          const balances: Record<string, any> = {}
+
+          for (const chain of balanceChains) {
+            try {
+              balances[chain] = await (this.vault as any).balance(chain)
+            } catch (error) {
+              balances[chain] = 
+                `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }
+          }
+
+          return { success: true, result: { balances } }
 
         case 'sign_transaction':
           if (!this.vault) {
