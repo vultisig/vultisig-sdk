@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Balance, Vault } from 'vultisig-sdk'
-import { VultisigSDK } from 'vultisig-sdk'
+import type { Balance, Vault, Vultisig } from 'vultisig-sdk'
 
 type BalanceDisplayProps = {
-  sdk: VultisigSDK
+  sdk: Vultisig
   vault: Vault
 }
 

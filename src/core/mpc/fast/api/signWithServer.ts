@@ -12,13 +12,12 @@ type Input = {
   vault_password: string
 }
 
-export const signWithServer = async (input: Input): Promise<string> => {
-  const sessionId = await queryUrl<string>(`${fastVaultServerUrl}/sign`, {
+export const signWithServer = async (input: Input) => {
+  const response = await queryUrl(`${fastVaultServerUrl}/sign`, {
     body: input,
-    responseType: 'json',
-  })
+    responseType: 'text',
+  }) as string
   
-  // Server returns the session ID as a JSON string (with quotes)
-  // Remove quotes if present to get clean UUID
-  return sessionId.replace(/^"|"$/g, '')
+  // Clean up the response - remove quotes and all whitespace/newlines
+  return response.trim().replace(/^["']|["']$/g, '')
 }

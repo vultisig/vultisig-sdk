@@ -171,10 +171,10 @@ if (typeof globalThis.WebAssembly === 'undefined') {
     const sdkPath = path.resolve(projectRoot, '../../src');
     
     // Require the CommonJS SDK build
-    const { Vultisig: VultisigSDK } = require(path.resolve(sdkPath, 'dist/index.node.cjs'));
+    const { Vultisig } = require(path.resolve(sdkPath, 'dist/index.node.cjs'));
     
     // Make SDK available globally for the CLI
-    globalThis.VultisigSDK = VultisigSDK;
+    globalThis.Vultisig = Vultisig;
     
     // Now require the CLI
     require(path.resolve(projectRoot, 'dist/cli.js'));
