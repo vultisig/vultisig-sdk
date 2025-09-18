@@ -4,9 +4,9 @@ import type {
   KeygenProgressUpdate,
   AddressBook,
   AddressBookEntry,
-  ServerStatus,
   ValidationResult,
 } from './types'
+import { ServerManager } from './server'
 import { AddressBookManager } from './vault/AddressBook'
 import { ChainManagement } from './vault/ChainManagement'
 import { ValidationHelpers } from './vault/utils/validation'
