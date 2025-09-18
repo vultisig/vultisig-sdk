@@ -1,67 +1,3 @@
-#!/bin/bash
-
-# Vultisig CLI Build Script - Final Working Version
-set -e
-
-echo "🏗️  Building Vultisig CLI (Final Version)..."
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-SDK_DIR="$PROJECT_DIR/../../src"
-
-echo -e "${BLUE}📁 Project directory: ${PROJECT_DIR}${NC}"
-echo -e "${BLUE}📁 SDK directory: ${SDK_DIR}${NC}"
-
-# Step 1: Build SDK for Node.js
-echo -e "${YELLOW}🔧 Building SDK for Node.js...${NC}"
-cd "$SDK_DIR"
-
-# Build the Node.js CJS version
-node --max-old-space-size=8192 ../node_modules/.bin/rollup -c rollup.node.config.js
-
-if [ ! -f "$SDK_DIR/dist/index.node.cjs" ]; then
-    echo -e "${RED}❌ SDK Node.js build failed${NC}"
-    exit 1
-fi
-
-# Copy missing WASM files
-echo -e "${YELLOW}📦 Copying WASM files...${NC}"
-if [ -f "../clients/extension/dist/assets/secp256k1.wasm" ]; then
-    cp "../clients/extension/dist/assets/secp256k1.wasm" "dist/"
-    cp "../clients/extension/dist/assets/secp256k1.wasm" "dist/wasm/"
-fi
-
-echo -e "${GREEN}✅ SDK built successfully ($(du -h dist/index.node.cjs | cut -f1))${NC}"
-
-# Step 2: Build CLI TypeScript
-echo -e "${YELLOW}🔨 Compiling CLI TypeScript...${NC}"
-cd "$PROJECT_DIR"
-
-# Clean previous builds
-rm -rf dist bin
-mkdir -p bin
-
-yarn build
-
-if [ ! -f "$PROJECT_DIR/dist/cli.js" ]; then
-    echo -e "${RED}❌ CLI TypeScript compilation failed${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}✅ CLI TypeScript compilation successful${NC}"
-
-# Step 3: Create the final CLI launcher
-echo -e "${YELLOW}📦 Creating CLI launcher...${NC}"
-
-cat > "$PROJECT_DIR/bin/vultisig" << 'EOF'
 #!/usr/bin/env node
 
 /**
@@ -87,6 +23,11 @@ globalThis.File = function File(chunks, name, options) {
 
 // Setup fetch polyfill for WASM file loading (from vitest.setup.ts)
 const originalFetch = globalThis.fetch;
+
+// Simplified fetch for production use
+const debugFetch = async function(url, options) {
+  return await originalFetch(url, options);
+};
 
 globalThis.fetch = async function(url) {
   const urlString = url.toString();
@@ -144,9 +85,9 @@ globalThis.fetch = async function(url) {
     }
   }
   
-  // For non-WASM requests, use original fetch if available
+  // For non-WASM requests, use debug fetch
   if (originalFetch) {
-    return originalFetch(url);
+    return debugFetch(url, arguments[1]);
   }
   
   // Fallback for non-WASM requests when no original fetch
@@ -171,11 +112,25 @@ if (typeof globalThis.WebAssembly === 'undefined') {
     const projectRoot = path.resolve(cliDir, '..');
     const sdkPath = path.resolve(projectRoot, '../../src');
     
-    // Require the CommonJS SDK build
-    const { Vultisig } = require(path.resolve(sdkPath, 'dist/index.node.cjs'));
+    // Try to require the CommonJS SDK build, fallback to regular build
+    let VultisigSDK;
+    const nodeCjsPath = path.resolve(sdkPath, 'dist/index.node.cjs');
+    const regularPath = path.resolve(sdkPath, 'dist/index.js');
+    
+    if (fs.existsSync(nodeCjsPath)) {
+      const sdk = require(nodeCjsPath);
+      VultisigSDK = sdk.Vultisig;
+    } else if (fs.existsSync(regularPath)) {
+      console.log('⚠️  Using fallback SDK build (index.js instead of index.node.cjs)');
+      // Use dynamic import for ES modules
+      const sdk = await import('file://' + regularPath);
+      VultisigSDK = sdk.Vultisig;
+    } else {
+      throw new Error('No SDK build found. Please build the SDK first.');
+    }
     
     // Make SDK available globally for the CLI
-    globalThis.Vultisig = Vultisig;
+    globalThis.Vultisig = VultisigSDK;
     
     // Now require the CLI
     require(path.resolve(projectRoot, 'dist/cli.js'));
@@ -189,22 +144,3 @@ if (typeof globalThis.WebAssembly === 'undefined') {
     process.exit(1);
   }
 })();
-EOF
-
-chmod +x "$PROJECT_DIR/bin/vultisig"
-
-echo -e "${GREEN}🎉 Build completed successfully!${NC}"
-echo -e "${GREEN}📍 CLI created at: ${PROJECT_DIR}/bin/vultisig${NC}"
-echo ""
-echo -e "${BLUE}📋 Verification:${NC}"
-"$PROJECT_DIR/bin/vultisig" --version
-echo ""
-echo -e "${BLUE}📋 Installation:${NC}"
-echo -e "   sudo cp ${PROJECT_DIR}/bin/vultisig /usr/local/bin/"
-echo ""
-echo -e "${BLUE}📋 Usage:${NC}"
-echo -e "   vultisig init      # Initialize directories"
-echo -e "   vultisig list      # List vault files"
-echo -e "   vultisig run       # Start daemon"
-echo ""
-echo -e "${GREEN}✅ CLI is ready to use!${NC}"

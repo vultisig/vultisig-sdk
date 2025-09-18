@@ -1,38 +1,8 @@
 import { useMemo, useState } from 'react'
-
-// Minimal Vault shape for example usage
-type Vault = {
-  name: string
-  publicKeys: { ecdsa: string; eddsa?: string }
-  localPartyId: string
-  signers: string[]
-  hexChainCode: string
-  keyShares: { ecdsa: string; eddsa?: string }
-  libType: 'DKLS' | 'GG20'
-  isBackedUp: boolean
-  order: number
-  createdAt?: number
-}
-
-type SDK = {
-  createFastVault: (options: {
-    name: string
-    email: string
-    password: string
-    onLog?: (message: string) => void
-    onProgress?: (u: KeygenProgressUpdate) => void
-  }) => Promise<{
-    vault: Vault
-    vaultId: string
-    verificationRequired: boolean
-  }>
-  verifyVault: (vaultId: string, code: string) => Promise<boolean>
-  getVault: (vaultId: string, password: string) => Promise<Vault>
-  resendVaultVerification: (vaultId: string) => Promise<void>
-}
+import type { Vault, Vultisig, KeygenProgressUpdate } from 'vultisig-sdk'
 
 type CreateVaultFormProps = {
-  sdk: SDK
+  sdk: Vultisig
   onVaultCreated: (vault: Vault, options?: { serverVerified?: boolean }) => void
   onInitialize: () => Promise<void>
 }
@@ -44,12 +14,6 @@ type CreateStep =
   | 'verifying'
   | 'done'
   | 'error'
-
-type KeygenProgressUpdate = {
-  phase: 'prepare' | 'ecdsa' | 'eddsa' | 'complete'
-  round?: 1 | 2 | 3
-  message?: string
-}
 
 export const CreateVaultForm = ({
   sdk,

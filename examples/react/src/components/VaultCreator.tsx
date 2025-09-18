@@ -1,18 +1,24 @@
-import {
-  validateEmail,
-  validatePassword,
-  validateVaultName,
-  Vault,
-  Vultisig,
-} from '@vultisig/sdk'
 import React, { useState } from 'react'
+import { Vultisig } from 'vultisig-sdk'
+
+type VaultLike = {
+  name: string
+  libType?: unknown
+  publicKeys?: { ecdsa?: string; eddsa?: string }
+  signers?: Array<unknown>
+}
 
 type VaultCreatorProps = {
   sdk: Vultisig
-  onVaultCreated: (vault: Vault) => void
+  onVaultCreated: (vault: VaultLike) => void
+  onInitialize: () => Promise<void>
 }
 
-const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
+const VaultCreator: React.FC<VaultCreatorProps> = ({
+  sdk,
+  onVaultCreated,
+  onInitialize,
+}) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -30,20 +36,20 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
     setError(null)
 
     // Validate form data using SDK utilities
-    const nameValidation = validateVaultName(formData.name)
+    const nameValidation = Vultisig.validateVaultName(formData.name)
     if (!nameValidation.valid) {
       setError(nameValidation.error!)
       return
     }
 
-    if (!validateEmail(formData.email)) {
+    if (Vultisig.validateEmail(formData.email).valid === false) {
       setError('Please enter a valid email address')
       return
     }
 
-    const passwordValidation = validatePassword(formData.password)
+    const passwordValidation = Vultisig.validatePassword(formData.password)
     if (!passwordValidation.valid) {
-      setError(passwordValidation.errors[0])
+      setError(passwordValidation.error!)
       return
     }
 
@@ -371,7 +377,8 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
           style={{
             padding: '12px',
             border:
-              formData.email && !validateEmail(formData.email)
+              formData.email &&
+              Vultisig.validateEmail(formData.email).valid === false
                 ? '1px solid #dc3545'
                 : '1px solid #ccc',
             borderRadius: '6px',
@@ -380,17 +387,18 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated }) => {
           required
         />
 
-        {formData.email && !validateEmail(formData.email) && (
-          <div
-            style={{
-              color: '#dc3545',
-              fontSize: '12px',
-              marginTop: '-10px',
-            }}
-          >
-            Please enter a valid email address
-          </div>
-        )}
+        {formData.email &&
+          Vultisig.validateEmail(formData.email).valid === false && (
+            <div
+              style={{
+                color: '#dc3545',
+                fontSize: '12px',
+                marginTop: '-10px',
+              }}
+            >
+              Please enter a valid email address
+            </div>
+          )}
 
         <input
           type="password"

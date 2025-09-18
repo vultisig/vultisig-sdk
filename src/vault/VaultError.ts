@@ -15,6 +15,8 @@ export enum VaultErrorCode {
   InvalidVault = 'INVALID_VAULT',
   InvalidPublicKey = 'INVALID_PUBLIC_KEY',
   InvalidChainCode = 'INVALID_CHAIN_CODE',
+  BalanceFetchFailed = 'BALANCE_FETCH_FAILED',
+  UnsupportedToken = 'UNSUPPORTED_TOKEN',
 }
 
 /**

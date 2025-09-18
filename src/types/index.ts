@@ -82,6 +82,12 @@ export type Balance = {
   value?: number // USD value
 }
 
+export type CachedBalance = {
+  balance: Balance
+  cachedAt: number // Unix timestamp when cached
+  ttl: number // Time to live in milliseconds (5 minutes = 300000)
+}
+
 export type SigningMode = 'fast' | 'relay' | 'local'
 
 export type SigningPayload = {

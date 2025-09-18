@@ -13,13 +13,24 @@
 export { Vultisig } from './VultisigSDK'
 
 // Vault management
-export * from './vault'
+export { 
+  Vault,
+  VaultError, 
+  VaultErrorCode, 
+  VaultImportError, 
+  VaultImportErrorCode,
+  AddressBookManager,
+  ChainManagement,
+  VaultManagement,
+  BalanceManagement,
+  ValidationHelpers
+} from './vault'
 
 // MPC operations
 export * from './mpc'
 
 // Chain operations
-export * from './chains'
+export { ChainManager, AddressDeriver } from './chains'
 
 // Server communication
 export * from './server'
@@ -27,21 +38,42 @@ export * from './server'
 // Cryptographic utilities
 export * from './crypto'
 
-// Types and interfaces
-export * from './types'
+// Types and interfaces - specific exports to avoid conflicts
+export type {
+  Balance,
+  CachedBalance,
+  SigningMode,
+  SigningPayload,
+  Signature,
+  ServerStatus,
+  KeygenProgressUpdate,
+  AddressBook,
+  AddressBookEntry,
+  ValidationResult,
+  VaultOptions,
+  VaultBackup,
+  VaultDetails,
+  VaultValidationResult,
+  ExportOptions,
+  FastSigningInput,
+  ReshareOptions,
+  SDKConfig,
+  ChainConfig,
+  AddressResult,
+  VaultType,
+  KeygenMode,
+  VaultManagerConfig,
+  VaultCreationStep,
+  SigningStep,
+  VaultSigner,
+  Summary,
+  Token,
+  Value,
+  GasInfo,
+  GasEstimate
+} from './types'
 
 // WASM utilities
 export * from './wasm'
 
-// Re-export core types that are part of the public API
-export type {
-  AccountCoin,
-  ChainKind,
-  Coin,
-  MpcServerType,
-  PublicKeys,
-  Vault,
-  VaultFolder,
-  VaultKeyShares,
-  VaultSecurityType,
-} from './types'
+// Types are already exported via export * from './types' above

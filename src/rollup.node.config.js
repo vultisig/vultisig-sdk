@@ -25,6 +25,7 @@ const external = [
   'viem', 
   'zod',
   '@trustwallet/wallet-core',
+  '@solana/web3.js',
   
   // React (not needed for CLI)
   'react',
