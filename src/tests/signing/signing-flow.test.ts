@@ -318,7 +318,7 @@ describe('Signing Flow Tests', () => {
       console.log('   v:', v)
       
       // Recover the address that signed this transaction
-      const recoveredAddress = recoverAddress({
+      const recoveredAddress = await recoverAddress({
         hash: messageHash,
         signature: {
           r: r as `0x${string}`,

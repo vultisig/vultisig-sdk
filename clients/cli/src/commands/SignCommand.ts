@@ -1,9 +1,10 @@
 import * as fs from 'fs'
+import * as path from 'path'
 // SDK will be made available globally by the launcher
-declare const VultisigSDK: any
+declare const Vultisig: any
 import { DaemonManager } from '../daemon/DaemonManager'
-import { stripPasswordQuotes } from '../utils/password'
 import { getVaultConfig } from '../utils/env'
+import { stripPasswordQuotes } from '../utils/password'
 
 export type SignOptions = {
   network: string
@@ -30,11 +31,15 @@ export class SignCommand {
 
     // Get vault configuration with automatic fallback logic
     const vaultConfig = getVaultConfig(options.vault, options.password)
-    const strippedPassword = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
-    
+    const strippedPassword = vaultConfig.vaultPassword
+      ? stripPasswordQuotes(vaultConfig.vaultPassword)
+      : undefined
+
     // Validate fast mode requirements
     if (mode === 'fast' && !strippedPassword) {
-      throw new Error('--password is required when using fast mode (provide via --password or VAULT_PASSWORD in .env)')
+      throw new Error(
+        '--password is required when using fast mode (provide via --password or VAULT_PASSWORD in .env)'
+      )
     }
 
     // Read payload
@@ -66,11 +71,11 @@ export class SignCommand {
     // Check if daemon is running or if we need to load vault directly
     const daemonManager = new DaemonManager()
     let shouldLoadDirectly = false
-    
+
     if (vaultConfig.vaultPath || strippedPassword) {
       shouldLoadDirectly = await daemonManager.autoStartDaemonIfNeeded({
         vault: vaultConfig.vaultPath,
-        password: strippedPassword
+        password: strippedPassword,
       })
     }
 
@@ -109,15 +114,18 @@ export class SignCommand {
         await daemonManager.performEphemeralOperation(
           {
             vault: vaultConfig.vaultPath,
-            password: strippedPassword
+            password: strippedPassword,
           },
-          async (vault) => {
+          async vault => {
             const signingPayload = {
               transaction: payloadData,
-              chain: options.network
+              chain: options.network,
             }
 
-            const signature = await vault.signWithPayload(signingPayload, strippedPassword)
+            const signature = await vault.signWithPayload(
+              signingPayload,
+              strippedPassword
+            )
 
             console.log('\n✅ Transaction signed successfully!')
             console.log('📝 Signature:', signature.signature)
@@ -128,41 +136,48 @@ export class SignCommand {
         )
         return
       } catch (error) {
-        console.log('⚠️  Could not perform ephemeral signing operation:', error instanceof Error ? error.message : error)
+        console.log(
+          '⚠️  Could not perform ephemeral signing operation:',
+          error instanceof Error ? error.message : error
+        )
       }
     }
 
     // Fallback to direct vault signing
-    const sdk = new VultisigSDK()
+    const sdk = new Vultisig()
     let activeVault = sdk.getActiveVault()
-    
+
     // If no active vault, try to load from vaults directory
     if (!activeVault) {
-      console.log('📂 No active vault found, attempting to load from vaults directory...')
-      
+      console.log(
+        '📂 No active vault found, attempting to load from vaults directory...'
+      )
+
       const { findVultFiles, getVaultsDir } = await import('../utils/paths')
       const vaultsDir = getVaultsDir()
       const vultFiles = await findVultFiles(vaultsDir)
-      
+
       if (vultFiles.length === 0) {
-        throw new Error(`No vault files found in ${vaultsDir}. Start with "vultisig run" first.`)
+        throw new Error(
+          `No vault files found in ${vaultsDir}. Start with "vultisig run" first.`
+        )
       }
-      
+
       // Load the first vault file (or HotVault.vult if it exists)
       const hotVaultPath = vultFiles.find(f => f.includes('HotVault.vult'))
       const vaultPath = hotVaultPath || vultFiles[0]
-      
+
       console.log(`📄 Loading vault: ${vaultPath}`)
-      
+
       const buffer = await fs.promises.readFile(vaultPath)
-      const file = new File([buffer], require('path').basename(vaultPath))
+      const file = new File([buffer], path.basename(vaultPath))
       ;(file as any).buffer = buffer
-      
+
       // For fast mode, password is required
       if (mode === 'fast' && !strippedPassword) {
         throw new Error('Password is required for fast signing mode')
       }
-      
+
       activeVault = await sdk.addVault(file, strippedPassword)
       console.log('✅ Vault loaded successfully!')
     }
@@ -171,11 +186,14 @@ export class SignCommand {
       // Create proper signing payload
       const signingPayload = {
         transaction: payloadData,
-        chain: options.network
+        chain: options.network,
       }
 
       // Use the new signWithPayload method that handles raw transaction data
-      const signature = await activeVault.signWithPayload(signingPayload, strippedPassword)
+      const signature = await activeVault.signWithPayload(
+        signingPayload,
+        strippedPassword
+      )
 
       console.log('\n✅ Transaction signed successfully!')
       console.log('📝 Signature:', signature.signature)
