@@ -36,6 +36,7 @@ fi
 echo -e "${YELLOW}📦 Copying WASM files...${NC}"
 if [ -f "../clients/extension/dist/assets/secp256k1.wasm" ]; then
     cp "../clients/extension/dist/assets/secp256k1.wasm" "dist/"
+    cp "../clients/extension/dist/assets/secp256k1.wasm" "dist/wasm/"
 fi
 
 echo -e "${GREEN}✅ SDK built successfully ($(du -h dist/index.node.cjs | cut -f1))${NC}"

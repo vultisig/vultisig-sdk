@@ -6,7 +6,7 @@ import { PublicKey } from '@solana/web3.js'
 import { CoinBalanceResolver } from '../resolver'
 
 export const getSolanaCoinBalance: CoinBalanceResolver = async input => {
-  const client = getSolanaClient()
+  const client = await getSolanaClient()
 
   if (isFeeCoin(input)) {
     const balance = await client.getBalance(new PublicKey(input.address))

@@ -56,13 +56,7 @@ export class Vault {
     private wasmManager?: WASMManager,
     sdkInstance?: any
   ) {
-    console.log('Vault initialized:', {
-      name: vaultData.name,
-      publicKeys: vaultData.publicKeys,
-      signers: vaultData.signers.length,
-      hasWalletCore: !!walletCore,
-      hasWasmManager: !!wasmManager,
-    })
+    // Vault initialized
 
     // Store SDK reference for chain validation
     this._sdkInstance = sdkInstance
@@ -246,20 +240,13 @@ export class Vault {
       walletCoreToUse = input.walletCore || this.walletCore
     }
 
-    console.log('Deriving address for chain:', chainStr)
     const startTime = performance.now()
 
     // Check cache first (permanent caching for addresses as per architecture)
     const cacheKey = chainStr.toLowerCase()
     if (this.addressCache.has(cacheKey)) {
       const cachedAddress = this.addressCache.get(cacheKey)!
-      console.log('Using cached address for', chainStr, ':', cachedAddress)
       const derivationTime = performance.now() - startTime
-      console.log(
-        `Derivation time for cached ${chainStr}:`,
-        derivationTime.toFixed(2),
-        'ms'
-      )
       return cachedAddress
     }
 
@@ -293,17 +280,10 @@ export class Vault {
         walletCore,
       })
 
-      console.log('Successfully derived address for', chainStr, ':', address)
-
       // Cache the address (permanent caching as per architecture)
       this.addressCache.set(cacheKey, address)
 
       const derivationTime = performance.now() - startTime
-      console.log(
-        `Derivation time for ${chainStr}:`,
-        derivationTime.toFixed(2),
-        'ms'
-      )
 
       return address
     } catch (error) {
@@ -385,9 +365,6 @@ export class Vault {
     // Check cache first
     const cachedBalance = this.getCachedBalance(chain, tokenId)
     if (cachedBalance) {
-      console.log(
-        `Using cached balance for ${chain}${tokenId ? `:${tokenId}` : ''}`
-      )
       return cachedBalance
     }
 
@@ -405,7 +382,6 @@ export class Vault {
       }
 
       // Get balance from ChainManager
-      console.log(`Fetching fresh balance for ${chain}:${address}`)
       const balance = await this.chainManager.getBalances({
         [chain]: address,
       })
@@ -479,7 +455,6 @@ export class Vault {
       const cachedBalance = this.getCachedBalance(chain)
       if (cachedBalance) {
         result[chain] = cachedBalance
-        console.log(`Using cached balance for ${chain}`)
       } else {
         try {
           // Get address for chains that need fresh data
@@ -498,9 +473,6 @@ export class Vault {
     // If we have chains to fetch fresh data for, batch them
     if (Object.keys(addressesToFetch).length > 0) {
       try {
-        console.log(
-          `Fetching fresh balances for ${Object.keys(addressesToFetch).length} chains`
-        )
         const freshBalances =
           await this.chainManager.getBalances(addressesToFetch)
 
@@ -517,7 +489,6 @@ export class Vault {
         console.error('Failed to fetch batch balances:', error)
 
         // On batch failure, try individual fetches as fallback
-        console.log('Falling back to individual balance fetches')
         for (const chain of Object.keys(addressesToFetch)) {
           try {
             const balance = await this.balance(chain)

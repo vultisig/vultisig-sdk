@@ -7,7 +7,7 @@ import { BroadcastTxResolver } from '../resolver'
 export const broadcastSolanaTx: BroadcastTxResolver<
   OtherChain.Solana
 > = async ({ tx: { encoded } }) => {
-  const client = getSolanaClient()
+  const client = await getSolanaClient()
 
   const transaction = Transaction.from(Buffer.from(encoded, 'base64'))
   

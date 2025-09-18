@@ -17,7 +17,7 @@ export const getSolanaSpecific: ChainSpecificResolver<SolanaSpecific> = async ({
   coin,
   receiver,
 }) => {
-  const client = getSolanaClient()
+  const client = await getSolanaClient()
 
   const recentBlockHash = (
     await client.getLatestBlockhash()

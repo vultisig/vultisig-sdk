@@ -99,8 +99,8 @@ export class JsonRpcServer {
                   maxFeePerGas: BigInt(tx.maxFeePerGas || tx.gasPrice),
                   maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas || '0'),
                   accessList: [],
-                  r,
-                  s,
+                  r: r.startsWith('0x') ? r as `0x${string}` : `0x${r}` as `0x${string}`,
+                  s: s.startsWith('0x') ? s as `0x${string}` : `0x${s}` as `0x${string}`,
                   v: BigInt(v)
                 }
                 
