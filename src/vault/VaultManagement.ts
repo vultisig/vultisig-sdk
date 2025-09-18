@@ -137,6 +137,7 @@ export class VaultManagement {
       const vaultInstance = new VaultClass(
         normalizedVault,
         await this.wasmManager?.getWalletCore(),
+        this.wasmManager,
         this.sdkInstance
       )
 
@@ -173,6 +174,7 @@ export class VaultManagement {
       const vaultInstance = new VaultClass(
         vault,
         await this.wasmManager?.getWalletCore(),
+        this.wasmManager,
         this.sdkInstance
       )
       const summary = vaultInstance.summary()

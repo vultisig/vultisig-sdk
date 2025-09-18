@@ -1,17 +1,17 @@
 import { getSolanaClient } from '../../../chains/solana/client'
 import { getSplAccounts } from '../../../chains/solana/spl/getSplAccounts'
 import { isFeeCoin } from '../../utils/isFeeCoin'
-import { Address } from '@solana/web3.js'
+import { PublicKey } from '@solana/web3.js'
 
 import { CoinBalanceResolver } from '../resolver'
 
 export const getSolanaCoinBalance: CoinBalanceResolver = async input => {
-  const client = getSolanaClient()
+  const client = await getSolanaClient()
 
   if (isFeeCoin(input)) {
-    const { value } = await client.getBalance(input.address as Address).send()
+    const balance = await client.getBalance(new PublicKey(input.address))
 
-    return value.valueOf()
+    return BigInt(balance)
   }
 
   const accounts = await getSplAccounts(input.address)

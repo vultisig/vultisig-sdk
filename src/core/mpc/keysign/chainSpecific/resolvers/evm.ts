@@ -41,7 +41,7 @@ export const getEthereumSpecific: ChainSpecificResolver<
         to: shouldBePresent(receiver) as `0x${string}`,
         value,
         data,
-      })
+      } as any)
 
     return create(EthereumSpecificSchema, {
       maxFeePerGasWei: maxFeePerGas.toString(),

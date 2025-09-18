@@ -28,3 +28,6 @@ export type {
   VaultDetails,
   VaultValidationResult,
 } from '../types'
+
+// Optional: Advanced balance providers (domain-driven design)
+export * as BalanceProviders from './balance'

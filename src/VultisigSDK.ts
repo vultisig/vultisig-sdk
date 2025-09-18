@@ -1,10 +1,12 @@
-import { ServerManager } from './server'
 import type {
+  Vault,
+  ServerStatus,
+  KeygenProgressUpdate,
   AddressBook,
   AddressBookEntry,
-  ServerStatus,
   ValidationResult,
 } from './types'
+import { ServerManager } from './server'
 import { AddressBookManager } from './vault/AddressBook'
 import { ChainManagement } from './vault/ChainManagement'
 import { ValidationHelpers } from './vault/utils/validation'
@@ -65,7 +67,7 @@ export class Vultisig {
   /**
    * Initialize the SDK and load WASM modules
    */
-  private async initialize(): Promise<void> {
+  async initialize(): Promise<void> {
     if (this.initialized) return
 
     try {
@@ -276,10 +278,6 @@ export class Vultisig {
 
   // === INTERNAL ACCESS FOR VAULT ===
 
-  /**
-   * Get server manager instance (internal use by Vault class)
-   * @internal
-   */
   getServerManager(): ServerManager {
     return this.serverManager
   }

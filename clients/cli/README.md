@@ -39,6 +39,7 @@ vultisig version
 vultisig list
 vultisig run
 vultisig address
+vultisig balance
 ```
 
 ## 🏃 Quick Start
@@ -80,7 +81,21 @@ vultisig address
 # 💡 Addresses retrieved from running daemon
 ```
 
-### 4. Sign Transaction (in another terminal)
+### 4. Query Balances (in another terminal)
+```bash
+vultisig balance
+# 💰 Querying balances...
+# 
+# === Balances ===
+#   💰 Bitcoin: 0.00125 BTC
+#   💰 Ethereum: 2.4567 ETH
+#   💰 Solana: 12.345 SOL
+#   ... (all configured chains)
+# 
+# 💡 Balances retrieved from running daemon
+```
+
+### 5. Sign Transaction (in another terminal)
 ```bash
 vultisig sign --network eth --payload-file transaction.json
 # 📡 Using vault already loaded in daemon...
@@ -98,7 +113,7 @@ vultisig sign --network eth --payload-file transaction.json
 # 📝 Signature: 0x1234567890abcdef...
 ```
 
-### 5. Stop Daemon
+### 6. Stop Daemon
 ```bash
 vultisig quit
 # 🛑 Shutting down daemon...
@@ -166,6 +181,63 @@ vultisig run --vault keyshares/secure.vult --password mypassword
 # Interactive password prompt (3 attempts)
 vultisig run --vault keyshares/secure.vult
 ```
+
+---
+
+### `vultisig balance`
+Show wallet balances for supported networks (queries running daemon or loads vault).
+
+**Usage:**
+```bash
+vultisig balance [options]
+```
+
+**Options:**
+- `--network <network>` - Network to query (default: all)
+- `--vault <path>` - Path to keyshare file (.vult) - starts daemon if not running
+- `--password <password>` - Password for encrypted keyshares
+
+**Examples:**
+```bash
+# Show all balances (requires daemon to be running or vault file)
+vultisig balance
+
+# Show specific network balance
+vultisig balance --network eth
+
+# Show multiple networks
+vultisig balance --network btc,eth,sol
+
+# Load specific vault file
+vultisig balance --vault keyshares/MyVault-share1of2.vult
+
+# Load encrypted vault with password
+vultisig balance --vault keyshares/secure.vult --password mypassword
+```
+
+**Note:** This command can work with a running daemon (started with `vultisig run`) or load a vault directly. If no daemon is running, it will attempt to auto-discover and load an available vault file.
+
+**Supported Networks:**
+- `btc` - Bitcoin
+- `eth` - Ethereum  
+- `sol` - Solana
+- `ltc` - Litecoin
+- `doge` - Dogecoin
+- `avax` - Avalanche
+- `matic` - Polygon
+- `bsc` - BSC
+- `opt` - Optimism
+- `arb` - Arbitrum
+- `base` - Base
+- `thor` - THORChain
+- `atom` - Cosmos
+- `maya` - MayaChain
+- `ada` - Cardano
+- `dot` - Polkadot
+- `xrp` - Ripple
+- `trx` - Tron
+- `sui` - Sui
+- `ton` - Ton
 
 ---
 
