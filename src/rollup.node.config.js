@@ -17,11 +17,13 @@ const external = [
   'events',
   'os',
   
+  // Runtime globals that should not be bundled
+  'fetch',
+  
   // External npm packages
   'axios',
   'viem', 
   'zod',
-  'uuid',
   '@trustwallet/wallet-core',
   
   // React (not needed for CLI)
@@ -54,9 +56,9 @@ const plugins = [
   typescript({
     tsconfig: './tsconfig.json',
     outputToFilesystem: true,
-    exclude: ['**/*.test.*', '**/*.stories.*', '**/*.tsx'],
+    exclude: ['**/*.test.*', '**/*.stories.*'],
     // Include workspace packages
-    include: ['**/*.ts', '../core/**/*.ts', '../lib/**/*.ts'],
+    include: ['**/*.ts', '**/*.tsx', '../core/**/*.ts', '../core/**/*.tsx', '../lib/**/*.ts', '../lib/**/*.tsx'],
     compilerOptions: {
       target: 'ES2020',
       module: 'ESNext',

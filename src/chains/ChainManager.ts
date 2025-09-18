@@ -1,9 +1,8 @@
-import { Chain } from '@core/chain/Chain'
-import { ChainKind } from '@core/chain/ChainKind'
-import { getCoinBalance } from '@core/chain/coin/balance'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-
-import type { Balance, Vault } from '../types'
+import { getCoinBalance } from '../core/chain/coin/balance'
+import { chainFeeCoin } from '../core/chain/coin/chainFeeCoin'
+import { Chain } from '../core/chain/Chain'
+import { ChainKind } from '../core/chain/ChainKind'
+import type { Vault, Balance } from '../types'
 import type { WASMManager } from '../wasm/WASMManager'
 import { AddressDeriver } from './AddressDeriver'
 

@@ -33,8 +33,9 @@ if (typeof File === 'undefined') {
   } as any
 }
 import { DaemonManager } from '../daemon/DaemonManager'
-import { promptForPasswordWithValidation } from '../utils/password'
+import { promptForPasswordWithValidation, stripPasswordQuotes } from '../utils/password'
 import { findVultFiles, getVaultsDir } from '../utils/paths'
+import { getVaultConfig } from '../utils/env'
 
 export type RunOptions = {
   vault?: string
@@ -58,24 +59,25 @@ export class RunCommand {
     // SDK will auto-initialize when we call methods on it
     console.log('✅ SDK initialized successfully')
 
-    // Auto-discovery or load specific vault file
+    // Get vault configuration with automatic fallback logic
+    const vaultConfig = getVaultConfig(options.vault, options.password)
     let vaultStorage
 
-    if (options.vault) {
-      // Load specific vault file
-      console.log(`📂 Loading vault: ${options.vault}`)
-      const buffer = await fs.promises.readFile(options.vault)
-      const file = new File([buffer], path.basename(options.vault))
+    if (vaultConfig.vaultPath) {
+      // Load specific vault file (from options or .env)
+      console.log(`📂 Loading vault: ${vaultConfig.vaultPath}`)
+      const buffer = await fs.promises.readFile(vaultConfig.vaultPath)
+      const file = new File([buffer], path.basename(vaultConfig.vaultPath))
 
       // Check if encrypted from filename hint (for .vult files)
-      const fileName = path.basename(options.vault)
+      const fileName = path.basename(vaultConfig.vaultPath)
       const isEncrypted =
         fileName.toLowerCase().includes('password') &&
         !fileName.toLowerCase().includes('nopassword')
 
-      let password = options.password
+      let password = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
       if (isEncrypted && !password) {
-        password = await promptForPasswordWithValidation(options.vault)
+        password = await promptForPasswordWithValidation(vaultConfig.vaultPath)
       } else if (!isEncrypted) {
         console.log('🔓 Vault is unencrypted, no password needed.')
       }
@@ -87,12 +89,12 @@ export class RunCommand {
       const vault = await sdk.addVault(file, password)
       vaultStorage = vault
     } else {
-      // Auto-discovery
+      // Auto-discovery fallback
       const vaultsDir = getVaultsDir()
       const vultFiles = await findVultFiles(vaultsDir)
 
       if (vultFiles.length === 0) {
-        throw new Error(`No vault files (.vult) found in ${vaultsDir}`)
+        throw new Error(`No vault files (.vult) found in ${vaultsDir}. Configure VAULT_PATH in .env or use --vault option.`)
       }
 
       const vaultPath = vultFiles[0]
@@ -106,7 +108,7 @@ export class RunCommand {
         fileName.toLowerCase().includes('password') &&
         !fileName.toLowerCase().includes('nopassword')
 
-      let password = options.password
+      let password = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
       if (isEncrypted && !password) {
         password = await promptForPasswordWithValidation(vaultPath)
       } else if (!isEncrypted) {

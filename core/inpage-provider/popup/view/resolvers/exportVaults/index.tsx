@@ -1,7 +1,7 @@
 import { PopupResolver } from '@core/inpage-provider/popup/view/resolver'
 import { PageHeaderBackButton } from '@core/ui/flow/PageHeaderBackButton'
 import { useVaults } from '@core/ui/storage/vaults'
-import { getVaultExportUid } from '@core/ui/vault/export/core/uid'
+import { toVaultExport } from '@core/ui/vault/export/core/toVaultExport'
 import { getVaultId } from '@core/ui/vault/Vault'
 import { Button } from '@lib/ui/buttons/Button'
 import { Switch } from '@lib/ui/inputs/switch'
@@ -13,29 +13,30 @@ import { PageFooter } from '@lib/ui/page/PageFooter'
 import { PageHeader } from '@lib/ui/page/PageHeader'
 import { Text } from '@lib/ui/text'
 import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { getUrlBaseDomain } from '@lib/utils/url/baseDomain'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-export const ExportVaults: PopupResolver<'exportVaults'> = ({ onFinish }) => {
+export const ExportVaults: PopupResolver<'exportVaults'> = ({
+  onFinish,
+  context: { requestOrigin },
+}) => {
   const { t } = useTranslation()
   const [vaultIds, setVaultIds] = useState<string[]>([])
   const vaults = useVaults()
 
   const onSubmit = useCallback(() => {
     onFinish({
-      data: vaultIds.map(vaultId => {
-        const vault = shouldBePresent(
-          vaults.find(vault => getVaultId(vault) === vaultId)
-        )
+      result: {
+        data: vaultIds.map(vaultId => {
+          const vault = shouldBePresent(
+            vaults.find(vault => getVaultId(vault) === vaultId)
+          )
 
-        return {
-          name: vault.name,
-          uid: getVaultExportUid(vault),
-          hexChainCode: vault.hexChainCode,
-          publicKeyEcdsa: vault.publicKeys.ecdsa,
-          publicKeyEddsa: vault.publicKeys.eddsa,
-        }
-      }),
+          return toVaultExport(vault)
+        }),
+      },
+      shouldClosePopup: true,
     })
   }, [onFinish, vaultIds, vaults])
 
@@ -45,7 +46,7 @@ export const ExportVaults: PopupResolver<'exportVaults'> = ({ onFinish }) => {
         secondaryControls={<PageHeaderBackButton />}
         title={
           <Text color="contrast" size={18} weight={500}>
-            {t('connect_with_vultisig')}
+            {t('connect_to_site', { site: getUrlBaseDomain(requestOrigin) })}
           </Text>
         }
         hasBorder

@@ -1,66 +1,97 @@
 # VultisigSDK Implementation TODO
 
-## 📊 **Current Implementation Status: ~60% Complete** (Updated)
+## Completed
 
----
+### Core Infrastructure
+- Auto-initialization and WASM integration
+- Workspace bundling for core/ and lib/ packages
+- Monorepo build system with proper TypeScript configuration
+- Comprehensive test suite (29 tests passing)
 
-## ✅ **COMPLETED FEATURES**
-
-### **🚨 Critical Priority (Must Have)**
-
-#### **1. Address Book Management** ✅ **COMPLETED IN VAULTMANAGER**
-**Status**: Implemented in VaultManager, needs SDK wrapper methods
+### Address Operations
 ```typescript
-// Implemented in VaultManager, need SDK wrappers:
-async getAddressBook(chain?: string): Promise<AddressBook> // VaultManager.addressBook()
-async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> // VaultManager.addAddressBookEntry()
-async removeAddressBookEntry(addresses: Array<{chain: string, address: string}>): Promise<void> // VaultManager.removeAddressBookEntry()
-async updateAddressBookEntry(chain: string, address: string, name: string): Promise<void> // VaultManager.updateAddressBookEntry()
+VultisigSDK.deriveAddress(vault: Vault, chain: string): Promise<string>
+Vault.address(chain: string): Promise<string>
+Vault.addresses(chains?: string[]): Promise<Record<string, string>>
 ```
 
-#### **2. Core Infrastructure** ✅ **FULLY COMPLETED**
-- ✅ Auto-initialization and WASM integration
-- ✅ Workspace bundling for core/ and lib/ packages
-- ✅ Monorepo build system with proper TypeScript configuration
-- ✅ Comprehensive test suite (29 tests passing)
+### Static Validation Methods
+```typescript
+VultisigSDK.validateEmail(email: string): ValidationResult
+VultisigSDK.validatePassword(password: string): ValidationResult
+VultisigSDK.validateVaultName(name: string): ValidationResult
+```
 
-#### **2. Vault Lifecycle Management** ✅ **FULLY COMPLETED**
-- ✅ Basic vault lifecycle (create, add, list, delete, clear)
-- ✅ Active vault management (setActiveVault, getActiveVault, hasActiveVault)
-- ✅ Fast vault creation with server
-- ✅ Vault import/export framework
-- ✅ Server status checking
+### Vault Operations (Partial)
+```typescript
+// Completed in Vault class:
+async rename(newName: string): Promise<void>
+async export(password?: string): Promise<Blob>
+```
 
-#### **3. Chain Management Hierarchy** ✅ **FULLY COMPLETED**
-- ✅ **Supported Chains (VultisigSDK)** - Complete immutable list of 30+ chains
-- ✅ **Default Chains (VultisigSDK)** - 5 top chains, configurable with validation
-- ✅ **User Chains (Vault)** - Per-vault chain management with inheritance
-- ✅ Chain validation against supported chains list
-- ✅ Auto address derivation when chains are added
-- ✅ Address cache management for removed chains
+## Partially Completed
 
-#### **4. Currency Management** ✅ **FULLY COMPLETED**
-- ✅ **Vault-level currency** (setCurrency/getCurrency)
-- ✅ Inheritance from SDK defaults
+### Vault Lifecycle Management
+**ARCHITECTURAL ISSUE**: VaultManager class exists but should be removed per VAULTPLAN
+```typescript
+// Currently in VaultManager (WRONG - should be in Vultisig class):
+VaultManager.create(name: string, options?: VaultOptions): Promise<Vault>
+VaultManager.add(file: File, password?: string): Promise<Vault>
+VaultManager.list(): Promise<Summary[]>
+VaultManager.remove(vault: Vault): Promise<void>
+VaultManager.clear(): Promise<void>
 
-#### **5. Address Operations** ✅ **FULLY COMPLETED**
-- ✅ Address derivation (single and multiple chains)
-- ✅ Address caching (permanent)
-- ✅ AddressDeriver integration
+// Currently in VultisigSDK (correct but incomplete wrappers):
+VultisigSDK.createVault(name: string, options?: VaultOptions): Promise<Vault>
+VultisigSDK.addVault(file: File, password?: string): Promise<Vault>
+VultisigSDK.listVaults(): Promise<Vault[]>
+VultisigSDK.deleteVault(vault: Vault): Promise<void>
+```
 
-#### **6. Balance Infrastructure** ✅ **FULLY COMPLETED**
-- ✅ Basic balance fetching exists in ChainManager.getChainBalance()
-- ✅ Balance types and interfaces defined
-- ✅ ChainManager integration with real balance data (VultisigSDK.getVaultBalances())
+### Address Book Management
+**ARCHITECTURAL ISSUE**: Currently in VaultManager but should be in Vultisig class
+```typescript
+// Currently in VaultManager (WRONG - should be in Vultisig class):
+VaultManager.addressBook(chain?: string): Promise<AddressBook>
+VaultManager.addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
+VaultManager.removeAddressBookEntry(addresses: Array<{chain: string, address: string}>): Promise<void>
+VaultManager.updateAddressBookEntry(chain: string, address: string, name: string): Promise<void>
+```
 
----
+### Chain Management Hierarchy
+**ARCHITECTURAL ISSUE**: Mixed between VaultManager and correct classes
+```typescript
+// Correct (in VultisigSDK):
+VultisigSDK.getSupportedChains(): string[]
+VultisigSDK.setDefaultChains(chains: string[]): void
 
-## 🔴 **STILL TO IMPLEMENT**
+// WRONG (in VaultManager - should be in Vultisig):
+VaultManager.setDefaultChains(chains: string[]): void
+VaultManager.setDefaultCurrency(currency: string): void
 
-### **🚨 Critical Priority (Must Have)**
+// Correct (in Vault class):
+Vault.setChains(chains: string[]): Promise<void>
+Vault.getChains(): string[]
+Vault.addChain(chain: string): Promise<void>
+Vault.removeChain(chain: string): Promise<void>
+```
 
-#### **1. Vault Balance Management** 🔶 **PARTIALLY COMPLETED**
-**Status**: ChainManager has balance fetching but Vault class missing balance methods
+### Currency Management
+**ARCHITECTURAL ISSUE**: Mixed between VaultManager and correct classes
+```typescript
+// Correct (in VultisigSDK):
+VultisigSDK.setDefaultCurrency(currency: string): void
+
+// WRONG (in VaultManager - should be in Vultisig):
+VaultManager.setDefaultCurrency(currency: string): void
+
+// Correct (in Vault class):
+Vault.setCurrency(currency: string): void
+Vault.getCurrency(): string
+```
+
+### Balance Infrastructure
+ChainManager has balance fetching, missing Vault class methods:
 ```typescript
 // Missing from Vault class:
 async balance(chain: string, tokenId?: string): Promise<Balance>
@@ -68,24 +99,68 @@ async balances(chains?: string[], includeTokens?: boolean): Promise<Record<strin
 async updateBalance(chain: string, tokenId?: string): Promise<Balance>
 async updateBalances(chains?: string[], includeTokens?: boolean): Promise<Record<string, Record<string, Balance>>>
 ```
-**Integration**: Connect Vault.setChains() to trigger balance fetching via ChainManager
 
-#### **2. Transaction Signing (Critical)** 🔶 **FRAMEWORK EXISTS**
-**Status**: ServerManager has framework, MPCManager has only placeholders
+### Gas Estimation
+Method exists but throws error:
+```typescript
+// Missing implementation:
+async gas(chain: string): Promise<GasInfo>
+async estimateGas(params: any): Promise<GasEstimate>
+```
+
+### Email Verification for Vaults
+SDK level implemented, missing from Vault class:
+```typescript
+// Missing from Vault class:
+async verifyEmail(code: string): Promise<boolean>
+async resendVerificationEmail(): Promise<void>
+```
+
+### Caching Strategy
+Only address caching implemented, missing:
+- Balance caching with TTL
+- Price data caching
+- Gas price caching
+
+### Progress Callbacks
+Types defined, partial implementation in ServerManager
+
+### VultisigSDK Configuration Management
+```typescript
+// Missing:
+updateConfig(config: Partial<VultisigConfig>): void
+getStatus(): Promise<VultisigStatus>
+```
+
+### Enhanced Error Handling
+VaultError classes implemented, missing graceful degradation
+
+## To Be Done
+
+### **CRITICAL: Remove VaultManager Class**
+**Architecture violation**: VaultManager should not exist per VAULTPLAN.md
+- Move all VaultManager methods into Vultisig class
+- Remove VaultManager class entirely
+- Update all imports and references
+- Ensure two-class architecture: Vultisig + Vault only
+
+### Vault Balance Management
+```typescript
+// Missing from Vault class:
+async balance(chain: string, tokenId?: string): Promise<Balance>
+async balances(chains?: string[], includeTokens?: boolean): Promise<Record<string, Balance>>
+async updateBalance(chain: string, tokenId?: string): Promise<Balance>
+async updateBalances(chains?: string[], includeTokens?: boolean): Promise<Record<string, Record<string, Balance>>>
+```
+
+### Transaction Signing
 ```typescript
 // Missing from Vault class:
 async sign(payload: SigningPayload): Promise<Signature>
 ```
-**Needs**:
-- MPC signing implementation in MPCManager
-- Progress callbacks for signing
-- Transaction broadcasting
-- Signing mode selection (fast/relay/local)
+Needs: MPC signing implementation, progress callbacks, broadcasting, mode selection
 
-### **🔥 High Priority**
-
-#### **3. Token Management** ❌ **NOT IMPLEMENTED**
-**Status**: Types defined, no implementation
+### Token Management
 ```typescript
 // Missing from Vault class:
 setTokens(chain: string, tokens: Token[]): void
@@ -94,8 +169,7 @@ removeToken(chain: string, tokenId: string): void
 getTokens(chain: string): Token[]
 ```
 
-#### **4. Fiat Value Operations** ❌ **NOT IMPLEMENTED**
-**Status**: Types defined, no implementation
+### Fiat Value Operations
 ```typescript
 // Missing from Vault class:
 async getValue(chain: string, tokenId?: string): Promise<Value>
@@ -105,86 +179,8 @@ async getTotalValue(): Promise<Value>
 async updateTotalValue(): Promise<Value>
 ```
 
-#### **5. Gas Estimation** ❌ **NOT IMPLEMENTED**
-**Status**: Placeholder methods only
+### Vault Operations (Complete)
 ```typescript
 // Missing from Vault class:
-async gas(chain: string): Promise<GasInfo>
-async estimateGas(params: any): Promise<GasEstimate>
-```
-
-### **⚠️ Medium Priority**
-
-#### **6. Caching Strategy with TTL** 🔶 **PARTIALLY COMPLETED**
-**Missing**:
-- Balance caching with 5-minute TTL
-- Price data caching
-- Gas price caching
-**Current**: Only address caching (permanent) exists
-
-#### **7. Progress Callbacks** ❌ **NOT IMPLEMENTED**
-**Missing**:
-- VaultCreationStep progress callbacks
-- SigningStep progress callbacks
-- Detailed progress reporting during long operations
-
-#### **8. Email Verification for Vaults** ❌ **NOT IMPLEMENTED**
-**Missing from Vault class**:
-```typescript
-async verifyEmail(code: string): Promise<boolean>
-async resendVerificationEmail(): Promise<void>
-```
-
-#### **9. Vault Operations** 🔶 **PARTIALLY COMPLETED**
-**Status**: Rename and export fully implemented with real vault testing, reshare still needs implementation
-```typescript
-// ✅ Implemented:
-async rename(newName: string): Promise<void>
-async export(password?: string): Promise<Blob> // ✅ COMPLETED - Full implementation with proper filename generation, password encryption, browser download, comprehensive testing with real vault files
-
-// Missing proper implementation:
 async reshare(options: ReshareOptions): Promise<Vault>
 ```
-
-### **✅ Low Priority**
-
-#### **10. VultisigSDK Configuration Management** ⚠️ **PARTIALLY COMPLETED**
-**Status**: Some methods exist, others missing
-```typescript
-// Partially implemented:
-// ✅ getConfig() exists in VaultManager.getConfig()
-// ✅ getStatus() exists in WASMManager.getStatus()
-// ❌ Missing: updateConfig(config: Partial<VultisigConfig>): void
-// ❌ Missing: SDK-level getStatus(): Promise<VultisigStatus>
-```
-
-#### **11. Static Validation Methods** ❌ **NOT IMPLEMENTED**
-```typescript
-// Missing from VultisigSDK:
-static validateEmail(email: string): ValidationResult
-static validatePassword(password: string): ValidationResult
-static validateVaultName(name: string): ValidationResult
-```
-
-#### **12. Enhanced Error Handling** 🔶 **PARTIALLY COMPLETED**
-- ✅ VaultError class with comprehensive error codes
-- ❌ Graceful degradation for failed requests
-
----
-
-## 📈 **Progress Tracking**
-
-- **Infrastructure**: 100% ✅
-- **Chain Management**: 100% ✅
-- **Address Operations**: 100% ✅
-- **Balance Operations**: 50% 🔶
-- **Token Management**: 0% ❌
-- **Transaction Signing**: 30% 🔶
-- **Fiat Value Operations**: 0% ❌
-- **Gas Estimation**: 0% ❌
-- **Caching Strategy**: 30% 🔶
-- **Error Handling**: 70% 🔶
-
-**Overall Progress**: ~60% Complete
-
----
