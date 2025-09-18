@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 // SDK will be made available globally by the launcher
-declare const VultisigSDK: any
+declare const Vultisig: any
 
 // Polyfill File for Node.js
 if (typeof File === 'undefined') {
@@ -72,7 +72,7 @@ export class ListCommand {
 
     // Also check for active vault in SDK
     try {
-      const sdk = new VultisigSDK()
+      const sdk = new Vultisig()
       const activeVault = sdk.getActiveVault()
       if (activeVault) {
         const summary = activeVault.summary()

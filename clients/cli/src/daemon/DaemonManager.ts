@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as net from 'net'
 // SDK will be made available globally by the launcher
-// declare const VultisigSDK: any
+// declare const Vultisig: any
 type VaultClass = any
 import { JsonRpcServer } from './JsonRpcServer'
 
@@ -105,7 +105,9 @@ export class DaemonManager {
     }
   }
 
-  async autoStartDaemonIfNeeded(options: AutoStartDaemonInput): Promise<boolean> {
+  async autoStartDaemonIfNeeded(
+    options: AutoStartDaemonInput
+  ): Promise<boolean> {
     try {
       await this.checkDaemonStatus()
       return false // Daemon already running
@@ -121,10 +123,10 @@ export class DaemonManager {
     }
 
     console.log('📂 Loading vault directly for ephemeral operation...')
-    
+
     // We need to extract the vault loading logic without starting the daemon
-    const VultisigSDK = (global as any).VultisigSDK
-    const sdk = new VultisigSDK({
+    const Vultisig = (global as any).Vultisig
+    const sdk = new Vultisig({
       defaultChains: ['bitcoin', 'ethereum', 'solana'],
       defaultCurrency: 'USD',
     })
@@ -150,12 +152,17 @@ export class DaemonManager {
     ;(file as any).buffer = buffer
 
     const fileName = path.basename(vaultPath)
-    const isEncrypted = fileName.toLowerCase().includes('password') && 
-                       !fileName.toLowerCase().includes('nopassword')
+    const isEncrypted =
+      fileName.toLowerCase().includes('password') &&
+      !fileName.toLowerCase().includes('nopassword')
 
-    let password = options.password ? stripPasswordQuotes(options.password) : undefined
+    let password = options.password
+      ? stripPasswordQuotes(options.password)
+      : undefined
     if (isEncrypted && !password) {
-      const { promptForPasswordWithValidation } = await import('../utils/password')
+      const { promptForPasswordWithValidation } = await import(
+        '../utils/password'
+      )
       password = await promptForPasswordWithValidation(vaultPath)
     }
 
@@ -165,11 +172,11 @@ export class DaemonManager {
   }
 
   async performEphemeralOperation<T>(
-    options: AutoStartDaemonInput, 
+    options: AutoStartDaemonInput,
     operation: (vault: any) => Promise<T>
   ): Promise<T> {
     let vault: any = null
-    
+
     try {
       vault = await this.loadVaultDirectly(options)
       const result = await operation(vault)
@@ -183,14 +190,17 @@ export class DaemonManager {
           if (vault.cleanup && typeof vault.cleanup === 'function') {
             await vault.cleanup()
           }
-          
+
           // Clear any temporary state
           vault = null
         } catch (cleanupError) {
-          console.warn('⚠️  Warning: Error during vault cleanup:', cleanupError instanceof Error ? cleanupError.message : cleanupError)
+          console.warn(
+            '⚠️  Warning: Error during vault cleanup:',
+            cleanupError instanceof Error ? cleanupError.message : cleanupError
+          )
         }
       }
-      
+
       // Force garbage collection hint
       if (global.gc) {
         global.gc()
@@ -307,7 +317,7 @@ export class DaemonManager {
           setTimeout(() => process.exit(0), 100)
           return { success: true, result: 'shutting down' }
 
-        case 'get_addresses':
+        case 'get_addresses': {
           if (!this.vault) {
             throw new Error('No vault loaded')
           }
@@ -329,6 +339,7 @@ export class DaemonManager {
           }
 
           return { success: true, result: { addresses } }
+        }
 
         case 'get_balances':
           if (!this.vault) {
@@ -365,6 +376,7 @@ export class DaemonManager {
           )
 
           return { success: true, result: signature }
+        }
 
         default:
           // Forward to JSON-RPC server if available

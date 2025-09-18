@@ -5,7 +5,7 @@ import './utils/env'
 
 import { Command } from 'commander'
 // SDK will be made available globally by the launcher
-declare const VultisigSDK: any
+declare const Vultisig: any
 import { AddressCommand } from './commands/AddressCommand'
 import { BalanceCommand } from './commands/BalanceCommand'
 import { InitCommand } from './commands/InitCommand'
@@ -28,7 +28,7 @@ let sdk: any
 
 async function initializeSDK(): Promise<void> {
   if (!sdk) {
-    sdk = new VultisigSDK({
+    sdk = new Vultisig({
       defaultChains: ['bitcoin', 'ethereum', 'solana'],
       defaultCurrency: 'USD',
     })
