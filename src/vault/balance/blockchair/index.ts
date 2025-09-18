@@ -12,6 +12,14 @@
 
 import { memoize } from '@lib/utils/memoize'
 import { queryUrl } from '@lib/utils/query/queryUrl'
+import type {
+  BlockchairChain as ImportedBlockchairChain,
+  BlockchairApiResponse,
+  BlockchairStats,
+  BlockchairAddressData as ImportedBlockchairAddressData,
+  BlockchairTransactionData as ImportedBlockchairTransactionData,
+  BlockchairConfig as ImportedBlockchairConfig,
+} from './types'
 
 // Blockchair API base URL
 export const BLOCKCHAIR_API_BASE = 'https://api.blockchair.com'
@@ -392,15 +400,7 @@ export const getBlockchairClient = memoize(
   (config?: BlockchairConfig) => new BlockchairClient(config)
 )
 
-// Export types
-export type {
-  BlockchairAddressData,
-  BlockchairChain,
-  BlockchairConfig,
-  BlockchairResponse,
-  BlockchairStatsData,
-  BlockchairTransactionData,
-} from './types'
+// The BlockchairClient class is already exported above
 
 // Export resolvers
 export { getBlockchairCardanoCoinBalance } from './resolvers/cardano'
