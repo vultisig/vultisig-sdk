@@ -376,7 +376,6 @@ export class DaemonManager {
           )
 
           return { success: true, result: signature }
-        }
 
         default:
           // Forward to JSON-RPC server if available
