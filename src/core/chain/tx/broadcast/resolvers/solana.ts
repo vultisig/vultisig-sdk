@@ -1,6 +1,6 @@
 import { OtherChain } from '../../../Chain'
 import { getSolanaClient } from '../../../chains/solana/client'
-import { Base64EncodedWireTransaction } from '@solana/web3.js'
+import { Transaction } from '@solana/web3.js'
 
 import { BroadcastTxResolver } from '../resolver'
 
@@ -9,11 +9,11 @@ export const broadcastSolanaTx: BroadcastTxResolver<
 > = async ({ tx: { encoded } }) => {
   const client = getSolanaClient()
 
-  await client
-    .sendTransaction(encoded as Base64EncodedWireTransaction, {
-      skipPreflight: false,
-      preflightCommitment: 'confirmed',
-      maxRetries: BigInt(3),
-    })
-    .send()
+  const transaction = Transaction.from(Buffer.from(encoded, 'base64'))
+  
+  await client.sendTransaction(transaction, {
+    skipPreflight: false,
+    preflightCommitment: 'confirmed',
+    maxRetries: 3,
+  })
 }
