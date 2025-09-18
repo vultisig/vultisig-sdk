@@ -125,7 +125,8 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
                                 output.includes('Signature:') || 
                                 output.includes('signature:')
 
-      const hasSignatureData = output.includes('0x') // hex signature data
+      const hasSignatureData = output.includes('📝 Signature:') && 
+                                (output.includes('0x') || /Signature: [0-9a-f]{100,}/.test(output)) // hex or DER signature data
 
       expect(hasSigningSuccess).toBe(true)
       expect(hasSignatureData).toBe(true)
