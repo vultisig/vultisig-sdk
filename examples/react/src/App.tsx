@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { VultisigSDK } from 'vultisig-sdk'
+import { Vultisig } from 'vultisig-sdk'
 type Vault = any
 import { AddressDerivationTester } from './components/AddressDerivationTester'
 import BalanceDisplay from './components/BalanceDisplay'
@@ -18,7 +18,7 @@ import { buildVultFile } from './utils/exportVault'
 function App() {
   const [sdk] = useState(
     () =>
-      new VultisigSDK({
+      new Vultisig({
         serverEndpoints: {
           fastVault: 'https://api.vultisig.com/vault',
           messageRelay: 'https://api.vultisig.com/router',

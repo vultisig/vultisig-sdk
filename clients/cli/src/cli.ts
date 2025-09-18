@@ -5,7 +5,7 @@ import './utils/env'
 
 import { Command } from 'commander'
 // SDK will be made available globally by the launcher
-declare const VultisigSDK: any
+declare const Vultisig: any
 import { AddressCommand } from './commands/AddressCommand'
 import { InitCommand } from './commands/InitCommand'
 import { ListCommand } from './commands/ListCommand'
@@ -27,7 +27,7 @@ let sdk: any
 
 async function initializeSDK(): Promise<void> {
   if (!sdk) {
-    sdk = new VultisigSDK({
+    sdk = new Vultisig({
       defaultChains: ['bitcoin', 'ethereum', 'solana'],
       defaultCurrency: 'USD',
     })
@@ -98,7 +98,10 @@ program
     'Networks (all, or comma-separated: btc,eth,sol)',
     'all'
   )
-  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
+  .option(
+    '--vault <path>',
+    'Path to keyshare file (.vult) - starts daemon if not running'
+  )
   .option('--password <password>', 'Password for encrypted keyshares')
   .action(wrapCommand(addressCommand, true))
 
@@ -117,7 +120,10 @@ program
     '--password <password>',
     'VultiServer decryption password (required for fast mode)'
   )
-  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
+  .option(
+    '--vault <path>',
+    'Path to keyshare file (.vult) - starts daemon if not running'
+  )
   .action(wrapCommand(signCommand, true))
 
 // Quit command - daemon operation

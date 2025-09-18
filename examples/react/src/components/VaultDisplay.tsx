@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Vault, VultisigSDK } from 'vultisig-sdk'
+import type { Vault, Vultisig } from 'vultisig-sdk'
 
 type AddressMap = Partial<Record<'BTC' | 'ETH' | 'SOL' | 'THOR', string>>
 
@@ -9,7 +9,7 @@ export const VaultDisplay = ({
   fastVault,
 }: {
   vault: Vault
-  sdk: VultisigSDK
+  sdk: Vultisig
   fastVault?: boolean
 }) => {
   const [addresses, setAddresses] = useState<AddressMap>({})

@@ -1,8 +1,8 @@
-import { defineConfig } from 'rollup'
-import typescript from '@rollup/plugin-typescript'
-import resolve from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
+import resolve from '@rollup/plugin-node-resolve'
 import terser from '@rollup/plugin-terser'
+import typescript from '@rollup/plugin-typescript'
+import { defineConfig } from 'rollup'
 import copy from 'rollup-plugin-copy'
 import dts from 'rollup-plugin-dts'
 
@@ -10,22 +10,22 @@ const external = [
   // Peer dependencies
   'react',
   'react-dom',
-  
+
   // Node modules that should be external in library builds
   'axios',
-  'viem', 
+  'viem',
   'zod',
   'uuid',
-  
+
   // Keep WASM modules external for proper loading
   '@trustwallet/wallet-core',
-  
+
   // Node.js built-ins (will be polyfilled by bundlers if needed)
   'crypto',
   'buffer',
   'util',
-  'stream'
-  
+  'stream',
+
   // Note: Workspace packages (@core/*, @lib/*) are now bundled by removing them from external
 ]
 
@@ -35,12 +35,20 @@ const plugins = [
     browser: true,
     exportConditions: ['browser', 'module', 'import', 'default'],
     // Include workspace packages for bundling
-    skip: ['react', 'react-dom', 'axios', 'viem', 'zod', 'uuid', '@trustwallet/wallet-core'],
+    skip: [
+      'react',
+      'react-dom',
+      'axios',
+      'viem',
+      'zod',
+      'uuid',
+      '@trustwallet/wallet-core',
+    ],
     // Ensure workspace packages are resolved and bundled
-    dedupe: ['react', 'react-dom']
+    dedupe: ['react', 'react-dom'],
   }),
   commonjs({
-    include: [/node_modules/, /\.\.\/core\//, /\.\.\/lib\//]
+    include: [/node_modules/, /\.\.\/core\//, /\.\.\/lib\//],
   }),
   typescript({
     tsconfig: './src/tsconfig.json',
@@ -52,27 +60,27 @@ const plugins = [
     compilerOptions: {
       paths: {
         '@core/*': ['../core/*'],
-        '@lib/*': ['../lib/*']
-      }
-    }
-  })
+        '@lib/*': ['../lib/*'],
+      },
+    },
+  }),
 ]
 
 const wasmCopyPlugin = copy({
   targets: [
     // Copy WASM files to dist for proper loading
-    { 
-      src: 'lib/dkls/vs_wasm_bg.wasm', 
+    {
+      src: 'lib/dkls/vs_wasm_bg.wasm',
       dest: 'src/dist/wasm/',
-      rename: 'dkls.wasm'
+      rename: 'dkls.wasm',
     },
-    { 
-      src: 'lib/schnorr/vs_schnorr_wasm_bg.wasm', 
+    {
+      src: 'lib/schnorr/vs_schnorr_wasm_bg.wasm',
       dest: 'src/dist/wasm/',
-      rename: 'schnorr.wasm' 
+      rename: 'schnorr.wasm',
     },
     // wallet-core.wasm will be handled by the consuming application
-  ]
+  ],
 })
 
 export default defineConfig([
@@ -84,7 +92,7 @@ export default defineConfig([
       format: 'es',
       sourcemap: true,
       // Preserve modules for better tree shaking
-      preserveModules: false
+      preserveModules: false,
     },
     external,
     plugins: [...plugins, wasmCopyPlugin],
@@ -93,9 +101,9 @@ export default defineConfig([
       // Suppress warnings about dynamic imports for WASM
       if (warning.code === 'DYNAMIC_IMPORT') return
       warn(warning)
-    }
+    },
   },
-  
+
   // CommonJS build for Node.js environments
   {
     input: 'src/index.ts',
@@ -104,60 +112,65 @@ export default defineConfig([
       format: 'cjs',
       sourcemap: true,
       exports: 'named',
-      interop: 'auto'
+      interop: 'auto',
     },
     external,
-    plugins
+    plugins,
   },
-  
+
   // UMD build for CDN/browser direct usage
   {
     input: 'src/index.ts',
     output: {
       file: 'src/dist/index.umd.js',
       format: 'umd',
-      name: 'VultisigSDK',
+      name: 'Vultisig',
       sourcemap: true,
       globals: {
-        'react': 'React',
+        react: 'React',
         'react-dom': 'ReactDOM',
-        'axios': 'axios',
-        'viem': 'viem',
-        'zod': 'zod',
+        axios: 'axios',
+        viem: 'viem',
+        zod: 'zod',
         '@trustwallet/wallet-core': 'WalletCore',
-        'crypto': 'crypto',
-        'buffer': 'Buffer'
-      }
+        crypto: 'crypto',
+        buffer: 'Buffer',
+      },
     },
     external,
-    plugins: [...plugins, terser({
-      compress: {
-        drop_console: true,
-        drop_debugger: true
-      },
-      mangle: {
-        reserved: ['VultisigSDK'] // Keep main export name
-      }
-    })]
+    plugins: [
+      ...plugins,
+      terser({
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+        mangle: {
+          reserved: ['Vultisig'], // Keep main export name
+        },
+      }),
+    ],
   },
-  
+
   // Type definitions
   {
     input: 'src/index.ts',
     output: {
       file: 'src/dist/index.d.ts',
-      format: 'es'
+      format: 'es',
     },
     external: [
       ...external,
       // Allow type-only imports
       /^@types\//,
     ],
-    plugins: [dts({
-      respectExternal: true,
-      compilerOptions: {
-        preserveSymlinks: false
-      }
-    })]
-  }
+    plugins: [
+      dts({
+        respectExternal: true,
+        compilerOptions: {
+          preserveSymlinks: false,
+        },
+      }),
+    ],
+  },
 ])
