@@ -9,7 +9,7 @@ import {
 } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
 import { attempt } from '../../../../../lib/utils/attempt'
-import { address } from '@solana/web3.js'
+import { PublicKey } from '@solana/web3.js'
 
 import { ChainSpecificResolver } from '../resolver'
 
@@ -20,12 +20,12 @@ export const getSolanaSpecific: ChainSpecificResolver<SolanaSpecific> = async ({
   const client = getSolanaClient()
 
   const recentBlockHash = (
-    await client.getLatestBlockhash().send()
-  ).value.blockhash.toString()
+    await client.getLatestBlockhash()
+  ).blockhash.toString()
 
-  const prioritizationFees = await client
-    .getRecentPrioritizationFees([address(coin.address)])
-    .send()
+  const prioritizationFees = await client.getRecentPrioritizationFees({
+    lockedWritableAccounts: [new PublicKey(coin.address)]
+  })
 
   // regardless of its complexity Solana charges a fixed base transaction fee of 5000 lamports per transaction.
   const highPriorityFee =
@@ -44,15 +44,15 @@ export const getSolanaSpecific: ChainSpecificResolver<SolanaSpecific> = async ({
       account: coin.address,
       token: shouldBePresent(coin.id),
     })
-    result.fromTokenAssociatedAddress = fromAccount.address
+    result.fromTokenAssociatedAddress = fromAccount.address.toString()
     const toAccount = await attempt(
       getSplAssociatedAccount({
         account: shouldBePresent(receiver),
         token: shouldBePresent(coin.id),
       })
     )
-    if (toAccount.data) {
-      result.toTokenAssociatedAddress = toAccount.data.address
+    if ('data' in toAccount) {
+      result.toTokenAssociatedAddress = toAccount.data.address.toString()
       result.programId = toAccount.data.isToken2022
     }
   }

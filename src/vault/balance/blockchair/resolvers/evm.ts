@@ -82,7 +82,7 @@ export const getBlockchairEvmCoinBalance: CoinBalanceResolver<
       const balance = await getEvmClient(chain).getBalance({
         address: input.address as `0x${string}`,
       })
-      return BigInt(balance.value)
+      return BigInt(balance)
     }
 
     // For tokens, re-throw the error

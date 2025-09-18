@@ -14,12 +14,12 @@ export const getEvmTokenMetadata: TokenMetadataResolver<EvmChain> = async ({
       address: id as Address,
       abi: erc20Abi,
       functionName: 'symbol',
-    }),
+    } as any),
     publicClient.readContract({
       address: id as Address,
       abi: erc20Abi,
       functionName: 'decimals',
-    }),
+    } as any),
   ])
 
   return {
