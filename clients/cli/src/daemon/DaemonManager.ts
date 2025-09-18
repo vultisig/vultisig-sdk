@@ -24,6 +24,11 @@ export type SignTransactionRequest = {
   password?: string
 }
 
+export type AutoStartDaemonInput = {
+  vault?: string
+  password?: string
+}
+
 export class DaemonManager {
   private readonly socketPath: string
   private readonly pidFile: string
@@ -97,6 +102,99 @@ export class DaemonManager {
 
       console.log('❌ Daemon is not running')
       throw new Error('Daemon is not running')
+    }
+  }
+
+  async autoStartDaemonIfNeeded(options: AutoStartDaemonInput): Promise<boolean> {
+    try {
+      await this.checkDaemonStatus()
+      return false // Daemon already running
+    } catch {
+      // Daemon not running, we'll load the vault directly without starting persistent daemon
+      return true // Indicate we need to handle vault loading
+    }
+  }
+
+  async loadVaultDirectly(options: AutoStartDaemonInput): Promise<any> {
+    if (!options.vault && !options.password) {
+      throw new Error('No vault or password provided for direct loading')
+    }
+
+    console.log('📂 Loading vault directly for ephemeral operation...')
+    
+    // We need to extract the vault loading logic without starting the daemon
+    const VultisigSDK = (global as any).VultisigSDK
+    const sdk = new VultisigSDK({
+      defaultChains: ['bitcoin', 'ethereum', 'solana'],
+      defaultCurrency: 'USD',
+    })
+
+    const fs = await import('fs')
+    const path = await import('path')
+    const { stripPasswordQuotes } = await import('../utils/password')
+    const { findVultFiles, getVaultsDir } = await import('../utils/paths')
+
+    let vaultPath = options.vault
+    if (!vaultPath) {
+      // Auto-discovery
+      const vaultsDir = getVaultsDir()
+      const vultFiles = await findVultFiles(vaultsDir)
+      if (vultFiles.length === 0) {
+        throw new Error(`No vault files (.vult) found in ${vaultsDir}`)
+      }
+      vaultPath = vultFiles[0]
+    }
+
+    const buffer = await fs.promises.readFile(vaultPath)
+    const file = new File([buffer], path.basename(vaultPath))
+    ;(file as any).buffer = buffer
+
+    const fileName = path.basename(vaultPath)
+    const isEncrypted = fileName.toLowerCase().includes('password') && 
+                       !fileName.toLowerCase().includes('nopassword')
+
+    let password = options.password ? stripPasswordQuotes(options.password) : undefined
+    if (isEncrypted && !password) {
+      const { promptForPasswordWithValidation } = await import('../utils/password')
+      password = await promptForPasswordWithValidation(vaultPath)
+    }
+
+    const vault = await sdk.addVault(file, password)
+    console.log('✅ Vault loaded for ephemeral operation')
+    return vault
+  }
+
+  async performEphemeralOperation<T>(
+    options: AutoStartDaemonInput, 
+    operation: (vault: any) => Promise<T>
+  ): Promise<T> {
+    let vault: any = null
+    
+    try {
+      vault = await this.loadVaultDirectly(options)
+      const result = await operation(vault)
+      console.log('🧹 Cleaning up ephemeral operation...')
+      return result
+    } finally {
+      // Ensure cleanup happens regardless of success/failure
+      if (vault) {
+        try {
+          // Clean up any vault resources if the SDK provides cleanup methods
+          if (vault.cleanup && typeof vault.cleanup === 'function') {
+            await vault.cleanup()
+          }
+          
+          // Clear any temporary state
+          vault = null
+        } catch (cleanupError) {
+          console.warn('⚠️  Warning: Error during vault cleanup:', cleanupError instanceof Error ? cleanupError.message : cleanupError)
+        }
+      }
+      
+      // Force garbage collection hint
+      if (global.gc) {
+        global.gc()
+      }
     }
   }
 

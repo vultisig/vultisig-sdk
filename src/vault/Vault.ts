@@ -1,13 +1,13 @@
-import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import type { Vault as CoreVault } from '@core/ui/vault/Vault'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { deriveAddress } from '../core/chain/publicKey/address/deriveAddress'
+import { getPublicKey } from '../core/chain/publicKey/getPublicKey'
+import type { Vault as CoreVault } from '../core/ui/vault/Vault'
+import { memoizeAsync } from '../lib/utils/memoizeAsync'
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { initWasm } from '@trustwallet/wallet-core'
 
 import { AddressDeriver } from '../chains/AddressDeriver'
 import { ChainManager } from '../chains/ChainManager'
-import type { Balance, CachedBalance } from '../types'
+import type { Balance, CachedBalance, SigningMode, SigningPayload, Signature } from '../types'
 import type { WASMManager } from '../wasm/WASMManager'
 import { VaultError, VaultErrorCode } from './VaultError'
 
@@ -155,13 +155,8 @@ export class Vault {
       )
     }
 
-    // Update vault through VaultManager to ensure proper storage handling
-    if (this._sdkInstance?.VaultManager) {
-      await this._sdkInstance.VaultManager.update(this, { name: newName })
-    } else {
-      // Fallback: update internal vault data directly
-      this.vaultData.name = newName
-    }
+    // Update internal vault data directly
+    this.vaultData.name = newName
   }
 
   /**
@@ -215,10 +210,8 @@ export class Vault {
     const blob = new Blob([base64Data], { type: 'application/octet-stream' })
 
     // Automatically download the file if we're in a browser environment
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      const { initiateFileDownload } = await import(
-        '@lib/ui/utils/initiateFileDownload'
-      )
+    if (typeof globalThis !== 'undefined' && 'window' in globalThis && 'document' in globalThis) {
+      const { initiateFileDownload } = await import('../lib/ui/utils/initiateFileDownload')
       initiateFileDownload({ blob, name: filename })
     }
 
@@ -820,12 +813,143 @@ export class Vault {
   }
 
   /**
-   * Sign transaction (placeholder for future MPC implementation)
+   * Sign transaction using specified mode
    */
-  async signTransaction(tx: any, chain: string): Promise<any> {
-    console.log('Signing transaction for chain:', chain)
+  async sign(mode: SigningMode, payload: SigningPayload, password?: string): Promise<Signature> {
+    console.log('Signing transaction with mode:', mode)
+    
+    // Validate vault supports the requested mode
+    this.validateSigningMode(mode)
+    
+    // Route to appropriate signing implementation
+    switch (mode) {
+      case 'fast':
+        return this.signFast(payload, password)
+      case 'relay':
+        throw new VaultError(
+          VaultErrorCode.NotImplemented,
+          'Relay signing not implemented yet'
+        )
+      case 'local':
+        throw new VaultError(
+          VaultErrorCode.NotImplemented,
+          'Local signing not implemented yet'
+        )
+      default:
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          `Unsupported signing mode: ${mode}`
+        )
+    }
+  }
+
+  /**
+   * Validate that the vault supports the requested signing mode
+   */
+  private validateSigningMode(mode: SigningMode): void {
+    const securityType = this._securityType ?? determineVaultType(this.vaultData.signers)
+    
+    if (mode === 'fast' && securityType !== 'fast') {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'Fast signing is only available for fast vaults (vaults with VultiServer)'
+      )
+    }
+    
+    if (mode === 'relay' && securityType !== 'secure') {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'Relay signing is only available for secure vaults'
+      )
+    }
+  }
+
+  /**
+   * Sign transaction using VultiServer (fast mode)
+   */
+  private async signFast(payload: SigningPayload, password?: string): Promise<Signature> {
+    // Get SDK instance to access server manager
+    if (!this._sdkInstance) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'SDK instance required for fast signing'
+      )
+    }
+
+    // Validate we have a server manager
+    const serverManager = this._sdkInstance.getServerManager()
+    if (!serverManager) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'Server manager not available for fast signing'
+      )
+    }
+
+    try {
+      // Validate password is provided for fast signing
+      if (!password) {
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          'Password is required for fast signing'
+        )
+      }
+      
+      // Use server manager to perform fast signing
+      return await serverManager.signWithServer(this.vaultData, payload, password)
+    } catch (error) {
+      console.error('Fast signing failed:', error)
+      
+      if (error instanceof VaultError) {
+        throw error
+      }
+      
+      throw new VaultError(
+        VaultErrorCode.SigningFailed,
+        `Fast signing failed: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Sign with raw transaction payload (public method for CLI)
+   * Converts raw transaction data to proper format and delegates to signTransaction
+   */
+  async signWithPayload(payload: SigningPayload, password?: string): Promise<Signature> {
+    try {
+      // For now, delegate to the existing signTransaction method
+      // The signTransaction method should handle the conversion internally
+      return await this.signTransaction(payload.transaction, payload.chain, password)
+    } catch (error) {
+      throw new VaultError(
+        VaultErrorCode.SigningFailed,
+        `Failed to sign with payload: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Sign transaction (legacy method - deprecated, use sign() instead)
+   */
+  async signTransaction(tx: any, chain: string, password?: string): Promise<any> {
+    console.log('Legacy signTransaction called for chain:', chain)
+    console.warn('signTransaction() is deprecated, use sign() method instead')
+    
+    // Convert to new API format
+    const payload: SigningPayload = {
+      transaction: tx,
+      chain
+    }
+    
+    // Default to fast mode for fast vaults, otherwise throw error
+    const securityType = this._securityType ?? determineVaultType(this.vaultData.signers)
+    if (securityType === 'fast') {
+      return this.sign('fast', payload, password)
+    }
+    
     throw new Error(
-      'signTransaction() not implemented yet - requires MPC integration'
+      'signTransaction() deprecated - use sign("fast"|"relay"|"local", payload) instead'
     )
   }
 

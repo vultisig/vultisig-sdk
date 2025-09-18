@@ -11,6 +11,7 @@
 
 // Core SDK class
 export { Vultisig } from './VultisigSDK'
+export { Vultisig as VultisigSDK } from './VultisigSDK'
 
 // Vault management
 export * from './vault'
