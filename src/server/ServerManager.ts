@@ -8,7 +8,6 @@ import type {
 } from '../types'
 import {
   generateBrowserPartyId,
-  generateChainCode,
   generateEncryptionKey,
   generateServerPartyId,
   generateSessionId,
@@ -166,7 +165,7 @@ export class ServerManager {
           responseType: 'none',
         })
       }
-    } catch (_e: any) {
+    } catch {
       // non-fatal
     }
 
@@ -192,9 +191,6 @@ export class ServerManager {
     // Step 3: Perform MPC keysign using core implementation
     console.log('🔐 Starting core MPC keysign process...')
     const { keysign } = await import('../core/mpc/keysign')
-    const { getPreSigningHashes } = await import(
-      '../core/chain/tx/preSigningHashes'
-    )
     const { getTxInputData } = await import('../core/mpc/keysign/txInputData')
     const { getPublicKey } = await import(
       '../core/chain/publicKey/getPublicKey'
@@ -211,7 +207,7 @@ export class ServerManager {
 
     // If this is a UTXO chain (e.g., BTC), there may be multiple messages. Sign all.
     const isUtxo = chainKind === 'utxo'
-    const signatures: Record<string, string> = {}
+    const signatures: Record<string, any> = {}
 
     for (const msg of messages) {
       const sig = await keysign({
@@ -287,11 +283,13 @@ export class ServerManager {
         case: 'utxoSpecific',
         value: {
           $typeName: 'vultisig.keysign.v1.UTXOSpecific',
-          psbt: psbtBase64,
+          byteFee: '1',
+          sendMaxAmount: false,
         },
       },
       toAddress: address,
       toAmount: '0',
+      memo: psbtBase64,
     })
 
     const inputs = getTxInputData({
@@ -313,7 +311,7 @@ export class ServerManager {
     // For UTXO, we expect a single compiled transaction
     const [compiled] = compiledTxs
     const decoded = decodeSigningOutput(chain, compiled)
-    const finalTxHex = decoded.encoded
+    const finalTxHex = (decoded as any).encoded || compiled
 
     console.log('✅ UTXO transaction compiled successfully')
     return {
@@ -567,7 +565,7 @@ export class ServerManager {
         }
 
         await new Promise(resolve => setTimeout(resolve, checkInterval))
-      } catch (error) {
+      } catch {
         await new Promise(resolve => setTimeout(resolve, checkInterval))
       }
     }
@@ -639,12 +637,14 @@ export class ServerManager {
         blockchainSpecific: {
           case: 'utxoSpecific',
           value: {
-            $typeName: 'vultisig.keysign.v1.UtxoSpecific',
-            psbt: psbtBase64,
+            $typeName: 'vultisig.keysign.v1.UTXOSpecific',
+            byteFee: '1',
+            sendMaxAmount: false,
           },
         },
         toAddress: address,
         toAmount: '0',
+        memo: psbtBase64,
       })
 
       const inputs = getTxInputData({
