@@ -24,11 +24,6 @@ globalThis.File = function File(chunks, name, options) {
 // Setup fetch polyfill for WASM file loading (from vitest.setup.ts)
 const originalFetch = globalThis.fetch;
 
-// Simplified fetch for production use
-const debugFetch = async function(url, options) {
-  return await originalFetch(url, options);
-};
-
 globalThis.fetch = async function(url) {
   const urlString = url.toString();
   
@@ -85,9 +80,9 @@ globalThis.fetch = async function(url) {
     }
   }
   
-  // For non-WASM requests, use debug fetch
+  // For non-WASM requests, use original fetch if available
   if (originalFetch) {
-    return debugFetch(url, arguments[1]);
+    return originalFetch(url);
   }
   
   // Fallback for non-WASM requests when no original fetch
@@ -112,25 +107,11 @@ if (typeof globalThis.WebAssembly === 'undefined') {
     const projectRoot = path.resolve(cliDir, '..');
     const sdkPath = path.resolve(projectRoot, '../../src');
     
-    // Try to require the CommonJS SDK build, fallback to regular build
-    let VultisigSDK;
-    const nodeCjsPath = path.resolve(sdkPath, 'dist/index.node.cjs');
-    const regularPath = path.resolve(sdkPath, 'dist/index.js');
-    
-    if (fs.existsSync(nodeCjsPath)) {
-      const sdk = require(nodeCjsPath);
-      VultisigSDK = sdk.Vultisig;
-    } else if (fs.existsSync(regularPath)) {
-      console.log('⚠️  Using fallback SDK build (index.js instead of index.node.cjs)');
-      // Use dynamic import for ES modules
-      const sdk = await import('file://' + regularPath);
-      VultisigSDK = sdk.Vultisig;
-    } else {
-      throw new Error('No SDK build found. Please build the SDK first.');
-    }
+    // Require the CommonJS SDK build
+    const { Vultisig } = require(path.resolve(sdkPath, 'dist/index.node.cjs'));
     
     // Make SDK available globally for the CLI
-    globalThis.Vultisig = VultisigSDK;
+    globalThis.Vultisig = Vultisig;
     
     // Now require the CLI
     require(path.resolve(projectRoot, 'dist/cli.js'));

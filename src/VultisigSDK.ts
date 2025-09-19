@@ -105,6 +105,64 @@ export class Vultisig {
   }
 
   /**
+   * Create fast vault (convenience method)
+   * Equivalent to createVault(name, { type: 'fast', ...options })
+   */
+  async createFastVault(options: {
+    name: string
+    password: string
+    email: string
+    onProgress?: (step: any) => void
+  }): Promise<{
+    vault: VaultClass
+    vaultId: string
+    verificationRequired: boolean
+  }> {
+    await this.ensureInitialized()
+    const vault = await this.vaultManagement.createVault(options.name, {
+      type: 'fast',
+      password: options.password,
+      email: options.email,
+      onProgress: options.onProgress
+    })
+    
+    return {
+      vault,
+      vaultId: vault.data.publicKeys.ecdsa,
+      verificationRequired: true
+    }
+  }
+
+  /**
+   * Verify fast vault with email code
+   */
+  async verifyVault(vaultId: string, code: string): Promise<boolean> {
+    await this.ensureInitialized()
+    return this.serverManager.verifyVault(vaultId, code)
+  }
+
+  /**
+   * Get vault from VultiServer
+   */
+  async getVault(vaultId: string, password: string): Promise<VaultClass> {
+    await this.ensureInitialized()
+    const vaultData = await this.serverManager.getVaultFromServer(vaultId, password)
+    
+    // Create VaultClass instance
+    const vault = new VaultClass(
+      vaultData,
+      await this.wasmManager.getWalletCore(),
+      this.wasmManager,
+      this
+    )
+
+    // Store the vault and set as active
+    this.vaultManagement.setActiveVault(vault)
+    
+    return vault
+  }
+
+  /**
    * Import vault from file (sets as active)
    */
   async addVault(file: File, password?: string): Promise<VaultClass> {

@@ -55,9 +55,88 @@ export class VaultManagement {
       onProgress?: (step: VaultCreationStep) => void
     }
   ): Promise<VaultClass> {
-    // TODO: Implement vault creation with MPC keygen
+    const vaultType = options?.type ?? 'fast'
+    
+    if (vaultType === 'fast') {
+      return this.createFastVault(name, options)
+    } else {
+      return this.createSecureVault(name, options)
+    }
+  }
+
+  /**
+   * Create a fast vault (2-of-2 with VultiServer)
+   */
+  private async createFastVault(
+    name: string,
+    options?: {
+      password?: string
+      email?: string
+      onProgress?: (step: VaultCreationStep) => void
+    }
+  ): Promise<VaultClass> {
+    if (!options?.password) {
+      throw new Error('Password is required for fast vault creation')
+    }
+    if (!options?.email) {
+      throw new Error('Email is required for fast vault creation')
+    }
+
+    // Ensure WASM is initialized
+    if (!this.wasmManager) {
+      throw new Error('WASMManager not available')
+    }
+    await this.wasmManager.initialize()
+
+    // Use ServerManager to create the fast vault
+    const serverManager = this.sdkInstance?.getServerManager()
+    if (!serverManager) {
+      throw new Error('ServerManager not available')
+    }
+
+    const result = await serverManager.createFastVault({
+      name,
+      password: options.password,
+      email: options.email,
+      onProgress: options.onProgress ? (update) => {
+        options.onProgress!({
+          step: update.phase === 'complete' ? 'complete' : 'keygen',
+          progress: update.phase === 'complete' ? 100 : 50,
+          message: update.message
+        })
+      } : undefined
+    })
+
+    // Create VaultClass instance from the created vault
+    const vaultInstance = new VaultClass(
+      result.vault,
+      await this.wasmManager.getWalletCore(),
+      this.wasmManager,
+      this.sdkInstance
+    )
+
+    // Store the vault
+    this.vaults.set(result.vault.publicKeys.ecdsa, result.vault)
+
+    // Set as active vault
+    this.activeVault = vaultInstance
+
+    return vaultInstance
+  }
+
+  /**
+   * Create a secure vault (multi-device)
+   */
+  private async createSecureVault(
+    name: string,
+    options?: {
+      keygenMode?: KeygenMode
+      onProgress?: (step: VaultCreationStep) => void
+    }
+  ): Promise<VaultClass> {
+    // TODO: Implement secure vault creation with multi-device MPC keygen
     throw new Error(
-      'createVault() not implemented yet - requires MPC keygen integration'
+      'Secure vault creation not implemented yet - requires multi-device MPC keygen integration'
     )
   }
 

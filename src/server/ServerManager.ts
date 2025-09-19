@@ -247,10 +247,12 @@ export class ServerManager {
     const { joinMpcSession } = await import('../core/mpc/session/joinMpcSession')
     const { startMpcSession } = await import('../core/ui/mpc/session/utils/startMpcSession')
     
-    // Generate session parameters
+    // Generate session parameters using core MPC utilities
     const sessionId = generateSessionId()
-    const hexEncryptionKey = await generateEncryptionKey()
-    const hexChainCode = await generateChainCode()
+    const { generateHexEncryptionKey } = await import('../core/mpc/utils/generateHexEncryptionKey')
+    const { generateHexChainCode } = await import('../core/mpc/utils/generateHexChainCode')
+    const hexEncryptionKey = generateHexEncryptionKey()
+    const hexChainCode = generateHexChainCode()
     const localPartyId = await generateBrowserPartyId()
     
     const log = options.onLog || (() => {})
@@ -258,12 +260,15 @@ export class ServerManager {
     
     log('Creating vault on FastVault server...')
     
+    // The server party ID should be consistent throughout the process
+    const serverPartyId = await generateServerPartyId()
+    
     await setupVaultWithServer({
       name: options.name,
       session_id: sessionId,
       hex_encryption_key: hexEncryptionKey,
       hex_chain_code: hexChainCode,
-      local_party_id: await generateServerPartyId(),
+      local_party_id: serverPartyId, // Use server party ID for server communication
       encryption_password: options.password,
       email: options.email,
       lib_type: 1
@@ -287,21 +292,77 @@ export class ServerManager {
       devices
     })
     
-    progress({ phase: 'ecdsa', message: 'Generating keys...' })
+    // Real MPC keygen - ECDSA first
+    progress({ phase: 'ecdsa', message: 'Generating ECDSA keys...' })
     
-    // Create placeholder vault (real implementation would use core keygen)
+    const { DKLS } = await import('../core/mpc/dkls/dkls')
+    const { Schnorr } = await import('../core/mpc/schnorr/schnorrKeygen')
+    const { setKeygenComplete, waitForKeygenComplete } = await import('../core/mpc/keygenComplete')
+    
+    // Create DKLS instance for ECDSA keygen
+    const dkls = new DKLS(
+      { create: true }, // KeygenOperation - creating new vault
+      true, // isInitiateDevice
+      this.config.messageRelay,
+      sessionId,
+      localPartyId, // This should be the browser/client party ID
+      devices, // keygenCommittee (includes both browser and server)
+      [], // oldKeygenCommittee (empty for new vault)
+      hexEncryptionKey
+    )
+    
+    // Run ECDSA keygen
+    const ecdsaResult = await dkls.startKeygenWithRetry()
+    log('ECDSA keygen completed successfully')
+    
+    // EdDSA keygen using the same setup message
+    progress({ phase: 'eddsa', message: 'Generating EdDSA keys...' })
+    
+    const setupMessage = dkls.getSetupMessage()
+    const schnorr = new Schnorr(
+      { create: true }, // KeygenOperation
+      true, // isInitiateDevice  
+      this.config.messageRelay,
+      sessionId + '-eddsa', // Different session ID for EdDSA
+      localPartyId,
+      devices, // keygenCommittee
+      [], // oldKeygenCommittee
+      hexEncryptionKey,
+      setupMessage // Reuse setup message from DKLS
+    )
+    
+    // Run EdDSA keygen
+    const eddsaResult = await schnorr.startKeygenWithRetry()
+    log('EdDSA keygen completed successfully')
+    
+    // Signal keygen completion to all participants
+    await setKeygenComplete({
+      serverURL: this.config.messageRelay,
+      sessionId,
+      localPartyId
+    })
+    
+    // Wait for all participants to complete
+    const peers = devices.filter(d => d !== localPartyId)
+    await waitForKeygenComplete({
+      serverURL: this.config.messageRelay,
+      sessionId,
+      peers
+    })
+    
+    // Create real vault from keygen results
     const vault: Vault = {
       name: options.name,
       publicKeys: {
-        ecdsa: hexChainCode,
-        eddsa: ''
+        ecdsa: ecdsaResult.publicKey,
+        eddsa: eddsaResult.publicKey
       },
       localPartyId,
       signers: devices,
-      hexChainCode,
+      hexChainCode: ecdsaResult.chaincode,
       keyShares: {
-        ecdsa: '',
-        eddsa: ''
+        ecdsa: ecdsaResult.keyshare,
+        eddsa: eddsaResult.keyshare
       },
       libType: 'DKLS',
       isBackedUp: false,

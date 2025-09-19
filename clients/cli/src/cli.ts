@@ -8,6 +8,7 @@ import { Command } from 'commander'
 declare const Vultisig: any
 import { AddressCommand } from './commands/AddressCommand'
 import { BalanceCommand } from './commands/BalanceCommand'
+import { CreateCommand } from './commands/CreateCommand'
 import { InitCommand } from './commands/InitCommand'
 import { ListCommand } from './commands/ListCommand'
 import { QuitCommand } from './commands/QuitCommand'
@@ -55,6 +56,7 @@ function wrapCommand(commandInstance: any, requiresSDK: boolean = false) {
 
 // Register all commands
 const initCommand = new InitCommand()
+const createCommand = new CreateCommand()
 const listCommand = new ListCommand()
 const runCommand = new RunCommand()
 const statusCommand = new StatusCommand()
@@ -69,6 +71,23 @@ program
   .command('init')
   .description(initCommand.description)
   .action(wrapCommand(initCommand, false))
+
+// Create command - needs SDK for vault creation
+program
+  .command('create')
+  .description(createCommand.description)
+  .requiredOption('--name <name>', 'Vault name')
+  .option('--email <email>', 'Email for vault verification (required for fast vaults)')
+  .option('--password <password>', 'Password for vault encryption')
+  .option('--mode <mode>', 'Vault creation mode: fast, relay, or local', 'fast')
+  .action(async (options) => {
+    try {
+      await createCommand.run(options)
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : error)
+      process.exit(1)
+    }
+  })
 
 // List command - needs SDK for vault checking
 program
