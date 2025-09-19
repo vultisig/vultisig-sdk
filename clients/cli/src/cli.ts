@@ -79,10 +79,13 @@ program
   .command('create')
   .description(createCommand.description)
   .requiredOption('--name <name>', 'Vault name')
-  .option('--email <email>', 'Email for vault verification (required for fast vaults)')
+  .option(
+    '--email <email>',
+    'Email for vault verification (required for fast vaults)'
+  )
   .option('--password <password>', 'Password for vault encryption')
   .option('--mode <mode>', 'Vault creation mode: fast, relay, or local', 'fast')
-  .action(async (options) => {
+  .action(async options => {
     try {
       await createCommand.run(options)
     } catch (error) {
@@ -97,7 +100,7 @@ program
   .description(verifyCommand.description)
   .option('--vault-id <vaultId>', 'Vault ID (ECDSA public key)')
   .option('--code <code>', 'Verification code from email')
-  .action(async (options) => {
+  .action(async options => {
     try {
       await verifyCommand.run(options)
     } catch (error) {
