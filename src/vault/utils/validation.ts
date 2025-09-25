@@ -1,5 +1,5 @@
-import { validateEmail } from '../../lib/utils/validation/validateEmail'
 import { passwordLenghtConfig } from '../../core/ui/security/password/config'
+import { validateEmail } from '../../lib/utils/validation/validateEmail'
 import type { ValidationResult } from '../../types'
 
 /**
@@ -15,7 +15,7 @@ export class ValidationHelpers {
     const error = validateEmail(email)
     return {
       valid: !error,
-      error
+      error,
     }
   }
 
@@ -28,21 +28,21 @@ export class ValidationHelpers {
     if (!password) {
       return {
         valid: false,
-        error: 'Password is required'
+        error: 'Password is required',
       }
     }
 
     if (password.length < passwordLenghtConfig.min) {
       return {
         valid: false,
-        error: `Password must be at least ${passwordLenghtConfig.min} character${passwordLenghtConfig.min === 1 ? '' : 's'} long`
+        error: `Password must be at least ${passwordLenghtConfig.min} character${passwordLenghtConfig.min === 1 ? '' : 's'} long`,
       }
     }
 
     if (password.length > passwordLenghtConfig.max) {
       return {
         valid: false,
-        error: `Password must be no more than ${passwordLenghtConfig.max} characters long`
+        error: `Password must be no more than ${passwordLenghtConfig.max} characters long`,
       }
     }
 
@@ -58,30 +58,30 @@ export class ValidationHelpers {
     if (!name) {
       return {
         valid: false,
-        error: 'Vault name is required'
+        error: 'Vault name is required',
       }
     }
 
     if (typeof name !== 'string') {
       return {
         valid: false,
-        error: 'Vault name must be a string'
+        error: 'Vault name must be a string',
       }
     }
 
     const trimmedName = name.trim()
-    
+
     if (trimmedName.length < 2) {
       return {
         valid: false,
-        error: 'Vault name must be at least 2 characters long'
+        error: 'Vault name must be at least 2 characters long',
       }
     }
 
     if (trimmedName.length > 50) {
       return {
         valid: false,
-        error: 'Vault name must be no more than 50 characters long'
+        error: 'Vault name must be no more than 50 characters long',
       }
     }
 
