@@ -49,7 +49,8 @@ export class AddressBookManager {
       } else {
         // Check if saved entry already exists
         const existingIndex = this.addressBookData.saved.findIndex(
-          existing => existing.chain === entry.chain && existing.address === entry.address
+          existing =>
+            existing.chain === entry.chain && existing.address === entry.address
         )
 
         if (existingIndex === -1) {
