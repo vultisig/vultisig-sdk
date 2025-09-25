@@ -1,20 +1,20 @@
 import { fromBinary } from '@bufbuild/protobuf'
+
 import { fromCommVault } from '../core/mpc/types/utils/commVault'
 import { VaultSchema } from '../core/mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '../core/ui/vault/import/utils/vaultContainerFromString'
 import { decryptWithAesGcm } from '../lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '../lib/utils/fromBase64'
-
 import type {
-  Vault,
   KeygenMode,
   Summary,
+  Vault,
   VaultCreationStep,
   VaultType,
 } from '../types'
+import type { WASMManager } from '../wasm'
 import { Vault as VaultClass } from './Vault'
 import { VaultImportError, VaultImportErrorCode } from './VaultError'
-import type { WASMManager } from '../wasm'
 
 /**
  * Determine vault type based on signer names
@@ -46,7 +46,7 @@ export class VaultManagement {
    * Create new vault (auto-initializes SDK, sets as active)
    */
   async createVault(
-    name: string, 
+    name: string,
     options?: {
       type?: VaultType
       keygenMode?: KeygenMode
@@ -128,7 +128,11 @@ export class VaultManagement {
       const securityType = determineVaultType(vault.signers)
 
       // Apply global settings and normalize
-      const normalizedVault = this.applyGlobalSettings(vault, isEncrypted, securityType)
+      const normalizedVault = this.applyGlobalSettings(
+        vault,
+        isEncrypted,
+        securityType
+      )
 
       // Store the vault
       this.vaults.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
@@ -220,7 +224,7 @@ export class VaultManagement {
   async deleteVault(vault: VaultClass): Promise<void> {
     const vaultId = vault.data.publicKeys.ecdsa
     this.vaults.delete(vaultId)
-    
+
     // Clear active vault if it was the deleted one
     if (this.activeVault?.data.publicKeys.ecdsa === vaultId) {
       this.activeVault = null
@@ -326,7 +330,10 @@ export class VaultManagement {
       // Store cached properties that will be used by Vault class
       _cachedEncryptionStatus: isEncrypted,
       _cachedSecurityType: securityType,
-    } as Vault & { _cachedEncryptionStatus: boolean; _cachedSecurityType: 'fast' | 'secure' }
+    } as Vault & {
+      _cachedEncryptionStatus: boolean
+      _cachedSecurityType: 'fast' | 'secure'
+    }
   }
 
   /**
