@@ -1,0 +1,33 @@
+[
+  {
+    "name": "btc_utxo_single_input_single_output",
+    "keysign_payload": {
+      "coin": {
+        "chain": "bitcoin",
+        "address": "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080"
+      },
+      "to_address": "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+      "to_amount": "50000",
+      "utxo_info": [
+        {
+          "hash": "e3a1b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f70",
+          "amount": "100000",
+          "index": 0
+        }
+      ],
+      "BlockchainSpecific": {
+        "blockchainSpecific": {
+          "utxoSpecific": {
+            "byte_fee": "1",
+            "send_max_amount": false
+          }
+        }
+      }
+    },
+    "expected_image_hash": [
+      "REPLACE_WITH_COMPUTED_HASHES"
+    ]
+  }
+]
+
+
