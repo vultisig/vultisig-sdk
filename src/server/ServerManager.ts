@@ -1,19 +1,18 @@
-import type { 
-  Vault, 
-  SigningPayload, 
-  Signature, 
-  ReshareOptions, 
+import type {
+  KeygenProgressUpdate,
+  ReshareOptions,
   ServerStatus,
-  KeygenProgressUpdate
+  Signature,
+  SigningPayload,
+  Vault,
 } from '../types'
-
-import { 
-  generateSessionId,
-  generateEncryptionKey,
-  generateChainCode,
+import {
   generateBrowserPartyId,
+  generateChainCode,
+  generateEncryptionKey,
   generateServerPartyId,
-  pingServer
+  generateSessionId,
+  pingServer,
 } from './utils'
 
 /**
@@ -26,13 +25,11 @@ export class ServerManager {
     messageRelay: string
   }
 
-  constructor(endpoints?: {
-    fastVault?: string
-    messageRelay?: string
-  }) {
+  constructor(endpoints?: { fastVault?: string; messageRelay?: string }) {
     this.config = {
       fastVault: endpoints?.fastVault || 'https://api.vultisig.com/vault',
-      messageRelay: endpoints?.messageRelay || 'https://api.vultisig.com/router'
+      messageRelay:
+        endpoints?.messageRelay || 'https://api.vultisig.com/router',
     }
   }
 
@@ -41,7 +38,9 @@ export class ServerManager {
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
     try {
-      const { verifyVaultEmailCode } = await import('../core/mpc/fast/api/verifyVaultEmailCode')
+      const { verifyVaultEmailCode } = await import(
+        '../core/mpc/fast/api/verifyVaultEmailCode'
+      )
       await verifyVaultEmailCode({ vaultId, code })
       return true
     } catch {
@@ -55,9 +54,9 @@ export class ServerManager {
   async resendVaultVerification(vaultId: string): Promise<void> {
     const { queryUrl } = await import('../lib/utils/query/queryUrl')
     const { fastVaultServerUrl } = await import('../core/mpc/fast/config')
-    
+
     await queryUrl(`${fastVaultServerUrl}/resend-verification/${vaultId}`, {
-      responseType: 'none'
+      responseType: 'none',
     })
   }
 
@@ -65,8 +64,10 @@ export class ServerManager {
    * Get vault from VultiServer using password
    */
   async getVaultFromServer(vaultId: string, password: string): Promise<Vault> {
-    const { getVaultFromServer } = await import('../core/mpc/fast/api/getVaultFromServer')
-    
+    const { getVaultFromServer } = await import(
+      '../core/mpc/fast/api/getVaultFromServer'
+    )
+
     const result = await getVaultFromServer({ vaultId, password })
     return result as Vault
   }
@@ -74,19 +75,33 @@ export class ServerManager {
   /**
    * Sign transaction using VultiServer
    */
-  async signWithServer(vault: any, payload: SigningPayload, vaultPassword: string): Promise<Signature> {
+  async signWithServer(
+    vault: any,
+    payload: SigningPayload,
+    vaultPassword: string
+  ): Promise<Signature> {
     // Validate vault is a fast vault
-    const hasFastVaultServer = vault.signers.some(signer => signer.startsWith('Server-'))
+    const hasFastVaultServer = vault.signers.some(signer =>
+      signer.startsWith('Server-')
+    )
     if (!hasFastVaultServer) {
-      throw new Error('Vault does not have VultiServer - fast signing not available')
+      throw new Error(
+        'Vault does not have VultiServer - fast signing not available'
+      )
     }
 
     // Use core functions directly
     const { getChainKind } = await import('../core/chain/ChainKind')
-    const { signatureAlgorithms } = await import('../core/chain/signing/SignatureAlgorithm')
+    const { signatureAlgorithms } = await import(
+      '../core/chain/signing/SignatureAlgorithm'
+    )
     const { getCoinType } = await import('../core/chain/coin/coinType')
-    const { joinMpcSession } = await import('../core/mpc/session/joinMpcSession')
-    const { signWithServer: callFastVaultAPI } = await import('../core/mpc/fast/api/signWithServer')
+    const { joinMpcSession } = await import(
+      '../core/mpc/session/joinMpcSession'
+    )
+    const { signWithServer: callFastVaultAPI } = await import(
+      '../core/mpc/fast/api/signWithServer'
+    )
     const { initWasm } = await import('@trustwallet/wallet-core')
     const { AddressDeriver } = await import('../chains/AddressDeriver')
 
@@ -97,7 +112,7 @@ export class ServerManager {
     const chain = addressDeriver.mapStringToChain(payload.chain)
     const coinType = getCoinType({ walletCore, chain })
     const derivePath = walletCore.CoinTypeExt.derivationPath(coinType)
-    
+
     const chainKind = getChainKind(chain)
     const signatureAlgorithm = signatureAlgorithms[chainKind]
 
@@ -106,7 +121,12 @@ export class ServerManager {
     if (payload.messageHashes) {
       messages = payload.messageHashes
     } else {
-      messages = await this.computeMessageHashesFromTransaction(payload, walletCore, chain, vault)
+      messages = await this.computeMessageHashesFromTransaction(
+        payload,
+        walletCore,
+        chain,
+        vault
+      )
     }
 
     // Generate session parameters
@@ -122,7 +142,7 @@ export class ServerManager {
       hex_encryption_key: hexEncryptionKey,
       derive_path: derivePath,
       is_ecdsa: signatureAlgorithm === 'ecdsa',
-      vault_password: vaultPassword
+      vault_password: vaultPassword,
     })
     console.log(`✅ Server acknowledged session: ${serverResponse}`)
 
@@ -130,21 +150,23 @@ export class ServerManager {
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
-      localPartyId: vault.localPartyId
+      localPartyId: vault.localPartyId,
     })
 
     // Step 2.5: Register server as participant (critical for server to join)
     try {
       const { queryUrl } = await import('../lib/utils/query/queryUrl')
       // Find the server signer from the vault
-      const serverSigner = vault.signers.find(signer => signer.startsWith('Server-'))
+      const serverSigner = vault.signers.find(signer =>
+        signer.startsWith('Server-')
+      )
       if (serverSigner) {
         await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
           body: [serverSigner],
-          responseType: 'none'
+          responseType: 'none',
         })
       }
-    } catch (_) {
+    } catch (_e: any) {
       // non-fatal
     }
 
@@ -154,63 +176,163 @@ export class ServerManager {
     const peers = devices.filter(device => device !== vault.localPartyId)
     console.log(`✅ All participants ready: [${devices.join(', ')}]`)
     console.log(`🤝 Peer devices: [${peers.join(', ')}]`)
-    
+
     // Step 2.5: Start MPC session with devices list (CRITICAL MISSING STEP)
     console.log('📡 Starting MPC session with devices list...')
-    const { startMpcSession } = await import('../core/ui/mpc/session/utils/startMpcSession')
+    const { startMpcSession } = await import(
+      '../core/ui/mpc/session/utils/startMpcSession'
+    )
     await startMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
-      devices
+      devices,
     })
     console.log('✅ MPC session started with devices')
-    
+
     // Step 3: Perform MPC keysign using core implementation
     console.log('🔐 Starting core MPC keysign process...')
     const { keysign } = await import('../core/mpc/keysign')
-    
+    const { getPreSigningHashes } = await import(
+      '../core/chain/tx/preSigningHashes'
+    )
+    const { getTxInputData } = await import('../core/mpc/keysign/txInputData')
+    const { getPublicKey } = await import(
+      '../core/chain/publicKey/getPublicKey'
+    )
+    const { compileTx } = await import('../core/chain/tx/compile/compileTx')
+    const { decodeSigningOutput } = await import(
+      '../core/chain/tw/signingOutput'
+    )
+
     const keyShare = vault.keyShares[signatureAlgorithm]
     if (!keyShare) {
       throw new Error(`No key share found for algorithm: ${signatureAlgorithm}`)
     }
-    
-    const signature = await keysign({
-      keyShare,
-      signatureAlgorithm,
-      message: messages[0],
-      chainPath: derivePath.replaceAll("'", ''),
-      localPartyId: vault.localPartyId,
-      peers,
-      serverUrl: this.config.messageRelay,
-      sessionId,
-      hexEncryptionKey,
-      isInitiatingDevice: true,
+
+    // If this is a UTXO chain (e.g., BTC), there may be multiple messages. Sign all.
+    const isUtxo = chainKind === 'utxo'
+    const signatures: Record<string, string> = {}
+
+    for (const msg of messages) {
+      const sig = await keysign({
+        keyShare,
+        signatureAlgorithm,
+        message: msg,
+        chainPath: derivePath.replaceAll("'", ''),
+        localPartyId: vault.localPartyId,
+        peers,
+        serverUrl: this.config.messageRelay,
+        sessionId,
+        hexEncryptionKey,
+        isInitiatingDevice: true,
+      })
+      signatures[msg] = sig.der_signature
+    }
+
+    // If single-message chains (e.g., EVM), return the single signature as before
+    if (!isUtxo) {
+      const only = messages[0]
+      const sig = signatures[only]
+      const recoveryIdHex = (
+        await keysign({
+          keyShare,
+          signatureAlgorithm,
+          message: only,
+          chainPath: derivePath.replaceAll("'", ''),
+          localPartyId: vault.localPartyId,
+          peers,
+          serverUrl: this.config.messageRelay,
+          sessionId,
+          hexEncryptionKey,
+          isInitiatingDevice: true,
+        })
+      ).recovery_id
+      const recoveryId = recoveryIdHex ? parseInt(recoveryIdHex, 16) : undefined
+      return {
+        signature: sig,
+        format:
+          signatureAlgorithm === 'eddsa'
+            ? 'EdDSA'
+            : recoveryId !== undefined
+              ? 'ECDSA'
+              : 'DER',
+        recovery: recoveryId,
+      }
+    }
+
+    // UTXO/BTC path: compile the fully signed transaction
+    // Recreate tx input data and public key to compile
+    const { create } = await import('@bufbuild/protobuf')
+    const { KeysignPayloadSchema } = await import(
+      '../core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+    )
+    const { deriveAddress } = await import(
+      '../core/chain/publicKey/address/deriveAddress'
+    )
+
+    const publicKey = getPublicKey({
+      chain,
+      walletCore,
+      hexChainCode: vault.hexChainCode,
+      publicKeys: vault.publicKeys,
     })
-    
-    console.log('✅ Core MPC keysign completed successfully!')
+    const address = deriveAddress({ chain, publicKey, walletCore })
+    const psbtBase64 = (payload as any)?.transaction?.psbtBase64
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: {
+        chain: 'bitcoin',
+        address,
+      },
+      blockchainSpecific: {
+        case: 'utxoSpecific',
+        value: {
+          $typeName: 'vultisig.keysign.v1.UTXOSpecific',
+          psbt: psbtBase64,
+        },
+      },
+      toAddress: address,
+      toAmount: '0',
+    })
 
-    const recoveryId = signature.recovery_id
-      ? parseInt(signature.recovery_id, 16)
-      : undefined
+    const inputs = getTxInputData({
+      keysignPayload,
+      walletCore,
+      publicKey,
+    })
 
+    const compiledTxs = inputs.map(txInputData =>
+      compileTx({
+        publicKey,
+        txInputData,
+        signatures,
+        chain,
+        walletCore,
+      })
+    )
+
+    // For UTXO, we expect a single compiled transaction
+    const [compiled] = compiledTxs
+    const decoded = decodeSigningOutput(chain, compiled)
+    const finalTxHex = decoded.encoded
+
+    console.log('✅ UTXO transaction compiled successfully')
     return {
-      signature: signature.der_signature,
-      format:
-        signatureAlgorithm === 'eddsa'
-          ? 'EdDSA'
-          : recoveryId !== undefined
-            ? 'ECDSA'
-            : 'DER',
-      recovery: recoveryId,
+      signature: finalTxHex,
+      format: 'DER',
     }
   }
 
   /**
    * Reshare vault participants
    */
-  async reshareVault(vault: Vault, reshareOptions: ReshareOptions & { password: string; email?: string }): Promise<Vault> {
-    const { reshareWithServer } = await import('../core/mpc/fast/api/reshareWithServer')
-    
+  async reshareVault(
+    vault: Vault,
+    reshareOptions: ReshareOptions & { password: string; email?: string }
+  ): Promise<Vault> {
+    const { reshareWithServer } = await import(
+      '../core/mpc/fast/api/reshareWithServer'
+    )
+
     await reshareWithServer({
       name: vault.name,
       session_id: generateSessionId(),
@@ -223,46 +345,56 @@ export class ServerManager {
       encryption_password: reshareOptions.password,
       email: reshareOptions.email,
       reshare_type: 1,
-      lib_type: 1
+      lib_type: 1,
     })
-    
+
     return vault
   }
 
   /**
    * Create a Fast Vault
    */
-  async createFastVault(options: { 
-    name: string; 
-    email: string; 
-    password: string;
-    onLog?: (msg: string) => void;
-    onProgress?: (u: KeygenProgressUpdate) => void;
+  async createFastVault(options: {
+    name: string
+    email: string
+    password: string
+    onLog?: (msg: string) => void
+    onProgress?: (u: KeygenProgressUpdate) => void
   }): Promise<{
     vault: Vault
     vaultId: string
     verificationRequired: boolean
   }> {
-    const { setupVaultWithServer } = await import('../core/mpc/fast/api/setupVaultWithServer')
-    const { joinMpcSession } = await import('../core/mpc/session/joinMpcSession')
-    const { startMpcSession } = await import('../core/ui/mpc/session/utils/startMpcSession')
-    
+    const { setupVaultWithServer } = await import(
+      '../core/mpc/fast/api/setupVaultWithServer'
+    )
+    const { joinMpcSession } = await import(
+      '../core/mpc/session/joinMpcSession'
+    )
+    const { startMpcSession } = await import(
+      '../core/ui/mpc/session/utils/startMpcSession'
+    )
+
     // Generate session parameters using core MPC utilities
     const sessionId = generateSessionId()
-    const { generateHexEncryptionKey } = await import('../core/mpc/utils/generateHexEncryptionKey')
-    const { generateHexChainCode } = await import('../core/mpc/utils/generateHexChainCode')
+    const { generateHexEncryptionKey } = await import(
+      '../core/mpc/utils/generateHexEncryptionKey'
+    )
+    const { generateHexChainCode } = await import(
+      '../core/mpc/utils/generateHexChainCode'
+    )
     const hexEncryptionKey = generateHexEncryptionKey()
     const hexChainCode = generateHexChainCode()
     const localPartyId = await generateBrowserPartyId()
-    
+
     const log = options.onLog || (() => {})
     const progress = options.onProgress || (() => {})
-    
+
     log('Creating vault on FastVault server...')
-    
+
     // The server party ID should be consistent throughout the process
     const serverPartyId = await generateServerPartyId()
-    
+
     await setupVaultWithServer({
       name: options.name,
       session_id: sessionId,
@@ -271,34 +403,36 @@ export class ServerManager {
       local_party_id: serverPartyId, // Use server party ID for server communication
       encryption_password: options.password,
       email: options.email,
-      lib_type: 1
+      lib_type: 1,
     })
-    
+
     log('Joining relay session...')
-    
+
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
-      localPartyId
+      localPartyId,
     })
-    
+
     log('Waiting for server and starting MPC session...')
-    
+
     const devices = await this.waitForPeers(sessionId, localPartyId)
-    
+
     await startMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
-      devices
+      devices,
     })
-    
+
     // Real MPC keygen - ECDSA first
     progress({ phase: 'ecdsa', message: 'Generating ECDSA keys...' })
-    
+
     const { DKLS } = await import('../core/mpc/dkls/dkls')
     const { Schnorr } = await import('../core/mpc/schnorr/schnorrKeygen')
-    const { setKeygenComplete, waitForKeygenComplete } = await import('../core/mpc/keygenComplete')
-    
+    const { setKeygenComplete, waitForKeygenComplete } = await import(
+      '../core/mpc/keygenComplete'
+    )
+
     // Create DKLS instance for ECDSA keygen
     const dkls = new DKLS(
       { create: true }, // KeygenOperation - creating new vault
@@ -310,18 +444,18 @@ export class ServerManager {
       [], // oldKeygenCommittee (empty for new vault)
       hexEncryptionKey
     )
-    
+
     // Run ECDSA keygen
     const ecdsaResult = await dkls.startKeygenWithRetry()
     log('ECDSA keygen completed successfully')
-    
+
     // EdDSA keygen using the same setup message
     progress({ phase: 'eddsa', message: 'Generating EdDSA keys...' })
-    
+
     const setupMessage = dkls.getSetupMessage()
     const schnorr = new Schnorr(
       { create: true }, // KeygenOperation
-      true, // isInitiateDevice  
+      true, // isInitiateDevice
       this.config.messageRelay,
       sessionId, // Use same session ID as ECDSA
       localPartyId,
@@ -330,52 +464,52 @@ export class ServerManager {
       hexEncryptionKey,
       setupMessage // Reuse setup message from DKLS
     )
-    
+
     // Run EdDSA keygen
     const eddsaResult = await schnorr.startKeygenWithRetry()
     log('EdDSA keygen completed successfully')
-    
+
     // Signal keygen completion to all participants
     await setKeygenComplete({
       serverURL: this.config.messageRelay,
       sessionId,
-      localPartyId
+      localPartyId,
     })
-    
+
     // Wait for all participants to complete
     const peers = devices.filter(d => d !== localPartyId)
     await waitForKeygenComplete({
       serverURL: this.config.messageRelay,
       sessionId,
-      peers
+      peers,
     })
-    
+
     // Create real vault from keygen results
     const vault: Vault = {
       name: options.name,
       publicKeys: {
         ecdsa: ecdsaResult.publicKey,
-        eddsa: eddsaResult.publicKey
+        eddsa: eddsaResult.publicKey,
       },
       localPartyId,
       signers: devices,
       hexChainCode: ecdsaResult.chaincode,
       keyShares: {
         ecdsa: ecdsaResult.keyshare,
-        eddsa: eddsaResult.keyshare
+        eddsa: eddsaResult.keyshare,
       },
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,
-      createdAt: Date.now()
+      createdAt: Date.now(),
     }
-    
+
     progress({ phase: 'complete', message: 'Vault created successfully' })
-    
+
     return {
       vault,
       vaultId: vault.publicKeys.ecdsa,
-      verificationRequired: true
+      verificationRequired: true,
     }
   }
 
@@ -385,34 +519,42 @@ export class ServerManager {
   async checkServerStatus(): Promise<ServerStatus> {
     const [fastVaultStatus, relayStatus] = await Promise.allSettled([
       pingServer(this.config.fastVault, '/'),
-      pingServer(this.config.messageRelay, '/ping')
+      pingServer(this.config.messageRelay, '/ping'),
     ])
 
     return {
       fastVault: {
         online: fastVaultStatus.status === 'fulfilled',
-        latency: fastVaultStatus.status === 'fulfilled' ? fastVaultStatus.value : undefined
+        latency:
+          fastVaultStatus.status === 'fulfilled'
+            ? fastVaultStatus.value
+            : undefined,
       },
       messageRelay: {
-        online: relayStatus.status === 'fulfilled', 
-        latency: relayStatus.status === 'fulfilled' ? relayStatus.value : undefined
+        online: relayStatus.status === 'fulfilled',
+        latency:
+          relayStatus.status === 'fulfilled' ? relayStatus.value : undefined,
       },
-      timestamp: Date.now()
+      timestamp: Date.now(),
     }
   }
 
   // ===== Private Helper Methods =====
 
-
-  private async waitForPeers(sessionId: string, localPartyId: string): Promise<string[]> {
+  private async waitForPeers(
+    sessionId: string,
+    localPartyId: string
+  ): Promise<string[]> {
     const { queryUrl } = await import('../lib/utils/query/queryUrl')
     const { without } = await import('../lib/utils/array/without')
-    const { withoutDuplicates } = await import('../lib/utils/array/withoutDuplicates')
-    
+    const { withoutDuplicates } = await import(
+      '../lib/utils/array/withoutDuplicates'
+    )
+
     const maxWaitTime = 30000
     const checkInterval = 2000
     const startTime = Date.now()
-    
+
     while (Date.now() - startTime < maxWaitTime) {
       try {
         const url = `${this.config.messageRelay}/${sessionId}`
@@ -423,25 +565,25 @@ export class ServerManager {
         if (otherPeers.length > 0) {
           return [localPartyId, ...otherPeers]
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, checkInterval))
       } catch (error) {
         await new Promise(resolve => setTimeout(resolve, checkInterval))
       }
     }
-    
+
     throw new Error('Timeout waiting for peers to join session')
   }
 
   private async computeMessageHashesFromTransaction(
-    payload: SigningPayload, 
-    walletCore: any, 
+    payload: SigningPayload,
+    walletCore: any,
     chain: any,
     vault: any
   ): Promise<string[]> {
-    if (payload.chain === 'ethereum' || payload.chain === 'eth') {
+    const network = String(payload.chain || '').toLowerCase()
+    if (network === 'ethereum' || network === 'eth') {
       const { serializeTransaction, keccak256 } = await import('viem')
-      
       const tx = payload.transaction
       const unsigned = {
         type: 'eip1559' as const,
@@ -455,13 +597,71 @@ export class ServerManager {
         maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0'),
         accessList: [],
       }
-      
       const serialized = serializeTransaction(unsigned)
       const signingHash = keccak256(serialized).slice(2)
-      
       return [signingHash]
     }
-    
-    throw new Error(`Message hash computation not yet implemented for chain: ${payload.chain}`)
+
+    // UTXO/BTC: derive pre-signing hashes from PSBT or constructed inputs
+    if (network === 'bitcoin' || network === 'btc') {
+      const { create } = await import('@bufbuild/protobuf')
+      const { KeysignPayloadSchema } = await import(
+        '../core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+      )
+      const { getTxInputData } = await import('../core/mpc/keysign/txInputData')
+      const { getPreSigningHashes } = await import(
+        '../core/chain/tx/preSigningHashes'
+      )
+      const { getPublicKey } = await import(
+        '../core/chain/publicKey/getPublicKey'
+      )
+      const { deriveAddress } = await import(
+        '../core/chain/publicKey/address/deriveAddress'
+      )
+
+      const publicKey = getPublicKey({
+        chain,
+        walletCore,
+        hexChainCode: vault.hexChainCode,
+        publicKeys: vault.publicKeys,
+      })
+      const address = deriveAddress({ chain, publicKey, walletCore })
+      const psbtBase64 = (payload as any)?.transaction?.psbtBase64
+      if (!psbtBase64) {
+        throw new Error('BTC signing requires transaction.psbtBase64')
+      }
+
+      const keysignPayload = create(KeysignPayloadSchema, {
+        coin: {
+          chain: 'bitcoin',
+          address,
+        },
+        blockchainSpecific: {
+          case: 'utxoSpecific',
+          value: {
+            $typeName: 'vultisig.keysign.v1.UtxoSpecific',
+            psbt: psbtBase64,
+          },
+        },
+        toAddress: address,
+        toAmount: '0',
+      })
+
+      const inputs = getTxInputData({
+        keysignPayload,
+        walletCore,
+        publicKey,
+      })
+      const hashes = inputs
+        .flatMap(txInputData =>
+          getPreSigningHashes({ walletCore, chain, txInputData })
+        )
+        .map(value => Buffer.from(value).toString('hex'))
+      return hashes
+    }
+
+    throw new Error(
+      `Message hash computation not yet implemented for chain: ${payload.chain}`
+    )
   }
 }
