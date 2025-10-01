@@ -1,5 +1,6 @@
 import { assertFetchResponse } from '../fetch/assertFetchResponse'
 import { withoutUndefinedFields } from '../record/withoutUndefinedFields'
+import fetch from 'node-fetch';
 
 type ResponseType = 'json' | 'text' | 'none'
 
