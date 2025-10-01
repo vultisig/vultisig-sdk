@@ -15,6 +15,7 @@ import { QuitCommand } from './commands/QuitCommand'
 import { RunCommand } from './commands/RunCommand'
 import { SignCommand } from './commands/SignCommand'
 import { StatusCommand } from './commands/StatusCommand'
+import { VerifyCommand } from './commands/VerifyCommand'
 import { VersionCommand } from './commands/VersionCommand'
 
 const program = new Command()
@@ -63,6 +64,7 @@ const statusCommand = new StatusCommand()
 const addressCommand = new AddressCommand()
 const balanceCommand = new BalanceCommand()
 const signCommand = new SignCommand()
+const verifyCommand = new VerifyCommand()
 const quitCommand = new QuitCommand()
 const versionCommand = new VersionCommand()
 
@@ -83,6 +85,21 @@ program
   .action(async (options) => {
     try {
       await createCommand.run(options)
+    } catch (error) {
+      console.error('Error:', error instanceof Error ? error.message : error)
+      process.exit(1)
+    }
+  })
+
+// Verify command - verify fast vault with email code
+program
+  .command('verify')
+  .description(verifyCommand.description)
+  .option('--vault-id <vaultId>', 'Vault ID (ECDSA public key)')
+  .option('--code <code>', 'Verification code from email')
+  .action(async (options) => {
+    try {
+      await verifyCommand.run(options)
     } catch (error) {
       console.error('Error:', error instanceof Error ? error.message : error)
       process.exit(1)

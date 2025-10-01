@@ -46,17 +46,29 @@ describe('Fast Vault Creation - Server API Integration', () => {
     const originalFetch = globalThis.fetch
     
     // Set up undici with longer timeout for MPC operations
+    // Note: rejectUnauthorized defaults to true and uses Node's default CA store
     setGlobalDispatcher(new Agent({
       connect: {
         timeout: 60000, // 60 second connection timeout
       },
       bodyTimeout: 120000, // 2 minute body timeout for MPC keygen
       headersTimeout: 30000, // 30 second headers timeout
+      // For testing only: allow self-signed certs if needed
+      // Set NODE_TLS_REJECT_UNAUTHORIZED=0 to disable SSL verification in test environment
     }))
     
     try {
-      // Temporarily replace the broken fetch with working undici fetch
-      globalThis.fetch = undiciFetch as any
+      // Create a hybrid fetch that uses original for WASM, undici for HTTP
+      globalThis.fetch = (async (url: string | URL | Request, ...args: any[]) => {
+        const urlString = url.toString()
+        // Use vitest's WASM handler for .wasm files
+        if (urlString.includes('.wasm')) {
+          return originalFetch(url, ...args)
+        }
+        // Use undici for HTTP/HTTPS requests
+        return undiciFetch(url, ...args)
+      }) as any
+      
       return await fn()
     } finally {
       // Restore original fetch (vitest setup for WASM loading)
@@ -320,7 +332,13 @@ describe('Fast Vault Creation - Server API Integration', () => {
           })
           console.log('✅ Vault retrieved successfully!')
           console.log(`📛 Name: ${retrievedVault.name}`)
-          console.log(`🔑 Public Key: ${retrievedVault.public_key_ecdsa}`)
+          console.log(`🔑 ECDSA Public Key: ${retrievedVault.publicKeys.ecdsa}`)
+          console.log(`🔑 EdDSA Public Key: ${retrievedVault.publicKeys.eddsa}`)
+          console.log(`🔗 Chain Code: ${retrievedVault.hexChainCode}`)
+          console.log(`🆔 Local Party ID: ${retrievedVault.localPartyId}`)
+          if (retrievedVault.signers?.length) {
+            console.log(`👥 Signers: ${retrievedVault.signers.join(', ')}`)
+          }
         }
         
       } else {
