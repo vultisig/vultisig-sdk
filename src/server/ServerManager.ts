@@ -68,7 +68,7 @@ export class ServerManager {
     const { getVaultFromServer } = await import('../core/mpc/fast/api/getVaultFromServer')
     
     const result = await getVaultFromServer({ vaultId, password })
-    return result as unknown as Vault
+    return result as Vault
   }
 
   /**
@@ -323,7 +323,7 @@ export class ServerManager {
       { create: true }, // KeygenOperation
       true, // isInitiateDevice  
       this.config.messageRelay,
-      sessionId + '-eddsa', // Different session ID for EdDSA
+      sessionId, // Use same session ID as ECDSA
       localPartyId,
       devices, // keygenCommittee
       [], // oldKeygenCommittee

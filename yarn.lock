@@ -6045,6 +6045,7 @@ __metadata:
     ts-node: "npm:^10.9.2"
     tsc-alias: "npm:^1.8.16"
     typescript: "npm:^5.9.2"
+    undici: "npm:^7.3.0"
   bin:
     vultisig: dist/cli.js
   languageName: unknown
@@ -15382,7 +15383,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"undici@npm:^7.12.0":
+"undici@npm:^7.12.0, undici@npm:^7.3.0":
   version: 7.16.0
   resolution: "undici@npm:7.16.0"
   checksum: 10c0/efd867792e9f233facf9efa0a087e2d9c3e4415c0b234061b9b40307ca4fa01d945fee4d43c7b564e1b80e0d519bcc682f9f6e0de13c717146c00a80e2f1fb0f

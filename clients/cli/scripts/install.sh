@@ -11,57 +11,77 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}🚀 Installing Vultisig CLI...${NC}"
+echo ""
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-
-BINARY_PATH="$PROJECT_DIR/bin/vultisig"
-INSTALL_PATH="/usr/local/bin/vultisig"
+BIN_DIR="$PROJECT_DIR/bin"
+BINARY_PATH="$BIN_DIR/vultisig"
 
 # Check if binary exists
 if [ ! -f "$BINARY_PATH" ]; then
     echo -e "${RED}❌ Binary not found at: $BINARY_PATH${NC}"
-    echo -e "${YELLOW}💡 Run ./scripts/build.sh first${NC}"
+    echo -e "${YELLOW}💡 Run ./scripts/build-final.sh first${NC}"
     exit 1
 fi
 
-# Check if /usr/local/bin exists
-if [ ! -d "/usr/local/bin" ]; then
-    echo -e "${YELLOW}📁 Creating /usr/local/bin directory...${NC}"
-    sudo mkdir -p "/usr/local/bin"
-fi
-
-# Check if already installed
-if [ -f "$INSTALL_PATH" ]; then
-    echo -e "${YELLOW}⚠️  Vultisig is already installed${NC}"
-    read -p "Overwrite existing installation? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}ℹ️  Installation cancelled${NC}"
-        exit 0
+# Detect shell and config file
+SHELL_NAME=$(basename "$SHELL")
+if [ "$SHELL_NAME" = "zsh" ]; then
+    SHELL_CONFIG="$HOME/.zshrc"
+elif [ "$SHELL_NAME" = "bash" ]; then
+    if [ -f "$HOME/.bashrc" ]; then
+        SHELL_CONFIG="$HOME/.bashrc"
+    else
+        SHELL_CONFIG="$HOME/.bash_profile"
     fi
+else
+    echo -e "${YELLOW}⚠️  Unknown shell: $SHELL_NAME${NC}"
+    echo -e "${YELLOW}💡 Please manually add this to your shell config:${NC}"
+    echo -e "   export PATH=\"$BIN_DIR:\$PATH\""
+    exit 1
 fi
 
-# Install the binary
-echo -e "${YELLOW}📦 Copying binary to system PATH...${NC}"
-sudo cp "$BINARY_PATH" "$INSTALL_PATH"
+# Check if already in PATH
+PATH_EXPORT="export PATH=\"$BIN_DIR:\$PATH\""
+if grep -q "$BIN_DIR" "$SHELL_CONFIG" 2>/dev/null; then
+    echo -e "${GREEN}✅ Vultisig CLI is already in PATH${NC}"
+    echo -e "${BLUE}ℹ️  Found in: $SHELL_CONFIG${NC}"
+else
+    # Add to PATH
+    echo -e "${YELLOW}📝 Adding Vultisig CLI to PATH...${NC}"
+    echo "" >> "$SHELL_CONFIG"
+    echo "# Vultisig CLI" >> "$SHELL_CONFIG"
+    echo "$PATH_EXPORT" >> "$SHELL_CONFIG"
+    echo -e "${GREEN}✅ Added to: $SHELL_CONFIG${NC}"
+fi
 
-# Verify installation
-if [ -f "$INSTALL_PATH" ] && [ -x "$INSTALL_PATH" ]; then
-    echo -e "${GREEN}✅ Vultisig CLI installed successfully!${NC}"
-    echo ""
-    echo -e "${BLUE}📋 Verification:${NC}"
+echo ""
+echo -e "${BLUE}📋 Verification:${NC}"
+
+# Source the config and test
+if [ -f "$SHELL_CONFIG" ]; then
+    source "$SHELL_CONFIG"
+fi
+
+if command -v vultisig &> /dev/null; then
     vultisig --version
     echo ""
-    echo -e "${GREEN}🎉 You can now use 'vultisig' from anywhere!${NC}"
+    echo -e "${GREEN}🎉 Installation successful!${NC}"
+    echo ""
+    echo -e "${BLUE}💡 To use immediately in this terminal:${NC}"
+    echo -e "   source $SHELL_CONFIG"
     echo ""
     echo -e "${BLUE}💡 Example usage:${NC}"
-    echo -e "   vultisig init      # Initialize directories"
-    echo -e "   vultisig list      # List keyshare files"
-    echo -e "   vultisig run       # Start daemon"
-    echo -e "   vultisig address   # Show addresses"
+    echo -e "   vultisig init         # Initialize directories"
+    echo -e "   vultisig create       # Create a new vault"
+    echo -e "   vultisig list         # List keyshare files"
+    echo -e "   vultisig run          # Start daemon"
+    echo -e "   vultisig address      # Show addresses"
 else
-    echo -e "${RED}❌ Installation failed${NC}"
-    exit 1
+    echo -e "${YELLOW}⚠️  Command not found yet in current shell${NC}"
+    echo -e "${BLUE}💡 Run this to activate:${NC}"
+    echo -e "   source $SHELL_CONFIG"
+    echo -e "${BLUE}💡 Or open a new terminal${NC}"
 fi

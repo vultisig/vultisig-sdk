@@ -8,7 +8,7 @@ help:
 	@echo ""
 	@echo "Available commands:"
 	@echo "  make build     - Build standalone binary"
-	@echo "  make install   - Install to system PATH (/usr/local/bin)"
+	@echo "  make install   - Add Vultisig CLI to your shell PATH"
 	@echo "  make uninstall - Remove from system PATH"
 	@echo "  make clean     - Clean build artifacts"
 	@echo "  make test      - Test the built binary"
