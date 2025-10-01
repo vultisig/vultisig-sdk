@@ -17,8 +17,11 @@ const originalFetch = global.fetch
 
 global.fetch = async (url: string | URL | Request) => {
   const urlString = url.toString()
+  
+  console.log('🔍 Vitest fetch called with URL:', urlString)
 
   if (urlString.includes('.wasm')) {
+    console.log('📦 Loading WASM file:', urlString)
     // Try to load from node_modules or lib directories
     let wasmPath: string
 
@@ -65,8 +68,10 @@ global.fetch = async (url: string | URL | Request) => {
       }
     }
 
+    console.log('📁 Trying to load WASM from:', wasmPath)
     try {
       const wasmBuffer = readFileSync(wasmPath)
+      console.log('✅ WASM file loaded successfully, size:', wasmBuffer.length, 'bytes')
       const arrayBuffer = wasmBuffer.buffer.slice(
         wasmBuffer.byteOffset,
         wasmBuffer.byteOffset + wasmBuffer.byteLength
