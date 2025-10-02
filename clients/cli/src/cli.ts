@@ -12,6 +12,7 @@ import { CreateCommand } from './commands/CreateCommand'
 import { ListCommand } from './commands/ListCommand'
 import { QuitCommand } from './commands/QuitCommand'
 import { RunCommand } from './commands/RunCommand'
+import { SendCommand } from './commands/SendCommand'
 import { SignCommand } from './commands/SignCommand'
 import { StatusCommand } from './commands/StatusCommand'
 import { VerifyCommand } from './commands/VerifyCommand'
@@ -61,6 +62,7 @@ const runCommand = new RunCommand()
 const statusCommand = new StatusCommand()
 const addressCommand = new AddressCommand()
 const balanceCommand = new BalanceCommand()
+const sendCommand = new SendCommand()
 const signCommand = new SignCommand()
 const verifyCommand = new VerifyCommand()
 const quitCommand = new QuitCommand()
@@ -86,12 +88,13 @@ program
     }
   })
 
-// Verify command - verify fast vault with email code
+// Verify command - verify fast vault with email code or check vault existence
 program
   .command('verify')
   .description(verifyCommand.description)
-  .option('--vault-id <vaultId>', 'Vault ID (ECDSA public key)')
-  .option('--code <code>', 'Verification code from email')
+  .requiredOption('--vault-id <vaultId>', 'Vault ID (ECDSA public key)')
+  .option('--email <code>', 'Verify email code')
+  .option('--password <password>', 'Check if vault exists on server (YES/NO)')
   .action(async options => {
     try {
       await verifyCommand.run(options)
@@ -153,6 +156,21 @@ program
   )
   .option('--password <password>', 'Password for encrypted keyshares')
   .action(wrapCommand(balanceCommand, true))
+
+// Send command - uses daemon/SDK
+program
+  .command('send')
+  .description(sendCommand.description)
+  .requiredOption('--network <network>', 'Blockchain network (ETH)')
+  .requiredOption('--to <address>', 'Recipient address')
+  .requiredOption('--amount <amount>', 'Amount to send (in ETH)')
+  .option('--memo <memo>', 'Optional transaction memo')
+  .option(
+    '--vault <path>',
+    'Path to keyshare file (.vult) - starts daemon if not running'
+  )
+  .option('--password <password>', 'Password for encrypted keyshares')
+  .action(wrapCommand(sendCommand, true))
 
 // Sign command - uses daemon/SDK
 program

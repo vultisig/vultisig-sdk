@@ -11,6 +11,7 @@ export type SignOptions = {
   mode?: string
   sessionId?: string
   payloadFile?: string
+  payloadData?: any
   password?: string
   vault?: string
 }
@@ -42,9 +43,11 @@ export class SignCommand {
       )
     }
 
-    // Read payload
+    // Read payload from payloadData, file, or stdin
     let payloadData: any
-    if (options.payloadFile) {
+    if (options.payloadData) {
+      payloadData = options.payloadData
+    } else if (options.payloadFile) {
       const payloadBuffer = await fs.promises.readFile(options.payloadFile)
       try {
         payloadData = JSON.parse(payloadBuffer.toString())
@@ -103,7 +106,8 @@ export class SignCommand {
 
         return
       } catch (error) {
-        console.log('⚠️  Daemon not available, trying direct vault signing...')
+        console.log('⚠️  Daemon signing failed:', error instanceof Error ? error.message : error)
+        console.log('⚠️  Trying direct vault signing...')
         shouldLoadDirectly = true
       }
     }
