@@ -45,9 +45,9 @@ vultisig balance
 ## 🏃 Quick Start
 
 ### 1. Prepare Your Vaults
-Create a `vaults/` directory and copy your `.vult` files:
+Copy your `.vult` files to the vaults directory (will be created automatically):
 ```bash
-mkdir vaults
+vultisig list  # Creates vaults/ directory if needed
 cp ~/Downloads/MyVault-*.vult ./vaults/
 vultisig list  # Verify files are detected
 ```
@@ -122,21 +122,6 @@ vultisig quit
 
 ## 📖 Commands Reference
 
-### `vultisig init`
-Initialize directories and configuration files.
-
-**Usage:**
-```bash
-vultisig init
-```
-
-**Creates:**
-- Configuration directory with default settings
-- Vault storage directory  
-- Keyshare file directory
-
----
-
 ### `vultisig list`
 List available vault files with encryption status.
 
@@ -150,6 +135,18 @@ vultisig list
 📁 Found 2 vault file(s) in ./vaults:
   📄 MyVault-share1of2.vult (🔓 unencrypted)
   📄 SecureVault-share2of2.vult (🔐 encrypted)
+```
+
+**First Run:**
+If the vaults directory doesn't exist, it will be created:
+```
+📁 Vaults directory not found. Creating: ./vaults
+✅ Created vaults directory
+
+Next steps:
+1. Place your .vult vault files in: ./vaults
+2. Run "vultisig list" again to see your vaults
+3. Start the daemon: vultisig run
 ```
 
 ---
@@ -442,11 +439,11 @@ When `is_encrypted = true`, vault data uses:
 
 ### Common Issues
 
-#### "No keyshare files found"
+#### "No vault files found"
 ```bash
-# Solution: Initialize and add keyshares
-vultisig init
-cp /path/to/your/keyshares/*.vult ./keyshares/
+# Solution: Add vault files to vaults directory
+vultisig list  # Creates vaults directory if needed
+cp /path/to/your/vaults/*.vult ./vaults/
 vultisig list  # Verify files are detected
 ```
 
@@ -487,8 +484,7 @@ vultisig run --verbose
 src/
 ├── cli.ts                 # Main CLI entry point with commander.js
 ├── commands/              # Command implementations
-│   ├── InitCommand.ts     # Initialize directories
-│   ├── ListCommand.ts     # List keyshare files with encryption status
+│   ├── ListCommand.ts     # List vault files with encryption status and directory creation
 │   ├── RunCommand.ts      # Start daemon with vault loading
 │   ├── AddressCommand.ts  # Show addresses for 20+ chains
 │   ├── SignCommand.ts     # Sign transactions (placeholder)

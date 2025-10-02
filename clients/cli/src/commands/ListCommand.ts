@@ -24,38 +24,36 @@ export class ListCommand {
   readonly description = 'List available vault files'
 
   async run(): Promise<void> {
-    console.log('📁 Scanning for vault files...')
-
-    // Check for .vult files in vaults directory
     const vaultsDir = getVaultsDir()
 
     try {
       await fs.promises.access(vaultsDir)
     } catch {
-      console.log('Vaults directory not found. Run "vultisig init" first.')
+      console.log(`📁 Vaults directory not found. Creating: ${vaultsDir}`)
+      await fs.promises.mkdir(vaultsDir, { recursive: true })
+      console.log('✅ Created vaults directory')
+      console.log('\nNext steps:')
+      console.log('1. Place your .vult vault files in:', vaultsDir)
+      console.log('2. Run "vultisig list" again to see your vaults')
+      console.log('3. Start the daemon: vultisig run')
       return
     }
 
     const vultFiles = await findVultFiles(vaultsDir)
 
     if (vultFiles.length === 0) {
-      console.log(`No vault files (.vult) found in: ${vaultsDir}`)
-      console.log(
-        '\nPlace your .vult files in this directory to use them with the CLI.'
-      )
+      console.log(`📁 No vault files found in: ${vaultsDir}`)
+      console.log('\nPlace your .vult files in this directory to use them with the CLI.')
       return
     }
 
     console.log(`📁 Found ${vultFiles.length} vault file(s) in ${vaultsDir}:`)
-
-    // Check each file status
 
     for (const filePath of vultFiles) {
       try {
         const buffer = await fs.promises.readFile(filePath)
         const file = new File([buffer], path.basename(filePath))
 
-        // Check if encrypted from filename hint
         const fileName = path.basename(filePath)
         const isEncrypted =
           fileName.toLowerCase().includes('password') &&
@@ -70,7 +68,6 @@ export class ListCommand {
       }
     }
 
-    // Also check for active vault in SDK
     try {
       const sdk = new Vultisig()
       const activeVault = sdk.getActiveVault()
