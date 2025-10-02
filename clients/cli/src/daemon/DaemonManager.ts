@@ -239,18 +239,12 @@ export class DaemonManager {
   }
 
   async signTransaction(request: SignTransactionRequest): Promise<any> {
-    try {
-      // Check if daemon is running first
-      await this.sendSocketCommand('ping', {})
+    // Check if daemon is running first
+    await this.sendSocketCommand('ping', {})
 
-      // Send signing request to daemon
-      const response = await this.sendSocketCommand('sign_transaction', request)
-      return response
-    } catch (error) {
-      throw new Error(
-        'No Vultisig daemon running, start with "vultisig run" first'
-      )
-    }
+    // Send signing request to daemon
+    const response = await this.sendSocketCommand('sign_transaction', request)
+    return response.result
   }
 
   private async startUnixSocket(): Promise<net.Server> {
@@ -370,10 +364,21 @@ export class DaemonManager {
           }
 
           const signRequest = request.params as SignTransactionRequest
-          const signature = await (this.vault as any).sign(
-            signRequest.payload,
-            signRequest.network
+          console.log('Daemon received sign_transaction request')
+          console.log('  Network:', signRequest.network)
+          console.log('  Payload:', JSON.stringify(signRequest.payload, null, 2))
+          
+          const signingPayload = {
+            transaction: signRequest.payload,
+            chain: signRequest.network,
+          }
+          
+          const signature = await (this.vault as any).signWithPayload(
+            signingPayload,
+            signRequest.password
           )
+          
+          console.log('Daemon completed signing')
 
           return { success: true, result: signature }
 

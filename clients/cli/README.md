@@ -347,6 +347,58 @@ vultisig status
 
 ---
 
+### `vultisig verify`
+Verify fast vault with email code or check if vault exists on server.
+
+**Usage:**
+```bash
+vultisig verify --vault-id <VAULT_ID> --email <CODE>
+vultisig verify --vault-id <VAULT_ID> --password <PASSWORD>
+```
+
+**Options:**
+- `--vault-id <vaultId>` - **Required.** Vault ID (ECDSA public key)
+- `--email <code>` - Verify email verification code (mutually exclusive with --password)
+- `--password <password>` - Check if vault exists on server with password (mutually exclusive with --email)
+
+**Examples:**
+
+**Email Verification:**
+```bash
+# Verify email code received after fast vault creation
+vultisig verify --vault-id 04a1b2c3... --email 123456
+
+# Expected output on success:
+# 🔄 Verifying email code...
+#    Vault ID: 04a1b2c3...
+#    Code: 123456
+# ✅ Email verification successful!
+# 🎉 Your fast vault is now fully activated!
+#
+# 💡 Next steps:
+#    - You can now use this vault for signing transactions
+#    - The vault is backed up on VultiServer
+#    - Keep your password safe - you need it to retrieve the vault
+```
+
+**Vault Existence Check:**
+```bash
+# Check if vault exists on server with password
+vultisig verify --vault-id 04a1b2c3... --password myPassword123
+
+# Expected output on success:
+# 🔄 Checking vault existence on server...
+# ✅ YES
+
+# Expected output on failure:
+# 🔄 Checking vault existence on server...
+# ❌ NO
+```
+
+**Note:** You must provide either `--email` or `--password`, but not both.
+
+---
+
 ### `vultisig quit`
 Gracefully shutdown the daemon.
 
