@@ -20,8 +20,8 @@ describe('Address Validation Tests', () => {
     const expected = expectedAddresses[vaultFile]
 
     test('should derive correct Bitcoin address', () => {
-      const vaultPath = path.join(vaultsDir, vaultFile)
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, vaultFile)
+      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -30,8 +30,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should derive correct Ethereum address', () => {
-      const vaultPath = path.join(vaultsDir, vaultFile)
-      const output = execSync(`${CLI_PATH} address --network ethereum --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, vaultFile)
+      const output = execSync(`${CLI_PATH} address --network ethereum --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -40,8 +40,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should derive correct Solana address', () => {
-      const vaultPath = path.join(vaultsDir, vaultFile)
-      const output = execSync(`${CLI_PATH} address --network solana --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, vaultFile)
+      const output = execSync(`${CLI_PATH} address --network solana --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -50,8 +50,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should derive correct THORChain address', () => {
-      const vaultPath = path.join(vaultsDir, vaultFile)
-      const output = execSync(`${CLI_PATH} address --network thorchain --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, vaultFile)
+      const output = execSync(`${CLI_PATH} address --network thorchain --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -60,8 +60,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should derive correct Cosmos address', () => {
-      const vaultPath = path.join(vaultsDir, vaultFile)
-      const output = execSync(`${CLI_PATH} address --network cosmos --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, vaultFile)
+      const output = execSync(`${CLI_PATH} address --network cosmos --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -70,8 +70,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should derive correct Litecoin address', () => {
-      const vaultPath = path.join(vaultsDir, vaultFile)
-      const output = execSync(`${CLI_PATH} address --network litecoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, vaultFile)
+      const output = execSync(`${CLI_PATH} address --network litecoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -80,8 +80,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should derive correct Dogecoin address', () => {
-      const vaultPath = path.join(vaultsDir, vaultFile)
-      const output = execSync(`${CLI_PATH} address --network dogecoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, vaultFile)
+      const output = execSync(`${CLI_PATH} address --network dogecoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -90,8 +90,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should derive all addresses correctly when using --network all', () => {
-      const vaultPath = path.join(vaultsDir, vaultFile)
-      const output = execSync(`${CLI_PATH} address --network all --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, vaultFile)
+      const output = execSync(`${CLI_PATH} address --network all --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -107,8 +107,8 @@ describe('Address Validation Tests', () => {
 
   describe('Vault Loading Tests', () => {
     test('should load vault with correct metadata', () => {
-      const vaultPath = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -121,8 +121,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should show derivation timing information', () => {
-      const vaultPath = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -132,8 +132,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should handle vault loading gracefully', () => {
-      const vaultPath = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network ethereum --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const output = execSync(`${CLI_PATH} address --network ethereum --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -182,8 +182,8 @@ describe('Address Validation Tests', () => {
 
   describe('SDK Integration Tests', () => {
     test('should use proper Vultisig SDK API', () => {
-      const vaultPath = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -196,8 +196,8 @@ describe('Address Validation Tests', () => {
     })
 
     test('should handle WASM loading correctly', () => {
-      const vaultPath = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -212,13 +212,13 @@ describe('Address Validation Tests', () => {
   describe('Error Recovery Tests', () => {
     test('should handle missing vault files gracefully', () => {
       // Temporarily move vault files
-      const vaultPath = path.join(
+      const vaultName = path.join(
         vaultsDir,
         'TestSecureVault-cfa0-share2of2-NoPassword.vult'
       )
-      const backupPath = vaultPath + '.backup'
+      const backupPath = vaultName + '.backup'
 
-      fs.renameSync(vaultPath, backupPath)
+      fs.renameSync(vaultName, backupPath)
 
       try {
         const output = execSync(`${CLI_PATH} list`, { encoding: 'utf8' })
@@ -226,13 +226,13 @@ describe('Address Validation Tests', () => {
         expect(parseInt(output.match(/Found (\d+) vault file\(s\)/)[1])).toBeGreaterThanOrEqual(2) // One less file
       } finally {
         // Restore file
-        fs.renameSync(backupPath, vaultPath)
+        fs.renameSync(backupPath, vaultName)
       }
     })
 
     test('should provide helpful error messages', () => {
-      const vaultPath = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })

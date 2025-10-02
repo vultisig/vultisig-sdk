@@ -23,12 +23,12 @@ describe('Vault Balance Methods', () => {
   describe('Balance Method', () => {
     test('should get balance for bitcoin', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -48,12 +48,12 @@ describe('Vault Balance Methods', () => {
 
     test('should get balance for ethereum', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -70,12 +70,12 @@ describe('Vault Balance Methods', () => {
 
     test('should throw error for unsupported token', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -97,12 +97,12 @@ describe('Vault Balance Methods', () => {
   describe('Balances Method', () => {
     test('should get balances for multiple chains', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -122,12 +122,12 @@ describe('Vault Balance Methods', () => {
 
     test('should get balances for all vault chains when no chains specified', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -151,12 +151,12 @@ describe('Vault Balance Methods', () => {
 
     test('should throw error when includeTokens is true', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -171,12 +171,12 @@ describe('Vault Balance Methods', () => {
   describe('Update Balance Method', () => {
     test('should force refresh balance for bitcoin', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -193,12 +193,12 @@ describe('Vault Balance Methods', () => {
 
     test('should throw error for unsupported token in update', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -213,12 +213,12 @@ describe('Vault Balance Methods', () => {
   describe('Update Balances Method', () => {
     test('should force refresh balances for multiple chains', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -238,12 +238,12 @@ describe('Vault Balance Methods', () => {
 
     test('should update balances for all vault chains when no chains specified', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -257,12 +257,12 @@ describe('Vault Balance Methods', () => {
 
     test('should throw error when includeTokens is true in update', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -277,12 +277,12 @@ describe('Vault Balance Methods', () => {
   describe('Cache Behavior', () => {
     test('should use cached balance on subsequent calls', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -303,12 +303,12 @@ describe('Vault Balance Methods', () => {
 
     test('should bypass cache when using updateBalance', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -329,12 +329,12 @@ describe('Vault Balance Methods', () => {
   describe('Error Handling', () => {
     test('should handle invalid chain gracefully in balance method', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -345,12 +345,12 @@ describe('Vault Balance Methods', () => {
 
     test('should handle invalid chain gracefully in balances method', async () => {
       // Import test vault
-      const vaultPath = join(
+      const vaultName = join(
         __dirname,
         'vaults',
         'TestFastVault-44fd-share2of2-Password123!.vult'
       )
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')

@@ -72,14 +72,14 @@ async function testBalanceCommand() {
   console.log('\n💰 Testing Balance Command')
   console.log('─'.repeat(50))
   
-  const vaultPath = process.env.VAULT_PATH || 'vaults/HotVault.vult'
+  const vaultName = process.env.VAULT_NAME || 'vaults/HotVault.vult'
   const vaultPassword = process.env.VAULT_PASSWORD || ''
   
-  console.log(`📂 Vault: ${vaultPath}`)
+  console.log(`📂 Vault: ${vaultName}`)
   console.log(`🔐 Password: ${vaultPassword ? '***' + vaultPassword.slice(-3) : '(none)'}`)
   
   return new Promise((resolve) => {
-    const args = ['balance', '--vault', vaultPath, '--network', 'ethereum']
+    const args = ['balance', '--vault', vaultName, '--network', 'ethereum']
     if (vaultPassword) {
       args.push('--password', vaultPassword)
     }

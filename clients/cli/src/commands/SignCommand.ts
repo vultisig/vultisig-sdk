@@ -72,9 +72,9 @@ export class SignCommand {
     const daemonManager = new DaemonManager()
     let shouldLoadDirectly = false
 
-    if (vaultConfig.vaultPath || strippedPassword) {
+    if (vaultConfig.vaultName || strippedPassword) {
       shouldLoadDirectly = await daemonManager.autoStartDaemonIfNeeded({
-        vault: vaultConfig.vaultPath,
+        vault: vaultConfig.vaultName,
         password: strippedPassword,
       })
     }
@@ -109,11 +109,11 @@ export class SignCommand {
     }
 
     // Load vault directly for this operation
-    if (shouldLoadDirectly && (vaultConfig.vaultPath || strippedPassword)) {
+    if (shouldLoadDirectly && (vaultConfig.vaultName || strippedPassword)) {
       try {
         await daemonManager.performEphemeralOperation(
           {
-            vault: vaultConfig.vaultPath,
+            vault: vaultConfig.vaultName,
             password: strippedPassword,
           },
           async vault => {
@@ -164,13 +164,13 @@ export class SignCommand {
       }
 
       // Load the first vault file (or HotVault.vult if it exists)
-      const hotVaultPath = vultFiles.find(f => f.includes('HotVault.vult'))
-      const vaultPath = hotVaultPath || vultFiles[0]
+      const hotvaultName = vultFiles.find(f => f.includes('HotVault.vult'))
+      const vaultName = hotvaultName || vultFiles[0]
 
-      console.log(`📄 Loading vault: ${vaultPath}`)
+      console.log(`📄 Loading vault: ${vaultName}`)
 
-      const buffer = await fs.promises.readFile(vaultPath)
-      const file = new File([buffer], path.basename(vaultPath))
+      const buffer = await fs.promises.readFile(vaultName)
+      const file = new File([buffer], path.basename(vaultName))
       ;(file as any).buffer = buffer
 
       // For fast mode, password is required

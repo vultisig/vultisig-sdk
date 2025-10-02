@@ -24,8 +24,8 @@ describe('Vault Rename Tests', () => {
   describe('Basic Rename Operations', () => {
     test('should successfully rename vault with valid name', async () => {
       // Import test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -44,8 +44,8 @@ describe('Vault Rename Tests', () => {
 
     test('should update vault in storage after rename', async () => {
       // Import test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -62,8 +62,8 @@ describe('Vault Rename Tests', () => {
 
     test('should preserve all other vault properties after rename', async () => {
       // Import test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -93,8 +93,8 @@ describe('Vault Rename Tests', () => {
 
     beforeEach(async () => {
       // Import test vault for validation tests
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -151,8 +151,8 @@ describe('Vault Rename Tests', () => {
   describe('Error Handling', () => {
     test('should throw VaultError with InvalidConfig code for validation errors', async () => {
       // Import test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -169,8 +169,8 @@ describe('Vault Rename Tests', () => {
 
     test('should provide specific error messages for different validation failures', async () => {
       // Import test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
