@@ -212,8 +212,8 @@ describe('Multi-Vault Tests', () => {
       expect(vultisig.isInitialized()).toBe(false)
       
       // Load test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'vault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       

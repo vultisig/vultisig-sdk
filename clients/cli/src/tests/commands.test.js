@@ -166,8 +166,8 @@ describe('CLI Commands Tests', () => {
     })
 
     test('should show performance metrics', () => {
-      const vaultPath = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultPath}"`, {
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })
@@ -219,9 +219,9 @@ describe('CLI Commands Tests', () => {
   describe('Performance Tests', () => {
     test('address derivation should complete within reasonable time', () => {
       const startTime = Date.now()
-      const vaultPath = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
 
-      execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultPath}"`, {
+      execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
         timeout: TIMEOUT,
       })

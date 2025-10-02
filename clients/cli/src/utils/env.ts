@@ -1,13 +1,14 @@
 import * as path from 'path'
 import * as fs from 'fs'
 import { config } from 'dotenv'
+import { getVaultsDir } from './paths'
 
 // Load environment variables from .env file
 const envPath = path.resolve(__dirname, '../../.env')
 config({ path: envPath })
 
 export type VaultConfig = {
-  vaultPath?: string
+  vaultName?: string
   vaultPassword?: string
 }
 
@@ -21,7 +22,7 @@ export function getVaultConfig(providedVault?: string, providedPassword?: string
   // If both are provided, use them
   if (providedVault && providedPassword !== undefined) {
     return {
-      vaultPath: resolveVaultPath(providedVault),
+      vaultName: resolveVaultName(providedVault),
       vaultPassword: providedPassword
     }
   }
@@ -29,24 +30,24 @@ export function getVaultConfig(providedVault?: string, providedPassword?: string
   // If only vault is provided, use it with env password if available
   if (providedVault) {
     return {
-      vaultPath: resolveVaultPath(providedVault),
+      vaultName: resolveVaultName(providedVault),
       vaultPassword: providedPassword || process.env.VAULT_PASSWORD
     }
   }
   
   // If only password is provided, use env vault if available
   if (providedPassword !== undefined) {
-    const envVaultPath = process.env.VAULT_PATH
+    const envVaultName = process.env.VAULT_NAME
     return {
-      vaultPath: envVaultPath ? resolveVaultPath(envVaultPath) : undefined,
+      vaultName: envVaultName ? resolveVaultName(envVaultName) : undefined,
       vaultPassword: providedPassword
     }
   }
   
   // Neither provided - check if .env file exists and has vault config
-  if (fs.existsSync(envPath) && process.env.VAULT_PATH) {
+  if (fs.existsSync(envPath) && process.env.VAULT_NAME) {
     return {
-      vaultPath: resolveVaultPath(process.env.VAULT_PATH),
+      vaultName: resolveVaultName(process.env.VAULT_NAME),
       vaultPassword: process.env.VAULT_PASSWORD
     }
   }
@@ -56,16 +57,66 @@ export function getVaultConfig(providedVault?: string, providedPassword?: string
 }
 
 /**
- * Resolve vault path to absolute path
+ * Resolve vault path to absolute path with intelligent search:
+ * 1. Check if it's an absolute path that exists
+ * 2. Check if it's a relative path that exists
+ * 3. Search in vaults directory by name (with or without .vult extension)
+ * 4. Match vault files that start with the given name
  */
-function resolveVaultPath(vaultPath: string): string {
-  // If it's already an absolute path, return it
-  if (path.isAbsolute(vaultPath)) {
-    return vaultPath
+function resolveVaultName(vaultName: string): string {
+  // If it's already an absolute path and exists, return it
+  if (path.isAbsolute(vaultName) && fs.existsSync(vaultName)) {
+    return vaultName
   }
   
-  // Otherwise, resolve relative to CLI directory
-  return path.resolve(__dirname, '../..', vaultPath)
+  // Check if it's a relative path that exists
+  const relativePath = path.resolve(process.cwd(), vaultName)
+  if (fs.existsSync(relativePath)) {
+    return relativePath
+  }
+  
+  // Search in vaults directory
+  const vaultsDir = getVaultsDir()
+  
+  // Try exact match with .vult extension
+  if (!vaultName.endsWith('.vult')) {
+    const withExtension = path.join(vaultsDir, `${vaultName}.vult`)
+    if (fs.existsSync(withExtension)) {
+      return withExtension
+    }
+  } else {
+    const exactPath = path.join(vaultsDir, vaultName)
+    if (fs.existsSync(exactPath)) {
+      return exactPath
+    }
+  }
+  
+  // Try finding files that start with the vault name
+  try {
+    const files = fs.readdirSync(vaultsDir)
+    const baseName = vaultName.replace(/\.vult$/i, '')
+    
+    // Find files that start with the base name
+    const matches = files.filter(file => 
+      file.toLowerCase().startsWith(baseName.toLowerCase()) && 
+      file.toLowerCase().endsWith('.vult')
+    )
+    
+    if (matches.length > 0) {
+      // If multiple matches, prefer exact match
+      const exactMatch = matches.find(
+        file => file.toLowerCase() === `${baseName.toLowerCase()}.vult`
+      )
+      const selectedFile = exactMatch || matches[0]
+      return path.join(vaultsDir, selectedFile)
+    }
+  } catch (error) {
+    // Vaults directory doesn't exist or can't be read
+  }
+  
+  // If nothing found, return the original path resolved relative to CLI directory
+  // This will fail later with a clear error message
+  return path.resolve(__dirname, '../..', vaultName)
 }
 
 /**

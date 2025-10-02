@@ -11,6 +11,7 @@ export type SignOptions = {
   mode?: string
   sessionId?: string
   payloadFile?: string
+  payloadData?: any
   password?: string
   vault?: string
 }
@@ -42,9 +43,11 @@ export class SignCommand {
       )
     }
 
-    // Read payload
+    // Read payload from payloadData, file, or stdin
     let payloadData: any
-    if (options.payloadFile) {
+    if (options.payloadData) {
+      payloadData = options.payloadData
+    } else if (options.payloadFile) {
       const payloadBuffer = await fs.promises.readFile(options.payloadFile)
       try {
         payloadData = JSON.parse(payloadBuffer.toString())
@@ -72,9 +75,9 @@ export class SignCommand {
     const daemonManager = new DaemonManager()
     let shouldLoadDirectly = false
 
-    if (vaultConfig.vaultPath || strippedPassword) {
+    if (vaultConfig.vaultName || strippedPassword) {
       shouldLoadDirectly = await daemonManager.autoStartDaemonIfNeeded({
-        vault: vaultConfig.vaultPath,
+        vault: vaultConfig.vaultName,
         password: strippedPassword,
       })
     }
@@ -103,17 +106,18 @@ export class SignCommand {
 
         return
       } catch (error) {
-        console.log('⚠️  Daemon not available, trying direct vault signing...')
+        console.log('⚠️  Daemon signing failed:', error instanceof Error ? error.message : error)
+        console.log('⚠️  Trying direct vault signing...')
         shouldLoadDirectly = true
       }
     }
 
     // Load vault directly for this operation
-    if (shouldLoadDirectly && (vaultConfig.vaultPath || strippedPassword)) {
+    if (shouldLoadDirectly && (vaultConfig.vaultName || strippedPassword)) {
       try {
         await daemonManager.performEphemeralOperation(
           {
-            vault: vaultConfig.vaultPath,
+            vault: vaultConfig.vaultName,
             password: strippedPassword,
           },
           async vault => {
@@ -164,13 +168,13 @@ export class SignCommand {
       }
 
       // Load the first vault file (or HotVault.vult if it exists)
-      const hotVaultPath = vultFiles.find(f => f.includes('HotVault.vult'))
-      const vaultPath = hotVaultPath || vultFiles[0]
+      const hotvaultName = vultFiles.find(f => f.includes('HotVault.vult'))
+      const vaultName = hotvaultName || vultFiles[0]
 
-      console.log(`📄 Loading vault: ${vaultPath}`)
+      console.log(`📄 Loading vault: ${vaultName}`)
 
-      const buffer = await fs.promises.readFile(vaultPath)
-      const file = new File([buffer], path.basename(vaultPath))
+      const buffer = await fs.promises.readFile(vaultName)
+      const file = new File([buffer], path.basename(vaultName))
       ;(file as any).buffer = buffer
 
       // For fast mode, password is required

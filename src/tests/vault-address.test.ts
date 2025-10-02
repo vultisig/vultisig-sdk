@@ -15,8 +15,8 @@ describe('Vault Address Tests', () => {
     vultisig = new Vultisig()
     
     // Import a test vault to trigger initialization
-    const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-    const vaultBuffer = readFileSync(vaultPath)
+    const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+    const vaultBuffer = readFileSync(vaultName)
     const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
     ;(vaultFile as any).buffer = vaultBuffer
     await vultisig.addVault(vaultFile, 'Password123!')
@@ -26,8 +26,8 @@ describe('Vault Address Tests', () => {
     // Clear and reimport vault for each test
     await vultisig.clearVaults()
     
-    const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-    const vaultBuffer = readFileSync(vaultPath)
+    const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+    const vaultBuffer = readFileSync(vaultName)
     const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
     ;(vaultFile as any).buffer = vaultBuffer
     await vultisig.addVault(vaultFile, 'Password123!')

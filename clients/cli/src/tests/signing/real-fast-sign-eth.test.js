@@ -21,8 +21,8 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
     expect(fs.existsSync(CLI_PATH)).toBe(true)
 
     // Ensure test vault exists
-    const vaultPath = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
-    expect(fs.existsSync(vaultPath)).toBe(true)
+    const vaultName = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
+    expect(fs.existsSync(vaultName)).toBe(true)
 
     // Ensure payload file exists
     const payloadPath = path.join(__dirname, 'eth-tx-payload.json')
@@ -30,12 +30,12 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
   })
 
   test('should load vault and sign ETH transaction using CLI fast mode', () => {
-    const vaultPath = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
+    const vaultName = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
     const payloadPath = path.join(__dirname, 'eth-tx-payload.json')
     const password = 'Password123!'
 
     console.log('🔄 Starting CLI fast signing test...')
-    console.log('📂 Vault path:', vaultPath)
+    console.log('📂 Vault path:', vaultName)
     console.log('📄 Payload path:', payloadPath)
 
     // Load and validate payload
@@ -68,7 +68,7 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
       CLI_PATH,
       'sign',
       '--network', 'eth',
-      '--vault', vaultPath,
+      '--vault', vaultName,
       '--password', password,
       '--payload-file', payloadPath
     ].join(' ')
