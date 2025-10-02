@@ -16,9 +16,9 @@ describe('Server Endpoints Tests', () => {
   
   beforeEach(async () => {
     // Load the real TestFastVault
-    const vaultPath = join(__dirname, '..', 'vaults', "TestFastVault-44fd-share2of2-Password123!.vult")
+    const vaultName = join(__dirname, '..', 'vaults', "TestFastVault-44fd-share2of2-Password123!.vult")
     const password = 'Password123!'
-    const vaultBytes = readFileSync(vaultPath)
+    const vaultBytes = readFileSync(vaultName)
     const vaultFile = new File([vaultBytes], 'TestFastVault.vult', { type: 'application/octet-stream' })
     ;(vaultFile as any).buffer = vaultBytes
 

@@ -29,9 +29,9 @@ export class BalanceCommand {
     const daemonManager = new DaemonManager()
     let shouldLoadDirectly = false
 
-    if (vaultConfig.vaultPath || vaultConfig.vaultPassword) {
+    if (vaultConfig.vaultName || vaultConfig.vaultPassword) {
       shouldLoadDirectly = await daemonManager.autoStartDaemonIfNeeded({
-        vault: vaultConfig.vaultPath,
+        vault: vaultConfig.vaultName,
         password: vaultConfig.vaultPassword,
       })
     }
@@ -73,12 +73,12 @@ export class BalanceCommand {
     // Load vault directly for this operation
     if (
       shouldLoadDirectly &&
-      (vaultConfig.vaultPath || vaultConfig.vaultPassword)
+      (vaultConfig.vaultName || vaultConfig.vaultPassword)
     ) {
       try {
         await daemonManager.performEphemeralOperation(
           {
-            vault: vaultConfig.vaultPath,
+            vault: vaultConfig.vaultName,
             password: vaultConfig.vaultPassword,
           },
           async vault => {

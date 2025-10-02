@@ -23,8 +23,8 @@ describe('Single Vault Tests', () => {
   describe('Vault Import and Basic Operations', () => {
     test('should import encrypted vault and verify properties', async () => {
       // Load encrypted test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
 
@@ -48,8 +48,8 @@ describe('Single Vault Tests', () => {
 
     test('should import unencrypted vault without password', async () => {
       // Load unencrypted test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestSecureVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
 
@@ -72,8 +72,8 @@ describe('Single Vault Tests', () => {
   describe('Address Derivation', () => {
     test('should derive address for bitcoin', async () => {
       // Import test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -85,8 +85,8 @@ describe('Single Vault Tests', () => {
 
     test('should derive addresses for multiple chains', async () => {
       // Import test vault
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
       const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -130,8 +130,8 @@ describe('Single Vault Tests', () => {
 
   describe('Error Handling', () => {
     test('should handle encrypted vault without password', async () => {
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
 
@@ -140,8 +140,8 @@ describe('Single Vault Tests', () => {
     })
 
     test('should handle wrong password for encrypted vault', async () => {
-      const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-      const vaultBuffer = readFileSync(vaultPath)
+      const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+      const vaultBuffer = readFileSync(vaultName)
       const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
       ;(vaultFile as any).buffer = vaultBuffer
 

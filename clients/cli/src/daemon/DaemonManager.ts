@@ -136,22 +136,22 @@ export class DaemonManager {
     const { stripPasswordQuotes } = await import('../utils/password')
     const { findVultFiles, getVaultsDir } = await import('../utils/paths')
 
-    let vaultPath = options.vault
-    if (!vaultPath) {
+    let vaultName = options.vault
+    if (!vaultName) {
       // Auto-discovery
       const vaultsDir = getVaultsDir()
       const vultFiles = await findVultFiles(vaultsDir)
       if (vultFiles.length === 0) {
         throw new Error(`No vault files (.vult) found in ${vaultsDir}`)
       }
-      vaultPath = vultFiles[0]
+      vaultName = vultFiles[0]
     }
 
-    const buffer = await fs.promises.readFile(vaultPath)
-    const file = new File([buffer], path.basename(vaultPath))
+    const buffer = await fs.promises.readFile(vaultName)
+    const file = new File([buffer], path.basename(vaultName))
     ;(file as any).buffer = buffer
 
-    const fileName = path.basename(vaultPath)
+    const fileName = path.basename(vaultName)
     const isEncrypted =
       fileName.toLowerCase().includes('password') &&
       !fileName.toLowerCase().includes('nopassword')
@@ -163,7 +163,7 @@ export class DaemonManager {
       const { promptForPasswordWithValidation } = await import(
         '../utils/password'
       )
-      password = await promptForPasswordWithValidation(vaultPath)
+      password = await promptForPasswordWithValidation(vaultName)
     }
 
     const vault = await sdk.addVault(file, password)
@@ -239,18 +239,12 @@ export class DaemonManager {
   }
 
   async signTransaction(request: SignTransactionRequest): Promise<any> {
-    try {
-      // Check if daemon is running first
-      await this.sendSocketCommand('ping', {})
+    // Check if daemon is running first
+    await this.sendSocketCommand('ping', {})
 
-      // Send signing request to daemon
-      const response = await this.sendSocketCommand('sign_transaction', request)
-      return response
-    } catch (error) {
-      throw new Error(
-        'No Vultisig daemon running, start with "vultisig run" first'
-      )
-    }
+    // Send signing request to daemon
+    const response = await this.sendSocketCommand('sign_transaction', request)
+    return response.result
   }
 
   private async startUnixSocket(): Promise<net.Server> {
@@ -370,10 +364,21 @@ export class DaemonManager {
           }
 
           const signRequest = request.params as SignTransactionRequest
-          const signature = await (this.vault as any).sign(
-            signRequest.payload,
-            signRequest.network
+          console.log('Daemon received sign_transaction request')
+          console.log('  Network:', signRequest.network)
+          console.log('  Payload:', JSON.stringify(signRequest.payload, null, 2))
+          
+          const signingPayload = {
+            transaction: signRequest.payload,
+            chain: signRequest.network,
+          }
+          
+          const signature = await (this.vault as any).signWithPayload(
+            signingPayload,
+            signRequest.password
           )
+          
+          console.log('Daemon completed signing')
 
           return { success: true, result: signature }
 
