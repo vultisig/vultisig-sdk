@@ -4,7 +4,7 @@
  * Test CLI signing with eth-tx-payload.json using environment configuration
  * 
  * Required environment variables:
- * - VAULT_PATH: Path to the vault file
+ * - VAULT_NAME: Path to the vault file
  * - VAULT_PASSWORD: Password for the vault
  * - RPC_URL: Ethereum RPC URL for broadcasting (optional)
  */
@@ -24,19 +24,19 @@ async function testCliSigning() {
   console.log('=====================================================\n')
 
   // Validate environment variables
-  const vaultPath = process.env.VAULT_PATH
+  const vaultName = process.env.VAULT_NAME
   const vaultPassword = process.env.VAULT_PASSWORD
   const rpcUrl = process.env.RPC_URL || 'https://ethereum-rpc.publicnode.com'
 
-  if (!vaultPath) {
-    throw new Error('VAULT_PATH environment variable is required')
+  if (!vaultName) {
+    throw new Error('VAULT_NAME environment variable is required')
   }
   if (!vaultPassword) {
     throw new Error('VAULT_PASSWORD environment variable is required')
   }
 
   console.log('🔧 Configuration:')
-  console.log('   Vault Path:', vaultPath)
+  console.log('   Vault Path:', vaultName)
   console.log('   Password:', '***' + vaultPassword.slice(-3))
   console.log('   RPC URL:', rpcUrl)
 
@@ -171,9 +171,9 @@ async function testCliSigning() {
     if (error.message.includes('ENOENT') || error.message.includes('socket')) {
       console.error('\n💡 Make sure Vultisig daemon is running:')
       console.error('   cd /path/to/vultisig-sdk/clients/cli')
-      console.error('   ./bin/vultisig run --vault $VAULT_PATH --password $VAULT_PASSWORD')
+      console.error('   ./bin/vultisig run --vault $VAULT_NAME --password $VAULT_PASSWORD')
       console.error('\n💡 Or set environment variables:')
-      console.error('   export VAULT_PATH="/path/to/your/vault.vult"')
+      console.error('   export VAULT_NAME="/path/to/your/vault.vult"')
       console.error('   export VAULT_PASSWORD="your-password"')
       console.error('   export RPC_URL="https://your-ethereum-rpc-url" # optional')
       console.error('   export BROADCAST_TX="true" # optional, for actual broadcasting')

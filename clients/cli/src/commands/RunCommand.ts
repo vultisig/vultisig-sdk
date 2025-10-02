@@ -66,14 +66,14 @@ export class RunCommand {
     const vaultConfig = getVaultConfig(options.vault, options.password)
     let vaultStorage
 
-    if (vaultConfig.vaultPath) {
+    if (vaultConfig.vaultName) {
       // Load specific vault file (from options or .env)
-      console.log(`📂 Loading vault: ${vaultConfig.vaultPath}`)
-      const buffer = await fs.promises.readFile(vaultConfig.vaultPath)
-      const file = new File([buffer], path.basename(vaultConfig.vaultPath))
+      console.log(`📂 Loading vault: ${vaultConfig.vaultName}`)
+      const buffer = await fs.promises.readFile(vaultConfig.vaultName)
+      const file = new File([buffer], path.basename(vaultConfig.vaultName))
 
       // Check if encrypted from filename hint (for .vult files)
-      const fileName = path.basename(vaultConfig.vaultPath)
+      const fileName = path.basename(vaultConfig.vaultName)
       const isEncrypted =
         fileName.toLowerCase().includes('password') &&
         !fileName.toLowerCase().includes('nopassword')
@@ -82,7 +82,7 @@ export class RunCommand {
         ? stripPasswordQuotes(vaultConfig.vaultPassword)
         : undefined
       if (isEncrypted && !password) {
-        password = await promptForPasswordWithValidation(vaultConfig.vaultPath)
+        password = await promptForPasswordWithValidation(vaultConfig.vaultName)
       } else if (!isEncrypted) {
         console.log('🔓 Vault is unencrypted, no password needed.')
       }
@@ -100,17 +100,17 @@ export class RunCommand {
 
       if (vultFiles.length === 0) {
         throw new Error(
-          `No vault files (.vult) found in ${vaultsDir}. Configure VAULT_PATH in .env or use --vault option.`
+          `No vault files (.vult) found in ${vaultsDir}. Configure VAULT_NAME in .env or use --vault option.`
         )
       }
 
-      const vaultPath = vultFiles[0]
-      console.log(`📄 Auto-discovered vault: ${path.basename(vaultPath)}`)
+      const vaultName = vultFiles[0]
+      console.log(`📄 Auto-discovered vault: ${path.basename(vaultName)}`)
 
-      const buffer = await fs.promises.readFile(vaultPath)
-      const file = new File([buffer], path.basename(vaultPath))
+      const buffer = await fs.promises.readFile(vaultName)
+      const file = new File([buffer], path.basename(vaultName))
 
-      const fileName = path.basename(vaultPath)
+      const fileName = path.basename(vaultName)
       const isEncrypted =
         fileName.toLowerCase().includes('password') &&
         !fileName.toLowerCase().includes('nopassword')
@@ -119,7 +119,7 @@ export class RunCommand {
         ? stripPasswordQuotes(vaultConfig.vaultPassword)
         : undefined
       if (isEncrypted && !password) {
-        password = await promptForPasswordWithValidation(vaultPath)
+        password = await promptForPasswordWithValidation(vaultName)
       } else if (!isEncrypted) {
         console.log('🔓 Vault is unencrypted, no password needed.')
       }

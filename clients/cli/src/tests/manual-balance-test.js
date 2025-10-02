@@ -93,13 +93,13 @@ async function testBalanceManually() {
     console.log('✅ SDK initialized')
     
     // Load vault
-    const vaultPath = process.env.VAULT_PATH || 'vaults/HotVault.vult'
+    const vaultName = process.env.VAULT_NAME || 'vaults/HotVault.vult'
     const vaultPassword = process.env.VAULT_PASSWORD || ''
     
-    console.log(`📂 Loading vault: ${vaultPath}`)
-    const fullVaultPath = path.resolve(__dirname, '../../', vaultPath)
-    const vaultBuffer = fs.readFileSync(fullVaultPath)
-    const vaultFile = new File([vaultBuffer], path.basename(vaultPath))
+    console.log(`📂 Loading vault: ${vaultName}`)
+    const fullvaultName = path.resolve(__dirname, '../../', vaultName)
+    const vaultBuffer = fs.readFileSync(fullvaultName)
+    const vaultFile = new File([vaultBuffer], path.basename(vaultName))
     vaultFile.buffer = vaultBuffer
     
     console.log('🔐 Adding vault to SDK...')

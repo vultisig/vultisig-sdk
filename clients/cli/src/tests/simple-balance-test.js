@@ -71,10 +71,10 @@ async function testVaultAddress() {
   console.log('\n📍 Testing vault address derivation...')
   
   return new Promise((resolve, reject) => {
-    const vaultPath = process.env.VAULT_PATH || 'vaults/HotVault.vult'
+    const vaultName = process.env.VAULT_NAME || 'vaults/HotVault.vult'
     const vaultPassword = process.env.VAULT_PASSWORD || ''
     
-    const args = ['address', '--vault', vaultPath, '--network', 'ethereum']
+    const args = ['address', '--vault', vaultName, '--network', 'ethereum']
     if (vaultPassword) {
       args.push('--password', vaultPassword)
     }
@@ -115,10 +115,10 @@ async function testBalanceCommand() {
   console.log('\n💰 Testing balance command...')
   
   return new Promise((resolve, reject) => {
-    const vaultPath = process.env.VAULT_PATH || 'vaults/HotVault.vult'
+    const vaultName = process.env.VAULT_NAME || 'vaults/HotVault.vult'
     const vaultPassword = process.env.VAULT_PASSWORD || ''
     
-    const args = ['balance', '--vault', vaultPath, '--network', 'ethereum']
+    const args = ['balance', '--vault', vaultName, '--network', 'ethereum']
     if (vaultPassword) {
       args.push('--password', vaultPassword)
     }

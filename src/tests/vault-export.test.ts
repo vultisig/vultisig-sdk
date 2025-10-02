@@ -18,8 +18,8 @@ describe('Vault Export', () => {
 
   it('should export imported DKLS vault and generate correct filename', async () => {
     // Import TestFastVault (DKLS type)
-    const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-    const vaultBuffer = readFileSync(vaultPath)
+    const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+    const vaultBuffer = readFileSync(vaultName)
     const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
     ;(vaultFile as any).buffer = vaultBuffer
     const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -46,8 +46,8 @@ describe('Vault Export', () => {
 
   it('should export imported DKLS vault with password', async () => {
     // Import TestFastVault (DKLS type)
-    const vaultPath = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
-    const vaultBuffer = readFileSync(vaultPath)
+    const vaultName = join(__dirname, 'vaults', 'TestFastVault-44fd-share2of2-Password123!.vult')
+    const vaultBuffer = readFileSync(vaultName)
     const vaultFile = new File([vaultBuffer], 'TestFastVault.vult')
     ;(vaultFile as any).buffer = vaultBuffer
     const vault = await vultisig.addVault(vaultFile, 'Password123!')
@@ -68,8 +68,8 @@ describe('Vault Export', () => {
 
   it('should export imported vault and generate correct filename', async () => {
     // Import TestSecureVault
-    const vaultPath = join(__dirname, 'vaults', 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-    const vaultBuffer = readFileSync(vaultPath)
+    const vaultName = join(__dirname, 'vaults', 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+    const vaultBuffer = readFileSync(vaultName)
     const vaultFile = new File([vaultBuffer], 'TestSecureVault.vult')
     ;(vaultFile as any).buffer = vaultBuffer
     const vault = await vultisig.addVault(vaultFile)

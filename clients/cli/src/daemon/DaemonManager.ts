@@ -136,22 +136,22 @@ export class DaemonManager {
     const { stripPasswordQuotes } = await import('../utils/password')
     const { findVultFiles, getVaultsDir } = await import('../utils/paths')
 
-    let vaultPath = options.vault
-    if (!vaultPath) {
+    let vaultName = options.vault
+    if (!vaultName) {
       // Auto-discovery
       const vaultsDir = getVaultsDir()
       const vultFiles = await findVultFiles(vaultsDir)
       if (vultFiles.length === 0) {
         throw new Error(`No vault files (.vult) found in ${vaultsDir}`)
       }
-      vaultPath = vultFiles[0]
+      vaultName = vultFiles[0]
     }
 
-    const buffer = await fs.promises.readFile(vaultPath)
-    const file = new File([buffer], path.basename(vaultPath))
+    const buffer = await fs.promises.readFile(vaultName)
+    const file = new File([buffer], path.basename(vaultName))
     ;(file as any).buffer = buffer
 
-    const fileName = path.basename(vaultPath)
+    const fileName = path.basename(vaultName)
     const isEncrypted =
       fileName.toLowerCase().includes('password') &&
       !fileName.toLowerCase().includes('nopassword')
@@ -163,7 +163,7 @@ export class DaemonManager {
       const { promptForPasswordWithValidation } = await import(
         '../utils/password'
       )
-      password = await promptForPasswordWithValidation(vaultPath)
+      password = await promptForPasswordWithValidation(vaultName)
     }
 
     const vault = await sdk.addVault(file, password)
