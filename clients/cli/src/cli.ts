@@ -9,7 +9,6 @@ declare const Vultisig: any
 import { AddressCommand } from './commands/AddressCommand'
 import { BalanceCommand } from './commands/BalanceCommand'
 import { CreateCommand } from './commands/CreateCommand'
-import { InitCommand } from './commands/InitCommand'
 import { ListCommand } from './commands/ListCommand'
 import { QuitCommand } from './commands/QuitCommand'
 import { RunCommand } from './commands/RunCommand'
@@ -56,7 +55,6 @@ function wrapCommand(commandInstance: any, requiresSDK: boolean = false) {
 }
 
 // Register all commands
-const initCommand = new InitCommand()
 const createCommand = new CreateCommand()
 const listCommand = new ListCommand()
 const runCommand = new RunCommand()
@@ -67,12 +65,6 @@ const signCommand = new SignCommand()
 const verifyCommand = new VerifyCommand()
 const quitCommand = new QuitCommand()
 const versionCommand = new VersionCommand()
-
-// Init command - doesn't need SDK
-program
-  .command('init')
-  .description(initCommand.description)
-  .action(wrapCommand(initCommand, false))
 
 // Create command - needs SDK for vault creation
 program
