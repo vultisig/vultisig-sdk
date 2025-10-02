@@ -160,8 +160,8 @@ export class CreateCommand {
       // Show vault summary
       const summary = vault.summary()
       console.log('\n📋 Vault Summary:')
-      console.log(`   ECDSA Public Key: ${summary.keys.ecdsa}`)
-      console.log(`   EdDSA Public Key: ${summary.keys.eddsa}`)
+      console.log(`   ECDSA Public Key: ${vault.data.publicKeys.ecdsa}`)
+      console.log(`   EdDSA Public Key: ${vault.data.publicKeys.eddsa}`)
       console.log(`   Local Party ID: ${vault.data.localPartyId}`)
       console.log(`   Created: ${new Date(summary.createdAt).toLocaleString()}`)
 
