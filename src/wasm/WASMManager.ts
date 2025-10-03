@@ -63,7 +63,7 @@ export class WASMManager {
    */
   private async initializeDkls(): Promise<void> {
     try {
-      await initializeMpcLib('ecdsa')
+      await initializeMpcLib('ecdsa', this.config?.wasmPaths?.dkls)
       this.dklsReady = true
     } catch (error) {
       throw new Error(`Failed to initialize DKLS WASM: ${error}`)
@@ -75,7 +75,7 @@ export class WASMManager {
    */
   private async initializeSchnorr(): Promise<void> {
     try {
-      await initializeMpcLib('eddsa')
+      await initializeMpcLib('eddsa', this.config?.wasmPaths?.schnorr)
       this.schnorrReady = true
     } catch (error) {
       throw new Error(`Failed to initialize Schnorr WASM: ${error}`)
