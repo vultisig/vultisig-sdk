@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Vault, Vultisig, KeygenProgressUpdate } from 'vultisig-sdk'
+import type { KeygenProgressUpdate, Vault, Vultisig } from 'vultisig-sdk'
 
 type CreateVaultFormProps = {
   sdk: Vultisig

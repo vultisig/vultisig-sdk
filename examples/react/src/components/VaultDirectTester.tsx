@@ -1,7 +1,6 @@
-// Note: For this demo, we'll show the concept but use SDK methods
-// In a real implementation, you'd import: import { Vault } from 'vultisig-sdk/src/vault'
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { useState } from 'react'
+import { Vault } from 'vultisig-sdk'
 
 type VaultData = any
 
@@ -48,16 +47,16 @@ export const VaultDirectTester = ({
     setLoading(true)
     setResults([])
 
+    const startTime = performance.now()
+
     try {
       // Create a Vault instance with WalletCore
       const vault = new Vault(vaultData, walletCore)
 
-      console.log('Testing direct Vault.deriveAddress method...')
+      console.log('Testing direct Vault.address method...')
 
-      const startTime = performance.now()
-
-      // Test the new deriveAddress(chain: string) method
-      const address = await vault.deriveAddress(chain)
+      // Test the address(chain: string) method
+      const address = await vault.address(chain)
 
       const duration = performance.now() - startTime
 
@@ -111,7 +110,7 @@ export const VaultDirectTester = ({
     try {
       console.log('Testing unsupported chain...')
       const startTime = performance.now()
-      await vault.deriveAddress('unsupported-chain')
+      await vault.address('unsupported-chain')
       const duration = performance.now() - startTime
       errorResults.push({
         success: false,
@@ -133,7 +132,7 @@ export const VaultDirectTester = ({
     try {
       console.log('Testing empty chain...')
       const startTime = performance.now()
-      await vault.deriveAddress('')
+      await vault.address('')
       const duration = performance.now() - startTime
       errorResults.push({
         success: false,
@@ -169,7 +168,7 @@ export const VaultDirectTester = ({
         🔧 Direct Vault Method Tester
       </h3>
       <p style={{ color: '#0c5460', fontSize: '14px', marginBottom: 16 }}>
-        Test the Vault.deriveAddress(chain: string) method directly
+        Test the Vault.address(chain: string) method directly
       </p>
 
       <div
@@ -319,8 +318,8 @@ export const VaultDirectTester = ({
         </p>
         <ul style={{ margin: 0, paddingLeft: 16 }}>
           <li>
-            Tests the new <code>deriveAddress(chain: string)</code> method
-            directly on Vault instance
+            Tests the <code>address(chain: string)</code> method directly on
+            Vault instance
           </li>
           <li>
             Requires WalletCore instance to be passed to Vault constructor

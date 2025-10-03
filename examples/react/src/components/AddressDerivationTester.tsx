@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import type { Vultisig } from 'vultisig-sdk'
-
-type Vault = any
+import type { Vault } from 'vultisig-sdk'
 
 type DerivationResult = {
   address: string
@@ -10,13 +8,7 @@ type DerivationResult = {
   cached: boolean
 }
 
-export const AddressDerivationTester = ({
-  vault,
-  sdk,
-}: {
-  vault: Vault
-  sdk: Vultisig
-}) => {
+export const AddressDerivationTester = ({ vault }: { vault: Vault }) => {
   const [chain, setChain] = useState('bitcoin')
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<DerivationResult[]>([])
@@ -38,7 +30,7 @@ export const AddressDerivationTester = ({
     chainName: string
   ): Promise<DerivationResult> => {
     const startTime = performance.now()
-    const address = await sdk.deriveAddress(vault, chainName)
+    const address = await vault.address(chainName)
     const duration = performance.now() - startTime
 
     return {
@@ -54,9 +46,8 @@ export const AddressDerivationTester = ({
   ): Promise<DerivationResult> => {
     const startTime = performance.now()
 
-    // For this demo, we'll use the SDK method since the Vault class isn't directly accessible
-    // In a real implementation, you'd have access to the Vault instance
-    const address = await sdk.deriveAddress(vault, chainName)
+    // Use the Vault's address method directly
+    const address = await vault.address(chainName)
     const duration = performance.now() - startTime
 
     return {
@@ -98,7 +89,7 @@ export const AddressDerivationTester = ({
 
       for (const testChain of testChains) {
         const startTime = performance.now()
-        const address = await sdk.deriveAddress(vault, testChain)
+        const address = await vault.address(testChain)
         const duration = performance.now() - startTime
 
         allResults.push({
@@ -124,7 +115,7 @@ export const AddressDerivationTester = ({
 
     try {
       // Test with an unsupported chain
-      await sdk.deriveAddress(vault, 'unsupported-chain')
+      await vault.address('unsupported-chain')
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -146,7 +137,7 @@ export const AddressDerivationTester = ({
         🧪 Address Derivation Tester
       </h3>
       <p style={{ color: '#666', fontSize: '14px', marginBottom: 16 }}>
-        Test the new Vault.deriveAddress(chain: string) implementation
+        Test the Vault.address(chain: string) implementation
       </p>
 
       <div
@@ -282,11 +273,11 @@ export const AddressDerivationTester = ({
 
       <div style={{ marginTop: 16, fontSize: '12px', color: '#666' }}>
         <p>
-          <strong>Testing the new Vault.deriveAddress implementation:</strong>
+          <strong>Testing the Vault.address implementation:</strong>
         </p>
         <ul style={{ margin: 0, paddingLeft: 16 }}>
           <li>
-            Tests the new <code>deriveAddress(chain: string)</code> signature
+            Tests the <code>address(chain: string)</code> method
           </li>
           <li>Measures derivation performance and timing</li>
           <li>Demonstrates error handling for unsupported chains</li>
