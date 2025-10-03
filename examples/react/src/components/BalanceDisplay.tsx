@@ -7,7 +7,9 @@ type BalanceDisplayProps = {
 
 function BalanceDisplay({ vault }: BalanceDisplayProps) {
   const [balances, setBalances] = useState<Record<string, Balance> | null>(null)
+  const [addresses, setAddresses] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [addressLoading, setAddressLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loadBalances = useCallback(async () => {
@@ -23,11 +25,49 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
     }
   }, [vault])
 
+  const loadAddresses = useCallback(async () => {
+    if (!balances) return
+
+    setAddressLoading(true)
+    try {
+      const addressPromises = Object.keys(balances).map(async chain => {
+        try {
+          const address = await vault.address(chain)
+          return { chain, address }
+        } catch (err) {
+          console.warn(`Failed to derive address for ${chain}:`, err)
+          return { chain, address: 'Failed to derive' }
+        }
+      })
+
+      const addressResults = await Promise.all(addressPromises)
+      const addressMap = addressResults.reduce(
+        (acc, { chain, address }) => {
+          acc[chain] = address
+          return acc
+        },
+        {} as Record<string, string>
+      )
+
+      setAddresses(addressMap)
+    } catch (err) {
+      console.error('Failed to load addresses:', err)
+    } finally {
+      setAddressLoading(false)
+    }
+  }, [vault, balances])
+
   useEffect(() => {
     if (vault && !loading) {
       loadBalances()
     }
   }, [vault, loading, loadBalances])
+
+  useEffect(() => {
+    if (balances && Object.keys(balances).length > 0) {
+      loadAddresses()
+    }
+  }, [balances, loadAddresses])
 
   if (loading) {
     return (
@@ -79,21 +119,47 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
           marginBottom: '15px',
         }}
       >
-        <h3 style={{ margin: 0, color: '#333' }}>Balances</h3>
-        <button
-          onClick={loadBalances}
-          style={{
-            padding: '6px 12px',
-            backgroundColor: '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '12px',
-          }}
-        >
-          Refresh
-        </button>
+        <h3 style={{ margin: 0, color: '#333' }}>
+          Balances & Addresses
+          {addressLoading && (
+            <span
+              style={{ fontSize: '12px', color: '#666', marginLeft: '8px' }}
+            >
+              (Loading addresses...)
+            </span>
+          )}
+        </h3>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={loadAddresses}
+            disabled={addressLoading || !balances}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: addressLoading ? '#6c757d' : '#17a2b8',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: addressLoading ? 'not-allowed' : 'pointer',
+              fontSize: '12px',
+            }}
+          >
+            {addressLoading ? 'Loading...' : 'Load Addresses'}
+          </button>
+          <button
+            onClick={loadBalances}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+            }}
+          >
+            Refresh Balances
+          </button>
+        </div>
       </div>
 
       {balances && Object.keys(balances).length > 0 ? (
@@ -242,6 +308,49 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
                       >
                         {coinId.toUpperCase()} Balance
                       </div>
+                      {addresses[coinId] && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            marginTop: '4px',
+                            maxWidth: '200px',
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: isBitcoin ? '12px' : '10px',
+                              color: '#888',
+                              fontFamily: 'monospace',
+                              wordBreak: 'break-all',
+                              flex: 1,
+                            }}
+                            title={addresses[coinId]}
+                          >
+                            {addresses[coinId].length > 20
+                              ? `${addresses[coinId].slice(0, 10)}...${addresses[coinId].slice(-10)}`
+                              : addresses[coinId]}
+                          </div>
+                          <button
+                            onClick={() =>
+                              navigator.clipboard.writeText(addresses[coinId])
+                            }
+                            style={{
+                              padding: '2px 4px',
+                              backgroundColor: 'transparent',
+                              border: '1px solid #ddd',
+                              borderRadius: '3px',
+                              cursor: 'pointer',
+                              fontSize: '10px',
+                              color: '#666',
+                            }}
+                            title="Copy address"
+                          >
+                            📋
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 

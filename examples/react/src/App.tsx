@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import { Vultisig } from 'vultisig-sdk'
-type Vault = any
+import { type Vault, Vultisig } from 'vultisig-sdk'
+
 import { AddressDerivationTester } from './components/AddressDerivationTester'
 import BalanceDisplay from './components/BalanceDisplay'
 import { CreateVaultForm } from './components/CreateVaultForm'
