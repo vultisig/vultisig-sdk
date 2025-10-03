@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Balance, Vault } from 'vultisig-sdk'
-import { Vultisig } from 'vultisig-sdk'
 
 type BalanceDisplayProps = {
-  sdk: Vultisig
   vault: Vault
 }
 
-function BalanceDisplay({ sdk, vault }: BalanceDisplayProps) {
+function BalanceDisplay({ vault }: BalanceDisplayProps) {
   const [balances, setBalances] = useState<Record<string, Balance> | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -16,14 +14,14 @@ function BalanceDisplay({ sdk, vault }: BalanceDisplayProps) {
     setLoading(true)
     setError(null)
     try {
-      const vaultBalances = await sdk.getVaultBalances(vault)
+      const vaultBalances = await vault.balances()
       setBalances(vaultBalances)
     } catch (err) {
       setError((err as Error).message)
     } finally {
       setLoading(false)
     }
-  }, [sdk, vault])
+  }, [vault])
 
   useEffect(() => {
     if (vault && !loading) {
