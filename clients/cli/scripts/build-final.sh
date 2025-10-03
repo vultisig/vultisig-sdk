@@ -34,9 +34,18 @@ fi
 
 # Copy missing WASM files
 echo -e "${YELLOW}📦 Copying WASM files...${NC}"
-if [ -f "../clients/extension/dist/assets/secp256k1.wasm" ]; then
-    cp "../clients/extension/dist/assets/secp256k1.wasm" "dist/"
-    cp "../clients/extension/dist/assets/secp256k1.wasm" "dist/wasm/"
+
+# Ensure dist/wasm directory exists
+mkdir -p "dist/wasm"
+
+# Copy secp256k1.wasm from tiny-secp256k1 package
+if [ -f "../node_modules/tiny-secp256k1/lib/secp256k1.wasm" ]; then
+    echo -e "${BLUE}  Copying secp256k1.wasm from tiny-secp256k1 package...${NC}"
+    cp "../node_modules/tiny-secp256k1/lib/secp256k1.wasm" "dist/"
+    cp "../node_modules/tiny-secp256k1/lib/secp256k1.wasm" "dist/wasm/"
+    echo -e "${GREEN}  ✓ secp256k1.wasm copied successfully${NC}"
+else
+    echo -e "${YELLOW}  ⚠️  Warning: secp256k1.wasm not found in node_modules/tiny-secp256k1/lib/${NC}"
 fi
 
 echo -e "${GREEN}✅ SDK built successfully ($(du -h dist/index.node.cjs | cut -f1))${NC}"
