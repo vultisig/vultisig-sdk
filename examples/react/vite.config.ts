@@ -25,12 +25,16 @@ export default defineConfig({
       '@core': path.resolve(__dirname, '../../core'),
       crypto: 'crypto-browserify',
       stream: 'stream-browserify',
+      'node:stream': 'stream-browserify',
+      'node:stream/web': 'stream-browserify',
       buffer: 'buffer',
       util: 'util',
       path: 'path-browserify',
       vm: 'vm-browserify',
       process: 'process/browser',
       events: 'events',
+      // Replace node-fetch with native fetch in browser
+      'node-fetch': 'isomorphic-fetch',
     },
   },
   esbuild: {
@@ -46,6 +50,11 @@ export default defineConfig({
       'events',
       'readable-stream',
       'string_decoder',
+      '@solana/web3.js',
     ],
+    exclude: ['node-fetch', 'fetch-blob'],
+    esbuildOptions: {
+      target: 'esnext',
+    },
   },
 })

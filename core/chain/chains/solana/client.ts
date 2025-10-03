@@ -1,6 +1,7 @@
 import { rootApiUrl } from '@core/config'
 import { memoize } from '@lib/utils/memoize'
-import { Connection } from '@solana/web3.js'
+import * as web3 from '@solana/web3.js'
+const { Connection } = web3
 
 export const solanaRpcUrl = `${rootApiUrl}/solana/`
 
