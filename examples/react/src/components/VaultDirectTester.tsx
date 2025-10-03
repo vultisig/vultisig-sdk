@@ -2,7 +2,28 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { useState } from 'react'
 import { Vault } from 'vultisig-sdk'
 
-type VaultData = any
+// Vault data type - matches the first parameter of Vault constructor
+type VaultData = {
+  name: string
+  publicKeys: {
+    ecdsa: string
+    eddsa: string
+  }
+  signers: string[]
+  hexChainCode: string
+  keyShares: {
+    ecdsa: string
+    eddsa: string
+  }
+  localPartyId: string
+  libType: 'GG20' | 'DKLS'
+  isBackedUp: boolean
+  order: number
+  createdAt?: number
+  resharePrefix?: string
+  folderId?: string
+  lastPasswordVerificationTime?: number
+}
 
 type DirectTestResult = {
   success: boolean
@@ -119,6 +140,7 @@ export const VaultDirectTester = ({
         cached: false,
       })
     } catch (error) {
+      const startTime = performance.now()
       const duration = performance.now() - startTime
       errorResults.push({
         success: true,
@@ -141,6 +163,7 @@ export const VaultDirectTester = ({
         cached: false,
       })
     } catch (error) {
+      const startTime = performance.now()
       const duration = performance.now() - startTime
       errorResults.push({
         success: true,
