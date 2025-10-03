@@ -23,6 +23,13 @@ function App() {
           fastVault: 'https://api.vultisig.com/vault',
           messageRelay: 'https://api.vultisig.com/router',
         },
+        wasmConfig: {
+          wasmPaths: {
+            walletCore: '/wallet-core.wasm',
+            dkls: '/dkls.wasm',
+            schnorr: '/schnorr.wasm',
+          },
+        },
       })
   )
   const [initialized, setInitialized] = useState(false)
