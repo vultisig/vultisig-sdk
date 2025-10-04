@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Balance, Vault } from 'vultisig-sdk'
+import { Balance, Vault, Vultisig } from 'vultisig-sdk'
 
 type BalanceDisplayProps = {
   vault: Vault
+  sdk: Vultisig
 }
 
-function BalanceDisplay({ vault }: BalanceDisplayProps) {
+function BalanceDisplay({ vault, sdk }: BalanceDisplayProps) {
   const [balances, setBalances] = useState<Record<string, Balance> | null>(null)
   const [addresses, setAddresses] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)

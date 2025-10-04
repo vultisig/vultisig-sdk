@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
-import type { KeygenProgressUpdate, Vault, Vultisig } from 'vultisig-sdk'
+import { KeygenProgressUpdate, Vault, Vultisig } from 'vultisig-sdk'
 
 type CreateVaultFormProps = {
   sdk: Vultisig
   onVaultCreated: (vault: Vault, options?: { serverVerified?: boolean }) => void
   onInitialize: () => Promise<void>
+  saveVaultImmediately?: (vault: Vault) => Promise<void>
 }
 
 type CreateStep =
@@ -19,6 +20,7 @@ export const CreateVaultForm = ({
   sdk,
   onVaultCreated,
   onInitialize,
+  saveVaultImmediately,
 }: CreateVaultFormProps) => {
   const [createForm, setCreateForm] = useState({
     name: import.meta.env.VITE_VAULT_NAME || 'TestVault',
@@ -63,8 +65,8 @@ export const CreateVaultForm = ({
         name,
         email,
         password,
-        onLog: addLog,
         onProgress: (u: KeygenProgressUpdate) => {
+          addLog(u.message || `${u.phase}: ${u.round || 'starting'}`)
           setKeygenProgress({ phase: u.phase, round: u.round })
         },
       })
@@ -77,6 +79,18 @@ export const CreateVaultForm = ({
       // Store vault and vault ID for verification
       setVault(result.vault)
       setVaultId(result.vaultId)
+
+      // Save the vault to storage immediately if a save function is provided
+      // This ensures the 1of2 client share is saved locally
+      if (saveVaultImmediately) {
+        try {
+          await saveVaultImmediately(result.vault)
+          addLog('Vault keyshare saved locally')
+        } catch (error) {
+          console.error('Failed to save vault immediately:', error)
+          addLog('Warning: Failed to save vault locally - continue with verification')
+        }
+      }
 
       // Move to verification step
       setStep('verify')
@@ -101,21 +115,26 @@ export const CreateVaultForm = ({
 
       if (verified) {
         addLog('Step 5: Verification succeeded (200 OK)')
-        addLog('Step 6: Retrieving verified vault (GET /vault/get/{vaultId})')
-        try {
-          const fetched = await sdk.getVault(vaultId, createForm.password)
-          addLog('Step 6: Vault retrieved (200 OK)')
-          onVaultCreated(fetched, { serverVerified: true })
-          setVault(fetched)
+
+        // The vault we already have from createFastVault contains the client's keyShares
+        // We don't need to fetch from server as that returns the server's view without keyShares
+        // Just mark the existing vault as verified
+        if (vault) {
+          addLog('Step 6: Using locally created vault with keyshares')
+          onVaultCreated(vault, { serverVerified: true })
           setStep('done')
-        } catch (err) {
-          const m = (err as Error).message
-          addLog(`Step 6: Failed to retrieve vault: ${m}`)
-          if (vault) {
-            // Fallback to previously returned vault shape
-            onVaultCreated(vault, { serverVerified: true })
+        } else {
+          // This shouldn't happen, but as a fallback try to get the vault
+          addLog('Warning: No local vault found, attempting to retrieve from server')
+          try {
+            const fetched = await sdk.getVault(vaultId, createForm.password)
+            addLog('Step 6: Vault retrieved from server (may lack keyshares)')
+            onVaultCreated(fetched, { serverVerified: true })
+            setVault(fetched)
             setStep('done')
-          } else {
+          } catch (err) {
+            const m = (err as Error).message
+            addLog(`Step 6: Failed to retrieve vault: ${m}`)
             setError(m)
             setStep('error')
           }
@@ -135,8 +154,10 @@ export const CreateVaultForm = ({
 
   const onResendEmail = async () => {
     try {
-      await sdk.resendVaultVerification(vaultId)
-      // Show success message (could add a toast/notification)
+      // TODO: Add resend verification method to SDK
+      // await sdk.resendVaultVerification(vaultId)
+      // For now, just show a message
+      addLog('Resend email functionality not yet implemented')
     } catch (e) {
       setError((e as Error).message)
     }

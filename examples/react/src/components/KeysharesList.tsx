@@ -6,6 +6,7 @@ type KeysharesListProps = {
   storedKeyshares?: StoredKeyshare[]
   onLoadKeyshare: (keyshare: LoadedKeyshare) => void
   onRemoveStoredKeyshare?: (keyshareId: string) => void
+  onLoadStoredKeyshare?: (keyshare: StoredKeyshare) => void
 }
 
 export const KeysharesList = ({
@@ -13,6 +14,7 @@ export const KeysharesList = ({
   storedKeyshares = [],
   onLoadKeyshare,
   onRemoveStoredKeyshare,
+  onLoadStoredKeyshare,
 }: KeysharesListProps) => (
   <div style={{ border: '1px solid #e9ecef', borderRadius: 8, padding: 12 }}>
     <h3 style={{ marginTop: 0, color: '#333' }}>Vault Files</h3>
@@ -91,6 +93,23 @@ export const KeysharesList = ({
               <span style={{ color: '#999', fontSize: 10 }}>
                 {new Date(k.dateAdded).toLocaleDateString()}
               </span>
+              {k.containerBase64 && onLoadStoredKeyshare && (
+                <button
+                  onClick={() => onLoadStoredKeyshare(k)}
+                  style={{
+                    marginLeft: 8,
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    border: '1px solid #007bff',
+                    background: '#007bff',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                  }}
+                >
+                  Load
+                </button>
+              )}
               {onRemoveStoredKeyshare && (
                 <button
                   onClick={() => onRemoveStoredKeyshare(k.id)}
@@ -111,17 +130,19 @@ export const KeysharesList = ({
             </li>
           ))}
         </ul>
-        <p
-          style={{
-            margin: '8px 0 0 0',
-            fontSize: 12,
-            color: '#666',
-            fontStyle: 'italic',
-          }}
-        >
-          To load these files, please re-upload them using &quot;Add Vault&quot;
-          button.
-        </p>
+        {storedKeyshares.some(k => !k.containerBase64) && (
+          <p
+            style={{
+              margin: '8px 0 0 0',
+              fontSize: 12,
+              color: '#666',
+              fontStyle: 'italic',
+            }}
+          >
+            Some vaults need to be re-uploaded using &quot;Add Vault&quot;
+            button to load them.
+          </p>
+        )}
       </div>
     )}
 
