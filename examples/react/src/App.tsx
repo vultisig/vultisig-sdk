@@ -323,8 +323,8 @@ function App() {
                 sdk={sdk}
                 fastVault={serverVerified}
               />
-              <AddressDerivationTester vault={vault} sdk={sdk} />
-              <BalanceDisplay vault={vault} sdk={sdk} />
+              <AddressDerivationTester vault={vault} />
+              <BalanceDisplay vault={vault} />
             </>
           )}
         </div>

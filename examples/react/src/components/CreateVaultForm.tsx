@@ -88,7 +88,9 @@ export const CreateVaultForm = ({
           addLog('Vault keyshare saved locally')
         } catch (error) {
           console.error('Failed to save vault immediately:', error)
-          addLog('Warning: Failed to save vault locally - continue with verification')
+          addLog(
+            'Warning: Failed to save vault locally - continue with verification'
+          )
         }
       }
 
@@ -125,7 +127,9 @@ export const CreateVaultForm = ({
           setStep('done')
         } else {
           // This shouldn't happen, but as a fallback try to get the vault
-          addLog('Warning: No local vault found, attempting to retrieve from server')
+          addLog(
+            'Warning: No local vault found, attempting to retrieve from server'
+          )
           try {
             const fetched = await sdk.getVault(vaultId, createForm.password)
             addLog('Step 6: Vault retrieved from server (may lack keyshares)')
