@@ -206,16 +206,25 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
                 }
               }
 
-              // Simple formatting function since formatBalanceAmount was removed
+              // Format balance to show up to 4 decimal places, taking into account the coin's decimals
               const formatBalance = (
                 value: string,
                 decimals: number
               ): string => {
                 const num = parseFloat(value)
                 if (num === 0) return '0'
-                return (num / Math.pow(10, decimals)).toFixed(
-                  decimals > 2 ? 4 : 2
-                )
+
+                // Convert from raw amount to human-readable amount
+                const humanReadableAmount = num / Math.pow(10, decimals)
+
+                // For very small amounts, show up to 6 decimal places
+                if (humanReadableAmount < 0.0001) {
+                  return humanReadableAmount.toFixed(6)
+                }
+
+                // For amounts >= 0.0001, show up to 4 decimal places but remove trailing zeros
+                const formatted = humanReadableAmount.toFixed(4)
+                return parseFloat(formatted).toString()
               }
 
               const formattedAmount = formatBalance(
