@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import { Vultisig } from 'vultisig-sdk'
-type Vault = any
+import { Vault, Vultisig } from 'vultisig-sdk'
+
 import { AddressDerivationTester } from './components/AddressDerivationTester'
 import BalanceDisplay from './components/BalanceDisplay'
 import { CreateVaultForm } from './components/CreateVaultForm'
@@ -61,13 +61,24 @@ function App() {
     for (const file of files) {
       try {
         const encrypted = await sdk.isVaultFileEncrypted(file)
-        await keysharesStorage.saveKeyshare({
+
+        // Read the file content as base64 and store it directly
+        const reader = new FileReader()
+        const fileContent = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const text = reader.result as string
+            resolve(text)
+          }
+          reader.onerror = reject
+          reader.readAsText(file)
+        })
+
+        // Store the file content directly in localStorage using the existing storage mechanism
+        await keysharesStorage.saveVaultFromFile({
           name: file.name,
           size: file.size,
           encrypted,
-          data: null,
-          id: `${file.name}-${Date.now()}`,
-          file,
+          containerBase64: fileContent,
         })
       } catch (error) {
         console.warn(`Failed to add ${file.name}:`, error)
@@ -77,12 +88,26 @@ function App() {
     ev.target.value = ''
   }
 
-  const handleVaultCreated = (vault: Vault) => {
+  const handleVaultCreated = (vault: Vault, options?: { serverVerified?: boolean }) => {
     setVault(vault)
     setShowCreate(false)
+    setServerVerified(Boolean(options?.serverVerified))
+
+    // Save or update vault in storage
     keysharesStorage
-      .saveVaultToStorage(vault, { name: vault.name })
-      .catch(() => undefined)
+      .saveVaultToStorage(vault, { name: vault.data.name })
+      .catch((error) => {
+        console.error('Failed to save vault to storage:', error)
+      })
+  }
+
+  const saveVaultImmediately = async (vault: Vault) => {
+    // Save vault to storage without closing the form
+    console.log('Saving vault immediately after creation:', vault)
+    console.log('Vault data:', vault.data)
+    console.log('KeyShares:', vault.data?.keyShares)
+
+    await keysharesStorage.saveVaultToStorage(vault, { name: vault.data.name })
   }
 
   const handleLoadKeyshare = (keyshare: LoadedKeyshare) => {
@@ -255,6 +280,7 @@ function App() {
               sdk={sdk}
               onVaultCreated={handleVaultCreated}
               onInitialize={onInitialize}
+              saveVaultImmediately={saveVaultImmediately}
             />
           )}
 
@@ -264,6 +290,19 @@ function App() {
               storedKeyshares={keysharesStorage.storedKeyshares}
               onLoadKeyshare={handleLoadKeyshare}
               onRemoveStoredKeyshare={handleRemoveStoredKeyshare}
+              onLoadStoredKeyshare={(storedKeyshare) => {
+                // Convert stored keyshare to LoadedKeyshare format for the modal
+                const loadedKeyshare: LoadedKeyshare = {
+                  id: storedKeyshare.id,
+                  name: storedKeyshare.name,
+                  size: storedKeyshare.size || 0,
+                  encrypted: storedKeyshare.encrypted || false,
+                  data: null,
+                  file: null,
+                  containerBase64: storedKeyshare.containerBase64,
+                }
+                handleLoadKeyshare(loadedKeyshare)
+              }}
             />
           )}
 
@@ -284,8 +323,8 @@ function App() {
                 sdk={sdk}
                 fastVault={serverVerified}
               />
-              <AddressDerivationTester vault={vault} sdk={sdk} />
-              <BalanceDisplay sdk={sdk} vault={vault} />
+              <AddressDerivationTester vault={vault} />
+              <BalanceDisplay vault={vault} />
             </>
           )}
         </div>
