@@ -86,6 +86,12 @@ export type UseKeysharesStorageReturn = {
     vault: any,
     options?: { name?: string; password?: string }
   ) => Promise<StoredKeyshare | null>
+  saveVaultFromFile: (input: {
+    name: string
+    size: number
+    encrypted: boolean
+    containerBase64: string
+  }) => Promise<StoredKeyshare | null>
   removeKeyshare: (keyshareId: string) => Promise<boolean>
   clearAllKeyshares: () => Promise<boolean>
   refreshKeyshares: () => void
@@ -152,6 +158,61 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
     [loadKeyshares]
   )
 
+  // Save a vault file from the file picker directly into storage
+  const saveVaultFromFile = useCallback(
+    async (input: {
+      name: string
+      size: number
+      encrypted: boolean
+      containerBase64: string
+    }): Promise<StoredKeyshare | null> => {
+      try {
+        setError(null)
+
+        // Check if vault with this name already exists
+        const existing = readAll()
+        const existingVault = existing.find(k => k.name === input.name)
+
+        if (existingVault) {
+          // Update existing vault
+          const updatedItems = existing.map(k =>
+            k.id === existingVault.id
+              ? {
+                  ...k,
+                  containerBase64: input.containerBase64,
+                  size: input.size,
+                  encrypted: input.encrypted,
+                  dateAdded: Date.now()
+                }
+              : k
+          )
+          writeAll(updatedItems)
+          loadKeyshares()
+          return { ...existingVault, containerBase64: input.containerBase64, size: input.size }
+        } else {
+          // Create new vault entry with embedded content
+          const item: StoredKeyshare = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            name: input.name,
+            size: input.size,
+            encrypted: input.encrypted,
+            dateAdded: Date.now(),
+            containerBase64: input.containerBase64,
+          }
+          const current = readAll()
+          writeAll([item, ...current])
+          loadKeyshares()
+          return item
+        }
+      } catch (err) {
+        const errorMsg = (err as Error).message
+        setError(errorMsg)
+        throw new Error(errorMsg)
+      }
+    },
+    [loadKeyshares]
+  )
+
   // Save a live vault object into storage as a .vult container (optionally encrypted)
   const saveVaultToStorage = useCallback(
     async (
@@ -159,7 +220,12 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
       options?: { name?: string; password?: string }
     ): Promise<StoredKeyshare | null> => {
       try {
-        const comm = toCommVault(vault)
+        // Extract raw vault data if it's a Vault class instance
+        const vaultData = vault.data || vault
+        console.log('saveVaultToStorage - vault input:', vault)
+        console.log('saveVaultToStorage - extracted vaultData:', vaultData)
+        console.log('saveVaultToStorage - keyShares present:', !!vaultData.keyShares)
+        const comm = toCommVault(vaultData)
         const binary = toBinary(VaultSchema, comm)
         let containerVaultBase64: string
         let encrypted = false
@@ -174,20 +240,38 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
           containerVaultBase64 = base64Encode(binary)
           encrypted = false
         }
-        const item = addStoredKeyshare({
-          name: `${options?.name ?? vault.name}.vult`,
-          size: containerVaultBase64.length,
-          encrypted,
-        })
-        if (!item) throw new Error('Failed to save vault to storage')
-        // attach payload
-        const cur = readAll()
-        const withPayload = cur.map(k =>
-          k.id === item.id ? { ...k, containerBase64: containerVaultBase64 } : k
-        )
-        writeAll(withPayload)
-        loadKeyshares()
-        return { ...item, containerBase64: containerVaultBase64 }
+        // Check if a vault with this name already exists
+        const vaultName = `${options?.name ?? vaultData.name}.vult`
+        const existing = readAll()
+        const existingVault = existing.find(k => k.name === vaultName)
+
+        if (existingVault && existingVault.containerBase64) {
+          // If vault already exists with data, update it instead of creating a new one
+          const updatedItems = existing.map(k =>
+            k.id === existingVault.id
+              ? { ...k, containerBase64: containerVaultBase64, size: containerVaultBase64.length, dateAdded: Date.now() }
+              : k
+          )
+          writeAll(updatedItems)
+          loadKeyshares()
+          return { ...existingVault, containerBase64: containerVaultBase64, size: containerVaultBase64.length }
+        } else {
+          // Create new vault entry
+          const item = addStoredKeyshare({
+            name: vaultName,
+            size: containerVaultBase64.length,
+            encrypted,
+          })
+          if (!item) throw new Error('Failed to save vault to storage')
+          // attach payload
+          const cur = readAll()
+          const withPayload = cur.map(k =>
+            k.id === item.id ? { ...k, containerBase64: containerVaultBase64 } : k
+          )
+          writeAll(withPayload)
+          loadKeyshares()
+          return { ...item, containerBase64: containerVaultBase64 }
+        }
       } catch (err) {
         const errorMsg = (err as Error).message
         setError(errorMsg)
@@ -278,6 +362,7 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
     error,
     saveKeyshare,
     saveVaultToStorage,
+    saveVaultFromFile,
     removeKeyshare,
     clearAllKeyshares,
     refreshKeyshares,
