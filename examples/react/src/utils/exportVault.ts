@@ -16,9 +16,12 @@ export const buildVultFile = async (vault: any, password?: string) => {
   const binary = toBinary(VaultSchema, comm)
   let innerBase64: string
   const isEncrypted = !!password
-  if (isEncrypted) {
-    const encrypted = await encryptWithAesGcm({ key: password!, value: binary })
-    innerBase64 = base64FromUint8(encrypted as unknown as Uint8Array)
+  if (isEncrypted && password) {
+    const encrypted = encryptWithAesGcm({
+      key: password,
+      value: Buffer.from(binary),
+    })
+    innerBase64 = base64FromUint8(new Uint8Array(encrypted))
   } else {
     innerBase64 = base64FromUint8(binary as unknown as Uint8Array)
   }
