@@ -6,5 +6,6 @@ export type LoadedKeyshare = {
   size: number // File size in bytes
   encrypted: boolean // Whether the vault is encrypted
   data: any // Will contain the vault data (null until loaded)
-  file?: File // Original file reference if loaded from file
+  file?: File | null // Original file reference if loaded from file
+  containerBase64?: string // Base64 encoded vault container content
 }
