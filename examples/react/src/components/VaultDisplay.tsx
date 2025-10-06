@@ -31,10 +31,10 @@ export const VaultDisplay = ({
         }
 
         const [btc, eth, sol, thor] = await Promise.all([
-          sdk.deriveAddress(vault, 'bitcoin'),
-          sdk.deriveAddress(vault, 'ethereum'),
-          sdk.deriveAddress(vault, 'solana'),
-          sdk.deriveAddress(vault, 'thorchain'),
+          vault.address('bitcoin'),
+          vault.address('ethereum'),
+          vault.address('solana'),
+          vault.address('thorchain'),
         ])
         if (!cancelled)
           setAddresses({ BTC: btc, ETH: eth, SOL: sol, THOR: thor })
@@ -77,13 +77,15 @@ export const VaultDisplay = ({
         </div>
       )}
       <h3 style={{ marginTop: 0, color: '#333' }}>Current Vault</h3>
-      <div style={{ color: '#555' }}>Name: {vault.name}</div>
-      <div style={{ color: '#555' }}>Local Party: {vault.localPartyId}</div>
+      <div style={{ color: '#555' }}>Name: {vault.data.name}</div>
       <div style={{ color: '#555' }}>
-        ECDSA PubKey: {vault.publicKeys.ecdsa}
+        Local Party: {vault.data.localPartyId}
       </div>
       <div style={{ color: '#555' }}>
-        EDDSA PubKey: {vault.publicKeys.eddsa}
+        ECDSA PubKey: {vault.data.publicKeys.ecdsa}
+      </div>
+      <div style={{ color: '#555' }}>
+        EDDSA PubKey: {vault.data.publicKeys.eddsa}
       </div>
 
       <div style={{ marginTop: 12 }}>

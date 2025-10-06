@@ -86,7 +86,7 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
       console.log('Result:', {
         vaultId: result.vaultId,
         verificationRequired: result.verificationRequired,
-        vaultName: result.vault.name,
+        vaultName: (result.vault as any).data?.name || 'Unknown',
       })
 
       setVaultId(result.vaultId)
@@ -98,7 +98,8 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
         setStep('verifying')
       } else {
         console.log('Vault created successfully without verification needed')
-        onVaultCreated(result.vault)
+        const vaultData = (result.vault as any).data
+        onVaultCreated(vaultData || result.vault)
       }
     } catch (err) {
       console.error('Vault creation failed:', err)
@@ -139,7 +140,7 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
         codeLength: verificationCode.length,
       })
 
-      const verified = await sdk.verifyVaultEmail(vaultId, verificationCode)
+      const verified = await sdk.verifyVault(vaultId, verificationCode)
       console.log('✅ Email verification response:', verified)
 
       if (!verified) {
@@ -152,14 +153,17 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
       console.log('📥 Retrieving complete vault from server...')
       // After verification, retrieve the complete vault
       const vault = await sdk.getVault(vaultId, formData.password)
+      const vaultData = (vault as any).data
       console.log('🎉 Vault retrieved successfully!', {
-        name: vault.name,
-        libType: vault.libType,
-        hasPublicKeys: !!(vault.publicKeys?.ecdsa && vault.publicKeys?.eddsa),
-        signers: vault.signers?.length || 0,
+        name: vaultData?.name || 'Unknown',
+        libType: vaultData?.libType || 'Unknown',
+        hasPublicKeys: !!(
+          vaultData?.publicKeys?.ecdsa && vaultData?.publicKeys?.eddsa
+        ),
+        signers: vaultData?.signers?.length || 0,
       })
 
-      onVaultCreated(vault)
+      onVaultCreated(vaultData || vault)
     } catch (err) {
       console.error('❌ Verification failed:', err)
       const errorMessage = (err as Error).message
@@ -186,9 +190,10 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
 
     try {
       console.log('🔄 Resending verification email...')
-      await sdk.resendVaultVerification(vaultId)
-      console.log('✅ Verification email resent')
-      setError(null) // Clear any previous errors
+      // TODO: SDK doesn't have resendVaultVerification method yet
+      // await sdk.resendVaultVerification(vaultId)
+      setError('Resend functionality not yet implemented')
+      console.log('⚠️ Resend not implemented in SDK')
     } catch (err) {
       console.error('❌ Failed to resend verification email:', err)
       setError('Failed to resend verification email. Please try again.')
