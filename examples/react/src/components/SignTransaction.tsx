@@ -12,8 +12,10 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
   const [amount, setAmount] = useState('')
   const [chain, setChain] = useState('Ethereum')
   const [signing, setSigning] = useState(false)
+  const [signingStatus, setSigningStatus] = useState('')
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const handleSign = async () => {
     if (!password || !toAddress || !amount) {
@@ -24,6 +26,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
     setSigning(true)
     setError(null)
     setResult(null)
+    setSigningStatus('Preparing transaction...')
 
     try {
       // Create a simple Ethereum transaction payload for testing
@@ -42,6 +45,8 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
       }
 
       console.log('Signing transaction with payload:', payload)
+      setSigningStatus('Connecting to VultiServer...')
+
       const signature = await sdk.signTransactionWithVault(
         vault,
         payload,
@@ -50,12 +55,29 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
       console.log('Transaction signed successfully:', signature)
 
       setResult(signature)
+      setSigningStatus('')
     } catch (err) {
       console.error('Failed to sign transaction:', err)
       setError((err as Error).message)
     } finally {
       setSigning(false)
+      setSigningStatus('')
     }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  const resetForm = () => {
+    setToAddress('')
+    setAmount('')
+    setPassword('')
+    setResult(null)
+    setError(null)
   }
 
   // Check if this is a fast vault
@@ -149,6 +171,13 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
           {signing ? 'Signing...' : 'Sign Transaction'}
         </button>
 
+        {signing && signingStatus && (
+          <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded animate-pulse">
+            <p className="font-bold">🔄 {signingStatus}</p>
+            <p className="text-sm mt-1">This may take a few seconds...</p>
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
             <p className="font-bold">Error</p>
@@ -158,10 +187,60 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
 
         {result && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-            <p className="font-bold">Success!</p>
-            <p className="text-xs break-all">
-              Signature: {JSON.stringify(result, null, 2)}
+            <p className="font-bold text-lg mb-2">
+              ✅ Transaction Signed Successfully!
             </p>
+
+            <div className="space-y-2">
+              <div>
+                <p className="font-semibold">Signature Format:</p>
+                <p className="text-sm">{result.format || 'Unknown'}</p>
+              </div>
+
+              {result.signature && (
+                <div>
+                  <p className="font-semibold">Signature:</p>
+                  <div className="bg-white p-2 rounded border border-green-300">
+                    <p className="text-xs font-mono break-all">
+                      {result.signature}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {result.recovery !== undefined && (
+                <div>
+                  <p className="font-semibold">Recovery ID:</p>
+                  <p className="text-sm">{result.recovery}</p>
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() =>
+                    copyToClipboard(result.signature || JSON.stringify(result))
+                  }
+                  className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                >
+                  {copied ? '✓ Copied!' : '📋 Copy Signature'}
+                </button>
+                <button
+                  onClick={resetForm}
+                  className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+                >
+                  🔄 Sign Another
+                </button>
+              </div>
+
+              <details className="mt-2">
+                <summary className="cursor-pointer text-sm font-semibold">
+                  View Raw Response
+                </summary>
+                <pre className="mt-2 text-xs bg-white p-2 rounded overflow-x-auto">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              </details>
+            </div>
           </div>
         )}
       </div>
