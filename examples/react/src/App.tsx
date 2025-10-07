@@ -9,6 +9,7 @@ import { ExportModal } from './components/ExportModal'
 import { KeysharesList } from './components/KeysharesList'
 import { LoadVaultModal } from './components/LoadVaultModal'
 import { ServerStatus } from './components/ServerStatus'
+import { SignTransaction } from './components/SignTransaction'
 import { VaultDisplay } from './components/VaultDisplay'
 import { useKeysharesStorage } from './hooks/useKeysharesStorage'
 import { useServerStatus } from './hooks/useServerStatus'
@@ -88,7 +89,10 @@ function App() {
     ev.target.value = ''
   }
 
-  const handleVaultCreated = (vault: Vault, options?: { serverVerified?: boolean }) => {
+  const handleVaultCreated = (
+    vault: Vault,
+    options?: { serverVerified?: boolean }
+  ) => {
     setVault(vault)
     setShowCreate(false)
     setServerVerified(Boolean(options?.serverVerified))
@@ -96,7 +100,7 @@ function App() {
     // Save or update vault in storage
     keysharesStorage
       .saveVaultToStorage(vault, { name: vault.data.name })
-      .catch((error) => {
+      .catch(error => {
         console.error('Failed to save vault to storage:', error)
       })
   }
@@ -290,7 +294,7 @@ function App() {
               storedKeyshares={keysharesStorage.storedKeyshares}
               onLoadKeyshare={handleLoadKeyshare}
               onRemoveStoredKeyshare={handleRemoveStoredKeyshare}
-              onLoadStoredKeyshare={(storedKeyshare) => {
+              onLoadStoredKeyshare={storedKeyshare => {
                 // Convert stored keyshare to LoadedKeyshare format for the modal
                 const loadedKeyshare: LoadedKeyshare = {
                   id: storedKeyshare.id,
@@ -325,6 +329,7 @@ function App() {
               />
               <AddressDerivationTester vault={vault} />
               <BalanceDisplay vault={vault} />
+              <SignTransaction vault={vault} sdk={sdk} />
             </>
           )}
         </div>
