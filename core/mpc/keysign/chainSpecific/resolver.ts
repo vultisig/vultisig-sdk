@@ -1,5 +1,10 @@
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { EthereumSpecific } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { EvmFeeQuote } from '@core/chain/tx/fee/evm/EvmFeeSettings'
+import {
+  CosmosSpecific,
+  EthereumSpecific,
+  UTXOSpecific,
+} from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { TransactionType } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Resolver } from '@lib/utils/types/Resolver'
@@ -15,20 +20,21 @@ type SpecificKeyByValue<R> = Extract<
   { value: R }
 >['case']
 
-export type ChainSpecificResolverInput<
-  T = any,
-  R = KeysignChainSpecificValue,
-> = {
+export type ChainSpecificResolverInput<R = KeysignChainSpecificValue> = {
   coin: AccountCoin<ChainsBySpecific<SpecificKeyByValue<R>>>
   receiver?: string
-  feeSettings?: T
   isDeposit?: boolean
-  amount?: number
+  amount?: bigint
   transactionType?: TransactionType
-  psbt?: Psbt
-} & (R extends EthereumSpecific ? { data?: `0x${string}` } : {})
+} & (R extends EthereumSpecific
+  ? { data?: string; feeQuote?: Partial<EvmFeeQuote> }
+  : R extends UTXOSpecific
+    ? { byteFeeMultiplier?: number; psbt?: Psbt }
+    : R extends CosmosSpecific
+      ? { timeoutTimestamp?: string }
+      : {})
 
-export type ChainSpecificResolver<
-  R = KeysignChainSpecificValue,
-  T = any,
-> = Resolver<ChainSpecificResolverInput<T, R>, Promise<R>>
+export type ChainSpecificResolver<R = KeysignChainSpecificValue> = Resolver<
+  ChainSpecificResolverInput<R>,
+  Promise<R>
+>

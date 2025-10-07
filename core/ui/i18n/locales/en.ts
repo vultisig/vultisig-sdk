@@ -1,4 +1,13 @@
 export const en = {
+  accept_continue: 'Accept & continue',
+  allow_app_access: 'Allow app access to',
+  app_store: 'App Store',
+  developer_options: 'Developer Options',
+  incorrect_url: 'Incorrect URL',
+  install_app: 'Install app',
+  app_permissions: 'App Permissions',
+  dapp_name: 'dApp Name',
+  description: 'Description',
   onboarding_greeting: 'Say goodbye to <g>seed phrases</g>',
   onboarding_step_1:
     'Say hello to <g>vault shares,</g> your new <g>recovery method</g>',
@@ -11,11 +20,22 @@ export const en = {
   onboarding_step_5:
     '<g>Always backup each vault share</g> separately in a <g>different location</g>',
   onboarding_step_6: 'These shares collaborate to <g>unlock your vault</g>',
-  incorrect_url: 'Incorrect URL',
-  developer_options: 'Developer Options',
+  permissions: 'Permissions',
+  personal_sign: 'Personal Sign',
+  function_unavailble:
+    'Feature unavailable for existing chain coins. Please add coins that can be used with FUNCTION:',
+  request_from: 'Request from',
+  rules: 'Rules',
+  rule_item: 'Rule {{number}}',
+  sign_request: 'Sign Request',
+  signed_signature: 'Signed Signature',
+  signing_address: 'Signing Address',
+  verify_identity_sign: 'Sign in to verify your identity',
   plugin_server_url: 'Plugin Server URL',
   connecting_to_verifier: 'Connecting to Verifier',
   connecting_to_plugin: 'Connecting to Plugin',
+  positions: 'Positions',
+  merged: 'Merged',
   confirm: 'Confirm',
   enter_your_password: 'Enter your password',
   go_to_wallet: 'Go to wallet',
@@ -40,6 +60,7 @@ export const en = {
   digit_input_error_validation: 'Error verifying code, please re-try',
   digit_input_loading_validation: 'Verifying code, please wait',
   create_referral_title: 'Create Referral',
+  referrals_create_page_title: 'Vultisig - Referrals',
   use_referral_code: 'Use referral Code',
   save_code: 'Save code',
   used_referral_error:
@@ -53,7 +74,7 @@ export const en = {
   expires_on: 'Expires on',
   edit_referral: 'Edit Referral',
   edit_friends_referral: 'Edit Friend Referral',
-  add_referral_code: 'Add Referral Code',
+  add_referral_code: 'Save referral code',
   your_friends_referral_code: 'Your friends referral code',
   change_your_friends_referral: 'Change friends Referral Code used for swaps',
   plugin_policy_desc:
@@ -118,8 +139,12 @@ export const en = {
   staked_amount: 'Staked Amount',
   send_overview: 'Send Overview',
   add_address: 'Add Address',
+  no_referral_yet: 'No referral yet.',
+  turn_your_vault_into_rewards_machine:
+    'Turn your vault into a rewards machine. Create your referral now and start earning.',
   selected_chain_missing_in_your_vault: 'Selected chain missing in your vault',
   vultisig: 'Vultisig',
+  by_vultisig: 'by Vultisig',
   missing_thorchain_address: 'Missing THORChain Address',
   missing_destination_address: 'Missing Destination Address',
   onboarding_description_1:
@@ -234,13 +259,18 @@ export const en = {
   upload_file_or_drag_and_drop: 'Upload file or drag & drop here',
   upload_vulttshare: 'Upload your Vultishare QR',
   getting_video_permission: 'Getting video permission...',
+  vault_selected: 'Vault selected',
   failed_to_get_video_permission: 'Failed to get video permission',
   processing_url: 'Processing URL...',
   failed_to_process_url: 'Failed to process URL',
   this_device_is_the: 'This device is the',
   initiating_device: 'Initiating device',
   pairing_device: 'Pairing device',
+  expiration_must_extend_by_exactly_one_year:
+    'Expiration can only be extended by exactly 1 year',
   add_new_vault: 'Add New Vault',
+  thorchain_address_required_for_referrals:
+    'You need to have a THORChain address to use the referral program',
   shares: 'Shares',
   backupnow_note:
     'Note: Never store Vault Shares from different devices in the same location.',
@@ -511,6 +541,7 @@ export const en = {
   reshare: 'Reshare',
   ibc_transfer: 'IBC Transfer',
   reshare_your_vault: 'Reshare your vault',
+  enter_percentage: 'Enter percentage',
   reshare_explanation:
     'Reshare can be used to refresh, expand or reduce the amount of devices in a Vault.',
   reshare_disclaimer:
@@ -524,16 +555,23 @@ export const en = {
   vault_missing_public_key: 'Vault missing public key',
   secure: 'Secure',
   generating_eddsa_key: 'Generating EdDSA Key',
-  title_1: 'Referral',
+  referrals_default_title: 'Referral',
+  add_friends_referral: 'Add a Friends Referral',
+  your_referrals: 'Your Referrals',
   title_2: 'Vultisig - Referrals',
   header_tooltip_title: 'Referral Program',
   header_tooltip_content:
     'The referral program is applied on THORChain swaps and is on a best effort basis. You need to register a THORName to use the Vultisig referral. The registration fee is 10 RUNE and 1 RUNE for each year, which is paid to the THORChain network.',
   referral_landing_title:
     '<0>Invite friends</0>. <1>Earn rewards</1>. Save on fees.',
+  save_10_percent_on_swaps: 'Save <blue>10%</blue> on swaps now',
   invite_friends: 'Invite frwiends',
   earn_rewards: 'Earn rewards',
   save_on_fees: 'Save on fees',
+  save_swap_fees_with_referral:
+    'Save <blue>10%</blue> on swaps - Add a Referral',
+  create_own_referral:
+    'Create your own code and earn <blue>20%</blue> on referred swaps',
   unmerge_ruji: 'Unmerge',
   referral_reg_fee: 'Registration Fee',
   create_referral: 'Create Referral',
@@ -934,7 +972,7 @@ export const en = {
   took_too_long_to_respond: 'Took too long to respond',
   backup_password: 'Backup Password',
   backup_without_password: 'Backup without password',
-  use_password: 'Use password',
+  backup_with_password: 'Backup with password',
   upgrade_vault: 'Upgrade your vault',
   upgrade_now: 'Upgrade now',
   got_it: 'Got it',
@@ -946,10 +984,14 @@ export const en = {
     "<b>You'll create new Vault Share backups</b>, store them as you did before",
   upgrade_success: 'Vault upgraded <b>successfully</b>',
   go_to_vault: 'Go to vault',
-  backup_password_prompt:
-    'Do you want to add a password to your device vault shares?',
-  backup_password_info:
-    "We recommend that you do not set a backup password for device vault shares-your data is safe if the backups are properly stored in different locations, which is already a significant protection. Remember, backup passwords can't be recovered if you forget them. Your choice!",
+  backup_password_confirmation_title:
+    'Do you want to encrypt your backup with a password?',
+  backup_password_info_secure_without_password:
+    'By default, your backup is <b>secure without</b> an extra password, since you store Vault shares in different locations.',
+  backup_password_info_encrypt_with_password:
+    'If you choose to add a password, this will be used to <b>encrypt</b> the backup file.',
+  backup_password_info_cannot_be_reset:
+    'Remember: if you forget your vault password, it <b>cannot</b> be reset or recovered.',
   upgrade_your_vault_now: 'Upgrade your vault now',
   version: 'Version',
   vulti_share_not_saved_hint:
@@ -1015,4 +1057,8 @@ export const en = {
   scanning: 'scanning...',
   go_back: 'Go Back',
   continue_anyway: 'Continue Anyway',
+  processing_transaction: 'Processing transaction...',
+  failed_to_process_transaction: 'Failed to process transaction',
+  signature_successful: 'Signature Successful',
+  same_vault_share: 'Same vault share',
 }

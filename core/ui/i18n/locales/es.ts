@@ -8,18 +8,25 @@ export const es = {
     '<g>Cada dispositivo</g> en su depósito contiene <g>una parte del depósito</g>',
   onboarding_step_4:
     'Recupera tu bóveda incluso <g>si un dispositivo se pierde o se daña</g>',
+  positions: 'Posiciones',
   onboarding_step_5:
     '<g>Siempre haga una copia de seguridad de cada parte del depósito</g> separadamente en una <g>ubicación diferente</g>',
   onboarding_step_6:
     'Estas partes colaboran para <g>desbloquear su depósito</g>',
   secure_crypto_vault: 'Bóveda segura de criptomonedas',
   vultisig: 'Vultisig',
+  by_vultisig: 'por Vultisig',
+  add_friends_referral: 'Agregar una referencia de amigos',
+  save_10_percent_on_swaps: 'Ahorra <blue>10%</blue> en intercambios ahora',
   digit_input_success_validation: 'Verificación exitosa',
   digit_input_error_validation:
     'Error al verificar el código, por favor intenta de nuevo',
   digit_input_loading_validation: 'Verificando código, por favor espera',
   mint: 'Recibir',
   redeem: 'Vender',
+  merged: 'Combinado',
+  function_unavailble:
+    'Función no disponible para las monedas de cadena existentes. Agrega monedas que puedan usarse con FUNCTION:',
   onboarding_description_1:
     'Vultisig es una bóveda segura de criptomonedas multi-dispositivo, compatible con todas las principales blockchains y más de 10,000 tokens. Vultisig es totalmente autogestionado.',
   onboarding_description_2:
@@ -72,13 +79,18 @@ export const es = {
     'Una pequeña propina para acelerar tu transacción. Propinas más altas pueden hacer que se procese más rápido.',
   percentage: 'Porcentaje',
   send_overview: 'Enviar resumen',
+  vault_selected: 'Bóveda seleccionada',
+  your_referrals: 'Tus recomendaciones',
   percentage_to_unstake: 'Porcentaje para retirar',
   staked_amount: 'Cantidad apostada',
+  thorchain_address_required_for_referrals:
+    'Necesitas una dirección de THORChain para usar el programa de recomendaciones',
   signing_transaction: 'Firma de la transacción',
   asset_selection: 'Selección de activos',
+  enter_percentage: 'Ingrese el porcentaje',
   chain: 'Cadena',
   staked: 'Apostado',
-  title_1: 'Referencia',
+  referrals_default_title: 'Referencia',
   title_2: 'Vultisig - Referencias',
   header_tooltip_title: 'Programa de Referidos',
   header_tooltip_content:
@@ -511,7 +523,6 @@ export const es = {
         'Este código confirmará que has recibido tu acción del monedero 1 por correo electrónico',
       verifyingCode: 'Verificando código, por favor espera',
       backupVault: 'Hacer copia de seguridad del monedero',
-      shareOnlineBackup: 'preferiblemente en línea.',
       shareSecurely: 'para garantizar el acceso,',
       securely: 'de forma segura, preferiblemente',
       online: 'en línea',
@@ -717,7 +728,6 @@ export const es = {
   normal: 'Normal',
   priority: 'Prioridad',
   gas_limit: 'Límite de gas',
-  current_base_fee: 'Tarifa base actual',
   gwei: 'GWEI',
   total_fee: 'Tarifa total',
   network_rate: 'Tasa de red',
@@ -871,11 +881,6 @@ export const es = {
   took_too_long_to_respond: 'Tardó demasiado en responder',
   backup_password: 'Contraseña de respaldo',
   backup_without_password: 'Copia de seguridad sin contraseña',
-  use_password: 'Usar contraseña',
-  backup_password_prompt:
-    '¿Quieres agregar una contraseña a los recursos compartidos de la bóveda de tu dispositivo?',
-  backup_password_info:
-    'Le recomendamos no establecer una contraseña de respaldo para los recursos compartidos de la bóveda del dispositivo. Sus datos estarán seguros si las copias de seguridad se almacenan correctamente en diferentes ubicaciones, lo cual ya constituye una protección considerable. Recuerde que las contraseñas de respaldo no se pueden recuperar si las olvida. ¡Usted decide!',
   upgrade_your_vault_now: 'Actualice su bóveda ahora',
   upgrade_vault: 'Mejora tu bóveda',
   upgrade_now: 'Actualice ahora',
@@ -923,8 +928,13 @@ export const es = {
   terms: 'Términos',
   twitter: 'Gorjeo',
   vultisig_community: 'Comunidad Vultisig',
+  expiration_must_extend_by_exactly_one_year:
+    'La vencimiento solo puede extenderse por un año',
+  turn_your_vault_into_rewards_machine:
+    'Convierta tu bóveda en una máquina de recompensas. Cree tu referencia ahora y comience a ganar.',
   remove: 'Eliminar',
   share_vault: 'Bóveda compartida',
+  no_referral_yet: 'Aún no hay referencia',
   missing_thorchain_address: 'Falta la dirección de THORChain',
   missing_destination_address: 'Dirección de destino faltante',
   upgrade_shares_info:
@@ -1042,8 +1052,6 @@ export const es = {
     'Esta transacción de IBC incluye una nota, pero Vultisig actualmente no admite la incorporación de notas dentro de los mensajes de transferencia de IBC.<br>Continuar con esta transacción puede resultar en una <b>pérdida irreversible de fondos</b>.',
   go_back: 'Volver',
   continue_anyway: 'Continuar de todos modos',
-  stake_ruji: 'Estaca RUJI',
-  unstake_ruji: 'Desapuesta RUJI',
   withdraw_ruji_rewards: 'Retirar recompensas RUJI',
   tns_max_4_chars: 'El código de referencia no debe tener más de 4 caracteres',
   tns_alnum_only:
@@ -1059,4 +1067,43 @@ export const es = {
   entity_scanned: '{{entity}} escaneado por <provider></provider>',
   site_has_risk: 'Sitio malicioso detectado por <provider></provider>',
   risky_site_detected: 'Sitio malicioso detectado',
+  app_permissions: 'Permisos de la aplicación',
+  dapp_name: 'Nombre de la dApp',
+  description: 'Descripción',
+  personal_sign: 'Signo personal',
+  request_from: 'Solicitud de',
+  rules: 'Normas',
+  rule_item: 'Regla {{number}}',
+  sign_request: 'Solicitud de firma',
+  signed_signature: 'Firma firmada',
+  signing_address: 'Dirección de firma',
+  verify_identity_sign: 'Inicie sesión para verificar su identidad',
+  incorrect_url: 'URL incorrecta',
+  developer_options: 'Opciones de desarrollador',
+  plugin_server_url: 'URL del servidor de complementos',
+  base_fee: 'Tarifa base',
+  backupShare2: 'Copia de seguridad compartida 2',
+  processing_transaction: 'Procesando transacción...',
+  failed_to_process_transaction: 'No se pudo procesar la transacción',
+  signature_successful: 'Firma exitosa',
+  accept_continue: 'Aceptar y continuar',
+  allow_app_access: 'Permitir el acceso de la aplicación a',
+  app_store: 'Tienda de aplicaciones',
+  install_app: 'Instalar aplicación',
+  permissions: 'Permisos',
+  same_vault_share: 'Misma bóveda compartida',
+  referrals_create_page_title: 'Vultisig - Referencias',
+  save_swap_fees_with_referral:
+    'Ahorre <blue>10%</blue> en intercambios - Agregar una referencia',
+  create_own_referral:
+    'Crea tu propio código y gana un <blue>20%</blue> en intercambios referidos',
+  backup_with_password: 'Copia de seguridad con contraseña',
+  backup_password_confirmation_title:
+    '¿Quieres cifrar tu copia de seguridad con una contraseña?',
+  backup_password_info_secure_without_password:
+    'De forma predeterminada, su copia de seguridad es <b>segura</b> sin una contraseña adicional, ya que almacena los recursos compartidos de Vault en diferentes ubicaciones.',
+  backup_password_info_encrypt_with_password:
+    'Si decide agregar una contraseña, esta se utilizará para <b>encriptar</b> el archivo de respaldo.',
+  backup_password_info_cannot_be_reset:
+    'Recuerde: si olvida la contraseña de su bóveda, no podrá restablecerla ni recuperarla.',
 }
