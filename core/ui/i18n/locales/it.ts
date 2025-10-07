@@ -6,23 +6,30 @@ export const it = {
     'Sono <g>divisi in parti</g> per aumentare la sicurezza e, <g>eliminare il singolo punto di guasto</g>',
   onboarding_step_3:
     '<g>Ogni dispositivo</g> nel tuo caveau contiene <g>una quota del caveau</g>',
+  positions: 'Posizioni',
   onboarding_step_4:
     'Recupera la tua cassaforte anche <g>se un dispositivo è perso o danneggiato</g>',
+  add_friends_referral: 'Aggiungi una referenza dei amici',
   onboarding_step_5:
     '<g>Esegui sempre il backup di ogni quota del caveau</g> separatamente in una <g>posizione diversa</g>',
   onboarding_step_6:
     'Queste quote collaborano per <g>sbloccare il tuo caveau</g>',
   secure_crypto_vault: 'Cassaforte sicura per criptovalute',
   vultisig: 'Vultisig',
+  by_vultisig: 'da Vultisig',
+  save_10_percent_on_swaps: 'Risparmia <blue>10%</blue> su swap ora',
   onboarding_description_1:
     'Vultisig è una cassaforte sicura per criptovalute multi-dispositivo, compatibile con tutte le principali blockchain e oltre 10.000 token. Vultisig è completamente autogestito.',
   onboarding_description_2:
     'Vultisig non traccia le tue attività né richiede alcuna registrazione. Vultisig è open-source, garantendo trasparenza e fiducia.',
+  function_unavailble:
+    'Funzionalità non disponibile per le monete della catena esistenti. Aggiungi monete che possono essere utilizzate con FUNCTION:',
   onboarding_description_3:
     "Vultisig è, per natura, un'applicazione multi-dispositivo. Richiede almeno due dispositivi per creare una cassaforte sicura: un dispositivo iniziale e un dispositivo di accoppiamento.",
   onboarding_description_4:
     'Vultisig è un portafoglio senza frasi seed. Utilizza invece frammenti facili da gestire. Ogni dispositivo ha il proprio frammento unico che necessita di un backup separato.',
   moreInfo: 'Maggiori informazioni',
+  merged: 'Combinato',
   incorrect_passcode: 'Codice errato',
   create_referral_title: 'Crea referral',
   use_referral_code: 'Usa codice referral',
@@ -80,15 +87,21 @@ export const it = {
   ibc_transfer: 'Trasferimento IBC',
   staked: 'Puntato',
   percentage: 'Percentuale',
+  vault_selected: 'Vault selezionato',
   percentage_to_unstake: 'Percentuale da dismettere',
   staked_amount: 'Importo puntato',
   percentage_limit: 'La percentuale deve essere compresa tra 0 e 100',
+  enter_percentage: 'Inserisci la percentuale',
+  thorchain_address_required_for_referrals:
+    'Hai bisogno di un indirizzo THORChain per utilizzare il programma di referral',
   selected_chain_missing_in_your_vault:
     'La blockchain selezionata manca nel tuo caveau',
   chain: 'Catena',
   price_impact_good: 'Buono',
   select_token: 'Seleziona token',
-  title_1: 'Referral',
+  referrals_default_title: 'Referral',
+  your_referrals: 'I tuoi referral',
+  referrals_create_page_title: 'Vultisig - Referrals',
   title_2: 'Vultisig - Referral',
   header_tooltip_title: 'Programma di Referral',
   header_tooltip_content:
@@ -514,7 +527,6 @@ export const it = {
         'Questo codice confermerà che hai ricevuto la tua quota del vault 1 via e-mail',
       verifyingCode: 'Verifica del codice in corso, attendere',
       backupVault: 'Esegui il backup del vault',
-      shareOnlineBackup: 'preferibilmente online.',
       shareSecurely: "per garantire l'accesso,",
       securely: 'in modo sicuro, preferibilmente',
       online: 'online',
@@ -712,7 +724,6 @@ export const it = {
   normal: 'Normale',
   priority: 'Priorità',
   gas_limit: 'Limite del gas',
-  current_base_fee: 'Tariffa base attuale',
   gwei: 'Ciao',
   total_fee: 'Tariffa totale',
   network_rate: 'Tasso di rete',
@@ -866,11 +877,6 @@ export const it = {
   took_too_long_to_respond: 'Ci è voluto troppo tempo per rispondere',
   backup_password: 'Password di backup',
   backup_without_password: 'Backup senza password',
-  use_password: 'Usa la password',
-  backup_password_prompt:
-    'Vuoi aggiungere una password alle condivisioni del vault del tuo dispositivo?',
-  backup_password_info:
-    'Ti consigliamo di non impostare una password di backup per le condivisioni del vault del dispositivo: i tuoi dati sono al sicuro se i backup sono correttamente archiviati in posizioni diverse, il che è già una protezione significativa. Ricorda, le password di backup non possono essere recuperate se le dimentichi. La scelta è tua!',
   upgrade_your_vault_now: 'Aggiorna il tuo caveau ora',
   upgrade_vault: 'Aggiorna il tuo caveau',
   upgrade_now: 'Aggiorna ora',
@@ -917,9 +923,14 @@ export const it = {
   support: 'Supporto',
   terms: 'Termini',
   twitter: 'Cinguettio',
+  expiration_must_extend_by_exactly_one_year:
+    'La scadenza può essere estesa solo per un anno',
+  turn_your_vault_into_rewards_machine:
+    'Trasforma il tuo vault in una macchina di premi. Crea la tua referenza ora e inizia a guadagnare.',
   vultisig_community: 'Comunità di Vultisig',
   remove: 'Rimuovere',
   share_vault: 'Condividi Vault',
+  no_referral_yet: 'Nessuna referenza',
   missing_thorchain_address: 'Indirizzo THORChain mancante',
   missing_destination_address: 'Indirizzo di destinazione mancante',
   upgrade_shares_info:
@@ -1038,8 +1049,6 @@ export const it = {
     "Questa transazione IBC include un promemoria, ma Vultisig attualmente non supporta l'incorporamento di promemoria nei messaggi di trasferimento IBC.<br> Procedere con questa transazione potrebbe comportare una <b>perdita irreversibile di fondi</b>.",
   go_back: 'Torna indietro',
   continue_anyway: 'Continua comunque',
-  stake_ruji: 'Palo RUJI',
-  unstake_ruji: 'Togliere RUJI',
   withdraw_ruji_rewards: 'Ritira i premi RUJI',
   tns_max_4_chars:
     'Il codice di riferimento non deve contenere più di 4 caratteri',
@@ -1056,4 +1065,42 @@ export const it = {
   entity_scanned: '{{entity}} scansionata da <provider></provider>',
   site_has_risk: 'Sito dannoso rilevato da <provider></provider>',
   risky_site_detected: 'Sito dannoso rilevato',
+  app_permissions: "Autorizzazioni dell'app",
+  dapp_name: 'Nome dApp',
+  description: 'Descrizione',
+  personal_sign: 'Segno personale',
+  request_from: 'Richiesta da',
+  rules: 'Regole',
+  rule_item: 'Regola {{numero}}',
+  sign_request: 'Richiesta di firma',
+  signed_signature: 'Firma firmata',
+  signing_address: 'Indirizzo di firma',
+  verify_identity_sign: 'Accedi per verificare la tua identità',
+  incorrect_url: 'URL errato',
+  developer_options: 'Opzioni sviluppatore',
+  plugin_server_url: 'URL del server del plugin',
+  base_fee: 'Tariffa base',
+  backupShare2: 'Condivisione di backup 2',
+  processing_transaction: 'Elaborazione della transazione in corso...',
+  failed_to_process_transaction: 'Impossibile elaborare la transazione',
+  signature_successful: 'Firma riuscita',
+  accept_continue: 'Accetta e continua',
+  allow_app_access: "Consenti l'accesso all'app a",
+  app_store: 'App Store',
+  install_app: "Installa l'app",
+  permissions: 'Permessi',
+  same_vault_share: 'Stessa condivisione del vault',
+  save_swap_fees_with_referral:
+    'Risparmia il <blue>10%</blue> sugli scambi - Aggiungi un referral',
+  create_own_referral:
+    'Crea il tuo codice e guadagna il <blue>20%</blue> sugli scambi segnalati',
+  backup_with_password: 'Backup con password',
+  backup_password_confirmation_title:
+    'Vuoi crittografare il tuo backup con una password?',
+  backup_password_info_secure_without_password:
+    'Per impostazione predefinita, il backup è <b>sicuro</b> senza una password aggiuntiva, poiché le condivisioni Vault vengono archiviate in posizioni diverse.',
+  backup_password_info_encrypt_with_password:
+    'Se si sceglie di aggiungere una password, questa verrà utilizzata per <b>crittografare</b> il file di backup.',
+  backup_password_info_cannot_be_reset:
+    'Ricorda: se dimentichi la password del tuo vault, non potrai reimpostarla o recuperarla.',
 }

@@ -13,6 +13,7 @@ export const pt = {
   onboarding_step_6: 'Essas partes colaboram para <g>desbloquear seu cofre</g>',
   secure_crypto_vault: 'Cofre seguro de cripto',
   vultisig: 'Vultisig',
+  by_vultisig: 'por Vultisig',
   onboarding_description_1:
     'O Vultisig é um cofre seguro de cripto multi-dispositivo, compatível com todas as principais blockchains e mais de 10.000 tokens. O Vultisig é totalmente auto-hospedado.',
   onboarding_description_2:
@@ -22,6 +23,9 @@ export const pt = {
   onboarding_description_4:
     'O Vultisig é uma carteira sem frases-semente. Em vez disso, usa fragmentos fáceis de gerenciar. Cada dispositivo tem seu próprio fragmento exclusivo que precisa de backup separado.',
   moreInfo: 'Mais informações',
+  merged: 'Combinado',
+  function_unavailble:
+    'Recurso não disponível para moedas de cadeia existentes. Adicione moedas que possam ser usadas com FUNCTION:',
   incorrect_passcode: 'Código incorreto',
   create_referral_title: 'Criar indicação',
   use_referral_code: 'Usar código de indicação',
@@ -79,12 +83,17 @@ export const pt = {
   verify_password_periodic_message:
     'Verifique sua senha de compartilhamento do servidor',
   staked: 'Apostado',
+  vault_selected: 'Cofre selecionado',
   percentage_to_unstake: 'Percentual para desinvestir',
   staked_amount: 'Valor em staking',
   percentage_limit: 'A porcentagem deve estar entre 0 e 100',
+  enter_percentage: 'Insira a porcentagem',
+  thorchain_address_required_for_referrals:
+    'Você precisa ter um endereço THORChain para usar o programa de referência',
   start_transaction: 'Iniciar transação',
   youre_swapping: 'Você está trocando',
-  title_1: 'Indicação',
+  referrals_default_title: 'Indicação',
+  your_referrals: 'Suas indicações',
   title_2: 'Vultisig - Indicações',
   header_tooltip_title: 'Programa de Indicações',
   header_tooltip_content:
@@ -506,7 +515,6 @@ export const pt = {
         'Este código confirmará que você recebeu sua ação do cofre 1 por e-mail',
       verifyingCode: 'Verificando código, por favor aguarde',
       backupVault: 'Fazer backup do cofre',
-      shareOnlineBackup: 'preferencialmente online.',
       shareSecurely: 'para garantir o acesso,',
       securely: 'com segurança, de preferência',
       online: 'online',
@@ -706,7 +714,6 @@ export const pt = {
   normal: 'Normal',
   priority: 'Prioridade',
   gas_limit: 'Limite de gás',
-  current_base_fee: 'Taxa base atual',
   gwei: 'GWEI',
   total_fee: 'Taxa total',
   network_rate: 'Taxa de rede',
@@ -860,11 +867,6 @@ export const pt = {
   took_too_long_to_respond: 'Demorou muito para responder',
   backup_password: 'Senha de backup',
   backup_without_password: 'Backup sem senha',
-  use_password: 'Usar senha',
-  backup_password_prompt:
-    'Deseja adicionar uma senha aos compartilhamentos do cofre do seu dispositivo?',
-  backup_password_info:
-    'Recomendamos que você não defina uma senha de backup para compartilhamentos de cofre de dispositivos - seus dados estarão seguros se os backups forem armazenados adequadamente em locais diferentes, o que já é uma proteção significativa. Lembre-se, as senhas de backup não podem ser recuperadas se você as esquecer. A escolha é sua!',
   upgrade_your_vault_now: 'Atualize seu cofre agora',
   upgrade_vault: 'Atualize seu cofre',
   upgrade_now: 'Atualize agora',
@@ -909,11 +911,16 @@ export const pt = {
   referral_code: 'Código de referência',
   rename: 'Renomear',
   support: 'Apoiar',
+  turn_your_vault_into_rewards_machine:
+    'Transforme seu cofre em uma máquina de recompensas',
   terms: 'Termos',
   twitter: 'Twitter',
+  expiration_must_extend_by_exactly_one_year:
+    'A expiração só pode ser estendida por um ano',
   vultisig_community: 'Comunidade Vultisig',
   remove: 'Remover',
   share_vault: 'Compartilhar Cofre',
+  no_referral_yet: 'Nenhuma referência ainda',
   missing_thorchain_address: 'Endereço THORChain ausente',
   missing_destination_address: 'Endereço de destino ausente',
   upgrade_shares_info:
@@ -1030,8 +1037,6 @@ export const pt = {
     'Esta transação IBC inclui um memorando, mas o Vultisig atualmente não suporta a incorporação de memorandos dentro de mensagens de transferência IBC.<br> Prosseguir com esta transação pode resultar em <b>perda irreversível de fundos</b>.',
   go_back: 'Volte',
   continue_anyway: 'Continue assim mesmo',
-  stake_ruji: 'Estaca RUJI',
-  unstake_ruji: 'Desencaixar RUJI',
   withdraw_ruji_rewards: 'Saque Recompensas RUJI',
   tns_max_4_chars: 'O código de referência não deve ter mais de 4 caracteres',
   tns_alnum_only:
@@ -1047,4 +1052,46 @@ export const pt = {
   entity_scanned: '{{entity}} escaneado por <provider></provider>',
   site_has_risk: 'Site malicioso detectado por <provider></provider>',
   risky_site_detected: 'Site malicioso detectado',
+  app_permissions: 'Permissões do aplicativo',
+  dapp_name: 'Nome do dApp',
+  description: 'Descrição',
+  personal_sign: 'Sinal Pessoal',
+  request_from: 'Solicitação de',
+  rules: 'Regras',
+  rule_item: 'Regra {{número}}',
+  sign_request: 'Solicitação de assinatura',
+  signed_signature: 'Assinatura assinada',
+  signing_address: 'Endereço de Assinatura',
+  verify_identity_sign: 'Entre para verificar sua identidade',
+  incorrect_url: 'URL incorreta',
+  developer_options: 'Opções do desenvolvedor',
+  plugin_server_url: 'URL do servidor de plugin',
+  positions: 'Posições',
+  base_fee: 'Taxa básica',
+  backupShare2: 'Compartilhamento de backup 2',
+  processing_transaction: 'Processando transação...',
+  failed_to_process_transaction: 'Falha ao processar a transação',
+  signature_successful: 'Assinatura bem-sucedida',
+  accept_continue: 'Aceitar e continuar',
+  allow_app_access: 'Permitir acesso do aplicativo a',
+  app_store: 'Loja de aplicativos',
+  install_app: 'Instalar aplicativo',
+  permissions: 'Permissões',
+  same_vault_share: 'Mesmo compartilhamento de cofre',
+  referrals_create_page_title: 'Vultisig - Referências',
+  add_friends_referral: 'Adicionar uma indicação de amigo',
+  save_10_percent_on_swaps: 'Economize <blue>10%</blue> em trocas agora',
+  save_swap_fees_with_referral:
+    'Economize <blue>10%</blue> em trocas - Adicione uma indicação',
+  create_own_referral:
+    'Crie seu próprio código e ganhe <blue>20%</blue> em swaps indicados',
+  backup_with_password: 'Backup com senha',
+  backup_password_confirmation_title:
+    'Você quer criptografar seu backup com uma senha?',
+  backup_password_info_secure_without_password:
+    'Por padrão, seu backup é <b>seguro sem</b> uma senha extra, já que você armazena compartilhamentos do Vault em locais diferentes.',
+  backup_password_info_encrypt_with_password:
+    'Se você optar por adicionar uma senha, ela será usada para <b>criptografar</b> o arquivo de backup.',
+  backup_password_info_cannot_be_reset:
+    'Lembre-se: se você esquecer a senha do seu cofre, ela <b>não poderá</b> ser redefinida ou recuperada.',
 }

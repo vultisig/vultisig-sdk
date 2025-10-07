@@ -8,12 +8,15 @@ export const hr = {
     '<g>Minden eszköz</g> a tárhelyedben tartalmaz <g>egy tárhelyrészt</g>',
   onboarding_step_4:
     'Állítsd helyre a széfet még akkor is <g>ha egy eszköz elveszik vagy megsérül</g>',
+  add_friends_referral: 'Adj hozzá egy barátságos hivatkozást',
   onboarding_step_5:
     '<g>Mindig készíts biztonsági másolatot minden tárhelyrészről</g> külön egy <g>másik helyszínen</g>',
   onboarding_step_6:
     'Ezek a részek együttműködnek, hogy <g>feloldják a tárhelyed zárolását</g>',
   secure_crypto_vault: 'Sigurni kripto trezor',
+  save_10_percent_on_swaps: 'Mentsd el <blue>10%</blue> a swap-okkal most',
   vultisig: 'Vultisig',
+  by_vultisig: 'od Vultisig',
   onboarding_description_1:
     'Vultisig je sigurni, višeslojni kripto trezor, kompatibilan sa svim glavnim blockchainima i preko 10.000 tokena. Vultisig je potpuno samostalni.',
   onboarding_description_2:
@@ -23,6 +26,9 @@ export const hr = {
   onboarding_description_4:
     'Vultisig je novčanik bez seed fraza. Umjesto toga koristi lako upravljive dijelove trezora. Svaki uređaj ima svoj jedinstveni dio koji treba zasebno sigurnosno kopirati.',
   search_field_placeholder: 'Pretraži..',
+  merged: 'Spojeno',
+  function_unavailble:
+    'Značajka nije dostupna za postojeće kovanice lanca. Dodajte kovanice koje se mogu koristiti s FUNCTION:',
   create_referral_title: 'Stvori preporuku',
   use_referral_code: 'Upotrijebi kod preporuke',
   save_code: 'Spremi kod',
@@ -33,6 +39,7 @@ export const hr = {
   your_referral_code: 'Vaš kod preporuke',
   collected_rewards: 'Prikupljene nagrade',
   expires_on: 'Istječe',
+  positions: 'Pozicije',
   unstake_share_token_label: 'Unstake {{ticker}}',
   edit_referral: 'Uredi preporuku',
   edit_friends_referral: 'Uredi prijateljevu preporuku',
@@ -64,9 +71,12 @@ export const hr = {
   base_fee_tooltip_content:
     'Mala napojnica za ubrzanje vaše transakcije. Veće napojnice mogu ubrzati obradu.',
   you_are_sending: 'Šalješ',
-  title_1: 'Preporuka',
+  referrals_default_title: 'Preporuka',
+  vault_selected: 'Vault odabran',
   title_2: 'Vultisig - Preporuke',
   header_tooltip_title: 'Program Preporuka',
+  thorchain_address_required_for_referrals:
+    'Moraš imati THORChain adresu za korištenje programa preporuka',
   header_tooltip_content:
     'Program preporuka se primjenjuje na THORChain zamjene i temelji se na načelu najbolje namjere. Moraš registrirati THORName kako bi koristio Vultisig preporuke. Naknada za registraciju je 10 RUNE te 1 RUNE godišnje, što se plaća THORChain mreži.',
   invite_friends: 'Pozovi prijatelje',
@@ -271,6 +281,7 @@ export const hr = {
   join_keygen_slider7_note1:
     'Višeslojna kompatibilnost. Pristupite svom Vultisig trezoru ',
   join_keygen_slider7_note2: 's više uređaja',
+  enter_percentage: 'Unesite postotak',
   join_keygen_slider7_note3:
     'povećavajući fleksibilnost bez kompromisa u sigurnosti.',
   generating_ecdsa_key: 'Generiranje ECDSA ključa',
@@ -493,7 +504,6 @@ export const hr = {
         'Ez a kód megerősíti, hogy megkaptad az 1. trezor megosztásodat e-mailben',
       verifyingCode: 'Kód ellenőrzése, kérlek várj',
       backupVault: 'Trezor biztonsági mentése',
-      shareOnlineBackup: 'lehetőleg online.',
       shareSecurely: 'a hozzáférés biztosítása érdekében,',
       securely: 'biztonságosan, lehetőleg',
       online: 'online',
@@ -691,7 +701,6 @@ export const hr = {
   normal: 'Normalan',
   priority: 'Prioritet',
   gas_limit: 'Ograničenje plina',
-  current_base_fee: 'Trenutna osnovna naknada',
   gwei: 'GWEI',
   total_fee: 'Ukupna naknada',
   network_rate: 'Mrežna stopa',
@@ -848,11 +857,6 @@ export const hr = {
   took_too_long_to_respond: 'Predugo je trebalo za odgovor',
   backup_password: 'Lozinka sigurnosne kopije',
   backup_without_password: 'Sigurnosna kopija bez lozinke',
-  use_password: 'Koristi lozinku',
-  backup_password_prompt:
-    'Želite li dodati lozinku dijeljenjima trezora uređaja?',
-  backup_password_info:
-    'Preporučujemo da ne postavljate sigurnosnu lozinku za dijeljenje trezora uređaja - vaši su podaci sigurni ako su sigurnosne kopije pravilno pohranjene na različitim lokacijama, što je već značajna zaštita. Upamtite, sigurnosne lozinke nije moguće vratiti ako ih zaboravite. Vaš izbor!',
   upgrade_your_vault_now: 'Nadogradite svoj trezor sada',
   upgrade_vault: 'Nadogradite svoj trezor',
   upgrade_now: 'Nadogradite sada',
@@ -897,12 +901,16 @@ export const hr = {
   prioritize_vultisig: 'Dajte prioritet Vultisigu',
   referral_code: 'Referral kod',
   rename: 'Preimenovati',
+  turn_your_vault_into_rewards_machine: 'Pretvorite svoju trezor u nagrade',
   support: 'Podrška',
+  expiration_must_extend_by_exactly_one_year:
+    'Ističe se može proširiti samo jednom godinom',
   terms: 'Uvjeti',
   twitter: 'Cvrkut',
   vultisig_community: 'Vultisig zajednica',
   remove: 'Ukloniti',
   share_vault: 'Dijeli trezor',
+  no_referral_yet: 'Nema preporuke',
   missing_thorchain_address: 'Nedostaje THORChain adresa',
   missing_destination_address: 'Nedostaje odredišna adresa',
   upgrade_shares_info:
@@ -1015,8 +1023,6 @@ export const hr = {
     'Ova IBC transakcija uključuje memorandum, ali Vultisig trenutno ne podržava ugrađivanje memoranduma unutar IBC poruka o prijenosu.<br> Nastavak ove transakcije može rezultirati <b>nepovratnim gubitkom sredstava</b>.',
   go_back: 'Natrag',
   continue_anyway: 'Nastavi svejedno',
-  stake_ruji: 'Kolac RUJI',
-  unstake_ruji: 'Ukloni RUJI',
   withdraw_ruji_rewards: 'Isplata RUJI nagrada',
   tns_max_4_chars: 'Referral kod ne smije biti duži od 4 znaka',
   tns_alnum_only: 'Referral kod mora sadržavati samo alfanumeričke znakove',
@@ -1031,4 +1037,44 @@ export const hr = {
   entity_scanned: '{{entitet}} skeniran od strane <provider></provider>',
   site_has_risk: 'Zlonamjernu stranicu otkrio je <provider></provider>',
   risky_site_detected: 'Otkrivena je zlonamjerna web-lokacija',
+  app_permissions: 'Dozvole aplikacije',
+  dapp_name: 'Naziv dApp-a',
+  description: 'Opis',
+  personal_sign: 'Osobni znak',
+  request_from: 'Zahtjev od',
+  rules: 'Pravila',
+  rule_item: 'Pravilo {{broj}}',
+  sign_request: 'Zahtjev za potpis',
+  signed_signature: 'Potpis',
+  signing_address: 'Adresa za potpisivanje',
+  verify_identity_sign: 'Prijavite se kako biste potvrdili svoj identitet',
+  incorrect_url: 'Netočan URL',
+  developer_options: 'Opcije za razvojne programere',
+  plugin_server_url: 'URL poslužitelja dodataka',
+  base_fee: 'Osnovna naknada',
+  backupShare2: 'Sigurnosno dijeljenje 2',
+  processing_transaction: 'Obrada transakcije...',
+  failed_to_process_transaction: 'Obrada transakcije nije uspjela',
+  signature_successful: 'Potpis uspješan',
+  accept_continue: 'Prihvati i nastavi',
+  allow_app_access: 'Dopusti aplikaciji pristup',
+  app_store: 'Trgovina aplikacija',
+  install_app: 'Instaliraj aplikaciju',
+  permissions: 'Dozvole',
+  same_vault_share: 'Isti trezorski udio',
+  referrals_create_page_title: 'Vultisig - Preporuke',
+  your_referrals: 'Vaše preporuke',
+  save_swap_fees_with_referral:
+    'Uštedite <blue>10%</blue> na zamjenama - Dodajte preporuku',
+  create_own_referral:
+    'Izradite vlastiti kod i zaradite <blue>20%</blue> na preporučenim zamjenama',
+  backup_with_password: 'Sigurnosna kopija s lozinkom',
+  backup_password_confirmation_title:
+    'Želite li šifrirati sigurnosnu kopiju lozinkom?',
+  backup_password_info_secure_without_password:
+    'Prema zadanim postavkama, vaša sigurnosna kopija je <b>sigurna bez</b> dodatne lozinke jer dijeljene datoteke Vaulta pohranjujete na različitim lokacijama.',
+  backup_password_info_encrypt_with_password:
+    'Ako odaberete dodati lozinku, ona će se koristiti za <b>šifriranje</b> sigurnosne kopije datoteke.',
+  backup_password_info_cannot_be_reset:
+    'Zapamtite: ako zaboravite lozinku za trezor, ona se *ne može* resetirati ili oporaviti.',
 }
