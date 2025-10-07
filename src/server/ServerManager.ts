@@ -132,6 +132,13 @@ export class ServerManager {
     const sessionId = generateSessionId() // Use our own session ID consistently
     const hexEncryptionKey = await generateEncryptionKey()
 
+    // Generate a new local party ID for this signing session (like extension does)
+    const { generateLocalPartyId } = await import(
+      '../core/mpc/devices/localPartyId'
+    )
+    const signingLocalPartyId = generateLocalPartyId('extension' as any)
+    console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
+
     // Step 1: Call FastVault server API with our session ID
     console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
     const serverResponse = await callFastVaultAPI({
@@ -145,11 +152,11 @@ export class ServerManager {
     })
     console.log(`✅ Server acknowledged session: ${serverResponse}`)
 
-    // Step 2: Join relay session as client
+    // Step 2: Join relay session as client with new signing party ID
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
-      localPartyId: vault.localPartyId,
+      localPartyId: signingLocalPartyId,
     })
 
     // Step 2.5: Register server as participant (critical for server to join)
@@ -171,8 +178,8 @@ export class ServerManager {
 
     // Wait for server to join session
     console.log('⏳ Waiting for server to join session...')
-    const devices = await this.waitForPeers(sessionId, vault.localPartyId)
-    const peers = devices.filter(device => device !== vault.localPartyId)
+    const devices = await this.waitForPeers(sessionId, signingLocalPartyId)
+    const peers = devices.filter(device => device !== signingLocalPartyId)
     console.log(`✅ All participants ready: [${devices.join(', ')}]`)
     console.log(`🤝 Peer devices: [${peers.join(', ')}]`)
 
@@ -207,45 +214,47 @@ export class ServerManager {
 
     // If this is a UTXO chain (e.g., BTC), there may be multiple messages. Sign all.
     const isUtxo = chainKind === 'utxo'
-    const signatures: Record<string, any> = {}
+    const signatureResults: Record<string, any> = {}
 
     for (const msg of messages) {
+      console.log(`🔏 Signing message: ${msg}`)
       const sig = await keysign({
         keyShare,
         signatureAlgorithm,
         message: msg,
         chainPath: derivePath.replaceAll("'", ''),
-        localPartyId: vault.localPartyId,
+        localPartyId: signingLocalPartyId,
         peers,
         serverUrl: this.config.messageRelay,
         sessionId,
         hexEncryptionKey,
         isInitiatingDevice: true,
       })
-      signatures[msg] = sig.der_signature
+      console.log(`✅ Signature result:`, sig)
+      signatureResults[msg] = sig
     }
 
     // If single-message chains (e.g., EVM), return the single signature as before
     if (!isUtxo) {
       const only = messages[0]
-      const sig = signatures[only]
-      const recoveryIdHex = (
-        await keysign({
-          keyShare,
-          signatureAlgorithm,
-          message: only,
-          chainPath: derivePath.replaceAll("'", ''),
-          localPartyId: vault.localPartyId,
-          peers,
-          serverUrl: this.config.messageRelay,
-          sessionId,
-          hexEncryptionKey,
-          isInitiatingDevice: true,
-        })
-      ).recovery_id
-      const recoveryId = recoveryIdHex ? parseInt(recoveryIdHex, 16) : undefined
+      const sigResult = signatureResults[only]
+      const recoveryId = sigResult.recovery_id
+        ? parseInt(sigResult.recovery_id, 16)
+        : undefined
+
+      console.log(`🎯 Final signature for EVM:`, {
+        signature: sigResult.der_signature,
+        format:
+          signatureAlgorithm === 'eddsa'
+            ? 'EdDSA'
+            : recoveryId !== undefined
+              ? 'ECDSA'
+              : 'DER',
+        recovery: recoveryId,
+      })
+
       return {
-        signature: sig,
+        signature: sigResult.der_signature,
         format:
           signatureAlgorithm === 'eddsa'
             ? 'EdDSA'
@@ -298,11 +307,17 @@ export class ServerManager {
       publicKey,
     })
 
+    // Extract just the DER signatures for compilation
+    const derSignatures: Record<string, any> = {}
+    for (const [msg, sigResult] of Object.entries(signatureResults)) {
+      derSignatures[msg] = sigResult.der_signature
+    }
+
     const compiledTxs = inputs.map(txInputData =>
       compileTx({
         publicKey,
         txInputData,
-        signatures,
+        signatures: derSignatures,
         chain,
         walletCore,
       })
