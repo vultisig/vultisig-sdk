@@ -1,12 +1,12 @@
+import { ServerManager } from './server'
 import type {
-  Vault,
-  ServerStatus,
-  KeygenProgressUpdate,
   AddressBook,
   AddressBookEntry,
+  ServerStatus,
+  Signature,
+  SigningPayload,
   ValidationResult,
 } from './types'
-import { ServerManager } from './server'
 import { AddressBookManager } from './vault/AddressBook'
 import { ChainManagement } from './vault/ChainManagement'
 import { ValidationHelpers } from './vault/utils/validation'
@@ -123,13 +123,13 @@ export class Vultisig {
       type: 'fast',
       password: options.password,
       email: options.email,
-      onProgress: options.onProgress
+      onProgress: options.onProgress,
     })
-    
+
     return {
       vault,
       vaultId: vault.data.publicKeys.ecdsa,
-      verificationRequired: true
+      verificationRequired: true,
     }
   }
 
@@ -146,8 +146,11 @@ export class Vultisig {
    */
   async getVault(vaultId: string, password: string): Promise<VaultClass> {
     await this.ensureInitialized()
-    const vaultData = await this.serverManager.getVaultFromServer(vaultId, password)
-    
+    const vaultData = await this.serverManager.getVaultFromServer(
+      vaultId,
+      password
+    )
+
     // Create VaultClass instance
     const vault = new VaultClass(
       vaultData,
@@ -158,7 +161,7 @@ export class Vultisig {
 
     // Store the vault and set as active
     this.vaultManagement.setActiveVault(vault)
-    
+
     return vault
   }
 
@@ -332,6 +335,36 @@ export class Vultisig {
     name: string
   ): Promise<void> {
     return this.addressBookManager.updateAddressBookEntry(chain, address, name)
+  }
+
+  // === SIGNING OPERATIONS ===
+
+  /**
+   * Sign transaction with the active vault using fast signing mode
+   * Only works with fast vaults (vaults with VultiServer)
+   */
+  async signTransaction(
+    payload: SigningPayload,
+    password: string
+  ): Promise<Signature> {
+    await this.ensureInitialized()
+    const activeVault = this.getActiveVault()
+    if (!activeVault) {
+      throw new Error('No active vault. Please set an active vault first.')
+    }
+    return activeVault.sign('fast', payload, password)
+  }
+
+  /**
+   * Sign transaction with a specific vault using fast signing mode
+   */
+  async signTransactionWithVault(
+    vault: VaultClass,
+    payload: SigningPayload,
+    password: string
+  ): Promise<Signature> {
+    await this.ensureInitialized()
+    return vault.sign('fast', payload, password)
   }
 
   // === INTERNAL ACCESS FOR VAULT ===
