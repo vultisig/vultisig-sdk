@@ -17,7 +17,7 @@ import { FC } from 'react'
 import { FieldValues } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
-import { useDepositFormFieldsAndSchema } from '../hooks/useDepositFormFieldsAndSchema'
+import { useDepositFormConfig } from '../hooks/useDepositFormConfig'
 import { useDepositAction } from '../providers/DepositActionProvider'
 import { useDepositCoin } from '../providers/DepositCoinProvider'
 
@@ -48,7 +48,7 @@ export const DepositVerify: FC<DepositVerifyProps> = ({
 
   const sender = useSender()
   const { t } = useTranslation()
-  const { fields: actionFields } = useDepositFormFieldsAndSchema()
+  const { fields: actionFields } = useDepositFormConfig()
 
   return (
     <>
@@ -93,16 +93,18 @@ export const DepositVerify: FC<DepositVerifyProps> = ({
           {selectedChainAction === 'leave' && (
             <ListItem description={`0 ${coin.ticker}`} title={t('amount')} />
           )}
-          <ListItem
-            description={
-              <VStack as="pre" scrollable>
-                <Text as="code" family="mono">
-                  {String(formattedDepositFormData['memo'])}
-                </Text>
-              </VStack>
-            }
-            title={t('memo')}
-          />
+          {Boolean(formattedDepositFormData['memo']) && (
+            <ListItem
+              description={
+                <VStack as="pre" scrollable>
+                  <Text as="code" family="mono">
+                    {String(formattedDepositFormData['memo'])}
+                  </Text>
+                </VStack>
+              }
+              title={t('memo')}
+            />
+          )}
           <ListItem
             description={<DepositFeeValue />}
             title={`${t('gas')} (${t('auto')})`}
