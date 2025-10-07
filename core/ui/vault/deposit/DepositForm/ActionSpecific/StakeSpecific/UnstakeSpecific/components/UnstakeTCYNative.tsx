@@ -35,12 +35,12 @@ export const UnstakeTCYNative = () => {
     <InputContainer>
       <Text size={15}>
         {t('percentage_to_unstake')} ({t('staked_amount')}: {maxDisplay}{' '}
-        {ticker}
+        {ticker})
       </Text>
       <ActionInsideInteractiveElement
         render={() => (
           <AmountTextInput
-            placeholder={t('enter_amount')}
+            placeholder={t('enter_percentage')}
             value={getValues('percentage')}
             onChange={e =>
               setValue('percentage', e.target.value, {
@@ -67,7 +67,7 @@ export const UnstakeTCYNative = () => {
         action={
           <MaxButton
             onClick={() =>
-              setValue('percentage', '100', { shouldValidate: true })
+              setValue('percentage', 100, { shouldValidate: true })
             }
           >
             {t('max')}
