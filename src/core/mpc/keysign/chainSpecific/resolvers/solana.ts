@@ -1,4 +1,7 @@
 import { create } from '@bufbuild/protobuf'
+
+import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
+import { attempt } from '../../../../../lib/utils/attempt'
 import { getSolanaClient } from '../../../../chain/chains/solana/client'
 import { solanaConfig } from '../../../../chain/chains/solana/solanaConfig'
 import { getSplAssociatedAccount } from '../../../../chain/chains/solana/spl/getSplAssociatedAccount'
@@ -7,10 +10,7 @@ import {
   SolanaSpecific,
   SolanaSpecificSchema,
 } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
-import { attempt } from '../../../../../lib/utils/attempt'
-import { PublicKey } from '@solana/web3.js'
-
+// import { PublicKey } from '@solana/web3.js' // Using dynamic import instead
 import { ChainSpecificResolver } from '../resolver'
 
 export const getSolanaSpecific: ChainSpecificResolver<SolanaSpecific> = async ({
@@ -23,8 +23,9 @@ export const getSolanaSpecific: ChainSpecificResolver<SolanaSpecific> = async ({
     await client.getLatestBlockhash()
   ).blockhash.toString()
 
+  const { PublicKey } = await import('@solana/web3.js')
   const prioritizationFees = await client.getRecentPrioritizationFees({
-    lockedWritableAccounts: [new PublicKey(coin.address)]
+    lockedWritableAccounts: [new PublicKey(coin.address)],
   })
 
   // regardless of its complexity Solana charges a fixed base transaction fee of 5000 lamports per transaction.

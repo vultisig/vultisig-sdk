@@ -595,7 +595,16 @@ export class ServerManager {
     vault: any
   ): Promise<string[]> {
     const network = String(payload.chain || '').toLowerCase()
-    if (network === 'ethereum' || network === 'eth') {
+
+    // Import Chain enum for proper comparison
+    const { Chain } = await import('../core/chain/Chain')
+
+    // Ethereum/EVM chains
+    if (
+      network === 'ethereum' ||
+      network === 'eth' ||
+      chain === Chain.Ethereum
+    ) {
       const { serializeTransaction, keccak256 } = await import('viem')
       const tx = payload.transaction
       const unsigned = {
@@ -615,8 +624,143 @@ export class ServerManager {
       return [signingHash]
     }
 
+    // Thorchain
+    if (
+      network === 'thorchain' ||
+      network === 'thor' ||
+      network === 'THORChain' ||
+      chain === Chain.THORChain
+    ) {
+      const { create } = await import('@bufbuild/protobuf')
+      const { KeysignPayloadSchema } = await import(
+        '../core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+      )
+      const { getTxInputData } = await import('../core/mpc/keysign/txInputData')
+      const { getPreSigningHashes } = await import(
+        '../core/chain/tx/preSigningHashes'
+      )
+      const { getPublicKey } = await import(
+        '../core/chain/publicKey/getPublicKey'
+      )
+      const { deriveAddress } = await import(
+        '../core/chain/publicKey/address/deriveAddress'
+      )
+
+      const publicKey = getPublicKey({
+        chain,
+        walletCore,
+        hexChainCode: vault.hexChainCode,
+        publicKeys: vault.publicKeys,
+      })
+      const address = deriveAddress({ chain, publicKey, walletCore })
+
+      const tx = payload.transaction
+      const keysignPayload = create(KeysignPayloadSchema, {
+        coin: {
+          chain: 'thorchain',
+          address,
+        },
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: {
+            $typeName: 'vultisig.keysign.v1.THORChainSpecific',
+            accountNumber: BigInt(tx.accountNumber || 0),
+            sequence: BigInt(tx.sequence || 0),
+            fee: BigInt(tx.fee || 0),
+            isDeposit: tx.isDeposit || false,
+            transactionType: tx.transactionType || 0,
+          },
+        },
+        toAddress: tx.toAddress || address,
+        toAmount: tx.toAmount || '0',
+        memo: tx.memo || '',
+      })
+
+      const inputs = getTxInputData({
+        keysignPayload,
+        walletCore,
+        publicKey,
+      })
+      const hashes = inputs
+        .flatMap(txInputData =>
+          getPreSigningHashes({ walletCore, chain, txInputData })
+        )
+        .map(value => Buffer.from(value).toString('hex'))
+      return hashes
+    }
+
+    // Solana
+    if (
+      network === 'solana' ||
+      network === 'sol' ||
+      network === 'Solana' ||
+      chain === Chain.Solana
+    ) {
+      const { create } = await import('@bufbuild/protobuf')
+      const { KeysignPayloadSchema } = await import(
+        '../core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+      )
+      const { getTxInputData } = await import('../core/mpc/keysign/txInputData')
+      const { getPreSigningHashes } = await import(
+        '../core/chain/tx/preSigningHashes'
+      )
+      const { getPublicKey } = await import(
+        '../core/chain/publicKey/getPublicKey'
+      )
+      const { deriveAddress } = await import(
+        '../core/chain/publicKey/address/deriveAddress'
+      )
+
+      const publicKey = getPublicKey({
+        chain,
+        walletCore,
+        hexChainCode: vault.hexChainCode,
+        publicKeys: vault.publicKeys,
+      })
+      const address = deriveAddress({ chain, publicKey, walletCore })
+
+      const tx = payload.transaction
+      const keysignPayload = create(KeysignPayloadSchema, {
+        coin: {
+          chain: 'solana',
+          address,
+        },
+        blockchainSpecific: {
+          case: 'solanaSpecific',
+          value: {
+            $typeName: 'vultisig.keysign.v1.SolanaSpecific',
+            recentBlockHash: tx.recentBlockHash || '',
+            priorityFee: tx.priorityFee || '0',
+            fromTokenAssociatedAddress: tx.fromTokenAssociatedAddress || '',
+            toTokenAssociatedAddress: tx.toTokenAssociatedAddress || '',
+            programId: tx.programId || false,
+          },
+        },
+        toAddress: tx.toAddress || address,
+        toAmount: tx.toAmount || '0',
+        memo: tx.memo || '',
+      })
+
+      const inputs = getTxInputData({
+        keysignPayload,
+        walletCore,
+        publicKey,
+      })
+      const hashes = inputs
+        .flatMap(txInputData =>
+          getPreSigningHashes({ walletCore, chain, txInputData })
+        )
+        .map(value => Buffer.from(value).toString('hex'))
+      return hashes
+    }
+
     // UTXO/BTC: derive pre-signing hashes from PSBT or constructed inputs
-    if (network === 'bitcoin' || network === 'btc') {
+    if (
+      network === 'bitcoin' ||
+      network === 'btc' ||
+      network === 'Bitcoin' ||
+      chain === Chain.Bitcoin
+    ) {
       const { create } = await import('@bufbuild/protobuf')
       const { KeysignPayloadSchema } = await import(
         '../core/mpc/types/vultisig/keysign/v1/keysign_message_pb'

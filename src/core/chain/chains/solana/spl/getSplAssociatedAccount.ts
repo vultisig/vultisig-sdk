@@ -1,6 +1,5 @@
 import { getSolanaClient } from '../client'
-import { PublicKey } from '@solana/web3.js'
-
+// import { PublicKey } from '@solana/web3.js' // Using dynamic import instead
 import { token2022ProgramId } from '../config'
 
 type Input = {
@@ -11,7 +10,8 @@ type Input = {
 export const getSplAssociatedAccount = async ({
   account,
   token,
-}: Input): Promise<{ address: PublicKey; isToken2022: boolean }> => {
+}: Input): Promise<{ address: any; isToken2022: boolean }> => {
+  const { PublicKey } = await import('@solana/web3.js')
   const client = await getSolanaClient()
 
   const { value } = await client.getTokenAccountsByOwner(

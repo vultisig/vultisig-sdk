@@ -17,6 +17,10 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // Chain-specific fields
+  const [memo, setMemo] = useState('')
+  const [psbtBase64, setPsbtBase64] = useState('')
+
   const handleSign = async () => {
     if (!password || !toAddress || !amount) {
       setError('Please fill in all fields')
@@ -29,19 +33,73 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
     setSigningStatus('Preparing transaction...')
 
     try {
-      // Create a simple Ethereum transaction payload for testing
-      const payload = {
-        chain,
-        transaction: {
-          to: toAddress,
-          value: (parseFloat(amount) * 1e18).toString(), // Convert ETH to wei
-          data: '0x',
-          chainId: 1, // Mainnet
-          nonce: 0,
-          gasLimit: '21000',
-          maxFeePerGas: '20000000000', // 20 gwei
-          maxPriorityFeePerGas: '1500000000', // 1.5 gwei
-        },
+      let payload: any
+
+      // Create chain-specific transaction payloads
+      switch (chain) {
+        case 'Ethereum':
+          payload = {
+            chain: 'Ethereum',
+            transaction: {
+              to: toAddress,
+              value: (parseFloat(amount) * 1e18).toString(), // Convert ETH to wei
+              data: '0x',
+              chainId: 1, // Mainnet
+              nonce: 0,
+              gasLimit: '21000',
+              maxFeePerGas: '20000000000', // 20 gwei
+              maxPriorityFeePerGas: '1500000000', // 1.5 gwei
+            },
+          }
+          break
+
+        case 'THORChain':
+          payload = {
+            chain: 'THORChain',
+            transaction: {
+              toAddress,
+              toAmount: (parseFloat(amount) * 1e8).toString(), // Convert to RUNE units
+              memo: memo || '',
+              accountNumber: 0, // Will be fetched from chain
+              sequence: 0, // Will be fetched from chain
+              fee: 0, // Will be fetched from chain
+              isDeposit: false,
+              transactionType: 0,
+            },
+          }
+          break
+
+        case 'Solana':
+          payload = {
+            chain: 'Solana',
+            transaction: {
+              toAddress,
+              toAmount: (parseFloat(amount) * 1e9).toString(), // Convert to lamports
+              memo: memo || '',
+              recentBlockHash: '', // Will be fetched from chain
+              priorityFee: '0', // Will be calculated
+              fromTokenAssociatedAddress: '',
+              toTokenAssociatedAddress: '',
+              programId: false,
+            },
+          }
+          break
+
+        case 'Bitcoin':
+          if (!psbtBase64) {
+            setError('PSBT Base64 is required for Bitcoin transactions')
+            return
+          }
+          payload = {
+            chain: 'Bitcoin',
+            transaction: {
+              psbtBase64,
+            },
+          }
+          break
+
+        default:
+          throw new Error(`Unsupported chain: ${chain}`)
       }
 
       console.log('Signing transaction with payload:', payload)
@@ -76,6 +134,8 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
     setToAddress('')
     setAmount('')
     setPassword('')
+    setMemo('')
+    setPsbtBase64('')
     setResult(null)
     setError(null)
   }
@@ -116,8 +176,9 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
             className="w-full p-2 border rounded"
           >
             <option value="Ethereum">Ethereum</option>
-            <option value="Bitcoin">Bitcoin (not yet supported)</option>
-            <option value="Solana">Solana (not yet supported)</option>
+            <option value="THORChain">THORChain</option>
+            <option value="Solana">Solana</option>
+            <option value="Bitcoin">Bitcoin</option>
           </select>
         </div>
 
@@ -139,7 +200,17 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
 
         <div>
           <label className="block text-sm font-medium mb-2" htmlFor="amount">
-            Amount (ETH)
+            Amount (
+            {chain === 'Ethereum'
+              ? 'ETH'
+              : chain === 'THORChain'
+                ? 'RUNE'
+                : chain === 'Solana'
+                  ? 'SOL'
+                  : chain === 'Bitcoin'
+                    ? 'BTC'
+                    : 'tokens'}
+            )
           </label>
           <input
             type="text"
@@ -149,6 +220,40 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
             className="w-full p-2 border rounded"
           />
         </div>
+
+        {/* Chain-specific fields */}
+        {(chain === 'THORChain' || chain === 'Solana') && (
+          <div>
+            <label className="block text-sm font-medium mb-2" htmlFor="memo">
+              Memo (optional)
+            </label>
+            <input
+              type="text"
+              value={memo}
+              onChange={e => setMemo(e.target.value)}
+              placeholder="Transaction memo"
+              className="w-full p-2 border rounded"
+            />
+          </div>
+        )}
+
+        {chain === 'Bitcoin' && (
+          <div>
+            <label className="block text-sm font-medium mb-2" htmlFor="psbt">
+              PSBT Base64
+            </label>
+            <textarea
+              value={psbtBase64}
+              onChange={e => setPsbtBase64(e.target.value)}
+              placeholder="Paste your PSBT in Base64 format here (from external tools like Bitcoin Core, Electrum, etc.)"
+              className="w-full p-2 border rounded h-20"
+            />
+            <p className="text-xs text-gray-600 mt-1">
+              Bitcoin transactions require a Partially Signed Bitcoin
+              Transaction (PSBT) in Base64 format.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium mb-2" htmlFor="password">
