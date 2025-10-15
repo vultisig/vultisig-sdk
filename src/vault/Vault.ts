@@ -9,10 +9,13 @@ import type { Vault as CoreVault } from '../core/ui/vault/Vault'
 import { memoizeAsync } from '../lib/utils/memoizeAsync'
 import type {
   Balance,
+  BroadcastOptions,
   CachedBalance,
   Signature,
+  SignedTransaction,
   SigningMode,
   SigningPayload,
+  TransactionReceipt,
 } from '../types'
 import type { WASMManager } from '../wasm/WASMManager'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -1055,5 +1058,24 @@ export class Vault {
     }
 
     return cachedBalance.balance
+  }
+
+  // === BROADCASTING METHODS ===
+
+  /**
+   * Broadcast a signed transaction to the blockchain
+   */
+  async broadcast(
+    chain: string,
+    signedTransaction: SignedTransaction
+  ): Promise<TransactionReceipt> {
+    if (!this._sdkInstance) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'SDK instance required for broadcasting'
+      )
+    }
+
+    return this._sdkInstance.broadcastTransaction(chain, signedTransaction)
   }
 }

@@ -1,5 +1,10 @@
 import { useState } from 'react'
-import { Vault as VaultClass, Vultisig } from 'vultisig-sdk'
+import {
+  type Signature,
+  type TransactionReceipt,
+  Vault as VaultClass,
+  Vultisig,
+} from 'vultisig-sdk'
 
 type SignTransactionProps = {
   vault: VaultClass
@@ -12,8 +17,11 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
   const [amount, setAmount] = useState('')
   const [chain, setChain] = useState('Ethereum')
   const [signing, setSigning] = useState(false)
+  const [broadcasting, setBroadcasting] = useState(false)
   const [signingStatus, setSigningStatus] = useState('')
-  const [result, setResult] = useState<any>(null)
+  const [broadcastStatus, setBroadcastStatus] = useState('')
+  const [result, setResult] = useState<Signature | null>(null)
+  const [receipt, setReceipt] = useState<TransactionReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -26,6 +34,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
     setSigning(true)
     setError(null)
     setResult(null)
+    setReceipt(null)
     setSigningStatus('Preparing transaction...')
 
     try {
@@ -65,6 +74,88 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
     }
   }
 
+  const handleBroadcast = async () => {
+    if (!result || !result.compiled) {
+      setError('No signed transaction to broadcast')
+      return
+    }
+
+    setBroadcasting(true)
+    setError(null)
+    setReceipt(null)
+    setBroadcastStatus('Broadcasting transaction...')
+
+    try {
+      console.log('Broadcasting transaction:', result)
+
+      const signedTransaction = {
+        signature: result.signature,
+        compiled: result.compiled,
+        chain,
+        format: result.format,
+        recovery: result.recovery,
+      }
+
+      const receipt = await sdk.broadcastTransaction(chain, signedTransaction)
+      console.log('Transaction broadcast successfully:', receipt)
+
+      setReceipt(receipt)
+      setBroadcastStatus('')
+    } catch (err) {
+      console.error('Failed to broadcast transaction:', err)
+      setError((err as Error).message)
+    } finally {
+      setBroadcasting(false)
+      setBroadcastStatus('')
+    }
+  }
+
+  const handleSignAndBroadcast = async () => {
+    if (!password || !toAddress || !amount) {
+      setError('Please fill in all fields')
+      return
+    }
+
+    setSigning(true)
+    setBroadcasting(true)
+    setError(null)
+    setResult(null)
+    setReceipt(null)
+    setSigningStatus('Signing and broadcasting transaction...')
+
+    try {
+      // Create a simple Ethereum transaction payload for testing
+      const payload = {
+        chain,
+        transaction: {
+          to: toAddress,
+          value: (parseFloat(amount) * 1e18).toString(), // Convert ETH to wei
+          data: '0x',
+          chainId: 1, // Mainnet
+          nonce: 0,
+          gasLimit: '21000',
+          maxFeePerGas: '20000000000', // 20 gwei
+          maxPriorityFeePerGas: '1500000000', // 1.5 gwei
+        },
+      }
+
+      console.log('Signing and broadcasting transaction with payload:', payload)
+
+      const receipt = await sdk.signAndBroadcast(payload, password)
+      console.log('Transaction signed and broadcast successfully:', receipt)
+
+      setReceipt(receipt)
+      setSigningStatus('')
+    } catch (err) {
+      console.error('Failed to sign and broadcast transaction:', err)
+      setError((err as Error).message)
+    } finally {
+      setSigning(false)
+      setBroadcasting(false)
+      setSigningStatus('')
+    }
+  }
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
@@ -77,6 +168,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
     setAmount('')
     setPassword('')
     setResult(null)
+    setReceipt(null)
     setError(null)
   }
 
@@ -163,18 +255,34 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
           />
         </div>
 
-        <button
-          onClick={handleSign}
-          disabled={signing}
-          className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
-        >
-          {signing ? 'Signing...' : 'Sign Transaction'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleSign}
+            disabled={signing || broadcasting}
+            className="flex-1 bg-blue-500 text-white p-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
+          >
+            {signing ? 'Signing...' : 'Sign Only'}
+          </button>
+          <button
+            onClick={handleSignAndBroadcast}
+            disabled={signing || broadcasting}
+            className="flex-1 bg-green-500 text-white p-2 rounded hover:bg-green-600 disabled:bg-gray-400"
+          >
+            {signing || broadcasting ? 'Processing...' : 'Sign & Broadcast'}
+          </button>
+        </div>
 
         {signing && signingStatus && (
           <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded animate-pulse">
             <p className="font-bold">🔄 {signingStatus}</p>
             <p className="text-sm mt-1">This may take a few seconds...</p>
+          </div>
+        )}
+
+        {broadcasting && broadcastStatus && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded animate-pulse">
+            <p className="font-bold">📡 {broadcastStatus}</p>
+            <p className="text-sm mt-1">Sending transaction to blockchain...</p>
           </div>
         )}
 
@@ -197,9 +305,31 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
                 <p className="text-sm">{result.format || 'Unknown'}</p>
               </div>
 
+              {result.compiled && (
+                <div>
+                  <p className="font-semibold">Transaction Hash:</p>
+                  <div className="bg-white p-2 rounded border border-green-300">
+                    <p className="text-xs font-mono break-all">
+                      {result.compiled.hash}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {result.compiled?.serialized && (
+                <div>
+                  <p className="font-semibold">Serialized Transaction:</p>
+                  <div className="bg-white p-2 rounded border border-green-300">
+                    <p className="text-xs font-mono break-all">
+                      {result.compiled.serialized}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {result.signature && (
                 <div>
-                  <p className="font-semibold">Signature:</p>
+                  <p className="font-semibold">Raw Signature:</p>
                   <div className="bg-white p-2 rounded border border-green-300">
                     <p className="text-xs font-mono break-all">
                       {result.signature}
@@ -216,6 +346,15 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
               )}
 
               <div className="flex gap-2 mt-2">
+                {result.compiled && (
+                  <button
+                    onClick={handleBroadcast}
+                    disabled={broadcasting}
+                    className="bg-orange-500 text-white px-3 py-1 rounded text-sm hover:bg-orange-600 disabled:bg-gray-400"
+                  >
+                    {broadcasting ? 'Broadcasting...' : '📡 Broadcast'}
+                  </button>
+                )}
                 <button
                   onClick={() =>
                     copyToClipboard(result.signature || JSON.stringify(result))
@@ -240,6 +379,90 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
                   {JSON.stringify(result, null, 2)}
                 </pre>
               </details>
+            </div>
+          </div>
+        )}
+
+        {receipt && (
+          <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
+            <p className="font-bold text-lg mb-2">
+              📡 Transaction Broadcast Successfully!
+            </p>
+
+            <div className="space-y-2">
+              <div>
+                <p className="font-semibold">Transaction Hash:</p>
+                <div className="bg-white p-2 rounded border border-blue-300">
+                  <p className="text-xs font-mono break-all">{receipt.hash}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="font-semibold">Status:</p>
+                <p className="text-sm">
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                      receipt.status === 'confirmed'
+                        ? 'bg-green-200 text-green-800'
+                        : receipt.status === 'pending'
+                          ? 'bg-yellow-200 text-yellow-800'
+                          : 'bg-red-200 text-red-800'
+                    }`}
+                  >
+                    {receipt.status.toUpperCase()}
+                  </span>
+                </p>
+              </div>
+
+              {receipt.blockNumber && (
+                <div>
+                  <p className="font-semibold">Block Number:</p>
+                  <p className="text-sm">{receipt.blockNumber}</p>
+                </div>
+              )}
+
+              {receipt.confirmations && (
+                <div>
+                  <p className="font-semibold">Confirmations:</p>
+                  <p className="text-sm">{receipt.confirmations}</p>
+                </div>
+              )}
+
+              {receipt.gasUsed && (
+                <div>
+                  <p className="font-semibold">Gas Used:</p>
+                  <p className="text-sm">{receipt.gasUsed}</p>
+                </div>
+              )}
+
+              {receipt.explorerUrl && (
+                <div>
+                  <p className="font-semibold">Explorer:</p>
+                  <a
+                    href={receipt.explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 underline text-sm"
+                  >
+                    🔗 View on Explorer
+                  </a>
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => copyToClipboard(receipt.hash)}
+                  className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                >
+                  {copied ? '✓ Copied!' : '📋 Copy Hash'}
+                </button>
+                <button
+                  onClick={resetForm}
+                  className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+                >
+                  🔄 New Transaction
+                </button>
+              </div>
             </div>
           </div>
         )}

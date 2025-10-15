@@ -98,9 +98,17 @@ export type SigningPayload = {
 }
 
 export type Signature = {
+  // Raw signature data (existing)
   signature: string
   recovery?: number
   format: 'DER' | 'ECDSA' | 'EdDSA'
+
+  // Compiled transaction (NEW)
+  compiled?: {
+    encoded: Uint8Array // Ready to broadcast
+    hash: string // Transaction hash
+    serialized?: string // Hex-encoded for EVM
+  }
 }
 
 export type FastSigningInput = {
@@ -290,4 +298,34 @@ export type GasEstimate = {
     maxFeePerGas?: string
   }
   chainId: string
+}
+
+// Transaction Broadcasting Types (NEW)
+
+export type TransactionReceipt = {
+  hash: string
+  status: 'pending' | 'confirmed' | 'failed'
+  blockNumber?: number
+  confirmations?: number
+  gasUsed?: string
+  explorerUrl?: string
+}
+
+export type BroadcastOptions = {
+  skipBroadcast?: boolean // For testing
+  waitForConfirmation?: boolean
+  confirmations?: number
+  timeout?: number
+}
+
+export type SignedTransaction = {
+  signature: string
+  compiled: {
+    encoded: Uint8Array
+    hash: string
+    serialized?: string
+  }
+  chain: string
+  format: 'DER' | 'ECDSA' | 'EdDSA'
+  recovery?: number
 }

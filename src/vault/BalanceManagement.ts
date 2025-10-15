@@ -67,7 +67,7 @@ export class BalanceManagement {
 
       // Get balances for each address (mock implementation for now)
       const result: Record<string, Balance> = {}
-      for (const [chain, address] of Object.entries(addresses)) {
+      for (const [chain] of Object.entries(addresses)) {
         // For now, return zero balances - balance fetching can be implemented later
         result[chain] = {
           amount: '0',

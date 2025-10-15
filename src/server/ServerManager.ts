@@ -234,7 +234,7 @@ export class ServerManager {
       signatureResults[msg] = sig
     }
 
-    // If single-message chains (e.g., EVM), return the single signature as before
+    // If single-message chains (e.g., EVM), compile the transaction
     if (!isUtxo) {
       const only = messages[0]
       const sigResult = signatureResults[only]
@@ -253,6 +253,150 @@ export class ServerManager {
         recovery: recoveryId,
       })
 
+      // Compile the transaction for EVM chains
+      const { getTxInputData } = await import('../core/mpc/keysign/txInputData')
+      const { getTxHash } = await import('../core/chain/tx/hash')
+      const { create } = await import('@bufbuild/protobuf')
+      const { KeysignPayloadSchema } = await import(
+        '../core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+      )
+      const { deriveAddress } = await import(
+        '../core/chain/publicKey/address/deriveAddress'
+      )
+
+      // Create proper keysign payload for compilation
+      const publicKey = getPublicKey({
+        chain,
+        walletCore,
+        hexChainCode: vault.hexChainCode,
+        publicKeys: vault.publicKeys,
+      })
+      const address = deriveAddress({ chain, publicKey, walletCore })
+
+      // Create keysign payload based on chain type
+      const keysignPayload =
+        chainKind === 'evm'
+          ? create(KeysignPayloadSchema, {
+              coin: {
+                chain: 'ethereum',
+                address,
+              },
+              blockchainSpecific: {
+                case: 'ethereumSpecific',
+                value: {
+                  $typeName: 'vultisig.keysign.v1.EthereumSpecific',
+                  maxFeePerGasWei:
+                    payload.transaction.maxFeePerGas ||
+                    payload.transaction.gasPrice ||
+                    '0',
+                  priorityFee: payload.transaction.maxPriorityFeePerGas || '0',
+                  gasLimit: payload.transaction.gasLimit,
+                  nonce: payload.transaction.nonce,
+                },
+              },
+              toAddress: payload.transaction.to || address,
+              toAmount: payload.transaction.value || '0',
+              memo: payload.transaction.data || '',
+            })
+          : create(KeysignPayloadSchema, {
+              coin: {
+                chain: chainKind,
+                address,
+              },
+              blockchainSpecific: {
+                case: 'utxoSpecific',
+                value: {
+                  $typeName: 'vultisig.keysign.v1.UTXOSpecific',
+                  byteFee: '1',
+                  sendMaxAmount: false,
+                },
+              },
+              toAddress: payload.transaction.to || address,
+              toAmount: payload.transaction.value || '0',
+              memo: payload.transaction.data || '',
+            })
+
+      // Recreate tx input data for compilation
+      const inputs = getTxInputData({
+        keysignPayload,
+        walletCore,
+        publicKey,
+      })
+
+      // Extract DER signatures for compilation
+      const derSignatures: Record<string, any> = {}
+      for (const [msg, sigResult] of Object.entries(signatureResults)) {
+        derSignatures[msg] = sigResult.der_signature
+      }
+
+      // Compile the transaction
+      const compiledTxs = inputs.map(txInputData =>
+        compileTx({
+          publicKey: getPublicKey({
+            chain,
+            walletCore,
+            hexChainCode: vault.hexChainCode,
+            publicKeys: vault.publicKeys,
+          }),
+          txInputData,
+          signatures: derSignatures,
+          chain,
+          walletCore,
+        })
+      )
+
+      // For EVM, we expect a single compiled transaction
+      const [compiled] = compiledTxs
+      const decoded = decodeSigningOutput(chain, compiled)
+      const hash = await getTxHash({ chain, tx: decoded })
+
+      // Extract the encoded transaction data
+      const encoded = (decoded as any).encoded || compiled
+
+      // For EVM, also create serialized transaction
+      let serialized: string | undefined
+      if (chainKind === 'evm') {
+        try {
+          const { serializeTransaction } = await import('viem')
+
+          // Parse DER signature to extract r, s, v components
+          const sig = sigResult.der_signature
+          const rLength = parseInt(sig.substr(6, 2), 16)
+          const rHex = sig.substr(8, rLength * 2)
+          const sStart = 8 + rLength * 2 + 4
+          const sLength = parseInt(sig.substr(sStart - 2, 2), 16)
+          const sHex = sig.substr(sStart, sLength * 2)
+
+          const r = '0x' + rHex.padStart(64, '0')
+          const s = '0x' + sHex.padStart(64, '0')
+          const v = (recoveryId || 0) + 27
+
+          // Create complete transaction with signature
+          const tx = payload.transaction
+          const completeTransaction = {
+            type: 'eip1559' as const,
+            chainId: tx.chainId,
+            nonce: tx.nonce,
+            to: tx.to,
+            value: BigInt(tx.value),
+            data: (tx.data || '0x') as `0x${string}`,
+            gas: BigInt(tx.gasLimit),
+            maxFeePerGas: BigInt(tx.maxFeePerGas || tx.gasPrice || '0'),
+            maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas || '0'),
+            accessList: [],
+            r: r as `0x${string}`,
+            s: s as `0x${string}`,
+            v: BigInt(v),
+          }
+
+          serialized = serializeTransaction(completeTransaction)
+        } catch (error) {
+          console.warn('Failed to serialize EVM transaction:', error)
+        }
+      }
+
+      console.log('✅ EVM transaction compiled successfully')
+
       return {
         signature: sigResult.der_signature,
         format:
@@ -262,6 +406,11 @@ export class ServerManager {
               ? 'ECDSA'
               : 'DER',
         recovery: recoveryId,
+        compiled: {
+          encoded,
+          hash,
+          serialized,
+        },
       }
     }
 
@@ -328,10 +477,21 @@ export class ServerManager {
     const decoded = decodeSigningOutput(chain, compiled)
     const finalTxHex = (decoded as any).encoded || compiled
 
+    // Get transaction hash
+    const { getTxHash } = await import('../core/chain/tx/hash')
+    const hash = await getTxHash({ chain, tx: decoded })
+
+    // Extract the encoded transaction data
+    const encoded = (decoded as any).encoded || compiled
+
     console.log('✅ UTXO transaction compiled successfully')
     return {
       signature: finalTxHex,
       format: 'DER',
+      compiled: {
+        encoded,
+        hash,
+      },
     }
   }
 
