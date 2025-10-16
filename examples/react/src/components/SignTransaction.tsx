@@ -12,9 +12,11 @@ type SignTransactionProps = {
 }
 
 export function SignTransaction({ vault, sdk }: SignTransactionProps) {
-  const [password, setPassword] = useState('')
-  const [toAddress, setToAddress] = useState('')
-  const [amount, setAmount] = useState('')
+  const [password, setPassword] = useState('Password123!')
+  const [toAddress, setToAddress] = useState(
+    '0x0b52FDD14661EF6ce2F994b06369da3A6073800b'
+  )
+  const [amount, setAmount] = useState('0.00001')
   const [chain, setChain] = useState('Ethereum')
   const [signing, setSigning] = useState(false)
   const [broadcasting, setBroadcasting] = useState(false)

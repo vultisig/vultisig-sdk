@@ -278,8 +278,9 @@ export class ServerManager {
         chainKind === 'evm'
           ? create(KeysignPayloadSchema, {
               coin: {
-                chain: 'ethereum',
+                chain: 'Ethereum', // Use proper case for Chain enum
                 address,
+                isNativeToken: true, // ETH is a native token
               },
               blockchainSpecific: {
                 case: 'ethereumSpecific',
@@ -317,7 +318,7 @@ export class ServerManager {
             })
 
       // Recreate tx input data for compilation
-      const inputs = getTxInputData({
+      const inputs = await getTxInputData({
         keysignPayload,
         walletCore,
         publicKey,
@@ -450,7 +451,7 @@ export class ServerManager {
       memo: psbtBase64,
     })
 
-    const inputs = getTxInputData({
+    const inputs = await getTxInputData({
       keysignPayload,
       walletCore,
       publicKey,
@@ -756,23 +757,69 @@ export class ServerManager {
   ): Promise<string[]> {
     const network = String(payload.chain || '').toLowerCase()
     if (network === 'ethereum' || network === 'eth') {
-      const { serializeTransaction, keccak256 } = await import('viem')
+      // Use the core MPC keysign payload structure to properly handle the transaction
+      const { create } = await import('@bufbuild/protobuf')
+      const { KeysignPayloadSchema } = await import(
+        '../core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+      )
+      const { getTxInputData } = await import('../core/mpc/keysign/txInputData')
+      const { getPreSigningHashes } = await import(
+        '../core/chain/tx/preSigningHashes'
+      )
+      const { getPublicKey } = await import(
+        '../core/chain/publicKey/getPublicKey'
+      )
+      const { deriveAddress } = await import(
+        '../core/chain/publicKey/address/deriveAddress'
+      )
+
+      // Get the public key and derive address for this vault
+      const publicKey = getPublicKey({
+        chain,
+        walletCore,
+        hexChainCode: vault.hexChainCode,
+        publicKeys: vault.publicKeys,
+      })
+      const address = deriveAddress({ chain, publicKey, walletCore })
+
       const tx = payload.transaction
-      const unsigned = {
-        type: 'eip1559' as const,
-        chainId: tx.chainId,
-        to: tx.to as `0x${string}`,
-        nonce: tx.nonce,
-        gas: BigInt(tx.gasLimit),
-        data: (tx.data || '0x') as `0x${string}`,
-        value: BigInt(tx.value),
-        maxFeePerGas: BigInt(tx.maxFeePerGas ?? tx.gasPrice ?? '0'),
-        maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0'),
-        accessList: [],
-      }
-      const serialized = serializeTransaction(unsigned)
-      const signingHash = keccak256(serialized).slice(2)
-      return [signingHash]
+
+      // Create a proper keysign payload with coin information
+      const keysignPayload = create(KeysignPayloadSchema, {
+        coin: {
+          chain: 'Ethereum', // Use proper case for Chain enum
+          address,
+          isNativeToken: true, // ETH is a native token
+        },
+        blockchainSpecific: {
+          case: 'ethereumSpecific',
+          value: {
+            $typeName: 'vultisig.keysign.v1.EthereumSpecific',
+            nonce: tx.nonce || 0,
+            gasLimit: tx.gasLimit || '21000',
+            maxFeePerGasWei: tx.maxFeePerGas || tx.gasPrice || '20000000000',
+            priorityFee: tx.maxPriorityFeePerGas || '1500000000',
+          },
+        },
+        toAddress: tx.to,
+        toAmount: tx.value || '0',
+        memo: tx.data && tx.data !== '0x' ? tx.data : undefined,
+      })
+
+      // Use the standard input data and pre-signing hash flow
+      const inputs = await getTxInputData({
+        keysignPayload,
+        walletCore,
+        publicKey,
+      })
+
+      const hashes = inputs
+        .flatMap(txInputData =>
+          getPreSigningHashes({ walletCore, chain, txInputData })
+        )
+        .map(value => Buffer.from(value).toString('hex'))
+
+      return hashes
     }
 
     // UTXO/BTC: derive pre-signing hashes from PSBT or constructed inputs
@@ -822,7 +869,7 @@ export class ServerManager {
         memo: psbtBase64,
       })
 
-      const inputs = getTxInputData({
+      const inputs = await getTxInputData({
         keysignPayload,
         walletCore,
         publicKey,

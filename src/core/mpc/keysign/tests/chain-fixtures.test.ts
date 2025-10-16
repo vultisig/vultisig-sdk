@@ -46,10 +46,10 @@ describe('iOS fixtures parity', () => {
     return
   }
 
-  it.each(cases)('%s', ({ keysign_payload, expected_image_hash }) => {
+  it.each(cases)('%s', async ({ keysign_payload, expected_image_hash }) => {
     const keysignPayload = normalizeKeysignPayloadFromJson(keysign_payload)
     const chain = resolveChainFromFixture(keysign_payload.coin.chain)
-    const inputs = getTxInputData({
+    const inputs = await getTxInputData({
       keysignPayload,
       walletCore,
     })
