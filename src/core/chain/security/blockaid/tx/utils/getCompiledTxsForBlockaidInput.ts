@@ -16,7 +16,7 @@ type Input = {
   walletCore: WalletCore
 }
 
-export const getCompiledTxsForBlockaidInput = ({
+export const getCompiledTxsForBlockaidInput = async ({
   payload,
   walletCore,
 }: Input) => {
@@ -34,11 +34,13 @@ export const getCompiledTxsForBlockaidInput = ({
     walletCore,
   })
 
-  return getTxInputData({
+  const txInputDataArray = await getTxInputData({
     keysignPayload: payload,
     walletCore,
     publicKey,
-  }).map(txInputData => {
+  })
+
+  return txInputDataArray.map(txInputData => {
     const preHashes = getPreSigningHashes({
       walletCore,
       txInputData,

@@ -13,24 +13,24 @@
 export { Vultisig } from './VultisigSDK'
 
 // Vault management
-export { 
-  Vault,
-  VaultError, 
-  VaultErrorCode, 
-  VaultImportError, 
-  VaultImportErrorCode,
+export {
   AddressBookManager,
-  ChainManagement,
-  VaultManagement,
   BalanceManagement,
-  ValidationHelpers
+  ChainManagement,
+  ValidationHelpers,
+  Vault,
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
+  VaultImportErrorCode,
+  VaultManagement,
 } from './vault'
 
 // MPC operations
 export * from './mpc'
 
 // Chain operations
-export { ChainManager, AddressDeriver } from './chains'
+export { AddressDeriver, ChainManager } from './chains'
 
 // Server communication
 export * from './server'
@@ -40,37 +40,40 @@ export * from './crypto'
 
 // Types and interfaces - specific exports to avoid conflicts
 export type {
-  Balance,
-  CachedBalance,
-  SigningMode,
-  SigningPayload,
-  Signature,
-  ServerStatus,
-  KeygenProgressUpdate,
   AddressBook,
   AddressBookEntry,
-  ValidationResult,
-  VaultOptions,
-  VaultBackup,
-  VaultDetails,
-  VaultValidationResult,
+  AddressResult,
+  Balance,
+  BroadcastOptions,
+  CachedBalance,
+  ChainConfig,
   ExportOptions,
   FastSigningInput,
+  GasEstimate,
+  GasInfo,
+  KeygenMode,
+  KeygenProgressUpdate,
   ReshareOptions,
   SDKConfig,
-  ChainConfig,
-  AddressResult,
-  VaultType,
-  KeygenMode,
-  VaultManagerConfig,
-  VaultCreationStep,
+  ServerStatus,
+  Signature,
+  SignedTransaction,
+  SigningMode,
+  SigningPayload,
   SigningStep,
-  VaultSigner,
   Summary,
   Token,
+  TransactionReceipt,
+  ValidationResult,
   Value,
-  GasInfo,
-  GasEstimate
+  VaultBackup,
+  VaultCreationStep,
+  VaultDetails,
+  VaultManagerConfig,
+  VaultOptions,
+  VaultSigner,
+  VaultType,
+  VaultValidationResult,
 } from './types'
 
 // WASM utilities
