@@ -2,9 +2,12 @@ import { ServerManager } from './server'
 import type {
   AddressBook,
   AddressBookEntry,
+  BroadcastOptions,
   ServerStatus,
   Signature,
+  SignedTransaction,
   SigningPayload,
+  TransactionReceipt,
   ValidationResult,
 } from './types'
 import { AddressBookManager } from './vault/AddressBook'
@@ -21,6 +24,7 @@ export class Vultisig {
   private serverManager: ServerManager
   private wasmManager: WASMManager
   private initialized = false
+  private rpcEndpoints?: Record<string, string>
 
   // Module managers
   private addressBookManager: AddressBookManager
@@ -42,9 +46,11 @@ export class Vultisig {
     }
     defaultChains?: string[]
     defaultCurrency?: string
+    rpcEndpoints?: Record<string, string>
   }) {
     this.wasmManager = new WASMManager(config?.wasmConfig)
     this.serverManager = new ServerManager(config?.serverEndpoints)
+    this.rpcEndpoints = config?.rpcEndpoints
 
     // Initialize module managers
     this.addressBookManager = new AddressBookManager()
@@ -367,9 +373,227 @@ export class Vultisig {
     return vault.sign('fast', payload, password)
   }
 
+  /**
+   * Broadcast a signed transaction to the blockchain
+   */
+  async broadcastTransaction(
+    chain: string,
+    signedTransaction: SignedTransaction,
+    options?: BroadcastOptions
+  ): Promise<TransactionReceipt> {
+    await this.ensureInitialized()
+
+    if (!signedTransaction.compiled) {
+      throw new Error('Transaction must be compiled before broadcasting')
+    }
+
+    // Use the existing broadcast resolver
+    const { broadcastTx } = await import('./core/chain/tx/broadcast')
+    const { getChainKind } = await import('./core/chain/ChainKind')
+    const { AddressDeriver } = await import('./chains/AddressDeriver')
+
+    // Map string chain to Chain enum
+    const addressDeriver = new AddressDeriver()
+    await addressDeriver.initialize(await this.wasmManager.getWalletCore())
+    const chainEnum = addressDeriver.mapStringToChain(chain)
+
+    try {
+      // For broadcasting, we need to pass the decoded signing output, not the raw encoded data
+      // The encoded field contains the Uint8Array, but broadcastTx expects SigningOutput
+      // We'll need to reconstruct this from the compiled data
+      const { decodeSigningOutput } = await import(
+        './core/chain/tw/signingOutput'
+      )
+
+      // The encoded field should be the compiled transaction data
+      const signingOutput = decodeSigningOutput(
+        chainEnum,
+        signedTransaction.compiled.encoded
+      )
+
+      // Broadcast the transaction
+      await broadcastTx({
+        chain: chainEnum,
+        tx: signingOutput,
+      })
+
+      // Generate explorer URL
+      const explorerUrl = this.generateExplorerUrl(
+        chain,
+        signedTransaction.compiled.hash
+      )
+
+      return {
+        hash: signedTransaction.compiled.hash,
+        status: 'pending',
+        explorerUrl,
+      }
+    } catch (error) {
+      console.error('Failed to broadcast transaction:', error)
+      throw new Error(
+        `Failed to broadcast transaction: ${(error as Error).message}`
+      )
+    }
+  }
+
+  /**
+   * Sign and broadcast transaction in one call
+   */
+  async signAndBroadcast(
+    payload: SigningPayload,
+    password: string,
+    options?: BroadcastOptions
+  ): Promise<TransactionReceipt> {
+    await this.ensureInitialized()
+
+    const activeVault = this.getActiveVault()
+    if (!activeVault) {
+      throw new Error('No active vault. Please set an active vault first.')
+    }
+
+    // Sign the transaction
+    const signature = await activeVault.sign('fast', payload, password)
+
+    if (!signature.compiled) {
+      throw new Error('Transaction compilation failed during signing')
+    }
+
+    // Create signed transaction object
+    const signedTransaction: SignedTransaction = {
+      signature: signature.signature,
+      compiled: signature.compiled,
+      chain: payload.chain,
+      format: signature.format,
+      recovery: signature.recovery,
+    }
+
+    // Broadcast the transaction
+    return this.broadcastTransaction(payload.chain, signedTransaction, options)
+  }
+
+  /**
+   * Generate explorer URL for a transaction hash
+   */
+  private generateExplorerUrl(chain: string, hash: string): string {
+    const chainLower = chain.toLowerCase()
+
+    // Common explorer patterns
+    const explorers: Record<string, string> = {
+      ethereum: `https://etherscan.io/tx/${hash}`,
+      bitcoin: `https://blockstream.info/tx/${hash}`,
+      solana: `https://solscan.io/tx/${hash}`,
+      polygon: `https://polygonscan.com/tx/${hash}`,
+      arbitrum: `https://arbiscan.io/tx/${hash}`,
+      optimism: `https://optimistic.etherscan.io/tx/${hash}`,
+      base: `https://basescan.org/tx/${hash}`,
+      avalanche: `https://snowtrace.io/tx/${hash}`,
+      bsc: `https://bscscan.com/tx/${hash}`,
+    }
+
+    return (
+      explorers[chainLower] || `https://explorer.${chainLower}.com/tx/${hash}`
+    )
+  }
+
   // === INTERNAL ACCESS FOR VAULT ===
 
   getServerManager(): ServerManager {
     return this.serverManager
+  }
+
+  /**
+   * Get RPC endpoint for a specific chain
+   */
+  getRpcEndpoint(chain: string): string | undefined {
+    return this.rpcEndpoints?.[chain]
+  }
+
+  // === HELPER UTILITIES ===
+
+  /**
+   * Estimate gas for a transaction
+   */
+  async estimateGas(
+    chain: string,
+    transaction: {
+      to: string
+      value?: string
+      data?: string
+      from?: string
+    }
+  ): Promise<{
+    gasLimit: string
+    gasPrice?: string
+    maxFeePerGas?: string
+    maxPriorityFeePerGas?: string
+  }> {
+    await this.ensureInitialized()
+
+    const { GasEstimator } = await import('./chains/helpers')
+    const { AddressDeriver } = await import('./chains/AddressDeriver')
+
+    const addressDeriver = new AddressDeriver()
+    await addressDeriver.initialize(await this.wasmManager.getWalletCore())
+
+    const gasEstimator = new GasEstimator(addressDeriver)
+    return gasEstimator.estimateGas(chain, transaction)
+  }
+
+  /**
+   * Get nonce for an address
+   */
+  async getNonce(chain: string, address: string): Promise<number> {
+    await this.ensureInitialized()
+
+    const { NonceManager } = await import('./chains/helpers')
+    const { AddressDeriver } = await import('./chains/AddressDeriver')
+
+    const addressDeriver = new AddressDeriver()
+    await addressDeriver.initialize(await this.wasmManager.getWalletCore())
+
+    const nonceManager = new NonceManager(addressDeriver)
+    return nonceManager.getNonce(chain, address)
+  }
+
+  /**
+   * Wait for transaction confirmation
+   */
+  async waitForTransaction(
+    chain: string,
+    hash: string,
+    options: {
+      confirmations?: number
+      timeout?: number
+    } = {}
+  ): Promise<TransactionReceipt> {
+    await this.ensureInitialized()
+
+    const { TransactionWaiter } = await import('./chains/helpers')
+    const { AddressDeriver } = await import('./chains/AddressDeriver')
+
+    const addressDeriver = new AddressDeriver()
+    await addressDeriver.initialize(await this.wasmManager.getWalletCore())
+
+    const transactionWaiter = new TransactionWaiter(addressDeriver)
+    return transactionWaiter.waitForTransaction(chain, hash, options)
+  }
+
+  /**
+   * Get transaction status
+   */
+  async getTransactionStatus(
+    chain: string,
+    hash: string
+  ): Promise<TransactionReceipt> {
+    await this.ensureInitialized()
+
+    const { TransactionWaiter } = await import('./chains/helpers')
+    const { AddressDeriver } = await import('./chains/AddressDeriver')
+
+    const addressDeriver = new AddressDeriver()
+    await addressDeriver.initialize(await this.wasmManager.getWalletCore())
+
+    const transactionWaiter = new TransactionWaiter(addressDeriver)
+    return transactionWaiter.getTransactionStatus(chain, hash)
   }
 }
