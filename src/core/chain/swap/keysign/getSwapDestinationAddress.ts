@@ -1,0 +1,33 @@
+import { AccountCoin } from '../../coin/AccountCoin'
+import { isFeeCoin } from '../../coin/utils/isFeeCoin'
+import { GeneralSwapTx } from '../general/GeneralSwapQuote'
+import { SwapQuote } from '../quote/SwapQuote'
+import { isOneOf } from '../../../../lib/utils/array/isOneOf'
+import { matchRecordUnion } from '../../../../lib/utils/matchRecordUnion'
+
+import { EvmChain } from '../../Chain'
+
+type GetSwapDestinationAddressInput = {
+  quote: SwapQuote
+  fromCoin: AccountCoin
+}
+
+export const getSwapDestinationAddress = ({
+  quote,
+  fromCoin,
+}: GetSwapDestinationAddressInput): string =>
+  matchRecordUnion<SwapQuote, string>(quote, {
+    general: quote =>
+      matchRecordUnion<GeneralSwapTx, string>(quote.tx, {
+        evm: ({ to }) => to,
+        solana: () => '',
+      }),
+    native: quote => {
+      const isErc20 =
+        isOneOf(fromCoin.chain, Object.values(EvmChain)) && !isFeeCoin(fromCoin)
+
+      return (
+        (isErc20 ? quote.router : quote.inbound_address) || fromCoin.address
+      )
+    },
+  })

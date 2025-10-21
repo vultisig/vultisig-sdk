@@ -1,4 +1,3 @@
-export type EvmFeeSettings = {
-  priorityFee: bigint
-  gasLimit: bigint
-}
+import { FeeQuote } from '../../../feeQuote/core'
+
+export type EvmFeeSettings = Omit<FeeQuote<'evm'>, 'baseFeePerGas'>

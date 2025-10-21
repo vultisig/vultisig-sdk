@@ -13,11 +13,12 @@ import { TransferDirection } from '@lib/utils/TransferDirection'
 import { createConfig, getQuote } from '@lifi/sdk'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
-import { EvmFeeQuote } from '../../../../tx/fee/evm/EvmFeeSettings'
+import { EvmFeeSettings } from '../../../../tx/fee/evm/EvmFeeSettings'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   amount: bigint
+  affiliateBps?: number
 }
 
 const setupLifi = memoize(() => {
@@ -28,6 +29,7 @@ const setupLifi = memoize(() => {
 
 export const getLifiSwapQuote = async ({
   amount,
+  affiliateBps,
   ...transfer
 }: Input): Promise<GeneralSwapQuote> => {
   setupLifi()
@@ -51,14 +53,14 @@ export const getLifiSwapQuote = async ({
     fromAmount: amount.toString(),
     fromAddress,
     toAddress,
-    fee: lifiConfig.afffiliateFee,
+    fee: affiliateBps ? affiliateBps / 10000 : undefined,
   })
 
   const { transactionRequest, estimate } = quote
 
   const chainKind = getChainKind(transfer.from.chain)
 
-  const { value, gasPrice, gasLimit, data, from, to } =
+  const { value, gasLimit, data, from, to } =
     shouldBePresent(transactionRequest)
 
   return {
@@ -96,10 +98,7 @@ export const getLifiSwapQuote = async ({
           }
         },
         evm: () => {
-          const feeQuote: Partial<EvmFeeQuote> = {}
-          if (gasPrice) {
-            feeQuote.maxFeePerGas = BigInt(gasPrice)
-          }
+          const feeQuote: Partial<EvmFeeSettings> = {}
           if (gasLimit) {
             feeQuote.gasLimit = BigInt(gasLimit)
           }

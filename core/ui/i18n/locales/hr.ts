@@ -4,6 +4,7 @@ export const hr = {
     'Mondd, hogy helló <g>széf részvények,</g> az új <g>helyreállítási módszered</g>',
   onboarding_step_2:
     'Ezek <g>részekre vannak osztva</g> a biztonság növelése érdekében és, <g>az egyetlen meghibásodási pont eltávolítása érdekében</g>',
+  keys: 'Kulcsák',
   onboarding_step_3:
     '<g>Minden eszköz</g> a tárhelyedben tartalmaz <g>egy tárhelyrészt</g>',
   onboarding_step_4:
@@ -13,16 +14,43 @@ export const hr = {
     '<g>Mindig készíts biztonsági másolatot minden tárhelyrészről</g> külön egy <g>másik helyszínen</g>',
   onboarding_step_6:
     'Ezek a részek együttműködnek, hogy <g>feloldják a tárhelyed zárolását</g>',
+  vault_share_banner:
+    'Ez a QR kód lehetővé teszi, hogy megoszthasd egy nézeti változatot a tárhelyed',
   secure_crypto_vault: 'Sigurni kripto trezor',
   save_10_percent_on_swaps: 'Mentsd el <blue>10%</blue> a swap-okkal most',
+  vault_info: 'Tárhelyinformáció',
+  failed_to_read_qr_code: 'Nem sikerült olvasni a QR kódot',
   vultisig: 'Vultisig',
+  vault_details_description: 'Prikazati naziv, dio i vrstu trezora',
+  vault_details_edit_vault_description: 'Urediti naziv svog trezora',
+  reshare_vault_description: 'Ponovno podijeliti trezor s novim odborom',
+  circle_title: 'Circle računi',
+  circle: {
+    introduction:
+      'Uložite svoje $USDC na Circle račun i ostvarite prinos. Sigurno unutar vašeg Vultisig trezora.',
+    balance_title: 'Pregled stanja',
+    total_deposit: 'Ukupni depozit',
+    rewards: 'Nagrade',
+    apy: 'APY',
+    claim: 'Preuzmi nagrade',
+    banner_text:
+      'Sredstva ostaju potpuno pod kontrolom vašeg trezora. Circle prinos se ostvaruje putem sigurnih off-chain trezora. Povlačenje je moguće bilo kada nakon namire.',
+    deposit: 'Uplati',
+    withdraw: 'Povuci',
+  },
+  circle_description: 'Uplati $USDC u Circle ugovor',
+  sign_custom_message_description: 'Potpisati prilagođenu poruku',
+  delete_vault_description: 'Trajno izbrisati svoj trezor',
+  backup_description: 'Sigurno podijeliti svoj trezor u odabranom mjestu',
   by_vultisig: 'od Vultisig',
   onboarding_description_1:
     'Vultisig je sigurni, višeslojni kripto trezor, kompatibilan sa svim glavnim blockchainima i preko 10.000 tokena. Vultisig je potpuno samostalni.',
+  vultisig_website: 'Vultisig web-lokacija',
   onboarding_description_2:
     'Vultisig ne prati vaše aktivnosti niti zahtijeva bilo kakvu registraciju. Vultisig je otvorenog koda, što osigurava transparentnost i povjerenje.',
   onboarding_description_3:
     'Vultisig je po prirodi višeslojna aplikacija. Zahtijeva najmanje dva uređaja za stvaranje sigurnog trezora: inicijalni uređaj i uređaj za uparivanje.',
+  vult: '$VULT',
   onboarding_description_4:
     'Vultisig je novčanik bez seed fraza. Umjesto toga koristi lako upravljive dijelove trezora. Svaki uređaj ima svoj jedinstveni dio koji treba zasebno sigurnosno kopirati.',
   search_field_placeholder: 'Pretraži..',
@@ -379,6 +407,8 @@ export const hr = {
   faq_need_to_register_title: 'Moram li se registrirati?',
   faq_need_to_register_content: 'Ne, nema zahtjeva za registraciju.',
   vault_settings_address_book_no_addresses_title: 'Nema spremljenih adresa',
+  vault_settings_address_book_no_addresses_description:
+    'Organizirajte sve vaše važne adrese u jednom mjestu.',
   or: 'ili',
   enter_vault_name: 'Unesite naziv trezora',
   vault_name_required: 'Naziv trezora je obavezan',
@@ -427,6 +457,10 @@ export const hr = {
   transaction_hash_copied: 'Hash transakcije kopiran',
   asset: 'Sredstvo',
   balance: 'Stanje',
+  portfolio_balance: 'Stanje Portfelja',
+  hide_balance: 'Sakrij Stanje',
+  show_balance: 'Prikaži Stanje',
+  fill_the_form: 'Ispunite obrazac',
   failed_to_load: 'Učitavanje nije uspjelo',
   enter_address: 'Unesite adresu',
   enter_amount: 'Unesite iznos',
@@ -555,8 +589,6 @@ export const hr = {
     connectionSuccess: 'Sikeres csatlakozás!',
     takeMinute: 'Ovo traje samo jednu sekundu',
     vaultInitializationStarting: 'Tároló inicializálásának indítása...',
-    emailRequired: 'E-mail szükséges',
-    emailIncorrect: 'Hibás e-mail, kérjük, ellenőrizze',
     enterEmail: 'Adja meg az e-mail címét',
     emailSetupTitle:
       'Ez az e-mail csak a szerver biztonsági mentésének küldésére szolgál',
@@ -911,6 +943,7 @@ export const hr = {
   remove: 'Ukloniti',
   share_vault: 'Dijeli trezor',
   no_referral_yet: 'Nema preporuke',
+  register_guide: 'Registracijski vodič',
   missing_thorchain_address: 'Nedostaje THORChain adresa',
   missing_destination_address: 'Nedostaje odredišna adresa',
   upgrade_shares_info:
@@ -1042,8 +1075,6 @@ export const hr = {
   description: 'Opis',
   personal_sign: 'Osobni znak',
   request_from: 'Zahtjev od',
-  rules: 'Pravila',
-  rule_item: 'Pravilo {{broj}}',
   sign_request: 'Zahtjev za potpis',
   signed_signature: 'Potpis',
   signing_address: 'Adresa za potpisivanje',
@@ -1077,4 +1108,52 @@ export const hr = {
     'Ako odaberete dodati lozinku, ona će se koristiti za <b>šifriranje</b> sigurnosne kopije datoteke.',
   backup_password_info_cannot_be_reset:
     'Zapamtite: ako zaboravite lozinku za trezor, ona se *ne može* resetirati ili oporaviti.',
+  email_required: 'E-pošta je obavezna',
+  device_backup: 'Sigurnosna kopija uređaja',
+  device_backup_description: 'Pohrani dijeljeni trezor ovog uređaja.',
+  server_backup: 'Sigurnosna kopija poslužitelja',
+  server_backup_description:
+    'Ponovno zatražite dijeljenje trezora poslužitelja.',
+  choose_backup_method: 'Odaberite metodu sigurnosne kopije',
+  vault_server_share_too_many_requests:
+    'Prečesto ste tražili sigurnosnu kopiju u kratkom vremenu. Pričekajte prije ponovnog pokušaja.',
+  vault_server_share_bad_request:
+    'Nešto je pošlo po zlu. Molimo vas da ponovno provjerite lozinku i pokušate ponovno.',
+  backup_share_sent: 'Dijeljenje sigurnosne kopije poslano!',
+  check_email: 'Provjerite e-poštu',
+  backup_share_sent_description:
+    'Upravo smo vam poslali sigurnosnu kopiju na vašu e-poštu. Ako je ne vidite, provjerite mapu neželjene pošte.',
+  faq_is_open_source_title: 'Je li Vultisig otvorenog koda i revidiran?',
+  faq_is_open_source_content:
+    'Da, Vultisig je otvorenog koda i prošao je sigurnosne revizije. I izvješća revizije i izvorni kod su dostupni.',
+  faq_data_protection_title:
+    'Kako Vultisig rješava probleme s privatnošću i zaštitom podataka?',
+  faq_data_protection_content:
+    'Vultisig ne pohranjuje nikakve korisničke podatke iz svojih mobilnih aplikacija.',
+  faq_comparison_title:
+    'Kako se Vultisig uspoređuje s drugim multisign novčanicima?',
+  faq_comparison_content:
+    'Izgrađen je na MPC tehnologiji, koja eliminira potrebu za početnim frazama i podržava više blockchaina, čineći Vultisig fleksibilnim i neovisnim o lancu.',
+  label: 'Označiti',
+  select_vaults_to_backup: 'Odaberite trezore za sigurnosno kopiranje',
+  select_vaults_to_backup_description:
+    'Odaberite želite li sigurnosno kopirati samo ovaj trezor ili sve trezore u aplikaciji.',
+  this_vault_only: 'Samo ovaj trezor',
+  all_vaults: 'Svi trezori',
+  more: 'više',
+  plugin_rules: 'Pravila dodataka',
+  resource: 'Resurs',
+  target: 'Cilj',
+  discount_tiers: 'Razine popusta',
+  discount_tiers_description:
+    'Držite $VULT kako biste otključali niže naknade za trgovanje.',
+  bronze: 'Bronza',
+  silver: 'Srebro',
+  gold: 'Zlato',
+  platinum: 'Platina',
+  discount: 'Popust',
+  unlock_tier: 'Otključaj razinu',
+  unlock_discount_tier: 'Otključaj <b>{{tier}}<b> razinu',
+  unlock_discount_tier_description:
+    'Držanjem {{minBalance}} otključat ćete {{tier}} razinu i ostvariti popust od <b>{{bps}} bps naknade za trgovanje</b> na sve swapove.',
 }
