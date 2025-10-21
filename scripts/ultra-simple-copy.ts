@@ -282,7 +282,7 @@ class UltraSimpleCopier {
 }
 
 // Run ultra simple copy
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const copier = new UltraSimpleCopier()
   copier.copyAll().catch(console.error)
 }

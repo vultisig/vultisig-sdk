@@ -59,11 +59,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vultisig/vultisig-windows.git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
     "directory": "vultisig-sdk"
   },
   "bugs": {
-    "url": "https://github.com/vultisig/vultisig-windows/issues"
+    "url": "https://github.com/vultisig/vultisig-sdk/issues"
   },
   "homepage": "https://vultisig.com",
   "dependencies": {
