@@ -20,5 +20,5 @@ export const getErc20Balance = async ({
     abi: erc20Abi,
     functionName: 'balanceOf',
     args: [accountAddress],
-  } as any)
+  })
 }

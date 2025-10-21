@@ -7,8 +7,11 @@ export const it = {
   onboarding_step_3:
     '<g>Ogni dispositivo</g> nel tuo caveau contiene <g>una quota del caveau</g>',
   positions: 'Posizioni',
+  keys: 'Chiavi',
   onboarding_step_4:
     'Recupera la tua cassaforte anche <g>se un dispositivo è perso o danneggiato</g>',
+  vault_share_banner:
+    'Questo QR Code consente di condividere una versione di vista del caveau',
   add_friends_referral: 'Aggiungi una referenza dei amici',
   onboarding_step_5:
     '<g>Esegui sempre il backup di ogni quota del caveau</g> separatamente in una <g>posizione diversa</g>',
@@ -17,11 +20,40 @@ export const it = {
   secure_crypto_vault: 'Cassaforte sicura per criptovalute',
   vultisig: 'Vultisig',
   by_vultisig: 'da Vultisig',
+  failed_to_read_qr_code: 'Impossibile leggere il codice QR',
+  circle: {
+    introduction:
+      "Deposita i tuoi $USDC in un conto Circle e guadagna rendimento. In sicurezza all'interno del tuo caveau Vultisig.",
+    balance_title: 'Panoramica del saldo',
+    total_deposit: 'Deposito totale',
+    rewards: 'Ricompense',
+    apy: 'APY',
+    claim: 'Richiedi ricompense',
+    banner_text:
+      'I fondi rimangono completamente sotto il controllo del tuo caveau. Il rendimento Circle è generato tramite tesorerie sicure off-chain. Puoi prelevare in qualsiasi momento dopo la liquidazione.',
+    deposit: 'Deposita',
+    withdraw: 'Preleva',
+  },
+  vault_info: 'Informazioni sul caveau',
+  circle_title: 'Conti Circle',
+  circle_description: 'Deposita $USDC in un contratto Circle',
+  vault_details_description:
+    'Visualizzare il nome, la parte e il tipo della cassaforte',
+  vault_details_edit_vault_description:
+    'Modificare il nome della tua cassaforte',
+  backup_description:
+    'Fai una copia di sicurezza della tua Cassaforte in un luogo preferito',
+  reshare_vault_description:
+    'Condividere di nuovo la cassaforte con un nuovo comitato',
+  sign_custom_message_description: 'Firmare un messaggio personalizzato',
+  delete_vault_description: 'Eliminare definitivamente la tua cassaforte',
   save_10_percent_on_swaps: 'Risparmia <blue>10%</blue> su swap ora',
   onboarding_description_1:
     'Vultisig è una cassaforte sicura per criptovalute multi-dispositivo, compatibile con tutte le principali blockchain e oltre 10.000 token. Vultisig è completamente autogestito.',
   onboarding_description_2:
     'Vultisig non traccia le tue attività né richiede alcuna registrazione. Vultisig è open-source, garantendo trasparenza e fiducia.',
+  vult: '$VULT',
+  vultisig_website: 'Sito web di Vultisig',
   function_unavailble:
     'Funzionalità non disponibile per le monete della catena esistenti. Aggiungi monete che possono essere utilizzate con FUNCTION:',
   onboarding_description_3:
@@ -396,7 +428,9 @@ export const it = {
     'Puoi eseguire il backup della tua cassaforte esportando i frammenti della cassaforte.',
   faq_need_to_register_title: 'Devo registrarmi?',
   faq_need_to_register_content: 'No, non ci sono requisiti di registrazione.',
-  vault_settings_address_book_no_addresses_title: 'Nessun indirizzo salvato',
+  vault_settings_address_book_no_addresses_title: 'Il tuo rubrica è vuota',
+  vault_settings_address_book_no_addresses_description:
+    'Organizza tutti i tuoi indirizzi importanti in un posto.',
   or: 'o',
   enter_vault_name: 'Inserisci il nome della cassaforte',
   vault_name_required: 'Il nome della cassaforte è obbligatorio',
@@ -449,6 +483,10 @@ export const it = {
   transaction_hash_copied: 'Hash della transazione copiato',
   asset: 'Asset',
   balance: 'Saldo',
+  portfolio_balance: 'Saldo del Portafoglio',
+  hide_balance: 'Nascondi Saldo',
+  show_balance: 'Mostra Saldo',
+  fill_the_form: 'Compila il modulo',
   failed_to_load: 'Impossibile caricare',
   enter_address: 'Inserisci indirizzo',
   enter_amount: 'Inserisci importo',
@@ -578,8 +616,6 @@ export const it = {
     connectionSuccess: 'Connessione riuscita!',
     takeMinute: 'Questo richiederà solo un secondo',
     vaultInitializationStarting: "Avvio dell'inizializzazione del vault...",
-    emailRequired: 'Email richiesta',
-    emailIncorrect: 'Email errata, si prega di controllare',
     enterEmail: 'Inserisci la tua email',
     emailSetupTitle:
       'Questa email viene utilizzata solo per inviare il backup del server.',
@@ -931,6 +967,7 @@ export const it = {
   remove: 'Rimuovere',
   share_vault: 'Condividi Vault',
   no_referral_yet: 'Nessuna referenza',
+  register_guide: 'Guida di registrazione',
   missing_thorchain_address: 'Indirizzo THORChain mancante',
   missing_destination_address: 'Indirizzo di destinazione mancante',
   upgrade_shares_info:
@@ -1070,8 +1107,6 @@ export const it = {
   description: 'Descrizione',
   personal_sign: 'Segno personale',
   request_from: 'Richiesta da',
-  rules: 'Regole',
-  rule_item: 'Regola {{numero}}',
   sign_request: 'Richiesta di firma',
   signed_signature: 'Firma firmata',
   signing_address: 'Indirizzo di firma',
@@ -1103,4 +1138,53 @@ export const it = {
     'Se si sceglie di aggiungere una password, questa verrà utilizzata per <b>crittografare</b> il file di backup.',
   backup_password_info_cannot_be_reset:
     'Ricorda: se dimentichi la password del tuo vault, non potrai reimpostarla o recuperarla.',
+  email_required: "L'email è obbligatoria",
+  device_backup: 'Backup del dispositivo',
+  device_backup_description:
+    'Memorizza la condivisione vault di questo dispositivo.',
+  server_backup: 'Backup del server',
+  server_backup_description:
+    'Richiedi nuovamente la condivisione del vault del server.',
+  choose_backup_method: 'Scegli il metodo di backup',
+  vault_server_share_too_many_requests:
+    'Hai richiesto la condivisione di backup troppo spesso in poco tempo. Attendi prima di riprovare.',
+  vault_server_share_bad_request:
+    'Si è verificato un errore. Ricontrolla la password e riprova.',
+  backup_share_sent: 'Condivisione di backup inviata!',
+  check_email: 'Controlla la posta elettronica',
+  backup_share_sent_description:
+    'Abbiamo appena inviato la condivisione di backup al tuo indirizzo email. Se non la vedi, controlla la cartella spam.',
+  faq_is_open_source_title: 'Vultisig è open source e sottoposto a verifica?',
+  faq_is_open_source_content:
+    'Sì, Vultisig è open source ed è stato sottoposto a controlli di sicurezza. Sia i report di audit che il codice sorgente sono accessibili.',
+  faq_data_protection_title:
+    'Come gestisce Vultisig la privacy e la protezione dei dati?',
+  faq_data_protection_content:
+    'Vultisig non memorizza alcuna informazione utente dalle sue app mobili.',
+  faq_comparison_title:
+    'Come si confronta Vultisig con altri portafogli multisig?',
+  faq_comparison_content:
+    'È basato sulla tecnologia MPC, che elimina la necessità di frasi seed e supporta più blockchain, rendendo Vultisig flessibile e indipendente dalla catena.',
+  label: 'Etichetta',
+  select_vaults_to_backup: 'Seleziona i Vault di cui eseguire il backup',
+  select_vaults_to_backup_description:
+    'Scegli se eseguire il backup solo di questo vault o di tutti i vault nella tua app.',
+  this_vault_only: 'Solo questo caveau',
+  all_vaults: 'Tutti i caveau',
+  more: 'Di più',
+  plugin_rules: 'Regole del plugin',
+  resource: 'Risorsa',
+  target: 'Bersaglio',
+  discount_tiers: 'Livelli di sconto',
+  discount_tiers_description:
+    'Mantieni $VULT per sbloccare commissioni di trading più basse.',
+  bronze: 'Bronzo',
+  silver: 'Argento',
+  gold: 'Oro',
+  platinum: 'Platino',
+  discount: 'Sconto',
+  unlock_tier: 'Sblocca livello',
+  unlock_discount_tier: 'Sblocca il livello <b>{{tier}}</b>',
+  unlock_discount_tier_description:
+    'Mantenendo {{minBalance}}, sbloccherai il livello {{tier}} e riceverai uno sconto sulle commissioni di trading di <b>{{bps}} bps</b> su tutti gli swap.',
 }

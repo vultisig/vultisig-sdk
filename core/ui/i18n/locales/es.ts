@@ -9,21 +9,50 @@ export const es = {
   onboarding_step_4:
     'Recupera tu bóveda incluso <g>si un dispositivo se pierde o se daña</g>',
   positions: 'Posiciones',
+  vault_info: 'Información de la bóveda',
+  keys: 'Claves',
+  vault_share_banner:
+    'Este código QR le permite compartir una versión de vista de su bóveda',
   onboarding_step_5:
     '<g>Siempre haga una copia de seguridad de cada parte del depósito</g> separadamente en una <g>ubicación diferente</g>',
   onboarding_step_6:
     'Estas partes colaboran para <g>desbloquear su depósito</g>',
   secure_crypto_vault: 'Bóveda segura de criptomonedas',
   vultisig: 'Vultisig',
+  failed_to_read_qr_code: 'No se pudo leer el código QR',
+  circle: {
+    introduction:
+      'Deposita tus $USDC en una cuenta Circle y gana rendimiento. De forma segura dentro de tu bóveda Vultisig.',
+    balance_title: 'Resumen de saldo',
+    total_deposit: 'Depósito total',
+    rewards: 'Recompensas',
+    apy: 'APY',
+    claim: 'Reclamar recompensas',
+    banner_text:
+      'Los fondos permanecen totalmente bajo el control de tu bóveda. El rendimiento de Circle se genera mediante tesorerías seguras fuera de la cadena. Retira en cualquier momento después de la liquidación.',
+    deposit: 'Depositar',
+    withdraw: 'Retirar',
+  },
+  circle_title: 'Cuentas Circle',
+  circle_description: 'Deposita $USDC en un contrato de Circle',
+  vault_details_description: 'Ver el nombre, la parte y el tipo de la bóveda',
+  vault_details_edit_vault_description: 'Editar el nombre de tu bóveda',
+  reshare_vault_description: 'Volver a compartir la bóveda con un nuevo comité',
+  sign_custom_message_description: 'Firmar mensaje personalizado',
+  delete_vault_description: 'Eliminar tu bóveda de forma permanente',
   by_vultisig: 'por Vultisig',
   add_friends_referral: 'Agregar una referencia de amigos',
   save_10_percent_on_swaps: 'Ahorra <blue>10%</blue> en intercambios ahora',
   digit_input_success_validation: 'Verificación exitosa',
+  backup_description:
+    'Haz una copia de seguridad de tu bóveda en un lugar preferido',
   digit_input_error_validation:
     'Error al verificar el código, por favor intenta de nuevo',
   digit_input_loading_validation: 'Verificando código, por favor espera',
   mint: 'Recibir',
+  vultisig_website: 'Sitio web de Vultisig',
   redeem: 'Vender',
+  vult: '$VULT',
   merged: 'Combinado',
   function_unavailble:
     'Función no disponible para las monedas de cadena existentes. Agrega monedas que puedan usarse con FUNCTION:',
@@ -399,7 +428,9 @@ export const es = {
   faq_need_to_register_title: '¿Necesito registrarme?',
   faq_need_to_register_content: 'No, no hay requisitos de registro.',
   vault_settings_address_book_no_addresses_title:
-    'No hay direcciones guardadas',
+    'Su libreta de direcciones está vacía',
+  vault_settings_address_book_no_addresses_description:
+    'Organice todas sus direcciones importantes en un lugar.',
   or: 'o',
   enter_vault_name: 'Ingrese el nombre de la bóveda',
   vault_name_required: 'Se requiere el nombre de la bóveda',
@@ -450,6 +481,10 @@ export const es = {
   transaction_hash_copied: 'Hash de la transacción copiado',
   asset: 'Activo',
   balance: 'Saldo',
+  portfolio_balance: 'Saldo de Cartera',
+  hide_balance: 'Ocultar Saldo',
+  show_balance: 'Mostrar Saldo',
+  fill_the_form: 'Completa el formulario',
   failed_to_load: 'No se pudo cargar',
   enter_address: 'Ingrese dirección',
   enter_amount: 'Ingrese monto',
@@ -575,8 +610,6 @@ export const es = {
     connectionSuccess: '¡Conexión exitosa!',
     takeMinute: 'Esto solo tomará un segundo',
     vaultInitializationStarting: 'Iniciando la inicialización del baúl...',
-    emailRequired: 'Correo electrónico es obligatorio',
-    emailIncorrect: 'Correo electrónico incorrecto, por favor verifique',
     enterEmail: 'Ingrese su correo electrónico',
     emailSetupTitle:
       'Este correo electrónico solo se usa para enviar la copia de seguridad del servidor.',
@@ -934,6 +967,7 @@ export const es = {
     'Convierta tu bóveda en una máquina de recompensas. Cree tu referencia ahora y comience a ganar.',
   remove: 'Eliminar',
   share_vault: 'Bóveda compartida',
+  register_guide: 'Guía de registro',
   no_referral_yet: 'Aún no hay referencia',
   missing_thorchain_address: 'Falta la dirección de THORChain',
   missing_destination_address: 'Dirección de destino faltante',
@@ -1072,8 +1106,6 @@ export const es = {
   description: 'Descripción',
   personal_sign: 'Signo personal',
   request_from: 'Solicitud de',
-  rules: 'Normas',
-  rule_item: 'Regla {{number}}',
   sign_request: 'Solicitud de firma',
   signed_signature: 'Firma firmada',
   signing_address: 'Dirección de firma',
@@ -1106,4 +1138,54 @@ export const es = {
     'Si decide agregar una contraseña, esta se utilizará para <b>encriptar</b> el archivo de respaldo.',
   backup_password_info_cannot_be_reset:
     'Recuerde: si olvida la contraseña de su bóveda, no podrá restablecerla ni recuperarla.',
+  email_required: 'Se requiere correo electrónico',
+  device_backup: 'Copia de seguridad del dispositivo',
+  device_backup_description:
+    'Almacenar el recurso compartido de bóveda de este dispositivo.',
+  server_backup: 'Copia de seguridad del servidor',
+  server_backup_description:
+    'Solicitar nuevamente el uso compartido de Server Vault.',
+  choose_backup_method: 'Elija el método de copia de seguridad',
+  vault_server_share_too_many_requests:
+    'Has solicitado tu copia de seguridad compartida con demasiada frecuencia en poco tiempo. Espera antes de volver a intentarlo.',
+  vault_server_share_bad_request:
+    'Algo salió mal. Por favor, revisa tu contraseña e inténtalo de nuevo.',
+  backup_share_sent: '¡Respaldo compartido enviado!',
+  check_email: 'Revisar el correo electrónico',
+  backup_share_sent_description:
+    'Acabamos de enviarte tu copia de seguridad a tu correo electrónico. Si no la encuentras, revisa tu carpeta de correo no deseado.',
+  faq_is_open_source_title: '¿Vultisig es de código abierto y auditado?',
+  faq_is_open_source_content:
+    'Sí, Vultisig es de código abierto y ha sido sometido a auditorías de seguridad. Tanto los informes de auditoría como el código fuente son accesibles.',
+  faq_data_protection_title:
+    '¿Cómo gestiona Vultisig la privacidad y la protección de datos?',
+  faq_data_protection_content:
+    'Vultisig no almacena ninguna información del usuario de sus aplicaciones móviles.',
+  faq_comparison_title:
+    '¿Cómo se compara Vultisig con otras billeteras multifirma?',
+  faq_comparison_content:
+    'Está construido sobre tecnología MPC, que elimina la necesidad de frases semilla y admite múltiples cadenas de bloques, lo que hace que Vultisig sea flexible y agnóstico en cuanto a cadena.',
+  label: 'Etiqueta',
+  select_vaults_to_backup:
+    'Seleccionar bóvedas para realizar copias de seguridad',
+  select_vaults_to_backup_description:
+    'Elija si desea realizar una copia de seguridad solo de esta bóveda o de todas las bóvedas de su aplicación.',
+  this_vault_only: 'Sólo esta bóveda',
+  all_vaults: 'Todas las bóvedas',
+  more: 'más',
+  plugin_rules: 'Reglas del complemento',
+  resource: 'Recurso',
+  target: 'Objetivo',
+  discount_tiers: 'Niveles de descuento',
+  discount_tiers_description:
+    'Mantenga $VULT para desbloquear tarifas comerciales más bajas.',
+  bronze: 'Bronce',
+  silver: 'Plata',
+  gold: 'Oro',
+  platinum: 'Platino',
+  discount: 'Descuento',
+  unlock_tier: 'Desbloquear nivel',
+  unlock_discount_tier: 'Desbloquear <b>{{tier}}</b> nivel',
+  unlock_discount_tier_description:
+    'Al mantener {{minBalance}}, desbloquearás el nivel {{tier}} y recibirás un descuento de <b>{{bps}} bps en la tarifa de negociación</b> en todos los swaps.',
 }
