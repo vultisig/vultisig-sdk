@@ -12,12 +12,8 @@ type Input = {
   vault_password: string
 }
 
-export const signWithServer = async (input: Input) => {
-  const response = await queryUrl(`${fastVaultServerUrl}/sign`, {
+export const signWithServer = async (input: Input) =>
+  queryUrl(`${fastVaultServerUrl}/sign`, {
     body: input,
-    responseType: 'text',
-  }) as string
-  
-  // Clean up the response - remove quotes and all whitespace/newlines
-  return response.trim().replace(/^["']|["']$/g, '')
-}
+    responseType: 'none',
+  })

@@ -1,7 +1,7 @@
 import { toSizeUnit } from '@lib/ui/css/toSizeUnit'
 import { ChevronRightIcon } from '@lib/ui/icons/ChevronRightIcon'
 import { getColor } from '@lib/ui/theme/getters'
-import { ThemeColors } from '@lib/ui/theme/ThemeColors'
+import { ThemeColor } from '@lib/ui/theme/ThemeColors'
 import {
   CSSProperties,
   FC,
@@ -11,12 +11,15 @@ import {
 } from 'react'
 import styled, { css } from 'styled-components'
 
+import { IconWrapper } from '../../icons/IconWrapper'
+import { HStack } from '../../layout/Stack'
+import { UiProps } from '../../props'
+
 type Styles = {
   color: ThemeColor
   fontSize: NonNullable<CSSProperties['fontSize']>
 }
 type Status = 'default' | 'error' | 'success' | 'warning'
-type ThemeColor = keyof ThemeColors
 
 const StyledDesc = styled.span<Styles>`
   color: ${({ color }) => getColor(color)};
@@ -26,12 +29,6 @@ const StyledDesc = styled.span<Styles>`
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
-`
-
-const StyledContent = styled.div`
-  align-items: center;
-  display: flex;
-  gap: 8px;
 `
 
 const StyledMeta = styled.span`
@@ -83,6 +80,7 @@ const StyledListItem = styled.div<{
         `
     }
   }}
+
   ${({ hoverable }) => {
     return (
       hoverable &&
@@ -107,7 +105,8 @@ type ListItemProps = {
   status?: Status
   styles?: { description?: Partial<Styles>; title?: Partial<Styles> }
   title: ReactNode
-} & Pick<HTMLAttributes<HTMLDivElement>, 'onClick' | 'style'>
+} & Pick<HTMLAttributes<HTMLDivElement>, 'onClick' | 'style'> &
+  Partial<UiProps>
 
 export const ListItem: FC<ListItemProps> = ({
   description,
@@ -117,6 +116,7 @@ export const ListItem: FC<ListItemProps> = ({
   status = 'default',
   title,
   styles,
+  hoverable = true,
   ...rest
 }) => {
   const titleRender = isValidElement(title) ? (
@@ -131,8 +131,8 @@ export const ListItem: FC<ListItemProps> = ({
   )
 
   return (
-    <StyledListItem status={status} {...rest}>
-      <StyledContent>
+    <StyledListItem hoverable={hoverable} status={status} {...rest}>
+      <HStack alignItems="center" gap={12}>
         {icon}
         {description ? (
           <StyledMeta>
@@ -151,12 +151,16 @@ export const ListItem: FC<ListItemProps> = ({
         ) : (
           titleRender
         )}
-      </StyledContent>
+      </HStack>
       {(extra || showArrow) && (
-        <StyledContent>
+        <HStack alignItems="center" gap={8}>
           {extra}
-          {showArrow && <ChevronRightIcon fontSize={16} />}
-        </StyledContent>
+          {showArrow && (
+            <IconWrapper size={16} color="textShy">
+              <ChevronRightIcon />
+            </IconWrapper>
+          )}
+        </HStack>
       )}
     </StyledListItem>
   )

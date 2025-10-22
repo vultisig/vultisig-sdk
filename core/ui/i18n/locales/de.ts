@@ -10,6 +10,29 @@ export const de = {
     'Stelle deinen Tresor wieder her, sogar <g>wenn ein Gerät verloren geht oder beschädigt wird</g>',
   onboarding_step_5:
     '<g>Sichern Sie jede Tresorfreigabe immer</g> separat in einer <g>anderen Location</g>',
+  vault_share_banner:
+    'Dieser QR Code ermöglicht Ihnen, eine Ansichtsversion Ihres Tresors zu teilen',
+  vault_info: 'Tresorinformationen',
+  circle_title: 'Circle-Konten',
+  circle_description: 'Zahle $USDC in einen Circle-Vertrag ein',
+  circle: {
+    introduction:
+      'Zahlen Sie Ihre $USDC auf ein Circle-Konto ein und verdienen Sie Zinsen. Sicher in Ihrem Vultisig-Tresor.',
+    balance_title: 'Kontostand Übersicht',
+    total_deposit: 'Gesamteinzahlung',
+    rewards: 'Belohnungen',
+    apy: 'APY',
+    claim: 'Belohnungen einfordern',
+    banner_text:
+      'Die Gelder bleiben vollständig unter der Kontrolle Ihres Tresors. Die Circle-Rendite wird durch sichere Off-Chain-Treasuries generiert. Abhebung jederzeit nach Abrechnung möglich.',
+    deposit: 'Einzahlen',
+    withdraw: 'Abheben',
+  },
+  vault_details_description: 'Name, Anteil und Typ des Tresors anzeigen',
+  vault_details_edit_vault_description: 'Deinen Tresornamen bearbeiten',
+  reshare_vault_description: 'Tresor erneut mit einem neuen Komitee teilen',
+  sign_custom_message_description: 'Benutzerdefinierte Nachricht signieren',
+  delete_vault_description: 'Deinen Tresor dauerhaft löschen',
   onboarding_step_6:
     'Diese Freigaben arbeiten zusammen, um <g>Ihren Tresor zu entsperren</g>',
   positions: 'Positionen',
@@ -17,10 +40,14 @@ export const de = {
   add_friends_referral: 'Fügen Sie eine Freunde-Referenz hinzu',
   secure_crypto_vault: 'Sicherer Krypto-Tresor',
   digit_input_success_validation: 'Verifizierung erfolgreich',
+  backup_description:
+    'Sichern Sie Ihren Tresor teilen in einem bevorzugten Ort',
   digit_input_error_validation:
     'Fehler bei der Code-Verifizierung, bitte erneut versuchen',
   digit_input_loading_validation: 'Code wird überprüft, bitte warten',
+  vult: '$VULT',
   vultisig: 'Vultisig',
+  keys: 'Schlüssel',
   by_vultisig: 'von Vultisig',
   merged: 'Zusammengeführt',
   mint: 'Erhalten',
@@ -395,8 +422,9 @@ export const de = {
   faq_need_to_register_title: 'Muss ich mich registrieren?',
   faq_need_to_register_content:
     'Nein, es gibt keine Registrierungsanforderungen.',
-  vault_settings_address_book_no_addresses_title:
-    'Keine gespeicherten Adressen',
+  vault_settings_address_book_no_addresses_title: 'Ihr Adressbuch ist leer',
+  vault_settings_address_book_no_addresses_description:
+    'Ordnen Sie alle Ihre wichtigen Adressen in einem Ort.',
   or: 'oder',
   enter_vault_name: 'Tresorname eingeben',
   vault_name_required: 'Tresorname ist erforderlich',
@@ -448,6 +476,10 @@ export const de = {
   transaction_hash_copied: 'Transaktionshash kopiert',
   asset: 'Asset',
   balance: 'Kontostand',
+  portfolio_balance: 'Portfolio-Saldo',
+  hide_balance: 'Saldo ausblenden',
+  show_balance: 'Saldo anzeigen',
+  fill_the_form: 'Formular ausfüllen',
   failed_to_load: 'Laden fehlgeschlagen',
   enter_address: 'Adresse eingeben',
   enter_amount: 'Betrag eingeben',
@@ -573,8 +605,6 @@ export const de = {
     connectionSuccess: 'Verbindung erfolgreich!',
     takeMinute: 'Dies sollte nur eine Sekunde dauern',
     vaultInitializationStarting: 'Tresor-Initialisierung startet...',
-    emailRequired: 'E-Mail ist erforderlich',
-    emailIncorrect: 'Falsche E-Mail, bitte überprüfen',
     enterEmail: 'Geben Sie Ihre E-Mail ein',
     emailSetupTitle:
       'Diese E-Mail wird nur verwendet, um das Server-Backup zu senden',
@@ -937,6 +967,7 @@ export const de = {
   twitter: 'Twitter',
   vultisig_community: 'Vultisig-Gemeinschaft',
   remove: 'Entfernen',
+  register_guide: 'Registrierungsanleitung',
   share_vault: 'Tresor teilen',
   no_referral_yet: 'Noch keine Empfehlung',
   missing_thorchain_address: 'Fehlende THORChain-Adresse',
@@ -1076,8 +1107,6 @@ export const de = {
   description: 'Beschreibung',
   personal_sign: 'Persönliches Zeichen',
   request_from: 'Anfrage von',
-  rules: 'Regeln',
-  rule_item: 'Regel {{number}}',
   sign_request: 'Anfrage unterzeichnen',
   signed_signature: 'Unterschrift',
   signing_address: 'Unterschriftsadresse',
@@ -1110,4 +1139,54 @@ export const de = {
     'Wenn Sie ein Kennwort hinzufügen, wird dieses zum <b>Verschlüsseln</b> der Sicherungsdatei verwendet.',
   backup_password_info_cannot_be_reset:
     'Denken Sie daran: Wenn Sie Ihr Tresorkennwort vergessen, kann es <b>nicht</b> zurückgesetzt oder wiederhergestellt werden.',
+  email_required: 'E-Mail ist erforderlich',
+  device_backup: 'Gerätesicherung',
+  device_backup_description: 'Speichern Sie die Tresorfreigabe dieses Geräts.',
+  server_backup: 'Serversicherung',
+  server_backup_description: 'Fordern Sie Server Vault Share erneut an.',
+  choose_backup_method: 'Wählen Sie eine Sicherungsmethode',
+  vault_server_share_too_many_requests:
+    'Sie haben Ihre Sicherungsfreigabe in kurzer Zeit zu oft angefordert. Bitte warten Sie, bevor Sie es erneut versuchen.',
+  vault_server_share_bad_request:
+    'Etwas ist schiefgelaufen. Bitte überprüfen Sie Ihr Passwort und versuchen Sie es erneut.',
+  backup_share_sent: 'Backup-Freigabe gesendet!',
+  check_email: 'E-Mails abrufen',
+  backup_share_sent_description:
+    'Wir haben Ihre Sicherungsfreigabe gerade an Ihre E-Mail-Adresse gesendet. Wenn Sie sie nicht sehen, überprüfen Sie Ihren Spam-Ordner.',
+  vultisig_website: 'Vultisig Website',
+  faq_is_open_source_title: 'Ist Vultisig Open Source und geprüft?',
+  faq_is_open_source_content:
+    'Ja, Vultisig ist Open Source und wurde Sicherheitsüberprüfungen unterzogen. Sowohl die Prüfberichte als auch der Quellcode sind zugänglich.',
+  faq_data_protection_title:
+    'Wie geht Vultisig mit Privatsphäre und Datenschutz um?',
+  faq_data_protection_content:
+    'Vultisig speichert keine Benutzerinformationen aus seinen mobilen Apps.',
+  faq_comparison_title:
+    'Wie schneidet Vultisig im Vergleich zu anderen Multisig-Wallets ab?',
+  faq_comparison_content:
+    'Es basiert auf der MPC-Technologie, die Seed-Phrasen überflüssig macht und mehrere Blockchains unterstützt, wodurch Vultisig flexibel und kettenunabhängig ist.',
+  label: 'Etikett',
+  select_vaults_to_backup: 'Wählen Sie Tresore zum Sichern aus',
+  select_vaults_to_backup_description:
+    'Wählen Sie, ob nur dieser Tresor oder alle Tresore in Ihrer App gesichert werden sollen.',
+  this_vault_only: 'Nur dieser Tresor',
+  all_vaults: 'Alle Tresore',
+  more: 'mehr',
+  plugin_rules: 'Plugin-Regeln',
+  resource: 'Ressource',
+  target: 'Ziel',
+  discount_tiers: 'Rabattstufen',
+  discount_tiers_description:
+    'Halten Sie $VULT, um niedrigere Handelsgebühren freizuschalten.',
+  bronze: 'Bronze',
+  silver: 'Silber',
+  gold: 'Gold',
+  platinum: 'Platin',
+  discount: 'Rabatt',
+  unlock_tier: 'Stufe freischalten',
+  unlock_discount_tier: 'Schalte die Stufe <b>{{tier}}</b> frei',
+  unlock_discount_tier_description:
+    'Indem Sie {{minBalance}} halten, schalten Sie die Stufe {{tier}} frei und erhalten einen <b>Rabatt auf die Handelsgebühr von {{bps}} bps</b> auf alle Swaps.',
+  upload_qr_code_with_address: 'QR-Code mit Adresse hochladen',
+  failed_to_read_qr_code: 'Der QR-Code konnte nicht gelesen werden.',
 }

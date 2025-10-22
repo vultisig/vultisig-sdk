@@ -5,12 +5,10 @@ import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import { OneInchSwapQuoteResponse } from './OneInchSwapQuoteResponse'
 import { oneInchAffiliateConfig } from '../oneInchAffiliateConfig'
-import { defaultEvmSwapGasLimit } from '../../../../tx/fee/evm/evmGasLimit'
 import { rootApiUrl } from '../../../../../config'
 import { hexToNumber } from '../../../../../../lib/utils/hex/hexToNumber'
 import { addQueryParams } from '../../../../../../lib/utils/query/addQueryParams'
 import { queryUrl } from '../../../../../../lib/utils/query/queryUrl'
-import { pick } from '../../../../../../lib/utils/record/pick'
 
 import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 
@@ -19,7 +17,7 @@ type Input = {
   fromCoinId: string
   toCoinId: string
   amount: bigint
-  isAffiliate: boolean
+  affiliateBps?: number
 }
 
 const getBaseUrl = (chainId: number) =>
@@ -30,9 +28,10 @@ export const getOneInchSwapQuote = async ({
   fromCoinId,
   toCoinId,
   amount,
-  isAffiliate,
+  affiliateBps,
 }: Input): Promise<GeneralSwapQuote> => {
-  const chainId = hexToNumber(getEvmChainId(account.chain as EvmChain))
+  const chain = account.chain as EvmChain
+  const chainId = hexToNumber(getEvmChainId(chain))
 
   const params = {
     src: isFeeCoin({ id: fromCoinId, chain: account.chain })
@@ -46,7 +45,12 @@ export const getOneInchSwapQuote = async ({
     slippage: 0.5,
     disableEstimate: true,
     includeGas: true,
-    ...(isAffiliate ? pick(oneInchAffiliateConfig, ['referrer', 'fee']) : {}),
+    ...(affiliateBps
+      ? {
+          referrer: oneInchAffiliateConfig.referrer,
+          fee: affiliateBps / 100,
+        }
+      : {}),
   }
 
   const url = addQueryParams(getBaseUrl(chainId), params)
@@ -60,7 +64,7 @@ export const getOneInchSwapQuote = async ({
     tx: {
       evm: {
         ...tx,
-        gas: tx.gas || defaultEvmSwapGasLimit,
+        gasLimit: tx.gas ? BigInt(tx.gas) : undefined,
       },
     },
   }

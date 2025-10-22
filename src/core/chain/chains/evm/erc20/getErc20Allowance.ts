@@ -22,5 +22,5 @@ export const getErc20Allowance = async ({
     abi: erc20Abi,
     functionName: 'allowance',
     args: [address as `0x${string}`, spender as `0x${string}`],
-  } as any)
+  })
 }
