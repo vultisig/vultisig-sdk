@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Vault, Vultisig } from 'vultisig-sdk'
 
+import { AddressBookPanel } from './components/AddressBookPanel'
 import { AddressDerivationTester } from './components/AddressDerivationTester'
 import BalanceDisplay from './components/BalanceDisplay'
 import { CreateVaultForm } from './components/CreateVaultForm'
@@ -11,8 +12,8 @@ import { LoadVaultModal } from './components/LoadVaultModal'
 import { ServerStatus } from './components/ServerStatus'
 import { SignTransaction } from './components/SignTransaction'
 import { VaultDisplay } from './components/VaultDisplay'
-import { useKeysharesStorage } from './hooks/useKeysharesStorage'
 import { useServerStatus } from './hooks/useServerStatus'
+import { useVaults } from './hooks/useVaults'
 import type { LoadedKeyshare } from './types'
 import { buildVultFile } from './utils/exportVault'
 
@@ -35,7 +36,7 @@ function App() {
   )
   const [initialized, setInitialized] = useState(false)
   const serverStatus = useServerStatus(sdk)
-  const keysharesStorage = useKeysharesStorage()
+  const vaultsHook = useVaults(sdk)
   const [vault, setVault] = useState<Vault | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -46,7 +47,7 @@ function App() {
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'vaults'>('vaults')
+  const [activeTab, setActiveTab] = useState<'vaults' | 'addressBook'>('vaults')
 
   const onInitialize = async () => {
     if (initialized) return
@@ -62,72 +63,60 @@ function App() {
     for (const file of files) {
       try {
         const encrypted = await sdk.isVaultFileEncrypted(file)
-
-        // Read the file content as base64 and store it directly
-        const reader = new FileReader()
-        const fileContent = await new Promise<string>((resolve, reject) => {
-          reader.onload = () => {
-            const text = reader.result as string
-            resolve(text)
-          }
-          reader.onerror = reject
-          reader.readAsText(file)
-        })
-
-        // Store the file content directly in localStorage using the existing storage mechanism
-        await keysharesStorage.saveVaultFromFile({
+        const loadedKeyshare: LoadedKeyshare = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           name: file.name,
           size: file.size,
           encrypted,
-          containerBase64: fileContent,
-        })
+          data: null,
+          file,
+          containerBase64: undefined,
+        }
+        setActiveKeyshare(loadedKeyshare)
       } catch (error) {
-        console.warn(`Failed to add ${file.name}:`, error)
+        console.warn(`Failed to load ${file.name}:`, error)
       }
     }
 
     ev.target.value = ''
   }
 
-  const handleVaultCreated = (
+  const handleVaultCreated = async (
     vault: Vault,
     options?: { serverVerified?: boolean }
   ) => {
     setVault(vault)
     setShowCreate(false)
     setServerVerified(Boolean(options?.serverVerified))
-
-    // Save or update vault in storage
-    keysharesStorage
-      .saveVaultToStorage(vault, { name: vault.data.name })
-      .catch(error => {
-        console.error('Failed to save vault to storage:', error)
-      })
+    await vaultsHook.refreshVaults()
   }
 
-  const saveVaultImmediately = async (vault: Vault) => {
-    // Save vault to storage without closing the form
-    console.log('Saving vault immediately after creation:', vault)
-    console.log('Vault data:', vault.data)
-    console.log('KeyShares:', vault.data?.keyShares)
-
-    await keysharesStorage.saveVaultToStorage(vault, { name: vault.data.name })
+  const saveVaultImmediately = async () => {
+    await vaultsHook.refreshVaults()
   }
 
   const handleLoadKeyshare = (keyshare: LoadedKeyshare) => {
     setActiveKeyshare(keyshare)
   }
 
-  const handleVaultLoaded = (
+  const handleVaultLoaded = async (
     vault: Vault,
     options?: { serverVerified?: boolean }
   ) => {
     setVault(vault)
     setServerVerified(Boolean(options?.serverVerified))
+    await vaultsHook.refreshVaults()
   }
 
-  const handleRemoveStoredKeyshare = async (keyshareId: string) => {
-    await keysharesStorage.removeKeyshare(keyshareId)
+  const handleRemoveStoredKeyshare = async (vaultId: string) => {
+    const vaultToDelete = vaultsHook.vaults.find(v => v.id === vaultId)
+    if (vaultToDelete) {
+      const vaultInstance = sdk.getActiveVault()
+      if (vaultInstance && vaultInstance.data.publicKeys.ecdsa === vaultId) {
+        await sdk.deleteVault(vaultInstance)
+      }
+      await vaultsHook.refreshVaults()
+    }
   }
 
   const doExport = async (password?: string) => {
@@ -184,7 +173,7 @@ function App() {
               VultiSig SDK - App Home
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {keysharesStorage.storageInfo.keyshareCount > 0 && (
+              {vaultsHook.getStorageInfo().vaultCount > 0 && (
                 <div
                   style={{
                     fontSize: '12px',
@@ -195,8 +184,8 @@ function App() {
                     border: '1px solid #e9ecef',
                   }}
                 >
-                  {keysharesStorage.storageInfo.keyshareCount} stored -{' '}
-                  {keysharesStorage.storageInfo.estimatedSize}
+                  {vaultsHook.getStorageInfo().vaultCount} stored -{' '}
+                  {vaultsHook.getStorageInfo().estimatedSize}
                 </div>
               )}
               <ServerStatus status={serverStatus} />
@@ -215,7 +204,20 @@ function App() {
                 cursor: 'pointer',
               }}
             >
-              Vaults ({keysharesStorage.storageInfo.keyshareCount})
+              Vaults ({vaultsHook.vaults.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('addressBook')}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid #e9ecef',
+                backgroundColor:
+                  activeTab === 'addressBook' ? '#e9ecef' : 'white',
+                cursor: 'pointer',
+              }}
+            >
+              Address Book
             </button>
           </div>
 
@@ -254,9 +256,9 @@ function App() {
             >
               {showCreate ? 'Close Create' : 'Create Vault'}
             </button>
-            {keysharesStorage.storageInfo.keyshareCount > 0 && (
+            {vaultsHook.vaults.length > 0 && (
               <button
-                onClick={() => keysharesStorage.clearAllKeyshares()}
+                onClick={() => vaultsHook.clearAllVaults()}
                 style={{
                   padding: '10px 16px',
                   backgroundColor: '#dc3545',
@@ -291,24 +293,33 @@ function App() {
           {activeTab === 'vaults' && (
             <KeysharesList
               keyshares={[]}
-              storedKeyshares={keysharesStorage.storedKeyshares}
+              storedKeyshares={vaultsHook.vaults.map(v => ({
+                id: v.id,
+                name: v.name,
+                size: v.size,
+                encrypted: v.isEncrypted,
+                dateAdded: v.createdAt,
+                containerBase64: undefined,
+              }))}
               onLoadKeyshare={handleLoadKeyshare}
               onRemoveStoredKeyshare={handleRemoveStoredKeyshare}
-              onLoadStoredKeyshare={storedKeyshare => {
-                // Convert stored keyshare to LoadedKeyshare format for the modal
+              onLoadStoredKeyshare={async storedVault => {
+                const vaultData = await vaultsHook.getVaultData(storedVault.id)
                 const loadedKeyshare: LoadedKeyshare = {
-                  id: storedKeyshare.id,
-                  name: storedKeyshare.name,
-                  size: storedKeyshare.size || 0,
-                  encrypted: storedKeyshare.encrypted || false,
+                  id: storedVault.id,
+                  name: storedVault.name,
+                  size: vaultData?.size || storedVault.size || 0,
+                  encrypted: storedVault.encrypted || false,
                   data: null,
                   file: null,
-                  containerBase64: storedKeyshare.containerBase64,
+                  containerBase64: vaultData?.containerBase64,
                 }
                 handleLoadKeyshare(loadedKeyshare)
               }}
             />
           )}
+
+          {activeTab === 'addressBook' && <AddressBookPanel sdk={sdk} />}
 
           {vault && (
             <>

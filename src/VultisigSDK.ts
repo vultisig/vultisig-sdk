@@ -174,6 +174,17 @@ export class Vultisig {
   }
 
   /**
+   * Import vault from base64 container data (for loading from storage)
+   */
+  async addVaultFromBase64(
+    containerBase64: string,
+    name: string
+  ): Promise<VaultClass> {
+    await this.ensureInitialized()
+    return this.vaultManagement.addVaultFromBase64(containerBase64, name)
+  }
+
+  /**
    * List all stored vaults
    */
   async listVaults(): Promise<any[]> {
@@ -371,5 +382,9 @@ export class Vultisig {
 
   getServerManager(): ServerManager {
     return this.serverManager
+  }
+
+  getVaultManagement(): VaultManagement {
+    return this.vaultManagement
   }
 }

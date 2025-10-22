@@ -1,11 +1,52 @@
 import type { AddressBook, AddressBookEntry } from '../types'
 
+const STORAGE_KEY = 'vultisig_address_book'
+
 /**
  * AddressBook manager for global address book operations
  * Handles saved addresses and addresses from user's other vaults
+ * Persists data to localStorage
  */
 export class AddressBookManager {
   private addressBookData: AddressBook = { saved: [], vaults: [] }
+
+  constructor() {
+    this.loadFromStorage()
+  }
+
+  /**
+   * Load address book from localStorage
+   */
+  private loadFromStorage(): void {
+    try {
+      if (typeof localStorage === 'undefined') {
+        return
+      }
+
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored) as AddressBook
+        this.addressBookData = parsed
+      }
+    } catch (error) {
+      console.warn('Failed to load address book from storage:', error)
+    }
+  }
+
+  /**
+   * Save address book to localStorage
+   */
+  private saveToStorage(): void {
+    try {
+      if (typeof localStorage === 'undefined') {
+        return
+      }
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.addressBookData))
+    } catch (error) {
+      console.warn('Failed to save address book to storage:', error)
+    }
+  }
 
   /**
    * Get address book entries
@@ -63,7 +104,7 @@ export class AddressBookManager {
         // If it exists, do nothing (preserve original)
       }
     }
-    // TODO: Persist to storage
+    this.saveToStorage()
   }
 
   /**
@@ -83,7 +124,7 @@ export class AddressBookManager {
         entry => !(entry.chain === chain && entry.address === address)
       )
     }
-    // TODO: Persist to storage
+    this.saveToStorage()
   }
 
   /**
@@ -101,7 +142,7 @@ export class AddressBookManager {
 
     if (savedEntry) {
       savedEntry.name = name
-      // TODO: Persist to storage
+      this.saveToStorage()
       return
     }
 
@@ -112,7 +153,7 @@ export class AddressBookManager {
 
     if (vaultEntry) {
       vaultEntry.name = name
-      // TODO: Persist to storage
+      this.saveToStorage()
     }
   }
 
@@ -121,5 +162,6 @@ export class AddressBookManager {
    */
   clear(): void {
     this.addressBookData = { saved: [], vaults: [] }
+    this.saveToStorage()
   }
 }

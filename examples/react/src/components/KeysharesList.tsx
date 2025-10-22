@@ -93,15 +93,15 @@ export const KeysharesList = ({
               <span style={{ color: '#999', fontSize: 10 }}>
                 {new Date(k.dateAdded).toLocaleDateString()}
               </span>
-              {k.containerBase64 && onLoadStoredKeyshare && (
+              {onLoadStoredKeyshare && (
                 <button
                   onClick={() => onLoadStoredKeyshare(k)}
                   style={{
                     marginLeft: 8,
                     padding: '4px 8px',
                     borderRadius: 4,
-                    border: '1px solid #007bff',
-                    background: '#007bff',
+                    border: '1px solid #28a745',
+                    background: '#28a745',
                     color: 'white',
                     cursor: 'pointer',
                     fontSize: 12,
