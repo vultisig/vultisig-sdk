@@ -18,53 +18,71 @@ The directories are synchronized from:
 ### Using yarn scripts (Recommended)
 
 ```bash
-# Sync both core/ and lib/ directories
-yarn sync:directories
+# Sync from vultisig-windows and copy to src/ with import transformations
+yarn sync-and-copy
 
-# Sync only core/ directory
-yarn sync:core
-
-# Sync only lib/ directory  
-yarn sync:lib
-
-# Check directory status
-yarn directories:status
+# Build SDK with full sync
+yarn build:sdk-full
 ```
 
 ### Using the script directly
 
 ```bash
-# Show all available commands
-./scripts/sync-directories.sh help
+# Run the full workflow (sync + copy)
+node_modules/.bin/tsx scripts/sync-and-copy.ts
 
-# Sync both directories
-./scripts/sync-directories.sh sync
+# Show help
+node_modules/.bin/tsx scripts/sync-and-copy.ts --help
+```
 
-# Sync individual directories
-./scripts/sync-directories.sh sync-core
-./scripts/sync-directories.sh sync-lib
+### Advanced Options
 
-# Check status
-./scripts/sync-directories.sh status
+The script supports optional flags for more control:
+
+```bash
+# Only sync from remote (skip copy to src/)
+node_modules/.bin/tsx scripts/sync-and-copy.ts --sync-only
+
+# Only copy to src/ (skip remote sync)
+node_modules/.bin/tsx scripts/sync-and-copy.ts --copy-only
+
+# Only process core/ directory
+node_modules/.bin/tsx scripts/sync-and-copy.ts --core-only
+
+# Only process lib/ directory
+node_modules/.bin/tsx scripts/sync-and-copy.ts --lib-only
 ```
 
 ## How It Works
 
-### Git Sparse Checkout
+### Two-Step Process
 
-The synchronization uses git sparse checkout to efficiently download only the specific directories we need from the vultisig-windows repository. This approach:
+The `sync-and-copy.ts` script performs two main operations:
+
+#### Step 1: Sync from Remote
+Uses git sparse checkout to efficiently download only the specific directories we need from the vultisig-windows repository:
 - Downloads only the required directories (not the entire repository)
 - Creates clean, independent copies of the directories
-- Allows for easy updates without complex git history management
-- Maintains full compatibility with normal git workflows
+- Automatically backs up existing directories before replacement
+- Updates `core/` and `lib/` with fresh content from upstream
 
-### Synchronization Process
+#### Step 2: Copy to src/ with Transformations
+Copies selected files from `core/` and `lib/` to `src/`:
+- Copies only the files needed for the SDK build
+- Transforms `@core/*` and `@lib/*` imports to relative paths
+- Maintains proper file structure for bundling
+- Reports detailed statistics on copied files
 
-1. **Clone**: Creates a temporary sparse checkout of vultisig-windows
-2. **Extract**: Copies only the specified directories (core/ or lib/)
-3. **Backup**: Automatically backs up existing directories before replacement
-4. **Replace**: Updates the local directories with fresh content from upstream
-5. **Cleanup**: Removes temporary files and reports status
+### Detailed Process
+
+1. **Prerequisites Check**: Verifies git repository, sparse-checkout support, and package.json
+2. **Remote Sync**: Creates temporary sparse checkout of vultisig-windows
+3. **Backup**: Backs up existing directories to `archived/` with timestamps
+4. **Update**: Replaces local directories with fresh content
+5. **Clean src/**: Removes existing `src/core/` and `src/lib/` directories
+6. **Copy Files**: Copies folders and individual files with import transformations
+7. **Report**: Provides detailed statistics and next steps
+8. **Cleanup**: Removes temporary files
 
 ## Workflow
 
