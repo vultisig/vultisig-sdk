@@ -9,6 +9,8 @@ export { AddressBookManager } from './AddressBook'
 export { ChainManagement } from './ChainManagement'
 export { VaultManagement } from './VaultManagement'
 export { BalanceManagement } from './BalanceManagement'
+export { StorageManager } from './StorageManager'
+export type { StoredVault, Settings } from './StorageManager'
 
 // Utilities
 export { ValidationHelpers } from './utils/validation'

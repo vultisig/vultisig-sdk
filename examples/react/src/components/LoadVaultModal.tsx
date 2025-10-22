@@ -34,27 +34,11 @@ export const LoadVaultModal = ({
         setStatus('checking')
         let encrypted = false
         if (keyshare.file) {
+          // Only files can be encrypted - check encryption status
           encrypted = await sdk.isVaultFileEncrypted(keyshare.file)
-          console.log('Checking file encryption:', encrypted)
         } else if (keyshare.containerBase64) {
-          // For containerBase64, check if it's actually encrypted by examining the content
-          // The VaultContainer has an isEncrypted field we can check
-          try {
-            // Try to parse the base64 content to check the container
-            const blob = new Blob([keyshare.containerBase64], {
-              type: 'text/plain',
-            })
-            const file = new File([blob], keyshare.name, { type: 'text/plain' })
-            encrypted = await sdk.isVaultFileEncrypted(file)
-            console.log(
-              'Checking containerBase64 encryption via SDK:',
-              encrypted
-            )
-          } catch {
-            // Fallback to stored metadata
-            encrypted = keyshare.encrypted || false
-            console.log('Using stored encryption status:', encrypted)
-          }
+          // Storage vaults are always unencrypted - no need to check
+          encrypted = false
         }
         if (!cancelled) {
           setIsEncrypted(encrypted)
@@ -75,8 +59,6 @@ export const LoadVaultModal = ({
     sdk,
     keyshare.file,
     keyshare.containerBase64,
-    keyshare.encrypted,
-    keyshare.name,
   ])
 
   const handleLoad = async () => {
@@ -85,40 +67,18 @@ export const LoadVaultModal = ({
       setStatus('decrypting')
       await onInitialize()
 
-      console.log(
-        'Loading vault - isEncrypted:',
-        isEncrypted,
-        'password:',
-        password ? 'provided' : 'not provided'
-      )
-
-      // Use password only if file is encrypted
+      // Load vault based on source
       let vault: Vault
       try {
         if (keyshare.file) {
+          // Loading from file - may require password if encrypted
           vault = await sdk.addVault(
             keyshare.file,
             isEncrypted || forcePasswordInput ? password : undefined
           )
         } else if (keyshare.containerBase64) {
-          // Create a File-like object from the base64 content
-          const blob = new Blob([keyshare.containerBase64], {
-            type: 'text/plain',
-          })
-          const file = new File([blob], keyshare.name, { type: 'text/plain' })
-          console.log('Importing from containerBase64, file size:', blob.size)
-          console.log(
-            'First 100 chars of containerBase64:',
-            keyshare.containerBase64.substring(0, 100)
-          )
-          console.log(
-            'Using password:',
-            (isEncrypted || forcePasswordInput) && password ? 'yes' : 'no'
-          )
-          vault = await sdk.addVault(
-            file,
-            isEncrypted || forcePasswordInput ? password : undefined
-          )
+          // Loading from storage - always unencrypted, no password needed
+          vault = await sdk.addVaultFromBase64(keyshare.containerBase64, keyshare.name)
         } else {
           // If no file or containerBase64, use keyshare data directly (already loaded)
           vault = keyshare.data as Vault
@@ -129,15 +89,15 @@ export const LoadVaultModal = ({
         console.error('Error details:', errorMessage)
         setStatus('error')
 
-        // If vault wasn't detected as encrypted but import failed, suggest trying with password
-        if (!isEncrypted && !forcePasswordInput) {
+        // Only suggest password retry for file imports
+        if (keyshare.file && !isEncrypted && !forcePasswordInput) {
           setError(
             `Failed to import vault. It might be encrypted - try entering a password. (${errorMessage})`
           )
           setForcePasswordInput(true)
         } else {
           setError(
-            `Wrong password or corrupted vault file. Please try again. (${errorMessage})`
+            `Failed to load vault: ${errorMessage}`
           )
         }
         return
@@ -228,6 +188,7 @@ export const LoadVaultModal = ({
   const isLoading =
     status === 'checking' || status === 'decrypting' || status === 'verifying'
   const showPasswordInput =
+    keyshare.file && // Only show password input for file imports, not storage loads
     (isEncrypted || forcePasswordInput) &&
     (status === 'idle' || status === 'error')
   const showActions = status === 'idle' || status === 'error'

@@ -174,6 +174,17 @@ export class Vultisig {
   }
 
   /**
+   * Import vault from base64 container data (for loading from storage)
+   */
+  async addVaultFromBase64(
+    containerBase64: string,
+    name: string
+  ): Promise<VaultClass> {
+    await this.ensureInitialized()
+    return this.vaultManagement.addVaultFromBase64(containerBase64, name)
+  }
+
+  /**
    * List all stored vaults
    */
   async listVaults(): Promise<any[]> {
@@ -258,6 +269,22 @@ export class Vultisig {
    */
   getDefaultChains(): string[] {
     return this.chainManagement.getDefaultChains()
+  }
+
+  // === SETTINGS PERSISTENCE ===
+
+  /**
+   * Get user settings from storage
+   */
+  async getSettings() {
+    return this.vaultManagement.getStorageManager().getSettings()
+  }
+
+  /**
+   * Save user settings to storage
+   */
+  async saveSettings(settings: Partial<import('./vault/StorageManager').Settings>) {
+    return this.vaultManagement.getStorageManager().saveSettings(settings)
   }
 
   // === VALIDATION HELPERS ===
@@ -371,5 +398,9 @@ export class Vultisig {
 
   getServerManager(): ServerManager {
     return this.serverManager
+  }
+
+  getVaultManagement(): VaultManagement {
+    return this.vaultManagement
   }
 }

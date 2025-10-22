@@ -1,8 +1,10 @@
-import { fromBinary } from '@bufbuild/protobuf'
+import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 
-import { fromCommVault } from '../core/mpc/types/utils/commVault'
+import { fromCommVault, toCommVault } from '../core/mpc/types/utils/commVault'
+import { VaultContainerSchema } from '../core/mpc/types/vultisig/vault/v1/vault_container_pb'
 import { VaultSchema } from '../core/mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '../core/ui/vault/import/utils/vaultContainerFromString'
+import { base64Encode } from '../lib/utils/base64Encode'
 import { decryptWithAesGcm } from '../lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '../lib/utils/fromBase64'
 import type {
@@ -13,6 +15,7 @@ import type {
   VaultType,
 } from '../types'
 import type { WASMManager } from '../wasm'
+import { StorageManager, type StoredVault } from './StorageManager'
 import { Vault as VaultClass } from './Vault'
 import { VaultImportError, VaultImportErrorCode } from './VaultError'
 
@@ -34,11 +37,124 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
 export class VaultManagement {
   private vaults = new Map<string, Vault>()
   private activeVault: VaultClass | null = null
+  private storageManager: StorageManager
+  private storageLoaded = false
 
   constructor(
     private wasmManager?: WASMManager,
     private sdkInstance?: any
-  ) {}
+  ) {
+    this.storageManager = new StorageManager()
+  }
+
+  // ===== STORAGE INTEGRATION =====
+
+  /**
+   * Load vaults from storage (called lazily on first vault operation)
+   */
+  private async loadVaultsFromStorage(): Promise<void> {
+    if (this.storageLoaded) return
+
+    try {
+      const storedVaults = await this.storageManager.getVaults()
+      const corruptedVaultIds: string[] = []
+
+      for (const storedVault of storedVaults) {
+        if (!storedVault.containerBase64) {
+          console.warn(
+            `Vault ${storedVault.name} has no data - skipping. Please re-import this vault.`
+          )
+          corruptedVaultIds.push(storedVault.id)
+          continue
+        }
+
+        try {
+          // Deserialize the stored vault container (stored as base64 protobuf)
+          const containerBinary = fromBase64(storedVault.containerBase64)
+          const container = fromBinary(VaultContainerSchema, containerBinary)
+          
+          // Extract and deserialize the vault protobuf
+          const vaultBinary = fromBase64(container.vault)
+          const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
+          const vault = fromCommVault(vaultProtobuf)
+
+          // Store in vaults Map
+          this.vaults.set(vault.publicKeys.ecdsa, vault)
+        } catch (error) {
+          console.warn(
+            `Failed to load vault ${storedVault.name}:`,
+            error,
+            '\nThis vault may be corrupted and needs to be re-imported.'
+          )
+          corruptedVaultIds.push(storedVault.id)
+        }
+      }
+
+      // Clean up corrupted vaults from storage
+      if (corruptedVaultIds.length > 0) {
+        for (const id of corruptedVaultIds) {
+          try {
+            await this.storageManager.deleteVault(id)
+          } catch (error) {
+            console.warn(`Failed to delete corrupted vault ${id}:`, error)
+          }
+        }
+      }
+
+      // Restore active vault if set
+      const activeId = await this.storageManager.getCurrentVaultId()
+      if (activeId && this.vaults.has(activeId)) {
+        const vaultData = this.vaults.get(activeId)!
+        this.activeVault = new VaultClass(
+          vaultData,
+          await this.wasmManager?.getWalletCore(),
+          this.wasmManager,
+          this.sdkInstance
+        )
+      }
+
+      this.storageLoaded = true
+    } catch (error) {
+      console.warn('Failed to load vaults from storage:', error)
+      this.storageLoaded = true
+    }
+  }
+
+  /**
+   * Serialize vault to storage format (creates VaultContainer)
+   * Note: Vaults are always stored UNENCRYPTED in localStorage for performance.
+   * Encryption is only used for .vult file exports.
+   */
+  private serializeVaultForStorage(
+    vault: Vault,
+    wasOriginallyEncrypted: boolean
+  ): StoredVault {
+    // Convert vault to protobuf
+    const commVault = toCommVault(vault)
+    const vaultData = toBinary(VaultSchema, commVault)
+
+    // Create VaultContainer (always unencrypted for storage)
+    const vaultContainer = create(VaultContainerSchema, {
+      version: BigInt(1),
+      vault: Buffer.from(vaultData).toString('base64'),
+      isEncrypted: false, // Always store unencrypted in localStorage
+    })
+
+    // Serialize container to base64
+    const vaultContainerData = toBinary(VaultContainerSchema, vaultContainer)
+    const containerBase64 = Buffer.from(vaultContainerData).toString('base64')
+
+    const storedVault = {
+      id: vault.publicKeys.ecdsa,
+      name: `${vault.name}.vult`,
+      size: containerBase64.length,
+      encrypted: wasOriginallyEncrypted, // Track original encryption status for UI
+      dateAdded: Date.now(),
+      containerBase64,
+    }
+
+    return storedVault
+  }
 
   // ===== VAULT LIFECYCLE =====
 
@@ -56,7 +172,7 @@ export class VaultManagement {
     }
   ): Promise<VaultClass> {
     const vaultType = options?.type ?? 'fast'
-    
+
     if (vaultType === 'fast') {
       return this.createFastVault(name, options)
     } else {
@@ -98,13 +214,15 @@ export class VaultManagement {
       name,
       password: options.password,
       email: options.email,
-      onProgress: options.onProgress ? (update) => {
-        options.onProgress!({
-          step: update.phase === 'complete' ? 'complete' : 'keygen',
-          progress: update.phase === 'complete' ? 100 : 50,
-          message: update.message
-        })
-      } : undefined
+      onProgress: options.onProgress
+        ? update => {
+            options.onProgress!({
+              step: update.phase === 'complete' ? 'complete' : 'keygen',
+              progress: update.phase === 'complete' ? 100 : 50,
+              message: update.message,
+            })
+          }
+        : undefined,
     })
 
     // Create VaultClass instance from the created vault
@@ -121,6 +239,18 @@ export class VaultManagement {
     // Set as active vault
     this.activeVault = vaultInstance
 
+    // Persist to storage
+    try {
+      const storedVault = this.serializeVaultForStorage(result.vault, false)
+      await this.storageManager.saveVault(storedVault)
+      await this.storageManager.setCurrentVaultId(result.vault.publicKeys.ecdsa)
+    } catch (error) {
+      console.warn('Failed to persist vault to storage:', error)
+    }
+
+    // Mark storage as loaded since we just added a vault
+    this.storageLoaded = true
+
     return vaultInstance
   }
 
@@ -128,8 +258,8 @@ export class VaultManagement {
    * Create a secure vault (multi-device)
    */
   private async createSecureVault(
-    name: string,
-    options?: {
+    _name: string,
+    _options?: {
       keygenMode?: KeygenMode
       onProgress?: (step: VaultCreationStep) => void
     }
@@ -138,6 +268,71 @@ export class VaultManagement {
     throw new Error(
       'Secure vault creation not implemented yet - requires multi-device MPC keygen integration'
     )
+  }
+
+  /**
+   * Import vault from base64 container data (for loading from storage)
+   * Note: Storage vaults are always unencrypted, no password needed.
+   */
+  async addVaultFromBase64(
+    containerBase64: string,
+    name: string
+  ): Promise<VaultClass> {
+    try {
+      // Parse VaultContainer protobuf from base64
+      const containerBinary = fromBase64(containerBase64)
+      const container = fromBinary(VaultContainerSchema, containerBinary)
+
+      // Storage vaults are always unencrypted (for performance)
+      // The encryption flag in storage metadata is just for UI display
+      const vaultBase64 = container.vault
+
+      // Decode and parse the inner Vault protobuf
+      const vaultBinary = fromBase64(vaultBase64)
+      const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
+
+      // Convert to Vault object
+      const vault = fromCommVault(vaultProtobuf)
+
+      // Determine security type
+      const securityType = determineVaultType(vault.signers)
+
+      // Apply global settings and normalize
+      const normalizedVault = this.applyGlobalSettings(
+        vault,
+        false, // Not encrypted in storage
+        securityType
+      )
+
+      // Store the vault
+      this.vaults.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
+
+      // Create VaultClass instance
+      const vaultInstance = new VaultClass(
+        normalizedVault,
+        await this.wasmManager?.getWalletCore(),
+        this.wasmManager,
+        this.sdkInstance
+      )
+
+      // Cache encryption status (false for storage vaults)
+      vaultInstance.setCachedEncryptionStatus(false)
+
+      // No need to re-persist since we just loaded from storage
+      // Set as active vault and mark storage as loaded
+      this.setActiveVault(vaultInstance)
+      this.storageLoaded = true
+
+      return vaultInstance
+    } catch (error) {
+      if (error instanceof VaultImportError) {
+        throw error
+      }
+      throw new VaultImportError(
+        VaultImportErrorCode.CORRUPTED_DATA,
+        `Failed to import vault from storage: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
   }
 
   /**
@@ -231,6 +426,23 @@ export class VaultManagement {
       // Set as active vault
       this.activeVault = vaultInstance
 
+      // Persist to storage
+      try {
+        const storedVault = this.serializeVaultForStorage(
+          normalizedVault,
+          isEncrypted
+        )
+        await this.storageManager.saveVault(storedVault)
+        await this.storageManager.setCurrentVaultId(
+          normalizedVault.publicKeys.ecdsa
+        )
+      } catch (error) {
+        console.warn('Failed to persist vault to storage:', error)
+      }
+
+      // Mark storage as loaded since we just added a vault
+      this.storageLoaded = true
+
       return vaultInstance
     } catch (error) {
       // Re-throw VaultImportError instances
@@ -251,6 +463,9 @@ export class VaultManagement {
    * List all stored vaults
    */
   async listVaults(): Promise<Summary[]> {
+    // Load vaults from storage if not already loaded
+    await this.loadVaultsFromStorage()
+
     const summaries: Summary[] = []
 
     for (const [, vault] of this.vaults) {
@@ -262,6 +477,11 @@ export class VaultManagement {
       )
       const summary = vaultInstance.summary()
 
+      // Get stored vault metadata for size
+      const storedVault = await this.storageManager.getVault(
+        vault.publicKeys.ecdsa
+      )
+
       const fullSummary: Summary = {
         id: summary.id,
         name: summary.name,
@@ -271,7 +491,7 @@ export class VaultManagement {
         isBackedUp: () => vault.isBackedUp ?? false,
         isEncrypted: vaultInstance.getCachedEncryptionStatus() ?? false,
         lastModified: vault.createdAt ?? Date.now(),
-        size: 0, // TODO: Calculate vault size
+        size: storedVault?.size ?? 0,
         threshold:
           vault.threshold ?? this.calculateThreshold(vault.signers.length),
         totalSigners: vault.signers.length,
@@ -298,6 +518,26 @@ export class VaultManagement {
   }
 
   /**
+   * Update vault in storage (called after modifications like rename)
+   */
+  async updateVaultInStorage(vault: VaultClass): Promise<void> {
+    const vaultData = vault.data
+    const isEncrypted = vault.getCachedEncryptionStatus() ?? false
+    const vaultId = vaultData.publicKeys.ecdsa
+
+    // Update in-memory Map
+    this.vaults.set(vaultId, vaultData)
+
+    // Persist to storage
+    try {
+      const storedVault = this.serializeVaultForStorage(vaultData, isEncrypted)
+      await this.storageManager.saveVault(storedVault)
+    } catch (error) {
+      console.warn('Failed to update vault in storage:', error)
+    }
+  }
+
+  /**
    * Delete vault from storage (clears active if needed)
    */
   async deleteVault(vault: VaultClass): Promise<void> {
@@ -308,6 +548,13 @@ export class VaultManagement {
     if (this.activeVault?.data.publicKeys.ecdsa === vaultId) {
       this.activeVault = null
     }
+
+    // Remove from storage
+    try {
+      await this.storageManager.deleteVault(vaultId)
+    } catch (error) {
+      console.warn('Failed to delete vault from storage:', error)
+    }
   }
 
   /**
@@ -316,6 +563,14 @@ export class VaultManagement {
   async clearVaults(): Promise<void> {
     this.vaults.clear()
     this.activeVault = null
+    this.storageLoaded = false
+
+    // Clear storage
+    try {
+      await this.storageManager.clearVaults()
+    } catch (error) {
+      console.warn('Failed to clear vaults from storage:', error)
+    }
   }
 
   // ===== ACTIVE VAULT MANAGEMENT =====
@@ -325,6 +580,13 @@ export class VaultManagement {
    */
   setActiveVault(vault: VaultClass): void {
     this.activeVault = vault
+
+    // Persist active vault ID (fire and forget)
+    this.storageManager
+      .setCurrentVaultId(vault.data.publicKeys.ecdsa)
+      .catch(error => {
+        console.warn('Failed to persist active vault ID:', error)
+      })
   }
 
   /**
@@ -339,6 +601,13 @@ export class VaultManagement {
    */
   hasActiveVault(): boolean {
     return this.activeVault !== null
+  }
+
+  /**
+   * Get direct access to storage manager (for advanced use cases)
+   */
+  getStorageManager(): StorageManager {
+    return this.storageManager
   }
 
   // ===== FILE OPERATIONS =====

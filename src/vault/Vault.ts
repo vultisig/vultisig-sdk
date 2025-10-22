@@ -157,6 +157,14 @@ export class Vault {
 
     // Update internal vault data directly
     this.vaultData.name = newName
+
+    // Persist to storage via VaultManagement
+    if (this._sdkInstance) {
+      const vaultManagement = this._sdkInstance.getVaultManagement?.()
+      if (vaultManagement) {
+        await vaultManagement.updateVaultInStorage(this)
+      }
+    }
   }
 
   /**
