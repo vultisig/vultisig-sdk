@@ -102,6 +102,8 @@
     "vitest": "^3.0.9"
   },
   "resolutions": {
-    "readable-stream": "3.6.2"
+    "readable-stream": "3.6.2",
+    "@solana/web3.js": "2.0.0",
+    "@noble/hashes": "1.8.0"
   }
 }
