@@ -10,8 +10,10 @@ import { ExportModal } from './components/ExportModal'
 import { KeysharesList } from './components/KeysharesList'
 import { LoadVaultModal } from './components/LoadVaultModal'
 import { ServerStatus } from './components/ServerStatus'
+import { SettingsPanel } from './components/SettingsPanel'
 import { SignTransaction } from './components/SignTransaction'
 import { VaultDisplay } from './components/VaultDisplay'
+import { useAddressBook } from './hooks/useAddressBook'
 import { useServerStatus } from './hooks/useServerStatus'
 import { useVaults } from './hooks/useVaults'
 import type { LoadedKeyshare } from './types'
@@ -37,6 +39,7 @@ function App() {
   const [initialized, setInitialized] = useState(false)
   const serverStatus = useServerStatus(sdk)
   const vaultsHook = useVaults(sdk)
+  const addressBookHook = useAddressBook(sdk)
   const [vault, setVault] = useState<Vault | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -47,7 +50,9 @@ function App() {
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [showExportModal, setShowExportModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'vaults' | 'addressBook'>('vaults')
+  const [activeTab, setActiveTab] = useState<'vaults' | 'addressBook' | 'settings'>(
+    'vaults'
+  )
 
   const onInitialize = async () => {
     if (initialized) return
@@ -217,7 +222,19 @@ function App() {
                 cursor: 'pointer',
               }}
             >
-              Address Book
+              Address Book ({addressBookHook.getTotalCount()})
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid #e9ecef',
+                backgroundColor: activeTab === 'settings' ? '#e9ecef' : 'white',
+                cursor: 'pointer',
+              }}
+            >
+              Settings
             </button>
           </div>
 
@@ -319,9 +336,16 @@ function App() {
             />
           )}
 
-          {activeTab === 'addressBook' && <AddressBookPanel sdk={sdk} />}
+          {activeTab === 'addressBook' && (
+            <AddressBookPanel
+              sdk={sdk}
+              onAddressBookChange={addressBookHook.refreshAddressBook}
+            />
+          )}
 
-          {vault && (
+          {activeTab === 'settings' && <SettingsPanel sdk={sdk} />}
+
+          {activeTab === 'vaults' && vault && (
             <>
               <CurrentVaultPanel
                 vault={vault}

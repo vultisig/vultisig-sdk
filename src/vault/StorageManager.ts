@@ -21,9 +21,9 @@ export type StoredVault = {
 }
 
 export type Settings = {
-  defaultCurrency: string
-  defaultChains: string[]
-  isBalanceVisible: boolean
+  defaultCurrency?: string
+  defaultChains?: string[]
+  isBalanceVisible?: boolean
 }
 
 const DEFAULT_SETTINGS: Settings = {

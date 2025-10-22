@@ -271,6 +271,22 @@ export class Vultisig {
     return this.chainManagement.getDefaultChains()
   }
 
+  // === SETTINGS PERSISTENCE ===
+
+  /**
+   * Get user settings from storage
+   */
+  async getSettings() {
+    return this.vaultManagement.getStorageManager().getSettings()
+  }
+
+  /**
+   * Save user settings to storage
+   */
+  async saveSettings(settings: Partial<import('./vault/StorageManager').Settings>) {
+    return this.vaultManagement.getStorageManager().saveSettings(settings)
+  }
+
   // === VALIDATION HELPERS ===
 
   /**

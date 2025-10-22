@@ -6,6 +6,7 @@ import { EditAddressModal } from './EditAddressModal'
 
 type AddressBookPanelProps = {
   sdk: Vultisig
+  onAddressBookChange?: () => void
 }
 
 type EditingAddress = {
@@ -14,7 +15,10 @@ type EditingAddress = {
   currentName: string
 }
 
-export const AddressBookPanel = ({ sdk }: AddressBookPanelProps) => {
+export const AddressBookPanel = ({
+  sdk,
+  onAddressBookChange,
+}: AddressBookPanelProps) => {
   const [addressBook, setAddressBook] = useState<AddressBook>({
     saved: [],
     vaults: [],
@@ -30,12 +34,13 @@ export const AddressBookPanel = ({ sdk }: AddressBookPanelProps) => {
     try {
       const book = await sdk.getAddressBook()
       setAddressBook(book)
+      onAddressBookChange?.()
     } catch (err) {
       console.error('Failed to load address book:', err)
     } finally {
       setIsLoading(false)
     }
-  }, [sdk])
+  }, [sdk, onAddressBookChange])
 
   useEffect(() => {
     loadAddressBook()
