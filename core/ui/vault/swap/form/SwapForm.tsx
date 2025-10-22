@@ -7,15 +7,41 @@ import { getFormProps } from '@lib/ui/form/utils/getFormProps'
 import { VStack, vStack } from '@lib/ui/layout/Stack'
 import { PageContent } from '@lib/ui/page/PageContent'
 import { OnFinishProp } from '@lib/ui/props'
-import { FC } from 'react'
+import { extractErrorMsg } from '@lib/utils/error/extractErrorMsg'
+import { FC, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 
-import { useSwapFormStates } from './hooks/useSwapFormStates'
+import { useSwapValidationQuery } from '../queries/useSwapValidationQuery'
 
 export const SwapForm: FC<OnFinishProp> = ({ onFinish }) => {
+  const {
+    error,
+    data: validationErrorMessage,
+    isPending,
+  } = useSwapValidationQuery()
+
   const { t } = useTranslation()
-  const { isDisabled } = useSwapFormStates()
+
+  const errorMessage = useMemo(() => {
+    if (isPending) {
+      return t('loading')
+    }
+
+    if (error) {
+      return extractErrorMsg(error)
+    }
+
+    // validationErrorMessage is undefined when queries aren't ready (e.g., no amount entered)
+    // validationErrorMessage is null when validation passes
+    // validationErrorMessage is a string when validation fails
+    if (validationErrorMessage === undefined) {
+      return t('fill_the_form')
+    }
+
+    // Return the validation error message if present, otherwise null (no error)
+    return validationErrorMessage || null
+  }, [validationErrorMessage, error, isPending, t])
 
   return (
     <>
@@ -24,7 +50,7 @@ export const SwapForm: FC<OnFinishProp> = ({ onFinish }) => {
         gap={40}
         {...getFormProps({
           onSubmit: onFinish,
-          isDisabled,
+          isDisabled: !!errorMessage,
         })}
         justifyContent="space-between"
         scrollable
@@ -41,8 +67,8 @@ export const SwapForm: FC<OnFinishProp> = ({ onFinish }) => {
             <SwapInfo />
           </VStack>
         </VStack>
-        <Button disabled={isDisabled} type="submit">
-          {typeof isDisabled === 'string' ? isDisabled : t('continue')}
+        <Button disabled={Boolean(errorMessage)} type="submit">
+          {errorMessage || t('continue')}
         </Button>
       </PageContent>
     </>

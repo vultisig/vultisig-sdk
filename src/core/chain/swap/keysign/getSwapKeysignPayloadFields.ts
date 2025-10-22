@@ -2,6 +2,10 @@ import { create } from '@bufbuild/protobuf'
 import { fromChainAmount } from '../../amount/fromChainAmount'
 import { AccountCoin } from '../../coin/AccountCoin'
 import { SwapQuote } from '../quote/SwapQuote'
+import {
+  getBlockchainSpecificValue,
+  type KeysignChainSpecific,
+} from '../../../mpc/keysign/chainSpecific/KeysignChainSpecific'
 import { CommKeysignSwapPayload } from '../../../mpc/keysign/swap/KeysignSwapPayload'
 import { toCommCoin } from '../../../mpc/types/utils/commCoin'
 import {
@@ -19,12 +23,14 @@ import { EvmChain } from '../../Chain'
 import { isFeeCoin } from '../../coin/utils/isFeeCoin'
 import { GeneralSwapTx } from '../general/GeneralSwapQuote'
 import { nativeSwapQuoteToSwapPayload } from '../native/utils/nativeSwapQuoteToSwapPayload'
+import { getSwapDestinationAddress } from './getSwapDestinationAddress'
 
 type Input = {
   amount: bigint
   quote: SwapQuote
   fromCoin: AccountCoin & { hexPublicKey: string }
   toCoin: AccountCoin & { hexPublicKey: string }
+  chainSpecific: KeysignChainSpecific
 }
 
 type Output = Pick<KeysignPayload, 'toAddress' | 'memo'> &
@@ -35,19 +41,30 @@ export const getSwapKeysignPayloadFields = ({
   quote,
   fromCoin,
   toCoin,
+  chainSpecific,
 }: Input): Output => {
+  const destinationAddress = getSwapDestinationAddress({ quote, fromCoin })
+
   const result = matchRecordUnion<SwapQuote, Output>(quote, {
     general: quote => {
-      const toAddress = matchRecordUnion<GeneralSwapTx, string>(quote.tx, {
-        evm: ({ to }) => to,
-        solana: () => '',
-      })
-
       const txMsg = matchRecordUnion<
         GeneralSwapTx,
         Omit<OneInchTransaction, '$typeName' | 'swapFee'>
       >(quote.tx, {
-        evm: ({ gas, ...tx }) => ({ ...tx, gas: BigInt(gas) }),
+        evm: ({ from, to, data, value }) => {
+          const { maxFeePerGasWei, gasLimit } = getBlockchainSpecificValue(
+            chainSpecific,
+            'ethereumSpecific'
+          )
+          return {
+            from,
+            to,
+            data,
+            value,
+            gasPrice: maxFeePerGasWei,
+            gas: BigInt(gasLimit),
+          }
+        },
         solana: ({ data }) => ({
           from: '',
           to: '',
@@ -79,7 +96,7 @@ export const getSwapKeysignPayloadFields = ({
       }
 
       return {
-        toAddress,
+        toAddress: destinationAddress,
         swapPayload,
       }
     },
@@ -91,14 +108,8 @@ export const getSwapKeysignPayloadFields = ({
         toCoin,
       })
 
-      const isErc20 =
-        isOneOf(fromCoin.chain, Object.values(EvmChain)) && !isFeeCoin(fromCoin)
-
-      const toAddress =
-        (isErc20 ? quote.router : quote.inbound_address) || fromCoin.address
-
       return {
-        toAddress,
+        toAddress: destinationAddress,
         swapPayload,
         memo: quote.memo,
       }

@@ -11,12 +11,16 @@ import { CustomMessagePayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/
 import { PageHeaderBackButton } from '@core/ui/flow/PageHeaderBackButton'
 import { StartKeysignPrompt } from '@core/ui/mpc/keysign/prompt/StartKeysignPrompt'
 import { useCore } from '@core/ui/state/core'
+import { useCurrentVault } from '@core/ui/vault/state/currentVault'
+import { useCurrentVaultAddress } from '@core/ui/vault/state/currentVaultCoins'
+import { getVaultId } from '@core/ui/vault/Vault'
 import { Match } from '@lib/ui/base/Match'
 import { Button } from '@lib/ui/buttons/Button'
 import { useViewState } from '@lib/ui/navigation/hooks/useViewState'
 import { PageContent } from '@lib/ui/page/PageContent'
 import { PageFooter } from '@lib/ui/page/PageFooter'
 import { PageHeader } from '@lib/ui/page/PageHeader'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
 import { omit } from '@lib/utils/record/omit'
 import { getRecordUnionKey } from '@lib/utils/record/union/getRecordUnionKey'
@@ -32,7 +36,8 @@ export const Overview = () => {
   const method = getRecordUnionKey(input)
   const { chain } = getRecordUnionValue(input)
   const [{ signature }] = useViewState<{ signature?: string }>()
-
+  const address = shouldBePresent(useCurrentVaultAddress(chain))
+  const vault = useCurrentVault()
   const message = matchRecordUnion<SignMessageInput, string>(input, {
     eth_signTypedData_v4: ({ message: { domain, types, message } }) =>
       TypedDataEncoder.encode(
@@ -60,9 +65,14 @@ export const Overview = () => {
 
   const keysignMessagePayload = useMemo(
     () => ({
-      custom: create(CustomMessagePayloadSchema, { method, message, chain }),
+      custom: create(CustomMessagePayloadSchema, {
+        method,
+        message,
+        chain,
+        vaultPublicKeyEcdsa: getVaultId(vault),
+      }),
     }),
-    [method, message, chain]
+    [method, message, chain, vault]
   )
 
   return (
@@ -77,7 +87,7 @@ export const Overview = () => {
           value={type}
           connect={() => (
             <ConnectOverview
-              chain={chain}
+              address={address}
               message={displayMessage}
               method={method}
               signature={signature}
@@ -85,7 +95,7 @@ export const Overview = () => {
           )}
           default={() => (
             <DefaultOverview
-              chain={chain}
+              address={address}
               message={displayMessage}
               method={method}
               signature={signature}
@@ -93,7 +103,7 @@ export const Overview = () => {
           )}
           policy={() => (
             <PolicyOverview
-              chain={chain}
+              address={address}
               message={displayMessage}
               method={method}
               signature={signature}

@@ -1,5 +1,5 @@
 import { getSolanaClient } from '../client'
-import { PublicKey } from '@solana/web3.js'
+import { Address } from '@solana/web3.js'
 
 import { token2022ProgramId } from '../config'
 
@@ -11,18 +11,20 @@ type Input = {
 export const getSplAssociatedAccount = async ({
   account,
   token,
-}: Input): Promise<{ address: PublicKey; isToken2022: boolean }> => {
-  const client = await getSolanaClient()
+}: Input): Promise<{ address: Address; isToken2022: boolean }> => {
+  const client = getSolanaClient()
 
-  const { value } = await client.getTokenAccountsByOwner(
-    new PublicKey(account),
-    {
-      mint: new PublicKey(token),
-    },
-    {
-      encoding: 'jsonParsed',
-    }
-  )
+  const { value } = await client
+    .getTokenAccountsByOwner(
+      account as Address,
+      {
+        mint: token as Address,
+      },
+      {
+        encoding: 'jsonParsed',
+      }
+    )
+    .send()
 
   if (!value) {
     throw new Error('No associated token account found')

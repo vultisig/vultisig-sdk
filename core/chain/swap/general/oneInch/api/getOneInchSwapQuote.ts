@@ -9,17 +9,15 @@ import { rootApiUrl } from '@core/config'
 import { hexToNumber } from '@lib/utils/hex/hexToNumber'
 import { addQueryParams } from '@lib/utils/query/addQueryParams'
 import { queryUrl } from '@lib/utils/query/queryUrl'
-import { pick } from '@lib/utils/record/pick'
 
 import { evmNativeCoinAddress } from '../../../../chains/evm/config'
-import { EvmFeeQuote } from '../../../../tx/fee/evm/EvmFeeSettings'
 
 type Input = {
   account: ChainAccount
   fromCoinId: string
   toCoinId: string
   amount: bigint
-  isAffiliate: boolean
+  affiliateBps?: number
 }
 
 const getBaseUrl = (chainId: number) =>
@@ -30,7 +28,7 @@ export const getOneInchSwapQuote = async ({
   fromCoinId,
   toCoinId,
   amount,
-  isAffiliate,
+  affiliateBps,
 }: Input): Promise<GeneralSwapQuote> => {
   const chain = account.chain as EvmChain
   const chainId = hexToNumber(getEvmChainId(chain))
@@ -47,7 +45,12 @@ export const getOneInchSwapQuote = async ({
     slippage: 0.5,
     disableEstimate: true,
     includeGas: true,
-    ...(isAffiliate ? pick(oneInchAffiliateConfig, ['referrer', 'fee']) : {}),
+    ...(affiliateBps
+      ? {
+          referrer: oneInchAffiliateConfig.referrer,
+          fee: affiliateBps / 100,
+        }
+      : {}),
   }
 
   const url = addQueryParams(getBaseUrl(chainId), params)
@@ -55,21 +58,13 @@ export const getOneInchSwapQuote = async ({
   const { dstAmount, tx }: OneInchSwapQuoteResponse =
     await queryUrl<OneInchSwapQuoteResponse>(url)
 
-  const feeQuote: Partial<EvmFeeQuote> = {}
-  if (tx.gasPrice) {
-    feeQuote.maxFeePerGas = BigInt(tx.gasPrice)
-  }
-  if (tx.gas) {
-    feeQuote.gasLimit = BigInt(tx.gas)
-  }
-
   return {
     dstAmount,
     provider: '1inch',
     tx: {
       evm: {
         ...tx,
-        feeQuote,
+        gasLimit: tx.gas ? BigInt(tx.gas) : undefined,
       },
     },
   }

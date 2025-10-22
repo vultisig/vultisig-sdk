@@ -1,5 +1,6 @@
 export const pt = {
   onboarding_greeting: 'Adeus às <g>frases semente</g>',
+  keys: 'Chaves',
   onboarding_step_1:
     'Diga olá para <g>ações do cofre,</g> seu novo <g>método de recuperação</g>',
   onboarding_step_2:
@@ -11,19 +12,47 @@ export const pt = {
   onboarding_step_5:
     '<g>Sempre faça backup de cada parte do cofre</g> separadamente em um <g>local diferente</g>',
   onboarding_step_6: 'Essas partes colaboram para <g>desbloquear seu cofre</g>',
+  vault_share_banner:
+    'Este QR Code permite compartilhar uma versão de visualização do seu cofre',
   secure_crypto_vault: 'Cofre seguro de cripto',
   vultisig: 'Vultisig',
   by_vultisig: 'por Vultisig',
+  failed_to_read_qr_code: 'Impossível ler o código QR',
+  vault_info: 'Informações do cofre',
+  vault_details_description: 'Visualizar o nome, a parte e o tipo do cofre',
+  circle: {
+    introduction:
+      'Deposite seus $USDC em uma conta Circle e ganhe rendimento. Com segurança dentro do seu cofre Vultisig.',
+    balance_title: 'Visão geral do saldo',
+    total_deposit: 'Depósito total',
+    rewards: 'Recompensas',
+    apy: 'APY',
+    claim: 'Resgatar recompensas',
+    banner_text:
+      'Os fundos permanecem totalmente sob o controle do seu cofre. O rendimento da Circle é gerado por tesourarias seguras fora da cadeia. Retire a qualquer momento após a liquidação.',
+    deposit: 'Depositar',
+    withdraw: 'Retirar',
+  },
+  vault_details_edit_vault_description: 'Editar o nome do seu cofre',
+  reshare_vault_description:
+    'Compartilhar novamente o cofre com um novo comitê',
+  sign_custom_message_description: 'Assinar mensagem personalizada',
+  delete_vault_description: 'Excluir seu cofre permanentemente',
+  backup_description: 'Faça backup do seu cofre em um local preferido',
   onboarding_description_1:
     'O Vultisig é um cofre seguro de cripto multi-dispositivo, compatível com todas as principais blockchains e mais de 10.000 tokens. O Vultisig é totalmente auto-hospedado.',
   onboarding_description_2:
     'O Vultisig não rastreia suas atividades nem exige nenhum registro. O Vultisig é de código aberto, garantindo transparência e confiança.',
+  vultisig_website: 'Site do Vultisig',
+  circle_title: 'Contas Circle',
+  circle_description: 'Deposite $USDC em um contrato da Circle',
   onboarding_description_3:
     'O Vultisig é, por natureza, um aplicativo multi-dispositivo. Exige pelo menos dois dispositivos para criar um cofre seguro: um dispositivo inicializador e um dispositivo de pareamento.',
   onboarding_description_4:
     'O Vultisig é uma carteira sem frases-semente. Em vez disso, usa fragmentos fáceis de gerenciar. Cada dispositivo tem seu próprio fragmento exclusivo que precisa de backup separado.',
   moreInfo: 'Mais informações',
   merged: 'Combinado',
+  vult: '$VULT',
   function_unavailble:
     'Recurso não disponível para moedas de cadeia existentes. Adicione moedas que possam ser usadas com FUNCTION:',
   incorrect_passcode: 'Código incorreto',
@@ -384,7 +413,10 @@ export const pt = {
     'Você pode fazer backup do seu cofre exportando os fragmentos do cofre.',
   faq_need_to_register_title: 'Preciso me registrar?',
   faq_need_to_register_content: 'Não, não há requisitos de registro.',
-  vault_settings_address_book_no_addresses_title: 'Nenhum endereço salvo',
+  vault_settings_address_book_no_addresses_title:
+    'Seu livro de endereços está vazio',
+  vault_settings_address_book_no_addresses_description:
+    'Organize todos os seus endereços importantes em um lugar.',
   or: 'ou',
   enter_vault_name: 'Insira o nome do cofre',
   vault_name_required: 'Nome do cofre obrigatório',
@@ -435,6 +467,10 @@ export const pt = {
   transaction_hash_copied: 'Hash da transação copiado',
   asset: 'Ativo',
   balance: 'Saldo',
+  portfolio_balance: 'Saldo da Carteira',
+  hide_balance: 'Ocultar Saldo',
+  show_balance: 'Mostrar Saldo',
+  fill_the_form: 'Preencha o formulário',
   overview: 'Visão geral',
   signing_transaction: 'Assinatura da transação',
   failed_to_load: 'Falha ao carregar',
@@ -566,8 +602,6 @@ export const pt = {
     connectionSuccess: 'Conexão bem-sucedida!',
     takeMinute: 'Isso deve levar apenas um segundo',
     vaultInitializationStarting: 'Iniciando a inicialização do cofre...',
-    emailRequired: 'E-mail é obrigatório',
-    emailIncorrect: 'E-mail incorreto, por favor verifique',
     enterEmail: 'Digite seu e-mail',
     emailSetupTitle:
       'Este email é usado apenas para enviar o backup do servidor',
@@ -920,6 +954,7 @@ export const pt = {
   vultisig_community: 'Comunidade Vultisig',
   remove: 'Remover',
   share_vault: 'Compartilhar Cofre',
+  register_guide: 'Guia de registro',
   no_referral_yet: 'Nenhuma referência ainda',
   missing_thorchain_address: 'Endereço THORChain ausente',
   missing_destination_address: 'Endereço de destino ausente',
@@ -1057,8 +1092,6 @@ export const pt = {
   description: 'Descrição',
   personal_sign: 'Sinal Pessoal',
   request_from: 'Solicitação de',
-  rules: 'Regras',
-  rule_item: 'Regra {{número}}',
   sign_request: 'Solicitação de assinatura',
   signed_signature: 'Assinatura assinada',
   signing_address: 'Endereço de Assinatura',
@@ -1094,4 +1127,54 @@ export const pt = {
     'Se você optar por adicionar uma senha, ela será usada para <b>criptografar</b> o arquivo de backup.',
   backup_password_info_cannot_be_reset:
     'Lembre-se: se você esquecer a senha do seu cofre, ela <b>não poderá</b> ser redefinida ou recuperada.',
+  email_required: 'E-mail é obrigatório',
+  device_backup: 'Backup do dispositivo',
+  device_backup_description:
+    'Armazene o compartilhamento do cofre deste dispositivo.',
+  server_backup: 'Backup do servidor',
+  server_backup_description:
+    'Solicite o compartilhamento do Vault do servidor novamente.',
+  choose_backup_method: 'Escolha o método de backup',
+  vault_server_share_too_many_requests:
+    'Você solicitou seu compartilhamento de backup muitas vezes em um curto espaço de tempo. Aguarde antes de tentar novamente.',
+  vault_server_share_bad_request:
+    'Algo deu errado. Verifique sua senha novamente e tente novamente.',
+  backup_share_sent: 'Compartilhamento de backup enviado!',
+  check_email: 'Verifique o e-mail',
+  backup_share_sent_description:
+    'Acabamos de enviar seu compartilhamento de backup para o seu e-mail. Caso não o encontre, verifique sua caixa de spam.',
+  faq_is_open_source_title: 'O Vultisig é de código aberto e auditado?',
+  faq_is_open_source_content:
+    'Sim, o Vultisig é de código aberto e passou por auditorias de segurança. Tanto os relatórios de auditoria quanto o código-fonte são acessíveis.',
+  faq_data_protection_title:
+    'Como a Vultisig lida com privacidade e proteção de dados?',
+  faq_data_protection_content:
+    'A Vultisig não armazena nenhuma informação do usuário em seus aplicativos móveis.',
+  faq_comparison_title:
+    'Como a Vultisig se compara a outras carteiras multiassinadas?',
+  faq_comparison_content:
+    'Ele é construído com base na tecnologia MPC, que elimina a necessidade de frases-semente e oferece suporte a vários blockchains, tornando o Vultisig flexível e independente de cadeia.',
+  label: 'Rótulo',
+  select_vaults_to_backup: 'Selecione os cofres para fazer backup',
+  select_vaults_to_backup_description:
+    'Escolha se deseja fazer backup apenas deste cofre ou de todos os cofres do seu aplicativo.',
+  this_vault_only: 'Somente este cofre',
+  all_vaults: 'Todos os cofres',
+  more: 'mais',
+  plugin_rules: 'Regras do plugin',
+  resource: 'Recurso',
+  target: 'Alvo',
+  discount_tiers: 'Níveis de desconto',
+  discount_tiers_description:
+    'Mantenha $VULT para desbloquear taxas de negociação mais baixas.',
+  bronze: 'Bronze',
+  silver: 'Prata',
+  gold: 'Ouro',
+  platinum: 'Platina',
+  discount: 'Desconto',
+  unlock_tier: 'Desbloquear nível',
+  unlock_discount_tier: 'Desbloquear nível <b>{{tier}}</b>',
+  unlock_discount_tier_description:
+    'Ao manter {{minBalance}}, você desbloqueará o nível {{tier}} e receberá um desconto de <b>{{bps}} bps na taxa de negociação</b> em todas as trocas.',
+  upload_qr_code_with_address: 'Carregar código QR com endereço',
 }
