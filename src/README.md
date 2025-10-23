@@ -390,6 +390,17 @@ src/                     # SDK source code
 ../lib/                # Shared libraries and utilities
 ```
 
+### TODO: Type Definitions Optimization
+
+**Current Approach:** TypeScript's native `tsc` generates type definitions in a distributed structure (one `.d.ts` file per source file). This is memory-efficient and reliable.
+
+**Future Consideration:** For better developer experience, consider implementing [@microsoft/api-extractor](https://api-extractor.com/) to:
+- Bundle distributed `.d.ts` files into a single rolled-up declaration file
+- Generate API documentation automatically
+- Provide API report generation for tracking changes
+
+This would be a post-processing step after `tsc` completes, avoiding the memory issues we experienced with `rollup-plugin-dts`.
+
 ## Contributing
 
 1. Fork the repository
