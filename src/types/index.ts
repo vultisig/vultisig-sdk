@@ -291,3 +291,15 @@ export type GasEstimate = {
   }
   chainId: string
 }
+
+// Solana-specific types
+export type {
+  SolanaToken,
+  PartialInstruction,
+  AddressTableLookup,
+  ParsedSolanaTransaction,
+  ParsedSolanaSwapParams,
+  SolanaTransactionInput,
+  SolanaKeysignOptions,
+  SolanaSignature,
+} from '../chains/solana/types'
