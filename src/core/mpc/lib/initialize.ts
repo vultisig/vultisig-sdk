@@ -5,14 +5,14 @@ import { prefixErrorWith } from '../../../lib/utils/error/prefixErrorWith'
 import { transformError } from '../../../lib/utils/error/transformError'
 import { memoizeAsync } from '../../../lib/utils/memoizeAsync'
 
-const initialize: Record<SignatureAlgorithm, (path?: string) => Promise<unknown>> = {
+const initialize: Record<SignatureAlgorithm, () => Promise<unknown>> = {
   ecdsa: initializeDkls,
   eddsa: initializeSchnorr,
 }
 
-export const initializeMpcLib = memoizeAsync((algo: SignatureAlgorithm, path?: string) =>
+export const initializeMpcLib = memoizeAsync((algo: SignatureAlgorithm) =>
   transformError(
-    initialize[algo](path),
+    initialize[algo](),
     prefixErrorWith('Failed to initialize MPC lib')
   )
 )

@@ -15,20 +15,20 @@ const REPO_URL = 'https://github.com/vultisig/vultisig-windows.git'
 const TEMP_DIR = '/tmp/vultisig-windows-sync'
 
 const foldersToCoopy = [
-  'core/chain',
-  'core/mpc',
-  'core/config',
-  'lib/utils',
-  'lib/dkls',
-  'lib/schnorr',
+  'upstream/core/chain',
+  'upstream/core/mpc',
+  'upstream/core/config',
+  'upstream/lib/utils',
+  'upstream/lib/dkls',
+  'upstream/lib/schnorr',
 ]
 
 const individualFiles = [
-  'core/ui/vault/Vault.ts',
-  'core/ui/vault/import/utils/vaultContainerFromString.ts',
-  'core/ui/security/password/config.ts',
-  'core/ui/mpc/session/utils/startMpcSession.ts',
-  'lib/ui/utils/initiateFileDownload.ts',
+  'upstream/core/ui/vault/Vault.ts',
+  'upstream/core/ui/vault/import/utils/vaultContainerFromString.ts',
+  'upstream/core/ui/security/password/config.ts',
+  'upstream/core/ui/mpc/session/utils/startMpcSession.ts',
+  'upstream/lib/ui/utils/initiateFileDownload.ts',
 ]
 
 type SyncAndCopyOptions = {
@@ -131,10 +131,11 @@ class SyncAndCopier {
       }
 
       console.log(`   📋 Copying ${dirName}/ to project...`)
-      const targetPath = path.join(this.projectRoot, dirName)
+      const targetPath = path.join(this.projectRoot, 'upstream', dirName)
       if (fs.existsSync(targetPath)) {
         fs.rmSync(targetPath, { recursive: true, force: true })
       }
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true })
       this.copyDirectoryRecursive(path.join(TEMP_DIR, dirName), targetPath)
 
       console.log(`   ✅ Successfully synced ${dirName}/`)
@@ -150,13 +151,13 @@ class SyncAndCopier {
   }
 
   private backupDirectory(dirName: string): void {
-    const dirPath = path.join(this.projectRoot, dirName)
+    const dirPath = path.join(this.projectRoot, 'upstream', dirName)
     if (fs.existsSync(dirPath)) {
       const timestamp = new Date()
         .toISOString()
         .replace(/[:.]/g, '-')
         .split('T')[0]
-      const backupName = `archived/${dirName}-backup-${timestamp}-${Date.now()}`
+      const backupName = `archived/upstream-${dirName}-backup-${timestamp}-${Date.now()}`
       const backupPath = path.join(this.projectRoot, backupName)
 
       console.log(`   📦 Backing up existing ${dirName}/ to ${backupName}/`)
@@ -236,7 +237,9 @@ class SyncAndCopier {
 
   private async copyFolder(folderPath: string): Promise<void> {
     const sourcePath = path.join(this.projectRoot, folderPath)
-    const destPath = path.join(this.projectRoot, 'src', folderPath)
+    // Strip 'upstream/' prefix for destination path
+    const destRelativePath = folderPath.replace(/^upstream\//, '')
+    const destPath = path.join(this.projectRoot, 'src', destRelativePath)
 
     if (!fs.existsSync(sourcePath)) {
       this.errors.push(`Source folder not found: ${folderPath}`)
@@ -282,7 +285,9 @@ class SyncAndCopier {
 
   private async copyFile(filePath: string): Promise<void> {
     const sourcePath = path.join(this.projectRoot, filePath)
-    const destPath = path.join(this.projectRoot, 'src', filePath)
+    // Strip 'upstream/' prefix for destination path
+    const destRelativePath = filePath.replace(/^upstream\//, '')
+    const destPath = path.join(this.projectRoot, 'src', destRelativePath)
 
     if (!fs.existsSync(sourcePath)) {
       this.errors.push(`Source file not found: ${filePath}`)

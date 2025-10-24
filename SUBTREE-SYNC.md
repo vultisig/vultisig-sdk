@@ -1,17 +1,22 @@
 # Directory Synchronization
 
-This document explains how the `core/` and `lib/` directories are synchronized with the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository using git sparse checkout.
+This document explains how the `upstream/` directory is synchronized with the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository using git sparse checkout.
 
 ## Overview
 
-The `core/` and `lib/` directories in this repository are automatically synchronized with the corresponding directories from the vultisig-windows repository. This allows us to maintain a single source of truth for core functionality while keeping the SDK repository focused on its specific concerns.
+The `upstream/` directory contains reference code synchronized from the vultisig-windows repository:
+- `upstream/core/` - Core blockchain and MPC functionality
+- `upstream/lib/` - Utility libraries and WASM modules
+- `upstream/clients/` - Reference client implementations (e.g., extension)
+
+**These directories are NOT compiled and NOT workspaces.** They serve only as source material. Selected files are copied to `src/core/` and `src/lib/` with import transformations during the build process.
 
 ## Setup
 
 The directories are synchronized from:
 - **Repository**: https://github.com/vultisig/vultisig-windows.git
 - **Branch**: main
-- **Directories**: `core/` and `lib/`
+- **Directories**: `core/`, `lib/`, and `clients/` → saved to `upstream/`
 
 ## Usage
 
@@ -64,11 +69,11 @@ Uses git sparse checkout to efficiently download only the specific directories w
 - Downloads only the required directories (not the entire repository)
 - Creates clean, independent copies of the directories
 - Automatically backs up existing directories before replacement
-- Updates `core/` and `lib/` with fresh content from upstream
+- Updates `upstream/core/`, `upstream/lib/`, and `upstream/clients/` with fresh content from vultisig-windows
 
 #### Step 2: Copy to src/ with Transformations
-Copies selected files from `core/` and `lib/` to `src/`:
-- Copies only the files needed for the SDK build
+Copies selected files from `upstream/` to `src/`:
+- Copies only the files needed for the SDK build (from `upstream/core/` and `upstream/lib/`)
 - Transforms `@core/*` and `@lib/*` imports to relative paths
 - Maintains proper file structure for bundling
 - Reports detailed statistics on copied files
