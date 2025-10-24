@@ -1,9 +1,18 @@
 import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes'
-import { Chain, OtherChain } from '@core/chain/Chain'
+import { Chain } from '@core/chain/Chain'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { deserializeSigningOutput } from '@core/chain/tw/signingOutput'
 import { rootApiUrl } from '@core/config'
 import { callBackground } from '@core/inpage-provider/background'
+import { callPopup } from '@core/inpage-provider/popup'
+import { getTransactionAuthority } from '@core/inpage-provider/popup/view/resolvers/sendTx/core/solana/utils'
+import {
+  RequestInput,
+  TransactionDetails,
+} from '@core/inpage-provider/popup/view/resolvers/sendTx/interfaces'
 import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 import { attempt } from '@lib/utils/attempt'
+import { NotImplementedError } from '@lib/utils/error/NotImplementedError'
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAccount,
@@ -51,22 +60,10 @@ import {
   type StandardEventsNames,
   type StandardEventsOnMethod,
 } from '@wallet-standard/features'
-import { v4 as uuidv4 } from 'uuid'
 
-import { MessageKey, RequestMethod } from '../../utils/constants'
-import {
-  bytesEqual,
-  isVersionedTransaction,
-  processBackgroundResponse,
-} from '../../utils/functions'
-import {
-  ITransaction,
-  Messaging,
-  TransactionType,
-} from '../../utils/interfaces'
+import { bytesEqual, isVersionedTransaction } from '../../utils/functions'
 import { Callback } from '../constants'
 import icon from '../icon'
-import { messengers } from '../messenger'
 import { requestAccount } from './core/requestAccount'
 import { getSharedHandlers } from './core/sharedHandlers'
 import { VultisigSolanaWalletAccount } from './solana/account'
@@ -229,30 +226,17 @@ export class Solana implements Wallet {
     await Promise.resolve()
   }
 
-  request = async (data: Messaging.Chain.Request, callback?: Callback) => {
+  request = async (data: RequestInput, callback?: Callback) => {
     const processRequest = async () => {
       const handlers = getSharedHandlers(Chain.Solana)
 
       if (data.method in handlers) {
-        return handlers[data.method as keyof typeof handlers]()
+        return handlers[data.method as keyof typeof handlers](
+          data.params as any
+        )
       }
-      const response = await messengers.background.send<
-        any,
-        Messaging.Chain.Response
-      >(
-        'providerRequest',
-        {
-          type: MessageKey.SOLANA_REQUEST,
-          message: data,
-        },
-        { id: uuidv4() }
-      )
 
-      return processBackgroundResponse(
-        data,
-        MessageKey.SOLANA_REQUEST,
-        response
-      )
+      throw new NotImplementedError(`Solana request method ${data.method}`)
     }
 
     try {
@@ -273,9 +257,14 @@ export class Solana implements Wallet {
     if (!this.account) throw new Error('not connected')
     const messageBuffer = Buffer.from(message)
     const decodedString = new TextDecoder().decode(messageBuffer)
-    const signature = await this.request({
-      method: RequestMethod.CTRL.SIGN_MESSAGE,
-      params: [{ message: decodedString }],
+
+    const signature = await callPopup({
+      signMessage: {
+        sign_message: {
+          message: decodedString,
+          chain: Chain.Solana,
+        },
+      },
     })
 
     return {
@@ -295,15 +284,20 @@ export class Solana implements Wallet {
       ...input,
       address: account.address,
     })
-    const sig = await this.request({
-      method: RequestMethod.CTRL.SIGN_MESSAGE,
-      params: [{ message }],
+
+    const signature = await callPopup({
+      signMessage: {
+        sign_message: {
+          message,
+          chain: Chain.Solana,
+        },
+      },
     })
 
     return {
       account: account,
       signedMessage: Buffer.from(message),
-      signature: Uint8Array.from(Buffer.from(String(sig), 'hex')),
+      signature: Uint8Array.from(Buffer.from(String(signature), 'hex')),
       signatureType: 'ed25519',
     }
   }
@@ -313,90 +307,145 @@ export class Solana implements Wallet {
     skipBroadcast: boolean = true
   ) => {
     if (isVersionedTransaction(transaction)) {
-      const result = (await this.request({
-        method: RequestMethod.VULTISIG.SEND_TRANSACTION,
-        params: [
-          {
-            serializedTx: transaction.serialize(),
-            skipBroadcast,
+      const serializedTransaction = transaction.serialize()
+      const serializedBase64 = Buffer.from(serializedTransaction).toString(
+        'base64'
+      )
+      const { data } = await callPopup(
+        {
+          sendTx: {
+            serialized: {
+              data: serializedBase64,
+              skipBroadcast,
+              chain: Chain.Solana,
+            },
           },
-        ],
-      })) as ITransaction<OtherChain.Solana>
-      const rawData = bs58.decode(String(result))
-      return VersionedTransaction.deserialize(rawData)
+        },
+        {
+          account: getTransactionAuthority(serializedTransaction),
+        }
+      )
+
+      const { signatures } = deserializeSigningOutput(Chain.Solana, data)
+
+      for (const sig of signatures) {
+        const { pubkey, signature } = sig
+        if (pubkey && signature)
+          transaction.addSignature(
+            new PublicKey(pubkey),
+            bs58.decode(signature)
+          )
+      }
+
+      return transaction
     } else {
       const connection = new Connection(`${rootApiUrl}/solana/`)
       for (const instruction of transaction.instructions) {
-        let modifiedTransfer: TransactionType.Phantom
+        const getTransactionDetails = async (): Promise<TransactionDetails> => {
+          if (instruction.programId.equals(SystemProgram.programId)) {
+            // Handle Native SOL Transfers
+            const decodedTransfer =
+              SystemInstruction.decodeTransfer(instruction)
 
-        if (instruction.programId.equals(SystemProgram.programId)) {
-          // Handle Native SOL Transfers
-          const decodedTransfer = SystemInstruction.decodeTransfer(instruction)
-          modifiedTransfer = {
-            txType: 'Phantom',
-            asset: { chain: Chain.Solana, ticker: 'SOL' },
-            amount: decodedTransfer.lamports.toString(),
-            from: decodedTransfer.fromPubkey.toString(),
-            to: decodedTransfer.toPubkey.toString(),
-            skipBroadcast,
-          }
-        } else if (instruction.programId.equals(TOKEN_PROGRAM_ID)) {
-          //  Handle SPL Token Transfers
-          const senderTokenAccountInfo = await getAccount(
-            connection,
-            new PublicKey(instruction.keys[0].pubkey)
-          )
-          let recipient: string
-          try {
-            // Try fetching receiver account
-            const receiverTokenAccountInfo = await getAccount(
-              connection,
-              new PublicKey(instruction.keys[2].pubkey)
-            )
-            recipient = receiverTokenAccountInfo.owner.toString()
-          } catch {
-            console.warn(
-              'Receiver token account not found. Checking for ATA...'
-            )
-            const ataInstruction = transaction.instructions.find(instr =>
-              instr.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)
-            )
-            if (ataInstruction) {
-              // The recipient should be in the ATA instruction's keys[0] (payer) or keys[2] (owner)
-              recipient = ataInstruction.keys[2].pubkey.toString()
-            } else {
-              throw new Error(
-                'Unable to determine recipient address. No direct token account or ATA instruction found.'
-              )
+            const amount = decodedTransfer.lamports.toString()
+            return {
+              asset: { ticker: 'SOL' },
+              amount: {
+                amount: amount,
+                decimals: chainFeeCoin[Chain.Solana].decimals,
+              },
+              from: decodedTransfer.fromPubkey.toString(),
+              to: decodedTransfer.toPubkey.toString(),
+              skipBroadcast,
             }
           }
 
-          const amountBytes = instruction.data.slice(1, 9)
-          const amount = new DataView(
-            Uint8Array.from(amountBytes).buffer
-          ).getBigUint64(0, true)
+          if (instruction.programId.equals(TOKEN_PROGRAM_ID)) {
+            //  Handle SPL Token Transfers
+            const senderTokenAccountInfo = await getAccount(
+              connection,
+              new PublicKey(instruction.keys[0].pubkey)
+            )
+            let recipient: string
+            try {
+              // Try fetching receiver account
+              const receiverTokenAccountInfo = await getAccount(
+                connection,
+                new PublicKey(instruction.keys[2].pubkey)
+              )
+              recipient = receiverTokenAccountInfo.owner.toString()
+            } catch {
+              console.warn(
+                'Receiver token account not found. Checking for ATA...'
+              )
+              const ataInstruction = transaction.instructions.find(instr =>
+                instr.programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)
+              )
+              if (ataInstruction) {
+                // The recipient should be in the ATA instruction's keys[0] (payer) or keys[2] (owner)
+                recipient = ataInstruction.keys[2].pubkey.toString()
+              } else {
+                throw new Error(
+                  'Unable to determine recipient address. No direct token account or ATA instruction found.'
+                )
+              }
+            }
 
-          modifiedTransfer = {
-            txType: 'Phantom',
-            amount: amount.toString(),
-            asset: {
-              chain: Chain.Solana,
-              mint: senderTokenAccountInfo.mint.toString(),
-            },
-            from: senderTokenAccountInfo.owner.toString(),
-            to: recipient,
-            skipBroadcast,
+            const amountBytes = instruction.data.slice(1, 9)
+            const amount = new DataView(
+              Uint8Array.from(amountBytes).buffer
+            ).getBigUint64(0, true)
+
+            const mint = senderTokenAccountInfo.mint.toString()
+
+            const metadata = await callBackground({
+              getTokenMetadata: {
+                chain: Chain.Solana,
+                id: mint,
+              },
+            })
+
+            return {
+              amount: {
+                amount: amount.toString(),
+                decimals: metadata.decimals,
+              },
+              asset: {
+                mint: mint,
+                ticker: metadata.ticker,
+              },
+              from: senderTokenAccountInfo.owner.toString(),
+              to: recipient,
+              skipBroadcast,
+            }
           }
-        } else {
-          continue
+
+          throw new NotImplementedError(
+            `Solana transaction details not implemented for instruction ${instruction.programId.toString()}`
+          )
         }
-        return await this.request({
-          method: RequestMethod.VULTISIG.SEND_TRANSACTION,
-          params: [modifiedTransfer],
-        }).then(result => {
-          const rawData = bs58.decode(String(result))
-          return Transaction.from(rawData)
-        })
+
+        const transactionDetails = await getTransactionDetails()
+
+        const { data } = await callPopup(
+          {
+            sendTx: {
+              keysign: {
+                transactionDetails,
+                chain: Chain.Solana,
+              },
+            },
+          },
+          {
+            account: transactionDetails.from,
+          }
+        )
+
+        const { encoded } = deserializeSigningOutput(Chain.Solana, data)
+
+        const rawData = bs58.decode(encoded)
+
+        return VersionedTransaction.deserialize(rawData)
       }
     }
   }
@@ -452,14 +501,9 @@ export class Solana implements Wallet {
         VersionedTransaction.deserialize(transaction)
       )
 
-      const serializedTransaction = isVersionedTransaction(signedTransaction)
-        ? signedTransaction.serialize()
-        : new Uint8Array(
-            (signedTransaction as Transaction).serialize({
-              requireAllSignatures: false,
-              verifySignatures: false,
-            })
-          )
+      const serializedTransaction = shouldBePresent(
+        signedTransaction?.serialize()
+      )
 
       outputs.push({ signedTransaction: serializedTransaction })
     } else if (inputs.length > 1) {
