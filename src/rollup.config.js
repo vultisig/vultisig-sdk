@@ -184,25 +184,7 @@ export default defineConfig([
     ],
   },
 
-  // Type definitions
-  {
-    input: './index.ts',
-    output: {
-      file: './dist/index.d.ts',
-      format: 'es',
-    },
-    external: [
-      ...external,
-      // Allow type-only imports
-      /^@types\//,
-    ],
-    plugins: [
-      dts({
-        respectExternal: true,
-        compilerOptions: {
-          preserveSymlinks: false,
-        },
-      }),
-    ],
-  },
+  // Type definitions build has been moved to TypeScript's native tsc
+  // See tsconfig.declarations.json and the build:types script
+  // This approach is more memory-efficient and reliable for large codebases
 ])

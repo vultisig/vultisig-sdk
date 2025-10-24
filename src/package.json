@@ -29,8 +29,10 @@
     }
   },
   "scripts": {
-    "build": "node --max-old-space-size=16384 ../node_modules/.bin/rollup -c rollup.config.js",
-    "build:types": "tsc --emitDeclarationOnly",
+    "build": "yarn build:js && yarn build:types",
+    "build:js": "node --max-old-space-size=8192 ../node_modules/.bin/rollup -c rollup.config.js",
+    "build:types": "tsc -p tsconfig.declarations.json",
+    "build:debug": "node --max-old-space-size=16384 --trace-warnings --expose-gc --trace-gc ../node_modules/.bin/rollup -c rollup.config.js --perf",
     "dev": "rollup -c rollup.config.js -w",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "test": "vitest --run",
@@ -67,6 +69,7 @@
   },
   "homepage": "https://vultisig.com",
   "dependencies": {
+    "@coral-xyz/anchor": "^0.28.0",
     "@core/chain": "workspace:*",
     "@core/config": "workspace:*",
     "@core/mpc": "workspace:*",
@@ -75,8 +78,12 @@
     "@lib/schnorr": "workspace:*",
     "@lib/ui": "workspace:*",
     "@lib/utils": "workspace:*",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.0",
     "@trustwallet/wallet-core": "^4.3.3",
     "axios": "^1.8.3",
+    "bs58": "^6.0.0",
+    "ethers": "^6.13.5",
     "node-fetch": "^3.3.2",
     "uuid": "^11.1.0",
     "viem": "^2.23.12",

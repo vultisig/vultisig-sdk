@@ -803,7 +803,12 @@ export class Vault {
     // Validate vault supports the requested mode
     this.validateSigningMode(mode)
 
-    // Route to appropriate signing implementation
+    // Detect Solana transactions and route to Solana-specific signing
+    if (this.isSolanaTransaction(payload)) {
+      return this.signSolana(mode, payload, password)
+    }
+
+    // Route to appropriate signing implementation for other chains
     switch (mode) {
       case 'fast':
         return this.signFast(payload, password)
@@ -823,6 +828,196 @@ export class Vault {
           `Unsupported signing mode: ${mode}`
         )
     }
+  }
+
+  /**
+   * Check if a signing payload is for a Solana transaction
+   */
+  private isSolanaTransaction(payload: SigningPayload): boolean {
+    const chain = payload.chain?.toString().toLowerCase()
+    return chain === 'solana' || chain === 'sol'
+  }
+
+  /**
+   * Sign Solana transaction with appropriate mode
+   * Parses the transaction and builds keysign payload before signing
+   */
+  private async signSolana(
+    mode: SigningMode,
+    payload: SigningPayload,
+    password?: string
+  ): Promise<Signature> {
+    console.log('Signing Solana transaction with mode:', mode)
+
+    // Validate we have WalletCore for transaction decoding
+    if (!this.walletCore) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'WalletCore required for Solana transaction signing'
+      )
+    }
+
+    // Validate transaction data is provided
+    if (!payload.transaction) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'Transaction data required for Solana signing'
+      )
+    }
+
+    // Convert transaction to Uint8Array if needed
+    const serializedTx = this.ensureUint8Array(payload.transaction)
+
+    try {
+      // Import Solana parsers and keysign builder
+      const {
+        parseSolanaTransaction,
+        buildSolanaKeysignPayload,
+      } = await import('../chains/solana')
+
+      // Parse the transaction
+      const parsedTransaction = await parseSolanaTransaction(
+        this.walletCore,
+        serializedTx
+      )
+
+      console.log('Parsed Solana transaction:', parsedTransaction)
+
+      // Build keysign payload
+      const keysignPayload = await buildSolanaKeysignPayload({
+        parsedTransaction,
+        serializedTransaction: serializedTx,
+        vaultPublicKey: this.vaultData.publicKeys.ecdsa,
+        skipBroadcast: false,
+      })
+
+      // Route to appropriate signing mode with the prepared payload
+      switch (mode) {
+        case 'fast':
+          return this.signSolanaFast(keysignPayload, password)
+        case 'relay':
+          return this.signSolanaRelay(keysignPayload)
+        case 'local':
+          return this.signSolanaLocal(keysignPayload)
+        default:
+          throw new VaultError(
+            VaultErrorCode.InvalidConfig,
+            `Unsupported signing mode: ${mode}`
+          )
+      }
+    } catch (error) {
+      console.error('Failed to sign Solana transaction:', error)
+
+      if (error instanceof VaultError) {
+        throw error
+      }
+
+      throw new VaultError(
+        VaultErrorCode.SigningFailed,
+        `Solana signing failed: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Ensure data is a Uint8Array
+   */
+  private ensureUint8Array(data: any): Uint8Array {
+    if (data instanceof Uint8Array) {
+      return data
+    }
+    if (Array.isArray(data)) {
+      return new Uint8Array(data)
+    }
+    if (ArrayBuffer.isView(data)) {
+      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+    }
+    if (typeof data === 'string') {
+      // Assume hex string
+      const hex = data.startsWith('0x') ? data.slice(2) : data
+      return new Uint8Array(
+        hex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []
+      )
+    }
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      'Transaction data must be Uint8Array, Buffer, or hex string'
+    )
+  }
+
+  /**
+   * Sign Solana transaction using VultiServer (fast mode)
+   */
+  private async signSolanaFast(
+    keysignPayload: any,
+    password?: string
+  ): Promise<Signature> {
+    // Get SDK instance to access server manager
+    if (!this._sdkInstance) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'SDK instance required for fast signing'
+      )
+    }
+
+    // Validate we have a server manager
+    const serverManager = this._sdkInstance.getServerManager()
+    if (!serverManager) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'Server manager not available for fast signing'
+      )
+    }
+
+    // Validate password is provided for fast signing
+    if (!password) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'Password is required for fast signing'
+      )
+    }
+
+    try {
+      // Use server manager to perform fast signing with Solana keysign payload
+      return await serverManager.signSolanaWithServer(
+        this.vaultData,
+        keysignPayload,
+        password
+      )
+    } catch (error) {
+      console.error('Solana fast signing failed:', error)
+
+      if (error instanceof VaultError) {
+        throw error
+      }
+
+      throw new VaultError(
+        VaultErrorCode.SigningFailed,
+        `Solana fast signing failed: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Sign Solana transaction using relay network (multi-device mode)
+   */
+  private async signSolanaRelay(keysignPayload: any): Promise<Signature> {
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      'Solana relay signing not implemented yet'
+    )
+  }
+
+  /**
+   * Sign Solana transaction using local P2P (multi-device mode)
+   */
+  private async signSolanaLocal(keysignPayload: any): Promise<Signature> {
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      'Solana local signing not implemented yet'
+    )
   }
 
   /**

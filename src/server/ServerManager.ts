@@ -674,7 +674,9 @@ export class ServerManager {
         .map(value => Buffer.from(value).toString('hex'))
       return hashes
     }
-
+    if (network === 'solana' || network === 'sol') {
+      // TODO addd tx prep here 
+    }
     throw new Error(
       `Message hash computation not yet implemented for chain: ${payload.chain}`
     )
