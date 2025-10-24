@@ -29,7 +29,7 @@ export const generateChainCode = async (): Promise<string> => {
  * Generate browser/extension party ID for server operations
  */
 export const generateBrowserPartyId = async (): Promise<string> => {
-  const { generateLocalPartyId } = await import('@core/mpc/devices/localPartyId')
+  const { generateLocalPartyId } = await import('../core/mpc/devices/localPartyId')
   return generateLocalPartyId('extension')
 }
 
@@ -37,7 +37,7 @@ export const generateBrowserPartyId = async (): Promise<string> => {
  * Generate server party ID for VultiServer operations
  */
 export const generateServerPartyId = async (): Promise<string> => {
-  const { generateLocalPartyId } = await import('@core/mpc/devices/localPartyId')
+  const { generateLocalPartyId } = await import('../core/mpc/devices/localPartyId')
   return generateLocalPartyId('server')
 }
 

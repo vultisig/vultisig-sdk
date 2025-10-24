@@ -3,7 +3,7 @@
  * Allows users to configure Blockchair as an alternative data source
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '../../../core/chain/Chain'
 
 import { BlockchairChain } from './types'
 

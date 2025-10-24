@@ -37,8 +37,6 @@ const external = [
   '@cosmjs/amino',
   '@bufbuild/protobuf',
   'ripple-binary-codec',
-
-  // Note: Workspace packages (@core/*, @lib/*) are now bundled by removing them from external
 ]
 
 const plugins = [
@@ -50,10 +48,6 @@ const plugins = [
     include: ['./**/*'],
     // Ensure proper module resolution for SDK-specific packages
     compilerOptions: {
-      paths: {
-        '@core/*': ['./core/*'],
-        '@lib/*': ['./lib/*'],
-      },
       skipLibCheck: true,
       noImplicitAny: false,
       ignoreDeprecations: '5.0',
@@ -68,7 +62,6 @@ const plugins = [
     preferBuiltins: false,
     browser: true,
     exportConditions: ['browser', 'module', 'import', 'default'],
-    // Include workspace packages for bundling
     skip: [
       'react',
       'react-dom',
@@ -82,14 +75,13 @@ const plugins = [
       '@cosmjs/stargate',
       '@cosmjs/amino',
     ],
-    // Ensure workspace packages are resolved and bundled
     dedupe: ['react', 'react-dom'],
     // Skip WASM files
     ignore: [/\.wasm$/],
   }),
   json(),
   commonjs({
-    include: [/node_modules/, /\.\/core\//, /\.\/lib\//],
+    include: [/node_modules/],
     transformMixedEsModules: true,
   }),
 ]
