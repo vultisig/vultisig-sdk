@@ -3,8 +3,8 @@
  * Uses Blockchair API for Cardano balance queries
  */
 
-import { CoinBalanceResolver } from '@core/chain/coin/balance/resolver'
-import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { CoinBalanceResolver } from '../../../../core/chain/coin/balance/resolver'
+import { isFeeCoin } from '../../../../core/chain/coin/utils/isFeeCoin'
 
 import { blockchairClient } from '../index'
 
