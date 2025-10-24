@@ -1,4 +1,5 @@
 import { UtxoChain } from '../../../../chain/Chain'
+import { minUtxo } from '../../../../chain/chains/utxo/minUtxo'
 import { utxoChainScriptType } from '../../../../chain/chains/utxo/tx/UtxoScriptType'
 import { getCoinType } from '../../../../chain/coin/coinType'
 import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
@@ -98,6 +99,7 @@ export const getUtxoTxInputData = ({
       chainInfo,
     }
   }
+
   const input = TW.Bitcoin.Proto.SigningInput.create({
     hashType: walletCore.BitcoinScript.hashTypeForCoin(coinType),
     amount: Long.fromString(amount),
@@ -106,6 +108,7 @@ export const getUtxoTxInputData = ({
     changeAddress: coin.address,
     byteFee: Long.fromString(byteFee),
     coinType: coinType.value,
+    fixedDustThreshold: Long.fromBigInt(minUtxo[chain]),
     scripts: {
       [scriptKey]: script,
     },

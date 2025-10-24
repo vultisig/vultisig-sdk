@@ -1,12 +1,16 @@
 import { UtxoChain } from '@core/chain/Chain'
+import { callPopup } from '@core/inpage-provider/popup'
+import {
+  BitcoinAccount,
+  ProviderId,
+  RequestInput,
+  XDEFIBitcoinPayloadMethods,
+} from '@core/inpage-provider/popup/view/resolvers/sendTx/interfaces'
+import { NotImplementedError } from '@lib/utils/error/NotImplementedError'
 import EventEmitter from 'events'
-import { v4 as uuidv4 } from 'uuid'
 
-import { EventMethod, MessageKey, RequestMethod } from '../../utils/constants'
-import { processBackgroundResponse } from '../../utils/functions'
-import { BitcoinAccount, Messaging, ProviderId } from '../../utils/interfaces'
+import { rebuildPsbtWithPartialSigsFromWC } from '../../utils/functions'
 import { Callback } from '../constants'
-import { messengers } from '../messenger'
 import { requestAccount } from './core/requestAccount'
 import { getSharedHandlers } from './core/sharedHandlers'
 
@@ -19,36 +23,23 @@ type SupportedUtxoChain =
 
 export class UTXO extends EventEmitter {
   public chain: UtxoChain
-  private providerType: MessageKey
   public static instances: Map<string, UTXO>
   private providerId: ProviderId
-  constructor(
-    providerType: string,
-    chain: SupportedUtxoChain,
-    providerId: ProviderId = 'vultisig'
-  ) {
+  constructor(chain: SupportedUtxoChain, providerId: ProviderId = 'vultisig') {
     super()
-    this.providerType = providerType as MessageKey
     this.chain = chain
     this.providerId = providerId
   }
 
-  static getInstance(
-    providerType: string,
-    chain: SupportedUtxoChain,
-    providerId: ProviderId
-  ): UTXO {
+  static getInstance(chain: SupportedUtxoChain, providerId: ProviderId): UTXO {
     if (!UTXO.instances) {
       UTXO.instances = new Map<string, UTXO>()
     }
 
-    if (!UTXO.instances.has(providerType)) {
-      UTXO.instances.set(
-        providerType,
-        new UTXO(providerType, chain, providerId)
-      )
+    if (!UTXO.instances.has(chain)) {
+      UTXO.instances.set(chain, new UTXO(chain, providerId))
     }
-    return UTXO.instances.get(providerType)!
+    return UTXO.instances.get(chain)!
   }
 
   async requestAccounts(): Promise<BitcoinAccount[] | string[]> {
@@ -61,38 +52,76 @@ export class UTXO extends EventEmitter {
     }
     return [address]
   }
-
-  async signPSBT(_psbt: string | Buffer) {
-    return await this.request({
-      method: RequestMethod.CTRL.SIGN_PSBT,
-      params: [],
+  // Keplr
+  async signPSBT(
+    psbt: Buffer,
+    {
+      inputsToSign,
+    }: {
+      inputsToSign?: {
+        address: string
+        signingIndexes: number[]
+        sigHash?: number
+      }[]
+    },
+    broadcast: boolean = false
+  ) {
+    const { data } = await callPopup({
+      sendTx: {
+        serialized: {
+          data: Buffer.from(psbt).toString('base64'),
+          chain: this.chain,
+          skipBroadcast: !broadcast,
+          params: inputsToSign,
+        },
+      },
     })
+    const rebuiltPsbt = rebuildPsbtWithPartialSigsFromWC(data, psbt)
+    return rebuiltPsbt
+  }
+  // CTRL
+  async signPsbt({
+    allowedSignHash = 1,
+    psbt,
+    broadcast = false,
+    signInputs,
+  }: {
+    allowedSignHash?: number
+    psbt: string
+    broadcast?: boolean
+    signInputs?: Record<string, number[]>
+  }) {
+    let inputsToSign = undefined
+    if (signInputs) {
+      inputsToSign = Object.entries(signInputs).map(
+        ([address, signingIndexes]) => ({
+          address,
+          signingIndexes,
+          sigHash: allowedSignHash,
+        })
+      )
+    }
+
+    return this.signPSBT(
+      Buffer.from(psbt, 'base64'),
+      { inputsToSign },
+      broadcast
+    )
   }
 
-  emitAccountsChanged() {
-    this.emit(EventMethod.ACCOUNTS_CHANGED, {})
-  }
-
-  async request(data: Messaging.Chain.Request, callback?: Callback) {
+  async request(data: RequestInput, callback?: Callback) {
     const processRequest = async () => {
       const handlers = getSharedHandlers(this.chain)
 
       if (data.method in handlers) {
-        return handlers[data.method as keyof typeof handlers]()
+        return handlers[data.method as keyof typeof handlers](
+          data.params as any
+        )
       }
-      const response = await messengers.background.send<
-        any,
-        Messaging.Chain.Response
-      >(
-        'providerRequest',
-        {
-          type: this.providerType,
-          message: data,
-        },
-        { id: uuidv4() }
-      )
-
-      return processBackgroundResponse(data, this.providerType, response)
+      if (data.method === XDEFIBitcoinPayloadMethods.SignPsbt) {
+        return this.signPsbt({ ...(data.params as any) })
+      }
+      throw new NotImplementedError(`UTXO method ${data.method}`)
     }
 
     try {

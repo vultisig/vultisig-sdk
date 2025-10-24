@@ -34,7 +34,7 @@ const individualFiles = [
 type SyncAndCopyOptions = {
   syncOnly?: boolean
   copyOnly?: boolean
-  directories?: Array<'core' | 'lib'>
+  directories?: Array<'core' | 'lib' | 'clients'>
 }
 
 class SyncAndCopier {
@@ -92,9 +92,9 @@ class SyncAndCopier {
   }
 
   private async syncFromRemote(
-    directories?: Array<'core' | 'lib'>
+    directories?: Array<'core' | 'lib' | 'clients'>
   ): Promise<void> {
-    const dirsToSync = directories || ['core', 'lib']
+    const dirsToSync = directories || ['core', 'lib', 'clients']
 
     console.log('📥 STEP 1: Sync from vultisig-windows')
     console.log('='.repeat(50))
@@ -124,10 +124,14 @@ class SyncAndCopier {
       )
 
       process.chdir(TEMP_DIR)
-      execSync(`git sparse-checkout set ${dirName}`, { stdio: 'pipe' })
 
-      if (!fs.existsSync(path.join(TEMP_DIR, dirName))) {
-        throw new Error(`Directory ${dirName}/ not found in remote repository`)
+      // For clients, only sync the extension subdirectory (not desktop)
+      // Extension is reference code for the browser extension client
+      const sparsePath = dirName === 'clients' ? 'clients/extension' : dirName
+      execSync(`git sparse-checkout set ${sparsePath}`, { stdio: 'pipe' })
+
+      if (!fs.existsSync(path.join(TEMP_DIR, sparsePath))) {
+        throw new Error(`Directory ${sparsePath}/ not found in remote repository`)
       }
 
       console.log(`   📋 Copying ${dirName}/ to project...`)
@@ -400,6 +404,9 @@ const parseArgs = (): SyncAndCopyOptions => {
   if (args.includes('--lib-only')) {
     options.directories = ['lib']
   }
+  if (args.includes('--clients-only')) {
+    options.directories = ['clients']
+  }
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
 Sync and Copy Script
@@ -408,17 +415,19 @@ Usage:
   yarn sync-and-copy [options]
 
 Options:
-  --sync-only    Only sync from remote, skip copy to src/
-  --copy-only    Only copy to src/, skip remote sync
-  --core-only    Only process core/ directory
-  --lib-only     Only process lib/ directory
-  --help, -h     Show this help message
+  --sync-only      Only sync from remote, skip copy to src/
+  --copy-only      Only copy to src/, skip remote sync
+  --core-only      Only process core/ directory
+  --lib-only       Only process lib/ directory
+  --clients-only   Only process clients/extension (reference code only)
+  --help, -h       Show this help message
 
 Examples:
-  yarn sync-and-copy                  # Full workflow
+  yarn sync-and-copy                  # Full workflow (sync core, lib, clients/extension)
   yarn sync-and-copy --sync-only      # Only sync from remote
   yarn sync-and-copy --copy-only      # Only copy to src/
   yarn sync-and-copy --core-only      # Only process core/
+  yarn sync-and-copy --clients-only   # Only sync clients/extension reference
     `)
     process.exit(0)
   }
