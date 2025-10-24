@@ -1,0 +1,14 @@
+# Encrypted vault files (keep encryption, but ignore actual vault data)
+test-vault.json.enc
+
+# Environment variables with secrets
+.env
+.env.local
+
+# Test output
+coverage/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
