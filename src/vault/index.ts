@@ -12,6 +12,7 @@ export { BalanceManagement } from './BalanceManagement'
 
 // Utilities
 export { ValidationHelpers } from './utils/validation'
+export { createVaultBackup, getExportFileName } from './utils/export'
 
 // Vault utilities - use VaultManager for encryption/decryption operations
 

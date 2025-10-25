@@ -13,17 +13,19 @@
 export { Vultisig } from './VultisigSDK'
 
 // Vault management
-export { 
+export {
   Vault,
-  VaultError, 
-  VaultErrorCode, 
-  VaultImportError, 
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
   VaultImportErrorCode,
   AddressBookManager,
   ChainManagement,
   VaultManagement,
   BalanceManagement,
-  ValidationHelpers
+  ValidationHelpers,
+  createVaultBackup,
+  getExportFileName
 } from './vault'
 
 // MPC operations
