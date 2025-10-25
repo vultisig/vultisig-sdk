@@ -1,9 +1,11 @@
 import { rootApiUrl } from '../../../config'
 import { memoize } from '../../../../lib/utils/memoize'
-import { createSolanaRpc } from '@solana/web3.js'
+
 
 export const solanaRpcUrl = `${rootApiUrl}/solana/`
 
-export const getSolanaClient = memoize(() => {
-  return createSolanaRpc(solanaRpcUrl)
+export const getSolanaClient = memoize(async () => {
+  // HACK: Dynamic import to handle Node.js vs browser differences
+  const { Connection } = await import('@solana/web3.js')
+  return new Connection(solanaRpcUrl)
 })
