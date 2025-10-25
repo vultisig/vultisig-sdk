@@ -22,10 +22,6 @@
     "isolatedModules": true,
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
-    "paths": {
-      "@core/*": ["./core/*"],
-      "@lib/*": ["./lib/*"]
-    },
     "baseUrl": "."
   },
   "include": [

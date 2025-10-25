@@ -3,10 +3,10 @@
  * Provides seamless switching between Blockchair and direct RPC calls
  */
 
-import { Chain, EvmChain } from '@core/chain/Chain'
-import { ChainAccount } from '@core/chain/ChainAccount'
-import { AccountCoinKey } from '@core/chain/coin/AccountCoin'
-import { getCoinBalance } from '@core/chain/coin/balance'
+import { Chain, EvmChain } from '../../../core/chain/Chain'
+import { ChainAccount } from '../../../core/chain/ChainAccount'
+import { AccountCoinKey } from '../../../core/chain/coin/AccountCoin'
+import { getCoinBalance } from '../../../core/chain/coin/balance'
 
 import { AddressDeriver } from '../../../chains/AddressDeriver'
 import {

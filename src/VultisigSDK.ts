@@ -32,18 +32,11 @@ export class Vultisig {
       fastVault?: string
       messageRelay?: string
     }
-    wasmConfig?: {
-      autoInit?: boolean
-      wasmPaths?: {
-        walletCore?: string
-        dkls?: string
-        schnorr?: string
-      }
-    }
+
     defaultChains?: string[]
     defaultCurrency?: string
   }) {
-    this.wasmManager = new WASMManager(config?.wasmConfig)
+    this.wasmManager = new WASMManager()
     this.serverManager = new ServerManager(config?.serverEndpoints)
 
     // Initialize module managers

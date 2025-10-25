@@ -3,7 +3,7 @@
  * Uses Blockchair API for transaction queries across multiple chains
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '../../../../core/chain/Chain'
 
 import { BlockchairChain, blockchairClient } from '../index'
 

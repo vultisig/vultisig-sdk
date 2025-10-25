@@ -2,7 +2,7 @@
  * Blockchair Configuration Tests
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '../../../core/chain/Chain'
 import { describe, expect, it } from 'vitest'
 
 import {

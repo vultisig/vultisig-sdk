@@ -2,7 +2,7 @@
  * Blockchair Integration Tests
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '../../../core/chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -37,7 +37,7 @@ vi.mock('./resolvers/transaction', () => ({
   getBlockchairTransaction: vi.fn(),
 }))
 
-import { getCoinBalance } from '@core/chain/coin/balance'
+import { getCoinBalance } from '../../../core/chain/coin/balance'
 
 import { getBlockchairCardanoCoinBalance } from './resolvers/cardano'
 import { getBlockchairEvmCoinBalance } from './resolvers/evm'

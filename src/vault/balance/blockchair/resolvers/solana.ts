@@ -3,9 +3,9 @@
  * Uses Blockchair API for Solana balance queries
  */
 
-import { getSplAccounts } from '@core/chain/chains/solana/spl/getSplAccounts'
-import { CoinBalanceResolver } from '@core/chain/coin/balance/resolver'
-import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { getSplAccounts } from '../../../../core/chain/chains/solana/spl/getSplAccounts'
+import { CoinBalanceResolver } from '../../../../core/chain/coin/balance/resolver'
+import { isFeeCoin } from '../../../../core/chain/coin/utils/isFeeCoin'
 
 import { blockchairClient } from '../index'
 
@@ -54,7 +54,7 @@ export const getBlockchairSolanaCoinBalance: CoinBalanceResolver =
       // Fallback to original Solana client for native tokens
       if (isFeeCoin(input)) {
         const { getSolanaClient } = await import(
-          '@core/chain/chains/solana/client'
+          '../../../../core/chain/chains/solana/client'
         )
         const client = await getSolanaClient()
         const balance = await client.getBalance(new (await import('@solana/web3.js')).PublicKey(input.address))
