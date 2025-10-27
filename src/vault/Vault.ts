@@ -216,7 +216,7 @@ export class Vault {
       'document' in globalThis
     ) {
       const { initiateFileDownload } = await import(
-        '../lib/ui/utils/initiateFileDownload'
+        '../lib/utils/file/initiateFileDownload'
       )
       initiateFileDownload({ blob, name: filename })
     }

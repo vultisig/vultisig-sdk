@@ -1,6 +1,10 @@
-import { passwordLenghtConfig } from '../../core/ui/security/password/config'
 import { validateEmail } from '../../lib/utils/validation/validateEmail'
 import type { ValidationResult } from '../../types'
+
+const passwordLenghtConfig = {
+  min: 1,
+  max: 128,
+} as const
 
 /**
  * Validation utilities for SDK input validation
