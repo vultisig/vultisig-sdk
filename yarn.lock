@@ -4625,9 +4625,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/sdk@workspace:*, @vultisig/sdk@workspace:src":
+"@vultisig/sdk@workspace:*, @vultisig/sdk@workspace:packages/sdk":
   version: 0.0.0-use.local
-  resolution: "@vultisig/sdk@workspace:src"
+  resolution: "@vultisig/sdk@workspace:packages/sdk"
   dependencies:
     7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.7.0"
