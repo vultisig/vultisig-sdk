@@ -10,8 +10,8 @@
  * API Documentation: https://blockchair.com/api/docs
  */
 
-import { memoize } from '@lib/utils/memoize'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { memoize } from '../../../lib/utils/memoize'
+import { queryUrl } from '../../../lib/utils/query/queryUrl'
 import type {
   BlockchairChain as ImportedBlockchairChain,
   BlockchairApiResponse,
@@ -45,6 +45,7 @@ export const BLOCKCHAIR_CHAIN_NAMES = {
   blast: 'blast',
   zksync: 'zksync',
   cronos: 'cronos',
+  mantle: 'mantle',
 } as const
 
 export type BlockchairChain = keyof typeof BLOCKCHAIR_CHAIN_NAMES

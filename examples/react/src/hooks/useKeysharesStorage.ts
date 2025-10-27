@@ -1,8 +1,4 @@
-import { toBinary } from '@bufbuild/protobuf'
-import { toCommVault } from '@core/mpc/types/utils/commVault'
-import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
-import { base64Encode } from '@lib/utils/base64Encode'
-import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGcm'
+import { createVaultBackup } from 'vultisig-sdk'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { LoadedKeyshare } from '../types'
@@ -225,21 +221,10 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
         console.log('saveVaultToStorage - vault input:', vault)
         console.log('saveVaultToStorage - extracted vaultData:', vaultData)
         console.log('saveVaultToStorage - keyShares present:', !!vaultData.keyShares)
-        const comm = toCommVault(vaultData)
-        const binary = toBinary(VaultSchema, comm)
-        let containerVaultBase64: string
-        let encrypted = false
-        if (options?.password) {
-          const encryptedBytes = await encryptWithAesGcm({
-            key: options.password,
-            value: Buffer.from(binary),
-          })
-          containerVaultBase64 = base64Encode(encryptedBytes)
-          encrypted = true
-        } else {
-          containerVaultBase64 = base64Encode(binary)
-          encrypted = false
-        }
+
+        // Use SDK's createVaultBackup function to serialize the vault
+        const containerVaultBase64 = await createVaultBackup(vaultData, options?.password)
+        const encrypted = !!options?.password
         // Check if a vault with this name already exists
         const vaultName = `${options?.name ?? vaultData.name}.vult`
         const existing = readAll()

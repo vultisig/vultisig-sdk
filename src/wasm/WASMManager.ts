@@ -12,15 +12,6 @@ export class WASMManager {
   private dklsReady = false
   private schnorrReady = false
 
-  constructor(private config?: {
-    autoInit?: boolean
-    wasmPaths?: {
-      walletCore?: string
-      dkls?: string
-      schnorr?: string
-    }
-  }) {}
-
   /**
    * Initialize all WASM modules
    */
@@ -34,7 +25,7 @@ export class WASMManager {
       await Promise.all([
         this.initializeWalletCore(),
         this.initializeDkls(),
-        this.initializeSchnorr()
+        this.initializeSchnorr(),
       ])
 
       this.initialized = true
@@ -63,7 +54,7 @@ export class WASMManager {
    */
   private async initializeDkls(): Promise<void> {
     try {
-      await initializeMpcLib('ecdsa', this.config?.wasmPaths?.dkls)
+      await initializeMpcLib('ecdsa')
       this.dklsReady = true
     } catch (error) {
       throw new Error(`Failed to initialize DKLS WASM: ${error}`)
@@ -75,7 +66,7 @@ export class WASMManager {
    */
   private async initializeSchnorr(): Promise<void> {
     try {
-      await initializeMpcLib('eddsa', this.config?.wasmPaths?.schnorr)
+      await initializeMpcLib('eddsa')
       this.schnorrReady = true
     } catch (error) {
       throw new Error(`Failed to initialize Schnorr WASM: ${error}`)
@@ -114,8 +105,8 @@ export class WASMManager {
       modules: {
         walletCore: this.walletCoreReady,
         dkls: this.dklsReady,
-        schnorr: this.schnorrReady
-      }
+        schnorr: this.schnorrReady,
+      },
     }
   }
 
@@ -124,9 +115,11 @@ export class WASMManager {
    */
   async getWalletCore() {
     if (!this.walletCoreReady || !this.walletCoreInstance) {
-      throw new Error('WalletCore WASM not initialized. Call initialize() first.')
+      throw new Error(
+        'WalletCore WASM not initialized. Call initialize() first.'
+      )
     }
-    
+
     return this.walletCoreInstance
   }
 
@@ -146,7 +139,7 @@ export class WASMManager {
     this.dklsReady = false
     this.schnorrReady = false
     this.walletCoreInstance = null
-    
+
     await this.initialize()
   }
 }

@@ -21,8 +21,6 @@ export default defineConfig({
     alias: {
       '@vultisig/sdk': path.resolve(__dirname, '../../src/index.ts'),
       'vultisig-sdk': path.resolve(__dirname, '../../src/index.ts'),
-      '@lib/utils': path.resolve(__dirname, '../../lib/utils'),
-      '@core': path.resolve(__dirname, '../../core'),
       crypto: 'crypto-browserify',
       stream: 'stream-browserify',
       'node:stream': 'stream-browserify',
