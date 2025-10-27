@@ -274,6 +274,9 @@ class SyncAndCopier {
 
       if (entry.isDirectory()) {
         this.copyFolderRecursive(srcPath, destPath)
+      } else if (entry.name.endsWith('.wasm')) {
+        // Copy WASM files directly without transformation
+        fs.copyFileSync(srcPath, destPath)
       } else if (
         entry.name.endsWith('.ts') ||
         entry.name.endsWith('.tsx') ||
@@ -315,14 +318,14 @@ class SyncAndCopier {
   private transformImports(content: string, destinationPath: string): string {
     let transformed = content
 
-    transformed = transformed.replace(/@core\/([^'"]*)/g, (match, corePath) => {
+    transformed = transformed.replace(/@core\/([^'"]*)/g, (_match, corePath) => {
       const destDir = path.dirname(destinationPath)
       const targetPath = path.join(this.projectRoot, 'src/core', corePath)
       const relativePath = path.relative(destDir, targetPath)
       return relativePath.startsWith('.') ? relativePath : './' + relativePath
     })
 
-    transformed = transformed.replace(/@lib\/([^'"]*)/g, (match, libPath) => {
+    transformed = transformed.replace(/@lib\/([^'"]*)/g, (_match, libPath) => {
       const destDir = path.dirname(destinationPath)
       const targetPath = path.join(this.projectRoot, 'src/lib', libPath)
       const relativePath = path.relative(destDir, targetPath)
