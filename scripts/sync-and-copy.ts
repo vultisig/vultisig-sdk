@@ -180,7 +180,7 @@ class SyncAndCopier {
   }
 
   private async copyToSrc(): Promise<void> {
-    console.log('\n📋 STEP 2: Copy to src/ with import transformations')
+    console.log('\n📋 STEP 2: Copy to packages/ with import transformations')
     console.log('='.repeat(50))
     console.log(`📊 Copy plan: ${foldersToCopy.length} folders\n`)
 
@@ -194,10 +194,10 @@ class SyncAndCopier {
   }
 
   private async cleanSrcDirectories(): Promise<void> {
-    console.log('🧹 Cleaning src/core and src/lib...')
+    console.log('🧹 Cleaning packages/core and packages/lib...')
 
-    const srcCore = path.join(this.projectRoot, 'src/core')
-    const srcLib = path.join(this.projectRoot, 'src/lib')
+    const srcCore = path.join(this.projectRoot, 'packages/core')
+    const srcLib = path.join(this.projectRoot, 'packages/lib')
 
     if (fs.existsSync(srcCore)) {
       fs.rmSync(srcCore, { recursive: true, force: true })
@@ -211,7 +211,7 @@ class SyncAndCopier {
     const sourcePath = path.join(this.projectRoot, folderPath)
     // Strip 'upstream/' prefix for destination path
     const destRelativePath = folderPath.replace(/^upstream\//, '')
-    const destPath = path.join(this.projectRoot, 'src', destRelativePath)
+    const destPath = path.join(this.projectRoot, 'packages', destRelativePath)
 
     if (!fs.existsSync(sourcePath)) {
       this.errors.push(`Source folder not found: ${folderPath}`)
@@ -258,19 +258,44 @@ class SyncAndCopier {
     }
   }
 
+  private async copyFile(filePath: string): Promise<void> {
+    const sourcePath = path.join(this.projectRoot, filePath)
+    // Strip 'upstream/' prefix for destination path
+    const destRelativePath = filePath.replace(/^upstream\//, '')
+    const destPath = path.join(this.projectRoot, 'packages', destRelativePath)
+
+    if (!fs.existsSync(sourcePath)) {
+      this.errors.push(`Source file not found: ${filePath}`)
+      return
+    }
+
+    try {
+      fs.mkdirSync(path.dirname(destPath), { recursive: true })
+
+      const content = fs.readFileSync(sourcePath, 'utf-8')
+      const transformedContent = this.transformImports(content, destPath)
+      fs.writeFileSync(destPath, transformedContent)
+
+      this.copied.push(filePath)
+      console.log(`✅ ${filePath}`)
+    } catch (error) {
+      this.errors.push(`Failed to copy file ${filePath}: ${error}`)
+    }
+  }
+
   private transformImports(content: string, destinationPath: string): string {
     let transformed = content
 
     transformed = transformed.replace(/@core\/([^'"]*)/g, (_match, corePath) => {
       const destDir = path.dirname(destinationPath)
-      const targetPath = path.join(this.projectRoot, 'src/core', corePath)
+      const targetPath = path.join(this.projectRoot, 'packages/core', corePath)
       const relativePath = path.relative(destDir, targetPath)
       return relativePath.startsWith('.') ? relativePath : './' + relativePath
     })
 
     transformed = transformed.replace(/@lib\/([^'"]*)/g, (_match, libPath) => {
       const destDir = path.dirname(destinationPath)
-      const targetPath = path.join(this.projectRoot, 'src/lib', libPath)
+      const targetPath = path.join(this.projectRoot, 'packages/lib', libPath)
       const relativePath = path.relative(destDir, targetPath)
       return relativePath.startsWith('.') ? relativePath : './' + relativePath
     })
@@ -314,8 +339,8 @@ class SyncAndCopier {
       this.errors.forEach(error => console.log(`   ${error}`))
     }
 
-    const srcCore = path.join(this.projectRoot, 'src/core')
-    const srcLib = path.join(this.projectRoot, 'src/lib')
+    const srcCore = path.join(this.projectRoot, 'packages/core')
+    const srcLib = path.join(this.projectRoot, 'packages/lib')
     const totalFiles = this.countFiles(srcCore) + this.countFiles(srcLib)
 
     console.log(`\n🎯 Result:`)
