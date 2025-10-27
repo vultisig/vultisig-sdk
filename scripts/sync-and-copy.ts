@@ -15,26 +15,26 @@ const REPO_URL = 'https://github.com/vultisig/vultisig-windows.git'
 const TEMP_DIR = '/tmp/vultisig-windows-sync'
 
 const foldersToCoopy = [
-  'core/chain',
-  'core/mpc',
-  'core/config',
-  'lib/utils',
-  'lib/dkls',
-  'lib/schnorr',
+  'upstream/core/chain',
+  'upstream/core/mpc',
+  'upstream/core/config',
+  'upstream/lib/utils',
+  'upstream/lib/dkls',
+  'upstream/lib/schnorr',
 ]
 
 const individualFiles = [
-  'core/ui/vault/Vault.ts',
-  'core/ui/vault/import/utils/vaultContainerFromString.ts',
-  'core/ui/security/password/config.ts',
-  'core/ui/mpc/session/utils/startMpcSession.ts',
-  'lib/ui/utils/initiateFileDownload.ts',
+  'upstream/core/ui/vault/Vault.ts',
+  'upstream/core/ui/vault/import/utils/vaultContainerFromString.ts',
+  'upstream/core/ui/security/password/config.ts',
+  'upstream/core/ui/mpc/session/utils/startMpcSession.ts',
+  'upstream/lib/ui/utils/initiateFileDownload.ts',
 ]
 
 type SyncAndCopyOptions = {
   syncOnly?: boolean
   copyOnly?: boolean
-  directories?: Array<'core' | 'lib'>
+  directories?: Array<'core' | 'lib' | 'clients'>
 }
 
 class SyncAndCopier {
@@ -92,9 +92,9 @@ class SyncAndCopier {
   }
 
   private async syncFromRemote(
-    directories?: Array<'core' | 'lib'>
+    directories?: Array<'core' | 'lib' | 'clients'>
   ): Promise<void> {
-    const dirsToSync = directories || ['core', 'lib']
+    const dirsToSync = directories || ['core', 'lib', 'clients']
 
     console.log('📥 STEP 1: Sync from vultisig-windows')
     console.log('='.repeat(50))
@@ -124,17 +124,22 @@ class SyncAndCopier {
       )
 
       process.chdir(TEMP_DIR)
-      execSync(`git sparse-checkout set ${dirName}`, { stdio: 'pipe' })
 
-      if (!fs.existsSync(path.join(TEMP_DIR, dirName))) {
-        throw new Error(`Directory ${dirName}/ not found in remote repository`)
+      // For clients, only sync the extension subdirectory (not desktop)
+      // Extension is reference code for the browser extension client
+      const sparsePath = dirName === 'clients' ? 'clients/extension' : dirName
+      execSync(`git sparse-checkout set ${sparsePath}`, { stdio: 'pipe' })
+
+      if (!fs.existsSync(path.join(TEMP_DIR, sparsePath))) {
+        throw new Error(`Directory ${sparsePath}/ not found in remote repository`)
       }
 
       console.log(`   📋 Copying ${dirName}/ to project...`)
-      const targetPath = path.join(this.projectRoot, dirName)
+      const targetPath = path.join(this.projectRoot, 'upstream', dirName)
       if (fs.existsSync(targetPath)) {
         fs.rmSync(targetPath, { recursive: true, force: true })
       }
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true })
       this.copyDirectoryRecursive(path.join(TEMP_DIR, dirName), targetPath)
 
       console.log(`   ✅ Successfully synced ${dirName}/`)
@@ -150,13 +155,13 @@ class SyncAndCopier {
   }
 
   private backupDirectory(dirName: string): void {
-    const dirPath = path.join(this.projectRoot, dirName)
+    const dirPath = path.join(this.projectRoot, 'upstream', dirName)
     if (fs.existsSync(dirPath)) {
       const timestamp = new Date()
         .toISOString()
         .replace(/[:.]/g, '-')
         .split('T')[0]
-      const backupName = `archived/${dirName}-backup-${timestamp}-${Date.now()}`
+      const backupName = `archived/upstream-${dirName}-backup-${timestamp}-${Date.now()}`
       const backupPath = path.join(this.projectRoot, backupName)
 
       console.log(`   📦 Backing up existing ${dirName}/ to ${backupName}/`)
@@ -236,7 +241,9 @@ class SyncAndCopier {
 
   private async copyFolder(folderPath: string): Promise<void> {
     const sourcePath = path.join(this.projectRoot, folderPath)
-    const destPath = path.join(this.projectRoot, 'src', folderPath)
+    // Strip 'upstream/' prefix for destination path
+    const destRelativePath = folderPath.replace(/^upstream\//, '')
+    const destPath = path.join(this.projectRoot, 'src', destRelativePath)
 
     if (!fs.existsSync(sourcePath)) {
       this.errors.push(`Source folder not found: ${folderPath}`)
@@ -267,6 +274,9 @@ class SyncAndCopier {
 
       if (entry.isDirectory()) {
         this.copyFolderRecursive(srcPath, destPath)
+      } else if (entry.name.endsWith('.wasm')) {
+        // Copy WASM files directly without transformation
+        fs.copyFileSync(srcPath, destPath)
       } else if (
         entry.name.endsWith('.ts') ||
         entry.name.endsWith('.tsx') ||
@@ -282,7 +292,9 @@ class SyncAndCopier {
 
   private async copyFile(filePath: string): Promise<void> {
     const sourcePath = path.join(this.projectRoot, filePath)
-    const destPath = path.join(this.projectRoot, 'src', filePath)
+    // Strip 'upstream/' prefix for destination path
+    const destRelativePath = filePath.replace(/^upstream\//, '')
+    const destPath = path.join(this.projectRoot, 'src', destRelativePath)
 
     if (!fs.existsSync(sourcePath)) {
       this.errors.push(`Source file not found: ${filePath}`)
@@ -306,14 +318,14 @@ class SyncAndCopier {
   private transformImports(content: string, destinationPath: string): string {
     let transformed = content
 
-    transformed = transformed.replace(/@core\/([^'"]*)/g, (match, corePath) => {
+    transformed = transformed.replace(/@core\/([^'"]*)/g, (_match, corePath) => {
       const destDir = path.dirname(destinationPath)
       const targetPath = path.join(this.projectRoot, 'src/core', corePath)
       const relativePath = path.relative(destDir, targetPath)
       return relativePath.startsWith('.') ? relativePath : './' + relativePath
     })
 
-    transformed = transformed.replace(/@lib\/([^'"]*)/g, (match, libPath) => {
+    transformed = transformed.replace(/@lib\/([^'"]*)/g, (_match, libPath) => {
       const destDir = path.dirname(destinationPath)
       const targetPath = path.join(this.projectRoot, 'src/lib', libPath)
       const relativePath = path.relative(destDir, targetPath)
@@ -395,6 +407,9 @@ const parseArgs = (): SyncAndCopyOptions => {
   if (args.includes('--lib-only')) {
     options.directories = ['lib']
   }
+  if (args.includes('--clients-only')) {
+    options.directories = ['clients']
+  }
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
 Sync and Copy Script
@@ -403,17 +418,19 @@ Usage:
   yarn sync-and-copy [options]
 
 Options:
-  --sync-only    Only sync from remote, skip copy to src/
-  --copy-only    Only copy to src/, skip remote sync
-  --core-only    Only process core/ directory
-  --lib-only     Only process lib/ directory
-  --help, -h     Show this help message
+  --sync-only      Only sync from remote, skip copy to src/
+  --copy-only      Only copy to src/, skip remote sync
+  --core-only      Only process core/ directory
+  --lib-only       Only process lib/ directory
+  --clients-only   Only process clients/extension (reference code only)
+  --help, -h       Show this help message
 
 Examples:
-  yarn sync-and-copy                  # Full workflow
+  yarn sync-and-copy                  # Full workflow (sync core, lib, clients/extension)
   yarn sync-and-copy --sync-only      # Only sync from remote
   yarn sync-and-copy --copy-only      # Only copy to src/
   yarn sync-and-copy --core-only      # Only process core/
+  yarn sync-and-copy --clients-only   # Only sync clients/extension reference
     `)
     process.exit(0)
   }

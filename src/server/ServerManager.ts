@@ -68,7 +68,9 @@ export class ServerManager {
     )
 
     const result = await getVaultFromServer({ vaultId, password })
-    return result as Vault
+
+    // NOTE: this is a little sketchy, not sure why we need to do this
+    return result as unknown as Vault
   }
 
   /**
@@ -675,7 +677,7 @@ export class ServerManager {
       return hashes
     }
     if (network === 'solana' || network === 'sol') {
-      // TODO addd tx prep here 
+      // TODO addd tx prep here
     }
     throw new Error(
       `Message hash computation not yet implemented for chain: ${payload.chain}`

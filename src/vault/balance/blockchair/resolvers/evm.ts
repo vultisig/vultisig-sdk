@@ -3,17 +3,18 @@
  * Uses Blockchair API for EVM chain balance queries
  */
 
-import { EvmChain } from '@core/chain/Chain'
-import { getErc20Balance } from '@core/chain/chains/evm/erc20/getErc20Balance'
-import { CoinBalanceResolver } from '@core/chain/coin/balance/resolver'
-import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { EvmChain } from '../../../../core/chain/Chain'
+import { getErc20Balance } from '../../../../core/chain/chains/evm/erc20/getErc20Balance'
+import { CoinBalanceResolver } from '../../../../core/chain/coin/balance/resolver'
+import { isFeeCoin } from '../../../../core/chain/coin/utils/isFeeCoin'
 
 import { BlockchairChain, blockchairClient } from '../index'
 
 /**
  * Map Vultisig EVM chain names to Blockchair chain names
+ * Only includes chains that Blockchair supports
  */
-const CHAIN_MAPPING: Record<EvmChain, BlockchairChain> = {
+const CHAIN_MAPPING: Partial<Record<EvmChain, BlockchairChain>> = {
   [EvmChain.Ethereum]: 'ethereum',
   [EvmChain.Base]: 'base',
   [EvmChain.Arbitrum]: 'arbitrum',
@@ -78,7 +79,7 @@ export const getBlockchairEvmCoinBalance: CoinBalanceResolver<
 
     // Fallback to original resolver for native tokens
     if (isFeeCoin(input)) {
-      const { getEvmClient } = await import('@core/chain/chains/evm/client')
+      const { getEvmClient } = await import('../../../../core/chain/chains/evm/client')
       const balance = await getEvmClient(chain).getBalance({
         address: input.address as `0x${string}`,
       })

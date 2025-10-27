@@ -146,7 +146,7 @@ export async function buildSolanaKeysignPayload(
  * Extract Solana-specific data from a keysign payload
  * Utility function for accessing Solana blockchain-specific fields
  */
-export function getSolanaSpecific(payload: KeysignPayload): SolanaSpecificSchema | null {
+export function getSolanaSpecific(payload: KeysignPayload): typeof SolanaSpecificSchema | null {
   if (
     payload.blockchainSpecific?.case === 'solanaSpecific' &&
     payload.blockchainSpecific.value
