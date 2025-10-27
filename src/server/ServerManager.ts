@@ -188,7 +188,7 @@ export class ServerManager {
     // Step 2.5: Start MPC session with devices list (CRITICAL MISSING STEP)
     console.log('📡 Starting MPC session with devices list...')
     const { startMpcSession } = await import(
-      '../core/ui/mpc/session/utils/startMpcSession'
+      '../core/mpc/session/startMpcSession'
     )
     await startMpcSession({
       serverUrl: this.config.messageRelay,
@@ -387,7 +387,7 @@ export class ServerManager {
       '../core/mpc/session/joinMpcSession'
     )
     const { startMpcSession } = await import(
-      '../core/ui/mpc/session/utils/startMpcSession'
+      '../core/mpc/session/startMpcSession'
     )
 
     // Generate session parameters using core MPC utilities

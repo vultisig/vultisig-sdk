@@ -5,6 +5,17 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
+"7z-wasm@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "7z-wasm@npm:1.2.0"
+  dependencies:
+    readline-sync: "npm:^1.4.10"
+  bin:
+    7z-wasm: bin/cli
+  checksum: 10c0/33d953fbf5ab859b86ec89f844a37b47ba0c92648efd09da1421e47a01e59dc5977ac51446abb724dfdc7744bac9a6c48678a3b5e47205a534cc53d71fef5e40
+  languageName: node
+  linkType: hard
+
 "@0no-co/graphql.web@npm:^1.0.5":
   version: 1.2.0
   resolution: "@0no-co/graphql.web@npm:1.2.0"
@@ -446,6 +457,31 @@ __metadata:
   version: 0.2.3
   resolution: "@bcoe/v8-coverage@npm:0.2.3"
   checksum: 10c0/6b80ae4cb3db53f486da2dc63b6e190a74c8c3cca16bb2733f234a0b6a9382b09b146488ae08e2b22cf00f6c83e20f3e040a2f7894f05c045c946d6a090b1d52
+  languageName: node
+  linkType: hard
+
+"@bigmi/core@npm:^0.6.0":
+  version: 0.6.0
+  resolution: "@bigmi/core@npm:0.6.0"
+  dependencies:
+    "@noble/hashes": "npm:^1.8.0"
+    bech32: "npm:^2.0.0"
+    bitcoinjs-lib: "npm:^7.0.0"
+    bs58: "npm:^6.0.0"
+    eventemitter3: "npm:^5.0.1"
+    zustand: "npm:^5.0.8"
+  peerDependencies:
+    bs58: ^6.0.0
+  checksum: 10c0/49c0747589c9837be4c4e2dfb8bdfa951f200be7a17fe6765fbcf17ac32d6582f7481bba322b05eb25a476668dcc2f1671679ad17f578a46f41d2f8aea942cef
+  languageName: node
+  linkType: hard
+
+"@bitcoinerlab/secp256k1@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "@bitcoinerlab/secp256k1@npm:1.2.0"
+  dependencies:
+    "@noble/curves": "npm:^1.7.0"
+  checksum: 10c0/ab5196e6052b60cbfee347434105dee59ecd93cb73473706252d35581b63dec2f4241b9e5ce7d5bbb062fb3fa9898a78660c886be8ae2d375480080c30a3a4b3
   languageName: node
   linkType: hard
 
@@ -1761,6 +1797,49 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@lifi/sdk@npm:^3.12.2":
+  version: 3.12.14
+  resolution: "@lifi/sdk@npm:3.12.14"
+  dependencies:
+    "@bigmi/core": "npm:^0.6.0"
+    "@bitcoinerlab/secp256k1": "npm:^1.2.0"
+    "@lifi/types": "npm:^17.41.0"
+    "@mysten/sui": "npm:^1.39.1"
+    "@mysten/wallet-standard": "npm:^0.18.1"
+    "@noble/curves": "npm:^1.9.7"
+    "@solana/wallet-adapter-base": "npm:^0.9.27"
+    "@solana/web3.js": "npm:^1.98.4"
+    bech32: "npm:^2.0.0"
+    bitcoinjs-lib: "npm:^7.0.0"
+    bs58: "npm:^6.0.0"
+    viem: "npm:^2.38.0"
+  peerDependencies:
+    "@solana/wallet-adapter-base": ^0.9.0
+    "@solana/web3.js": ^1.98.0
+    viem: ^2.21.0
+  checksum: 10c0/67edbc7a66401bb55b20b776d74874624aad37ebcafa3950ca551e60f9f17536a0a08de773d1b69c1680c7aef7c6af78c83d2fb9b8be086e7e596933408cc86c
+  languageName: node
+  linkType: hard
+
+"@lifi/types@npm:^17.41.0":
+  version: 17.44.1
+  resolution: "@lifi/types@npm:17.44.1"
+  dependencies:
+    viem: "npm:^2.33.2"
+  checksum: 10c0/bc35c0464788294b5b4cab1c5f44b798d4ebc757eeeeff2dd10dd170616622064d2d4062fe1f0402c21630112ee8348aa42763274ed1f167ac696f2d88113049
+  languageName: node
+  linkType: hard
+
+"@mysten/bcs@npm:1.8.0":
+  version: 1.8.0
+  resolution: "@mysten/bcs@npm:1.8.0"
+  dependencies:
+    "@mysten/utils": "npm:0.2.0"
+    "@scure/base": "npm:^1.2.6"
+  checksum: 10c0/0be5ce820acff75bfecf3fe7adcb74c335813df5b2bca46a24006f21d8a4b5211a4e4e3e8faa7fe5ef5dee3242581d2361a66c13ce8efd1932e280f7fa9e1d80
+  languageName: node
+  linkType: hard
+
 "@mysten/bcs@npm:1.9.1":
   version: 1.9.1
   resolution: "@mysten/bcs@npm:1.9.1"
@@ -1771,7 +1850,27 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mysten/sui@npm:^1.37.6":
+"@mysten/sui@npm:1.39.1":
+  version: 1.39.1
+  resolution: "@mysten/sui@npm:1.39.1"
+  dependencies:
+    "@graphql-typed-document-node/core": "npm:^3.2.0"
+    "@mysten/bcs": "npm:1.8.0"
+    "@mysten/utils": "npm:0.2.0"
+    "@noble/curves": "npm:^1.9.4"
+    "@noble/hashes": "npm:^1.8.0"
+    "@scure/base": "npm:^1.2.6"
+    "@scure/bip32": "npm:^1.7.0"
+    "@scure/bip39": "npm:^1.6.0"
+    gql.tada: "npm:^1.8.13"
+    graphql: "npm:^16.11.0"
+    poseidon-lite: "npm:0.2.1"
+    valibot: "npm:^0.36.0"
+  checksum: 10c0/036d94574509fc2095eaf9d09ce242f3cf855d4169cb5b74c541da36b23da544624bf0dadbf17384c6bd146d4c9dd0e26dd5738d2b5ab14d5c980b732c4349da
+  languageName: node
+  linkType: hard
+
+"@mysten/sui@npm:^1.37.6, @mysten/sui@npm:^1.39.1":
   version: 1.43.1
   resolution: "@mysten/sui@npm:1.43.1"
   dependencies:
@@ -1800,6 +1899,16 @@ __metadata:
   dependencies:
     "@scure/base": "npm:^1.2.6"
   checksum: 10c0/016b8dca513ba268f6d48137fad2298bea009e2ead3bdfed90350651a8c95ff2b9eb7141ee7176e28a57565033410de2fbc8004bcd9fafc8679e6b1a743328a9
+  languageName: node
+  linkType: hard
+
+"@mysten/wallet-standard@npm:^0.18.1":
+  version: 0.18.1
+  resolution: "@mysten/wallet-standard@npm:0.18.1"
+  dependencies:
+    "@mysten/sui": "npm:1.39.1"
+    "@wallet-standard/core": "npm:1.1.1"
+  checksum: 10c0/676399dfc72b126f8d139c183facd719b1c6a80a01ec80686e8e46116c27327eefcaf4077cd9ecf4c711efb98848d4498f104de8729480fd29273d578b008b39
   languageName: node
   linkType: hard
 
@@ -1859,7 +1968,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/curves@npm:^1.0.0, @noble/curves@npm:^1.3.0, @noble/curves@npm:^1.4.2, @noble/curves@npm:^1.9.2, @noble/curves@npm:~1.9.0":
+"@noble/curves@npm:^1.0.0, @noble/curves@npm:^1.3.0, @noble/curves@npm:^1.4.2, @noble/curves@npm:^1.7.0, @noble/curves@npm:^1.9.2, @noble/curves@npm:^1.9.4, @noble/curves@npm:^1.9.7, @noble/curves@npm:~1.9.0":
   version: 1.9.7
   resolution: "@noble/curves@npm:1.9.7"
   dependencies:
@@ -3658,7 +3767,31 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@solana/web3.js@npm:^1.32.0, @solana/web3.js@npm:^1.68.0":
+"@solana/wallet-adapter-base@npm:^0.9.27":
+  version: 0.9.27
+  resolution: "@solana/wallet-adapter-base@npm:0.9.27"
+  dependencies:
+    "@solana/wallet-standard-features": "npm:^1.3.0"
+    "@wallet-standard/base": "npm:^1.1.0"
+    "@wallet-standard/features": "npm:^1.1.0"
+    eventemitter3: "npm:^5.0.1"
+  peerDependencies:
+    "@solana/web3.js": ^1.98.0
+  checksum: 10c0/b9df73f96f068bafb6cd021f61ab839303093f144a9c73a4a4f7a8de929038207153bb15e4e7fefa703ba37938049adc01311a724a83214a1e30c9b58ce4590b
+  languageName: node
+  linkType: hard
+
+"@solana/wallet-standard-features@npm:^1.3.0":
+  version: 1.3.0
+  resolution: "@solana/wallet-standard-features@npm:1.3.0"
+  dependencies:
+    "@wallet-standard/base": "npm:^1.1.0"
+    "@wallet-standard/features": "npm:^1.1.0"
+  checksum: 10c0/a71f797d81103697eb2878ce301a493a95a057dd2b3daa92faeb7b53f3c5e0655f41de6ea5260571b34b1c819a74a42c72213ada714edb4fbd27c6cf85d4036d
+  languageName: node
+  linkType: hard
+
+"@solana/web3.js@npm:^1.32.0, @solana/web3.js@npm:^1.68.0, @solana/web3.js@npm:^1.98.4":
   version: 1.98.4
   resolution: "@solana/web3.js@npm:1.98.4"
   dependencies:
@@ -4496,9 +4629,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/sdk@workspace:src"
   dependencies:
+    7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.7.0"
     "@coral-xyz/anchor": "npm:^0.28.0"
     "@cosmjs/stargate": "npm:^0.36.0"
+    "@lifi/sdk": "npm:^3.12.2"
     "@mysten/sui": "npm:^1.37.6"
     "@noble/hashes": "npm:^2.0.0"
     "@polkadot/api": "npm:^16.4.6"
@@ -4516,6 +4651,7 @@ __metadata:
     bitcoinjs-lib: "npm:^6.1.7"
     bs58: "npm:^6.0.0"
     cbor-x: "npm:^1.6.0"
+    date-fns: "npm:^4.1.0"
     ethers: "npm:^6.13.5"
     node-fetch: "npm:^3.3.2"
     rollup: "npm:^4.32.1"
@@ -4539,6 +4675,65 @@ __metadata:
       optional: true
   languageName: unknown
   linkType: soft
+
+"@wallet-standard/app@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@wallet-standard/app@npm:1.1.0"
+  dependencies:
+    "@wallet-standard/base": "npm:^1.1.0"
+  checksum: 10c0/04650f92d512493f4556cbf48e49626745a0fe55633b03a96d99698e415d5e66114733ba3cff25867b9f89ef607f5755b0ad964a914e8b43f94df508be6998d0
+  languageName: node
+  linkType: hard
+
+"@wallet-standard/base@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@wallet-standard/base@npm:1.1.0"
+  checksum: 10c0/4cae344d5a74ba4b7d063b649b191f2267bd11ea9573ebb9e78874163c03b58e3ec531bb296d0a8d7941bc09231761d97afb4c6ca8c0dc399c81d39884b4e408
+  languageName: node
+  linkType: hard
+
+"@wallet-standard/core@npm:1.1.1":
+  version: 1.1.1
+  resolution: "@wallet-standard/core@npm:1.1.1"
+  dependencies:
+    "@wallet-standard/app": "npm:^1.1.0"
+    "@wallet-standard/base": "npm:^1.1.0"
+    "@wallet-standard/errors": "npm:^0.1.1"
+    "@wallet-standard/features": "npm:^1.1.0"
+    "@wallet-standard/wallet": "npm:^1.1.0"
+  checksum: 10c0/fb0398869de6858df1ce0e1abe4f9fb59c52f98eae5a493d908c5b961a59d4ce94b2fe937e4395408ab1dbd3de921710d7441addc5ce14366c4747fc77286cf8
+  languageName: node
+  linkType: hard
+
+"@wallet-standard/errors@npm:^0.1.1":
+  version: 0.1.1
+  resolution: "@wallet-standard/errors@npm:0.1.1"
+  dependencies:
+    chalk: "npm:^5.4.1"
+    commander: "npm:^13.1.0"
+  bin:
+    errors: bin/cli.mjs
+  checksum: 10c0/03b7519b92c6058f1c1c20dee46ba5d35b890ed66b56708d18b9c94fc1b746384c270a49097d3b705e2272903234509133dd6aa1680a524d6c410c5e4ca95f83
+  languageName: node
+  linkType: hard
+
+"@wallet-standard/features@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@wallet-standard/features@npm:1.1.0"
+  dependencies:
+    "@wallet-standard/base": "npm:^1.1.0"
+  checksum: 10c0/9df265b02c0ed7a19da6410e8379baba701f51486324b0eefb0f79f988cc7114dc3b8c97dc1250f76bb546706d242413d99e45c4fc55f67778850366e885d047
+  languageName: node
+  linkType: hard
+
+"@wallet-standard/wallet@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "@wallet-standard/wallet@npm:1.1.0"
+  dependencies:
+    "@wallet-standard/base": "npm:^1.1.0"
+  checksum: 10c0/aa53460568f209d4e38030ee5e98d4f6ea6fec159a1e7fb5a3ee81cf8d91c89f0be86b7188dbf0bb9803d10608bf88bd824f73cd6800823279738827304038e5
+  languageName: node
+  linkType: hard
 
 "@xrplf/isomorphic@npm:^1.0.0, @xrplf/isomorphic@npm:^1.0.1":
   version: 1.0.1
@@ -5137,6 +5332,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"bip174@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "bip174@npm:3.0.0"
+  dependencies:
+    uint8array-tools: "npm:^0.0.9"
+    varuint-bitcoin: "npm:^2.0.0"
+  checksum: 10c0/5a335518712770f3b43ec87d950ebec5e0215e5705086cf752f2ea6e03e3c3542900a861224b4c571946e3abf77350e6d0ce43978a9741f1e128259861382937
+  languageName: node
+  linkType: hard
+
 "bip32@npm:^5.0.0-rc.0":
   version: 5.0.0
   resolution: "bip32@npm:5.0.0"
@@ -5161,6 +5366,21 @@ __metadata:
     typeforce: "npm:^1.11.3"
     varuint-bitcoin: "npm:^1.1.2"
   checksum: 10c0/1ce7415cc967bfc5ea7cba0032e73eaba8e3dd7683dffcc90c020d0dba92de6cf1dc92359733c9efa186a4c3ae9547cc379fa4b4a7fb106c0b126c226dec2a40
+  languageName: node
+  linkType: hard
+
+"bitcoinjs-lib@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "bitcoinjs-lib@npm:7.0.0"
+  dependencies:
+    "@noble/hashes": "npm:^1.2.0"
+    bech32: "npm:^2.0.0"
+    bip174: "npm:^3.0.0"
+    bs58check: "npm:^4.0.0"
+    uint8array-tools: "npm:^0.0.9"
+    valibot: "npm:^0.38.0"
+    varuint-bitcoin: "npm:^2.0.0"
+  checksum: 10c0/c4ce9a451b7335a3e5303078e923f84176a6cb6e6265d98c43d30a39d9b64952c4c15f544aa81311245f0d7668cb4da09f4f75e9dfa4cdffe6bdadee9986b51e
   languageName: node
   linkType: hard
 
@@ -6000,6 +6220,13 @@ __metadata:
     es-errors: "npm:^1.3.0"
     is-data-view: "npm:^1.0.1"
   checksum: 10c0/fa7aa40078025b7810dcffc16df02c480573b7b53ef1205aa6a61533011005c1890e5ba17018c692ce7c900212b547262d33279fde801ad9843edc0863bf78c4
+  languageName: node
+  linkType: hard
+
+"date-fns@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "date-fns@npm:4.1.0"
+  checksum: 10c0/b79ff32830e6b7faa009590af6ae0fb8c3fd9ffad46d930548fbb5acf473773b4712ae887e156ba91a7b3dc30591ce0f517d69fd83bd9c38650fdc03b4e0bac8
   languageName: node
   linkType: hard
 
@@ -10519,6 +10746,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"readline-sync@npm:^1.4.10":
+  version: 1.4.10
+  resolution: "readline-sync@npm:1.4.10"
+  checksum: 10c0/0a4d0fe4ad501f8f005a3c9cbf3cc0ae6ca2ced93e9a1c7c46f226bdfcb6ef5d3f437ae7e9d2e1098ee13524a3739c830e4c8dbc7f543a693eecd293e41093a3
+  languageName: node
+  linkType: hard
+
 "readonly-date@npm:^1.0.0":
   version: 1.0.0
   resolution: "readonly-date@npm:1.0.0"
@@ -12013,6 +12247,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"uint8array-tools@npm:^0.0.9":
+  version: 0.0.9
+  resolution: "uint8array-tools@npm:0.0.9"
+  checksum: 10c0/1f3692aa60f87b84ebd3254bea2024ee9b8c1dc226ac906a879190298c736b3c942a7a12d20996d179d3918a65d4613fc2494837e8959329ac0747e12a18f90c
+  languageName: node
+  linkType: hard
+
 "unbox-primitive@npm:^1.1.0":
   version: 1.1.0
   resolution: "unbox-primitive@npm:1.1.0"
@@ -12270,6 +12511,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"valibot@npm:^0.38.0":
+  version: 0.38.0
+  resolution: "valibot@npm:0.38.0"
+  peerDependencies:
+    typescript: ">=5"
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 10c0/dd61a2299879fa644e6192ec5c67fd036b27c023b77146369ca2d720368f096ca6c9a8711f2e4b7cbac1716df5fe0e2d3eeee5028f233f87de04c08b93e98d81
+  languageName: node
+  linkType: hard
+
 "validate-npm-package-name@npm:^6.0.0":
   version: 6.0.2
   resolution: "validate-npm-package-name@npm:6.0.2"
@@ -12286,7 +12539,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"viem@npm:^2.37.4":
+"varuint-bitcoin@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "varuint-bitcoin@npm:2.0.0"
+  dependencies:
+    uint8array-tools: "npm:^0.0.8"
+  checksum: 10c0/63048ddcf85ef728ec610d234a1de010ce81204751d7d1a54eca9f140a86c30bb187cd4871ee042ce9e656d76ee50093a7370c56114ae6716297ef32de4a8b26
+  languageName: node
+  linkType: hard
+
+"viem@npm:^2.33.2, viem@npm:^2.37.4, viem@npm:^2.38.0":
   version: 2.38.4
   resolution: "viem@npm:2.38.4"
   dependencies:
@@ -12955,5 +13217,26 @@ __metadata:
   version: 4.1.12
   resolution: "zod@npm:4.1.12"
   checksum: 10c0/b64c1feb19e99d77075261eaf613e0b2be4dfcd3551eff65ad8b4f2a079b61e379854d066f7d447491fcf193f45babd8095551a9d47973d30b46b6d8e2c46774
+  languageName: node
+  linkType: hard
+
+"zustand@npm:^5.0.8":
+  version: 5.0.8
+  resolution: "zustand@npm:5.0.8"
+  peerDependencies:
+    "@types/react": ">=18.0.0"
+    immer: ">=9.0.6"
+    react: ">=18.0.0"
+    use-sync-external-store: ">=1.2.0"
+  peerDependenciesMeta:
+    "@types/react":
+      optional: true
+    immer:
+      optional: true
+    react:
+      optional: true
+    use-sync-external-store:
+      optional: true
+  checksum: 10c0/e865a6f7f1c0e03571701db5904151aaa7acefd6f85541a117085e129bf16e8f60b11f8cc82f277472de5c7ad5dcb201e1b0a89035ea0b40c9d9aab3cd24c8ad
   languageName: node
   linkType: hard
