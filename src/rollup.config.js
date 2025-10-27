@@ -43,7 +43,7 @@ const plugins = [
   typescript({
     tsconfig: './tsconfig.json',
     outputToFilesystem: true,
-    exclude: ['**/*.test.*', '**/*.stories.*'],
+    exclude: ['**/*.test.*', '**/*.stories.*', '**/chains/solana/**'],
     // Include minimal SDK-specific core and lib files
     include: ['./**/*'],
     // Ensure proper module resolution for SDK-specific packages
