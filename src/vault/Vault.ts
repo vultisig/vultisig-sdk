@@ -840,13 +840,20 @@ export class Vault {
 
   /**
    * Sign Solana transaction with appropriate mode
-   * Parses the transaction and builds keysign payload before signing
+   * TEMPORARILY DISABLED - Solana library issues need to be resolved
+   * TODO: Re-enable once @solana/web3.js v2 migration is complete
    */
   private async signSolana(
-    mode: SigningMode,
-    payload: SigningPayload,
-    password?: string
+    _mode: SigningMode,
+    _payload: SigningPayload,
+    _password?: string
   ): Promise<Signature> {
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      'Solana signing temporarily disabled - library issues under maintenance'
+    )
+
+    /* COMMENTED OUT UNTIL SOLANA LIBRARY ISSUES ARE FIXED
     console.log('Signing Solana transaction with mode:', mode)
 
     // Validate we have WalletCore for transaction decoding
@@ -918,6 +925,7 @@ export class Vault {
         error as Error
       )
     }
+    */
   }
 
   /**
@@ -948,11 +956,17 @@ export class Vault {
 
   /**
    * Sign Solana transaction using VultiServer (fast mode)
+   * TEMPORARILY DISABLED - Solana library issues need to be resolved
    */
   private async signSolanaFast(
-    keysignPayload: any,
-    password?: string
+    _keysignPayload: any,
+    _password?: string
   ): Promise<Signature> {
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      'Solana fast signing temporarily disabled - library issues under maintenance'
+    )
+    /* COMMENTED OUT UNTIL SOLANA LIBRARY ISSUES ARE FIXED
     // Get SDK instance to access server manager
     if (!this._sdkInstance) {
       throw new VaultError(
@@ -998,25 +1012,28 @@ export class Vault {
         error as Error
       )
     }
+    */
   }
 
   /**
    * Sign Solana transaction using relay network (multi-device mode)
+   * TEMPORARILY DISABLED - Solana library issues need to be resolved
    */
-  private async signSolanaRelay(keysignPayload: any): Promise<Signature> {
+  private async signSolanaRelay(_keysignPayload: any): Promise<Signature> {
     throw new VaultError(
       VaultErrorCode.NotImplemented,
-      'Solana relay signing not implemented yet'
+      'Solana relay signing temporarily disabled - library issues under maintenance'
     )
   }
 
   /**
    * Sign Solana transaction using local P2P (multi-device mode)
+   * TEMPORARILY DISABLED - Solana library issues need to be resolved
    */
-  private async signSolanaLocal(keysignPayload: any): Promise<Signature> {
+  private async signSolanaLocal(_keysignPayload: any): Promise<Signature> {
     throw new VaultError(
       VaultErrorCode.NotImplemented,
-      'Solana local signing not implemented yet'
+      'Solana local signing temporarily disabled - library issues under maintenance'
     )
   }
 

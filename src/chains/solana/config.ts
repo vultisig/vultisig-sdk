@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js'
+import { address, type Address } from '@solana/web3.js'
 
 /**
  * Solana program IDs for transaction parsing
@@ -9,7 +9,7 @@ import { PublicKey } from '@solana/web3.js'
  * Jupiter V6 Program ID
  * Used for identifying Jupiter swap transactions
  */
-export const JUPITER_V6_PROGRAM_ID = new PublicKey(
+export const JUPITER_V6_PROGRAM_ID: Address = address(
   'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4'
 )
 
@@ -17,7 +17,7 @@ export const JUPITER_V6_PROGRAM_ID = new PublicKey(
  * Raydium AMM Routing Program ID
  * Used for identifying Raydium swap transactions
  */
-export const RAYDIUM_AMM_PROGRAM_ID = new PublicKey(
+export const RAYDIUM_AMM_PROGRAM_ID: Address = address(
   'routeUGWgWzqBWFcrCfv8tritsqukccJPu3q5GPP3xS'
 )
 
