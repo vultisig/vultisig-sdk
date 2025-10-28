@@ -5,15 +5,18 @@
   "workspaces": [
     "clients/cli",
     "examples/*",
-    "src"
+    "packages/sdk"
   ],
   "scripts": {
-    "lint": "eslint 'src/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}'",
-    "lint:fix": "eslint 'src/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}' --fix",
-    "build:sdk": "yarn workspace vultisig-sdk build",
+    "lint": "eslint 'packages/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}'",
+    "lint:fix": "eslint 'packages/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}' --fix",
+    "build:sdk": "yarn workspace @vultisig/sdk build",
     "sync-packages": "syncpack fix-mismatches",
     "typecheck": "tsc --noEmit",
-    "test": "vitest --run",
+    "test": "yarn workspace @vultisig/sdk test",
+    "test:unit": "yarn workspace @vultisig/sdk test:unit",
+    "test:integration": "yarn workspace @vultisig/sdk test:integration",
+    "test:watch": "yarn workspace @vultisig/sdk test:watch",
     "knip": "knip",
     "check:all": "yarn lint && yarn typecheck && yarn test && yarn knip",
     "knip:fix": "knip --fix --allow-remove-files",
