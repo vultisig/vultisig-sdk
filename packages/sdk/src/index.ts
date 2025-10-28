@@ -48,6 +48,66 @@ export {
   SOLANA_PROGRAM_IDS,
 } from './chains/solana'
 
+// EVM chain utilities
+export {
+  // Transaction parsers
+  parseEvmTransaction,
+  parseErc20TransferFrom,
+  getFunctionSelector,
+  Erc20Parser,
+  UniswapParser,
+  OneInchParser,
+  NftParser,
+  // Keysign utilities
+  buildEvmKeysignPayload,
+  getEvmSpecific,
+  updateEvmSpecific,
+  // Gas utilities
+  estimateTransactionGas,
+  calculateMaxGasCost,
+  calculateExpectedGasCost,
+  compareGasEstimates,
+  formatGasPrice,
+  parseGasPrice,
+  weiToGwei,
+  gweiToWei,
+  weiToEth,
+  ethToWei,
+  compareGasPrices,
+  calculateGasPriceChange,
+  formatGasPriceAuto,
+  getGasPriceCategory,
+  // Token utilities
+  getTokenBalance,
+  getTokenAllowance,
+  formatTokenAmount,
+  parseTokenAmount,
+  isAllowanceSufficient,
+  calculateAllowanceShortfall,
+  formatTokenWithSymbol,
+  compareAmounts,
+  getTokenMetadata,
+  buildToken,
+  getNativeToken,
+  batchGetTokenMetadata,
+  isValidTokenAddress,
+  normalizeTokenAddress,
+  // Configuration
+  EVM_CHAIN_IDS,
+  NATIVE_TOKEN_ADDRESS,
+  COMMON_TOKENS,
+  DEX_ROUTERS,
+  ERC20_SELECTORS,
+  ERC721_SELECTORS,
+  ERC1155_SELECTORS,
+  ERC20_ABI,
+  getChainId,
+  getChainFromId,
+  isNativeToken,
+  isEvmChain,
+  getCommonToken,
+} from './chains/evm'
+
 // Server communication
 export * from './server'
 
@@ -96,6 +156,24 @@ export type {
   SolanaKeysignOptions,
   SolanaSignature
 } from './types'
+
+// EVM types
+export type {
+  EvmToken,
+  EvmTransactionType,
+  EvmProtocol,
+  DecodedContractCall,
+  EvmTransferParams,
+  EvmSwapParams,
+  EvmNftParams,
+  EvmApproveParams,
+  ParsedEvmTransaction,
+  EvmTransactionInput,
+  EvmKeysignOptions,
+  EvmSignature,
+  EvmGasEstimate,
+  FormattedGasPrice
+} from './chains/evm'
 
 // WASM utilities
 export * from './wasm'
