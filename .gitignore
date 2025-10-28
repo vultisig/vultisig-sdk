@@ -126,3 +126,6 @@ storybook-static
 # Development planning files
 plans/
 archived/
+
+# Synced reference code (fetched fresh from vultisig-windows)
+upstream/

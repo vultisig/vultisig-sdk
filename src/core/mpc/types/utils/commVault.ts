@@ -1,7 +1,7 @@
 import { create } from '@bufbuild/protobuf'
 import { Timestamp, TimestampSchema } from '@bufbuild/protobuf/wkt'
 import { signingAlgorithms } from '../../../chain/signing/SignatureAlgorithm'
-import { Vault } from '../../../ui/vault/Vault'
+import { Vault } from '../../vault/Vault'
 import { shouldBePresent } from '../../../../lib/utils/assert/shouldBePresent'
 import { pick } from '../../../../lib/utils/record/pick'
 import { recordFromKeys } from '../../../../lib/utils/record/recordFromKeys'

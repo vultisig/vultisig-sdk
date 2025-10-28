@@ -1,7 +1,7 @@
 import { Chain } from '../core/chain/Chain'
 import { deriveAddress as coreDerive } from '../core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '../core/chain/publicKey/getPublicKey'
-import { Vault } from '../core/ui/vault/Vault'
+import { Vault } from '../core/mpc/vault/Vault'
 
 export class AddressDeriver {
   private walletCore: any = null

@@ -14,21 +14,13 @@ import * as path from 'path'
 const REPO_URL = 'https://github.com/vultisig/vultisig-windows.git'
 const TEMP_DIR = '/tmp/vultisig-windows-sync'
 
-const foldersToCoopy = [
+const foldersToCopy = [
   'upstream/core/chain',
   'upstream/core/mpc',
   'upstream/core/config',
   'upstream/lib/utils',
   'upstream/lib/dkls',
   'upstream/lib/schnorr',
-]
-
-const individualFiles = [
-  'upstream/core/ui/vault/Vault.ts',
-  'upstream/core/ui/vault/import/utils/vaultContainerFromString.ts',
-  'upstream/core/ui/security/password/config.ts',
-  'upstream/core/ui/mpc/session/utils/startMpcSession.ts',
-  'upstream/lib/ui/utils/initiateFileDownload.ts',
 ]
 
 type SyncAndCopyOptions = {
@@ -107,8 +99,6 @@ class SyncAndCopier {
   private async syncDirectory(dirName: string): Promise<void> {
     console.log(`\n🔄 Syncing ${dirName}/ directory...`)
 
-    this.backupDirectory(dirName)
-
     if (fs.existsSync(TEMP_DIR)) {
       fs.rmSync(TEMP_DIR, { recursive: true, force: true })
     }
@@ -154,22 +144,6 @@ class SyncAndCopier {
     }
   }
 
-  private backupDirectory(dirName: string): void {
-    const dirPath = path.join(this.projectRoot, 'upstream', dirName)
-    if (fs.existsSync(dirPath)) {
-      const timestamp = new Date()
-        .toISOString()
-        .replace(/[:.]/g, '-')
-        .split('T')[0]
-      const backupName = `archived/upstream-${dirName}-backup-${timestamp}-${Date.now()}`
-      const backupPath = path.join(this.projectRoot, backupName)
-
-      console.log(`   📦 Backing up existing ${dirName}/ to ${backupName}/`)
-      fs.mkdirSync(path.dirname(backupPath), { recursive: true })
-      this.copyDirectoryRecursive(dirPath, backupPath)
-    }
-  }
-
   private copyDirectoryRecursive(src: string, dest: string): void {
     fs.mkdirSync(dest, { recursive: true })
 
@@ -208,18 +182,12 @@ class SyncAndCopier {
   private async copyToSrc(): Promise<void> {
     console.log('\n📋 STEP 2: Copy to src/ with import transformations')
     console.log('='.repeat(50))
-    console.log(
-      `📊 Copy plan: ${foldersToCoopy.length} folders + ${individualFiles.length} files\n`
-    )
+    console.log(`📊 Copy plan: ${foldersToCopy.length} folders\n`)
 
     await this.cleanSrcDirectories()
 
-    for (const folder of foldersToCoopy) {
+    for (const folder of foldersToCopy) {
       await this.copyFolder(folder)
-    }
-
-    for (const file of individualFiles) {
-      await this.copyFile(file)
     }
 
     this.generateCopyReport()
@@ -287,31 +255,6 @@ class SyncAndCopier {
         const transformedContent = this.transformImports(content, destPath)
         fs.writeFileSync(destPath, transformedContent)
       }
-    }
-  }
-
-  private async copyFile(filePath: string): Promise<void> {
-    const sourcePath = path.join(this.projectRoot, filePath)
-    // Strip 'upstream/' prefix for destination path
-    const destRelativePath = filePath.replace(/^upstream\//, '')
-    const destPath = path.join(this.projectRoot, 'src', destRelativePath)
-
-    if (!fs.existsSync(sourcePath)) {
-      this.errors.push(`Source file not found: ${filePath}`)
-      return
-    }
-
-    try {
-      fs.mkdirSync(path.dirname(destPath), { recursive: true })
-
-      const content = fs.readFileSync(sourcePath, 'utf-8')
-      const transformedContent = this.transformImports(content, destPath)
-      fs.writeFileSync(destPath, transformedContent)
-
-      this.copied.push(filePath)
-      console.log(`✅ ${filePath}`)
-    } catch (error) {
-      this.errors.push(`Failed to copy file ${filePath}: ${error}`)
     }
   }
 
