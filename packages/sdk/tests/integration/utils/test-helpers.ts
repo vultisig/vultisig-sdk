@@ -146,7 +146,7 @@ export function isValidAddress(address: string, chain: Chain): boolean {
       return /^0x[a-fA-F0-9]{40}$/.test(address);
 
     case 'Bitcoin':
-    case 'BitcoinCash':
+    case 'Bitcoin-Cash':
     case 'Litecoin':
     case 'Dogecoin':
       // UTXO addresses vary, basic length check
@@ -174,7 +174,7 @@ export function getChainDecimals(chain: Chain): number {
     case 'Base':
       return 18;
     case 'Bitcoin':
-    case 'BitcoinCash':
+    case 'Bitcoin-Cash':
     case 'Litecoin':
     case 'Dogecoin':
       return 8;

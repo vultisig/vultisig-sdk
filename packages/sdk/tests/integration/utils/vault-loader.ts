@@ -1,7 +1,7 @@
 import * as crypto from 'crypto'
 import * as fs from 'fs'
 import * as path from 'path'
-import { Vultisig } from '../../../packages/sdk/VultisigSDK'
+import { Vultisig } from '../../../src/VultisigSDK'
 import type { Vault } from '../../../src/vault/Vault'
 
 const VAULT_FILE_PATH = path.join(
@@ -114,8 +114,11 @@ export async function getTestVault(password: string): Promise<Vault> {
   // Parse vault data (assuming it's exported vault JSON)
   const vaultBlob = new Blob([vaultData], { type: 'application/json' })
 
+  // Convert Blob to File (required by SDK)
+  const vaultFile = new File([vaultBlob], 'test-vault.vult', { type: 'application/json' })
+
   // Add vault to SDK
-  const vault = await sdk.addVault(vaultBlob, password)
+  const vault = await sdk.addVault(vaultFile, password)
 
   return vault
 }
@@ -142,22 +145,22 @@ export async function createTestVault(
 
   // Create a fast vault
   console.log('Creating fast vault (requires email verification)...')
-  const vault = await sdk.createFastVault({
+  const result = await sdk.createFastVault({
     name: vaultName,
     email: 'test@example.com', // You'll need to verify this email
     password: password,
   })
 
   console.log('Vault created successfully!')
-  console.log('Vault ID:', vault.id)
+  console.log('Vault ID:', result.vaultId)
   console.log('Please fund the following addresses:')
 
   // Show addresses for key chains
-  const solAddress = await vault.address('Solana')
+  const solAddress = await result.vault.address('Solana')
   console.log('Solana:', solAddress)
 
   // Export vault
-  const exported = await vault.export(password)
+  const exported = await result.vault.export(password)
   const vaultData = await exported.text()
 
   // Encrypt and save
