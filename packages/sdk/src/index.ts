@@ -34,19 +34,19 @@ export * from './mpc'
 // Chain operations
 export { ChainManager, AddressDeriver } from './chains'
 
-// Solana chain utilities - TEMPORARILY DISABLED
-// export {
-//   parseSolanaTransaction,
-//   resolveAddressTableKeys,
-//   buildSolanaKeysignPayload,
-//   getSolanaSpecific,
-//   updateSolanaSpecific,
-//   JupiterInstructionParser,
-//   RaydiumInstructionParser,
-//   JUPITER_V6_PROGRAM_ID,
-//   RAYDIUM_AMM_PROGRAM_ID,
-//   SOLANA_PROGRAM_IDS,
-// } from './chains/solana'
+// Solana chain utilities
+export {
+  parseSolanaTransaction,
+  resolveAddressTableKeys,
+  buildSolanaKeysignPayload,
+  getSolanaSpecific,
+  updateSolanaSpecific,
+  JupiterInstructionParser,
+  RaydiumInstructionParser,
+  JUPITER_V6_PROGRAM_ID,
+  RAYDIUM_AMM_PROGRAM_ID,
+  SOLANA_PROGRAM_IDS,
+} from './chains/solana'
 
 // Server communication
 export * from './server'
@@ -87,14 +87,14 @@ export type {
   Value,
   GasInfo,
   GasEstimate,
-  // SolanaToken,
-  // PartialInstruction,
-  // AddressTableLookup,
-  // ParsedSolanaTransaction,
-  // ParsedSolanaSwapParams,
-  // SolanaTransactionInput,
-  // SolanaKeysignOptions,
-  // SolanaSignature
+  SolanaToken,
+  PartialInstruction,
+  AddressTableLookup,
+  ParsedSolanaTransaction,
+  ParsedSolanaSwapParams,
+  SolanaTransactionInput,
+  SolanaKeysignOptions,
+  SolanaSignature
 } from './types'
 
 // WASM utilities
