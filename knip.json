@@ -1,6 +1,6 @@
 {
   "ignore": [
-    "core/mpc/types/**",
+    "packages/core/mpc/types/**",
     "clients/desktop/wailsjs/**"
   ],
   "ignoreBinaries": [
