@@ -54,9 +54,10 @@ export const getBlockchairSolanaCoinBalance: CoinBalanceResolver =
       // Fallback to original Solana client for native tokens
       if (isFeeCoin(input)) {
         const { getSolanaClient } = await import('@core/chain/chains/solana/client')
-        const client = await getSolanaClient()
-        const balance = await client.getBalance(new (await import('@solana/web3.js')).PublicKey(input.address))
-        return BigInt(balance)
+        const { address } = await import('@solana/web3.js')
+        const client = getSolanaClient()
+        const balance = await client.getBalance(address(input.address)).send()
+        return BigInt(balance.value)
       }
 
       // For tokens, re-throw the error
