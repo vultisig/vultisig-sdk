@@ -1,8 +1,8 @@
-import { NATIVE_MINT, TOKEN_PROGRAM_ID, getAccount } from '@solana/spl-token'
-import { Connection, PublicKey, SystemProgram } from '@solana/web3.js'
+import { NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token'
+import { address, type Address } from '@solana/web3.js'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 
-import { solanaRpcUrl } from '@core/chain/chains/solana/client'
+import { getSolanaClient } from '@core/chain/chains/solana/client'
 import { JUPITER_V6_PROGRAM_ID, RAYDIUM_AMM_PROGRAM_ID } from '../config'
 import {
   AddressTableLookup,
@@ -19,7 +19,8 @@ const createNativeSolToken = (): SolanaToken => ({
   name: 'Solana',
   symbol: 'SOL',
   decimals: 9,
-  logoURI: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+  logoURI:
+    'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
 })
 
 /**
@@ -30,38 +31,61 @@ const readU32LE = (buf: Buffer, offset = 0): number => buf.readUInt32LE(offset)
 /**
  * Read an unsigned 64-bit little-endian integer from a Buffer
  */
-const readU64LE = (buf: Buffer, offset = 0): number => Number(buf.readBigUInt64LE(offset))
+const readU64LE = (buf: Buffer, offset = 0): number =>
+  Number(buf.readBigUInt64LE(offset))
 
 /**
  * Resolve Address Lookup Table keys for v0 transactions
  * Fetches the actual addresses from on-chain lookup tables
+ *
+ * TODO: Currently disabled - waiting for core getSolanaClient() to be updated
+ *
+ * In web3.js 2.0, the RPC client uses a modular approach. The default client
+ * Rpc<SolanaRpcApiForTestClusters> doesn't include all methods like getAddressLookupTable.
+ *
+ * To fix: Update core/chain/chains/solana/client.ts to explicitly type the client:
+ *   export const getSolanaClient = memoize(() => {
+ *     return createSolanaRpc<SolanaRpcApi>(solanaRpcUrl)
+ *   })
+ *
+ * This will include the full API. Once core is updated, uncomment the implementation below.
  */
 export async function resolveAddressTableKeys(
   lookups: AddressTableLookup[]
-): Promise<PublicKey[]> {
-  const allResolvedKeys: PublicKey[] = []
-  const connection = new Connection(solanaRpcUrl)
+): Promise<Address[]> {
+  // Temporarily return empty array until core is updated to use full SolanaRpcApi
+  // This means v0 transactions with address lookup tables won't parse correctly
+  console.warn('Address lookup table resolution temporarily disabled - waiting for core to use full SolanaRpcApi')
+  return []
+
+  /* TODO: Uncomment once core getSolanaClient() returns Rpc<SolanaRpcApi>
+  const allResolvedKeys: Address[] = [];
+  const rpc = getSolanaClient();
 
   for (const lookup of lookups) {
     try {
-      const res = await connection.getAddressLookupTable(
-        new PublicKey(lookup.accountKey)
-      )
-      if (!res.value) continue
+      const res = await rpc.getAddressLookupTable(address(lookup.accountKey)).send();
 
-      const table = res.value.state.addresses
+      const lookupTableAccount = res.value;
+      if (!lookupTableAccount) {
+        continue;
+      }
+
+      const table = lookupTableAccount.addresses;
+
       // v0 ordering: for each lookup, first all writable, then all readonly
       allResolvedKeys.push(
-        ...lookup.writableIndexes.map(idx => table[idx]),
-        ...lookup.readonlyIndexes.map(idx => table[idx])
-      )
+        ...lookup.writableIndexes.map((idx) => table[idx]),
+        ...lookup.readonlyIndexes.map((idx) => table[idx])
+      );
     } catch (error) {
-      console.warn(`Failed to resolve address table ${lookup.accountKey}:`, error)
-      continue
+      console.warn(`Failed to resolve address table ${lookup.accountKey}:`, error);
+      continue;
     }
   }
 
-  return allResolvedKeys
+  return allResolvedKeys;
+  */
 }
 
 /**
@@ -89,7 +113,7 @@ async function buildToken(mint: string): Promise<SolanaToken> {
  */
 async function parseJupiterSwap(
   instructions: PartialInstruction[],
-  staticKeys: PublicKey[],
+  staticKeys: Address[],
   lookups: AddressTableLookup[]
 ): Promise<ParsedSolanaTransaction> {
   // Dynamic import to avoid circular dependencies
@@ -116,7 +140,7 @@ async function parseJupiterSwap(
  */
 async function parseRaydiumSwap(
   instructions: PartialInstruction[],
-  staticKeys: PublicKey[],
+  staticKeys: Address[],
   lookups: AddressTableLookup[]
 ): Promise<ParsedSolanaTransaction> {
   // Dynamic import to avoid circular dependencies
@@ -142,13 +166,13 @@ async function parseRaydiumSwap(
  */
 async function parseSPLTokenTransfer(
   instructions: PartialInstruction[],
-  allKeyStrings: string[]
+  allKeyStrings: Address[]
 ): Promise<ParsedSolanaTransaction | null> {
-  const connection = new Connection(solanaRpcUrl)
+  const rpc = getSolanaClient()
 
   for (const instruction of instructions) {
     const programIdKey = allKeyStrings[instruction.programId]
-    if (programIdKey !== TOKEN_PROGRAM_ID.toBase58()) continue
+    if (programIdKey !== TOKEN_PROGRAM_ID) continue
 
     // Common SPL Transfer layout: u8 opcode=12; next 8 bytes = amount (LE)
     const raw = Buffer.from(instruction.programData)
@@ -163,11 +187,17 @@ async function parseSPLTokenTransfer(
     const receiverATA = allKeyStrings[receiverATAIndex]
 
     try {
-      const tokenAccountInfo = await getAccount(
-        connection,
-        new PublicKey(receiverATA)
-      )
-      const receiverAuthority = tokenAccountInfo.owner.toBase58()
+      // Get token account info using v2.0 API
+      const accountInfo = await rpc
+        .getAccountInfo(address(receiverATA), {
+          encoding: 'jsonParsed',
+        })
+        .send()
+
+      if (!accountInfo.value) continue
+
+      const parsed = (accountInfo.value.data as any).parsed
+      const receiverAuthority = parsed?.info?.owner ?? ''
       const inAmount = isTransfer ? readU64LE(raw, 1) : 0
 
       return {
@@ -186,16 +216,19 @@ async function parseSPLTokenTransfer(
   return null
 }
 
+// System Program ID constant for v2.0
+const SYSTEM_PROGRAM_ID = address('11111111111111111111111111111111')
+
 /**
  * Parse a native SOL transfer transaction
  */
 function parseNativeSOLTransfer(
   instructions: PartialInstruction[],
-  allKeyStrings: string[]
+  allKeyStrings: Address[]
 ): ParsedSolanaTransaction | null {
   for (const instruction of instructions) {
     const programIdKey = allKeyStrings[instruction.programId]
-    if (programIdKey !== SystemProgram.programId.toBase58()) continue
+    if (programIdKey !== SYSTEM_PROGRAM_ID) continue
 
     const data = Buffer.from(instruction.programData)
     const opcode = readU32LE(data, 0)
@@ -208,7 +241,8 @@ function parseNativeSOLTransfer(
       // - Transfer: [fromIndex, toIndex]
       // - TransferWithSeed: [fromDerivedIndex, baseIndex, toIndex, baseOwnerIndex]
       const fromIndex = instruction.accounts[0]
-      const toIndex = opcode === 2 ? instruction.accounts[1] : instruction.accounts[2]
+      const toIndex =
+        opcode === 2 ? instruction.accounts[1] : instruction.accounts[2]
 
       const from = allKeyStrings[fromIndex]
       const to = allKeyStrings[toIndex]
@@ -261,7 +295,7 @@ export async function parseSolanaTransaction(
   const tx = decodedTx.transaction.v0
 
   // Build complete keyspace for v0 transactions
-  const staticKeys = (tx.accountKeys ?? []).map(k => new PublicKey(k))
+  const staticKeys = (tx.accountKeys ?? []) as Address[]
   const loadedKeys =
     tx.addressTableLookups && tx.addressTableLookups.length > 0
       ? await resolveAddressTableKeys(
@@ -271,13 +305,13 @@ export async function parseSolanaTransaction(
 
   // Complete keyspace: static first, then loaded
   const allKeys = [...staticKeys, ...loadedKeys]
-  const allKeyStrings = allKeys.map(k => k.toBase58())
+  const allKeyStrings = allKeys // Already strings in v2.0
   const instructions = tx.instructions as PartialInstruction[]
 
   // Detect transaction type and parse accordingly
 
   // 1) Jupiter swap
-  if (allKeys.some(k => k.equals(JUPITER_V6_PROGRAM_ID))) {
+  if (allKeys.some(k => k === JUPITER_V6_PROGRAM_ID)) {
     return await parseJupiterSwap(
       instructions,
       staticKeys,
@@ -286,7 +320,7 @@ export async function parseSolanaTransaction(
   }
 
   // 2) Raydium swap
-  if (allKeys.some(k => k.equals(RAYDIUM_AMM_PROGRAM_ID))) {
+  if (allKeys.some(k => k === RAYDIUM_AMM_PROGRAM_ID)) {
     return await parseRaydiumSwap(
       instructions,
       staticKeys,
@@ -295,13 +329,13 @@ export async function parseSolanaTransaction(
   }
 
   // 3) SPL Token transfer
-  if (allKeyStrings.includes(TOKEN_PROGRAM_ID.toBase58())) {
+  if (allKeyStrings.some(k => k === TOKEN_PROGRAM_ID)) {
     const result = await parseSPLTokenTransfer(instructions, allKeyStrings)
     if (result) return result
   }
 
   // 4) Native SOL transfer
-  if (allKeyStrings.includes(SystemProgram.programId.toBase58())) {
+  if (allKeyStrings.some(k => k === SYSTEM_PROGRAM_ID)) {
     const result = parseNativeSOLTransfer(instructions, allKeyStrings)
     if (result) return result
   }

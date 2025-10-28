@@ -1,9 +1,9 @@
 import { BorshCoder } from '@coral-xyz/anchor'
 import { NATIVE_MINT } from '@solana/spl-token'
-import { Connection, PublicKey } from '@solana/web3.js'
+import { address, type Address } from '@solana/web3.js'
 import base58 from 'bs58'
 
-import { solanaRpcUrl } from '@core/chain/chains/solana/client'
+import { getSolanaClient } from '@core/chain/chains/solana/client'
 import { AddressTableLookup, ParsedSolanaSwapParams, PartialInstruction } from '../types'
 import { resolveAddressTableKeys } from './transaction'
 import { IDL } from '../idl/jupiter'
@@ -14,9 +14,9 @@ import { IDL } from '../idl/jupiter'
  */
 export class JupiterInstructionParser {
   private coder: BorshCoder
-  private programId: PublicKey
+  private programId: Address
 
-  constructor(programId: PublicKey) {
+  constructor(programId: Address) {
     this.programId = programId
     this.coder = new BorshCoder(IDL)
   }
@@ -31,7 +31,7 @@ export class JupiterInstructionParser {
    */
   async getInstructionParsedData(
     instructions: PartialInstruction[],
-    accountKeys: PublicKey[],
+    accountKeys: Address[],
     lookups: AddressTableLookup[]
   ): Promise<ParsedSolanaSwapParams> {
     try {
@@ -42,7 +42,7 @@ export class JupiterInstructionParser {
       // Find Jupiter instruction
       for (const instruction of instructions) {
         const programIdKey = allAccountKeys[instruction.programId]
-        if (!programIdKey || !programIdKey.equals(this.programId)) continue
+        if (!programIdKey || programIdKey !== this.programId) continue
 
         // Decode instruction using Borsh coder
         const programDataBuffer = new Uint8Array(
@@ -112,7 +112,7 @@ export class JupiterInstructionParser {
   private getAccountFromIndex(
     instructionDef: any,
     instruction: PartialInstruction,
-    accountKeys: PublicKey[],
+    accountKeys: Address[],
     accountName: string
   ): string {
     const accountIndex = instructionDef.accounts.findIndex(
@@ -124,7 +124,7 @@ export class JupiterInstructionParser {
     }
 
     const actualIndex = instruction.accounts[accountIndex]
-    return accountKeys[actualIndex]?.toString() ?? ''
+    return accountKeys[actualIndex] ?? ''
   }
 
   /**
@@ -134,7 +134,7 @@ export class JupiterInstructionParser {
   private async resolveInputMint(
     instructionDef: any,
     instruction: PartialInstruction,
-    accountKeys: PublicKey[],
+    accountKeys: Address[],
     authority: string
   ): Promise<string> {
     // Try to find source account in instruction
@@ -149,20 +149,22 @@ export class JupiterInstructionParser {
       return NATIVE_MINT.toString()
     }
 
-    const accountPubkey = accountKeys[instruction.accounts[sourceAccountIndex]]
-    if (!accountPubkey) {
+    const accountAddress = accountKeys[instruction.accounts[sourceAccountIndex]]
+    if (!accountAddress) {
       return NATIVE_MINT.toString()
     }
 
     // If the source account is the authority itself, it's native SOL
-    if (accountPubkey.toString() === authority) {
+    if (accountAddress === authority) {
       return NATIVE_MINT.toString()
     }
 
     // Fetch account info to get the mint
     try {
-      const connection = new Connection(solanaRpcUrl)
-      const accountInfo = await connection.getParsedAccountInfo(accountPubkey)
+      const rpc = getSolanaClient()
+      const accountInfo = await rpc.getAccountInfo(address(accountAddress), {
+        encoding: 'jsonParsed'
+      }).send()
 
       if (!accountInfo.value) {
         return NATIVE_MINT.toString()
@@ -194,9 +196,9 @@ export class JupiterInstructionParser {
   /**
    * Return default swap params when parsing fails
    */
-  private getDefaultSwapParams(accountKeys: PublicKey[]): ParsedSolanaSwapParams {
+  private getDefaultSwapParams(accountKeys: Address[]): ParsedSolanaSwapParams {
     return {
-      authority: accountKeys[0]?.toString() ?? '',
+      authority: accountKeys[0] ?? '',
       inputMint: NATIVE_MINT.toString(),
       outputMint: NATIVE_MINT.toString(),
       inAmount: 0,

@@ -1,7 +1,7 @@
 import { NATIVE_MINT } from '@solana/spl-token'
-import { Connection, PublicKey } from '@solana/web3.js'
+import { address, type Address } from '@solana/web3.js'
 
-import { solanaRpcUrl } from '@core/chain/chains/solana/client'
+import { getSolanaClient } from '@core/chain/chains/solana/client'
 import { AddressTableLookup, ParsedSolanaSwapParams, PartialInstruction } from '../types'
 import { resolveAddressTableKeys } from './transaction'
 
@@ -10,12 +10,10 @@ import { resolveAddressTableKeys } from './transaction'
  * Extracts swap parameters from Raydium routing instructions
  */
 export class RaydiumInstructionParser {
-  private programId: PublicKey
-  private connection: Connection
+  private programId: Address
 
-  constructor(programId: PublicKey) {
+  constructor(programId: Address) {
     this.programId = programId
-    this.connection = new Connection(solanaRpcUrl)
   }
 
   /**
@@ -28,7 +26,7 @@ export class RaydiumInstructionParser {
    */
   async getInstructionParsedData(
     instructions: PartialInstruction[],
-    accountKeys: PublicKey[],
+    accountKeys: Address[],
     lookups: AddressTableLookup[]
   ): Promise<ParsedSolanaSwapParams> {
     try {
@@ -39,7 +37,7 @@ export class RaydiumInstructionParser {
       // Find Raydium routing instruction
       for (const instruction of instructions) {
         const programIdKey = allAccountKeys[instruction.programId]
-        if (!programIdKey || !programIdKey.equals(this.programId)) continue
+        if (!programIdKey || programIdKey !== this.programId) continue
 
         // Check if this is a routing instruction (opcode 0)
         if (!this.isRoutingInstruction(instruction.programData)) continue
@@ -68,7 +66,7 @@ export class RaydiumInstructionParser {
         // u8 opcode (0 for routing)
         // u64 input amount (bytes 1-8)
         // u64 minimum output amount (bytes 9-16)
-        const authority = allAccountKeys[0]?.toString() ?? ''
+        const authority = allAccountKeys[0] ?? ''
         const inAmount = Number(buffer.readBigUInt64LE(1))
         const outAmount = Number(buffer.readBigUInt64LE(9))
 
@@ -101,16 +99,20 @@ export class RaydiumInstructionParser {
    * Requires on-chain lookup to get the account's mint
    */
   private async getMintFromAccount(
-    accountKeys: PublicKey[],
+    accountKeys: Address[],
     accountIndex: number
   ): Promise<string> {
-    const pubkey = accountKeys[accountIndex]
-    if (!pubkey) {
+    const accountAddress = accountKeys[accountIndex]
+    if (!accountAddress) {
       return NATIVE_MINT.toString()
     }
 
     try {
-      const accountInfo = await this.connection.getParsedAccountInfo(pubkey)
+      const rpc = getSolanaClient()
+      const accountInfo = await rpc.getAccountInfo(address(accountAddress), {
+        encoding: 'jsonParsed'
+      }).send()
+
       if (!accountInfo.value) {
         return NATIVE_MINT.toString()
       }
@@ -127,9 +129,9 @@ export class RaydiumInstructionParser {
   /**
    * Return default swap params when parsing fails
    */
-  private getDefaultSwapParams(accountKeys: PublicKey[]): ParsedSolanaSwapParams {
+  private getDefaultSwapParams(accountKeys: Address[]): ParsedSolanaSwapParams {
     return {
-      authority: accountKeys[0]?.toString() ?? '',
+      authority: accountKeys[0] ?? '',
       inputMint: NATIVE_MINT.toString(),
       outputMint: NATIVE_MINT.toString(),
       inAmount: 0,
