@@ -8,7 +8,7 @@ VultisigSDK is a clean, vault-centric architecture with two primary classes:
 - **`Vault`** - Individual vault instance
 - **`.vult`** - Vault file format (Protocol Buffers with optional AES-256-GCM encryption)
 
-### Minimal Integration Example
+### Integration Example
 
 ```typescript
 // 1. Import and create Vultisig instance
@@ -29,43 +29,16 @@ await vault.verifyEmail('1234')
 const ethAddress = await vault.address('ethereum')
 const ethBalance = await vault.balance('ethereum')          // Native ETH balance
 
-// 4. Sign transaction with progress updates
+// 4. Sign transaction with VultiServer (instant signing)
 const signature = await vault.sign({
   transaction: { to: '0x...', value: '1000000000000000000' },
   chain: 'ethereum',
   onProgress: (step) => {
-    console.log(`${step.mode} signing: ${step.progress}% - ${step.message}`)
+    console.log(`Signing: ${step.progress}% - ${step.message}`)
   }
 })
 
 console.log('Transaction signed:', signature.txHash)
-```
-
-### Secure Vault Example
-
-```typescript
-// 1. Create secure vault with multi-device setup (automatically sets as active)
-const vault = await vultisig.createVault('My Secure Vault', {
-  type: 'secure',
-  keygenMode: 'local',
-  onProgress: (step) => {
-    console.log(`${step.step}: ${step.progress}% - ${step.message}`)
-  }
-})
-
-// 2. Get address/balance for transaction
-const btcAddress = await vault.address('bitcoin')
-const btcBalance = await vault.balance('bitcoin')        // Native BTC balance
-
-// 3. Multi-device signing with threshold
-const signature = await vault.sign({
-  transaction: { to: 'bc1q...', value: '50000' },
-  chain: 'bitcoin',
-  signingMode: 'relay',
-  onProgress: (step) => {
-    console.log(`${step.mode} signing: ${step.progress}% - ${step.message}`)
-  }
-})
 ```
 
 # Architecture
@@ -154,8 +127,7 @@ interface VultisigConfig {
   
   // Server endpoints
   serverEndpoints?: {
-    messageRelay?: string                   // Message relay server URL
-    vultiServer?: string                    // Main Vulti server URL
+    vultiServer?: string                    // VultiServer URL
   }
   
   // Performance configuration
@@ -187,16 +159,13 @@ interface VultisigConfig {
 }
 
 interface CreateVaultOptions {
-  type?: VaultType                          // Vault type (default: 'fast')
-  keygenMode?: KeygenMode                   // Keygen mode for secure vaults only (default: 'relay')
   password?: string                         // Vault encryption password
-  email?: string                           // Email for fast vault verification
+  email?: string                           // Email for vault verification
   onProgress?: (step: VaultCreationStep) => void  // Progress callback
 }
 
 interface ServerStatus {
-  vultiServer: 'online' | 'offline'        // Fast vault server status
-  messageRelay: 'online' | 'offline'       // Message relay server status
+  vultiServer: 'online' | 'offline'        // VultiServer status
   lastChecked: number                       // Timestamp of last status check
 }
 
@@ -219,10 +188,6 @@ interface VaultSummary {
   createdAt: number                        // Timestamp added to storage
   lastModified: number                     // Last modification timestamp
   size: number                             // Estimated size in bytes
-  type: VaultType                          // Vault security type (derived from signers/threshold)
-  threshold: number                        // Minimum signers required
-  totalSigners: number                     // Total participants
-  vaultIndex: number                       // Which vault share this device owns
 }
 
 interface VaultCreationStep {
@@ -236,9 +201,6 @@ interface SigningStep {
   step: 'preparing' | 'coordinating' | 'signing' | 'broadcasting' | 'complete'
   progress: number                          // Progress percentage (0-100)
   message: string                          // Human readable status message
-  mode: SigningMode                        // Current signing mode being used
-  participantCount?: number                // Number of participants (for relay/local modes)
-  participantsReady?: number               // Number of participants ready to sign
 }
 
 interface AddressBookEntry {
@@ -321,11 +283,6 @@ class Vault {
 ### Vault Interfaces
 
 ```typescript
-type VaultType = 'fast' | 'secure'
-type KeygenMode = 'relay' | 'local'
-type SigningMode = 'fast' | 'relay' | 'local'
-
-
 interface VaultSigner {
   id: string                    // Signer identifier
   publicKey: string            // Signer's public key
@@ -343,11 +300,7 @@ interface Summary {
   createdAt: number                   // Timestamp added to storage
   lastModified: number                // Last modification timestamp
   size: number                        // Estimated size in bytes
-  type: VaultType                     // Vault security type (derived from signers/threshold)
-  threshold: number                   // Minimum signers required
-  totalSigners: number                // Total participants
-  vaultIndex: number                  // Which vault share this device owns
-  signers: VaultSigner[]              // All participant details
+  signers: VaultSigner[]              // All participant details (user + VultiServer)
   isBackedUp(): boolean               // Check if vault has been backed up
   keys: {                             // Public keys (from .vult file)
     ecdsa: string                     // ECDSA public key
@@ -372,7 +325,6 @@ interface Balance {
 interface SigningPayload {
   transaction: any            // Transaction data
   chain: string              // Chain identifier
-  signingMode?: SigningMode   // Signing mode (defaults to vault type)
   onProgress?: (step: SigningStep) => void  // Progress callback
 }
 
@@ -546,26 +498,19 @@ npx tsx scripts/inspect_keyshare.ts vault.vult mypassword123
 ```
 
 
-## Vault Modes
+## Vault Architecture
 
-### **Vault Types:**
-- **Fast**: 2-of-2 threshold with VultiServer (default)
-- **Secure**: Multi-signature with user devices only
+All vaults use a **2-of-2 threshold signature scheme** with VultiServer:
+- **User Device**: Holds one key share
+- **VultiServer**: Holds the second key share
+- **Both required**: Transactions require signatures from both parties
 
-### **Secure Vault Keygen:**
-- **Relay**: Key generation via relay network (default)
-- **Local**: Direct P2P key generation
-
-## Signing Modes
-
-### **Fast**: VultiServer co-signing (instant)
-### **Relay**: Multi-device signing via relay network  
-### **Local**: Direct P2P device signing
-
-### **Defaults:**
-- **Fast vault** → **Fast signing**
-- **Secure vault** → **Relay signing**
-- Override by specifying `signingMode` in transaction payload
+### Signing Process
+All transaction signing is performed via VultiServer:
+1. User initiates transaction
+2. SDK coordinates with VultiServer
+3. Both parties sign (2-of-2 threshold)
+4. Transaction is broadcast
 
 
 ## Chain Management Hierarchy
