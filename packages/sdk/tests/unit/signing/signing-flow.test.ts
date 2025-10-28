@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
-import { Vultisig } from '../../src/VultisigSDK'
-import { getVaultFromServer } from '../../src/server'
-import type { SigningPayload } from '../../src/types'
+import { Vultisig } from '../../../src/VultisigSDK'
+import { getVaultFromServer } from '../../../src/server'
+import type { SigningPayload } from '../../../src/types'
 
 /**
  * Signing Flow Tests
@@ -407,10 +407,10 @@ describe('Signing Flow Tests', () => {
 
       // Import server functions
       const { signWithServer } = await import(
-        '../../core/mpc/fast/api/signWithServer'
+        '@core/mpc/fast/api/signWithServer'
       )
       const { joinMpcSession } = await import(
-        '../../core/mpc/session/joinMpcSession'
+        '@core/mpc/session/joinMpcSession'
       )
 
       // Test Step 1: Call FastVault server API
