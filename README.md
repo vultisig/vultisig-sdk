@@ -4,14 +4,14 @@ A TypeScript SDK for multi-party computation (MPC) wallet operations, providing 
 
 ## Overview
 
-VultisigSDK enables developers to integrate MPC wallet functionality into their applications. The SDK supports both "Fast Vault" (server-assisted) and "Secure Vault" (fully decentralized) creation modes, with comprehensive blockchain support including Bitcoin, Ethereum, Cosmos, and many others.
+VultisigSDK enables developers to integrate MPC wallet functionality into their applications. The SDK uses server-assisted Fast Vault creation with comprehensive blockchain support including Bitcoin, Ethereum, Cosmos, and many others.
 
 ## Features
 
-- **Multi-Party Computation**: Secure key generation and signing using DKLS and Schnorr protocols
+- **Multi-Party Computation**: Secure 2-of-2 threshold key generation and signing with VultiServer
 - **Address Derivation**: Generate blockchain addresses using WalletCore WASM
 - **Vault Management**: Create, import, export, and manage encrypted vaults
-- **Fast Vault Creation**: Server-assisted vault creation with email verification
+- **Server-Assisted Signing**: Fast, secure transaction signing via VultiServer
 - **Cross-Chain Support**: Bitcoin, Ethereum, Cosmos, Solana, and 40+ blockchains
 - **TypeScript**: Full type safety and IntelliSense support
 
@@ -32,8 +32,8 @@ import { VultisigSDK } from 'vultisig-sdk'
 const sdk = new VultisigSDK()
 await sdk.initialize()
 
-// Create a Fast Vault (server-assisted)
-const result = await sdk.createFastVault({
+// Create a vault
+const result = await sdk.createVault({
   name: 'My Wallet',
   email: 'user@example.com',
   password: 'secure-password'
@@ -119,10 +119,22 @@ yarn workspace @vultisig/sdk test
 ```
 
 
+### Syncing from vultisig-windows
+
+The SDK syncs core functionality from the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository. To update to the latest upstream code:
+
+```bash
+# Fetch latest code from vultisig-windows and copy to src/
+yarn sync-and-copy
+```
+
+This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisig-windows, transforms imports from package paths to relative paths, and copies selected files to `src/`. See [SUBTREE-SYNC.md](SUBTREE-SYNC.md) for details.
+
 ### Available Scripts
 
 - `yarn workspace @vultisig/sdk build` - Build the SDK with all workspace dependencies
 - `yarn workspace @vultisig/sdk test` - Run SDK tests
+- `yarn sync-and-copy` - Sync latest code from vultisig-windows
 - `yarn build:prod` - Build and serve the React example app
 - `yarn lint` - Run ESLint across all packages
 - `yarn typecheck` - Run TypeScript type checking
