@@ -29,11 +29,15 @@ export async function estimateTransactionGas(
 ): Promise<EvmGasEstimate> {
   // Call core's fee quote resolver
   const feeQuote = await getEvmFeeQuote({
-    chain,
-    from: transaction.from as `0x${string}`,
-    to: transaction.to as `0x${string}`,
-    data: (transaction.data as `0x${string}`) || '0x',
-    value: transaction.value || 0n,
+    coin: {
+      chain,
+      address: transaction.from,
+      decimals: 18,
+      ticker: 'ETH',
+    },
+    amount: transaction.value || 0n,
+    receiver: transaction.to,
+    data: transaction.data || '0x',
   })
 
   // Calculate max fee per gas (baseFee * 1.5 + priorityFee)

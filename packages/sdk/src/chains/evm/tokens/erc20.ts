@@ -50,9 +50,9 @@ export async function getTokenAllowance(
 ): Promise<bigint> {
   return getErc20Allowance({
     chain,
-    address: tokenAddress as `0x${string}`,
-    owner: owner as `0x${string}`,
-    spender: spender as `0x${string}`,
+    id: tokenAddress,
+    address: owner,
+    spender,
   })
 }
 

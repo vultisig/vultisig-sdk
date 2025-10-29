@@ -8,7 +8,7 @@
  */
 
 import { TW, WalletCore } from '@trustwallet/wallet-core'
-import { decodeRlp, toBeHex, getBytes } from 'ethers'
+import { decodeRlp, toBeHex, getBytes, RlpStructuredData } from 'ethers'
 
 import type {
   ParsedEvmTransaction,
@@ -17,9 +17,26 @@ import type {
 } from '../types'
 import { ERC20_SELECTORS, ERC721_SELECTORS, ERC1155_SELECTORS } from '../config'
 
-// Helper function for ethers compatibility
-function toHex(value: any): string {
-  return toBeHex(value)
+// Helper functions for RLP data conversion
+function rlpToHex(data: RlpStructuredData): string {
+  if (Array.isArray(data)) {
+    throw new Error('Expected primitive value in RLP data, got array')
+  }
+  return toBeHex(data)
+}
+
+function rlpToBigInt(data: RlpStructuredData): bigint {
+  if (Array.isArray(data)) {
+    throw new Error('Expected primitive value in RLP data, got array')
+  }
+  return BigInt(data)
+}
+
+function rlpToNumber(data: RlpStructuredData): number {
+  if (Array.isArray(data)) {
+    throw new Error('Expected primitive value in RLP data, got array')
+  }
+  return Number(data)
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -149,14 +166,14 @@ function decodeTransaction(txBytes: Uint8Array): {
     // EIP-1559 transaction
     // [chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gasLimit, to, value, data, accessList, signatureYParity, signatureR, signatureS]
     return {
-      chainId: Number(decoded[0]),
-      nonce: Number(decoded[1]),
-      maxPriorityFeePerGas: BigInt(decoded[2]),
-      maxFeePerGas: BigInt(decoded[3]),
-      gasLimit: BigInt(decoded[4]),
-      to: toHex(decoded[5]),
-      value: BigInt(decoded[6]),
-      data: toHex(decoded[7]),
+      chainId: rlpToNumber(decoded[0]),
+      nonce: rlpToNumber(decoded[1]),
+      maxPriorityFeePerGas: rlpToBigInt(decoded[2]),
+      maxFeePerGas: rlpToBigInt(decoded[3]),
+      gasLimit: rlpToBigInt(decoded[4]),
+      to: rlpToHex(decoded[5]),
+      value: rlpToBigInt(decoded[6]),
+      data: rlpToHex(decoded[7]),
       accessList: parseAccessList(decoded[8]),
       from: '', // Will be recovered from signature if needed
     }
@@ -164,28 +181,28 @@ function decodeTransaction(txBytes: Uint8Array): {
     // EIP-2930 transaction
     // [chainId, nonce, gasPrice, gasLimit, to, value, data, accessList, signatureYParity, signatureR, signatureS]
     return {
-      chainId: Number(decoded[0]),
-      nonce: Number(decoded[1]),
-      gasPrice: BigInt(decoded[2]),
-      gasLimit: BigInt(decoded[3]),
-      to: toHex(decoded[4]),
-      value: BigInt(decoded[5]),
-      data: toHex(decoded[6]),
+      chainId: rlpToNumber(decoded[0]),
+      nonce: rlpToNumber(decoded[1]),
+      gasPrice: rlpToBigInt(decoded[2]),
+      gasLimit: rlpToBigInt(decoded[3]),
+      to: rlpToHex(decoded[4]),
+      value: rlpToBigInt(decoded[5]),
+      data: rlpToHex(decoded[6]),
       accessList: parseAccessList(decoded[7]),
       from: '', // Will be recovered from signature if needed
     }
   } else {
     // Legacy transaction
     // [nonce, gasPrice, gasLimit, to, value, data, v, r, s]
-    const chainId = decoded[6] ? Number(decoded[6]) : 1 // Extract from v if present
+    const chainId = decoded[6] ? rlpToNumber(decoded[6]) : 1 // Extract from v if present
     return {
       chainId,
-      nonce: Number(decoded[0]),
-      gasPrice: BigInt(decoded[1]),
-      gasLimit: BigInt(decoded[2]),
-      to: toHex(decoded[3]),
-      value: BigInt(decoded[4]),
-      data: toHex(decoded[5]),
+      nonce: rlpToNumber(decoded[0]),
+      gasPrice: rlpToBigInt(decoded[1]),
+      gasLimit: rlpToBigInt(decoded[2]),
+      to: rlpToHex(decoded[3]),
+      value: rlpToBigInt(decoded[4]),
+      data: rlpToHex(decoded[5]),
       from: '', // Will be recovered from signature if needed
     }
   }
@@ -202,8 +219,8 @@ function parseAccessList(
   }
 
   return accessListRaw.map((item) => ({
-    address: toHex(item[0]),
-    storageKeys: item[1].map((key: any) => toHex(key)),
+    address: rlpToHex(item[0]),
+    storageKeys: item[1].map((key: any) => rlpToHex(key)),
   }))
 }
 
