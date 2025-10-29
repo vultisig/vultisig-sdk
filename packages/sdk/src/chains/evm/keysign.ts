@@ -106,7 +106,7 @@ export async function buildEvmKeysignPayload(
 
   // Build Ethereum-specific blockchain data
   const ethereumSpecific = create(EthereumSpecificSchema, {
-    nonce: BigInt(parsedTransaction.nonce).toString(),
+    nonce: BigInt(parsedTransaction.nonce),
     maxFeePerGasWei: parsedTransaction.maxFeePerGas?.toString() || '0',
     priorityFee: parsedTransaction.maxPriorityFeePerGas?.toString() || '0',
     gasLimit: parsedTransaction.gasLimit.toString(),
@@ -206,12 +206,12 @@ export async function buildEvmKeysignPayload(
  */
 export function getEvmSpecific(
   payload: KeysignPayload
-): ReturnType<typeof EthereumSpecificSchema.create> | null {
+) {
   if (
     payload.blockchainSpecific?.case === 'ethereumSpecific' &&
     payload.blockchainSpecific.value
   ) {
-    return payload.blockchainSpecific.value as any
+    return payload.blockchainSpecific.value
   }
   return null
 }
@@ -227,7 +227,7 @@ export function getEvmSpecific(
 export function updateEvmSpecific(
   payload: KeysignPayload,
   updates: Partial<{
-    nonce: string
+    nonce: string | bigint
     maxFeePerGasWei: string
     priorityFee: string
     gasLimit: string
@@ -238,13 +238,21 @@ export function updateEvmSpecific(
     throw new Error('Payload does not contain Ethereum-specific data')
   }
 
+  // Convert nonce to bigint if it's provided as a string
+  const processedUpdates = {
+    ...updates,
+    ...(updates.nonce !== undefined && {
+      nonce: typeof updates.nonce === 'string' ? BigInt(updates.nonce) : updates.nonce,
+    }),
+  }
+
   return create(KeysignPayloadSchema, {
     ...payload,
     blockchainSpecific: {
       case: 'ethereumSpecific',
       value: create(EthereumSpecificSchema, {
         ...current,
-        ...updates,
+        ...processedUpdates,
       }),
     },
   })

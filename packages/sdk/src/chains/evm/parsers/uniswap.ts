@@ -277,15 +277,7 @@ export class UniswapParser {
     inputAmount: bigint
     minOutputAmount: bigint
   } {
-    if ('path' in swap && Array.isArray(swap.path)) {
-      // V2 swap
-      return {
-        inputToken: swap.path[0],
-        outputToken: swap.path[swap.path.length - 1],
-        inputAmount: swap.amountIn,
-        minOutputAmount: swap.amountOutMin,
-      }
-    } else if ('tokenIn' in swap) {
+    if ('tokenIn' in swap) {
       // V3 exactInputSingle
       return {
         inputToken: swap.tokenIn,
@@ -293,9 +285,19 @@ export class UniswapParser {
         inputAmount: swap.amountIn,
         minOutputAmount: swap.amountOutMinimum,
       }
-    } else {
-      // V3 exactInput
-      throw new Error('V3 exactInput path decoding not yet fully implemented')
     }
+
+    if ('amountOutMin' in swap) {
+      // V2 swap (has amountOutMin property)
+      return {
+        inputToken: swap.path[0],
+        outputToken: swap.path[swap.path.length - 1],
+        inputAmount: swap.amountIn,
+        minOutputAmount: swap.amountOutMin,
+      }
+    }
+
+    // V3 exactInput (has amountOutMinimum and path is string)
+    throw new Error('V3 exactInput path decoding not yet fully implemented')
   }
 }
