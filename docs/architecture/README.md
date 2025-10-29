@@ -97,6 +97,30 @@ This directory contains comprehensive documentation for the proposed Vultisig SD
 
 ---
 
+### 5. [Server Operations Architecture](./SERVER_OPERATIONS_ARCHITECTURE.md) 🆕
+
+**Purpose:** Deep dive into ServerManager and fast vault operations
+
+**Contents:**
+- ServerManager current implementation and responsibilities
+- Fast Vault architecture (2-of-2 threshold signing with VultiServer)
+- Current implementation analysis with code examples
+- Architectural issues (mixed concerns, over-exposure, tight coupling)
+- Detailed refactoring proposal with benefits
+- Integration with service layer and strategy pattern
+- Comprehensive testing strategy
+- Migration path (v2.x → v3.0)
+
+**Read this if you want to:**
+- Understand how fast vaults work
+- Learn about ServerManager architecture
+- See how server operations integrate with the refactoring
+- Understand the 2-of-2 threshold signing flow
+- Implement ServerManager refactoring (Phase 6)
+- Write tests for server operations
+
+---
+
 ## 🎯 Quick Start
 
 ### For Team Review
@@ -149,6 +173,16 @@ This directory contains comprehensive documentation for the proposed Vultisig SD
 - **Performance Gain:** 5-10x faster (Blockchair integration)
 - **Architectural Quality:** High (clear patterns, testable, maintainable)
 
+### ServerManager Refactoring Metrics
+- **Lines Reduced:** 240 lines → 100 lines (server coordination only)
+- **Chain Logic Extracted:** 85 lines moved to ChainStrategy implementations
+- **Methods Removed:** `computeMessageHashesFromTransaction()` (moved to strategies)
+- **Methods Refactored:** `signWithServer()` → `coordinateFastSigning()`
+- **Export Status:** Public → Internal (removed from index.ts)
+- **Public Methods Removed:** `Vultisig.getServerManager()` (no longer exposed)
+- **New Services:** FastSigningService (orchestrates fast signing)
+- **Separation of Concerns:** ✅ Server coordination separate from chain logic
+
 ---
 
 ## 🎨 Architecture Summary
@@ -192,20 +226,34 @@ Easy to refactor, test, and extend
 │   SERVICE LAYER (New)              │  ← AddressService
 │   - Coordinates operations          │  ← BalanceService
 │   - Chain-agnostic                  │  ← SigningService
-└──────────────┬──────────────────────┘
+│                                      │  ← FastSigningService (NEW)
+└──────────┬──────────────┬───────────┘
+           │              │
+           │              └──────────────┐
+           │                             │
+┌──────────▼──────────────────────┐  ┌──▼────────────────────┐
+│   STRATEGY PATTERN (New)       │  │  SERVER OPERATIONS    │
+│   - Chain-specific logic         │  │  (Internal)           │
+│   - EvmStrategy, SolanaStrategy │  │  - ServerManager      │
+│   - BitcoinStrategy              │  │  - Fast vault support │
+│   - computePreSigningHashes      │  │  - MPC coordination   │
+│   - formatSignatureResult        │  │  - 2-of-2 threshold   │
+└──────────────┬──────────────────┘  └───────────────────────┘
                │
-┌──────────────▼──────────────────────┐
-│   STRATEGY PATTERN (New)           │  ← ChainStrategyFactory
-│   - Chain-specific logic            │  ← EvmStrategy, SolanaStrategy
-│   - Polymorphic behavior            │  ← (add more strategies)
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│   IMPLEMENTATIONS (Exists)         │  ← chains/evm/* (internal)
-│   - Chain utilities                 │  ← chains/solana/* (internal)
-│   - Blockchair integration          │  ← vault/balance/blockchair/
-└─────────────────────────────────────┘
+┌──────────────▼──────────────────┐
+│   IMPLEMENTATIONS (Exists)     │  ← chains/evm/* (internal)
+│   - Chain utilities              │  ← chains/solana/* (internal)
+│   - Blockchair integration       │  ← vault/balance/blockchair/
+└─────────────────────────────────┘
 ```
+
+**Key Integration Points:**
+- **FastSigningService** bridges SigningService and ServerManager
+- **ServerManager** remains internal (not exported from index.ts)
+- **ChainStrategy** provides chain-specific logic to FastSigningService
+  - `computePreSigningHashes()` - Compute message hashes before signing
+  - `formatSignatureResult()` - Format MPC results for broadcast
+- Users access via `vault.sign('fast', payload)` not ServerManager directly
 
 ---
 
