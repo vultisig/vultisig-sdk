@@ -174,6 +174,32 @@ export interface ChainStrategy {
    * Optional - not all chains support gas estimation
    */
   estimateGas?(tx: any): Promise<GasEstimate>
+
+  /**
+   * Compute pre-signing hashes for MPC signing (Fast Vault support)
+   * Used by FastSigningService to prepare message hashes before server coordination
+   * @param payload Signing payload containing transaction data
+   * @param vault Vault data with keys and configuration
+   * @param walletCore WalletCore instance for cryptographic operations
+   * @returns Array of hex-encoded message hashes to sign
+   */
+  computePreSigningHashes(
+    payload: SigningPayload,
+    vault: Vault,
+    walletCore: any
+  ): Promise<string[]>
+
+  /**
+   * Format signature results from MPC keysign (Fast Vault support)
+   * Handles chain-specific result formatting (e.g., UTXO transaction compilation)
+   * @param signatureResults Map of message hash to signature result
+   * @param payload Original signing payload
+   * @returns Formatted signature ready for broadcast
+   */
+  formatSignatureResult(
+    signatureResults: Record<string, any>,
+    payload: SigningPayload
+  ): Promise<Signature>
 }
 
 /**
@@ -471,6 +497,66 @@ export class EvmStrategy implements ChainStrategy {
       maxFeePerGas: estimate.maxFeePerGas,
       maxPriorityFeePerGas: estimate.maxPriorityFeePerGas,
       gasPrice: estimate.gasPrice
+    }
+  }
+
+  /**
+   * Compute pre-signing hashes for Fast Vault signing
+   * Moved from ServerManager.computeMessageHashesFromTransaction
+   */
+  async computePreSigningHashes(
+    payload: SigningPayload,
+    vault: Vault,
+    walletCore: any
+  ): Promise<string[]> {
+    // Import viem for transaction serialization and hashing
+    const { serializeTransaction, keccak256 } = await import('viem')
+
+    const tx = payload.transaction
+
+    // Build EIP-1559 transaction for signing
+    const unsigned = {
+      type: 'eip1559' as const,
+      chainId: tx.chainId,
+      to: tx.to as `0x${string}`,
+      nonce: tx.nonce,
+      gas: BigInt(tx.gasLimit),
+      data: (tx.data || '0x') as `0x${string}`,
+      value: BigInt(tx.value),
+      maxFeePerGas: BigInt(tx.maxFeePerGas ?? tx.gasPrice ?? '0'),
+      maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0'),
+      accessList: [],
+    }
+
+    // Serialize transaction and compute keccak256 hash
+    const serialized = serializeTransaction(unsigned)
+    const signingHash = keccak256(serialized).slice(2)  // Remove '0x' prefix
+
+    // EVM chains use a single signing hash
+    return [signingHash]
+  }
+
+  /**
+   * Format signature results from MPC keysign
+   * EVM uses single-message signing with recovery ID
+   */
+  async formatSignatureResult(
+    signatureResults: Record<string, any>,
+    payload: SigningPayload
+  ): Promise<Signature> {
+    // EVM chains use single message
+    const messageHash = Object.keys(signatureResults)[0]
+    const sigResult = signatureResults[messageHash]
+
+    // Extract recovery ID if present (for ECDSA)
+    const recoveryId = sigResult.recovery_id
+      ? parseInt(sigResult.recovery_id, 16)
+      : undefined
+
+    return {
+      signature: sigResult.der_signature,
+      format: recoveryId !== undefined ? 'ECDSA' : 'DER',
+      recovery: recoveryId,
     }
   }
 
@@ -1004,6 +1090,122 @@ export class CacheService {
 
 ---
 
+### Step 2.5: Create FastSigningService
+
+**File:** `packages/sdk/src/vault/services/FastSigningService.ts` (NEW)
+
+**Purpose:** Coordinate fast vault signing by combining ServerManager (server communication) and ChainStrategy (chain logic)
+
+```typescript
+import type { Vault, SigningPayload, Signature } from '../../types'
+import type { ServerManager } from '../../server/ServerManager'
+import type { ChainStrategyFactory } from '../../chains/strategies/ChainStrategyFactory'
+import { VaultError, VaultErrorCode } from '../VaultError'
+
+/**
+ * Fast signing service for server-assisted signing (2-of-2 MPC with VultiServer)
+ * Coordinates between ChainStrategy (chain logic) and ServerManager (server communication)
+ */
+export class FastSigningService {
+  constructor(
+    private serverManager: ServerManager,
+    private strategyFactory: ChainStrategyFactory
+  ) {}
+
+  /**
+   * Sign transaction with VultiServer assistance
+   * @param vault Vault data with keys and signers
+   * @param payload Signing payload with transaction data
+   * @param vaultPassword Password for vault encryption
+   * @returns Signed transaction ready for broadcast
+   */
+  async signWithServer(
+    vault: Vault,
+    payload: SigningPayload,
+    vaultPassword: string
+  ): Promise<Signature> {
+    // Validate vault has server signer
+    this.validateFastVault(vault)
+
+    // Get chain strategy for chain-specific operations
+    const strategy = this.strategyFactory.getStrategy(payload.chain)
+
+    // Initialize WalletCore for cryptographic operations
+    const { initWasm } = await import('@trustwallet/wallet-core')
+    const walletCore = await initWasm()
+
+    // Compute pre-signing hashes using chain strategy (chain-specific logic)
+    const messages = payload.messageHashes ||
+      await strategy.computePreSigningHashes(payload, vault, walletCore)
+
+    // Coordinate signing with server (server communication via ServerManager)
+    return this.serverManager.coordinateFastSigning({
+      vault,
+      messages,
+      vaultPassword,
+      payload,
+      strategy,
+    })
+  }
+
+  /**
+   * Validate that vault has VultiServer as signer (required for fast signing)
+   * @param vault Vault to validate
+   * @throws VaultError if vault doesn't have server signer
+   */
+  private validateFastVault(vault: Vault): void {
+    const hasFastVaultServer = vault.signers.some(signer =>
+      signer.startsWith('Server-')
+    )
+
+    if (!hasFastVaultServer) {
+      throw new VaultError(
+        VaultErrorCode.SIGNING_FAILED,
+        'Vault does not have VultiServer - fast signing not available'
+      )
+    }
+  }
+}
+```
+
+**Export from services index:**
+
+```typescript
+// packages/sdk/src/vault/services/index.ts
+export { AddressService } from './AddressService'
+export { BalanceService } from './BalanceService'
+export { SigningService } from './SigningService'
+export { CacheService } from './CacheService'
+export { FastSigningService } from './FastSigningService'  // NEW
+```
+
+**Key Design Decisions:**
+- **Separation of Concerns:** Fast signing service orchestrates but doesn't implement chain logic
+- **Strategy Pattern Integration:** Uses ChainStrategy for all chain-specific operations
+- **ServerManager Delegation:** Pure server coordination delegated to ServerManager
+- **Validation:** Ensures vault has server signer before attempting fast signing
+- **Clean Flow:**
+  1. Validate vault has server signer
+  2. Get chain strategy
+  3. Strategy computes pre-signing hashes (chain-specific)
+  4. ServerManager coordinates signing (server communication)
+  5. Strategy formats result (chain-specific)
+
+**Integration with Existing Architecture:**
+```
+Vault.sign('fast', payload, password)
+  ↓
+FastSigningService.signWithServer()
+  ↓
+  ├── ChainStrategy.computePreSigningHashes()  ← Chain-specific logic
+  ↓
+ServerManager.coordinateFastSigning()  ← Server communication
+  ↓
+  └── ChainStrategy.formatSignatureResult()  ← Chain-specific formatting
+```
+
+---
+
 ## Phase 3: Integrate Services into Vault
 
 ### Step 3.1: Refactor Vault Constructor
@@ -1522,9 +1724,334 @@ export * from './index.deprecated'
 
 ---
 
-## Phase 6: Delete Redundant Code
+## Phase 6: Refactor ServerManager
 
-### Step 6.1: Delete BalanceManagement.ts
+**Timeline:** 2-3 days
+**Risk:** Low (internal refactoring, no API changes)
+
+### Step 6.1: Extract Chain Logic from ServerManager
+
+**File:** `packages/sdk/src/server/ServerManager.ts`
+
+**Changes:**
+
+1. **Remove `computeMessageHashesFromTransaction` method** (lines 555-639 in current implementation)
+   - This logic has been moved to ChainStrategy implementations
+   - EVM logic → `EvmStrategy.computePreSigningHashes()`
+   - Bitcoin logic → `BitcoinStrategy.computePreSigningHashes()`
+   - Solana logic → `SolanaStrategy.computePreSigningHashes()`
+
+2. **Refactor `signWithServer` → `coordinateFastSigning`**
+
+**Before (240+ lines mixing concerns):**
+```typescript
+async signWithServer(
+  vault: any,
+  payload: SigningPayload,
+  vaultPassword: string
+): Promise<Signature> {
+  // Validate vault
+  const hasFastVaultServer = vault.signers.some(signer => signer.startsWith('Server-'))
+  if (!hasFastVaultServer) throw new Error('...')
+
+  // Chain-specific logic (85 lines)
+  const messages = await this.computeMessageHashesFromTransaction(payload, walletCore, chain, vault)
+
+  // Server coordination (100 lines)
+  const sessionId = generateSessionId()
+  await callFastVaultAPI(...)
+  await joinMpcSession(...)
+  const devices = await waitForPeers(...)
+  await startMpcSession(...)
+
+  // MPC signing (30 lines)
+  const signatureResults = await keysign(...)
+
+  // Chain-specific result formatting (25 lines)
+  if (isUtxo) { /* compile transaction */ }
+  else { /* format EVM signature */ }
+}
+```
+
+**After (100 lines pure server coordination):**
+```typescript
+async coordinateFastSigning(options: {
+  vault: Vault
+  messages: string[]       // Pre-computed by ChainStrategy
+  vaultPassword: string
+  payload: SigningPayload
+  strategy: ChainStrategy  // For result formatting
+}): Promise<Signature> {
+  const { vault, messages, vaultPassword, payload, strategy } = options
+
+  // Generate session parameters
+  const sessionId = generateSessionId()
+  const hexEncryptionKey = await generateEncryptionKey()
+  const signingLocalPartyId = generateLocalPartyId('extension' as any)
+
+  // Step 1: Call FastVault API
+  const serverResponse = await this.callFastVaultAPI({
+    public_key: vault.publicKeys.ecdsa,
+    messages,
+    session: sessionId,
+    hex_encryption_key: hexEncryptionKey,
+    derive_path: derivePath,
+    is_ecdsa: signatureAlgorithm === 'ecdsa',
+    vault_password: vaultPassword,
+  })
+
+  // Step 2: Join relay session
+  await joinMpcSession({
+    serverUrl: this.config.messageRelay,
+    sessionId,
+    localPartyId: signingLocalPartyId,
+  })
+
+  // Step 2.5: Register server as participant
+  try {
+    const serverSigner = vault.signers.find(signer => signer.startsWith('Server-'))
+    if (serverSigner) {
+      await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
+        body: [serverSigner],
+        responseType: 'none',
+      })
+    }
+  } catch {
+    // non-fatal
+  }
+
+  // Step 3: Wait for peers
+  const devices = await this.waitForPeers(sessionId, signingLocalPartyId)
+  const peers = devices.filter(device => device !== signingLocalPartyId)
+
+  // Step 4: Start MPC session
+  await startMpcSession({
+    serverUrl: this.config.messageRelay,
+    sessionId,
+    devices,
+  })
+
+  // Step 5: Perform MPC keysign for all messages
+  const signatureResults: Record<string, any> = {}
+  for (const msg of messages) {
+    const sig = await keysign({
+      keyShare,
+      signatureAlgorithm,
+      message: msg,
+      chainPath: derivePath.replaceAll("'", ''),
+      localPartyId: signingLocalPartyId,
+      peers,
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      hexEncryptionKey,
+      isInitiatingDevice: true,
+    })
+    signatureResults[msg] = sig
+  }
+
+  // Step 6: Format result using strategy (chain-specific)
+  return strategy.formatSignatureResult(signatureResults, payload)
+}
+```
+
+3. **Extract helper methods** (optional but recommended for cleaner code)
+
+```typescript
+private async callFastVaultAPI(options: {
+  public_key: string
+  messages: string[]
+  session: string
+  hex_encryption_key: string
+  derive_path: string
+  is_ecdsa: boolean
+  vault_password: string
+}): Promise<string> {
+  const { signWithServer } = await import('@core/mpc/fast/api/signWithServer')
+  return signWithServer(options)
+}
+
+private async joinRelaySession(sessionId: string, localPartyId: string): Promise<void> {
+  const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
+  await joinMpcSession({
+    serverUrl: this.config.messageRelay,
+    sessionId,
+    localPartyId,
+  })
+}
+
+private async startMpcSession(sessionId: string, devices: string[]): Promise<void> {
+  const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
+  await startMpcSession({
+    serverUrl: this.config.messageRelay,
+    sessionId,
+    devices,
+  })
+}
+
+private async performMpcKeysign(options: {
+  vault: Vault
+  messages: string[]
+  devices: string[]
+  sessionId: string
+  hexEncryptionKey: string
+  signingLocalPartyId: string
+}): Promise<Record<string, any>> {
+  const { keysign } = await import('@core/mpc/keysign')
+  const signatureResults: Record<string, any> = {}
+
+  for (const msg of options.messages) {
+    const sig = await keysign({
+      keyShare: options.vault.keyShares[signatureAlgorithm],
+      signatureAlgorithm,
+      message: msg,
+      chainPath: derivePath.replaceAll("'", ''),
+      localPartyId: options.signingLocalPartyId,
+      peers: options.devices.filter(d => d !== options.signingLocalPartyId),
+      serverUrl: this.config.messageRelay,
+      sessionId: options.sessionId,
+      hexEncryptionKey: options.hexEncryptionKey,
+      isInitiatingDevice: true,
+    })
+    signatureResults[msg] = sig
+  }
+
+  return signatureResults
+}
+```
+
+**Testing:**
+
+```typescript
+// Test server coordination with mock strategy
+describe('ServerManager.coordinateFastSigning', () => {
+  it('should coordinate fast signing with strategy', async () => {
+    const mockStrategy = {
+      computePreSigningHashes: jest.fn().mockResolvedValue(['hash1', 'hash2']),
+      formatSignatureResult: jest.fn().mockResolvedValue({
+        signature: '0xabc...',
+        format: 'ECDSA',
+      })
+    }
+
+    const serverManager = new ServerManager()
+    const result = await serverManager.coordinateFastSigning({
+      vault: mockVault,
+      messages: ['hash1', 'hash2'],
+      vaultPassword: 'password123',
+      payload: mockPayload,
+      strategy: mockStrategy,
+    })
+
+    expect(mockStrategy.formatSignatureResult).toHaveBeenCalledWith(
+      expect.any(Object),
+      mockPayload
+    )
+    expect(result.signature).toBe('0xabc...')
+  })
+})
+```
+
+---
+
+### Step 6.2: Remove ServerManager from Public Exports
+
+**File:** `packages/sdk/src/index.ts`
+
+**Change line 112:**
+
+**Before:**
+```typescript
+// Server communication
+export * from './server'  // ❌ Exports ServerManager + 20+ items
+```
+
+**After:**
+```typescript
+// Server communication - types only, not implementation
+export type { ServerStatus, KeygenProgressUpdate } from './server'
+
+// ServerManager is now internal only
+// Users access via: vault.sign('fast', payload, password)
+```
+
+**Deprecation Warning (Optional for v2.x transition period):**
+
+```typescript
+// index.deprecated.ts (v2.x only)
+import { ServerManager as _ServerManager } from './server/ServerManager'
+
+/**
+ * @deprecated ServerManager should not be used directly.
+ * Use Vault.sign('fast', ...) instead.
+ * Will be removed in v3.0.
+ */
+export const ServerManager = _ServerManager
+```
+
+---
+
+### Step 6.3: Update VultisigSDK.ts
+
+**File:** `packages/sdk/src/VultisigSDK.ts`
+
+**Remove public getter for ServerManager:**
+
+**Before:**
+```typescript
+class Vultisig {
+  private serverManager: ServerManager
+
+  // ❌ Public getter exposes internal implementation
+  getServerManager(): ServerManager {
+    return this.serverManager
+  }
+}
+```
+
+**After:**
+```typescript
+class Vultisig {
+  private serverManager: ServerManager  // Internal only
+
+  // ❌ REMOVE: getServerManager() public method
+  // Users should use vault.sign('fast', ...) instead
+}
+```
+
+**Note:** ServerManager is still used internally by VultisigSDK for fast vault creation and by Vault (via FastSigningService) for fast signing, but it's no longer exposed publicly.
+
+---
+
+### Step 6.4: Verification
+
+**Checklist:**
+- [ ] `ServerManager.computeMessageHashesFromTransaction()` deleted
+- [ ] `ServerManager.signWithServer()` renamed to `coordinateFastSigning()`
+- [ ] `coordinateFastSigning()` takes pre-computed messages and strategy
+- [ ] ServerManager contains only server coordination logic (no chain logic)
+- [ ] ServerManager not exported from `index.ts`
+- [ ] `Vultisig.getServerManager()` method removed
+- [ ] All tests pass
+- [ ] Fast vault signing still works via `vault.sign('fast', ...)`
+
+**Test Fast Signing End-to-End:**
+```typescript
+// Should work without direct ServerManager access
+const vault = await sdk.getVault('my-vault', 'password')
+const signature = await vault.sign('fast', {
+  transaction: { to: '0x...', value: '1000000000000000000', ... },
+  chain: 'Ethereum'
+}, { vaultPassword: 'vault-password' })
+
+expect(signature.signature).toBeDefined()
+expect(signature.format).toBe('ECDSA')
+```
+
+---
+
+## Phase 7: Delete Redundant Code
+
+### Step 7.1: Delete BalanceManagement.ts
 
 **Command:**
 ```bash

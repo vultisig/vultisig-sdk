@@ -329,6 +329,103 @@ getChainClient(chain) → Throws "not implemented yet"
 
 ---
 
+#### ServerManager (`server/ServerManager.ts`)
+
+**Status:** ✅ Currently Used | **Lines of Code:** 641 | **Export Status:** Public (via `export * from './server'`)
+
+**Purpose:** Coordinates all server communication for Fast Vault operations (2-of-2 threshold signing with VultiServer)
+
+**Key Methods:**
+```typescript
+async verifyVault(vaultId: string, code: string): Promise<boolean>
+async resendVaultVerification(vaultId: string): Promise<void>
+async getVaultFromServer(vaultId: string, password: string): Promise<Vault>
+async signWithServer(vault: any, payload: SigningPayload, vaultPassword: string): Promise<Signature>  // 240+ lines
+async createFastVault(options: {...}): Promise<{vault: Vault, vaultId: string, verificationRequired: boolean}>
+async reshareVault(vault: Vault, options: ReshareOptions & {password: string}): Promise<Vault>
+async checkServerStatus(): Promise<ServerStatus>
+private async waitForPeers(sessionId: string, localPartyId: string): Promise<string[]>
+private async computeMessageHashesFromTransaction(payload, walletCore, chain, vault): Promise<string[]>  // 85 lines
+```
+
+**Current Architecture:**
+- Used directly by `VultisigSDK` for fast vault creation/verification
+- Used directly by `Vault` for fast mode signing via `sign('fast', payload, password)`
+- Contains chain-specific logic in `computeMessageHashesFromTransaction()` method (lines 555-639)
+- Directly imports `AddressDeriver` and chain utilities (EVM: viem, Bitcoin: protobuf utilities)
+- Exported publicly from index.ts via `export * from './server'`
+- Coordinates MPC signing sessions with VultiServer and message relay
+
+**Configuration:**
+```typescript
+constructor(endpoints?: {
+  fastVault?: string      // Default: 'https://api.vultisig.com/vault'
+  messageRelay?: string   // Default: 'https://api.vultisig.com/router'
+})
+```
+
+**Usage Pattern:**
+```typescript
+// VultisigSDK creates ServerManager
+const sdk = new Vultisig()
+const serverManager = sdk.getServerManager()  // ⚠️ Public getter
+
+// Vault uses ServerManager for fast signing
+await vault.sign('fast', payload, password)
+  ↓
+await serverManager.signWithServer(vault, payload, password)
+  ↓
+1. Compute message hashes (chain-specific logic - EVM/Bitcoin/Solana)
+2. Call FastVault API
+3. Join relay session
+4. Wait for peers (server + client)
+5. Perform MPC keysign
+6. Format result (chain-specific logic)
+```
+
+**Problems Identified:**
+
+1. **Mixed Concerns (Lines 555-639):**
+   ```typescript
+   private async computeMessageHashesFromTransaction(...) {
+     if (network === 'ethereum' || network === 'eth') {
+       // 18 lines of EVM-specific logic with viem imports
+     }
+     if (network === 'bitcoin' || network === 'btc') {
+       // 50 lines of UTXO/PSBT logic with protobuf
+     }
+     if (network === 'solana' || network === 'sol') {
+       // TODO - not implemented
+     }
+   }
+   ```
+   - **Issue:** Chain-specific logic should be in ChainStrategy, not ServerManager
+   - **Impact:** Violates strategy pattern, hard to extend, hard to test
+
+2. **Over-Exposed:**
+   - Exported publicly via `index.ts` line 112: `export * from './server'`
+   - Users can directly access `ServerManager` when they should use `Vault` methods
+   - Creates additional public API surface to maintain
+
+3. **Tight Coupling:**
+   - Directly imports `AddressDeriver` (line 97)
+   - Directly imports chain utilities instead of using strategies
+   - Makes testing difficult (can't mock chain operations separately)
+
+4. **`signWithServer` Method Too Large:**
+   - 240+ lines mixing server coordination + chain logic + MPC coordination
+   - Difficult to maintain and understand
+   - No separation between server communication and chain-specific operations
+
+**Assessment:**
+- ✅ **Essential component** for fast vault support
+- ✅ **Server coordination logic is good** (MPC session management, peer coordination)
+- ❌ **Architecture violation:** Contains chain-specific logic that belongs in strategies
+- ❌ **Over-exposed:** Should be internal only
+- 🔄 **Refactor needed:** Extract chain logic to strategies, make internal only
+
+---
+
 ### Blockchair Integration
 
 **Location:** `vault/balance/blockchair/`
@@ -757,6 +854,87 @@ vault.getTokens(chain: string): Token[]
 - 🔄 **User Workaround:** Users must manage tokens themselves
 
 **Severity:** 🟡 MEDIUM - Spec gap but users can work around it
+
+---
+
+### 7. ServerManager Architecture Issues
+
+**Problem:** ServerManager mixes server coordination with chain-specific transaction logic
+
+**Current Code (Lines 555-639 in ServerManager.ts):**
+```typescript
+private async computeMessageHashesFromTransaction(
+  payload: SigningPayload,
+  walletCore: any,
+  chain: any,
+  vault: any
+): Promise<string[]> {
+  const network = String(payload.chain || '').toLowerCase()
+
+  if (network === 'ethereum' || network === 'eth') {
+    // 18 lines of EVM-specific logic with viem imports
+    const { serializeTransaction, keccak256 } = await import('viem')
+    const unsigned = { type: 'eip1559' as const, chainId: tx.chainId, ... }
+    const signingHash = keccak256(serializeTransaction(unsigned)).slice(2)
+    return [signingHash]
+  }
+
+  if (network === 'bitcoin' || network === 'btc') {
+    // 50 lines of UTXO/PSBT logic with protobuf imports
+    const { create } = await import('@bufbuild/protobuf')
+    const { KeysignPayloadSchema } = await import('@core/mpc/types/...')
+    // Complex Bitcoin transaction input derivation
+    return hashes
+  }
+
+  if (network === 'solana' || network === 'sol') {
+    // TODO - not implemented
+  }
+
+  throw new Error(`Message hash computation not yet implemented for chain: ${payload.chain}`)
+}
+```
+
+**Issues:**
+
+1. **Violation of Strategy Pattern:**
+   - Chain-specific logic should be in `ChainStrategy` implementations
+   - ServerManager should only coordinate server communication
+   - Cannot easily add new chains (must modify ServerManager)
+
+2. **Tight Coupling:**
+   - ServerManager directly imports `AddressDeriver` (line 97)
+   - Directly imports chain-specific libraries (viem, @bufbuild/protobuf)
+   - Makes unit testing difficult (can't mock chain operations)
+
+3. **Over-Exposed:**
+   - Exported publicly via `index.ts` line 112: `export * from './server'`
+   - Users can access `ServerManager` directly via `sdk.getServerManager()`
+   - Should be internal implementation detail
+
+4. **`signWithServer` Too Large:**
+   - 240+ lines mixing: validation + chain logic + server coordination + MPC + result formatting
+   - Hard to maintain and understand
+   - Multiple responsibilities in one method
+
+**Impact:**
+- 🔴 **Architecture Violation:** Breaks separation of concerns
+- 🔒 **Hard to Extend:** Adding Solana support requires modifying ServerManager
+- 🧪 **Hard to Test:** Cannot test server coordination separately from chain logic
+- 📦 **Over-Exposed:** Users can bypass Vault and use ServerManager directly
+
+**Example of Problem:**
+```typescript
+// Users can currently do this (bad):
+import { ServerManager } from 'vultisig-sdk'
+const serverManager = new ServerManager()
+await serverManager.signWithServer(vault, payload, password)  // Bypasses Vault
+
+// Should only be accessible via:
+await vault.sign('fast', payload, password)  // Proper encapsulation
+```
+
+**Severity:** 🟡 MEDIUM - Works but architecturally incorrect, refactoring needed
 
 ---
 

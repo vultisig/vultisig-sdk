@@ -409,6 +409,201 @@ export { BalanceProviders } from './vault/balance'
 
 ---
 
+#### 6. Refactor ServerManager to Pure Server Coordination
+
+**Current Problem:** ServerManager contains chain-specific logic that violates the strategy pattern
+
+**Extract Chain Logic to Strategies:**
+
+Add new methods to `ChainStrategy` interface for fast vault support:
+
+```typescript
+interface ChainStrategy {
+  // Existing methods...
+  deriveAddress(vault: CoreVault): Promise<string>
+  getBalance(address: string, resolver?: BalanceResolver): Promise<Balance>
+  parseTransaction(rawTx: any): Promise<ParsedTransaction>
+  buildKeysignPayload(tx: ParsedTransaction): Promise<KeysignPayload>
+  estimateGas?(tx: any): Promise<GasEstimate>
+
+  // NEW: Fast vault signing support
+  computePreSigningHashes(
+    payload: SigningPayload,
+    vault: Vault,
+    walletCore: any
+  ): Promise<string[]>
+
+  formatSignatureResult(
+    signatureResults: Record<string, any>,
+    payload: SigningPayload
+  ): Promise<Signature>
+}
+```
+
+**Create FastSigningService:**
+
+New service to coordinate fast vault signing by combining ServerManager (server communication) and ChainStrategy (chain logic):
+
+```typescript
+// NEW: vault/services/FastSigningService.ts
+class FastSigningService {
+  constructor(
+    private serverManager: ServerManager,
+    private strategyFactory: ChainStrategyFactory
+  ) {}
+
+  async signWithServer(
+    vault: Vault,
+    payload: SigningPayload,
+    password: string
+  ): Promise<Signature> {
+    // Validate vault has server signer
+    this.validateFastVault(vault)
+
+    // Get chain strategy
+    const strategy = this.strategyFactory.getStrategy(payload.chain)
+
+    // Initialize WalletCore
+    const walletCore = await initWasm()
+
+    // Strategy computes hashes (chain-specific)
+    const messages = payload.messageHashes ||
+      await strategy.computePreSigningHashes(payload, vault, walletCore)
+
+    // ServerManager coordinates signing (server communication)
+    return this.serverManager.coordinateFastSigning({
+      vault,
+      messages,
+      password,
+      strategy
+    })
+  }
+
+  private validateFastVault(vault: Vault): void {
+    const hasFastVaultServer = vault.signers.some(s => s.startsWith('Server-'))
+    if (!hasFastVaultServer) {
+      throw new Error('Vault does not have VultiServer - fast signing not available')
+    }
+  }
+}
+```
+
+**Refactor ServerManager:**
+
+Transform from mixed concerns to pure server coordination:
+
+```typescript
+// REFACTORED: Pure server coordination, no chain logic
+class ServerManager {
+  async coordinateFastSigning(options: {
+    vault: Vault
+    messages: string[]       // Pre-computed by strategy
+    password: string
+    strategy: ChainStrategy  // For result formatting
+  }): Promise<Signature> {
+    const { vault, messages, password, strategy } = options
+
+    // Generate session parameters
+    const sessionId = generateSessionId()
+    const hexEncryptionKey = await generateEncryptionKey()
+
+    // Step 1: Call FastVault API
+    await this.callFastVaultAPI({ sessionId, messages, vault, password })
+
+    // Step 2: Join relay session
+    await this.joinRelaySession(sessionId, vault.localPartyId)
+
+    // Step 3: Wait for peers
+    const devices = await this.waitForPeers(sessionId, vault.localPartyId)
+
+    // Step 4: Start MPC session
+    await this.startMpcSession(sessionId, devices)
+
+    // Step 5: Perform MPC keysign
+    const signatureResults = await this.performMpcKeysign({
+      vault,
+      messages,
+      devices,
+      sessionId,
+      hexEncryptionKey
+    })
+
+    // Step 6: Format result using strategy (chain-specific)
+    return strategy.formatSignatureResult(signatureResults, payload)
+  }
+
+  // ❌ REMOVE: computeMessageHashesFromTransaction (moved to strategies)
+}
+```
+
+**Update Vault Integration:**
+
+```typescript
+class Vault {
+  private fastSigningService: FastSigningService  // NEW
+
+  constructor(
+    vaultData: CoreVault,
+    walletCore: WalletCore,
+    serverManager: ServerManager,
+    addressService: AddressService,
+    balanceService: BalanceService,
+    signingService: SigningService
+  ) {
+    // ... existing initialization ...
+
+    // Initialize fast signing service
+    this.fastSigningService = new FastSigningService(
+      serverManager,
+      new ChainStrategyFactory()
+    )
+  }
+
+  async sign(
+    mode: 'fast' | 'relay' | 'local',
+    payload: SigningPayload,
+    options?: { vaultPassword?: string }
+  ): Promise<Signature> {
+    // Fast mode: use FastSigningService
+    if (mode === 'fast') {
+      if (!options?.vaultPassword) {
+        throw new VaultError('Vault password required for fast signing')
+      }
+
+      return this.fastSigningService.signWithServer(
+        this.vaultData,
+        payload,
+        options.vaultPassword
+      )
+    }
+
+    // Regular signing modes: use SigningService
+    return this.signingService.sign(payload, mode)
+  }
+}
+```
+
+**Remove ServerManager from Public Exports:**
+
+```typescript
+// index.ts - CHANGE LINE 112
+// Before: export * from './server'  ❌
+// After:   export type { ServerStatus, KeygenProgressUpdate } from './server'  ✅
+
+// ServerManager becomes internal only
+// Users access via: vault.sign('fast', payload)
+```
+
+**Benefits:**
+- ✅ ServerManager = pure server coordination (no chain logic)
+- ✅ ChainStrategy = all chain-specific logic (compute hashes, format results)
+- ✅ FastSigningService = orchestration layer
+- ✅ Easy to test separately (mock strategy, test server coordination)
+- ✅ Easy to add new chains (implement strategy methods)
+- ✅ ServerManager becomes internal (not exported)
+
+---
+
 ## Benefits Analysis
 
 ### 1. Developer Experience Benefits
@@ -609,6 +804,138 @@ const vault = new Vault(data, core, mockSigningService)
 - ✅ Fast unit tests (no real chain calls)
 - ✅ Test edge cases easily
 - ✅ Better code coverage
+
+---
+
+#### ServerManager Refactoring Example
+
+**Before (Mixed Concerns - 240 lines):**
+```typescript
+// ServerManager.signWithServer() contains everything
+class ServerManager {
+  async signWithServer(vault, payload, password): Promise<Signature> {
+    // 1. Chain-specific logic (85 lines)
+    const messages = await this.computeMessageHashesFromTransaction(payload, walletCore, chain, vault)
+    if (network === 'ethereum') { /* EVM logic */ }
+    if (network === 'bitcoin') { /* Bitcoin logic */ }
+    if (network === 'solana') { /* Solana logic */ }
+
+    // 2. Server coordination (100 lines)
+    const sessionId = generateSessionId()
+    await callFastVaultAPI(...)
+    await joinRelaySession(...)
+    const devices = await waitForPeers(...)
+
+    // 3. MPC signing (30 lines)
+    const signatureResults = await keysign(...)
+
+    // 4. Chain-specific result formatting (25 lines)
+    if (isUtxo) { /* compile transaction */ }
+    else { /* format EVM signature */ }
+  }
+}
+
+// Problems:
+// - Can't test server coordination without chain implementations
+// - Can't add new chains without modifying ServerManager
+// - Mixed responsibilities make code hard to understand
+```
+
+**After (Separation of Concerns):**
+```typescript
+// 1. Chain logic in strategies (20-50 lines each)
+class EvmStrategy implements ChainStrategy {
+  async computePreSigningHashes(payload, vault, walletCore): Promise<string[]> {
+    // 18 lines of EVM-specific logic
+    const { serializeTransaction, keccak256 } = await import('viem')
+    const serialized = serializeTransaction(unsigned)
+    return [keccak256(serialized).slice(2)]
+  }
+
+  async formatSignatureResult(signatureResults, payload): Promise<Signature> {
+    // EVM-specific result formatting
+    const sigResult = signatureResults[messages[0]]
+    return { signature: sigResult.der_signature, format: 'ECDSA', recovery: recoveryId }
+  }
+}
+
+class BitcoinStrategy implements ChainStrategy {
+  async computePreSigningHashes(payload, vault, walletCore): Promise<string[]> {
+    // 50 lines of UTXO/PSBT logic
+    const inputs = getTxInputData({ keysignPayload, walletCore, publicKey })
+    return inputs.flatMap(txInputData => getPreSigningHashes({ walletCore, chain, txInputData }))
+  }
+
+  async formatSignatureResult(signatureResults, payload): Promise<Signature> {
+    // Compile UTXO transaction
+    const compiledTxs = inputs.map(txInputData => compileTx({ publicKey, txInputData, signatures, chain, walletCore }))
+    return { signature: compiledTxHex, format: 'DER' }
+  }
+}
+
+// 2. Orchestration in FastSigningService (40 lines)
+class FastSigningService {
+  async signWithServer(vault, payload, password): Promise<Signature> {
+    const strategy = this.strategyFactory.getStrategy(payload.chain)
+    const messages = await strategy.computePreSigningHashes(payload, vault, walletCore)
+    return this.serverManager.coordinateFastSigning({ vault, messages, password, strategy })
+  }
+}
+
+// 3. Pure server coordination in ServerManager (100 lines)
+class ServerManager {
+  async coordinateFastSigning({ vault, messages, password, strategy }): Promise<Signature> {
+    const sessionId = generateSessionId()
+    await this.callFastVaultAPI({ sessionId, messages, vault, password })
+    await this.joinRelaySession(sessionId, vault.localPartyId)
+    const devices = await this.waitForPeers(sessionId, vault.localPartyId)
+    const signatureResults = await this.performMpcKeysign({ vault, messages, devices, sessionId })
+    return strategy.formatSignatureResult(signatureResults, payload)
+  }
+}
+```
+
+**Testing Improvements:**
+```typescript
+// Before: Can't test server coordination without chain implementations
+await serverManager.signWithServer(vault, payload, password) // Tests everything at once
+
+// After: Test components independently
+
+// Test 1: Test EVM strategy (no server involved)
+const evmStrategy = new EvmStrategy()
+const hashes = await evmStrategy.computePreSigningHashes(payload, vault, walletCore)
+expect(hashes).toHaveLength(1)
+expect(hashes[0]).toMatch(/^[0-9a-f]{64}$/)
+
+// Test 2: Test server coordination (mock strategy)
+const mockStrategy = {
+  computePreSigningHashes: jest.fn().mockResolvedValue(['hash1', 'hash2']),
+  formatSignatureResult: jest.fn().mockResolvedValue({ signature: '0x...' })
+}
+await serverManager.coordinateFastSigning({
+  vault,
+  messages: ['hash1', 'hash2'],
+  password,
+  strategy: mockStrategy
+})
+expect(mockStrategy.formatSignatureResult).toHaveBeenCalled()
+
+// Test 3: Test FastSigningService orchestration (mock both)
+const mockServerManager = { coordinateFastSigning: jest.fn() }
+const mockStrategyFactory = { getStrategy: jest.fn().mockReturnValue(mockStrategy) }
+const fastSigningService = new FastSigningService(mockServerManager, mockStrategyFactory)
+await fastSigningService.signWithServer(vault, payload, password)
+expect(mockStrategyFactory.getStrategy).toHaveBeenCalledWith(payload.chain)
+expect(mockServerManager.coordinateFastSigning).toHaveBeenCalled()
+```
+
+**Benefits:**
+- ✅ **Single Responsibility:** ServerManager = server coordination only
+- ✅ **Testable:** Can test each component independently
+- ✅ **Extensible:** Add new chains by implementing strategy methods
+- ✅ **Maintainable:** Clear boundaries between server logic and chain logic
+- ✅ **Reusable:** Strategies can be used for both fast and regular signing
 
 ---
 
