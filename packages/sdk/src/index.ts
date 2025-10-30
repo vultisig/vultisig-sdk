@@ -7,7 +7,14 @@
  * - Multi-chain blockchain support
  * - Server-assisted operations (Fast Vault)
  * - Cross-device message relay
+ *
+ * Phase 5: Cleaned up to export only public API
+ * Internal chain utilities (parsers, builders, etc.) are now internal-only
  */
+
+// ============================================================================
+// PUBLIC API - Core Classes
+// ============================================================================
 
 // Core SDK class
 export { Vultisig } from './VultisigSDK'
@@ -22,99 +29,56 @@ export {
   AddressBookManager,
   ChainManagement,
   VaultManagement,
-  BalanceManagement,
+  // Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
+  // BalanceManagement,
   ValidationHelpers,
   createVaultBackup,
   getExportFileName,
 } from './vault'
 
-// MPC operations
-export * from './mpc'
+// ============================================================================
+// PUBLIC API - Operations
+// ============================================================================
 
-// Chain operations
-export { ChainManager, AddressDeriver } from './chains'
+// NOTE: MPC implementation is internal-only
+// Users interact via: sdk.createVault() and vault.sign()
+// MPC types are exported from './types' section below
 
-// Solana chain utilities
-export {
-  parseSolanaTransaction,
-  resolveAddressTableKeys,
-  buildSolanaKeysignPayload,
-  getSolanaSpecific,
-  updateSolanaSpecific,
-  JupiterInstructionParser,
-  RaydiumInstructionParser,
-  JUPITER_V6_PROGRAM_ID,
-  RAYDIUM_AMM_PROGRAM_ID,
-  SOLANA_PROGRAM_IDS,
-} from './chains/solana'
+// NOTE: ChainManager and AddressDeriver are internal implementation details
+// Users should interact via Vultisig and Vault classes only
+// Removed from public exports (Phase 5 cleanup)
 
-// EVM chain utilities
-export {
-  // Transaction parsers
-  parseEvmTransaction,
-  parseErc20TransferFrom,
-  getFunctionSelector,
-  Erc20Parser,
-  UniswapParser,
-  OneInchParser,
-  NftParser,
-  // Keysign utilities
-  buildEvmKeysignPayload,
-  getEvmSpecific,
-  updateEvmSpecific,
-  // Gas utilities
-  estimateTransactionGas,
-  calculateMaxGasCost,
-  calculateExpectedGasCost,
-  compareGasEstimates,
-  formatGasPrice,
-  parseGasPrice,
-  weiToGwei,
-  gweiToWei,
-  weiToEth,
-  ethToWei,
-  compareGasPrices,
-  calculateGasPriceChange,
-  formatGasPriceAuto,
-  getGasPriceCategory,
-  // Token utilities
-  getTokenBalance,
-  getTokenAllowance,
-  formatTokenAmount,
-  parseTokenAmount,
-  isAllowanceSufficient,
-  calculateAllowanceShortfall,
-  formatTokenWithSymbol,
-  compareAmounts,
-  getTokenMetadata,
-  buildToken,
-  getNativeToken,
-  batchGetTokenMetadata,
-  isValidTokenAddress,
-  normalizeTokenAddress,
-  // Configuration
-  EVM_CHAIN_IDS,
-  NATIVE_TOKEN_ADDRESS,
-  COMMON_TOKENS,
-  DEX_ROUTERS,
-  ERC20_SELECTORS,
-  ERC721_SELECTORS,
-  ERC1155_SELECTORS,
-  ERC20_ABI,
-  getChainId,
-  getChainFromId,
-  isNativeToken,
-  isEvmChain,
-  getCommonToken,
-} from './chains/evm'
+// NOTE: ServerManager is internal-only
+// Users access server-assisted signing via: vault.sign('fast', payload)
+// Server types (ServerStatus, ReshareOptions, FastSigningInput) are exported from './types' section below
 
-// Server communication
-export * from './server'
+// NOTE: Cryptographic utilities are internal-only
+// Users don't need direct access to crypto primitives
 
-// Cryptographic utilities
-export * from './crypto'
+// NOTE: WASM management is internal-only
+// WalletCore initialization is handled by the SDK
 
-// Types and interfaces - specific exports to avoid conflicts
+// ============================================================================
+// Phase 5: Chain-specific utilities are now INTERNAL ONLY
+// ============================================================================
+// Users should interact via:
+// - vault.address(chain) - for addresses
+// - vault.balance(chain) - for balances
+// - vault.sign(mode, payload) - for signing
+//
+// Internal utilities moved to services and strategies:
+// - parseSolanaTransaction → SolanaStrategy (internal)
+// - parseEvmTransaction → EvmStrategy (internal)
+// - buildEvmKeysignPayload → EvmStrategy (internal)
+// - Gas utilities → EvmStrategy.estimateGas() (internal)
+// - Token utilities → Strategy pattern (internal)
+// ============================================================================
+
+// ============================================================================
+// PUBLIC API - Types (keep all types for TypeScript users)
+// ============================================================================
+
+// General types
 export type {
   Balance,
   CachedBalance,
@@ -157,7 +121,7 @@ export type {
   SolanaSignature
 } from './types'
 
-// EVM types
+// EVM types (exported for TypeScript users working with EVM chains)
 export type {
   EvmToken,
   EvmTransactionType,
@@ -174,8 +138,3 @@ export type {
   EvmGasEstimate,
   FormattedGasPrice
 } from './chains/evm'
-
-// WASM utilities
-export * from './wasm'
-
-// Types are already exported via export * from './types' above

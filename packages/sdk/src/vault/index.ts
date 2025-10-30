@@ -8,7 +8,8 @@ export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } fr
 export { AddressBookManager } from './AddressBook'
 export { ChainManagement } from './ChainManagement'
 export { VaultManagement } from './VaultManagement'
-export { BalanceManagement } from './BalanceManagement'
+// Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
+// export { BalanceManagement } from './BalanceManagement'
 
 // Utilities
 export { ValidationHelpers } from './utils/validation'

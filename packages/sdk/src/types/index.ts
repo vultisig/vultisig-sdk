@@ -100,7 +100,7 @@ export type SigningPayload = {
 export type Signature = {
   signature: string
   recovery?: number
-  format: 'DER' | 'ECDSA' | 'EdDSA'
+  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519'
 }
 
 export type FastSigningInput = {

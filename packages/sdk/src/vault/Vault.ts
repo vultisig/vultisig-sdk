@@ -1,15 +1,8 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
-import { initWasm } from '@trustwallet/wallet-core'
 
-import { AddressDeriver } from '../chains/AddressDeriver'
-import { ChainManager } from '../chains/ChainManager'
-import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import type {
   Balance,
-  CachedBalance,
   Signature,
   SigningMode,
   SigningPayload,
@@ -17,8 +10,14 @@ import type {
 import type { WASMManager } from '../wasm/WASMManager'
 import { VaultError, VaultErrorCode } from './VaultError'
 
-// Use the same memoized WalletCore instance as the extension
-const getWalletCore = memoizeAsync(initWasm)
+// Phase 3: Import new services
+import { AddressService } from './services/AddressService'
+import { BalanceService } from './services/BalanceService'
+import { SigningService } from './services/SigningService'
+import { CacheService } from './services/CacheService'
+import { FastSigningService } from './services/FastSigningService'
+import { createDefaultStrategyFactory } from '../chains/strategies/ChainStrategyFactory'
+import { blockchairFirstResolver } from './balance/blockchair/integration'
 
 type AddressInput = {
   chain: string
@@ -43,8 +42,13 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  */
 export class Vault {
   private addressCache = new Map<string, string>()
-  private addressDeriver = new AddressDeriver()
-  private chainManager?: ChainManager
+
+  // Phase 3: Service instances (replacing old AddressDeriver and ChainManager)
+  private addressService: AddressService
+  private balanceService: BalanceService
+  private signingService: SigningService
+  private cacheService: CacheService
+  private fastSigningService?: FastSigningService
 
   // Cached properties to avoid repeated decoding
   private _isEncrypted?: boolean
@@ -54,18 +58,32 @@ export class Vault {
   private _userChains: string[] = []
   private _currency: string = 'USD'
   private _sdkInstance?: any // Reference to SDK for getting supported/default chains
-  private _balanceCache = new Map<string, CachedBalance>() // TTL balance caching (5 minutes)
+  // Phase 3: Removed _balanceCache - now using CacheService instead
 
   constructor(
     private vaultData: CoreVault,
     private walletCore?: WalletCore,
-    private wasmManager?: WASMManager,
+    _wasmManager?: WASMManager,  // Kept for backward compatibility, no longer used
     sdkInstance?: any
   ) {
     // Vault initialized
 
     // Store SDK reference for chain validation
     this._sdkInstance = sdkInstance
+
+    // Phase 3: Initialize strategy factory and services
+    const strategyFactory = createDefaultStrategyFactory()
+
+    this.addressService = new AddressService(strategyFactory)
+    this.balanceService = new BalanceService(strategyFactory, blockchairFirstResolver)
+    this.signingService = new SigningService(strategyFactory)
+    this.cacheService = new CacheService()
+
+    // FastSigningService requires ServerManager (will be initialized when needed)
+    if (sdkInstance?.getServerManager) {
+      const serverManager = sdkInstance.getServerManager()
+      this.fastSigningService = new FastSigningService(serverManager, strategyFactory)
+    }
 
     // Initialize user chains from SDK defaults if available
     if (sdkInstance?.getDefaultChains) {
@@ -86,18 +104,8 @@ export class Vault {
       this._currency = sdkInstance.getDefaultCurrency()
     }
 
-    // Initialize the address deriver if we have WalletCore
-    if (walletCore) {
-      this.addressDeriver.initialize(walletCore)
-    }
-
-    // Initialize ChainManager if we have WASMManager
-    if (wasmManager) {
-      this.chainManager = new ChainManager(wasmManager)
-      this.chainManager.initialize().catch(error => {
-        console.warn('Failed to initialize ChainManager:', error)
-      })
-    }
+    // Note: Old AddressDeriver and ChainManager initialization removed (Phase 3 cleanup)
+    // All operations now use addressService and balanceService instead
   }
 
   /**
@@ -240,14 +248,12 @@ export class Vault {
   async address(input: string | AddressInput): Promise<string> {
     // Handle both signatures: address(chain) and address({ chain, walletCore })
     let chainStr: string
-    let walletCoreToUse: WalletCore | undefined
 
     if (typeof input === 'string') {
       chainStr = input
-      walletCoreToUse = this.walletCore
     } else {
       chainStr = input.chain
-      walletCoreToUse = input.walletCore || this.walletCore
+      // Note: walletCore parameter is ignored as AddressService handles this
     }
 
     // Check cache first (permanent caching for addresses as per architecture)
@@ -258,34 +264,11 @@ export class Vault {
     }
 
     try {
-      // Ensure we have WalletCore
-      if (!walletCoreToUse) {
-        throw new VaultError(
-          VaultErrorCode.WalletCoreNotInitialized,
-          'WalletCore instance is required for address derivation'
-        )
-      }
-
-      // Get WalletCore using the same memoized instance as the extension
-      const walletCore = await getWalletCore()
-
-      // Map string to Chain enum (using AddressDeriver's mapping)
-      const chain = this.addressDeriver.mapStringToChain(chainStr)
-
-      // Get the proper public key for this chain
-      const publicKey = getPublicKey({
-        chain,
-        walletCore,
-        hexChainCode: this.vaultData.hexChainCode,
-        publicKeys: this.vaultData.publicKeys,
-      })
-
-      // Derive the address using core functionality
-      const address = deriveAddress({
-        chain,
-        publicKey,
-        walletCore,
-      })
+      // Phase 3: Delegate to AddressService for address derivation
+      const address = await this.addressService.deriveAddress(
+        this.vaultData,
+        chainStr
+      )
 
       // Cache the address (permanent caching as per architecture)
       this.addressCache.set(cacheKey, address)
@@ -359,16 +342,10 @@ export class Vault {
    * @returns Promise resolving to Balance object
    */
   async balance(chain: string, tokenId?: string): Promise<Balance> {
-    // Validate ChainManager availability
-    if (!this.chainManager) {
-      throw new VaultError(
-        VaultErrorCode.WalletCoreNotInitialized,
-        'ChainManager not available - WASMManager required for balance operations'
-      )
-    }
+    // Check cache first (5-minute TTL)
+    const cacheKey = `balance:${chain}${tokenId ? `:${tokenId}` : ''}`
+    const cachedBalance = this.cacheService.get<Balance>(cacheKey, 300000) // 5 minutes
 
-    // Check cache first
-    const cachedBalance = this.getCachedBalance(chain, tokenId)
     if (cachedBalance) {
       return cachedBalance
     }
@@ -386,21 +363,11 @@ export class Vault {
         )
       }
 
-      // Get balance from ChainManager
-      const balance = await this.chainManager.getBalances({
-        [chain]: address,
-      })
-      const chainBalance = balance[chain as keyof typeof balance]
-
-      if (!chainBalance) {
-        throw new VaultError(
-          VaultErrorCode.BalanceFetchFailed,
-          `Failed to get balance for ${chain} - no balance returned from ChainManager`
-        )
-      }
+      // Phase 3: Use BalanceService with Blockchair integration
+      const chainBalance = await this.balanceService.fetchBalance(chain, address)
 
       // Cache the result
-      this.storeBalanceInCache(chain, tokenId, chainBalance)
+      this.cacheService.set(cacheKey, chainBalance)
 
       return chainBalance
     } catch (error) {
@@ -433,14 +400,6 @@ export class Vault {
     chains?: string[],
     includeTokens?: boolean
   ): Promise<Record<string, Balance>> {
-    // Validate ChainManager availability
-    if (!this.chainManager) {
-      throw new VaultError(
-        VaultErrorCode.WalletCoreNotInitialized,
-        'ChainManager not available - WASMManager required for balance operations'
-      )
-    }
-
     // Determine which chains to fetch
     const chainsToFetch = chains || this.getChains()
 
@@ -457,7 +416,9 @@ export class Vault {
 
     // First, check cache for existing balances and collect missing ones
     for (const chain of chainsToFetch) {
-      const cachedBalance = this.getCachedBalance(chain)
+      const cacheKey = `balance:${chain}`
+      const cachedBalance = this.cacheService.get<Balance>(cacheKey, 300000)
+
       if (cachedBalance) {
         result[chain] = cachedBalance
       } else {
@@ -475,17 +436,18 @@ export class Vault {
       }
     }
 
-    // If we have chains to fetch fresh data for, batch them
+    // If we have chains to fetch fresh data for, use BalanceService
     if (Object.keys(addressesToFetch).length > 0) {
       try {
-        const freshBalances =
-          await this.chainManager.getBalances(addressesToFetch)
+        // Phase 3: Use BalanceService with Blockchair integration
+        const freshBalances = await this.balanceService.fetchBalances(addressesToFetch)
 
         // Store results and add to cache
         for (const [chain, balance] of Object.entries(freshBalances)) {
           if (balance) {
             result[chain] = balance
-            this.storeBalanceInCache(chain, undefined, balance)
+            const cacheKey = `balance:${chain}`
+            this.cacheService.set(cacheKey, balance)
           } else {
             console.warn(`No balance returned for ${chain}`)
           }
@@ -519,18 +481,11 @@ export class Vault {
    * @returns Promise resolving to fresh Balance object
    */
   async updateBalance(chain: string, tokenId?: string): Promise<Balance> {
-    // Validate ChainManager availability
-    if (!this.chainManager) {
-      throw new VaultError(
-        VaultErrorCode.WalletCoreNotInitialized,
-        'ChainManager not available - WASMManager required for balance operations'
-      )
-    }
+    // Clear cache to force refresh
+    const cacheKey = `balance:${chain}${tokenId ? `:${tokenId}` : ''}`
+    this.cacheService.clear(cacheKey)
 
     try {
-      // Clear existing cache entry to force fresh fetch
-      this.clearCacheEntry(chain, tokenId)
-
       // Get address for the chain
       const address = await this.address(chain)
 
@@ -543,22 +498,12 @@ export class Vault {
         )
       }
 
-      // Get fresh balance from ChainManager
+      // Phase 3: Use BalanceService for fresh balance
       console.log(`Force refreshing balance for ${chain}:${address}`)
-      const balances = await this.chainManager.getBalances({
-        [chain]: address,
-      })
-      const chainBalance = balances[chain as keyof typeof balances]
-
-      if (!chainBalance) {
-        throw new VaultError(
-          VaultErrorCode.BalanceFetchFailed,
-          `Failed to get fresh balance for ${chain} - no balance returned from ChainManager`
-        )
-      }
+      const chainBalance = await this.balanceService.fetchBalance(chain, address)
 
       // Cache the fresh result
-      this.storeBalanceInCache(chain, tokenId, chainBalance)
+      this.cacheService.set(cacheKey, chainBalance)
 
       return chainBalance
     } catch (error) {
@@ -590,14 +535,6 @@ export class Vault {
     chains?: string[],
     includeTokens?: boolean
   ): Promise<Record<string, Balance>> {
-    // Validate ChainManager availability
-    if (!this.chainManager) {
-      throw new VaultError(
-        VaultErrorCode.WalletCoreNotInitialized,
-        'ChainManager not available - WASMManager required for balance operations'
-      )
-    }
-
     // Determine which chains to update
     const chainsToUpdate = chains || this.getChains()
 
@@ -614,7 +551,8 @@ export class Vault {
 
     // Clear cache entries for all chains we're updating
     for (const chain of chainsToUpdate) {
-      this.clearCacheEntry(chain, undefined)
+      const cacheKey = `balance:${chain}`
+      this.cacheService.clear(cacheKey)
     }
 
     // Get addresses for all chains
@@ -628,20 +566,21 @@ export class Vault {
       }
     }
 
-    // If we have chains to update, batch them
+    // If we have chains to update, use BalanceService
     if (Object.keys(addressesToFetch).length > 0) {
       try {
         console.log(
           `Force refreshing balances for ${Object.keys(addressesToFetch).length} chains`
         )
-        const freshBalances =
-          await this.chainManager.getBalances(addressesToFetch)
+        // Phase 3: Use BalanceService for fresh balances
+        const freshBalances = await this.balanceService.fetchBalances(addressesToFetch)
 
         // Store results and update cache
         for (const [chain, balance] of Object.entries(freshBalances)) {
           if (balance) {
             result[chain] = balance
-            this.storeBalanceInCache(chain, undefined, balance)
+            const cacheKey = `balance:${chain}`
+            this.cacheService.set(cacheKey, balance)
           } else {
             console.warn(`No balance returned for ${chain}`)
           }
@@ -1064,34 +1003,26 @@ export class Vault {
     payload: SigningPayload,
     password?: string
   ): Promise<Signature> {
-    // Get SDK instance to access server manager
-    if (!this._sdkInstance) {
+    // Validate password is provided for fast signing
+    if (!password) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
-        'SDK instance required for fast signing'
+        'Password is required for fast signing'
       )
     }
 
-    // Validate we have a server manager
-    const serverManager = this._sdkInstance.getServerManager()
-    if (!serverManager) {
+    // Validate FastSigningService is available
+    if (!this.fastSigningService) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
-        'Server manager not available for fast signing'
+        'FastSigningService not initialized. Fast signing requires server manager.'
       )
     }
 
     try {
-      // Validate password is provided for fast signing
-      if (!password) {
-        throw new VaultError(
-          VaultErrorCode.InvalidConfig,
-          'Password is required for fast signing'
-        )
-      }
-
-      // Use server manager to perform fast signing
-      return await serverManager.signWithServer(
+      // Use FastSigningService for proper separation of concerns
+      // FastSigningService orchestrates: strategy (chain logic) + ServerManager (server coordination)
+      return await this.fastSigningService.signWithServer(
         this.vaultData,
         payload,
         password
@@ -1189,81 +1120,5 @@ export class Vault {
     return this.vaultData
   }
 
-  // === PRIVATE BALANCE CACHE HELPERS ===
-
-  /**
-   * Generate cache key for balance entries
-   * Format: `${chain}:${tokenId || 'native'}`
-   */
-  private getCacheKey(chain: string, tokenId?: string): string {
-    const normalizedChain = chain.toLowerCase()
-    const tokenKey = tokenId || 'native'
-    return `${normalizedChain}:${tokenKey}`
-  }
-
-  /**
-   * Check if cached balance is still valid (not expired)
-   */
-  private isCacheValid(cachedBalance: CachedBalance): boolean {
-    const now = Date.now()
-    const expiresAt = cachedBalance.cachedAt + cachedBalance.ttl
-    return now < expiresAt
-  }
-
-  /**
-   * Clear expired entries from balance cache
-   */
-  private clearExpiredCache(): void {
-    for (const [key, cachedBalance] of this._balanceCache.entries()) {
-      if (!this.isCacheValid(cachedBalance)) {
-        this._balanceCache.delete(key)
-      }
-    }
-  }
-
-  /**
-   * Clear specific cache entry
-   */
-  private clearCacheEntry(chain: string, tokenId?: string): void {
-    const cacheKey = this.getCacheKey(chain, tokenId)
-    this._balanceCache.delete(cacheKey)
-  }
-
-  /**
-   * Store balance in cache with TTL
-   */
-  private storeBalanceInCache(
-    chain: string,
-    tokenId: string | undefined,
-    balance: import('../types').Balance
-  ): void {
-    const cacheKey = this.getCacheKey(chain, tokenId)
-    const cachedBalance: CachedBalance = {
-      balance,
-      cachedAt: Date.now(),
-      ttl: 5 * 60 * 1000, // 5 minutes in milliseconds
-    }
-    this._balanceCache.set(cacheKey, cachedBalance)
-  }
-
-  /**
-   * Get balance from cache if valid
-   */
-  private getCachedBalance(
-    chain: string,
-    tokenId?: string
-  ): import('../types').Balance | null {
-    const cacheKey = this.getCacheKey(chain, tokenId)
-    const cachedBalance = this._balanceCache.get(cacheKey)
-
-    if (!cachedBalance || !this.isCacheValid(cachedBalance)) {
-      if (cachedBalance) {
-        // Remove expired entry
-        this._balanceCache.delete(cacheKey)
-      }
-      return null
-    }
-
-    return cachedBalance.balance
-  }
+  // Phase 3: Balance cache helpers removed - now using CacheService
 }
