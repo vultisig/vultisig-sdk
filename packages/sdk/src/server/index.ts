@@ -1,7 +1,19 @@
-// Export ServerManager for coordinated server operations
-export { ServerManager } from './ServerManager'
+/**
+ * Server module - Public API
+ *
+ * ServerManager is INTERNAL ONLY - users should access server-assisted signing via:
+ * vault.sign('fast', payload)
+ *
+ * This module exports:
+ * - Utilities (generateSessionId, pingServer, etc.)
+ * - Fast Vault API functions (setupVaultWithServer, signWithServer, etc.)
+ * - Relay functions (sendMpcRelayMessage, getMpcRelayMessages, etc.)
+ */
 
-// Export utilities
+// ServerManager is internal-only - not exported
+// import { ServerManager } from './ServerManager'
+
+// Export utilities for advanced users
 export * from './utils'
 
 // Re-export core fast vault API functions directly

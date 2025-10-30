@@ -1,4 +1,5 @@
-import { ServerManager } from './server'
+// ServerManager is internal - import directly from implementation file
+import { ServerManager } from './server/ServerManager'
 import type {
   AddressBook,
   AddressBookEntry,
