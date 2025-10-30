@@ -7,7 +7,14 @@
  * - Multi-chain blockchain support
  * - Server-assisted operations (Fast Vault)
  * - Cross-device message relay
+ *
+ * Phase 5: Cleaned up to export only public API
+ * Internal chain utilities (parsers, builders, etc.) are now internal-only
  */
+
+// ============================================================================
+// PUBLIC API - Core Classes
+// ============================================================================
 
 // Core SDK class
 export { Vultisig } from './VultisigSDK'
@@ -20,41 +27,56 @@ export {
   VaultImportError,
   VaultImportErrorCode,
   AddressBookManager,
-  ChainManagement,
-  VaultManagement,
-  BalanceManagement,
+  // Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
+  // BalanceManagement,
   ValidationHelpers,
   createVaultBackup,
   getExportFileName,
 } from './vault'
 
-// MPC operations
-export * from './mpc'
+// ============================================================================
+// PUBLIC API - Operations
+// ============================================================================
 
-// Chain operations
-export { ChainManager, AddressDeriver } from './chains'
+// NOTE: MPC implementation is internal-only
+// Users interact via: sdk.createVault() and vault.sign()
+// MPC types are exported from './types' section below
 
-// Solana chain utilities
-export {
-  parseSolanaTransaction,
-  resolveAddressTableKeys,
-  buildSolanaKeysignPayload,
-  getSolanaSpecific,
-  updateSolanaSpecific,
-  JupiterInstructionParser,
-  RaydiumInstructionParser,
-  JUPITER_V6_PROGRAM_ID,
-  RAYDIUM_AMM_PROGRAM_ID,
-  SOLANA_PROGRAM_IDS,
-} from './chains/solana'
+// NOTE: ChainManager and AddressDeriver are internal implementation details
+// Users should interact via Vultisig and Vault classes only
+// Removed from public exports (Phase 5 cleanup)
 
-// Server communication
-export * from './server'
+// NOTE: ServerManager is internal-only
+// Users access server-assisted signing via: vault.sign('fast', payload)
+// Server types (ServerStatus, ReshareOptions, FastSigningInput) are exported from './types' section below
 
-// Cryptographic utilities
-export * from './crypto'
+// NOTE: Cryptographic utilities are internal-only
+// Users don't need direct access to crypto primitives
 
-// Types and interfaces - specific exports to avoid conflicts
+// NOTE: WASM management is internal-only
+// WalletCore initialization is handled by the SDK
+
+// ============================================================================
+// Phase 5: Chain-specific utilities are now INTERNAL ONLY
+// ============================================================================
+// Users should interact via:
+// - vault.address(chain) - for addresses
+// - vault.balance(chain) - for balances
+// - vault.sign(mode, payload) - for signing
+//
+// Internal utilities moved to services and strategies:
+// - parseSolanaTransaction → SolanaStrategy (internal)
+// - parseEvmTransaction → EvmStrategy (internal)
+// - buildEvmKeysignPayload → EvmStrategy (internal)
+// - Gas utilities → EvmStrategy.estimateGas() (internal)
+// - Token utilities → Strategy pattern (internal)
+// ============================================================================
+
+// ============================================================================
+// PUBLIC API - Types (keep all types for TypeScript users)
+// ============================================================================
+
+// General types
 export type {
   Balance,
   CachedBalance,
@@ -97,7 +119,20 @@ export type {
   SolanaSignature
 } from './types'
 
-// WASM utilities
-export * from './wasm'
-
-// Types are already exported via export * from './types' above
+// EVM types (exported for TypeScript users working with EVM chains)
+export type {
+  EvmToken,
+  EvmTransactionType,
+  EvmProtocol,
+  DecodedContractCall,
+  EvmTransferParams,
+  EvmSwapParams,
+  EvmNftParams,
+  EvmApproveParams,
+  ParsedEvmTransaction,
+  EvmTransactionInput,
+  EvmKeysignOptions,
+  EvmSignature,
+  EvmGasEstimate,
+  FormattedGasPrice
+} from './chains/evm'

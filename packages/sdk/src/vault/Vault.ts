@@ -1,29 +1,20 @@
-import type { WalletCore } from '@trustwallet/wallet-core'
-import { initWasm } from '@trustwallet/wallet-core'
-
-import { AddressDeriver } from '../chains/AddressDeriver'
-import { ChainManager } from '../chains/ChainManager'
-import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
-import type {
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import {
   Balance,
-  CachedBalance,
   Signature,
   SigningMode,
   SigningPayload,
 } from '../types'
-import type { WASMManager } from '../wasm/WASMManager'
 import { VaultError, VaultErrorCode } from './VaultError'
 
-// Use the same memoized WalletCore instance as the extension
-const getWalletCore = memoizeAsync(initWasm)
-
-type AddressInput = {
-  chain: string
-  walletCore: WalletCore
-}
+// Phase 3: Import new services
+import { AddressService } from './services/AddressService'
+import { BalanceService } from './services/BalanceService'
+import { SigningService } from './services/SigningService'
+import { CacheService } from './services/CacheService'
+import { FastSigningService } from './services/FastSigningService'
+import { ChainConfig } from '../chains/config/ChainConfig'
+import { VaultServices, VaultConfig } from './VaultServices'
 
 /**
  * Determine vault type based on signer names
@@ -42,9 +33,12 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  * Following vault-centric architecture with debugging support
  */
 export class Vault {
-  private addressCache = new Map<string, string>()
-  private addressDeriver = new AddressDeriver()
-  private chainManager?: ChainManager
+  // Phase 3: Service instances (replacing old AddressDeriver and ChainManager)
+  private addressService: AddressService
+  private balanceService: BalanceService
+  private signingService: SigningService
+  private cacheService: CacheService
+  private fastSigningService?: FastSigningService
 
   // Cached properties to avoid repeated decoding
   private _isEncrypted?: boolean
@@ -53,51 +47,30 @@ export class Vault {
   // Runtime properties (not stored in .vult file)
   private _userChains: string[] = []
   private _currency: string = 'USD'
-  private _sdkInstance?: any // Reference to SDK for getting supported/default chains
-  private _balanceCache = new Map<string, CachedBalance>() // TTL balance caching (5 minutes)
+  // Phase 3: Removed _balanceCache - now using CacheService instead
 
   constructor(
     private vaultData: CoreVault,
-    private walletCore?: WalletCore,
-    private wasmManager?: WASMManager,
-    sdkInstance?: any
+    services: VaultServices,
+    config?: VaultConfig
   ) {
-    // Vault initialized
+    // Vault initialized with injected services
 
-    // Store SDK reference for chain validation
-    this._sdkInstance = sdkInstance
+    // Phase 3: Use injected services (no more instantiation here)
+    this.addressService = services.addressService
+    this.balanceService = services.balanceService
+    this.signingService = services.signingService
+    this.fastSigningService = services.fastSigningService
+    this.cacheService = new CacheService()
 
-    // Initialize user chains from SDK defaults if available
-    if (sdkInstance?.getDefaultChains) {
-      this._userChains = [...sdkInstance.getDefaultChains()]
-    } else {
-      // Fallback to basic chains if no SDK instance
-      this._userChains = [
-        'Bitcoin',
-        'Ethereum',
-        'Solana',
-        'THORChain',
-        'Ripple',
-      ]
-    }
+    // Initialize user chains from config or ChainConfig defaults
+    this._userChains = config?.defaultChains ?? ChainConfig.getDefaultChains()
 
-    // Initialize currency from SDK defaults if available
-    if (sdkInstance?.getDefaultCurrency) {
-      this._currency = sdkInstance.getDefaultCurrency()
-    }
+    // Initialize currency from config or default
+    this._currency = config?.defaultCurrency ?? 'USD'
 
-    // Initialize the address deriver if we have WalletCore
-    if (walletCore) {
-      this.addressDeriver.initialize(walletCore)
-    }
-
-    // Initialize ChainManager if we have WASMManager
-    if (wasmManager) {
-      this.chainManager = new ChainManager(wasmManager)
-      this.chainManager.initialize().catch(error => {
-        console.warn('Failed to initialize ChainManager:', error)
-      })
-    }
+    // Note: Old AddressDeriver and ChainManager initialization removed (Phase 3 cleanup)
+    // All operations now use addressService and balanceService instead
   }
 
   /**
@@ -234,61 +207,28 @@ export class Vault {
 
   /**
    * Get address for specified chain
-   * Uses AddressDeriver for consistent address derivation
+   * Uses AddressService for consistent address derivation
    */
-  async address(chain: string): Promise<string>
-  async address(input: string | AddressInput): Promise<string> {
-    // Handle both signatures: address(chain) and address({ chain, walletCore })
-    let chainStr: string
-    let walletCoreToUse: WalletCore | undefined
-
-    if (typeof input === 'string') {
-      chainStr = input
-      walletCoreToUse = this.walletCore
-    } else {
-      chainStr = input.chain
-      walletCoreToUse = input.walletCore || this.walletCore
-    }
+  async address(chain: string): Promise<string> {
+    const chainStr = chain
 
     // Check cache first (permanent caching for addresses as per architecture)
-    const cacheKey = chainStr.toLowerCase()
-    if (this.addressCache.has(cacheKey)) {
-      const cachedAddress = this.addressCache.get(cacheKey)!
+    const cacheKey = `address:${chainStr.toLowerCase()}`
+    const cachedAddress = this.cacheService.get<string>(cacheKey, Number.MAX_SAFE_INTEGER)
+
+    if (cachedAddress) {
       return cachedAddress
     }
 
     try {
-      // Ensure we have WalletCore
-      if (!walletCoreToUse) {
-        throw new VaultError(
-          VaultErrorCode.WalletCoreNotInitialized,
-          'WalletCore instance is required for address derivation'
-        )
-      }
-
-      // Get WalletCore using the same memoized instance as the extension
-      const walletCore = await getWalletCore()
-
-      // Map string to Chain enum (using AddressDeriver's mapping)
-      const chain = this.addressDeriver.mapStringToChain(chainStr)
-
-      // Get the proper public key for this chain
-      const publicKey = getPublicKey({
-        chain,
-        walletCore,
-        hexChainCode: this.vaultData.hexChainCode,
-        publicKeys: this.vaultData.publicKeys,
-      })
-
-      // Derive the address using core functionality
-      const address = deriveAddress({
-        chain,
-        publicKey,
-        walletCore,
-      })
+      // Phase 3: Delegate to AddressService for address derivation
+      const address = await this.addressService.deriveAddress(
+        this.vaultData,
+        chainStr
+      )
 
       // Cache the address (permanent caching as per architecture)
-      this.addressCache.set(cacheKey, address)
+      this.cacheService.set(cacheKey, address)
 
       return address
     } catch (error) {
@@ -359,16 +299,10 @@ export class Vault {
    * @returns Promise resolving to Balance object
    */
   async balance(chain: string, tokenId?: string): Promise<Balance> {
-    // Validate ChainManager availability
-    if (!this.chainManager) {
-      throw new VaultError(
-        VaultErrorCode.WalletCoreNotInitialized,
-        'ChainManager not available - WASMManager required for balance operations'
-      )
-    }
+    // Check cache first (5-minute TTL)
+    const cacheKey = `balance:${chain}${tokenId ? `:${tokenId}` : ''}`
+    const cachedBalance = this.cacheService.get<Balance>(cacheKey, 300000) // 5 minutes
 
-    // Check cache first
-    const cachedBalance = this.getCachedBalance(chain, tokenId)
     if (cachedBalance) {
       return cachedBalance
     }
@@ -386,21 +320,11 @@ export class Vault {
         )
       }
 
-      // Get balance from ChainManager
-      const balance = await this.chainManager.getBalances({
-        [chain]: address,
-      })
-      const chainBalance = balance[chain as keyof typeof balance]
-
-      if (!chainBalance) {
-        throw new VaultError(
-          VaultErrorCode.BalanceFetchFailed,
-          `Failed to get balance for ${chain} - no balance returned from ChainManager`
-        )
-      }
+      // Phase 3: Use BalanceService with Blockchair integration
+      const chainBalance = await this.balanceService.fetchBalance(chain, address)
 
       // Cache the result
-      this.storeBalanceInCache(chain, tokenId, chainBalance)
+      this.cacheService.set(cacheKey, chainBalance)
 
       return chainBalance
     } catch (error) {
@@ -433,14 +357,6 @@ export class Vault {
     chains?: string[],
     includeTokens?: boolean
   ): Promise<Record<string, Balance>> {
-    // Validate ChainManager availability
-    if (!this.chainManager) {
-      throw new VaultError(
-        VaultErrorCode.WalletCoreNotInitialized,
-        'ChainManager not available - WASMManager required for balance operations'
-      )
-    }
-
     // Determine which chains to fetch
     const chainsToFetch = chains || this.getChains()
 
@@ -457,7 +373,9 @@ export class Vault {
 
     // First, check cache for existing balances and collect missing ones
     for (const chain of chainsToFetch) {
-      const cachedBalance = this.getCachedBalance(chain)
+      const cacheKey = `balance:${chain}`
+      const cachedBalance = this.cacheService.get<Balance>(cacheKey, 300000)
+
       if (cachedBalance) {
         result[chain] = cachedBalance
       } else {
@@ -475,17 +393,18 @@ export class Vault {
       }
     }
 
-    // If we have chains to fetch fresh data for, batch them
+    // If we have chains to fetch fresh data for, use BalanceService
     if (Object.keys(addressesToFetch).length > 0) {
       try {
-        const freshBalances =
-          await this.chainManager.getBalances(addressesToFetch)
+        // Phase 3: Use BalanceService with Blockchair integration
+        const freshBalances = await this.balanceService.fetchBalances(addressesToFetch)
 
         // Store results and add to cache
         for (const [chain, balance] of Object.entries(freshBalances)) {
           if (balance) {
             result[chain] = balance
-            this.storeBalanceInCache(chain, undefined, balance)
+            const cacheKey = `balance:${chain}`
+            this.cacheService.set(cacheKey, balance)
           } else {
             console.warn(`No balance returned for ${chain}`)
           }
@@ -519,18 +438,11 @@ export class Vault {
    * @returns Promise resolving to fresh Balance object
    */
   async updateBalance(chain: string, tokenId?: string): Promise<Balance> {
-    // Validate ChainManager availability
-    if (!this.chainManager) {
-      throw new VaultError(
-        VaultErrorCode.WalletCoreNotInitialized,
-        'ChainManager not available - WASMManager required for balance operations'
-      )
-    }
+    // Clear cache to force refresh
+    const cacheKey = `balance:${chain}${tokenId ? `:${tokenId}` : ''}`
+    this.cacheService.clear(cacheKey)
 
     try {
-      // Clear existing cache entry to force fresh fetch
-      this.clearCacheEntry(chain, tokenId)
-
       // Get address for the chain
       const address = await this.address(chain)
 
@@ -543,22 +455,12 @@ export class Vault {
         )
       }
 
-      // Get fresh balance from ChainManager
+      // Phase 3: Use BalanceService for fresh balance
       console.log(`Force refreshing balance for ${chain}:${address}`)
-      const balances = await this.chainManager.getBalances({
-        [chain]: address,
-      })
-      const chainBalance = balances[chain as keyof typeof balances]
-
-      if (!chainBalance) {
-        throw new VaultError(
-          VaultErrorCode.BalanceFetchFailed,
-          `Failed to get fresh balance for ${chain} - no balance returned from ChainManager`
-        )
-      }
+      const chainBalance = await this.balanceService.fetchBalance(chain, address)
 
       // Cache the fresh result
-      this.storeBalanceInCache(chain, tokenId, chainBalance)
+      this.cacheService.set(cacheKey, chainBalance)
 
       return chainBalance
     } catch (error) {
@@ -590,14 +492,6 @@ export class Vault {
     chains?: string[],
     includeTokens?: boolean
   ): Promise<Record<string, Balance>> {
-    // Validate ChainManager availability
-    if (!this.chainManager) {
-      throw new VaultError(
-        VaultErrorCode.WalletCoreNotInitialized,
-        'ChainManager not available - WASMManager required for balance operations'
-      )
-    }
-
     // Determine which chains to update
     const chainsToUpdate = chains || this.getChains()
 
@@ -614,7 +508,8 @@ export class Vault {
 
     // Clear cache entries for all chains we're updating
     for (const chain of chainsToUpdate) {
-      this.clearCacheEntry(chain, undefined)
+      const cacheKey = `balance:${chain}`
+      this.cacheService.clear(cacheKey)
     }
 
     // Get addresses for all chains
@@ -628,20 +523,21 @@ export class Vault {
       }
     }
 
-    // If we have chains to update, batch them
+    // If we have chains to update, use BalanceService
     if (Object.keys(addressesToFetch).length > 0) {
       try {
         console.log(
           `Force refreshing balances for ${Object.keys(addressesToFetch).length} chains`
         )
-        const freshBalances =
-          await this.chainManager.getBalances(addressesToFetch)
+        // Phase 3: Use BalanceService for fresh balances
+        const freshBalances = await this.balanceService.fetchBalances(addressesToFetch)
 
         // Store results and update cache
         for (const [chain, balance] of Object.entries(freshBalances)) {
           if (balance) {
             result[chain] = balance
-            this.storeBalanceInCache(chain, undefined, balance)
+            const cacheKey = `balance:${chain}`
+            this.cacheService.set(cacheKey, balance)
           } else {
             console.warn(`No balance returned for ${chain}`)
           }
@@ -676,17 +572,15 @@ export class Vault {
    */
   async setChains(chains: string[]): Promise<void> {
     this.validateChains(chains)
-    this._userChains = [...chains]
 
-    // Clear address cache for removed chains
-    const currentCacheKeys = Array.from(this.addressCache.keys())
-    const newChainKeys = chains.map(chain => chain.toLowerCase())
-
-    for (const cacheKey of currentCacheKeys) {
-      if (!newChainKeys.includes(cacheKey)) {
-        this.addressCache.delete(cacheKey)
-      }
+    // Clear address cache for chains being removed
+    const removedChains = this._userChains.filter(c => !chains.includes(c))
+    for (const chain of removedChains) {
+      const cacheKey = `address:${chain.toLowerCase()}`
+      this.cacheService.clear(cacheKey)
     }
+
+    this._userChains = [...chains]
 
     // Pre-derive addresses for new chains
     await this.addresses(chains)
@@ -712,7 +606,8 @@ export class Vault {
     this._userChains = this._userChains.filter(c => c !== chain)
 
     // Clear address cache for removed chain
-    this.addressCache.delete(chain.toLowerCase())
+    const cacheKey = `address:${chain.toLowerCase()}`
+    this.cacheService.clear(cacheKey)
   }
 
   /**
@@ -726,7 +621,7 @@ export class Vault {
    * Reset to SDK default chains
    */
   async resetToDefaultChains(): Promise<void> {
-    const defaultChains = this.getSDKDefaultChains()
+    const defaultChains = ChainConfig.getDefaultChains()
     await this.setChains(defaultChains)
   }
 
@@ -752,31 +647,13 @@ export class Vault {
    * Validate chains against supported chains list
    */
   private validateChains(chains: string[]): void {
-    if (!this._sdkInstance?.getSupportedChains) {
-      return // Skip validation if no SDK instance
-    }
+    const { invalid } = ChainConfig.validateChains(chains)
 
-    const supportedChains = this._sdkInstance.getSupportedChains()
-    const invalidChains = chains.filter(
-      chain => !supportedChains.includes(chain)
-    )
-
-    if (invalidChains.length > 0) {
+    if (invalid.length > 0) {
       throw new Error(
-        `Unsupported chains: ${invalidChains.join(', ')}. Supported chains: ${supportedChains.join(', ')}`
+        `Unsupported chains: ${invalid.join(', ')}. Supported chains: ${ChainConfig.getSupportedChains().join(', ')}`
       )
     }
-  }
-
-  /**
-   * Get SDK default chains or fallback
-   */
-  private getSDKDefaultChains(): string[] {
-    if (this._sdkInstance?.getDefaultChains) {
-      return this._sdkInstance.getDefaultChains()
-    }
-    // Fallback to basic chains if no SDK instance
-    return ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple']
   }
 
   /**
@@ -785,7 +662,7 @@ export class Vault {
   private getDefaultChains(): string[] {
     return this._userChains.length > 0
       ? this._userChains
-      : this.getSDKDefaultChains()
+      : ChainConfig.getDefaultChains()
   }
 
   /**
@@ -801,12 +678,8 @@ export class Vault {
     // Validate vault supports the requested mode
     this.validateSigningMode(mode)
 
-    // Detect Solana transactions and route to Solana-specific signing
-    if (this.isSolanaTransaction(payload)) {
-      return this.signSolana(mode, payload, password)
-    }
-
-    // Route to appropriate signing implementation for other chains
+    // Route to appropriate signing implementation
+    // Note: Solana signing uses same flow as other chains via strategies
     switch (mode) {
       case 'fast':
         return this.signFast(payload, password)
@@ -826,213 +699,6 @@ export class Vault {
           `Unsupported signing mode: ${mode}`
         )
     }
-  }
-
-  /**
-   * Check if a signing payload is for a Solana transaction
-   */
-  private isSolanaTransaction(payload: SigningPayload): boolean {
-    const chain = payload.chain?.toString().toLowerCase()
-    return chain === 'solana' || chain === 'sol'
-  }
-
-  /**
-   * Sign Solana transaction with appropriate mode
-   * TEMPORARILY DISABLED - Solana library issues need to be resolved
-   * TODO: Re-enable once @solana/web3.js v2 migration is complete
-   */
-  private async signSolana(
-    _mode: SigningMode,
-    _payload: SigningPayload,
-    _password?: string
-  ): Promise<Signature> {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Solana signing temporarily disabled - library issues under maintenance'
-    )
-
-    /* COMMENTED OUT UNTIL SOLANA LIBRARY ISSUES ARE FIXED
-    console.log('Signing Solana transaction with mode:', mode)
-
-    // Validate we have WalletCore for transaction decoding
-    if (!this.walletCore) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'WalletCore required for Solana transaction signing'
-      )
-    }
-
-    // Validate transaction data is provided
-    if (!payload.transaction) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Transaction data required for Solana signing'
-      )
-    }
-
-    // Convert transaction to Uint8Array if needed
-    const serializedTx = this.ensureUint8Array(payload.transaction)
-
-    try {
-      // Import Solana parsers and keysign builder
-      const {
-        parseSolanaTransaction,
-        buildSolanaKeysignPayload,
-      } = await import('../chains/solana')
-
-      // Parse the transaction
-      const parsedTransaction = await parseSolanaTransaction(
-        this.walletCore,
-        serializedTx
-      )
-
-      console.log('Parsed Solana transaction:', parsedTransaction)
-
-      // Build keysign payload
-      const keysignPayload = await buildSolanaKeysignPayload({
-        parsedTransaction,
-        serializedTransaction: serializedTx,
-        vaultPublicKey: this.vaultData.publicKeys.ecdsa,
-        skipBroadcast: false,
-      })
-
-      // Route to appropriate signing mode with the prepared payload
-      switch (mode) {
-        case 'fast':
-          return this.signSolanaFast(keysignPayload, password)
-        case 'relay':
-          return this.signSolanaRelay(keysignPayload)
-        case 'local':
-          return this.signSolanaLocal(keysignPayload)
-        default:
-          throw new VaultError(
-            VaultErrorCode.InvalidConfig,
-            `Unsupported signing mode: ${mode}`
-          )
-      }
-    } catch (error) {
-      console.error('Failed to sign Solana transaction:', error)
-
-      if (error instanceof VaultError) {
-        throw error
-      }
-
-      throw new VaultError(
-        VaultErrorCode.SigningFailed,
-        `Solana signing failed: ${(error as Error).message}`,
-        error as Error
-      )
-    }
-    */
-  }
-
-  /**
-   * Ensure data is a Uint8Array
-   */
-  private ensureUint8Array(data: any): Uint8Array {
-    if (data instanceof Uint8Array) {
-      return data
-    }
-    if (Array.isArray(data)) {
-      return new Uint8Array(data)
-    }
-    if (ArrayBuffer.isView(data)) {
-      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-    }
-    if (typeof data === 'string') {
-      // Assume hex string
-      const hex = data.startsWith('0x') ? data.slice(2) : data
-      return new Uint8Array(
-        hex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []
-      )
-    }
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      'Transaction data must be Uint8Array, Buffer, or hex string'
-    )
-  }
-
-  /**
-   * Sign Solana transaction using VultiServer (fast mode)
-   * TEMPORARILY DISABLED - Solana library issues need to be resolved
-   */
-  private async signSolanaFast(
-    _keysignPayload: any,
-    _password?: string
-  ): Promise<Signature> {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Solana fast signing temporarily disabled - library issues under maintenance'
-    )
-    /* COMMENTED OUT UNTIL SOLANA LIBRARY ISSUES ARE FIXED
-    // Get SDK instance to access server manager
-    if (!this._sdkInstance) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'SDK instance required for fast signing'
-      )
-    }
-
-    // Validate we have a server manager
-    const serverManager = this._sdkInstance.getServerManager()
-    if (!serverManager) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Server manager not available for fast signing'
-      )
-    }
-
-    // Validate password is provided for fast signing
-    if (!password) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Password is required for fast signing'
-      )
-    }
-
-    try {
-      // Use server manager to perform fast signing with Solana keysign payload
-      return await serverManager.signSolanaWithServer(
-        this.vaultData,
-        keysignPayload,
-        password
-      )
-    } catch (error) {
-      console.error('Solana fast signing failed:', error)
-
-      if (error instanceof VaultError) {
-        throw error
-      }
-
-      throw new VaultError(
-        VaultErrorCode.SigningFailed,
-        `Solana fast signing failed: ${(error as Error).message}`,
-        error as Error
-      )
-    }
-    */
-  }
-
-  /**
-   * Sign Solana transaction using relay network (multi-device mode)
-   * TEMPORARILY DISABLED - Solana library issues need to be resolved
-   */
-  private async signSolanaRelay(_keysignPayload: any): Promise<Signature> {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Solana relay signing temporarily disabled - library issues under maintenance'
-    )
-  }
-
-  /**
-   * Sign Solana transaction using local P2P (multi-device mode)
-   * TEMPORARILY DISABLED - Solana library issues need to be resolved
-   */
-  private async signSolanaLocal(_keysignPayload: any): Promise<Signature> {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Solana local signing temporarily disabled - library issues under maintenance'
-    )
   }
 
   /**
@@ -1064,34 +730,26 @@ export class Vault {
     payload: SigningPayload,
     password?: string
   ): Promise<Signature> {
-    // Get SDK instance to access server manager
-    if (!this._sdkInstance) {
+    // Validate password is provided for fast signing
+    if (!password) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
-        'SDK instance required for fast signing'
+        'Password is required for fast signing'
       )
     }
 
-    // Validate we have a server manager
-    const serverManager = this._sdkInstance.getServerManager()
-    if (!serverManager) {
+    // Validate FastSigningService is available
+    if (!this.fastSigningService) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
-        'Server manager not available for fast signing'
+        'FastSigningService not initialized. Fast signing requires server manager.'
       )
     }
 
     try {
-      // Validate password is provided for fast signing
-      if (!password) {
-        throw new VaultError(
-          VaultErrorCode.InvalidConfig,
-          'Password is required for fast signing'
-        )
-      }
-
-      // Use server manager to perform fast signing
-      return await serverManager.signWithServer(
+      // Use FastSigningService for proper separation of concerns
+      // FastSigningService orchestrates: strategy (chain logic) + ServerManager (server coordination)
+      return await this.fastSigningService.signWithServer(
         this.vaultData,
         payload,
         password
@@ -1189,81 +847,5 @@ export class Vault {
     return this.vaultData
   }
 
-  // === PRIVATE BALANCE CACHE HELPERS ===
-
-  /**
-   * Generate cache key for balance entries
-   * Format: `${chain}:${tokenId || 'native'}`
-   */
-  private getCacheKey(chain: string, tokenId?: string): string {
-    const normalizedChain = chain.toLowerCase()
-    const tokenKey = tokenId || 'native'
-    return `${normalizedChain}:${tokenKey}`
-  }
-
-  /**
-   * Check if cached balance is still valid (not expired)
-   */
-  private isCacheValid(cachedBalance: CachedBalance): boolean {
-    const now = Date.now()
-    const expiresAt = cachedBalance.cachedAt + cachedBalance.ttl
-    return now < expiresAt
-  }
-
-  /**
-   * Clear expired entries from balance cache
-   */
-  private clearExpiredCache(): void {
-    for (const [key, cachedBalance] of this._balanceCache.entries()) {
-      if (!this.isCacheValid(cachedBalance)) {
-        this._balanceCache.delete(key)
-      }
-    }
-  }
-
-  /**
-   * Clear specific cache entry
-   */
-  private clearCacheEntry(chain: string, tokenId?: string): void {
-    const cacheKey = this.getCacheKey(chain, tokenId)
-    this._balanceCache.delete(cacheKey)
-  }
-
-  /**
-   * Store balance in cache with TTL
-   */
-  private storeBalanceInCache(
-    chain: string,
-    tokenId: string | undefined,
-    balance: import('../types').Balance
-  ): void {
-    const cacheKey = this.getCacheKey(chain, tokenId)
-    const cachedBalance: CachedBalance = {
-      balance,
-      cachedAt: Date.now(),
-      ttl: 5 * 60 * 1000, // 5 minutes in milliseconds
-    }
-    this._balanceCache.set(cacheKey, cachedBalance)
-  }
-
-  /**
-   * Get balance from cache if valid
-   */
-  private getCachedBalance(
-    chain: string,
-    tokenId?: string
-  ): import('../types').Balance | null {
-    const cacheKey = this.getCacheKey(chain, tokenId)
-    const cachedBalance = this._balanceCache.get(cacheKey)
-
-    if (!cachedBalance || !this.isCacheValid(cachedBalance)) {
-      if (cachedBalance) {
-        // Remove expired entry
-        this._balanceCache.delete(cacheKey)
-      }
-      return null
-    }
-
-    return cachedBalance.balance
-  }
+  // Phase 3: Balance cache helpers removed - now using CacheService
 }

@@ -44,6 +44,8 @@
     "**/*.stories.ts",
     "**/*.stories.tsx",
     "../**/node_modules",
-    "../**/dist"
+    "../**/dist",
+    "../../upstream/**/*",
+    "../../archived/**/*"
   ]
 }
