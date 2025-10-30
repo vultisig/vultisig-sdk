@@ -10,10 +10,10 @@ import {
   Vault,
   VaultCreationStep,
   VaultType,
-} from '../types'
-import { WASMManager } from '../wasm'
+} from './types'
+import { WASMManager } from './wasm'
 import { Vault as VaultClass } from './Vault'
-import { VaultImportError, VaultImportErrorCode } from './VaultError'
+import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 /**
@@ -28,10 +28,10 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
 }
 
 /**
- * VaultManagement handles vault lifecycle operations
+ * VaultManager handles vault lifecycle operations
  * Manages vault storage, import/export, and active vault state
  */
-export class VaultManagement {
+export class VaultManager {
   private vaults = new Map<string, Vault>()
   private activeVault: VaultClass | null = null
 

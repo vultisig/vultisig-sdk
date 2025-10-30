@@ -1,4 +1,5 @@
 import { Chain } from '@core/chain/Chain'
+import { VaultError, VaultErrorCode } from '../../vault/VaultError'
 
 /**
  * Chain type categorization
@@ -341,7 +342,8 @@ export class ChainConfig {
       }
     }
 
-    throw new Error(
+    throw new VaultError(
+      VaultErrorCode.ChainNotSupported,
       `Unsupported chain: ${chainId}. Supported chains: ${this.getSupportedChains().join(', ')}`
     )
   }

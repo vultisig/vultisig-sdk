@@ -1,10 +1,11 @@
-import { ChainConfig } from '../chains/config/ChainConfig'
+import { ChainConfig } from './chains/config/ChainConfig'
+import { VaultError, VaultErrorCode } from './vault/VaultError'
 
 /**
- * ChainManagement handles SDK-level chain configuration and validation
+ * ChainManager handles SDK-level chain configuration and validation
  * Manages supported chains, default chains, and currency settings
  */
-export class ChainManagement {
+export class ChainManager {
   private defaultChains: string[]
   private defaultCurrency = 'USD'
 
@@ -34,7 +35,8 @@ export class ChainManagement {
     const validation = ChainConfig.validateChains(chains)
 
     if (validation.invalid.length > 0) {
-      throw new Error(
+      throw new VaultError(
+        VaultErrorCode.ChainNotSupported,
         `Unsupported chains: ${validation.invalid.join(', ')}. Supported chains: ${ChainConfig.getSupportedChains().join(', ')}`
       )
     }

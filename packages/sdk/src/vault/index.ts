@@ -4,10 +4,14 @@
  */
 
 export { Vault } from './Vault'
-export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
+export {
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
+  VaultImportErrorCode,
+} from './VaultError'
 export { AddressBookManager } from './AddressBook'
-export { ChainManagement } from './ChainManagement'
-export { VaultManagement } from './VaultManagement'
+
 // Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
 // export { BalanceManagement } from './BalanceManagement'
 
