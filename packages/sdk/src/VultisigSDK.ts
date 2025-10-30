@@ -3,6 +3,7 @@ import { ServerManager } from './server/ServerManager'
 import {
   AddressBook,
   AddressBookEntry,
+  SDKConfig,
   ServerStatus,
   Signature,
   SigningPayload,
@@ -20,6 +21,7 @@ import { WASMManager } from './wasm'
  */
 export class Vultisig {
   private serverManager: ServerManager
+  private wasmManager: WASMManager
   private initialized = false
 
   // Module managers
@@ -27,16 +29,12 @@ export class Vultisig {
   private chainManager: ChainManager
   private vaultManager: VaultManager
 
-  constructor(config?: {
-    serverEndpoints?: {
-      fastVault?: string
-      messageRelay?: string
-    }
-
+  constructor(config?: SDKConfig & {
     defaultChains?: string[]
     defaultCurrency?: string
   }) {
     this.serverManager = new ServerManager(config?.serverEndpoints)
+    this.wasmManager = new WASMManager(config?.wasmConfig)
 
     // Initialize module managers
     this.addressBookManager = new AddressBookManager()
@@ -44,7 +42,14 @@ export class Vultisig {
       defaultChains: config?.defaultChains,
       defaultCurrency: config?.defaultCurrency,
     })
-    this.vaultManager = new VaultManager(this)
+    this.vaultManager = new VaultManager(
+      this.wasmManager,
+      this.serverManager,
+      {
+        defaultChains: config?.defaultChains,
+        defaultCurrency: config?.defaultCurrency,
+      }
+    )
   }
 
   /**
@@ -65,7 +70,7 @@ export class Vultisig {
     if (this.initialized) return
 
     try {
-      await WASMManager.getInstance().initialize()
+      await this.wasmManager.initialize()
       this.initialized = true
     } catch (error) {
       throw new Error('Failed to initialize SDK: ' + (error as Error).message)
@@ -145,11 +150,9 @@ export class Vultisig {
       password
     )
 
-    // Create VaultClass instance
-    const vault = new VaultClass(
-      vaultData,
-      this
-    )
+    // Create VaultClass instance using VaultManager's service creation
+    // This ensures consistent service instantiation across all vault creation paths
+    const vault = this.vaultManager.createVaultInstance(vaultData)
 
     // Store the vault and set as active
     this.vaultManager.setActiveVault(vault)
@@ -363,5 +366,9 @@ export class Vultisig {
 
   getServerManager(): ServerManager {
     return this.serverManager
+  }
+
+  getWasmManager(): WASMManager {
+    return this.wasmManager
   }
 }

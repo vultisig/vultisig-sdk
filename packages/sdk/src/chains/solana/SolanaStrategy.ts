@@ -14,6 +14,7 @@ import { Chain } from '@core/chain/Chain'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getCoinBalance } from '@core/chain/coin/balance'
+import { WASMManager } from '../../wasm/WASMManager'
 
 /**
  * Strategy implementation for Solana.
@@ -21,6 +22,11 @@ import { getCoinBalance } from '@core/chain/coin/balance'
  */
 export class SolanaStrategy implements ChainStrategy {
   readonly chainId = 'Solana'
+  private readonly wasmManager: WASMManager
+
+  constructor(wasmManager: WASMManager) {
+    this.wasmManager = wasmManager
+  }
 
   /**
    * Derive Solana address for vault
@@ -138,10 +144,9 @@ export class SolanaStrategy implements ChainStrategy {
   // estimateGas is not implemented (optional in interface)
 
   /**
-   * Get WalletCore instance via singleton
+   * Get WalletCore instance via injected WASMManager
    */
   private async getWalletCore(): Promise<WalletCore> {
-    const { WASMManager } = await import('../../wasm/WASMManager')
-    return WASMManager.getInstance().getWalletCore()
+    return this.wasmManager.getWalletCore()
   }
 }

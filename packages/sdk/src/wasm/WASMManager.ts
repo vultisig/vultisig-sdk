@@ -2,45 +2,49 @@ import { initializeMpcLib } from '@core/mpc/lib/initialize'
 import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm } from '@trustwallet/wallet-core'
 
+export interface WASMConfig {
+  autoInit?: boolean
+  wasmPaths?: {
+    walletCore?: string
+    dkls?: string
+    schnorr?: string
+  }
+}
+
 /**
  * WASMManager handles initialization and management of all WASM modules
- * Singleton instance with lazy loading for optimal performance
+ * Supports lazy loading for optimal performance
  * Coordinates wallet-core, DKLS, and Schnorr WASM loading
  */
 export class WASMManager {
-  private static instance: WASMManager | null = null
+  private config?: WASMConfig
 
-  /**
-   * Get singleton instance
-   */
-  static getInstance(): WASMManager {
-    if (!WASMManager.instance) {
-      WASMManager.instance = new WASMManager()
-    }
-    return WASMManager.instance
+  constructor(config?: WASMConfig) {
+    this.config = config
   }
-
-  /**
-   * Reset singleton instance (for testing)
-   */
-  static reset(): void {
-    WASMManager.instance = null
-  }
-
-  // Private constructor to enforce singleton pattern
-  private constructor() {}
 
   // Memoized initialization functions for lazy loading
-  private getWalletCoreInit = memoizeAsync(initWasm)
-  private getDklsInit = memoizeAsync(() => initializeMpcLib('ecdsa'))
-  private getSchnorrInit = memoizeAsync(() => initializeMpcLib('eddsa'))
+  // Note: initWasm from wallet-core doesn't support custom paths
+  private getWalletCoreInit = memoizeAsync(() => initWasm())
+  private getDklsInit = memoizeAsync((wasmUrl?: string) =>
+    initializeMpcLib('ecdsa', wasmUrl)
+  )
+  private getSchnorrInit = memoizeAsync((wasmUrl?: string) =>
+    initializeMpcLib('eddsa', wasmUrl)
+  )
 
   /**
    * Get WalletCore instance for address derivation and operations
    * Lazy loads on first access
+   * Note: Custom WASM paths not supported for wallet-core
    */
   async getWalletCore() {
     try {
+      if (this.config?.wasmPaths?.walletCore) {
+        console.warn(
+          'Custom WASM path for wallet-core is not supported. Using default path.'
+        )
+      }
       return await this.getWalletCoreInit()
     } catch (error) {
       throw new Error(`Failed to initialize WalletCore WASM: ${error}`)
@@ -53,7 +57,8 @@ export class WASMManager {
    */
   async initializeDkls(): Promise<void> {
     try {
-      await this.getDklsInit()
+      const customPath = this.config?.wasmPaths?.dkls
+      await this.getDklsInit(customPath)
     } catch (error) {
       throw new Error(`Failed to initialize DKLS WASM: ${error}`)
     }
@@ -65,7 +70,8 @@ export class WASMManager {
    */
   async initializeSchnorr(): Promise<void> {
     try {
-      await this.getSchnorrInit()
+      const customPath = this.config?.wasmPaths?.schnorr
+      await this.getSchnorrInit(customPath)
     } catch (error) {
       throw new Error(`Failed to initialize Schnorr WASM: ${error}`)
     }
