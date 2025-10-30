@@ -1,5 +1,6 @@
 import { ChainStrategy } from './ChainStrategy'
 import { ChainConfig } from '../config/ChainConfig'
+import { WASMManager } from '../../wasm/WASMManager'
 
 /**
  * Factory for chain strategies.
@@ -80,8 +81,9 @@ export class ChainStrategyFactory {
 /**
  * Create a default factory with all supported chains registered
  * Uses ChainConfig to get chain lists (single source of truth)
+ * @param wasmManager WASMManager instance to inject into strategies
  */
-export function createDefaultStrategyFactory(): ChainStrategyFactory {
+export function createDefaultStrategyFactory(wasmManager: WASMManager): ChainStrategyFactory {
   const factory = new ChainStrategyFactory()
 
   // Get chain lists from ChainConfig (no more hardcoded lists!)
@@ -94,13 +96,13 @@ export function createDefaultStrategyFactory(): ChainStrategyFactory {
   const { UtxoStrategy } = require('../utxo/UtxoStrategy')
 
   // Register all EVM chains (they share same strategy with different config)
-  factory.registerEvmChains(evmChains, (chainId) => new EvmStrategy(chainId))
+  factory.registerEvmChains(evmChains, (chainId) => new EvmStrategy(chainId, wasmManager))
 
   // Register all UTXO chains (they share same strategy with different config)
-  factory.registerUtxoChains(utxoChains, (chainId) => new UtxoStrategy(chainId))
+  factory.registerUtxoChains(utxoChains, (chainId) => new UtxoStrategy(chainId, wasmManager))
 
   // Register Solana
-  factory.register('Solana', new SolanaStrategy())
+  factory.register('Solana', new SolanaStrategy(wasmManager))
 
   return factory
 }

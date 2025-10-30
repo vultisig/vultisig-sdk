@@ -16,6 +16,7 @@ import { EvmChain } from '@core/chain/Chain'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getCoinBalance } from '@core/chain/coin/balance'
+import { WASMManager } from '../../wasm/WASMManager'
 
 /**
  * Strategy implementation for EVM-compatible chains.
@@ -24,10 +25,12 @@ import { getCoinBalance } from '@core/chain/coin/balance'
 export class EvmStrategy implements ChainStrategy {
   readonly chainId: string
   private readonly evmChain: EvmChain
+  private readonly wasmManager: WASMManager
 
-  constructor(chainId: string) {
+  constructor(chainId: string, wasmManager: WASMManager) {
     this.chainId = chainId
     this.evmChain = chainId as EvmChain
+    this.wasmManager = wasmManager
   }
 
   /**
@@ -186,10 +189,9 @@ export class EvmStrategy implements ChainStrategy {
   }
 
   /**
-   * Get WalletCore instance via singleton
+   * Get WalletCore instance via injected WASMManager
    */
   private async getWalletCore(): Promise<WalletCore> {
-    const { WASMManager } = await import('../../wasm/WASMManager')
-    return WASMManager.getInstance().getWalletCore()
+    return this.wasmManager.getWalletCore()
   }
 }

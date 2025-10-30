@@ -13,9 +13,8 @@ import { BalanceService } from './services/BalanceService'
 import { SigningService } from './services/SigningService'
 import { CacheService } from './services/CacheService'
 import { FastSigningService } from './services/FastSigningService'
-import { createDefaultStrategyFactory } from '../chains/strategies/ChainStrategyFactory'
-import { blockchairFirstResolver } from './balance/blockchair/integration'
 import { ChainConfig } from '../chains/config/ChainConfig'
+import { VaultServices, VaultConfig } from './VaultServices'
 
 /**
  * Determine vault type based on signer names
@@ -48,44 +47,27 @@ export class Vault {
   // Runtime properties (not stored in .vult file)
   private _userChains: string[] = []
   private _currency: string = 'USD'
-  private _sdkInstance?: any // Reference to SDK for getting supported/default chains
   // Phase 3: Removed _balanceCache - now using CacheService instead
 
   constructor(
     private vaultData: CoreVault,
-    sdkInstance?: any
+    services: VaultServices,
+    config?: VaultConfig
   ) {
-    // Vault initialized
+    // Vault initialized with injected services
 
-    // Store SDK reference for chain validation
-    this._sdkInstance = sdkInstance
-
-    // Phase 3: Initialize strategy factory and services
-    const strategyFactory = createDefaultStrategyFactory()
-
-    this.addressService = new AddressService(strategyFactory)
-    this.balanceService = new BalanceService(strategyFactory, blockchairFirstResolver)
-    this.signingService = new SigningService(strategyFactory)
+    // Phase 3: Use injected services (no more instantiation here)
+    this.addressService = services.addressService
+    this.balanceService = services.balanceService
+    this.signingService = services.signingService
+    this.fastSigningService = services.fastSigningService
     this.cacheService = new CacheService()
 
-    // FastSigningService requires ServerManager (will be initialized when needed)
-    if (sdkInstance?.getServerManager) {
-      const serverManager = sdkInstance.getServerManager()
-      this.fastSigningService = new FastSigningService(serverManager, strategyFactory)
-    }
+    // Initialize user chains from config or ChainConfig defaults
+    this._userChains = config?.defaultChains ?? ChainConfig.getDefaultChains()
 
-    // Initialize user chains from SDK defaults if available
-    if (sdkInstance?.getDefaultChains) {
-      this._userChains = [...sdkInstance.getDefaultChains()]
-    } else {
-      // Fallback to ChainConfig defaults if no SDK instance
-      this._userChains = ChainConfig.getDefaultChains()
-    }
-
-    // Initialize currency from SDK defaults if available
-    if (sdkInstance?.getDefaultCurrency) {
-      this._currency = sdkInstance.getDefaultCurrency()
-    }
+    // Initialize currency from config or default
+    this._currency = config?.defaultCurrency ?? 'USD'
 
     // Note: Old AddressDeriver and ChainManager initialization removed (Phase 3 cleanup)
     // All operations now use addressService and balanceService instead
@@ -639,7 +621,7 @@ export class Vault {
    * Reset to SDK default chains
    */
   async resetToDefaultChains(): Promise<void> {
-    const defaultChains = this.getSDKDefaultChains()
+    const defaultChains = ChainConfig.getDefaultChains()
     await this.setChains(defaultChains)
   }
 
@@ -665,31 +647,13 @@ export class Vault {
    * Validate chains against supported chains list
    */
   private validateChains(chains: string[]): void {
-    if (!this._sdkInstance?.getSupportedChains) {
-      return // Skip validation if no SDK instance
-    }
+    const { invalid } = ChainConfig.validateChains(chains)
 
-    const supportedChains = this._sdkInstance.getSupportedChains()
-    const invalidChains = chains.filter(
-      chain => !supportedChains.includes(chain)
-    )
-
-    if (invalidChains.length > 0) {
+    if (invalid.length > 0) {
       throw new Error(
-        `Unsupported chains: ${invalidChains.join(', ')}. Supported chains: ${supportedChains.join(', ')}`
+        `Unsupported chains: ${invalid.join(', ')}. Supported chains: ${ChainConfig.getSupportedChains().join(', ')}`
       )
     }
-  }
-
-  /**
-   * Get SDK default chains or fallback
-   */
-  private getSDKDefaultChains(): string[] {
-    if (this._sdkInstance?.getDefaultChains) {
-      return this._sdkInstance.getDefaultChains()
-    }
-    // Fallback to ChainConfig defaults if no SDK instance
-    return ChainConfig.getDefaultChains()
   }
 
   /**
@@ -698,7 +662,7 @@ export class Vault {
   private getDefaultChains(): string[] {
     return this._userChains.length > 0
       ? this._userChains
-      : this.getSDKDefaultChains()
+      : ChainConfig.getDefaultChains()
   }
 
   /**

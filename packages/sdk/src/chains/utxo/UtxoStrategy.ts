@@ -13,6 +13,7 @@ import { UtxoChain } from '@core/chain/Chain'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getCoinBalance } from '@core/chain/coin/balance'
+import { WASMManager } from '../../wasm/WASMManager'
 
 /**
  * Strategy implementation for UTXO-based chains (Bitcoin, Litecoin, etc.)
@@ -28,11 +29,13 @@ export class UtxoStrategy implements ChainStrategy {
   readonly chainId: string
   private readonly utxoChain: UtxoChain
   private readonly config
+  private readonly wasmManager: WASMManager
 
-  constructor(chainId: string) {
+  constructor(chainId: string, wasmManager: WASMManager) {
     this.chainId = chainId
     this.utxoChain = chainId as UtxoChain
     this.config = getUtxoChainConfig(chainId)
+    this.wasmManager = wasmManager
   }
 
   /**
@@ -322,10 +325,9 @@ export class UtxoStrategy implements ChainStrategy {
   }
 
   /**
-   * Get WalletCore instance via singleton
+   * Get WalletCore instance via injected WASMManager
    */
   private async getWalletCore(): Promise<WalletCore> {
-    const { WASMManager } = await import('../../wasm/WASMManager')
-    return WASMManager.getInstance().getWalletCore()
+    return this.wasmManager.getWalletCore()
   }
 }

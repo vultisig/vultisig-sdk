@@ -11,9 +11,18 @@ import {
   VaultCreationStep,
   VaultType,
 } from './types'
-import { Vault as VaultClass } from './Vault'
+import { Vault as VaultClass } from './vault/Vault'
 import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
+import { VaultServices, VaultConfig } from './vault/VaultServices'
+import { WASMManager } from './wasm'
+import { ServerManager } from './server/ServerManager'
+import { AddressService } from './vault/services/AddressService'
+import { BalanceService } from './vault/services/BalanceService'
+import { SigningService } from './vault/services/SigningService'
+import { FastSigningService } from './vault/services/FastSigningService'
+import { createDefaultStrategyFactory } from './chains/strategies/ChainStrategyFactory'
+import { blockchairFirstResolver } from './vault/balance/blockchair/integration'
 
 /**
  * Determine vault type based on signer names
@@ -34,7 +43,38 @@ export class VaultManager {
   private vaults = new Map<string, Vault>()
   private activeVault: VaultClass | null = null
 
-  constructor(private sdkInstance?: any) {}
+  constructor(
+    private wasmManager: WASMManager,
+    private serverManager: ServerManager,
+    private config: VaultConfig
+  ) {}
+
+  /**
+   * Create VaultServices instance for dependency injection
+   * Services are created once and shared across vault instances
+   */
+  private createVaultServices(): VaultServices {
+    const strategyFactory = createDefaultStrategyFactory(this.wasmManager)
+
+    return {
+      addressService: new AddressService(strategyFactory),
+      balanceService: new BalanceService(strategyFactory, blockchairFirstResolver),
+      signingService: new SigningService(strategyFactory),
+      fastSigningService: new FastSigningService(this.serverManager, strategyFactory)
+    }
+  }
+
+  /**
+   * Create VaultClass instance with proper service injection
+   * Internal helper for consistent vault instantiation
+   */
+  createVaultInstance(vaultData: Vault): VaultClass {
+    return new VaultClass(
+      vaultData,
+      this.createVaultServices(),
+      this.config
+    )
+  }
 
   // ===== VAULT LIFECYCLE =====
 
@@ -79,12 +119,7 @@ export class VaultManager {
     }
 
     // Use ServerManager to create the fast vault
-    const serverManager = this.sdkInstance?.getServerManager()
-    if (!serverManager) {
-      throw new Error('ServerManager not available')
-    }
-
-    const result = await serverManager.createFastVault({
+    const result = await this.serverManager.createFastVault({
       name,
       password: options.password,
       email: options.email,
@@ -98,10 +133,7 @@ export class VaultManager {
     })
 
     // Create VaultClass instance from the created vault
-    const vaultInstance = new VaultClass(
-      result.vault,
-      this.sdkInstance
-    )
+    const vaultInstance = this.createVaultInstance(result.vault)
 
     // Store the vault
     this.vaults.set(result.vault.publicKeys.ecdsa, result.vault)
@@ -205,10 +237,7 @@ export class VaultManager {
       this.vaults.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
 
       // Create VaultClass instance
-      const vaultInstance = new VaultClass(
-        normalizedVault,
-        this.sdkInstance
-      )
+      const vaultInstance = this.createVaultInstance(normalizedVault)
 
       // Set cached properties on the Vault instance
       vaultInstance.setCachedEncryptionStatus(isEncrypted)
@@ -240,10 +269,7 @@ export class VaultManager {
     const summaries: Summary[] = []
 
     for (const [, vault] of this.vaults) {
-      const vaultInstance = new VaultClass(
-        vault,
-        this.sdkInstance
-      )
+      const vaultInstance = this.createVaultInstance(vault)
       const summary = vaultInstance.summary()
 
       const fullSummary: Summary = {
@@ -271,7 +297,7 @@ export class VaultManager {
           hexChainCode: vault.hexChainCode,
           hexEncryptionKey: '', // TODO: Add encryption key if available
         },
-        currency: this.sdkInstance?.getDefaultCurrency?.() || 'USD',
+        currency: this.config.defaultCurrency || 'USD',
         tokens: {}, // TODO: Implement token management
       }
 
