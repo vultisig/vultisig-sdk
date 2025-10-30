@@ -85,7 +85,6 @@ export class EvmStrategy implements ChainStrategy {
 
   /**
    * Build keysign payload for EVM transaction
-   * TODO(Phase 2): Align return types properly
    */
   async buildKeysignPayload(
     tx: ParsedTransaction,
@@ -102,8 +101,7 @@ export class EvmStrategy implements ChainStrategy {
       skipBroadcast: options?.skipBroadcast ?? false
     })
 
-    // TODO(Phase 2): Remove type assertion when interfaces are aligned
-    return payload as any
+    return payload
   }
 
   /**

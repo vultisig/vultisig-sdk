@@ -110,7 +110,7 @@ export class UtxoStrategy implements ChainStrategy {
     const { KeysignPayloadSchema } = await import('@core/mpc/types/vultisig/keysign/v1/keysign_message_pb')
 
     const walletCore = await this.getWalletCore()
-    const utxoTx = tx as ParsedUtxoTransaction
+    const utxoTx = tx as unknown as ParsedUtxoTransaction
 
     // Derive address for this vault
     const publicKey = vaultPublicKey
@@ -137,7 +137,7 @@ export class UtxoStrategy implements ChainStrategy {
       memo: utxoTx.psbtBase64, // PSBT encoded in memo field
     })
 
-    return keysignPayload as any
+    return keysignPayload
   }
 
   /**

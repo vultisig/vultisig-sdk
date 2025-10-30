@@ -3,8 +3,10 @@
  * Handles multi-chain blockchain interactions
  */
 
-export { ChainManager } from './ChainManager'
-export { AddressDeriver } from './AddressDeriver'
+// ChainManager removed - was orphaned code not used by Vault
+// AddressDeriver removed - replaced by ChainConfig for chain mapping
+export { ChainConfig } from './config/ChainConfig'
+export type { ChainMetadata, ChainType } from './config/ChainConfig'
 
 // Chain strategies
 export { EvmStrategy } from './evm/EvmStrategy'

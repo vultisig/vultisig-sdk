@@ -6,7 +6,7 @@
 
 import { EvmChain } from '@core/chain/Chain'
 import { getEvmClient } from '@core/chain/chains/evm/client'
-import type { EvmToken } from '../types'
+import { EvmToken } from '../types'
 import { NATIVE_TOKEN_ADDRESS, isNativeToken, getChainId, ERC20_ABI } from '../config'
 
 /**

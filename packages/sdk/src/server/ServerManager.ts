@@ -1,9 +1,7 @@
-import type {
+import {
   KeygenProgressUpdate,
   ReshareOptions,
   ServerStatus,
-  Signature,
-  SigningPayload,
   Vault,
 } from '../types'
 import {
@@ -59,66 +57,18 @@ export class ServerManager {
 
   /**
    * Get vault from VultiServer using password
+   *
+   * NOTE: The core getVaultFromServer currently returns minimal data.
+   * This needs to be updated to properly retrieve and decrypt the vault data.
    */
   async getVaultFromServer(vaultId: string, password: string): Promise<Vault> {
     const { getVaultFromServer } = await import('@core/mpc/fast/api/getVaultFromServer')
 
     const result = await getVaultFromServer({ vaultId, password })
 
-    // NOTE: this is a little sketchy, not sure why we need to do this
+    // TODO: Properly convert/decrypt the vault data from server response
+    // Currently the core function returns { password } which is incomplete
     return result as unknown as Vault
-  }
-
-  /**
-   * Sign transaction using VultiServer
-   */
-  /**
-   * Sign with server (legacy method - delegates to new flow)
-   * @deprecated Use FastSigningService.signWithServer() instead
-   * This method is kept for backward compatibility and will be removed in v3.0
-   */
-  async signWithServer(
-    vault: any,
-    payload: SigningPayload,
-    vaultPassword: string
-  ): Promise<Signature> {
-    console.warn('⚠️  ServerManager.signWithServer() is deprecated. Use FastSigningService instead.')
-
-    // Validate vault is a fast vault
-    const hasFastVaultServer = vault.signers.some((signer: string) =>
-      signer.startsWith('Server-')
-    )
-    if (!hasFastVaultServer) {
-      throw new Error(
-        'Vault does not have VultiServer - fast signing not available'
-      )
-    }
-
-    // Initialize WalletCore and get strategy
-    const { initWasm } = await import('@trustwallet/wallet-core')
-    const { createDefaultStrategyFactory } = await import('../chains/strategies/ChainStrategyFactory')
-
-    const walletCore = await initWasm()
-    const strategyFactory = createDefaultStrategyFactory()
-    const strategy = strategyFactory.getStrategy(payload.chain)
-
-    // Prepare messages using strategy
-    let messages: string[]
-    if (payload.messageHashes && payload.messageHashes.length > 0) {
-      messages = payload.messageHashes
-    } else {
-      messages = await strategy.computePreSigningHashes(payload, vault, walletCore)
-    }
-
-    // Delegate to new coordinateFastSigning method
-    return this.coordinateFastSigning({
-      vault,
-      messages,
-      password: vaultPassword,
-      payload,
-      strategy,
-      walletCore,
-    })
   }
 
   /**
@@ -150,14 +100,12 @@ export class ServerManager {
     const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
     const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
     const { signWithServer: callFastVaultAPI } = await import('@core/mpc/fast/api/signWithServer')
-    const { AddressDeriver } = await import('../chains/AddressDeriver')
+    const { ChainConfig } = await import('../chains/config/ChainConfig')
     const { generateLocalPartyId } = await import('@core/mpc/devices/localPartyId')
     const { keysign } = await import('@core/mpc/keysign')
 
-    // Initialize address deriver
-    const addressDeriver = new AddressDeriver()
-    await addressDeriver.initialize(walletCore)
-    const chain = addressDeriver.mapStringToChain(payload.chain)
+    // Map chain string to Chain enum
+    const chain = ChainConfig.getChainEnum(payload.chain)
     const coinType = getCoinType({ walletCore, chain })
     const derivePath = walletCore.CoinTypeExt.derivationPath(coinType)
 

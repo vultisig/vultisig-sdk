@@ -1,4 +1,5 @@
 import { ChainStrategy } from './ChainStrategy'
+import { ChainConfig } from '../config/ChainConfig'
 
 /**
  * Factory for chain strategies.
@@ -78,34 +79,14 @@ export class ChainStrategyFactory {
 
 /**
  * Create a default factory with all supported chains registered
+ * Uses ChainConfig to get chain lists (single source of truth)
  */
 export function createDefaultStrategyFactory(): ChainStrategyFactory {
   const factory = new ChainStrategyFactory()
 
-  // Register EVM chains
-  const evmChains = [
-    'Ethereum',
-    'Arbitrum',
-    'Base',
-    'Blast',
-    'Optimism',
-    'Zksync',
-    'Mantle',
-    'Avalanche',
-    'CronosChain',
-    'BSC',
-    'Polygon'
-  ]
-
-  // Register UTXO chains
-  const utxoChains = [
-    'Bitcoin',
-    'Litecoin',
-    'Bitcoin-Cash',
-    'Dogecoin',
-    'Dash',
-    'Zcash'
-  ]
+  // Get chain lists from ChainConfig (no more hardcoded lists!)
+  const evmChains = ChainConfig.getEvmChains()
+  const utxoChains = ChainConfig.getUtxoChains()
 
   // Import strategy classes (dynamic to avoid circular deps)
   const { EvmStrategy } = require('../evm/EvmStrategy')

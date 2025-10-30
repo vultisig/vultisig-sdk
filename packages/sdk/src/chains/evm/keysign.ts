@@ -16,7 +16,7 @@ import {
 } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { OneInchSwapPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/1inch_swap_payload_pb'
 
-import type { EvmKeysignOptions, EvmTransactionInput, ParsedEvmTransaction } from './types'
+import { EvmKeysignOptions, EvmTransactionInput, ParsedEvmTransaction } from './types'
 import { isNativeToken } from './config'
 import { getChainFromId } from './config'
 

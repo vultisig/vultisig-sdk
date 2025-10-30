@@ -4,7 +4,7 @@
  * Functions for formatting and converting gas prices between units
  */
 
-import type { FormattedGasPrice } from '../types'
+import { FormattedGasPrice } from '../types'
 
 /**
  * Format gas price from wei to multiple units

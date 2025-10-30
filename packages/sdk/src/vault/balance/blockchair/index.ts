@@ -12,7 +12,7 @@
 
 import { memoize } from '@lib/utils/memoize'
 import { queryUrl } from '@lib/utils/query/queryUrl'
-import type {
+import {
   BlockchairChain as ImportedBlockchairChain,
   BlockchairApiResponse,
   BlockchairStats,

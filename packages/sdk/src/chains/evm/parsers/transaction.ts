@@ -10,7 +10,7 @@
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 import { decodeRlp, toBeHex, getBytes, RlpStructuredData } from 'ethers'
 
-import type {
+import {
   ParsedEvmTransaction,
   EvmTransactionInput,
   EvmTransactionType,

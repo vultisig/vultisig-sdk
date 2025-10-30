@@ -1,13 +1,13 @@
-import type { WalletCore } from '@trustwallet/wallet-core'
+import { WalletCore } from '@trustwallet/wallet-core'
 
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
-import type {
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import {
   Balance,
   Signature,
   SigningMode,
   SigningPayload,
 } from '../types'
-import type { WASMManager } from '../wasm/WASMManager'
+import { WASMManager } from '../wasm/WASMManager'
 import { VaultError, VaultErrorCode } from './VaultError'
 
 // Phase 3: Import new services
@@ -18,6 +18,7 @@ import { CacheService } from './services/CacheService'
 import { FastSigningService } from './services/FastSigningService'
 import { createDefaultStrategyFactory } from '../chains/strategies/ChainStrategyFactory'
 import { blockchairFirstResolver } from './balance/blockchair/integration'
+import { ChainConfig } from '../chains/config/ChainConfig'
 
 type AddressInput = {
   chain: string
@@ -41,8 +42,6 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  * Following vault-centric architecture with debugging support
  */
 export class Vault {
-  private addressCache = new Map<string, string>()
-
   // Phase 3: Service instances (replacing old AddressDeriver and ChainManager)
   private addressService: AddressService
   private balanceService: BalanceService
@@ -89,14 +88,8 @@ export class Vault {
     if (sdkInstance?.getDefaultChains) {
       this._userChains = [...sdkInstance.getDefaultChains()]
     } else {
-      // Fallback to basic chains if no SDK instance
-      this._userChains = [
-        'Bitcoin',
-        'Ethereum',
-        'Solana',
-        'THORChain',
-        'Ripple',
-      ]
+      // Fallback to ChainConfig defaults if no SDK instance
+      this._userChains = ChainConfig.getDefaultChains()
     }
 
     // Initialize currency from SDK defaults if available
@@ -257,9 +250,10 @@ export class Vault {
     }
 
     // Check cache first (permanent caching for addresses as per architecture)
-    const cacheKey = chainStr.toLowerCase()
-    if (this.addressCache.has(cacheKey)) {
-      const cachedAddress = this.addressCache.get(cacheKey)!
+    const cacheKey = `address:${chainStr.toLowerCase()}`
+    const cachedAddress = this.cacheService.get<string>(cacheKey, Number.MAX_SAFE_INTEGER)
+
+    if (cachedAddress) {
       return cachedAddress
     }
 
@@ -271,7 +265,7 @@ export class Vault {
       )
 
       // Cache the address (permanent caching as per architecture)
-      this.addressCache.set(cacheKey, address)
+      this.cacheService.set(cacheKey, address)
 
       return address
     } catch (error) {
@@ -615,17 +609,15 @@ export class Vault {
    */
   async setChains(chains: string[]): Promise<void> {
     this.validateChains(chains)
-    this._userChains = [...chains]
 
-    // Clear address cache for removed chains
-    const currentCacheKeys = Array.from(this.addressCache.keys())
-    const newChainKeys = chains.map(chain => chain.toLowerCase())
-
-    for (const cacheKey of currentCacheKeys) {
-      if (!newChainKeys.includes(cacheKey)) {
-        this.addressCache.delete(cacheKey)
-      }
+    // Clear address cache for chains being removed
+    const removedChains = this._userChains.filter(c => !chains.includes(c))
+    for (const chain of removedChains) {
+      const cacheKey = `address:${chain.toLowerCase()}`
+      this.cacheService.clear(cacheKey)
     }
+
+    this._userChains = [...chains]
 
     // Pre-derive addresses for new chains
     await this.addresses(chains)
@@ -651,7 +643,8 @@ export class Vault {
     this._userChains = this._userChains.filter(c => c !== chain)
 
     // Clear address cache for removed chain
-    this.addressCache.delete(chain.toLowerCase())
+    const cacheKey = `address:${chain.toLowerCase()}`
+    this.cacheService.clear(cacheKey)
   }
 
   /**
@@ -714,8 +707,8 @@ export class Vault {
     if (this._sdkInstance?.getDefaultChains) {
       return this._sdkInstance.getDefaultChains()
     }
-    // Fallback to basic chains if no SDK instance
-    return ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple']
+    // Fallback to ChainConfig defaults if no SDK instance
+    return ChainConfig.getDefaultChains()
   }
 
   /**
@@ -740,12 +733,8 @@ export class Vault {
     // Validate vault supports the requested mode
     this.validateSigningMode(mode)
 
-    // Detect Solana transactions and route to Solana-specific signing
-    if (this.isSolanaTransaction(payload)) {
-      return this.signSolana(mode, payload, password)
-    }
-
-    // Route to appropriate signing implementation for other chains
+    // Route to appropriate signing implementation
+    // Note: Solana signing uses same flow as other chains via strategies
     switch (mode) {
       case 'fast':
         return this.signFast(payload, password)
@@ -765,213 +754,6 @@ export class Vault {
           `Unsupported signing mode: ${mode}`
         )
     }
-  }
-
-  /**
-   * Check if a signing payload is for a Solana transaction
-   */
-  private isSolanaTransaction(payload: SigningPayload): boolean {
-    const chain = payload.chain?.toString().toLowerCase()
-    return chain === 'solana' || chain === 'sol'
-  }
-
-  /**
-   * Sign Solana transaction with appropriate mode
-   * TEMPORARILY DISABLED - Solana library issues need to be resolved
-   * TODO: Re-enable once @solana/web3.js v2 migration is complete
-   */
-  private async signSolana(
-    _mode: SigningMode,
-    _payload: SigningPayload,
-    _password?: string
-  ): Promise<Signature> {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Solana signing temporarily disabled - library issues under maintenance'
-    )
-
-    /* COMMENTED OUT UNTIL SOLANA LIBRARY ISSUES ARE FIXED
-    console.log('Signing Solana transaction with mode:', mode)
-
-    // Validate we have WalletCore for transaction decoding
-    if (!this.walletCore) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'WalletCore required for Solana transaction signing'
-      )
-    }
-
-    // Validate transaction data is provided
-    if (!payload.transaction) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Transaction data required for Solana signing'
-      )
-    }
-
-    // Convert transaction to Uint8Array if needed
-    const serializedTx = this.ensureUint8Array(payload.transaction)
-
-    try {
-      // Import Solana parsers and keysign builder
-      const {
-        parseSolanaTransaction,
-        buildSolanaKeysignPayload,
-      } = await import('../chains/solana')
-
-      // Parse the transaction
-      const parsedTransaction = await parseSolanaTransaction(
-        this.walletCore,
-        serializedTx
-      )
-
-      console.log('Parsed Solana transaction:', parsedTransaction)
-
-      // Build keysign payload
-      const keysignPayload = await buildSolanaKeysignPayload({
-        parsedTransaction,
-        serializedTransaction: serializedTx,
-        vaultPublicKey: this.vaultData.publicKeys.ecdsa,
-        skipBroadcast: false,
-      })
-
-      // Route to appropriate signing mode with the prepared payload
-      switch (mode) {
-        case 'fast':
-          return this.signSolanaFast(keysignPayload, password)
-        case 'relay':
-          return this.signSolanaRelay(keysignPayload)
-        case 'local':
-          return this.signSolanaLocal(keysignPayload)
-        default:
-          throw new VaultError(
-            VaultErrorCode.InvalidConfig,
-            `Unsupported signing mode: ${mode}`
-          )
-      }
-    } catch (error) {
-      console.error('Failed to sign Solana transaction:', error)
-
-      if (error instanceof VaultError) {
-        throw error
-      }
-
-      throw new VaultError(
-        VaultErrorCode.SigningFailed,
-        `Solana signing failed: ${(error as Error).message}`,
-        error as Error
-      )
-    }
-    */
-  }
-
-  /**
-   * Ensure data is a Uint8Array
-   */
-  private ensureUint8Array(data: any): Uint8Array {
-    if (data instanceof Uint8Array) {
-      return data
-    }
-    if (Array.isArray(data)) {
-      return new Uint8Array(data)
-    }
-    if (ArrayBuffer.isView(data)) {
-      return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-    }
-    if (typeof data === 'string') {
-      // Assume hex string
-      const hex = data.startsWith('0x') ? data.slice(2) : data
-      return new Uint8Array(
-        hex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []
-      )
-    }
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      'Transaction data must be Uint8Array, Buffer, or hex string'
-    )
-  }
-
-  /**
-   * Sign Solana transaction using VultiServer (fast mode)
-   * TEMPORARILY DISABLED - Solana library issues need to be resolved
-   */
-  private async signSolanaFast(
-    _keysignPayload: any,
-    _password?: string
-  ): Promise<Signature> {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Solana fast signing temporarily disabled - library issues under maintenance'
-    )
-    /* COMMENTED OUT UNTIL SOLANA LIBRARY ISSUES ARE FIXED
-    // Get SDK instance to access server manager
-    if (!this._sdkInstance) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'SDK instance required for fast signing'
-      )
-    }
-
-    // Validate we have a server manager
-    const serverManager = this._sdkInstance.getServerManager()
-    if (!serverManager) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Server manager not available for fast signing'
-      )
-    }
-
-    // Validate password is provided for fast signing
-    if (!password) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Password is required for fast signing'
-      )
-    }
-
-    try {
-      // Use server manager to perform fast signing with Solana keysign payload
-      return await serverManager.signSolanaWithServer(
-        this.vaultData,
-        keysignPayload,
-        password
-      )
-    } catch (error) {
-      console.error('Solana fast signing failed:', error)
-
-      if (error instanceof VaultError) {
-        throw error
-      }
-
-      throw new VaultError(
-        VaultErrorCode.SigningFailed,
-        `Solana fast signing failed: ${(error as Error).message}`,
-        error as Error
-      )
-    }
-    */
-  }
-
-  /**
-   * Sign Solana transaction using relay network (multi-device mode)
-   * TEMPORARILY DISABLED - Solana library issues need to be resolved
-   */
-  private async signSolanaRelay(_keysignPayload: any): Promise<Signature> {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Solana relay signing temporarily disabled - library issues under maintenance'
-    )
-  }
-
-  /**
-   * Sign Solana transaction using local P2P (multi-device mode)
-   * TEMPORARILY DISABLED - Solana library issues need to be resolved
-   */
-  private async signSolanaLocal(_keysignPayload: any): Promise<Signature> {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Solana local signing temporarily disabled - library issues under maintenance'
-    )
   }
 
   /**

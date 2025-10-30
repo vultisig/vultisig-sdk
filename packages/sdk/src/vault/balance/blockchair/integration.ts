@@ -8,7 +8,7 @@ import { ChainAccount } from '@core/chain/ChainAccount'
 import { AccountCoinKey } from '@core/chain/coin/AccountCoin'
 import { getCoinBalance } from '@core/chain/coin/balance'
 
-import { AddressDeriver } from '../../../chains/AddressDeriver'
+import { ChainConfig } from '../../../chains/config/ChainConfig'
 import {
   BlockchairProviderConfig,
   createBlockchairConfig,
@@ -124,7 +124,6 @@ export class SmartBalanceResolver {
  */
 export class SmartTransactionResolver {
   private config: BlockchairProviderConfig
-  private addressDeriver = new AddressDeriver()
 
   constructor(config: BlockchairProviderConfig = createBlockchairConfig()) {
     this.config = config
@@ -134,8 +133,8 @@ export class SmartTransactionResolver {
    * Get transaction information using preferred data source
    */
   async getTransaction(chain: string, txHash: string) {
-    // Map string chain name to Chain enum value
-    const chainEnum = this.addressDeriver.mapStringToChain(chain)
+    // Map string chain name to Chain enum value using ChainConfig
+    const chainEnum = ChainConfig.getChainEnum(chain)
     const dataSource = getDataSourceForChain(chainEnum, this.config)
 
     if (

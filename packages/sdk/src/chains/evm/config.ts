@@ -6,7 +6,7 @@
  */
 
 import { EvmChain } from '@core/chain/Chain'
-import type { EvmToken } from './types'
+import { EvmToken } from './types'
 
 /**
  * EVM chain ID mappings
