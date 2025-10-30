@@ -4,95 +4,87 @@ import { initWasm } from '@trustwallet/wallet-core'
 
 /**
  * WASMManager handles initialization and management of all WASM modules
+ * Singleton instance with lazy loading for optimal performance
  * Coordinates wallet-core, DKLS, and Schnorr WASM loading
  */
 export class WASMManager {
-  private initialized = false
-  private walletCoreReady = false
-  private dklsReady = false
-  private schnorrReady = false
+  private static instance: WASMManager | null = null
 
   /**
-   * Initialize all WASM modules
+   * Get singleton instance
    */
-  async initialize(): Promise<void> {
-    if (this.initialized) {
-      return
+  static getInstance(): WASMManager {
+    if (!WASMManager.instance) {
+      WASMManager.instance = new WASMManager()
     }
-
-    try {
-      // Initialize in parallel for better performance
-      await Promise.all([
-        this.initializeWalletCore(),
-        this.initializeDkls(),
-        this.initializeSchnorr(),
-      ])
-
-      this.initialized = true
-    } catch (error) {
-      throw new Error(`Failed to initialize WASM modules: ${error}`)
-    }
+    return WASMManager.instance
   }
 
-  private walletCoreInstance: any = null
+  /**
+   * Reset singleton instance (for testing)
+   */
+  static reset(): void {
+    WASMManager.instance = null
+  }
+
+  // Private constructor to enforce singleton pattern
+  private constructor() {}
+
+  // Memoized initialization functions for lazy loading
   private getWalletCoreInit = memoizeAsync(initWasm)
+  private getDklsInit = memoizeAsync(() => initializeMpcLib('ecdsa'))
+  private getSchnorrInit = memoizeAsync(() => initializeMpcLib('eddsa'))
 
   /**
-   * Initialize Trust Wallet Core WASM
+   * Get WalletCore instance for address derivation and operations
+   * Lazy loads on first access
    */
-  private async initializeWalletCore(): Promise<void> {
+  async getWalletCore() {
     try {
-      this.walletCoreInstance = await this.getWalletCoreInit()
-      this.walletCoreReady = true
+      return await this.getWalletCoreInit()
     } catch (error) {
       throw new Error(`Failed to initialize WalletCore WASM: ${error}`)
     }
   }
 
   /**
-   * Initialize DKLS WASM module
+   * Initialize DKLS WASM module (ECDSA)
+   * Lazy loads on first access
    */
-  private async initializeDkls(): Promise<void> {
+  async initializeDkls(): Promise<void> {
     try {
-      await initializeMpcLib('ecdsa')
-      this.dklsReady = true
+      await this.getDklsInit()
     } catch (error) {
       throw new Error(`Failed to initialize DKLS WASM: ${error}`)
     }
   }
 
   /**
-   * Initialize Schnorr WASM module
+   * Initialize Schnorr WASM module (EdDSA)
+   * Lazy loads on first access
    */
-  private async initializeSchnorr(): Promise<void> {
+  async initializeSchnorr(): Promise<void> {
     try {
-      await initializeMpcLib('eddsa')
-      this.schnorrReady = true
+      await this.getSchnorrInit()
     } catch (error) {
       throw new Error(`Failed to initialize Schnorr WASM: ${error}`)
     }
   }
 
   /**
-   * Check if all WASM modules are initialized
+   * Pre-load all WASM modules (optional)
+   * Useful for upfront initialization to avoid delays later
    */
-  isInitialized(): boolean {
-    return this.initialized
-  }
-
-  /**
-   * Check if specific WASM module is ready
-   */
-  isModuleReady(module: 'walletCore' | 'dkls' | 'schnorr'): boolean {
-    switch (module) {
-      case 'walletCore':
-        return this.walletCoreReady
-      case 'dkls':
-        return this.dklsReady
-      case 'schnorr':
-        return this.schnorrReady
-      default:
-        return false
+  async initialize(): Promise<void> {
+    try {
+      // Initialize in parallel for better performance
+      await Promise.all([
+        this.getWalletCore(),
+        this.initializeDkls(),
+        this.initializeSchnorr(),
+      ])
+    } catch (error) {
+      throw new Error(`Failed to initialize WASM modules: ${error}`)
     }
   }
 
@@ -100,46 +92,10 @@ export class WASMManager {
    * Get initialization status for all modules
    */
   getStatus() {
+    // Since we're using memoization, we can't easily track status
+    // without calling the functions. This is a simplified implementation.
     return {
-      initialized: this.initialized,
-      modules: {
-        walletCore: this.walletCoreReady,
-        dkls: this.dklsReady,
-        schnorr: this.schnorrReady,
-      },
+      note: 'Modules are lazy-loaded on first access via memoization',
     }
-  }
-
-  /**
-   * Get WalletCore instance for address derivation and operations
-   */
-  async getWalletCore() {
-    if (!this.walletCoreReady || !this.walletCoreInstance) {
-      throw new Error(
-        'WalletCore WASM not initialized. Call initialize() first.'
-      )
-    }
-
-    return this.walletCoreInstance
-  }
-
-  /**
-   * Get the memoized WalletCore getter (same instance as used by extension)
-   */
-  getWalletCoreGetter() {
-    return this.walletCoreInstance
-  }
-
-  /**
-   * Force re-initialization of all modules
-   */
-  async reinitialize(): Promise<void> {
-    this.initialized = false
-    this.walletCoreReady = false
-    this.dklsReady = false
-    this.schnorrReady = false
-    this.walletCoreInstance = null
-
-    await this.initialize()
   }
 }

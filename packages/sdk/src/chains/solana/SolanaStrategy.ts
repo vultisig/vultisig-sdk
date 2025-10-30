@@ -138,11 +138,10 @@ export class SolanaStrategy implements ChainStrategy {
   // estimateGas is not implemented (optional in interface)
 
   /**
-   * Get WalletCore instance
-   * In real implementation, this should be injected via constructor or context
+   * Get WalletCore instance via singleton
    */
   private async getWalletCore(): Promise<WalletCore> {
-    const { getWalletCore } = require('../../wasm/WASMManager')
-    return getWalletCore()
+    const { WASMManager } = await import('../../wasm/WASMManager')
+    return WASMManager.getInstance().getWalletCore()
   }
 }

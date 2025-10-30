@@ -1,5 +1,3 @@
-import { WalletCore } from '@trustwallet/wallet-core'
-
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import {
   Balance,
@@ -7,7 +5,6 @@ import {
   SigningMode,
   SigningPayload,
 } from '../types'
-import { WASMManager } from '../wasm/WASMManager'
 import { VaultError, VaultErrorCode } from './VaultError'
 
 // Phase 3: Import new services
@@ -19,11 +16,6 @@ import { FastSigningService } from './services/FastSigningService'
 import { createDefaultStrategyFactory } from '../chains/strategies/ChainStrategyFactory'
 import { blockchairFirstResolver } from './balance/blockchair/integration'
 import { ChainConfig } from '../chains/config/ChainConfig'
-
-type AddressInput = {
-  chain: string
-  walletCore: WalletCore
-}
 
 /**
  * Determine vault type based on signer names
@@ -61,8 +53,6 @@ export class Vault {
 
   constructor(
     private vaultData: CoreVault,
-    private walletCore?: WalletCore,
-    _wasmManager?: WASMManager,  // Kept for backward compatibility, no longer used
     sdkInstance?: any
   ) {
     // Vault initialized
@@ -235,19 +225,10 @@ export class Vault {
 
   /**
    * Get address for specified chain
-   * Uses AddressDeriver for consistent address derivation
+   * Uses AddressService for consistent address derivation
    */
-  async address(chain: string): Promise<string>
-  async address(input: string | AddressInput): Promise<string> {
-    // Handle both signatures: address(chain) and address({ chain, walletCore })
-    let chainStr: string
-
-    if (typeof input === 'string') {
-      chainStr = input
-    } else {
-      chainStr = input.chain
-      // Note: walletCore parameter is ignored as AddressService handles this
-    }
+  async address(chain: string): Promise<string> {
+    const chainStr = chain
 
     // Check cache first (permanent caching for addresses as per architecture)
     const cacheKey = `address:${chainStr.toLowerCase()}`
