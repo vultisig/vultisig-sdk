@@ -1,15 +1,13 @@
 import { Balance } from '../../types'
 import { ChainStrategyFactory } from '../../chains/strategies/ChainStrategyFactory'
 import { SmartBalanceResolver } from '../balance/blockchair/integration'
-import { Chain } from '@core/chain/Chain'
-import { AddressDeriver } from '../../chains/AddressDeriver'
+import { ChainConfig } from '../../chains/config/ChainConfig'
 
 /**
  * Service for coordinating balance fetching across chains.
  * Integrates Blockchair for faster responses with RPC fallback.
  */
 export class BalanceService {
-  private addressDeriver = new AddressDeriver()
 
   constructor(
     private strategyFactory: ChainStrategyFactory,
@@ -26,8 +24,8 @@ export class BalanceService {
     // If we have a balance resolver (Blockchair), use it
     if (this.balanceResolver) {
       try {
-        // Map string chain to Chain enum
-        const chainEnum = this.addressDeriver.mapStringToChain(chain)
+        // Map string chain to Chain enum using ChainConfig
+        const chainEnum = ChainConfig.getChainEnum(chain)
 
         // Get raw balance from Blockchair (returns bigint)
         const rawBalance = await this.balanceResolver.getBalance({
@@ -36,7 +34,7 @@ export class BalanceService {
         })
 
         // Convert to Balance type
-        return this.convertToBalance(chain, rawBalance, address)
+        return this.convertToBalance(chain, rawBalance)
       } catch (error) {
         console.warn(
           `Blockchair balance fetch failed for ${chain}:${address}, falling back to RPC:`,
@@ -90,72 +88,22 @@ export class BalanceService {
 
   /**
    * Convert raw balance (bigint) to Balance type
+   * Uses ChainConfig for decimals and symbol lookup
    * @param chain Chain identifier
    * @param rawBalance Balance in smallest unit (wei, lamports, etc.)
-   * @param address Address (for logging)
    */
   private convertToBalance(
     chain: string,
-    rawBalance: bigint,
-    address: string
+    rawBalance: bigint
   ): Balance {
-    // TODO: Get proper decimals and symbol from chain config
-    // For now, use defaults based on chain
-    const decimals = this.getDecimalsForChain(chain)
-    const symbol = this.getSymbolForChain(chain)
+    // Use ChainConfig for chain metadata
+    const decimals = ChainConfig.getDecimals(chain)
+    const symbol = ChainConfig.getSymbol(chain)
 
     return {
       amount: rawBalance.toString(),
       decimals,
       symbol
     }
-  }
-
-  /**
-   * Get decimal places for a chain
-   * TODO: Move to chain config/strategy
-   */
-  private getDecimalsForChain(chain: string): number {
-    const chainLower = chain.toLowerCase()
-
-    // Solana uses 9 decimals
-    if (chainLower === 'solana') return 9
-
-    // Bitcoin and most UTXO chains use 8 decimals
-    if (['bitcoin', 'litecoin', 'dogecoin', 'bitcoincash', 'dash', 'zcash'].includes(chainLower)) {
-      return 8
-    }
-
-    // EVM chains typically use 18 decimals
-    return 18
-  }
-
-  /**
-   * Get native token symbol for a chain
-   * TODO: Move to chain config/strategy
-   */
-  private getSymbolForChain(chain: string): string {
-    const symbolMap: Record<string, string> = {
-      ethereum: 'ETH',
-      arbitrum: 'ETH',
-      base: 'ETH',
-      blast: 'ETH',
-      optimism: 'ETH',
-      zksync: 'ETH',
-      mantle: 'MNT',
-      avalanche: 'AVAX',
-      cronoschain: 'CRO',
-      bsc: 'BNB',
-      polygon: 'MATIC',
-      solana: 'SOL',
-      bitcoin: 'BTC',
-      litecoin: 'LTC',
-      dogecoin: 'DOGE',
-      bitcoincash: 'BCH',
-      dash: 'DASH',
-      zcash: 'ZEC',
-    }
-
-    return symbolMap[chain.toLowerCase()] || chain.toUpperCase()
   }
 }

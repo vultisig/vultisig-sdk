@@ -4,14 +4,14 @@ import { fromCommVault } from '@core/mpc/types/utils/commVault'
 import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
-import type {
+import {
   KeygenMode,
   Summary,
   Vault,
   VaultCreationStep,
   VaultType,
 } from '../types'
-import type { WASMManager } from '../wasm'
+import { WASMManager } from '../wasm'
 import { Vault as VaultClass } from './Vault'
 import { VaultImportError, VaultImportErrorCode } from './VaultError'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'

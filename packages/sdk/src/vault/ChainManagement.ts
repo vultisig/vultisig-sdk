@@ -1,74 +1,28 @@
+import { ChainConfig } from '../chains/config/ChainConfig'
+
 /**
  * ChainManagement handles SDK-level chain configuration and validation
  * Manages supported chains, default chains, and currency settings
  */
 export class ChainManagement {
-  private defaultChains: string[] = [
-    'Bitcoin',
-    'Ethereum',
-    'Solana',
-    'THORChain',
-    'Ripple',
-  ]
+  private defaultChains: string[]
   private defaultCurrency = 'USD'
 
   constructor(config?: { defaultChains?: string[]; defaultCurrency?: string }) {
-    if (config?.defaultChains) {
-      this.defaultChains = config.defaultChains
-    }
+    // Use ChainConfig as single source of truth for defaults
+    this.defaultChains = config?.defaultChains ?? ChainConfig.getDefaultChains()
+
     if (config?.defaultCurrency) {
       this.defaultCurrency = config.defaultCurrency
     }
   }
 
   /**
-   * Get all hardcoded supported chains (immutable)
-   * Complete list from core/chain/Chain.ts - cannot be overridden at runtime
+   * Get all supported chains (immutable)
+   * Delegates to ChainConfig for single source of truth
    */
   getSupportedChains(): string[] {
-    return [
-      // EVM Chains
-      'Ethereum',
-      'Arbitrum',
-      'Base',
-      'Blast',
-      'Optimism',
-      'Zksync',
-      'Mantle',
-      'Avalanche',
-      'CronosChain',
-      'BSC',
-      'Polygon',
-
-      // UTXO Chains
-      'Bitcoin',
-      'Bitcoin-Cash',
-      'Litecoin',
-      'Dogecoin',
-      'Dash',
-      'Zcash',
-
-      // Cosmos Chains
-      'THORChain',
-      'MayaChain',
-      'Cosmos',
-      'Osmosis',
-      'Dydx',
-      'Kujira',
-      'Terra',
-      'TerraClassic',
-      'Noble',
-      'Akash',
-
-      // Other Chains
-      'Sui',
-      'Solana',
-      'Polkadot',
-      'Ton',
-      'Ripple',
-      'Tron',
-      'Cardano',
-    ]
+    return ChainConfig.getSupportedChains()
   }
 
   /**
@@ -76,18 +30,17 @@ export class ChainManagement {
    * Validates against supported chains list
    */
   setDefaultChains(chains: string[]): void {
-    const supportedChains = this.getSupportedChains()
-    const invalidChains = chains.filter(
-      chain => !supportedChains.includes(chain)
-    )
+    // Use ChainConfig for validation
+    const validation = ChainConfig.validateChains(chains)
 
-    if (invalidChains.length > 0) {
+    if (validation.invalid.length > 0) {
       throw new Error(
-        `Unsupported chains: ${invalidChains.join(', ')}. Supported chains: ${supportedChains.join(', ')}`
+        `Unsupported chains: ${validation.invalid.join(', ')}. Supported chains: ${ChainConfig.getSupportedChains().join(', ')}`
       )
     }
 
-    this.defaultChains = chains
+    // Store normalized chain IDs
+    this.defaultChains = validation.valid
     // TODO: Save config to storage
   }
 

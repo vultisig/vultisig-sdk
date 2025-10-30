@@ -1,5 +1,23 @@
+import { WalletCore } from '@trustwallet/wallet-core'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import type { KeysignPayload as CoreKeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Balance, Signature, SigningPayload } from '../../types'
+
+/**
+ * Signature result from MPC keysign operation
+ */
+export interface SignatureResult {
+  /** R component of signature (hex-encoded) */
+  r: string
+  /** S component of signature (hex-encoded) */
+  s: string
+  /** Recovery ID (for ECDSA) */
+  recoveryId?: number
+  /** Signature type identifier */
+  signatureType?: string
+  /** Additional chain-specific fields */
+  [key: string]: unknown
+}
 
 /**
  * Common interface for chain-specific operations.
@@ -57,8 +75,8 @@ export interface ChainStrategy {
    */
   computePreSigningHashes(
     payload: SigningPayload,
-    vault: any,
-    walletCore: any
+    vault: CoreVault,
+    walletCore: WalletCore
   ): Promise<string[]>
 
   /**
@@ -69,7 +87,7 @@ export interface ChainStrategy {
    * @returns Formatted signature ready for broadcast
    */
   formatSignatureResult(
-    signatureResults: Record<string, any>,
+    signatureResults: Record<string, SignatureResult>,
     payload: SigningPayload
   ): Promise<Signature>
 }
@@ -90,14 +108,9 @@ export interface ParsedTransaction {
 
 /**
  * Keysign payload for MPC operations
+ * Uses the protobuf-generated type from core library
  */
-export interface KeysignPayload {
-  vaultPublicKey: string
-  transaction: string
-  chain: string
-  skipBroadcast?: boolean
-  [key: string]: any
-}
+export type KeysignPayload = CoreKeysignPayload
 
 /**
  * Gas estimation result

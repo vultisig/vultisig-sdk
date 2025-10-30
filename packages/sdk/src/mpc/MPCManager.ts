@@ -1,4 +1,4 @@
-import type { ServerManager } from '../server/ServerManager'
+import { ServerManager } from '../server/ServerManager'
 
 /**
  * MPCManager handles multi-party computation operations

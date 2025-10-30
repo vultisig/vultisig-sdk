@@ -1,6 +1,6 @@
 # Vultisig SDK Architecture
 
-**Last Updated:** 2025-10-29
+**Last Updated:** 2025-10-30
 **Version:** 2.0
 
 ---
@@ -19,8 +19,8 @@ packages/sdk/src/
 ├── index.ts                 # Public API exports
 ├── types/                   # Core type definitions
 ├── chains/                  # Chain-specific implementations
-│   ├── ChainManager.ts      # Multi-chain operations coordinator
-│   ├── AddressDeriver.ts    # Address derivation across chains
+│   ├── config/              # Chain configuration
+│   │   └── ChainConfig.ts   # Centralized chain metadata registry
 │   ├── strategies/          # Strategy pattern for chains
 │   │   ├── ChainStrategy.ts
 │   │   └── ChainStrategyFactory.ts
@@ -105,7 +105,8 @@ packages/sdk/src/
 - `ServerManager` - Server communication
 - `WASMManager` - WebAssembly initialization
 - `AddressBookManager` - Address book operations
-- `ChainManagement` - Chain configuration
+- `ChainConfig` - Chain metadata and configuration
+- `ChainManagement` - Chain configuration helpers
 - `VaultManagement` - Vault lifecycle
 
 ---
@@ -148,30 +149,50 @@ packages/sdk/src/
 
 ---
 
-### ChainManager
+### ChainConfig (Centralized Configuration)
 
-**Location:** [ChainManager.ts](../../packages/sdk/src/chains/ChainManager.ts)
+**Location:** [ChainConfig.ts](../../packages/sdk/src/chains/config/ChainConfig.ts)
 
 **Responsibilities:**
-- Multi-chain blockchain operations
-- Address derivation across multiple chains
-- Balance fetching with Blockchair integration (5-10x faster)
-- Chain-agnostic batch operations
+- Single source of truth for all chain metadata
+- Chain identification and normalization
+- Chain type categorization (EVM, UTXO, Cosmos, Other)
+- Chain validation and querying
 
 **Key Features:**
-- **Blockchair Integration:** Uses `SmartBalanceResolver` for faster balance fetching
-- **Fallback Support:** Automatic RPC fallback if Blockchair fails
-- **Batch Operations:** Efficient multi-chain address/balance fetching
+- **Comprehensive Registry:** 35+ supported chains with complete metadata
+- **Alias Resolution:** Case-insensitive lookup with multiple aliases per chain (e.g., 'eth', 'ethereum', 'Ethereum')
+- **Type System:** Categorizes chains into 'evm', 'utxo', 'cosmos', or 'other' types
+- **Validation Helpers:** Methods to validate chain lists and check support
+
+**Metadata Structure:**
+Each chain includes:
+- Official ID (e.g., 'Ethereum')
+- Chain enum value from @core/chain/Chain
+- Native token decimals
+- Native token symbol
+- Chain type (evm/utxo/cosmos/other)
+- Aliases for flexible identification
 
 **Key Methods:**
-- `initialize()` - Initialize with WalletCore
-- `getAddresses(vault, chains)` - Get addresses for specific chains
-- `getBalances(addresses)` - Batch balance fetching
+- `getMetadata(chainId)` - Get full chain metadata
+- `getChainEnum(chainId)` - Map to Chain enum (replaces AddressDeriver.mapStringToChain)
+- `getDecimals(chainId)` - Get native token decimals
+- `getSymbol(chainId)` - Get native token symbol
+- `getType(chainId)` - Get chain type
+- `getSupportedChains()` - List all supported chains
+- `getEvmChains()` / `getUtxoChains()` / `getCosmosChains()` - Get chains by type
+- `isSupported(chainId)` - Check if chain is supported
+- `validateChains(chainIds)` - Validate list of chain identifiers
 
-**Dependencies:**
-- `AddressDeriver` - Address derivation logic
-- `SmartBalanceResolver` - Blockchair integration
-- `WASMManager` - WalletCore access
+**Registered Chain Types:**
+- **EVM (11 chains - IMPLEMENTED):** Ethereum, Arbitrum, Base, Blast, Optimism, zkSync, Polygon, BSC, Avalanche, Mantle, Cronos
+- **UTXO (6 chains - IMPLEMENTED):** Bitcoin, Litecoin, Bitcoin Cash, Dogecoin, Dash, Zcash
+- **Other - Solana (1 chain - IMPLEMENTED):** Solana
+- **Cosmos (10 chains - METADATA ONLY):** THORChain, MayaChain, Cosmos, Osmosis, Dydx, Kujira, Terra, TerraClassic, Noble, Akash
+- **Other (6 chains - METADATA ONLY):** Sui, Polkadot, Ton, Ripple, Tron, Cardano
+
+**Note:** Chains marked as "METADATA ONLY" have configuration registered in ChainConfig but do not yet have full strategy implementations. Only EVM, UTXO, and Solana chains are currently fully supported.
 
 ---
 
@@ -248,7 +269,7 @@ interface ChainStrategy {
 
 **Location:** [EvmStrategy.ts](../../packages/sdk/src/chains/evm/EvmStrategy.ts)
 
-**Supported Chains:**
+**Supported Chains:** All EVM-compatible chains from ChainConfig (11 total)
 - Ethereum, Arbitrum, Base, Blast, Optimism, zkSync
 - Polygon, BSC, Avalanche, Mantle, Cronos
 
@@ -281,7 +302,7 @@ interface ChainStrategy {
 
 **Location:** [UtxoStrategy.ts](../../packages/sdk/src/chains/utxo/UtxoStrategy.ts)
 
-**Supported Chains:**
+**Supported Chains:** All UTXO-based chains from ChainConfig (6 total)
 - Bitcoin (SegWit - wpkh)
 - Litecoin (SegWit - wpkh)
 - Bitcoin Cash, Dogecoin, Dash, Zcash (Legacy - pkh)
@@ -303,6 +324,11 @@ interface ChainStrategy {
 
 ---
 
+**Note on Cosmos Chains:**
+ChainConfig includes metadata for 10 Cosmos-based chains (THORChain, MayaChain, Cosmos, Osmosis, Dydx, Kujira, Terra, TerraClassic, Noble, Akash), but CosmosStrategy implementation is not yet complete. These chains are registered in the configuration system for future support.
+
+---
+
 ### ChainStrategyFactory
 
 **Location:** [ChainStrategyFactory.ts](../../packages/sdk/src/chains/strategies/ChainStrategyFactory.ts)
@@ -311,16 +337,19 @@ interface ChainStrategy {
 - Register and lookup chain strategies
 - Create default factory with all supported chains
 - Validate chain support
+- Data-driven strategy registration via ChainConfig
 
 **Factory Initialization:**
 ```typescript
 function createDefaultStrategyFactory() {
   const factory = new ChainStrategyFactory()
 
-  // Register EVM chains
+  // Register EVM chains dynamically from ChainConfig
+  const evmChains = ChainConfig.getEvmChains()
   factory.registerEvmChains(evmChains, (chainId) => new EvmStrategy(chainId))
 
-  // Register UTXO chains
+  // Register UTXO chains dynamically from ChainConfig
+  const utxoChains = ChainConfig.getUtxoChains()
   factory.registerUtxoChains(utxoChains, (chainId) => new UtxoStrategy(chainId))
 
   // Register Solana
@@ -329,6 +358,11 @@ function createDefaultStrategyFactory() {
   return factory
 }
 ```
+
+**Key Benefits:**
+- **No Hardcoded Lists:** Chain lists come from ChainConfig registry
+- **Single Source of Truth:** Adding a chain to ChainConfig makes it available to the factory
+- **Easy Maintenance:** No need to update multiple files when adding chains
 
 ---
 
@@ -354,11 +388,13 @@ The Vault class delegates to specialized services for separation of concerns:
 - Blockchair integration with RPC fallback
 - Type conversion (bigint to Balance)
 - Batch balance operations
+- Chain metadata integration via ChainConfig
 
 **Key Features:**
 - **Blockchair First:** Tries Blockchair API for 5-10x faster responses
 - **Automatic Fallback:** Falls back to strategy RPC calls on failure
 - **Parallel Fetching:** Fetches multiple balances concurrently
+- **ChainConfig Integration:** Uses `ChainConfig.getDecimals()` and `ChainConfig.getSymbol()` for chain-specific formatting
 
 ### SigningService
 
@@ -503,7 +539,7 @@ The Vault class delegates to specialized services for separation of concerns:
 **Types:** ~50+ TypeScript types exported for developer use
 
 **Internal (Not Exported):**
-- ChainManager, ServerManager - Implementation details
+- ServerManager, ChainConfig - Implementation details
 - Strategies, Services - Encapsulated
 - Chain parsers, builders - Internal utilities
 

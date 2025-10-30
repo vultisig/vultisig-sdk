@@ -1,6 +1,6 @@
 # Adding New Chains Guide
 
-**Last Updated:** 2025-10-29
+**Last Updated:** 2025-10-30
 **Version:** 2.0
 
 ---
@@ -30,6 +30,7 @@ This guide provides step-by-step instructions for adding support for new blockch
 ### SDK Understanding
 Before starting, read:
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - Understand the SDK architecture
+- [CHAIN_CONFIG.md](./CHAIN_CONFIG.md) - Understand the ChainConfig system (required for adding chains)
 
 ---
 
@@ -163,8 +164,9 @@ export class [YourChain]Strategy implements ChainStrategy {
   async deriveAddress(vault: CoreVault): Promise<string> {
     const walletCore = await this.getWalletCore()
 
-    // Use @core/address helpers for address derivation
-    const { getPublicKey, deriveAddress } = require('@core/address')
+    // Use @core helpers for address derivation
+    const { getPublicKey } = require('@core/chain/publicKey/getPublicKey')
+    const { deriveAddress } = require('@core/chain/publicKey/address/deriveAddress')
 
     const publicKey = getPublicKey({
       chain: this.chainId,
@@ -198,7 +200,7 @@ export class [YourChain]Strategy implements ChainStrategy {
     }
 
     // Fallback to RPC or use core's getCoinBalance
-    const { getCoinBalance } = require('@core/balance')
+    const { getCoinBalance } = require('@core/chain/coin/balance')
     return getCoinBalance(this.chainId, address)
   }
 
@@ -316,39 +318,89 @@ export type {
 
 ---
 
-### Step 6: Register Strategy in Factory
+### Step 6: Register Chain in ChainConfig
+
+**File:** `chains/config/ChainConfig.ts`
+
+**IMPORTANT:** This step is required for your chain to be recognized by the SDK. ChainConfig is the single source of truth for chain metadata.
+
+Add your chain to the `registry` object:
+
+```typescript
+export class ChainConfig {
+  private static readonly registry: Record<string, ChainMetadata> = {
+    // ... existing chains ...
+
+    // Add your new chain:
+    yournewchain: {
+      id: 'YourChain',                       // Official PascalCase ID (must match chainId in strategy)
+      chainEnum: Chain.YourChain,            // From @core/chain/Chain
+      decimals: 18,                          // Native token decimals
+      symbol: 'YCH',                         // Native token symbol
+      type: 'evm',                           // Chain type: 'evm' | 'utxo' | 'cosmos' | 'other'
+      aliases: ['yournewchain', 'ych'],      // Lowercase aliases for flexible lookup
+    },
+  }
+}
+```
+
+**Chain Type Guidelines:**
+- Use `'evm'` for Ethereum Virtual Machine compatible chains (reuse EvmStrategy)
+- Use `'utxo'` for Bitcoin-like chains (reuse UtxoStrategy)
+- Use `'cosmos'` for Cosmos SDK-based chains (CosmosStrategy not yet implemented)
+- Use `'other'` for unique chains requiring custom strategy
+
+**Tips:**
+- The `id` field must match your strategy's `chainId` property exactly
+- Add common aliases to improve developer experience (e.g., 'eth' for 'Ethereum')
+- Verify decimals carefully - this affects all balance calculations
+- For EVM chains, most use 18 decimals
+
+See [CHAIN_CONFIG.md](./CHAIN_CONFIG.md) for complete documentation.
+
+---
+
+### Step 7: Register Strategy in Factory
 
 **File:** `chains/strategies/ChainStrategyFactory.ts`
 
 Update the `createDefaultStrategyFactory` function:
 
 ```typescript
+import { ChainConfig } from '../config/ChainConfig'
+
 export function createDefaultStrategyFactory(): ChainStrategyFactory {
   const factory = new ChainStrategyFactory()
 
-  // Existing registrations...
+  // Import strategies
   const { EvmStrategy } = require('../evm/EvmStrategy')
+  const { UtxoStrategy } = require('../utxo/UtxoStrategy')
   const { SolanaStrategy } = require('../solana/SolanaStrategy')
-
-  // Add your new chain
   const { [YourChain]Strategy } = require('../[your-chain-name]/[YourChain]Strategy')
 
-  // Register EVM chains
+  // Register EVM chains dynamically from ChainConfig
+  const evmChains = ChainConfig.getEvmChains()
   factory.registerEvmChains(evmChains, (chainId) => new EvmStrategy(chainId))
+
+  // Register UTXO chains dynamically from ChainConfig
+  const utxoChains = ChainConfig.getUtxoChains()
+  factory.registerUtxoChains(utxoChains, (chainId) => new UtxoStrategy(chainId))
 
   // Register Solana
   factory.register('Solana', new SolanaStrategy())
 
-  // Register your new chain
-  factory.register('[YourChain]', new [YourChain]Strategy())
+  // Register your new chain (if type is 'other' and not EVM/UTXO)
+  factory.register('YourChain', new [YourChain]Strategy())
 
   return factory
 }
 ```
 
+**Note:** If your chain is type `'evm'` or `'utxo'` in ChainConfig, it will be automatically registered with the respective strategy. You only need to manually register chains with type `'other'` that require custom strategies.
+
 ---
 
-### Step 7: Write Tests
+### Step 8: Write Tests
 
 **File:** `chains/[your-chain-name]/__tests__/[YourChain]Strategy.test.ts`
 
@@ -433,7 +485,8 @@ describe('[YourChain]Strategy', () => {
 ### 2. Balance Fetching
 - Try Blockchair first for UTXO chains (faster)
 - Fall back to RPC for unsupported chains
-- Use `@core/balance` helpers when available
+- Use `@core/chain/coin/balance` helpers when available
+- ChainConfig automatically provides decimals and symbols for balance formatting
 
 ### 3. Transaction Parsing
 - Decode based on chain's encoding (RLP, SCALE, protobuf, etc.)
@@ -581,7 +634,8 @@ For reference, see existing implementations:
 - [ ] Implement `computePreSigningHashes()`
 - [ ] Implement `formatSignatureResult()`
 - [ ] Create index file (index.ts)
-- [ ] Register in ChainStrategyFactory
+- [ ] **Register chain in ChainConfig.ts (REQUIRED)**
+- [ ] Register strategy in ChainStrategyFactory (if type is 'other')
 - [ ] Write unit tests
 - [ ] Write integration tests
 - [ ] Test on testnet

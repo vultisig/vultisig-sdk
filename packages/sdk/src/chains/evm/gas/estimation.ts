@@ -6,7 +6,7 @@
 
 import { EvmChain } from '@core/chain/Chain'
 import { getEvmFeeQuote } from '@core/chain/feeQuote/resolvers/evm'
-import type { EvmGasEstimate } from '../types'
+import { EvmGasEstimate } from '../types'
 
 /**
  * Estimate gas for an EVM transaction

@@ -9,7 +9,7 @@ export type { AccountCoin } from '@core/chain/coin/AccountCoin'
 export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
 
 // SDK-extended vault type that includes calculated threshold
