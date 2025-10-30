@@ -27,8 +27,6 @@ export {
   VaultImportError,
   VaultImportErrorCode,
   AddressBookManager,
-  ChainManagement,
-  VaultManagement,
   // Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
   // BalanceManagement,
   ValidationHelpers,
