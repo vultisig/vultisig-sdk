@@ -11,7 +11,6 @@ import {
   VaultCreationStep,
   VaultType,
 } from './types'
-import { WASMManager } from './wasm'
 import { Vault as VaultClass } from './Vault'
 import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
@@ -35,10 +34,7 @@ export class VaultManager {
   private vaults = new Map<string, Vault>()
   private activeVault: VaultClass | null = null
 
-  constructor(
-    private wasmManager?: WASMManager,
-    private sdkInstance?: any
-  ) {}
+  constructor(private sdkInstance?: any) {}
 
   // ===== VAULT LIFECYCLE =====
 
@@ -82,12 +78,6 @@ export class VaultManager {
       throw new Error('Email is required for fast vault creation')
     }
 
-    // Ensure WASM is initialized
-    if (!this.wasmManager) {
-      throw new Error('WASMManager not available')
-    }
-    await this.wasmManager.initialize()
-
     // Use ServerManager to create the fast vault
     const serverManager = this.sdkInstance?.getServerManager()
     if (!serverManager) {
@@ -110,8 +100,6 @@ export class VaultManager {
     // Create VaultClass instance from the created vault
     const vaultInstance = new VaultClass(
       result.vault,
-      await this.wasmManager.getWalletCore(),
-      this.wasmManager,
       this.sdkInstance
     )
 
@@ -219,8 +207,6 @@ export class VaultManager {
       // Create VaultClass instance
       const vaultInstance = new VaultClass(
         normalizedVault,
-        await this.wasmManager?.getWalletCore(),
-        this.wasmManager,
         this.sdkInstance
       )
 
@@ -256,8 +242,6 @@ export class VaultManager {
     for (const [, vault] of this.vaults) {
       const vaultInstance = new VaultClass(
         vault,
-        await this.wasmManager?.getWalletCore(),
-        this.wasmManager,
         this.sdkInstance
       )
       const summary = vaultInstance.summary()

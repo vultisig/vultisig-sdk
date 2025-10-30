@@ -20,7 +20,6 @@ import { WASMManager } from './wasm'
  */
 export class Vultisig {
   private serverManager: ServerManager
-  private wasmManager: WASMManager
   private initialized = false
 
   // Module managers
@@ -37,7 +36,6 @@ export class Vultisig {
     defaultChains?: string[]
     defaultCurrency?: string
   }) {
-    this.wasmManager = new WASMManager()
     this.serverManager = new ServerManager(config?.serverEndpoints)
 
     // Initialize module managers
@@ -46,7 +44,7 @@ export class Vultisig {
       defaultChains: config?.defaultChains,
       defaultCurrency: config?.defaultCurrency,
     })
-    this.vaultManager = new VaultManager(this.wasmManager, this)
+    this.vaultManager = new VaultManager(this)
   }
 
   /**
@@ -59,13 +57,15 @@ export class Vultisig {
   }
 
   /**
-   * Initialize the SDK and load WASM modules
+   * Initialize the SDK and pre-load all WASM modules (optional but recommended)
+   * WASM modules will lazy-load automatically when needed, but calling this
+   * upfront can improve performance by avoiding delays during operations
    */
   async initialize(): Promise<void> {
     if (this.initialized) return
 
     try {
-      await this.wasmManager.initialize()
+      await WASMManager.getInstance().initialize()
       this.initialized = true
     } catch (error) {
       throw new Error('Failed to initialize SDK: ' + (error as Error).message)
@@ -148,8 +148,6 @@ export class Vultisig {
     // Create VaultClass instance
     const vault = new VaultClass(
       vaultData,
-      await this.wasmManager.getWalletCore(),
-      this.wasmManager,
       this
     )
 

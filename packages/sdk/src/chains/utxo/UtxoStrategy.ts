@@ -322,11 +322,10 @@ export class UtxoStrategy implements ChainStrategy {
   }
 
   /**
-   * Get WalletCore instance
-   * TODO: Inject via constructor for better testability
+   * Get WalletCore instance via singleton
    */
   private async getWalletCore(): Promise<WalletCore> {
-    const { getWalletCore } = require('../../wasm/WASMManager')
-    return getWalletCore()
+    const { WASMManager } = await import('../../wasm/WASMManager')
+    return WASMManager.getInstance().getWalletCore()
   }
 }
