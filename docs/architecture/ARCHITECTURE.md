@@ -1,13 +1,20 @@
 # Vultisig SDK Architecture
 
-**Last Updated:** 2025-10-30
-**Version:** 2.0
+**Last Updated:** 2025-11-01
+**Version:** 2.1
 
 ---
 
 ## Overview
 
-The Vultisig SDK is a TypeScript SDK for secure multi-party computation (MPC) and blockchain operations. It provides vault management, multi-chain support, and server-assisted signing through a well-organized, modular architecture using strategy and service patterns.
+The Vultisig SDK is a TypeScript SDK for secure multi-party computation (MPC) and blockchain operations. It provides vault management, multi-chain support, and server-assisted signing through a well-organized, modular architecture using strategy, service, and manager patterns.
+
+**Recent Updates (v2.1):**
+- Added Manager Pattern architecture (VaultManager, ChainManager, WASMManager)
+- Implemented Service Injection pattern to eliminate circular dependencies
+- Enhanced Blockchair integration with Smart Resolver system (18+ chains)
+- Documented three-tier caching strategy for optimal performance
+- Phase 5 refactoring: Internalized ChainConfig and ServerManager from public API
 
 ---
 
@@ -242,6 +249,182 @@ Each chain includes:
 
 ---
 
+## Manager Pattern Architecture
+
+The SDK employs a **Manager Pattern** to organize functionality into dedicated managers that handle specific concerns. This pattern provides clear separation of responsibilities and enables modular, testable code.
+
+### VaultManager
+
+**Location:** [VaultManager.ts](../../packages/sdk/src/VaultManager.ts)
+
+**Responsibilities:**
+- Vault lifecycle management (create, import, delete)
+- Vault storage and retrieval
+- Active vault state management
+- Service injection for Vault instances
+- File operations (.vult import/export)
+- Encryption status detection
+
+**Key Features:**
+- **Service Injection Pattern:** Creates `VaultServices` instances and injects them into `Vault` class to avoid circular dependencies
+- **Fast Vault Creation:** Delegates to `ServerManager` for 2-of-2 vault creation
+- **Secure Vault Creation:** (Not yet implemented) Will handle multi-device MPC keygen
+- **Vault Import:** Supports encrypted and unencrypted .vult files with automatic detection
+- **Type Detection:** Automatically determines vault type (fast/secure) based on signer names
+- **Global Settings:** Applies SDK-level defaults to imported vaults
+
+**Key Methods:**
+- `createVault(name, options)` - Create new vault (auto-detects fast/secure)
+- `createFastVault(name, options)` - Private method for 2-of-2 vault creation
+- `createSecureVault(name, options)` - Private method for multi-device vault (stub)
+- `addVault(file, password?)` - Import vault from .vult file
+- `listVaults()` - Get summaries of all stored vaults
+- `deleteVault(vault)` - Remove vault from storage
+- `setActiveVault(vault)` - Switch active vault
+- `getActiveVault()` - Get current active vault
+- `isVaultFileEncrypted(file)` - Check encryption status before import
+
+**Service Injection Implementation:**
+```typescript
+private createVaultServices(): VaultServices {
+  const strategyFactory = createDefaultStrategyFactory(this.wasmManager)
+
+  return {
+    addressService: new AddressService(strategyFactory),
+    balanceService: new BalanceService(strategyFactory, blockchairFirstResolver),
+    signingService: new SigningService(strategyFactory),
+    fastSigningService: new FastSigningService(this.serverManager, strategyFactory)
+  }
+}
+
+createVaultInstance(vaultData: Vault): VaultClass {
+  return new VaultClass(
+    vaultData,
+    this.createVaultServices(),
+    this.config
+  )
+}
+```
+
+**Dependencies:**
+- `WASMManager` - For WASM module initialization
+- `ServerManager` - For server-assisted vault creation
+- `VaultConfig` - SDK-level configuration (default chains, currency)
+
+---
+
+### ChainManager
+
+**Location:** [ChainManager.ts](../../packages/sdk/src/ChainManager.ts)
+
+**Responsibilities:**
+- SDK-level chain configuration
+- Default chains for new vaults
+- Chain validation
+- Default currency management
+- Delegation to ChainConfig for supported chains
+
+**Key Features:**
+- **Single Source of Truth:** Delegates to `ChainConfig` for all chain metadata
+- **Validation:** Ensures only supported chains can be set as defaults
+- **Configuration Persistence:** (TODO) Will save settings to storage
+
+**Key Methods:**
+- `getSupportedChains()` - Get all supported chains (delegates to ChainConfig)
+- `setDefaultChains(chains)` - Set SDK-level default chains with validation
+- `getDefaultChains()` - Get SDK-level default chains
+- `setDefaultCurrency(currency)` - Set global default currency
+- `getDefaultCurrency()` - Get global default currency
+
+**Default Chains:**
+The SDK uses 5 top chains by default: Bitcoin, Ethereum, Solana, THORChain, Ripple
+
+---
+
+### WASMManager
+
+**Location:** [WASMManager.ts](../../packages/sdk/src/wasm/WASMManager.ts)
+
+**Responsibilities:**
+- WebAssembly module initialization
+- Lazy loading of WASM modules
+- WASM module caching
+- Custom WASM path configuration (DKLS/Schnorr only)
+
+**Key Features:**
+- **Lazy Loading:** Modules are loaded on first access, not upfront
+- **Memoization:** Uses `memoizeAsync` to ensure modules are loaded only once
+- **Parallel Initialization:** Can load all modules concurrently for better performance
+- **Custom Paths:** Supports custom WASM URLs for DKLS and Schnorr (WalletCore uses default)
+
+**WASM Modules:**
+1. **WalletCore** - Address derivation and cryptographic operations
+2. **DKLS** - ECDSA MPC signing (2-party)
+3. **Schnorr** - EdDSA MPC signing (2-party)
+
+**Key Methods:**
+- `getWalletCore()` - Lazy load WalletCore (auto-called by strategies)
+- `initializeDkls()` - Lazy load DKLS module
+- `initializeSchnorr()` - Lazy load Schnorr module
+- `initialize()` - Pre-load all modules in parallel (optional)
+- `getStatus()` - Get module initialization status
+
+**Configuration:**
+```typescript
+const wasmManager = new WASMManager({
+  autoInit: true,  // Pre-load modules on SDK init
+  wasmPaths: {
+    // Custom paths only for DKLS and Schnorr
+    dkls: 'https://custom-cdn.com/dkls.wasm',
+    schnorr: 'https://custom-cdn.com/schnorr.wasm'
+  }
+})
+```
+
+**Performance Benefits:**
+- Lazy loading reduces initial SDK load time
+- Memoization prevents duplicate downloads
+- Parallel loading speeds up upfront initialization
+
+---
+
+### Service Injection Pattern
+
+The SDK uses **Dependency Injection** to break circular dependencies and enable clean architecture:
+
+**Problem:** Direct dependency from `Vault` → `ServerManager` → `VaultManager` → `Vault` creates circular reference
+
+**Solution:** `VaultManager` creates and injects services into `Vault` instances
+
+**VaultServices Interface:**
+
+**Location:** [VaultServices.ts](../../packages/sdk/src/vault/VaultServices.ts)
+
+```typescript
+interface VaultServices {
+  addressService: AddressService
+  balanceService: BalanceService
+  signingService: SigningService
+  fastSigningService?: FastSigningService
+}
+```
+
+**Benefits:**
+- **No Circular Dependencies:** Vault receives services, doesn't create them
+- **Testability:** Easy to inject mock services for testing
+- **Separation of Concerns:** VaultManager handles service wiring
+- **Flexibility:** Services can be configured per vault instance if needed
+
+**Flow:**
+```
+VaultManager.createVaultInstance()
+  → createVaultServices() → Creates all service instances
+  → new VaultClass(data, services, config) → Injects services
+  → Vault uses injected services for operations
+```
+
+---
+
 ## Chain Support Architecture
 
 ### Strategy Pattern
@@ -385,16 +568,79 @@ The Vault class delegates to specialized services for separation of concerns:
 
 **Responsibilities:**
 - Coordinate balance fetching
-- Blockchair integration with RPC fallback
+- Smart resolver integration (Blockchair + RPC)
 - Type conversion (bigint to Balance)
 - Batch balance operations
 - Chain metadata integration via ChainConfig
 
 **Key Features:**
-- **Blockchair First:** Tries Blockchair API for 5-10x faster responses
-- **Automatic Fallback:** Falls back to strategy RPC calls on failure
+- **Smart Resolver Pattern:** Uses configurable `SmartBalanceResolver` for intelligent data source selection
+- **Blockchair Integration:** 5-10x faster balance fetching for 18+ supported chains
+- **Automatic Fallback:** Seamless RPC fallback on Blockchair failure
 - **Parallel Fetching:** Fetches multiple balances concurrently
 - **ChainConfig Integration:** Uses `ChainConfig.getDecimals()` and `ChainConfig.getSymbol()` for chain-specific formatting
+
+**Blockchair Smart Resolver System:**
+
+**Location:** [blockchair/integration.ts](../../packages/sdk/src/vault/balance/blockchair/integration.ts)
+
+The SDK includes a comprehensive **Smart Resolver** system that intelligently switches between Blockchair and RPC data sources:
+
+**SmartBalanceResolver:**
+```typescript
+class SmartBalanceResolver {
+  async getBalance(input: ChainAccount): Promise<bigint> {
+    // 1. Check if Blockchair is enabled and chain is supported
+    if (shouldUseBlockchair(input.chain)) {
+      try {
+        return await getBlockchairBalance(input)
+      } catch (error) {
+        // 2. Automatic fallback to RPC on error
+        if (config.fallbackToRpc) {
+          return await getCoinBalance(input)  // Standard RPC
+        }
+        throw error
+      }
+    }
+    // 3. Use RPC directly for unsupported chains
+    return await getCoinBalance(input)
+  }
+}
+```
+
+**Supported Chains (18+):**
+- **EVM (11 chains):** Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Avalanche, Blast, zkSync, Cronos, Mantle
+- **UTXO (6 chains):** Bitcoin, Bitcoin Cash, Litecoin, Dogecoin, Dash, Zcash
+- **Other (2 chains):** Solana, Cardano
+
+**Configuration Options:**
+```typescript
+// Pre-configured resolvers available:
+export const blockchairFirstResolver  // Default: Blockchair with RPC fallback
+export const rpcOnlyResolver          // Disable Blockchair, RPC only
+export const selectiveBlockchairResolver  // Custom per-chain configuration
+```
+
+**Chain-Specific Resolvers:**
+- **EVM Resolver:** [evm.ts](../../packages/sdk/src/vault/balance/blockchair/resolvers/evm.ts) - Handles all EVM chains
+- **Solana Resolver:** [solana.ts](../../packages/sdk/src/vault/balance/blockchair/resolvers/solana.ts) - Solana-specific balance fetching
+- **Cardano Resolver:** [cardano.ts](../../packages/sdk/src/vault/balance/blockchair/resolvers/cardano.ts) - Cardano ADA balances
+- **Transaction Resolver:** [transaction.ts](../../packages/sdk/src/vault/balance/blockchair/resolvers/transaction.ts) - Transaction lookups
+
+**Performance Benefits:**
+- **5-10x Faster:** Blockchair's indexed data is significantly faster than direct RPC calls
+- **Reduced RPC Load:** Fewer direct node requests
+- **Better Reliability:** Automatic fallback ensures uptime
+- **Caching:** Blockchair's built-in caching reduces latency
+
+**Integration with BalanceService:**
+```typescript
+// VaultManager creates BalanceService with smart resolver
+const balanceService = new BalanceService(
+  strategyFactory,
+  blockchairFirstResolver  // Injected resolver
+)
+```
 
 ### SigningService
 
@@ -498,15 +744,147 @@ The Vault class delegates to specialized services for separation of concerns:
 - **Supported:** UTXO chains (Bitcoin, Litecoin, etc.)
 - **Fallback:** Automatic RPC fallback on failure
 
-### Caching Strategy
-**Addresses:**
-- Permanent caching (addresses never change)
-- Stored in `Vault.addressCache`
+### Three-Tier Caching Strategy
 
-**Balances:**
-- 5-minute TTL caching
-- Managed by `CacheService`
-- Force refresh available
+The SDK employs a **three-tier caching strategy** to optimize performance while maintaining data freshness:
+
+#### Tier 1: Permanent Cache (Addresses)
+**Purpose:** Cache data that never changes
+
+**Implementation:**
+- Addresses are derived from public keys and never change
+- Stored permanently in `Vault.addressCache` (Map<chainId, address>)
+- No expiration or invalidation needed
+- Addresses cached on first derivation
+
+**Example:**
+```typescript
+async address(chain: string): Promise<string> {
+  // Check permanent cache first
+  const cached = this.addressCache.get(chain)
+  if (cached) return cached
+
+  // Derive and cache permanently
+  const address = await this.services.addressService.deriveAddress(this.data, chain)
+  this.addressCache.set(chain, address)
+  return address
+}
+```
+
+**Benefits:**
+- Zero latency on subsequent calls
+- No WASM re-initialization
+- Significant performance improvement for repeated address lookups
+
+#### Tier 2: TTL-Based Cache (Balances)
+**Purpose:** Cache frequently changing data with time-to-live
+
+**Implementation:**
+- Managed by `CacheService` with 5-minute TTL
+- Used for balance data that changes frequently
+- Automatic expiration after TTL
+- Force refresh available via `updateBalance()`
+
+**CacheService Features:**
+- Generic type support: `CacheService<T>`
+- Get-or-compute pattern: Fetch from cache or compute if missing/expired
+- Manual invalidation: Clear individual keys or entire cache
+- TTL tracking: Stores timestamp with each entry
+
+**Example:**
+```typescript
+// BalanceService uses CacheService
+async balance(chain: string, tokenId?: string): Promise<Balance> {
+  const cacheKey = `${chain}:${tokenId ?? 'native'}`
+
+  return await this.cacheService.getOrCompute(
+    cacheKey,
+    async () => {
+      // Compute balance if not cached or expired
+      const bigintBalance = await this.services.balanceService.getBalance(...)
+      return this.convertToBalance(bigintBalance, chain)
+    },
+    5 * 60 * 1000  // 5-minute TTL
+  )
+}
+
+// Force refresh bypasses cache
+async updateBalance(chain: string): Promise<Balance> {
+  const cacheKey = `${chain}:native`
+  this.cacheService.clear(cacheKey)  // Invalidate cache
+  return await this.balance(chain)    // Fetch fresh
+}
+```
+
+**Benefits:**
+- Reduces redundant API calls
+- Improves UI responsiveness
+- Balances user experience with data freshness
+- Configurable TTL per data type
+
+#### Tier 3: Strategy-Level Caching (Chain-Specific)
+**Purpose:** Chain-specific optimizations and caching
+
+**Implementation:**
+- Blockchair's built-in HTTP caching (server-side)
+- WASM module memoization in `WASMManager`
+- Strategy factory memoization for repeated lookups
+- RPC provider connection pooling
+
+**Examples:**
+
+**Blockchair HTTP Caching:**
+```typescript
+// Blockchair API responses include cache metadata
+{
+  context: {
+    cache: {
+      live: true,
+      duration: 15,      // Cache duration in seconds
+      since: 1234567890, // Cache start timestamp
+      until: 1234567905, // Cache expiration timestamp
+    }
+  }
+}
+```
+
+**WASM Module Memoization:**
+```typescript
+// WASMManager uses memoizeAsync for lazy loading
+private getWalletCoreInit = memoizeAsync(() => initWasm())
+private getDklsInit = memoizeAsync((wasmUrl?) => initializeMpcLib('ecdsa', wasmUrl))
+
+// First call loads WASM, subsequent calls return cached instance
+await wasmManager.getWalletCore()  // Loads WASM
+await wasmManager.getWalletCore()  // Returns cached instance
+```
+
+**Benefits:**
+- Reduces network requests
+- Optimizes WASM initialization
+- Chain-specific performance tuning
+- Transparent to SDK users
+
+---
+
+**Caching Strategy Summary:**
+
+| Tier | Data Type | Duration | Invalidation | Use Case |
+|------|-----------|----------|--------------|----------|
+| **Tier 1** | Addresses | Permanent | Never | Derived data that never changes |
+| **Tier 2** | Balances | 5 minutes | Manual/TTL | Frequently changing data |
+| **Tier 3** | HTTP/WASM | Varies | Automatic | Infrastructure optimization |
+
+**Cache Invalidation:**
+```typescript
+// Manual balance refresh
+await vault.updateBalance('Ethereum')
+
+// Clear all balance cache
+vault.clearBalanceCache()
+
+// Address cache never invalidated (permanent)
+```
 
 ### Multi-Message Signing (UTXO)
 - UTXO transactions can have multiple inputs
