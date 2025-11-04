@@ -108,31 +108,9 @@ export type {
   Token,
   Value,
   GasInfo,
-  GasEstimate,
-  SolanaToken,
-  PartialInstruction,
-  AddressTableLookup,
-  ParsedSolanaTransaction,
-  ParsedSolanaSwapParams,
-  SolanaTransactionInput,
-  SolanaKeysignOptions,
-  SolanaSignature
+  GasEstimate
+  // Solana types removed - use core types directly
 } from './types'
 
-// EVM types (exported for TypeScript users working with EVM chains)
-export type {
-  EvmToken,
-  EvmTransactionType,
-  EvmProtocol,
-  DecodedContractCall,
-  EvmTransferParams,
-  EvmSwapParams,
-  EvmNftParams,
-  EvmApproveParams,
-  ParsedEvmTransaction,
-  EvmTransactionInput,
-  EvmKeysignOptions,
-  EvmSignature,
-  EvmGasEstimate,
-  FormattedGasPrice
-} from './chains/evm'
+// EVM types removed - use core types directly
+// (chains/evm directory deleted in functional adapter refactor)

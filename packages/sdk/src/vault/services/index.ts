@@ -1,12 +1,9 @@
 /**
  * Vault Services
  *
- * Service layer that coordinates vault operations across chains.
- * Services use the strategy pattern to delegate chain-specific logic.
+ * Essential services for vault operations.
+ * Vault calls core functions directly - no strategy pattern needed.
  */
 
-export { AddressService } from './AddressService'
-export { BalanceService } from './BalanceService'
-export { SigningService } from './SigningService'
 export { CacheService } from './CacheService'
 export { FastSigningService } from './FastSigningService'

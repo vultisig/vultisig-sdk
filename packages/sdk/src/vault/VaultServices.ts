@@ -1,16 +1,13 @@
-import { AddressService } from './services/AddressService'
-import { BalanceService } from './services/BalanceService'
-import { SigningService } from './services/SigningService'
 import { FastSigningService } from './services/FastSigningService'
+import { WASMManager } from '../wasm/WASMManager'
 
 /**
  * Services required by Vault for operations
- * These are injected to avoid circular dependencies with VultisigSDK
+ * Simplified - only essential services needed
+ * Vault calls core functions directly - no service layers
  */
 export interface VaultServices {
-  addressService: AddressService
-  balanceService: BalanceService
-  signingService: SigningService
+  wasmManager: WASMManager
   fastSigningService?: FastSigningService
 }
 
