@@ -1,4 +1,5 @@
-import { ChainConfig } from '../../chains/config/ChainConfig'
+import { Chain } from '@core/chain/Chain'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { Balance, Token } from '../../types'
 
 /**
@@ -28,9 +29,9 @@ export function formatBalance(
     decimals = token?.decimals ?? 18 // Default to 18 for ERC-20 tokens
     symbol = token?.symbol ?? tokenId
   } else {
-    // Native balance - use ChainConfig
-    decimals = ChainConfig.getDecimals(chain)
-    symbol = ChainConfig.getSymbol(chain)
+    // Native balance - use chainFeeCoin
+    decimals = chainFeeCoin[chain as Chain].decimals
+    symbol = chainFeeCoin[chain as Chain].ticker
   }
 
   return {

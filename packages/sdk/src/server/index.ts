@@ -13,8 +13,11 @@
 // ServerManager is internal-only - not exported
 // import { ServerManager } from './ServerManager'
 
-// Export utilities for advanced users
-export * from './utils'
+// Server utilities removed - replaced by core/lib utilities
+// Users should use core utilities directly:
+// - generateLocalPartyId from '@core/mpc/devices/localPartyId'
+// - getHexEncodedRandomBytes from '@lib/utils/crypto/getHexEncodedRandomBytes'
+// - crypto.randomUUID() for session IDs
 
 // Re-export core fast vault API functions directly
 export { setupVaultWithServer } from '@core/mpc/fast/api/setupVaultWithServer'

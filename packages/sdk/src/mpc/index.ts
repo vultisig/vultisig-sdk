@@ -3,7 +3,7 @@
  * Handles keygen, keysign, and reshare operations
  */
 
-export { MPCManager } from './MPCManager'
+// MPCManager removed - was unused placeholder
 
 // Re-export available MPC types
 export type { MpcServerType } from '@core/mpc/MpcServerType'

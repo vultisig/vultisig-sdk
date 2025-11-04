@@ -1,13 +1,15 @@
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 // Core functions (functional dispatch) - Direct imports from core
+import { Chain } from '@core/chain/Chain'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { getCoinBalance } from '@core/chain/coin/balance'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { getFeeQuote } from '@core/chain/feeQuote'
 
 // SDK utilities
-import { ChainConfig } from '../chains/config/ChainConfig'
+import { DEFAULT_CHAINS, isChainSupported, stringToChain } from '../chains/utils'
 import { CacheService } from './services/CacheService'
 import { FastSigningService } from './services/FastSigningService'
 import { formatBalance } from './adapters/formatBalance'
@@ -75,7 +77,7 @@ export class Vault {
     this.cacheService = new CacheService()
 
     // Initialize user chains from config
-    this._userChains = config?.defaultChains ?? ChainConfig.getDefaultChains()
+    this._userChains = config?.defaultChains ?? DEFAULT_CHAINS
 
     // Initialize currency from config
     this._currency = config?.defaultCurrency ?? 'USD'
@@ -215,16 +217,15 @@ export class Vault {
    * Get address for specified chain
    * Uses core's deriveAddress() with permanent caching
    */
-  async address(chain: string): Promise<string> {
-    const cacheKey = `address:${chain.toLowerCase()}`
+  async address(chain: string | Chain): Promise<string> {
+    const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
+    const cacheKey = `address:${chainEnum.toLowerCase()}`
 
     // Check permanent cache
     const cached = this.cacheService.get<string>(cacheKey, Number.MAX_SAFE_INTEGER)
     if (cached) return cached
 
     try {
-      // Get chain enum
-      const chainEnum = ChainConfig.getChainEnum(chain)
 
       // Get WalletCore
       const walletCore = await this.wasmManager.getWalletCore()
@@ -284,16 +285,16 @@ export class Vault {
    * Get balance for chain (with optional token)
    * Uses core's getCoinBalance() with 5-minute TTL cache
    */
-  async balance(chain: string, tokenId?: string): Promise<Balance> {
-    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
+  async balance(chain: string | Chain, tokenId?: string): Promise<Balance> {
+    const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
+    const cacheKey = `balance:${chainEnum}:${tokenId ?? 'native'}`
 
     // Check 5-min TTL cache
     const cached = this.cacheService.get<Balance>(cacheKey, 5 * 60 * 1000)
     if (cached) return cached
 
     try {
-      const address = await this.address(chain)
-      const chainEnum = ChainConfig.getChainEnum(chain)
+      const address = await this.address(chainEnum)
 
       // Core handles balance fetching for ALL chains
       // Supports: native, ERC-20, SPL, wasm tokens automatically
@@ -390,10 +391,10 @@ export class Vault {
    * Get gas info for chain
    * Uses core's getFeeQuote()
    */
-  async gas(chain: string): Promise<GasInfo> {
+  async gas(chain: string | Chain): Promise<GasInfo> {
     try {
-      const chainEnum = ChainConfig.getChainEnum(chain)
-      const address = await this.address(chain)
+      const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
+      const address = await this.address(chainEnum)
 
       // Core handles gas estimation for all chains
       // Need to provide full AccountCoin with metadata
@@ -401,13 +402,13 @@ export class Vault {
         coin: {
           chain: chainEnum,
           address,
-          decimals: ChainConfig.getDecimals(chain),
-          ticker: ChainConfig.getSymbol(chain)
+          decimals: chainFeeCoin[chainEnum].decimals,
+          ticker: chainFeeCoin[chainEnum].ticker
         }
       })
 
       // Format using adapter
-      return formatGasInfo(feeQuote, chain)
+      return formatGasInfo(feeQuote, chainEnum)
 
     } catch (error) {
       throw new VaultError(
@@ -613,7 +614,7 @@ export class Vault {
   async setChains(chains: string[]): Promise<void> {
     // Validate all chains
     chains.forEach(chain => {
-      if (!ChainConfig.isSupported(chain)) {
+      if (!isChainSupported(chain)) {
         throw new VaultError(
           VaultErrorCode.ChainNotSupported,
           `Chain not supported: ${chain}`
@@ -631,7 +632,7 @@ export class Vault {
    * Add single chain
    */
   async addChain(chain: string): Promise<void> {
-    if (!ChainConfig.isSupported(chain)) {
+    if (!isChainSupported(chain)) {
       throw new VaultError(
         VaultErrorCode.ChainNotSupported,
         `Chain not supported: ${chain}`
@@ -666,7 +667,7 @@ export class Vault {
    * Reset to default chains
    */
   async resetToDefaultChains(): Promise<void> {
-    this._userChains = ChainConfig.getDefaultChains()
+    this._userChains = DEFAULT_CHAINS
     await this.addresses(this._userChains)
   }
 
