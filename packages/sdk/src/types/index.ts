@@ -9,7 +9,7 @@ export type { AccountCoin } from '@core/chain/coin/AccountCoin'
 export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
 
 // SDK-extended vault type that includes calculated threshold
@@ -79,6 +79,8 @@ export type Balance = {
   amount: string
   decimals: number
   symbol: string
+  chainId: string
+  tokenId?: string
   value?: number // USD value
 }
 
@@ -100,7 +102,7 @@ export type SigningPayload = {
 export type Signature = {
   signature: string
   recovery?: number
-  format: 'DER' | 'ECDSA' | 'EdDSA'
+  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519'
 }
 
 export type FastSigningInput = {
@@ -292,14 +294,5 @@ export type GasEstimate = {
   chainId: string
 }
 
-// Solana-specific types
-export type {
-  SolanaToken,
-  PartialInstruction,
-  AddressTableLookup,
-  ParsedSolanaTransaction,
-  ParsedSolanaSwapParams,
-  SolanaTransactionInput,
-  SolanaKeysignOptions,
-  SolanaSignature,
-} from '../chains/solana/types'
+// Solana-specific types (now handled by core)
+// Removed - using core types directly instead of SDK wrappers

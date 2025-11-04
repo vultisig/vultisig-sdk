@@ -3,15 +3,18 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# Yarn
 .yarn/build-state.yml
 .yarn/install-state.gz
-# Dependency directories
-vendor/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 
 # Output directories
-build/bin
-build/darwin
-build/windows
 dist/
 bin/
 
@@ -19,20 +22,11 @@ bin/
 .rollup.cache/
 *.tsbuildinfo
 
-# SDK build artifacts  
-src/dist/
-src/.rollup.cache/
-src/.npmignore
-src/node_modules/
-
 # Examples build artifacts
 examples/*/dist/
 examples/*/build/
 
-# Wails build files
-wails.log
-
-# IDE and Editor directories/files
+# IDE and Editor files
 .idea/
 *.swp
 *.swo
@@ -40,14 +34,6 @@ wails.log
 # OS generated files
 .DS_Store
 Thumbs.db
-
-# Go related files
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
 
 # Logs
 *.log
@@ -57,75 +43,34 @@ Thumbs.db
 *.temp
 
 # Coverage files
-*.coverprofile
+coverage/
 *.cover.out
 
-# Wails specific files
-frontend/dist/
-frontend/node_modules/
-frontend/yarn.lock
-frontend/package.json.md5
-
-# Ignore build files created by Wails
-frontend/build/
-frontend/.parcel-cache/
-
-# Local environment configuration
+# Environment configuration
 .env
 .env.local
+.env.development
 .env.development.local
+.env.staging
 .env.test.local
 .env.production.local
-HotVault.vult
+.envrc
 
-# Optional: Ignore binary files (uncomment if applicable)
-# myapp.exe
-# myapp
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Vite cache and temp files
+# Vite cache
 .vite/
 vite.config.ts.timestamp-*
 
-# Development and debug files
-.env.development
-.env.staging
-debug.log
-*.debug
-
-# Ignore compiled Go files
-*.o
-*.a
-*.out
-vultisig.db
-vultisig-win
-
-frontend/vite.config.ts.timestamp-*
-
-.envrc
-credentials.json
-
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-
-.expo/
-.expo-shared/
-
-mcp.json
-task.md
+# Storybook
 *storybook.log
 storybook-static
+
+# Development files
+credentials.json
+mcp.json
+task.md
+HotVault.vult
 
 # Development planning files
 plans/
 archived/
-
-# Synced reference code (fetched fresh from vultisig-windows)
 upstream/

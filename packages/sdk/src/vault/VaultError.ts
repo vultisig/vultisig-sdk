@@ -17,6 +17,7 @@ export enum VaultErrorCode {
   InvalidChainCode = 'INVALID_CHAIN_CODE',
   BalanceFetchFailed = 'BALANCE_FETCH_FAILED',
   UnsupportedToken = 'UNSUPPORTED_TOKEN',
+  GasEstimationFailed = 'GAS_ESTIMATION_FAILED',
 }
 
 /**

@@ -4,11 +4,16 @@
  */
 
 export { Vault } from './Vault'
-export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
+export {
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
+  VaultImportErrorCode,
+} from './VaultError'
 export { AddressBookManager } from './AddressBook'
-export { ChainManagement } from './ChainManagement'
-export { VaultManagement } from './VaultManagement'
-export { BalanceManagement } from './BalanceManagement'
+
+// Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
+// export { BalanceManagement } from './BalanceManagement'
 
 // Utilities
 export { ValidationHelpers } from './utils/validation'
@@ -30,5 +35,3 @@ export type {
   VaultValidationResult,
 } from '../types'
 
-// Optional: Advanced balance providers (domain-driven design)
-export * as BalanceProviders from './balance'

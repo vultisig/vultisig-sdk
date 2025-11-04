@@ -1,17 +1,19 @@
-import { ServerManager } from './server'
-import type {
+// ServerManager is internal - import directly from implementation file
+import { ServerManager } from './server/ServerManager'
+import {
   AddressBook,
   AddressBookEntry,
+  SDKConfig,
   ServerStatus,
   Signature,
   SigningPayload,
   ValidationResult,
 } from './types'
 import { AddressBookManager } from './vault/AddressBook'
-import { ChainManagement } from './vault/ChainManagement'
+import { ChainManager } from './ChainManager'
 import { ValidationHelpers } from './vault/utils/validation'
 import { Vault as VaultClass } from './vault/Vault'
-import { VaultManagement } from './vault/VaultManagement'
+import { VaultManager } from './VaultManager'
 import { WASMManager } from './wasm'
 
 /**
@@ -24,28 +26,30 @@ export class Vultisig {
 
   // Module managers
   private addressBookManager: AddressBookManager
-  private chainManagement: ChainManagement
-  private vaultManagement: VaultManagement
+  private chainManager: ChainManager
+  private vaultManager: VaultManager
 
-  constructor(config?: {
-    serverEndpoints?: {
-      fastVault?: string
-      messageRelay?: string
-    }
-
+  constructor(config?: SDKConfig & {
     defaultChains?: string[]
     defaultCurrency?: string
   }) {
-    this.wasmManager = new WASMManager()
     this.serverManager = new ServerManager(config?.serverEndpoints)
+    this.wasmManager = new WASMManager(config?.wasmConfig)
 
     // Initialize module managers
     this.addressBookManager = new AddressBookManager()
-    this.chainManagement = new ChainManagement({
+    this.chainManager = new ChainManager({
       defaultChains: config?.defaultChains,
       defaultCurrency: config?.defaultCurrency,
     })
-    this.vaultManagement = new VaultManagement(this.wasmManager, this)
+    this.vaultManager = new VaultManager(
+      this.wasmManager,
+      this.serverManager,
+      {
+        defaultChains: config?.defaultChains,
+        defaultCurrency: config?.defaultCurrency,
+      }
+    )
   }
 
   /**
@@ -58,7 +62,9 @@ export class Vultisig {
   }
 
   /**
-   * Initialize the SDK and load WASM modules
+   * Initialize the SDK and pre-load all WASM modules (optional but recommended)
+   * WASM modules will lazy-load automatically when needed, but calling this
+   * upfront can improve performance by avoiding delays during operations
    */
   async initialize(): Promise<void> {
     if (this.initialized) return
@@ -94,7 +100,7 @@ export class Vultisig {
     }
   ): Promise<VaultClass> {
     await this.ensureInitialized()
-    return this.vaultManagement.createVault(name, options)
+    return this.vaultManager.createVault(name, options)
   }
 
   /**
@@ -112,7 +118,7 @@ export class Vultisig {
     verificationRequired: boolean
   }> {
     await this.ensureInitialized()
-    const vault = await this.vaultManagement.createVault(options.name, {
+    const vault = await this.vaultManager.createVault(options.name, {
       type: 'fast',
       password: options.password,
       email: options.email,
@@ -144,16 +150,12 @@ export class Vultisig {
       password
     )
 
-    // Create VaultClass instance
-    const vault = new VaultClass(
-      vaultData,
-      await this.wasmManager.getWalletCore(),
-      this.wasmManager,
-      this
-    )
+    // Create VaultClass instance using VaultManager's service creation
+    // This ensures consistent service instantiation across all vault creation paths
+    const vault = this.vaultManager.createVaultInstance(vaultData)
 
     // Store the vault and set as active
-    this.vaultManagement.setActiveVault(vault)
+    this.vaultManager.setActiveVault(vault)
 
     return vault
   }
@@ -163,7 +165,7 @@ export class Vultisig {
    */
   async addVault(file: File, password?: string): Promise<VaultClass> {
     await this.ensureInitialized()
-    return this.vaultManagement.addVault(file, password)
+    return this.vaultManager.addVault(file, password)
   }
 
   /**
@@ -171,7 +173,7 @@ export class Vultisig {
    */
   async listVaults(): Promise<any[]> {
     await this.ensureInitialized()
-    return this.vaultManagement.listVaults()
+    return this.vaultManager.listVaults()
   }
 
   /**
@@ -179,7 +181,7 @@ export class Vultisig {
    */
   async deleteVault(vault: VaultClass): Promise<void> {
     await this.ensureInitialized()
-    return this.vaultManagement.deleteVault(vault)
+    return this.vaultManager.deleteVault(vault)
   }
 
   /**
@@ -187,7 +189,7 @@ export class Vultisig {
    */
   async clearVaults(): Promise<void> {
     await this.ensureInitialized()
-    await this.vaultManagement.clearVaults()
+    await this.vaultManager.clearVaults()
     this.addressBookManager.clear()
   }
 
@@ -197,21 +199,21 @@ export class Vultisig {
    * Switch to different vault
    */
   setActiveVault(vault: VaultClass): void {
-    this.vaultManagement.setActiveVault(vault)
+    this.vaultManager.setActiveVault(vault)
   }
 
   /**
    * Get current active vault
    */
   getActiveVault(): VaultClass | null {
-    return this.vaultManagement.getActiveVault()
+    return this.vaultManager.getActiveVault()
   }
 
   /**
    * Check if there's an active vault
    */
   hasActiveVault(): boolean {
-    return this.vaultManagement.hasActiveVault()
+    return this.vaultManager.hasActiveVault()
   }
 
   // === GLOBAL CONFIGURATION ===
@@ -220,14 +222,14 @@ export class Vultisig {
    * Set global default currency
    */
   setDefaultCurrency(currency: string): void {
-    this.chainManagement.setDefaultCurrency(currency)
+    this.chainManager.setDefaultCurrency(currency)
   }
 
   /**
    * Get global default currency
    */
   getDefaultCurrency(): string {
-    return this.chainManagement.getDefaultCurrency()
+    return this.chainManager.getDefaultCurrency()
   }
 
   // === CHAIN OPERATIONS ===
@@ -236,21 +238,21 @@ export class Vultisig {
    * Get all hardcoded supported chains (immutable)
    */
   getSupportedChains(): string[] {
-    return this.chainManagement.getSupportedChains()
+    return this.chainManager.getSupportedChains()
   }
 
   /**
    * Set SDK-level default chains for new vaults
    */
   setDefaultChains(chains: string[]): void {
-    this.chainManagement.setDefaultChains(chains)
+    this.chainManager.setDefaultChains(chains)
   }
 
   /**
    * Get SDK-level default chains
    */
   getDefaultChains(): string[] {
-    return this.chainManagement.getDefaultChains()
+    return this.chainManager.getDefaultChains()
   }
 
   // === VALIDATION HELPERS ===
@@ -282,7 +284,7 @@ export class Vultisig {
    * Check if .vult file is encrypted
    */
   async isVaultFileEncrypted(file: File): Promise<boolean> {
-    return this.vaultManagement.isVaultFileEncrypted(file)
+    return this.vaultManager.isVaultFileEncrypted(file)
   }
 
   // === SERVER STATUS ===
@@ -364,5 +366,9 @@ export class Vultisig {
 
   getServerManager(): ServerManager {
     return this.serverManager
+  }
+
+  getWasmManager(): WASMManager {
+    return this.wasmManager
   }
 }

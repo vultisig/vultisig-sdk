@@ -1,18 +1,12 @@
-import type {
+import {
   KeygenProgressUpdate,
   ReshareOptions,
   ServerStatus,
-  Signature,
-  SigningPayload,
   Vault,
 } from '../types'
-import {
-  generateBrowserPartyId,
-  generateEncryptionKey,
-  generateServerPartyId,
-  generateSessionId,
-  pingServer,
-} from './utils'
+import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
+import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
+import { stringToChain } from '../chains/utils'
 
 /**
  * ServerManager coordinates all server communications
@@ -59,103 +53,91 @@ export class ServerManager {
 
   /**
    * Get vault from VultiServer using password
+   *
+   * NOTE: The core getVaultFromServer currently returns minimal data.
+   * This needs to be updated to properly retrieve and decrypt the vault data.
    */
   async getVaultFromServer(vaultId: string, password: string): Promise<Vault> {
     const { getVaultFromServer } = await import('@core/mpc/fast/api/getVaultFromServer')
 
     const result = await getVaultFromServer({ vaultId, password })
 
-    // NOTE: this is a little sketchy, not sure why we need to do this
+    // TODO: Properly convert/decrypt the vault data from server response
+    // Currently the core function returns { password } which is incomplete
     return result as unknown as Vault
   }
 
   /**
-   * Sign transaction using VultiServer
+   * Coordinate fast signing with VultiServer (refactored version)
+   * Pure server coordination - no chain-specific logic
+   *
+   * @param options.vault Vault with keys and signers
+   * @param options.messages Pre-computed message hashes (from strategy.computePreSigningHashes())
+   * @param options.password Vault password for encryption
+   * @param options.payload Original signing payload
+   * @param options.strategy Chain strategy for result formatting
+   * @param options.walletCore WalletCore instance
+   * @returns Formatted signature (via strategy.formatSignatureResult())
    */
-  async signWithServer(
-    vault: any,
-    payload: SigningPayload,
-    vaultPassword: string
-  ): Promise<Signature> {
-    // Validate vault is a fast vault
-    const hasFastVaultServer = vault.signers.some(signer =>
-      signer.startsWith('Server-')
-    )
-    if (!hasFastVaultServer) {
-      throw new Error(
-        'Vault does not have VultiServer - fast signing not available'
-      )
-    }
+  async coordinateFastSigning(options: {
+    vault: any
+    messages: string[]
+    password: string
+    payload: any
+    strategy: any
+    walletCore: any
+  }): Promise<any> {
+    const { vault, messages, password, payload, strategy, walletCore } = options
 
-    // Use core functions directly
+    // Import required utilities
     const { getChainKind } = await import('@core/chain/ChainKind')
     const { signatureAlgorithms } = await import('@core/chain/signing/SignatureAlgorithm')
     const { getCoinType } = await import('@core/chain/coin/coinType')
     const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
+    const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
     const { signWithServer: callFastVaultAPI } = await import('@core/mpc/fast/api/signWithServer')
-    const { initWasm } = await import('@trustwallet/wallet-core')
-    const { AddressDeriver } = await import('../chains/AddressDeriver')
+    const { generateLocalPartyId } = await import('@core/mpc/devices/localPartyId')
+    const { keysign } = await import('@core/mpc/keysign')
 
-    // Initialize components
-    const walletCore = await initWasm()
-    const addressDeriver = new AddressDeriver()
-    await addressDeriver.initialize(walletCore)
-    const chain = addressDeriver.mapStringToChain(payload.chain)
+    // Map chain string to Chain enum
+    const chain = typeof payload.chain === 'string' ? stringToChain(payload.chain) : payload.chain
     const coinType = getCoinType({ walletCore, chain })
     const derivePath = walletCore.CoinTypeExt.derivationPath(coinType)
 
     const chainKind = getChainKind(chain)
     const signatureAlgorithm = signatureAlgorithms[chainKind]
 
-    // Prepare messages
-    let messages: string[]
-    if (payload.messageHashes) {
-      messages = payload.messageHashes
-    } else {
-      messages = await this.computeMessageHashesFromTransaction(
-        payload,
-        walletCore,
-        chain,
-        vault
-      )
-    }
-
     // Generate session parameters
-    const sessionId = generateSessionId() // Use our own session ID consistently
-    const hexEncryptionKey = await generateEncryptionKey()
-
-    // Generate a new local party ID for this signing session (like extension does)
-    const { generateLocalPartyId } = await import('@core/mpc/devices/localPartyId')
+    const sessionId = crypto.randomUUID()
+    const hexEncryptionKey = getHexEncodedRandomBytes(32)
     const signingLocalPartyId = generateLocalPartyId('extension' as any)
-    console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
 
-    // Step 1: Call FastVault server API with our session ID
+    console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
     console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
+
+    // Step 1: Call FastVault API
     const serverResponse = await callFastVaultAPI({
       public_key: vault.publicKeys.ecdsa,
       messages,
-      session: sessionId, // Use our session ID, not server's returned one
+      session: sessionId,
       hex_encryption_key: hexEncryptionKey,
       derive_path: derivePath,
       is_ecdsa: signatureAlgorithm === 'ecdsa',
-      vault_password: vaultPassword,
+      vault_password: password,
     })
     console.log(`✅ Server acknowledged session: ${serverResponse}`)
 
-    // Step 2: Join relay session as client with new signing party ID
+    // Step 2: Join relay session
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       localPartyId: signingLocalPartyId,
     })
 
-    // Step 2.5: Register server as participant (critical for server to join)
+    // Step 2.5: Register server as participant
     try {
       const { queryUrl } = await import('@lib/utils/query/queryUrl')
-      // Find the server signer from the vault
-      const serverSigner = vault.signers.find(signer =>
-        signer.startsWith('Server-')
-      )
+      const serverSigner = vault.signers.find(signer => signer.startsWith('Server-'))
       if (serverSigner) {
         await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
           body: [serverSigner],
@@ -166,40 +148,30 @@ export class ServerManager {
       // non-fatal
     }
 
-    // Wait for server to join session
+    // Step 3: Wait for server to join
     console.log('⏳ Waiting for server to join session...')
     const devices = await this.waitForPeers(sessionId, signingLocalPartyId)
     const peers = devices.filter(device => device !== signingLocalPartyId)
     console.log(`✅ All participants ready: [${devices.join(', ')}]`)
-    console.log(`🤝 Peer devices: [${peers.join(', ')}]`)
 
-    // Step 2.5: Start MPC session with devices list (CRITICAL MISSING STEP)
+    // Step 4: Start MPC session
     console.log('📡 Starting MPC session with devices list...')
-    const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
     await startMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
     })
-    console.log('✅ MPC session started with devices')
+    console.log('✅ MPC session started')
 
-    // Step 3: Perform MPC keysign using core implementation
-    console.log('🔐 Starting core MPC keysign process...')
-    const { keysign } = await import('@core/mpc/keysign')
-    const { getTxInputData } = await import('@core/mpc/keysign/txInputData')
-    const { getPublicKey } = await import('@core/chain/publicKey/getPublicKey')
-    const { compileTx } = await import('@core/chain/tx/compile/compileTx')
-    const { decodeSigningOutput } = await import('@core/chain/tw/signingOutput')
-
+    // Step 5: Perform MPC keysign
+    console.log('🔐 Starting MPC keysign process...')
     const keyShare = vault.keyShares[signatureAlgorithm]
     if (!keyShare) {
       throw new Error(`No key share found for algorithm: ${signatureAlgorithm}`)
     }
 
-    // If this is a UTXO chain (e.g., BTC), there may be multiple messages. Sign all.
-    const isUtxo = chainKind === 'utxo'
+    // Sign all messages (UTXO can have multiple, EVM typically has one)
     const signatureResults: Record<string, any> = {}
-
     for (const msg of messages) {
       console.log(`🔏 Signing message: ${msg}`)
       const sig = await keysign({
@@ -214,105 +186,21 @@ export class ServerManager {
         hexEncryptionKey,
         isInitiatingDevice: true,
       })
-      console.log(`✅ Signature result:`, sig)
+      console.log(`✅ Signature obtained for message`)
       signatureResults[msg] = sig
     }
 
-    // If single-message chains (e.g., EVM), return the single signature as before
-    if (!isUtxo) {
-      const only = messages[0]
-      const sigResult = signatureResults[only]
-      const recoveryId = sigResult.recovery_id
-        ? parseInt(sigResult.recovery_id, 16)
-        : undefined
+    // Step 6: Format signature result using strategy (chain-specific)
+    console.log(`🔄 Formatting signature result via ${payload.chain} strategy...`)
 
-      console.log(`🎯 Final signature for EVM:`, {
-        signature: sigResult.der_signature,
-        format:
-          signatureAlgorithm === 'eddsa'
-            ? 'EdDSA'
-            : recoveryId !== undefined
-              ? 'ECDSA'
-              : 'DER',
-        recovery: recoveryId,
-      })
-
-      return {
-        signature: sigResult.der_signature,
-        format:
-          signatureAlgorithm === 'eddsa'
-            ? 'EdDSA'
-            : recoveryId !== undefined
-              ? 'ECDSA'
-              : 'DER',
-        recovery: recoveryId,
-      }
-    }
-
-    // UTXO/BTC path: compile the fully signed transaction
-    // Recreate tx input data and public key to compile
-    const { create } = await import('@bufbuild/protobuf')
-    const { KeysignPayloadSchema } = await import('@core/mpc/types/vultisig/keysign/v1/keysign_message_pb')
-    const { deriveAddress } = await import('@core/chain/publicKey/address/deriveAddress')
-
-    const publicKey = getPublicKey({
-      chain,
+    // Pass vault and walletCore in payload for strategy to use
+    const enrichedPayload = {
+      ...payload,
+      vault,
       walletCore,
-      hexChainCode: vault.hexChainCode,
-      publicKeys: vault.publicKeys,
-    })
-    const address = deriveAddress({ chain, publicKey, walletCore })
-    const psbtBase64 = (payload as any)?.transaction?.psbtBase64
-    const keysignPayload = create(KeysignPayloadSchema, {
-      coin: {
-        chain: 'bitcoin',
-        address,
-      },
-      blockchainSpecific: {
-        case: 'utxoSpecific',
-        value: {
-          $typeName: 'vultisig.keysign.v1.UTXOSpecific',
-          byteFee: '1',
-          sendMaxAmount: false,
-        },
-      },
-      toAddress: address,
-      toAmount: '0',
-      memo: psbtBase64,
-    })
-
-    const inputs = getTxInputData({
-      keysignPayload,
-      walletCore,
-      publicKey,
-    })
-
-    // Extract just the DER signatures for compilation
-    const derSignatures: Record<string, any> = {}
-    for (const [msg, sigResult] of Object.entries(signatureResults)) {
-      derSignatures[msg] = sigResult.der_signature
     }
 
-    const compiledTxs = inputs.map(txInputData =>
-      compileTx({
-        publicKey,
-        txInputData,
-        signatures: derSignatures,
-        chain,
-        walletCore,
-      })
-    )
-
-    // For UTXO, we expect a single compiled transaction
-    const [compiled] = compiledTxs
-    const decoded = decodeSigningOutput(chain, compiled)
-    const finalTxHex = (decoded as any).encoded || compiled
-
-    console.log('✅ UTXO transaction compiled successfully')
-    return {
-      signature: finalTxHex,
-      format: 'DER',
-    }
+    return strategy.formatSignatureResult(signatureResults, enrichedPayload)
   }
 
   /**
@@ -326,7 +214,7 @@ export class ServerManager {
 
     await reshareWithServer({
       name: vault.name,
-      session_id: generateSessionId(),
+      session_id: crypto.randomUUID(),
       public_key: vault.publicKeys.ecdsa,
       hex_encryption_key: vault.hexChainCode,
       hex_chain_code: vault.hexChainCode,
@@ -361,12 +249,12 @@ export class ServerManager {
     const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
 
     // Generate session parameters using core MPC utilities
-    const sessionId = generateSessionId()
+    const sessionId = crypto.randomUUID()
     const { generateHexEncryptionKey } = await import('@core/mpc/utils/generateHexEncryptionKey')
     const { generateHexChainCode } = await import('@core/mpc/utils/generateHexChainCode')
     const hexEncryptionKey = generateHexEncryptionKey()
     const hexChainCode = generateHexChainCode()
-    const localPartyId = await generateBrowserPartyId()
+    const localPartyId = generateLocalPartyId('extension')
 
     const log = options.onLog || (() => {})
     const progress = options.onProgress || (() => {})
@@ -374,7 +262,7 @@ export class ServerManager {
     log('Creating vault on FastVault server...')
 
     // The server party ID should be consistent throughout the process
-    const serverPartyId = await generateServerPartyId()
+    const serverPartyId = generateLocalPartyId('server')
 
     await setupVaultWithServer({
       name: options.name,
@@ -497,8 +385,8 @@ export class ServerManager {
    */
   async checkServerStatus(): Promise<ServerStatus> {
     const [fastVaultStatus, relayStatus] = await Promise.allSettled([
-      pingServer(this.config.fastVault, '/'),
-      pingServer(this.config.messageRelay, '/ping'),
+      this.pingServer(this.config.fastVault, '/'),
+      this.pingServer(this.config.messageRelay, '/ping'),
     ])
 
     return {
@@ -552,89 +440,22 @@ export class ServerManager {
     throw new Error('Timeout waiting for peers to join session')
   }
 
-  private async computeMessageHashesFromTransaction(
-    payload: SigningPayload,
-    walletCore: any,
-    chain: any,
-    vault: any
-  ): Promise<string[]> {
-    const network = String(payload.chain || '').toLowerCase()
-    if (network === 'ethereum' || network === 'eth') {
-      const { serializeTransaction, keccak256 } = await import('viem')
-      const tx = payload.transaction
-      const unsigned = {
-        type: 'eip1559' as const,
-        chainId: tx.chainId,
-        to: tx.to as `0x${string}`,
-        nonce: tx.nonce,
-        gas: BigInt(tx.gasLimit),
-        data: (tx.data || '0x') as `0x${string}`,
-        value: BigInt(tx.value),
-        maxFeePerGas: BigInt(tx.maxFeePerGas ?? tx.gasPrice ?? '0'),
-        maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas ?? '0'),
-        accessList: [],
-      }
-      const serialized = serializeTransaction(unsigned)
-      const signingHash = keccak256(serialized).slice(2)
-      return [signingHash]
-    }
+  private async pingServer(
+    baseUrl: string,
+    endpoint = '/ping',
+    timeout = 5000
+  ): Promise<number> {
+    const start = Date.now()
 
-    // UTXO/BTC: derive pre-signing hashes from PSBT or constructed inputs
-    if (network === 'bitcoin' || network === 'btc') {
-      const { create } = await import('@bufbuild/protobuf')
-      const { KeysignPayloadSchema } = await import('@core/mpc/types/vultisig/keysign/v1/keysign_message_pb')
-      const { getTxInputData } = await import('@core/mpc/keysign/txInputData')
-      const { getPreSigningHashes } = await import('@core/chain/tx/preSigningHashes')
-      const { getPublicKey } = await import('@core/chain/publicKey/getPublicKey')
-      const { deriveAddress } = await import('@core/chain/publicKey/address/deriveAddress')
-
-      const publicKey = getPublicKey({
-        chain,
-        walletCore,
-        hexChainCode: vault.hexChainCode,
-        publicKeys: vault.publicKeys,
+    try {
+      await fetch(`${baseUrl}${endpoint}`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(timeout),
       })
-      const address = deriveAddress({ chain, publicKey, walletCore })
-      const psbtBase64 = (payload as any)?.transaction?.psbtBase64
-      if (!psbtBase64) {
-        throw new Error('BTC signing requires transaction.psbtBase64')
-      }
-
-      const keysignPayload = create(KeysignPayloadSchema, {
-        coin: {
-          chain: 'bitcoin',
-          address,
-        },
-        blockchainSpecific: {
-          case: 'utxoSpecific',
-          value: {
-            $typeName: 'vultisig.keysign.v1.UTXOSpecific',
-            byteFee: '1',
-            sendMaxAmount: false,
-          },
-        },
-        toAddress: address,
-        toAmount: '0',
-        memo: psbtBase64,
-      })
-
-      const inputs = getTxInputData({
-        keysignPayload,
-        walletCore,
-        publicKey,
-      })
-      const hashes = inputs
-        .flatMap(txInputData =>
-          getPreSigningHashes({ walletCore, chain, txInputData })
-        )
-        .map(value => Buffer.from(value).toString('hex'))
-      return hashes
+      return Date.now() - start
+    } catch (error) {
+      throw new Error(`Server ping failed: ${error}`)
     }
-    if (network === 'solana' || network === 'sol') {
-      // TODO addd tx prep here
-    }
-    throw new Error(
-      `Message hash computation not yet implemented for chain: ${payload.chain}`
-    )
   }
+
 }
