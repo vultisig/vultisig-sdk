@@ -17,12 +17,7 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 import { VaultServices, VaultConfig } from './vault/VaultServices'
 import { WASMManager } from './wasm'
 import { ServerManager } from './server/ServerManager'
-import { AddressService } from './vault/services/AddressService'
-import { BalanceService } from './vault/services/BalanceService'
-import { SigningService } from './vault/services/SigningService'
 import { FastSigningService } from './vault/services/FastSigningService'
-import { createDefaultStrategyFactory } from './chains/strategies/ChainStrategyFactory'
-import { blockchairFirstResolver } from './vault/balance/blockchair/integration'
 
 /**
  * Determine vault type based on signer names
@@ -51,16 +46,15 @@ export class VaultManager {
 
   /**
    * Create VaultServices instance for dependency injection
-   * Services are created once and shared across vault instances
+   * Simplified - only essential services needed
    */
   private createVaultServices(): VaultServices {
-    const strategyFactory = createDefaultStrategyFactory(this.wasmManager)
-
     return {
-      addressService: new AddressService(strategyFactory),
-      balanceService: new BalanceService(strategyFactory, blockchairFirstResolver),
-      signingService: new SigningService(strategyFactory),
-      fastSigningService: new FastSigningService(this.serverManager, strategyFactory)
+      wasmManager: this.wasmManager,
+      fastSigningService: new FastSigningService(
+        this.serverManager,
+        this.wasmManager
+      )
     }
   }
 

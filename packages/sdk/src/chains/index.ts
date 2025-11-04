@@ -8,11 +8,7 @@
 export { ChainConfig } from './config/ChainConfig'
 export type { ChainMetadata, ChainType } from './config/ChainConfig'
 
-// Chain strategies
-export { EvmStrategy } from './evm/EvmStrategy'
-export { SolanaStrategy } from './solana/SolanaStrategy'
-export { UtxoStrategy } from './utxo/UtxoStrategy'
-export { ChainStrategyFactory, createDefaultStrategyFactory } from './strategies/ChainStrategyFactory'
+// Chain strategies removed - using core functions directly instead
 
 // Re-export specific chain types that are available
 export type { Chain } from '@core/chain/Chain'

@@ -1,20 +1,29 @@
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+
+// Core functions (functional dispatch) - Direct imports from core
+import { getCoinBalance } from '@core/chain/coin/balance'
+import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
+import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
+import { getFeeQuote } from '@core/chain/feeQuote'
+
+// SDK utilities
+import { ChainConfig } from '../chains/config/ChainConfig'
+import { CacheService } from './services/CacheService'
+import { FastSigningService } from './services/FastSigningService'
+import { formatBalance } from './adapters/formatBalance'
+import { formatGasInfo } from './adapters/formatGasInfo'
+import { VaultError, VaultErrorCode } from './VaultError'
+import { VaultServices, VaultConfig } from './VaultServices'
+
+// Types
 import {
   Balance,
+  GasInfo,
   Signature,
   SigningMode,
   SigningPayload,
+  Token,
 } from '../types'
-import { VaultError, VaultErrorCode } from './VaultError'
-
-// Phase 3: Import new services
-import { AddressService } from './services/AddressService'
-import { BalanceService } from './services/BalanceService'
-import { SigningService } from './services/SigningService'
-import { CacheService } from './services/CacheService'
-import { FastSigningService } from './services/FastSigningService'
-import { ChainConfig } from '../chains/config/ChainConfig'
-import { VaultServices, VaultConfig } from './VaultServices'
 
 /**
  * Determine vault type based on signer names
@@ -28,50 +37,51 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
 }
 
 /**
- * Vault class for handling vault operations
- * Implements deriveAddress for Bitcoin and other chains
- * Following vault-centric architecture with debugging support
+ * Vault class - Functional Adapter Approach
+ *
+ * This class provides a thin layer over core functions, handling:
+ * - Caching (addresses: permanent, balances: 5-min TTL)
+ * - Format conversion (bigint → Balance, FeeQuote → GasInfo)
+ * - Error handling and user-friendly messages
+ *
+ * Architecture:
+ * - Vault → Core Functions (direct) → Chain Resolvers
+ * - No strategy pattern, no unnecessary abstraction layers
+ * - Aligns with core's functional dispatch pattern
  */
 export class Vault {
-  // Phase 3: Service instances (replacing old AddressDeriver and ChainManager)
-  private addressService: AddressService
-  private balanceService: BalanceService
-  private signingService: SigningService
+  // Essential services only
+  private wasmManager
   private cacheService: CacheService
   private fastSigningService?: FastSigningService
 
-  // Cached properties to avoid repeated decoding
+  // Cached properties
   private _isEncrypted?: boolean
   private _securityType?: 'fast' | 'secure'
 
-  // Runtime properties (not stored in .vult file)
+  // Runtime state (not persisted)
   private _userChains: string[] = []
   private _currency: string = 'USD'
-  // Phase 3: Removed _balanceCache - now using CacheService instead
+  private _tokens: Record<string, Token[]> = {}
 
   constructor(
     private vaultData: CoreVault,
     services: VaultServices,
     config?: VaultConfig
   ) {
-    // Vault initialized with injected services
-
-    // Phase 3: Use injected services (no more instantiation here)
-    this.addressService = services.addressService
-    this.balanceService = services.balanceService
-    this.signingService = services.signingService
+    // Inject essential services
+    this.wasmManager = services.wasmManager
     this.fastSigningService = services.fastSigningService
     this.cacheService = new CacheService()
 
-    // Initialize user chains from config or ChainConfig defaults
+    // Initialize user chains from config
     this._userChains = config?.defaultChains ?? ChainConfig.getDefaultChains()
 
-    // Initialize currency from config or default
+    // Initialize currency from config
     this._currency = config?.defaultCurrency ?? 'USD'
-
-    // Note: Old AddressDeriver and ChainManager initialization removed (Phase 3 cleanup)
-    // All operations now use addressService and balanceService instead
   }
+
+  // ===== VAULT INFO =====
 
   /**
    * Get vault summary information
@@ -81,35 +91,35 @@ export class Vault {
       id: this.vaultData.publicKeys.ecdsa,
       name: this.vaultData.name,
       type: this._securityType ?? determineVaultType(this.vaultData.signers),
-      chains: this.getSupportedChains(),
+      chains: this.getChains(),
       createdAt: this.vaultData.createdAt,
       isBackedUp: this.vaultData.isBackedUp,
     }
   }
 
   /**
-   * Set cached encryption status (called during import to avoid repeated decoding)
+   * Set cached encryption status (called during import)
    */
   setCachedEncryptionStatus(isEncrypted: boolean): void {
     this._isEncrypted = isEncrypted
   }
 
   /**
-   * Get cached encryption status (returns undefined if not cached)
+   * Get cached encryption status
    */
   getCachedEncryptionStatus(): boolean | undefined {
     return this._isEncrypted
   }
 
   /**
-   * Set cached security type (called during import to avoid repeated calculation)
+   * Set cached security type (called during import)
    */
   setCachedSecurityType(securityType: 'fast' | 'secure'): void {
     this._securityType = securityType
   }
 
   /**
-   * Get cached security type (returns undefined if not cached)
+   * Get cached security type
    */
   getCachedSecurityType(): 'fast' | 'secure' | undefined {
     return this._securityType
@@ -128,12 +138,11 @@ export class Vault {
       )
     }
 
-    // Update internal vault data directly
     this.vaultData.name = newName
   }
 
   /**
-   * Validate vault name according to established rules
+   * Validate vault name
    */
   private validateVaultName(name: string): {
     isValid: boolean
@@ -141,22 +150,18 @@ export class Vault {
   } {
     const errors: string[] = []
 
-    // Check if name is empty or only whitespace
     if (!name || name.trim().length === 0) {
       errors.push('Vault name cannot be empty')
     }
 
-    // Check minimum length (2 characters as per UI validation)
     if (name.length < 2) {
       errors.push('Vault name must be at least 2 characters long')
     }
 
-    // Check maximum length (50 characters as per UI validation)
     if (name.length > 50) {
       errors.push('Vault name cannot exceed 50 characters')
     }
 
-    // Check allowed characters (letters, numbers, spaces, hyphens, underscores)
     if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
       errors.push(
         'Vault name can only contain letters, numbers, spaces, hyphens, and underscores'
@@ -170,7 +175,7 @@ export class Vault {
   }
 
   /**
-   * Export vault data as a downloadable file
+   * Export vault data as downloadable file
    */
   async export(password?: string): Promise<Blob> {
     const { createVaultBackup, getExportFileName } = await import(
@@ -182,7 +187,7 @@ export class Vault {
 
     const blob = new Blob([base64Data], { type: 'application/octet-stream' })
 
-    // Automatically download the file if we're in a browser environment
+    // Automatically download if in browser
     if (
       typeof globalThis !== 'undefined' &&
       'window' in globalThis &&
@@ -196,74 +201,57 @@ export class Vault {
   }
 
   /**
-   * Delete vault data (placeholder for future implementation)
+   * Delete vault (placeholder)
    */
   delete(): Promise<void> {
-    console.log('Deleting vault:', this.vaultData.name)
     throw new Error(
       'delete() not implemented yet - requires storage integration'
     )
   }
 
+  // ===== ADDRESS METHODS =====
+
   /**
    * Get address for specified chain
-   * Uses AddressService for consistent address derivation
+   * Uses core's deriveAddress() with permanent caching
    */
   async address(chain: string): Promise<string> {
-    const chainStr = chain
+    const cacheKey = `address:${chain.toLowerCase()}`
 
-    // Check cache first (permanent caching for addresses as per architecture)
-    const cacheKey = `address:${chainStr.toLowerCase()}`
-    const cachedAddress = this.cacheService.get<string>(cacheKey, Number.MAX_SAFE_INTEGER)
-
-    if (cachedAddress) {
-      return cachedAddress
-    }
+    // Check permanent cache
+    const cached = this.cacheService.get<string>(cacheKey, Number.MAX_SAFE_INTEGER)
+    if (cached) return cached
 
     try {
-      // Phase 3: Delegate to AddressService for address derivation
-      const address = await this.addressService.deriveAddress(
-        this.vaultData,
-        chainStr
-      )
+      // Get chain enum
+      const chainEnum = ChainConfig.getChainEnum(chain)
 
-      // Cache the address (permanent caching as per architecture)
+      // Get WalletCore
+      const walletCore = await this.wasmManager.getWalletCore()
+
+      // Get public key using core
+      const publicKey = getPublicKey({
+        chain: chainEnum,
+        walletCore,
+        publicKeys: this.vaultData.publicKeys,
+        hexChainCode: this.vaultData.hexChainCode
+      })
+
+      // Derive address using core (handles all chain-specific logic)
+      const address = deriveAddress({
+        chain: chainEnum,
+        publicKey,
+        walletCore
+      })
+
+      // Cache permanently (addresses don't change)
       this.cacheService.set(cacheKey, address)
-
       return address
+
     } catch (error) {
-      console.error('Failed to derive address for', chainStr, ':', error)
-
-      if (error instanceof VaultError) {
-        throw error
-      }
-
-      // Check for specific error types and throw appropriate VaultError
-      if (
-        (error as Error).message.includes('Unsupported chain') ||
-        (error as Error).message.includes('Chain not supported')
-      ) {
-        throw new VaultError(
-          VaultErrorCode.ChainNotSupported,
-          `Chain not supported: ${chainStr}`,
-          error as Error
-        )
-      }
-
-      if (
-        (error as Error).message.includes('network') ||
-        (error as Error).message.includes('Network')
-      ) {
-        throw new VaultError(
-          VaultErrorCode.NetworkError,
-          `Network error during address derivation for ${chainStr}`,
-          error as Error
-        )
-      }
-
       throw new VaultError(
         VaultErrorCode.AddressDerivationFailed,
-        `Failed to derive address for ${chainStr}: ${(error as Error).message}`,
+        `Failed to derive address for ${chain}`,
         error as Error
       )
     }
@@ -271,76 +259,61 @@ export class Vault {
 
   /**
    * Get addresses for multiple chains
-   * Implements the addresses() method from VAULTPLAN.md
    */
   async addresses(chains?: string[]): Promise<Record<string, string>> {
-    const chainsToDerive = chains || this.getDefaultChains()
-    const addresses: Record<string, string> = {}
+    const chainsToDerive = chains || this._userChains
+    const result: Record<string, string> = {}
 
-    for (const chain of chainsToDerive) {
-      try {
-        addresses[chain] = await this.address(chain)
-      } catch (error) {
-        console.warn(`Failed to derive address for ${chain}:`, error)
-        // Skip chains that fail to derive
-      }
-    }
+    // Parallel derivation
+    await Promise.all(
+      chainsToDerive.map(async (chain) => {
+        try {
+          result[chain] = await this.address(chain)
+        } catch (error) {
+          console.warn(`Failed to derive address for ${chain}:`, error)
+        }
+      })
+    )
 
-    return addresses
+    return result
   }
 
-  // === BALANCE METHODS ===
+  // ===== BALANCE METHODS =====
 
   /**
-   * Get balance for a specific chain
-   * Implements vault-centric balance fetching with 5-minute TTL caching
-   * @param chain - Chain name (e.g., 'Bitcoin', 'Ethereum')
-   * @param tokenId - Optional token ID for token-specific balances
-   * @returns Promise resolving to Balance object
+   * Get balance for chain (with optional token)
+   * Uses core's getCoinBalance() with 5-minute TTL cache
    */
   async balance(chain: string, tokenId?: string): Promise<Balance> {
-    // Check cache first (5-minute TTL)
-    const cacheKey = `balance:${chain}${tokenId ? `:${tokenId}` : ''}`
-    const cachedBalance = this.cacheService.get<Balance>(cacheKey, 300000) // 5 minutes
+    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
 
-    if (cachedBalance) {
-      return cachedBalance
-    }
+    // Check 5-min TTL cache
+    const cached = this.cacheService.get<Balance>(cacheKey, 5 * 60 * 1000)
+    if (cached) return cached
 
     try {
-      // Get address for the chain
       const address = await this.address(chain)
+      const chainEnum = ChainConfig.getChainEnum(chain)
 
-      // For now, only support native token balances (tokenId must be undefined)
-      if (tokenId) {
-        throw new VaultError(
-          VaultErrorCode.UnsupportedToken,
-          `Token-specific balances not yet supported. Token: ${tokenId} on ${chain}`,
-          new Error('Token balance support not implemented')
-        )
-      }
+      // Core handles balance fetching for ALL chains
+      // Supports: native, ERC-20, SPL, wasm tokens automatically
+      const rawBalance = await getCoinBalance({
+        chain: chainEnum,
+        address,
+        id: tokenId  // Token ID (contract address for ERC-20, etc.)
+      })
 
-      // Phase 3: Use BalanceService with Blockchair integration
-      const chainBalance = await this.balanceService.fetchBalance(chain, address)
+      // Format using adapter
+      const balance = formatBalance(rawBalance, chain, tokenId, this._tokens)
 
-      // Cache the result
-      this.cacheService.set(cacheKey, chainBalance)
+      // Cache with 5-min TTL
+      this.cacheService.set(cacheKey, balance)
+      return balance
 
-      return chainBalance
     } catch (error) {
-      console.error(
-        `Failed to get balance for ${chain}${tokenId ? `:${tokenId}` : ''}:`,
-        error
-      )
-
-      if (error instanceof VaultError) {
-        throw error
-      }
-
-      // Wrap unexpected errors
       throw new VaultError(
         VaultErrorCode.BalanceFetchFailed,
-        `Failed to get balance for ${chain}${tokenId ? `:${tokenId}` : ''}: ${(error as Error).message}`,
+        `Failed to fetch balance for ${chain}${tokenId ? `:${tokenId}` : ''}`,
         error as Error
       )
     }
@@ -348,83 +321,28 @@ export class Vault {
 
   /**
    * Get balances for multiple chains
-   * Implements batch balance fetching with intelligent caching
-   * @param chains - Optional array of chain names. Uses vault's chains if not provided
-   * @param includeTokens - Whether to include token balances (not yet implemented)
-   * @returns Promise resolving to record of chain -> Balance
    */
   async balances(
     chains?: string[],
-    includeTokens?: boolean
+    includeTokens = false
   ): Promise<Record<string, Balance>> {
-    // Determine which chains to fetch
-    const chainsToFetch = chains || this.getChains()
-
-    // Token support not yet implemented
-    if (includeTokens) {
-      throw new VaultError(
-        VaultErrorCode.UnsupportedToken,
-        'Token balance fetching not yet supported in batch operations'
-      )
-    }
-
+    const chainsToFetch = chains || this._userChains
     const result: Record<string, Balance> = {}
-    const addressesToFetch: Record<string, string> = {}
 
-    // First, check cache for existing balances and collect missing ones
     for (const chain of chainsToFetch) {
-      const cacheKey = `balance:${chain}`
-      const cachedBalance = this.cacheService.get<Balance>(cacheKey, 300000)
-
-      if (cachedBalance) {
-        result[chain] = cachedBalance
-      } else {
-        try {
-          // Get address for chains that need fresh data
-          const address = await this.address(chain)
-          addressesToFetch[chain] = address
-        } catch (error) {
-          console.warn(
-            `Failed to derive address for ${chain}, skipping:`,
-            error
-          )
-          // Skip chains where address derivation fails
-        }
-      }
-    }
-
-    // If we have chains to fetch fresh data for, use BalanceService
-    if (Object.keys(addressesToFetch).length > 0) {
       try {
-        // Phase 3: Use BalanceService with Blockchair integration
-        const freshBalances = await this.balanceService.fetchBalances(addressesToFetch)
+        // Native balance
+        result[chain] = await this.balance(chain)
 
-        // Store results and add to cache
-        for (const [chain, balance] of Object.entries(freshBalances)) {
-          if (balance) {
-            result[chain] = balance
-            const cacheKey = `balance:${chain}`
-            this.cacheService.set(cacheKey, balance)
-          } else {
-            console.warn(`No balance returned for ${chain}`)
+        // Token balances
+        if (includeTokens) {
+          const tokens = this._tokens[chain] || []
+          for (const token of tokens) {
+            result[`${chain}:${token.id}`] = await this.balance(chain, token.id)
           }
         }
       } catch (error) {
-        console.error('Failed to fetch batch balances:', error)
-
-        // On batch failure, try individual fetches as fallback
-        for (const chain of Object.keys(addressesToFetch)) {
-          try {
-            const balance = await this.balance(chain)
-            result[chain] = balance
-          } catch (individualError) {
-            console.error(
-              `Failed to get balance for ${chain}:`,
-              individualError
-            )
-            // Skip failed chains - they won't be in the result
-          }
-        }
+        console.warn(`Failed to fetch balance for ${chain}:`, error)
       }
     }
 
@@ -432,254 +350,86 @@ export class Vault {
   }
 
   /**
-   * Force refresh balance for a specific chain (bypasses cache)
-   * @param chain - Chain name (e.g., 'Bitcoin', 'Ethereum')
-   * @param tokenId - Optional token ID for token-specific balances
-   * @returns Promise resolving to fresh Balance object
+   * Force refresh balance (clear cache)
    */
   async updateBalance(chain: string, tokenId?: string): Promise<Balance> {
-    // Clear cache to force refresh
-    const cacheKey = `balance:${chain}${tokenId ? `:${tokenId}` : ''}`
+    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
     this.cacheService.clear(cacheKey)
+    return this.balance(chain, tokenId)
+  }
 
+  /**
+   * Force refresh multiple balances
+   */
+  async updateBalances(
+    chains?: string[],
+    includeTokens = false
+  ): Promise<Record<string, Balance>> {
+    const chainsToUpdate = chains || this._userChains
+
+    // Clear cache for all chains
+    for (const chain of chainsToUpdate) {
+      const cacheKey = `balance:${chain}:native`
+      this.cacheService.clear(cacheKey)
+
+      if (includeTokens) {
+        const tokens = this._tokens[chain] || []
+        for (const token of tokens) {
+          const tokenCacheKey = `balance:${chain}:${token.id}`
+          this.cacheService.clear(tokenCacheKey)
+        }
+      }
+    }
+
+    return this.balances(chainsToUpdate, includeTokens)
+  }
+
+  // ===== GAS ESTIMATION =====
+
+  /**
+   * Get gas info for chain
+   * Uses core's getFeeQuote()
+   */
+  async gas(chain: string): Promise<GasInfo> {
     try {
-      // Get address for the chain
+      const chainEnum = ChainConfig.getChainEnum(chain)
       const address = await this.address(chain)
 
-      // For now, only support native token balances
-      if (tokenId) {
-        throw new VaultError(
-          VaultErrorCode.UnsupportedToken,
-          `Token-specific balances not yet supported. Token: ${tokenId} on ${chain}`,
-          new Error('Token balance support not implemented')
-        )
-      }
+      // Core handles gas estimation for all chains
+      // Need to provide full AccountCoin with metadata
+      const feeQuote = await getFeeQuote({
+        coin: {
+          chain: chainEnum,
+          address,
+          decimals: ChainConfig.getDecimals(chain),
+          ticker: ChainConfig.getSymbol(chain)
+        }
+      })
 
-      // Phase 3: Use BalanceService for fresh balance
-      console.log(`Force refreshing balance for ${chain}:${address}`)
-      const chainBalance = await this.balanceService.fetchBalance(chain, address)
+      // Format using adapter
+      return formatGasInfo(feeQuote, chain)
 
-      // Cache the fresh result
-      this.cacheService.set(cacheKey, chainBalance)
-
-      return chainBalance
     } catch (error) {
-      console.error(
-        `Failed to update balance for ${chain}${tokenId ? `:${tokenId}` : ''}:`,
-        error
-      )
-
-      if (error instanceof VaultError) {
-        throw error
-      }
-
-      // Wrap unexpected errors
       throw new VaultError(
-        VaultErrorCode.BalanceFetchFailed,
-        `Failed to update balance for ${chain}${tokenId ? `:${tokenId}` : ''}: ${(error as Error).message}`,
+        VaultErrorCode.GasEstimationFailed,
+        `Failed to estimate gas for ${chain}`,
         error as Error
       )
     }
   }
 
-  /**
-   * Force refresh balances for multiple chains (bypasses cache)
-   * @param chains - Optional array of chain names. Uses vault's chains if not provided
-   * @param includeTokens - Whether to include token balances (not yet implemented)
-   * @returns Promise resolving to record of chain -> fresh Balance
-   */
-  async updateBalances(
-    chains?: string[],
-    includeTokens?: boolean
-  ): Promise<Record<string, Balance>> {
-    // Determine which chains to update
-    const chainsToUpdate = chains || this.getChains()
-
-    // Token support not yet implemented
-    if (includeTokens) {
-      throw new VaultError(
-        VaultErrorCode.UnsupportedToken,
-        'Token balance fetching not yet supported in batch operations'
-      )
-    }
-
-    const result: Record<string, Balance> = {}
-    const addressesToFetch: Record<string, string> = {}
-
-    // Clear cache entries for all chains we're updating
-    for (const chain of chainsToUpdate) {
-      const cacheKey = `balance:${chain}`
-      this.cacheService.clear(cacheKey)
-    }
-
-    // Get addresses for all chains
-    for (const chain of chainsToUpdate) {
-      try {
-        const address = await this.address(chain)
-        addressesToFetch[chain] = address
-      } catch (error) {
-        console.warn(`Failed to derive address for ${chain}, skipping:`, error)
-        // Skip chains where address derivation fails
-      }
-    }
-
-    // If we have chains to update, use BalanceService
-    if (Object.keys(addressesToFetch).length > 0) {
-      try {
-        console.log(
-          `Force refreshing balances for ${Object.keys(addressesToFetch).length} chains`
-        )
-        // Phase 3: Use BalanceService for fresh balances
-        const freshBalances = await this.balanceService.fetchBalances(addressesToFetch)
-
-        // Store results and update cache
-        for (const [chain, balance] of Object.entries(freshBalances)) {
-          if (balance) {
-            result[chain] = balance
-            const cacheKey = `balance:${chain}`
-            this.cacheService.set(cacheKey, balance)
-          } else {
-            console.warn(`No balance returned for ${chain}`)
-          }
-        }
-      } catch (error) {
-        console.error('Failed to update batch balances:', error)
-
-        // On batch failure, try individual updates as fallback
-        console.log('Falling back to individual balance updates')
-        for (const chain of Object.keys(addressesToFetch)) {
-          try {
-            const balance = await this.updateBalance(chain)
-            result[chain] = balance
-          } catch (individualError) {
-            console.error(
-              `Failed to update balance for ${chain}:`,
-              individualError
-            )
-            // Skip failed chains - they won't be in the result
-          }
-        }
-      }
-    }
-
-    return result
-  }
-
-  // === USER CHAIN MANAGEMENT ===
+  // ===== SIGNING METHODS =====
 
   /**
-   * Set user chains (triggers address/balance updates)
-   */
-  async setChains(chains: string[]): Promise<void> {
-    this.validateChains(chains)
-
-    // Clear address cache for chains being removed
-    const removedChains = this._userChains.filter(c => !chains.includes(c))
-    for (const chain of removedChains) {
-      const cacheKey = `address:${chain.toLowerCase()}`
-      this.cacheService.clear(cacheKey)
-    }
-
-    this._userChains = [...chains]
-
-    // Pre-derive addresses for new chains
-    await this.addresses(chains)
-  }
-
-  /**
-   * Add single chain (triggers address/balance updates)
-   */
-  async addChain(chain: string): Promise<void> {
-    this.validateChains([chain])
-
-    if (!this._userChains.includes(chain)) {
-      this._userChains.push(chain)
-      // Pre-derive address for new chain
-      await this.address(chain)
-    }
-  }
-
-  /**
-   * Remove single chain
-   */
-  removeChain(chain: string): void {
-    this._userChains = this._userChains.filter(c => c !== chain)
-
-    // Clear address cache for removed chain
-    const cacheKey = `address:${chain.toLowerCase()}`
-    this.cacheService.clear(cacheKey)
-  }
-
-  /**
-   * Get current user chains
-   */
-  getChains(): string[] {
-    return [...this._userChains]
-  }
-
-  /**
-   * Reset to SDK default chains
-   */
-  async resetToDefaultChains(): Promise<void> {
-    const defaultChains = ChainConfig.getDefaultChains()
-    await this.setChains(defaultChains)
-  }
-
-  // === CURRENCY MANAGEMENT ===
-
-  /**
-   * Set vault currency
-   */
-  setCurrency(currency: string): void {
-    this._currency = currency
-  }
-
-  /**
-   * Get vault currency
-   */
-  getCurrency(): string {
-    return this._currency
-  }
-
-  // === PRIVATE HELPERS ===
-
-  /**
-   * Validate chains against supported chains list
-   */
-  private validateChains(chains: string[]): void {
-    const { invalid } = ChainConfig.validateChains(chains)
-
-    if (invalid.length > 0) {
-      throw new Error(
-        `Unsupported chains: ${invalid.join(', ')}. Supported chains: ${ChainConfig.getSupportedChains().join(', ')}`
-      )
-    }
-  }
-
-  /**
-   * Get default chains for address derivation (uses user chains)
-   */
-  private getDefaultChains(): string[] {
-    return this._userChains.length > 0
-      ? this._userChains
-      : ChainConfig.getDefaultChains()
-  }
-
-  /**
-   * Sign transaction using specified mode
+   * Sign transaction
    */
   async sign(
     mode: SigningMode,
     payload: SigningPayload,
     password?: string
   ): Promise<Signature> {
-    console.log('Signing transaction with mode:', mode)
-
-    // Validate vault supports the requested mode
     this.validateSigningMode(mode)
 
-    // Route to appropriate signing implementation
-    // Note: Solana signing uses same flow as other chains via strategies
     switch (mode) {
       case 'fast':
         return this.signFast(payload, password)
@@ -702,7 +452,7 @@ export class Vault {
   }
 
   /**
-   * Validate that the vault supports the requested signing mode
+   * Validate signing mode against vault type
    */
   private validateSigningMode(mode: SigningMode): void {
     const securityType =
@@ -724,13 +474,12 @@ export class Vault {
   }
 
   /**
-   * Sign transaction using VultiServer (fast mode)
+   * Fast signing with VultiServer
    */
   private async signFast(
     payload: SigningPayload,
     password?: string
   ): Promise<Signature> {
-    // Validate password is provided for fast signing
     if (!password) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
@@ -738,25 +487,20 @@ export class Vault {
       )
     }
 
-    // Validate FastSigningService is available
     if (!this.fastSigningService) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
-        'FastSigningService not initialized. Fast signing requires server manager.'
+        'FastSigningService not initialized'
       )
     }
 
     try {
-      // Use FastSigningService for proper separation of concerns
-      // FastSigningService orchestrates: strategy (chain logic) + ServerManager (server coordination)
       return await this.fastSigningService.signWithServer(
         this.vaultData,
         payload,
         password
       )
     } catch (error) {
-      console.error('Fast signing failed:', error)
-
       if (error instanceof VaultError) {
         throw error
       }
@@ -770,16 +514,39 @@ export class Vault {
   }
 
   /**
-   * Sign with raw transaction payload (public method for CLI)
-   * Converts raw transaction data to proper format and delegates to signTransaction
+   * Legacy signTransaction method (deprecated)
+   */
+  async signTransaction(
+    tx: any,
+    chain: string,
+    password?: string
+  ): Promise<any> {
+    console.warn('signTransaction() is deprecated, use sign() method instead')
+
+    const payload: SigningPayload = {
+      transaction: tx,
+      chain,
+    }
+
+    const securityType =
+      this._securityType ?? determineVaultType(this.vaultData.signers)
+    if (securityType === 'fast') {
+      return this.sign('fast', payload, password)
+    }
+
+    throw new Error(
+      'signTransaction() deprecated - use sign("fast"|"relay"|"local", payload) instead'
+    )
+  }
+
+  /**
+   * Sign with payload (public method for CLI)
    */
   async signWithPayload(
     payload: SigningPayload,
     password?: string
   ): Promise<Signature> {
     try {
-      // For now, delegate to the existing signTransaction method
-      // The signTransaction method should handle the conversion internally
       return await this.signTransaction(
         payload.transaction,
         payload.chain,
@@ -795,50 +562,138 @@ export class Vault {
   }
 
   /**
-   * Sign transaction (legacy method - deprecated, use sign() instead)
+   * Estimate gas (placeholder)
    */
-  async signTransaction(
-    tx: any,
-    chain: string,
-    password?: string
-  ): Promise<any> {
-    console.log('Legacy signTransaction called for chain:', chain)
-    console.warn('signTransaction() is deprecated, use sign() method instead')
-
-    // Convert to new API format
-    const payload: SigningPayload = {
-      transaction: tx,
-      chain,
-    }
-
-    // Default to fast mode for fast vaults, otherwise throw error
-    const securityType =
-      this._securityType ?? determineVaultType(this.vaultData.signers)
-    if (securityType === 'fast') {
-      return this.sign('fast', payload, password)
-    }
-
+  async estimateGas(_tx: any, _chain: string): Promise<any> {
     throw new Error(
-      'signTransaction() deprecated - use sign("fast"|"relay"|"local", payload) instead'
+      'estimateGas() not implemented yet - use gas() method instead'
     )
   }
 
+  // ===== TOKEN MANAGEMENT =====
+
   /**
-   * Estimate gas for transaction (placeholder for future implementation)
+   * Set tokens for a chain
    */
-  async estimateGas(tx: any, chain: string): Promise<any> {
-    console.log('Estimating gas for chain:', chain)
-    throw new Error(
-      'estimateGas() not implemented yet - requires chain-specific integration'
-    )
+  setTokens(chain: string, tokens: Token[]): void {
+    this._tokens[chain] = tokens
   }
 
   /**
-   * Get list of supported chains for this vault (uses user chains)
+   * Add single token to chain
+   */
+  addToken(chain: string, token: Token): void {
+    if (!this._tokens[chain]) this._tokens[chain] = []
+    if (!this._tokens[chain].find(t => t.id === token.id)) {
+      this._tokens[chain].push(token)
+    }
+  }
+
+  /**
+   * Remove token from chain
+   */
+  removeToken(chain: string, tokenId: string): void {
+    if (this._tokens[chain]) {
+      this._tokens[chain] = this._tokens[chain].filter(t => t.id !== tokenId)
+    }
+  }
+
+  /**
+   * Get tokens for chain
+   */
+  getTokens(chain: string): Token[] {
+    return this._tokens[chain] || []
+  }
+
+  // ===== CHAIN MANAGEMENT =====
+
+  /**
+   * Set user chains
+   */
+  async setChains(chains: string[]): Promise<void> {
+    // Validate all chains
+    chains.forEach(chain => {
+      if (!ChainConfig.isSupported(chain)) {
+        throw new VaultError(
+          VaultErrorCode.ChainNotSupported,
+          `Chain not supported: ${chain}`
+        )
+      }
+    })
+
+    this._userChains = chains
+
+    // Pre-derive addresses
+    await this.addresses(chains)
+  }
+
+  /**
+   * Add single chain
+   */
+  async addChain(chain: string): Promise<void> {
+    if (!ChainConfig.isSupported(chain)) {
+      throw new VaultError(
+        VaultErrorCode.ChainNotSupported,
+        `Chain not supported: ${chain}`
+      )
+    }
+
+    if (!this._userChains.includes(chain)) {
+      this._userChains.push(chain)
+      await this.address(chain) // Pre-derive
+    }
+  }
+
+  /**
+   * Remove single chain
+   */
+  removeChain(chain: string): void {
+    this._userChains = this._userChains.filter(c => c !== chain)
+
+    // Clear address cache
+    const cacheKey = `address:${chain.toLowerCase()}`
+    this.cacheService.clear(cacheKey)
+  }
+
+  /**
+   * Get current user chains
+   */
+  getChains(): string[] {
+    return [...this._userChains]
+  }
+
+  /**
+   * Reset to default chains
+   */
+  async resetToDefaultChains(): Promise<void> {
+    this._userChains = ChainConfig.getDefaultChains()
+    await this.addresses(this._userChains)
+  }
+
+  /**
+   * Get supported chains (alias for getChains)
    */
   private getSupportedChains(): string[] {
     return this.getChains()
   }
+
+  // ===== CURRENCY MANAGEMENT =====
+
+  /**
+   * Set vault currency
+   */
+  setCurrency(currency: string): void {
+    this._currency = currency
+  }
+
+  /**
+   * Get vault currency
+   */
+  getCurrency(): string {
+    return this._currency
+  }
+
+  // ===== DATA ACCESS =====
 
   /**
    * Get the underlying vault data
@@ -846,6 +701,4 @@ export class Vault {
   get data(): CoreVault {
     return this.vaultData
   }
-
-  // Phase 3: Balance cache helpers removed - now using CacheService
 }

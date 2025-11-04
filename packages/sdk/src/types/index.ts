@@ -79,6 +79,8 @@ export type Balance = {
   amount: string
   decimals: number
   symbol: string
+  chainId: string
+  tokenId?: string
   value?: number // USD value
 }
 
@@ -292,14 +294,5 @@ export type GasEstimate = {
   chainId: string
 }
 
-// Solana-specific types
-export type {
-  SolanaToken,
-  PartialInstruction,
-  AddressTableLookup,
-  ParsedSolanaTransaction,
-  ParsedSolanaSwapParams,
-  SolanaTransactionInput,
-  SolanaKeysignOptions,
-  SolanaSignature,
-} from '../chains/solana/types'
+// Solana-specific types (now handled by core)
+// Removed - using core types directly instead of SDK wrappers
