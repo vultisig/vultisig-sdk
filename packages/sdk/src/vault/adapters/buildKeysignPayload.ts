@@ -1,40 +1,90 @@
 import { Chain } from '@core/chain/Chain'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
+import { getPreSigningHashes } from '@core/chain/tx/preSigningHashes'
+import { buildSendKeysignPayload } from '@core/mpc/keysign/build/send'
+import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
 import { WalletCore } from '@trustwallet/wallet-core'
-import { Vault } from '../../types'
+import { Vault, SigningPayload } from '../../types'
 
 /**
- * Build keysign payload for MPC signing
+ * Build keysign payload for MPC signing using core functions
  *
- * This adapter coordinates with core's keysign functions to build
- * the complete payload needed for MPC signing operations.
+ * This function:
+ * 1. Builds a complete KeysignPayload using core's buildSendKeysignPayload
+ * 2. Gets encoded signing inputs (protobuf)
+ * 3. Computes pre-signing hashes
+ * 4. Returns hex-encoded message hashes ready for MPC signing
  *
- * The payload includes:
- * - Transaction data (chain-specific)
- * - Signing inputs (protobuf encoded)
- * - Chain-specific metadata
- * - Public keys and derivation paths
- *
- * Note: This is a placeholder. The actual implementation will be done
- * when we implement the signing flow in the Vault class, as it requires
- * deep integration with core's keysign system.
- *
- * @param payload Signing payload from SDK
- * @param chain Chain enum value
+ * @param sdkPayload Signing payload from SDK with transaction details
+ * @param chain Chain value (e.g., 'Ethereum', 'Bitcoin')
  * @param walletCore WalletCore WASM instance
  * @param vaultData Vault data with keys and signers
- * @returns Keysign payload ready for MPC signing
+ * @returns Array of hex-encoded message hashes to sign
  */
 export async function buildKeysignPayload(
-  payload: any,
+  sdkPayload: SigningPayload,
   chain: Chain,
   walletCore: WalletCore,
   vaultData: Vault
-): Promise<any> {
-  // TODO: Implement in Phase 3.5 (Signing methods)
-  // This will use:
-  // - getKeysignTxData() from @core/mpc/keysign/txData
-  // - buildChainSpecific() from @core/mpc/keysign/chainSpecific/build
-  // - getEncodedSigningInputs() from @core/mpc/keysign/signingInputs
+): Promise<string[]> {
+  const { transaction } = sdkPayload
 
-  throw new Error('buildKeysignPayload not yet implemented - will be completed in Phase 3.5')
+  // Extract transaction details
+  const receiver = transaction.receiver || transaction.toAddress
+  const amount = BigInt(transaction.amount || transaction.toAmount || '0')
+  const memo = transaction.memo
+
+  if (!receiver) {
+    throw new Error('Transaction receiver address is required')
+  }
+
+  // Build AccountCoin for the chain
+  const coin: AccountCoin = {
+    chain,
+    address: '', // Will be set by buildSendKeysignPayload
+    decimals: chainFeeCoin[chain].decimals,
+    ticker: chainFeeCoin[chain].ticker,
+  }
+
+  // Get public key for this chain (returns WalletCore PublicKey object)
+  const publicKey = getPublicKey({
+    chain,
+    walletCore,
+    hexChainCode: vaultData.hexChainCode,
+    publicKeys: vaultData.publicKeys,
+  })
+
+  // Build the complete keysign payload using core function
+  const keysignPayload = await buildSendKeysignPayload({
+    coin,
+    receiver,
+    amount,
+    memo,
+    vaultId: vaultData.publicKeys.ecdsa,
+    localPartyId: vaultData.localPartyId,
+    publicKey,
+    walletCore,
+    libType: vaultData.libType,
+  })
+
+  // Get encoded signing inputs from the keysign payload
+  const signingInputs = getEncodedSigningInputs({
+    keysignPayload,
+    walletCore,
+    publicKey,
+  })
+
+  // Get pre-signing hashes from the signing inputs
+  const messageHashes = signingInputs.flatMap(txInputData => {
+    const hashes = getPreSigningHashes({
+      walletCore,
+      chain,
+      txInputData,
+    })
+    return hashes.map(hash => Buffer.from(hash).toString('hex'))
+  })
+
+  return messageHashes
 }

@@ -1,4 +1,5 @@
-import { ChainConfig } from '../../chains/config/ChainConfig'
+import { Chain } from '@core/chain/Chain'
+import { getChainKind } from '@core/chain/ChainKind'
 import { GasInfo } from '../../types'
 
 /**
@@ -18,7 +19,7 @@ import { GasInfo } from '../../types'
  * @returns Formatted GasInfo object
  */
 export function formatGasInfo(feeQuote: any, chain: string): GasInfo {
-  const chainType = ChainConfig.getType(chain)
+  const chainType = getChainKind(chain as Chain)
 
   // EVM chains have complex gas structure (EIP-1559)
   if (chainType === 'evm') {

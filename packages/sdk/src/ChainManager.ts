@@ -1,4 +1,4 @@
-import { ChainConfig } from './chains/config/ChainConfig'
+import { DEFAULT_CHAINS, getSupportedChains, validateChains } from './chains/utils'
 import { VaultError, VaultErrorCode } from './vault/VaultError'
 
 /**
@@ -10,8 +10,8 @@ export class ChainManager {
   private defaultCurrency = 'USD'
 
   constructor(config?: { defaultChains?: string[]; defaultCurrency?: string }) {
-    // Use ChainConfig as single source of truth for defaults
-    this.defaultChains = config?.defaultChains ?? ChainConfig.getDefaultChains()
+    // Use DEFAULT_CHAINS as single source of truth for defaults
+    this.defaultChains = config?.defaultChains ?? DEFAULT_CHAINS
 
     if (config?.defaultCurrency) {
       this.defaultCurrency = config.defaultCurrency
@@ -20,10 +20,10 @@ export class ChainManager {
 
   /**
    * Get all supported chains (immutable)
-   * Delegates to ChainConfig for single source of truth
+   * Delegates to chain utils for single source of truth
    */
   getSupportedChains(): string[] {
-    return ChainConfig.getSupportedChains()
+    return getSupportedChains()
   }
 
   /**
@@ -31,13 +31,13 @@ export class ChainManager {
    * Validates against supported chains list
    */
   setDefaultChains(chains: string[]): void {
-    // Use ChainConfig for validation
-    const validation = ChainConfig.validateChains(chains)
+    // Use validateChains for validation
+    const validation = validateChains(chains)
 
     if (validation.invalid.length > 0) {
       throw new VaultError(
         VaultErrorCode.ChainNotSupported,
-        `Unsupported chains: ${validation.invalid.join(', ')}. Supported chains: ${ChainConfig.getSupportedChains().join(', ')}`
+        `Unsupported chains: ${validation.invalid.join(', ')}. Supported chains: ${getSupportedChains().join(', ')}`
       )
     }
 

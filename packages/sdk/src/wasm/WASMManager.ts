@@ -27,10 +27,10 @@ export class WASMManager {
   // Note: initWasm from wallet-core doesn't support custom paths
   private getWalletCoreInit = memoizeAsync(() => initWasm())
   private getDklsInit = memoizeAsync((wasmUrl?: string) =>
-    initializeMpcLib('ecdsa', wasmUrl)
+    initializeMpcLib('ecdsa')
   )
   private getSchnorrInit = memoizeAsync((wasmUrl?: string) =>
-    initializeMpcLib('eddsa', wasmUrl)
+    initializeMpcLib('eddsa')
   )
 
   /**

@@ -4,13 +4,9 @@ import {
   ServerStatus,
   Vault,
 } from '../types'
-import {
-  generateBrowserPartyId,
-  generateEncryptionKey,
-  generateServerPartyId,
-  generateSessionId,
-  pingServer,
-} from './utils'
+import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
+import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
+import { stringToChain } from '../chains/utils'
 
 /**
  * ServerManager coordinates all server communications
@@ -100,12 +96,11 @@ export class ServerManager {
     const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
     const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
     const { signWithServer: callFastVaultAPI } = await import('@core/mpc/fast/api/signWithServer')
-    const { ChainConfig } = await import('../chains/config/ChainConfig')
     const { generateLocalPartyId } = await import('@core/mpc/devices/localPartyId')
     const { keysign } = await import('@core/mpc/keysign')
 
     // Map chain string to Chain enum
-    const chain = ChainConfig.getChainEnum(payload.chain)
+    const chain = typeof payload.chain === 'string' ? stringToChain(payload.chain) : payload.chain
     const coinType = getCoinType({ walletCore, chain })
     const derivePath = walletCore.CoinTypeExt.derivationPath(coinType)
 
@@ -113,8 +108,8 @@ export class ServerManager {
     const signatureAlgorithm = signatureAlgorithms[chainKind]
 
     // Generate session parameters
-    const sessionId = generateSessionId()
-    const hexEncryptionKey = await generateEncryptionKey()
+    const sessionId = crypto.randomUUID()
+    const hexEncryptionKey = getHexEncodedRandomBytes(32)
     const signingLocalPartyId = generateLocalPartyId('extension' as any)
 
     console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
@@ -219,7 +214,7 @@ export class ServerManager {
 
     await reshareWithServer({
       name: vault.name,
-      session_id: generateSessionId(),
+      session_id: crypto.randomUUID(),
       public_key: vault.publicKeys.ecdsa,
       hex_encryption_key: vault.hexChainCode,
       hex_chain_code: vault.hexChainCode,
@@ -254,12 +249,12 @@ export class ServerManager {
     const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
 
     // Generate session parameters using core MPC utilities
-    const sessionId = generateSessionId()
+    const sessionId = crypto.randomUUID()
     const { generateHexEncryptionKey } = await import('@core/mpc/utils/generateHexEncryptionKey')
     const { generateHexChainCode } = await import('@core/mpc/utils/generateHexChainCode')
     const hexEncryptionKey = generateHexEncryptionKey()
     const hexChainCode = generateHexChainCode()
-    const localPartyId = await generateBrowserPartyId()
+    const localPartyId = generateLocalPartyId('extension')
 
     const log = options.onLog || (() => {})
     const progress = options.onProgress || (() => {})
@@ -267,7 +262,7 @@ export class ServerManager {
     log('Creating vault on FastVault server...')
 
     // The server party ID should be consistent throughout the process
-    const serverPartyId = await generateServerPartyId()
+    const serverPartyId = generateLocalPartyId('server')
 
     await setupVaultWithServer({
       name: options.name,
@@ -390,8 +385,8 @@ export class ServerManager {
    */
   async checkServerStatus(): Promise<ServerStatus> {
     const [fastVaultStatus, relayStatus] = await Promise.allSettled([
-      pingServer(this.config.fastVault, '/'),
-      pingServer(this.config.messageRelay, '/ping'),
+      this.pingServer(this.config.fastVault, '/'),
+      this.pingServer(this.config.messageRelay, '/ping'),
     ])
 
     return {
@@ -443,6 +438,24 @@ export class ServerManager {
     }
 
     throw new Error('Timeout waiting for peers to join session')
+  }
+
+  private async pingServer(
+    baseUrl: string,
+    endpoint = '/ping',
+    timeout = 5000
+  ): Promise<number> {
+    const start = Date.now()
+
+    try {
+      await fetch(`${baseUrl}${endpoint}`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(timeout),
+      })
+      return Date.now() - start
+    } catch (error) {
+      throw new Error(`Server ping failed: ${error}`)
+    }
   }
 
 }

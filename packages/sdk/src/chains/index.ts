@@ -4,9 +4,8 @@
  */
 
 // ChainManager removed - was orphaned code not used by Vault
-// AddressDeriver removed - replaced by ChainConfig for chain mapping
-export { ChainConfig } from './config/ChainConfig'
-export type { ChainMetadata, ChainType } from './config/ChainConfig'
+// AddressDeriver removed - chain operations now use core functions directly
+// ChainConfig removed - replaced by internal chain utils (not exported)
 
 // Chain strategies removed - using core functions directly instead
 
