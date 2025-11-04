@@ -2,7 +2,7 @@
  * Vault Services
  *
  * Essential services for vault operations.
- * Vault calls core functions directly - no strategy pattern needed.
+ * Vault calls core functions directly.
  */
 
 export { CacheService } from './CacheService'

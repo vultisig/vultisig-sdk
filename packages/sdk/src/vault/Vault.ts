@@ -48,7 +48,6 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  *
  * Architecture:
  * - Vault → Core Functions (direct) → Chain Resolvers
- * - No strategy pattern, no unnecessary abstraction layers
  * - Aligns with core's functional dispatch pattern
  */
 export class Vault {
@@ -514,62 +513,6 @@ export class Vault {
     }
   }
 
-  /**
-   * Legacy signTransaction method (deprecated)
-   */
-  async signTransaction(
-    tx: any,
-    chain: string,
-    password?: string
-  ): Promise<any> {
-    console.warn('signTransaction() is deprecated, use sign() method instead')
-
-    const payload: SigningPayload = {
-      transaction: tx,
-      chain,
-    }
-
-    const securityType =
-      this._securityType ?? determineVaultType(this.vaultData.signers)
-    if (securityType === 'fast') {
-      return this.sign('fast', payload, password)
-    }
-
-    throw new Error(
-      'signTransaction() deprecated - use sign("fast"|"relay"|"local", payload) instead'
-    )
-  }
-
-  /**
-   * Sign with payload (public method for CLI)
-   */
-  async signWithPayload(
-    payload: SigningPayload,
-    password?: string
-  ): Promise<Signature> {
-    try {
-      return await this.signTransaction(
-        payload.transaction,
-        payload.chain,
-        password
-      )
-    } catch (error) {
-      throw new VaultError(
-        VaultErrorCode.SigningFailed,
-        `Failed to sign with payload: ${(error as Error).message}`,
-        error as Error
-      )
-    }
-  }
-
-  /**
-   * Estimate gas (placeholder)
-   */
-  async estimateGas(_tx: any, _chain: string): Promise<any> {
-    throw new Error(
-      'estimateGas() not implemented yet - use gas() method instead'
-    )
-  }
 
   // ===== TOKEN MANAGEMENT =====
 
