@@ -7,9 +7,6 @@
  * - Multi-chain blockchain support
  * - Server-assisted operations (Fast Vault)
  * - Cross-device message relay
- *
- * Phase 5: Cleaned up to export only public API
- * Internal chain utilities (parsers, builders, etc.) are now internal-only
  */
 
 // ============================================================================
@@ -27,8 +24,6 @@ export {
   VaultImportError,
   VaultImportErrorCode,
   AddressBookManager,
-  // Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
-  // BalanceManagement,
   ValidationHelpers,
   createVaultBackup,
   getExportFileName,
@@ -44,7 +39,6 @@ export {
 
 // NOTE: ChainManager and AddressDeriver are internal implementation details
 // Users should interact via Vultisig and Vault classes only
-// Removed from public exports (Phase 5 cleanup)
 
 // NOTE: ServerManager is internal-only
 // Users access server-assisted signing via: vault.sign('fast', payload)
@@ -55,22 +49,6 @@ export {
 
 // NOTE: WASM management is internal-only
 // WalletCore initialization is handled by the SDK
-
-// ============================================================================
-// Phase 5: Chain-specific utilities are now INTERNAL ONLY
-// ============================================================================
-// Users should interact via:
-// - vault.address(chain) - for addresses
-// - vault.balance(chain) - for balances
-// - vault.sign(mode, payload) - for signing
-//
-// Internal utilities moved to services and strategies:
-// - parseSolanaTransaction → SolanaStrategy (internal)
-// - parseEvmTransaction → EvmStrategy (internal)
-// - buildEvmKeysignPayload → EvmStrategy (internal)
-// - Gas utilities → EvmStrategy.estimateGas() (internal)
-// - Token utilities → Strategy pattern (internal)
-// ============================================================================
 
 // ============================================================================
 // PUBLIC API - Types (keep all types for TypeScript users)
@@ -109,8 +87,4 @@ export type {
   Value,
   GasInfo,
   GasEstimate
-  // Solana types removed - use core types directly
 } from './types'
-
-// EVM types removed - use core types directly
-// (chains/evm directory deleted in functional adapter refactor)
