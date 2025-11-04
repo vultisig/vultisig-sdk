@@ -27,8 +27,8 @@ function App() {
         wasmConfig: {
           wasmPaths: {
             walletCore: '/wallet-core.wasm',
-            dkls: '/dkls.wasm',
-            schnorr: '/schnorr.wasm',
+            dkls: '/vs_wasm_bg.wasm',
+            schnorr: '/vs_schnorr_wasm_bg.wasm',
           },
         },
       })

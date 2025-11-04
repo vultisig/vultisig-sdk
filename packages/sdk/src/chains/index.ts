@@ -3,8 +3,11 @@
  * Handles multi-chain blockchain interactions
  */
 
-export { ChainManager } from './ChainManager'
-export { AddressDeriver } from './AddressDeriver'
+// ChainManager removed - was orphaned code not used by Vault
+// AddressDeriver removed - chain operations now use core functions directly
+// ChainConfig removed - replaced by internal chain utils (not exported)
+
+// Chain strategies removed - using core functions directly instead
 
 // Re-export specific chain types that are available
 export type { Chain } from '@core/chain/Chain'

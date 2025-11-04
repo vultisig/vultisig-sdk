@@ -1,4 +1,3 @@
-import type { WalletCore } from '@trustwallet/wallet-core'
 import { useState } from 'react'
 import { Vault } from 'vultisig-sdk'
 
@@ -35,10 +34,8 @@ type DirectTestResult = {
 
 export const VaultDirectTester = ({
   vaultData,
-  walletCore,
 }: {
   vaultData: VaultData
-  walletCore: WalletCore
 }) => {
   const [chain, setChain] = useState('bitcoin')
   const [results, setResults] = useState<DirectTestResult[]>([])
@@ -53,26 +50,14 @@ export const VaultDirectTester = ({
   ]
 
   const testDirectVaultMethod = async () => {
-    if (!walletCore) {
-      setResults([
-        {
-          success: false,
-          error: 'WalletCore not available',
-          duration: 0,
-          cached: false,
-        },
-      ])
-      return
-    }
-
     setLoading(true)
     setResults([])
 
     const startTime = performance.now()
 
     try {
-      // Create a Vault instance with WalletCore
-      const vault = new Vault(vaultData, walletCore)
+      // Create a Vault instance
+      const vault = new Vault(vaultData)
 
       console.log('Testing direct Vault.address method...')
 
@@ -109,22 +94,10 @@ export const VaultDirectTester = ({
   }
 
   const testErrorCases = async () => {
-    if (!walletCore) {
-      setResults([
-        {
-          success: false,
-          error: 'WalletCore not available',
-          duration: 0,
-          cached: false,
-        },
-      ])
-      return
-    }
-
     setLoading(true)
     setResults([])
 
-    const vault = new Vault(vaultData, walletCore)
+    const vault = new Vault(vaultData)
     const errorResults: DirectTestResult[] = []
 
     // Test unsupported chain
@@ -216,15 +189,15 @@ export const VaultDirectTester = ({
 
         <button
           onClick={testDirectVaultMethod}
-          disabled={loading || !walletCore}
+          disabled={loading}
           style={{
             padding: '8px 16px',
             backgroundColor: '#17a2b8',
             color: 'white',
             border: 'none',
             borderRadius: 4,
-            cursor: loading || !walletCore ? 'not-allowed' : 'pointer',
-            opacity: loading || !walletCore ? 0.6 : 1,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1,
           }}
         >
           {loading ? 'Testing...' : 'Test Direct Method'}
@@ -232,22 +205,22 @@ export const VaultDirectTester = ({
 
         <button
           onClick={testErrorCases}
-          disabled={loading || !walletCore}
+          disabled={loading}
           style={{
             padding: '8px 16px',
             backgroundColor: '#ffc107',
             color: '#212529',
             border: 'none',
             borderRadius: 4,
-            cursor: loading || !walletCore ? 'not-allowed' : 'pointer',
-            opacity: loading || !walletCore ? 0.6 : 1,
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1,
           }}
         >
           Test Error Cases
         </button>
       </div>
 
-      {!walletCore && (
+      {false && (
         <div
           style={{
             backgroundColor: '#fff3cd',
