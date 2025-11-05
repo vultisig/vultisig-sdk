@@ -1,6 +1,6 @@
 import { Vault, SigningPayload, Signature } from '../../types'
 import { WASMManager } from '../../wasm/WASMManager'
-import { stringToChain } from '../../chains/utils'
+import { stringToChain } from '../../ChainManager'
 import { buildKeysignPayload } from '../adapters/buildKeysignPayload'
 
 /**

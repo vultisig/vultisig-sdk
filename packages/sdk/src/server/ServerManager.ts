@@ -4,9 +4,9 @@ import {
   ServerStatus,
   Vault,
 } from '../types'
+import { stringToChain } from '../ChainManager'
 import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
-import { stringToChain } from '../chains/utils'
 
 /**
  * ServerManager coordinates all server communications
