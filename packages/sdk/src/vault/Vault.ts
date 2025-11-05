@@ -6,7 +6,7 @@ import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { getCoinBalance } from '@core/chain/coin/balance'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import { getFeeQuote } from '@core/chain/feeQuote'
+// import { getFeeQuote } from '@core/chain/feeQuote' // TODO: getFeeQuote not available in core
 
 // SDK utilities
 import {
@@ -194,7 +194,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    */
   async export(password?: string): Promise<Blob> {
     const { createVaultBackup, getExportFileName } = await import(
-      './utils/export'
+      '../utils/export'
     )
 
     const base64Data = await createVaultBackup(this.vaultData, password)
@@ -417,30 +417,35 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Uses core's getFeeQuote()
    */
   async gas(chain: string | Chain): Promise<GasInfo> {
-    try {
-      const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
-      const address = await this.address(chainEnum)
+    // TODO: Implement gas estimation - getFeeQuote not available in core
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      'Gas estimation not implemented yet'
+    )
+    // try {
+    //   const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
+    //   const address = await this.address(chainEnum)
 
-      // Core handles gas estimation for all chains
-      // Need to provide full AccountCoin with metadata
-      const feeQuote = await getFeeQuote({
-        coin: {
-          chain: chainEnum,
-          address,
-          decimals: chainFeeCoin[chainEnum].decimals,
-          ticker: chainFeeCoin[chainEnum].ticker,
-        },
-      })
+    //   // Core handles gas estimation for all chains
+    //   // Need to provide full AccountCoin with metadata
+    //   const feeQuote = await getFeeQuote({
+    //     coin: {
+    //       chain: chainEnum,
+    //       address,
+    //       decimals: chainFeeCoin[chainEnum].decimals,
+    //       ticker: chainFeeCoin[chainEnum].ticker,
+    //     },
+    //   })
 
-      // Format using adapter
-      return formatGasInfo(feeQuote, chainEnum)
-    } catch (error) {
-      throw new VaultError(
-        VaultErrorCode.GasEstimationFailed,
-        `Failed to estimate gas for ${chain}`,
-        error as Error
-      )
-    }
+    //   // Format using adapter
+    //   return formatGasInfo(feeQuote, chainEnum)
+    // } catch (error) {
+    //   throw new VaultError(
+    //     VaultErrorCode.GasEstimationFailed,
+    //     `Failed to estimate gas for ${chain}`,
+    //     error as Error
+    //   )
+    // }
   }
 
   // ===== SIGNING METHODS =====
