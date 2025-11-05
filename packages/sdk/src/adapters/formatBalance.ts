@@ -1,6 +1,6 @@
 import { Chain } from '@core/chain/Chain'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { Balance, Token } from '../../types'
+import { Balance, Token } from '../types'
 
 /**
  * Convert raw bigint balance to SDK Balance format

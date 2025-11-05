@@ -29,62 +29,65 @@ export async function buildKeysignPayload(
   walletCore: WalletCore,
   vaultData: Vault
 ): Promise<string[]> {
-  const { transaction } = sdkPayload
+  // TODO: Implement buildKeysignPayload - buildSendKeysignPayload not available in core
+  throw new Error('buildKeysignPayload not implemented yet')
 
-  // Extract transaction details
-  const receiver = transaction.receiver || transaction.toAddress
-  const amount = BigInt(transaction.amount || transaction.toAmount || '0')
-  const memo = transaction.memo
+  // const { transaction } = sdkPayload
 
-  if (!receiver) {
-    throw new Error('Transaction receiver address is required')
-  }
+  // // Extract transaction details
+  // const receiver = transaction.receiver || transaction.toAddress
+  // const amount = BigInt(transaction.amount || transaction.toAmount || '0')
+  // const memo = transaction.memo
 
-  // Build AccountCoin for the chain
-  const coin: AccountCoin = {
-    chain,
-    address: '', // Will be set by buildSendKeysignPayload
-    decimals: chainFeeCoin[chain].decimals,
-    ticker: chainFeeCoin[chain].ticker,
-  }
+  // if (!receiver) {
+  //   throw new Error('Transaction receiver address is required')
+  // }
 
-  // Get public key for this chain (returns WalletCore PublicKey object)
-  const publicKey = getPublicKey({
-    chain,
-    walletCore,
-    hexChainCode: vaultData.hexChainCode,
-    publicKeys: vaultData.publicKeys,
-  })
+  // // Build AccountCoin for the chain
+  // const coin: AccountCoin = {
+  //   chain,
+  //   address: '', // Will be set by buildSendKeysignPayload
+  //   decimals: chainFeeCoin[chain].decimals,
+  //   ticker: chainFeeCoin[chain].ticker,
+  // }
 
-  // Build the complete keysign payload using core function
-  const keysignPayload = await buildSendKeysignPayload({
-    coin,
-    receiver,
-    amount,
-    memo,
-    vaultId: vaultData.publicKeys.ecdsa,
-    localPartyId: vaultData.localPartyId,
-    publicKey,
-    walletCore,
-    libType: vaultData.libType,
-  })
+  // // Get public key for this chain (returns WalletCore PublicKey object)
+  // const publicKey = getPublicKey({
+  //   chain,
+  //   walletCore,
+  //   hexChainCode: vaultData.hexChainCode,
+  //   publicKeys: vaultData.publicKeys,
+  // })
 
-  // Get encoded signing inputs from the keysign payload
-  const signingInputs = getEncodedSigningInputs({
-    keysignPayload,
-    walletCore,
-    publicKey,
-  })
+  // // Build the complete keysign payload using core function
+  // const keysignPayload = await buildSendKeysignPayload({
+  //   coin,
+  //   receiver,
+  //   amount,
+  //   memo,
+  //   vaultId: vaultData.publicKeys.ecdsa,
+  //   localPartyId: vaultData.localPartyId,
+  //   publicKey,
+  //   walletCore,
+  //   libType: vaultData.libType,
+  // })
 
-  // Get pre-signing hashes from the signing inputs
-  const messageHashes = signingInputs.flatMap(txInputData => {
-    const hashes = getPreSigningHashes({
-      walletCore,
-      chain,
-      txInputData,
-    })
-    return hashes.map(hash => Buffer.from(hash).toString('hex'))
-  })
+  // // Get encoded signing inputs from the keysign payload
+  // const signingInputs = getEncodedSigningInputs({
+  //   keysignPayload,
+  //   walletCore,
+  //   publicKey,
+  // })
 
-  return messageHashes
+  // // Get pre-signing hashes from the signing inputs
+  // const messageHashes = signingInputs.flatMap(txInputData => {
+  //   const hashes = getPreSigningHashes({
+  //     walletCore,
+  //     chain,
+  //     txInputData,
+  //   })
+  //   return hashes.map(hash => Buffer.from(hash).toString('hex'))
+  // })
+
+  // return messageHashes
 }
