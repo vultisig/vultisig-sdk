@@ -1,8 +1,6 @@
-import { EvmFeeSettings } from '../../tx/fee/evm/EvmFeeSettings'
-import { UtxoFeeSettings } from '../../tx/fee/utxo/UtxoFeeSettings'
-
-import { Chain, EvmChain, UtxoChain } from '../../Chain'
-import { DeriveChainKind } from '../../ChainKind'
+import { Chain, EvmChain, UtxoChain } from '../../../chain/Chain'
+import { DeriveChainKind } from '../../../chain/ChainKind'
+import { UtxoFeeSettings } from '../../../chain/tx/fee/utxo/UtxoFeeSettings'
 
 export const feeSettingsChains = [
   ...Object.values(EvmChain),
@@ -12,6 +10,11 @@ export const feeSettingsChains = [
 type FeeSettingsChain = (typeof feeSettingsChains)[number]
 
 export type FeeSettingsChainKind = DeriveChainKind<FeeSettingsChain>
+
+export type EvmFeeSettings = {
+  maxPriorityFeePerGas: bigint
+  gasLimit: bigint
+}
 
 export type FeeSettings<T extends FeeSettingsChainKind = FeeSettingsChainKind> =
   T extends 'evm' ? EvmFeeSettings : UtxoFeeSettings
