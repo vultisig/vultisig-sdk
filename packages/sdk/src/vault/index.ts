@@ -10,14 +10,6 @@ export {
   VaultImportError,
   VaultImportErrorCode,
 } from './VaultError'
-export { AddressBookManager } from './AddressBook'
-
-// Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
-// export { BalanceManagement } from './BalanceManagement'
-
-// Utilities
-export { ValidationHelpers } from './utils/validation'
-export { createVaultBackup, getExportFileName } from './utils/export'
 
 // Vault utilities - use VaultManager for encryption/decryption operations
 
@@ -34,4 +26,3 @@ export type {
   VaultDetails,
   VaultValidationResult,
 } from '../types'
-

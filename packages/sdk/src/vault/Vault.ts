@@ -9,13 +9,19 @@ import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { getFeeQuote } from '@core/chain/feeQuote'
 
 // SDK utilities
-import { DEFAULT_CHAINS, isChainSupported, stringToChain } from '../ChainManager'
-import { CacheService } from './services/CacheService'
-import { FastSigningService } from './services/FastSigningService'
-import { formatBalance } from './adapters/formatBalance'
-import { formatGasInfo } from './adapters/formatGasInfo'
+import {
+  DEFAULT_CHAINS,
+  isChainSupported,
+  stringToChain,
+} from '../ChainManager'
+import { CacheService } from '../services/CacheService'
+import { FastSigningService } from '../services/FastSigningService'
+import { formatBalance } from '../adapters/formatBalance'
+import { formatGasInfo } from '../adapters/formatGasInfo'
 import { VaultError, VaultErrorCode } from './VaultError'
 import { VaultServices, VaultConfig } from './VaultServices'
+import { UniversalEventEmitter } from '../events/EventEmitter'
+import type { VaultEvents } from '../events/types'
 
 // Types
 import {
@@ -45,12 +51,13 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  * - Caching (addresses: permanent, balances: 5-min TTL)
  * - Format conversion (bigint → Balance, FeeQuote → GasInfo)
  * - Error handling and user-friendly messages
+ * - Event emission for reactive updates
  *
  * Architecture:
  * - Vault → Core Functions (direct) → Chain Resolvers
  * - Aligns with core's functional dispatch pattern
  */
-export class Vault {
+export class Vault extends UniversalEventEmitter<VaultEvents> {
   // Essential services only
   private wasmManager
   private cacheService: CacheService
@@ -70,6 +77,9 @@ export class Vault {
     services: VaultServices,
     config?: VaultConfig
   ) {
+    // Initialize EventEmitter
+    super()
+
     // Inject essential services
     this.wasmManager = services.wasmManager
     this.fastSigningService = services.fastSigningService
@@ -139,7 +149,11 @@ export class Vault {
       )
     }
 
+    const oldName = this.vaultData.name
     this.vaultData.name = newName
+
+    // Emit renamed event
+    this.emit('renamed', { oldName, newName })
   }
 
   /**
@@ -311,8 +325,17 @@ export class Vault {
 
       // Cache with 5-min TTL
       this.cacheService.set(cacheKey, balance)
+
+      // Emit balance updated event
+      this.emit('balanceUpdated', {
+        chain: chainEnum,
+        balance,
+        tokenId,
+      })
+
       return balance
     } catch (error) {
+      this.emit('error', error as Error)
       throw new VaultError(
         VaultErrorCode.BalanceFetchFailed,
         `Failed to fetch balance for ${chain}${tokenId ? `:${tokenId}` : ''}`,
@@ -357,6 +380,7 @@ export class Vault {
   async updateBalance(chain: string, tokenId?: string): Promise<Balance> {
     const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
     this.cacheService.clear(cacheKey)
+    // balance() will emit the balanceUpdated event
     return this.balance(chain, tokenId)
   }
 
@@ -496,12 +520,19 @@ export class Vault {
     }
 
     try {
-      return await this.fastSigningService.signWithServer(
+      const signature = await this.fastSigningService.signWithServer(
         this.vaultData,
         payload,
         password
       )
+
+      // Emit transaction signed event
+      this.emit('transactionSigned', { signature, payload })
+
+      return signature
     } catch (error) {
+      this.emit('error', error as Error)
+
       if (error instanceof VaultError) {
         throw error
       }
@@ -530,6 +561,8 @@ export class Vault {
     if (!this._tokens[chain]) this._tokens[chain] = []
     if (!this._tokens[chain].find(t => t.id === token.id)) {
       this._tokens[chain].push(token)
+      // Emit token added event
+      this.emit('tokenAdded', { chain, token })
     }
   }
 
@@ -538,7 +571,13 @@ export class Vault {
    */
   removeToken(chain: string, tokenId: string): void {
     if (this._tokens[chain]) {
+      const tokenExists = this._tokens[chain].some(t => t.id === tokenId)
       this._tokens[chain] = this._tokens[chain].filter(t => t.id !== tokenId)
+
+      if (tokenExists) {
+        // Emit token removed event
+        this.emit('tokenRemoved', { chain, tokenId })
+      }
     }
   }
 
@@ -585,6 +624,9 @@ export class Vault {
     if (!this._userChains.includes(chain)) {
       this._userChains.push(chain)
       await this.address(chain) // Pre-derive
+
+      // Emit chain added event
+      this.emit('chainAdded', { chain })
     }
   }
 
@@ -592,11 +634,17 @@ export class Vault {
    * Remove single chain
    */
   removeChain(chain: string): void {
+    const chainExists = this._userChains.includes(chain)
     this._userChains = this._userChains.filter(c => c !== chain)
 
     // Clear address cache
     const cacheKey = `address:${chain.toLowerCase()}`
     this.cacheService.clear(cacheKey)
+
+    if (chainExists) {
+      // Emit chain removed event
+      this.emit('chainRemoved', { chain })
+    }
   }
 
   /**

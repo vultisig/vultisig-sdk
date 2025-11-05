@@ -34,77 +34,34 @@ export function stringToChain(chain: string): Chain {
 }
 
 /**
- * ChainManager handles SDK-level chain configuration and validation
- * Manages supported chains, default chains, and currency settings
+ * Get all supported chains (returns all Chain enum values)
  */
-export class ChainManager {
-  private defaultChains: string[]
-  private defaultCurrency = 'USD'
+export function getSupportedChains(): string[] {
+  return Object.values(Chain)
+}
 
-  constructor(config?: { defaultChains?: string[]; defaultCurrency?: string }) {
-    // Use DEFAULT_CHAINS as single source of truth for defaults
-    this.defaultChains = config?.defaultChains ?? DEFAULT_CHAINS
+/**
+ * Validate chains against supported chains list
+ * Returns validated chains or throws VaultError if any chain is unsupported
+ */
+export function validateChains(chains: string[]): Chain[] {
+  const valid: Chain[] = []
+  const invalid: string[] = []
 
-    if (config?.defaultCurrency) {
-      this.defaultCurrency = config.defaultCurrency
+  for (const chain of chains) {
+    if (chain in Chain) {
+      valid.push(chain as Chain)
+    } else {
+      invalid.push(chain)
     }
   }
 
-  /**
-   * Get all supported chains (immutable)
-   */
-  getSupportedChains(): string[] {
-    return Object.values(Chain)
+  if (invalid.length > 0) {
+    throw new VaultError(
+      VaultErrorCode.ChainNotSupported,
+      `Unsupported chains: ${invalid.join(', ')}. Supported chains: ${getSupportedChains().join(', ')}`
+    )
   }
 
-  /**
-   * Set SDK-level default chains for new vaults
-   * Validates against supported chains list
-   */
-  setDefaultChains(chains: string[]): void {
-    // Validate chains
-    const valid: Chain[] = []
-    const invalid: string[] = []
-
-    for (const chain of chains) {
-      if (chain in Chain) {
-        valid.push(chain as Chain)
-      } else {
-        invalid.push(chain)
-      }
-    }
-
-    if (invalid.length > 0) {
-      throw new VaultError(
-        VaultErrorCode.ChainNotSupported,
-        `Unsupported chains: ${invalid.join(', ')}. Supported chains: ${this.getSupportedChains().join(', ')}`
-      )
-    }
-
-    // Store normalized chain IDs
-    this.defaultChains = valid
-    // TODO: Save config to storage
-  }
-
-  /**
-   * Get SDK-level default chains (5 top chains: BTC, ETH, SOL, THOR, XRP)
-   */
-  getDefaultChains(): string[] {
-    return this.defaultChains
-  }
-
-  /**
-   * Set global default currency
-   */
-  setDefaultCurrency(currency: string): void {
-    this.defaultCurrency = currency
-    // TODO: Save config to storage
-  }
-
-  /**
-   * Get global default currency
-   */
-  getDefaultCurrency(): string {
-    return this.defaultCurrency
-  }
+  return valid
 }
