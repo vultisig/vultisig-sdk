@@ -51,6 +51,60 @@ export {
 // WalletCore initialization is handled by the SDK
 
 // ============================================================================
+// PUBLIC API - Provider (Unified Vault Provider)
+// ============================================================================
+
+// Provider classes and factory functions
+export {
+  createProvider,
+  createBrowserProvider,
+  createNodeProvider,
+  createElectronProvider,
+  BrowserProvider,
+  NodeProvider,
+  ElectronProvider,
+  BaseProvider,
+} from './provider'
+
+// Provider types
+export type {
+  VultisigProvider,
+  ProviderConfig,
+  ConnectionOptions,
+  SignTransactionParams,
+  SendTransactionParams,
+  SignMessageParams,
+  SignTypedDataParams,
+  GetBalanceParams,
+  CreateVaultOptions,
+  VaultCreationStep as ProviderVaultCreationStep,
+  VaultSummary as ProviderVaultSummary,
+  ProviderEvents,
+  VaultStorage,
+  StorageMetadata,
+  StoredValue,
+  Environment,
+} from './provider'
+
+// Provider utilities
+export {
+  StorageError,
+  StorageErrorCode,
+  BrowserStorage,
+  NodeStorage,
+  MemoryStorage,
+  detectEnvironment,
+  isBrowser,
+  isNode,
+  isElectron,
+  isElectronMain,
+  isElectronRenderer,
+  isWorker,
+  getEnvironmentInfo,
+  UniversalEventEmitter,
+} from './provider'
+
+// ============================================================================
 // PUBLIC API - Types (keep all types for TypeScript users)
 // ============================================================================
 

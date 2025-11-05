@@ -9,11 +9,7 @@ import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { getFeeQuote } from '@core/chain/feeQuote'
 
 // SDK utilities
-import {
-  DEFAULT_CHAINS,
-  isChainSupported,
-  stringToChain,
-} from '../chains/utils'
+import { DEFAULT_CHAINS, isChainSupported, stringToChain } from '../ChainManager'
 import { CacheService } from './services/CacheService'
 import { FastSigningService } from './services/FastSigningService'
 import { formatBalance } from './adapters/formatBalance'

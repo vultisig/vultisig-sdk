@@ -1,5 +1,37 @@
-import { DEFAULT_CHAINS, getSupportedChains, validateChains } from './chains/utils'
+import { Chain } from '@core/chain/Chain'
 import { VaultError, VaultErrorCode } from './vault/VaultError'
+
+/**
+ * Default chains for new vaults
+ * Used when user doesn't specify custom chain list
+ */
+export const DEFAULT_CHAINS: Chain[] = [
+  Chain.Bitcoin,
+  Chain.Ethereum,
+  Chain.Solana,
+  Chain.THORChain,
+  Chain.Ripple,
+]
+
+/**
+ * Check if a chain is supported
+ */
+export function isChainSupported(chain: string): chain is Chain {
+  return chain in Chain
+}
+
+/**
+ * Convert string to Chain enum with validation
+ */
+export function stringToChain(chain: string): Chain {
+  if (!isChainSupported(chain)) {
+    throw new VaultError(
+      VaultErrorCode.ChainNotSupported,
+      `Unsupported chain: ${chain}`
+    )
+  }
+  return chain as Chain
+}
 
 /**
  * ChainManager handles SDK-level chain configuration and validation
@@ -20,10 +52,9 @@ export class ChainManager {
 
   /**
    * Get all supported chains (immutable)
-   * Delegates to chain utils for single source of truth
    */
   getSupportedChains(): string[] {
-    return getSupportedChains()
+    return Object.values(Chain)
   }
 
   /**
@@ -31,18 +62,27 @@ export class ChainManager {
    * Validates against supported chains list
    */
   setDefaultChains(chains: string[]): void {
-    // Use validateChains for validation
-    const validation = validateChains(chains)
+    // Validate chains
+    const valid: Chain[] = []
+    const invalid: string[] = []
 
-    if (validation.invalid.length > 0) {
+    for (const chain of chains) {
+      if (chain in Chain) {
+        valid.push(chain as Chain)
+      } else {
+        invalid.push(chain)
+      }
+    }
+
+    if (invalid.length > 0) {
       throw new VaultError(
         VaultErrorCode.ChainNotSupported,
-        `Unsupported chains: ${validation.invalid.join(', ')}. Supported chains: ${getSupportedChains().join(', ')}`
+        `Unsupported chains: ${invalid.join(', ')}. Supported chains: ${this.getSupportedChains().join(', ')}`
       )
     }
 
     // Store normalized chain IDs
-    this.defaultChains = validation.valid
+    this.defaultChains = valid
     // TODO: Save config to storage
   }
 
