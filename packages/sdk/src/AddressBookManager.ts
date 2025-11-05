@@ -1,4 +1,4 @@
-import { AddressBook, AddressBookEntry } from '../types'
+import { AddressBook, AddressBookEntry } from './types'
 
 /**
  * AddressBook manager for global address book operations

@@ -6,7 +6,7 @@ import { getPreSigningHashes } from '@core/chain/tx/preSigningHashes'
 // import { buildSendKeysignPayload } from '@core/mpc/keysign/build/send'
 import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
 import { WalletCore } from '@trustwallet/wallet-core'
-import { Vault, SigningPayload } from '../../types'
+import { Vault, SigningPayload } from '../types'
 
 /**
  * Build keysign payload for MPC signing using core functions

@@ -6,6 +6,8 @@ export type Environment =
   | 'node' // Node.js
   | 'electron-main' // Electron main process
   | 'electron-renderer' // Electron renderer process
+  | 'chrome-extension' // Chrome extension (popup/options/content script)
+  | 'chrome-extension-sw' // Chrome extension service worker (background)
   | 'worker' // Web Worker / Service Worker
   | 'unknown' // Unsupported
 
@@ -14,9 +16,10 @@ export type Environment =
  *
  * Detection Order (order matters!):
  * 1. Electron (has both process and window)
- * 2. Web Worker / Service Worker
- * 3. Browser (has window and document)
- * 4. Node.js (has process and no window)
+ * 2. Chrome Extension (has chrome.runtime API)
+ * 3. Web Worker / Service Worker
+ * 4. Browser (has window and document)
+ * 5. Node.js (has process and no window)
  */
 export function detectEnvironment(): Environment {
   // Check for Electron FIRST (must be before browser check)
@@ -31,6 +34,29 @@ export function detectEnvironment(): Environment {
     if (processType === 'renderer') return 'electron-renderer'
     // Fallback if type is not set (shouldn't happen, but be safe)
     return typeof window !== 'undefined' ? 'electron-renderer' : 'electron-main'
+  }
+
+  // Check for Chrome Extension (must be before browser/worker check)
+  // Chrome extensions have the chrome.runtime API
+  if (
+    typeof chrome !== 'undefined' &&
+    chrome.runtime &&
+    chrome.runtime.id
+  ) {
+    // Service worker context (background script)
+    // @ts-ignore - ServiceWorkerGlobalScope type conflict between dom and webworker libs
+    if (
+      // @ts-ignore - ServiceWorkerGlobalScope type conflict between dom and webworker libs
+      typeof ServiceWorkerGlobalScope !== 'undefined' &&
+      typeof self !== 'undefined' &&
+      // @ts-ignore - ServiceWorkerGlobalScope type conflict between dom and webworker libs
+      self instanceof ServiceWorkerGlobalScope
+    ) {
+      return 'chrome-extension-sw'
+    }
+
+    // Extension page context (popup, options, content script)
+    return 'chrome-extension'
   }
 
   // Check for Web Workers / Service Workers
@@ -111,6 +137,28 @@ export function isWorker(): boolean {
 }
 
 /**
+ * Check if running in a Chrome extension (any context).
+ */
+export function isChromeExtension(): boolean {
+  const env = detectEnvironment()
+  return env === 'chrome-extension' || env === 'chrome-extension-sw'
+}
+
+/**
+ * Check if running in a Chrome extension service worker (background script).
+ */
+export function isChromeExtensionServiceWorker(): boolean {
+  return detectEnvironment() === 'chrome-extension-sw'
+}
+
+/**
+ * Check if running in a Chrome extension page (popup, options, content script).
+ */
+export function isChromeExtensionPage(): boolean {
+  return detectEnvironment() === 'chrome-extension'
+}
+
+/**
  * Get environment information for debugging.
  */
 export function getEnvironmentInfo(): {
@@ -120,8 +168,10 @@ export function getEnvironmentInfo(): {
   hasProcess: boolean
   hasNavigator: boolean
   isElectron: boolean
+  isChromeExtension: boolean
   nodeVersion?: string
   electronVersion?: string
+  chromeExtensionId?: string
   userAgent?: string
 } {
   const env = detectEnvironment()
@@ -133,8 +183,10 @@ export function getEnvironmentInfo(): {
     hasProcess: typeof process !== 'undefined',
     hasNavigator: typeof navigator !== 'undefined',
     isElectron: isElectron(),
+    isChromeExtension: isChromeExtension(),
     nodeVersion: typeof process !== 'undefined' ? process.versions?.node : undefined,
     electronVersion: typeof process !== 'undefined' ? process.versions?.electron : undefined,
+    chromeExtensionId: typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime.id : undefined,
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
   }
 }
