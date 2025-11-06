@@ -1,4 +1,4 @@
-import { FastSigningService } from './services/FastSigningService'
+import { FastSigningService } from '../services/FastSigningService'
 import { WASMManager } from '../wasm/WASMManager'
 
 /**

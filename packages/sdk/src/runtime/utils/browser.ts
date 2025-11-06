@@ -1,0 +1,231 @@
+/**
+ * Browser-specific utility functions.
+ *
+ * These helpers simplify browser integration by providing:
+ * - Vault download (triggers browser download)
+ * - Storage quota and usage information
+ * - Storage clearing utilities
+ *
+ * Usage:
+ * ```typescript
+ * import { Vultisig } from '@vultisig/sdk'
+ * import { downloadVault, getBrowserStorageInfo } from '@vultisig/sdk'
+ *
+ * const sdk = new Vultisig()
+ * const vault = sdk.getActiveVault()
+ *
+ * // Download vault
+ * await downloadVault(vault, 'my-vault.vult')
+ *
+ * // Check storage usage
+ * const info = await getBrowserStorageInfo()
+ * console.log(`Using ${info.usage} bytes of ${info.quota} (${info.percentage}%)`)
+ * ```
+ */
+
+import type { Vault as VaultClass } from '../../vault/Vault'
+import type { BrowserStorage } from '../storage/BrowserStorage'
+import { isBrowser } from '../environment'
+
+/**
+ * Download vault file in browser.
+ * Creates a temporary download link and triggers browser download dialog.
+ *
+ * @param vault - Vault instance to download
+ * @param filename - Optional filename (defaults to vault name with .vult extension)
+ * @throws Error if not running in browser environment
+ *
+ * @example
+ * ```typescript
+ * const vault = sdk.getActiveVault()
+ * await downloadVault(vault, 'my-backup.vult')
+ * ```
+ */
+export async function downloadVault(
+  vault: VaultClass,
+  filename?: string
+): Promise<void> {
+  if (!isBrowser()) {
+    throw new Error('downloadVault can only be called in browser environment')
+  }
+
+  const blob = await vault.export()
+  const url = URL.createObjectURL(blob)
+
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename ?? `${vault.data.name}.vult`
+  document.body.appendChild(a)
+  a.click()
+
+  // Cleanup
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Get browser storage usage and quota information.
+ * Returns information about IndexedDB/localStorage usage.
+ *
+ * @param storage - BrowserStorage instance (from sdk.storage if it's BrowserStorage)
+ * @returns Storage usage, quota, and percentage
+ * @throws Error if not running in browser environment
+ *
+ * @example
+ * ```typescript
+ * import { Vultisig, BrowserStorage } from '@vultisig/sdk'
+ * import { getBrowserStorageInfo } from '@vultisig/sdk'
+ *
+ * const sdk = new Vultisig()
+ * const storage = (sdk as any).storage as BrowserStorage
+ * const info = await getBrowserStorageInfo(storage)
+ *
+ * if (info.percentage && info.percentage > 80) {
+ *   console.warn('Storage nearly full!')
+ * }
+ * ```
+ */
+export async function getBrowserStorageInfo(storage: BrowserStorage): Promise<{
+  usage: number
+  quota?: number
+  percentage?: number
+}> {
+  if (!isBrowser()) {
+    throw new Error('getBrowserStorageInfo can only be called in browser environment')
+  }
+
+  const usage = await storage.getUsage?.() ?? 0
+  const quota = await storage.getQuota?.() ?? undefined
+
+  return {
+    usage,
+    quota,
+    percentage: quota ? (usage / quota) * 100 : undefined,
+  }
+}
+
+/**
+ * Check if browser storage quota is running low.
+ * Returns true if usage exceeds the specified threshold.
+ *
+ * @param storage - BrowserStorage instance
+ * @param threshold - Percentage threshold (default: 80%)
+ * @returns True if storage is above threshold
+ * @throws Error if not running in browser environment
+ *
+ * @example
+ * ```typescript
+ * if (await isBrowserStorageLow(storage, 90)) {
+ *   alert('Storage is almost full! Please export and delete old vaults.')
+ * }
+ * ```
+ */
+export async function isBrowserStorageLow(
+  storage: BrowserStorage,
+  threshold: number = 80
+): Promise<boolean> {
+  if (!isBrowser()) {
+    throw new Error('isBrowserStorageLow can only be called in browser environment')
+  }
+
+  const info = await getBrowserStorageInfo(storage)
+  return info.percentage ? info.percentage >= threshold : false
+}
+
+/**
+ * Request persistent storage permission (browser only).
+ * This helps prevent the browser from clearing vault data automatically.
+ *
+ * @returns True if persistent storage was granted
+ * @throws Error if not running in browser environment
+ *
+ * @example
+ * ```typescript
+ * const granted = await requestPersistentStorage()
+ * if (granted) {
+ *   console.log('Vault data will not be automatically cleared')
+ * }
+ * ```
+ */
+export async function requestPersistentStorage(): Promise<boolean> {
+  if (!isBrowser()) {
+    throw new Error('requestPersistentStorage can only be called in browser environment')
+  }
+
+  if (navigator.storage && navigator.storage.persist) {
+    return await navigator.storage.persist()
+  }
+
+  console.warn('Persistent storage API not available')
+  return false
+}
+
+/**
+ * Check if persistent storage is already granted.
+ *
+ * @returns True if persistent storage is granted
+ * @throws Error if not running in browser environment
+ *
+ * @example
+ * ```typescript
+ * const isPersisted = await isPersistentStorage()
+ * if (!isPersisted) {
+ *   await requestPersistentStorage()
+ * }
+ * ```
+ */
+export async function isPersistentStorage(): Promise<boolean> {
+  if (!isBrowser()) {
+    throw new Error('isPersistentStorage can only be called in browser environment')
+  }
+
+  if (navigator.storage && navigator.storage.persisted) {
+    return await navigator.storage.persisted()
+  }
+
+  return false
+}
+
+/**
+ * Upload vault file from user's file system (browser only).
+ * Opens file picker and returns File object ready for import.
+ *
+ * @param accept - File extension filter (default: .vult)
+ * @returns File object or null if user cancelled
+ * @throws Error if not running in browser environment
+ *
+ * @example
+ * ```typescript
+ * const file = await uploadVaultFile()
+ * if (file) {
+ *   const vault = await sdk.addVault(file, password)
+ * }
+ * ```
+ */
+export async function uploadVaultFile(accept: string = '.vult'): Promise<File | null> {
+  if (!isBrowser()) {
+    throw new Error('uploadVaultFile can only be called in browser environment')
+  }
+
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = accept
+    input.style.display = 'none'
+
+    input.onchange = (e: Event) => {
+      const target = e.target as HTMLInputElement
+      const file = target.files?.[0] ?? null
+      document.body.removeChild(input)
+      resolve(file)
+    }
+
+    input.oncancel = () => {
+      document.body.removeChild(input)
+      resolve(null)
+    }
+
+    document.body.appendChild(input)
+    input.click()
+  })
+}
