@@ -14,7 +14,7 @@
 // ============================================================================
 
 // Core SDK class
-export { Vultisig } from './VultisigSDK'
+export { Vultisig } from './Vultisig'
 
 // Vault management
 export {
@@ -23,9 +23,6 @@ export {
   VaultErrorCode,
   VaultImportError,
   VaultImportErrorCode,
-  ValidationHelpers,
-  createVaultBackup,
-  getExportFileName,
 } from './vault'
 
 // ============================================================================
@@ -48,6 +45,88 @@ export {
 
 // NOTE: WASM management is internal-only
 // WalletCore initialization is handled by the SDK
+
+// ============================================================================
+// PUBLIC API - Environment Utilities
+// ============================================================================
+
+// Environment detection
+export {
+  detectEnvironment,
+  isBrowser,
+  isNode,
+  isElectron,
+  isElectronMain,
+  isElectronRenderer,
+  isChromeExtension,
+  isChromeExtensionServiceWorker,
+  isChromeExtensionPage,
+  isWorker,
+  getEnvironmentInfo,
+} from './runtime/environment'
+
+export type { Environment } from './runtime/environment'
+
+// Storage implementations
+export { StorageManager } from './runtime/storage/StorageManager'
+export type { StorageOptions } from './runtime/storage/StorageManager'
+export { BrowserStorage } from './runtime/storage/BrowserStorage'
+export { NodeStorage } from './runtime/storage/NodeStorage'
+export { MemoryStorage } from './runtime/storage/MemoryStorage'
+export { ChromeStorage } from './runtime/storage/ChromeStorage'
+
+export { StorageError, StorageErrorCode } from './runtime/storage/types'
+
+export type {
+  VaultStorage,
+  StorageMetadata,
+  StoredValue,
+} from './runtime/storage/types'
+
+// Event system
+export { UniversalEventEmitter } from './events/EventEmitter'
+export type { SdkEvents, VaultEvents } from './events/types'
+
+// ============================================================================
+// PUBLIC API - Environment-Specific Utilities
+// ============================================================================
+
+// Electron utilities
+export {
+  setupElectronIPC,
+  getElectronHandlers,
+  getElectronProcessType,
+  exportElectronVaultToFile,
+  downloadElectronVault,
+} from './runtime/utils/electron'
+
+// Node.js utilities
+export {
+  exportVaultToFile,
+  importVaultFromFile,
+  getStoragePath,
+  getNodeStorageInfo,
+  ensureDirectory,
+} from './runtime/utils/node'
+
+// Browser utilities
+export {
+  downloadVault,
+  getBrowserStorageInfo,
+  isBrowserStorageLow,
+  requestPersistentStorage,
+  isPersistentStorage,
+  uploadVaultFile,
+} from './runtime/utils/browser'
+
+// Chrome extension utilities
+export {
+  setupChromeMessageHandlers,
+  sendChromeMessage,
+  keepServiceWorkerAlive,
+  isServiceWorkerAlive,
+  onChromeStorageChanged,
+} from './runtime/utils/chrome'
 
 // ============================================================================
 // PUBLIC API - Types (keep all types for TypeScript users)
@@ -86,4 +165,7 @@ export type {
   Value,
   GasInfo,
   GasEstimate,
+  // Extended SDK types (from refactor)
+  VultisigConfig,
+  VaultSummary,
 } from './types'

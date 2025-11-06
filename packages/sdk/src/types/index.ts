@@ -157,6 +157,62 @@ export type SDKConfig = {
   }
 }
 
+// Extended SDK config with storage and connection options
+export type VultisigConfig = SDKConfig & {
+  storage?: any // VaultStorage interface (avoiding circular dependency)
+  autoInit?: boolean
+  autoConnect?: boolean
+  defaultChains?: string[]
+  defaultCurrency?: string
+}
+
+// Connection options
+export type ConnectionOptions = {
+  vaultId?: string
+  password?: string
+}
+
+// Convenience wrapper parameter types
+export type SignTransactionParams = {
+  chain: string
+  payload: SigningPayload
+  password?: string
+  mode?: SigningMode
+}
+
+export type SignMessageParams = {
+  chain: string
+  message: string
+  password?: string
+}
+
+export type SignTypedDataParams = {
+  chain: string
+  typedData: Record<string, unknown>
+  password?: string
+}
+
+export type GetBalanceParams = {
+  chain: string
+  tokenId?: string
+}
+
+export type CreateVaultOptions = {
+  name: string
+  type?: VaultType
+  password?: string
+  email?: string
+  onProgress?: (step: VaultCreationStep) => void
+}
+
+export type VaultSummary = {
+  id: string
+  name: string
+  type: VaultType
+  createdAt: number
+  isEncrypted: boolean
+}
+
 // Address derivation types
 export type ChainConfig = {
   name: string

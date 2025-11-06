@@ -17,7 +17,7 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 import { VaultServices, VaultConfig } from './vault/VaultServices'
 import { WASMManager } from './wasm'
 import { ServerManager } from './server/ServerManager'
-import { FastSigningService } from './vault/services/FastSigningService'
+import { FastSigningService } from './services/FastSigningService'
 
 /**
  * Determine vault type based on signer names
@@ -54,7 +54,7 @@ export class VaultManager {
       fastSigningService: new FastSigningService(
         this.serverManager,
         this.wasmManager
-      )
+      ),
     }
   }
 
@@ -63,11 +63,7 @@ export class VaultManager {
    * Internal helper for consistent vault instantiation
    */
   createVaultInstance(vaultData: Vault): VaultClass {
-    return new VaultClass(
-      vaultData,
-      this.createVaultServices(),
-      this.config
-    )
+    return new VaultClass(vaultData, this.createVaultServices(), this.config)
   }
 
   // ===== VAULT LIFECYCLE =====
@@ -86,7 +82,7 @@ export class VaultManager {
     }
   ): Promise<VaultClass> {
     const vaultType = options?.type ?? 'fast'
-    
+
     if (vaultType === 'fast') {
       return this.createFastVault(name, options)
     } else {
@@ -117,13 +113,15 @@ export class VaultManager {
       name,
       password: options.password,
       email: options.email,
-      onProgress: options.onProgress ? (update) => {
-        options.onProgress!({
-          step: update.phase === 'complete' ? 'complete' : 'keygen',
-          progress: update.phase === 'complete' ? 100 : 50,
-          message: update.message
-        })
-      } : undefined
+      onProgress: options.onProgress
+        ? update => {
+            options.onProgress!({
+              step: update.phase === 'complete' ? 'complete' : 'keygen',
+              progress: update.phase === 'complete' ? 100 : 50,
+              message: update.message,
+            })
+          }
+        : undefined,
     })
 
     // Create VaultClass instance from the created vault

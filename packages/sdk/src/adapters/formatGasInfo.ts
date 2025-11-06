@@ -1,6 +1,6 @@
 import { Chain } from '@core/chain/Chain'
 import { getChainKind } from '@core/chain/ChainKind'
-import { GasInfo } from '../../types'
+import { GasInfo } from '../types'
 
 /**
  * Convert core FeeQuote to SDK GasInfo format
