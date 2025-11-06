@@ -6,16 +6,22 @@ import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { getCoinBalance } from '@core/chain/coin/balance'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import { getFeeQuote } from '@core/chain/feeQuote'
+// import { getFeeQuote } from '@core/chain/feeQuote' // TODO: getFeeQuote not available in core
 
 // SDK utilities
-import { DEFAULT_CHAINS, isChainSupported, stringToChain } from '../chains/utils'
-import { CacheService } from './services/CacheService'
-import { FastSigningService } from './services/FastSigningService'
-import { formatBalance } from './adapters/formatBalance'
-import { formatGasInfo } from './adapters/formatGasInfo'
+import {
+  DEFAULT_CHAINS,
+  isChainSupported,
+  stringToChain,
+} from '../ChainManager'
+import { CacheService } from '../services/CacheService'
+import { FastSigningService } from '../services/FastSigningService'
+import { formatBalance } from '../adapters/formatBalance'
+import { formatGasInfo } from '../adapters/formatGasInfo'
 import { VaultError, VaultErrorCode } from './VaultError'
 import { VaultServices, VaultConfig } from './VaultServices'
+import { UniversalEventEmitter } from '../events/EventEmitter'
+import type { VaultEvents } from '../events/types'
 
 // Types
 import {
@@ -45,12 +51,13 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  * - Caching (addresses: permanent, balances: 5-min TTL)
  * - Format conversion (bigint → Balance, FeeQuote → GasInfo)
  * - Error handling and user-friendly messages
+ * - Event emission for reactive updates
  *
  * Architecture:
  * - Vault → Core Functions (direct) → Chain Resolvers
  * - Aligns with core's functional dispatch pattern
  */
-export class Vault {
+export class Vault extends UniversalEventEmitter<VaultEvents> {
   // Essential services only
   private wasmManager
   private cacheService: CacheService
@@ -70,6 +77,9 @@ export class Vault {
     services: VaultServices,
     config?: VaultConfig
   ) {
+    // Initialize EventEmitter
+    super()
+
     // Inject essential services
     this.wasmManager = services.wasmManager
     this.fastSigningService = services.fastSigningService
@@ -139,7 +149,11 @@ export class Vault {
       )
     }
 
+    const oldName = this.vaultData.name
     this.vaultData.name = newName
+
+    // Emit renamed event
+    this.emit('renamed', { oldName, newName })
   }
 
   /**
@@ -180,7 +194,7 @@ export class Vault {
    */
   async export(password?: string): Promise<Blob> {
     const { createVaultBackup, getExportFileName } = await import(
-      './utils/export'
+      '../utils/export'
     )
 
     const base64Data = await createVaultBackup(this.vaultData, password)
@@ -194,7 +208,9 @@ export class Vault {
       'window' in globalThis &&
       'document' in globalThis
     ) {
-      const { initiateFileDownload } = await import('@lib/utils/file/initiateFileDownload')
+      const { initiateFileDownload } = await import(
+        '@lib/utils/file/initiateFileDownload'
+      )
       initiateFileDownload({ blob, name: filename })
     }
 
@@ -221,11 +237,13 @@ export class Vault {
     const cacheKey = `address:${chainEnum.toLowerCase()}`
 
     // Check permanent cache
-    const cached = this.cacheService.get<string>(cacheKey, Number.MAX_SAFE_INTEGER)
+    const cached = this.cacheService.get<string>(
+      cacheKey,
+      Number.MAX_SAFE_INTEGER
+    )
     if (cached) return cached
 
     try {
-
       // Get WalletCore
       const walletCore = await this.wasmManager.getWalletCore()
 
@@ -234,20 +252,19 @@ export class Vault {
         chain: chainEnum,
         walletCore,
         publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode
+        hexChainCode: this.vaultData.hexChainCode,
       })
 
       // Derive address using core (handles all chain-specific logic)
       const address = deriveAddress({
         chain: chainEnum,
         publicKey,
-        walletCore
+        walletCore,
       })
 
       // Cache permanently (addresses don't change)
       this.cacheService.set(cacheKey, address)
       return address
-
     } catch (error) {
       throw new VaultError(
         VaultErrorCode.AddressDerivationFailed,
@@ -266,7 +283,7 @@ export class Vault {
 
     // Parallel derivation
     await Promise.all(
-      chainsToDerive.map(async (chain) => {
+      chainsToDerive.map(async chain => {
         try {
           result[chain] = await this.address(chain)
         } catch (error) {
@@ -300,7 +317,7 @@ export class Vault {
       const rawBalance = await getCoinBalance({
         chain: chainEnum,
         address,
-        id: tokenId  // Token ID (contract address for ERC-20, etc.)
+        id: tokenId, // Token ID (contract address for ERC-20, etc.)
       })
 
       // Format using adapter
@@ -308,9 +325,17 @@ export class Vault {
 
       // Cache with 5-min TTL
       this.cacheService.set(cacheKey, balance)
-      return balance
 
+      // Emit balance updated event
+      this.emit('balanceUpdated', {
+        chain: chainEnum,
+        balance,
+        tokenId,
+      })
+
+      return balance
     } catch (error) {
+      this.emit('error', error as Error)
       throw new VaultError(
         VaultErrorCode.BalanceFetchFailed,
         `Failed to fetch balance for ${chain}${tokenId ? `:${tokenId}` : ''}`,
@@ -355,6 +380,7 @@ export class Vault {
   async updateBalance(chain: string, tokenId?: string): Promise<Balance> {
     const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
     this.cacheService.clear(cacheKey)
+    // balance() will emit the balanceUpdated event
     return this.balance(chain, tokenId)
   }
 
@@ -391,31 +417,35 @@ export class Vault {
    * Uses core's getFeeQuote()
    */
   async gas(chain: string | Chain): Promise<GasInfo> {
-    try {
-      const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
-      const address = await this.address(chainEnum)
+    // TODO: Implement gas estimation - getFeeQuote not available in core
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      'Gas estimation not implemented yet'
+    )
+    // try {
+    //   const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
+    //   const address = await this.address(chainEnum)
 
-      // Core handles gas estimation for all chains
-      // Need to provide full AccountCoin with metadata
-      const feeQuote = await getFeeQuote({
-        coin: {
-          chain: chainEnum,
-          address,
-          decimals: chainFeeCoin[chainEnum].decimals,
-          ticker: chainFeeCoin[chainEnum].ticker
-        }
-      })
+    //   // Core handles gas estimation for all chains
+    //   // Need to provide full AccountCoin with metadata
+    //   const feeQuote = await getFeeQuote({
+    //     coin: {
+    //       chain: chainEnum,
+    //       address,
+    //       decimals: chainFeeCoin[chainEnum].decimals,
+    //       ticker: chainFeeCoin[chainEnum].ticker,
+    //     },
+    //   })
 
-      // Format using adapter
-      return formatGasInfo(feeQuote, chainEnum)
-
-    } catch (error) {
-      throw new VaultError(
-        VaultErrorCode.GasEstimationFailed,
-        `Failed to estimate gas for ${chain}`,
-        error as Error
-      )
-    }
+    //   // Format using adapter
+    //   return formatGasInfo(feeQuote, chainEnum)
+    // } catch (error) {
+    //   throw new VaultError(
+    //     VaultErrorCode.GasEstimationFailed,
+    //     `Failed to estimate gas for ${chain}`,
+    //     error as Error
+    //   )
+    // }
   }
 
   // ===== SIGNING METHODS =====
@@ -495,12 +525,19 @@ export class Vault {
     }
 
     try {
-      return await this.fastSigningService.signWithServer(
+      const signature = await this.fastSigningService.signWithServer(
         this.vaultData,
         payload,
         password
       )
+
+      // Emit transaction signed event
+      this.emit('transactionSigned', { signature, payload })
+
+      return signature
     } catch (error) {
+      this.emit('error', error as Error)
+
       if (error instanceof VaultError) {
         throw error
       }
@@ -512,7 +549,6 @@ export class Vault {
       )
     }
   }
-
 
   // ===== TOKEN MANAGEMENT =====
 
@@ -530,6 +566,8 @@ export class Vault {
     if (!this._tokens[chain]) this._tokens[chain] = []
     if (!this._tokens[chain].find(t => t.id === token.id)) {
       this._tokens[chain].push(token)
+      // Emit token added event
+      this.emit('tokenAdded', { chain, token })
     }
   }
 
@@ -538,7 +576,13 @@ export class Vault {
    */
   removeToken(chain: string, tokenId: string): void {
     if (this._tokens[chain]) {
+      const tokenExists = this._tokens[chain].some(t => t.id === tokenId)
       this._tokens[chain] = this._tokens[chain].filter(t => t.id !== tokenId)
+
+      if (tokenExists) {
+        // Emit token removed event
+        this.emit('tokenRemoved', { chain, tokenId })
+      }
     }
   }
 
@@ -585,6 +629,9 @@ export class Vault {
     if (!this._userChains.includes(chain)) {
       this._userChains.push(chain)
       await this.address(chain) // Pre-derive
+
+      // Emit chain added event
+      this.emit('chainAdded', { chain })
     }
   }
 
@@ -592,11 +639,17 @@ export class Vault {
    * Remove single chain
    */
   removeChain(chain: string): void {
+    const chainExists = this._userChains.includes(chain)
     this._userChains = this._userChains.filter(c => c !== chain)
 
     // Clear address cache
     const cacheKey = `address:${chain.toLowerCase()}`
     this.cacheService.clear(cacheKey)
+
+    if (chainExists) {
+      // Emit chain removed event
+      this.emit('chainRemoved', { chain })
+    }
   }
 
   /**
