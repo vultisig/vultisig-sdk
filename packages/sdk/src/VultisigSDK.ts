@@ -9,7 +9,7 @@ import {
   SigningPayload,
   ValidationResult,
 } from './types'
-import { AddressBookManager } from './vault/AddressBook'
+import { AddressBookManager } from './AddressBookManager'
 import { ChainManager } from './ChainManager'
 import { ValidationHelpers } from './vault/utils/validation'
 import { Vault as VaultClass } from './vault/Vault'
@@ -29,10 +29,12 @@ export class Vultisig {
   private chainManager: ChainManager
   private vaultManager: VaultManager
 
-  constructor(config?: SDKConfig & {
-    defaultChains?: string[]
-    defaultCurrency?: string
-  }) {
+  constructor(
+    config?: SDKConfig & {
+      defaultChains?: string[]
+      defaultCurrency?: string
+    }
+  ) {
     this.serverManager = new ServerManager(config?.serverEndpoints)
     this.wasmManager = new WASMManager(config?.wasmConfig)
 
@@ -42,14 +44,10 @@ export class Vultisig {
       defaultChains: config?.defaultChains,
       defaultCurrency: config?.defaultCurrency,
     })
-    this.vaultManager = new VaultManager(
-      this.wasmManager,
-      this.serverManager,
-      {
-        defaultChains: config?.defaultChains,
-        defaultCurrency: config?.defaultCurrency,
-      }
-    )
+    this.vaultManager = new VaultManager(this.wasmManager, this.serverManager, {
+      defaultChains: config?.defaultChains,
+      defaultCurrency: config?.defaultCurrency,
+    })
   }
 
   /**

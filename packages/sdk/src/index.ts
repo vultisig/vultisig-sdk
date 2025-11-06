@@ -23,7 +23,6 @@ export {
   VaultErrorCode,
   VaultImportError,
   VaultImportErrorCode,
-  AddressBookManager,
   ValidationHelpers,
   createVaultBackup,
   getExportFileName,
@@ -86,5 +85,5 @@ export type {
   Token,
   Value,
   GasInfo,
-  GasEstimate
+  GasEstimate,
 } from './types'
