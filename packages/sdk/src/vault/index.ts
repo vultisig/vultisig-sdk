@@ -11,13 +11,6 @@ export {
   VaultImportErrorCode,
 } from './VaultError'
 
-// Phase 7: BalanceManagement removed - redundant with AddressService and BalanceService
-// export { BalanceManagement } from './BalanceManagement'
-
-// Utilities
-export { ValidationHelpers } from './utils/validation'
-export { createVaultBackup, getExportFileName } from './utils/export'
-
 // Vault utilities - use VaultManager for encryption/decryption operations
 
 // Re-export main vault type with alias to avoid conflict

@@ -1,6 +1,6 @@
-import { Vault, SigningPayload, Signature } from '../../types'
-import { WASMManager } from '../../wasm/WASMManager'
-import { stringToChain } from '../../chains/utils'
+import { Vault, SigningPayload, Signature } from '../types'
+import { WASMManager } from '../wasm/WASMManager'
+import { stringToChain } from '../ChainManager'
 import { buildKeysignPayload } from '../adapters/buildKeysignPayload'
 
 /**
@@ -43,14 +43,26 @@ export class FastSigningService {
 
     if (payload.messageHashes && payload.messageHashes.length > 0) {
       // Use pre-computed message hashes if provided (for advanced use cases)
-      console.log(`📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`)
+      console.log(
+        `📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`
+      )
       messages = payload.messageHashes
     } else {
       // Build message hashes from transaction data using core keysign functions
       console.log(`🔨 Building keysign payload for ${payload.chain}...`)
-      const chainEnum = typeof payload.chain === 'string' ? stringToChain(payload.chain) : payload.chain
-      messages = await buildKeysignPayload(payload, chainEnum, walletCore, vault)
-      console.log(`✅ Generated ${messages.length} message hash(es) for signing`)
+      const chainEnum =
+        typeof payload.chain === 'string'
+          ? stringToChain(payload.chain)
+          : payload.chain
+      messages = await buildKeysignPayload(
+        payload,
+        chainEnum,
+        walletCore,
+        vault
+      )
+      console.log(
+        `✅ Generated ${messages.length} message hash(es) for signing`
+      )
     }
 
     // Step 4: Coordinate fast signing with server
@@ -81,7 +93,7 @@ export class FastSigningService {
     if (!hasFastVaultServer) {
       throw new Error(
         'Vault does not have VultiServer - fast signing not available. ' +
-        'Only fast vaults (2-of-2 with server) support this operation.'
+          'Only fast vaults (2-of-2 with server) support this operation.'
       )
     }
   }
