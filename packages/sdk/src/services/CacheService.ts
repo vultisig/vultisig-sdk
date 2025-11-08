@@ -1,7 +1,7 @@
 /**
  * Cached item with TTL
  */
-interface CachedItem<T> {
+type CachedItem<T> = {
   value: T
   timestamp: number
 }
@@ -40,7 +40,7 @@ export class CacheService {
   set<T>(key: string, value: T): void {
     this.cache.set(key, {
       value,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
   }
 

@@ -6,7 +6,7 @@ import { WASMManager } from '../wasm/WASMManager'
  * Simplified - only essential services needed
  * Vault calls core functions directly - no service layers
  */
-export interface VaultServices {
+export type VaultServices = {
   wasmManager: WASMManager
   fastSigningService?: FastSigningService
 }
@@ -15,7 +15,7 @@ export interface VaultServices {
  * Configuration for Vault initialization
  * Contains user-level preferences, not static chain data
  */
-export interface VaultConfig {
+export type VaultConfig = {
   /** Default chains for new vaults (from SDK config) */
   defaultChains?: string[]
   /** Default currency for balance display (from SDK config) */

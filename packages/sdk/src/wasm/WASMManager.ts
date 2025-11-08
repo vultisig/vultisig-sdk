@@ -2,7 +2,7 @@ import { initializeMpcLib } from '@core/mpc/lib/initialize'
 import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm } from '@trustwallet/wallet-core'
 
-export interface WASMConfig {
+export type WASMConfig = {
   autoInit?: boolean
   wasmPaths?: {
     walletCore?: string
@@ -26,10 +26,10 @@ export class WASMManager {
   // Memoized initialization functions for lazy loading
   // Note: initWasm from wallet-core doesn't support custom paths
   private getWalletCoreInit = memoizeAsync(() => initWasm())
-  private getDklsInit = memoizeAsync((wasmUrl?: string) =>
+  private getDklsInit = memoizeAsync((_wasmUrl?: string) =>
     initializeMpcLib('ecdsa')
   )
-  private getSchnorrInit = memoizeAsync((wasmUrl?: string) =>
+  private getSchnorrInit = memoizeAsync((_wasmUrl?: string) =>
     initializeMpcLib('eddsa')
   )
 

@@ -1,4 +1,5 @@
 import { validateEmail } from '@lib/utils/validation/validateEmail'
+
 import { ValidationResult } from '../types'
 
 const passwordLenghtConfig = {

@@ -1,10 +1,10 @@
 import {
-  VaultStorage,
-  StoredValue,
-  StorageMetadata,
+  STORAGE_VERSION,
   StorageError,
   StorageErrorCode,
-  STORAGE_VERSION,
+  StorageMetadata,
+  StoredValue,
+  VaultStorage,
 } from './types'
 
 /**
@@ -246,7 +246,11 @@ export class BrowserStorage implements VaultStorage {
   }
 
   async getUsage(): Promise<number> {
-    if (this.mode === 'indexeddb' && typeof navigator !== 'undefined' && navigator.storage) {
+    if (
+      this.mode === 'indexeddb' &&
+      typeof navigator !== 'undefined' &&
+      navigator.storage
+    ) {
       try {
         const estimate = await navigator.storage.estimate()
         return estimate.usage || 0
@@ -267,7 +271,11 @@ export class BrowserStorage implements VaultStorage {
   }
 
   async getQuota(): Promise<number | undefined> {
-    if (this.mode === 'indexeddb' && typeof navigator !== 'undefined' && navigator.storage) {
+    if (
+      this.mode === 'indexeddb' &&
+      typeof navigator !== 'undefined' &&
+      navigator.storage
+    ) {
       try {
         const estimate = await navigator.storage.estimate()
         return estimate.quota
@@ -366,7 +374,7 @@ export class BrowserStorage implements VaultStorage {
     localStorage.setItem(key, JSON.stringify(value))
   }
 
-  private listFromLocalStorage(): string[]  {
+  private listFromLocalStorage(): string[] {
     const keys: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)

@@ -1,31 +1,27 @@
-import { Vault as CoreVault } from '@core/mpc/vault/Vault'
-
+import { create } from '@bufbuild/protobuf'
 // Core functions (functional dispatch) - Direct imports from core
 import { Chain } from '@core/chain/Chain'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { getCoinBalance } from '@core/chain/coin/balance'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { getChainSpecific } from '@core/mpc/keysign/chainSpecific'
-import { create } from '@bufbuild/protobuf'
-import { KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { toCommCoin } from '@core/mpc/types/utils/commCoin'
+import { KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
+import { formatBalance } from '../adapters/formatBalance'
+import { formatGasInfo } from '../adapters/formatGasInfo'
 // SDK utilities
 import {
   DEFAULT_CHAINS,
   isChainSupported,
   stringToChain,
 } from '../ChainManager'
-import { CacheService } from '../services/CacheService'
-import { FastSigningService } from '../services/FastSigningService'
-import { formatBalance } from '../adapters/formatBalance'
-import { formatGasInfo } from '../adapters/formatGasInfo'
-import { VaultError, VaultErrorCode } from './VaultError'
-import { VaultServices, VaultConfig } from './VaultServices'
 import { UniversalEventEmitter } from '../events/EventEmitter'
 import type { VaultEvents } from '../events/types'
-
+import { CacheService } from '../services/CacheService'
+import { FastSigningService } from '../services/FastSigningService'
 // Types
 import {
   Balance,
@@ -35,6 +31,8 @@ import {
   SigningPayload,
   Token,
 } from '../types'
+import { VaultError, VaultErrorCode } from './VaultError'
+import { VaultConfig, VaultServices } from './VaultServices'
 
 /**
  * Determine vault type based on signer names
@@ -420,7 +418,6 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Uses core's getChainSpecific() to estimate fees
    */
   async gas(chain: string | Chain): Promise<GasInfo> {
-
     try {
       const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
       const address = await this.address(chainEnum)
@@ -433,7 +430,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
         chain: chainEnum,
         walletCore,
         publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode
+        hexChainCode: this.vaultData.hexChainCode,
       })
 
       // Create minimal keysign payload to get fee data
@@ -460,7 +457,6 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
       // Format using adapter
       return formatGasInfo(chainSpecific, chainEnum)
-
     } catch (error) {
       throw new VaultError(
         VaultErrorCode.GasEstimationFailed,

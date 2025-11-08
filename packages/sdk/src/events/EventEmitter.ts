@@ -10,7 +10,10 @@
  */
 export class UniversalEventEmitter<Events extends Record<string, unknown>> {
   private listeners = new Map<keyof Events, Set<EventHandler<unknown>>>()
-  private onceWrappers = new WeakMap<EventHandler<unknown>, EventHandler<unknown>>()
+  private onceWrappers = new WeakMap<
+    EventHandler<unknown>,
+    EventHandler<unknown>
+  >()
   private maxListeners = 10 // Memory leak protection
 
   /**
@@ -32,7 +35,7 @@ export class UniversalEventEmitter<Events extends Record<string, unknown>> {
     if (handlers.size > this.maxListeners) {
       console.warn(
         `[EventEmitter] Possible memory leak: ${handlers.size} listeners for event "${String(event)}". ` +
-        `Use setMaxListeners() to increase the limit if this is intentional.`
+          `Use setMaxListeners() to increase the limit if this is intentional.`
       )
     }
 
@@ -56,7 +59,10 @@ export class UniversalEventEmitter<Events extends Record<string, unknown>> {
     }
 
     // Store mapping so we can remove it if off() is called with original handler
-    this.onceWrappers.set(handler as EventHandler<unknown>, onceWrapper as EventHandler<unknown>)
+    this.onceWrappers.set(
+      handler as EventHandler<unknown>,
+      onceWrapper as EventHandler<unknown>
+    )
 
     // Register the wrapper
     return this.on(event, onceWrapper)

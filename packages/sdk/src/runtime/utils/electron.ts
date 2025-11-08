@@ -17,8 +17,8 @@
  * ```
  */
 
-import type { Vultisig } from '../../Vultisig'
 import type { Vault as VaultClass } from '../../vault/Vault'
+import type { Vultisig } from '../../Vultisig'
 import { detectEnvironment } from '../environment'
 
 /**
@@ -63,12 +63,7 @@ export function setupElectronIPC(
 
   for (const [channel, handler] of Object.entries(handlers)) {
     ipcMain.handle(channel, async (_event: unknown, ...args: unknown[]) => {
-      try {
-        return await handler(...args)
-      } catch (error) {
-        // Re-throw to be caught by renderer
-        throw error
-      }
+      return await handler(...args)
     })
   }
 }

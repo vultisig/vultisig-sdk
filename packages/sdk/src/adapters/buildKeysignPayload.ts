@@ -1,12 +1,8 @@
 import { Chain } from '@core/chain/Chain'
-import { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import { getPreSigningHashes } from '@core/chain/tx/preSigningHashes'
 // import { buildSendKeysignPayload } from '@core/mpc/keysign/build/send'
-import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
 import { WalletCore } from '@trustwallet/wallet-core'
-import { Vault, SigningPayload } from '../types'
+
+import { SigningPayload, Vault } from '../types'
 
 /**
  * Build keysign payload for MPC signing using core functions
@@ -24,10 +20,10 @@ import { Vault, SigningPayload } from '../types'
  * @returns Array of hex-encoded message hashes to sign
  */
 export async function buildKeysignPayload(
-  sdkPayload: SigningPayload,
-  chain: Chain,
-  walletCore: WalletCore,
-  vaultData: Vault
+  _sdkPayload: SigningPayload,
+  _chain: Chain,
+  _walletCore: WalletCore,
+  _vaultData: Vault
 ): Promise<string[]> {
   // TODO: Implement buildKeysignPayload - buildSendKeysignPayload not available in core
   throw new Error('buildKeysignPayload not implemented yet')
