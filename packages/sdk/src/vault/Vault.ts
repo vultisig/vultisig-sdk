@@ -6,7 +6,10 @@ import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { getCoinBalance } from '@core/chain/coin/balance'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-// import { getFeeQuote } from '@core/chain/feeQuote' // TODO: getFeeQuote not available in core
+import { getChainSpecific } from '@core/mpc/keysign/chainSpecific'
+import { create } from '@bufbuild/protobuf'
+import { KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { toCommCoin } from '@core/mpc/types/utils/commCoin'
 
 // SDK utilities
 import {
@@ -414,38 +417,57 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
   /**
    * Get gas info for chain
-   * Uses core's getFeeQuote()
+   * Uses core's getChainSpecific() to estimate fees
    */
   async gas(chain: string | Chain): Promise<GasInfo> {
-    // TODO: Implement gas estimation - getFeeQuote not available in core
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'Gas estimation not implemented yet'
-    )
-    // try {
-    //   const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
-    //   const address = await this.address(chainEnum)
 
-    //   // Core handles gas estimation for all chains
-    //   // Need to provide full AccountCoin with metadata
-    //   const feeQuote = await getFeeQuote({
-    //     coin: {
-    //       chain: chainEnum,
-    //       address,
-    //       decimals: chainFeeCoin[chainEnum].decimals,
-    //       ticker: chainFeeCoin[chainEnum].ticker,
-    //     },
-    //   })
+    try {
+      const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
+      const address = await this.address(chainEnum)
 
-    //   // Format using adapter
-    //   return formatGasInfo(feeQuote, chainEnum)
-    // } catch (error) {
-    //   throw new VaultError(
-    //     VaultErrorCode.GasEstimationFailed,
-    //     `Failed to estimate gas for ${chain}`,
-    //     error as Error
-    //   )
-    // }
+      // Get WalletCore
+      const walletCore = await this.wasmManager.getWalletCore()
+
+      // Get public key
+      const publicKey = getPublicKey({
+        chain: chainEnum,
+        walletCore,
+        publicKeys: this.vaultData.publicKeys,
+        hexChainCode: this.vaultData.hexChainCode
+      })
+
+      // Create minimal keysign payload to get fee data
+      const minimalPayload = create(KeysignPayloadSchema, {
+        coin: toCommCoin({
+          chain: chainEnum,
+          address,
+          decimals: chainFeeCoin[chainEnum].decimals,
+          ticker: chainFeeCoin[chainEnum].ticker,
+          hexPublicKey: Buffer.from(publicKey.data()).toString('hex'),
+        }),
+        toAddress: address, // Dummy address for fee estimation
+        toAmount: '1', // Minimal amount for fee estimation
+        vaultLocalPartyId: this.vaultData.localPartyId,
+        vaultPublicKeyEcdsa: this.vaultData.publicKeys.ecdsa,
+        libType: this.vaultData.libType,
+      })
+
+      // Get chain-specific data with fee information
+      const chainSpecific = await getChainSpecific({
+        keysignPayload: minimalPayload,
+        walletCore,
+      })
+
+      // Format using adapter
+      return formatGasInfo(chainSpecific, chainEnum)
+
+    } catch (error) {
+      throw new VaultError(
+        VaultErrorCode.GasEstimationFailed,
+        `Failed to estimate gas for ${chain}`,
+        error as Error
+      )
+    }
   }
 
   // ===== SIGNING METHODS =====
