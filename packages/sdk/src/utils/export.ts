@@ -1,11 +1,9 @@
 import { create, toBinary } from '@bufbuild/protobuf'
-
 import { toCommVault } from '@core/mpc/types/utils/commVault'
 import { VaultContainerSchema } from '@core/mpc/types/vultisig/vault/v1/vault_container_pb'
 import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
-
-import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGcm'
 import { Vault } from '@core/mpc/vault/Vault'
+import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGcm'
 
 /**
  * Generate export filename based on vault details (DKLS format only)

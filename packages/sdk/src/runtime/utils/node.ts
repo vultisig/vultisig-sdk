@@ -24,8 +24,8 @@
  */
 
 import type { Vault as VaultClass } from '../../vault/Vault'
-import type { NodeStorage } from '../storage/NodeStorage'
 import { isNode } from '../environment'
+import type { NodeStorage } from '../storage/NodeStorage'
 
 /**
  * Export vault to file (Node.js only).
@@ -46,7 +46,9 @@ export async function exportVaultToFile(
   filePath: string
 ): Promise<void> {
   if (!isNode()) {
-    throw new Error('exportVaultToFile can only be called in Node.js environment')
+    throw new Error(
+      'exportVaultToFile can only be called in Node.js environment'
+    )
   }
 
   const fs = await import('fs/promises')
@@ -79,10 +81,12 @@ export async function exportVaultToFile(
  */
 export async function importVaultFromFile(
   filePath: string,
-  password?: string
+  _password?: string
 ): Promise<File> {
   if (!isNode()) {
-    throw new Error('importVaultFromFile can only be called in Node.js environment')
+    throw new Error(
+      'importVaultFromFile can only be called in Node.js environment'
+    )
   }
 
   const fs = await import('fs/promises')
@@ -148,10 +152,12 @@ export async function getNodeStorageInfo(storage: NodeStorage): Promise<{
   path: string
 }> {
   if (!isNode()) {
-    throw new Error('getNodeStorageInfo can only be called in Node.js environment')
+    throw new Error(
+      'getNodeStorageInfo can only be called in Node.js environment'
+    )
   }
 
-  const usage = await storage.getUsage?.() ?? 0
+  const usage = (await storage.getUsage?.()) ?? 0
 
   return {
     usage,

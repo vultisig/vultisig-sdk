@@ -17,13 +17,27 @@
     "test:unit": "yarn workspace @vultisig/sdk test:unit",
     "test:integration": "yarn workspace @vultisig/sdk test:integration",
     "test:watch": "yarn workspace @vultisig/sdk test:watch",
+    "test:changed": "yarn workspace @vultisig/sdk test:changed",
     "knip": "knip",
     "check:all": "yarn lint && yarn typecheck && yarn test && yarn knip",
     "knip:fix": "knip --fix --allow-remove-files",
     "build:prod": "yarn workspace vultisig-sdk-react-example-2 build && yarn workspace vultisig-sdk-react-example-2 preview --port 5175 --strictPort --open=false",
     "dev:react": "yarn workspace vultisig-sdk-react-example-2 dev",
     "sync-and-copy": "node_modules/.bin/tsx scripts/sync-and-copy.ts",
-    "build:sdk-full": "yarn sync-and-copy && yarn workspace @vultisig/sdk build"
+    "build:sdk-full": "yarn sync-and-copy && yarn workspace @vultisig/sdk build",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "packages/**/*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "packages/sdk/tests/**/*.test.ts": [
+      "vitest related --run"
+    ],
+    "packages/sdk/tests/fixtures/**/*.json": [
+      "node scripts/validate-fixtures.js"
+    ]
   },
   "devDependencies": {
     "@eslint/compat": "^1.2.7",
@@ -51,7 +65,9 @@
     "eslint-plugin-storybook": "^9.0.9",
     "eslint-plugin-unused-imports": "^4.1.4",
     "globals": "^16.0.0",
+    "husky": "^9.1.7",
     "knip": "^5.46.0",
+    "lint-staged": "^16.2.6",
     "prettier": "^3.6.2",
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-dts": "^6.2.3",

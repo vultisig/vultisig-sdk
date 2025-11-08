@@ -1,7 +1,7 @@
-import { Vault, SigningPayload, Signature } from '../types'
-import { WASMManager } from '../wasm/WASMManager'
-import { stringToChain } from '../ChainManager'
 import { buildKeysignPayload } from '../adapters/buildKeysignPayload'
+import { stringToChain } from '../ChainManager'
+import { Signature, SigningPayload, Vault } from '../types'
+import { WASMManager } from '../wasm/WASMManager'
 
 /**
  * Fast signing service for server-assisted signing (2-of-2 MPC with VultiServer)

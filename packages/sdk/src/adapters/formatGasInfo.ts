@@ -1,4 +1,5 @@
 import { KeysignChainSpecific } from '@core/mpc/keysign/chainSpecific/KeysignChainSpecific'
+
 import { GasInfo } from '../types'
 
 /**
@@ -17,8 +18,10 @@ import { GasInfo } from '../types'
  * @param chain Chain identifier
  * @returns Formatted GasInfo object
  */
-export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string): GasInfo {
-
+export function formatGasInfo(
+  chainSpecific: KeysignChainSpecific,
+  chain: string
+): GasInfo {
   // EVM chains (EIP-1559 gas structure)
   if (chainSpecific.case === 'ethereumSpecific') {
     const { maxFeePerGasWei, priorityFee } = chainSpecific.value
@@ -32,7 +35,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
       gasPriceGwei: maxFeePerGasGwei.toString(), // in Gwei
       maxFeePerGas: maxFeePerGasWei, // in Wei
       priorityFee: priorityFee, // in Wei
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -42,7 +45,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: byteFee,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -52,7 +55,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: gas.toString(),
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -61,7 +64,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: '0', // THORChain doesn't use traditional gas
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -70,7 +73,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: '0', // Maya doesn't use traditional gas
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -81,7 +84,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
       chainId: chain,
       gasPrice: priorityFee,
       priorityFee: priorityFee,
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -91,7 +94,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: referenceGasPrice.toString(),
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -100,7 +103,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: '0', // Polkadot uses weight-based fees
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -109,7 +112,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: '0', // TON gas is calculated dynamically
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -118,7 +121,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: '0', // Tron uses energy/bandwidth
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -128,7 +131,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: gas.toString(),
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -137,7 +140,7 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
     return {
       chainId: chain,
       gasPrice: '0', // Cardano uses ADA-based fees
-      lastUpdated: Date.now()
+      lastUpdated: Date.now(),
     }
   }
 
@@ -145,6 +148,6 @@ export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: string
   return {
     chainId: chain,
     gasPrice: '0',
-    lastUpdated: Date.now()
+    lastUpdated: Date.now(),
   }
 }

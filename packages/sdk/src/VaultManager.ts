@@ -1,9 +1,12 @@
 import { fromBinary } from '@bufbuild/protobuf'
-
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
 import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
+import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
+
+import { ServerManager } from './server/ServerManager'
+import { FastSigningService } from './services/FastSigningService'
 import {
   KeygenMode,
   Summary,
@@ -13,11 +16,8 @@ import {
 } from './types'
 import { Vault as VaultClass } from './vault/Vault'
 import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
-import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
-import { VaultServices, VaultConfig } from './vault/VaultServices'
+import { VaultConfig, VaultServices } from './vault/VaultServices'
 import { WASMManager } from './wasm'
-import { ServerManager } from './server/ServerManager'
-import { FastSigningService } from './services/FastSigningService'
 
 /**
  * Determine vault type based on signer names
@@ -140,8 +140,8 @@ export class VaultManager {
    * Create a secure vault (multi-device)
    */
   private async createSecureVault(
-    name: string,
-    options?: {
+    _name: string,
+    _options?: {
       keygenMode?: KeygenMode
       onProgress?: (step: VaultCreationStep) => void
     }

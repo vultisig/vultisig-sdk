@@ -1,4 +1,16 @@
 // ServerManager is internal - import directly from implementation file
+import { Chain } from '@core/chain/Chain'
+
+import { AddressBookManager } from './AddressBookManager'
+import {
+  DEFAULT_CHAINS,
+  getSupportedChains,
+  validateChains,
+} from './ChainManager'
+import { UniversalEventEmitter } from './events/EventEmitter'
+import type { SdkEvents } from './events/types'
+import { StorageManager } from './runtime/storage/StorageManager'
+import type { VaultStorage } from './runtime/storage/types'
 import { ServerManager } from './server/ServerManager'
 import {
   AddressBook,
@@ -10,21 +22,10 @@ import {
   ValidationResult,
   VultisigConfig,
 } from './types'
-import { AddressBookManager } from './AddressBookManager'
-import {
-  DEFAULT_CHAINS,
-  getSupportedChains,
-  validateChains,
-} from './ChainManager'
+import { ValidationHelpers } from './utils/validation'
 import { Vault as VaultClass } from './vault/Vault'
 import { VaultManager } from './VaultManager'
 import { WASMManager } from './wasm'
-import { UniversalEventEmitter } from './events/EventEmitter'
-import type { SdkEvents } from './events/types'
-import type { VaultStorage } from './runtime/storage/types'
-import { StorageManager } from './runtime/storage/StorageManager'
-import { Chain } from '@core/chain/Chain'
-import { ValidationHelpers } from './utils/validation'
 
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
@@ -195,7 +196,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     const file = new File([blob], `${vaultData.name}.vult`)
 
     // Import vault using existing method
-    const vault = await this.addVault(file, password)
+    await this.addVault(file, password)
 
     // Emit event
     this.emit('vaultChanged', { vaultId })

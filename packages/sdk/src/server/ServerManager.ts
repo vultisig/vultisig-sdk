@@ -1,12 +1,13 @@
+import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
+import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
+
+import { stringToChain } from '../ChainManager'
 import {
   KeygenProgressUpdate,
   ReshareOptions,
   ServerStatus,
   Vault,
 } from '../types'
-import { stringToChain } from '../ChainManager'
-import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
-import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 
 /**
  * ServerManager coordinates all server communications
@@ -31,7 +32,9 @@ export class ServerManager {
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
     try {
-      const { verifyVaultEmailCode } = await import('@core/mpc/fast/api/verifyVaultEmailCode')
+      const { verifyVaultEmailCode } = await import(
+        '@core/mpc/fast/api/verifyVaultEmailCode'
+      )
       await verifyVaultEmailCode({ vaultId, code })
       return true
     } catch {
@@ -58,7 +61,9 @@ export class ServerManager {
    * This needs to be updated to properly retrieve and decrypt the vault data.
    */
   async getVaultFromServer(vaultId: string, password: string): Promise<Vault> {
-    const { getVaultFromServer } = await import('@core/mpc/fast/api/getVaultFromServer')
+    const { getVaultFromServer } = await import(
+      '@core/mpc/fast/api/getVaultFromServer'
+    )
 
     const result = await getVaultFromServer({ vaultId, password })
 
@@ -91,16 +96,27 @@ export class ServerManager {
 
     // Import required utilities
     const { getChainKind } = await import('@core/chain/ChainKind')
-    const { signatureAlgorithms } = await import('@core/chain/signing/SignatureAlgorithm')
+    const { signatureAlgorithms } = await import(
+      '@core/chain/signing/SignatureAlgorithm'
+    )
     const { getCoinType } = await import('@core/chain/coin/coinType')
     const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
-    const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
-    const { signWithServer: callFastVaultAPI } = await import('@core/mpc/fast/api/signWithServer')
-    const { generateLocalPartyId } = await import('@core/mpc/devices/localPartyId')
+    const { startMpcSession } = await import(
+      '@core/mpc/session/startMpcSession'
+    )
+    const { signWithServer: callFastVaultAPI } = await import(
+      '@core/mpc/fast/api/signWithServer'
+    )
+    const { generateLocalPartyId } = await import(
+      '@core/mpc/devices/localPartyId'
+    )
     const { keysign } = await import('@core/mpc/keysign')
 
     // Map chain string to Chain enum
-    const chain = typeof payload.chain === 'string' ? stringToChain(payload.chain) : payload.chain
+    const chain =
+      typeof payload.chain === 'string'
+        ? stringToChain(payload.chain)
+        : payload.chain
     const coinType = getCoinType({ walletCore, chain })
     const derivePath = walletCore.CoinTypeExt.derivationPath(coinType)
 
@@ -137,7 +153,9 @@ export class ServerManager {
     // Step 2.5: Register server as participant
     try {
       const { queryUrl } = await import('@lib/utils/query/queryUrl')
-      const serverSigner = vault.signers.find(signer => signer.startsWith('Server-'))
+      const serverSigner = vault.signers.find(signer =>
+        signer.startsWith('Server-')
+      )
       if (serverSigner) {
         await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
           body: [serverSigner],
@@ -191,7 +209,9 @@ export class ServerManager {
     }
 
     // Step 6: Format signature result using strategy (chain-specific)
-    console.log(`🔄 Formatting signature result via ${payload.chain} strategy...`)
+    console.log(
+      `🔄 Formatting signature result via ${payload.chain} strategy...`
+    )
 
     // Pass vault and walletCore in payload for strategy to use
     const enrichedPayload = {
@@ -210,7 +230,9 @@ export class ServerManager {
     vault: Vault,
     reshareOptions: ReshareOptions & { password: string; email?: string }
   ): Promise<Vault> {
-    const { reshareWithServer } = await import('@core/mpc/fast/api/reshareWithServer')
+    const { reshareWithServer } = await import(
+      '@core/mpc/fast/api/reshareWithServer'
+    )
 
     await reshareWithServer({
       name: vault.name,
@@ -244,14 +266,22 @@ export class ServerManager {
     vaultId: string
     verificationRequired: boolean
   }> {
-    const { setupVaultWithServer } = await import('@core/mpc/fast/api/setupVaultWithServer')
+    const { setupVaultWithServer } = await import(
+      '@core/mpc/fast/api/setupVaultWithServer'
+    )
     const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
-    const { startMpcSession } = await import('@core/mpc/session/startMpcSession')
+    const { startMpcSession } = await import(
+      '@core/mpc/session/startMpcSession'
+    )
 
     // Generate session parameters using core MPC utilities
     const sessionId = crypto.randomUUID()
-    const { generateHexEncryptionKey } = await import('@core/mpc/utils/generateHexEncryptionKey')
-    const { generateHexChainCode } = await import('@core/mpc/utils/generateHexChainCode')
+    const { generateHexEncryptionKey } = await import(
+      '@core/mpc/utils/generateHexEncryptionKey'
+    )
+    const { generateHexChainCode } = await import(
+      '@core/mpc/utils/generateHexChainCode'
+    )
     const hexEncryptionKey = generateHexEncryptionKey()
     const hexChainCode = generateHexChainCode()
     const localPartyId = generateLocalPartyId('extension')
@@ -298,7 +328,9 @@ export class ServerManager {
 
     const { DKLS } = await import('@core/mpc/dkls/dkls')
     const { Schnorr } = await import('@core/mpc/schnorr/schnorrKeygen')
-    const { setKeygenComplete, waitForKeygenComplete } = await import('@core/mpc/keygenComplete')
+    const { setKeygenComplete, waitForKeygenComplete } = await import(
+      '@core/mpc/keygenComplete'
+    )
 
     // Create DKLS instance for ECDSA keygen
     const dkls = new DKLS(
@@ -414,7 +446,9 @@ export class ServerManager {
   ): Promise<string[]> {
     const { queryUrl } = await import('@lib/utils/query/queryUrl')
     const { without } = await import('@lib/utils/array/without')
-    const { withoutDuplicates } = await import('@lib/utils/array/withoutDuplicates')
+    const { withoutDuplicates } = await import(
+      '@lib/utils/array/withoutDuplicates'
+    )
 
     const maxWaitTime = 30000
     const checkInterval = 2000
@@ -457,5 +491,4 @@ export class ServerManager {
       throw new Error(`Server ping failed: ${error}`)
     }
   }
-
 }

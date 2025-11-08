@@ -1,5 +1,6 @@
 import { Chain } from '@core/chain/Chain'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+
 import { Balance, Token } from '../types'
 
 /**
@@ -39,6 +40,6 @@ export function formatBalance(
     symbol,
     decimals,
     chainId: chain,
-    tokenId
+    tokenId,
   }
 }

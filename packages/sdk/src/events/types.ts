@@ -4,7 +4,7 @@ import type { Balance, Signature, SigningPayload, Token } from '../types'
  * Events emitted by the Vultisig SDK for state changes.
  * Consumers can listen to these for reactive updates.
  */
-export interface SdkEvents extends Record<string, unknown> {
+export type SdkEvents = {
   /** Emitted when SDK successfully connects */
   connect: void
 
@@ -23,13 +23,13 @@ export interface SdkEvents extends Record<string, unknown> {
 
   /** Emitted on SDK-level errors */
   error: Error
-}
+} & Record<string, unknown>
 
 /**
  * Events emitted by individual Vault instances.
  * Allows reactive updates for vault-specific operations.
  */
-export interface VaultEvents extends Record<string, unknown> {
+export type VaultEvents = {
   /** Emitted when a balance is fetched or updated */
   balanceUpdated: {
     chain: string
@@ -73,4 +73,4 @@ export interface VaultEvents extends Record<string, unknown> {
 
   /** Emitted on vault-level errors */
   error: Error
-}
+} & Record<string, unknown>

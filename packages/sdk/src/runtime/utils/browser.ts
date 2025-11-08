@@ -24,8 +24,8 @@
  */
 
 import type { Vault as VaultClass } from '../../vault/Vault'
-import type { BrowserStorage } from '../storage/BrowserStorage'
 import { isBrowser } from '../environment'
+import type { BrowserStorage } from '../storage/BrowserStorage'
 
 /**
  * Download vault file in browser.
@@ -91,11 +91,13 @@ export async function getBrowserStorageInfo(storage: BrowserStorage): Promise<{
   percentage?: number
 }> {
   if (!isBrowser()) {
-    throw new Error('getBrowserStorageInfo can only be called in browser environment')
+    throw new Error(
+      'getBrowserStorageInfo can only be called in browser environment'
+    )
   }
 
-  const usage = await storage.getUsage?.() ?? 0
-  const quota = await storage.getQuota?.() ?? undefined
+  const usage = (await storage.getUsage?.()) ?? 0
+  const quota = (await storage.getQuota?.()) ?? undefined
 
   return {
     usage,
@@ -125,7 +127,9 @@ export async function isBrowserStorageLow(
   threshold: number = 80
 ): Promise<boolean> {
   if (!isBrowser()) {
-    throw new Error('isBrowserStorageLow can only be called in browser environment')
+    throw new Error(
+      'isBrowserStorageLow can only be called in browser environment'
+    )
   }
 
   const info = await getBrowserStorageInfo(storage)
@@ -149,7 +153,9 @@ export async function isBrowserStorageLow(
  */
 export async function requestPersistentStorage(): Promise<boolean> {
   if (!isBrowser()) {
-    throw new Error('requestPersistentStorage can only be called in browser environment')
+    throw new Error(
+      'requestPersistentStorage can only be called in browser environment'
+    )
   }
 
   if (navigator.storage && navigator.storage.persist) {
@@ -176,7 +182,9 @@ export async function requestPersistentStorage(): Promise<boolean> {
  */
 export async function isPersistentStorage(): Promise<boolean> {
   if (!isBrowser()) {
-    throw new Error('isPersistentStorage can only be called in browser environment')
+    throw new Error(
+      'isPersistentStorage can only be called in browser environment'
+    )
   }
 
   if (navigator.storage && navigator.storage.persisted) {
@@ -202,12 +210,14 @@ export async function isPersistentStorage(): Promise<boolean> {
  * }
  * ```
  */
-export async function uploadVaultFile(accept: string = '.vult'): Promise<File | null> {
+export async function uploadVaultFile(
+  accept: string = '.vult'
+): Promise<File | null> {
   if (!isBrowser()) {
     throw new Error('uploadVaultFile can only be called in browser environment')
   }
 
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = accept

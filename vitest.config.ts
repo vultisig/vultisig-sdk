@@ -61,11 +61,7 @@ export default defineConfig({
       clean: true,
     },
     // Reporter configuration
-    reporters: ['verbose', 'json', 'html'],
-    outputFile: {
-      json: './test-results/results.json',
-      html: './test-results/index.html',
-    },
+    reporters: ['verbose'],
     // Parallel execution
     pool: 'threads',
     poolOptions: {
