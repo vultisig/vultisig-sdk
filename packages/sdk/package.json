@@ -13,19 +13,18 @@
   ],
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.esm.js",
-      "require": "./dist/index.js",
-      "node": "./dist/index.node.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./node": {
-      "require": "./dist/index.node.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.node.js"
     },
     "./wasm": {
+      "types": "./dist/wasm/index.d.ts",
       "import": "./dist/wasm/index.esm.js",
-      "require": "./dist/wasm/index.js",
-      "types": "./dist/wasm/index.d.ts"
+      "require": "./dist/wasm/index.js"
     }
   },
   "scripts": {

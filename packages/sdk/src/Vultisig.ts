@@ -35,6 +35,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private serverManager: ServerManager
   private wasmManager: WASMManager
   private initialized = false
+  private initializationPromise?: Promise<void>
 
   // Module managers
   private addressBookManager: AddressBookManager
@@ -111,16 +112,31 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Initialize the SDK and pre-load all WASM modules (optional but recommended)
    * WASM modules will lazy-load automatically when needed, but calling this
    * upfront can improve performance by avoiding delays during operations
+   *
+   * Thread-safe: Multiple concurrent calls will share the same initialization promise
    */
   async initialize(): Promise<void> {
+    // Already initialized
     if (this.initialized) return
 
-    try {
-      await this.wasmManager.initialize()
-      this.initialized = true
-    } catch (error) {
-      throw new Error('Failed to initialize SDK: ' + (error as Error).message)
+    // Initialization in progress - return existing promise to prevent duplicate initialization
+    if (this.initializationPromise) {
+      return this.initializationPromise
     }
+
+    // Start new initialization
+    this.initializationPromise = (async () => {
+      try {
+        await this.wasmManager.initialize()
+        this.initialized = true
+      } catch (error) {
+        // Reset promise on error so initialization can be retried
+        this.initializationPromise = undefined
+        throw new Error('Failed to initialize SDK: ' + (error as Error).message)
+      }
+    })()
+
+    return this.initializationPromise
   }
 
   /**
