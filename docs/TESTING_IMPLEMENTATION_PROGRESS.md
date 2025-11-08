@@ -1,9 +1,9 @@
 # Testing Implementation Progress
 
-**Last Updated**: 2025-11-08 (Updated: Night Session - Phase 1 Complete!)
-**Current Phase**: Phase 1 - Foundation ✅ COMPLETE
-**Overall Coverage**: ~10% → Target: 85%
-**Status**: 🟢 Phase 1 Complete | Ready for Phase 2
+**Last Updated**: 2025-11-08 (Updated: Race conditions fixed, CacheService tests added!)
+**Current Phase**: Phase 2 - Core Components 🟡 IN PROGRESS
+**Overall Coverage**: ~15% → Target: 85%
+**Status**: 🟢 Phase 1 Complete | 🟡 Phase 2 In Progress (Vultisig, memoizeAsync, CacheService complete)
 
 ---
 
@@ -11,8 +11,8 @@
 
 | Metric | Current | Target | Progress |
 |--------|---------|--------|----------|
-| **Overall Code Coverage** | ~10% | 85% | ██░░░░░░░░ 10% |
-| **Unit Tests** | 168 | ~150 | ██████████ 112% ✅ |
+| **Overall Code Coverage** | ~15% | 85% | ███░░░░░░░ 15% |
+| **Unit Tests** | 248 | ~150 | ██████████ 165% ✅ |
 | **Integration Tests** | 0 | ~50 | ░░░░░░░░░░ 0% |
 | **E2E Tests** | 0 | ~30 | ░░░░░░░░░░ 0% |
 | **Chain Fixtures** | 5/35 | 35/35 | ███░░░░░░░ 14% |
@@ -24,7 +24,7 @@
 | Phase | Duration | Coverage | Status | Start Date | End Date |
 |-------|----------|----------|--------|------------|----------|
 | [Phase 1: Foundation](#phase-1-foundation) | Week 1-2 | 30% | 🟢 Complete | 2025-11-08 | 2025-11-08 |
-| [Phase 2: Core Components](#phase-2-core-components) | Week 3-4 | 50% | ⚪ Pending | - | - |
+| [Phase 2: Core Components](#phase-2-core-components) | Week 3-4 | 50% | 🟡 In Progress | 2025-11-08 | - |
 | [Phase 3: Integration](#phase-3-integration) | Week 5-6 | 65% | ⚪ Pending | - | - |
 | [Phase 4: E2E Testing](#phase-4-e2e-testing) | Week 7-8 | 75% | ⚪ Pending | - | - |
 | [Phase 5: Advanced](#phase-5-advanced) | Week 9-10 | 85% | ⚪ Pending | - | - |
@@ -227,25 +227,64 @@
 | Fixture Coverage | 100% Tier 1 (5 chains) | 5/5 | 🟢 Complete |
 | CI Pipeline Setup | Complete | Complete | 🟢 Complete |
 | Mock Framework | Complete | Complete | 🟢 Complete |
-| Unit Tests Created | ~80 tests | **168 tests** | 🟢 210% of target! |
+| Unit Tests Created | ~80 tests | **248 tests** | 🟢 310% of target! |
 
 ---
 
 ## Phase 2: Core Components
 **Target Coverage**: 50%
-**Status**: ⚪ Pending
-**Duration**: Week 3-4
+**Status**: 🟡 In Progress
+**Duration**: Week 3-4 (Started 2025-11-08)
+
+## 🐛 Critical Discovery: Race Condition Bugs
+
+During Phase 2 implementation, testing revealed **3 critical race conditions** in concurrent async code:
+
+### Bug #1: Vultisig.initialize() - ✅ FIXED
+- **Issue**: Classic "check-then-act" race condition allowed multiple concurrent calls to redundantly initialize WASM modules
+- **Impact**: 3x waste of resources (200-500ms overhead per redundant init)
+- **Fix**: Implemented promise caching pattern to ensure single initialization
+- **Test Coverage**: 2 race condition tests (out of 41 total Vultisig tests)
+
+### Bug #2: memoizeAsync() utility - ✅ FIXED
+- **Issue**: Same race condition pattern in the memoization utility function
+- **Impact**: Medium risk - affects WASMManager lazy loading
+- **Fix**: Created SDK-local fixed version at `packages/sdk/src/utils/memoizeAsync.ts` (upstream is immutable)
+- **Test Coverage**: 13 comprehensive tests (all focused on race conditions)
+
+### Bug #3: CacheService.getOrCompute() - ✅ FIXED
+- **Issue**: Same "check-then-act" pattern allowing concurrent calls to redundantly compute cached values
+- **Impact**: Multiple concurrent calls would all execute compute() instead of sharing one promise
+- **Fix**: Added `pendingComputations` Map to track in-flight promises
+- **Test Coverage**: 4 race condition tests (out of 26 total CacheService tests)
+
+**Summary**: All 3 race conditions fixed using promise caching pattern
+**Total Race Condition Tests**: 19 tests ensuring thread-safety
+**Lesson Learned**: Any async function with a boolean guard needs promise caching to prevent race conditions.
 
 ### Week 3: Core SDK Components
 
-#### Day 1-2: VultisigSDK Class Tests
-- [ ] **Task 2.1**: Main SDK Class Tests
-  - [ ] Create `tests/unit/VultisigSDK.test.ts`
-  - [ ] Test initialization
-  - [ ] Test configuration
-  - [ ] Test lazy WASM loading
-  - [ ] Test vault operations
-  - [ ] Test chain operations
+#### Day 1-2: Vultisig SDK Class Tests ✅
+- [x] **Task 2.1**: Main SDK Class Tests
+  - [x] Create `tests/unit/Vultisig.test.ts`
+  - [x] Test initialization (6 tests)
+  - [x] Test connection management (4 tests)
+  - [x] Test supported chains (5 tests)
+  - [x] Test validation helpers (email, password, vault name - 6 tests)
+  - [x] Test currency management (2 tests)
+  - [x] Test active vault management (3 tests)
+  - [x] Test server status (1 test)
+  - [x] Test event emission (3 tests)
+  - [x] Test vault lifecycle operations (2 tests)
+  - [x] Test error handling (2 tests)
+  - [x] Test storage integration (2 tests)
+  - [x] Test edge cases (3 tests)
+  - [x] **Test concurrent operations (2 tests - discovered & fixed race condition!)**
+  - **RESULT**: ✅ 41 tests passing (100%)
+  - **BUG FIXED**: Race condition in initialization code
+  - **FILES**:
+    - `tests/unit/Vultisig.test.ts` (41 tests)
+    - `src/Vultisig.ts` (added promise caching)
 
 #### Day 3-4: Vault Class Tests
 - [ ] **Task 2.2**: Vault Instance Tests
@@ -266,13 +305,21 @@
 
 ### Week 4: Services and Adapters
 
-#### Day 6-7: Service Layer Tests
-- [ ] **Task 2.4**: CacheService Tests
-  - [ ] Create `tests/unit/vault/services/CacheService.test.ts`
-  - [ ] Test basic operations
-  - [ ] Test TTL functionality
-  - [ ] Test namespace functionality
-  - [ ] Test cache statistics
+#### Day 6-7: Service Layer Tests ✅
+- [x] **Task 2.4**: CacheService Tests
+  - [x] Create `tests/unit/services/CacheService.test.ts`
+  - [x] Test basic caching (3 tests)
+  - [x] Test TTL functionality (3 tests)
+  - [x] Test cache clearing (3 tests)
+  - [x] Test getOrCompute (4 tests)
+  - [x] **Test concurrent operations (4 tests - discovered & fixed race condition!)**
+  - [x] Test error handling (3 tests)
+  - [x] Test edge cases (6 tests)
+  - **RESULT**: ✅ 26 tests passing (100%)
+  - **BUG FIXED**: Race condition in getOrCompute() method
+  - **FILES**:
+    - `tests/unit/services/CacheService.test.ts` (26 tests)
+    - `src/services/CacheService.ts` (added pendingComputations)
 
 - [ ] **Task 2.5**: FastSigningService Tests
   - [ ] Create `tests/unit/vault/services/FastSigningService.test.ts`
@@ -462,10 +509,13 @@
 - `tests/helpers/server-mocks.test.ts` - Server mock helper tests (13 tests) ✅
 - `tests/unit/utils/validation.test.ts` - Validation utilities tests (21 tests) ✅
 - `tests/unit/utils/export.test.ts` - Export utilities tests (17 tests) ✅
+- `tests/unit/utils/memoizeAsync.test.ts` - Async memoization tests with race condition fixes (13 tests) ✅
 - `tests/unit/vault/VaultError.test.ts` - VaultError class tests (33 tests) ✅
 - `tests/unit/ChainManager.test.ts` - ChainManager module tests (38 tests) ✅
+- `tests/unit/services/CacheService.test.ts` - Cache service tests with race condition fixes (26 tests) ✅
+- `tests/unit/Vultisig.test.ts` - Main SDK class tests (41 tests) ✅
 
-**Total Unit Tests**: 168 tests passing ⭐
+**Total Unit Tests**: 248 tests passing ⭐
 
 ### Integration Tests
 *No files created yet*
