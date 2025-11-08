@@ -1,0 +1,24 @@
+{
+  "getBalance": {
+    "request": {
+      "address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
+    },
+    "response": {
+      "balance": "1000000000000000000",
+      "token": "BTC"
+    }
+  },
+  "getTransactionCount": {
+    "request": {
+      "address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
+    },
+    "response": {
+      "count": 42
+    }
+  },
+  "metadata": {
+    "chain": "bitcoin",
+    "family": "utxo",
+    "generatedAt": "2025-11-08T17:45:33.690Z"
+  }
+}

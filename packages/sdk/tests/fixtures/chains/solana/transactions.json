@@ -1,0 +1,17 @@
+{
+  "unsigned": [
+    {
+      "from": "7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDpvcMwJeK",
+      "to": "recipient_address_placeholder",
+      "amount": "1000000000",
+      "recentBlockhash": "blockhash_placeholder",
+      "description": "Basic Solana transaction"
+    }
+  ],
+  "signed": [],
+  "metadata": {
+    "chain": "solana",
+    "family": "eddsa",
+    "generatedAt": "2025-11-08T17:45:33.691Z"
+  }
+}
