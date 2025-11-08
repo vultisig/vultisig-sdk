@@ -23,6 +23,11 @@ const foldersToCopy = [
   'upstream/lib/schnorr',
 ]
 
+const filesToCopy = [
+  'upstream/core/ui/vault/send/keysignPayload/build.ts',
+  'upstream/core/ui/vault/swap/keysignPayload/build.ts',
+]
+
 type SyncAndCopyOptions = {
   syncOnly?: boolean
   copyOnly?: boolean
@@ -182,12 +187,16 @@ class SyncAndCopier {
   private async copyToSrc(): Promise<void> {
     console.log('\n📋 STEP 2: Copy to packages/ with import transformations')
     console.log('='.repeat(50))
-    console.log(`📊 Copy plan: ${foldersToCopy.length} folders\n`)
+    console.log(`📊 Copy plan: ${foldersToCopy.length} folders, ${filesToCopy.length} files\n`)
 
     await this.cleanSrcDirectories()
 
     for (const folder of foldersToCopy) {
       await this.copyFolder(folder)
+    }
+
+    for (const file of filesToCopy) {
+      await this.copyFile(file)
     }
 
     this.generateCopyReport()
@@ -232,6 +241,17 @@ class SyncAndCopier {
     }
   }
 
+  private isTestFile(fileName: string): boolean {
+    return (
+      fileName.endsWith('.test.ts') ||
+      fileName.endsWith('.test.tsx') ||
+      fileName.endsWith('.test.js') ||
+      fileName.endsWith('.spec.ts') ||
+      fileName.endsWith('.spec.tsx') ||
+      fileName.endsWith('.spec.js')
+    )
+  }
+
   private copyFolderRecursive(src: string, dest: string): void {
     fs.mkdirSync(dest, { recursive: true })
 
@@ -239,6 +259,16 @@ class SyncAndCopier {
     for (const entry of entries) {
       const srcPath = path.join(src, entry.name)
       const destPath = path.join(dest, entry.name)
+
+      // Skip test directories
+      if (entry.isDirectory() && entry.name === '__tests__') {
+        continue
+      }
+
+      // Skip test files
+      if (entry.isFile() && this.isTestFile(entry.name)) {
+        continue
+      }
 
       if (entry.isDirectory()) {
         this.copyFolderRecursive(srcPath, destPath)
@@ -286,6 +316,7 @@ class SyncAndCopier {
   private transformImports(content: string, destinationPath: string): string {
     let transformed = content
 
+    // Transform @core/ imports
     transformed = transformed.replace(/@core\/([^'"]*)/g, (_match, corePath) => {
       const destDir = path.dirname(destinationPath)
       const targetPath = path.join(this.projectRoot, 'packages/core', corePath)
@@ -293,12 +324,42 @@ class SyncAndCopier {
       return relativePath.startsWith('.') ? relativePath : './' + relativePath
     })
 
+    // Transform @lib/ imports
     transformed = transformed.replace(/@lib\/([^'"]*)/g, (_match, libPath) => {
       const destDir = path.dirname(destinationPath)
       const targetPath = path.join(this.projectRoot, 'packages/lib', libPath)
       const relativePath = path.relative(destDir, targetPath)
       return relativePath.startsWith('.') ? relativePath : './' + relativePath
     })
+
+    // Fix relative imports that reference core or lib directories
+    // Match import statements with relative paths
+    transformed = transformed.replace(
+      /from ['"](\.\.[^'"]+)['"]/g,
+      (match, importPath) => {
+        const destDir = path.dirname(destinationPath)
+
+        // Resolve the import path relative to destination
+        const resolvedPath = path.resolve(destDir, importPath)
+        const packagesDir = path.join(this.projectRoot, 'packages')
+
+        // Check if this resolves to something in packages/core or packages/lib
+        if (resolvedPath.startsWith(packagesDir)) {
+          const relativeToPackages = path.relative(packagesDir, resolvedPath)
+
+          // If it starts with 'core/' or 'lib/', recalculate the correct relative path
+          if (relativeToPackages.startsWith('core/') || relativeToPackages.startsWith('lib/')) {
+            const correctRelativePath = path.relative(destDir, resolvedPath)
+            const fixedPath = correctRelativePath.startsWith('.')
+              ? correctRelativePath
+              : './' + correctRelativePath
+            return `from '${fixedPath}'`
+          }
+        }
+
+        return match
+      }
+    )
 
     return transformed
   }
