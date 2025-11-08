@@ -1,0 +1,24 @@
+{
+  "getBalance": {
+    "request": {
+      "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8"
+    },
+    "response": {
+      "balance": "1000000000000000000",
+      "token": "ETH"
+    }
+  },
+  "getTransactionCount": {
+    "request": {
+      "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8"
+    },
+    "response": {
+      "count": 42
+    }
+  },
+  "metadata": {
+    "chain": "ethereum",
+    "family": "evm",
+    "generatedAt": "2025-11-08T17:45:33.690Z"
+  }
+}

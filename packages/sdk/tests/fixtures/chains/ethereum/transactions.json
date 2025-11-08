@@ -1,0 +1,21 @@
+{
+  "unsigned": [
+    {
+      "from": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8",
+      "to": "0x0000000000000000000000000000000000000000",
+      "value": "1000000000000000000",
+      "gasLimit": "21000",
+      "gasPrice": "20000000000",
+      "nonce": 0,
+      "chainId": 1,
+      "data": "0x",
+      "description": "Basic ETH transfer"
+    }
+  ],
+  "signed": [],
+  "metadata": {
+    "chain": "ethereum",
+    "family": "evm",
+    "generatedAt": "2025-11-08T17:45:33.690Z"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "getBalance": {
+    "request": {
+      "address": "rN7n7otQDd6FczFgLdlqtyMVrn3VxZvnav"
+    },
+    "response": {
+      "balance": "1000000000000000000",
+      "token": "XRP"
+    }
+  },
+  "getTransactionCount": {
+    "request": {
+      "address": "rN7n7otQDd6FczFgLdlqtyMVrn3VxZvnav"
+    },
+    "response": {
+      "count": 42
+    }
+  },
+  "metadata": {
+    "chain": "ripple",
+    "family": "other",
+    "generatedAt": "2025-11-08T17:45:33.691Z"
+  }
+}
