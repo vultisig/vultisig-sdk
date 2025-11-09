@@ -3,21 +3,107 @@
 **Coverage Target**: 65%
 **Priority**: HIGH
 
+## 🔴 CRITICAL: PRODUCTION TESTING WITH REAL FUNDS
+
+**⚠️ This phase uses PRODUCTION environment with SMALL AMOUNTS of REAL FUNDS**
+
+### ⚠️ WARNING: REAL MONEY AT RISK
+This testing strategy involves creating real vaults on production VultiServer and broadcasting real transactions on mainnet blockchains with actual cryptocurrency. While we use small amounts ($1-5 per chain), there is **REAL FINANCIAL RISK**.
+
+### Why Production with Real Funds?
+1. **No Staging Environment**: VultiServer does not have a staging/test environment available
+2. **Testnet Limitations**: Testnets don't catch production-specific issues (server load, real MPC timing, mainnet RPC differences)
+3. **Cryptographic Authenticity**: Only real MPC operations validate actual signature correctness
+4. **Production Confidence**: Tests the EXACT user experience with real servers and real blockchains
+5. **Cross-Chain Validation**: Real WASM + real chain code = real addresses for all 35 chains
+
+### Safety Strategy
+- ✅ **SMALL AMOUNTS ONLY**: Maximum $5 per chain, $50 total budget
+- ✅ **MANUAL APPROVAL**: Explicit confirmation required before ANY transaction broadcast
+- ✅ **LOW-FEE FIRST**: Test on Solana/Polygon before Bitcoin/Ethereum
+- ✅ **TRANSACTION LOGGING**: All transaction hashes logged for audit
+- ✅ **VAULT BACKUP**: Export and backup all test vaults immediately after creation
+- ✅ **ADDRESS DOCUMENTATION**: Document all test addresses for fund recovery
+- ✅ **AMOUNT LIMITS**: Hard-coded maximum amounts in test code
+- ✅ **RECOVERY PLAN**: Keep .vult backups and private keys recoverable
+
+### Production Environment Setup
+- **VultiServer**: Production endpoints (https://api.vultisig.com)
+- **Blockchains**: MAINNET RPCs (Bitcoin, Ethereum, Solana, Polygon, etc.)
+- **Credentials**: Dedicated test email account (NOT personal)
+- **Funds**: Small amounts loaded onto test vaults
+- **Cleanup**: Manual export and backup (NOT deletion - funds need recovery)
+
+### Required Environment Variables
+```bash
+# PRODUCTION endpoints
+VULTISIG_API_URL=https://api.vultisig.com
+VULTISIG_RELAY_URL=<production-relay-url>
+
+# Test credentials
+VULTISIG_TEST_EMAIL=sdk-integration-tests@example.com
+VULTISIG_TEST_PASSWORD=<secure-password>
+
+# MAINNET RPC endpoints
+ETH_MAINNET_RPC=https://eth-mainnet.g.alchemy.com/v2/<key>
+BTC_MAINNET_RPC=https://blockstream.info/api
+SOL_MAINNET_RPC=https://api.mainnet-beta.solana.com
+POLYGON_MAINNET_RPC=https://polygon-rpc.com
+AVAX_MAINNET_RPC=https://api.avax.network/ext/bc/C/rpc
+# ... (more MAINNET RPCs)
+
+# Safety controls
+MAX_TOTAL_TEST_FUNDS_USD=50
+MAX_PER_CHAIN_USD=5
+REQUIRE_TX_APPROVAL=true
+LOG_ALL_TRANSACTIONS=true
+EXPORT_TEST_VAULTS=true
+VAULT_BACKUP_DIR=./test-vault-backups
+
+# Fund allocations (in USD equivalent)
+BTC_TEST_AMOUNT_USD=5
+ETH_TEST_AMOUNT_USD=3
+SOL_TEST_AMOUNT_USD=1
+POLYGON_TEST_AMOUNT_USD=1
+AVAX_TEST_AMOUNT_USD=2
+```
+
+### Test Fund Management
+```typescript
+// Maximum amounts per chain (enforced in code)
+const MAX_TEST_AMOUNTS = {
+  bitcoin: 5,       // $5 BTC (~0.00005 BTC at $100k)
+  ethereum: 3,      // $3 ETH (higher fees)
+  solana: 1,        // $1 SOL (low fees)
+  polygon: 1,       // $1 MATIC (low fees)
+  avalanche: 2,     // $2 AVAX
+  binanceSmartChain: 1,  // $1 BNB
+  // ... other chains
+}
+
+// TOTAL CAP: $50 across ALL chains
+const MAX_TOTAL_BUDGET_USD = 50
+```
+
 ## Objectives
 
-1. Test component interactions and data flow
-2. Validate vault lifecycle operations end-to-end
-3. Test address derivation for ALL 30+ chains
-4. Validate server coordination and MPC flows
-5. Test WASM module integration with real modules
+1. Test component interactions with REAL PRODUCTION server coordination
+2. Validate vault lifecycle operations with REAL MPC keygen/signing on PRODUCTION
+3. Test address derivation for ALL 30+ chains with REAL WASM on MAINNET
+4. Validate REAL production VultiServer + MessageRelay coordination
+5. Test REAL blockchain interactions (balances, transactions on MAINNET with small funds)
 
 ## Prerequisites
 
-- Phases 1-2 completed successfully
-- 50% code coverage achieved
-- Core components unit tested
-- Mock infrastructure operational
-- Chain fixtures for all Tier 1 chains
+- Phases 1-2 completed successfully (✅ COMPLETE)
+- 25% code coverage achieved (Phase 2 complete)
+- Core components unit tested (✅ COMPLETE)
+- **REQUIRED**: Production API access credentials
+- **REQUIRED**: Test email account set up
+- **REQUIRED**: Small amounts of crypto funded ($50 total budget)
+- **REQUIRED**: Mainnet RPC endpoints configured
+- **REQUIRED**: Vault backup directory created
+- Chain fixtures for all Tier 1 chains (✅ COMPLETE)
 
 ## Week 5: Vault Lifecycle Integration
 

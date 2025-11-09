@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   resolve: {
@@ -14,6 +14,7 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.{test,spec}.{js,ts,tsx}'],
     exclude: ['**/node_modules/**', '**/dist/**'],
+    setupFiles: ['./tests/setup.ts'],
     // Default config for unit tests (integration has its own config)
   },
 })

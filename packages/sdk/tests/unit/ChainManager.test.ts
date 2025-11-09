@@ -41,20 +41,20 @@ describe('ChainManager', () => {
       expect(isChainSupported('Ripple')).toBe(true)
     })
 
-    it('should return true for chain keys (not values with different names)', () => {
-      // NOTE: isChainSupported checks if string is a KEY in Chain object
-      // For chains where key !== value (e.g., BitcoinCash = 'Bitcoin-Cash'),
-      // it only works with the key ('BitcoinCash'), not the value ('Bitcoin-Cash')
-      expect(isChainSupported('Bitcoin')).toBe(true) // key === value
-      expect(isChainSupported('Ethereum')).toBe(true) // key === value
-      expect(isChainSupported('BitcoinCash')).toBe(true) // key (value is 'Bitcoin-Cash')
-      expect(isChainSupported('Bitcoin-Cash')).toBe(false) // value, not key
+    it('should support case-insensitive matching', () => {
+      // isChainSupported now matches against Chain enum values (case-insensitive)
+      expect(isChainSupported('bitcoin')).toBe(true) // lowercase
+      expect(isChainSupported('BITCOIN')).toBe(true) // uppercase
+      expect(isChainSupported('BitCoin')).toBe(true) // mixed case
+      expect(isChainSupported('ethereum')).toBe(true)
+      expect(isChainSupported('ETHEREUM')).toBe(true)
+      expect(isChainSupported('solana')).toBe(true)
+      expect(isChainSupported('SOLANA')).toBe(true)
     })
 
     it('should return false for unsupported chains', () => {
       expect(isChainSupported('InvalidChain')).toBe(false)
       expect(isChainSupported('NotAChain')).toBe(false)
-      expect(isChainSupported('bitcoin')).toBe(false) // lowercase
       expect(isChainSupported('')).toBe(false)
       expect(isChainSupported('Ethereum2')).toBe(false)
     })
@@ -77,12 +77,29 @@ describe('ChainManager', () => {
     })
 
     it('should convert valid chain keys (matches where key === value)', () => {
-      // Only test chains where the key equals the value
-      // NOTE: stringToChain uses isChainSupported which checks keys, not values
+      // Chain matching is now case-insensitive
       const validKeys = ['Bitcoin', 'Ethereum', 'Solana', 'THORChain', 'Ripple']
       validKeys.forEach(chain => {
         expect(stringToChain(chain)).toBe(chain)
       })
+    })
+
+    it('should support case-insensitive chain matching', () => {
+      // Test lowercase
+      expect(stringToChain('bitcoin')).toBe(Chain.Bitcoin)
+      expect(stringToChain('ethereum')).toBe(Chain.Ethereum)
+      expect(stringToChain('solana')).toBe(Chain.Solana)
+      expect(stringToChain('thorchain')).toBe(Chain.THORChain)
+
+      // Test uppercase
+      expect(stringToChain('BITCOIN')).toBe(Chain.Bitcoin)
+      expect(stringToChain('ETHEREUM')).toBe(Chain.Ethereum)
+      expect(stringToChain('SOLANA')).toBe(Chain.Solana)
+
+      // Test mixed case
+      expect(stringToChain('bItCoIn')).toBe(Chain.Bitcoin)
+      expect(stringToChain('EtHeReUm')).toBe(Chain.Ethereum)
+      expect(stringToChain('rIpPlE')).toBe(Chain.Ripple)
     })
 
     it('should throw VaultError for unsupported chains', () => {
@@ -354,27 +371,6 @@ describe('ChainManager', () => {
   })
 
   describe('Edge cases and error handling', () => {
-    it('should handle case sensitivity correctly', () => {
-      expect(isChainSupported('bitcoin')).toBe(false)
-      expect(isChainSupported('BITCOIN')).toBe(false)
-      expect(isChainSupported('Bitcoin')).toBe(true)
-    })
-
-    it('should check chain keys not values for chains with hyphens', () => {
-      // NOTE: This documents a known inconsistency
-      // The key is 'BitcoinCash' but the value is 'Bitcoin-Cash'
-      expect(isChainSupported('BitcoinCash')).toBe(true) // key
-      expect(isChainSupported('Bitcoin-Cash')).toBe(false) // value
-    })
-
-    it('should validate using chain keys', () => {
-      // NOTE: validateChains checks keys, so use 'BitcoinCash' not 'Bitcoin-Cash'
-      // When the key is found, it's cast to Chain type and returned
-      const validated = validateChains(['BitcoinCash'])
-      expect(validated).toContain('BitcoinCash') // Returns the key, cast to Chain type
-      expect(validated).toHaveLength(1)
-    })
-
     it('should handle error wrapping in validateChains', () => {
       try {
         validateChains(['Invalid1', 'Invalid2'])
