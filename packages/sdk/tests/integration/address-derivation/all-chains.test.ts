@@ -37,48 +37,48 @@ console.log(`\n🔍 Testing ${ALL_CHAINS.length} blockchain chains\n`)
  */
 const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
   // UTXO Chains
-  Bitcoin: (addr) => /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(addr),
-  Litecoin: (addr) => /^(ltc1|[LM])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(addr),
-  Dogecoin: (addr) => /^D[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
-  'Bitcoin-Cash': (addr) =>
+  Bitcoin: addr => /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(addr),
+  Litecoin: addr => /^(ltc1|[LM])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(addr),
+  Dogecoin: addr => /^D[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
+  'Bitcoin-Cash': addr =>
     /^(bitcoincash:|q)[a-zA-HJ-NP-Z0-9]{40,45}$/.test(addr) ||
     /^[13][a-zA-HJ-NP-Z0-9]{25,34}$/.test(addr),
-  Dash: (addr) => /^X[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
-  Zcash: (addr) => /^(t1|t3)[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
+  Dash: addr => /^X[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
+  Zcash: addr => /^(t1|t3)[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
 
   // EVM Chains (all share same address format)
-  Ethereum: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  Polygon: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  BSC: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  Avalanche: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  CronosChain: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  Arbitrum: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  Base: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  Blast: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  Optimism: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  Zksync: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-  Mantle: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Ethereum: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Polygon: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  BSC: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Avalanche: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  CronosChain: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Arbitrum: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Base: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Blast: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Optimism: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Zksync: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Mantle: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
 
   // Cosmos Chains
-  Cosmos: (addr) => /^cosmos1[a-z0-9]{38,}$/.test(addr),
-  THORChain: (addr) => /^thor1[a-z0-9]{38,}$/.test(addr),
-  MayaChain: (addr) => /^maya1[a-z0-9]{38,}$/.test(addr),
-  Osmosis: (addr) => /^osmo1[a-z0-9]{38,}$/.test(addr),
-  Dydx: (addr) => /^dydx1[a-z0-9]{38,}$/.test(addr),
-  Kujira: (addr) => /^kujira1[a-z0-9]{38,}$/.test(addr),
-  Terra: (addr) => /^terra1[a-z0-9]{38,}$/.test(addr),
-  TerraClassic: (addr) => /^terra1[a-z0-9]{38,}$/.test(addr),
-  Noble: (addr) => /^noble1[a-z0-9]{38,}$/.test(addr),
-  Akash: (addr) => /^akash1[a-z0-9]{38,}$/.test(addr),
+  Cosmos: addr => /^cosmos1[a-z0-9]{38,}$/.test(addr),
+  THORChain: addr => /^thor1[a-z0-9]{38,}$/.test(addr),
+  MayaChain: addr => /^maya1[a-z0-9]{38,}$/.test(addr),
+  Osmosis: addr => /^osmo1[a-z0-9]{38,}$/.test(addr),
+  Dydx: addr => /^dydx1[a-z0-9]{38,}$/.test(addr),
+  Kujira: addr => /^kujira1[a-z0-9]{38,}$/.test(addr),
+  Terra: addr => /^terra1[a-z0-9]{38,}$/.test(addr),
+  TerraClassic: addr => /^terra1[a-z0-9]{38,}$/.test(addr),
+  Noble: addr => /^noble1[a-z0-9]{38,}$/.test(addr),
+  Akash: addr => /^akash1[a-z0-9]{38,}$/.test(addr),
 
   // EdDSA & Other Chains
-  Solana: (addr) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr),
-  Sui: (addr) => /^0x[a-f0-9]{64}$/.test(addr),
-  Polkadot: (addr) => /^1[a-zA-HJ-NP-Z0-9]{47}$/.test(addr),
-  Ton: (addr) => /^[UE][Qf][a-zA-Z0-9_-]{46}$/.test(addr),
-  Ripple: (addr) => /^r[a-zA-Z0-9]{24,34}$/.test(addr),
-  Tron: (addr) => /^T[a-zA-Z0-9]{33}$/.test(addr),
-  Cardano: (addr) => /^addr1[a-z0-9]{53,}$/.test(addr),
+  Solana: addr => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr),
+  Sui: addr => /^0x[a-f0-9]{64}$/.test(addr),
+  Polkadot: addr => /^1[a-zA-HJ-NP-Z0-9]{47}$/.test(addr),
+  Ton: addr => /^[UE][Qf][a-zA-Z0-9_-]{46}$/.test(addr),
+  Ripple: addr => /^r[a-zA-Z0-9]{24,34}$/.test(addr),
+  Tron: addr => /^T[a-zA-Z0-9]{33}$/.test(addr),
+  Cardano: addr => /^addr1[a-z0-9]{53,}$/.test(addr),
 }
 
 describe('Integration: Multi-Chain Address Derivation', () => {
@@ -101,7 +101,8 @@ describe('Integration: Multi-Chain Address Derivation', () => {
         // Real-ish looking public keys (proper format for address derivation)
         ecdsa:
           '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
-        eddsa: 'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
+        eddsa:
+          'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
       },
       hexChainCode:
         '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
@@ -131,15 +132,20 @@ describe('Integration: Multi-Chain Address Derivation', () => {
    * This test is parameterized to run once per chain, providing clear
    * visibility into which chains pass and which fail.
    */
-  describe.each(ALL_CHAINS)('Chain: %s', (chain) => {
+  describe.each(ALL_CHAINS)('Chain: %s', chain => {
     it(`should derive a valid ${chain} address`, async () => {
       // Derive address using public API
       const address = await vault.address(chain)
 
       // Basic validations
       expect(address, `${chain} address should be defined`).toBeDefined()
-      expect(typeof address, `${chain} address should be a string`).toBe('string')
-      expect(address.length, `${chain} address should not be empty`).toBeGreaterThan(0)
+      expect(typeof address, `${chain} address should be a string`).toBe(
+        'string'
+      )
+      expect(
+        address.length,
+        `${chain} address should not be empty`
+      ).toBeGreaterThan(0)
 
       // Chain-specific validation
       const validator = CHAIN_VALIDATORS[chain]
@@ -195,7 +201,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
 
     it('should derive identical addresses for all EVM chains', async () => {
       const addresses = await Promise.all(
-        evmChains.map(async (chain) => ({
+        evmChains.map(async chain => ({
           chain,
           address: await vault.address(chain),
         }))
@@ -204,13 +210,14 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       // All addresses should be identical
       const firstAddress = addresses[0].address
       addresses.forEach(({ chain, address }) => {
-        expect(
-          address,
-          `${chain} should have same address as Ethereum`
-        ).toBe(firstAddress)
+        expect(address, `${chain} should have same address as Ethereum`).toBe(
+          firstAddress
+        )
       })
 
-      console.log(`\n✅ All ${evmChains.length} EVM chains share address: ${firstAddress}`)
+      console.log(
+        `\n✅ All ${evmChains.length} EVM chains share address: ${firstAddress}`
+      )
     })
   })
 
@@ -253,7 +260,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
 
       // Derive addresses for all chains in parallel
       const results = await Promise.all(
-        ALL_CHAINS.map(async (chain) => ({
+        ALL_CHAINS.map(async chain => ({
           chain,
           address: await vault.address(chain),
         }))
@@ -270,8 +277,12 @@ describe('Integration: Multi-Chain Address Derivation', () => {
         expect(address.length).toBeGreaterThan(0)
       })
 
-      console.log(`\n⚡ Derived ${ALL_CHAINS.length} addresses in ${duration}ms`)
-      console.log(`   Average: ${(duration / ALL_CHAINS.length).toFixed(2)}ms per chain`)
+      console.log(
+        `\n⚡ Derived ${ALL_CHAINS.length} addresses in ${duration}ms`
+      )
+      console.log(
+        `   Average: ${(duration / ALL_CHAINS.length).toFixed(2)}ms per chain`
+      )
 
       // Should complete within reasonable time (10 seconds for 40+ chains)
       expect(duration).toBeLessThan(10000)

@@ -114,8 +114,7 @@ export const CHAIN_CONFIGS: Record<string, ChainConfig> = {
     sampleAddress: '7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDpvcMwJeK',
     sampleTxHash:
       '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW',
-    samplePublicKey:
-      '7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDpvcMwJeK',
+    samplePublicKey: '7EqQdEULxWcraVx3mXKFjc84LhCkMGZCkRuDpvcMwJeK',
   },
   thorchain: {
     name: 'thorchain',
@@ -274,7 +273,7 @@ export const CHAIN_CONFIGS: Record<string, ChainConfig> = {
     family: ChainFamily.EDDSA,
     tier: 'tier3',
     nativeToken: 'DOT',
-    derivationPath: "//polkadot//0",
+    derivationPath: '//polkadot//0',
   },
   noble: {
     name: 'noble',
@@ -545,10 +544,7 @@ export function generateChainFixtures(
 /**
  * Generate fixtures for a specific tier
  */
-export function generateTierFixtures(
-  tier: ChainTier,
-  outputDir: string
-): void {
+export function generateTierFixtures(tier: ChainTier, outputDir: string): void {
   const chains = CHAIN_TIERS[tier]
   console.log(`\n🎯 Generating Tier ${tier.toUpperCase()} fixtures...\n`)
 
