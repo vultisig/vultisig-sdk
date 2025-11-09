@@ -7,6 +7,9 @@
 
 import { vi } from 'vitest'
 
+// Type declaration for optional globals
+declare const chrome: any
+
 /**
  * Environment Detection
  * Used by tests to conditionally run environment-specific tests
@@ -446,7 +449,7 @@ if (testEnvironment.isNode && typeof File === 'undefined') {
       return this._buffer.buffer.slice(
         this._buffer.byteOffset,
         this._buffer.byteOffset + this._buffer.byteLength
-      )
+      ) as ArrayBuffer
     }
 
     async text(): Promise<string> {
@@ -484,7 +487,7 @@ if (testEnvironment.isNode && typeof Blob === 'undefined') {
       return this._buffer.buffer.slice(
         this._buffer.byteOffset,
         this._buffer.byteOffset + this._buffer.byteLength
-      )
+      ) as ArrayBuffer
     }
 
     async text(): Promise<string> {

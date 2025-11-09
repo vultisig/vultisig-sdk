@@ -1,3 +1,4 @@
+import { ServerManager } from '../server/ServerManager'
 import { Signature, SigningPayload, Vault } from '../types'
 import { WASMManager } from '../wasm/WASMManager'
 
@@ -13,7 +14,7 @@ import { WASMManager } from '../wasm/WASMManager'
  */
 export class FastSigningService {
   constructor(
-    private serverManager: any,
+    private serverManager: ServerManager,
     private wasmManager: WASMManager
   ) {}
 
@@ -68,7 +69,7 @@ export class FastSigningService {
    * @throws Error if vault doesn't have server signer
    */
   private validateFastVault(vault: Vault): void {
-    const hasFastVaultServer = vault.signers.some(signer =>
+    const hasFastVaultServer = vault.signers.some((signer: string) =>
       signer.startsWith('Server-')
     )
 

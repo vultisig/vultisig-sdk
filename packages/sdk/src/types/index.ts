@@ -103,6 +103,12 @@ export type Signature = {
   signature: string
   recovery?: number
   format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519'
+  // For UTXO chains with multiple inputs, includes all signatures
+  signatures?: Array<{
+    r: string
+    s: string
+    der: string
+  }>
 }
 
 export type FastSigningInput = {
