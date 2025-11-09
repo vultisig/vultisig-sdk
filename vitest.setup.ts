@@ -31,9 +31,9 @@ global.fetch = async (url: string | URL | Request) => {
         'node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'
       )
     } else if (urlString.includes('vs_wasm_bg.wasm')) {
-      wasmPath = join(__dirname, 'lib/dkls/vs_wasm_bg.wasm')
+      wasmPath = join(__dirname, 'packages/lib/dkls/vs_wasm_bg.wasm')
     } else if (urlString.includes('vs_schnorr_wasm_bg.wasm')) {
-      wasmPath = join(__dirname, 'lib/schnorr/vs_schnorr_wasm_bg.wasm')
+      wasmPath = join(__dirname, 'packages/lib/schnorr/vs_schnorr_wasm_bg.wasm')
     } else {
       // For any other WASM files, try to load from the filesystem
       const fs = await import('fs')
@@ -47,8 +47,8 @@ global.fetch = async (url: string | URL | Request) => {
           'node_modules/@trustwallet/wallet-core/dist/lib/',
           filename
         ),
-        path.join(__dirname, 'lib/dkls/', filename),
-        path.join(__dirname, 'lib/schnorr/', filename),
+        path.join(__dirname, 'packages/lib/dkls/', filename),
+        path.join(__dirname, 'packages/lib/schnorr/', filename),
         path.join(
           __dirname,
           'src/node_modules/@trustwallet/wallet-core/dist/lib/',
@@ -87,8 +87,8 @@ global.fetch = async (url: string | URL | Request) => {
     } catch (error) {
       // Try fallback paths if primary path fails
       const fallbackPaths = [
-        join(__dirname, 'lib/dkls/vs_wasm_bg.wasm'),
-        join(__dirname, 'lib/schnorr/vs_schnorr_wasm_bg.wasm'),
+        join(__dirname, 'packages/lib/dkls/vs_wasm_bg.wasm'),
+        join(__dirname, 'packages/lib/schnorr/vs_schnorr_wasm_bg.wasm'),
         join(
           __dirname,
           'node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'
