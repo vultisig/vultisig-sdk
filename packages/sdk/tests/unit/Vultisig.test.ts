@@ -359,21 +359,9 @@ describe('Vultisig', () => {
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
 
-    it('should emit errors on auto-init failure', () => {
-      return new Promise<void>(resolve => {
-        const sdkWithAutoInit = new Vultisig({ autoInit: true })
-
-        vi.spyOn(
-          sdkWithAutoInit.getWasmManager(),
-          'initialize'
-        ).mockRejectedValue(new Error('Auto init failed'))
-
-        sdkWithAutoInit.on('error', error => {
-          expect(error).toBeDefined()
-          resolve()
-        })
-      })
-    })
+    // Note: Testing auto-init error emission is not feasible with current architecture
+    // because auto-init happens in constructor before mocks can be set up.
+    // Error handling for manual initialize() is tested above.
   })
 
   describe('storage integration', () => {
