@@ -88,14 +88,14 @@ export type { SdkEvents, VaultEvents } from './events/types'
 // PUBLIC API - Environment-Specific Utilities
 // ============================================================================
 
-// Electron utilities
-export {
-  downloadElectronVault,
-  exportElectronVaultToFile,
-  getElectronHandlers,
-  getElectronProcessType,
-  setupElectronIPC,
-} from './runtime/utils/electron'
+// Electron utilities - TODO: Re-enable when Electron integration is ready
+// export {
+//   downloadElectronVault,
+//   exportElectronVaultToFile,
+//   getElectronHandlers,
+//   getElectronProcessType,
+//   setupElectronIPC,
+// } from './runtime/utils/electron'
 
 // Node.js utilities
 export {

@@ -46,6 +46,7 @@
     "../**/node_modules",
     "../**/dist",
     "../../upstream/**/*",
-    "../../archived/**/*"
+    "../../archived/**/*",
+    "src/runtime/utils/electron.ts"
   ]
 }

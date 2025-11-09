@@ -109,11 +109,15 @@ describe('Integration: Multi-Chain Address Derivation', () => {
         '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
       localPartyId: 'test-device',
       signers: ['test-device', 'Server-1'],
-      keyShares: [],
+      keyShares: {
+        ecdsa: 'mock_ecdsa_keyshare',
+        eddsa: 'mock_eddsa_keyshare',
+      },
       resharePrefix: '',
       libType: 'GG20',
       createdAt: Date.now(),
       isBackedUp: false,
+      order: 0,
     } as CoreVault
 
     const services: VaultServices = {

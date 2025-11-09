@@ -108,7 +108,7 @@ function createMockVaultFile(
     // Encrypt the vault data
     const encryptedData = encryptWithAesGcm({
       key: password,
-      value: vaultBinary,
+      value: Buffer.from(vaultBinary),
     })
 
     // Store encrypted data as base64
@@ -143,7 +143,7 @@ function createMockVaultFile(
   })
 
   // Add buffer property for Node.js test environment compatibility
-  ;(file as any).buffer = fileContent.buffer
+  ;(file as any).buffer = fileContent
 
   return file
 }
@@ -170,10 +170,12 @@ describe('VaultManager', () => {
           hexChainCode: 'test_chain_code',
           localPartyId: 'local-1',
           signers: ['local-1', 'Server-1'],
-          keyShares: [],
+          keyShares: { ecdsa: 'mock_ecdsa', eddsa: 'mock_eddsa' },
           resharePrefix: '',
           libType: 'GG20',
           createdAt: Date.now(),
+          isBackedUp: false,
+          order: 0,
         } as Vault,
         sessionId: 'test-session-id',
       }),
@@ -422,10 +424,12 @@ describe('VaultManager', () => {
           hexChainCode: 'different_chain_code',
           localPartyId: 'local-2',
           signers: ['local-2', 'Server-2'],
-          keyShares: [],
+          keyShares: { ecdsa: 'mock_ecdsa2', eddsa: 'mock_eddsa2' },
           resharePrefix: '',
           libType: 'GG20',
           createdAt: Date.now(),
+          isBackedUp: false,
+          order: 1,
         } as Vault,
         sessionId: 'test-session-id-2',
       })
@@ -552,10 +556,12 @@ describe('VaultManager', () => {
           hexChainCode: 'different',
           localPartyId: 'local-2',
           signers: ['local-2', 'Server-2'],
-          keyShares: [],
+          keyShares: { ecdsa: 'mock_ecdsa3', eddsa: 'mock_eddsa3' },
           resharePrefix: '',
           libType: 'GG20',
           createdAt: Date.now(),
+          isBackedUp: false,
+          order: 1,
         } as Vault,
         sessionId: 'session-2',
       })
@@ -640,10 +646,12 @@ describe('VaultManager', () => {
           hexChainCode: 'vault2',
           localPartyId: 'local-2',
           signers: ['local-2', 'Server-2'],
-          keyShares: [],
+          keyShares: { ecdsa: 'mock_ecdsa4', eddsa: 'mock_eddsa4' },
           resharePrefix: '',
           libType: 'GG20',
           createdAt: Date.now(),
+          isBackedUp: false,
+          order: 1,
         } as Vault,
         sessionId: 'session-2',
       })

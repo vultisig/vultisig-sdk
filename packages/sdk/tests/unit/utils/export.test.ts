@@ -1,7 +1,7 @@
+import { Vault } from '@core/mpc/vault/Vault'
 import { describe, expect, it, vi } from 'vitest'
 
-import { createVaultBackup, getExportFileName } from '@/utils/export'
-import { Vault } from '@/vault/Vault'
+import { createVaultBackup, getExportFileName } from '../../../src/utils/export'
 
 // Mock the external dependencies
 vi.mock('@bufbuild/protobuf', () => ({
@@ -33,11 +33,17 @@ vi.mock('@lib/utils/encryption/aesGcm/encryptWithAesGcm', () => ({
 describe('Export Utilities', () => {
   describe('getExportFileName', () => {
     it('should generate correct filename for 2-of-2 vault', () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'TestVault',
         localPartyId: 'device-123',
         signers: ['device-123', 'Server-456'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename = getExportFileName(mockVault)
 
@@ -45,11 +51,17 @@ describe('Export Utilities', () => {
     })
 
     it('should generate correct filename for 2-of-3 vault (second signer)', () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'MultiSig',
         localPartyId: 'device-2',
         signers: ['device-1', 'device-2', 'device-3'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename = getExportFileName(mockVault)
 
@@ -57,11 +69,17 @@ describe('Export Utilities', () => {
     })
 
     it('should generate correct filename for 3-of-4 vault (third signer)', () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'Corporate',
         localPartyId: 'alice',
         signers: ['bob', 'charlie', 'alice', 'dave'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename = getExportFileName(mockVault)
 
@@ -69,11 +87,17 @@ describe('Export Utilities', () => {
     })
 
     it('should handle vault names with special characters', () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'My Vault #1',
         localPartyId: 'user-device',
         signers: ['user-device', 'Server-backup'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename = getExportFileName(mockVault)
 
@@ -81,11 +105,17 @@ describe('Export Utilities', () => {
     })
 
     it('should always use .vult extension', () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'Test',
         localPartyId: 'dev1',
         signers: ['dev1', 'dev2'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename = getExportFileName(mockVault)
 
@@ -93,11 +123,17 @@ describe('Export Utilities', () => {
     })
 
     it('should include correct share index when localPartyId is first', () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'Vault',
         localPartyId: 'first',
         signers: ['first', 'second', 'third'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename = getExportFileName(mockVault)
 
@@ -105,11 +141,17 @@ describe('Export Utilities', () => {
     })
 
     it('should include correct share index when localPartyId is last', () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'Vault',
         localPartyId: 'last',
         signers: ['first', 'second', 'last'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename = getExportFileName(mockVault)
 
@@ -119,11 +161,17 @@ describe('Export Utilities', () => {
 
   describe('createVaultBackup', () => {
     it('should create unencrypted backup when no password provided', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'TestVault',
         localPartyId: 'device-1',
         signers: ['device-1', 'device-2'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const backup = await createVaultBackup(mockVault)
 
@@ -134,11 +182,17 @@ describe('Export Utilities', () => {
     })
 
     it('should create encrypted backup when password provided', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'SecureVault',
         localPartyId: 'device-secure',
         signers: ['device-secure', 'backup'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const password = 'StrongPassword123!'
       const backup = await createVaultBackup(mockVault, password)
@@ -150,11 +204,17 @@ describe('Export Utilities', () => {
     })
 
     it('should create different backups for encrypted vs unencrypted', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'Vault',
         localPartyId: 'device',
         signers: ['device', 'server'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const unencryptedBackup = await createVaultBackup(mockVault)
       const encryptedBackup = await createVaultBackup(mockVault, 'password')
@@ -163,11 +223,17 @@ describe('Export Utilities', () => {
     })
 
     it('should handle empty password as unencrypted', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'Vault',
         localPartyId: 'device',
         signers: ['device'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const backupWithEmptyPassword = await createVaultBackup(mockVault, '')
       const backupWithoutPassword = await createVaultBackup(mockVault)
@@ -178,11 +244,17 @@ describe('Export Utilities', () => {
     })
 
     it('should return base64 encoded string', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'EncodingTest',
         localPartyId: 'device',
         signers: ['device', 'backup'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const backup = await createVaultBackup(mockVault, 'password')
 
@@ -194,11 +266,17 @@ describe('Export Utilities', () => {
     })
 
     it('should handle vault with many signers', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'MultiSigVault',
         localPartyId: 'device-3',
         signers: ['device-1', 'device-2', 'device-3', 'device-4', 'device-5'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const backup = await createVaultBackup(mockVault, 'SecurePass')
 
@@ -207,11 +285,17 @@ describe('Export Utilities', () => {
     })
 
     it('should handle vault with special characters in name', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'Vault™ (2024) - Main 🔒',
         localPartyId: 'device-unicode',
         signers: ['device-unicode', 'backup'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const backup = await createVaultBackup(mockVault)
 
@@ -220,11 +304,17 @@ describe('Export Utilities', () => {
     })
 
     it('should handle different password types', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'PasswordTest',
         localPartyId: 'device',
         signers: ['device', 'server'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const passwords = [
         'simple',
@@ -244,11 +334,17 @@ describe('Export Utilities', () => {
 
   describe('Integration: export filename and backup', () => {
     it('should create matching filename and backup for same vault', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'IntegrationTest',
         localPartyId: 'device-1',
         signers: ['device-1', 'Server-backup'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename = getExportFileName(mockVault)
       const backup = await createVaultBackup(mockVault, 'password')
@@ -263,11 +359,17 @@ describe('Export Utilities', () => {
     })
 
     it('should handle the same vault exported multiple times', async () => {
-      const mockVault = {
+      const mockVault: Vault = {
         name: 'RepeatedExport',
         localPartyId: 'device',
         signers: ['device', 'backup'],
-      } as unknown as Vault
+        publicKeys: { ecdsa: 'test', eddsa: 'test' },
+        hexChainCode: 'test',
+        keyShares: { ecdsa: 'test', eddsa: 'test' },
+        libType: 'GG20',
+        isBackedUp: false,
+        order: 0,
+      }
 
       const filename1 = getExportFileName(mockVault)
       const filename2 = getExportFileName(mockVault)

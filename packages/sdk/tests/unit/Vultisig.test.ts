@@ -277,9 +277,15 @@ describe('Vultisig', () => {
     it('should check server status', async () => {
       // Mock serverManager.checkServerStatus
       const mockStatus = {
-        online: true,
-        latency: 50,
-        version: '1.0.0',
+        fastVault: {
+          online: true,
+          latency: 50,
+        },
+        messageRelay: {
+          online: true,
+          latency: 30,
+        },
+        timestamp: Date.now(),
       }
 
       vi.spyOn(sdk.getServerManager(), 'checkServerStatus').mockResolvedValue(
@@ -289,7 +295,7 @@ describe('Vultisig', () => {
       const status = await sdk.getServerStatus()
 
       expect(status).toEqual(mockStatus)
-      expect(status.online).toBe(true)
+      expect(status.fastVault.online).toBe(true)
     })
   })
 
@@ -297,20 +303,22 @@ describe('Vultisig', () => {
     it('should be an event emitter', () => {
       expect(sdk.on).toBeDefined()
       expect(sdk.off).toBeDefined()
-      expect(sdk.emit).toBeDefined()
+      // emit is protected, verify instance has event capabilities
+      expect(sdk).toHaveProperty('on')
+      expect(sdk).toHaveProperty('off')
     })
 
     it('should emit events', () => {
       return new Promise<void>(resolve => {
-        // Listen for error event
-        sdk.on('error', error => {
-          expect(error).toBeInstanceOf(Error)
-          expect(error.message).toBe('Test error')
+        // Test that event listeners work by using disconnect event
+        // since emit is protected and error events require internal triggering
+        sdk.on('disconnect', () => {
+          // Event listener successfully received event
           resolve()
         })
 
-        // Emit error event
-        sdk.emit('error', new Error('Test error'))
+        // Trigger disconnect which internally emits the disconnect event
+        sdk.disconnect()
       })
     })
 
