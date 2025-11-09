@@ -1,6 +1,6 @@
 # Testing Implementation Progress
 
-**Last Updated**: 2025-11-09 (All Tests Passing! 536/536 ✅)
+**Last Updated**: 2025-11-09 (All Tests Passing! 536/536 ✅) - Fixture Cleanup
 **Current Phase**: Phase 3 - Integration 🟢 COMPLETE
 **Overall Coverage**: ~25% → Target: 85%
 **Status**: 🟢 Phase 1 Complete | 🟢 Phase 2 Complete | 🟢 Phase 3 Complete
@@ -15,7 +15,7 @@
 | **Unit Tests** | 444/444 passing (100%) | ~150 | ██████████ 296% ✅ |
 | **Integration Tests** | 92/92 passing (100%) | ~50 | ██████████ 184% ✅ |
 | **E2E Tests** | 0 | ~30 | ░░░░░░░░░░ 0% |
-| **Chain Fixtures** | 5/35 | 35/35 | ███░░░░░░░ 14% |
+| **Chain Fixtures** | 0/35 (Removed) | 0/35 | ░░░░░░░░░░ N/A |
 
 ---
 
@@ -708,7 +708,23 @@ isChainSupported('BitcoinCash') // Returns true (key exists)
 
 **Impact**: Task 1.8 completed with alternative approach
 
-### ✅ Decision 4: Real MPC Wallets for Integration Testing (PRODUCTION WITH REAL FUNDS)
+### ✅ Decision 4: Remove Unused Chain Fixtures
+**Context**: Phase 1 created 20 chain fixture files (5 chains × 4 files each) but they were never integrated
+**Decision**: Remove all chain fixtures and the `loadChainFixture()` helper function
+**Rationale**:
+- **Never Used**: No test files reference or import the fixtures (0 imports found)
+- **Strategy Changed**: Tests use real WASM + inline mocks instead of file-based fixtures
+- **Cleaner Codebase**: Removing unused code reduces maintenance burden and confusion
+- **No Loss**: Current tests (536 passing) don't depend on fixtures at all
+
+**Removed Files** (2025-11-09):
+- `/packages/sdk/tests/fixtures/` directory (5 chain directories, 20 JSON files)
+- `loadChainFixture()` function from `tests/setup.ts` (lines 274-294)
+- `fixtures` export from `testHelpers` object
+
+**Impact**: Cleaner codebase with no functional impact (fixtures were created but never used)
+
+### ✅ Decision 5: Real MPC Wallets for Integration Testing (PRODUCTION WITH REAL FUNDS)
 **Context**: Phase 3 will test vault operations, signing, and multi-chain functionality
 **Decision**: Use REAL MPC wallet operations with PRODUCTION environment and SMALL AMOUNTS of REAL FUNDS
 **Rationale**:
@@ -1065,6 +1081,21 @@ EXPORT_TEST_VAULTS=true
   - Integration test count: 92 (184% of 50 target) ✅
 - **Total Test Count**: 444 unit + 92 integration = **536 tests** (all passing!)
 - **Ready for**: Phase 4 - E2E Testing (requires real funds - needs approval)
+
+### 2025-11-09 (Fixture Cleanup) - 🧹 REMOVED UNUSED CHAIN FIXTURES
+- ✅ **CLEANUP COMPLETE**: Removed all unused chain fixture files and helpers
+- **Removed Files**:
+  - Deleted `/packages/sdk/tests/fixtures/` directory (5 chain directories, 20 JSON files)
+  - Removed `loadChainFixture()` function from `tests/setup.ts` (lines 274-294)
+  - Removed `fixtures` from `testHelpers` export
+- **Rationale**:
+  - Chain fixtures were created in Phase 1 but never actually used in any tests
+  - Grep search found 0 imports or references to fixture files
+  - Tests evolved to use real WASM + inline mocks instead of file-based fixtures
+  - Removing unused code reduces maintenance burden and codebase confusion
+- **Impact**: No functional impact - all 536 tests still passing (100%)
+- **Decision**: Documented in "Key Implementation Decisions" section (Decision 4)
+- **Next Steps**: Continue with Phase 3.5 - expanding test coverage for adapters and services
 
 ---
 

@@ -263,38 +263,6 @@ export const cleanup = {
 }
 
 /**
- * Test Fixtures Loader
- * Utilities for loading test fixtures from files
- */
-export const fixtures = {
-  /**
-   * Load chain fixture by name
-   * Returns undefined if fixture doesn't exist yet
-   */
-  loadChainFixture: async (
-    chainName: string,
-    fixtureType: 'addresses' | 'transactions' | 'balances' | 'rpc-responses'
-  ): Promise<any> => {
-    try {
-      const fixturePath = `./fixtures/chains/${chainName}/${fixtureType}.json`
-      // In Node.js environment, we can use dynamic imports
-      if (testEnvironment.isNode) {
-        const fs = await import('fs/promises')
-        const path = await import('path')
-        const fullPath = path.join(__dirname, fixturePath)
-        const data = await fs.readFile(fullPath, 'utf-8')
-        return JSON.parse(data)
-      }
-    } catch {
-      console.warn(
-        `Fixture not found: ${chainName}/${fixtureType} - this is expected if fixtures haven't been generated yet`
-      )
-      return undefined
-    }
-  },
-}
-
-/**
  * Assertion Helpers
  * Common assertions used across tests
  */
@@ -396,7 +364,6 @@ export const testHelpers = {
   setupMockFetch,
   wasmHelpers,
   cleanup,
-  fixtures,
   assertions,
   performance,
   setConsoleLogging,
