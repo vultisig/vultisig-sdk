@@ -1,11 +1,15 @@
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
+import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
 import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
+import type { WalletCore } from '@trustwallet/wallet-core'
 
 import { stringToChain } from '../ChainManager'
 import {
   KeygenProgressUpdate,
   ReshareOptions,
   ServerStatus,
+  Signature,
+  SigningPayload,
   Vault,
 } from '../types'
 
@@ -74,7 +78,7 @@ export class ServerManager {
 
   /**
    * Coordinate fast signing with VultiServer
-   * Pure server coordination - uses core abstractions for signature formatting
+   * Pure server coordination - uses SDK adapters for chain-specific logic
    *
    * @param options.vault Vault with keys and signers
    * @param options.messages Pre-computed message hashes
@@ -84,20 +88,15 @@ export class ServerManager {
    * @returns Formatted signature
    */
   async coordinateFastSigning(options: {
-    vault: any
+    vault: Vault
     messages: string[]
     password: string
-    payload: any
-    walletCore: any
-  }): Promise<any> {
+    payload: SigningPayload
+    walletCore: WalletCore
+  }): Promise<Signature> {
     const { vault, messages, password, payload, walletCore } = options
 
     // Import required utilities
-    const { getChainKind } = await import('@core/chain/ChainKind')
-    const { signatureAlgorithms } = await import(
-      '@core/chain/signing/SignatureAlgorithm'
-    )
-    const { getCoinType } = await import('@core/chain/coin/coinType')
     const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
     const { startMpcSession } = await import(
       '@core/mpc/session/startMpcSession'
@@ -110,21 +109,15 @@ export class ServerManager {
     )
     const { keysign } = await import('@core/mpc/keysign')
 
-    // Map chain string to Chain enum
-    const chain =
-      typeof payload.chain === 'string'
-        ? stringToChain(payload.chain)
-        : payload.chain
-    const coinType = getCoinType({ walletCore, chain })
-    const derivePath = walletCore.CoinTypeExt.derivationPath(coinType)
-
-    const chainKind = getChainKind(chain)
-    const signatureAlgorithm = signatureAlgorithms[chainKind]
+    // Use SDK adapter to extract chain-specific signing information
+    const { getChainSigningInfo } = await import('../adapters')
+    const { signatureAlgorithm, derivePath, chainPath } =
+      await getChainSigningInfo(payload, walletCore, stringToChain)
 
     // Generate session parameters
     const sessionId = crypto.randomUUID()
     const hexEncryptionKey = getHexEncodedRandomBytes(32)
-    const signingLocalPartyId = generateLocalPartyId('extension' as any)
+    const signingLocalPartyId = generateLocalPartyId('extension')
 
     console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
     console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
@@ -151,7 +144,7 @@ export class ServerManager {
     // Step 2.5: Register server as participant
     try {
       const { queryUrl } = await import('@lib/utils/query/queryUrl')
-      const serverSigner = vault.signers.find(signer =>
+      const serverSigner = vault.signers.find((signer: string) =>
         signer.startsWith('Server-')
       )
       if (serverSigner) {
@@ -187,14 +180,14 @@ export class ServerManager {
     }
 
     // Sign all messages (UTXO can have multiple, EVM typically has one)
-    const signatureResults: Record<string, any> = {}
+    const signatureResults: Record<string, KeysignSignature> = {}
     for (const msg of messages) {
       console.log(`🔏 Signing message: ${msg}`)
       const sig = await keysign({
         keyShare,
         signatureAlgorithm,
         message: msg,
-        chainPath: derivePath.replaceAll("'", ''),
+        chainPath, // Use normalized chainPath from adapter
         localPartyId: signingLocalPartyId,
         peers,
         serverUrl: this.config.messageRelay,
@@ -206,38 +199,10 @@ export class ServerManager {
       signatureResults[msg] = sig
     }
 
-    // Step 6: Format signature results into SDK Signature type
-    console.log(`🔄 Formatting signature results for ${payload.chain}...`)
-
-    // Convert KeysignSignature(s) to SDK Signature format
-    // For most chains, there's one signature. For UTXO chains, there can be multiple.
-    const firstMessage = messages[0]
-    const firstSignature = signatureResults[firstMessage]
-
-    if (!firstSignature) {
-      throw new Error('No signature result found')
-    }
-
-    // Determine signature format based on algorithm
-    const signatureFormat =
-      signatureAlgorithm === 'ecdsa' ? ('ECDSA' as const) : ('EdDSA' as const)
-
-    // Return SDK Signature format
-    return {
-      signature: firstSignature.der_signature,
-      recovery: firstSignature.recovery_id
-        ? parseInt(firstSignature.recovery_id)
-        : undefined,
-      format: signatureFormat,
-      // For UTXO chains with multiple inputs, include all signatures
-      ...(messages.length > 1 && {
-        signatures: messages.map(msg => ({
-          r: signatureResults[msg].r,
-          s: signatureResults[msg].s,
-          der: signatureResults[msg].der_signature,
-        })),
-      }),
-    }
+    // Step 6: Format signature results using SDK adapter
+    console.log(`🔄 Formatting signature results...`)
+    const { formatSignature } = await import('../adapters')
+    return formatSignature(signatureResults, messages, signatureAlgorithm)
   }
 
   /**

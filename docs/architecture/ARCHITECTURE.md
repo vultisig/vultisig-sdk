@@ -1,7 +1,7 @@
 # Vultisig SDK Architecture
 
 **Last Updated:** November 2025
-**Status:** Production Ready
+**Status:** Alpha
 
 ---
 
@@ -209,6 +209,8 @@ packages/sdk/src/
 ├── adapters/                # Data format conversion
 │   ├── formatBalance.ts     # bigint → Balance
 │   ├── formatGasInfo.ts     # FeeQuote → GasInfo
+│   ├── formatSignature.ts   # KeysignSignature → Signature
+│   ├── getChainSigningInfo.ts # Extract chain signing metadata
 │   └── index.ts
 │
 ├── utils/                   # General utilities
@@ -494,7 +496,7 @@ class CacheService {
 
 **File:** `src/services/FastSigningService.ts`
 
-Server-assisted signing for 2-of-2 fast vaults.
+Server-assisted signing for 2-of-2 fast vaults using proper type safety and delegation.
 
 ```typescript
 async signWithServer(
@@ -505,11 +507,49 @@ async signWithServer(
 ```
 
 **Signing Flow:**
-1. Validate vault has server signer
-2. Get WalletCore instance
-3. Build keysign payload (use pre-computed hashes or build from transaction)
-4. Coordinate with ServerManager for MPC signing
-5. Return formatted signature
+1. Validate vault has server signer (`Server-*` in signers array)
+2. Validate payload contains pre-computed `messageHashes`
+3. Get WalletCore instance
+4. Delegate to ServerManager for MPC coordination
+5. Return properly typed `Signature` object
+
+**Architecture:**
+- **Type Safety:** All parameters fully typed (no `any`)
+- **Delegation Pattern:** Coordinates signing but delegates chain logic to adapters
+- **Validation:** Ensures payload comes from `Vault.prepareSendTx()` which uses Core's `buildSendKeysignPayload()`
+
+### ServerManager
+
+**File:** `src/server/ServerManager.ts`
+
+Coordinates all server communications for fast vaults with clean separation of concerns.
+
+```typescript
+async coordinateFastSigning(options: {
+  vault: Vault
+  messages: string[]
+  password: string
+  payload: SigningPayload
+  walletCore: WalletCore
+}): Promise<Signature>
+```
+
+**Server Coordination Flow:**
+1. Extract chain signing info using `getChainSigningInfo()` adapter
+2. Generate MPC session parameters (sessionId, encryption key, party ID)
+3. Call FastVault API to initiate server participation
+4. Join relay session for message coordination
+5. Wait for all participants (server + device)
+6. Start MPC session with all devices
+7. Perform MPC keysign for all messages (UTXO can have multiple)
+8. Format signatures using `formatSignature()` adapter
+9. Return properly typed `Signature` with optional multi-signature support
+
+**Architecture Principles:**
+- **Pure Coordination:** Handles ONLY server/MPC session coordination
+- **Zero Chain Logic:** All chain-specific logic delegated to SDK adapters
+- **Type Safety:** Fully typed parameters and return values
+- **Adapter Pattern:** Uses `getChainSigningInfo()` for chain metadata, `formatSignature()` for output formatting
 
 ---
 
@@ -558,6 +598,48 @@ export function formatGasInfo(
     gasPrice: feeQuote.gasPrice?.toString(),
     maxFeePerGas: feeQuote.maxFeePerGas?.toString(),
     priorityFee: feeQuote.priorityFee?.toString()
+  }
+}
+```
+
+### formatSignature.ts
+
+Converts Core's `KeysignSignature` to SDK's `Signature` object with support for UTXO multi-signatures.
+
+```typescript
+export function formatSignature(
+  signatureResults: Record<string, KeysignSignature>,
+  messages: string[],
+  signatureAlgorithm: SignatureAlgorithm
+): Signature {
+  // Maps signature algorithm to format
+  // Handles single-signature (EVM, Cosmos) and multi-signature (UTXO) cases
+  return {
+    signature: firstSignature.der_signature,
+    recovery: parseInt(firstSignature.recovery_id),
+    format: 'ECDSA' | 'EdDSA',
+    signatures: [...] // Optional for UTXO chains
+  }
+}
+```
+
+### getChainSigningInfo.ts
+
+Extracts chain-specific signing metadata (algorithm, derivation path).
+
+```typescript
+export async function getChainSigningInfo(
+  payload: { chain: Chain | string; derivePath?: string },
+  walletCore: WalletCore,
+  stringToChain: (chain: string) => Chain
+): Promise<ChainSigningInfo> {
+  // Determines signature algorithm (ECDSA vs EdDSA)
+  // Gets derivation path from chain config
+  // Normalizes path for MPC library
+  return {
+    signatureAlgorithm: 'ecdsa' | 'eddsa',
+    derivePath: "m/44'/60'/0'/0/0",
+    chainPath: "m/44/60/0/0/0" // normalized
   }
 }
 ```
@@ -658,8 +740,14 @@ interface GasInfo {
 // Signature data
 interface Signature {
   signature: string
-  txHash?: string
-  format: 'DER' | 'ECDSA' | 'EdDSA'
+  recovery?: number
+  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519'
+  // For UTXO chains with multiple inputs
+  signatures?: Array<{
+    r: string
+    s: string
+    der: string
+  }>
 }
 
 // Transaction payload
@@ -1058,4 +1146,4 @@ The Vultisig SDK architecture is **clean, layered, and environment-agnostic**:
 ---
 
 **Last Updated:** November 2025
-**Status:** Production Ready
+**Status:** Alpha
