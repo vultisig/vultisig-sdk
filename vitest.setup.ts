@@ -23,7 +23,7 @@ global.fetch = async (url: string | URL | Request) => {
   if (urlString.includes('.wasm')) {
     console.log('📦 Loading WASM file:', urlString)
     // Try to load from node_modules or lib directories
-    let wasmPath: string
+    let wasmPath: string | undefined = undefined
 
     if (urlString.includes('wallet-core.wasm')) {
       wasmPath = join(
@@ -133,6 +133,97 @@ global.fetch = async (url: string | URL | Request) => {
   } as Response)
 }
 
+/**
+ * Polyfills for Node.js test environment
+ * Add File and Blob support for tests that need them
+ */
+if (typeof File === 'undefined') {
+  // @ts-ignore - Adding File polyfill
+  global.File = class File {
+    name: string
+    type: string
+    lastModified: number
+    size: number
+    _buffer: Buffer
+
+    constructor(bits: BlobPart[], filename: string, options?: FilePropertyBag) {
+      this.name = filename
+      this.type = options?.type || ''
+      this.lastModified = options?.lastModified || Date.now()
+
+      // Combine all bits into a single buffer
+      const buffers: Buffer[] = []
+      for (const bit of bits) {
+        if (bit instanceof Buffer) {
+          buffers.push(bit)
+        } else if (bit instanceof Uint8Array) {
+          buffers.push(Buffer.from(bit))
+        } else if (typeof bit === 'string') {
+          buffers.push(Buffer.from(bit))
+        } else if ((bit as any)?.constructor?.name === 'Blob') {
+          // Handle Blob
+          const blobBuffer = (bit as any)._buffer
+          if (blobBuffer) {
+            buffers.push(blobBuffer)
+          }
+        }
+      }
+      this._buffer = buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this.size = this._buffer.length
+    }
+
+    async arrayBuffer(): Promise<ArrayBuffer> {
+      return this._buffer.buffer.slice(
+        this._buffer.byteOffset,
+        this._buffer.byteOffset + this._buffer.byteLength
+      ) as ArrayBuffer
+    }
+
+    async text(): Promise<string> {
+      return this._buffer.toString('utf-8')
+    }
+  }
+}
+
+if (typeof Blob === 'undefined') {
+  // @ts-ignore - Adding Blob polyfill
+  global.Blob = class Blob {
+    type: string
+    size: number
+    _buffer: Buffer
+
+    constructor(bits: BlobPart[], options?: BlobPropertyBag) {
+      this.type = options?.type || ''
+
+      const buffers: Buffer[] = []
+      for (const bit of bits) {
+        if (bit instanceof Buffer) {
+          buffers.push(bit)
+        } else if (bit instanceof Uint8Array) {
+          buffers.push(Buffer.from(bit))
+        } else if (typeof bit === 'string') {
+          buffers.push(Buffer.from(bit))
+        }
+      }
+      this._buffer = buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this.size = this._buffer.length
+    }
+
+    async arrayBuffer(): Promise<ArrayBuffer> {
+      return this._buffer.buffer.slice(
+        this._buffer.byteOffset,
+        this._buffer.byteOffset + this._buffer.byteLength
+      ) as ArrayBuffer
+    }
+
+    async text(): Promise<string> {
+      return this._buffer.toString('utf-8')
+    }
+  }
+}
+
 console.log(
   'Vitest setup: Global WASM loading configured for Node.js environment'
 )
+console.log('✅ File polyfill:', typeof File !== 'undefined')
+console.log('✅ Blob polyfill:', typeof Blob !== 'undefined')

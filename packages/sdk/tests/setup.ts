@@ -39,7 +39,7 @@ export const testUtils = {
       if (await condition()) {
         return
       }
-      await new Promise((resolve) => setTimeout(resolve, interval))
+      await new Promise(resolve => setTimeout(resolve, interval))
     }
     throw new Error(`Timeout waiting for condition after ${timeout}ms`)
   },
@@ -48,7 +48,7 @@ export const testUtils = {
    * Sleep for a specified duration
    */
   sleep: (ms: number): Promise<void> =>
-    new Promise((resolve) => setTimeout(resolve, ms)),
+    new Promise(resolve => setTimeout(resolve, ms)),
 
   /**
    * Generate random hex string (useful for mock data)
@@ -64,7 +64,7 @@ export const testUtils = {
       }
     }
     return Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
+      .map(b => b.toString(16).padStart(2, '0'))
       .join('')
   },
 
@@ -282,7 +282,7 @@ export const fixtures = {
         const data = await fs.readFile(fullPath, 'utf-8')
         return JSON.parse(data)
       }
-    } catch (error) {
+    } catch {
       console.warn(
         `Fixture not found: ${chainName}/${fixtureType} - this is expected if fixtures haven't been generated yet`
       )
@@ -315,7 +315,11 @@ export const assertions = {
 
     switch (chain) {
       case 'bitcoin':
-        return address.startsWith('bc1') || address.startsWith('1') || address.startsWith('3')
+        return (
+          address.startsWith('bc1') ||
+          address.startsWith('1') ||
+          address.startsWith('3')
+        )
       case 'ethereum':
         return address.startsWith('0x') && address.length === 42
       case 'solana':
@@ -398,6 +402,97 @@ export const testHelpers = {
 // Auto-configure console (disabled by default, can be enabled per test)
 setConsoleLogging(false)
 
+/**
+ * Polyfills for Node.js test environment
+ * Add File and Blob support for tests that need them
+ */
+if (testEnvironment.isNode && typeof File === 'undefined') {
+  // @ts-ignore - Adding File polyfill
+  global.File = class File {
+    name: string
+    type: string
+    lastModified: number
+    size: number
+    _buffer: Buffer
+
+    constructor(bits: BlobPart[], filename: string, options?: FilePropertyBag) {
+      this.name = filename
+      this.type = options?.type || ''
+      this.lastModified = options?.lastModified || Date.now()
+
+      // Combine all bits into a single buffer
+      const buffers: Buffer[] = []
+      for (const bit of bits) {
+        if (bit instanceof Buffer) {
+          buffers.push(bit)
+        } else if (bit instanceof Uint8Array) {
+          buffers.push(Buffer.from(bit))
+        } else if (typeof bit === 'string') {
+          buffers.push(Buffer.from(bit))
+        } else if ((bit as any)?.constructor?.name === 'Blob') {
+          // Handle Blob
+          const blobBuffer = (bit as any)._buffer
+          if (blobBuffer) {
+            buffers.push(blobBuffer)
+          }
+        }
+      }
+      this._buffer =
+        buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this.size = this._buffer.length
+    }
+
+    async arrayBuffer(): Promise<ArrayBuffer> {
+      return this._buffer.buffer.slice(
+        this._buffer.byteOffset,
+        this._buffer.byteOffset + this._buffer.byteLength
+      )
+    }
+
+    async text(): Promise<string> {
+      return this._buffer.toString('utf-8')
+    }
+  }
+}
+
+if (testEnvironment.isNode && typeof Blob === 'undefined') {
+  // @ts-ignore - Adding Blob polyfill
+  global.Blob = class Blob {
+    type: string
+    size: number
+    _buffer: Buffer
+
+    constructor(bits: BlobPart[], options?: BlobPropertyBag) {
+      this.type = options?.type || ''
+
+      const buffers: Buffer[] = []
+      for (const bit of bits) {
+        if (bit instanceof Buffer) {
+          buffers.push(bit)
+        } else if (bit instanceof Uint8Array) {
+          buffers.push(Buffer.from(bit))
+        } else if (typeof bit === 'string') {
+          buffers.push(Buffer.from(bit))
+        }
+      }
+      this._buffer =
+        buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this.size = this._buffer.length
+    }
+
+    async arrayBuffer(): Promise<ArrayBuffer> {
+      return this._buffer.buffer.slice(
+        this._buffer.byteOffset,
+        this._buffer.byteOffset + this._buffer.byteLength
+      )
+    }
+
+    async text(): Promise<string> {
+      return this._buffer.toString('utf-8')
+    }
+  }
+}
+
 console.log('✅ Vultisig SDK test setup loaded')
 console.log('🌍 Environment:', {
   node: testEnvironment.isNode,
@@ -405,4 +500,6 @@ console.log('🌍 Environment:', {
   chromeExt: testEnvironment.isChromeExtension,
   electron: testEnvironment.isElectron,
   wasm: wasmHelpers.isWasmSupported(),
+  file: typeof File !== 'undefined',
+  blob: typeof Blob !== 'undefined',
 })
