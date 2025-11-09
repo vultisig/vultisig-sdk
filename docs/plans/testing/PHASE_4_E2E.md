@@ -317,6 +317,41 @@ describe('E2E: Multi-Chain Transaction Signing', () => {
   });
 
   describe('Bitcoin Transaction Signing', () => {
+    it('should prepare and sign Bitcoin transaction using prepareSendTx()', async () => {
+      console.log('₿ Testing Bitcoin transaction preparation and signing...');
+
+      // Get vault address
+      const btcAddress = await vault.getAddress('bitcoin');
+
+      // Step 1: Prepare transaction using prepareSendTx()
+      const keysignPayload = await vault.prepareSendTx({
+        coin: {
+          chain: 'bitcoin',
+          address: btcAddress,
+          decimals: 8,
+          ticker: 'BTC'
+        },
+        receiver: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        amount: 100000n, // 0.001 BTC
+        feeSettings: {
+          byteFeeRate: 10n // 10 sat/byte
+        }
+      });
+
+      expect(keysignPayload).toBeDefined();
+      expect(keysignPayload.coin.chain).toBe('bitcoin');
+      expect(keysignPayload.toAddress).toBe('bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh');
+
+      // Step 2: Sign the prepared payload
+      const signature = await vault.sign('fast', keysignPayload, TEST_PASSWORD);
+
+      expect(signature).toBeDefined();
+      expect(signature.r).toBeDefined();
+      expect(signature.s).toBeDefined();
+
+      console.log('✅ Bitcoin transaction prepared and signed successfully');
+    });
+
     it('should sign simple Bitcoin transaction', async () => {
       console.log('₿ Testing Bitcoin transaction signing...');
 
@@ -366,6 +401,73 @@ describe('E2E: Multi-Chain Transaction Signing', () => {
   });
 
   describe('Ethereum Transaction Signing', () => {
+    it('should prepare and sign EIP-1559 transaction using prepareSendTx()', async () => {
+      console.log('Ξ Testing Ethereum transaction preparation and signing...');
+
+      const ethAddress = await vault.getAddress('ethereum');
+
+      // Step 1: Prepare transaction using prepareSendTx()
+      const keysignPayload = await vault.prepareSendTx({
+        coin: {
+          chain: 'ethereum',
+          address: ethAddress,
+          decimals: 18,
+          ticker: 'ETH'
+        },
+        receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+        amount: 100000000000000000n, // 0.1 ETH
+        feeSettings: {
+          maxFeePerGas: 30000000000n, // 30 Gwei
+          maxPriorityFeePerGas: 2000000000n, // 2 Gwei
+          gasLimit: 21000n
+        }
+      });
+
+      expect(keysignPayload).toBeDefined();
+      expect(keysignPayload.coin.chain).toBe('ethereum');
+
+      // Step 2: Sign the prepared payload
+      const signature = await vault.sign('fast', keysignPayload, TEST_PASSWORD);
+
+      expect(signature).toBeDefined();
+      expect(signature.r).toMatch(/^0x[a-fA-F0-9]{64}$/);
+      expect(signature.s).toMatch(/^0x[a-fA-F0-9]{64}$/);
+
+      console.log('✅ Ethereum transaction prepared and signed successfully');
+    });
+
+    it('should prepare and sign ERC-20 token transfer using prepareSendTx()', async () => {
+      console.log('Ξ Testing ERC-20 token transfer preparation...');
+
+      const ethAddress = await vault.getAddress('ethereum');
+
+      // Prepare USDC transfer
+      const keysignPayload = await vault.prepareSendTx({
+        coin: {
+          chain: 'ethereum',
+          address: ethAddress,
+          decimals: 6,
+          ticker: 'USDC',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' // USDC contract
+        },
+        receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+        amount: 100000000n, // 100 USDC
+        feeSettings: {
+          maxFeePerGas: 30000000000n,
+          maxPriorityFeePerGas: 2000000000n,
+          gasLimit: 100000n // Higher for token transfer
+        }
+      });
+
+      expect(keysignPayload).toBeDefined();
+      expect(keysignPayload.coin.id).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
+
+      const signature = await vault.sign('fast', keysignPayload, TEST_PASSWORD);
+      expect(signature).toBeDefined();
+
+      console.log('✅ ERC-20 token transfer prepared and signed successfully');
+    });
+
     it('should sign EIP-1559 Ethereum transaction', async () => {
       console.log('Ξ Testing Ethereum transaction signing...');
 

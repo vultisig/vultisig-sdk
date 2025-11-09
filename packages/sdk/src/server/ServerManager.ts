@@ -73,26 +73,24 @@ export class ServerManager {
   }
 
   /**
-   * Coordinate fast signing with VultiServer (refactored version)
-   * Pure server coordination - no chain-specific logic
+   * Coordinate fast signing with VultiServer
+   * Pure server coordination - uses core abstractions for signature formatting
    *
    * @param options.vault Vault with keys and signers
-   * @param options.messages Pre-computed message hashes (from strategy.computePreSigningHashes())
+   * @param options.messages Pre-computed message hashes
    * @param options.password Vault password for encryption
    * @param options.payload Original signing payload
-   * @param options.strategy Chain strategy for result formatting
    * @param options.walletCore WalletCore instance
-   * @returns Formatted signature (via strategy.formatSignatureResult())
+   * @returns Formatted signature
    */
   async coordinateFastSigning(options: {
     vault: any
     messages: string[]
     password: string
     payload: any
-    strategy: any
     walletCore: any
   }): Promise<any> {
-    const { vault, messages, password, payload, strategy, walletCore } = options
+    const { vault, messages, password, payload, walletCore } = options
 
     // Import required utilities
     const { getChainKind } = await import('@core/chain/ChainKind')
@@ -208,19 +206,38 @@ export class ServerManager {
       signatureResults[msg] = sig
     }
 
-    // Step 6: Format signature result using strategy (chain-specific)
-    console.log(
-      `🔄 Formatting signature result via ${payload.chain} strategy...`
-    )
+    // Step 6: Format signature results into SDK Signature type
+    console.log(`🔄 Formatting signature results for ${payload.chain}...`)
 
-    // Pass vault and walletCore in payload for strategy to use
-    const enrichedPayload = {
-      ...payload,
-      vault,
-      walletCore,
+    // Convert KeysignSignature(s) to SDK Signature format
+    // For most chains, there's one signature. For UTXO chains, there can be multiple.
+    const firstMessage = messages[0]
+    const firstSignature = signatureResults[firstMessage]
+
+    if (!firstSignature) {
+      throw new Error('No signature result found')
     }
 
-    return strategy.formatSignatureResult(signatureResults, enrichedPayload)
+    // Determine signature format based on algorithm
+    const signatureFormat =
+      signatureAlgorithm === 'ecdsa' ? ('ECDSA' as const) : ('EdDSA' as const)
+
+    // Return SDK Signature format
+    return {
+      signature: firstSignature.der_signature,
+      recovery: firstSignature.recovery_id
+        ? parseInt(firstSignature.recovery_id)
+        : undefined,
+      format: signatureFormat,
+      // For UTXO chains with multiple inputs, include all signatures
+      ...(messages.length > 1 && {
+        signatures: messages.map(msg => ({
+          r: signatureResults[msg].r,
+          s: signatureResults[msg].s,
+          der: signatureResults[msg].der_signature,
+        })),
+      }),
+    }
   }
 
   /**

@@ -311,6 +311,150 @@ describe('Vault', () => {
       expect(encrypted).toHaveProperty('data');
     });
   });
+
+  describe('transaction preparation', () => {
+    it('should prepare send transaction for native coin', async () => {
+      const payload = await vault.prepareSendTx({
+        coin: {
+          chain: 'ethereum',
+          address: await vault.getAddress('ethereum'),
+          decimals: 18,
+          ticker: 'ETH'
+        },
+        receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+        amount: 1000000000000000000n // 1 ETH
+      });
+
+      expect(payload).toBeDefined();
+      expect(payload).toHaveProperty('coin');
+      expect(payload).toHaveProperty('toAddress');
+      expect(payload).toHaveProperty('toAmount');
+      expect(payload.toAddress).toBe('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb');
+    });
+
+    it('should prepare send transaction for token', async () => {
+      const payload = await vault.prepareSendTx({
+        coin: {
+          chain: 'ethereum',
+          address: await vault.getAddress('ethereum'),
+          decimals: 6,
+          ticker: 'USDC',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+        },
+        receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+        amount: 100000000n // 100 USDC
+      });
+
+      expect(payload).toBeDefined();
+      expect(payload.coin.id).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
+    });
+
+    it('should prepare send transaction with memo', async () => {
+      const payload = await vault.prepareSendTx({
+        coin: {
+          chain: 'thorchain',
+          address: await vault.getAddress('thorchain'),
+          decimals: 8,
+          ticker: 'RUNE'
+        },
+        receiver: 'thor1abc...',
+        amount: 100000000n, // 1 RUNE
+        memo: 'SWAP:BTC.BTC:bc1q...'
+      });
+
+      expect(payload).toBeDefined();
+      expect(payload).toHaveProperty('memo');
+      expect(payload.memo).toBe('SWAP:BTC.BTC:bc1q...');
+    });
+
+    it('should prepare send transaction with custom fee settings', async () => {
+      const payload = await vault.prepareSendTx({
+        coin: {
+          chain: 'ethereum',
+          address: await vault.getAddress('ethereum'),
+          decimals: 18,
+          ticker: 'ETH'
+        },
+        receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+        amount: 1000000000000000000n,
+        feeSettings: {
+          maxPriorityFeePerGas: 2000000000n,
+          gasLimit: 100000n
+        }
+      });
+
+      expect(payload).toBeDefined();
+      // Note: feeSettings are applied internally by buildSendKeysignPayload
+    });
+
+    it('should handle errors in prepareSendTx', async () => {
+      await expect(
+        vault.prepareSendTx({
+          coin: {
+            chain: 'invalid-chain',
+            address: 'invalid',
+            decimals: 18,
+            ticker: 'INVALID'
+          },
+          receiver: 'invalid',
+          amount: 1000n
+        })
+      ).rejects.toThrow();
+    });
+
+    it('should validate receiver address format', async () => {
+      await expect(
+        vault.prepareSendTx({
+          coin: {
+            chain: 'ethereum',
+            address: await vault.getAddress('ethereum'),
+            decimals: 18,
+            ticker: 'ETH'
+          },
+          receiver: 'not-a-valid-eth-address',
+          amount: 1000000000000000000n
+        })
+      ).rejects.toThrow();
+    });
+
+    it('should prepare send transactions for all chain types', async () => {
+      const chains = [
+        {
+          chain: 'bitcoin',
+          address: await vault.getAddress('bitcoin'),
+          decimals: 8,
+          ticker: 'BTC',
+          receiver: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
+        },
+        {
+          chain: 'ethereum',
+          address: await vault.getAddress('ethereum'),
+          decimals: 18,
+          ticker: 'ETH',
+          receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
+        },
+        {
+          chain: 'solana',
+          address: await vault.getAddress('solana'),
+          decimals: 9,
+          ticker: 'SOL',
+          receiver: 'DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK'
+        }
+      ];
+
+      for (const { chain, address, decimals, ticker, receiver } of chains) {
+        const payload = await vault.prepareSendTx({
+          coin: { chain, address, decimals, ticker },
+          receiver,
+          amount: 1000000n
+        });
+
+        expect(payload).toBeDefined();
+        expect(payload.coin.chain).toBe(chain);
+        expect(payload.toAddress).toBe(receiver);
+      }
+    });
+  });
 });
 ```
 
@@ -794,137 +938,17 @@ describe('FastSigningService', () => {
 
 ### Day 8-9: Adapter Tests
 
-#### Task 2.6: Transaction Adapters Tests
+#### Task 2.6: Balance/Gas Adapters Tests
 ```typescript
-// tests/unit/vault/adapters/transaction-adapters.test.ts
-import { describe, it, expect } from 'vitest';
-import {
-  buildKeysignPayload,
-  formatTransactionForSigning,
-  extractMessageHash
-} from '@/vault/adapters/transaction-adapters';
-import { loadChainFixture } from '@helpers/fixture-loaders';
-
-describe('Transaction Adapters', () => {
-  describe('buildKeysignPayload', () => {
-    it('should build Bitcoin keysign payload', async () => {
-      const btcFixture = await loadChainFixture('bitcoin');
-      const transaction = btcFixture.transactions.unsigned.simple;
-
-      const payload = buildKeysignPayload('bitcoin', transaction);
-
-      expect(payload).toHaveProperty('messageHash');
-      expect(payload).toHaveProperty('chain', 'bitcoin');
-      expect(payload).toHaveProperty('signatureType', 'ecdsa');
-      expect(payload.messageHash).toMatch(/^[a-fA-F0-9]{64}$/);
-    });
-
-    it('should build Ethereum keysign payload', async () => {
-      const ethFixture = await loadChainFixture('ethereum');
-      const transaction = ethFixture.transactions.unsigned.simple;
-
-      const payload = buildKeysignPayload('ethereum', transaction);
-
-      expect(payload).toHaveProperty('messageHash');
-      expect(payload).toHaveProperty('chain', 'ethereum');
-      expect(payload).toHaveProperty('signatureType', 'ecdsa');
-      expect(payload.messageHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
-    });
-
-    it('should build Solana keysign payload', async () => {
-      const solFixture = await loadChainFixture('solana');
-      const transaction = solFixture.transactions.unsigned.simple;
-
-      const payload = buildKeysignPayload('solana', transaction);
-
-      expect(payload).toHaveProperty('messageHash');
-      expect(payload).toHaveProperty('chain', 'solana');
-      expect(payload).toHaveProperty('signatureType', 'eddsa');
-    });
-
-    it('should handle complex transactions', async () => {
-      const ethFixture = await loadChainFixture('ethereum');
-      const complexTx = ethFixture.transactions.unsigned.complex;
-
-      const payload = buildKeysignPayload('ethereum', complexTx);
-
-      expect(payload).toBeDefined();
-      expect(payload.messageHash).toBeDefined();
-    });
-  });
-
-  describe('formatTransactionForSigning', () => {
-    it('should format UTXO transaction', async () => {
-      const btcFixture = await loadChainFixture('bitcoin');
-      const rawTx = btcFixture.transactions.unsigned.simple;
-
-      const formatted = formatTransactionForSigning('bitcoin', rawTx);
-
-      expect(formatted).toHaveProperty('inputs');
-      expect(formatted).toHaveProperty('outputs');
-      expect(formatted.inputs).toBeInstanceOf(Array);
-    });
-
-    it('should format EVM transaction', async () => {
-      const ethFixture = await loadChainFixture('ethereum');
-      const rawTx = ethFixture.transactions.unsigned.simple;
-
-      const formatted = formatTransactionForSigning('ethereum', rawTx);
-
-      expect(formatted).toHaveProperty('to');
-      expect(formatted).toHaveProperty('value');
-      expect(formatted).toHaveProperty('gasLimit');
-      expect(formatted).toHaveProperty('chainId');
-    });
-
-    it('should format Cosmos transaction', async () => {
-      const thorFixture = await loadChainFixture('thorchain');
-      const rawTx = thorFixture.transactions.unsigned.simple;
-
-      const formatted = formatTransactionForSigning('thorchain', rawTx);
-
-      expect(formatted).toHaveProperty('messages');
-      expect(formatted).toHaveProperty('fee');
-      expect(formatted).toHaveProperty('memo');
-    });
-  });
-
-  describe('extractMessageHash', () => {
-    it('should extract hash from signed Bitcoin tx', async () => {
-      const btcFixture = await loadChainFixture('bitcoin');
-      const signedTx = btcFixture.transactions.signed.simple;
-
-      const hash = extractMessageHash('bitcoin', signedTx);
-
-      expect(hash).toBeDefined();
-      expect(hash).toMatch(/^[a-fA-F0-9]{64}$/);
-    });
-
-    it('should extract hash from signed Ethereum tx', async () => {
-      const ethFixture = await loadChainFixture('ethereum');
-      const signedTx = ethFixture.transactions.signed.simple;
-
-      const hash = extractMessageHash('ethereum', signedTx);
-
-      expect(hash).toBeDefined();
-      expect(hash).toMatch(/^0x[a-fA-F0-9]{64}$/);
-    });
-  });
-});
-```
-
-#### Task 2.7: Balance Adapters Tests
-```typescript
-// tests/unit/vault/adapters/balance-adapters.test.ts
+// tests/unit/vault/adapters/balance-gas-adapters.test.ts
 import { describe, it, expect } from 'vitest';
 import {
   formatBalance,
-  parseTokenBalance,
-  convertToUSD
-} from '@/vault/adapters/balance-adapters';
+  formatGasInfo
+} from '@/vault/adapters';
 import { loadChainFixture } from '@helpers/fixture-loaders';
 
-describe('Balance Adapters', () => {
+describe('Balance and Gas Adapters', () => {
   describe('formatBalance', () => {
     it('should format Bitcoin balance (8 decimals)', () => {
       const formatted = formatBalance('100000000', 8); // 1 BTC

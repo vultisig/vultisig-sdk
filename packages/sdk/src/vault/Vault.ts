@@ -1,14 +1,20 @@
 import { create } from '@bufbuild/protobuf'
 // Core functions (functional dispatch) - Direct imports from core
 import { Chain } from '@core/chain/Chain'
+import type { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { getCoinBalance } from '@core/chain/coin/balance'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { getChainSpecific } from '@core/mpc/keysign/chainSpecific'
+import type { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
 import { toCommCoin } from '@core/mpc/types/utils/commCoin'
-import { KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import {
+  type KeysignPayload,
+  KeysignPayloadSchema,
+} from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { buildSendKeysignPayload } from '@core/ui/vault/send/keysignPayload/build'
 
 import { formatBalance } from '../adapters/formatBalance'
 import { formatGasInfo } from '../adapters/formatGasInfo'
@@ -461,6 +467,104 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       throw new VaultError(
         VaultErrorCode.GasEstimationFailed,
         `Failed to estimate gas for ${chain}`,
+        error as Error
+      )
+    }
+  }
+
+  // ===== TRANSACTION PREPARATION =====
+
+  /**
+   * Prepare a send transaction keysign payload
+   *
+   * This method builds a complete keysign payload for sending tokens or native coins.
+   * The returned `KeysignPayload` can be passed directly to the `sign()` method.
+   *
+   * @param params - Transaction parameters
+   * @param params.coin - The coin to send (AccountCoin with chain, address, decimals, ticker, and optional id for tokens)
+   * @param params.receiver - The recipient's address
+   * @param params.amount - Amount to send in base units (as bigint)
+   * @param params.memo - Optional transaction memo (for chains that support it)
+   * @param params.feeSettings - Optional custom fee settings (FeeSettings - chain-specific)
+   *
+   * @returns A KeysignPayload ready to be signed with the sign() method
+   *
+   * @example
+   * ```typescript
+   * // Prepare a native coin transfer
+   * const payload = await vault.prepareSendTx({
+   *   coin: {
+   *     chain: Chain.Ethereum,
+   *     address: await vault.address('ethereum'),
+   *     decimals: 18,
+   *     ticker: 'ETH'
+   *   },
+   *   receiver: '0x...',
+   *   amount: 1500000000000000000n // 1.5 ETH
+   * })
+   *
+   * // Sign the transaction
+   * const signature = await vault.sign('fast', payload, password)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Prepare a token transfer with custom fees
+   * const payload = await vault.prepareSendTx({
+   *   coin: {
+   *     chain: Chain.Ethereum,
+   *     address: await vault.address('ethereum'),
+   *     decimals: 6,
+   *     ticker: 'USDC',
+   *     id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+   *   },
+   *   receiver: '0x...',
+   *   amount: 100000000n, // 100 USDC
+   *   feeSettings: {
+   *     maxPriorityFeePerGas: 2000000000n,
+   *     gasLimit: 100000n
+   *   }
+   * })
+   * ```
+   */
+  async prepareSendTx(params: {
+    coin: AccountCoin
+    receiver: string
+    amount: bigint
+    memo?: string
+    feeSettings?: FeeSettings
+  }): Promise<KeysignPayload> {
+    try {
+      // Get WalletCore
+      const walletCore = await this.wasmManager.getWalletCore()
+
+      // Get public key for the coin's chain
+      const publicKey = getPublicKey({
+        chain: params.coin.chain,
+        walletCore,
+        publicKeys: this.vaultData.publicKeys,
+        hexChainCode: this.vaultData.hexChainCode,
+      })
+
+      // Build the keysign payload using core function
+      const keysignPayload = await buildSendKeysignPayload({
+        coin: params.coin,
+        receiver: params.receiver,
+        amount: params.amount,
+        memo: params.memo,
+        vaultId: this.vaultData.publicKeys.ecdsa,
+        localPartyId: this.vaultData.localPartyId,
+        publicKey,
+        walletCore,
+        libType: this.vaultData.libType,
+        feeSettings: params.feeSettings,
+      })
+
+      return keysignPayload
+    } catch (error) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Failed to prepare send transaction: ${(error as Error).message}`,
         error as Error
       )
     }
