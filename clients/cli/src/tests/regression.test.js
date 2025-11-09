@@ -16,11 +16,17 @@ const TIMEOUT = 30000
 describe('Regression Tests', () => {
   describe('API Compatibility', () => {
     test('should use new Vultisig SDK API (not old VaultManager)', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should NOT contain old VaultManager patterns
       expect(output).not.toContain('VaultManager.add')
@@ -28,16 +34,23 @@ describe('Regression Tests', () => {
 
       // Should show new SDK patterns
       expect(output).toContain('Vault initialized')
-      const vaultData = expectedVaultData['TestSecureVault-cfa0-share2of2-NoPassword.vult']
+      const vaultData =
+        expectedVaultData['TestSecureVault-cfa0-share2of2-NoPassword.vult']
       expect(output).toContain(vaultData.publicKeys.ecdsa)
     })
 
     test('should not use workaround patterns', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should NOT contain workaround patterns
       expect(output).not.toContain('Creating vault with WalletCore')
@@ -52,11 +65,17 @@ describe('Regression Tests', () => {
 
   describe('WASM Loading', () => {
     test('should not fail with WASM fetch errors', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should NOT contain WASM loading errors
       expect(output).not.toContain('fetch failed')
@@ -69,14 +88,21 @@ describe('Regression Tests', () => {
     })
 
     test('should have WalletCore properly initialized', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should show WalletCore is available
-      const vaultData = expectedVaultData['TestSecureVault-cfa0-share2of2-NoPassword.vult']
+      const vaultData =
+        expectedVaultData['TestSecureVault-cfa0-share2of2-NoPassword.vult']
       expect(output).toContain(vaultData.publicKeys.ecdsa)
 
       // Should NOT contain WalletCore errors
@@ -87,11 +113,17 @@ describe('Regression Tests', () => {
 
   describe('File Handling', () => {
     test('should not fail with File polyfill errors', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should NOT contain File polyfill errors
       expect(output).not.toContain('FileReader not available')
@@ -107,7 +139,9 @@ describe('Regression Tests', () => {
 
       // Should find and list vault files
       expect(output).toMatch(/Found \d+ vault file\(s\)/)
-      expect(parseInt(output.match(/Found (\d+) vault file\(s\)/)[1])).toBeGreaterThanOrEqual(3)
+      expect(
+        parseInt(output.match(/Found (\d+) vault file\(s\)/)[1])
+      ).toBeGreaterThanOrEqual(3)
       expect(output).toContain('TestSecureVault')
       expect(output).toContain('🔓 unencrypted')
       expect(output).toContain('🔐 encrypted')
@@ -116,11 +150,17 @@ describe('Regression Tests', () => {
 
   describe('Import Resolution', () => {
     test('should not fail with module resolution errors', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should NOT contain module resolution errors
       expect(output).not.toContain('Cannot find module')
@@ -134,11 +174,17 @@ describe('Regression Tests', () => {
     })
 
     test('should load SDK bundle correctly', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should show SDK is working
       expect(output).toContain('Vault initialized')
@@ -149,7 +195,10 @@ describe('Regression Tests', () => {
   describe('Performance Regressions', () => {
     test('address derivation should not be slower than 10 seconds', () => {
       const startTime = Date.now()
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
 
       execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',
@@ -181,24 +230,38 @@ describe('Regression Tests', () => {
 
   describe('Output Format Consistency', () => {
     test('should maintain consistent address output format', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should follow expected format
       expect(output).toMatch(/=== Addresses \(ephemeral vault\) ===/)
       expect(output).toMatch(/✅ Bitcoin: bc1[a-z0-9]+/)
-      expect(output).toMatch(/💡 Addresses retrieved from ephemeral vault operation/)
+      expect(output).toMatch(
+        /💡 Addresses retrieved from ephemeral vault operation/
+      )
     })
 
     test('should show vault metadata consistently', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Should show vault initialization info
       const vaultData =

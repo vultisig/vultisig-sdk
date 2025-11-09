@@ -77,7 +77,9 @@ describe('CLI Commands Tests', () => {
     test('should list available vault files', () => {
       const output = execSync(`${CLI_PATH} list`, { encoding: 'utf8' })
       expect(output).toMatch(/Found \d+ vault file\(s\)/)
-      expect(parseInt(output.match(/Found (\d+) vault file\(s\)/)[1])).toBeGreaterThanOrEqual(3)
+      expect(
+        parseInt(output.match(/Found (\d+) vault file\(s\)/)[1])
+      ).toBeGreaterThanOrEqual(3)
       expect(output).toContain('TestFastVault-44fd-share2of2-Password123!.vult')
       expect(output).toContain('TestSecureVault')
       expect(output).toContain('🔐 encrypted')
@@ -87,30 +89,45 @@ describe('CLI Commands Tests', () => {
 
   describe('Address Command', () => {
     test('should derive Bitcoin address for unencrypted vault', () => {
-      const vaultFile = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultFile}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultFile = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultFile}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       const expectedBitcoinAddress =
         expectedAddresses['TestSecureVault-cfa0-share2of2-NoPassword.vult']
           .Bitcoin
 
       expect(output).toContain('Loading vault')
-      expect(output).toContain('TestSecureVault')  // Vault name, not filename
-      const vaultData = expectedVaultData['TestSecureVault-cfa0-share2of2-NoPassword.vult']
+      expect(output).toContain('TestSecureVault') // Vault name, not filename
+      const vaultData =
+        expectedVaultData['TestSecureVault-cfa0-share2of2-NoPassword.vult']
       expect(output).toContain(vaultData.publicKeys.ecdsa)
       expect(output).toContain(`Bitcoin: ${expectedBitcoinAddress}`)
-      expect(output).toContain('Addresses retrieved from ephemeral vault operation')
+      expect(output).toContain(
+        'Addresses retrieved from ephemeral vault operation'
+      )
     })
 
     test('should derive Ethereum address for unencrypted vault', () => {
-      const vaultFile = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network ethereum --vault "${vaultFile}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultFile = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network ethereum --vault "${vaultFile}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       const expectedEthereumAddress =
         expectedAddresses['TestSecureVault-cfa0-share2of2-NoPassword.vult']
@@ -121,11 +138,17 @@ describe('CLI Commands Tests', () => {
     })
 
     test('should derive Solana address for unencrypted vault', () => {
-      const vaultFile = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network solana --vault "${vaultFile}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultFile = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network solana --vault "${vaultFile}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       const expectedSolanaAddress =
         expectedAddresses['TestSecureVault-cfa0-share2of2-NoPassword.vult']
@@ -136,11 +159,17 @@ describe('CLI Commands Tests', () => {
     })
 
     test('should derive addresses for all supported chains', () => {
-      const vaultFile = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network all --vault "${vaultFile}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultFile = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network all --vault "${vaultFile}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       // Check that all major chains are derived
       const vaultAddresses =
@@ -166,11 +195,17 @@ describe('CLI Commands Tests', () => {
     })
 
     test('should show performance metrics', () => {
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
-      const output = execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
-        encoding: 'utf8',
-        timeout: TIMEOUT,
-      })
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
+      const output = execSync(
+        `${CLI_PATH} address --network bitcoin --vault "${vaultName}"`,
+        {
+          encoding: 'utf8',
+          timeout: TIMEOUT,
+        }
+      )
 
       expect(output).toContain('Derivation time for bitcoin:')
       expect(output).toMatch(/\d+\.\d+ ms/) // Should show timing in ms
@@ -219,7 +254,10 @@ describe('CLI Commands Tests', () => {
   describe('Performance Tests', () => {
     test('address derivation should complete within reasonable time', () => {
       const startTime = Date.now()
-      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
+      const vaultName = path.join(
+        vaultsDir,
+        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
+      )
 
       execSync(`${CLI_PATH} address --network bitcoin --vault "${vaultName}"`, {
         encoding: 'utf8',

@@ -351,7 +351,7 @@ export class DaemonManager {
             try {
               balances[chain] = await (this.vault as any).balance(chain)
             } catch (error) {
-              balances[chain] = 
+              balances[chain] =
                 `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
             }
           }
@@ -366,18 +366,21 @@ export class DaemonManager {
           const signRequest = request.params as SignTransactionRequest
           console.log('Daemon received sign_transaction request')
           console.log('  Network:', signRequest.network)
-          console.log('  Payload:', JSON.stringify(signRequest.payload, null, 2))
-          
+          console.log(
+            '  Payload:',
+            JSON.stringify(signRequest.payload, null, 2)
+          )
+
           const signingPayload = {
             transaction: signRequest.payload,
             chain: signRequest.network,
           }
-          
+
           const signature = await (this.vault as any).signWithPayload(
             signingPayload,
             signRequest.password
           )
-          
+
           console.log('Daemon completed signing')
 
           return { success: true, result: signature }

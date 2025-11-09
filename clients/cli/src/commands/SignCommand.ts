@@ -106,7 +106,10 @@ export class SignCommand {
 
         return
       } catch (error) {
-        console.log('⚠️  Daemon signing failed:', error instanceof Error ? error.message : error)
+        console.log(
+          '⚠️  Daemon signing failed:',
+          error instanceof Error ? error.message : error
+        )
         console.log('⚠️  Trying direct vault signing...')
         shouldLoadDirectly = true
       }

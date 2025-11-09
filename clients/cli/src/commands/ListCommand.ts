@@ -43,7 +43,9 @@ export class ListCommand {
 
     if (vultFiles.length === 0) {
       console.log(`📁 No vault files found in: ${vaultsDir}`)
-      console.log('\nPlace your .vult files in this directory to use them with the CLI.')
+      console.log(
+        '\nPlace your .vult files in this directory to use them with the CLI.'
+      )
       return
     }
 

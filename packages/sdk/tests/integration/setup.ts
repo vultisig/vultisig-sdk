@@ -29,7 +29,11 @@ const wasmFetchHandler = async (
   _init?: RequestInit
 ): Promise<Response | null> => {
   const url =
-    typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url
 
   // Check if this is a WASM file request with file:// protocol
   if (url.endsWith('.wasm') && url.startsWith('file://')) {
@@ -75,7 +79,8 @@ const wrappedFetch = async function (
 
   // Delegate to current globalThis.fetch (which might be a mock)
   // We check globalThis.fetch at call time, not setup time
-  const currentFetch = globalThis.fetch === wrappedFetch ? originalFetch : globalThis.fetch
+  const currentFetch =
+    globalThis.fetch === wrappedFetch ? originalFetch : globalThis.fetch
   return currentFetch(input as any, init)
 }
 
