@@ -3,95 +3,52 @@
 **Coverage Target**: 65%
 **Priority**: HIGH
 
-## 🔴 CRITICAL: PRODUCTION TESTING WITH REAL FUNDS
+## ⚠️ UPDATED STRATEGY: MOCKED INTEGRATION TESTS (No Real Funds)
 
-**⚠️ This phase uses PRODUCTION environment with SMALL AMOUNTS of REAL FUNDS**
+**Phase 3 uses MOCKED vault creation with REAL WASM for safe, comprehensive testing**
 
-### ⚠️ WARNING: REAL MONEY AT RISK
-This testing strategy involves creating real vaults on production VultiServer and broadcasting real transactions on mainnet blockchains with actual cryptocurrency. While we use small amounts ($1-5 per chain), there is **REAL FINANCIAL RISK**.
+### Strategy Change Rationale
+The original plan called for production testing with real funds in Phase 3. After review, we've decided to **defer production testing to Phase 4 (E2E)** for the following reasons:
 
-### Why Production with Real Funds?
-1. **No Staging Environment**: VultiServer does not have a staging/test environment available
-2. **Testnet Limitations**: Testnets don't catch production-specific issues (server load, real MPC timing, mainnet RPC differences)
-3. **Cryptographic Authenticity**: Only real MPC operations validate actual signature correctness
-4. **Production Confidence**: Tests the EXACT user experience with real servers and real blockchains
-5. **Cross-Chain Validation**: Real WASM + real chain code = real addresses for all 35 chains
+1. **Integration vs E2E Separation**: Integration tests should validate component interactions, not full production flows
+2. **Safety First**: No need to risk real funds for testing address derivation and vault operations
+3. **Faster Development**: Mocked tests run faster and don't require production credentials or funding
+4. **Better Coverage**: Can test all 40+ chains without needing mainnet funds for each
+5. **E2E is Better Suited**: Production testing with real funds belongs in dedicated E2E test suite (Phase 4)
 
-### Safety Strategy
-- ✅ **SMALL AMOUNTS ONLY**: Maximum $5 per chain, $50 total budget
-- ✅ **MANUAL APPROVAL**: Explicit confirmation required before ANY transaction broadcast
-- ✅ **LOW-FEE FIRST**: Test on Solana/Polygon before Bitcoin/Ethereum
-- ✅ **TRANSACTION LOGGING**: All transaction hashes logged for audit
-- ✅ **VAULT BACKUP**: Export and backup all test vaults immediately after creation
-- ✅ **ADDRESS DOCUMENTATION**: Document all test addresses for fund recovery
-- ✅ **AMOUNT LIMITS**: Hard-coded maximum amounts in test code
-- ✅ **RECOVERY PLAN**: Keep .vult backups and private keys recoverable
+### Phase 3 Approach (SAFE - No Real Funds)
+- ✅ **REAL WASM Modules**: Authentic cryptographic operations for address derivation
+- ✅ **MOCKED Vault Creation**: No production server dependencies
+- ✅ **ALL 40+ Chains**: Test every supported blockchain for address derivation
+- ✅ **Public SDK API**: Tests use only the public `Vultisig` class interface
+- ✅ **Fast Execution**: Tests run in <2 seconds without network calls
+- ✅ **No Credentials Needed**: No production API keys or test email accounts required
+- ✅ **No Financial Risk**: Zero chance of losing real funds
 
-### Production Environment Setup
-- **VultiServer**: Production endpoints (https://api.vultisig.com)
-- **Blockchains**: MAINNET RPCs (Bitcoin, Ethereum, Solana, Polygon, etc.)
-- **Credentials**: Dedicated test email account (NOT personal)
-- **Funds**: Small amounts loaded onto test vaults
-- **Cleanup**: Manual export and backup (NOT deletion - funds need recovery)
+### What Gets Tested in Phase 3
+1. **Address Derivation**: All 40+ chains with REAL WASM cryptography
+2. **Vault Import/Export**: File operations with encryption/decryption
+3. **Component Integration**: Vault → WASM → Chain operations
+4. **Cache Behavior**: Address caching and performance
+5. **Chain Validation**: Format validation for all chain types (UTXO, EVM, EdDSA, Cosmos)
 
-### Required Environment Variables
-```bash
-# PRODUCTION endpoints
-VULTISIG_API_URL=https://api.vultisig.com
-VULTISIG_RELAY_URL=<production-relay-url>
+### What Moves to Phase 4 (E2E with Real Funds)
+- 🔴 **Production Vault Creation**: Real MPC operations with VultiServer
+- 🔴 **Transaction Signing**: Real signing ceremonies with production server
+- 🔴 **Transaction Broadcasting**: Real mainnet transactions (SMALL AMOUNTS)
+- 🔴 **Email Verification**: Real email verification flow
+- 🔴 **Balance Fetching**: Real blockchain RPC calls
+- 🔴 **Server Coordination**: Real MessageRelay and MPC protocols
 
-# Test credentials
-VULTISIG_TEST_EMAIL=sdk-integration-tests@example.com
-VULTISIG_TEST_PASSWORD=<secure-password>
-
-# MAINNET RPC endpoints
-ETH_MAINNET_RPC=https://eth-mainnet.g.alchemy.com/v2/<key>
-BTC_MAINNET_RPC=https://blockstream.info/api
-SOL_MAINNET_RPC=https://api.mainnet-beta.solana.com
-POLYGON_MAINNET_RPC=https://polygon-rpc.com
-AVAX_MAINNET_RPC=https://api.avax.network/ext/bc/C/rpc
-# ... (more MAINNET RPCs)
-
-# Safety controls
-MAX_TOTAL_TEST_FUNDS_USD=50
-MAX_PER_CHAIN_USD=5
-REQUIRE_TX_APPROVAL=true
-LOG_ALL_TRANSACTIONS=true
-EXPORT_TEST_VAULTS=true
-VAULT_BACKUP_DIR=./test-vault-backups
-
-# Fund allocations (in USD equivalent)
-BTC_TEST_AMOUNT_USD=5
-ETH_TEST_AMOUNT_USD=3
-SOL_TEST_AMOUNT_USD=1
-POLYGON_TEST_AMOUNT_USD=1
-AVAX_TEST_AMOUNT_USD=2
-```
-
-### Test Fund Management
-```typescript
-// Maximum amounts per chain (enforced in code)
-const MAX_TEST_AMOUNTS = {
-  bitcoin: 5,       // $5 BTC (~0.00005 BTC at $100k)
-  ethereum: 3,      // $3 ETH (higher fees)
-  solana: 1,        // $1 SOL (low fees)
-  polygon: 1,       // $1 MATIC (low fees)
-  avalanche: 2,     // $2 AVAX
-  binanceSmartChain: 1,  // $1 BNB
-  // ... other chains
-}
-
-// TOTAL CAP: $50 across ALL chains
-const MAX_TOTAL_BUDGET_USD = 50
-```
+See **[Phase 4: E2E Testing](PHASE_4_E2E.md)** for production testing with real funds strategy.
 
 ## Objectives
 
-1. Test component interactions with REAL PRODUCTION server coordination
-2. Validate vault lifecycle operations with REAL MPC keygen/signing on PRODUCTION
-3. Test address derivation for ALL 30+ chains with REAL WASM on MAINNET
-4. Validate REAL production VultiServer + MessageRelay coordination
-5. Test REAL blockchain interactions (balances, transactions on MAINNET with small funds)
+1. Test component interactions with **MOCKED** vault creation
+2. Validate address derivation for ALL 40+ chains with **REAL WASM**
+3. Test vault import/export operations with encryption
+4. Validate chain-specific address formats and validation
+5. Test caching behavior and performance optimization
 
 ## Prerequisites
 

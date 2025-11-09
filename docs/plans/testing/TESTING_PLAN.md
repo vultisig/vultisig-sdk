@@ -74,26 +74,33 @@ Key deliverables:
 [Detailed implementation in PHASE_2_CORE.md](PHASE_2_CORE.md)
 
 ### Phase 3: Integration Testing (Week 5-6)
-**Objective**: Validate component interactions
+**Objective**: Validate component interactions (MOCKED - No Real Funds)
 
 Key deliverables:
-- Vault lifecycle integration tests
-- Address derivation for ALL chains
-- Server coordination tests
-- WASM module integration
+- Address derivation for ALL 40+ chains with REAL WASM
+- Vault import/export integration with encryption
+- Component integration (Vault → WASM → Chains)
 - Cache behavior validation
+- Chain-specific address format validation
+
+**Strategy**: Uses MOCKED vault creation with REAL WASM modules. No production servers, no real funds, no financial risk.
 
 [Detailed implementation in PHASE_3_INTEGRATION.md](PHASE_3_INTEGRATION.md)
 
 ### Phase 4: End-to-End Testing (Week 7-8)
-**Objective**: Test complete user workflows
+**Objective**: Test complete user workflows (PRODUCTION - Real Funds)
+
+🔴 **CRITICAL**: This phase uses **PRODUCTION environment with REAL FUNDS** (small amounts)
 
 Key deliverables:
-- Fast vault creation flow
-- Transaction signing for each chain family
-- Import/export operations
-- Email verification flow
+- Fast vault creation flow with REAL MPC operations
+- Transaction signing with REAL signing ceremonies
+- REAL transaction broadcasting on mainnet (small amounts $1-5 per chain)
+- Email verification flow with production server
+- Full import/export cycles with real vault files
 - Error recovery scenarios
+
+**Safety**: $50 total budget, manual approval required for all transactions, comprehensive logging and backups.
 
 [Detailed implementation in PHASE_4_E2E.md](PHASE_4_E2E.md)
 

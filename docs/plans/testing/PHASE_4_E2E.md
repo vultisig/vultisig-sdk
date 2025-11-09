@@ -3,21 +3,72 @@
 **Coverage Target**: 75%
 **Priority**: CRITICAL
 
+## 🔴 PRODUCTION TESTING WITH REAL FUNDS
+
+**⚠️ This phase uses PRODUCTION environment with SMALL AMOUNTS of REAL FUNDS**
+
+### ⚠️ WARNING: REAL MONEY AT RISK
+Phase 4 E2E tests involve creating real vaults on production VultiServer and broadcasting real transactions on mainnet blockchains with actual cryptocurrency. While we use small amounts ($1-5 per chain), there is **REAL FINANCIAL RISK**.
+
+### Why Production with Real Funds in E2E?
+1. **No Staging Environment**: VultiServer does not have a staging/test environment available
+2. **Testnet Limitations**: Testnets don't catch production-specific issues (server load, real MPC timing, mainnet RPC differences)
+3. **Cryptographic Authenticity**: Only real MPC operations validate actual signature correctness
+4. **Production Confidence**: Tests the EXACT user experience with real servers and real blockchains
+5. **True End-to-End**: Complete user workflows from vault creation to transaction broadcasting
+
+### Safety Strategy
+- ✅ **SMALL AMOUNTS ONLY**: Maximum $5 per chain, $50 total budget
+- ✅ **MANUAL APPROVAL**: Explicit confirmation required before ANY transaction broadcast
+- ✅ **LOW-FEE FIRST**: Test on Solana/Polygon before Bitcoin/Ethereum
+- ✅ **TRANSACTION LOGGING**: All transaction hashes logged for audit
+- ✅ **VAULT BACKUP**: Export and backup all test vaults immediately after creation
+- ✅ **ADDRESS DOCUMENTATION**: Document all test addresses for fund recovery
+- ✅ **AMOUNT LIMITS**: Hard-coded maximum amounts in test code
+- ✅ **RECOVERY PLAN**: Keep .vult backups and private keys recoverable
+
+### Production Environment Setup
+```bash
+# PRODUCTION endpoints
+VULTISIG_API_URL=https://api.vultisig.com
+VULTISIG_RELAY_URL=<production-relay-url>
+
+# Test credentials
+VULTISIG_TEST_EMAIL=sdk-e2e-tests@example.com
+VULTISIG_TEST_PASSWORD=<secure-password>
+
+# MAINNET RPC endpoints
+ETH_MAINNET_RPC=https://eth-mainnet.g.alchemy.com/v2/<key>
+BTC_MAINNET_RPC=https://blockstream.info/api
+SOL_MAINNET_RPC=https://api.mainnet-beta.solana.com
+POLYGON_MAINNET_RPC=https://polygon-rpc.com
+
+# Safety controls
+MAX_TOTAL_TEST_FUNDS_USD=50
+MAX_PER_CHAIN_USD=5
+REQUIRE_TX_APPROVAL=true
+LOG_ALL_TRANSACTIONS=true
+EXPORT_TEST_VAULTS=true
+```
+
 ## Objectives
 
-1. Test complete user workflows from start to finish
-2. Validate transaction signing for all chain families
-3. Test full import/export cycles with real data
-4. Implement error recovery and edge case scenarios
-5. Performance benchmarking of critical operations
+1. Test complete user workflows from start to finish **WITH PRODUCTION SERVER**
+2. Validate transaction signing for all chain families **WITH REAL MPC**
+3. Test full import/export cycles with **REAL VAULT FILES**
+4. Test **REAL TRANSACTION BROADCASTING** on mainnet (small amounts)
+5. Implement error recovery and edge case scenarios
+6. Performance benchmarking of critical operations
 
 ## Prerequisites
 
 - Phases 1-3 completed successfully
 - 65% code coverage achieved
-- Integration tests passing
+- Integration tests passing (all 40+ chains)
+- **PRODUCTION CREDENTIALS**: Test email account set up
+- **TEST FUNDS**: Small amounts loaded ($50 total budget)
+- **MAINNET RPC ACCESS**: All chain RPC endpoints configured
 - All chain fixtures populated
-- Test environment with mock servers
 
 ## Week 7: Complete User Workflows
 

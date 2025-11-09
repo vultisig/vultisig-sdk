@@ -14,7 +14,7 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.{test,spec}.{js,ts,tsx}'],
     exclude: ['**/node_modules/**', '**/dist/**'],
-    setupFiles: ['./tests/setup.ts'],
-    // Default config for unit tests (integration has its own config)
+    setupFiles: ['./tests/setup.ts', './tests/integration/setup.ts'],
+    // Setup files load in order: first general setup, then integration-specific WASM polyfill
   },
 })
