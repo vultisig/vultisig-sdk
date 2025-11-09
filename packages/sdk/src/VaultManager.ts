@@ -118,7 +118,7 @@ export class VaultManager {
             options.onProgress!({
               step: update.phase === 'complete' ? 'complete' : 'keygen',
               progress: update.phase === 'complete' ? 100 : 50,
-              message: update.message,
+              message: update.message || '',
             })
           }
         : undefined,

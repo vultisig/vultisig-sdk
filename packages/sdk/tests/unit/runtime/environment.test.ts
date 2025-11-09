@@ -12,7 +12,7 @@ import {
   isElectronRenderer,
   isNode,
   isWorker,
-} from '@/runtime/environment'
+} from '../../../src/runtime/environment'
 
 describe('Environment Detection', () => {
   // Store original values

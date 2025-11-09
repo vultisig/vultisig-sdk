@@ -5,7 +5,7 @@ import {
   VaultErrorCode,
   VaultImportError,
   VaultImportErrorCode,
-} from '@/vault/VaultError'
+} from '../../../src/vault/VaultError'
 
 describe('VaultError', () => {
   describe('constructor', () => {

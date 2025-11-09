@@ -17,14 +17,14 @@ export {
   importVaultFromFile,
 } from './node'
 
-// Electron utilities
-export {
-  downloadElectronVault,
-  exportElectronVaultToFile,
-  getElectronHandlers,
-  getElectronProcessType,
-  setupElectronIPC,
-} from './electron'
+// Electron utilities - TODO: Re-enable when Electron integration is ready
+// export {
+//   downloadElectronVault,
+//   exportElectronVaultToFile,
+//   getElectronHandlers,
+//   getElectronProcessType,
+//   setupElectronIPC,
+// } from './electron'
 
 // Chrome extension utilities
 export {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { ValidationHelpers } from '@/utils/validation'
+import { ValidationHelpers } from '../../../src/utils/validation'
 
 describe('ValidationHelpers', () => {
   describe('validateEmail', () => {
