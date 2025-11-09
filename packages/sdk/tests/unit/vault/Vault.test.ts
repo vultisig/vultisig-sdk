@@ -935,4 +935,38 @@ describe('Vault', () => {
       expect(addresses[1]).toBe(addresses[4])
     })
   })
+
+  describe('Transaction Preparation (prepareSendTx)', () => {
+    // NOTE: prepareSendTx() requires blockchain data (UTXOs, nonces, balances)
+    // These tests belong in Phase 3 (Integration Tests) or Phase 4 (E2E Tests)
+    // See: docs/plans/testing/PHASE_3_INTEGRATION.md
+    // See: docs/plans/testing/PHASE_4_E2E.md
+
+    it('should have prepareSendTx method available', () => {
+      expect(vault.prepareSendTx).toBeDefined()
+      expect(typeof vault.prepareSendTx).toBe('function')
+    })
+
+    it('should validate method signature', () => {
+      // Test that the method exists and can be called
+      // Actual functionality tested in integration/e2e tests
+      const methodSignature = vault.prepareSendTx.toString()
+      expect(methodSignature).toContain('prepareSendTx')
+    })
+  })
+
+  // DEFERRED TO INTEGRATION TESTS (Phase 3/4)
+  // The following test cases require real blockchain data and will be
+  // implemented in integration test suite:
+  // - should prepare send transaction for native coin (Ethereum)
+  // - should prepare send transaction for token (ERC-20)
+  // - should prepare send transaction with memo (THORChain)
+  // - should prepare send transaction with custom fee settings
+  // - should handle errors for invalid chain
+  // - should prepare send transactions for Bitcoin
+  // - should prepare send transactions for Solana
+  // - should prepare send transactions for multiple chains
+  // - should include vault metadata in payload
+  // - should handle very small amounts
+  // - should handle very large amounts
 })

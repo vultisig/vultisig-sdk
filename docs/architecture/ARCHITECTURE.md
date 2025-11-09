@@ -151,7 +151,7 @@ Intelligent caching based on data mutability:
  │ • deriveAddress()             │   │ Storage  │
  │ • getCoinBalance()            │   │ • Browser│
  │ • getFeeQuote()               │   │ • Node   │
- │ • buildKeysignPayload()       │   │ • Chrome │
+ │ • buildSendKeysignPayload()   │   │ • Chrome │
  │ • 34+ chain resolvers         │   │ • Memory │
  └────────────────────────────────┘   └──────────┘
 ```
@@ -209,7 +209,6 @@ packages/sdk/src/
 ├── adapters/                # Data format conversion
 │   ├── formatBalance.ts     # bigint → Balance
 │   ├── formatGasInfo.ts     # FeeQuote → GasInfo
-│   ├── buildKeysignPayload.ts # Transaction → Message hashes
 │   └── index.ts
 │
 ├── utils/                   # General utilities
@@ -563,25 +562,6 @@ export function formatGasInfo(
 }
 ```
 
-### buildKeysignPayload.ts
-
-Builds keysign payload for MPC signing.
-
-```typescript
-export async function buildKeysignPayload(
-  payload: SigningPayload,
-  chain: Chain,
-  walletCore: WalletCore,
-  vault: Vault
-): Promise<string[]> {
-  // Use core functions:
-  // - getPublicKey()
-  // - getEncodedSigningInputs()
-  // - getPreSigningHashes()
-  return messageHashes
-}
-```
-
 ---
 
 ## Events System
@@ -851,11 +831,9 @@ vault.sign('fast', payload, password)
   │
   ├─→ Get WalletCore
   │
-  ├─→ Adapter: buildKeysignPayload()
-  │     ├─→ Core: buildSendKeysignPayload()
-  │     ├─→ Core: getEncodedSigningInputs()
-  │     └─→ Core: getPreSigningHashes()
-  │     Output: messageHashes
+  ├─→ Validate payload has pre-computed messageHashes
+  │     (Generated via Vault.prepareSendTx() which uses
+  │      Core's buildSendKeysignPayload())
   │
   ├─→ FastSigningService.signWithServer()
   │     ├─→ POST /fast-sign/start
