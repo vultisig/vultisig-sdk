@@ -55,8 +55,6 @@ jobs:
           submodules: recursive
       - name: Install dependencies
         run: yarn install
-      - name: Validate public files
-        run: yarn workspace @core/ui validate-public
       - name: Check for unused code
         run: yarn knip
       - name: Lint
@@ -65,23 +63,6 @@ jobs:
         run: yarn test
       - name: run typecheck
         run: yarn typecheck
-  extension:
-    needs: [setup, lint]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          submodules: recursive
-      - name: Install dependencies
-        run: yarn install
-      - name: Build extension
-        run: yarn workspace @clients/extension build
-      - name: Upload dist to artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: extension-dist-${{ github.sha }}
-          path: clients/extension/dist
   build:
     needs: lint
     strategy:
