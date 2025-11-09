@@ -16,12 +16,13 @@
  * NOTE: Integration setup (WASM & crypto polyfills) loaded via vitest.config.ts
  */
 
-import { describe, it, expect, beforeAll } from 'vitest'
 import { Chain } from '@core/chain/Chain'
+import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { beforeAll, describe, expect, it } from 'vitest'
+
 import { Vultisig } from '../../../src'
 import { Vault } from '../../../src/vault/Vault'
 import type { VaultServices } from '../../../src/vault/VaultServices'
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 /**
  * ALL SUPPORTED CHAINS

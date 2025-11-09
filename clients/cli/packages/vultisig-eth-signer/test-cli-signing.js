@@ -9,12 +9,11 @@
  * - RPC_URL: Ethereum RPC URL for broadcasting (optional)
  */
 
-import { VultisigSigner } from './dist/index.js'
-import { JsonRpcProvider, formatEther } from 'ethers'
-import { serializeTransaction, keccak256, recoverAddress } from 'viem'
-import * as fs from 'fs'
-import * as path from 'path'
 import { config } from 'dotenv'
+import { formatEther, JsonRpcProvider } from 'ethers'
+import * as fs from 'fs'
+
+import { VultisigSigner } from './dist/index.js'
 
 // Load environment variables from CLI's .env file
 config({ path: '../../.env' })

@@ -1,5 +1,5 @@
-import { createVaultBackup } from 'vultisig-sdk'
 import { useCallback, useEffect, useState } from 'react'
+import { createVaultBackup } from 'vultisig-sdk'
 
 import type { LoadedKeyshare } from '../types'
 
@@ -178,13 +178,17 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
                   containerBase64: input.containerBase64,
                   size: input.size,
                   encrypted: input.encrypted,
-                  dateAdded: Date.now()
+                  dateAdded: Date.now(),
                 }
               : k
           )
           writeAll(updatedItems)
           loadKeyshares()
-          return { ...existingVault, containerBase64: input.containerBase64, size: input.size }
+          return {
+            ...existingVault,
+            containerBase64: input.containerBase64,
+            size: input.size,
+          }
         } else {
           // Create new vault entry with embedded content
           const item: StoredKeyshare = {
@@ -220,10 +224,16 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
         const vaultData = vault.data || vault
         console.log('saveVaultToStorage - vault input:', vault)
         console.log('saveVaultToStorage - extracted vaultData:', vaultData)
-        console.log('saveVaultToStorage - keyShares present:', !!vaultData.keyShares)
+        console.log(
+          'saveVaultToStorage - keyShares present:',
+          !!vaultData.keyShares
+        )
 
         // Use SDK's createVaultBackup function to serialize the vault
-        const containerVaultBase64 = await createVaultBackup(vaultData, options?.password)
+        const containerVaultBase64 = await createVaultBackup(
+          vaultData,
+          options?.password
+        )
         const encrypted = !!options?.password
         // Check if a vault with this name already exists
         const vaultName = `${options?.name ?? vaultData.name}.vult`
@@ -234,12 +244,21 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
           // If vault already exists with data, update it instead of creating a new one
           const updatedItems = existing.map(k =>
             k.id === existingVault.id
-              ? { ...k, containerBase64: containerVaultBase64, size: containerVaultBase64.length, dateAdded: Date.now() }
+              ? {
+                  ...k,
+                  containerBase64: containerVaultBase64,
+                  size: containerVaultBase64.length,
+                  dateAdded: Date.now(),
+                }
               : k
           )
           writeAll(updatedItems)
           loadKeyshares()
-          return { ...existingVault, containerBase64: containerVaultBase64, size: containerVaultBase64.length }
+          return {
+            ...existingVault,
+            containerBase64: containerVaultBase64,
+            size: containerVaultBase64.length,
+          }
         } else {
           // Create new vault entry
           const item = addStoredKeyshare({
@@ -251,7 +270,9 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
           // attach payload
           const cur = readAll()
           const withPayload = cur.map(k =>
-            k.id === item.id ? { ...k, containerBase64: containerVaultBase64 } : k
+            k.id === item.id
+              ? { ...k, containerBase64: containerVaultBase64 }
+              : k
           )
           writeAll(withPayload)
           loadKeyshares()

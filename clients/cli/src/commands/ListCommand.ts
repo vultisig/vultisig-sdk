@@ -53,9 +53,6 @@ export class ListCommand {
 
     for (const filePath of vultFiles) {
       try {
-        const buffer = await fs.promises.readFile(filePath)
-        const file = new File([buffer], path.basename(filePath))
-
         const fileName = path.basename(filePath)
         const isEncrypted =
           fileName.toLowerCase().includes('password') &&
@@ -77,7 +74,7 @@ export class ListCommand {
         const summary = activeVault.summary()
         console.log(`\n📍 Active vault: ${summary.name} (${summary.type})`)
       }
-    } catch (error) {
+    } catch {
       // No active vault
     }
   }
