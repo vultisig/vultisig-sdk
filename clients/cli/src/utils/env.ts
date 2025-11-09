@@ -1,6 +1,7 @@
-import * as path from 'path'
-import * as fs from 'fs'
 import { config } from 'dotenv'
+import * as fs from 'fs'
+import * as path from 'path'
+
 import { getVaultsDir } from './paths'
 
 // Load environment variables from .env file
@@ -114,7 +115,7 @@ function resolveVaultName(vaultName: string): string {
       const selectedFile = exactMatch || matches[0]
       return path.join(vaultsDir, selectedFile)
     }
-  } catch (error) {
+  } catch {
     // Vaults directory doesn't exist or can't be read
   }
 

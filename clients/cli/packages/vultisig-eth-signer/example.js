@@ -5,10 +5,11 @@
  * Demonstrates fast signing with VultiServer
  */
 
-import { VultisigSigner } from './dist/index.js'
-import { JsonRpcProvider, parseEther, formatEther } from 'ethers'
+import { formatEther, JsonRpcProvider } from 'ethers'
 import * as fs from 'fs'
 import * as path from 'path'
+
+import { VultisigSigner } from './dist/index.js'
 
 // Load environment variables from current directory or parent directories
 function loadEnv() {

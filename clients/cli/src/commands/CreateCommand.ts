@@ -81,11 +81,10 @@ export class CreateCommand {
         `📡 ${vaultType === 'fast' ? 'Connecting to VultiServer' : 'Starting MPC keygen'}...`
       )
 
-      let vault: any
       let vaultId: string
 
       // Use createVault for both fast and secure vaults
-      vault = await sdk.createVault(options.name, {
+      const vault = await sdk.createVault(options.name, {
         type: vaultType,
         keygenMode: keygenMode,
         password: password || undefined,
@@ -125,7 +124,7 @@ export class CreateCommand {
               name: 'code',
               message:
                 'Enter verification code from email (or press Enter to skip):',
-              validate: (input: string) => {
+              validate: (_input: string) => {
                 // Allow empty input to skip verification
                 return true
               },

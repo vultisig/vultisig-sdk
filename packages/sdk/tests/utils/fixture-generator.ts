@@ -11,7 +11,7 @@
  * Phase 1: Foundation - Tier 1 chains (Bitcoin, Ethereum, Solana, THORChain, Ripple)
  */
 
-import { writeFileSync, mkdirSync, existsSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 /**
@@ -63,7 +63,7 @@ export enum ChainFamily {
 /**
  * Chain Configuration
  */
-export interface ChainConfig {
+export type ChainConfig = {
   name: ChainName
   family: ChainFamily
   tier: ChainTier

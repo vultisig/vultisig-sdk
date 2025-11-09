@@ -56,7 +56,7 @@ export async function promptForPasswordWithValidation(
       // In real implementation, this would validate against the vault
       console.log('✅ Password accepted.')
       return password
-    } catch (error) {
+    } catch {
       if (attempt < maxAttempts) {
         console.log('❌ Incorrect password. Please try again.')
       } else {

@@ -32,11 +32,7 @@ type DirectTestResult = {
   cached: boolean
 }
 
-export const VaultDirectTester = ({
-  vaultData,
-}: {
-  vaultData: VaultData
-}) => {
+export const VaultDirectTester = ({ vaultData }: { vaultData: VaultData }) => {
   const [chain, setChain] = useState('bitcoin')
   const [results, setResults] = useState<DirectTestResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -219,22 +215,6 @@ export const VaultDirectTester = ({
           Test Error Cases
         </button>
       </div>
-
-      {false && (
-        <div
-          style={{
-            backgroundColor: '#fff3cd',
-            color: '#856404',
-            padding: 12,
-            borderRadius: 4,
-            marginBottom: 16,
-            border: '1px solid #ffeaa7',
-          }}
-        >
-          <strong>Warning:</strong> WalletCore not available. This component
-          requires direct access to WalletCore instance.
-        </div>
-      )}
 
       {results.length > 0 && (
         <div>

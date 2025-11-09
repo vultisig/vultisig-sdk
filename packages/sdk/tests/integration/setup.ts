@@ -3,9 +3,9 @@
  * Configures WASM loading for Node.js environment
  */
 
+import { webcrypto } from 'crypto'
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
-import { webcrypto } from 'crypto'
 
 /**
  * Polyfill for Web Crypto API in Node.js

@@ -81,7 +81,7 @@ export class DaemonManager {
       await this.sendSocketCommand('shutdown', {})
       console.log('✅ Shutdown signal sent via Unix socket')
       await this.waitForShutdown()
-    } catch (error) {
+    } catch {
       // Fallback to PID-based termination
       console.log('🔄 Unix socket failed, trying PID-based shutdown...')
       await this.shutdownByPID()
@@ -93,7 +93,7 @@ export class DaemonManager {
       // Check if socket exists and is responsive
       await this.sendSocketCommand('ping', {})
       console.log('✅ Daemon is running and responsive')
-    } catch (error) {
+    } catch {
       // Check if PID file exists and process is running
       if (await this.isPIDFileValid()) {
         console.log('⚠️  Daemon PID file exists but socket is unresponsive')
@@ -106,7 +106,7 @@ export class DaemonManager {
   }
 
   async autoStartDaemonIfNeeded(
-    options: AutoStartDaemonInput
+    _options: AutoStartDaemonInput
   ): Promise<boolean> {
     try {
       await this.checkDaemonStatus()
@@ -216,7 +216,7 @@ export class DaemonManager {
       // Request addresses from daemon
       const response = await this.sendSocketCommand('get_addresses', { chains })
       return response.addresses || {}
-    } catch (error) {
+    } catch {
       throw new Error(
         'No Vultisig daemon running, start with "vultisig run" first'
       )
@@ -231,7 +231,7 @@ export class DaemonManager {
       // Request balances from daemon
       const response = await this.sendSocketCommand('get_balances', { chains })
       return response.balances || {}
-    } catch (error) {
+    } catch {
       throw new Error(
         'No Vultisig daemon running, start with "vultisig run" first'
       )
@@ -335,7 +335,7 @@ export class DaemonManager {
           return { success: true, result: { addresses } }
         }
 
-        case 'get_balances':
+        case 'get_balances': {
           if (!this.vault) {
             throw new Error('No vault loaded')
           }
@@ -357,8 +357,9 @@ export class DaemonManager {
           }
 
           return { success: true, result: { balances } }
+        }
 
-        case 'sign_transaction':
+        case 'sign_transaction': {
           if (!this.vault) {
             throw new Error('No vault loaded')
           }
@@ -384,6 +385,7 @@ export class DaemonManager {
           console.log('Daemon completed signing')
 
           return { success: true, result: signature }
+        }
 
         default:
           // Forward to JSON-RPC server if available

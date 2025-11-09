@@ -4,7 +4,7 @@
  * Verify the signature from CLI signing test
  */
 
-import { JsonRpcProvider, keccak256, getBytes, recoverAddress } from 'ethers'
+import { getBytes, keccak256, recoverAddress } from 'ethers'
 import { serializeTransaction as viemSerialize } from 'viem'
 
 const signature =
