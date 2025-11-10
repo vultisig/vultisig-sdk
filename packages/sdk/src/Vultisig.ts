@@ -42,13 +42,13 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private vaultManager: VaultManager
 
   // Chain and currency configuration
-  private defaultChains: string[]
+  private defaultChains: Chain[]
   private defaultCurrency: string
 
   // Storage and connection state
   private storage: VaultStorage
   private connected = false
-  private activeChain: string
+  private activeChain: Chain
 
   constructor(config?: VultisigConfig) {
     // Initialize EventEmitter
@@ -509,7 +509,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Get address book entries
    */
-  async getAddressBook(chain?: string): Promise<AddressBook> {
+  async getAddressBook(chain?: Chain): Promise<AddressBook> {
     return this.addressBookManager.getAddressBook(chain)
   }
 
@@ -524,7 +524,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Remove address book entries
    */
   async removeAddressBookEntry(
-    addresses: Array<{ chain: string; address: string }>
+    addresses: Array<{ chain: Chain; address: string }>
   ): Promise<void> {
     return this.addressBookManager.removeAddressBookEntry(addresses)
   }
@@ -533,7 +533,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Update address book entry name
    */
   async updateAddressBookEntry(
-    chain: string,
+    chain: Chain,
     address: string,
     name: string
   ): Promise<void> {
@@ -575,7 +575,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Set active chain and persist to storage
    */
-  async setActiveChain(chain: string): Promise<void> {
+  async setActiveChain(chain: Chain): Promise<void> {
     this.activeChain = chain
     await this.storage.set('activeChain', chain)
     this.emit('chainChanged', { chain })
@@ -584,9 +584,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Get active chain from storage or memory
    */
-  async getActiveChain(): Promise<string> {
+  async getActiveChain(): Promise<Chain> {
     // Try storage first
-    const stored = await this.storage.get<string>('activeChain')
+    const stored = await this.storage.get<Chain>('activeChain')
     return stored ?? this.activeChain
   }
 

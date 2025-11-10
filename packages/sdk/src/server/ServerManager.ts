@@ -3,7 +3,6 @@ import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
 import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
 import type { WalletCore } from '@trustwallet/wallet-core'
 
-import { stringToChain } from '../ChainManager'
 import {
   KeygenProgressUpdate,
   ReshareOptions,
@@ -112,7 +111,7 @@ export class ServerManager {
     // Use SDK adapter to extract chain-specific signing information
     const { getChainSigningInfo } = await import('../adapters')
     const { signatureAlgorithm, derivePath, chainPath } =
-      await getChainSigningInfo(payload, walletCore, stringToChain)
+      await getChainSigningInfo(payload, walletCore)
 
     // Generate session parameters
     const sessionId = crypto.randomUUID()

@@ -5,6 +5,7 @@
  * data to SDK GasInfo format. Covers all 14 different chain-specific types.
  */
 
+import { Chain } from '@core/chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { formatGasInfo } from '../../../src/adapters/formatGasInfo'
@@ -28,10 +29,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Ethereum')
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
 
       expect(result).toEqual({
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         gasPrice: '50000000000', // in Wei
         gasPriceGwei: '50', // in Gwei (50000000000 / 1e9)
         maxFeePerGas: 50000000000n,
@@ -54,7 +55,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Ethereum')
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
 
       expect(result.gasPriceGwei).toBe('150')
       expect(result.maxFeePerGas).toBe(150000000000n)
@@ -72,7 +73,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Ethereum')
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
 
       expect(result.gasPriceGwei).toBe('0') // Integer division
       expect(result.gasPrice).toBe('500000000')
@@ -110,10 +111,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Bitcoin')
+      const result = formatGasInfo(chainSpecific, Chain.Bitcoin)
 
       expect(result).toEqual({
-        chainId: 'Bitcoin',
+        chainId: Chain.Bitcoin,
         gasPrice: '10',
         byteFee: '10',
         estimatedCost: 4000n,
@@ -130,7 +131,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Bitcoin')
+      const result = formatGasInfo(chainSpecific, Chain.Bitcoin)
 
       expect(result.gasPrice).toBe('150')
     })
@@ -172,10 +173,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Cosmos')
+      const result = formatGasInfo(chainSpecific, Chain.Cosmos)
 
       expect(result).toEqual({
-        chainId: 'Cosmos',
+        chainId: Chain.Cosmos,
         gasPrice: '200000',
         gas: '200000',
         estimatedCost: 200000n,
@@ -193,7 +194,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Cosmos')
+      const result = formatGasInfo(chainSpecific, Chain.Cosmos)
 
       expect(result.gasPrice).toBe('0')
     })
@@ -231,10 +232,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'THORChain')
+      const result = formatGasInfo(chainSpecific, Chain.THORChain)
 
       expect(result).toEqual({
-        chainId: 'THORChain',
+        chainId: Chain.THORChain,
         gasPrice: '0',
         estimatedCost: 0n,
         lastUpdated: mockTimestamp,
@@ -253,10 +254,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Maya')
+      const result = formatGasInfo(chainSpecific, Chain.MayaChain)
 
       expect(result).toEqual({
-        chainId: 'Maya',
+        chainId: Chain.MayaChain,
         gasPrice: '0',
         lastUpdated: mockTimestamp,
       })
@@ -273,10 +274,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Solana')
+      const result = formatGasInfo(chainSpecific, Chain.Solana)
 
       expect(result).toEqual({
-        chainId: 'Solana',
+        chainId: Chain.Solana,
         gasPrice: '5000',
         priorityFee: '5000',
         estimatedCost: 10000n,
@@ -293,7 +294,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Solana')
+      const result = formatGasInfo(chainSpecific, Chain.Solana)
 
       expect(result.gasPrice).toBe('0')
       expect(result.priorityFee).toBe('0')
@@ -308,7 +309,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Solana')
+      const result = formatGasInfo(chainSpecific, Chain.Solana)
 
       expect(result.priorityFee).toBe('1000000')
     })
@@ -323,10 +324,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Sui')
+      const result = formatGasInfo(chainSpecific, Chain.Sui)
 
       expect(result).toEqual({
-        chainId: 'Sui',
+        chainId: Chain.Sui,
         gasPrice: '1000',
         lastUpdated: mockTimestamp,
       })
@@ -340,7 +341,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Sui')
+      const result = formatGasInfo(chainSpecific, Chain.Sui)
 
       expect(result.gasPrice).toBe('1')
     })
@@ -357,10 +358,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Polkadot')
+      const result = formatGasInfo(chainSpecific, Chain.Polkadot)
 
       expect(result).toEqual({
-        chainId: 'Polkadot',
+        chainId: Chain.Polkadot,
         gasPrice: '0',
         lastUpdated: mockTimestamp,
       })
@@ -378,10 +379,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'TON')
+      const result = formatGasInfo(chainSpecific, Chain.Ton)
 
       expect(result).toEqual({
-        chainId: 'TON',
+        chainId: Chain.Ton,
         gasPrice: '0',
         lastUpdated: mockTimestamp,
       })
@@ -398,10 +399,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Tron')
+      const result = formatGasInfo(chainSpecific, Chain.Tron)
 
       expect(result).toEqual({
-        chainId: 'Tron',
+        chainId: Chain.Tron,
         gasPrice: '0',
         lastUpdated: mockTimestamp,
       })
@@ -418,10 +419,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Ripple')
+      const result = formatGasInfo(chainSpecific, Chain.Ripple)
 
       expect(result).toEqual({
-        chainId: 'Ripple',
+        chainId: Chain.Ripple,
         gasPrice: '12',
         lastUpdated: mockTimestamp,
       })
@@ -436,7 +437,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Ripple')
+      const result = formatGasInfo(chainSpecific, Chain.Ripple)
 
       expect(result.gasPrice).toBe('10')
     })
@@ -451,10 +452,10 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Cardano')
+      const result = formatGasInfo(chainSpecific, Chain.Cardano)
 
       expect(result).toEqual({
-        chainId: 'Cardano',
+        chainId: Chain.Cardano,
         gasPrice: '0',
         lastUpdated: mockTimestamp,
       })
@@ -468,10 +469,10 @@ describe('formatGasInfo', () => {
         case: undefined,
       } as any
 
-      const result = formatGasInfo(chainSpecific, 'UnknownChain')
+      const result = formatGasInfo(chainSpecific, 'UnknownChain' as any)
 
       expect(result).toEqual({
-        chainId: 'UnknownChain',
+        chainId: 'UnknownChain' as any,
         gasPrice: '0',
         lastUpdated: mockTimestamp,
       })
@@ -490,7 +491,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Ethereum')
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
 
       expect(result.lastUpdated).toBe(mockTimestamp)
       expect(typeof result.lastUpdated).toBe('number')
@@ -507,7 +508,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Bitcoin')
+      const result = formatGasInfo(chainSpecific, Chain.Bitcoin)
 
       // Verify required GasInfo fields
       expect(result).toHaveProperty('chainId')
@@ -529,7 +530,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Ethereum')
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
 
       expect(result).toHaveProperty('gasPriceGwei')
       expect(result).toHaveProperty('maxFeePerGas')
@@ -545,7 +546,7 @@ describe('formatGasInfo', () => {
         },
       }
 
-      const result = formatGasInfo(chainSpecific, 'Solana')
+      const result = formatGasInfo(chainSpecific, Chain.Solana)
 
       expect(result).toHaveProperty('priorityFee')
       expect(result.priorityFee).toBe('5000')

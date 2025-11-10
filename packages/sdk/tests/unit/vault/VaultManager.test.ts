@@ -20,6 +20,7 @@
 
 import { create, toBinary } from '@bufbuild/protobuf'
 import { timestampNow } from '@bufbuild/protobuf/wkt'
+import { Chain } from '@core/chain/Chain'
 import { LibType } from '@core/mpc/types/vultisig/keygen/v1/lib_type_message_pb'
 import {
   VaultContainer,
@@ -182,7 +183,7 @@ describe('VaultManager', () => {
     } as any
 
     vaultManager = new VaultManager(mockWasmManager, mockServerManager, {
-      defaultChains: ['bitcoin', 'ethereum', 'solana'],
+      defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
     })
   })
