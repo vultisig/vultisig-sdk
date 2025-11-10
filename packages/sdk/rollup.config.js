@@ -97,17 +97,8 @@ const wasmCopyPlugin = copy({
       src: '../lib/schnorr',
       dest: './dist/lib',
     },
-    // Also copy to ./lib for development to match the same ../../lib/ path
-    // from both src/wasm/ and dist/wasm/
-    {
-      src: '../lib/dkls',
-      dest: './lib',
-    },
-    {
-      src: '../lib/schnorr',
-      dest: './lib',
-    },
-    // wallet-core.wasm will be handled by the consuming application
+    // Note: ./lib is a symlink to ../lib, so no copy needed for development
+    // The symlink provides direct access to packages/lib from packages/sdk/lib
   ],
 })
 

@@ -1,11 +1,9 @@
 {
   "ignore": [
-    "packages/core/mpc/types/**",
-    "clients/desktop/wailsjs/**"
+    "packages/core/mpc/types/**"
   ],
   "ignoreBinaries": [
-    "tsx",
-    "wails"
+    "tsx"
   ],
   "entry": [
     "clients/extension/src/background/index.ts",

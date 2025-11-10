@@ -41,7 +41,7 @@
       "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
     ],
     "packages/sdk/tests/**/*.test.ts": [
-      "vitest related --run --config .config/vitest.config.ts"
+      "yarn workspace @vultisig/sdk test:changed"
     ]
   },
   "devDependencies": {

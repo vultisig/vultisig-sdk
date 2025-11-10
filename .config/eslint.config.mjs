@@ -30,7 +30,6 @@ export default [
     ignores: [
       '**/node_modules',
       '**/dist',
-      '**/wailsjs',
       '**/*_pb.ts',
       '**/lib/**',
       'packages/core/**',

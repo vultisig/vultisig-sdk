@@ -1,0 +1,30 @@
+{
+  // ESLint configuration
+  "eslint.options": {
+    "overrideConfigFile": ".config/eslint.config.mjs"
+  },
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+
+  // Prettier configuration
+  "prettier.configPath": ".config/.prettierrc",
+  "prettier.ignorePath": ".config/.prettierignore",
+
+  // Format on save
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+
+  // ESLint auto-fix on save
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // File associations
+  "files.associations": {
+    "*.mjs": "javascript"
+  }
+}
