@@ -196,9 +196,9 @@ describe('E2E: Balance Operations (Production)', () => {
     it('should cache balance for repeated fetches', async () => {
       console.log('🔍 Testing balance caching...')
 
-      // First fetch (fresh)
+      // First fetch (force fresh by using updateBalance which clears cache)
       const startTime1 = performance.now()
-      const balance1 = await vault.balance('Ethereum')
+      const balance1 = await vault.updateBalance('Ethereum')
       const fetchTime1 = performance.now() - startTime1
 
       // Second fetch (cached - should be much faster)

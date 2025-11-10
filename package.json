@@ -8,19 +8,19 @@
     "packages/sdk"
   ],
   "scripts": {
-    "lint": "eslint 'packages/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}'",
-    "lint:fix": "eslint 'packages/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}' --fix",
+    "lint": "eslint --config .config/eslint.config.mjs 'packages/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}'",
+    "lint:fix": "eslint --config .config/eslint.config.mjs 'packages/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}' --fix",
     "build:sdk": "yarn workspace @vultisig/sdk build",
     "sync-packages": "syncpack fix-mismatches",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --project .config/tsconfig.json --noEmit",
     "test": "yarn workspace @vultisig/sdk test",
     "test:unit": "yarn workspace @vultisig/sdk test:unit",
     "test:integration": "yarn workspace @vultisig/sdk test:integration",
     "test:watch": "yarn workspace @vultisig/sdk test:watch",
     "test:changed": "yarn workspace @vultisig/sdk test:changed",
-    "knip": "knip",
+    "knip": "knip --config .config/knip.json",
     "check:all": "yarn lint && yarn typecheck && yarn test && yarn knip",
-    "knip:fix": "knip --fix --allow-remove-files",
+    "knip:fix": "knip --config .config/knip.json --fix --allow-remove-files",
     "build:prod": "yarn workspace vultisig-sdk-react-example-2 build && yarn workspace vultisig-sdk-react-example-2 preview --port 5175 --strictPort --open=false",
     "dev:react": "yarn workspace vultisig-sdk-react-example-2 dev",
     "sync-and-copy": "node_modules/.bin/tsx scripts/sync-and-copy.ts",
@@ -29,22 +29,19 @@
   },
   "lint-staged": {
     "packages/**/*.{js,jsx,ts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
+      "eslint --config .config/eslint.config.mjs --fix",
+      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
     ],
     "clients/**/*.{js,jsx,ts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
+      "eslint --config .config/eslint.config.mjs --fix",
+      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
     ],
     "examples/**/*.{js,jsx,ts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
+      "eslint --config .config/eslint.config.mjs --fix",
+      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
     ],
     "packages/sdk/tests/**/*.test.ts": [
-      "vitest related --run"
-    ],
-    "packages/sdk/tests/fixtures/**/*.json": [
-      "node scripts/validate-fixtures.js"
+      "vitest related --run --config .config/vitest.config.ts"
     ]
   },
   "devDependencies": {

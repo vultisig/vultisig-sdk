@@ -442,7 +442,10 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
           placeholder="Confirm Password"
           value={formData.confirmPassword}
           onChange={e =>
-            setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))
+            setFormData(prev => ({
+              ...prev,
+              confirmPassword: e.target.value,
+            }))
           }
           style={{
             padding: '12px',

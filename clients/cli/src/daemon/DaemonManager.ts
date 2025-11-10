@@ -214,7 +214,9 @@ export class DaemonManager {
       await this.sendSocketCommand('ping', {})
 
       // Request addresses from daemon
-      const response = await this.sendSocketCommand('get_addresses', { chains })
+      const response = await this.sendSocketCommand('get_addresses', {
+        chains,
+      })
       return response.addresses || {}
     } catch {
       throw new Error(

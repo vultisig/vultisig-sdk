@@ -4,13 +4,13 @@ import { resolve } from 'path'
 export default defineConfig({
   resolve: {
     alias: {
-      '@': resolve(__dirname, './packages/sdk/src'),
-      '@core': resolve(__dirname, './packages/core'),
-      '@lib': resolve(__dirname, './packages/lib'),
-      '@tests': resolve(__dirname, './packages/sdk/tests'),
-      '@fixtures': resolve(__dirname, './packages/sdk/tests/fixtures'),
-      '@mocks': resolve(__dirname, './packages/sdk/tests/mocks'),
-      '@utils': resolve(__dirname, './packages/sdk/tests/utils'),
+      '@': resolve(__dirname, '../packages/sdk/src'),
+      '@core': resolve(__dirname, '../packages/core'),
+      '@lib': resolve(__dirname, '../packages/lib'),
+      '@tests': resolve(__dirname, '../packages/sdk/tests'),
+      '@fixtures': resolve(__dirname, '../packages/sdk/tests/fixtures'),
+      '@mocks': resolve(__dirname, '../packages/sdk/tests/mocks'),
+      '@utils': resolve(__dirname, '../packages/sdk/tests/utils'),
     },
   },
   test: {
@@ -27,7 +27,7 @@ export default defineConfig({
       '**/.{idea,git,cache,output,temp}/**',
       '**/e2e/**', // E2E tests run separately
     ],
-    setupFiles: ['./vitest.setup.ts'],
+    setupFiles: ['./.config/vitest.setup.ts'],
     testTimeout: 30000, // 30 seconds for unit tests (WASM loading can take time)
     hookTimeout: 30000, // 30 seconds for hooks
     teardownTimeout: 10000, // 10 seconds for cleanup

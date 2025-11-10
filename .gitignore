@@ -30,6 +30,10 @@ examples/*/build/
 .idea/
 *.swp
 *.swo
+.claude/
+
+# Git hooks (Husky auto-generated)
+.husky/_
 
 # OS generated files
 .DS_Store
