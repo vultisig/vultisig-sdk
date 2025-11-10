@@ -1,3 +1,5 @@
+import type { Chain } from '@core/chain/Chain'
+
 import type { Balance, Signature, SigningPayload, Token } from '../types'
 
 /**
@@ -13,7 +15,7 @@ export type SdkEvents = {
 
   /** Emitted when active chain changes */
   chainChanged: {
-    chain: string
+    chain: Chain
   }
 
   /** Emitted when active vault changes */
@@ -32,7 +34,7 @@ export type SdkEvents = {
 export type VaultEvents = {
   /** Emitted when a balance is fetched or updated */
   balanceUpdated: {
-    chain: string
+    chain: Chain
     balance: Balance
     tokenId?: string
   }
@@ -45,23 +47,23 @@ export type VaultEvents = {
 
   /** Emitted when a chain is added to the vault */
   chainAdded: {
-    chain: string
+    chain: Chain
   }
 
   /** Emitted when a chain is removed from the vault */
   chainRemoved: {
-    chain: string
+    chain: Chain
   }
 
   /** Emitted when a token is added */
   tokenAdded: {
-    chain: string
+    chain: Chain
     token: Token
   }
 
   /** Emitted when a token is removed */
   tokenRemoved: {
-    chain: string
+    chain: Chain
     tokenId: string
   }
 

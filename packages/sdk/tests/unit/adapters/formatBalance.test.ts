@@ -5,6 +5,7 @@
  * to SDK Balance format with proper metadata (decimals, symbol).
  */
 
+import { Chain } from '@core/chain/Chain'
 import { describe, expect, it } from 'vitest'
 
 import { formatBalance } from '../../../src/adapters/formatBalance'
@@ -13,92 +14,92 @@ import { Token } from '../../../src/types'
 describe('formatBalance', () => {
   describe('Native Token Balances', () => {
     it('should format Bitcoin native balance correctly', () => {
-      const result = formatBalance(100000000n, 'Bitcoin')
+      const result = formatBalance(100000000n, Chain.Bitcoin)
 
       expect(result).toEqual({
         amount: '100000000',
         symbol: 'BTC',
         decimals: 8,
-        chainId: 'Bitcoin',
+        chainId: Chain.Bitcoin,
         tokenId: undefined,
       })
     })
 
     it('should format Ethereum native balance correctly', () => {
-      const result = formatBalance(1000000000000000000n, 'Ethereum')
+      const result = formatBalance(1000000000000000000n, Chain.Ethereum)
 
       expect(result).toEqual({
         amount: '1000000000000000000',
         symbol: 'ETH',
         decimals: 18,
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: undefined,
       })
     })
 
     it('should format Solana native balance correctly', () => {
-      const result = formatBalance(1000000000n, 'Solana')
+      const result = formatBalance(1000000000n, Chain.Solana)
 
       expect(result).toEqual({
         amount: '1000000000',
         symbol: 'SOL',
         decimals: 9,
-        chainId: 'Solana',
+        chainId: Chain.Solana,
         tokenId: undefined,
       })
     })
 
     it('should format THORChain native balance correctly', () => {
-      const result = formatBalance(100000000n, 'THORChain')
+      const result = formatBalance(100000000n, Chain.THORChain)
 
       expect(result).toEqual({
         amount: '100000000',
         symbol: 'RUNE',
         decimals: 8,
-        chainId: 'THORChain',
+        chainId: Chain.THORChain,
         tokenId: undefined,
       })
     })
 
     it('should format Ripple native balance correctly', () => {
-      const result = formatBalance(1000000n, 'Ripple')
+      const result = formatBalance(1000000n, Chain.Ripple)
 
       expect(result).toEqual({
         amount: '1000000',
         symbol: 'XRP',
         decimals: 6,
-        chainId: 'Ripple',
+        chainId: Chain.Ripple,
         tokenId: undefined,
       })
     })
 
     it('should format Polygon native balance correctly', () => {
-      const result = formatBalance(1000000000000000000n, 'Polygon')
+      const result = formatBalance(1000000000000000000n, Chain.Polygon)
 
       expect(result).toEqual({
         amount: '1000000000000000000',
         symbol: 'POL', // Polygon rebranded from MATIC to POL
         decimals: 18,
-        chainId: 'Polygon',
+        chainId: Chain.Polygon,
         tokenId: undefined,
       })
     })
 
     it('should handle zero balance', () => {
-      const result = formatBalance(0n, 'Ethereum')
+      const result = formatBalance(0n, Chain.Ethereum)
 
       expect(result).toEqual({
         amount: '0',
         symbol: 'ETH',
         decimals: 18,
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: undefined,
       })
     })
 
     it('should handle very large balances', () => {
       const largeBalance = 999999999999999999999999n
-      const result = formatBalance(largeBalance, 'Ethereum')
+      const result = formatBalance(largeBalance, Chain.Ethereum)
 
       expect(result.amount).toBe('999999999999999999999999')
       expect(result.symbol).toBe('ETH')
@@ -113,7 +114,7 @@ describe('formatBalance', () => {
           id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
           symbol: 'USDC',
           decimals: 6,
-          chainId: 'Ethereum',
+          chainId: Chain.Ethereum,
           logo: 'usdc.png',
           priceProviderId: 'usd-coin',
         },
@@ -121,7 +122,7 @@ describe('formatBalance', () => {
           id: '0xdac17f958d2ee523a2206206994597c13d831ec7',
           symbol: 'USDT',
           decimals: 6,
-          chainId: 'Ethereum',
+          chainId: Chain.Ethereum,
           logo: 'usdt.png',
           priceProviderId: 'tether',
         },
@@ -129,7 +130,7 @@ describe('formatBalance', () => {
           id: '0x6b175474e89094c44da98b954eedeac495271d0f',
           symbol: 'DAI',
           decimals: 18,
-          chainId: 'Ethereum',
+          chainId: Chain.Ethereum,
           logo: 'dai.png',
           priceProviderId: 'dai',
         },
@@ -139,7 +140,7 @@ describe('formatBalance', () => {
           id: '0x2791bca1f2de4661ed88a30c99a7a9449aa84174',
           symbol: 'USDC',
           decimals: 6,
-          chainId: 'Polygon',
+          chainId: Chain.Polygon,
           logo: 'usdc.png',
           priceProviderId: 'usd-coin',
         },
@@ -149,7 +150,7 @@ describe('formatBalance', () => {
     it('should format USDC token balance with metadata', () => {
       const result = formatBalance(
         1000000n,
-        'Ethereum',
+        Chain.Ethereum,
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
         tokens
       )
@@ -158,7 +159,7 @@ describe('formatBalance', () => {
         amount: '1000000',
         symbol: 'USDC',
         decimals: 6,
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       })
     })
@@ -166,7 +167,7 @@ describe('formatBalance', () => {
     it('should format USDT token balance with metadata', () => {
       const result = formatBalance(
         5000000n,
-        'Ethereum',
+        Chain.Ethereum,
         '0xdac17f958d2ee523a2206206994597c13d831ec7',
         tokens
       )
@@ -175,7 +176,7 @@ describe('formatBalance', () => {
         amount: '5000000',
         symbol: 'USDT',
         decimals: 6,
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: '0xdac17f958d2ee523a2206206994597c13d831ec7',
       })
     })
@@ -183,7 +184,7 @@ describe('formatBalance', () => {
     it('should format DAI token balance with 18 decimals', () => {
       const result = formatBalance(
         1000000000000000000n,
-        'Ethereum',
+        Chain.Ethereum,
         '0x6b175474e89094c44da98b954eedeac495271d0f',
         tokens
       )
@@ -192,7 +193,7 @@ describe('formatBalance', () => {
         amount: '1000000000000000000',
         symbol: 'DAI',
         decimals: 18,
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: '0x6b175474e89094c44da98b954eedeac495271d0f',
       })
     })
@@ -200,7 +201,7 @@ describe('formatBalance', () => {
     it('should handle token on different chain (Polygon USDC)', () => {
       const result = formatBalance(
         2000000n,
-        'Polygon',
+        Chain.Polygon,
         '0x2791bca1f2de4661ed88a30c99a7a9449aa84174',
         tokens
       )
@@ -209,7 +210,7 @@ describe('formatBalance', () => {
         amount: '2000000',
         symbol: 'USDC',
         decimals: 6,
-        chainId: 'Polygon',
+        chainId: Chain.Polygon,
         tokenId: '0x2791bca1f2de4661ed88a30c99a7a9449aa84174',
       })
     })
@@ -217,7 +218,7 @@ describe('formatBalance', () => {
     it('should default to 18 decimals for unknown token', () => {
       const result = formatBalance(
         1000000000000000000n,
-        'Ethereum',
+        Chain.Ethereum,
         '0xunknowntoken123456789',
         tokens
       )
@@ -226,7 +227,7 @@ describe('formatBalance', () => {
         amount: '1000000000000000000',
         symbol: '0xunknowntoken123456789', // Falls back to tokenId
         decimals: 18, // Default for unknown ERC-20
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: '0xunknowntoken123456789',
       })
     })
@@ -234,7 +235,7 @@ describe('formatBalance', () => {
     it('should handle token without token registry', () => {
       const result = formatBalance(
         1000000n,
-        'Ethereum',
+        Chain.Ethereum,
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
         // No tokens parameter
       )
@@ -243,7 +244,7 @@ describe('formatBalance', () => {
         amount: '1000000',
         symbol: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
         decimals: 18, // Default
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       })
     })
@@ -251,7 +252,7 @@ describe('formatBalance', () => {
     it('should handle empty token registry', () => {
       const result = formatBalance(
         1000000n,
-        'Ethereum',
+        Chain.Ethereum,
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
         {} // Empty registry
       )
@@ -260,7 +261,7 @@ describe('formatBalance', () => {
         amount: '1000000',
         symbol: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
         decimals: 18,
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       })
     })
@@ -268,7 +269,7 @@ describe('formatBalance', () => {
     it('should handle zero token balance', () => {
       const result = formatBalance(
         0n,
-        'Ethereum',
+        Chain.Ethereum,
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
         tokens
       )
@@ -277,7 +278,7 @@ describe('formatBalance', () => {
         amount: '0',
         symbol: 'USDC',
         decimals: 6,
-        chainId: 'Ethereum',
+        chainId: Chain.Ethereum,
         tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       })
     })
@@ -286,7 +287,7 @@ describe('formatBalance', () => {
       const largeBalance = 999999999999999999n
       const result = formatBalance(
         largeBalance,
-        'Ethereum',
+        Chain.Ethereum,
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
         tokens
       )
@@ -299,19 +300,19 @@ describe('formatBalance', () => {
   describe('Edge Cases', () => {
     it('should handle chain with case sensitivity', () => {
       // Chain names should match exactly
-      const result = formatBalance(1000000000000000000n, 'Ethereum')
+      const result = formatBalance(1000000000000000000n, Chain.Ethereum)
       expect(result.symbol).toBe('ETH')
     })
 
     it('should preserve tokenId in result', () => {
       const tokenId = '0xcustomtoken'
-      const result = formatBalance(100n, 'Ethereum', tokenId)
+      const result = formatBalance(100n, Chain.Ethereum, tokenId)
 
       expect(result.tokenId).toBe(tokenId)
     })
 
     it('should not include tokenId for native balance', () => {
-      const result = formatBalance(100n, 'Ethereum')
+      const result = formatBalance(100n, Chain.Ethereum)
 
       expect(result.tokenId).toBeUndefined()
     })
@@ -324,34 +325,39 @@ describe('formatBalance', () => {
             id: splTokenAddress,
             symbol: 'USDC',
             decimals: 6,
-            chainId: 'Solana',
+            chainId: Chain.Solana,
             logo: 'usdc.png',
             priceProviderId: 'usd-coin',
           },
         ],
       }
 
-      const result = formatBalance(1000000n, 'Solana', splTokenAddress, tokens)
+      const result = formatBalance(
+        1000000n,
+        Chain.Solana,
+        splTokenAddress,
+        tokens
+      )
 
       expect(result).toEqual({
         amount: '1000000',
         symbol: 'USDC',
         decimals: 6,
-        chainId: 'Solana',
+        chainId: Chain.Solana,
         tokenId: splTokenAddress,
       })
     })
 
     it('should handle negative-like values (should not occur but type allows)', () => {
       // BigInt doesn't have negative in this context, but testing string conversion
-      const result = formatBalance(1n, 'Ethereum')
+      const result = formatBalance(1n, Chain.Ethereum)
       expect(result.amount).toBe('1')
     })
   })
 
   describe('Type Compatibility', () => {
     it('should return Balance type with all required fields', () => {
-      const result = formatBalance(1000000n, 'Ethereum')
+      const result = formatBalance(1000000n, Chain.Ethereum)
 
       // Verify all Balance fields are present
       expect(result).toHaveProperty('amount')
@@ -365,14 +371,14 @@ describe('formatBalance', () => {
     })
 
     it('should return tokenId when provided', () => {
-      const result = formatBalance(1000000n, 'Ethereum', '0xtoken')
+      const result = formatBalance(1000000n, Chain.Ethereum, '0xtoken')
 
       expect(result).toHaveProperty('tokenId')
       expect(result.tokenId).toBe('0xtoken')
     })
 
     it('should return undefined tokenId for native balances', () => {
-      const result = formatBalance(1000000n, 'Ethereum')
+      const result = formatBalance(1000000n, Chain.Ethereum)
 
       expect(result.tokenId).toBeUndefined()
     })

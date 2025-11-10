@@ -19,13 +19,11 @@ export type ChainSigningInfo = {
  *
  * @param payload - Signing payload containing chain information
  * @param walletCore - WalletCore instance for chain utilities
- * @param stringToChain - Function to convert string to Chain enum
  * @returns Chain signing information
  */
 export async function getChainSigningInfo(
-  payload: { chain: Chain | string; derivePath?: string },
-  walletCore: WalletCore,
-  stringToChain: (chain: string) => Chain
+  payload: { chain: Chain; derivePath?: string },
+  walletCore: WalletCore
 ): Promise<ChainSigningInfo> {
   // Dynamic imports to avoid circular dependencies
   const { getChainKind } = await import('@core/chain/ChainKind')
@@ -34,11 +32,7 @@ export async function getChainSigningInfo(
   )
   const { getCoinType } = await import('@core/chain/coin/coinType')
 
-  // Map chain string to Chain enum
-  const chain =
-    typeof payload.chain === 'string'
-      ? stringToChain(payload.chain)
-      : payload.chain
+  const chain = payload.chain
 
   // Determine signature algorithm based on chain kind
   const chainKind = getChainKind(chain)

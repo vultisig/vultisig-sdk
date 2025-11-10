@@ -4,24 +4,11 @@
  * IMPORTANT: This file DOES NOT mock getCoinBalance or any blockchain APIs.
  * E2E tests need to make real network calls to production blockchain RPCs.
  *
- * Note: WASM loading is now handled by the SDK's built-in wasmLoader,
- * which automatically detects Node.js and uses fs.readFile() for file:// URLs.
+ * Notes:
+ * - WASM loading is handled by the SDK's built-in wasmLoader (uses fs.readFile() in Node.js)
+ * - Node.js 18+ has native fetch support for HTTP requests
+ * - We only provide File/Blob polyfills for vault file loading in tests
  */
-
-// Ensure fetch is available and properly forwards request options
-// This was the critical bug fix - originalFetch needs both url AND options
-const originalFetch = global.fetch
-
-global.fetch = async (url: string | URL | Request, options?: RequestInit) => {
-  // Simply forward to original fetch with BOTH parameters
-  // The SDK's wasmLoader handles file:// URLs internally
-  if (originalFetch) {
-    return originalFetch(url, options)
-  }
-
-  // Fallback if no fetch available (shouldn't happen in Node 18+)
-  throw new Error('fetch is not available in this environment')
-}
 
 /**
  * Polyfills for Node.js test environment

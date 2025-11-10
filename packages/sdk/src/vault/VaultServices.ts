@@ -11,13 +11,15 @@ export type VaultServices = {
   fastSigningService?: FastSigningService
 }
 
+import type { Chain } from '@core/chain/Chain'
+
 /**
  * Configuration for Vault initialization
  * Contains user-level preferences, not static chain data
  */
 export type VaultConfig = {
   /** Default chains for new vaults (from SDK config) */
-  defaultChains?: string[]
+  defaultChains?: Chain[]
   /** Default currency for balance display (from SDK config) */
   defaultCurrency?: string
 }

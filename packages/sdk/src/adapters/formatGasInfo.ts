@@ -1,3 +1,4 @@
+import type { Chain } from '@core/chain/Chain'
 import { KeysignChainSpecific } from '@core/mpc/keysign/chainSpecific/KeysignChainSpecific'
 
 import { GasInfo } from '../types'
@@ -20,7 +21,7 @@ import { GasInfo } from '../types'
  */
 export function formatGasInfo(
   chainSpecific: KeysignChainSpecific,
-  chain: string
+  chain: Chain
 ): GasInfo {
   // EVM chains (EIP-1559 gas structure)
   if (chainSpecific.case === 'ethereumSpecific') {

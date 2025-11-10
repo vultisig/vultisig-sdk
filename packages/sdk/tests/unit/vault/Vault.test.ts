@@ -101,7 +101,7 @@ describe('Vault', () => {
 
     // Create vault instance with REAL WASM
     vault = new Vault(mockVaultData, realServices, {
-      defaultChains: ['bitcoin', 'ethereum', 'solana'],
+      defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
     })
   })
@@ -116,7 +116,11 @@ describe('Vault', () => {
       expect(summary).toHaveProperty('chains')
       expect(summary).toHaveProperty('createdAt')
       expect(summary).toHaveProperty('isBackedUp', false)
-      expect(summary.chains).toEqual(['bitcoin', 'ethereum', 'solana'])
+      expect(summary.chains).toEqual([
+        Chain.Bitcoin,
+        Chain.Ethereum,
+        Chain.Solana,
+      ])
     })
 
     it('should detect fast vault type (signers contain Server-)', () => {
@@ -281,7 +285,7 @@ describe('Vault', () => {
     // Addresses will be deterministic based on the public keys provided
 
     it('should derive address for a chain', async () => {
-      const address = await vault.address('bitcoin')
+      const address = await vault.address(Chain.Bitcoin)
 
       expect(address).toBeDefined()
       expect(typeof address).toBe('string')
@@ -289,7 +293,7 @@ describe('Vault', () => {
     })
 
     it('should accept chain as string', async () => {
-      const address = await vault.address('ethereum')
+      const address = await vault.address(Chain.Ethereum)
       expect(address).toBeDefined()
     })
 
@@ -299,9 +303,9 @@ describe('Vault', () => {
     })
 
     it('should cache derived addresses (permanent cache)', async () => {
-      const address1 = await vault.address('bitcoin')
-      const address2 = await vault.address('bitcoin')
-      const address3 = await vault.address('bitcoin')
+      const address1 = await vault.address(Chain.Bitcoin)
+      const address2 = await vault.address(Chain.Bitcoin)
+      const address3 = await vault.address(Chain.Bitcoin)
 
       // All should return the same address (proving cache works)
       expect(address1).toBe(address2)
@@ -309,18 +313,22 @@ describe('Vault', () => {
     })
 
     it('should derive different addresses for different chains', async () => {
-      const btcAddress = await vault.address('bitcoin')
-      const ethAddress = await vault.address('ethereum')
+      const btcAddress = await vault.address(Chain.Bitcoin)
+      const ethAddress = await vault.address(Chain.Ethereum)
 
       expect(btcAddress).not.toBe(ethAddress)
     })
 
     it('should derive addresses for multiple chains in parallel', async () => {
-      const addresses = await vault.addresses(['bitcoin', 'ethereum', 'solana'])
+      const addresses = await vault.addresses([
+        Chain.Bitcoin,
+        Chain.Ethereum,
+        Chain.Solana,
+      ])
 
-      expect(addresses).toHaveProperty('bitcoin')
-      expect(addresses).toHaveProperty('ethereum')
-      expect(addresses).toHaveProperty('solana')
+      expect(addresses).toHaveProperty(Chain.Bitcoin)
+      expect(addresses).toHaveProperty(Chain.Ethereum)
+      expect(addresses).toHaveProperty(Chain.Solana)
       expect(Object.keys(addresses)).toHaveLength(3)
 
       // Each address should be unique
@@ -332,9 +340,9 @@ describe('Vault', () => {
     it('should derive addresses for default chains when no chains specified', async () => {
       const addresses = await vault.addresses()
 
-      expect(addresses).toHaveProperty('bitcoin')
-      expect(addresses).toHaveProperty('ethereum')
-      expect(addresses).toHaveProperty('solana')
+      expect(addresses).toHaveProperty(Chain.Bitcoin)
+      expect(addresses).toHaveProperty(Chain.Ethereum)
+      expect(addresses).toHaveProperty(Chain.Solana)
     })
 
     it('should handle address derivation errors gracefully', async () => {
@@ -347,10 +355,10 @@ describe('Vault', () => {
         wasmManager: mockWasmManager,
       } as VaultServices)
 
-      await expect(errorTestVault.address('bitcoin')).rejects.toThrow(
+      await expect(errorTestVault.address(Chain.Bitcoin)).rejects.toThrow(
         VaultError
       )
-      await expect(errorTestVault.address('bitcoin')).rejects.toThrow(
+      await expect(errorTestVault.address(Chain.Bitcoin)).rejects.toThrow(
         'Failed to derive address'
       )
     })
@@ -358,7 +366,11 @@ describe('Vault', () => {
     it('should continue deriving other addresses if one fails', async () => {
       // This tests the error handling in addresses() method
       // With real WASM, all addresses should derive successfully
-      const addresses = await vault.addresses(['bitcoin', 'ethereum', 'solana'])
+      const addresses = await vault.addresses([
+        Chain.Bitcoin,
+        Chain.Ethereum,
+        Chain.Solana,
+      ])
 
       // All should succeed with real WASM
       expect(Object.keys(addresses).length).toBe(3)
@@ -375,14 +387,14 @@ describe('Vault', () => {
       } as VaultServices)
 
       try {
-        await errorTestVault.address('bitcoin')
+        await errorTestVault.address(Chain.Bitcoin)
         expect.fail('Should have thrown error')
       } catch (error) {
         expect(error).toBeInstanceOf(VaultError)
         expect((error as VaultError).code).toBe(
           VaultErrorCode.AddressDerivationFailed
         )
-        expect((error as VaultError).message).toContain('bitcoin')
+        expect((error as VaultError).message).toContain(Chain.Bitcoin)
       }
     })
   })
@@ -545,20 +557,20 @@ describe('Vault', () => {
       symbol: 'DAI',
       name: 'Dai Stablecoin',
       decimals: 18,
-      chainId: 'ethereum',
+      chainId: Chain.Ethereum,
     }
 
     it('should set tokens for a chain', () => {
-      vault.setTokens('ethereum', [mockToken])
-      const tokens = vault.getTokens('ethereum')
+      vault.setTokens(Chain.Ethereum, [mockToken])
+      const tokens = vault.getTokens(Chain.Ethereum)
 
       expect(tokens).toHaveLength(1)
       expect(tokens[0]).toEqual(mockToken)
     })
 
     it('should add single token to chain', () => {
-      vault.addToken('ethereum', mockToken)
-      const tokens = vault.getTokens('ethereum')
+      vault.addToken(Chain.Ethereum, mockToken)
+      const tokens = vault.getTokens(Chain.Ethereum)
 
       expect(tokens).toHaveLength(1)
       expect(tokens[0]).toEqual(mockToken)
@@ -568,21 +580,21 @@ describe('Vault', () => {
       const tokenHandler = vi.fn()
       vault.on('tokenAdded', tokenHandler)
 
-      vault.addToken('ethereum', mockToken)
+      vault.addToken(Chain.Ethereum, mockToken)
 
       expect(tokenHandler).toHaveBeenCalledWith({
-        chain: 'ethereum',
+        chain: Chain.Ethereum,
         token: mockToken,
       })
       expect(tokenHandler).toHaveBeenCalledTimes(1)
     })
 
     it('should not add duplicate tokens', () => {
-      vault.addToken('ethereum', mockToken)
-      vault.addToken('ethereum', mockToken)
-      vault.addToken('ethereum', mockToken)
+      vault.addToken(Chain.Ethereum, mockToken)
+      vault.addToken(Chain.Ethereum, mockToken)
+      vault.addToken(Chain.Ethereum, mockToken)
 
-      const tokens = vault.getTokens('ethereum')
+      const tokens = vault.getTokens(Chain.Ethereum)
       expect(tokens).toHaveLength(1)
     })
 
@@ -590,17 +602,17 @@ describe('Vault', () => {
       const tokenHandler = vi.fn()
       vault.on('tokenAdded', tokenHandler)
 
-      vault.addToken('ethereum', mockToken)
-      vault.addToken('ethereum', mockToken)
+      vault.addToken(Chain.Ethereum, mockToken)
+      vault.addToken(Chain.Ethereum, mockToken)
 
       expect(tokenHandler).toHaveBeenCalledTimes(1) // Only once
     })
 
     it('should remove token from chain', () => {
-      vault.addToken('ethereum', mockToken)
-      vault.removeToken('ethereum', mockToken.id)
+      vault.addToken(Chain.Ethereum, mockToken)
+      vault.removeToken(Chain.Ethereum, mockToken.id)
 
-      const tokens = vault.getTokens('ethereum')
+      const tokens = vault.getTokens(Chain.Ethereum)
       expect(tokens).toHaveLength(0)
     })
 
@@ -608,11 +620,11 @@ describe('Vault', () => {
       const tokenHandler = vi.fn()
       vault.on('tokenRemoved', tokenHandler)
 
-      vault.addToken('ethereum', mockToken)
-      vault.removeToken('ethereum', mockToken.id)
+      vault.addToken(Chain.Ethereum, mockToken)
+      vault.removeToken(Chain.Ethereum, mockToken.id)
 
       expect(tokenHandler).toHaveBeenCalledWith({
-        chain: 'ethereum',
+        chain: Chain.Ethereum,
         tokenId: mockToken.id,
       })
       expect(tokenHandler).toHaveBeenCalledTimes(1)
@@ -622,13 +634,13 @@ describe('Vault', () => {
       const tokenHandler = vi.fn()
       vault.on('tokenRemoved', tokenHandler)
 
-      vault.removeToken('ethereum', 'non-existent-token-id')
+      vault.removeToken(Chain.Ethereum, 'non-existent-token-id')
 
       expect(tokenHandler).not.toHaveBeenCalled()
     })
 
     it('should return empty array for chain with no tokens', () => {
-      const tokens = vault.getTokens('bitcoin')
+      const tokens = vault.getTokens(Chain.Bitcoin)
       expect(tokens).toEqual([])
     })
 
@@ -637,11 +649,11 @@ describe('Vault', () => {
       const token2: Token = { ...mockToken, id: 'token2', symbol: 'TOK2' }
       const token3: Token = { ...mockToken, id: 'token3', symbol: 'TOK3' }
 
-      vault.addToken('ethereum', token1)
-      vault.addToken('ethereum', token2)
-      vault.addToken('ethereum', token3)
+      vault.addToken(Chain.Ethereum, token1)
+      vault.addToken(Chain.Ethereum, token2)
+      vault.addToken(Chain.Ethereum, token3)
 
-      const tokens = vault.getTokens('ethereum')
+      const tokens = vault.getTokens(Chain.Ethereum)
       expect(tokens).toHaveLength(3)
     })
 
@@ -649,35 +661,35 @@ describe('Vault', () => {
       const token1: Token = { ...mockToken, id: 'token1' }
       const token2: Token = { ...mockToken, id: 'token2' }
 
-      vault.addToken('ethereum', token1)
-      vault.setTokens('ethereum', [token2])
+      vault.addToken(Chain.Ethereum, token1)
+      vault.setTokens(Chain.Ethereum, [token2])
 
-      const tokens = vault.getTokens('ethereum')
+      const tokens = vault.getTokens(Chain.Ethereum)
       expect(tokens).toHaveLength(1)
       expect(tokens[0].id).toBe('token2')
     })
 
     it('should manage tokens for different chains independently', () => {
-      const ethToken: Token = { ...mockToken, chainId: 'ethereum' }
+      const ethToken: Token = { ...mockToken, chainId: Chain.Ethereum }
       const solToken: Token = {
         ...mockToken,
         id: 'sol-token',
-        chainId: 'solana',
+        chainId: Chain.Solana,
       }
 
-      vault.addToken('ethereum', ethToken)
-      vault.addToken('solana', solToken)
+      vault.addToken(Chain.Ethereum, ethToken)
+      vault.addToken(Chain.Solana, solToken)
 
-      expect(vault.getTokens('ethereum')).toHaveLength(1)
-      expect(vault.getTokens('solana')).toHaveLength(1)
-      expect(vault.getTokens('bitcoin')).toHaveLength(0)
+      expect(vault.getTokens(Chain.Ethereum)).toHaveLength(1)
+      expect(vault.getTokens(Chain.Solana)).toHaveLength(1)
+      expect(vault.getTokens(Chain.Bitcoin)).toHaveLength(0)
     })
   })
 
   describe('Chain Management', () => {
     it('should get current user chains', () => {
       const chains = vault.getChains()
-      expect(chains).toEqual(['bitcoin', 'ethereum', 'solana'])
+      expect(chains).toEqual([Chain.Bitcoin, Chain.Ethereum, Chain.Solana])
     })
 
     it('should return copy of chains array (not reference)', () => {
@@ -688,33 +700,37 @@ describe('Vault', () => {
       expect(chains1).not.toBe(chains2) // Different array instances
 
       // Modifying returned array shouldn't affect vault
-      chains1.push('ripple')
-      expect(vault.getChains()).toEqual(['bitcoin', 'ethereum', 'solana'])
+      chains1.push(Chain.Ripple)
+      expect(vault.getChains()).toEqual([
+        Chain.Bitcoin,
+        Chain.Ethereum,
+        Chain.Solana,
+      ])
     })
 
     it('should set user chains', async () => {
-      await vault.setChains(['bitcoin', 'ethereum'])
+      await vault.setChains([Chain.Bitcoin, Chain.Ethereum])
       const chains = vault.getChains()
 
-      expect(chains).toEqual(['bitcoin', 'ethereum'])
+      expect(chains).toEqual([Chain.Bitcoin, Chain.Ethereum])
     })
 
     it('should validate chains when setting', async () => {
-      await expect(vault.setChains(['invalid_chain'])).rejects.toThrow(
+      await expect(vault.setChains(['invalid_chain' as any])).rejects.toThrow(
         VaultError
       )
-      await expect(vault.setChains(['invalid_chain'])).rejects.toThrow(
+      await expect(vault.setChains(['invalid_chain' as any])).rejects.toThrow(
         'Chain not supported'
       )
     })
 
     it('should pre-derive addresses when setting chains', async () => {
-      await vault.setChains(['bitcoin', 'ethereum', 'ripple'])
+      await vault.setChains([Chain.Bitcoin, Chain.Ethereum, Chain.Ripple])
 
       // Addresses should already be cached
-      const btcAddress = await vault.address('bitcoin')
-      const ethAddress = await vault.address('ethereum')
-      const xrpAddress = await vault.address('ripple')
+      const btcAddress = await vault.address(Chain.Bitcoin)
+      const ethAddress = await vault.address(Chain.Ethereum)
+      const xrpAddress = await vault.address(Chain.Ripple)
 
       expect(btcAddress).toBeDefined()
       expect(ethAddress).toBeDefined()
@@ -722,10 +738,10 @@ describe('Vault', () => {
     })
 
     it('should add single chain', async () => {
-      await vault.addChain('ripple')
+      await vault.addChain(Chain.Ripple)
       const chains = vault.getChains()
 
-      expect(chains).toContain('ripple')
+      expect(chains).toContain(Chain.Ripple)
       expect(chains).toHaveLength(4)
     })
 
@@ -733,48 +749,50 @@ describe('Vault', () => {
       const chainHandler = vi.fn()
       vault.on('chainAdded', chainHandler)
 
-      await vault.addChain('ripple')
+      await vault.addChain(Chain.Ripple)
 
-      expect(chainHandler).toHaveBeenCalledWith({ chain: 'ripple' })
+      expect(chainHandler).toHaveBeenCalledWith({ chain: Chain.Ripple })
       expect(chainHandler).toHaveBeenCalledTimes(1)
     })
 
     it('should not add duplicate chains', async () => {
-      await vault.addChain('bitcoin')
+      await vault.addChain(Chain.Bitcoin)
       const chains = vault.getChains()
 
-      expect(chains).toEqual(['bitcoin', 'ethereum', 'solana'])
+      expect(chains).toEqual([Chain.Bitcoin, Chain.Ethereum, Chain.Solana])
     })
 
     it('should not emit event for duplicate chains', async () => {
       const chainHandler = vi.fn()
       vault.on('chainAdded', chainHandler)
 
-      await vault.addChain('bitcoin')
+      await vault.addChain(Chain.Bitcoin)
 
       expect(chainHandler).not.toHaveBeenCalled()
     })
 
     it('should validate chain before adding', async () => {
-      await expect(vault.addChain('invalid_chain')).rejects.toThrow(VaultError)
-      await expect(vault.addChain('invalid_chain')).rejects.toThrow(
+      await expect(vault.addChain('invalid_chain' as any)).rejects.toThrow(
+        VaultError
+      )
+      await expect(vault.addChain('invalid_chain' as any)).rejects.toThrow(
         'Chain not supported'
       )
     })
 
     it('should pre-derive address when adding chain', async () => {
-      await vault.addChain('ripple')
+      await vault.addChain(Chain.Ripple)
 
       // Address should already be cached
-      const address = await vault.address('ripple')
+      const address = await vault.address(Chain.Ripple)
       expect(address).toBeDefined()
     })
 
     it('should remove chain', () => {
-      vault.removeChain('solana')
+      vault.removeChain(Chain.Solana)
       const chains = vault.getChains()
 
-      expect(chains).not.toContain('solana')
+      expect(chains).not.toContain(Chain.Solana)
       expect(chains).toHaveLength(2)
     })
 
@@ -782,9 +800,9 @@ describe('Vault', () => {
       const chainHandler = vi.fn()
       vault.on('chainRemoved', chainHandler)
 
-      vault.removeChain('solana')
+      vault.removeChain(Chain.Solana)
 
-      expect(chainHandler).toHaveBeenCalledWith({ chain: 'solana' })
+      expect(chainHandler).toHaveBeenCalledWith({ chain: Chain.Solana })
       expect(chainHandler).toHaveBeenCalledTimes(1)
     })
 
@@ -792,30 +810,30 @@ describe('Vault', () => {
       const chainHandler = vi.fn()
       vault.on('chainRemoved', chainHandler)
 
-      vault.removeChain('ripple')
+      vault.removeChain(Chain.Ripple)
 
       expect(chainHandler).not.toHaveBeenCalled()
     })
 
     it('should clear address cache when removing chain', async () => {
       // Derive address first
-      const address1 = await vault.address('bitcoin')
+      const address1 = await vault.address(Chain.Bitcoin)
       expect(address1).toBeDefined()
 
       // Remove chain (clears cache)
-      vault.removeChain('bitcoin')
+      vault.removeChain(Chain.Bitcoin)
 
       // Re-add chain
-      await vault.addChain('bitcoin')
+      await vault.addChain(Chain.Bitcoin)
 
       // Should derive address again
-      const address2 = await vault.address('bitcoin')
+      const address2 = await vault.address(Chain.Bitcoin)
       expect(address2).toBeDefined()
     })
 
     it('should reset to default chains', async () => {
-      await vault.setChains(['bitcoin'])
-      expect(vault.getChains()).toEqual(['bitcoin'])
+      await vault.setChains([Chain.Bitcoin])
+      expect(vault.getChains()).toEqual([Chain.Bitcoin])
 
       await vault.resetToDefaultChains()
 
@@ -886,10 +904,10 @@ describe('Vault', () => {
 
     it('should initialize with custom default chains', () => {
       const customVault = new Vault(mockVaultData, realServices, {
-        defaultChains: ['bitcoin', 'ripple'],
+        defaultChains: [Chain.Bitcoin, Chain.Ripple],
       })
 
-      expect(customVault.getChains()).toEqual(['bitcoin', 'ripple'])
+      expect(customVault.getChains()).toEqual([Chain.Bitcoin, Chain.Ripple])
     })
 
     it('should initialize with custom default currency', () => {
@@ -912,19 +930,19 @@ describe('Vault', () => {
 
   describe('Edge Cases', () => {
     it('should handle empty token list', () => {
-      vault.setTokens('ethereum', [])
-      const tokens = vault.getTokens('ethereum')
+      vault.setTokens(Chain.Ethereum, [])
+      const tokens = vault.getTokens(Chain.Ethereum)
 
       expect(tokens).toEqual([])
     })
 
     it('should handle concurrent address derivations', async () => {
       const promises = [
-        vault.address('bitcoin'),
-        vault.address('ethereum'),
-        vault.address('solana'),
-        vault.address('bitcoin'), // duplicate
-        vault.address('ethereum'), // duplicate
+        vault.address(Chain.Bitcoin),
+        vault.address(Chain.Ethereum),
+        vault.address(Chain.Solana),
+        vault.address(Chain.Bitcoin), // duplicate
+        vault.address(Chain.Ethereum), // duplicate
       ]
 
       const addresses = await Promise.all(promises)

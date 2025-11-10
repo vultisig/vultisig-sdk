@@ -17,7 +17,7 @@ import { Balance, Token } from '../types'
  */
 export function formatBalance(
   rawBalance: bigint,
-  chain: string,
+  chain: Chain,
   tokenId?: string,
   tokens?: Record<string, Token[]>
 ): Balance {
@@ -31,8 +31,8 @@ export function formatBalance(
     symbol = token?.symbol ?? tokenId
   } else {
     // Native balance - use chainFeeCoin
-    decimals = chainFeeCoin[chain as Chain].decimals
-    symbol = chainFeeCoin[chain as Chain].ticker
+    decimals = chainFeeCoin[chain].decimals
+    symbol = chainFeeCoin[chain].ticker
   }
 
   return {
