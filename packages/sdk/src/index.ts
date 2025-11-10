@@ -129,6 +129,10 @@ export {
 // PUBLIC API - Types (keep all types for TypeScript users)
 // ============================================================================
 
+// Chain enums and types
+export type { Chain as ChainType } from './types'
+export { Chain } from './types'
+
 // General types
 export type {
   AddressBook,

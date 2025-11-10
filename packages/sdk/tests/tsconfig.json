@@ -5,7 +5,16 @@
     "types": ["node", "vitest/globals"],
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "bundler",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@helpers/*": ["./tests/helpers/*"],
+      "@types": ["./src/types"],
+      "@core/*": ["../core/*"],
+      "@lib/*": ["../lib/*"]
+    }
   },
   "include": [
     "**/*.ts",

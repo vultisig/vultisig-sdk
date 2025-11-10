@@ -88,15 +88,24 @@ const plugins = [
 
 const wasmCopyPlugin = copy({
   targets: [
-    // Copy WASM files to dist for proper loading
-    // Keep original filenames to match wasm-bindgen expectations
+    // Copy WASM files to dist/lib for production (published package)
     {
-      src: '../lib/dkls/vs_wasm_bg.wasm',
-      dest: './dist/wasm/',
+      src: '../lib/dkls',
+      dest: './dist/lib',
     },
     {
-      src: '../lib/schnorr/vs_schnorr_wasm_bg.wasm',
-      dest: './dist/wasm/',
+      src: '../lib/schnorr',
+      dest: './dist/lib',
+    },
+    // Also copy to ./lib for development to match the same ../../lib/ path
+    // from both src/wasm/ and dist/wasm/
+    {
+      src: '../lib/dkls',
+      dest: './lib',
+    },
+    {
+      src: '../lib/schnorr',
+      dest: './lib',
     },
     // wallet-core.wasm will be handled by the consuming application
   ],

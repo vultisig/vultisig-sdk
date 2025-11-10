@@ -304,7 +304,7 @@ const balance = await vault.balance('Ethereum')
 const tokenBalance = await vault.balance('Ethereum', tokenContractAddress)
 
 // Gas estimation
-const gas = await vault.gas('Ethereum')
+const gas = await vault.gas(Chain.Ethereum)
 
 // Transaction signing
 const signature = await vault.sign('fast', payload, password)

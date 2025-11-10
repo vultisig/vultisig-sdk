@@ -34,8 +34,11 @@ describe('formatGasInfo', () => {
         chainId: 'Ethereum',
         gasPrice: '50000000000', // in Wei
         gasPriceGwei: '50', // in Gwei (50000000000 / 1e9)
-        maxFeePerGas: '50000000000',
+        maxFeePerGas: 50000000000n,
+        maxPriorityFeePerGas: 2000000000n,
         priorityFee: '2000000000',
+        gasLimit: 21000n,
+        estimatedCost: 1050000000000000n,
         lastUpdated: mockTimestamp,
       })
     })
@@ -54,7 +57,7 @@ describe('formatGasInfo', () => {
       const result = formatGasInfo(chainSpecific, 'Ethereum')
 
       expect(result.gasPriceGwei).toBe('150')
-      expect(result.maxFeePerGas).toBe('150000000000')
+      expect(result.maxFeePerGas).toBe(150000000000n)
       expect(result.priorityFee).toBe('5000000000')
     })
 
@@ -112,6 +115,8 @@ describe('formatGasInfo', () => {
       expect(result).toEqual({
         chainId: 'Bitcoin',
         gasPrice: '10',
+        byteFee: '10',
+        estimatedCost: 4000n,
         lastUpdated: mockTimestamp,
       })
     })
@@ -172,6 +177,8 @@ describe('formatGasInfo', () => {
       expect(result).toEqual({
         chainId: 'Cosmos',
         gasPrice: '200000',
+        gas: '200000',
+        estimatedCost: 200000n,
         lastUpdated: mockTimestamp,
       })
     })
@@ -229,6 +236,7 @@ describe('formatGasInfo', () => {
       expect(result).toEqual({
         chainId: 'THORChain',
         gasPrice: '0',
+        estimatedCost: 0n,
         lastUpdated: mockTimestamp,
       })
     })
@@ -271,6 +279,7 @@ describe('formatGasInfo', () => {
         chainId: 'Solana',
         gasPrice: '5000',
         priorityFee: '5000',
+        estimatedCost: 10000n,
         lastUpdated: mockTimestamp,
       })
     })

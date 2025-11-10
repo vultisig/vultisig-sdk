@@ -24,6 +24,9 @@
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "baseUrl": ".",
     "paths": {
+      "@/*": ["./src/*"],
+      "@helpers/*": ["./tests/helpers/*"],
+      "@types": ["./src/types"],
       "@core/*": ["../core/*"],
       "@lib/*": ["../lib/*"]
     }
@@ -31,6 +34,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
     "../core/**/*.ts",
     "../core/**/*.tsx",
     "../lib/**/*.ts",
@@ -39,8 +44,6 @@
   "exclude": [
     "node_modules",
     "dist",
-    "**/*.test.ts",
-    "**/*.test.tsx",
     "**/*.stories.ts",
     "**/*.stories.tsx",
     "../**/node_modules",
