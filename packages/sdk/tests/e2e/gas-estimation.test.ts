@@ -277,7 +277,7 @@ describe('E2E: Gas Estimation (Production)', () => {
       console.log(
         `\n  Note: L2s (Arbitrum, Optimism, Base) typically have lower gas costs than Ethereum mainnet`
       )
-    })
+    }, 30000)
 
     it('should validate gas estimation response structure', async () => {
       const gasInfo = await vault.gas(Chain.Ethereum)

@@ -100,7 +100,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
           }
         })
       }
-    })
+    }, 30000)
 
     it('should verify at least 80% of chains are functional', () => {
       const successCount = Object.values(testResults).filter(
@@ -279,22 +279,23 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
     it('should verify balance caching improves performance', async () => {
       const testChain = TEST_VAULT_CONFIG.testChains[0]
 
-      // First fetch (cold)
-      const start1 = Date.now()
-      const balance1 = await vault.balance(testChain)
-      const time1 = Date.now() - start1
+      // First fetch (force fresh by using updateBalance which clears cache)
+      const start1 = performance.now()
+      const balance1 = await vault.updateBalance(testChain)
+      const time1 = performance.now() - start1
 
       // Second fetch (cached)
-      const start2 = Date.now()
+      const start2 = performance.now()
       const balance2 = await vault.balance(testChain)
-      const time2 = Date.now() - start2
+      const time2 = performance.now() - start2
 
       console.log(`\n🚀 Caching Performance:`)
-      console.log(`  Cold fetch: ${time1}ms`)
-      console.log(`  Cached fetch: ${time2}ms`)
-      console.log(`  Speedup: ${(time1 / time2).toFixed(1)}x`)
+      console.log(`  Cold fetch: ${time1.toFixed(2)}ms`)
+      console.log(`  Cached fetch: ${time2.toFixed(2)}ms`)
+      const time2Adjusted = Math.max(time2, 0.1) // Avoid division issues
+      console.log(`  Speedup: ${(time1 / time2Adjusted).toFixed(1)}x`)
 
-      expect(time2).toBeLessThan(time1 / 5) // Cached should be at least 5x faster
+      expect(time2Adjusted).toBeLessThan(time1 / 5) // Cached should be at least 5x faster
       expect(balance1.amount).toBe(balance2.amount)
       expect(balance1.symbol).toBe(balance2.symbol)
     })
