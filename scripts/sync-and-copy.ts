@@ -25,7 +25,6 @@ const foldersToCopy = [
 
 const filesToCopy = [
   'upstream/core/ui/vault/send/keysignPayload/build.ts',
-  'upstream/core/ui/vault/swap/keysignPayload/build.ts',
 ]
 
 type SyncAndCopyOptions = {
