@@ -223,7 +223,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
 
       // Verify we got gas estimates for all EVM chains
       expect(Object.keys(gasEstimates).length).toBeGreaterThan(0)
-    })
+    }, 30000)
 
     it('should estimate fees for UTXO chains', async () => {
       const utxoChains = ['Bitcoin', 'Litecoin', 'Dogecoin']
