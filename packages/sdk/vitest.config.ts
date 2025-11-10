@@ -7,6 +7,7 @@ export default defineConfig({
       '@core': resolve(__dirname, '../core'),
       '@lib': resolve(__dirname, '../lib'),
       '@': resolve(__dirname, './src'),
+      '@helpers': resolve(__dirname, './tests/helpers'),
     },
   },
   test: {

@@ -316,8 +316,9 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     const cached = this.cacheService.get<Balance>(cacheKey, 5 * 60 * 1000)
     if (cached) return cached
 
+    let address: string | undefined
     try {
-      const address = await this.address(chainEnum)
+      address = await this.address(chainEnum)
 
       // Core handles balance fetching for ALL chains
       // Supports: native, ERC-20, SPL, wasm tokens automatically
@@ -342,10 +343,14 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
       return balance
     } catch (error) {
+      // Enhanced error logging for E2E test debugging
+      const errorMessage = (error as Error)?.message || 'Unknown error'
+      const errorName = (error as Error)?.name || 'Error'
+
       this.emit('error', error as Error)
       throw new VaultError(
         VaultErrorCode.BalanceFetchFailed,
-        `Failed to fetch balance for ${chain}${tokenId ? `:${tokenId}` : ''}`,
+        `Failed to fetch balance for ${chain}${tokenId ? `:${tokenId}` : ''}: ${errorName}: ${errorMessage}`,
         error as Error
       )
     }
@@ -420,13 +425,44 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   // ===== GAS ESTIMATION =====
 
   /**
+   * Well-known active addresses for Cosmos chains
+   * Used for gas estimation to avoid errors when user's address doesn't exist on-chain yet
+   * Gas prices are global, so any active address works for estimation
+   */
+  private static readonly COSMOS_GAS_ESTIMATION_ADDRESSES: Partial<
+    Record<Chain, string>
+  > = {
+    [Chain.THORChain]: 'thor1dheycdevq39qlkxs2a6wuuzyn4aqxhve4qxtxt',
+    [Chain.Cosmos]: 'cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh',
+    [Chain.Osmosis]: 'osmo1clpqr4nrk4khgkxj78fcwwh6dl3uw4epasmvnj',
+    [Chain.MayaChain]: 'maya1dheycdevq39qlkxs2a6wuuzyn4aqxhveshhay9',
+    [Chain.Kujira]: 'kujira1nynns8ex9fq6sjjfj8k79ymkdz4sqth0hdz2q8',
+    [Chain.Dydx]: 'dydx1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3l3qwf0',
+  }
+
+  /**
    * Get gas info for chain
    * Uses core's getChainSpecific() to estimate fees
    */
-  async gas(chain: string | Chain): Promise<GasInfo> {
+  async gas(chain: Chain): Promise<GasInfo> {
+    console.log(`🔍 Starting gas estimation for chain: ${chain}`)
+    const chainEnum = chain
+    let address: string | undefined
     try {
-      const chainEnum = typeof chain === 'string' ? stringToChain(chain) : chain
-      const address = await this.address(chainEnum)
+      console.log(`  📍 Getting address...`)
+
+      // For Cosmos chains, use well-known addresses to avoid account-doesn't-exist errors
+      // Gas prices are global, so any active address works for estimation
+      const cosmosAddress = Vault.COSMOS_GAS_ESTIMATION_ADDRESSES[chainEnum]
+      if (cosmosAddress) {
+        address = cosmosAddress
+        console.log(
+          `  📍 Using well-known address for Cosmos gas estimation: ${address}`
+        )
+      } else {
+        address = await this.address(chainEnum)
+        console.log(`  📍 Address: ${address}`)
+      }
 
       // Get WalletCore
       const walletCore = await this.wasmManager.getWalletCore()
@@ -456,17 +492,25 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       })
 
       // Get chain-specific data with fee information
+      console.log(`  ⛓️ Calling getChainSpecific()...`)
       const chainSpecific = await getChainSpecific({
         keysignPayload: minimalPayload,
         walletCore,
       })
+      console.log(`  ✅ getChainSpecific() succeeded, formatting...`)
 
       // Format using adapter
-      return formatGasInfo(chainSpecific, chainEnum)
+      const result = formatGasInfo(chainSpecific, chainEnum)
+      console.log(`  ✅ formatGasInfo() succeeded`)
+      return result
     } catch (error) {
+      // Enhanced error logging for E2E test debugging
+      const errorMessage = (error as Error)?.message || 'Unknown error'
+      const errorName = (error as Error)?.name || 'Error'
+
       throw new VaultError(
         VaultErrorCode.GasEstimationFailed,
-        `Failed to estimate gas for ${chain}`,
+        `Failed to estimate gas for ${chain}: ${errorName}: ${errorMessage}`,
         error as Error
       )
     }
