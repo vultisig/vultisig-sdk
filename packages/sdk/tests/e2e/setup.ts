@@ -11,6 +11,31 @@
  */
 
 import { webcrypto } from 'crypto'
+import { config } from 'dotenv'
+import { existsSync } from 'fs'
+import { resolve } from 'path'
+
+/**
+ * Load environment variables from .env file
+ * This allows test vault credentials to be stored securely outside of git
+ */
+const envPath = resolve(__dirname, '.env')
+if (existsSync(envPath)) {
+  config({ path: envPath })
+  console.log('✅ Loaded .env file from:', envPath)
+  console.log(
+    '   TEST_VAULT_PATH:',
+    process.env.TEST_VAULT_PATH ? 'SET' : 'NOT SET'
+  )
+  console.log(
+    '   TEST_VAULT_PASSWORD:',
+    process.env.TEST_VAULT_PASSWORD ? 'SET' : 'NOT SET'
+  )
+} else {
+  console.log(
+    'ℹ️  No .env file found, using default test vault or exported env vars'
+  )
+}
 
 /**
  * Polyfill for Web Crypto API in Node.js

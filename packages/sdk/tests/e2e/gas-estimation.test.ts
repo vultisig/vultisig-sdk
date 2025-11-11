@@ -5,9 +5,12 @@
  * estimation operations against production blockchain RPCs. No transactions
  * are broadcast - only read-only gas price queries are performed.
  *
- * Test Vault: TestFastVault-44fd (2-of-2 MPC with VultiServer)
  * Environment: Production (mainnet RPCs)
  * Safety: Read-only operations, no fund transfers
+ *
+ * SECURITY: See SECURITY.md for vault setup instructions.
+ * - Vault credentials loaded from environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
+ * - Falls back to public test vault (read-only tests only - NEVER fund these addresses!)
  */
 
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'

@@ -72,7 +72,13 @@ storybook-static
 credentials.json
 mcp.json
 task.md
-HotVault.vult
+
+# Vault files - SECURITY: NEVER commit vault files or keyshares
+*.vult
+**/vaults/**/*.vult
+**/keyshares/**/*.vult
+vault-details-*.json
+keyshare-*.json
 
 # Development
 archived/

@@ -1,0 +1,14 @@
+# Vault files - SECURITY: NEVER commit vault files or keyshares
+*.vult
+vault-details-*.json
+keyshare-*.json
+
+# Test vault environment files
+tests/**/.env
+tests/**/.env.local
+.env.test
+.env.e2e
+
+# Test fixtures (secure vaults only - example fixtures are ok)
+tests/fixtures/vaults/*.vult
+!tests/fixtures/vaults/.gitkeep

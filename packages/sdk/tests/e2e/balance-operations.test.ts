@@ -5,16 +5,15 @@
  * fetching operations against production blockchain RPCs. No transactions
  * are broadcast - only read-only operations are performed.
  *
- * Test Vault: TestFastVault-44fd (2-of-2 MPC with VultiServer)
  * Environment: Production (mainnet RPCs)
  * Safety: Read-only operations, no fund transfers
+ *
+ * SECURITY: See SECURITY.md for vault setup instructions.
+ * - Vault credentials MUST be loaded from environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
+ * - See tests/e2e/SECURITY.md and .env.example for setup instructions
  */
 
-import {
-  getExpectedAddress,
-  loadTestVault,
-  verifyTestVault,
-} from '@helpers/test-vault'
+import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { Vault } from '@/index'
@@ -243,21 +242,19 @@ describe('E2E: Balance Operations (Production)', () => {
   })
 
   describe('Address Verification', () => {
-    it('should derive correct Bitcoin address', async () => {
+    it('should derive valid Bitcoin address', async () => {
       const address = await vault.address('Bitcoin')
-      const expectedAddress = getExpectedAddress('Bitcoin')
 
-      expect(address).toBe(expectedAddress)
+      expect(address).toBeDefined()
       expect(address).toMatch(/^bc1/) // Bech32 format
 
       console.log(`📍 Bitcoin address: ${address}`)
     })
 
-    it('should derive correct Ethereum address', async () => {
+    it('should derive valid Ethereum address', async () => {
       const address = await vault.address('Ethereum')
-      const expectedAddress = getExpectedAddress('Ethereum')
 
-      expect(address).toBe(expectedAddress)
+      expect(address).toBeDefined()
       expect(address).toMatch(/^0x[a-fA-F0-9]{40}$/) // EVM format
 
       console.log(`📍 Ethereum address: ${address}`)

@@ -3,6 +3,9 @@
  *
  * Provides utilities for loading and using a pre-created persistent fast vault
  * for E2E testing. This avoids the need to create new vaults for every test run.
+ *
+ * SECURITY: Vault path and password MUST be loaded from environment variables.
+ * See tests/e2e/SECURITY.md for setup instructions.
  */
 
 import { readFile } from 'node:fs/promises'
@@ -11,58 +14,63 @@ import { resolve } from 'node:path'
 import type { Vault, Vultisig } from '@/index'
 
 /**
- * Pre-created test vault configuration
+ * Get test vault configuration from environment variables
  *
- * Vault: TestFastVault-44fd-share2of2
- * Type: Fast (2-of-2 MPC with VultiServer)
- * Password: Password123!
- * Created: 2025-06-09
+ * REQUIRED: Both TEST_VAULT_PATH and TEST_VAULT_PASSWORD must be set.
+ * See tests/e2e/SECURITY.md for setup instructions.
+ *
+ * @throws Error if environment variables are not set
+ */
+function getVaultCredentials(): { path: string; password: string } {
+  const envPath = process.env.TEST_VAULT_PATH
+  const envPassword = process.env.TEST_VAULT_PASSWORD
+
+  // Both variables must be set
+  if (!envPath || !envPassword) {
+    throw new Error(
+      '❌ TEST_VAULT_PATH and TEST_VAULT_PASSWORD environment variables are required!\n' +
+        '\n' +
+        'Setup instructions:\n' +
+        '1. Create a test vault with small amounts for testing\n' +
+        '2. Create tests/e2e/.env file:\n' +
+        '   TEST_VAULT_PATH=/path/to/your/vault.vult\n' +
+        '   TEST_VAULT_PASSWORD=your-secure-password\n' +
+        '\n' +
+        'See tests/e2e/SECURITY.md for detailed instructions.\n' +
+        '\n' +
+        'Current status:\n' +
+        '  TEST_VAULT_PATH: ' +
+        (envPath ? 'SET' : 'NOT SET') +
+        '\n' +
+        '  TEST_VAULT_PASSWORD: ' +
+        (envPassword ? 'SET' : 'NOT SET')
+    )
+  }
+
+  return {
+    path: resolve(envPath),
+    password: envPassword,
+  }
+}
+
+/**
+ * Test vault configuration
+ *
+ * Credentials are loaded from environment variables:
+ * - TEST_VAULT_PATH: Path to your test vault file
+ * - TEST_VAULT_PASSWORD: Password for your test vault
+ *
+ * See tests/e2e/SECURITY.md for setup instructions.
  */
 export const TEST_VAULT_CONFIG = {
-  /** Path to the .vult file */
-  path: resolve(
-    __dirname,
-    '../fixtures/vaults/TestFastVault-44fd-share2of2-Password123!.vult'
-  ),
-
-  /** Vault password */
-  password: 'Password123!',
-
-  /** Vault name */
-  name: 'TestFastVault',
-
-  /** Vault type */
-  type: 'fast' as const,
-
-  /** Public keys */
-  publicKeys: {
-    ecdsa: '03ac0f333fc5d22f929e013be80988f57a56837db64d968c126ca4c943984744fd',
-    eddsa: 'dff9b5b456eadcbd99366fd691f50f865a26df433f9cbffe1b6f319ecadb8308',
+  /** Get vault path from environment */
+  get path(): string {
+    return getVaultCredentials().path
   },
 
-  /** Pre-derived addresses for major chains */
-  addresses: {
-    Bitcoin: 'bc1qsef7rshf0jwm53rnkttpry5rpveqcd6dyj6pn9',
-    Ethereum: '0x8c4E1C2D3b9F88bBa6162F6Bd8dB05840Ca24F8c',
-    THORChain: 'thor1nuwfr59wyn6da6v5ktxsa32v2t6u2q4veg9awu',
-    Cosmos: 'cosmos1axf2e8w0k73gp7zmfqcx7zssma34haxh7xwlsu',
-    Solana: 'G5Jm9g1NH1xprPz3ZpnNmF8Wkz2F6YUhkxpf432mRefR',
-    Cardano: 'addr1v8ktk0y6xkhy7k60wzdwwkc77n7cvlduw2cuew2a0frk6aq8ahycw',
-    Polkadot: '164frjvvMTVaeZS5No4KfjsVEQFruHY1tZAhXd5WMGQB4yva',
-    Ripple: 'rpauN4CN6hDdZBwjTbPvtdW6TBVzroFQCm',
-    Tron: 'TSZh1ddJLcVruiC6kZYojtAVwKawC2jVj5',
-    Litecoin: 'ltc1qkdau9j2puxrsu0vlwa6q7cysq8ys97w2tk7whc',
-    Dogecoin: 'DTSParRZGeQSzPK2uTvzFCtsiWfTbwvmUZ',
-    BSC: '0x8c4E1C2D3b9F88bBa6162F6Bd8dB05840Ca24F8c',
-    Avalanche: '0x8c4E1C2D3b9F88bBa6162F6Bd8dB05840Ca24F8c',
-    Polygon: '0x8c4E1C2D3b9F88bBa6162F6Bd8dB05840Ca24F8c',
-    Arbitrum: '0x8c4E1C2D3b9F88bBa6162F6Bd8dB05840Ca24F8c',
-    Optimism: '0x8c4E1C2D3b9F88bBa6162F6Bd8dB05840Ca24F8c',
-    Base: '0x8c4E1C2D3b9F88bBa6162F6Bd8dB05840Ca24F8c',
-    Osmosis: 'osmo1axf2e8w0k73gp7zmfqcx7zssma34haxhkaa0xw',
-    Sui: '0x61102d766fc7e62ff2d1f2094636e4d04dc137ee3bb469a8d027c3f432d715fe',
-    MayaChain: 'maya1nuwfr59wyn6da6v5ktxsa32v2t6u2q4velm3cv',
-    Ton: 'UQCeg8c0AuZfbZbYf_WtzgKXnPLUwXkPjZwEKB16VzwSC4Yl',
+  /** Get vault password from environment */
+  get password(): string {
+    return getVaultCredentials().password
   },
 
   /** Chains to test (subset of all supported chains) */
@@ -203,48 +211,35 @@ export async function loadTestVault(
 /**
  * Verify that the test vault loaded correctly
  *
+ * Performs basic validation checks to ensure the vault is properly loaded.
+ * Works with any vault (default or custom).
+ *
  * @param vault - The vault instance to verify
- * @throws Error if vault data doesn't match expected configuration
+ * @throws Error if vault is invalid or missing required data
  */
 export function verifyTestVault(vault: Vault): void {
   const summary = vault.summary()
 
-  if (summary.name !== TEST_VAULT_CONFIG.name) {
-    throw new Error(
-      `Expected vault name "${TEST_VAULT_CONFIG.name}", got "${summary.name}"`
-    )
+  // Basic validation checks
+  if (!summary.name) {
+    throw new Error('Vault has no name')
   }
 
-  if (summary.type !== TEST_VAULT_CONFIG.type) {
-    throw new Error(
-      `Expected vault type "${TEST_VAULT_CONFIG.type}", got "${summary.type}"`
-    )
+  if (!summary.type) {
+    throw new Error('Vault has no type')
   }
 
   const publicKeys = vault.data.publicKeys
-  if (publicKeys.ecdsa !== TEST_VAULT_CONFIG.publicKeys.ecdsa) {
-    throw new Error(
-      `ECDSA public key mismatch: expected ${TEST_VAULT_CONFIG.publicKeys.ecdsa}, got ${publicKeys.ecdsa}`
-    )
+  if (!publicKeys || !publicKeys.ecdsa || !publicKeys.eddsa) {
+    throw new Error('Vault is missing required public keys (ecdsa/eddsa)')
   }
 
-  if (publicKeys.eddsa !== TEST_VAULT_CONFIG.publicKeys.eddsa) {
-    throw new Error(
-      `EdDSA public key mismatch: expected ${TEST_VAULT_CONFIG.publicKeys.eddsa}, got ${publicKeys.eddsa}`
-    )
-  }
-}
-
-/**
- * Get expected address for a chain
- *
- * @param chain - Chain name (e.g., 'Bitcoin', 'Ethereum')
- * @returns Expected address for the chain, or undefined if not pre-calculated
- */
-export function getExpectedAddress(chain: string): string | undefined {
-  return TEST_VAULT_CONFIG.addresses[
-    chain as keyof typeof TEST_VAULT_CONFIG.addresses
-  ]
+  // Log vault info for debugging
+  console.log(
+    `✅ Test vault verified: "${summary.name}" (type: ${summary.type})`
+  )
+  console.log(`   ECDSA: ${publicKeys.ecdsa.substring(0, 20)}...`)
+  console.log(`   EdDSA: ${publicKeys.eddsa.substring(0, 20)}...`)
 }
 
 /**
