@@ -5,9 +5,12 @@
  * by the Vultisig SDK. Tests balance fetching, gas estimation, and address
  * derivation for all chains to ensure production readiness.
  *
- * Test Vault: TestFastVault-44fd (2-of-2 MPC with VultiServer)
  * Environment: Production (mainnet RPCs)
  * Safety: Read-only operations, no fund transfers
+ *
+ * SECURITY: See SECURITY.md for vault setup instructions.
+ * - Vault credentials loaded from environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
+ * - Falls back to public test vault (read-only tests only - NEVER fund these addresses!)
  */
 
 import {

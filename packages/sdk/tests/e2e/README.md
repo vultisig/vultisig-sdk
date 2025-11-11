@@ -6,16 +6,38 @@ End-to-end tests for the Vultisig SDK using a persistent fast vault to test prod
 
 These E2E tests validate the SDK against **production blockchain RPCs** using a **pre-created persistent fast vault**. All tests are **read-only** - no transactions are broadcast to any blockchain.
 
+## Security
+
+**⚠️ IMPORTANT: Read [SECURITY.md](./SECURITY.md) before running transaction signing tests!**
+
+### Quick Security Summary
+
+- **Default test vault**: Credentials are public in git - **NEVER fund these addresses!**
+- **For read-only tests**: No funding needed, default vault is safe to use
+- **For transaction signing tests**: Create your own vault, use environment variables
+- **Vault setup**: Set `TEST_VAULT_PATH` and `TEST_VAULT_PASSWORD` environment variables
+- **See**: [SECURITY.md](./SECURITY.md) for complete setup instructions
+
 ## Test Strategy
 
 ### Persistent Vault Approach
 
 Instead of creating new vaults for every test run (which requires email verification and MPC keygen overhead), we use a **pre-created test vault** that is reused across all test runs:
 
-- **Vault**: TestFastVault-44fd
+- **Default Vault**: TestFastVault-44fd (credentials public in git)
 - **Type**: Fast (2-of-2 MPC with VultiServer)
-- **Password**: `Password123!`
 - **Location**: `tests/fixtures/vaults/TestFastVault-44fd-share2of2-Password123!.vult`
+- **⚠️ WARNING**: NEVER fund the default vault addresses - use your own vault for funded tests!
+
+**Environment Variable Setup** (Optional):
+```bash
+# Copy .env.example to .env and configure
+cp .env.example .env
+
+# Set your own vault credentials (for transaction signing tests)
+TEST_VAULT_PATH=/path/to/your/vault.vult
+TEST_VAULT_PASSWORD=your-secure-password
+```
 
 ### Benefits
 
@@ -116,6 +138,8 @@ All E2E tests perform **read-only operations only**:
 
 ## Test Vault Details
 
+**Default Test Vault Addresses** (from public vault - DO NOT FUND):
+
 ```typescript
 {
   name: 'TestFastVault',
@@ -133,17 +157,54 @@ All E2E tests perform **read-only operations only**:
 }
 ```
 
+**⚠️ SECURITY WARNING:**
+- These addresses correspond to the default test vault (credentials public in git)
+- **NEVER send funds to these addresses** - anyone can access them!
+- For funded tests, create your own vault with unique addresses
+- See [SECURITY.md](./SECURITY.md) for safe testing practices
+
 ## Troubleshooting
 
 ### Vault Loading Errors
-If you see "Cannot read vault file":
+
+**Error: "Cannot read vault file"**
+
+If using default vault:
 ```bash
-# Verify vault file exists
+# Verify default vault file exists
 ls -la packages/sdk/tests/fixtures/vaults/
 
-# If missing, copy from CLI vaults
-cp clients/cli/vaults/TestFastVault-44fd-share2of2-Password123!.vult \
-   packages/sdk/tests/fixtures/vaults/
+# If missing, the vault file may have been gitignored
+# This is expected if you're using a custom vault
+```
+
+If using custom vault (environment variables):
+```bash
+# Verify your vault file exists
+ls -la "$TEST_VAULT_PATH"
+
+# Check environment variables are set
+echo $TEST_VAULT_PATH
+echo $TEST_VAULT_PASSWORD
+
+# Make sure .env file exists and is loaded
+cat packages/sdk/tests/e2e/.env
+```
+
+**Error: "Both TEST_VAULT_PATH and TEST_VAULT_PASSWORD must be set"**
+
+You've set one environment variable but not the other. Either:
+1. Set both variables for custom vault, or
+2. Unset both to use the default public vault
+
+```bash
+# Option 1: Set both (recommended for transaction signing)
+export TEST_VAULT_PATH=/path/to/your/vault.vult
+export TEST_VAULT_PASSWORD=your-password
+
+# Option 2: Unset both (for read-only tests only)
+unset TEST_VAULT_PATH
+unset TEST_VAULT_PASSWORD
 ```
 
 ### RPC Timeout Errors
@@ -209,6 +270,17 @@ tests/fixtures/vaults/
 After E2E read-only tests pass:
 1. ✅ Phase 4.1 Complete: Read-only operations validated
 2. 🔜 Phase 4.2: Transaction signing with small amounts
+   - **⚠️ Security required first**: Create dedicated test vault (see [SECURITY.md](./SECURITY.md))
+   - Fund test vault with minimal amounts ($5-10 per chain, $100 max total)
+   - Use environment variables for vault credentials
+   - Verify no vault files committed to git
 3. 🔜 Phase 4.3: Transaction broadcasting (requires funding)
+   - Additional security measures required
+   - Separate funded test vault recommended
+   - Consider using testnets where possible
 
-For Phase 4.2+, refer to `docs/plans/testing/PHASE_4_E2E.md` for the full production testing plan with real funds.
+**Before proceeding to Phase 4.2+:**
+- Read [SECURITY.md](./SECURITY.md) completely
+- Verify `.gitignore` patterns are in place
+- Never commit vault files or passwords
+- Use minimal funding amounts only

@@ -5,9 +5,15 @@
  * preparation WITHOUT broadcasting. All operations build transaction payloads
  * and message hashes, but NO actual transactions are sent to the blockchain.
  *
- * Test Vault: TestFastVault-44fd (2-of-2 MPC with VultiServer)
  * Environment: Production (mainnet RPCs)
- * Safety: Read-only operations, NO transaction broadcasting
+ * Safety: NO transaction broadcasting - transactions are prepared but never sent
+ *
+ * SECURITY: See SECURITY.md for vault setup instructions.
+ * - Vault credentials loaded from environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
+ * - Falls back to public test vault (read-only tests only)
+ * - ⚠️ WARNING: Some tests require funded addresses to prepare valid transactions
+ * - ⚠️ NEVER fund the default test vault addresses - credentials are public!
+ * - For funded tests, create your own vault and set environment variables
  */
 
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
@@ -40,7 +46,7 @@ describe('E2E: Transaction Preparation (No Broadcasting)', () => {
       const payload = await vault.prepareSendTx({
         coin,
         receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
-        amount: 1000000000000000000n, // 1 ETH
+        amount: 700000000000000n, // ~0.0007 ETH (~$2 at $3000/ETH)
       })
 
       expect(payload).toBeDefined()
@@ -48,14 +54,13 @@ describe('E2E: Transaction Preparation (No Broadcasting)', () => {
       expect(payload.toAddress).toBe(
         '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8'
       )
-      expect(payload.toAmount).toBe('1000000000000000000')
-      expect(payload.messageHashes).toBeDefined()
-      expect(payload.messageHashes.length).toBeGreaterThan(0)
+      expect(payload.toAmount).toBe('700000000000000')
+      expect(payload.blockchainSpecific).toBeDefined()
+      expect(payload.blockchainSpecific.case).toBe('ethereumSpecific')
 
       console.log('✅ ETH transfer prepared (NOT broadcast)')
       console.log(`  To: ${payload.toAddress}`)
-      console.log(`  Amount: ${payload.toAmount} wei (1 ETH)`)
-      console.log(`  Message Hashes: ${payload.messageHashes.length} hash(es)`)
+      console.log(`  Amount: ${payload.toAmount} wei (~0.0007 ETH, ~$2)`)
     })
 
     it('should prepare ERC-20 transfer (USDC, no broadcast)', async () => {
@@ -76,14 +81,17 @@ describe('E2E: Transaction Preparation (No Broadcasting)', () => {
       })
 
       expect(payload).toBeDefined()
-      expect(payload.coin.id).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+      expect(payload.coin).toBeDefined()
+      expect(payload.coin.ticker).toBe('USDC')
       expect(payload.toAddress).toBe(
         '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8'
       )
       expect(payload.toAmount).toBe('100000000')
+      expect(payload.blockchainSpecific).toBeDefined()
+      expect(payload.blockchainSpecific.case).toBe('ethereumSpecific')
 
       console.log('✅ USDC transfer prepared (NOT broadcast)')
-      console.log(`  Token: USDC (${coin.id})`)
+      console.log(`  Token: USDC`)
       console.log(`  To: ${payload.toAddress}`)
       console.log(`  Amount: ${payload.toAmount} (100 USDC)`)
     })
@@ -110,10 +118,14 @@ describe('E2E: Transaction Preparation (No Broadcasting)', () => {
       })
 
       expect(payload).toBeDefined()
-      expect(payload.toAmount).toBe('500000000000000000')
+      // Amount should be less than input due to gas deduction
+      expect(BigInt(payload.toAmount)).toBeLessThan(500000000000000000n)
+      expect(BigInt(payload.toAmount)).toBeGreaterThan(0n)
+      expect(payload.blockchainSpecific).toBeDefined()
+      expect(payload.blockchainSpecific.case).toBe('ethereumSpecific')
 
       console.log('✅ Custom gas transaction prepared (NOT broadcast)')
-      console.log(`  Amount: 0.5 ETH`)
+      console.log(`  Amount after gas: ${payload.toAmount} wei`)
       console.log(`  Custom Gas: 50 gwei max, 2 gwei priority`)
     })
   })
@@ -140,7 +152,8 @@ describe('E2E: Transaction Preparation (No Broadcasting)', () => {
         'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
       )
       expect(payload.toAmount).toBe('100000')
-      expect(payload.messageHashes).toBeDefined()
+      expect(payload.blockchainSpecific).toBeDefined()
+      expect(payload.blockchainSpecific.case).toBe('utxoSpecific')
 
       console.log('✅ Bitcoin transfer prepared (NOT broadcast)')
       console.log(`  To: ${payload.toAddress}`)
@@ -351,22 +364,19 @@ describe('E2E: Transaction Preparation (No Broadcasting)', () => {
       const payload = await vault.prepareSendTx({
         coin,
         receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
-        amount: 1000000000000000000n,
+        amount: 700000000000000n, // ~0.0007 ETH (~$2)
       })
 
-      // Verify message hashes
-      expect(payload.messageHashes).toBeDefined()
-      expect(Array.isArray(payload.messageHashes)).toBe(true)
-      expect(payload.messageHashes.length).toBeGreaterThan(0)
+      // Verify blockchain-specific data
+      expect(payload.blockchainSpecific).toBeDefined()
+      expect(payload.blockchainSpecific.case).toBe('ethereumSpecific')
 
-      // Each hash should be a hex string
-      for (const hash of payload.messageHashes) {
-        expect(hash).toMatch(/^[a-fA-F0-9]+$/)
-        expect(hash.length).toBeGreaterThan(0)
-      }
+      // Verify payload structure
+      expect(payload.vaultPublicKeyEcdsa).toBeDefined()
+      expect(payload.vaultLocalPartyId).toBeDefined()
 
       console.log(
-        `✅ Generated ${payload.messageHashes.length} valid message hash(es)`
+        `✅ Generated valid keysign payload with ${payload.blockchainSpecific.case}`
       )
     })
 
@@ -381,14 +391,16 @@ describe('E2E: Transaction Preparation (No Broadcasting)', () => {
       const payload = await vault.prepareSendTx({
         coin,
         receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
-        amount: 1000000000000000000n,
+        amount: 700000000000000n, // ~0.0007 ETH (~$2)
       })
 
       // Verify all required fields
       expect(payload).toHaveProperty('coin')
       expect(payload).toHaveProperty('toAddress')
       expect(payload).toHaveProperty('toAmount')
-      expect(payload).toHaveProperty('messageHashes')
+      expect(payload).toHaveProperty('blockchainSpecific')
+      expect(payload).toHaveProperty('vaultPublicKeyEcdsa')
+      expect(payload).toHaveProperty('vaultLocalPartyId')
 
       // Verify coin object structure
       expect(payload.coin).toHaveProperty('chain')
@@ -413,7 +425,7 @@ describe('E2E: Transaction Preparation (No Broadcasting)', () => {
         vault.prepareSendTx({
           coin,
           receiver: 'invalid-ethereum-address',
-          amount: 1000000000000000000n,
+          amount: 700000000000000n, // ~0.0007 ETH (~$2)
         })
       ).rejects.toThrow()
     })

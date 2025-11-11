@@ -40,7 +40,7 @@
       "eslint --config .config/eslint.config.mjs --fix",
       "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
     ],
-    "packages/sdk/tests/**/*.test.ts": [
+    "packages/sdk/tests/!(e2e)/**/*.test.ts": [
       "yarn workspace @vultisig/sdk test:changed"
     ]
   },

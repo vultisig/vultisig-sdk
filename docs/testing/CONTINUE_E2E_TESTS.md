@@ -1,6 +1,6 @@
 # Continue E2E Testing Work - Get Read-Only Tests Working
 
-## Current Status (Updated: 2025-11-10 - Session 6)
+## Current Status (Updated: 2025-11-10 - Session 7)
 
 🎉🎉🎉 **ALL READ-ONLY TESTS NOW PASSING (51/51 = 100%)!** 🎉🎉🎉
 
@@ -24,7 +24,83 @@
 - These are EXPECTED failures - test vault has zero balance on most chains
 - Would require funding test vault addresses ($5-20 per chain) - Phase 4.2 of testing plan
 
-### Latest Progress Summary (Session 6 - 2025-11-10)
+### Latest Progress Summary (Session 7 - 2025-11-10)
+
+🔒 **CRITICAL SECURITY FIX: Vault Credentials Removed from Git**
+
+**Session 7** focused on addressing a critical security gap before proceeding with Phase 4.2 (transaction signing tests that require funding):
+
+#### Security Issue Identified:
+
+**Problem:** Vault files (.vult) and passwords were hardcoded and committed to git, creating a major security vulnerability:
+- 5 vault files tracked in git (including test vault used for E2E tests)
+- Password "Password123!" hardcoded in 23+ locations
+- All blockchain addresses publicly exposed
+- Anyone cloning the repo could control these addresses if funded
+
+**Risk:** If test vault addresses were funded for Phase 4.2, funds would be immediately at risk of theft by anyone with git access.
+
+#### Security Fixes Implemented:
+
+**1. Updated .gitignore patterns** (2 files):
+- Root `.gitignore`: Added wildcard patterns for `*.vult`, `**/vaults/**/*.vult`, `vault-details-*.json`
+- New `packages/sdk/.gitignore`: Added vault-specific patterns and test environment files
+
+**2. Environment variable infrastructure** ([test-vault.ts](../../packages/sdk/tests/helpers/test-vault.ts)):
+- Converted `TEST_VAULT_CONFIG` to use environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
+- Added fallback to public default vault with prominent security warnings
+- Validates that both env vars are set together (or both unset)
+- Shows warning when using default vault (only safe for read-only tests)
+
+**3. Created security documentation:**
+- New [SECURITY.md](../../packages/sdk/tests/e2e/SECURITY.md) - Comprehensive security guide (400+ lines)
+- New [.env.example](../../packages/sdk/tests/e2e/.env.example) - Environment variable template
+- Updated [E2E README](../../packages/sdk/tests/e2e/README.md) - Added security section prominently at top
+
+**4. Updated all test files** (4 files):
+- Added security warnings to file headers
+- References to SECURITY.md for setup instructions
+- Warnings about never funding default test vault addresses
+
+#### Key Security Principles Documented:
+
+✅ **Safe to share:** Blockchain addresses (always public on-chain anyway)
+❌ **Never share:** Vault files, passwords, or private keys
+⚠️ **Default vault:** Public credentials in git - NEVER fund these addresses!
+✅ **Custom vault:** Use environment variables for your own test vault (safe to fund minimally)
+
+#### Backwards Compatibility:
+
+Tests still work with default vault (backwards compatible):
+- Falls back to public test vault if env vars not set
+- Shows prominent warning about security
+- Read-only tests work fine (no funding needed)
+- Transaction signing tests require custom vault setup
+
+#### Files Changed:
+
+- [.gitignore](../../.gitignore) - Added vault file patterns
+- [packages/sdk/.gitignore](../../packages/sdk/.gitignore) - Created with vault patterns
+- [test-vault.ts](../../packages/sdk/tests/helpers/test-vault.ts) - Environment variable support
+- [SECURITY.md](../../packages/sdk/tests/e2e/SECURITY.md) - New comprehensive security guide
+- [.env.example](../../packages/sdk/tests/e2e/.env.example) - New environment template
+- [README.md](../../packages/sdk/tests/e2e/README.md) - Added security section
+- All 4 E2E test files - Added security warnings
+
+#### Next Steps (Phase 4.2 - Transaction Signing):
+
+**Before funding any test addresses:**
+1. ✅ Security infrastructure in place (Session 7 complete)
+2. 🔜 Create dedicated test vault (outside of git)
+3. 🔜 Set up environment variables locally
+4. 🔜 Verify no vault files in git (`git status`)
+5. 🔜 Fund test vault minimally ($5-10 per chain, $100 max)
+6. 🔜 Enable transaction signing tests
+7. 🔜 Verify 14 failing tests now pass with funded vault
+
+---
+
+### Previous Session Summary (Session 6 - 2025-11-10)
 
 🎉 **ALL READ-ONLY TESTS NOW PASSING (51/51 = 100%)!**
 
