@@ -8,13 +8,13 @@ import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { getChainSpecific } from '@core/mpc/keysign/chainSpecific'
 import type { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
+import { buildSendKeysignPayload } from '@core/mpc/keysign/send/build'
 import { toCommCoin } from '@core/mpc/types/utils/commCoin'
 import {
   type KeysignPayload,
   KeysignPayloadSchema,
 } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
-import { buildSendKeysignPayload } from '@core/ui/vault/send/keysignPayload/build'
 
 import { formatBalance } from '../adapters/formatBalance'
 import { formatGasInfo } from '../adapters/formatGasInfo'

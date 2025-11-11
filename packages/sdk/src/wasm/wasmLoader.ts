@@ -53,7 +53,7 @@ async function loadWasmNode(url: string): Promise<ArrayBuffer> {
   return buffer.buffer.slice(
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength
-  )
+  ) as ArrayBuffer
 }
 
 /**
