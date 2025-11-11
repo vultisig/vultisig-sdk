@@ -2,6 +2,9 @@ import { resolve } from 'path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  // Load environment variables from tests/e2e/.env
+  envDir: resolve(__dirname),
+
   test: {
     name: 'e2e',
     root: resolve(__dirname, '../..'),

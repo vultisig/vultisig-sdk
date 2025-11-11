@@ -23,9 +23,7 @@ const foldersToCopy = [
   'upstream/lib/schnorr',
 ]
 
-const filesToCopy = [
-  'upstream/core/ui/vault/send/keysignPayload/build.ts',
-]
+const filesToCopy: string[] = []
 
 type SyncAndCopyOptions = {
   syncOnly?: boolean
@@ -125,7 +123,9 @@ class SyncAndCopier {
       execSync(`git sparse-checkout set ${sparsePath}`, { stdio: 'pipe' })
 
       if (!fs.existsSync(path.join(TEMP_DIR, sparsePath))) {
-        throw new Error(`Directory ${sparsePath}/ not found in remote repository`)
+        throw new Error(
+          `Directory ${sparsePath}/ not found in remote repository`
+        )
       }
 
       console.log(`   📋 Copying ${dirName}/ to project...`)
@@ -186,7 +186,9 @@ class SyncAndCopier {
   private async copyToSrc(): Promise<void> {
     console.log('\n📋 STEP 2: Copy to packages/ with import transformations')
     console.log('='.repeat(50))
-    console.log(`📊 Copy plan: ${foldersToCopy.length} folders, ${filesToCopy.length} files\n`)
+    console.log(
+      `📊 Copy plan: ${foldersToCopy.length} folders, ${filesToCopy.length} files\n`
+    )
 
     await this.cleanSrcDirectories()
 
@@ -316,12 +318,19 @@ class SyncAndCopier {
     let transformed = content
 
     // Transform @core/ imports
-    transformed = transformed.replace(/@core\/([^'"]*)/g, (_match, corePath) => {
-      const destDir = path.dirname(destinationPath)
-      const targetPath = path.join(this.projectRoot, 'packages/core', corePath)
-      const relativePath = path.relative(destDir, targetPath)
-      return relativePath.startsWith('.') ? relativePath : './' + relativePath
-    })
+    transformed = transformed.replace(
+      /@core\/([^'"]*)/g,
+      (_match, corePath) => {
+        const destDir = path.dirname(destinationPath)
+        const targetPath = path.join(
+          this.projectRoot,
+          'packages/core',
+          corePath
+        )
+        const relativePath = path.relative(destDir, targetPath)
+        return relativePath.startsWith('.') ? relativePath : './' + relativePath
+      }
+    )
 
     // Transform @lib/ imports
     transformed = transformed.replace(/@lib\/([^'"]*)/g, (_match, libPath) => {
@@ -347,7 +356,10 @@ class SyncAndCopier {
           const relativeToPackages = path.relative(packagesDir, resolvedPath)
 
           // If it starts with 'core/' or 'lib/', recalculate the correct relative path
-          if (relativeToPackages.startsWith('core/') || relativeToPackages.startsWith('lib/')) {
+          if (
+            relativeToPackages.startsWith('core/') ||
+            relativeToPackages.startsWith('lib/')
+          ) {
             const correctRelativePath = path.relative(destDir, resolvedPath)
             const fixedPath = correctRelativePath.startsWith('.')
               ? correctRelativePath

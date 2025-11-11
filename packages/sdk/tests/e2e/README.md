@@ -63,7 +63,7 @@ TEST_VAULT_PASSWORD=your-secure-password
 - Other chain fees (Solana, Cosmos, THORChain)
 - Gas comparison across chains
 
-### 3. Transaction Preparation (`tx-preparation.test.ts`)
+### 3. Transaction Preparation (`prepare-send-tx.test.ts`)
 - Prepare ETH transfers (no broadcast)
 - Prepare ERC-20 transfers (no broadcast)
 - Prepare Bitcoin transfers (no broadcast)
@@ -255,7 +255,7 @@ tests/e2e/
 ├── vitest.config.ts               # E2E test configuration
 ├── balance-operations.test.ts     # Balance fetching tests
 ├── gas-estimation.test.ts         # Gas/fee estimation tests
-├── tx-preparation.test.ts         # Transaction prep tests (no broadcast)
+├── prepare-send-tx.test.ts        # prepareSendTx() tests (no broadcast)
 └── multi-chain-coverage.test.ts   # Comprehensive chain coverage
 
 tests/helpers/

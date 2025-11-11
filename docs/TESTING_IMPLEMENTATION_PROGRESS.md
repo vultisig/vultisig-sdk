@@ -582,7 +582,7 @@ Ready to proceed to **Phase 4: E2E Testing** with a solid foundation of 650 pass
 - Response structure validation
 - Error handling
 
-**3. Transaction Preparation** (`tests/e2e/tx-preparation.test.ts` - 18 tests)
+**3. Transaction Preparation** (`tests/e2e/prepare-send-tx.test.ts` - 17 tests)
 - ETH transfer preparation (no broadcast)
 - ERC-20 transfer preparation (USDC, USDT)
 - Bitcoin transaction preparation
