@@ -95,7 +95,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         )
       })
 
-      it.skip('Litecoin: Alternative UTXO implementation', async () => {
+      it('Litecoin: Alternative UTXO implementation', async () => {
         // TODO: Requires Litecoin funding (~$2-5)
         // Tests that UTXO logic generalizes to Litecoin network
         // Different address format (ltc1...) and network parameters
@@ -111,7 +111,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
         const payload = await vault.prepareSendTx({
           coin,
-          receiver: 'ltc1qfwkqp3mxd5qneqqxvcc5u8nhdcsjvq9pqvvv5z', // Example Litecoin address
+          receiver: 'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9', // Valid Litecoin SegWit address (bech32)
           amount: 100000n, // ~0.001 LTC (~$0.10 at $100/LTC)
         })
 
@@ -201,7 +201,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
     // ==========================================================================
 
     describe('Cosmos Chains', () => {
-      it.skip('THORChain: Vault-based Cosmos with memo', async () => {
+      it('THORChain: Vault-based Cosmos with memo', async () => {
         // TODO: Requires THORChain funding (~$5-10) and account initialization
         // THORChain uses vault-based architecture (different from IBC Cosmos)
         // Tests memo field support for DEX operations
@@ -236,7 +236,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         console.log(`  Memo: ${payload.memo}`)
       })
 
-      it.skip('Cosmos Hub: IBC-enabled Cosmos', async () => {
+      it('Cosmos Hub: IBC-enabled Cosmos', async () => {
         // TODO: Requires Cosmos funding (~$5-10) and account initialization
         // Tests standard IBC Cosmos SDK implementation
         // Different account model than THORChain (sequence numbers, etc.)
@@ -400,7 +400,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
       console.log(`  Custom Gas: 2 gwei priority, 21000 gas limit`)
     })
 
-    it.skip('UTXO: Custom byte fee (sat/vbyte)', async () => {
+    it('UTXO: Custom byte fee (sat/vbyte)', async () => {
       // TODO: Combine with main Bitcoin test or create separate test
       // Tests custom fee rate for UTXO chains (Bitcoin, Litecoin, etc.)
 
