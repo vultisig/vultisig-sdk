@@ -131,26 +131,27 @@ Intelligent caching based on data mutability:
       │                                      │
  ┌────▼──────────────────────────────┐     │
  │         Vault Instance            │     │
+ │         (Facade Pattern)          │     │
  │  ┌──────────────────────────────┐│     │
- │  │• Address derivation          ││     │
- │  │• Balance fetching            ││     │
- │  │• Gas estimation              ││     │
- │  │• Transaction signing         ││     │
- │  │• Token/Chain management      ││     │
+ │  │  Delegates to Services:      ││     │
+ │  │  • AddressService            ││     │
+ │  │  • BalanceService            ││     │
+ │  │  • GasEstimationService      ││     │
+ │  │  • TransactionBuilder        ││     │
  │  └──────────────────────────────┘│     │
  └────┬──────────────┬───────────────┘     │
       │              │                      │
  ┌────▼─────┐   ┌───▼──────┐              │
- │ Adapters │   │ Services │              │
- │ (format) │   │ (cache,  │              │
- │          │   │  signing) │              │
+ │ Services │   │ Adapters │              │
+ │ (vault/  │   │ (format) │              │
+ │ services)│   │          │              │
  └────┬─────┘   └───┬──────┘              │
       │             │                       │
  ┌────▼─────────────▼────────────┐   ┌────▼─────┐
  │    Vultisig Core Library      │   │ Runtime  │
  │ • deriveAddress()             │   │ Storage  │
  │ • getCoinBalance()            │   │ • Browser│
- │ • getFeeQuote()               │   │ • Node   │
+ │ • getChainSpecific()          │   │ • Node   │
  │ • buildSendKeysignPayload()   │   │ • Chrome │
  │ • 34+ chain resolvers         │   │ • Memory │
  └────────────────────────────────┘   └──────────┘
@@ -178,8 +179,14 @@ packages/sdk/src/
 ├── AddressBookManager.ts       # Global address book
 │
 ├── vault/                      # Vault functionality
-│   ├── Vault.ts               # Main vault class (functional adapters)
+│   ├── Vault.ts               # Main vault class (facade pattern)
 │   ├── VaultServices.ts       # Service injection interface
+│   ├── VaultError.ts          # Vault error types
+│   ├── services/              # Extracted vault services
+│   │   ├── AddressService.ts # Address derivation
+│   │   ├── BalanceService.ts # Balance fetching & caching
+│   │   ├── GasEstimationService.ts # Gas/fee estimation
+│   │   └── TransactionBuilder.ts # TX preparation & hash extraction
 │   └── index.ts               # Vault exports
 │
 ├── runtime/                   # Runtime environment handling
@@ -291,9 +298,9 @@ const encrypted = await vaultManager.exportVault(vaultId, password)
 
 ### 3. Vault Class
 
-**File:** `src/vault/Vault.ts`
+**File:** `src/vault/Vault.ts` (658 lines, 30% smaller after refactoring)
 
-Individual vault instance using functional adapter pattern for all operations.
+Individual vault instance using **facade pattern** with **service delegation**.
 
 ```typescript
 // Address derivation
@@ -306,24 +313,69 @@ const tokenBalance = await vault.balance('Ethereum', tokenContractAddress)
 // Gas estimation
 const gas = await vault.gas(Chain.Ethereum)
 
+// Transaction preparation
+const keysignPayload = await vault.prepareSendTx({ coin, receiver, amount })
+const messageHashes = await vault.extractMessageHashes(keysignPayload)
+
 // Transaction signing
 const signature = await vault.sign('fast', payload, password)
 ```
 
-**Architecture Approach:**
-- **Functional Adapter Pattern** - Thin layer over core functions
-- Directly calls core functions (`deriveAddress`, `getCoinBalance`, `getFeeQuote`)
-- Uses adapters for format conversion (bigint → Balance, FeeQuote → GasInfo)
-- Minimal business logic, delegates to core
+**Architecture Approach (Refactored):**
+- **Facade Pattern** - Clean interface that delegates to specialized services
+- **Service Extraction** - Core responsibilities extracted into 4 focused services:
+  - `AddressService` - Address derivation with permanent caching
+  - `BalanceService` - Balance fetching with 5-minute TTL caching
+  - `GasEstimationService` - Gas/fee estimation for all chains
+  - `TransactionBuilder` - TX preparation and message hash extraction
+- **Minimal Business Logic** - Vault coordinates services, delegates implementation
+- **Backward Compatible** - All public APIs unchanged
+
+**Service Architecture:**
+
+```typescript
+class Vault extends UniversalEventEmitter<VaultEvents> {
+  // Extracted services
+  private addressService: AddressService
+  private balanceService: BalanceService
+  private gasEstimationService: GasEstimationService
+  private transactionBuilder: TransactionBuilder
+
+  // Public API delegates to services
+  async address(chain: Chain): Promise<string> {
+    return this.addressService.getAddress(chain)
+  }
+
+  async balance(chain: Chain, tokenId?: string): Promise<Balance> {
+    return this.balanceService.getBalance(chain, tokenId)
+  }
+
+  async gas(chain: Chain): Promise<GasInfo> {
+    return this.gasEstimationService.getGasInfo(chain)
+  }
+
+  async prepareSendTx(params): Promise<KeysignPayload> {
+    return this.transactionBuilder.prepareSendTx(params)
+  }
+}
+```
+
+**Refactoring Benefits:**
+- **Maintainability** - Each service has single responsibility (285 lines extracted)
+- **Testability** - Services can be unit tested independently
+- **Code Organization** - Vault.ts reduced from 943 to 658 lines
+- **Performance** - No impact, all tests passing at same speed
 
 **Caching Strategy:**
-- Addresses: Permanent cache (never expire)
-- Balances: 5-minute TTL
-- CacheService handles all caching logic
+- Addresses: Permanent cache (AddressService)
+- Balances: 5-minute TTL (BalanceService)
+- Gas: No cache (GasEstimationService)
+- CacheService injected via dependency injection
 
 **Event Emission:**
 - Extends `UniversalEventEmitter`
 - Emits events for: balance updates, transactions signed, chain/token changes, rename operations
+- Services use callbacks to emit events through Vault
 
 ### 4. ChainManager
 
@@ -375,6 +427,141 @@ const entries = addressBook.getEntriesForChain('Ethereum')
 - Maintain two address books: saved and vault-derived
 - Add/remove/update address entries
 - Chain-specific filtering
+
+### 6. Vault Services
+
+**Location:** `src/vault/services/`
+
+Extracted services that implement vault operations with single responsibilities.
+
+#### AddressService
+
+**File:** `src/vault/services/AddressService.ts` (88 lines)
+
+Handles address derivation with permanent caching.
+
+```typescript
+class AddressService {
+  async getAddress(chain: Chain): Promise<string>
+  async getAddresses(chains?: Chain[]): Promise<Record<string, string>>
+}
+```
+
+**Responsibilities:**
+- Derive addresses for any chain using Core's `deriveAddress()`
+- Permanent caching (addresses never change)
+- Parallel address derivation for multiple chains
+- Error handling with VaultError
+
+**Key Features:**
+- Uses WalletCore's `getPublicKey()` and `deriveAddress()`
+- Cache key: `address:${chain.toLowerCase()}`
+- TTL: `Number.MAX_SAFE_INTEGER` (permanent)
+
+#### BalanceService
+
+**File:** `src/vault/services/BalanceService.ts` (146 lines)
+
+Handles balance fetching, caching, and updates for vault accounts.
+
+```typescript
+class BalanceService {
+  async getBalance(chain: Chain, tokenId?: string): Promise<Balance>
+  async getBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>>
+  async updateBalance(chain: Chain, tokenId?: string): Promise<Balance>
+  async updateBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>>
+}
+```
+
+**Responsibilities:**
+- Fetch native and token balances using Core's `getCoinBalance()`
+- 5-minute TTL caching
+- Event emission via callbacks
+- Format raw balances to SDK Balance type
+
+**Key Features:**
+- Cache key: `balance:${chain}:${tokenId ?? 'native'}`
+- TTL: 5 minutes (`5 * 60 * 1000`)
+- Emits `balanceUpdated` event through Vault
+- Handles both native and ERC-20/SPL token balances
+
+#### GasEstimationService
+
+**File:** `src/vault/services/GasEstimationService.ts` (117 lines)
+
+Handles gas and fee estimation for all chains.
+
+```typescript
+class GasEstimationService {
+  async getGasInfo(chain: Chain): Promise<GasInfo>
+}
+```
+
+**Responsibilities:**
+- Estimate gas/fees using Core's `getChainSpecific()`
+- Cosmos well-known address mapping for gas estimation
+- Chain-specific gas handling (EIP-1559 vs simple)
+- No caching (gas prices are volatile)
+
+**Key Features:**
+- Static well-known addresses for Cosmos chains (avoids account-doesn't-exist errors)
+- Creates minimal keysign payload for fee estimation
+- Formats chain-specific data to unified GasInfo type
+- Maps to chain families: EVM (EIP-1559), UTXO (byte fee), Cosmos (gas), etc.
+
+**Cosmos Address Mapping:**
+```typescript
+private static readonly COSMOS_GAS_ESTIMATION_ADDRESSES = {
+  [Chain.THORChain]: 'thor1dheycdevq39qlkxs2a6wuuzyn4aqxhve4qxtxt',
+  [Chain.Cosmos]: 'cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh',
+  [Chain.Osmosis]: 'osmo1clpqr4nrk4khgkxj78fcwwh6dl3uw4epasmvnj',
+  [Chain.MayaChain]: 'maya1dheycdevq39qlkxs2a6wuuzyn4aqxhveshhay9',
+  [Chain.Kujira]: 'kujira1nynns8ex9fq6sjjfj8k79ymkdz4sqth0hdz2q8',
+  [Chain.Dydx]: 'dydx1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3l3qwf0',
+}
+```
+
+#### TransactionBuilder
+
+**File:** `src/vault/services/TransactionBuilder.ts` (178 lines)
+
+Handles transaction preparation and message hash extraction.
+
+```typescript
+class TransactionBuilder {
+  async prepareSendTx(params: {
+    coin: AccountCoin
+    receiver: string
+    amount: bigint
+    memo?: string
+    feeSettings?: FeeSettings
+  }): Promise<KeysignPayload>
+
+  async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
+}
+```
+
+**Responsibilities:**
+- Build complete keysign payloads using Core's `buildSendKeysignPayload()`
+- Extract pre-signing message hashes from payloads
+- Support custom fee settings
+- Handle all chain types (UTXO, EVM, Cosmos, EdDSA)
+
+**Key Features:**
+- `prepareSendTx()` - Creates transaction payloads for signing
+- `extractMessageHashes()` - Critical SDK improvement (Nov 2025)
+- Dynamic imports for hash extraction (tree-shaking optimization)
+- Supports memo fields (THORChain, Cosmos)
+- Custom fee parameters (EVM gas, UTXO byte fees)
+
+**Message Hash Extraction Flow:**
+```typescript
+// 1. Get chain from keysign payload
+// 2. Create WalletCore PublicKey from payload data
+// 3. Get encoded signing inputs (compiled TX data)
+// 4. Extract pre-signing hashes for each input
+// 5. Convert Uint8Array to hex strings
+```
 
 ---
 
@@ -873,17 +1060,21 @@ interface VaultServices {
 ```
 vault.address('Ethereum')
   │
-  ├─→ Check cache ────→ [HIT] Return cached
-  │
-  ├─→ [MISS] Get WalletCore
-  │
-  ├─→ Core: getPublicKey({ chain, hexChainCode, publicKeys })
-  │     Output: PublicKey
-  │
-  ├─→ Core: deriveAddress({ chain, publicKey, walletCore })
-  │     Output: address (string)
-  │
-  ├─→ Cache address (permanent)
+  ├─→ Delegate to AddressService.getAddress()
+  │     │
+  │     ├─→ Check cache ────→ [HIT] Return cached
+  │     │
+  │     ├─→ [MISS] Get WalletCore
+  │     │
+  │     ├─→ Core: getPublicKey({ chain, hexChainCode, publicKeys })
+  │     │     Output: PublicKey
+  │     │
+  │     ├─→ Core: deriveAddress({ chain, publicKey, walletCore })
+  │     │     Output: address (string)
+  │     │
+  │     ├─→ Cache address (permanent - Number.MAX_SAFE_INTEGER)
+  │     │
+  │     └─→ Return address
   │
   └─→ Return address
 ```
@@ -893,19 +1084,25 @@ vault.address('Ethereum')
 ```
 vault.balance('Ethereum', tokenId?)
   │
-  ├─→ Check cache (5-min) ────→ [HIT] Return cached
-  │
-  ├─→ [MISS] Get address via vault.address()
-  │
-  ├─→ Core: getCoinBalance({ chain, address, contractAddress })
-  │     Output: rawBalance (bigint)
-  │
-  ├─→ Adapter: formatBalance(rawBalance, chain, tokenId)
-  │     Output: Balance { amount, symbol, decimals }
-  │
-  ├─→ Cache balance (5-min TTL)
-  │
-  ├─→ Emit 'balanceUpdated' event
+  ├─→ Delegate to BalanceService.getBalance()
+  │     │
+  │     ├─→ Check cache (5-min) ────→ [HIT] Return cached
+  │     │
+  │     ├─→ [MISS] Get address via callback
+  │     │     (Calls vault.address() → AddressService)
+  │     │
+  │     ├─→ Core: getCoinBalance({ chain, address, id: tokenId })
+  │     │     Output: rawBalance (bigint)
+  │     │
+  │     ├─→ Adapter: formatBalance(rawBalance, chain, tokenId, tokens)
+  │     │     Output: Balance { amount, symbol, decimals }
+  │     │
+  │     ├─→ Cache balance (5-min TTL)
+  │     │
+  │     ├─→ Emit 'balanceUpdated' via callback
+  │     │     (Vault emits the event)
+  │     │
+  │     └─→ Return Balance
   │
   └─→ Return Balance
 ```
@@ -913,15 +1110,55 @@ vault.balance('Ethereum', tokenId?)
 ### Fast Signing Flow
 
 ```
-vault.sign('fast', payload, password)
+// Step 1: Prepare transaction
+vault.prepareSendTx({ coin, receiver, amount })
+  │
+  ├─→ Delegate to TransactionBuilder.prepareSendTx()
+  │     │
+  │     ├─→ Get WalletCore
+  │     │
+  │     ├─→ Core: getPublicKey({ chain, publicKeys, hexChainCode })
+  │     │
+  │     ├─→ Core: buildSendKeysignPayload({
+  │     │     coin, receiver, amount, memo, feeSettings,
+  │     │     vaultId, localPartyId, publicKey, walletCore
+  │     │   })
+  │     │     Output: KeysignPayload
+  │     │
+  │     └─→ Return KeysignPayload
+  │
+  └─→ Return KeysignPayload
+
+// Step 2: Extract message hashes (Critical SDK Improvement - Nov 2025)
+vault.extractMessageHashes(keysignPayload)
+  │
+  ├─→ Delegate to TransactionBuilder.extractMessageHashes()
+  │     │
+  │     ├─→ Get chain from keysign payload
+  │     │
+  │     ├─→ Create WalletCore PublicKey from payload data
+  │     │
+  │     ├─→ Core: getEncodedSigningInputs({ keysignPayload, walletCore, publicKey })
+  │     │     Output: txInputsArray (compiled transaction data)
+  │     │
+  │     ├─→ For each txInput:
+  │     │     Core: getPreSigningHashes({ walletCore, txInputData, chain })
+  │     │     Output: messageHashes (Uint8Array[])
+  │     │
+  │     ├─→ Convert Uint8Array to hex strings
+  │     │
+  │     └─→ Return string[]
+  │
+  └─→ Return messageHashes
+
+// Step 3: Sign with fast mode
+vault.sign('fast', signingPayload, password)
   │
   ├─→ Validate vault type (must have Server-* signer)
   │
   ├─→ Get WalletCore
   │
   ├─→ Validate payload has pre-computed messageHashes
-  │     (Generated via Vault.prepareSendTx() which uses
-  │      Core's buildSendKeysignPayload())
   │
   ├─→ FastSigningService.signWithServer()
   │     ├─→ POST /fast-sign/start
@@ -931,7 +1168,7 @@ vault.sign('fast', payload, password)
   │
   ├─→ Emit 'transactionSigned' event
   │
-  └─→ Return Signature { signature, txHash }
+  └─→ Return Signature { signature, recovery, format }
 ```
 
 ---
@@ -1133,17 +1370,25 @@ The Vultisig SDK architecture is **clean, layered, and environment-agnostic**:
 - Direct Core integration for blockchain operations
 
 **Architecture Decisions:**
-1. **Functional Core Calls** - Vault directly calls Core functions
-2. **Minimal Services** - Only CacheService and FastSigningService
-3. **Adapter Pattern** - Format conversion isolated to pure functions
-4. **Permanent Address Caching** - Addresses cached forever
-5. **5-Minute Balance TTL** - Balance freshness vs API efficiency
-6. **Type-Safe Events** - Compile-time safety for events
-7. **Environment Detection Order** - Prevents false positives
-8. **Storage Abstraction** - Single interface, multiple implementations
-9. **Service Injection** - Flexibility and testability
+1. **Service Extraction (Nov 2025)** - Vault refactored into 4 specialized services
+   - AddressService (88 lines) - Address derivation
+   - BalanceService (146 lines) - Balance fetching & caching
+   - GasEstimationService (117 lines) - Gas/fee estimation
+   - TransactionBuilder (178 lines) - TX preparation & hash extraction
+   - Result: Vault.ts reduced from 943 to 658 lines (30% reduction)
+2. **Facade Pattern** - Vault delegates to services, maintains backward compatibility
+3. **Callback Pattern** - Services use callbacks to emit events through Vault
+4. **Single Responsibility** - Each service has one clear purpose
+5. **Functional Core Calls** - Services call Core functions directly
+6. **Adapter Pattern** - Format conversion isolated to pure functions
+7. **Permanent Address Caching** - Addresses cached forever (AddressService)
+8. **5-Minute Balance TTL** - Balance freshness vs API efficiency (BalanceService)
+9. **Type-Safe Events** - Compile-time safety for events
+10. **Environment Detection Order** - Prevents false positives
+11. **Storage Abstraction** - Single interface, multiple implementations
+12. **Dependency Injection** - Flexibility and testability
 
 ---
 
-**Last Updated:** November 2025
+**Last Updated:** November 2025 (Vault Refactoring)
 **Status:** Alpha
