@@ -1,14 +1,14 @@
 import { detectEnvironment, Environment } from '../environment'
-import type { VaultStorage } from './types'
-import { MemoryStorage } from './MemoryStorage'
 import { BrowserStorage } from './BrowserStorage'
-import { NodeStorage } from './NodeStorage'
 import { ChromeStorage } from './ChromeStorage'
+import { MemoryStorage } from './MemoryStorage'
+import { NodeStorage } from './NodeStorage'
+import type { VaultStorage } from './types'
 
 /**
  * Options for configuring storage behavior
  */
-export interface StorageOptions {
+export type StorageOptions = {
   /**
    * Force a specific storage implementation
    */
@@ -97,7 +97,9 @@ export class StorageManager {
 
       case 'node':
         // Node.js uses filesystem storage in home directory
-        return new NodeStorage(options?.basePath ? { basePath: options.basePath } : undefined)
+        return new NodeStorage(
+          options?.basePath ? { basePath: options.basePath } : undefined
+        )
 
       case 'electron-main':
         // Electron main process uses userData directory
@@ -105,12 +107,16 @@ export class StorageManager {
 
       case 'worker':
         // Web Workers can't reliably access IndexedDB, use memory
-        console.warn('Running in Web Worker - using in-memory storage (data will not persist)')
+        console.warn(
+          'Running in Web Worker - using in-memory storage (data will not persist)'
+        )
         return new MemoryStorage()
 
       default:
         // Unknown environment - use memory storage as safe fallback
-        console.warn(`Unknown environment detected: ${env} - using in-memory storage`)
+        console.warn(
+          `Unknown environment detected: ${env} - using in-memory storage`
+        )
         return new MemoryStorage()
     }
   }
@@ -134,7 +140,9 @@ export class StorageManager {
         return new BrowserStorage()
 
       case 'node':
-        return new NodeStorage(options?.basePath ? { basePath: options.basePath } : undefined)
+        return new NodeStorage(
+          options?.basePath ? { basePath: options.basePath } : undefined
+        )
 
       case 'chrome':
         return new ChromeStorage()
@@ -154,7 +162,10 @@ export class StorageManager {
     try {
       return new ChromeStorage()
     } catch (error) {
-      console.warn('Chrome storage not available, falling back to memory storage:', error)
+      console.warn(
+        'Chrome storage not available, falling back to memory storage:',
+        error
+      )
       return new MemoryStorage()
     }
   }
@@ -167,7 +178,9 @@ export class StorageManager {
    * @param options - Optional storage configuration
    * @returns NodeStorage configured for Electron or default location
    */
-  private static createElectronMainStorage(options?: StorageOptions): VaultStorage {
+  private static createElectronMainStorage(
+    options?: StorageOptions
+  ): VaultStorage {
     // If custom basePath provided, use it
     if (options?.basePath) {
       return new NodeStorage({ basePath: options.basePath })
@@ -175,14 +188,18 @@ export class StorageManager {
 
     // Try to use Electron's userData directory
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // Dynamic require prevents errors in non-Electron environments
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { app } = require('electron')
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const path = require('path')
       const basePath = path.join(app.getPath('userData'), '.vultisig')
       return new NodeStorage({ basePath })
     } catch (error) {
-      console.warn('Failed to access Electron app.getPath, using default Node storage:', error)
+      console.warn(
+        'Failed to access Electron app.getPath, using default Node storage:',
+        error
+      )
       return new NodeStorage()
     }
   }

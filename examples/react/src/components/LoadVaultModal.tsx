@@ -44,7 +44,9 @@ export const LoadVaultModal = ({
             const blob = new Blob([keyshare.containerBase64], {
               type: 'text/plain',
             })
-            const file = new File([blob], keyshare.name, { type: 'text/plain' })
+            const file = new File([blob], keyshare.name, {
+              type: 'text/plain',
+            })
             encrypted = await sdk.isVaultFileEncrypted(file)
             console.log(
               'Checking containerBase64 encryption via SDK:',

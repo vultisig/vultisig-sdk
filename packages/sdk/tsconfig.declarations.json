@@ -23,6 +23,7 @@
     "**/*.test.ts",
     "**/*.test.tsx",
     "**/*.stories.ts",
-    "**/*.stories.tsx"
+    "**/*.stories.tsx",
+    "src/runtime/utils/electron.ts"
   ]
 }

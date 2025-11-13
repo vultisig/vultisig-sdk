@@ -24,10 +24,7 @@ export type Environment =
 export function detectEnvironment(): Environment {
   // Check for Electron FIRST (must be before browser check)
   // Electron has both process and window, so we need to check for process.versions.electron
-  if (
-    typeof process !== 'undefined' &&
-    process.versions?.electron
-  ) {
+  if (typeof process !== 'undefined' && process.versions?.electron) {
     // Main process has type 'browser', renderer has type 'renderer'
     const processType = (process as any).type
     if (processType === 'browser') return 'electron-main'
@@ -38,11 +35,7 @@ export function detectEnvironment(): Environment {
 
   // Check for Chrome Extension (must be before browser/worker check)
   // Chrome extensions have the chrome.runtime API
-  if (
-    typeof chrome !== 'undefined' &&
-    chrome.runtime &&
-    chrome.runtime.id
-  ) {
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
     // Service worker context (background script)
     // @ts-ignore - ServiceWorkerGlobalScope type conflict between dom and webworker libs
     if (
@@ -69,18 +62,12 @@ export function detectEnvironment(): Environment {
   }
 
   // Check for browser (has window and document)
-  if (
-    typeof window !== 'undefined' &&
-    typeof document !== 'undefined'
-  ) {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     return 'browser'
   }
 
   // Check for Node.js (has process and Node version, but no window)
-  if (
-    typeof process !== 'undefined' &&
-    process.versions?.node
-  ) {
+  if (typeof process !== 'undefined' && process.versions?.node) {
     return 'node'
   }
 
@@ -109,10 +96,7 @@ export function isNode(): boolean {
  * Check if running in Electron (any process).
  */
 export function isElectron(): boolean {
-  return (
-    typeof process !== 'undefined' &&
-    !!process.versions?.electron
-  )
+  return typeof process !== 'undefined' && !!process.versions?.electron
 }
 
 /**
@@ -184,9 +168,15 @@ export function getEnvironmentInfo(): {
     hasNavigator: typeof navigator !== 'undefined',
     isElectron: isElectron(),
     isChromeExtension: isChromeExtension(),
-    nodeVersion: typeof process !== 'undefined' ? process.versions?.node : undefined,
-    electronVersion: typeof process !== 'undefined' ? process.versions?.electron : undefined,
-    chromeExtensionId: typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime.id : undefined,
-    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+    nodeVersion:
+      typeof process !== 'undefined' ? process.versions?.node : undefined,
+    electronVersion:
+      typeof process !== 'undefined' ? process.versions?.electron : undefined,
+    chromeExtensionId:
+      typeof chrome !== 'undefined' && chrome.runtime
+        ? chrome.runtime.id
+        : undefined,
+    userAgent:
+      typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
   }
 }

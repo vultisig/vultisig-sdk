@@ -1,4 +1,16 @@
 // ServerManager is internal - import directly from implementation file
+import { Chain } from '@core/chain/Chain'
+
+import { AddressBookManager } from './AddressBookManager'
+import {
+  DEFAULT_CHAINS,
+  getSupportedChains,
+  validateChains,
+} from './ChainManager'
+import { UniversalEventEmitter } from './events/EventEmitter'
+import type { SdkEvents } from './events/types'
+import { StorageManager } from './runtime/storage/StorageManager'
+import type { VaultStorage } from './runtime/storage/types'
 import { ServerManager } from './server/ServerManager'
 import {
   AddressBook,
@@ -10,21 +22,10 @@ import {
   ValidationResult,
   VultisigConfig,
 } from './types'
-import { AddressBookManager } from './AddressBookManager'
-import {
-  DEFAULT_CHAINS,
-  getSupportedChains,
-  validateChains,
-} from './ChainManager'
+import { ValidationHelpers } from './utils/validation'
 import { Vault as VaultClass } from './vault/Vault'
 import { VaultManager } from './VaultManager'
 import { WASMManager } from './wasm'
-import { UniversalEventEmitter } from './events/EventEmitter'
-import type { SdkEvents } from './events/types'
-import type { VaultStorage } from './runtime/storage/types'
-import { StorageManager } from './runtime/storage/StorageManager'
-import { Chain } from '@core/chain/Chain'
-import { ValidationHelpers } from './utils/validation'
 
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
@@ -34,19 +35,20 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private serverManager: ServerManager
   private wasmManager: WASMManager
   private initialized = false
+  private initializationPromise?: Promise<void>
 
   // Module managers
   private addressBookManager: AddressBookManager
   private vaultManager: VaultManager
 
   // Chain and currency configuration
-  private defaultChains: string[]
+  private defaultChains: Chain[]
   private defaultCurrency: string
 
   // Storage and connection state
   private storage: VaultStorage
   private connected = false
-  private activeChain: string
+  private activeChain: Chain
 
   constructor(config?: VultisigConfig) {
     // Initialize EventEmitter
@@ -110,16 +112,31 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Initialize the SDK and pre-load all WASM modules (optional but recommended)
    * WASM modules will lazy-load automatically when needed, but calling this
    * upfront can improve performance by avoiding delays during operations
+   *
+   * Thread-safe: Multiple concurrent calls will share the same initialization promise
    */
   async initialize(): Promise<void> {
+    // Already initialized
     if (this.initialized) return
 
-    try {
-      await this.wasmManager.initialize()
-      this.initialized = true
-    } catch (error) {
-      throw new Error('Failed to initialize SDK: ' + (error as Error).message)
+    // Initialization in progress - return existing promise to prevent duplicate initialization
+    if (this.initializationPromise) {
+      return this.initializationPromise
     }
+
+    // Start new initialization
+    this.initializationPromise = (async () => {
+      try {
+        await this.wasmManager.initialize()
+        this.initialized = true
+      } catch (error) {
+        // Reset promise on error so initialization can be retried
+        this.initializationPromise = undefined
+        throw new Error('Failed to initialize SDK: ' + (error as Error).message)
+      }
+    })()
+
+    return this.initializationPromise
   }
 
   /**
@@ -195,7 +212,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     const file = new File([blob], `${vaultData.name}.vult`)
 
     // Import vault using existing method
-    const vault = await this.addVault(file, password)
+    await this.addVault(file, password)
 
     // Emit event
     this.emit('vaultChanged', { vaultId })
@@ -492,7 +509,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Get address book entries
    */
-  async getAddressBook(chain?: string): Promise<AddressBook> {
+  async getAddressBook(chain?: Chain): Promise<AddressBook> {
     return this.addressBookManager.getAddressBook(chain)
   }
 
@@ -507,7 +524,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Remove address book entries
    */
   async removeAddressBookEntry(
-    addresses: Array<{ chain: string; address: string }>
+    addresses: Array<{ chain: Chain; address: string }>
   ): Promise<void> {
     return this.addressBookManager.removeAddressBookEntry(addresses)
   }
@@ -516,7 +533,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Update address book entry name
    */
   async updateAddressBookEntry(
-    chain: string,
+    chain: Chain,
     address: string,
     name: string
   ): Promise<void> {
@@ -558,7 +575,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Set active chain and persist to storage
    */
-  async setActiveChain(chain: string): Promise<void> {
+  async setActiveChain(chain: Chain): Promise<void> {
     this.activeChain = chain
     await this.storage.set('activeChain', chain)
     this.emit('chainChanged', { chain })
@@ -567,9 +584,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Get active chain from storage or memory
    */
-  async getActiveChain(): Promise<string> {
+  async getActiveChain(): Promise<Chain> {
     // Try storage first
-    const stored = await this.storage.get<string>('activeChain')
+    const stored = await this.storage.get<Chain>('activeChain')
     return stored ?? this.activeChain
   }
 

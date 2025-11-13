@@ -1,8 +1,8 @@
 import {
-  VaultStorage,
-  StoredValue,
-  StorageMetadata,
   STORAGE_VERSION,
+  StorageMetadata,
+  StoredValue,
+  VaultStorage,
 } from './types'
 
 /**

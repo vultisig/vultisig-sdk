@@ -1,7 +1,7 @@
 /**
  * Cached item with TTL
  */
-interface CachedItem<T> {
+type CachedItem<T> = {
   value: T
   timestamp: number
 }
@@ -9,9 +9,12 @@ interface CachedItem<T> {
 /**
  * Service for centralized caching logic.
  * Extracted from Vault to make caching reusable and testable.
+ *
+ * Thread-safe: getOrCompute() uses promise caching to prevent race conditions
  */
 export class CacheService {
   private cache = new Map<string, CachedItem<any>>()
+  private pendingComputations = new Map<string, Promise<any>>()
 
   /**
    * Get cached item if not expired
@@ -40,7 +43,7 @@ export class CacheService {
   set<T>(key: string, value: T): void {
     this.cache.set(key, {
       value,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
   }
 
@@ -74,6 +77,8 @@ export class CacheService {
 
   /**
    * Get or compute value with caching
+   * Thread-safe: Concurrent calls with same key share the same promise
+   *
    * @param key Cache key
    * @param ttl Time-to-live in milliseconds
    * @param compute Function to compute value if not cached
@@ -83,11 +88,29 @@ export class CacheService {
     ttl: number,
     compute: () => Promise<T>
   ): Promise<T> {
+    // Check cache first
     const cached = this.get<T>(key, ttl)
     if (cached !== null) return cached
 
-    const value = await compute()
-    this.set(key, value)
-    return value
+    // Check for in-flight computation (FIX: Prevents race condition)
+    const pending = this.pendingComputations.get(key)
+    if (pending) {
+      return pending as Promise<T>
+    }
+
+    // Start new computation
+    const promise = (async () => {
+      try {
+        const value = await compute()
+        this.set(key, value)
+        return value
+      } finally {
+        // Clean up pending computation after completion (success or failure)
+        this.pendingComputations.delete(key)
+      }
+    })()
+
+    this.pendingComputations.set(key, promise)
+    return promise
   }
 }

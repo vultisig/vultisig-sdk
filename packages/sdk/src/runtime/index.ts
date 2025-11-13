@@ -12,32 +12,36 @@
 // ============================================
 // Storage Abstraction
 // ============================================
-export type { VaultStorage, StorageMetadata, StoredValue } from './storage/types'
-export { StorageError, StorageErrorCode } from './storage/types'
-export { StorageManager } from './storage/StorageManager'
-export type { StorageOptions } from './storage/StorageManager'
 export { BrowserStorage } from './storage/BrowserStorage'
-export { NodeStorage } from './storage/NodeStorage'
-export { MemoryStorage } from './storage/MemoryStorage'
 export { ChromeStorage } from './storage/ChromeStorage'
+export { MemoryStorage } from './storage/MemoryStorage'
+export { NodeStorage } from './storage/NodeStorage'
+export type { StorageOptions } from './storage/StorageManager'
+export { StorageManager } from './storage/StorageManager'
+export type {
+  StorageMetadata,
+  StoredValue,
+  VaultStorage,
+} from './storage/types'
+export { StorageError, StorageErrorCode } from './storage/types'
 
 // ============================================
 // Environment Detection
 // ============================================
+export type { Environment } from './environment'
 export {
   detectEnvironment,
+  getEnvironmentInfo,
   isBrowser,
-  isNode,
+  isChromeExtension,
+  isChromeExtensionPage,
+  isChromeExtensionServiceWorker,
   isElectron,
   isElectronMain,
   isElectronRenderer,
-  isChromeExtension,
-  isChromeExtensionServiceWorker,
-  isChromeExtensionPage,
+  isNode,
   isWorker,
-  getEnvironmentInfo,
 } from './environment'
-export type { Environment } from './environment'
 
 // ============================================
 // Environment-Specific Utilities

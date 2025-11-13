@@ -19,8 +19,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@vultisig/sdk': path.resolve(__dirname, '../../packages/sdk/src/index.ts'),
-      'vultisig-sdk': path.resolve(__dirname, '../../packages/sdk/src/index.ts'),
+      '@vultisig/sdk': path.resolve(
+        __dirname,
+        '../../packages/sdk/src/index.ts'
+      ),
+      'vultisig-sdk': path.resolve(
+        __dirname,
+        '../../packages/sdk/src/index.ts'
+      ),
       '@core': path.resolve(__dirname, '../../packages/core'),
       '@lib': path.resolve(__dirname, '../../packages/lib'),
       crypto: 'crypto-browserify',

@@ -144,7 +144,7 @@ The SDK syncs core functionality from the [vultisig-windows](https://github.com/
 yarn sync-and-copy
 ```
 
-This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisig-windows, transforms imports from package paths to relative paths, and copies selected files to `src/`. See [SUBTREE-SYNC.md](SUBTREE-SYNC.md) for details.
+This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisig-windows, transforms imports from package paths to relative paths, and copies selected files to `src/`. See [SUBTREE-SYNC.md](docs/SUBTREE-SYNC.md) for details.
 
 ### Available Scripts
 

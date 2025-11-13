@@ -1,0 +1,6 @@
+# Run lint-staged
+npx lint-staged
+
+# Run tests for changed files
+echo "Running tests for changed files..."
+cd packages/sdk && npm run test:changed

@@ -50,7 +50,7 @@ export class VultisigSigner extends AbstractSigner {
 
   constructor(provider?: Provider, config?: VultisigSignerConfig) {
     super(provider)
-    
+
     if (config?.socketPath) {
       this.socketPath = config.socketPath
     }
@@ -115,7 +115,7 @@ export class VultisigSigner extends AbstractSigner {
         messageType: 'eth_tx',
         payload: transaction,
         signingMode: this.signingMode,
-        password: this.password
+        password: this.password,
       },
     }
 
@@ -156,7 +156,7 @@ export class VultisigSigner extends AbstractSigner {
           value,
         },
         signingMode: this.signingMode,
-        password: this.password
+        password: this.password,
       },
     }
 
@@ -175,9 +175,8 @@ export class VultisigSigner extends AbstractSigner {
 
   async signMessage(message: string | Uint8Array): Promise<string> {
     // Convert message to string if it's Uint8Array
-    const messageStr = typeof message === 'string' 
-      ? message 
-      : new TextDecoder().decode(message)
+    const messageStr =
+      typeof message === 'string' ? message : new TextDecoder().decode(message)
 
     const request: JsonRpcRequest = {
       id: this.requestId++,
@@ -189,7 +188,7 @@ export class VultisigSigner extends AbstractSigner {
         messageType: 'eth_message',
         payload: { message: messageStr },
         signingMode: this.signingMode,
-        password: this.password
+        password: this.password,
       },
     }
 
@@ -251,7 +250,7 @@ export class VultisigSigner extends AbstractSigner {
     return new VultisigSigner(provider, {
       socketPath: this.socketPath,
       mode: this.signingMode,
-      password: this.password
+      password: this.password,
     })
   }
 

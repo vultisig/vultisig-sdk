@@ -1,4 +1,5 @@
 import { Chain } from '@core/chain/Chain'
+
 import { VaultError, VaultErrorCode } from './vault/VaultError'
 
 /**
@@ -14,23 +15,32 @@ export const DEFAULT_CHAINS: Chain[] = [
 ]
 
 /**
- * Check if a chain is supported
+ * Check if a chain is supported (case-insensitive)
  */
 export function isChainSupported(chain: string): chain is Chain {
-  return chain in Chain
+  // Check if chain matches any Chain enum value (case-insensitive)
+  const chainLower = chain.toLowerCase()
+  return Object.values(Chain).some(c => c.toLowerCase() === chainLower)
 }
 
 /**
- * Convert string to Chain enum with validation
+ * Convert string to Chain enum with validation (case-insensitive)
  */
 export function stringToChain(chain: string): Chain {
-  if (!isChainSupported(chain)) {
+  // Find the Chain enum value that matches (case-insensitive)
+  const chainLower = chain.toLowerCase()
+  const matchedChain = Object.values(Chain).find(
+    c => c.toLowerCase() === chainLower
+  )
+
+  if (!matchedChain) {
     throw new VaultError(
       VaultErrorCode.ChainNotSupported,
       `Unsupported chain: ${chain}`
     )
   }
-  return chain as Chain
+
+  return matchedChain
 }
 
 /**
@@ -41,7 +51,7 @@ export function getSupportedChains(): string[] {
 }
 
 /**
- * Validate chains against supported chains list
+ * Validate chains against supported chains list (case-insensitive)
  * Returns validated chains or throws VaultError if any chain is unsupported
  */
 export function validateChains(chains: string[]): Chain[] {
@@ -49,9 +59,9 @@ export function validateChains(chains: string[]): Chain[] {
   const invalid: string[] = []
 
   for (const chain of chains) {
-    if (chain in Chain) {
-      valid.push(chain as Chain)
-    } else {
+    try {
+      valid.push(stringToChain(chain))
+    } catch {
       invalid.push(chain)
     }
   }

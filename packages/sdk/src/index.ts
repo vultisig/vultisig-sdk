@@ -51,37 +51,34 @@ export {
 // ============================================================================
 
 // Environment detection
+export type { Environment } from './runtime/environment'
 export {
   detectEnvironment,
+  getEnvironmentInfo,
   isBrowser,
-  isNode,
+  isChromeExtension,
+  isChromeExtensionPage,
+  isChromeExtensionServiceWorker,
   isElectron,
   isElectronMain,
   isElectronRenderer,
-  isChromeExtension,
-  isChromeExtensionServiceWorker,
-  isChromeExtensionPage,
+  isNode,
   isWorker,
-  getEnvironmentInfo,
 } from './runtime/environment'
 
-export type { Environment } from './runtime/environment'
-
 // Storage implementations
-export { StorageManager } from './runtime/storage/StorageManager'
-export type { StorageOptions } from './runtime/storage/StorageManager'
 export { BrowserStorage } from './runtime/storage/BrowserStorage'
-export { NodeStorage } from './runtime/storage/NodeStorage'
-export { MemoryStorage } from './runtime/storage/MemoryStorage'
 export { ChromeStorage } from './runtime/storage/ChromeStorage'
-
-export { StorageError, StorageErrorCode } from './runtime/storage/types'
-
+export { MemoryStorage } from './runtime/storage/MemoryStorage'
+export { NodeStorage } from './runtime/storage/NodeStorage'
+export type { StorageOptions } from './runtime/storage/StorageManager'
+export { StorageManager } from './runtime/storage/StorageManager'
 export type {
-  VaultStorage,
   StorageMetadata,
   StoredValue,
+  VaultStorage,
 } from './runtime/storage/types'
+export { StorageError, StorageErrorCode } from './runtime/storage/types'
 
 // Event system
 export { UniversalEventEmitter } from './events/EventEmitter'
@@ -91,22 +88,22 @@ export type { SdkEvents, VaultEvents } from './events/types'
 // PUBLIC API - Environment-Specific Utilities
 // ============================================================================
 
-// Electron utilities
-export {
-  setupElectronIPC,
-  getElectronHandlers,
-  getElectronProcessType,
-  exportElectronVaultToFile,
-  downloadElectronVault,
-} from './runtime/utils/electron'
+// Electron utilities - TODO: Re-enable when Electron integration is ready
+// export {
+//   downloadElectronVault,
+//   exportElectronVaultToFile,
+//   getElectronHandlers,
+//   getElectronProcessType,
+//   setupElectronIPC,
+// } from './runtime/utils/electron'
 
 // Node.js utilities
 export {
-  exportVaultToFile,
-  importVaultFromFile,
-  getStoragePath,
-  getNodeStorageInfo,
   ensureDirectory,
+  exportVaultToFile,
+  getNodeStorageInfo,
+  getStoragePath,
+  importVaultFromFile,
 } from './runtime/utils/node'
 
 // Browser utilities
@@ -114,58 +111,62 @@ export {
   downloadVault,
   getBrowserStorageInfo,
   isBrowserStorageLow,
-  requestPersistentStorage,
   isPersistentStorage,
+  requestPersistentStorage,
   uploadVaultFile,
 } from './runtime/utils/browser'
 
 // Chrome extension utilities
 export {
-  setupChromeMessageHandlers,
-  sendChromeMessage,
-  keepServiceWorkerAlive,
   isServiceWorkerAlive,
+  keepServiceWorkerAlive,
   onChromeStorageChanged,
+  sendChromeMessage,
+  setupChromeMessageHandlers,
 } from './runtime/utils/chrome'
 
 // ============================================================================
 // PUBLIC API - Types (keep all types for TypeScript users)
 // ============================================================================
 
+// Chain enums and types
+export type { Chain as ChainType } from './types'
+export { Chain } from './types'
+
 // General types
 export type {
-  Balance,
-  CachedBalance,
-  SigningMode,
-  SigningPayload,
-  Signature,
-  ServerStatus,
-  KeygenProgressUpdate,
   AddressBook,
   AddressBookEntry,
-  ValidationResult,
-  VaultOptions,
-  VaultBackup,
-  VaultDetails,
-  VaultValidationResult,
+  AddressResult,
+  Balance,
+  CachedBalance,
+  ChainConfig,
   ExportOptions,
   FastSigningInput,
+  GasEstimate,
+  GasInfo,
+  KeygenMode,
+  KeygenProgressUpdate,
   ReshareOptions,
   SDKConfig,
-  ChainConfig,
-  AddressResult,
-  VaultType,
-  KeygenMode,
-  VaultManagerConfig,
-  VaultCreationStep,
+  ServerStatus,
+  Signature,
+  SigningMode,
+  SigningPayload,
   SigningStep,
-  VaultSigner,
   Summary,
   Token,
+  ValidationResult,
   Value,
-  GasInfo,
-  GasEstimate,
+  VaultBackup,
+  VaultCreationStep,
+  VaultDetails,
+  VaultManagerConfig,
+  VaultOptions,
+  VaultSigner,
+  VaultSummary,
+  VaultType,
+  VaultValidationResult,
   // Extended SDK types (from refactor)
   VultisigConfig,
-  VaultSummary,
 } from './types'

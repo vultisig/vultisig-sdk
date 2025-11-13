@@ -1,3 +1,5 @@
+import type { Chain } from '@core/chain/Chain'
+
 import { AddressBook, AddressBookEntry } from './types'
 
 /**
@@ -10,7 +12,7 @@ export class AddressBookManager {
   /**
    * Get address book entries
    */
-  async getAddressBook(chain?: string): Promise<AddressBook> {
+  async getAddressBook(chain?: Chain): Promise<AddressBook> {
     if (chain) {
       return {
         saved: this.addressBookData.saved.filter(
@@ -70,7 +72,7 @@ export class AddressBookManager {
    * Remove address book entries
    */
   async removeAddressBookEntry(
-    addresses: Array<{ chain: string; address: string }>
+    addresses: Array<{ chain: Chain; address: string }>
   ): Promise<void> {
     for (const { chain, address } of addresses) {
       // Remove from saved entries
@@ -90,7 +92,7 @@ export class AddressBookManager {
    * Update address book entry name
    */
   async updateAddressBookEntry(
-    chain: string,
+    chain: Chain,
     address: string,
     name: string
   ): Promise<void> {

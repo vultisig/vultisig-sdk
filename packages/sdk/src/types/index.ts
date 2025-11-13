@@ -12,6 +12,16 @@ export type { MpcServerType } from '@core/mpc/MpcServerType'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
 
+// Import and export Chain types
+import type {
+  CosmosChain,
+  EvmChain,
+  OtherChain,
+  UtxoChain,
+} from '@core/chain/Chain'
+export type { Chain as ChainType } from '@core/chain/Chain'
+export { Chain } from '@core/chain/Chain'
+
 // SDK-extended vault type that includes calculated threshold
 export type Vault = CoreVault & {
   threshold?: number
@@ -103,6 +113,12 @@ export type Signature = {
   signature: string
   recovery?: number
   format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519'
+  // For UTXO chains with multiple inputs, includes all signatures
+  signatures?: Array<{
+    r: string
+    s: string
+    der: string
+  }>
 }
 
 export type FastSigningInput = {
@@ -157,12 +173,14 @@ export type SDKConfig = {
   }
 }
 
+import type { Chain } from '@core/chain/Chain'
+
 // Extended SDK config with storage and connection options
 export type VultisigConfig = SDKConfig & {
   storage?: any // VaultStorage interface (avoiding circular dependency)
   autoInit?: boolean
   autoConnect?: boolean
-  defaultChains?: string[]
+  defaultChains?: Chain[]
   defaultCurrency?: string
 }
 
@@ -174,26 +192,26 @@ export type ConnectionOptions = {
 
 // Convenience wrapper parameter types
 export type SignTransactionParams = {
-  chain: string
+  chain: Chain
   payload: SigningPayload
   password?: string
   mode?: SigningMode
 }
 
 export type SignMessageParams = {
-  chain: string
+  chain: Chain
   message: string
   password?: string
 }
 
 export type SignTypedDataParams = {
-  chain: string
+  chain: Chain
   typedData: Record<string, unknown>
   password?: string
 }
 
 export type GetBalanceParams = {
-  chain: string
+  chain: Chain
   tokenId?: string
 }
 
@@ -291,7 +309,7 @@ export type Summary = {
 }
 
 export type AddressBookEntry = {
-  chain: string
+  chain: Chain
   address: string
   name: string
   source: 'saved' | 'vault'
@@ -324,14 +342,77 @@ export type Value = {
   lastUpdated: number
 }
 
-export type GasInfo = {
+// Base properties shared by all gas info
+type BaseGasInfo = {
   chainId: string
   gasPrice: string
-  gasPriceGwei?: string
-  priorityFee?: string
-  maxFeePerGas?: string
+  estimatedCost?: bigint
+  estimatedCostUSD?: number
   lastUpdated: number
 }
+
+/**
+ * EVM chains gas info (Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, etc.)
+ * Includes EIP-1559 fee structure with gas limit and priority fees
+ */
+export type EvmGasInfo = BaseGasInfo & {
+  gasPriceGwei: string
+  priorityFee: string
+  maxFeePerGas: bigint
+  maxPriorityFeePerGas: bigint
+  gasLimit: bigint
+}
+
+/**
+ * UTXO chains gas info (Bitcoin, Litecoin, Dogecoin, Dash, etc.)
+ * Uses byte-based fee calculation
+ */
+export type UtxoGasInfo = BaseGasInfo & {
+  byteFee?: string
+}
+
+/**
+ * Cosmos chains gas info (Cosmos, Osmosis, THORChain, MayaChain, Dydx, etc.)
+ * Uses gas-based fee calculation
+ */
+export type CosmosGasInfo = BaseGasInfo & {
+  gas?: string
+}
+
+/**
+ * Other chains gas info (Solana, Polkadot, Sui, TON, Tron, Ripple, Cardano)
+ * Each chain may have its own fee structure
+ */
+export type OtherGasInfo = BaseGasInfo & {
+  priorityFee?: string
+}
+
+/**
+ * Conditional type that returns the correct GasInfo based on chain type.
+ * Enables perfect type safety with template literal types.
+ *
+ * @example
+ * const ethGas = await vault.gas(Chain.Ethereum) // Type: EvmGasInfo
+ * console.log(ethGas.gasLimit) // ✅ TypeScript knows this exists
+ *
+ * const btcGas = await vault.gas(Chain.Bitcoin) // Type: UtxoGasInfo
+ * console.log(btcGas.gasLimit) // ❌ TypeScript error - doesn't exist on UTXO
+ */
+export type GasInfoForChain<C extends string> = C extends EvmChain
+  ? EvmGasInfo
+  : C extends UtxoChain
+    ? UtxoGasInfo
+    : C extends CosmosChain
+      ? CosmosGasInfo
+      : C extends OtherChain
+        ? OtherGasInfo
+        : BaseGasInfo
+
+/**
+ * Union type for gas info across all chains.
+ * Use this when the chain type is not known at compile time.
+ */
+export type GasInfo = EvmGasInfo | UtxoGasInfo | CosmosGasInfo | OtherGasInfo
 
 export type GasEstimate = {
   gasLimit: number
