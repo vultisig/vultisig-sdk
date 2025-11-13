@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../.config/tsconfig.json",
   "compilerOptions": {
     "target": "ES2021",
     "lib": ["ES2021", "DOM", "DOM.Iterable"],
@@ -24,6 +24,9 @@
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "baseUrl": ".",
     "paths": {
+      "@/*": ["./src/*"],
+      "@helpers/*": ["./tests/helpers/*"],
+      "@types": ["./src/types"],
       "@core/*": ["../core/*"],
       "@lib/*": ["../lib/*"]
     }
@@ -31,6 +34,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
     "../core/**/*.ts",
     "../core/**/*.tsx",
     "../lib/**/*.ts",
@@ -39,13 +44,12 @@
   "exclude": [
     "node_modules",
     "dist",
-    "**/*.test.ts",
-    "**/*.test.tsx",
     "**/*.stories.ts",
     "**/*.stories.tsx",
     "../**/node_modules",
     "../**/dist",
     "../../upstream/**/*",
-    "../../archived/**/*"
+    "../../archived/**/*",
+    "src/runtime/utils/electron.ts"
   ]
 }

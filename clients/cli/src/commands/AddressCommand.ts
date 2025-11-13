@@ -53,7 +53,7 @@ export class AddressCommand {
 
         console.log('\n💡 Addresses retrieved from running daemon')
         return
-      } catch (error) {
+      } catch {
         // Daemon not running, continue to direct vault loading
         shouldLoadDirectly = true
       }
@@ -125,7 +125,7 @@ export class AddressCommand {
         console.log('\n💡 Addresses retrieved from active vault')
         return
       }
-    } catch (error) {
+    } catch {
       // No active vault available, continue to vault loading
     }
 

@@ -1,10 +1,10 @@
 import {
-  VaultStorage,
-  StoredValue,
-  StorageMetadata,
+  STORAGE_VERSION,
   StorageError,
   StorageErrorCode,
-  STORAGE_VERSION,
+  StorageMetadata,
+  StoredValue,
+  VaultStorage,
 } from './types'
 
 /**
@@ -26,6 +26,11 @@ import {
  * - Files are stored as plain JSON (not encrypted by default)
  * - File permissions: 0600 (owner read/write only)
  * - Ensure proper OS-level security and disk encryption
+ *
+ * Implementation Note:
+ * - Node.js modules (path, os, electron) are loaded via require() instead of top-level imports
+ * - This prevents bundler errors when this file is included in browser/extension builds
+ * - StorageManager imports all storage implementations, so top-level imports would fail in browsers
  */
 export class NodeStorage implements VaultStorage {
   public readonly basePath: string
@@ -46,9 +51,10 @@ export class NodeStorage implements VaultStorage {
       (process as any).type === 'browser' // Main process only
     ) {
       try {
-        // Dynamic import to avoid errors in non-Electron environments
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        // Dynamic require prevents errors in non-Electron environments
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { app } = require('electron')
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const path = require('path')
         return path.join(app.getPath('userData'), '.vultisig')
       } catch (error) {
@@ -58,7 +64,10 @@ export class NodeStorage implements VaultStorage {
     }
 
     // Default to home directory
+    // Dynamic require prevents bundler errors in browser builds
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const os = require('os')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('path')
     return path.join(os.homedir(), '.vultisig')
   }
@@ -93,6 +102,8 @@ export class NodeStorage implements VaultStorage {
   private getFilePath(key: string): string {
     // Sanitize key to prevent directory traversal
     const sanitized = key.replace(/[^a-zA-Z0-9_-]/g, '_')
+    // Dynamic require prevents bundler errors in browser builds
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('path')
     return path.join(this.basePath, `${sanitized}.json`)
   }
@@ -232,13 +243,13 @@ export class NodeStorage implements VaultStorage {
       const files = await fs.readdir(this.basePath)
 
       // Remove all .json files
+      // Dynamic require prevents bundler errors in browser builds
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const path = require('path')
       await Promise.all(
         files
           .filter(file => file.endsWith('.json'))
-          .map(file => {
-            const path = require('path')
-            return fs.unlink(path.join(this.basePath, file))
-          })
+          .map(file => fs.unlink(path.join(this.basePath, file)))
       )
     } catch (error) {
       throw new StorageError(
@@ -254,6 +265,8 @@ export class NodeStorage implements VaultStorage {
 
     try {
       const fs = await import('fs/promises')
+      // Dynamic require prevents bundler errors in browser builds
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const path = require('path')
 
       const files = await fs.readdir(this.basePath)
@@ -294,7 +307,7 @@ export class NodeStorage implements VaultStorage {
       const stored = JSON.parse(content) as StoredValue
 
       return stored.metadata
-    } catch (error) {
+    } catch {
       return null
     }
   }

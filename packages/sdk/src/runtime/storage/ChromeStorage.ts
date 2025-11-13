@@ -26,13 +26,17 @@
  * ```
  */
 
-import type { VaultStorage, StorageMetadata, StoredValue, STORAGE_VERSION } from './types'
+import type { StoredValue, VaultStorage } from './types'
 import { StorageError, StorageErrorCode } from './types'
 
 export class ChromeStorage implements VaultStorage {
   constructor() {
     // Verify chrome.storage API is available
-    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+    if (
+      typeof chrome === 'undefined' ||
+      !chrome.storage ||
+      !chrome.storage.local
+    ) {
       throw new StorageError(
         StorageErrorCode.StorageUnavailable,
         'Chrome storage API not available. This storage can only be used in Chrome extensions.'

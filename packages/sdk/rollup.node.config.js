@@ -1,9 +1,9 @@
-import { defineConfig } from 'rollup'
-import typescript from '@rollup/plugin-typescript'
-import resolve from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
-import copy from 'rollup-plugin-copy'
 import json from '@rollup/plugin-json'
+import resolve from '@rollup/plugin-node-resolve'
+import typescript from '@rollup/plugin-typescript'
+import { defineConfig } from 'rollup'
+import copy from 'rollup-plugin-copy'
 
 // External dependencies that should not be bundled
 const external = [

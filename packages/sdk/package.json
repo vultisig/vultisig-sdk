@@ -8,29 +8,29 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "lib",
     "README.md",
     "LICENSE"
   ],
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.esm.js",
-      "require": "./dist/index.js",
-      "node": "./dist/index.node.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./node": {
-      "require": "./dist/index.node.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.node.js"
     },
     "./wasm": {
+      "types": "./dist/wasm/index.d.ts",
       "import": "./dist/wasm/index.esm.js",
-      "require": "./dist/wasm/index.js",
-      "types": "./dist/wasm/index.d.ts"
+      "require": "./dist/wasm/index.js"
     }
   },
   "scripts": {
     "build": "yarn build:js && yarn build:types",
-    "build:js": "node --max-old-space-size=8192 ../../node_modules/.bin/rollup -c rollup.config.js",
+    "build:js": "node ../../node_modules/.bin/rollup -c rollup.config.js",
     "build:types": "tsc -p tsconfig.declarations.json",
     "build:debug": "node --max-old-space-size=16384 --trace-warnings --expose-gc --trace-gc ../../node_modules/.bin/rollup -c rollup.config.js --perf",
     "dev": "rollup -c rollup.config.js -w",
@@ -38,10 +38,18 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run --config tests/integration/vitest.config.ts tests/integration",
+    "test:e2e": "yarn test:e2e:balance; yarn test:e2e:gas; yarn test:e2e:multi-chain; yarn test:e2e:prepare-send; yarn test:e2e:fast-signing",
+    "test:e2e:balance": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/balance-operations.test.ts",
+    "test:e2e:gas": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/gas-estimation.test.ts",
+    "test:e2e:multi-chain": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/multi-chain-coverage.test.ts",
+    "test:e2e:prepare-send": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/prepare-send-tx.test.ts",
+    "test:e2e:fast-signing": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/fast-signing.test.ts",
     "test:watch": "vitest",
     "test:unit:watch": "vitest tests/unit",
-    "lint": "eslint src/**/*.{ts,tsx}",
-    "lint:fix": "eslint src/**/*.{ts,tsx} --fix",
+    "test:e2e:watch": "vitest --config tests/e2e/vitest.config.ts tests/e2e",
+    "test:changed": "vitest related --run",
+    "lint": "eslint --config ../../.config/eslint.config.mjs src/**/*.{ts,tsx}",
+    "lint:fix": "eslint --config ../../.config/eslint.config.mjs src/**/*.{ts,tsx} --fix",
     "prepublishOnly": "npm run typecheck",
     "prepack": "echo 'Build skipped for development'"
   },
@@ -107,6 +115,8 @@
     "@rollup/plugin-typescript": "^12.1.1",
     "@types/chrome": "^0.1.27",
     "@types/node": "^22.13.10",
+    "@vitest/coverage-v8": "3.2.4",
+    "dotenv": "^17.2.3",
     "rollup": "^4.32.1",
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-dts": "^6.1.1",

@@ -1,9 +1,9 @@
-import { defineConfig } from 'rollup'
-import typescript from '@rollup/plugin-typescript'
-import resolve from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
 import json from '@rollup/plugin-json'
+import resolve from '@rollup/plugin-node-resolve'
 import terser from '@rollup/plugin-terser'
+import typescript from '@rollup/plugin-typescript'
+import { defineConfig } from 'rollup'
 import copy from 'rollup-plugin-copy'
 
 const external = [
@@ -88,17 +88,17 @@ const plugins = [
 
 const wasmCopyPlugin = copy({
   targets: [
-    // Copy WASM files to dist for proper loading
-    // Keep original filenames to match wasm-bindgen expectations
+    // Copy WASM files to dist/lib for production (published package)
     {
-      src: '../lib/dkls/vs_wasm_bg.wasm',
-      dest: './dist/wasm/',
+      src: '../lib/dkls',
+      dest: './dist/lib',
     },
     {
-      src: '../lib/schnorr/vs_schnorr_wasm_bg.wasm',
-      dest: './dist/wasm/',
+      src: '../lib/schnorr',
+      dest: './dist/lib',
     },
-    // wallet-core.wasm will be handled by the consuming application
+    // Note: ./lib is a symlink to ../lib, so no copy needed for development
+    // The symlink provides direct access to packages/lib from packages/sdk/lib
   ],
 })
 

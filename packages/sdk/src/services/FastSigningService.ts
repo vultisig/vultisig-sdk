@@ -1,29 +1,27 @@
-import { Vault, SigningPayload, Signature } from '../types'
+import { ServerManager } from '../server/ServerManager'
+import { Signature, SigningPayload, Vault } from '../types'
 import { WASMManager } from '../wasm/WASMManager'
-import { stringToChain } from '../ChainManager'
-import { buildKeysignPayload } from '../adapters/buildKeysignPayload'
 
 /**
  * Fast signing service for server-assisted signing (2-of-2 MPC with VultiServer)
- * Functional adapter approach - uses core functions directly
  *
  * Flow:
  * 1. Validate vault is a fast vault (has VultiServer signer)
  * 2. Get WalletCore instance
- * 3. Build keysign payload using core functions via buildKeysignPayload adapter
+ * 3. Use pre-computed message hashes from SigningPayload
  * 4. Coordinate fast signing with ServerManager (MPC session, relay, keysign)
  * 5. Return formatted signature
  */
 export class FastSigningService {
   constructor(
-    private serverManager: any,
+    private serverManager: ServerManager,
     private wasmManager: WASMManager
   ) {}
 
   /**
    * Sign transaction with VultiServer assistance (2-of-2 threshold signing)
    * @param vault Vault data with keys and signers
-   * @param payload Signing payload with transaction data
+   * @param payload Signing payload with transaction data (must include messageHashes)
    * @param vaultPassword Password for vault encryption
    * @returns Signed transaction ready for broadcast
    */
@@ -35,42 +33,27 @@ export class FastSigningService {
     // Step 1: Validate vault has server signer
     this.validateFastVault(vault)
 
-    // Step 2: Get WalletCore instance
-    const walletCore = await this.wasmManager.getWalletCore()
-
-    // Step 3: Build keysign payload using core functions
-    let messages: string[]
-
-    if (payload.messageHashes && payload.messageHashes.length > 0) {
-      // Use pre-computed message hashes if provided (for advanced use cases)
-      console.log(
-        `📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`
-      )
-      messages = payload.messageHashes
-    } else {
-      // Build message hashes from transaction data using core keysign functions
-      console.log(`🔨 Building keysign payload for ${payload.chain}...`)
-      const chainEnum =
-        typeof payload.chain === 'string'
-          ? stringToChain(payload.chain)
-          : payload.chain
-      messages = await buildKeysignPayload(
-        payload,
-        chainEnum,
-        walletCore,
-        vault
-      )
-      console.log(
-        `✅ Generated ${messages.length} message hash(es) for signing`
+    // Step 2: Validate message hashes are provided
+    if (!payload.messageHashes || payload.messageHashes.length === 0) {
+      throw new Error(
+        'SigningPayload must include pre-computed messageHashes. ' +
+          'Use Vault.prepareSendTx() to generate transaction payloads with message hashes.'
       )
     }
+
+    // Step 3: Get WalletCore instance
+    const walletCore = await this.wasmManager.getWalletCore()
+
+    console.log(
+      `📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`
+    )
 
     // Step 4: Coordinate fast signing with server
     // ServerManager handles: API calls, relay session, MPC coordination, keysign
     console.log(`🚀 Starting fast signing coordination with VultiServer...`)
     const signature = await this.serverManager.coordinateFastSigning({
       vault,
-      messages,
+      messages: payload.messageHashes,
       password: vaultPassword,
       payload,
       walletCore,
@@ -86,7 +69,7 @@ export class FastSigningService {
    * @throws Error if vault doesn't have server signer
    */
   private validateFastVault(vault: Vault): void {
-    const hasFastVaultServer = vault.signers.some(signer =>
+    const hasFastVaultServer = vault.signers.some((signer: string) =>
       signer.startsWith('Server-')
     )
 

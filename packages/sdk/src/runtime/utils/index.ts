@@ -3,34 +3,34 @@ export {
   downloadVault,
   getBrowserStorageInfo,
   isBrowserStorageLow,
-  requestPersistentStorage,
   isPersistentStorage,
+  requestPersistentStorage,
   uploadVaultFile,
 } from './browser'
 
 // Node.js utilities
 export {
-  exportVaultToFile,
-  importVaultFromFile,
-  getStoragePath,
-  getNodeStorageInfo,
   ensureDirectory,
+  exportVaultToFile,
+  getNodeStorageInfo,
+  getStoragePath,
+  importVaultFromFile,
 } from './node'
 
-// Electron utilities
-export {
-  setupElectronIPC,
-  getElectronHandlers,
-  getElectronProcessType,
-  exportElectronVaultToFile,
-  downloadElectronVault,
-} from './electron'
+// Electron utilities - TODO: Re-enable when Electron integration is ready
+// export {
+//   downloadElectronVault,
+//   exportElectronVaultToFile,
+//   getElectronHandlers,
+//   getElectronProcessType,
+//   setupElectronIPC,
+// } from './electron'
 
 // Chrome extension utilities
 export {
-  setupChromeMessageHandlers,
-  sendChromeMessage,
-  keepServiceWorkerAlive,
   isServiceWorkerAlive,
+  keepServiceWorkerAlive,
   onChromeStorageChanged,
+  sendChromeMessage,
+  setupChromeMessageHandlers,
 } from './chrome'

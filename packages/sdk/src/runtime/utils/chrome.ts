@@ -160,7 +160,7 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
     case 'switchVault':
       return await sdk.switchVault(params.vaultId)
 
-    case 'deleteVault':
+    case 'deleteVault': {
       const vaults = await sdk.listVaults()
       const vault = vaults.find((v: any) => {
         const summary = v.summary ? v.summary() : v
@@ -170,10 +170,12 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
         return await sdk.deleteVault(vault)
       }
       throw new Error(`Vault not found: ${params.vaultId}`)
+    }
 
-    case 'getActiveVault':
+    case 'getActiveVault': {
       const activeVault = sdk.getActiveVault()
       return activeVault ? activeVault.summary() : null
+    }
 
     default:
       throw new Error(`Unknown action: ${action}`)
@@ -287,7 +289,7 @@ export async function isServiceWorkerAlive(): Promise<boolean> {
   }
 
   return new Promise(resolve => {
-    chrome.runtime.sendMessage({ action: 'ping' }, response => {
+    chrome.runtime.sendMessage({ action: 'ping' }, _response => {
       resolve(!chrome.runtime.lastError)
     })
   })

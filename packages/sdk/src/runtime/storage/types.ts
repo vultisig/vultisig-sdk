@@ -6,7 +6,7 @@ export const STORAGE_VERSION = 1
 /**
  * Storage metadata for versioning and migration
  */
-export interface StorageMetadata {
+export type StorageMetadata = {
   version: number
   createdAt: number
   lastModified: number
@@ -15,7 +15,7 @@ export interface StorageMetadata {
 /**
  * Stored value with metadata
  */
-export interface StoredValue<T = unknown> {
+export type StoredValue<T = unknown> = {
   value: T
   metadata: StorageMetadata
 }
@@ -24,7 +24,7 @@ export interface StoredValue<T = unknown> {
  * Universal storage interface for vault persistence.
  * All implementations must support async operations and provide atomic writes.
  */
-export interface VaultStorage {
+export type VaultStorage = {
   /**
    * Retrieve a value by key.
    * @returns The value if found, null otherwise

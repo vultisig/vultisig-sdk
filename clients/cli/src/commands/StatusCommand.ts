@@ -23,7 +23,7 @@ export class StatusCommand {
           console.log(`🔧 Type: ${summary.type}`)
           console.log(`⛓️  Chains: ${summary.chains.join(', ')}`)
         }
-      } catch (error) {
+      } catch {
         console.log('ℹ️  No active vault found')
       }
     } catch (error) {
