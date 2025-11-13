@@ -1,6 +1,9 @@
 import { EvmChain } from '../../../Chain'
 import { rootApiUrl } from '../../../../config'
-import { defaultFiatCurrency, FiatCurrency } from '../../../../config/FiatCurrency'
+import {
+  defaultFiatCurrency,
+  FiatCurrency,
+} from '../../../../config/FiatCurrency'
 import { addQueryParams } from '../../../../../lib/utils/query/addQueryParams'
 
 import { queryCoingeickoPrices } from '../queryCoingeickoPrices'
@@ -25,6 +28,7 @@ const coinGeckoNetwork: Record<EvmChain, string> = {
   [EvmChain.Zksync]: 'zksync',
   [EvmChain.CronosChain]: 'cronos',
   [EvmChain.Mantle]: 'mantle',
+  [EvmChain.Sei]: 'sei-network',
 }
 
 export const getErc20Prices = async ({
