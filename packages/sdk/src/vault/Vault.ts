@@ -1,27 +1,14 @@
-import { create } from '@bufbuild/protobuf'
 // Core functions (functional dispatch) - Direct imports from core
 import { Chain } from '@core/chain/Chain'
-import type { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { getCoinBalance } from '@core/chain/coin/balance'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import { getChainSpecific } from '@core/mpc/keysign/chainSpecific'
-import type { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
-import { buildSendKeysignPayload } from '@core/mpc/keysign/send/build'
-import { toCommCoin } from '@core/mpc/types/utils/commCoin'
-import {
-  type KeysignPayload,
-  KeysignPayloadSchema,
-} from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
+import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
-import { formatBalance } from '../adapters/formatBalance'
-import { formatGasInfo } from '../adapters/formatGasInfo'
 // SDK utilities
 import { DEFAULT_CHAINS, isChainSupported } from '../ChainManager'
 import { UniversalEventEmitter } from '../events/EventEmitter'
-import type { VaultEvents } from '../events/types'
+import { VaultEvents } from '../events/types'
 import { CacheService } from '../services/CacheService'
 import { FastSigningService } from '../services/FastSigningService'
 // Types
@@ -33,6 +20,12 @@ import {
   SigningPayload,
   Token,
 } from '../types'
+import { WASMManager } from '../wasm/WASMManager'
+// Vault services
+import { AddressService } from './services/AddressService'
+import { BalanceService } from './services/BalanceService'
+import { GasEstimationService } from './services/GasEstimationService'
+import { TransactionBuilder } from './services/TransactionBuilder'
 import { VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig, VaultServices } from './VaultServices'
 
@@ -62,9 +55,15 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  */
 export class Vault extends UniversalEventEmitter<VaultEvents> {
   // Essential services only
-  private wasmManager
+  private wasmManager: WASMManager
   private cacheService: CacheService
   private fastSigningService?: FastSigningService
+
+  // Extracted services
+  private addressService: AddressService
+  private transactionBuilder: TransactionBuilder
+  private balanceService: BalanceService
+  private gasEstimationService: GasEstimationService
 
   // Cached properties
   private _isEncrypted?: boolean
@@ -87,6 +86,31 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     this.wasmManager = services.wasmManager
     this.fastSigningService = services.fastSigningService
     this.cacheService = new CacheService()
+
+    // Initialize extracted services
+    this.addressService = new AddressService(
+      this.vaultData,
+      this.wasmManager,
+      this.cacheService,
+      () => this._userChains
+    )
+    this.transactionBuilder = new TransactionBuilder(
+      this.vaultData,
+      this.wasmManager
+    )
+    this.balanceService = new BalanceService(
+      this.cacheService,
+      data => this.emit('balanceUpdated', data),
+      error => this.emit('error', error),
+      chain => this.address(chain),
+      chain => this.getTokens(chain),
+      () => this._tokens
+    )
+    this.gasEstimationService = new GasEstimationService(
+      this.vaultData,
+      this.wasmManager,
+      chain => this.address(chain)
+    )
 
     // Initialize user chains from config
     this._userChains = config?.defaultChains ?? DEFAULT_CHAINS
@@ -236,65 +260,14 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Uses core's deriveAddress() with permanent caching
    */
   async address(chain: Chain): Promise<string> {
-    const cacheKey = `address:${chain.toLowerCase()}`
-
-    // Check permanent cache
-    const cached = this.cacheService.get<string>(
-      cacheKey,
-      Number.MAX_SAFE_INTEGER
-    )
-    if (cached) return cached
-
-    try {
-      // Get WalletCore
-      const walletCore = await this.wasmManager.getWalletCore()
-
-      // Get public key using core
-      const publicKey = getPublicKey({
-        chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
-
-      // Derive address using core (handles all chain-specific logic)
-      const address = deriveAddress({
-        chain,
-        publicKey,
-        walletCore,
-      })
-
-      // Cache permanently (addresses don't change)
-      this.cacheService.set(cacheKey, address)
-      return address
-    } catch (error) {
-      throw new VaultError(
-        VaultErrorCode.AddressDerivationFailed,
-        `Failed to derive address for ${chain}`,
-        error as Error
-      )
-    }
+    return this.addressService.getAddress(chain)
   }
 
   /**
    * Get addresses for multiple chains
    */
   async addresses(chains?: Chain[]): Promise<Record<string, string>> {
-    const chainsToDerive = chains || this._userChains
-    const result: Record<string, string> = {}
-
-    // Parallel derivation
-    await Promise.all(
-      chainsToDerive.map(async chain => {
-        try {
-          result[chain] = await this.address(chain)
-        } catch (error) {
-          console.warn(`Failed to derive address for ${chain}:`, error)
-        }
-      })
-    )
-
-    return result
+    return this.addressService.getAddresses(chains)
   }
 
   // ===== BALANCE METHODS =====
@@ -304,50 +277,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Uses core's getCoinBalance() with 5-minute TTL cache
    */
   async balance(chain: Chain, tokenId?: string): Promise<Balance> {
-    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
-
-    // Check 5-min TTL cache
-    const cached = this.cacheService.get<Balance>(cacheKey, 5 * 60 * 1000)
-    if (cached) return cached
-
-    let address: string | undefined
-    try {
-      address = await this.address(chain)
-
-      // Core handles balance fetching for ALL chains
-      // Supports: native, ERC-20, SPL, wasm tokens automatically
-      const rawBalance = await getCoinBalance({
-        chain,
-        address,
-        id: tokenId, // Token ID (contract address for ERC-20, etc.)
-      })
-
-      // Format using adapter
-      const balance = formatBalance(rawBalance, chain, tokenId, this._tokens)
-
-      // Cache with 5-min TTL
-      this.cacheService.set(cacheKey, balance)
-
-      // Emit balance updated event
-      this.emit('balanceUpdated', {
-        chain,
-        balance,
-        tokenId,
-      })
-
-      return balance
-    } catch (error) {
-      // Enhanced error logging for E2E test debugging
-      const errorMessage = (error as Error)?.message || 'Unknown error'
-      const errorName = (error as Error)?.name || 'Error'
-
-      this.emit('error', error as Error)
-      throw new VaultError(
-        VaultErrorCode.BalanceFetchFailed,
-        `Failed to fetch balance for ${chain}${tokenId ? `:${tokenId}` : ''}: ${errorName}: ${errorMessage}`,
-        error as Error
-      )
-    }
+    return this.balanceService.getBalance(chain, tokenId)
   }
 
   /**
@@ -358,36 +288,14 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     includeTokens = false
   ): Promise<Record<string, Balance>> {
     const chainsToFetch = chains || this._userChains
-    const result: Record<string, Balance> = {}
-
-    for (const chain of chainsToFetch) {
-      try {
-        // Native balance
-        result[chain] = await this.balance(chain)
-
-        // Token balances
-        if (includeTokens) {
-          const tokens = this._tokens[chain] || []
-          for (const token of tokens) {
-            result[`${chain}:${token.id}`] = await this.balance(chain, token.id)
-          }
-        }
-      } catch (error) {
-        console.warn(`Failed to fetch balance for ${chain}:`, error)
-      }
-    }
-
-    return result
+    return this.balanceService.getBalances(chainsToFetch, includeTokens)
   }
 
   /**
    * Force refresh balance (clear cache)
    */
   async updateBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
-    this.cacheService.clear(cacheKey)
-    // balance() will emit the balanceUpdated event
-    return this.balance(chain, tokenId)
+    return this.balanceService.updateBalance(chain, tokenId)
   }
 
   /**
@@ -398,115 +306,17 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     includeTokens = false
   ): Promise<Record<string, Balance>> {
     const chainsToUpdate = chains || this._userChains
-
-    // Clear cache for all chains
-    for (const chain of chainsToUpdate) {
-      const cacheKey = `balance:${chain}:native`
-      this.cacheService.clear(cacheKey)
-
-      if (includeTokens) {
-        const tokens = this._tokens[chain] || []
-        for (const token of tokens) {
-          const tokenCacheKey = `balance:${chain}:${token.id}`
-          this.cacheService.clear(tokenCacheKey)
-        }
-      }
-    }
-
-    return this.balances(chainsToUpdate, includeTokens)
+    return this.balanceService.updateBalances(chainsToUpdate, includeTokens)
   }
 
   // ===== GAS ESTIMATION =====
-
-  /**
-   * Well-known active addresses for Cosmos chains
-   * Used for gas estimation to avoid errors when user's address doesn't exist on-chain yet
-   * Gas prices are global, so any active address works for estimation
-   */
-  private static readonly COSMOS_GAS_ESTIMATION_ADDRESSES: Partial<
-    Record<Chain, string>
-  > = {
-    [Chain.THORChain]: 'thor1dheycdevq39qlkxs2a6wuuzyn4aqxhve4qxtxt',
-    [Chain.Cosmos]: 'cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh',
-    [Chain.Osmosis]: 'osmo1clpqr4nrk4khgkxj78fcwwh6dl3uw4epasmvnj',
-    [Chain.MayaChain]: 'maya1dheycdevq39qlkxs2a6wuuzyn4aqxhveshhay9',
-    [Chain.Kujira]: 'kujira1nynns8ex9fq6sjjfj8k79ymkdz4sqth0hdz2q8',
-    [Chain.Dydx]: 'dydx1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3l3qwf0',
-  }
 
   /**
    * Get gas info for chain
    * Uses core's getChainSpecific() to estimate fees
    */
   async gas(chain: Chain): Promise<GasInfo> {
-    console.log(`🔍 Starting gas estimation for chain: ${chain}`)
-    let address: string | undefined
-    try {
-      console.log(`  📍 Getting address...`)
-
-      // For Cosmos chains, use well-known addresses to avoid account-doesn't-exist errors
-      // Gas prices are global, so any active address works for estimation
-      const cosmosAddress = Vault.COSMOS_GAS_ESTIMATION_ADDRESSES[chain]
-      if (cosmosAddress) {
-        address = cosmosAddress
-        console.log(
-          `  📍 Using well-known address for Cosmos gas estimation: ${address}`
-        )
-      } else {
-        address = await this.address(chain)
-        console.log(`  📍 Address: ${address}`)
-      }
-
-      // Get WalletCore
-      const walletCore = await this.wasmManager.getWalletCore()
-
-      // Get public key
-      const publicKey = getPublicKey({
-        chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
-
-      // Create minimal keysign payload to get fee data
-      const minimalPayload = create(KeysignPayloadSchema, {
-        coin: toCommCoin({
-          chain,
-          address,
-          decimals: chainFeeCoin[chain].decimals,
-          ticker: chainFeeCoin[chain].ticker,
-          hexPublicKey: Buffer.from(publicKey.data()).toString('hex'),
-        }),
-        toAddress: address, // Dummy address for fee estimation
-        toAmount: '1', // Minimal amount for fee estimation
-        vaultLocalPartyId: this.vaultData.localPartyId,
-        vaultPublicKeyEcdsa: this.vaultData.publicKeys.ecdsa,
-        libType: this.vaultData.libType,
-      })
-
-      // Get chain-specific data with fee information
-      console.log(`  ⛓️ Calling getChainSpecific()...`)
-      const chainSpecific = await getChainSpecific({
-        keysignPayload: minimalPayload,
-        walletCore,
-      })
-      console.log(`  ✅ getChainSpecific() succeeded, formatting...`)
-
-      // Format using adapter
-      const result = formatGasInfo(chainSpecific, chain)
-      console.log(`  ✅ formatGasInfo() succeeded`)
-      return result
-    } catch (error) {
-      // Enhanced error logging for E2E test debugging
-      const errorMessage = (error as Error)?.message || 'Unknown error'
-      const errorName = (error as Error)?.name || 'Error'
-
-      throw new VaultError(
-        VaultErrorCode.GasEstimationFailed,
-        `Failed to estimate gas for ${chain}: ${errorName}: ${errorMessage}`,
-        error as Error
-      )
-    }
+    return this.gasEstimationService.getGasInfo(chain)
   }
 
   // ===== TRANSACTION PREPARATION =====
@@ -571,40 +381,30 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     feeSettings?: FeeSettings
   }): Promise<KeysignPayload> {
-    try {
-      // Get WalletCore
-      const walletCore = await this.wasmManager.getWalletCore()
+    return this.transactionBuilder.prepareSendTx(params)
+  }
 
-      // Get public key for the coin's chain
-      const publicKey = getPublicKey({
-        chain: params.coin.chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
-
-      // Build the keysign payload using core function
-      const keysignPayload = await buildSendKeysignPayload({
-        coin: params.coin,
-        receiver: params.receiver,
-        amount: params.amount,
-        memo: params.memo,
-        vaultId: this.vaultData.publicKeys.ecdsa,
-        localPartyId: this.vaultData.localPartyId,
-        publicKey,
-        walletCore,
-        libType: this.vaultData.libType,
-        feeSettings: params.feeSettings,
-      })
-
-      return keysignPayload
-    } catch (error) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `Failed to prepare send transaction: ${(error as Error).message}`,
-        error as Error
-      )
-    }
+  /**
+   * Extract message hashes from a KeysignPayload
+   *
+   * This helper method extracts the pre-signing message hashes from a KeysignPayload
+   * that was created by prepareSendTx(). These hashes are required for signing.
+   *
+   * @param keysignPayload - Payload from prepareSendTx()
+   * @returns Array of hex-encoded message hashes
+   *
+   * @example
+   * ```typescript
+   * const keysignPayload = await vault.prepareSendTx({ ... })
+   * const messageHashes = await vault.extractMessageHashes(keysignPayload)
+   * const signingPayload = { transaction: keysignPayload, chain, messageHashes }
+   * const signature = await vault.sign('fast', signingPayload, password)
+   * ```
+   */
+  async extractMessageHashes(
+    keysignPayload: KeysignPayload
+  ): Promise<string[]> {
+    return this.transactionBuilder.extractMessageHashes(keysignPayload)
   }
 
   // ===== SIGNING METHODS =====
