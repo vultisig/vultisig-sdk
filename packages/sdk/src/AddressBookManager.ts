@@ -1,5 +1,6 @@
 import type { Chain } from '@core/chain/Chain'
 
+import type { VaultStorage } from './runtime/storage/types'
 import { AddressBook, AddressBookEntry } from './types'
 
 /**
@@ -8,6 +9,26 @@ import { AddressBook, AddressBookEntry } from './types'
  */
 export class AddressBookManager {
   private addressBookData: AddressBook = { saved: [], vaults: [] }
+  private storage: VaultStorage
+
+  constructor(storage: VaultStorage) {
+    this.storage = storage
+  }
+
+  /**
+   * Initialize address book by loading data from storage
+   */
+  async init(): Promise<void> {
+    const saved =
+      await this.storage.get<AddressBookEntry[]>('addressBook:saved')
+    const vaults =
+      await this.storage.get<AddressBookEntry[]>('addressBook:vaults')
+
+    this.addressBookData = {
+      saved: saved ?? [],
+      vaults: vaults ?? [],
+    }
+  }
 
   /**
    * Get address book entries
@@ -65,7 +86,10 @@ export class AddressBookManager {
         // If it exists, do nothing (preserve original)
       }
     }
-    // TODO: Persist to storage
+
+    // Persist to storage
+    await this.storage.set('addressBook:saved', this.addressBookData.saved)
+    await this.storage.set('addressBook:vaults', this.addressBookData.vaults)
   }
 
   /**
@@ -85,7 +109,10 @@ export class AddressBookManager {
         entry => !(entry.chain === chain && entry.address === address)
       )
     }
-    // TODO: Persist to storage
+
+    // Persist to storage
+    await this.storage.set('addressBook:saved', this.addressBookData.saved)
+    await this.storage.set('addressBook:vaults', this.addressBookData.vaults)
   }
 
   /**
@@ -103,7 +130,7 @@ export class AddressBookManager {
 
     if (savedEntry) {
       savedEntry.name = name
-      // TODO: Persist to storage
+      await this.storage.set('addressBook:saved', this.addressBookData.saved)
       return
     }
 
@@ -114,14 +141,16 @@ export class AddressBookManager {
 
     if (vaultEntry) {
       vaultEntry.name = name
-      // TODO: Persist to storage
+      await this.storage.set('addressBook:vaults', this.addressBookData.vaults)
     }
   }
 
   /**
    * Clear all address book data
    */
-  clear(): void {
+  async clear(): Promise<void> {
     this.addressBookData = { saved: [], vaults: [] }
+    await this.storage.remove('addressBook:saved')
+    await this.storage.remove('addressBook:vaults')
   }
 }
