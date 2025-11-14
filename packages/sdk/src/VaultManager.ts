@@ -5,6 +5,7 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
+import type { VaultStorage } from './runtime/storage/types'
 import { ServerManager } from './server/ServerManager'
 import { FastSigningService } from './services/FastSigningService'
 import {
@@ -37,12 +38,41 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
 export class VaultManager {
   private vaults = new Map<string, Vault>()
   private activeVault: VaultClass | null = null
+  private storage: VaultStorage
 
   constructor(
     private wasmManager: WASMManager,
     private serverManager: ServerManager,
-    private config: VaultConfig
-  ) {}
+    private config: VaultConfig,
+    storage: VaultStorage
+  ) {
+    this.storage = storage
+  }
+
+  /**
+   * Initialize vault manager by loading vault summaries from storage
+   */
+  async init(): Promise<void> {
+    // Load all vault summaries from storage
+    const keys = await this.storage.list()
+    const summaryKeys = keys.filter(k => k.startsWith('vault:summary:'))
+
+    for (const key of summaryKeys) {
+      const summary = await this.storage.get<Summary>(key)
+      if (summary) {
+        // Note: We only store summaries, not full vault data
+        // Vaults must be re-imported from .vult files on startup
+        // This is intentional to keep storage minimal
+      }
+    }
+
+    // Load and restore active vault ID
+    const activeVaultId = await this.storage.get<string>('activeVaultId')
+    if (activeVaultId) {
+      // Active vault will be set when user re-imports or when vault is loaded
+      // We store the ID but don't auto-load vaults (user must import .vult file)
+    }
+  }
 
   /**
    * Create VaultServices instance for dependency injection
@@ -63,7 +93,12 @@ export class VaultManager {
    * Internal helper for consistent vault instantiation
    */
   createVaultInstance(vaultData: Vault): VaultClass {
-    return new VaultClass(vaultData, this.createVaultServices(), this.config)
+    return new VaultClass(
+      vaultData,
+      this.createVaultServices(),
+      this.config,
+      this.storage
+    )
   }
 
   // ===== VAULT LIFECYCLE =====
@@ -130,8 +165,13 @@ export class VaultManager {
     // Store the vault
     this.vaults.set(result.vault.publicKeys.ecdsa, result.vault)
 
+    // Persist vault summary to storage
+    const summary = vaultInstance.summary()
+    await this.storage.set(`vault:summary:${summary.id}`, summary)
+
     // Set as active vault
     this.activeVault = vaultInstance
+    await this.storage.set('activeVaultId', result.vault.publicKeys.ecdsa)
 
     return vaultInstance
   }
@@ -235,8 +275,13 @@ export class VaultManager {
       vaultInstance.setCachedEncryptionStatus(isEncrypted)
       vaultInstance.setCachedSecurityType(securityType)
 
+      // Persist vault summary to storage
+      const summary = vaultInstance.summary()
+      await this.storage.set(`vault:summary:${summary.id}`, summary)
+
       // Set as active vault
       this.activeVault = vaultInstance
+      await this.storage.set('activeVaultId', normalizedVault.publicKeys.ecdsa)
 
       return vaultInstance
     } catch (error) {
@@ -306,9 +351,14 @@ export class VaultManager {
     const vaultId = vault.data.publicKeys.ecdsa
     this.vaults.delete(vaultId)
 
+    // Remove from storage
+    await this.storage.remove(`vault:summary:${vaultId}`)
+    await this.storage.remove(`vault:preferences:${vaultId}`)
+
     // Clear active vault if it was the deleted one
     if (this.activeVault?.data.publicKeys.ecdsa === vaultId) {
       this.activeVault = null
+      await this.storage.remove('activeVaultId')
     }
   }
 
@@ -316,6 +366,18 @@ export class VaultManager {
    * Clear all stored vaults
    */
   async clearVaults(): Promise<void> {
+    // Remove all vault-related storage keys
+    const keys = await this.storage.list()
+    const vaultKeys = keys.filter(
+      k => k.startsWith('vault:summary:') || k.startsWith('vault:preferences:')
+    )
+
+    for (const key of vaultKeys) {
+      await this.storage.remove(key)
+    }
+
+    await this.storage.remove('activeVaultId')
+
     this.vaults.clear()
     this.activeVault = null
   }
@@ -325,8 +387,15 @@ export class VaultManager {
   /**
    * Switch to different vault
    */
-  setActiveVault(vault: VaultClass): void {
+  async setActiveVault(vault: VaultClass | null): Promise<void> {
     this.activeVault = vault
+
+    if (vault) {
+      const vaultId = vault.data.publicKeys.ecdsa
+      await this.storage.set('activeVaultId', vaultId)
+    } else {
+      await this.storage.remove('activeVaultId')
+    }
   }
 
   /**

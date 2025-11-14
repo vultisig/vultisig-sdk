@@ -147,10 +147,10 @@ describe('Vultisig', () => {
       expect(sdk.getDefaultChains()).toEqual(newDefaults)
     })
 
-    it('should validate chains when setting defaults', () => {
-      expect(() => {
+    it('should validate chains when setting defaults', async () => {
+      await expect(
         sdk.setDefaultChains(['invalid_chain' as any])
-      }).toThrow()
+      ).rejects.toThrow()
     })
 
     it('should return immutable copy of default chains', () => {
@@ -260,13 +260,18 @@ describe('Vultisig', () => {
       expect(activeVault).toBeNull()
     })
 
-    it('should set active vault', () => {
+    it('should set active vault', async () => {
       // Create a mock vault instance
       const mockVault = {
         summary: () => ({ id: 'test-vault' }),
+        data: {
+          publicKeys: {
+            ecdsa: 'test-vault-id',
+          },
+        },
       } as any as Vault
 
-      sdk.setActiveVault(mockVault)
+      await sdk.setActiveVault(mockVault)
 
       expect(sdk.hasActiveVault()).toBe(true)
       expect(sdk.getActiveVault()).toBe(mockVault)

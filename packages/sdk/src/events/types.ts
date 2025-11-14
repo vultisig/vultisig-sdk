@@ -23,6 +23,9 @@ export type SdkEvents = {
     vaultId: string
   }
 
+  /** Emitted when all SDK data is cleared from storage */
+  dataCleared: Record<string, never>
+
   /** Emitted on SDK-level errors */
   error: Error
 } & Record<string, unknown>
