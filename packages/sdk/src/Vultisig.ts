@@ -208,7 +208,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       }
 
       this.connected = true
-      this.emit('connect', undefined)
+      this.emit('connect', {})
     } catch (error) {
       this.emit('error', error as Error)
       throw error
@@ -221,7 +221,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async disconnect(): Promise<void> {
     this.vaultManager.setActiveVault(null as any)
     this.connected = false
-    this.emit('disconnect', undefined)
+    this.emit('disconnect', {})
   }
 
   /**
