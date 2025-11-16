@@ -8,10 +8,10 @@ import type { Balance, Signature, SigningPayload, Token } from '../types'
  */
 export type SdkEvents = {
   /** Emitted when SDK successfully connects */
-  connect: void
+  connect: Record<string, never>
 
   /** Emitted when SDK disconnects */
-  disconnect: void
+  disconnect: Record<string, never>
 
   /** Emitted when active chain changes */
   chainChanged: {
@@ -23,9 +23,12 @@ export type SdkEvents = {
     vaultId: string
   }
 
+  /** Emitted when all SDK data is cleared from storage */
+  dataCleared: Record<string, never>
+
   /** Emitted on SDK-level errors */
   error: Error
-} & Record<string, unknown>
+}
 
 /**
  * Events emitted by individual Vault instances.
@@ -75,4 +78,4 @@ export type VaultEvents = {
 
   /** Emitted on vault-level errors */
   error: Error
-} & Record<string, unknown>
+}

@@ -102,7 +102,13 @@ export class UniversalEventEmitter<Events extends Record<string, unknown>> {
    * - One handler error doesn't prevent other handlers from running
    * - Errors are collected and can be accessed via getLastErrors()
    */
-  protected emit<K extends keyof Events>(event: K, data: Events[K]): void {
+  protected emit<K extends keyof Events>(
+    event: K,
+    ...args: Events[K] extends Record<string, never>
+      ? [] | [Events[K]]
+      : [Events[K]]
+  ): void {
+    const data = (args.length > 0 ? args[0] : {}) as Events[K]
     const handlers = this.listeners.get(event)
     if (!handlers || handlers.size === 0) return
 

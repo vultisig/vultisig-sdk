@@ -9,6 +9,7 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { DEFAULT_CHAINS, isChainSupported } from '../ChainManager'
 import { UniversalEventEmitter } from '../events/EventEmitter'
 import { VaultEvents } from '../events/types'
+import type { VaultStorage } from '../runtime/storage/types'
 import { CacheService } from '../services/CacheService'
 import { FastSigningService } from '../services/FastSigningService'
 // Types
@@ -69,15 +70,19 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private _isEncrypted?: boolean
   private _securityType?: 'fast' | 'secure'
 
-  // Runtime state (not persisted)
+  // Runtime state (persisted via storage)
   private _userChains: Chain[] = []
   private _currency: string = 'USD'
   private _tokens: Record<string, Token[]> = {}
 
+  // Storage for persistence
+  private storage?: VaultStorage
+
   constructor(
     private vaultData: CoreVault,
     services: VaultServices,
-    config?: VaultConfig
+    config?: VaultConfig,
+    storage?: VaultStorage
   ) {
     // Initialize EventEmitter
     super()
@@ -86,6 +91,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     this.wasmManager = services.wasmManager
     this.fastSigningService = services.fastSigningService
     this.cacheService = new CacheService()
+    this.storage = storage
 
     // Initialize extracted services
     this.addressService = new AddressService(
@@ -117,6 +123,41 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
     // Initialize currency from config
     this._currency = config?.defaultCurrency ?? 'USD'
+  }
+
+  /**
+   * Load preferences from storage
+   */
+  async loadPreferences(): Promise<void> {
+    if (!this.storage) return
+
+    const vaultId = this.vaultData.publicKeys.ecdsa
+    const prefs = await this.storage.get<{
+      currency: string
+      chains: Chain[]
+      tokens: Record<string, Token[]>
+    }>(`vault:preferences:${vaultId}`)
+
+    if (prefs) {
+      this._currency = prefs.currency
+      this._userChains = prefs.chains
+      this._tokens = prefs.tokens
+    }
+  }
+
+  /**
+   * Save preferences to storage
+   * @private
+   */
+  private async savePreferences(): Promise<void> {
+    if (!this.storage) return
+
+    const vaultId = this.vaultData.publicKeys.ecdsa
+    await this.storage.set(`vault:preferences:${vaultId}`, {
+      currency: this._currency,
+      chains: this._userChains,
+      tokens: this._tokens,
+    })
   }
 
   // ===== VAULT INFO =====
@@ -514,17 +555,19 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   /**
    * Set tokens for a chain
    */
-  setTokens(chain: Chain, tokens: Token[]): void {
+  async setTokens(chain: Chain, tokens: Token[]): Promise<void> {
     this._tokens[chain] = tokens
+    await this.savePreferences()
   }
 
   /**
    * Add single token to chain
    */
-  addToken(chain: Chain, token: Token): void {
+  async addToken(chain: Chain, token: Token): Promise<void> {
     if (!this._tokens[chain]) this._tokens[chain] = []
     if (!this._tokens[chain].find(t => t.id === token.id)) {
       this._tokens[chain].push(token)
+      await this.savePreferences()
       // Emit token added event
       this.emit('tokenAdded', { chain, token })
     }
@@ -533,12 +576,13 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   /**
    * Remove token from chain
    */
-  removeToken(chain: Chain, tokenId: string): void {
+  async removeToken(chain: Chain, tokenId: string): Promise<void> {
     if (this._tokens[chain]) {
       const tokenExists = this._tokens[chain].some(t => t.id === tokenId)
       this._tokens[chain] = this._tokens[chain].filter(t => t.id !== tokenId)
 
       if (tokenExists) {
+        await this.savePreferences()
         // Emit token removed event
         this.emit('tokenRemoved', { chain, tokenId })
       }
@@ -572,6 +616,9 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
     // Pre-derive addresses
     await this.addresses(chains)
+
+    // Save preferences
+    await this.savePreferences()
   }
 
   /**
@@ -588,6 +635,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     if (!this._userChains.includes(chain)) {
       this._userChains.push(chain)
       await this.address(chain) // Pre-derive
+      await this.savePreferences()
 
       // Emit chain added event
       this.emit('chainAdded', { chain })
@@ -597,7 +645,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   /**
    * Remove single chain
    */
-  removeChain(chain: Chain): void {
+  async removeChain(chain: Chain): Promise<void> {
     const chainExists = this._userChains.includes(chain)
     this._userChains = this._userChains.filter(c => c !== chain)
 
@@ -606,6 +654,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     this.cacheService.clear(cacheKey)
 
     if (chainExists) {
+      await this.savePreferences()
       // Emit chain removed event
       this.emit('chainRemoved', { chain })
     }
@@ -624,6 +673,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   async resetToDefaultChains(): Promise<void> {
     this._userChains = DEFAULT_CHAINS
     await this.addresses(this._userChains)
+    await this.savePreferences()
   }
 
   /**
@@ -638,8 +688,9 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   /**
    * Set vault currency
    */
-  setCurrency(currency: string): void {
+  async setCurrency(currency: string): Promise<void> {
     this._currency = currency
+    await this.savePreferences()
   }
 
   /**

@@ -233,7 +233,7 @@ npm run create-vault
 
 ### Adding New Chains
 To add a new chain to the test suite:
-1. Add chain name to `TEST_VAULT_CONFIG.testChains` in `tests/helpers/test-vault.ts`
+1. Add chain name to `TEST_VAULT_CONFIG.testChains` in `tests/e2e/helpers/test-vault.ts`
 2. Run tests - address will be derived automatically
 3. (Optional) Add expected address to `TEST_VAULT_CONFIG.addresses`
 
@@ -252,14 +252,16 @@ When adding new E2E tests:
 ```
 tests/e2e/
 ├── README.md                      # This file
+├── SECURITY.md                    # Security guidelines
 ├── vitest.config.ts               # E2E test configuration
+├── vitest.setup.ts                # E2E test setup
 ├── balance-operations.test.ts     # Balance fetching tests
 ├── gas-estimation.test.ts         # Gas/fee estimation tests
 ├── prepare-send-tx.test.ts        # prepareSendTx() tests (no broadcast)
-└── multi-chain-coverage.test.ts   # Comprehensive chain coverage
-
-tests/helpers/
-└── test-vault.ts                  # Persistent vault helper
+├── multi-chain-coverage.test.ts   # Comprehensive chain coverage
+└── helpers/
+    ├── test-vault.ts              # Persistent vault helper
+    └── signing-helpers.ts         # Signing test helpers
 
 tests/fixtures/vaults/
 └── TestFastVault-44fd-share2of2-Password123!.vult  # Pre-created test vault

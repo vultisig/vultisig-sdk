@@ -576,11 +576,11 @@ describe('Vault', () => {
       expect(tokens[0]).toEqual(mockToken)
     })
 
-    it('should emit tokenAdded event', () => {
+    it('should emit tokenAdded event', async () => {
       const tokenHandler = vi.fn()
       vault.on('tokenAdded', tokenHandler)
 
-      vault.addToken(Chain.Ethereum, mockToken)
+      await vault.addToken(Chain.Ethereum, mockToken)
 
       expect(tokenHandler).toHaveBeenCalledWith({
         chain: Chain.Ethereum,
@@ -589,39 +589,39 @@ describe('Vault', () => {
       expect(tokenHandler).toHaveBeenCalledTimes(1)
     })
 
-    it('should not add duplicate tokens', () => {
-      vault.addToken(Chain.Ethereum, mockToken)
-      vault.addToken(Chain.Ethereum, mockToken)
-      vault.addToken(Chain.Ethereum, mockToken)
+    it('should not add duplicate tokens', async () => {
+      await vault.addToken(Chain.Ethereum, mockToken)
+      await vault.addToken(Chain.Ethereum, mockToken)
+      await vault.addToken(Chain.Ethereum, mockToken)
 
       const tokens = vault.getTokens(Chain.Ethereum)
       expect(tokens).toHaveLength(1)
     })
 
-    it('should not emit event for duplicate tokens', () => {
+    it('should not emit event for duplicate tokens', async () => {
       const tokenHandler = vi.fn()
       vault.on('tokenAdded', tokenHandler)
 
-      vault.addToken(Chain.Ethereum, mockToken)
-      vault.addToken(Chain.Ethereum, mockToken)
+      await vault.addToken(Chain.Ethereum, mockToken)
+      await vault.addToken(Chain.Ethereum, mockToken)
 
       expect(tokenHandler).toHaveBeenCalledTimes(1) // Only once
     })
 
-    it('should remove token from chain', () => {
-      vault.addToken(Chain.Ethereum, mockToken)
-      vault.removeToken(Chain.Ethereum, mockToken.id)
+    it('should remove token from chain', async () => {
+      await vault.addToken(Chain.Ethereum, mockToken)
+      await vault.removeToken(Chain.Ethereum, mockToken.id)
 
       const tokens = vault.getTokens(Chain.Ethereum)
       expect(tokens).toHaveLength(0)
     })
 
-    it('should emit tokenRemoved event', () => {
+    it('should emit tokenRemoved event', async () => {
       const tokenHandler = vi.fn()
       vault.on('tokenRemoved', tokenHandler)
 
-      vault.addToken(Chain.Ethereum, mockToken)
-      vault.removeToken(Chain.Ethereum, mockToken.id)
+      await vault.addToken(Chain.Ethereum, mockToken)
+      await vault.removeToken(Chain.Ethereum, mockToken.id)
 
       expect(tokenHandler).toHaveBeenCalledWith({
         chain: Chain.Ethereum,
@@ -630,11 +630,11 @@ describe('Vault', () => {
       expect(tokenHandler).toHaveBeenCalledTimes(1)
     })
 
-    it('should not emit event when removing non-existent token', () => {
+    it('should not emit event when removing non-existent token', async () => {
       const tokenHandler = vi.fn()
       vault.on('tokenRemoved', tokenHandler)
 
-      vault.removeToken(Chain.Ethereum, 'non-existent-token-id')
+      await vault.removeToken(Chain.Ethereum, 'non-existent-token-id')
 
       expect(tokenHandler).not.toHaveBeenCalled()
     })
@@ -796,21 +796,21 @@ describe('Vault', () => {
       expect(chains).toHaveLength(2)
     })
 
-    it('should emit chainRemoved event', () => {
+    it('should emit chainRemoved event', async () => {
       const chainHandler = vi.fn()
       vault.on('chainRemoved', chainHandler)
 
-      vault.removeChain(Chain.Solana)
+      await vault.removeChain(Chain.Solana)
 
       expect(chainHandler).toHaveBeenCalledWith({ chain: Chain.Solana })
       expect(chainHandler).toHaveBeenCalledTimes(1)
     })
 
-    it('should not emit event when removing non-existent chain', () => {
+    it('should not emit event when removing non-existent chain', async () => {
       const chainHandler = vi.fn()
       vault.on('chainRemoved', chainHandler)
 
-      vault.removeChain(Chain.Ripple)
+      await vault.removeChain(Chain.Ripple)
 
       expect(chainHandler).not.toHaveBeenCalled()
     })

@@ -1,33 +1,32 @@
-import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   resolve: {
     alias: {
-      '@': resolve(__dirname, '../packages/sdk/src'),
-      '@core': resolve(__dirname, '../packages/core'),
-      '@lib': resolve(__dirname, '../packages/lib'),
-      '@tests': resolve(__dirname, '../packages/sdk/tests'),
-      '@fixtures': resolve(__dirname, '../packages/sdk/tests/fixtures'),
-      '@mocks': resolve(__dirname, '../packages/sdk/tests/mocks'),
-      '@utils': resolve(__dirname, '../packages/sdk/tests/utils'),
+      '@': resolve(__dirname, '../../src'),
+      '@core': resolve(__dirname, '../../../core'),
+      '@lib': resolve(__dirname, '../../../lib'),
+      '@tests': resolve(__dirname, '..'),
+      '@fixtures': resolve(__dirname, '../fixtures'),
+      '@mocks': resolve(__dirname, './mocks'),
+      '@utils': resolve(__dirname, '../utils'),
     },
   },
   test: {
     globals: true,
     environment: 'node',
-    include: [
-      'packages/sdk/tests/**/*.{test,spec}.{js,ts,tsx}',
-      'packages/sdk/src/**/*.{test,spec}.{js,ts,tsx}',
-    ],
+    include: ['./**/*.{test,spec}.{js,ts,tsx}'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
       '**/build/**',
       '**/.{idea,git,cache,output,temp}/**',
-      '**/e2e/**', // E2E tests run separately
+      '../e2e/**', // E2E tests run separately
+      '../integration/**', // Integration tests run separately
+      '../runtime/**', // Runtime tests run separately
     ],
-    setupFiles: ['./.config/vitest.setup.ts'],
+    setupFiles: [resolve(__dirname, './vitest.setup.ts')],
     testTimeout: 30000, // 30 seconds for unit tests (WASM loading can take time)
     hookTimeout: 30000, // 30 seconds for hooks
     teardownTimeout: 10000, // 10 seconds for cleanup

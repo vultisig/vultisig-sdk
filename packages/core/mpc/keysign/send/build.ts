@@ -40,21 +40,15 @@ export const buildSendKeysignPayload = async ({
   feeSettings,
 }: BuildSendKeysignPayloadInput) => {
   // Validate receiver address format
-  const isValid = isValidAddress({
-    chain: coin.chain,
-    address: receiver,
-    walletCore,
-  })
-
-  if (!isValid) {
+  if (!isValidAddress({ chain: coin.chain, address: receiver, walletCore })) {
     throw new Error(
       `Invalid receiver address format for ${coin.chain}: ${receiver}`
     )
   }
 
-  // Validate amount
+  // Validate amount is positive
   if (amount <= 0n) {
-    throw new Error('Amount must be greater than zero')
+    throw new Error(`Amount must be greater than zero, got: ${amount}`)
   }
 
   let keysignPayload = create(KeysignPayloadSchema, {

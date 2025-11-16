@@ -45,7 +45,8 @@ if (typeof File === 'undefined') {
           }
         }
       }
-      this._buffer = buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this._buffer =
+        buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
       this.size = this._buffer.length
     }
 
@@ -82,7 +83,8 @@ if (typeof Blob === 'undefined') {
           buffers.push(Buffer.from(bit))
         }
       }
-      this._buffer = buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this._buffer =
+        buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
       this.size = this._buffer.length
     }
 

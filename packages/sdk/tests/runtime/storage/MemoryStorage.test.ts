@@ -7,8 +7,8 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { MemoryStorage } from '../../../../src/runtime/storage/MemoryStorage'
-import { STORAGE_VERSION } from '../../../../src/runtime/storage/types'
+import { MemoryStorage } from '@/runtime/storage/MemoryStorage'
+import { STORAGE_VERSION } from '@/runtime/storage/types'
 
 describe('MemoryStorage', () => {
   let storage: MemoryStorage

@@ -34,7 +34,7 @@ export default defineConfig({
 
     // Setup files - MUST use E2E-specific WASM loader (no API mocks!)
     setupFiles: [
-      resolve(__dirname, '../../../..', '.config/vitest.e2e-setup.ts'), // E2E WASM loader (NO getCoinBalance mock)
+      resolve(__dirname, './vitest.setup.ts'), // E2E WASM loader (NO getCoinBalance mock)
       resolve(__dirname, './setup.ts'), // E2E-specific setup
       resolve(__dirname, '../setup.ts'), // Test utilities
     ],
@@ -46,7 +46,7 @@ export default defineConfig({
       '@core': resolve(__dirname, '../../../core'),
       '@lib': resolve(__dirname, '../../../lib'),
       '@tests': resolve(__dirname, '..'),
-      '@helpers': resolve(__dirname, '../helpers'),
+      '@helpers': resolve(__dirname, './helpers'),
       '@fixtures': resolve(__dirname, '../fixtures'),
     },
   },
