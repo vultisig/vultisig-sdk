@@ -1,6 +1,15 @@
 import type { Chain } from '@core/chain/Chain'
 
-import type { Balance, Signature, SigningPayload, Token, Value } from '../types'
+import type {
+  Balance,
+  Signature,
+  SigningPayload,
+  SigningStep,
+  Token,
+  Value,
+  VaultCreationStep,
+} from '../types'
+import type { Vault } from '../vault/Vault'
 
 /**
  * Events emitted by the Vultisig SDK for state changes.
@@ -28,6 +37,17 @@ export type SdkEvents = {
 
   /** Emitted on SDK-level errors */
   error: Error
+
+  /** Emitted during vault creation with progress updates */
+  vaultCreationProgress: {
+    vault?: Vault // undefined until vault object created, then populated
+    step: VaultCreationStep
+  }
+
+  /** Emitted when vault creation completes successfully */
+  vaultCreationComplete: {
+    vault: Vault
+  }
 }
 
 /**
@@ -88,4 +108,9 @@ export type VaultEvents = {
 
   /** Emitted on vault-level errors */
   error: Error
+
+  /** Emitted during transaction signing with progress updates */
+  signingProgress: {
+    step: SigningStep
+  }
 }
