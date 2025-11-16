@@ -1,6 +1,6 @@
 import type { Chain } from '@core/chain/Chain'
 
-import type { Balance, Signature, SigningPayload, Token } from '../types'
+import type { Balance, Signature, SigningPayload, Token, Value } from '../types'
 
 /**
  * Events emitted by the Vultisig SDK for state changes.
@@ -74,6 +74,16 @@ export type VaultEvents = {
   renamed: {
     oldName: string
     newName: string
+  }
+
+  /** Emitted when fiat values are updated for a chain */
+  valuesUpdated: {
+    chain: Chain | 'all'
+  }
+
+  /** Emitted when total portfolio value is recalculated */
+  totalValueUpdated: {
+    value: Value
   }
 
   /** Emitted on vault-level errors */
