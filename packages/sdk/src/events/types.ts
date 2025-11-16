@@ -113,4 +113,14 @@ export type VaultEvents = {
   signingProgress: {
     step: SigningStep
   }
+
+  /** Emitted when a transaction is successfully broadcast to the blockchain network */
+  transactionBroadcast: {
+    /** The chain the transaction was broadcast on */
+    chain: Chain
+    /** The transaction hash returned by the network */
+    txHash: string
+    /** The original keysign payload used to create the transaction */
+    keysignPayload: any
+  }
 }

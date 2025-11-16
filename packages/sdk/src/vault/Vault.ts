@@ -28,6 +28,7 @@ import { WASMManager } from '../wasm/WASMManager'
 // Vault services
 import { AddressService } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
+import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
 import { TransactionBuilder } from './services/TransactionBuilder'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -69,6 +70,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private transactionBuilder: TransactionBuilder
   private balanceService: BalanceService
   private gasEstimationService: GasEstimationService
+  private broadcastService: BroadcastService
 
   // Cached properties
   private _isEncrypted?: boolean
@@ -131,6 +133,10 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       this.vaultData,
       this.wasmManager,
       chain => this.address(chain)
+    )
+    this.broadcastService = new BroadcastService(
+      this.wasmManager,
+      keysignPayload => this.extractMessageHashes(keysignPayload)
     )
 
     // Initialize user chains from config
@@ -589,6 +595,81 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
         `Fast signing failed: ${(error as Error).message}`,
         error as Error
       )
+    }
+  }
+
+  // ===== TRANSACTION BROADCASTING =====
+
+  /**
+   * Broadcast a signed transaction to the blockchain network
+   *
+   * This method compiles the signed transaction and broadcasts it to the network.
+   * It should be called after prepareSendTx() and sign().
+   *
+   * @param params - Broadcast parameters
+   * @param params.chain - The blockchain to broadcast on
+   * @param params.keysignPayload - Original payload from prepareSendTx()
+   * @param params.signature - Signature from sign()
+   *
+   * @returns Transaction hash (string) on success
+   *
+   * @throws {VaultError} With code BroadcastFailed if broadcast fails
+   *
+   * @fires VaultEvents#transactionBroadcast - When broadcast succeeds
+   *
+   * @example
+   * ```typescript
+   * // Complete transaction flow
+   * const payload = await vault.prepareSendTx({
+   *   coin: { chain: Chain.Ethereum, address, decimals: 18, ticker: 'ETH' },
+   *   receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+   *   amount: 1000000000000000000n
+   * })
+   *
+   * const messageHashes = await vault.extractMessageHashes(payload)
+   * const signature = await vault.sign('fast', {
+   *   transaction: payload,
+   *   chain: Chain.Ethereum,
+   *   messageHashes
+   * }, password)
+   *
+   * const txHash = await vault.broadcastTx({
+   *   chain: Chain.Ethereum,
+   *   keysignPayload: payload,
+   *   signature
+   * })
+   *
+   * console.log(`Transaction: ${txHash}`)
+   * // Output: "Transaction: 0x1234567890abcdef..."
+   * ```
+   */
+  async broadcastTx(params: {
+    chain: Chain
+    keysignPayload: KeysignPayload
+    signature: Signature
+  }): Promise<string> {
+    const { chain, keysignPayload, signature } = params
+
+    try {
+      // Delegate to BroadcastService
+      const txHash = await this.broadcastService.broadcastTx({
+        chain,
+        keysignPayload,
+        signature,
+      })
+
+      // Emit success event
+      this.emit('transactionBroadcast', {
+        chain,
+        txHash,
+        keysignPayload,
+      })
+
+      return txHash
+    } catch (error) {
+      // BroadcastService already wraps errors in VaultError
+      this.emit('error', error as Error)
+      throw error
     }
   }
 
