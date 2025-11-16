@@ -8,6 +8,7 @@ export type { ChainKind } from '@core/chain/ChainKind'
 export type { AccountCoin } from '@core/chain/coin/AccountCoin'
 export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
+export type { FiatCurrency } from '@core/config/FiatCurrency'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
@@ -91,13 +92,28 @@ export type Balance = {
   symbol: string
   chainId: string
   tokenId?: string
-  value?: number // USD value
+  value?: number // USD value (deprecated - use fiatValue instead)
+  fiatValue?: number // Current fiat value in vault's currency
+  fiatCurrency?: string // Currency code (e.g., 'USD', 'EUR')
 }
 
 export type CachedBalance = {
   balance: Balance
   cachedAt: number // Unix timestamp when cached
   ttl: number // Time to live in milliseconds (5 minutes = 300000)
+}
+
+/**
+ * Fiat value representation
+ * Used for portfolio values and individual asset values
+ */
+export type Value = {
+  /** Formatted value amount (e.g., "1234.56") */
+  amount: string
+  /** Currency code (e.g., "USD", "EUR", "GBP") */
+  currency: string
+  /** Unix timestamp of when value was calculated */
+  lastUpdated: number
 }
 
 export type SigningMode = 'fast' | 'relay' | 'local'

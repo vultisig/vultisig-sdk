@@ -12,14 +12,17 @@ import { VaultEvents } from '../events/types'
 import type { VaultStorage } from '../runtime/storage/types'
 import { CacheService } from '../services/CacheService'
 import { FastSigningService } from '../services/FastSigningService'
+import { FiatValueService } from '../services/FiatValueService'
 // Types
 import {
   Balance,
+  FiatCurrency,
   GasInfo,
   Signature,
   SigningMode,
   SigningPayload,
   Token,
+  Value,
 } from '../types'
 import { WASMManager } from '../wasm/WASMManager'
 // Vault services
@@ -59,6 +62,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private wasmManager: WASMManager
   private cacheService: CacheService
   private fastSigningService?: FastSigningService
+  private fiatValueService: FiatValueService
 
   // Extracted services
   private addressService: AddressService
@@ -74,6 +78,10 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private _userChains: Chain[] = []
   private _currency: string = 'USD'
   private _tokens: Record<string, Token[]> = {}
+
+  // Fiat value tracking
+  private lastValueUpdate?: Date
+  private cachedTotalValue?: Value
 
   // Storage for persistence
   private storage?: VaultStorage
@@ -92,6 +100,13 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     this.fastSigningService = services.fastSigningService
     this.cacheService = new CacheService()
     this.storage = storage
+
+    // Initialize fiat value service
+    this.fiatValueService = new FiatValueService(
+      this.cacheService,
+      () => this._currency as FiatCurrency,
+      () => this._tokens
+    )
 
     // Initialize extracted services
     this.addressService = new AddressService(
@@ -136,12 +151,16 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       currency: string
       chains: Chain[]
       tokens: Record<string, Token[]>
+      lastValueUpdate?: number
     }>(`vault:preferences:${vaultId}`)
 
     if (prefs) {
       this._currency = prefs.currency
       this._userChains = prefs.chains
       this._tokens = prefs.tokens
+      if (prefs.lastValueUpdate) {
+        this.lastValueUpdate = new Date(prefs.lastValueUpdate)
+      }
     }
   }
 
@@ -157,6 +176,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       currency: this._currency,
       chains: this._userChains,
       tokens: this._tokens,
+      lastValueUpdate: this.lastValueUpdate?.getTime(),
     })
   }
 
@@ -719,6 +739,226 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    */
   getCurrency(): string {
     return this._currency
+  }
+
+  // ===== FIAT VALUE OPERATIONS =====
+
+  /**
+   * Get fiat value for a specific asset
+   * Combines balance and price data to calculate current value
+   *
+   * @param chain Chain to get value for
+   * @param tokenId Optional token contract address (omit for native token)
+   * @param fiatCurrency Optional currency override (defaults to vault currency)
+   * @returns Current value in specified fiat currency
+   *
+   * @example
+   * ```typescript
+   * // Get ETH value in vault's currency
+   * const ethValue = await vault.getValue(Chain.Ethereum)
+   * console.log(`ETH value: ${ethValue.currency} ${ethValue.amount}`)
+   *
+   * // Get USDC value in EUR
+   * const usdcValue = await vault.getValue(
+   *   Chain.Ethereum,
+   *   '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+   *   'eur'
+   * )
+   * ```
+   */
+  async getValue(
+    chain: Chain,
+    tokenId?: string,
+    fiatCurrency?: FiatCurrency
+  ): Promise<Value> {
+    try {
+      // Get current balance
+      const balance = await this.balance(chain, tokenId)
+
+      // Calculate fiat value
+      const currency = fiatCurrency ?? (this._currency as FiatCurrency)
+      const value = await this.fiatValueService.getBalanceValue(
+        balance,
+        currency
+      )
+
+      return {
+        amount: value.toFixed(2),
+        currency,
+        lastUpdated: Date.now(),
+      }
+    } catch (error) {
+      throw new VaultError(
+        VaultErrorCode.BalanceFetchFailed,
+        `Failed to get value for ${chain}${tokenId ? `:${tokenId}` : ''}: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Get fiat values for all assets on a chain (native + tokens)
+   *
+   * @param chain Chain to get values for
+   * @param fiatCurrency Optional currency override
+   * @returns Record of asset ID to Value
+   *
+   * @example
+   * ```typescript
+   * const values = await vault.getValues(Chain.Ethereum)
+   * console.log('Native ETH:', values.native.amount)
+   * console.log('USDC:', values['0xA0b86991...'].amount)
+   * ```
+   */
+  async getValues(
+    chain: Chain,
+    fiatCurrency?: FiatCurrency
+  ): Promise<Record<string, Value>> {
+    const values: Record<string, Value> = {}
+
+    try {
+      // Get native token value
+      values.native = await this.getValue(chain, undefined, fiatCurrency)
+    } catch (error) {
+      console.warn(`Failed to get native value for ${chain}:`, error)
+    }
+
+    // Get all token values
+    const tokens = this.getTokens(chain)
+    for (const token of tokens) {
+      try {
+        values[token.contractAddress] = await this.getValue(
+          chain,
+          token.contractAddress,
+          fiatCurrency
+        )
+      } catch (error) {
+        console.warn(
+          `Failed to get value for token ${token.contractAddress}:`,
+          error
+        )
+        // Continue with other tokens
+      }
+    }
+
+    return values
+  }
+
+  /**
+   * Refresh price data for specified chain or all chains
+   * Clears price cache to force fresh fetch
+   *
+   * @param chain Chain to update ('all' for all chains)
+   *
+   * @example
+   * ```typescript
+   * // Update prices for Ethereum
+   * await vault.updateValues(Chain.Ethereum)
+   *
+   * // Update prices for all chains
+   * await vault.updateValues('all')
+   * ```
+   */
+  async updateValues(chain: Chain | 'all'): Promise<void> {
+    // Clear price cache to force fresh fetch
+    this.fiatValueService.clearCache()
+
+    if (chain === 'all') {
+      // Fetch values for all chains (triggers fresh price fetch)
+      const chains = this.getChains()
+      await Promise.all(chains.map(c => this.getValues(c)))
+    } else {
+      // Fetch values for specific chain
+      await this.getValues(chain)
+    }
+
+    // Emit event
+    this.emit('valuesUpdated', { chain })
+  }
+
+  /**
+   * Get total portfolio value across all chains and tokens
+   * Uses 1-minute cache to avoid excessive calculations
+   *
+   * @param fiatCurrency Optional currency override
+   * @returns Total portfolio value
+   *
+   * @example
+   * ```typescript
+   * const total = await vault.getTotalValue()
+   * console.log(`Total portfolio: ${total.currency} ${total.amount}`)
+   * ```
+   */
+  async getTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
+    const currency = fiatCurrency ?? (this._currency as FiatCurrency)
+
+    // Use cached value if fresh (< 1 minute old)
+    if (
+      this.cachedTotalValue &&
+      this.lastValueUpdate &&
+      this.cachedTotalValue.currency === currency
+    ) {
+      const age = Date.now() - this.lastValueUpdate.getTime()
+      if (age < 60000) {
+        // 1 minute
+        return this.cachedTotalValue
+      }
+    }
+
+    // Calculate fresh total
+    return this.updateTotalValue(currency)
+  }
+
+  /**
+   * Force recalculation of total portfolio value (ignores cache)
+   * Updates lastValueUpdate timestamp
+   *
+   * @param fiatCurrency Optional currency override
+   * @returns Updated total portfolio value
+   *
+   * @example
+   * ```typescript
+   * // Force fresh calculation
+   * const total = await vault.updateTotalValue()
+   * console.log(`Updated total: ${total.currency} ${total.amount}`)
+   * ```
+   */
+  async updateTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
+    const currency = fiatCurrency ?? (this._currency as FiatCurrency)
+    const chains = this.getChains()
+
+    let total = 0
+
+    // Sum values across all chains
+    for (const chain of chains) {
+      try {
+        const chainValues = await this.getValues(chain, currency)
+        for (const value of Object.values(chainValues)) {
+          total += parseFloat(value.amount)
+        }
+      } catch (error) {
+        console.warn(`Failed to get values for ${chain}:`, error)
+        // Continue with other chains
+      }
+    }
+
+    const totalValue: Value = {
+      amount: total.toFixed(2),
+      currency,
+      lastUpdated: Date.now(),
+    }
+
+    // Cache the result
+    this.cachedTotalValue = totalValue
+    this.lastValueUpdate = new Date()
+
+    // Persist to storage
+    await this.savePreferences()
+
+    // Emit event
+    this.emit('totalValueUpdated', { value: totalValue })
+
+    return totalValue
   }
 
   // ===== DATA ACCESS =====
