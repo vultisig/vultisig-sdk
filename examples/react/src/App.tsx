@@ -24,13 +24,14 @@ function App() {
           fastVault: 'https://api.vultisig.com/vault',
           messageRelay: 'https://api.vultisig.com/router',
         },
-        wasmConfig: {
-          wasmPaths: {
-            walletCore: '/wallet-core.wasm',
-            dkls: '/vs_wasm_bg.wasm',
-            schnorr: '/vs_schnorr_wasm_bg.wasm',
-          },
-        },
+        // Let Vite handle WASM bundling automatically
+        // wasmConfig: {
+        //   wasmPaths: {
+        //     walletCore: '/wallet-core.wasm',
+        //     dkls: '/vs_wasm_bg.wasm',
+        //     schnorr: '/vs_schnorr_wasm_bg.wasm',
+        //   },
+        // },
       })
   )
   const [initialized, setInitialized] = useState(false)
@@ -57,32 +58,42 @@ function App() {
   const onPickVault = () => fileInputRef.current?.click()
   const onFilesChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(ev.target.files || [])
+    console.log('Files selected:', files.length)
+
     await onInitialize()
 
     for (const file of files) {
       try {
+        console.log('Processing file:', file.name, 'size:', file.size)
         const encrypted = await sdk.isVaultFileEncrypted(file)
+        console.log('File encrypted:', encrypted)
 
         // Read the file content as base64 and store it directly
         const reader = new FileReader()
         const fileContent = await new Promise<string>((resolve, reject) => {
           reader.onload = () => {
             const text = reader.result as string
+            console.log('File content length:', text.length)
+            console.log('First 100 chars:', text.substring(0, 100))
             resolve(text)
           }
-          reader.onerror = reject
+          reader.onerror = err => {
+            console.error('FileReader error:', err)
+            reject(err)
+          }
           reader.readAsText(file)
         })
 
         // Store the file content directly in localStorage using the existing storage mechanism
-        await keysharesStorage.saveVaultFromFile({
+        const stored = await keysharesStorage.saveVaultFromFile({
           name: file.name,
           size: file.size,
           encrypted,
           containerBase64: fileContent,
         })
+        console.log('Vault stored successfully:', stored)
       } catch (error) {
-        console.warn(`Failed to add ${file.name}:`, error)
+        console.error(`Failed to add ${file.name}:`, error)
       }
     }
 
