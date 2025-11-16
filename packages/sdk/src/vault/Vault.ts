@@ -258,15 +258,33 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Get the export filename for this vault
+   * Format: {vaultName}-{localPartyId}-share{index}of{total}.vult
+   */
+  getExportFileName(): string {
+    const totalSigners = this.vaultData.signers.length
+    const localPartyIndex =
+      this.vaultData.signers.indexOf(this.vaultData.localPartyId) + 1
+
+    // Always use DKLS share format
+    return `${this.vaultData.name}-${this.vaultData.localPartyId}-share${localPartyIndex}of${totalSigners}.vult`
+  }
+
+  /**
+   * Export vault data as base64 string
+   * Useful for storing vault backups in localStorage or other text-based storage
+   */
+  async exportAsBase64(password?: string): Promise<string> {
+    const { createVaultBackup } = await import('../utils/export')
+    return createVaultBackup(this.vaultData, password)
+  }
+
+  /**
    * Export vault data as downloadable file
    */
   async export(password?: string): Promise<Blob> {
-    const { createVaultBackup, getExportFileName } = await import(
-      '../utils/export'
-    )
-
-    const base64Data = await createVaultBackup(this.vaultData, password)
-    const filename = getExportFileName(this.vaultData)
+    const base64Data = await this.exportAsBase64(password)
+    const filename = this.getExportFileName()
 
     const blob = new Blob([base64Data], { type: 'application/octet-stream' })
 
