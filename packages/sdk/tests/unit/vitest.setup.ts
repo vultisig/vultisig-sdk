@@ -17,7 +17,7 @@ const originalFetch = global.fetch
 
 global.fetch = async (url: string | URL | Request) => {
   const urlString = url.toString()
-  
+
   console.log('🔍 Vitest fetch called with URL:', urlString)
 
   if (urlString.includes('.wasm')) {
@@ -28,12 +28,18 @@ global.fetch = async (url: string | URL | Request) => {
     if (urlString.includes('wallet-core.wasm')) {
       wasmPath = join(
         __dirname,
-        'node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'
+        '../../../../node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'
       )
     } else if (urlString.includes('vs_wasm_bg.wasm')) {
-      wasmPath = join(__dirname, 'packages/lib/dkls/vs_wasm_bg.wasm')
+      wasmPath = join(
+        __dirname,
+        '../../../../packages/lib/dkls/vs_wasm_bg.wasm'
+      )
     } else if (urlString.includes('vs_schnorr_wasm_bg.wasm')) {
-      wasmPath = join(__dirname, 'packages/lib/schnorr/vs_schnorr_wasm_bg.wasm')
+      wasmPath = join(
+        __dirname,
+        '../../../../packages/lib/schnorr/vs_schnorr_wasm_bg.wasm'
+      )
     } else {
       // For any other WASM files, try to load from the filesystem
       const fs = await import('fs')
@@ -44,14 +50,14 @@ global.fetch = async (url: string | URL | Request) => {
       const possiblePaths = [
         path.join(
           __dirname,
-          'node_modules/@trustwallet/wallet-core/dist/lib/',
+          '../../../../node_modules/@trustwallet/wallet-core/dist/lib/',
           filename
         ),
-        path.join(__dirname, 'packages/lib/dkls/', filename),
-        path.join(__dirname, 'packages/lib/schnorr/', filename),
+        path.join(__dirname, '../../../../packages/lib/dkls/', filename),
+        path.join(__dirname, '../../../../packages/lib/schnorr/', filename),
         path.join(
           __dirname,
-          'src/node_modules/@trustwallet/wallet-core/dist/lib/',
+          '../../../../src/node_modules/@trustwallet/wallet-core/dist/lib/',
           filename
         ),
       ]
@@ -71,7 +77,11 @@ global.fetch = async (url: string | URL | Request) => {
     console.log('📁 Trying to load WASM from:', wasmPath)
     try {
       const wasmBuffer = readFileSync(wasmPath)
-      console.log('✅ WASM file loaded successfully, size:', wasmBuffer.length, 'bytes')
+      console.log(
+        '✅ WASM file loaded successfully, size:',
+        wasmBuffer.length,
+        'bytes'
+      )
       const arrayBuffer = wasmBuffer.buffer.slice(
         wasmBuffer.byteOffset,
         wasmBuffer.byteOffset + wasmBuffer.byteLength
@@ -87,11 +97,14 @@ global.fetch = async (url: string | URL | Request) => {
     } catch (error) {
       // Try fallback paths if primary path fails
       const fallbackPaths = [
-        join(__dirname, 'packages/lib/dkls/vs_wasm_bg.wasm'),
-        join(__dirname, 'packages/lib/schnorr/vs_schnorr_wasm_bg.wasm'),
+        join(__dirname, '../../../../packages/lib/dkls/vs_wasm_bg.wasm'),
         join(
           __dirname,
-          'node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'
+          '../../../../packages/lib/schnorr/vs_schnorr_wasm_bg.wasm'
+        ),
+        join(
+          __dirname,
+          '../../../../node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'
         ),
       ]
 
@@ -110,7 +123,7 @@ global.fetch = async (url: string | URL | Request) => {
                 'Content-Type': 'application/wasm',
               }),
             })
-          } catch (fallbackError) {
+          } catch {
             continue
           }
         }
@@ -168,7 +181,8 @@ if (typeof File === 'undefined') {
           }
         }
       }
-      this._buffer = buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this._buffer =
+        buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
       this.size = this._buffer.length
     }
 
@@ -205,7 +219,8 @@ if (typeof Blob === 'undefined') {
           buffers.push(Buffer.from(bit))
         }
       }
-      this._buffer = buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this._buffer =
+        buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
       this.size = this._buffer.length
     }
 

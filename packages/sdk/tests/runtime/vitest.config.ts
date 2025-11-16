@@ -24,13 +24,11 @@ export default defineConfig({
       '**/build/**',
       '**/.{idea,git,cache,output,temp}/**',
     ],
-    setupFiles: [
-      resolve(__dirname, '../unit/vitest.setup.ts'),
-      resolve(__dirname, './setup.ts'),
-    ],
-    testTimeout: 60000, // 60 seconds for integration tests (may need network/WASM)
-    hookTimeout: 60000,
-    teardownTimeout: 10000,
+    setupFiles: [resolve(__dirname, '../unit/vitest.setup.ts')],
+    testTimeout: 30000, // 30 seconds for runtime tests (WASM loading can take time)
+    hookTimeout: 30000, // 30 seconds for hooks
+    teardownTimeout: 10000, // 10 seconds for cleanup
+    // Allow importing from workspace packages
     deps: {
       external: ['@trustwallet/wallet-core'],
     },

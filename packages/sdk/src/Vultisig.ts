@@ -73,11 +73,16 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     }
 
     // Initialize module managers
-    this.addressBookManager = new AddressBookManager()
-    this.vaultManager = new VaultManager(this.wasmManager, this.serverManager, {
-      defaultChains: config?.defaultChains,
-      defaultCurrency: config?.defaultCurrency,
-    })
+    this.addressBookManager = new AddressBookManager(this.storage)
+    this.vaultManager = new VaultManager(
+      this.wasmManager,
+      this.serverManager,
+      {
+        defaultChains: config?.defaultChains,
+        defaultCurrency: config?.defaultCurrency,
+      },
+      this.storage
+    )
 
     // Auto-initialization
     if (config?.autoInit) {
@@ -97,6 +102,32 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   private createDefaultStorage(): VaultStorage {
     return StorageManager.createDefaultStorage()
+  }
+
+  /**
+   * Load configuration from storage
+   * @private
+   */
+  private async loadConfigFromStorage(): Promise<void> {
+    // Load default currency
+    const storedCurrency = await this.storage.get<string>(
+      'config:defaultCurrency'
+    )
+    if (storedCurrency) {
+      this.defaultCurrency = storedCurrency
+    }
+
+    // Load default chains
+    const storedChains = await this.storage.get<Chain[]>('config:defaultChains')
+    if (storedChains) {
+      this.defaultChains = storedChains
+    }
+
+    // Load active chain
+    const storedActiveChain = await this.storage.get<Chain>('activeChain')
+    if (storedActiveChain) {
+      this.activeChain = storedActiveChain
+    }
   }
 
   /**
@@ -128,6 +159,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     this.initializationPromise = (async () => {
       try {
         await this.wasmManager.initialize()
+
+        // Load configuration from storage
+        await this.loadConfigFromStorage()
+
+        // Initialize managers
+        await this.addressBookManager.init()
+        await this.vaultManager.init()
+
         this.initialized = true
       } catch (error) {
         // Reset promise on error so initialization can be retried
@@ -169,7 +208,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       }
 
       this.connected = true
-      this.emit('connect', undefined)
+      this.emit('connect', {})
     } catch (error) {
       this.emit('error', error as Error)
       throw error
@@ -182,7 +221,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async disconnect(): Promise<void> {
     this.vaultManager.setActiveVault(null as any)
     this.connected = false
-    this.emit('disconnect', undefined)
+    this.emit('disconnect', {})
   }
 
   /**
@@ -425,9 +464,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Set global default currency
    */
-  setDefaultCurrency(currency: string): void {
+  async setDefaultCurrency(currency: string): Promise<void> {
     this.defaultCurrency = currency
-    // TODO: Save config to storage
+    await this.storage.set('config:defaultCurrency', currency)
   }
 
   /**
@@ -449,11 +488,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Set SDK-level default chains for new vaults
    */
-  setDefaultChains(chains: string[]): void {
+  async setDefaultChains(chains: string[]): Promise<void> {
     // Validate chains (will throw if invalid)
     const validatedChains = validateChains(chains)
     this.defaultChains = validatedChains
-    // TODO: Save config to storage
+    await this.storage.set('config:defaultChains', validatedChains)
   }
 
   /**
@@ -602,6 +641,47 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       this.emit('error', error as Error)
       throw error
     }
+  }
+
+  // === STORAGE QUOTA MONITORING ===
+
+  /**
+   * Check storage quota and return usage statistics
+   */
+  async getStorageInfo(): Promise<{
+    usage: number
+    quota?: number
+    percentage?: number
+    isNearLimit: boolean
+  }> {
+    const usage = (await this.storage.getUsage?.()) ?? 0
+    const quota = await this.storage.getQuota?.()
+
+    const percentage = quota ? (usage / quota) * 100 : undefined
+    const isNearLimit = percentage ? percentage > 80 : false
+
+    // Emit warning if storage is >80% full
+    if (isNearLimit) {
+      console.warn(
+        `Storage usage is ${percentage?.toFixed(1)}% full (${usage} / ${quota} bytes). Consider clearing old data.`
+      )
+    }
+
+    return {
+      usage,
+      quota,
+      percentage,
+      isNearLimit,
+    }
+  }
+
+  /**
+   * Clear all SDK data from storage
+   * Warning: This will remove all vaults, address book, and configuration
+   */
+  async clearAllData(): Promise<void> {
+    await this.storage.clear()
+    this.emit('dataCleared', {})
   }
 
   // === INTERNAL ACCESS FOR VAULT ===

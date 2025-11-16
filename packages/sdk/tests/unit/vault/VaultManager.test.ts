@@ -35,6 +35,7 @@ import { base64Encode } from '@lib/utils/base64Encode'
 import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGcm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
 import { ServerManager } from '../../../src/server/ServerManager'
 import type { Vault } from '../../../src/types'
 import {
@@ -182,10 +183,15 @@ describe('VaultManager', () => {
       }),
     } as any
 
-    vaultManager = new VaultManager(mockWasmManager, mockServerManager, {
-      defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
-      defaultCurrency: 'USD',
-    })
+    vaultManager = new VaultManager(
+      mockWasmManager,
+      mockServerManager,
+      {
+        defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
+        defaultCurrency: 'USD',
+      },
+      new MemoryStorage()
+    )
   })
 
   // ===== VAULT CREATION =====
