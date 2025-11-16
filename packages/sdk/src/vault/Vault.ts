@@ -474,13 +474,14 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   async sign(
     mode: SigningMode,
     payload: SigningPayload,
-    password?: string
+    password?: string,
+    onProgress?: (step: import('../types').SigningStep) => void
   ): Promise<Signature> {
     this.validateSigningMode(mode)
 
     switch (mode) {
       case 'fast':
-        return this.signFast(payload, password)
+        return this.signFast(payload, password, onProgress)
       case 'relay':
         throw new VaultError(
           VaultErrorCode.NotImplemented,
@@ -526,7 +527,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    */
   private async signFast(
     payload: SigningPayload,
-    password?: string
+    password?: string,
+    onProgress?: (step: import('../types').SigningStep) => void
   ): Promise<Signature> {
     if (!password) {
       throw new VaultError(
@@ -546,7 +548,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       const signature = await this.fastSigningService.signWithServer(
         this.vaultData,
         payload,
-        password
+        password,
+        onProgress
       )
 
       // Emit transaction signed event
