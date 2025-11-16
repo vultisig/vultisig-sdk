@@ -271,6 +271,88 @@ describe('VaultManager', () => {
         })
       )
     })
+
+    it('should report all VaultCreationStep phases', async () => {
+      const progressSteps: any[] = []
+      const onProgress = vi.fn(step => {
+        progressSteps.push(step)
+      })
+
+      // Mock ServerManager to simulate keygen progress
+      mockServerManager.createFastVault = vi
+        .fn()
+        .mockImplementation(options => {
+          // Simulate keygen progress callbacks
+          if (options.onProgress) {
+            options.onProgress({ phase: 'ecdsa', message: 'ECDSA keygen' })
+            options.onProgress({ phase: 'eddsa', message: 'EdDSA keygen' })
+            options.onProgress({ phase: 'complete', message: 'Keygen done' })
+          }
+          return Promise.resolve({
+            vault: {
+              name: 'Fast Vault',
+              publicKeys: { ecdsa: '02test', eddsa: 'test' },
+              hexChainCode: 'test',
+              localPartyId: 'local-1',
+              signers: ['local-1', 'Server-1'],
+              keyShares: { ecdsa: 'mock', eddsa: 'mock' },
+              resharePrefix: '',
+              libType: 'GG20',
+              createdAt: Date.now(),
+              isBackedUp: false,
+              order: 0,
+            },
+            sessionId: 'test-session',
+          })
+        })
+
+      await vaultManager.createVault('Progress Vault', {
+        type: 'fast',
+        email: 'test@example.com',
+        password: 'pass123',
+        onProgress,
+      })
+
+      // Verify all expected steps were reported
+      const reportedSteps = progressSteps.map(s => s.step)
+      expect(reportedSteps).toContain('initializing')
+      expect(reportedSteps).toContain('keygen')
+      expect(reportedSteps).toContain('deriving_addresses')
+      expect(reportedSteps).toContain('fetching_balances')
+      expect(reportedSteps).toContain('applying_tokens')
+      expect(reportedSteps).toContain('complete')
+
+      // Verify progress values are increasing
+      const progressValues = progressSteps.map(s => s.progress)
+      for (let i = 1; i < progressValues.length; i++) {
+        expect(progressValues[i]).toBeGreaterThanOrEqual(progressValues[i - 1])
+      }
+
+      // Verify final progress is 100%
+      expect(progressSteps[progressSteps.length - 1].progress).toBe(100)
+      expect(progressSteps[progressSteps.length - 1].step).toBe('complete')
+    })
+
+    it('should provide descriptive messages in progress updates', async () => {
+      const progressSteps: any[] = []
+      const onProgress = vi.fn(step => {
+        progressSteps.push(step)
+      })
+
+      await vaultManager.createVault('Progress Vault', {
+        type: 'fast',
+        email: 'test@example.com',
+        password: 'pass123',
+        onProgress,
+      })
+
+      // Verify all steps have messages
+      progressSteps.forEach(step => {
+        expect(step.message).toBeDefined()
+        expect(typeof step.message).toBe('string')
+        expect(step.message.length).toBeGreaterThan(0)
+      })
+    })
   })
 
   // ===== VAULT IMPORT =====
