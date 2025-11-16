@@ -113,7 +113,7 @@ export class VaultManager {
       keygenMode?: KeygenMode
       password?: string
       email?: string
-      onProgress?: (step: VaultCreationStep) => void
+      onProgressInternal?: (step: VaultCreationStep, vault?: VaultClass) => void
     }
   ): Promise<VaultClass> {
     const vaultType = options?.type ?? 'fast'
@@ -133,7 +133,7 @@ export class VaultManager {
     options?: {
       password?: string
       email?: string
-      onProgress?: (step: VaultCreationStep) => void
+      onProgressInternal?: (step: VaultCreationStep, vault?: VaultClass) => void
     }
   ): Promise<VaultClass> {
     if (!options?.password) {
@@ -143,50 +143,55 @@ export class VaultManager {
       throw new Error('Email is required for fast vault creation')
     }
 
-    const reportProgress = options?.onProgress || (() => {})
+    const reportProgress = options?.onProgressInternal || (() => {})
 
-    // Step 1: Initializing
-    reportProgress({
-      step: 'initializing',
-      progress: 0,
-      message: 'Initializing vault creation...',
-    })
+    // Step 1: Initializing (vault not created yet)
+    reportProgress(
+      {
+        step: 'initializing',
+        progress: 0,
+        message: 'Initializing vault creation...',
+      },
+      undefined
+    )
 
-    // Step 2: Keygen (MPC key generation)
+    // Step 2: Keygen (MPC key generation) - vault not created yet
     const result = await this.serverManager.createFastVault({
       name,
       password: options.password,
       email: options.email,
-      onProgress: options.onProgress
+      onProgress: options.onProgressInternal
         ? update => {
             if (update.phase === 'ecdsa') {
-              reportProgress({
-                step: 'keygen',
-                progress: 25,
-                message: update.message || 'Generating ECDSA keys...',
-              })
+              reportProgress(
+                {
+                  step: 'keygen',
+                  progress: 25,
+                  message: update.message || 'Generating ECDSA keys...',
+                },
+                undefined
+              )
             } else if (update.phase === 'eddsa') {
-              reportProgress({
-                step: 'keygen',
-                progress: 50,
-                message: update.message || 'Generating EdDSA keys...',
-              })
+              reportProgress(
+                {
+                  step: 'keygen',
+                  progress: 50,
+                  message: update.message || 'Generating EdDSA keys...',
+                },
+                undefined
+              )
             } else if (update.phase === 'complete') {
-              reportProgress({
-                step: 'keygen',
-                progress: 60,
-                message: 'Key generation complete',
-              })
+              reportProgress(
+                {
+                  step: 'keygen',
+                  progress: 60,
+                  message: 'Key generation complete',
+                },
+                undefined
+              )
             }
           }
         : undefined,
-    })
-
-    // Step 3: Deriving addresses
-    reportProgress({
-      step: 'deriving_addresses',
-      progress: 70,
-      message: 'Deriving addresses for default chains...',
     })
 
     // Create VaultClass instance from the created vault
@@ -195,19 +200,35 @@ export class VaultManager {
     // Store the vault
     this.vaults.set(result.vault.publicKeys.ecdsa, result.vault)
 
-    // Step 4: Fetching balances (optional - skip for now as we don't auto-fetch)
-    reportProgress({
-      step: 'fetching_balances',
-      progress: 85,
-      message: 'Preparing balance tracking...',
-    })
+    // Step 3: Deriving addresses (vault now available)
+    reportProgress(
+      {
+        step: 'deriving_addresses',
+        progress: 70,
+        message: 'Deriving addresses for default chains...',
+      },
+      vaultInstance
+    )
 
-    // Step 5: Applying tokens
-    reportProgress({
-      step: 'applying_tokens',
-      progress: 90,
-      message: 'Setting up default tokens...',
-    })
+    // Step 4: Fetching balances (vault available)
+    reportProgress(
+      {
+        step: 'fetching_balances',
+        progress: 85,
+        message: 'Preparing balance tracking...',
+      },
+      vaultInstance
+    )
+
+    // Step 5: Applying tokens (vault available)
+    reportProgress(
+      {
+        step: 'applying_tokens',
+        progress: 90,
+        message: 'Setting up default tokens...',
+      },
+      vaultInstance
+    )
 
     // Persist vault summary to storage
     const summary = vaultInstance.summary()
@@ -217,12 +238,15 @@ export class VaultManager {
     this.activeVault = vaultInstance
     await this.storage.set('activeVaultId', result.vault.publicKeys.ecdsa)
 
-    // Step 6: Complete
-    reportProgress({
-      step: 'complete',
-      progress: 100,
-      message: 'Vault created successfully',
-    })
+    // Step 6: Complete (vault available)
+    reportProgress(
+      {
+        step: 'complete',
+        progress: 100,
+        message: 'Vault created successfully',
+      },
+      vaultInstance
+    )
 
     return vaultInstance
   }
@@ -234,7 +258,7 @@ export class VaultManager {
     _name: string,
     _options?: {
       keygenMode?: KeygenMode
-      onProgress?: (step: VaultCreationStep) => void
+      onProgressInternal?: (step: VaultCreationStep, vault?: VaultClass) => void
     }
   ): Promise<VaultClass> {
     // TODO: Implement secure vault creation with multi-device MPC keygen
