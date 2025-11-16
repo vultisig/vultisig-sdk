@@ -67,13 +67,30 @@ export class WASMManager {
         return
       }
 
-      const wasmPath = this.config?.wasmPaths?.dkls || getDklsWasmPath()
+      const wasmPath = this.config?.wasmPaths?.dkls
 
-      // Load WASM as ArrayBuffer (handles file:// URLs in Node.js)
-      const wasmBuffer = await loadWasm(wasmPath)
+      // If wasmPath is already an ArrayBuffer, use it directly
+      if (wasmPath instanceof ArrayBuffer) {
+        await initializeDkls(wasmPath)
+      } else if (wasmPath) {
+        // Custom path provided - load as ArrayBuffer
+        const wasmBuffer = await loadWasm(wasmPath)
+        await initializeDkls(wasmBuffer)
+      } else {
+        // No custom path - let environment determine loading strategy
+        const { detectEnvironment } = await import('../runtime/environment')
+        const env = detectEnvironment()
 
-      // Pass ArrayBuffer to WASM init (bypasses fetch)
-      await initializeDkls(wasmBuffer)
+        if (env === 'node' || env === 'electron-main') {
+          // Node.js: get default path and load as ArrayBuffer
+          const defaultPath = getDklsWasmPath()
+          const wasmBuffer = await loadWasm(defaultPath)
+          await initializeDkls(wasmBuffer)
+        } else {
+          // Browser: pass undefined to let wasm-bindgen resolve path
+          await initializeDkls(undefined)
+        }
+      }
 
       this.dklsInitialized = true
     } catch (error) {
@@ -92,13 +109,30 @@ export class WASMManager {
         return
       }
 
-      const wasmPath = this.config?.wasmPaths?.schnorr || getSchnorrWasmPath()
+      const wasmPath = this.config?.wasmPaths?.schnorr
 
-      // Load WASM as ArrayBuffer (handles file:// URLs in Node.js)
-      const wasmBuffer = await loadWasm(wasmPath)
+      // If wasmPath is already an ArrayBuffer, use it directly
+      if (wasmPath instanceof ArrayBuffer) {
+        await initializeSchnorr(wasmPath)
+      } else if (wasmPath) {
+        // Custom path provided - load as ArrayBuffer
+        const wasmBuffer = await loadWasm(wasmPath)
+        await initializeSchnorr(wasmBuffer)
+      } else {
+        // No custom path - let environment determine loading strategy
+        const { detectEnvironment } = await import('../runtime/environment')
+        const env = detectEnvironment()
 
-      // Pass ArrayBuffer to WASM init (bypasses fetch)
-      await initializeSchnorr(wasmBuffer)
+        if (env === 'node' || env === 'electron-main') {
+          // Node.js: get default path and load as ArrayBuffer
+          const defaultPath = getSchnorrWasmPath()
+          const wasmBuffer = await loadWasm(defaultPath)
+          await initializeSchnorr(wasmBuffer)
+        } else {
+          // Browser: pass undefined to let wasm-bindgen resolve path
+          await initializeSchnorr(undefined)
+        }
+      }
 
       this.schnorrInitialized = true
     } catch (error) {

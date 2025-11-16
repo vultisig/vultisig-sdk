@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createVaultBackup } from 'vultisig-sdk'
 
 import type { LoadedKeyshare } from '../types'
 
@@ -220,23 +219,15 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
       options?: { name?: string; password?: string }
     ): Promise<StoredKeyshare | null> => {
       try {
-        // Extract raw vault data if it's a Vault class instance
-        const vaultData = vault.data || vault
         console.log('saveVaultToStorage - vault input:', vault)
-        console.log('saveVaultToStorage - extracted vaultData:', vaultData)
-        console.log(
-          'saveVaultToStorage - keyShares present:',
-          !!vaultData.keyShares
-        )
 
-        // Use SDK's createVaultBackup function to serialize the vault
-        const containerVaultBase64 = await createVaultBackup(
-          vaultData,
+        // Use Vault's public exportAsBase64 method to serialize the vault
+        const containerVaultBase64 = await vault.exportAsBase64(
           options?.password
         )
         const encrypted = !!options?.password
         // Check if a vault with this name already exists
-        const vaultName = `${options?.name ?? vaultData.name}.vult`
+        const vaultName = `${options?.name ?? vault.data.name}.vult`
         const existing = readAll()
         const existingVault = existing.find(k => k.name === vaultName)
 
