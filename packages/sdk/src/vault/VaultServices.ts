@@ -5,6 +5,8 @@ import { WASMManager } from '../wasm/WASMManager'
  * Services required by Vault for operations
  * Simplified - only essential services needed
  * Vault calls core functions directly - no service layers
+ *
+ * Note: CacheService and FiatValueService are created internally by Vault
  */
 export type VaultServices = {
   wasmManager: WASMManager

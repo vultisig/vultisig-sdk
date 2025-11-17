@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { KeygenProgressUpdate, Vault, Vultisig } from 'vultisig-sdk'
+import { Vault, Vultisig } from 'vultisig-sdk'
 
 type CreateVaultFormProps = {
   sdk: Vultisig
@@ -60,25 +60,45 @@ export const CreateVaultForm = ({
       const { name, email, password } = createForm
       if (!name || !email || !password) return
 
-      // Use the simplified SDK method that handles the complete 3-step flow
-      const result = await sdk.createFastVault({
-        name,
-        email,
-        password,
-        onProgress: (u: KeygenProgressUpdate) => {
-          addLog(u.message || `${u.phase}: ${u.round || 'starting'}`)
-          setKeygenProgress({ phase: u.phase, round: u.round })
-        },
-      })
-      addLog('Step 1: FastVault create request completed (200 OK)')
-      addLog(
-        'Steps 2–4: Server joins relay and runs DKLS/Schnorr keygen on your behalf'
-      )
-      addLog('Awaiting email to confirm keygen completion and vault activation')
+      // Listen to vault creation progress events
+      const progressHandler = ({ step }: { step: any }) => {
+        addLog(step.message || `${step.step}: ${step.progress}%`)
+        // Map VaultCreationStep to KeygenProgressUpdate phase for UI compatibility
+        if (step.step === 'keygen') {
+          setKeygenProgress({
+            phase: 'ecdsa',
+            round: Math.floor(step.progress / 10),
+          })
+        } else if (step.step === 'complete') {
+          setKeygenProgress({ phase: 'complete' })
+        }
+      }
 
-      // Store vault and vault ID for verification
-      setVault(result.vault)
-      setVaultId(result.vaultId)
+      sdk.on('vaultCreationProgress', progressHandler)
+
+      try {
+        // Use the simplified SDK method that handles the complete 3-step flow
+        const result = await sdk.createFastVault({
+          name,
+          email,
+          password,
+        })
+
+        addLog('Step 1: FastVault create request completed (200 OK)')
+        addLog(
+          'Steps 2–4: Server joins relay and runs DKLS/Schnorr keygen on your behalf'
+        )
+        addLog(
+          'Awaiting email to confirm keygen completion and vault activation'
+        )
+
+        // Store vault and vault ID for verification
+        setVault(result.vault)
+        setVaultId(result.vaultId)
+      } finally {
+        // Clean up event listener
+        sdk.off('vaultCreationProgress', progressHandler)
+      }
 
       // Save the vault to storage immediately if a save function is provided
       // This ensures the 1of2 client share is saved locally

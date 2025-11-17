@@ -1,5 +1,11 @@
 import { ServerManager } from '../server/ServerManager'
-import { Signature, SigningPayload, Vault } from '../types'
+import {
+  Signature,
+  SigningMode,
+  SigningPayload,
+  SigningStep,
+  Vault,
+} from '../types'
 import { WASMManager } from '../wasm/WASMManager'
 
 /**
@@ -23,17 +29,31 @@ export class FastSigningService {
    * @param vault Vault data with keys and signers
    * @param payload Signing payload with transaction data (must include messageHashes)
    * @param vaultPassword Password for vault encryption
+   * @param onProgress Optional callback for signing progress updates
    * @returns Signed transaction ready for broadcast
    */
   async signWithServer(
     vault: Vault,
     payload: SigningPayload,
-    vaultPassword: string
+    vaultPassword: string,
+    onProgress?: (step: SigningStep) => void
   ): Promise<Signature> {
-    // Step 1: Validate vault has server signer
+    const reportProgress = onProgress || (() => {})
+
+    // Step 1: Preparing
+    reportProgress({
+      step: 'preparing',
+      progress: 0,
+      message: 'Preparing transaction for signing...',
+      mode: 'fast' as SigningMode,
+      participantCount: 2,
+      participantsReady: 0,
+    })
+
+    // Validate vault has server signer
     this.validateFastVault(vault)
 
-    // Step 2: Validate message hashes are provided
+    // Validate message hashes are provided
     if (!payload.messageHashes || payload.messageHashes.length === 0) {
       throw new Error(
         'SigningPayload must include pre-computed messageHashes. ' +
@@ -41,14 +61,23 @@ export class FastSigningService {
       )
     }
 
-    // Step 3: Get WalletCore instance
+    // Get WalletCore instance
     const walletCore = await this.wasmManager.getWalletCore()
 
     console.log(
       `📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`
     )
 
-    // Step 4: Coordinate fast signing with server
+    reportProgress({
+      step: 'preparing',
+      progress: 20,
+      message: 'Transaction prepared, connecting to signing service...',
+      mode: 'fast' as SigningMode,
+      participantCount: 2,
+      participantsReady: 1,
+    })
+
+    // Step 2: Coordinate fast signing with server
     // ServerManager handles: API calls, relay session, MPC coordination, keysign
     console.log(`🚀 Starting fast signing coordination with VultiServer...`)
     const signature = await this.serverManager.coordinateFastSigning({
@@ -57,6 +86,7 @@ export class FastSigningService {
       password: vaultPassword,
       payload,
       walletCore,
+      onProgress: reportProgress,
     })
 
     console.log(`✅ Fast signing completed successfully`)

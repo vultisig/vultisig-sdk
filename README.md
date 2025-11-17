@@ -26,22 +26,22 @@ yarn add vultisig-sdk
 ## Quick Start
 
 ```typescript
-import { VultisigSDK } from 'vultisig-sdk'
+import { Vultisig } from 'vultisig-sdk'
 
 // Initialize SDK
-const sdk = new VultisigSDK()
+const sdk = new Vultisig()
 await sdk.initialize()
 
-// Create a vault
-const result = await sdk.createVault({
-  name: 'My Wallet',
+// Create a fast vault (server-assisted)
+const vault = await sdk.createVault('My Wallet', {
+  type: 'fast',
   email: 'user@example.com',
   password: 'secure-password'
 })
 
 // Derive addresses for different chains
-const btcAddress = await sdk.deriveAddress(result.vault, 'Bitcoin')
-const ethAddress = await sdk.deriveAddress(result.vault, 'Ethereum')
+const btcAddress = await vault.address('Bitcoin')
+const ethAddress = await vault.address('Ethereum')
 
 console.log('Bitcoin Address:', btcAddress)
 console.log('Ethereum Address:', ethAddress)

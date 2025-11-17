@@ -84,6 +84,7 @@ export class ServerManager {
    * @param options.password Vault password for encryption
    * @param options.payload Original signing payload
    * @param options.walletCore WalletCore instance
+   * @param options.onProgress Optional callback for signing progress updates
    * @returns Formatted signature
    */
   async coordinateFastSigning(options: {
@@ -92,8 +93,11 @@ export class ServerManager {
     password: string
     payload: SigningPayload
     walletCore: WalletCore
+    onProgress?: (step: import('../types').SigningStep) => void
   }): Promise<Signature> {
-    const { vault, messages, password, payload, walletCore } = options
+    const { vault, messages, password, payload, walletCore, onProgress } =
+      options
+    const reportProgress = onProgress || (() => {})
 
     // Import required utilities
     const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
@@ -121,7 +125,16 @@ export class ServerManager {
     console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
     console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
 
-    // Step 1: Call FastVault API
+    // Step 1: Coordinating - Call FastVault API
+    reportProgress({
+      step: 'coordinating',
+      progress: 30,
+      message: 'Connecting to VultiServer...',
+      mode: 'fast' as import('../types').SigningMode,
+      participantCount: 2,
+      participantsReady: 1,
+    })
+
     const serverResponse = await callFastVaultAPI({
       public_key: vault.publicKeys.ecdsa,
       messages,
@@ -134,6 +147,15 @@ export class ServerManager {
     console.log(`✅ Server acknowledged session: ${serverResponse}`)
 
     // Step 2: Join relay session
+    reportProgress({
+      step: 'coordinating',
+      progress: 40,
+      message: 'Joining relay session...',
+      mode: 'fast' as import('../types').SigningMode,
+      participantCount: 2,
+      participantsReady: 1,
+    })
+
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
@@ -158,9 +180,27 @@ export class ServerManager {
 
     // Step 3: Wait for server to join
     console.log('⏳ Waiting for server to join session...')
+    reportProgress({
+      step: 'coordinating',
+      progress: 50,
+      message: 'Waiting for all participants...',
+      mode: 'fast' as import('../types').SigningMode,
+      participantCount: 2,
+      participantsReady: 1,
+    })
+
     const devices = await this.waitForPeers(sessionId, signingLocalPartyId)
     const peers = devices.filter(device => device !== signingLocalPartyId)
     console.log(`✅ All participants ready: [${devices.join(', ')}]`)
+
+    reportProgress({
+      step: 'coordinating',
+      progress: 60,
+      message: 'All participants ready, starting MPC session...',
+      mode: 'fast' as import('../types').SigningMode,
+      participantCount: 2,
+      participantsReady: 2,
+    })
 
     // Step 4: Start MPC session
     console.log('📡 Starting MPC session with devices list...')
@@ -171,8 +211,17 @@ export class ServerManager {
     })
     console.log('✅ MPC session started')
 
-    // Step 5: Perform MPC keysign
+    // Step 5: Signing - Perform MPC keysign
     console.log('🔐 Starting MPC keysign process...')
+    reportProgress({
+      step: 'signing',
+      progress: 70,
+      message: 'Performing cryptographic signing...',
+      mode: 'fast' as import('../types').SigningMode,
+      participantCount: 2,
+      participantsReady: 2,
+    })
+
     const keyShare = vault.keyShares[signatureAlgorithm]
     if (!keyShare) {
       throw new Error(`No key share found for algorithm: ${signatureAlgorithm}`)
@@ -198,10 +247,34 @@ export class ServerManager {
       signatureResults[msg] = sig
     }
 
-    // Step 6: Format signature results using SDK adapter
+    // Step 6: Complete - Format signature results
     console.log(`🔄 Formatting signature results...`)
+    reportProgress({
+      step: 'complete',
+      progress: 90,
+      message: 'Formatting signature...',
+      mode: 'fast' as import('../types').SigningMode,
+      participantCount: 2,
+      participantsReady: 2,
+    })
+
     const { formatSignature } = await import('../adapters')
-    return formatSignature(signatureResults, messages, signatureAlgorithm)
+    const signature = formatSignature(
+      signatureResults,
+      messages,
+      signatureAlgorithm
+    )
+
+    reportProgress({
+      step: 'complete',
+      progress: 100,
+      message: 'Signature complete',
+      mode: 'fast' as import('../types').SigningMode,
+      participantCount: 2,
+      participantsReady: 2,
+    })
+
+    return signature
   }
 
   /**
