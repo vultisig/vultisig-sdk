@@ -254,22 +254,130 @@ describe('VaultManager', () => {
       ).rejects.toThrow('Secure vault creation not implemented yet')
     })
 
-    it('should call onProgress callback during creation', async () => {
-      const onProgress = vi.fn()
+    it('should call onProgressInternal callback during creation', async () => {
+      const onProgressInternal = vi.fn()
 
       await vaultManager.createVault('Progress Vault', {
         type: 'fast',
         email: 'test@example.com',
         password: 'pass123',
-        onProgress,
+        onProgressInternal,
       })
 
-      // Verify onProgress was passed to ServerManager
+      // Verify onProgressInternal was called with vault reference
+      expect(onProgressInternal).toHaveBeenCalled()
+
+      // Verify it was passed to ServerManager
       expect(mockServerManager.createFastVault).toHaveBeenCalledWith(
         expect.objectContaining({
           onProgress: expect.any(Function),
         })
       )
+    })
+
+    it('should report all VaultCreationStep phases with vault reference', async () => {
+      const progressSteps: Array<{ step: any; vault?: any }> = []
+      const onProgressInternal = vi.fn((step, vault) => {
+        progressSteps.push({ step, vault })
+      })
+
+      // Mock ServerManager to simulate keygen progress
+      mockServerManager.createFastVault = vi
+        .fn()
+        .mockImplementation(options => {
+          // Simulate keygen progress callbacks
+          if (options.onProgress) {
+            options.onProgress({ phase: 'ecdsa', message: 'ECDSA keygen' })
+            options.onProgress({ phase: 'eddsa', message: 'EdDSA keygen' })
+            options.onProgress({ phase: 'complete', message: 'Keygen done' })
+          }
+          return Promise.resolve({
+            vault: {
+              name: 'Fast Vault',
+              publicKeys: { ecdsa: '02test', eddsa: 'test' },
+              hexChainCode: 'test',
+              localPartyId: 'local-1',
+              signers: ['local-1', 'Server-1'],
+              keyShares: { ecdsa: 'mock', eddsa: 'mock' },
+              resharePrefix: '',
+              libType: 'GG20',
+              createdAt: Date.now(),
+              isBackedUp: false,
+              order: 0,
+            },
+            sessionId: 'test-session',
+          })
+        })
+
+      await vaultManager.createVault('Progress Vault', {
+        type: 'fast',
+        email: 'test@example.com',
+        password: 'pass123',
+        onProgressInternal,
+      })
+
+      // Verify all expected steps were reported
+      const reportedSteps = progressSteps.map(s => s.step.step)
+      expect(reportedSteps).toContain('initializing')
+      expect(reportedSteps).toContain('keygen')
+      expect(reportedSteps).toContain('deriving_addresses')
+      expect(reportedSteps).toContain('fetching_balances')
+      expect(reportedSteps).toContain('applying_tokens')
+      expect(reportedSteps).toContain('complete')
+
+      // Verify progress values are increasing
+      const progressValues = progressSteps.map(s => s.step.progress)
+      for (let i = 1; i < progressValues.length; i++) {
+        expect(progressValues[i]).toBeGreaterThanOrEqual(progressValues[i - 1])
+      }
+
+      // Verify final progress is 100%
+      expect(progressSteps[progressSteps.length - 1].step.progress).toBe(100)
+      expect(progressSteps[progressSteps.length - 1].step.step).toBe('complete')
+
+      // Verify vault reference is undefined early, then populated
+      const earlySteps = progressSteps.filter(s =>
+        ['initializing', 'keygen'].includes(s.step.step)
+      )
+      const laterSteps = progressSteps.filter(s =>
+        [
+          'deriving_addresses',
+          'fetching_balances',
+          'applying_tokens',
+          'complete',
+        ].includes(s.step.step)
+      )
+
+      // Early steps should have undefined vault
+      earlySteps.forEach(s => {
+        expect(s.vault).toBeUndefined()
+      })
+
+      // Later steps should have vault reference
+      laterSteps.forEach(s => {
+        expect(s.vault).toBeDefined()
+      })
+    })
+
+    it('should provide descriptive messages in progress updates', async () => {
+      const progressSteps: any[] = []
+      const onProgressInternal = vi.fn(step => {
+        progressSteps.push(step)
+      })
+
+      await vaultManager.createVault('Progress Vault', {
+        type: 'fast',
+        email: 'test@example.com',
+        password: 'pass123',
+        onProgressInternal,
+      })
+
+      // Verify all steps have messages
+      progressSteps.forEach(step => {
+        expect(step.message).toBeDefined()
+        expect(typeof step.message).toBe('string')
+        expect(step.message.length).toBeGreaterThan(0)
+      })
     })
   })
 

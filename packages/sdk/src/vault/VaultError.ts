@@ -18,6 +18,7 @@ export enum VaultErrorCode {
   BalanceFetchFailed = 'BALANCE_FETCH_FAILED',
   UnsupportedToken = 'UNSUPPORTED_TOKEN',
   GasEstimationFailed = 'GAS_ESTIMATION_FAILED',
+  BroadcastFailed = 'BROADCAST_FAILED',
 }
 
 /**

@@ -300,13 +300,23 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       keygenMode?: 'relay' | 'local'
       password?: string
       email?: string
-      onProgress?: (step: any) => void
     }
   ): Promise<VaultClass> {
     await this.ensureInitialized()
-    const vault = await this.vaultManager.createVault(name, options)
 
-    // Save to storage and emit event
+    // Create vault with internal progress handling
+    const vault = await this.vaultManager.createVault(name, {
+      ...options,
+      onProgressInternal: (step, vaultRef) => {
+        // Emit progress events with vault reference (undefined early, then populated)
+        this.emit('vaultCreationProgress', { vault: vaultRef, step })
+      },
+    })
+
+    // Emit completion event
+    this.emit('vaultCreationComplete', { vault })
+
+    // Save to storage and emit vaultChanged event
     await this.saveVaultToStorage(vault)
     this.emit('vaultChanged', { vaultId: vault.summary().id })
 
@@ -321,23 +331,30 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     name: string
     password: string
     email: string
-    onProgress?: (step: any) => void
   }): Promise<{
     vault: VaultClass
     vaultId: string
     verificationRequired: boolean
   }> {
     await this.ensureInitialized()
+
+    // Create vault with internal progress handling
     const vault = await this.vaultManager.createVault(options.name, {
       type: 'fast',
       password: options.password,
       email: options.email,
-      onProgress: options.onProgress,
+      onProgressInternal: (step, vaultRef) => {
+        // Emit progress events with vault reference (undefined early, then populated)
+        this.emit('vaultCreationProgress', { vault: vaultRef, step })
+      },
     })
 
     const vaultId = vault.data.publicKeys.ecdsa
 
-    // Save to storage and emit event
+    // Emit completion event
+    this.emit('vaultCreationComplete', { vault })
+
+    // Save to storage and emit vaultChanged event
     await this.saveVaultToStorage(vault)
     this.emit('vaultChanged', { vaultId })
 

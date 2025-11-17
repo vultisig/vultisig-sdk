@@ -1,0 +1,38 @@
+{
+  "name": "@vultisig/example-nodejs",
+  "version": "1.0.0",
+  "description": "Complete CLI wallet example demonstrating the Vultisig SDK for Node.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "wallet": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "vultisig",
+    "wallet",
+    "cli",
+    "blockchain",
+    "crypto"
+  ],
+  "dependencies": {
+    "@vultisig/sdk": "workspace:*",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.0",
+    "inquirer": "^9.2.0",
+    "ora": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
