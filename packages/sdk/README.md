@@ -1,4 +1,4 @@
-# VultisigSDK
+# Vultisig SDK
 
 > **⚠️ Beta Release**: This SDK is currently in beta. APIs may change before the stable 1.0 release.
 
@@ -33,9 +33,9 @@ npm install react@^18.0.0 react-dom@^18.0.0
 ### 1. Initialize the SDK
 
 ```typescript
-import { VultisigSDK } from 'vultisig-sdk'
+import { Vultisig } from 'vultisig-sdk'
 
-const sdk = new VultisigSDK()
+const sdk = new Vultisig()
 
 // Initialize WASM modules
 await sdk.initialize()
@@ -54,8 +54,8 @@ const { vault, vaultId, verificationRequired } = await sdk.createFastVault({
 if (verificationRequired) {
   // User will receive a 4-digit code via email
   const code = '1234' // Get from user input
-  await sdk.verifyVaultEmail(vaultId, code)
-  
+  await sdk.verifyVault(vaultId, code)
+
   // Retrieve the complete vault after verification
   const verifiedVault = await sdk.getVault(vaultId, 'SecurePassword123!')
 }
@@ -65,9 +65,9 @@ if (verificationRequired) {
 
 ```typescript
 // Derive addresses for different blockchain networks
-const btcAddress = await sdk.deriveAddress(vault, 'bitcoin')
-const ethAddress = await sdk.deriveAddress(vault, 'ethereum')
-const solAddress = await sdk.deriveAddress(vault, 'solana')
+const btcAddress = await vault.address('Bitcoin')
+const ethAddress = await vault.address('Ethereum')
+const solAddress = await vault.address('Solana')
 
 console.log('BTC:', btcAddress) // bc1q...
 console.log('ETH:', ethAddress) // 0x...
@@ -81,16 +81,16 @@ console.log('SOL:', solAddress) // 9WzD...
 const isEncrypted = await sdk.isVaultFileEncrypted(file)
 
 // Import vault from file
-const vault = await sdk.importVaultFromFile(
-  file, 
+const vault = await sdk.addVault(
+  file,
   isEncrypted ? 'password' : undefined
 )
 
-// Export vault to backup format
-const backup = await sdk.exportVault(vault, {
-  includeKeyshares: true,
-  password: 'BackupPassword123!'
-})
+// Export vault to backup format (as Blob)
+const backupBlob = await vault.export('BackupPassword123!')
+
+// Or export as base64 string
+const backupBase64 = await vault.exportAsBase64('BackupPassword123!')
 ```
 
 ## Supported Blockchains
@@ -118,11 +118,11 @@ The SDK supports address derivation and operations for 30+ blockchain networks:
 ### Complete Example Component
 
 ```typescript
-import { VultisigSDK, Vault } from 'vultisig-sdk'
+import { Vultisig, Vault } from 'vultisig-sdk'
 import { useState, useEffect } from 'react'
 
 function VaultApp() {
-  const [sdk] = useState(() => new VultisigSDK())
+  const [sdk] = useState(() => new Vultisig())
   const [vault, setVault] = useState<Vault | null>(null)
   const [addresses, setAddresses] = useState<Record<string, string>>({})
 
@@ -141,7 +141,7 @@ function VaultApp() {
 
       if (result.verificationRequired) {
         const code = prompt('Enter 4-digit verification code:')
-        await sdk.verifyVaultEmail(result.vaultId, code!)
+        await sdk.verifyVault(result.vaultId, code!)
         const verifiedVault = await sdk.getVault(result.vaultId, 'SecurePassword123!')
         setVault(verifiedVault)
       } else {
@@ -155,12 +155,12 @@ function VaultApp() {
   const deriveAddresses = async () => {
     if (!vault) return
 
-    const chains = ['bitcoin', 'ethereum', 'solana']
+    const chains = ['Bitcoin', 'Ethereum', 'Solana']
     const results: Record<string, string> = {}
 
     for (const chain of chains) {
       try {
-        results[chain] = await sdk.deriveAddress(vault, chain)
+        results[chain] = await vault.address(chain)
       } catch (error) {
         console.error(`Failed to derive ${chain} address:`, error)
       }
@@ -171,8 +171,8 @@ function VaultApp() {
 
   return (
     <div>
-      <h1>VultisigSDK Demo</h1>
-      
+      <h1>Vultisig SDK Demo</h1>
+
       {!vault && (
         <button onClick={createVault}>
           Create Fast Vault
@@ -183,7 +183,7 @@ function VaultApp() {
         <div>
           <h2>Vault: {vault.name}</h2>
           <p>Local Party: {vault.localPartyId}</p>
-          
+
           <button onClick={deriveAddresses}>
             Derive Addresses
           </button>
@@ -212,19 +212,10 @@ export default VaultApp
 ### SDK Configuration
 
 ```typescript
-const sdk = new VultisigSDK({
-  serverEndpoints: {
-    fastVault: 'https://api.vultisig.com',      // VultiServer endpoint
-    messageRelay: 'https://relay.vultisig.com'  // Message relay endpoint
-  },
-  wasmConfig: {
-    autoInit: true,  // Automatically initialize WASM modules
-    wasmPaths: {
-      walletCore: '/wallet-core.wasm',  // Custom WASM paths
-      dkls: '/dkls.wasm',
-      schnorr: '/schnorr.wasm'
-    }
-  }
+const sdk = new Vultisig({
+  autoInit: true,  // Automatically initialize WASM modules on creation
+  serverUrl: 'https://api.vultisig.com',  // Custom VultiServer endpoint
+  relayUrl: 'https://relay.vultisig.com'  // Custom relay endpoint
 })
 ```
 
@@ -253,20 +244,23 @@ Create a new vault using VultiServer assistance.
 - `options.email: string` - Email for verification
 - `options.password: string` - Vault encryption password
 
-#### `verifyVaultEmail(vaultId, code): Promise<boolean>`
+#### `verifyVault(vaultId, code): Promise<boolean>`
 Verify vault creation with email verification code.
 
 #### `getVault(vaultId, password): Promise<Vault>`
 Retrieve a verified vault from VultiServer.
 
-#### `deriveAddress(vault, chain): Promise<string>`
-Derive a blockchain address for the given chain.
+#### `vault.address(chain): Promise<string>`
+Derive a blockchain address for the given chain (called on Vault instance).
 
-#### `importVaultFromFile(file, password?): Promise<Vault>`
+#### `addVault(file, password?): Promise<Vault>`
 Import a vault from a backup file.
 
-#### `exportVault(vault, options?): Promise<VaultBackup>`
-Export a vault to backup format.
+#### `vault.export(password?): Promise<Blob>`
+Export a vault to encrypted backup format as a Blob (called on Vault instance).
+
+#### `vault.exportAsBase64(password?): Promise<string>`
+Export a vault to encrypted backup format as a base64 string (called on Vault instance).
 
 ### Utility Methods
 
