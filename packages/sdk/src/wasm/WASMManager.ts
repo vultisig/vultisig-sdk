@@ -1,7 +1,7 @@
-import initializeDkls from '@lib/dkls/vs_wasm'
-import initializeSchnorr from '@lib/schnorr/vs_schnorr_wasm'
 import { initWasm } from '@trustwallet/wallet-core'
 
+import initializeDkls from '../../../lib/dkls/vs_wasm.js'
+import initializeSchnorr from '../../../lib/schnorr/vs_schnorr_wasm.js'
 import { loadWasm } from './wasmLoader'
 import { getDklsWasmPath, getSchnorrWasmPath } from './wasmPaths'
 

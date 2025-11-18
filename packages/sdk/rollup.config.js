@@ -25,6 +25,7 @@ const external = [
   'buffer',
   'util',
   'stream',
+  'url',
 
   // WASM files should be external
   /\.wasm$/,

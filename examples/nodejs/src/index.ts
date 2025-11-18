@@ -7,8 +7,8 @@ import { program } from 'commander'
 import inquirer from 'inquirer'
 import ora from 'ora'
 
-import { TransactionManager } from './transaction.js'
-import { VaultManager } from './wallet.js'
+import { TransactionManager } from './transaction'
+import { VaultManager } from './wallet'
 
 // Global state
 let vaultManager: VaultManager
@@ -35,7 +35,7 @@ program
       await init()
 
       // Collect vault details
-      const answers: any = await inquirer.prompt([
+      const answers: any = await inquirer.prompt<any>([
         {
           type: 'input',
           name: 'name',
