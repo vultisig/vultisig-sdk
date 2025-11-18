@@ -28,6 +28,12 @@
       "require": "./dist/wasm/index.js"
     }
   },
+  "imports": {
+    "#lib/dkls/*": "./dist/lib/dkls/*",
+    "#lib/schnorr/*": "./dist/lib/schnorr/*",
+    "@lib/dkls/*": "./dist/lib/dkls/*",
+    "@lib/schnorr/*": "./dist/lib/schnorr/*"
+  },
   "scripts": {
     "_____BUILD_____": "",
     "build": "yarn build:js && yarn build:types",
@@ -116,6 +122,7 @@
     "tiny-secp256k1": "^2.2.4",
     "uuid": "^11.1.0",
     "viem": "2.21.0",
+    "ws": "^8.18.0",
     "xrpl": "^4.4.1",
     "zod": "^3.24.2"
   },
