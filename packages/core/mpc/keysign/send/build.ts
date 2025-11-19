@@ -2,7 +2,6 @@ import { create } from '@bufbuild/protobuf'
 import { isChainOfKind } from '../../../chain/ChainKind'
 import { AccountCoin } from '../../../chain/coin/AccountCoin'
 import { getCoinBalance } from '../../../chain/coin/balance'
-import { isValidAddress } from '../../../chain/utils/isValidAddress'
 import { getChainSpecific } from '../chainSpecific'
 import { FeeSettings } from '../chainSpecific/FeeSettings'
 import { refineKeysignAmount } from '../refine/amount'
@@ -13,6 +12,8 @@ import { toCommCoin } from '../../types/utils/commCoin'
 import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import { isAddress } from 'viem'
+import { BuildKeysignPayloadError } from '../error'
 
 export type BuildSendKeysignPayloadInput = {
   coin: AccountCoin
@@ -39,16 +40,9 @@ export const buildSendKeysignPayload = async ({
   libType,
   feeSettings,
 }: BuildSendKeysignPayloadInput) => {
-  // Validate receiver address format
-  if (!isValidAddress({ chain: coin.chain, address: receiver, walletCore })) {
-    throw new Error(
-      `Invalid receiver address format for ${coin.chain}: ${receiver}`
-    )
-  }
-
-  // Validate amount is positive
-  if (amount <= 0n) {
-    throw new Error(`Amount must be greater than zero, got: ${amount}`)
+  // Validate Ethereum addresses
+  if (isChainOfKind(coin.chain, 'evm') && !isAddress(receiver)) {
+    throw new BuildKeysignPayloadError('invalid-address')
   }
 
   let keysignPayload = create(KeysignPayloadSchema, {
