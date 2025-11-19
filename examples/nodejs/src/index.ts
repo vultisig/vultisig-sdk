@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 import 'dotenv/config'
 
-import { Chain } from '@vultisig/sdk'
+import {
+  Chain,
+  fiatCurrencies,
+  FiatCurrency,
+  fiatCurrencyNameRecord,
+} from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
 import inquirer from 'inquirer'
 import ora from 'ora'
 
-import { TransactionManager } from './transaction.js'
-import { VaultManager } from './wallet.js'
+import { TransactionManager } from './transaction'
+import { VaultManager } from './wallet'
 
 // Global state
 let vaultManager: VaultManager
@@ -35,7 +40,8 @@ program
       await init()
 
       // Collect vault details
-      const answers: any = await inquirer.prompt([
+      // @ts-expect-error - inquirer types issue with array of questions
+      const answers = (await inquirer.prompt([
         {
           type: 'input',
           name: 'name',
@@ -66,7 +72,7 @@ program
           validate: (input: string) =>
             /\S+@\S+\.\S+/.test(input) || 'Invalid email format',
         },
-      ])
+      ])) as any
 
       // Create vault
       const { vaultId, verificationRequired } = await vaultManager.createVault(
@@ -288,7 +294,11 @@ program
 program
   .command('portfolio')
   .description('Show total portfolio value')
-  .option('-c, --currency <currency>', 'Fiat currency (USD, EUR, GBP)', 'USD')
+  .option(
+    '-c, --currency <currency>',
+    `Fiat currency (${fiatCurrencies.join(', ')})`,
+    'usd'
+  )
   .action(async (options: { currency: string }) => {
     try {
       await init()
@@ -300,19 +310,32 @@ program
         process.exit(1)
       }
 
-      const spinner = ora('Loading portfolio...').start()
+      // Validate and normalize currency
+      const currency = options.currency.toLowerCase() as FiatCurrency
+      if (!fiatCurrencies.includes(currency)) {
+        console.error(chalk.red(`✗ Invalid currency: ${options.currency}`))
+        console.log(
+          chalk.yellow(`Supported currencies: ${fiatCurrencies.join(', ')}`)
+        )
+        process.exit(1)
+      }
 
-      const portfolio = await vaultManager.getPortfolioValue(options.currency)
+      const currencyName = fiatCurrencyNameRecord[currency]
+      const spinner = ora(`Loading portfolio in ${currencyName}...`).start()
+
+      const portfolio = await vaultManager.getPortfolioValue(currency)
 
       spinner.succeed('Portfolio loaded')
 
       // Display total value
       console.log(chalk.cyan('\n╔════════════════════════════════════════╗'))
-      console.log(chalk.cyan('║       Portfolio Total Value            ║'))
+      console.log(
+        chalk.cyan(`║       Portfolio Total Value (${currencyName})       ║`)
+      )
       console.log(chalk.cyan('╠════════════════════════════════════════╣'))
       const totalDisplay =
         portfolio.totalValue.amount.padEnd(20) +
-        portfolio.totalValue.currency.padStart(16)
+        portfolio.totalValue.currency.toUpperCase().padStart(16)
       console.log(
         chalk.cyan('║  ') + chalk.bold.green(totalDisplay) + chalk.cyan('  ║')
       )
@@ -326,11 +349,16 @@ program
           Chain: chain,
           Amount: balance.amount,
           Symbol: balance.symbol,
-          Value: value ? `${value.amount} ${value.currency}` : 'N/A',
+          Value: value
+            ? `${value.amount} ${value.currency.toUpperCase()}`
+            : 'N/A',
         })
       )
 
       console.table(table)
+
+      // Exit cleanly after displaying portfolio
+      process.exit(0)
     } catch (error: any) {
       console.error(chalk.red(`\n✗ Failed to load portfolio: ${error.message}`))
       process.exit(1)

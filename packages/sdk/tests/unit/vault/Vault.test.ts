@@ -846,16 +846,16 @@ describe('Vault', () => {
   describe('Currency Management', () => {
     it('should get default currency', () => {
       const currency = vault.getCurrency()
-      expect(currency).toBe('USD')
+      expect(currency).toBe('usd')
     })
 
     it('should set currency', () => {
-      vault.setCurrency('EUR')
-      expect(vault.getCurrency()).toBe('EUR')
+      vault.setCurrency('eur')
+      expect(vault.getCurrency()).toBe('eur')
     })
 
     it('should accept any currency string', () => {
-      const currencies = ['JPY', 'GBP', 'CHF', 'CAD', 'AUD']
+      const currencies = ['jpy', 'gbp', 'chf', 'cad', 'aud']
 
       currencies.forEach(curr => {
         vault.setCurrency(curr)
@@ -899,7 +899,7 @@ describe('Vault', () => {
 
       expect(chains).toBeDefined()
       expect(chains.length).toBeGreaterThan(0)
-      expect(currency).toBe('USD')
+      expect(currency).toBe('usd')
     })
 
     it('should initialize with custom default chains', () => {
@@ -912,10 +912,10 @@ describe('Vault', () => {
 
     it('should initialize with custom default currency', () => {
       const customVault = new Vault(mockVaultData, realServices, {
-        defaultCurrency: 'EUR',
+        defaultCurrency: 'eur',
       })
 
-      expect(customVault.getCurrency()).toBe('EUR')
+      expect(customVault.getCurrency()).toBe('eur')
     })
 
     it('should work without fastSigningService', () => {

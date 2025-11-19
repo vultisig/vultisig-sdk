@@ -115,7 +115,7 @@ export const TEST_RECEIVERS: Partial<Record<Chain, string>> = {
   Litecoin: 'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
 
   // Ethereum: Example address (DO NOT send real funds)
-  Ethereum: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+  Ethereum: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
 
   // Solana: Example address (DO NOT send real funds)
   Solana: 'DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK',
@@ -130,5 +130,5 @@ export const TEST_RECEIVERS: Partial<Record<Chain, string>> = {
   Polkadot: '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5',
 
   // Sui: Example address (DO NOT send real funds)
-  Sui: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+  Sui: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
 }

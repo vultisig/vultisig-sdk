@@ -9,6 +9,7 @@ import {
 } from './ChainManager'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
+import { isNode } from './runtime/environment'
 import { StorageManager } from './runtime/storage/StorageManager'
 import type { VaultStorage } from './runtime/storage/types'
 import { ServerManager } from './server/ServerManager'
@@ -158,6 +159,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Start new initialization
     this.initializationPromise = (async () => {
       try {
+        // Initialize Node.js polyfills first (if in Node.js)
+        if (isNode()) {
+          const { initializeNodePolyfills } = await import(
+            './runtime/utils/node'
+          )
+          await initializeNodePolyfills()
+        }
+
         await this.wasmManager.initialize()
 
         // Load configuration from storage
@@ -409,6 +418,58 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     this.emit('vaultChanged', { vaultId: vault.summary().id })
 
     return vault
+  }
+
+  /**
+   * Import vault from file path (Node.js only)
+   *
+   * Provides a convenient way to import vaults from file paths in Node.js.
+   * In browser environments, use addVault() with a File object instead.
+   *
+   * @param filePath - Absolute path to vault file (Node.js only)
+   * @param password - Optional password for encrypted vaults
+   * @returns Imported vault instance
+   * @throws Error if not running in Node.js environment
+   *
+   * @example
+   * ```typescript
+   * // Node.js
+   * const vault = await sdk.addVaultFromFile('/path/to/vault.vult', 'password')
+   * ```
+   */
+  async addVaultFromFile(
+    filePath: string,
+    password?: string
+  ): Promise<VaultClass> {
+    if (!isNode()) {
+      throw new Error(
+        'addVaultFromFile can only be called in Node.js environment. Use addVault() with a File object in browsers.'
+      )
+    }
+
+    // Dynamically import Node.js modules
+    const fs = await import('fs/promises')
+
+    // Read file and create File-like object with required properties
+    const fileBuffer = await fs.readFile(filePath)
+    const fileName = filePath.split('/').pop() || 'vault.vult'
+
+    // Convert Buffer to Uint8Array for Blob compatibility
+    const uint8Array = new Uint8Array(fileBuffer)
+
+    // Create a File-like object with name and buffer properties for compatibility
+    const blob = new Blob([uint8Array])
+    const arrayBuffer = fileBuffer.buffer.slice(
+      fileBuffer.byteOffset,
+      fileBuffer.byteOffset + fileBuffer.byteLength
+    )
+    const file = Object.assign(blob, {
+      name: fileName,
+      buffer: arrayBuffer,
+    })
+
+    // Use existing addVault method
+    return this.addVault(file as any, password)
   }
 
   /**

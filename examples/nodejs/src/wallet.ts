@@ -1,6 +1,7 @@
 import {
   Balance,
   Chain,
+  FiatCurrency,
   NodeStorage,
   Token,
   Vault,
@@ -10,7 +11,7 @@ import chalk from 'chalk'
 import { promises as fs } from 'fs'
 import ora from 'ora'
 
-import type { PortfolioSummary, WalletConfig } from './types.js'
+import type { PortfolioSummary, WalletConfig } from './types'
 
 /**
  * VaultManager - High-level vault management and operations
@@ -29,7 +30,7 @@ export class VaultManager {
   constructor(config?: WalletConfig) {
     this.config = {
       storagePath: process.env.VAULT_STORAGE_PATH || './vaults',
-      defaultCurrency: process.env.DEFAULT_CURRENCY || 'USD',
+      defaultCurrency: process.env.DEFAULT_CURRENCY || 'usd',
       ...config,
     }
   }
@@ -53,12 +54,26 @@ export class VaultManager {
 
       await this.sdk.initialize()
 
-      // Try to load active vault if exists
-      const vaults = await this.sdk.listVaults()
-      if (vaults.length > 0) {
-        this.activeVault = this.sdk.getActiveVault()
-        if (this.activeVault) {
+      // Auto-import vault from .env if configured
+      const vaultFilePath = process.env.VAULT_FILE_PATH
+      if (vaultFilePath) {
+        try {
+          // Check if file exists
+          await fs.access(vaultFilePath)
+
+          // Import vault with optional password from .env
+          const vaultPassword = process.env.VAULT_PASSWORD
+          this.activeVault = await this.sdk.addVaultFromFile(
+            vaultFilePath,
+            vaultPassword
+          )
           this.setupVaultEvents(this.activeVault)
+          spinner.text = `Vault loaded: ${this.activeVault.data.name}`
+        } catch (error: any) {
+          // If vault file doesn't exist or import fails, continue without it
+          if (error.code !== 'ENOENT') {
+            spinner.warn(`Failed to auto-import vault: ${error.message}`)
+          }
         }
       }
 
@@ -133,16 +148,15 @@ export class VaultManager {
     const spinner = ora('Importing vault...').start()
 
     try {
-      const file = await fs.readFile(filePath)
-      const blob = new Blob([file])
-      const vault = await this.sdk.addVault(blob as any, password)
+      // Use SDK's built-in addVaultFromFile method
+      const vault = await this.sdk.addVaultFromFile(filePath, password)
 
       this.activeVault = vault
       this.setupVaultEvents(this.activeVault)
       spinner.succeed(`Vault imported: ${vault.data.name}`)
 
       return vault
-    } catch (error) {
+    } catch (error: any) {
       spinner.fail('Import failed')
       throw error
     }
@@ -207,12 +221,14 @@ export class VaultManager {
   /**
    * Get portfolio value across all chains
    */
-  async getPortfolioValue(currency = 'USD'): Promise<PortfolioSummary> {
+  async getPortfolioValue(
+    currency: FiatCurrency = 'usd'
+  ): Promise<PortfolioSummary> {
     if (!this.activeVault) {
       throw new Error('No active vault')
     }
 
-    const totalValue = await this.activeVault.getTotalValue(currency as any)
+    const totalValue = await this.activeVault.getTotalValue(currency)
     const chains = this.activeVault.getChains()
 
     const chainBalances = await Promise.all(
@@ -222,7 +238,7 @@ export class VaultManager {
           const value = await this.activeVault!.getValue(
             chain,
             undefined,
-            currency as any
+            currency
           )
           return { chain, balance, value }
         } catch {

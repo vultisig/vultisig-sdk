@@ -75,7 +75,7 @@ export class FiatValueService {
     tokenId?: string,
     fiatCurrency?: FiatCurrency
   ): Promise<number> {
-    const currency = fiatCurrency ?? this.getCurrency()
+    const currency = fiatCurrency ? fiatCurrency : this.getCurrency()
     const cacheKey = `price:${chain}:${tokenId ?? 'native'}:${currency}`
 
     // Check cache first (5-minute TTL)
@@ -326,12 +326,6 @@ export class FiatValueService {
     const isEvmChain = this.isEvmChain(chain)
 
     if (!isEvmChain) {
-      // For non-EVM chains, try to get priceProviderId from token metadata
-      const token = this.getTokens()[chain]?.find(t => t.id === tokenAddress)
-      if (token?.priceProviderId) {
-        return this.fetchNativePrice(chain, currency)
-      }
-
       throw new Error(
         `Token pricing not supported for ${chain} (non-EVM chain)`
       )

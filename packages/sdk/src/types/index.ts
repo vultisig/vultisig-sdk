@@ -350,14 +350,6 @@ export type Token = {
   isNative?: boolean
 }
 
-export type Value = {
-  amount: string
-  currency: string
-  symbol: string
-  rate: number
-  lastUpdated: number
-}
-
 // Base properties shared by all gas info
 type BaseGasInfo = {
   chainId: string
