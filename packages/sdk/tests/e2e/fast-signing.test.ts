@@ -261,7 +261,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           coin,
           receiver: TEST_RECEIVERS.THORChain!,
           amount: TEST_AMOUNTS.THORChain!,
-          memo: 'SWAP:ETH.ETH:0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+          memo: 'SWAP:ETH.ETH:0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
         })
 
         const messageHashes = await vault.extractMessageHashes(keysignPayload)

@@ -140,7 +140,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
         const payload = await vault.prepareSendTx({
           coin,
-          receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+          receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
           amount: 300000000000000n, // ~0.0003 ETH (~$1 at $3300/ETH)
         })
 
@@ -148,7 +148,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         expect(payload).toBeDefined()
         expect(payload.coin).toBeDefined()
         expect(payload.toAddress).toBe(
-          '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8'
+          '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8'
         )
         expect(payload.toAmount).toBe('300000000000000')
         expect(payload.blockchainSpecific).toBeDefined()
@@ -172,7 +172,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
         const payload = await vault.prepareSendTx({
           coin,
-          receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+          receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
           amount: 1000000n, // 1 USDC (~$1)
         })
 
@@ -181,7 +181,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         expect(payload.coin).toBeDefined()
         expect(payload.coin.ticker).toBe('USDC')
         expect(payload.toAddress).toBe(
-          '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8'
+          '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8'
         )
         expect(payload.toAmount).toBe('1000000')
         expect(payload.blockchainSpecific).toBeDefined()
@@ -219,7 +219,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
           coin,
           receiver: 'thor1g98cy3n9mmjrpn0sxmn63lztelera37n8n67c0',
           amount: 20000000n, // 0.2 RUNE (~$1 at $5/RUNE)
-          memo: 'SWAP:ETH.ETH:0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+          memo: 'SWAP:ETH.ETH:0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
         })
 
         expect(payload).toBeDefined()
@@ -228,7 +228,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         )
         expect(payload.toAmount).toBe('20000000')
         expect(payload.memo).toBe(
-          'SWAP:ETH.ETH:0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8'
+          'SWAP:ETH.ETH:0x742D35cC6634C0532925A3b844bc9E7595f0BEb8'
         )
         expect(payload.blockchainSpecific).toBeDefined()
 
@@ -344,7 +344,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
         const payload = await vault.prepareSendTx({
           coin,
-          receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8', // Example Sui address
+          receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8', // Example Sui address
           amount: 312500000n, // ~0.3125 SUI (~$1 at $3.20/SUI)
         })
 
@@ -373,7 +373,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
       const payload = await vault.prepareSendTx({
         coin,
-        receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+        receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
         amount: 300000000000000n, // ~0.0003 ETH (~$1 at $3300/ETH)
         feeSettings: {
           maxPriorityFeePerGas: 2000000000n, // 2 gwei
@@ -465,7 +465,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
       await expect(
         vault.prepareSendTx({
           coin,
-          receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+          receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
           amount: 1000n,
         })
       ).rejects.toThrow()
@@ -484,7 +484,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
       await expect(
         vault.prepareSendTx({
           coin,
-          receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+          receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
           amount: 0n,
         })
       ).rejects.toThrow()
@@ -509,7 +509,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
       const payload = await vault.prepareSendTx({
         coin,
-        receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+        receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
         amount: 300000000000000n,
       })
 
@@ -536,7 +536,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
       const payload = await vault.prepareSendTx({
         coin,
-        receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+        receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
         amount: 300000000000000n,
       })
 
@@ -596,7 +596,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
           if (chain.name === Chain.Solana) {
             return 'DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK'
           }
-          return '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8'
+          return '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8'
         }
 
         await vault.prepareSendTx({
