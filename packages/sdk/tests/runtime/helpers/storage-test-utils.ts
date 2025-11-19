@@ -9,15 +9,12 @@ import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { BrowserStorage } from '../../../../src/runtime/storage/BrowserStorage'
-import { ChromeStorage } from '../../../../src/runtime/storage/ChromeStorage'
-import { MemoryStorage } from '../../../../src/runtime/storage/MemoryStorage'
-import { NodeStorage } from '../../../../src/runtime/storage/NodeStorage'
-import type { VaultStorage } from '../../../../src/runtime/storage/types'
-import {
-  StorageError,
-  StorageErrorCode,
-} from '../../../../src/runtime/storage/types'
+import { BrowserStorage } from '@/runtime/storage/BrowserStorage'
+import { ChromeStorage } from '@/runtime/storage/ChromeStorage'
+import { MemoryStorage } from '@/runtime/storage/MemoryStorage'
+import { NodeStorage } from '@/runtime/storage/NodeStorage'
+import type { VaultStorage } from '@/runtime/storage/types'
+import { StorageError, StorageErrorCode } from '@/runtime/storage/types'
 
 /**
  * Storage type for factory
