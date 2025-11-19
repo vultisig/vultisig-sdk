@@ -1,4 +1,4 @@
-import type { Balance, Chain, Value } from '@vultisig/sdk'
+import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk'
 
 /**
  * Keysign payload type (internal SDK type)
@@ -44,5 +44,5 @@ export type WalletConfig = {
   serverUrl?: string
   relayUrl?: string
   storagePath?: string
-  defaultCurrency?: string
+  defaultCurrency?: FiatCurrency
 }

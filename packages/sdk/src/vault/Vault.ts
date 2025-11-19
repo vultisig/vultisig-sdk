@@ -78,7 +78,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
   // Runtime state (persisted via storage)
   private _userChains: Chain[] = []
-  private _currency: string = 'USD'
+  private _currency: string = 'usd'
   private _tokens: Record<string, Token[]> = {}
 
   // Fiat value tracking
@@ -142,8 +142,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     // Initialize user chains from config
     this._userChains = config?.defaultChains ?? DEFAULT_CHAINS
 
-    // Initialize currency from config
-    this._currency = config?.defaultCurrency ?? 'USD'
+    // Initialize currency from config (normalize to lowercase)
+    this._currency = (config?.defaultCurrency ?? 'usd').toLowerCase()
   }
 
   /**
@@ -857,8 +857,10 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       // Get current balance
       const balance = await this.balance(chain, tokenId)
 
-      // Calculate fiat value
-      const currency = fiatCurrency ?? (this._currency as FiatCurrency)
+      // Calculate fiat value (normalize currency to lowercase)
+      const currency = (
+        fiatCurrency ?? this._currency
+      ).toLowerCase() as FiatCurrency
       const value = await this.fiatValueService.getBalanceValue(
         balance,
         currency
@@ -972,7 +974,10 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * ```
    */
   async getTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
-    const currency = fiatCurrency ?? (this._currency as FiatCurrency)
+    // Normalize currency to lowercase
+    const currency = (
+      fiatCurrency ?? this._currency
+    ).toLowerCase() as FiatCurrency
 
     // Use cached value if fresh (< 1 minute old)
     if (
@@ -1006,7 +1011,10 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * ```
    */
   async updateTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
-    const currency = fiatCurrency ?? (this._currency as FiatCurrency)
+    // Normalize currency to lowercase
+    const currency = (
+      fiatCurrency ?? this._currency
+    ).toLowerCase() as FiatCurrency
     const chains = this.getChains()
 
     let total = 0

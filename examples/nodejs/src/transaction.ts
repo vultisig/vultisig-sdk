@@ -3,7 +3,7 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 import ora from 'ora'
 
-import type { KeysignPayload, SendParams, TransactionResult } from './types.js'
+import type { KeysignPayload, SendParams, TransactionResult } from './types'
 
 // AccountCoin type from SDK internals
 type AccountCoin = {

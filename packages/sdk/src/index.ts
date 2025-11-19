@@ -133,6 +133,15 @@ export {
 export type { Chain as ChainType } from './types'
 export { Chain } from './types'
 
+// Fiat currency types
+export type { FiatCurrency } from '@core/config/FiatCurrency'
+export {
+  defaultFiatCurrency,
+  fiatCurrencies,
+  fiatCurrencyNameRecord,
+  fiatCurrencySymbolRecord,
+} from '@core/config/FiatCurrency'
+
 // General types
 export type {
   AddressBook,

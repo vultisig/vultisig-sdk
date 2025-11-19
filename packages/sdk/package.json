@@ -28,6 +28,12 @@
       "require": "./dist/wasm/index.js"
     }
   },
+  "imports": {
+    "#lib/dkls/*": "./dist/lib/dkls/*",
+    "#lib/schnorr/*": "./dist/lib/schnorr/*",
+    "@lib/dkls/*": "./dist/lib/dkls/*",
+    "@lib/schnorr/*": "./dist/lib/schnorr/*"
+  },
   "scripts": {
     "_____BUILD_____": "",
     "build": "yarn build:js && yarn build:types",
@@ -46,13 +52,14 @@
     "test:unit": "vitest run --config tests/unit/vitest.config.ts tests/unit",
     "test:runtime": "vitest run --config tests/runtime/vitest.config.ts tests/runtime",
     "test:integration": "vitest run --config tests/integration/vitest.config.ts tests/integration",
-    "test:e2e": "yarn test:e2e:balance && yarn test:e2e:gas && yarn test:e2e:multi-chain && yarn test:e2e:prepare-send && yarn test:e2e:fast-signing",
+    "test:e2e": "yarn test:e2e:balance && yarn test:e2e:gas && yarn test:e2e:multi-chain && yarn test:e2e:prepare-send && yarn test:e2e:fast-signing && yarn test:e2e:fiat-value",
     "_____TEST_E2E_INDIVIDUAL_____": "",
     "test:e2e:balance": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/balance-operations.test.ts",
     "test:e2e:gas": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/gas-estimation.test.ts",
     "test:e2e:multi-chain": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/multi-chain-coverage.test.ts",
     "test:e2e:prepare-send": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/prepare-send-tx.test.ts",
     "test:e2e:fast-signing": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/fast-signing.test.ts",
+    "test:e2e:fiat-value": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/fiat-value-service.test.ts",
     "_____TEST_WATCH_____": "",
     "test:watch": "vitest --config tests/unit/vitest.config.ts",
     "test:unit:watch": "vitest --config tests/unit/vitest.config.ts tests/unit",
@@ -116,6 +123,7 @@
     "tiny-secp256k1": "^2.2.4",
     "uuid": "^11.1.0",
     "viem": "2.21.0",
+    "ws": "^8.18.0",
     "xrpl": "^4.4.1",
     "zod": "^3.24.2"
   },

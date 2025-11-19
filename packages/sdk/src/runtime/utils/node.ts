@@ -188,3 +188,40 @@ export async function ensureDirectory(dirPath: string): Promise<void> {
   const fs = await import('fs/promises')
   await fs.mkdir(dirPath, { recursive: true, mode: 0o700 })
 }
+
+/**
+ * Initialize Node.js-specific polyfills.
+ * This function sets up required globals that are missing in Node.js but expected by some chains.
+ *
+ * Currently polyfills:
+ * - WebSocket (required for Ripple and other chains)
+ *
+ * This is automatically called during SDK initialization when running in Node.js.
+ * You don't need to call this manually.
+ *
+ * @internal
+ */
+export async function initializeNodePolyfills(): Promise<void> {
+  if (!isNode()) {
+    return
+  }
+
+  // Polyfill WebSocket if not already available
+  if (typeof globalThis.WebSocket === 'undefined') {
+    try {
+      // Import ws package - need to use require to avoid browser stub
+      // Dynamic import in Node.js can resolve to ws/browser.js which throws
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- Required to avoid browser stub resolution
+      const ws = require('ws')
+      // @ts-ignore - Adding WebSocket to global
+      globalThis.WebSocket = ws
+    } catch {
+      // ws package not installed - log a warning but don't fail
+      console.warn(
+        '[Vultisig SDK] WebSocket not available in Node.js. ' +
+          'Some chains (like Ripple) may not work correctly. ' +
+          'Install "ws" package to enable WebSocket support: npm install ws'
+      )
+    }
+  }
+}

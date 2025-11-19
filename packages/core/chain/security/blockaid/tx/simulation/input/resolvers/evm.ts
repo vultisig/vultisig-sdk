@@ -4,29 +4,14 @@ import { KeysignSwapPayload } from '../../../../../../../mpc/keysign/swap/Keysig
 import { getKeysignCoin } from '../../../../../../../mpc/keysign/utils/getKeysignCoin'
 import { bigIntToHex } from '../../../../../../../../lib/utils/bigint/bigIntToHex'
 import { matchRecordUnion } from '../../../../../../../../lib/utils/matchRecordUnion'
-import { encodeFunctionData, erc20Abi } from 'viem'
+import { encodeFunctionData } from 'viem'
+import { erc20Abi } from 'viem'
 
 import { EvmChain } from '../../../../../../Chain'
-import { BlockaidTxValidationInput } from '../../resolver'
-import { BlockaidTxValidationInputResolver } from '../resolver'
+import { BlockaidTxSimulationInput } from '../../resolver'
+import { BlockaidTxSimulationInputResolver } from '../resolver'
 
-const blockaidEvnChain: Record<EvmChain, string> = {
-  [EvmChain.Arbitrum]: 'arbitrum',
-  [EvmChain.Avalanche]: 'avalanche',
-  [EvmChain.Base]: 'base',
-  [EvmChain.Blast]: 'blast',
-  [EvmChain.BSC]: 'bsc',
-  [EvmChain.CronosChain]: 'cronoschain',
-  [EvmChain.Ethereum]: 'ethereum',
-  [EvmChain.Hyperliquid]: 'hyperevm',
-  [EvmChain.Mantle]: 'mantle',
-  [EvmChain.Optimism]: 'optimism',
-  [EvmChain.Polygon]: 'polygon',
-  [EvmChain.Sei]: 'sei',
-  [EvmChain.Zksync]: 'zksync',
-}
-
-export const getEvmBlockaidTxValidationInput: BlockaidTxValidationInputResolver<
+export const getEvmBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<
   EvmChain
 > = ({ payload, chain }) => {
   const coin = getKeysignCoin(payload)
@@ -39,23 +24,31 @@ export const getEvmBlockaidTxValidationInput: BlockaidTxValidationInputResolver<
     to: string
     value: string
     data: string
-  }) => ({
-    data: {
-      method: 'eth_sendTransaction',
-      params: [{ from: coin.address, to, value, data }],
-    },
-    chain: blockaidEvnChain[chain],
-    metadata: {
-      domain: productRootDomain,
-    },
-  })
-
+  }) => {
+    const params: Record<string, string> = {
+      from: coin.address,
+      to,
+      value,
+      data,
+    }
+    return {
+      data: {
+        method: 'eth_sendTransaction',
+        params: [params],
+      },
+      chain: chain.toLowerCase(),
+      metadata: {
+        domain: productRootDomain,
+      },
+      options: ['simulation'],
+    }
+  }
   const swapPayload = getKeysignSwapPayload(payload)
 
   if (swapPayload) {
     return matchRecordUnion<
       KeysignSwapPayload,
-      Pick<BlockaidTxValidationInput, 'data'> | null
+      Pick<BlockaidTxSimulationInput, 'data'> | null
     >(swapPayload, {
       native: () => null,
       general: generalSwapPayload => {
