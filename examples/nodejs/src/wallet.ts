@@ -1,6 +1,7 @@
 import {
   Balance,
   Chain,
+  FiatCurrency,
   NodeStorage,
   Token,
   Vault,
@@ -29,7 +30,7 @@ export class VaultManager {
   constructor(config?: WalletConfig) {
     this.config = {
       storagePath: process.env.VAULT_STORAGE_PATH || './vaults',
-      defaultCurrency: process.env.DEFAULT_CURRENCY || 'USD',
+      defaultCurrency: process.env.DEFAULT_CURRENCY || 'usd',
       ...config,
     }
   }
@@ -220,12 +221,14 @@ export class VaultManager {
   /**
    * Get portfolio value across all chains
    */
-  async getPortfolioValue(currency = 'USD'): Promise<PortfolioSummary> {
+  async getPortfolioValue(
+    currency: FiatCurrency = 'usd'
+  ): Promise<PortfolioSummary> {
     if (!this.activeVault) {
       throw new Error('No active vault')
     }
 
-    const totalValue = await this.activeVault.getTotalValue(currency as any)
+    const totalValue = await this.activeVault.getTotalValue(currency)
     const chains = this.activeVault.getChains()
 
     const chainBalances = await Promise.all(
@@ -235,7 +238,7 @@ export class VaultManager {
           const value = await this.activeVault!.getValue(
             chain,
             undefined,
-            currency as any
+            currency
           )
           return { chain, balance, value }
         } catch {

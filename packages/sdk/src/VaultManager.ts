@@ -350,6 +350,9 @@ export class VaultManager {
       vaultInstance.setCachedEncryptionStatus(isEncrypted)
       vaultInstance.setCachedSecurityType(securityType)
 
+      // Load saved preferences (chains, tokens, currency) from storage
+      await vaultInstance.loadPreferences()
+
       // Persist vault summary to storage
       const summary = vaultInstance.summary()
       await this.storage.set(`vault:summary:${summary.id}`, summary)
