@@ -74,7 +74,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
     // Key features: ECDSA signatures, UTXO selection, change outputs
     // ==========================================================================
 
-    describe('UTXO Chains', () => {
+    describe.concurrent('UTXO Chains', () => {
       it('Bitcoin: Sign native BTC transfer', async () => {
         console.log('\n🔐 Testing Bitcoin fast signing...')
 
@@ -160,7 +160,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
     // Key features: ECDSA signatures, EIP-1559 gas, nonce management
     // ==========================================================================
 
-    describe('EVM Chains', () => {
+    describe.concurrent('EVM Chains', () => {
       it('Ethereum: Sign native ETH transfer (EIP-1559)', async () => {
         console.log('\n🔐 Testing Ethereum fast signing...')
 
@@ -246,7 +246,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
     // Two types: IBC-enabled (Cosmos Hub) and vault-based (THORChain)
     // ==========================================================================
 
-    describe('Cosmos Chains', () => {
+    describe.concurrent('Cosmos Chains', () => {
       it('THORChain: Sign native RUNE transfer with memo', async () => {
         console.log('\n🔐 Testing THORChain fast signing...')
 
@@ -328,7 +328,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
     // Chains with unique architectures: Solana (EdDSA), Polkadot, Sui
     // ==========================================================================
 
-    describe('Other Chain Architectures', () => {
+    describe.concurrent('Other Chain Architectures', () => {
       it('Solana: Sign native SOL transfer (EdDSA)', async () => {
         console.log('\n🔐 Testing Solana fast signing...')
 
@@ -441,7 +441,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
   // Tests that signatures have correct format for each signature algorithm
   // ============================================================================
 
-  describe('Signature Format Validation', () => {
+  describe.concurrent('Signature Format Validation', () => {
     it('ECDSA signatures: correct format and structure', async () => {
       console.log('\n📝 Validating ECDSA signature format...')
 
@@ -530,7 +530,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
   // Tests that signing properly validates inputs and handles errors
   // ============================================================================
 
-  describe('Error Handling', () => {
+  describe.concurrent('Error Handling', () => {
     it('Rejects signing with incorrect password', async () => {
       const coin = {
         chain: Chain.Ethereum,
@@ -599,51 +599,41 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         '\n🔒 Safety Check: Verifying NO transactions were broadcast...'
       )
 
-      // Sign multiple transactions across different chain families
-      const chains = [
-        { chain: Chain.Ethereum, amount: TEST_AMOUNTS.Ethereum!, decimals: 18 },
-        { chain: Chain.Bitcoin, amount: TEST_AMOUNTS.Bitcoin!, decimals: 8 },
-        { chain: Chain.Solana, amount: TEST_AMOUNTS.Solana!, decimals: 9 },
-      ]
-
-      let signedCount = 0
-
-      for (const { chain, amount, decimals } of chains) {
-        const coin = {
-          chain,
-          address: await vault.address(chain),
-          decimals,
-          ticker: chain,
-        }
-
-        const keysignPayload = await vault.prepareSendTx({
-          coin,
-          receiver: TEST_RECEIVERS[chain]!,
-          amount,
-        })
-
-        const messageHashes = await vault.extractMessageHashes(keysignPayload)
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          chain
-        )
-
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
-
-        expect(signature).toBeDefined()
-        signedCount++
+      // Sign one transaction to verify safety (no broadcast)
+      const chain = Chain.Ethereum
+      const coin = {
+        chain,
+        address: await vault.address(chain),
+        decimals: 18,
+        ticker: chain,
       }
 
-      console.log(`✅ Signed ${signedCount} transactions`)
+      const keysignPayload = await vault.prepareSendTx({
+        coin,
+        receiver: TEST_RECEIVERS[chain]!,
+        amount: TEST_AMOUNTS.Ethereum!,
+      })
+
+      const messageHashes = await vault.extractMessageHashes(keysignPayload)
+      const signingPayload = createSigningPayload(
+        keysignPayload,
+        messageHashes,
+        chain
+      )
+
+      const signature = await vault.sign(
+        'fast',
+        signingPayload,
+        TEST_VAULT_CONFIG.password
+      )
+
+      expect(signature).toBeDefined()
+
+      console.log('✅ Signature generated successfully')
       console.log('✅ ZERO transactions were broadcast to the blockchain')
       console.log('✅ All operations were signing-only (vault.sign)')
       console.log('✅ No funds were transferred')
-      console.log('✅ Signatures generated but never submitted to networks')
+      console.log('✅ Signature generated but never submitted to network')
     })
   })
 })

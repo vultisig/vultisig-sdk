@@ -2,42 +2,25 @@ import { fromBinary } from '@bufbuild/protobuf'
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
 import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
 import type { VaultStorage } from './runtime/storage/types'
 import { ServerManager } from './server/ServerManager'
 import { FastSigningService } from './services/FastSigningService'
-import {
-  KeygenMode,
-  Summary,
-  Vault,
-  VaultCreationStep,
-  VaultType,
-} from './types'
-import { Vault as VaultClass } from './vault/Vault'
+import { KeygenMode, VaultCreationStep, VaultData, VaultType } from './types'
+import { createVaultBackup } from './utils/export'
+import { Vault } from './vault/Vault'
 import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
 import { VaultConfig, VaultServices } from './vault/VaultServices'
 import { WASMManager } from './wasm'
-
-/**
- * Determine vault type based on signer names
- * Fast vaults have one signer that starts with "Server-"
- * Secure vaults have only device signers (no "Server-" prefix)
- */
-function determineVaultType(signers: string[]): 'fast' | 'secure' {
-  return signers.some(signer => signer.startsWith('Server-'))
-    ? 'fast'
-    : 'secure'
-}
 
 /**
  * VaultManager handles vault lifecycle operations
  * Manages vault storage, import/export, and active vault state
  */
 export class VaultManager {
-  private vaults = new Map<string, Vault>()
-  private activeVault: VaultClass | null = null
   private storage: VaultStorage
 
   constructor(
@@ -50,28 +33,47 @@ export class VaultManager {
   }
 
   /**
-   * Initialize vault manager by loading vault summaries from storage
+   * Initialize vault manager
+   * No caching needed - storage layer handles it
    */
   async init(): Promise<void> {
-    // Load all vault summaries from storage
-    const keys = await this.storage.list()
-    const summaryKeys = keys.filter(k => k.startsWith('vault:summary:'))
+    // Nothing to do! No caching.
+    // Active vault ID is loaded on-demand in getActiveVault()
+  }
 
-    for (const key of summaryKeys) {
-      const summary = await this.storage.get<Summary>(key)
-      if (summary) {
-        // Note: We only store summaries, not full vault data
-        // Vaults must be re-imported from .vult files on startup
-        // This is intentional to keep storage minimal
+  /**
+   * Get next available vault ID by scanning existing vaults
+   * Returns 0 if no vaults exist, otherwise max(existing IDs) + 1
+   */
+  private async getNextVaultId(): Promise<number> {
+    const keys = await this.storage.list()
+    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
+
+    if (vaultKeys.length === 0) {
+      return 0
+    }
+
+    const ids = vaultKeys.map(k => parseInt(k.split(':')[1]))
+    return Math.max(...ids) + 1
+  }
+
+  /**
+   * Find vault ID by public key (for detecting re-imports)
+   */
+  private async findVaultByPublicKey(
+    publicKey: string
+  ): Promise<number | null> {
+    const keys = await this.storage.list()
+    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
+
+    for (const key of vaultKeys) {
+      const vaultData = await this.storage.get<VaultData>(key)
+      if (vaultData?.publicKeyEcdsa === publicKey) {
+        return vaultData.id
       }
     }
 
-    // Load and restore active vault ID
-    const activeVaultId = await this.storage.get<string>('activeVaultId')
-    if (activeVaultId) {
-      // Active vault will be set when user re-imports or when vault is loaded
-      // We store the ID but don't auto-load vaults (user must import .vult file)
-    }
+    return null
   }
 
   /**
@@ -89,12 +91,36 @@ export class VaultManager {
   }
 
   /**
-   * Create VaultClass instance with proper service injection
+   * Create Vault instance with proper service injection
    * Internal helper for consistent vault instantiation
    */
-  createVaultInstance(vaultData: Vault): VaultClass {
-    return new VaultClass(
+  createVaultInstance(id: number, vaultData: VaultData): Vault {
+    // Convert VaultData to CoreVault format for the Vault class
+    const coreVault: CoreVault = {
+      name: vaultData.name,
+      publicKeys: {
+        ecdsa: vaultData.publicKeyEcdsa,
+        eddsa: vaultData.publicKeyEddsa,
+      },
+      signers: vaultData.signers.map(s => s.id),
+      createdAt: vaultData.createdAt,
+      hexChainCode: vaultData.hexChainCode,
+      keyShares: {
+        ecdsa: '', // Will be populated from vault file when needed
+        eddsa: '', // Will be populated from vault file when needed
+      },
+      localPartyId:
+        vaultData.signers.find(s => !s.id.startsWith('Server-'))?.id ||
+        vaultData.signers[0].id,
+      libType: 'DKLS',
+      isBackedUp: vaultData.isBackedUp,
+      order: vaultData.vaultIndex,
+    }
+
+    return new Vault(
+      id,
       vaultData,
+      coreVault,
       this.createVaultServices(),
       this.config,
       this.storage
@@ -113,9 +139,9 @@ export class VaultManager {
       keygenMode?: KeygenMode
       password?: string
       email?: string
-      onProgressInternal?: (step: VaultCreationStep, vault?: VaultClass) => void
+      onProgressInternal?: (step: VaultCreationStep, vault?: Vault) => void
     }
-  ): Promise<VaultClass> {
+  ): Promise<Vault> {
     const vaultType = options?.type ?? 'fast'
 
     if (vaultType === 'fast') {
@@ -133,9 +159,9 @@ export class VaultManager {
     options?: {
       password?: string
       email?: string
-      onProgressInternal?: (step: VaultCreationStep, vault?: VaultClass) => void
+      onProgressInternal?: (step: VaultCreationStep, vault?: Vault) => void
     }
-  ): Promise<VaultClass> {
+  ): Promise<Vault> {
     if (!options?.password) {
       throw new Error('Password is required for fast vault creation')
     }
@@ -154,6 +180,9 @@ export class VaultManager {
       },
       undefined
     )
+
+    // Get next vault ID
+    const vaultId = await this.getNextVaultId()
 
     // Step 2: Keygen (MPC key generation) - vault not created yet
     const result = await this.serverManager.createFastVault({
@@ -194,11 +223,44 @@ export class VaultManager {
         : undefined,
     })
 
-    // Create VaultClass instance from the created vault
-    const vaultInstance = this.createVaultInstance(result.vault)
+    // Generate .vult file content
+    const vultContent = await createVaultBackup(result.vault, options.password)
 
-    // Store the vault
-    this.vaults.set(result.vault.publicKeys.ecdsa, result.vault)
+    // Build unified VaultData
+    const vaultData: VaultData = {
+      id: vaultId,
+      publicKeyEcdsa: result.vault.publicKeys.ecdsa,
+      publicKeyEddsa: result.vault.publicKeys.eddsa,
+      name: result.vault.name,
+      isEncrypted: true,
+      type: 'fast',
+      createdAt: result.vault.createdAt || Date.now(),
+      lastModified: Date.now(),
+      currency: this.config.defaultCurrency || 'usd',
+      chains: this.config.defaultChains?.map(c => c.toString()) || [],
+      tokens: {},
+      threshold: 2,
+      totalSigners: 2,
+      vaultIndex: 0,
+      signers: result.vault.signers.map((s: string) => ({
+        id: s,
+        publicKey: s.startsWith('Server-') ? s : result.vault.publicKeys.ecdsa,
+        name: s,
+      })),
+      hexChainCode: result.vault.hexChainCode,
+      hexEncryptionKey: '',
+      vultFileContent: vultContent,
+      isBackedUp: true,
+    }
+
+    // Save to storage (single write)
+    await this.storage.set(`vault:${vaultId}`, vaultData)
+
+    // Set as active
+    await this.storage.set('activeVaultId', vaultId)
+
+    // Create Vault instance
+    const vaultInstance = this.createVaultInstance(vaultId, vaultData)
 
     // Step 3: Deriving addresses (vault now available)
     reportProgress(
@@ -230,14 +292,6 @@ export class VaultManager {
       vaultInstance
     )
 
-    // Persist vault summary to storage
-    const summary = vaultInstance.summary()
-    await this.storage.set(`vault:summary:${summary.id}`, summary)
-
-    // Set as active vault
-    this.activeVault = vaultInstance
-    await this.storage.set('activeVaultId', result.vault.publicKeys.ecdsa)
-
     // Step 6: Complete (vault available)
     reportProgress(
       {
@@ -258,9 +312,9 @@ export class VaultManager {
     _name: string,
     _options?: {
       keygenMode?: KeygenMode
-      onProgressInternal?: (step: VaultCreationStep, vault?: VaultClass) => void
+      onProgressInternal?: (step: VaultCreationStep, vault?: Vault) => void
     }
-  ): Promise<VaultClass> {
+  ): Promise<Vault> {
     // TODO: Implement secure vault creation with multi-device MPC keygen
     throw new Error(
       'Secure vault creation not implemented yet - requires multi-device MPC keygen integration'
@@ -268,107 +322,105 @@ export class VaultManager {
   }
 
   /**
-   * Import vault from file (sets as active)
+   * Import vault from .vult file content (sets as active)
+   *
+   * @param vultContent - The base64-encoded .vult file content (as string)
+   * @param password - Optional password for encrypted vaults
+   * @returns Vault instance
+   *
+   * @example
+   * const vultContent = fs.readFileSync('my-vault.vult', 'utf-8')
+   * const vault = await vaultManager.importVault(vultContent, 'password123')
    */
-  async addVault(file: File, password?: string): Promise<VaultClass> {
+  async importVault(vultContent: string, password?: string): Promise<Vault> {
     try {
-      // Validate file type
-      if (!file.name.toLowerCase().endsWith('.vult')) {
-        throw new VaultImportError(
-          VaultImportErrorCode.INVALID_FILE_FORMAT,
-          'Only .vult files are supported for vault import'
-        )
-      }
+      // 1. Parse VaultContainer from content
+      const container = vaultContainerFromString(vultContent.trim())
 
-      // Read file as ArrayBuffer
-      const buffer = await this.readFileAsArrayBuffer(file)
-
-      // Decode as UTF-8 string (base64 content)
-      const base64Content = new TextDecoder().decode(buffer)
-
-      // Parse VaultContainer protobuf
-      const container = vaultContainerFromString(base64Content.trim())
-
+      // 2. Handle decryption if needed
       let vaultBase64: string
-
-      // Handle encryption
       if (container.isEncrypted) {
         if (!password) {
           throw new VaultImportError(
             VaultImportErrorCode.PASSWORD_REQUIRED,
-            'Password is required to decrypt this vault'
+            'Password required for encrypted vault'
           )
         }
 
-        try {
-          // Decrypt the vault data
-          const encryptedData = fromBase64(container.vault)
-          const decryptedBuffer = await decryptWithAesGcm({
-            key: password,
-            value: encryptedData,
-          })
-
-          // Convert decrypted data back to base64 for parsing
-          vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
-        } catch (error) {
-          throw new VaultImportError(
-            VaultImportErrorCode.INVALID_PASSWORD,
-            'Invalid password for encrypted vault',
-            error as Error
-          )
-        }
+        // Decrypt
+        const encryptedData = fromBase64(container.vault)
+        const decryptedBuffer = await decryptWithAesGcm({
+          key: password,
+          value: encryptedData,
+        })
+        vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
       } else {
-        // Unencrypted vault - use directly
         vaultBase64 = container.vault
       }
 
-      // Decode and parse the inner Vault protobuf
+      // 3. Parse inner Vault protobuf
       const vaultBinary = fromBase64(vaultBase64)
       const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
+      const parsedVault = fromCommVault(vaultProtobuf)
 
-      // Convert to Vault object
-      const vault = fromCommVault(vaultProtobuf)
+      // 4. Determine vault type
+      const vaultType = parsedVault.signers.some(s => s.startsWith('Server-'))
+        ? 'fast'
+        : 'secure'
 
-      // Determine encryption status and security type (cache these to avoid repeated decoding)
-      const isEncrypted = container.isEncrypted
-      const securityType = determineVaultType(vault.signers)
-
-      // Apply global settings and normalize
-      const normalizedVault = this.applyGlobalSettings(
-        vault,
-        isEncrypted,
-        securityType
+      // 5. Check if vault already exists (by public key)
+      let vaultId: number
+      const existingVaultId = await this.findVaultByPublicKey(
+        parsedVault.publicKeys.ecdsa
       )
 
-      // Store the vault
-      this.vaults.set(normalizedVault.publicKeys.ecdsa, normalizedVault)
+      if (existingVaultId !== null) {
+        // Update existing vault
+        vaultId = existingVaultId
+      } else {
+        // New vault - get next ID
+        vaultId = await this.getNextVaultId()
+      }
 
-      // Create VaultClass instance
-      const vaultInstance = this.createVaultInstance(normalizedVault)
+      // 6. Build unified VaultData
+      const vaultData: VaultData = {
+        id: vaultId,
+        publicKeyEcdsa: parsedVault.publicKeys.ecdsa,
+        publicKeyEddsa: parsedVault.publicKeys.eddsa,
+        name: parsedVault.name,
+        isEncrypted: container.isEncrypted,
+        type: vaultType,
+        createdAt: parsedVault.createdAt || Date.now(),
+        lastModified: Date.now(),
+        currency: this.config.defaultCurrency || 'usd',
+        chains: this.config.defaultChains?.map(c => c.toString()) || [],
+        tokens: {},
+        threshold: Object.keys(parsedVault.keyShares).length,
+        totalSigners: parsedVault.signers.length,
+        vaultIndex: parsedVault.order || 0,
+        signers: parsedVault.signers.map(s => ({
+          id: s,
+          publicKey: s.startsWith('Server-') ? s : parsedVault.publicKeys.ecdsa,
+          name: s,
+        })),
+        hexChainCode: parsedVault.hexChainCode,
+        hexEncryptionKey: '', // Not available in core vault
+        vultFileContent: vultContent.trim(), // Store original content!
+        isBackedUp: true,
+      }
 
-      // Set cached properties on the Vault instance
-      vaultInstance.setCachedEncryptionStatus(isEncrypted)
-      vaultInstance.setCachedSecurityType(securityType)
+      // 7. Save to storage (single write)
+      await this.storage.set(`vault:${vaultId}`, vaultData)
 
-      // Load saved preferences (chains, tokens, currency) from storage
-      await vaultInstance.loadPreferences()
+      // 8. Set as active vault
+      await this.storage.set('activeVaultId', vaultId)
 
-      // Persist vault summary to storage
-      const summary = vaultInstance.summary()
-      await this.storage.set(`vault:summary:${summary.id}`, summary)
-
-      // Set as active vault
-      this.activeVault = vaultInstance
-      await this.storage.set('activeVaultId', normalizedVault.publicKeys.ecdsa)
-
-      return vaultInstance
+      // 9. Create and return Vault instance
+      return this.createVaultInstance(vaultId, vaultData)
     } catch (error) {
-      // Re-throw VaultImportError instances
       if (error instanceof VaultImportError) {
         throw error
       }
-
-      // Wrap other errors
       throw new VaultImportError(
         VaultImportErrorCode.CORRUPTED_DATA,
         `Failed to import vault: ${(error as Error).message}`,
@@ -378,64 +430,99 @@ export class VaultManager {
   }
 
   /**
-   * List all stored vaults
+   * Export vault as .vult file content
+   * @param id - Vault ID (numeric)
+   * @returns Base64-encoded .vult file content
+   * @throws Error if vault not found
+   *
+   * @example
+   * const vultContent = await vaultManager.exportVault(0)
+   * fs.writeFileSync('backup.vult', vultContent)
    */
-  async listVaults(): Promise<Summary[]> {
-    const summaries: Summary[] = []
+  async exportVault(id: number): Promise<string> {
+    const vaultData = await this.storage.get<VaultData>(`vault:${id}`)
 
-    for (const [, vault] of this.vaults) {
-      const vaultInstance = this.createVaultInstance(vault)
-      const summary = vaultInstance.summary()
-
-      const fullSummary: Summary = {
-        id: summary.id,
-        name: summary.name,
-        type: summary.type as VaultType,
-        chains: summary.chains,
-        createdAt: summary.createdAt ?? Date.now(),
-        isBackedUp: () => vault.isBackedUp ?? false,
-        isEncrypted: vaultInstance.getCachedEncryptionStatus() ?? false,
-        lastModified: vault.createdAt ?? Date.now(),
-        size: 0, // TODO: Calculate vault size
-        threshold:
-          vault.threshold ?? this.calculateThreshold(vault.signers.length),
-        totalSigners: vault.signers.length,
-        vaultIndex: vault.localPartyId ? parseInt(vault.localPartyId) : 0,
-        signers: vault.signers.map((signerId, index) => ({
-          id: signerId,
-          publicKey: '', // TODO: Map signer ID to public key if available
-          name: `Signer ${index + 1}`,
-        })),
-        keys: {
-          ecdsa: vault.publicKeys.ecdsa,
-          eddsa: vault.publicKeys.eddsa,
-          hexChainCode: vault.hexChainCode,
-          hexEncryptionKey: '', // TODO: Add encryption key if available
-        },
-        currency: this.config.defaultCurrency || 'USD',
-        tokens: {}, // TODO: Implement token management
-      }
-
-      summaries.push(fullSummary)
+    if (!vaultData) {
+      throw new Error(`Vault ${id} not found`)
     }
 
-    return summaries
+    return vaultData.vultFileContent
+  }
+
+  /**
+   * List all stored vaults as Vault instances
+   * Users can call vault.summary() on each instance to get summary data
+   *
+   * @returns Array of Vault class instances
+   * @example
+   * ```typescript
+   * const vaults = await vaultManager.listVaults()
+   * vaults.forEach(vault => {
+   *   const summary = vault.summary()
+   *   console.log(`${summary.name}: ${summary.chains.join(', ')}`)
+   * })
+   * ```
+   */
+  async listVaults(): Promise<Vault[]> {
+    const keys = await this.storage.list()
+    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
+    const vaults: Vault[] = []
+
+    for (const key of vaultKeys) {
+      const id = parseInt(key.split(':')[1])
+      const vaultData = await this.storage.get<VaultData>(key)
+
+      if (vaultData) {
+        vaults.push(this.createVaultInstance(id, vaultData))
+      }
+    }
+
+    return vaults
+  }
+
+  /**
+   * Get vault instance by ID
+   *
+   * @param id - Numeric vault ID
+   * @returns Vault instance or null if not found
+   * @example
+   * ```typescript
+   * const vault = await vaultManager.getVaultById(0)
+   * if (vault) {
+   *   const balance = await vault.balance('Bitcoin')
+   * }
+   * ```
+   */
+  async getVaultById(id: number): Promise<Vault | null> {
+    const vaultData = await this.storage.get<VaultData>(`vault:${id}`)
+
+    if (!vaultData) {
+      return null
+    }
+
+    return this.createVaultInstance(id, vaultData)
+  }
+
+  /**
+   * Get all vault instances
+   * Async equivalent to listVaults()
+   *
+   * @returns Array of all vault instances
+   */
+  async getAllVaults(): Promise<Vault[]> {
+    return this.listVaults()
   }
 
   /**
    * Delete vault from storage (clears active if needed)
    */
-  async deleteVault(vault: VaultClass): Promise<void> {
-    const vaultId = vault.data.publicKeys.ecdsa
-    this.vaults.delete(vaultId)
-
-    // Remove from storage
-    await this.storage.remove(`vault:summary:${vaultId}`)
-    await this.storage.remove(`vault:preferences:${vaultId}`)
+  async deleteVault(id: number): Promise<void> {
+    // Remove vault data
+    await this.storage.remove(`vault:${id}`)
 
     // Clear active vault if it was the deleted one
-    if (this.activeVault?.data.publicKeys.ecdsa === vaultId) {
-      this.activeVault = null
+    const activeId = await this.storage.get<number>('activeVaultId')
+    if (activeId === id) {
       await this.storage.remove('activeVaultId')
     }
   }
@@ -444,20 +531,16 @@ export class VaultManager {
    * Clear all stored vaults
    */
   async clearVaults(): Promise<void> {
-    // Remove all vault-related storage keys
+    // Remove all vault data
     const keys = await this.storage.list()
-    const vaultKeys = keys.filter(
-      k => k.startsWith('vault:summary:') || k.startsWith('vault:preferences:')
-    )
+    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
 
     for (const key of vaultKeys) {
       await this.storage.remove(key)
     }
 
+    // Clear active vault
     await this.storage.remove('activeVaultId')
-
-    this.vaults.clear()
-    this.activeVault = null
   }
 
   // ===== ACTIVE VAULT MANAGEMENT =====
@@ -465,12 +548,9 @@ export class VaultManager {
   /**
    * Switch to different vault
    */
-  async setActiveVault(vault: VaultClass | null): Promise<void> {
-    this.activeVault = vault
-
-    if (vault) {
-      const vaultId = vault.data.publicKeys.ecdsa
-      await this.storage.set('activeVaultId', vaultId)
+  async setActiveVault(id: number | null): Promise<void> {
+    if (id !== null) {
+      await this.storage.set('activeVaultId', id)
     } else {
       await this.storage.remove('activeVaultId')
     }
@@ -479,33 +559,34 @@ export class VaultManager {
   /**
    * Get current active vault
    */
-  getActiveVault(): VaultClass | null {
-    return this.activeVault
+  async getActiveVault(): Promise<Vault | null> {
+    const id = await this.storage.get<number>('activeVaultId')
+
+    if (id === null || id === undefined) {
+      return null
+    }
+
+    return this.getVaultById(id)
   }
 
   /**
    * Check if there's an active vault
    */
-  hasActiveVault(): boolean {
-    return this.activeVault !== null
+  async hasActiveVault(): Promise<boolean> {
+    const id = await this.storage.get<number>('activeVaultId')
+    return id !== null && id !== undefined
   }
 
-  // ===== FILE OPERATIONS =====
+  // ===== UTILITY METHODS =====
 
   /**
-   * Check if .vult file is encrypted
+   * Check if .vult file content is encrypted
+   * @param vultContent - The .vult file content as a string
+   * @returns true if encrypted, false otherwise
    */
-  async isVaultFileEncrypted(file: File): Promise<boolean> {
+  async isVaultContentEncrypted(vultContent: string): Promise<boolean> {
     try {
-      // Read file as ArrayBuffer
-      const buffer = await this.readFileAsArrayBuffer(file)
-
-      // Decode as UTF-8 string (base64 content)
-      const base64Content = new TextDecoder().decode(buffer)
-
-      // Parse VaultContainer protobuf to check encryption flag
-      const container = vaultContainerFromString(base64Content.trim())
-
+      const container = vaultContainerFromString(vultContent.trim())
       return container.isEncrypted
     } catch (error) {
       throw new VaultImportError(
@@ -514,62 +595,5 @@ export class VaultManager {
         error as Error
       )
     }
-  }
-
-  // ===== PRIVATE HELPER METHODS =====
-
-  /**
-   * Read file as ArrayBuffer (works in both browser and Node.js)
-   */
-  private async readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
-    // Check if we're in a browser environment
-    if (typeof globalThis !== 'undefined' && 'FileReader' in globalThis) {
-      // Use File.arrayBuffer() method which is now standard
-      return file.arrayBuffer()
-    }
-
-    // For Node.js/test environment, use the file's internal buffer
-    // This is a workaround for testing - in production this would use FileReader
-    const fileData = (file as any).buffer || (file as any)._buffer
-    if (fileData) {
-      return fileData
-    }
-
-    throw new Error(
-      'Unable to read file: FileReader not available and no internal buffer found'
-    )
-  }
-
-  /**
-   * Apply global VaultManager settings to an imported vault
-   */
-  private applyGlobalSettings(
-    vault: Vault,
-    isEncrypted: boolean,
-    securityType: 'fast' | 'secure'
-  ): Vault {
-    // Calculate and store threshold based on signers count
-    const threshold = this.calculateThreshold(vault.signers.length)
-
-    return {
-      ...vault,
-      threshold,
-      isBackedUp: true, // Imported vaults are considered backed up
-      // Store cached properties that will be used by Vault class
-      _cachedEncryptionStatus: isEncrypted,
-      _cachedSecurityType: securityType,
-    } as Vault & {
-      _cachedEncryptionStatus: boolean
-      _cachedSecurityType: 'fast' | 'secure'
-    }
-  }
-
-  /**
-   * Calculate threshold based on total signers
-   */
-  private calculateThreshold(totalSigners: number): number {
-    // For 2-of-2 (fast vaults), threshold is 2
-    // For multi-sig (secure vaults), threshold is typically (n+1)/2
-    return totalSigners === 2 ? 2 : Math.ceil((totalSigners + 1) / 2)
   }
 }

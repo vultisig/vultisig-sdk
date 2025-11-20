@@ -1,5 +1,6 @@
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
 import type { WalletCore } from '@trustwallet/wallet-core'
 
@@ -9,7 +10,6 @@ import {
   ServerStatus,
   Signature,
   SigningPayload,
-  Vault,
 } from '../types'
 
 /**
@@ -63,7 +63,10 @@ export class ServerManager {
    * NOTE: The core getVaultFromServer currently returns minimal data.
    * This needs to be updated to properly retrieve and decrypt the vault data.
    */
-  async getVaultFromServer(vaultId: string, password: string): Promise<Vault> {
+  async getVaultFromServer(
+    vaultId: string,
+    password: string
+  ): Promise<CoreVault> {
     const { getVaultFromServer } = await import(
       '@core/mpc/fast/api/getVaultFromServer'
     )
@@ -72,7 +75,7 @@ export class ServerManager {
 
     // TODO: Properly convert/decrypt the vault data from server response
     // Currently the core function returns { password } which is incomplete
-    return result as unknown as Vault
+    return result as unknown as CoreVault
   }
 
   /**
@@ -88,7 +91,7 @@ export class ServerManager {
    * @returns Formatted signature
    */
   async coordinateFastSigning(options: {
-    vault: Vault
+    vault: CoreVault
     messages: string[]
     password: string
     payload: SigningPayload
@@ -281,9 +284,9 @@ export class ServerManager {
    * Reshare vault participants
    */
   async reshareVault(
-    vault: Vault,
+    vault: CoreVault,
     reshareOptions: ReshareOptions & { password: string; email?: string }
-  ): Promise<Vault> {
+  ): Promise<CoreVault> {
     const { reshareWithServer } = await import(
       '@core/mpc/fast/api/reshareWithServer'
     )
@@ -316,7 +319,7 @@ export class ServerManager {
     onLog?: (msg: string) => void
     onProgress?: (u: KeygenProgressUpdate) => void
   }): Promise<{
-    vault: Vault
+    vault: CoreVault
     vaultId: string
     verificationRequired: boolean
   }> {
@@ -438,7 +441,7 @@ export class ServerManager {
     })
 
     // Create real vault from keygen results
-    const vault: Vault = {
+    const vault: CoreVault = {
       name: options.name,
       publicKeys: {
         ecdsa: ecdsaResult.publicKey,

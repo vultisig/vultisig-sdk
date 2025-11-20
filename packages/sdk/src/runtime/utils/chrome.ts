@@ -89,7 +89,7 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
       return await sdk.createVault(params.name, params.options)
 
     case 'getAccounts': {
-      const vault = sdk.getActiveVault()
+      const vault = await sdk.getActiveVault()
       if (!vault) return []
       if (params?.chain) {
         const address = await vault.address(params.chain)
@@ -101,33 +101,33 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
     }
 
     case 'getActiveAccount': {
-      const vault = sdk.getActiveVault()
+      const vault = await sdk.getActiveVault()
       if (!vault) return null
       return await vault.address(params.chain)
     }
 
     case 'getBalance': {
-      const vault = sdk.getActiveVault()
+      const vault = await sdk.getActiveVault()
       if (!vault) throw new Error('No active vault')
       return await vault.balance(params.chain, params.tokenId)
     }
 
     case 'getBalances': {
-      const vault = sdk.getActiveVault()
+      const vault = await sdk.getActiveVault()
       if (!vault) return {}
       const targetChains = params?.chains ?? vault.getChains()
       return await vault.balances(targetChains)
     }
 
     case 'signTransaction': {
-      const vault = sdk.getActiveVault()
+      const vault = await sdk.getActiveVault()
       if (!vault) throw new Error('No active vault')
       const mode = params.mode ?? 'fast'
       return await vault.sign(mode, params.payload, params.password)
     }
 
     case 'signMessage': {
-      const vault = sdk.getActiveVault()
+      const vault = await sdk.getActiveVault()
       if (!vault) throw new Error('No active vault')
       const signature = await vault.sign(
         'local',
@@ -141,7 +141,7 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
     }
 
     case 'signTypedData': {
-      const vault = sdk.getActiveVault()
+      const vault = await sdk.getActiveVault()
       if (!vault) throw new Error('No active vault')
       const signature = await vault.sign(
         'local',
@@ -173,7 +173,7 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
     }
 
     case 'getActiveVault': {
-      const activeVault = sdk.getActiveVault()
+      const activeVault = await sdk.getActiveVault()
       return activeVault ? activeVault.summary() : null
     }
 

@@ -10,7 +10,6 @@ export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
 export type { FiatCurrency } from '@core/config/FiatCurrency'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
-import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
 
 // Import and export Chain types
@@ -23,10 +22,6 @@ import type {
 export type { Chain as ChainType } from '@core/chain/Chain'
 export { Chain } from '@core/chain/Chain'
 
-// SDK-extended vault type that includes calculated threshold
-export type Vault = CoreVault & {
-  threshold?: number
-}
 // VaultFolder and VaultSecurityType not available in copied core - using local types
 export type VaultFolder = 'fast' | 'secure'
 export type VaultSecurityType = 'fast' | 'secure'
@@ -348,6 +343,47 @@ export type Token = {
   chainId: string
   logoUrl?: string
   isNative?: boolean
+}
+
+/**
+ * Unified vault data structure that consolidates all vault information
+ * into a single, self-contained record. Replaces the previous split
+ * between vault_summary and vault_preferences.
+ */
+export type VaultData = {
+  // Identity
+  id: number // Sequential ID (0, 1, 2...)
+  publicKeyEcdsa: string // ECDSA public key (for signing, addresses)
+  publicKeyEddsa: string // EdDSA public key
+  name: string // Vault name
+
+  // Metadata
+  isEncrypted: boolean // Whether .vult file is encrypted
+  type: 'fast' | 'secure' // Vault type
+  createdAt: number // Creation timestamp
+  lastModified: number // Last modification timestamp
+
+  // User Preferences (single source of truth)
+  currency: string // Fiat currency (e.g., 'usd')
+  chains: string[] // Active blockchain chains
+  tokens: Record<string, Token[]> // Tokens per chain
+
+  // Vault Structure
+  threshold: number // Signing threshold (e.g., 2 of 2)
+  totalSigners: number // Total number of signers
+  vaultIndex: number // Vault order index
+  signers: VaultSigner[] // Array of signer info
+
+  // Cryptographic Keys
+  hexChainCode: string // BIP32 chain code
+  hexEncryptionKey: string // Encryption key
+
+  // Self-Contained Backup
+  vultFileContent: string // Original base64 .vult file content
+
+  // Computed/Optional
+  lastValueUpdate?: number // Last portfolio value update
+  isBackedUp: boolean // Backup status
 }
 
 // Base properties shared by all gas info

@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ServerManager } from '../../../src/server/ServerManager'
 import { FastSigningService } from '../../../src/services/FastSigningService'
-import type { SigningStep, Vault } from '../../../src/types'
+import type { SigningStep } from '../../../src/types'
 import { WASMManager } from '../../../src/wasm/WASMManager'
 
 // Mock ServerManager methods

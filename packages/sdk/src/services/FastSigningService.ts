@@ -1,11 +1,7 @@
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+
 import { ServerManager } from '../server/ServerManager'
-import {
-  Signature,
-  SigningMode,
-  SigningPayload,
-  SigningStep,
-  Vault,
-} from '../types'
+import { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
 import { WASMManager } from '../wasm/WASMManager'
 
 /**
@@ -33,7 +29,7 @@ export class FastSigningService {
    * @returns Signed transaction ready for broadcast
    */
   async signWithServer(
-    vault: Vault,
+    vault: CoreVault,
     payload: SigningPayload,
     vaultPassword: string,
     onProgress?: (step: SigningStep) => void
@@ -98,7 +94,7 @@ export class FastSigningService {
    * @param vault Vault to validate
    * @throws Error if vault doesn't have server signer
    */
-  private validateFastVault(vault: Vault): void {
+  private validateFastVault(vault: CoreVault): void {
     const hasFastVaultServer = vault.signers.some((signer: string) =>
       signer.startsWith('Server-')
     )

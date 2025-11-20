@@ -19,12 +19,11 @@ import {
   ServerStatus,
   Signature,
   SigningPayload,
-  Summary,
   ValidationResult,
   VultisigConfig,
 } from './types'
 import { ValidationHelpers } from './utils/validation'
-import { Vault as VaultClass } from './vault/Vault'
+import { Vault } from './vault/Vault'
 import { VaultManager } from './VaultManager'
 import { WASMManager } from './wasm'
 
@@ -200,17 +199,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Connect to storage and optionally load a vault
    * Initializes WASM modules and loads the last active vault or a specific vault from storage
    */
-  async connect(options?: {
-    vaultId?: string
-    password?: string
-  }): Promise<void> {
+  async connect(options?: { vaultId?: number }): Promise<void> {
     try {
       // Initialize WASM modules
       await this.initialize()
 
-      if (options?.vaultId) {
+      if (options?.vaultId !== undefined) {
         // Load specific vault
-        await this.loadVaultFromStorage(options.vaultId, options.password)
+        await this.loadVaultFromStorage(options.vaultId)
       } else {
         // Auto-load last active vault
         await this.loadLastActiveVault()
@@ -228,7 +224,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Disconnect and clear active vault
    */
   async disconnect(): Promise<void> {
-    this.vaultManager.setActiveVault(null as any)
+    await this.vaultManager.setActiveVault(null)
     this.connected = false
     this.emit('disconnect', {})
   }
@@ -236,34 +232,23 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Check if connected with active vault
    */
-  isConnected(): boolean {
-    return this.connected && this.hasActiveVault()
+  async isConnected(): Promise<boolean> {
+    return this.connected && (await this.hasActiveVault())
   }
 
   /**
    * Load vault from storage by ID
    * @private
    */
-  private async loadVaultFromStorage(
-    vaultId: string,
-    password?: string
-  ): Promise<void> {
-    const vaultData = await this.storage.get<Summary>(`vault:${vaultId}`)
-    if (!vaultData) {
+  private async loadVaultFromStorage(vaultId: number): Promise<void> {
+    const vault = await this.vaultManager.getVaultById(vaultId)
+    if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`)
     }
 
-    // Reconstruct File-like object from vault data
-    const blob = new Blob([JSON.stringify(vaultData)], {
-      type: 'application/json',
-    })
-    const file = new File([blob], `${vaultData.name}.vult`)
-
-    // Import vault using existing method
-    await this.addVault(file, password)
-
-    // Emit event
-    this.emit('vaultChanged', { vaultId })
+    // Vault is already loaded and set as active by VaultManager
+    // Just emit event
+    this.emit('vaultChanged', { vaultId: vaultId.toString() })
   }
 
   /**
@@ -271,8 +256,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @private
    */
   private async loadLastActiveVault(): Promise<void> {
-    const lastVaultId = await this.storage.get<string>('activeVaultId')
-    if (lastVaultId) {
+    const lastVaultId = await this.storage.get<number>('activeVaultId')
+    if (lastVaultId !== null && lastVaultId !== undefined) {
       try {
         await this.loadVaultFromStorage(lastVaultId)
       } catch (error) {
@@ -286,15 +271,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Save vault to storage
    * @private
    */
-  private async saveVaultToStorage(vault: VaultClass): Promise<void> {
-    const summary = vault.summary()
-    const vaultId = summary.id
-
-    // Store vault summary
-    await this.storage.set(`vault:${vaultId}`, summary)
-
-    // Store as last active
-    await this.storage.set('activeVaultId', vaultId)
+  // Note: Storage is now handled by VaultManager, so this method is no longer needed
+  // Keeping for backward compatibility but it's a no-op
+  private async saveVaultToStorage(_vault: Vault): Promise<void> {
+    // VaultManager already handles all storage operations
+    // This method is kept for compatibility but does nothing
   }
 
   // === VAULT LIFECYCLE ===
@@ -310,7 +291,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       password?: string
       email?: string
     }
-  ): Promise<VaultClass> {
+  ): Promise<Vault> {
     await this.ensureInitialized()
 
     // Create vault with internal progress handling
@@ -341,7 +322,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     password: string
     email: string
   }): Promise<{
-    vault: VaultClass
+    vault: Vault
     vaultId: string
     verificationRequired: boolean
   }> {
@@ -384,38 +365,81 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   /**
    * Get vault from VultiServer
+   *
+   * Note: This method currently has limitations as getVaultFromServer
+   * returns incomplete data. Consider using importVault() with a .vult file instead.
    */
-  async getVault(vaultId: string, password: string): Promise<VaultClass> {
+  async getVault(vaultId: string, password: string): Promise<Vault> {
     await this.ensureInitialized()
-    const vaultData = await this.serverManager.getVaultFromServer(
+    const coreVault = await this.serverManager.getVaultFromServer(
       vaultId,
       password
     )
 
-    // Create VaultClass instance using VaultManager's service creation
-    // This ensures consistent service instantiation across all vault creation paths
-    const vault = this.vaultManager.createVaultInstance(vaultData)
+    // TODO: This is incomplete - getVaultFromServer doesn't return full vault data
+    // We need to build VaultData from CoreVault, but we're missing the .vult content
+    // For now, create a minimal VaultData
+    const nextId = await this.vaultManager['getNextVaultId']()
 
-    // Store the vault and set as active
-    this.vaultManager.setActiveVault(vault)
+    const vaultData: import('./types').VaultData = {
+      id: nextId,
+      publicKeyEcdsa: coreVault.publicKeys.ecdsa,
+      publicKeyEddsa: coreVault.publicKeys.eddsa,
+      name: coreVault.name,
+      isEncrypted: true,
+      type: coreVault.signers.some(s => s.startsWith('Server-'))
+        ? 'fast'
+        : 'secure',
+      createdAt: coreVault.createdAt || Date.now(),
+      lastModified: Date.now(),
+      currency: 'usd',
+      chains: [],
+      tokens: {},
+      threshold: Object.keys(coreVault.keyShares).length,
+      totalSigners: coreVault.signers.length,
+      vaultIndex: coreVault.order,
+      signers: coreVault.signers.map(s => ({
+        id: s,
+        publicKey: s.startsWith('Server-') ? s : coreVault.publicKeys.ecdsa,
+        name: s,
+      })),
+      hexChainCode: coreVault.hexChainCode,
+      hexEncryptionKey: '',
+      vultFileContent: '', // Missing - this is a problem!
+      isBackedUp: coreVault.isBackedUp,
+    }
 
-    // Save to storage and emit event
-    await this.saveVaultToStorage(vault)
-    this.emit('vaultChanged', { vaultId })
+    // Save to storage
+    await this.storage.set(`vault:${nextId}`, vaultData)
+    await this.storage.set('activeVaultId', nextId)
+
+    // Create Vault instance
+    const vault = this.vaultManager.createVaultInstance(nextId, vaultData)
+
+    this.emit('vaultChanged', { vaultId: nextId.toString() })
 
     return vault
   }
 
   /**
-   * Import vault from file (sets as active)
+   * Import vault from .vult file content (sets as active)
+   *
+   * @param vultContent - The .vult file content as a string
+   * @param password - Optional password for encrypted vaults
+   * @returns Imported vault instance
+   *
+   * @example
+   * ```typescript
+   * const vultContent = fs.readFileSync('vault.vult', 'utf-8')
+   * const vault = await sdk.importVault(vultContent, 'password123')
+   * ```
    */
-  async addVault(file: File, password?: string): Promise<VaultClass> {
+  async importVault(vultContent: string, password?: string): Promise<Vault> {
     await this.ensureInitialized()
-    const vault = await this.vaultManager.addVault(file, password)
+    const vault = await this.vaultManager.importVault(vultContent, password)
 
-    // Save to storage and emit event
-    await this.saveVaultToStorage(vault)
-    this.emit('vaultChanged', { vaultId: vault.summary().id })
+    // VaultManager already handles storage, just emit event
+    this.emit('vaultChanged', { vaultId: vault.id.toString() })
 
     return vault
   }
@@ -424,7 +448,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Import vault from file path (Node.js only)
    *
    * Provides a convenient way to import vaults from file paths in Node.js.
-   * In browser environments, use addVault() with a File object instead.
+   * In browser environments, use importVault() with file content instead.
    *
    * @param filePath - Absolute path to vault file (Node.js only)
    * @param password - Optional password for encrypted vaults
@@ -434,48 +458,60 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @example
    * ```typescript
    * // Node.js
-   * const vault = await sdk.addVaultFromFile('/path/to/vault.vult', 'password')
+   * const vault = await sdk.importVaultFromFile('/path/to/vault.vult', 'password')
    * ```
    */
-  async addVaultFromFile(
+  async importVaultFromFile(
     filePath: string,
     password?: string
-  ): Promise<VaultClass> {
+  ): Promise<Vault> {
     if (!isNode()) {
       throw new Error(
-        'addVaultFromFile can only be called in Node.js environment. Use addVault() with a File object in browsers.'
+        'importVaultFromFile can only be called in Node.js environment. Use importVault() with file content in browsers.'
       )
     }
 
     // Dynamically import Node.js modules
     const fs = await import('fs/promises')
 
-    // Read file and create File-like object with required properties
-    const fileBuffer = await fs.readFile(filePath)
-    const fileName = filePath.split('/').pop() || 'vault.vult'
+    // Read file as UTF-8 string
+    const vultContent = await fs.readFile(filePath, 'utf-8')
 
-    // Convert Buffer to Uint8Array for Blob compatibility
-    const uint8Array = new Uint8Array(fileBuffer)
-
-    // Create a File-like object with name and buffer properties for compatibility
-    const blob = new Blob([uint8Array])
-    const arrayBuffer = fileBuffer.buffer.slice(
-      fileBuffer.byteOffset,
-      fileBuffer.byteOffset + fileBuffer.byteLength
-    )
-    const file = Object.assign(blob, {
-      name: fileName,
-      buffer: arrayBuffer,
-    })
-
-    // Use existing addVault method
-    return this.addVault(file as any, password)
+    // Use existing importVault method
+    return this.importVault(vultContent, password)
   }
 
   /**
-   * List all stored vaults
+   * Export vault to .vult file content
+   *
+   * @param vaultId - Numeric vault ID
+   * @returns Base64-encoded .vult file content
+   *
+   * @example
+   * ```typescript
+   * const vultContent = await sdk.exportVault(0)
+   * fs.writeFileSync('backup.vult', vultContent)
+   * ```
    */
-  async listVaults(): Promise<any[]> {
+  async exportVault(vaultId: number): Promise<string> {
+    await this.ensureInitialized()
+    return this.vaultManager.exportVault(vaultId)
+  }
+
+  /**
+   * List all stored vaults as Vault instances
+   *
+   * @returns Array of Vault class instances
+   * @example
+   * ```typescript
+   * const vaults = await sdk.listVaults()
+   * vaults.forEach(vault => {
+   *   const summary = vault.summary()
+   *   console.log(summary.name)
+   * })
+   * ```
+   */
+  async listVaults(): Promise<Vault[]> {
     await this.ensureInitialized()
     return this.vaultManager.listVaults()
   }
@@ -483,21 +519,12 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Delete vault from storage (clears active if needed)
    */
-  async deleteVault(vault: VaultClass): Promise<void> {
+  async deleteVault(vault: Vault): Promise<void> {
     await this.ensureInitialized()
-    const vaultId = vault.summary().id
+    const vaultId = vault.id
 
-    // Delete from VaultManager
-    await this.vaultManager.deleteVault(vault)
-
-    // Remove from storage
-    await this.storage.remove(`vault:${vaultId}`)
-
-    // Clear active vault ID if this was the active vault
-    const activeVaultId = await this.storage.get<string>('activeVaultId')
-    if (activeVaultId === vaultId) {
-      await this.storage.remove('activeVaultId')
-    }
+    // Delete from VaultManager (which handles all storage)
+    await this.vaultManager.deleteVault(vaultId)
 
     // Emit event with empty vaultId to indicate no active vault
     this.emit('vaultChanged', { vaultId: '' })
@@ -519,22 +546,42 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Switch to different vault
    */
-  setActiveVault(vault: VaultClass): void {
-    this.vaultManager.setActiveVault(vault)
+  async setActiveVault(vault: Vault): Promise<void> {
+    await this.vaultManager.setActiveVault(vault.id)
   }
 
   /**
    * Get current active vault
    */
-  getActiveVault(): VaultClass | null {
+  async getActiveVault(): Promise<Vault | null> {
     return this.vaultManager.getActiveVault()
   }
 
   /**
    * Check if there's an active vault
    */
-  hasActiveVault(): boolean {
+  async hasActiveVault(): Promise<boolean> {
     return this.vaultManager.hasActiveVault()
+  }
+
+  /**
+   * Get vault instance by ID
+   *
+   * @param vaultId - Numeric vault ID
+   * @returns Vault instance or null if not found
+   */
+  async getVaultById(vaultId: number): Promise<Vault | null> {
+    return this.vaultManager.getVaultById(vaultId)
+  }
+
+  /**
+   * Get all vault instances (convenience method)
+   * Equivalent to listVaults()
+   *
+   * @returns Array of all vault instances
+   */
+  async getAllVaults(): Promise<Vault[]> {
+    return this.vaultManager.getAllVaults()
   }
 
   // === GLOBAL CONFIGURATION ===
@@ -608,8 +655,13 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Check if .vult file is encrypted
    */
-  async isVaultFileEncrypted(file: File): Promise<boolean> {
-    return this.vaultManager.isVaultFileEncrypted(file)
+  /**
+   * Check if .vult file content is encrypted
+   * @param vultContent - The .vult file content as a string
+   * @returns true if encrypted, false otherwise
+   */
+  async isVaultContentEncrypted(vultContent: string): Promise<boolean> {
+    return this.vaultManager.isVaultContentEncrypted(vultContent)
   }
 
   // === SERVER STATUS ===
@@ -668,7 +720,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     password: string
   ): Promise<Signature> {
     await this.ensureInitialized()
-    const activeVault = this.getActiveVault()
+    const activeVault = await this.getActiveVault()
     if (!activeVault) {
       throw new Error('No active vault. Please set an active vault first.')
     }
@@ -679,7 +731,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Sign transaction with a specific vault using fast signing mode
    */
   async signTransactionWithVault(
-    vault: VaultClass,
+    vault: Vault,
     payload: SigningPayload,
     password: string
   ): Promise<Signature> {
@@ -711,10 +763,10 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Switch to different vault by ID
    * Loads vault from storage and sets as active
    */
-  async switchVault(vaultId: string): Promise<void> {
+  async switchVault(vaultId: number): Promise<void> {
     try {
       await this.loadVaultFromStorage(vaultId)
-      this.emit('vaultChanged', { vaultId })
+      this.emit('vaultChanged', { vaultId: vaultId.toString() })
     } catch (error) {
       this.emit('error', error as Error)
       throw error

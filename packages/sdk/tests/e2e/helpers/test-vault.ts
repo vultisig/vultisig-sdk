@@ -146,15 +146,11 @@ export async function loadTestVault(
 ): Promise<{ sdk: Vultisig; vault: Vault }> {
   // If SDK provided, use it directly (bypass singleton for custom tests)
   if (sdk) {
-    const vaultBuffer = await readFile(TEST_VAULT_CONFIG.path)
-    const vaultFile = new File(
-      [new Uint8Array(vaultBuffer)],
-      'TestFastVault.vult',
-      {
-        type: 'application/octet-stream',
-      }
+    const vaultContent = await readFile(TEST_VAULT_CONFIG.path, 'utf-8')
+    const vault = await sdk.importVault(
+      vaultContent,
+      TEST_VAULT_CONFIG.password
     )
-    const vault = await sdk.addVault(vaultFile, TEST_VAULT_CONFIG.password)
     return { sdk, vault }
   }
 
@@ -181,22 +177,12 @@ export async function loadTestVault(
 
     console.log('✅ Shared Vultisig instance initialized (WASM loaded once)')
 
-    // Read vault file
-    const vaultBuffer = await readFile(TEST_VAULT_CONFIG.path)
-
-    // Create File object (browser-compatible in Node.js via polyfill)
-    // Convert Buffer to Uint8Array for better compatibility with BlobPart
-    const vaultFile = new File(
-      [new Uint8Array(vaultBuffer)],
-      'TestFastVault.vult',
-      {
-        type: 'application/octet-stream',
-      }
-    )
+    // Read vault file content
+    const vaultContent = await readFile(TEST_VAULT_CONFIG.path, 'utf-8')
 
     // Import vault
-    sharedVault = await sharedSdk.addVault(
-      vaultFile,
+    sharedVault = await sharedSdk.importVault(
+      vaultContent,
       TEST_VAULT_CONFIG.password
     )
 
@@ -229,8 +215,8 @@ export function verifyTestVault(vault: Vault): void {
     throw new Error('Vault has no type')
   }
 
-  const publicKeys = vault.data.publicKeys
-  if (!publicKeys || !publicKeys.ecdsa || !publicKeys.eddsa) {
+  const keys = summary.keys
+  if (!keys || !keys.ecdsa || !keys.eddsa) {
     throw new Error('Vault is missing required public keys (ecdsa/eddsa)')
   }
 
@@ -238,8 +224,8 @@ export function verifyTestVault(vault: Vault): void {
   console.log(
     `✅ Test vault verified: "${summary.name}" (type: ${summary.type})`
   )
-  console.log(`   ECDSA: ${publicKeys.ecdsa.substring(0, 20)}...`)
-  console.log(`   EdDSA: ${publicKeys.eddsa.substring(0, 20)}...`)
+  console.log(`   ECDSA: ${keys.ecdsa.substring(0, 20)}...`)
+  console.log(`   EdDSA: ${keys.eddsa.substring(0, 20)}...`)
 }
 
 /**

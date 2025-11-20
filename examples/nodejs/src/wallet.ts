@@ -54,7 +54,17 @@ export class VaultManager {
 
       await this.sdk.initialize()
 
-      // Auto-import vault from .env if configured
+      // Check if there's an active vault in storage (from previous import/create)
+      const existingVault = await this.sdk.getActiveVault()
+      if (existingVault) {
+        this.activeVault = existingVault
+        this.setupVaultEvents(this.activeVault)
+        const summary = this.activeVault.summary()
+        spinner.succeed(`SDK initialized - Vault loaded: ${summary.name}`)
+        return
+      }
+
+      // Auto-import vault from .env if configured and no active vault
       const vaultFilePath = process.env.VAULT_FILE_PATH
       if (vaultFilePath) {
         try {
@@ -63,12 +73,14 @@ export class VaultManager {
 
           // Import vault with optional password from .env
           const vaultPassword = process.env.VAULT_PASSWORD
-          this.activeVault = await this.sdk.addVaultFromFile(
+          this.activeVault = await this.sdk.importVaultFromFile(
             vaultFilePath,
             vaultPassword
           )
           this.setupVaultEvents(this.activeVault)
-          spinner.text = `Vault loaded: ${this.activeVault.data.name}`
+          const summary = this.activeVault.summary()
+          spinner.succeed(`SDK initialized - Vault imported: ${summary.name}`)
+          return
         } catch (error: any) {
           // If vault file doesn't exist or import fails, continue without it
           if (error.code !== 'ENOENT') {
@@ -148,12 +160,13 @@ export class VaultManager {
     const spinner = ora('Importing vault...').start()
 
     try {
-      // Use SDK's built-in addVaultFromFile method
-      const vault = await this.sdk.addVaultFromFile(filePath, password)
+      // Use SDK's importVaultFromFile method
+      const vault = await this.sdk.importVaultFromFile(filePath, password)
 
       this.activeVault = vault
       this.setupVaultEvents(this.activeVault)
-      spinner.succeed(`Vault imported: ${vault.data.name}`)
+      const summary = vault.summary()
+      spinner.succeed(`Vault imported: ${summary.name}`)
 
       return vault
     } catch (error: any) {

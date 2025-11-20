@@ -68,6 +68,7 @@ describe('Integration: Vault Export', () => {
    * Helper function to create a test vault
    */
   async function createTestVault(name: string): Promise<Vault> {
+    const now = Date.now()
     const mockVaultData: CoreVault = {
       name,
       publicKeys: {
@@ -87,7 +88,7 @@ describe('Integration: Vault Export', () => {
       },
       resharePrefix: '',
       libType: 'GG20',
-      createdAt: Date.now(),
+      createdAt: now,
       isBackedUp: false,
       order: 0,
     } as CoreVault
@@ -97,7 +98,33 @@ describe('Integration: Vault Export', () => {
       fastSigningService: {} as any, // Not needed for export
     }
 
-    return new Vault(mockVaultData, services)
+    // Create mock VaultData to match new constructor signature
+    const vaultData = {
+      id: 0,
+      publicKeyEcdsa: mockVaultData.publicKeys.ecdsa,
+      publicKeyEddsa: mockVaultData.publicKeys.eddsa,
+      name,
+      isEncrypted: false,
+      type: 'fast' as const,
+      createdAt: now,
+      lastModified: now,
+      currency: 'usd',
+      chains: ['Bitcoin', 'Ethereum', 'Solana'],
+      tokens: {},
+      threshold: 2,
+      totalSigners: 2,
+      vaultIndex: 0,
+      signers: [
+        { id: 'test-device', publicKey: mockVaultData.publicKeys.ecdsa },
+        { id: 'Server-1', publicKey: mockVaultData.publicKeys.ecdsa },
+      ],
+      hexChainCode: mockVaultData.hexChainCode,
+      hexEncryptionKey: '',
+      vultFileContent: '',
+      isBackedUp: false,
+    }
+
+    return new Vault(0, vaultData, mockVaultData, services)
   }
 
   describe('Unencrypted Export', () => {

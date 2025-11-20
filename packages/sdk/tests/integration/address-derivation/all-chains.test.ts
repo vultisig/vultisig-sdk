@@ -96,6 +96,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
     await sdk.initialize()
 
     // Create a vault directly with mock data (no MPC keygen needed for address derivation)
+    const now = Date.now()
     const mockVaultData: CoreVault = {
       name: 'Integration Test Vault',
       publicKeys: {
@@ -115,7 +116,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       },
       resharePrefix: '',
       libType: 'GG20',
-      createdAt: Date.now(),
+      createdAt: now,
       isBackedUp: false,
       order: 0,
     } as CoreVault
@@ -125,7 +126,33 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       fastSigningService: {} as any, // Not needed for address derivation
     }
 
-    vault = new Vault(mockVaultData, services)
+    // Create mock VaultData to match new constructor signature
+    const vaultData = {
+      id: 0,
+      publicKeyEcdsa: mockVaultData.publicKeys.ecdsa,
+      publicKeyEddsa: mockVaultData.publicKeys.eddsa,
+      name: 'Integration Test Vault',
+      isEncrypted: false,
+      type: 'fast' as const,
+      createdAt: now,
+      lastModified: now,
+      currency: 'usd',
+      chains: ALL_CHAINS.map(c => c.toString()),
+      tokens: {},
+      threshold: 2,
+      totalSigners: 2,
+      vaultIndex: 0,
+      signers: [
+        { id: 'test-device', publicKey: mockVaultData.publicKeys.ecdsa },
+        { id: 'Server-1', publicKey: mockVaultData.publicKeys.ecdsa },
+      ],
+      hexChainCode: mockVaultData.hexChainCode,
+      hexEncryptionKey: '',
+      vultFileContent: '',
+      isBackedUp: false,
+    }
+
+    vault = new Vault(0, vaultData, mockVaultData, services)
 
     console.log('✅ SDK initialized and vault created with REAL WASM')
     console.log(`   Testing ${ALL_CHAINS.length} chains\n`)

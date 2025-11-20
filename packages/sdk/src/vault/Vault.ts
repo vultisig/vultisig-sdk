@@ -1,9 +1,15 @@
 // Core functions (functional dispatch) - Direct imports from core
+import { fromBinary } from '@bufbuild/protobuf'
 import { Chain } from '@core/chain/Chain'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
+import { fromCommVault } from '@core/mpc/types/utils/commVault'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
+import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
+import { fromBase64 } from '@lib/utils/fromBase64'
 
 // SDK utilities
 import { DEFAULT_CHAINS, isChainSupported } from '../ChainManager'
@@ -21,8 +27,10 @@ import {
   Signature,
   SigningMode,
   SigningPayload,
+  Summary,
   Token,
   Value,
+  VaultData,
 } from '../types'
 import { WASMManager } from '../wasm/WASMManager'
 // Vault services
@@ -89,6 +97,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private storage?: VaultStorage
 
   constructor(
+    public readonly id: number,
+    private _vaultData: VaultData,
     private vaultData: CoreVault,
     services: VaultServices,
     config?: VaultConfig,
@@ -139,11 +149,26 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       keysignPayload => this.extractMessageHashes(keysignPayload)
     )
 
-    // Initialize user chains from config
-    this._userChains = config?.defaultChains ?? DEFAULT_CHAINS
+    // Initialize user chains from VaultData or config
+    // Empty array is truthy, so explicitly check length
+    this._userChains =
+      _vaultData.chains && _vaultData.chains.length > 0
+        ? _vaultData.chains.map(c => c as Chain)
+        : (config?.defaultChains ?? DEFAULT_CHAINS)
 
-    // Initialize currency from config (normalize to lowercase)
-    this._currency = (config?.defaultCurrency ?? 'usd').toLowerCase()
+    // Initialize currency from VaultData or config (normalize to lowercase)
+    this._currency = (
+      _vaultData.currency ??
+      config?.defaultCurrency ??
+      'usd'
+    ).toLowerCase()
+
+    // Initialize tokens from VaultData
+    this._tokens = _vaultData.tokens ?? {}
+
+    // Set cached properties from VaultData
+    this._isEncrypted = _vaultData.isEncrypted
+    this._securityType = _vaultData.type
   }
 
   /**
@@ -152,20 +177,15 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   async loadPreferences(): Promise<void> {
     if (!this.storage) return
 
-    const vaultId = this.vaultData.publicKeys.ecdsa
-    const prefs = await this.storage.get<{
-      currency: string
-      chains: Chain[]
-      tokens: Record<string, Token[]>
-      lastValueUpdate?: number
-    }>(`vault:preferences:${vaultId}`)
+    const vaultData = await this.storage.get<VaultData>(`vault:${this.id}`)
 
-    if (prefs) {
-      this._currency = prefs.currency
-      this._userChains = prefs.chains
-      this._tokens = prefs.tokens
-      if (prefs.lastValueUpdate) {
-        this.lastValueUpdate = new Date(prefs.lastValueUpdate)
+    if (vaultData) {
+      this._vaultData = vaultData
+      this._currency = vaultData.currency
+      this._userChains = vaultData.chains.map(c => c as Chain)
+      this._tokens = vaultData.tokens
+      if (vaultData.lastValueUpdate) {
+        this.lastValueUpdate = new Date(vaultData.lastValueUpdate)
       }
     }
   }
@@ -177,13 +197,17 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private async savePreferences(): Promise<void> {
     if (!this.storage) return
 
-    const vaultId = this.vaultData.publicKeys.ecdsa
-    await this.storage.set(`vault:preferences:${vaultId}`, {
-      currency: this._currency,
-      chains: this._userChains,
-      tokens: this._tokens,
-      lastValueUpdate: this.lastValueUpdate?.getTime(),
-    })
+    // Update lastModified timestamp
+    this._vaultData.lastModified = Date.now()
+
+    // Update runtime state in VaultData
+    this._vaultData.currency = this._currency
+    this._vaultData.chains = this._userChains.map(c => c.toString())
+    this._vaultData.tokens = this._tokens
+    this._vaultData.lastValueUpdate = this.lastValueUpdate?.getTime()
+
+    // Save entire vault data atomically
+    await this.storage.set(`vault:${this.id}`, this._vaultData)
   }
 
   // ===== VAULT INFO =====
@@ -191,22 +215,43 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   /**
    * Get vault summary information
    */
-  summary() {
+  summary(): Summary {
     return {
       id: this.vaultData.publicKeys.ecdsa,
       name: this.vaultData.name,
-      type: this._securityType ?? determineVaultType(this.vaultData.signers),
-      chains: this.getChains(),
+      isEncrypted: this._isEncrypted ?? false,
       createdAt: this.vaultData.createdAt,
-      isBackedUp: this.vaultData.isBackedUp,
+      lastModified: this.vaultData.createdAt, // Use createdAt as fallback
+      size: 0, // TODO: Calculate vault size if needed
+      type: this._securityType ?? determineVaultType(this.vaultData.signers),
+      currency: this._currency,
+      chains: this.getChains(),
+      tokens: this._tokens,
+      threshold: this.calculateThreshold(this.vaultData.signers.length),
+      totalSigners: this.vaultData.signers.length,
+      vaultIndex: this.vaultData.order ?? 0,
+      signers: this.vaultData.signers.map((signerId, index) => ({
+        id: signerId,
+        publicKey: '', // Per-signer public keys not stored separately
+        name: `Signer ${index + 1}`,
+      })),
+      isBackedUp: () => this.vaultData.isBackedUp ?? false,
+      keys: {
+        ecdsa: this.vaultData.publicKeys.ecdsa,
+        eddsa: this.vaultData.publicKeys.eddsa,
+        hexChainCode: this.vaultData.hexChainCode,
+        hexEncryptionKey: '', // Not currently stored
+      },
     }
   }
 
   /**
-   * Set cached encryption status (called during import)
+   * Calculate threshold based on total signers
+   * For 2-of-2 (fast vaults), threshold is 2
+   * For multi-sig (secure vaults), threshold is typically (n+1)/2
    */
-  setCachedEncryptionStatus(isEncrypted: boolean): void {
-    this._isEncrypted = isEncrypted
+  private calculateThreshold(totalSigners: number): number {
+    return totalSigners === 2 ? 2 : Math.ceil((totalSigners + 1) / 2)
   }
 
   /**
@@ -214,13 +259,6 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    */
   getCachedEncryptionStatus(): boolean | undefined {
     return this._isEncrypted
-  }
-
-  /**
-   * Set cached security type (called during import)
-   */
-  setCachedSecurityType(securityType: 'fast' | 'secure'): void {
-    this._securityType = securityType
   }
 
   /**
@@ -548,6 +586,61 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Ensure keyShares are loaded from vault file (lazy loading with password)
+   * This is called before signing operations that need keyShares
+   */
+  private async ensureKeySharesLoaded(password: string): Promise<void> {
+    // Check if keyShares are already loaded (non-empty strings)
+    if (
+      this.vaultData.keyShares.ecdsa &&
+      this.vaultData.keyShares.ecdsa.length > 0 &&
+      this.vaultData.keyShares.eddsa &&
+      this.vaultData.keyShares.eddsa.length > 0
+    ) {
+      return // Already loaded
+    }
+
+    // Check if vault file content is available
+    // (In unit tests, vultFileContent may be empty and keyShares are already set)
+    if (
+      !this._vaultData.vultFileContent ||
+      this._vaultData.vultFileContent.trim().length === 0
+    ) {
+      // No vault file to parse - keyShares must already be in CoreVault
+      // This happens in unit tests where mock data is used
+      return
+    }
+
+    // Parse vault file to get keyShares (using static imports for performance)
+    // 1. Parse VaultContainer from content
+    const container = vaultContainerFromString(
+      this._vaultData.vultFileContent.trim()
+    )
+
+    // 2. Handle decryption if needed
+    let vaultBase64: string
+    if (container.isEncrypted) {
+      // Decrypt
+      const encryptedData = fromBase64(container.vault)
+      const decryptedBuffer = await decryptWithAesGcm({
+        key: password,
+        value: encryptedData,
+      })
+      vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+    } else {
+      vaultBase64 = container.vault
+    }
+
+    // 3. Parse inner Vault protobuf
+    const vaultBinary = fromBase64(vaultBase64)
+    const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
+    const parsedVault = fromCommVault(vaultProtobuf)
+
+    // 4. Update CoreVault with keyShares (mutate in place for session)
+    this.vaultData.keyShares = parsedVault.keyShares
+  }
+
+  /**
    * Fast signing with VultiServer
    */
   private async signFast(
@@ -569,6 +662,9 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     }
 
     try {
+      // Ensure keyShares are loaded from vault file (lazy loading)
+      await this.ensureKeySharesLoaded(password)
+
       const signature = await this.fastSigningService.signWithServer(
         this.vaultData,
         payload,
