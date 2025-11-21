@@ -7,6 +7,7 @@ import { initWasm } from '@trustwallet/wallet-core'
 
 import initializeDkls from '../../../lib/dkls/vs_wasm.js'
 import initializeSchnorr from '../../../lib/schnorr/vs_schnorr_wasm.js'
+import { memoizeAsync } from '../../utils/memoizeAsync'
 import { wasmLoaderRegistry } from './registry'
 import type { WasmConfig } from './types'
 
@@ -18,12 +19,68 @@ import type { WasmConfig } from './types'
  *
  * Supports lazy loading for optimal performance.
  * Coordinates wallet-core, DKLS, and Schnorr WASM loading.
+ *
+ * Thread-safe: Uses memoizeAsync to prevent race conditions during concurrent initialization.
  */
 export class WasmManager {
   private static config?: WasmConfig
   private static walletCoreInstance?: any
   private static dklsInitialized = false
   private static schnorrInitialized = false
+
+  // Race-safe memoized initialization functions
+  private static memoizedInitWalletCore = memoizeAsync(async () => {
+    if (this.config?.wasmPaths?.walletCore) {
+      console.warn(
+        'Custom WASM path for wallet-core is not supported. Using default path.'
+      )
+    }
+    const instance = await initWasm()
+    this.walletCoreInstance = instance
+    return instance
+  })
+
+  private static memoizedInitDkls = memoizeAsync(async () => {
+    const wasmPath = this.config?.wasmPaths?.dkls
+
+    // If wasmPath is already an ArrayBuffer, use it directly
+    if (wasmPath instanceof ArrayBuffer) {
+      await initializeDkls(wasmPath)
+    } else if (wasmPath) {
+      // Custom path provided - load as ArrayBuffer
+      const wasmBuffer = await wasmLoaderRegistry.loadWasm(wasmPath)
+      await initializeDkls(wasmBuffer)
+    } else {
+      // No custom path - use registry to resolve and load
+      const defaultPath = wasmLoaderRegistry.resolvePath('dkls/vs_wasm_bg.wasm')
+      const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
+      await initializeDkls(wasmBuffer)
+    }
+
+    this.dklsInitialized = true
+  })
+
+  private static memoizedInitSchnorr = memoizeAsync(async () => {
+    const wasmPath = this.config?.wasmPaths?.schnorr
+
+    // If wasmPath is already an ArrayBuffer, use it directly
+    if (wasmPath instanceof ArrayBuffer) {
+      await initializeSchnorr(wasmPath)
+    } else if (wasmPath) {
+      // Custom path provided - load as ArrayBuffer
+      const wasmBuffer = await wasmLoaderRegistry.loadWasm(wasmPath)
+      await initializeSchnorr(wasmBuffer)
+    } else {
+      // No custom path - use registry to resolve and load
+      const defaultPath = wasmLoaderRegistry.resolvePath(
+        'schnorr/vs_schnorr_wasm_bg.wasm'
+      )
+      const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
+      await initializeSchnorr(wasmBuffer)
+    }
+
+    this.schnorrInitialized = true
+  })
 
   /**
    * Configure WASM loading (optional).
@@ -45,6 +102,7 @@ export class WasmManager {
   /**
    * Get WalletCore instance for address derivation and operations.
    * Lazy loads on first access.
+   * Thread-safe: Concurrent calls will wait for same initialization promise.
    */
   static async getWalletCore() {
     try {
@@ -52,14 +110,7 @@ export class WasmManager {
         return this.walletCoreInstance
       }
 
-      if (this.config?.wasmPaths?.walletCore) {
-        console.warn(
-          'Custom WASM path for wallet-core is not supported. Using default path.'
-        )
-      }
-
-      this.walletCoreInstance = await initWasm()
-      return this.walletCoreInstance
+      return await this.memoizedInitWalletCore()
     } catch (error) {
       throw new Error(`Failed to initialize WalletCore WASM: ${error}`)
     }
@@ -69,6 +120,7 @@ export class WasmManager {
    * Initialize DKLS WASM module (ECDSA).
    * Lazy loads on first access.
    * Supports custom paths and environment-specific loading.
+   * Thread-safe: Concurrent calls will wait for same initialization promise.
    */
   static async initializeDkls(): Promise<void> {
     try {
@@ -76,25 +128,7 @@ export class WasmManager {
         return
       }
 
-      const wasmPath = this.config?.wasmPaths?.dkls
-
-      // If wasmPath is already an ArrayBuffer, use it directly
-      if (wasmPath instanceof ArrayBuffer) {
-        await initializeDkls(wasmPath)
-      } else if (wasmPath) {
-        // Custom path provided - load as ArrayBuffer
-        const wasmBuffer = await wasmLoaderRegistry.loadWasm(wasmPath)
-        await initializeDkls(wasmBuffer)
-      } else {
-        // No custom path - use registry to resolve and load
-        const defaultPath = wasmLoaderRegistry.resolvePath(
-          'dkls/vs_wasm_bg.wasm'
-        )
-        const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
-        await initializeDkls(wasmBuffer)
-      }
-
-      this.dklsInitialized = true
+      await this.memoizedInitDkls()
     } catch (error) {
       throw new Error(`Failed to initialize DKLS WASM: ${error}`)
     }
@@ -104,6 +138,7 @@ export class WasmManager {
    * Initialize Schnorr WASM module (EdDSA).
    * Lazy loads on first access.
    * Supports custom paths and environment-specific loading.
+   * Thread-safe: Concurrent calls will wait for same initialization promise.
    */
   static async initializeSchnorr(): Promise<void> {
     try {
@@ -111,25 +146,7 @@ export class WasmManager {
         return
       }
 
-      const wasmPath = this.config?.wasmPaths?.schnorr
-
-      // If wasmPath is already an ArrayBuffer, use it directly
-      if (wasmPath instanceof ArrayBuffer) {
-        await initializeSchnorr(wasmPath)
-      } else if (wasmPath) {
-        // Custom path provided - load as ArrayBuffer
-        const wasmBuffer = await wasmLoaderRegistry.loadWasm(wasmPath)
-        await initializeSchnorr(wasmBuffer)
-      } else {
-        // No custom path - use registry to resolve and load
-        const defaultPath = wasmLoaderRegistry.resolvePath(
-          'schnorr/vs_schnorr_wasm_bg.wasm'
-        )
-        const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
-        await initializeSchnorr(wasmBuffer)
-      }
-
-      this.schnorrInitialized = true
+      await this.memoizedInitSchnorr()
     } catch (error) {
       throw new Error(`Failed to initialize Schnorr WASM: ${error}`)
     }
@@ -165,11 +182,62 @@ export class WasmManager {
 
   /**
    * Reset all WASM state (mainly for testing).
+   * Recreates memoized functions to clear their internal caches.
    */
   static reset(): void {
     this.config = undefined
     this.walletCoreInstance = undefined
     this.dklsInitialized = false
     this.schnorrInitialized = false
+
+    // Recreate memoized functions to clear their caches
+    this.memoizedInitWalletCore = memoizeAsync(async () => {
+      if (this.config?.wasmPaths?.walletCore) {
+        console.warn(
+          'Custom WASM path for wallet-core is not supported. Using default path.'
+        )
+      }
+      const instance = await initWasm()
+      this.walletCoreInstance = instance
+      return instance
+    })
+
+    this.memoizedInitDkls = memoizeAsync(async () => {
+      const wasmPath = this.config?.wasmPaths?.dkls
+
+      if (wasmPath instanceof ArrayBuffer) {
+        await initializeDkls(wasmPath)
+      } else if (wasmPath) {
+        const wasmBuffer = await wasmLoaderRegistry.loadWasm(wasmPath)
+        await initializeDkls(wasmBuffer)
+      } else {
+        const defaultPath = wasmLoaderRegistry.resolvePath(
+          'dkls/vs_wasm_bg.wasm'
+        )
+        const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
+        await initializeDkls(wasmBuffer)
+      }
+
+      this.dklsInitialized = true
+    })
+
+    this.memoizedInitSchnorr = memoizeAsync(async () => {
+      const wasmPath = this.config?.wasmPaths?.schnorr
+
+      if (wasmPath instanceof ArrayBuffer) {
+        await initializeSchnorr(wasmPath)
+      } else if (wasmPath) {
+        const wasmBuffer = await wasmLoaderRegistry.loadWasm(wasmPath)
+        await initializeSchnorr(wasmBuffer)
+      } else {
+        const defaultPath = wasmLoaderRegistry.resolvePath(
+          'schnorr/vs_schnorr_wasm_bg.wasm'
+        )
+        const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
+        await initializeSchnorr(wasmBuffer)
+      }
+
+      this.schnorrInitialized = true
+    })
   }
 }

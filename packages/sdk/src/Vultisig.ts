@@ -10,6 +10,7 @@ import {
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import { isNode } from './runtime/environment'
+import { PolyfillManager } from './runtime/polyfills'
 import { StorageManager } from './runtime/storage/StorageManager'
 import type { Storage } from './runtime/storage/types'
 import { WasmManager } from './runtime/wasm'
@@ -161,14 +162,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Start new initialization
     this.initializationPromise = (async () => {
       try {
-        // Initialize Node.js polyfills first (if in Node.js)
-        if (isNode()) {
-          const { initializeNodePolyfills } = await import(
-            './runtime/utils/node'
-          )
-          await initializeNodePolyfills()
-        }
-
+        // Initialize platform-specific items
+        await PolyfillManager.initialize()
         await WasmManager.initialize()
 
         // Load configuration from storage

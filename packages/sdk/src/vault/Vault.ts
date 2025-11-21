@@ -361,9 +361,6 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       this._currency = loadedVaultData.currency
       this._userChains = loadedVaultData.chains.map(c => c as Chain)
       this._tokens = loadedVaultData.tokens
-      if (loadedVaultData.lastValueUpdate) {
-        this.lastValueUpdate = new Date(loadedVaultData.lastValueUpdate)
-      }
 
       // Sync CoreVault with VaultData
       this.coreVault.name = loadedVaultData.name
@@ -1363,7 +1360,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    */
   async updateValues(chain: Chain | 'all'): Promise<void> {
     // Clear price cache to force fresh fetch
-    this.fiatValueService.clearCache()
+    await this.fiatValueService.clearPrices()
 
     if (chain === 'all') {
       // Fetch values for all chains (triggers fresh price fetch)

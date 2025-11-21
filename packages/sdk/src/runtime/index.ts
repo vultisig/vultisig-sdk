@@ -50,6 +50,12 @@ export {
 export * from './utils'
 
 // ============================================
+// Polyfill Management
+// ============================================
+export type { PolyfillProvider } from './polyfills'
+export { PolyfillManager, polyfillRegistry } from './polyfills'
+
+// ============================================
 // WASM Management
 // ============================================
 export type { WasmConfig, WasmLoader } from './wasm'
