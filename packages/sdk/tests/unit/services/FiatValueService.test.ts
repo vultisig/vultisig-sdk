@@ -37,8 +37,10 @@ import type { Balance } from '../../../src/types'
 describe('FiatValueService', () => {
   let service: FiatValueService
   let cache: CacheService
-  let getCurrency: () => string
+  let getCurrency: any
   let getTokens: () => Record<string, any[]>
+  let getChains: () => Chain[]
+  let getBalance: (chain: Chain, tokenId?: string) => Promise<Balance>
 
   beforeEach(async () => {
     // Clear all mocks before each test
@@ -53,8 +55,25 @@ describe('FiatValueService', () => {
     // Mock tokens getter
     getTokens = vi.fn(() => ({}))
 
+    // Mock chains getter
+    getChains = vi.fn(() => [Chain.Ethereum, Chain.Bitcoin])
+
+    // Mock balance getter
+    getBalance = vi.fn(async () => ({
+      amount: '1000000000000000000',
+      decimals: 18,
+      symbol: 'ETH',
+      chainId: Chain.Ethereum,
+    }))
+
     // Create service
-    service = new FiatValueService(cache, getCurrency, getTokens)
+    service = new FiatValueService(
+      cache,
+      getCurrency,
+      getTokens,
+      getChains,
+      getBalance
+    )
   })
 
   describe('getPrice', () => {
@@ -477,7 +496,13 @@ describe('FiatValueService', () => {
       )
 
       getCurrency = vi.fn(() => 'eur')
-      service = new FiatValueService(cache, getCurrency, getTokens)
+      service = new FiatValueService(
+        cache,
+        getCurrency,
+        getTokens,
+        getChains,
+        getBalance
+      )
 
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 2500,
@@ -497,7 +522,13 @@ describe('FiatValueService', () => {
       )
 
       getCurrency = vi.fn(() => 'usd')
-      service = new FiatValueService(cache, getCurrency, getTokens)
+      service = new FiatValueService(
+        cache,
+        getCurrency,
+        getTokens,
+        getChains,
+        getBalance
+      )
 
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 2200,

@@ -12,7 +12,7 @@ import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGc
 import { fromBase64 } from '@lib/utils/fromBase64'
 
 // SDK utilities
-import { DEFAULT_CHAINS, isChainSupported } from '../ChainManager'
+import { DEFAULT_CHAINS } from '../ChainManager'
 import { UniversalEventEmitter } from '../events/EventEmitter'
 import { VaultEvents } from '../events/types'
 import { MemoryStorage } from '../runtime/storage/MemoryStorage'
@@ -37,6 +37,7 @@ import { AddressService } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
 import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
+import { PreferencesService } from './services/PreferencesService'
 import { TransactionBuilder } from './services/TransactionBuilder'
 import { VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig, VaultServices } from './VaultServices'
@@ -77,6 +78,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private balanceService: BalanceService
   private gasEstimationService: GasEstimationService
   private broadcastService: BroadcastService
+  private preferencesService: PreferencesService
 
   // Runtime state (persisted via storage)
   private _userChains: Chain[] = []
@@ -226,11 +228,13 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     this._currency = this.vaultData.currency
     this._tokens = this.vaultData.tokens
 
-    // Initialize fiat value service
+    // Initialize fiat value service (now with portfolio support)
     this.fiatValueService = new FiatValueService(
       this.cacheService,
       () => this._currency as FiatCurrency,
-      () => this._tokens
+      () => this._tokens,
+      () => this._userChains,
+      (chain, tokenId) => this.balance(chain, tokenId)
     )
 
     // Initialize extracted services
@@ -242,7 +246,13 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       error => this.emit('error', error),
       chain => this.address(chain),
       chain => this.getTokens(chain),
-      () => this._tokens
+      () => this._tokens,
+      tokens => {
+        this._tokens = tokens
+      },
+      () => this.save(),
+      data => this.emit('tokenAdded', data),
+      data => this.emit('tokenRemoved', data)
     )
     this.gasEstimationService = new GasEstimationService(
       this.coreVault,
@@ -250,6 +260,23 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     )
     this.broadcastService = new BroadcastService(keysignPayload =>
       this.extractMessageHashes(keysignPayload)
+    )
+    this.preferencesService = new PreferencesService(
+      this.cacheService,
+      () => this._userChains,
+      chains => {
+        this._userChains = chains
+      },
+      () => this._currency,
+      currency => {
+        this._currency = currency
+      },
+      async chains => {
+        await this.addresses(chains)
+      },
+      () => this.save(),
+      data => this.emit('chainAdded', data),
+      data => this.emit('chainRemoved', data)
     )
 
     // Setup event-driven cache invalidation
@@ -1094,37 +1121,21 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Set tokens for a chain
    */
   async setTokens(chain: Chain, tokens: Token[]): Promise<void> {
-    this._tokens[chain] = tokens
-    await this.save()
+    return this.balanceService.setTokens(chain, tokens)
   }
 
   /**
    * Add single token to chain
    */
   async addToken(chain: Chain, token: Token): Promise<void> {
-    if (!this._tokens[chain]) this._tokens[chain] = []
-    if (!this._tokens[chain].find(t => t.id === token.id)) {
-      this._tokens[chain].push(token)
-      await this.save()
-      // Emit token added event
-      this.emit('tokenAdded', { chain, token })
-    }
+    return this.balanceService.addToken(chain, token)
   }
 
   /**
    * Remove token from chain
    */
   async removeToken(chain: Chain, tokenId: string): Promise<void> {
-    if (this._tokens[chain]) {
-      const tokenExists = this._tokens[chain].some(t => t.id === tokenId)
-      this._tokens[chain] = this._tokens[chain].filter(t => t.id !== tokenId)
-
-      if (tokenExists) {
-        await this.save()
-        // Emit token removed event
-        this.emit('tokenRemoved', { chain, tokenId })
-      }
-    }
+    return this.balanceService.removeToken(chain, tokenId)
   }
 
   /**
@@ -1140,78 +1151,35 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Set user chains
    */
   async setChains(chains: Chain[]): Promise<void> {
-    // Validate all chains
-    chains.forEach(chain => {
-      if (!isChainSupported(chain)) {
-        throw new VaultError(
-          VaultErrorCode.ChainNotSupported,
-          `Chain not supported: ${chain}`
-        )
-      }
-    })
-
-    this._userChains = chains
-
-    // Pre-derive addresses
-    await this.addresses(chains)
-
-    // Save preferences
-    await this.save()
+    return this.preferencesService.setChains(chains)
   }
 
   /**
    * Add single chain
    */
   async addChain(chain: Chain): Promise<void> {
-    if (!isChainSupported(chain)) {
-      throw new VaultError(
-        VaultErrorCode.ChainNotSupported,
-        `Chain not supported: ${chain}`
-      )
-    }
-
-    if (!this._userChains.includes(chain)) {
-      this._userChains.push(chain)
-      await this.address(chain) // Pre-derive
-      await this.save()
-
-      // Emit chain added event
-      this.emit('chainAdded', { chain })
-    }
+    return this.preferencesService.addChain(chain)
   }
 
   /**
    * Remove single chain
    */
   async removeChain(chain: Chain): Promise<void> {
-    const chainExists = this._userChains.includes(chain)
-    this._userChains = this._userChains.filter(c => c !== chain)
-
-    // Clear address cache
-    const cacheKey = `address:${chain.toLowerCase()}`
-    this.cacheService.clear(cacheKey)
-
-    if (chainExists) {
-      await this.save()
-      // Emit chain removed event
-      this.emit('chainRemoved', { chain })
-    }
+    return this.preferencesService.removeChain(chain)
   }
 
   /**
    * Get current user chains
    */
   getChains(): Chain[] {
-    return [...this._userChains]
+    return this.preferencesService.getChains()
   }
 
   /**
    * Reset to default chains
    */
   async resetToDefaultChains(): Promise<void> {
-    this._userChains = DEFAULT_CHAINS
-    await this.addresses(this._userChains)
-    await this.save()
+    return this.preferencesService.resetToDefaultChains()
   }
 
   /**
@@ -1227,15 +1195,14 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Set vault currency
    */
   async setCurrency(currency: string): Promise<void> {
-    this._currency = currency
-    await this.save()
+    return this.preferencesService.setCurrency(currency)
   }
 
   /**
    * Get vault currency
    */
   getCurrency(): string {
-    return this._currency
+    return this.preferencesService.getCurrencyPreference()
   }
 
   // ===== FIAT VALUE OPERATIONS =====
@@ -1268,31 +1235,12 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     tokenId?: string,
     fiatCurrency?: FiatCurrency
   ): Promise<Value> {
-    try {
-      // Get current balance
-      const balance = await this.balance(chain, tokenId)
-
-      // Calculate fiat value (normalize currency to lowercase)
-      const currency = (
-        fiatCurrency ?? this._currency
-      ).toLowerCase() as FiatCurrency
-      const value = await this.fiatValueService.getBalanceValue(
-        balance,
-        currency
-      )
-
-      return {
-        amount: value.toFixed(2),
-        currency,
-        lastUpdated: Date.now(),
-      }
-    } catch (error) {
-      throw new VaultError(
-        VaultErrorCode.BalanceFetchFailed,
-        `Failed to get value for ${chain}${tokenId ? `:${tokenId}` : ''}: ${(error as Error).message}`,
-        error as Error
-      )
-    }
+    const value = await this.fiatValueService.getValue(
+      chain,
+      tokenId,
+      fiatCurrency
+    )
+    return value
   }
 
   /**
@@ -1313,34 +1261,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     chain: Chain,
     fiatCurrency?: FiatCurrency
   ): Promise<Record<string, Value>> {
-    const values: Record<string, Value> = {}
-
-    try {
-      // Get native token value
-      values.native = await this.getValue(chain, undefined, fiatCurrency)
-    } catch (error) {
-      console.warn(`Failed to get native value for ${chain}:`, error)
-    }
-
-    // Get all token values
-    const tokens = this.getTokens(chain)
-    for (const token of tokens) {
-      try {
-        values[token.contractAddress] = await this.getValue(
-          chain,
-          token.contractAddress,
-          fiatCurrency
-        )
-      } catch (error) {
-        console.warn(
-          `Failed to get value for token ${token.contractAddress}:`,
-          error
-        )
-        // Continue with other tokens
-      }
-    }
-
-    return values
+    return this.fiatValueService.getValues(chain, fiatCurrency)
   }
 
   /**
@@ -1359,18 +1280,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * ```
    */
   async updateValues(chain: Chain | 'all'): Promise<void> {
-    // Clear price cache to force fresh fetch
-    await this.fiatValueService.clearPrices()
-
-    if (chain === 'all') {
-      // Fetch values for all chains (triggers fresh price fetch)
-      const chains = this.getChains()
-      await Promise.all(chains.map(c => this.getValues(c)))
-    } else {
-      // Fetch values for specific chain
-      await this.getValues(chain)
-    }
-
+    await this.fiatValueService.updateValues(chain)
     // Emit event
     this.emit('valuesUpdated', { chain })
   }
@@ -1389,40 +1299,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * ```
    */
   async getTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
-    // Normalize currency to lowercase
-    const currency = (
-      fiatCurrency ?? this._currency
-    ).toLowerCase() as FiatCurrency
-
-    // Use scoped cache with configured TTL
-    return this.cacheService.getOrComputeScoped(
-      currency,
-      CacheScope.PORTFOLIO,
-      async () => {
-        // Calculate fresh total
-        const chains = this.getChains()
-        let total = 0
-
-        // Sum values across all chains
-        for (const chain of chains) {
-          try {
-            const chainValues = await this.getValues(chain, currency)
-            for (const value of Object.values(chainValues)) {
-              total += parseFloat(value.amount)
-            }
-          } catch (error) {
-            console.warn(`Failed to get values for ${chain}:`, error)
-            // Continue with other chains
-          }
-        }
-
-        return {
-          amount: total.toFixed(2),
-          currency,
-          lastUpdated: Date.now(),
-        }
-      }
-    )
+    return this.fiatValueService.getTotalValue(fiatCurrency)
   }
 
   /**
@@ -1439,20 +1316,10 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * ```
    */
   async updateTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
-    // Normalize currency to lowercase
-    const currency = (
-      fiatCurrency ?? this._currency
-    ).toLowerCase() as FiatCurrency
-
-    // Invalidate cache to force recalculation
-    await this.cacheService.invalidateScoped(currency, CacheScope.PORTFOLIO)
-
-    // Get fresh value (will recompute)
-    const totalValue = await this.getTotalValue(currency)
-
+    const totalValue =
+      await this.fiatValueService.updateTotalValue(fiatCurrency)
     // Emit event
     this.emit('totalValueUpdated', { value: totalValue })
-
     return totalValue
   }
 

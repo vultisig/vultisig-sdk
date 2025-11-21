@@ -23,7 +23,11 @@ export class BalanceService {
     private emitError: (error: Error) => void,
     private getAddress: (chain: Chain) => Promise<string>,
     private getTokens: (chain: Chain) => Token[],
-    private getAllTokens: () => Record<string, Token[]>
+    private getAllTokens: () => Record<string, Token[]>,
+    private setAllTokens: (tokens: Record<string, Token[]>) => void,
+    private saveVault: () => Promise<void>,
+    private emitTokenAdded: (data: { chain: Chain; token: Token }) => void,
+    private emitTokenRemoved: (data: { chain: Chain; tokenId: string }) => void
   ) {}
 
   /**
@@ -149,5 +153,67 @@ export class BalanceService {
    */
   private getTokensRecord(): Record<string, Token[]> {
     return this.getAllTokens()
+  }
+
+  /**
+   * Set tokens for a chain (replaces existing list)
+   *
+   * @param chain Chain to set tokens for
+   * @param tokens Array of tokens
+   */
+  async setTokens(chain: Chain, tokens: Token[]): Promise<void> {
+    const allTokens = this.getAllTokens()
+    allTokens[chain] = tokens
+    this.setAllTokens(allTokens)
+    await this.saveVault()
+  }
+
+  /**
+   * Add single token to chain
+   * Emits tokenAdded event and invalidates balance cache
+   *
+   * @param chain Chain to add token to
+   * @param token Token to add
+   */
+  async addToken(chain: Chain, token: Token): Promise<void> {
+    const allTokens = this.getAllTokens()
+
+    if (!allTokens[chain]) {
+      allTokens[chain] = []
+    }
+
+    // Check if token already exists
+    if (!allTokens[chain].find(t => t.id === token.id)) {
+      allTokens[chain].push(token)
+      this.setAllTokens(allTokens)
+      await this.saveVault()
+
+      // Emit token added event
+      this.emitTokenAdded({ chain, token })
+    }
+  }
+
+  /**
+   * Remove token from chain
+   * Emits tokenRemoved event and invalidates balance cache
+   *
+   * @param chain Chain to remove token from
+   * @param tokenId Token ID (contract address) to remove
+   */
+  async removeToken(chain: Chain, tokenId: string): Promise<void> {
+    const allTokens = this.getAllTokens()
+
+    if (allTokens[chain]) {
+      const tokenExists = allTokens[chain].some(t => t.id === tokenId)
+      allTokens[chain] = allTokens[chain].filter(t => t.id !== tokenId)
+      this.setAllTokens(allTokens)
+
+      if (tokenExists) {
+        await this.saveVault()
+
+        // Emit token removed event
+        this.emitTokenRemoved({ chain, tokenId })
+      }
+    }
   }
 }

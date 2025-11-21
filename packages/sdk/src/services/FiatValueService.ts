@@ -37,7 +37,9 @@ export class FiatValueService {
   constructor(
     private cacheService: CacheService,
     private getCurrency: () => FiatCurrency,
-    private getTokens: () => Record<string, Token[]>
+    private getTokens: () => Record<string, Token[]>,
+    private getChains: () => Chain[],
+    private getBalance: (chain: Chain, tokenId?: string) => Promise<Balance>
   ) {}
 
   /**
@@ -246,6 +248,224 @@ export class FiatValueService {
   async clearPrices(): Promise<void> {
     // Clear only price-related cache entries (not addresses or balances!)
     await this.cacheService.invalidateScope(CacheScope.PRICE)
+  }
+
+  /**
+   * Get fiat value for a specific asset
+   * Combines balance and price data to calculate current value
+   *
+   * @param chain Chain to get value for
+   * @param tokenId Optional token contract address (omit for native token)
+   * @param fiatCurrency Optional currency override (defaults to vault currency)
+   * @returns Current value in specified fiat currency
+   *
+   * @example
+   * ```typescript
+   * // Get ETH value in vault's currency
+   * const ethValue = await service.getValue(Chain.Ethereum)
+   * console.log(`ETH value: ${ethValue.currency} ${ethValue.amount}`)
+   *
+   * // Get USDC value in EUR
+   * const usdcValue = await service.getValue(
+   *   Chain.Ethereum,
+   *   '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+   *   'eur'
+   * )
+   * ```
+   */
+  async getValue(
+    chain: Chain,
+    tokenId?: string,
+    fiatCurrency?: FiatCurrency
+  ): Promise<{ amount: string; currency: FiatCurrency; lastUpdated: number }> {
+    try {
+      // Get current balance
+      const balance = await this.getBalance(chain, tokenId)
+
+      // Calculate fiat value (normalize currency to lowercase)
+      const currency = (
+        fiatCurrency ?? this.getCurrency()
+      ).toLowerCase() as FiatCurrency
+
+      const value = await this.getBalanceValue(balance, currency)
+
+      return {
+        amount: value.toFixed(2),
+        currency,
+        lastUpdated: Date.now(),
+      }
+    } catch (error) {
+      throw new Error(
+        `Failed to get value for ${chain}${tokenId ? `:${tokenId}` : ''}: ${(error as Error).message}`
+      )
+    }
+  }
+
+  /**
+   * Get fiat values for all assets on a chain (native + tokens)
+   *
+   * @param chain Chain to get values for
+   * @param fiatCurrency Optional currency override
+   * @returns Record of asset ID to Value
+   *
+   * @example
+   * ```typescript
+   * const values = await service.getValues(Chain.Ethereum)
+   * console.log('Native ETH:', values.native.amount)
+   * console.log('USDC:', values['0xA0b86991...'].amount)
+   * ```
+   */
+  async getValues(
+    chain: Chain,
+    fiatCurrency?: FiatCurrency
+  ): Promise<
+    Record<
+      string,
+      { amount: string; currency: FiatCurrency; lastUpdated: number }
+    >
+  > {
+    const values: Record<
+      string,
+      { amount: string; currency: FiatCurrency; lastUpdated: number }
+    > = {}
+
+    try {
+      // Get native token value
+      values.native = await this.getValue(chain, undefined, fiatCurrency)
+    } catch (error) {
+      console.warn(`Failed to get native value for ${chain}:`, error)
+    }
+
+    // Get all token values
+    const allTokens = this.getTokens()
+    const tokens = allTokens[chain] || []
+
+    for (const token of tokens) {
+      try {
+        values[token.contractAddress] = await this.getValue(
+          chain,
+          token.contractAddress,
+          fiatCurrency
+        )
+      } catch (error) {
+        console.warn(
+          `Failed to get value for token ${token.contractAddress}:`,
+          error
+        )
+        // Continue with other tokens
+      }
+    }
+
+    return values
+  }
+
+  /**
+   * Get total portfolio value across all chains and tokens
+   * Uses 1-minute cache to avoid excessive calculations
+   *
+   * @param fiatCurrency Optional currency override
+   * @returns Total portfolio value
+   *
+   * @example
+   * ```typescript
+   * const total = await service.getTotalValue()
+   * console.log(`Total portfolio: ${total.currency} ${total.amount}`)
+   * ```
+   */
+  async getTotalValue(
+    fiatCurrency?: FiatCurrency
+  ): Promise<{ amount: string; currency: FiatCurrency; lastUpdated: number }> {
+    // Normalize currency to lowercase
+    const currency = (
+      fiatCurrency ?? this.getCurrency()
+    ).toLowerCase() as FiatCurrency
+
+    // Use scoped cache with configured TTL
+    return this.cacheService.getOrComputeScoped(
+      currency,
+      CacheScope.PORTFOLIO,
+      async () => {
+        // Calculate fresh total
+        const chains = this.getChains()
+        let total = 0
+
+        // Sum values across all chains
+        for (const chain of chains) {
+          try {
+            const chainValues = await this.getValues(chain, currency)
+            for (const value of Object.values(chainValues)) {
+              total += parseFloat(value.amount)
+            }
+          } catch (error) {
+            console.warn(`Failed to get values for ${chain}:`, error)
+            // Continue with other chains
+          }
+        }
+
+        return {
+          amount: total.toFixed(2),
+          currency,
+          lastUpdated: Date.now(),
+        }
+      }
+    )
+  }
+
+  /**
+   * Refresh price data for specified chain or all chains
+   * Clears price cache to force fresh fetch
+   *
+   * @param chain Chain to update ('all' for all chains)
+   *
+   * @example
+   * ```typescript
+   * // Update prices for Ethereum
+   * await service.updateValues(Chain.Ethereum)
+   *
+   * // Update prices for all chains
+   * await service.updateValues('all')
+   * ```
+   */
+  async updateValues(chain: Chain | 'all'): Promise<void> {
+    // Clear price cache to force fresh fetch
+    await this.clearPrices()
+
+    if (chain === 'all') {
+      // Fetch values for all chains (triggers fresh price fetch)
+      const chains = this.getChains()
+      await Promise.all(chains.map(c => this.getValues(c)))
+    } else {
+      // Fetch values for specific chain
+      await this.getValues(chain)
+    }
+  }
+
+  /**
+   * Force recalculation of total portfolio value (invalidates cache)
+   *
+   * @param fiatCurrency Optional currency override
+   * @returns Updated total portfolio value
+   *
+   * @example
+   * ```typescript
+   * // Force fresh calculation
+   * const total = await service.updateTotalValue()
+   * console.log(`Updated total: ${total.currency} ${total.amount}`)
+   * ```
+   */
+  async updateTotalValue(
+    fiatCurrency?: FiatCurrency
+  ): Promise<{ amount: string; currency: FiatCurrency; lastUpdated: number }> {
+    // Normalize currency to lowercase
+    const currency = (
+      fiatCurrency ?? this.getCurrency()
+    ).toLowerCase() as FiatCurrency
+
+    // Invalidate cache to force recalculation
+    await this.cacheService.invalidateScoped(currency, CacheScope.PORTFOLIO)
+
+    // Get fresh value (will recompute)
+    return this.getTotalValue(currency)
   }
 
   // ========== PRIVATE METHODS ==========
