@@ -43,8 +43,9 @@ export {
 // NOTE: Cryptographic utilities are internal-only
 // Users don't need direct access to crypto primitives
 
-// NOTE: WASM management is internal-only
-// WalletCore initialization is handled by the SDK
+// WASM Management (now static - no instance needed)
+export type { WasmConfig } from './runtime/wasm'
+export { WasmManager } from './runtime/wasm'
 
 // ============================================================================
 // PUBLIC API - Environment Utilities

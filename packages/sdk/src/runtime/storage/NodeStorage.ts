@@ -312,3 +312,23 @@ export class NodeStorage implements Storage {
     }
   }
 }
+
+// Self-register
+import { type StorageOptions, storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'node',
+  priority: 100,
+  isSupported: () => {
+    return (
+      typeof process !== 'undefined' &&
+      process.versions?.node !== undefined &&
+      typeof window === 'undefined' // Not Electron renderer
+    )
+  },
+  create: (options?: StorageOptions) => {
+    return new NodeStorage(
+      options?.basePath ? { basePath: options.basePath } : undefined
+    )
+  },
+})

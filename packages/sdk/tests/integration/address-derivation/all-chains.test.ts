@@ -122,7 +122,6 @@ describe('Integration: Multi-Chain Address Derivation', () => {
     } as CoreVault
 
     const services: VaultServices = {
-      wasmManager: sdk.getWasmManager(),
       fastSigningService: {} as any, // Not needed for address derivation
     }
 

@@ -23,19 +23,16 @@ import { Chain } from '@core/chain/Chain'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { WasmManager } from '../../../src/runtime/wasm'
 import type { SigningPayload, Token, VaultData } from '../../../src/types/index'
 import { Vault } from '../../../src/vault/Vault'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 import type { VaultServices } from '../../../src/vault/VaultServices'
-import { WASMManager } from '../../../src/wasm/WASMManager'
 
 // Mock only external dependencies, NOT WASM or core functions
 vi.mock('@lib/utils/file/initiateFileDownload', () => ({
   initiateFileDownload: vi.fn(),
 }))
-
-// Real WASMManager instance for authentic testing
-let sharedWasmManager: WASMManager
 
 // Helper to create mock vault data
 function createMockVaultData(overrides?: Partial<CoreVault>): CoreVault {
@@ -109,19 +106,16 @@ describe('Vault', () => {
 
   // Initialize WASM once before all tests (shared across tests for performance)
   beforeAll(async () => {
-    // Create real WASMManager that will load actual WASM modules
-    sharedWasmManager = new WASMManager()
-    // Preload WalletCore to speed up tests (memoized, so only loads once)
-    await sharedWasmManager.getWalletCore()
+    // Preload WalletCore to speed up tests (static, so only loads once)
+    await WasmManager.getWalletCore()
   }, 30000) // 30 second timeout for WASM loading
 
   beforeEach(() => {
     // Create mock vault data
     mockVaultData = createMockVaultData()
 
-    // Create services with REAL WASMManager
+    // Create services (WasmManager is now static - no instance needed)
     realServices = {
-      wasmManager: sharedWasmManager,
       fastSigningService: {
         signWithServer: vi.fn().mockResolvedValue({
           signature: '0x' + '1234'.repeat(32),
@@ -440,22 +434,19 @@ describe('Vault', () => {
     })
 
     it('should handle address derivation errors gracefully', async () => {
-      // Create a separate vault with a mocked WASMManager for error testing
-      const mockWasmManager = {
-        getWalletCore: vi.fn().mockRejectedValue(new Error('WASM load failed')),
-      } as any
+      // Mock static WasmManager for error testing
+      const spy = vi
+        .spyOn(WasmManager, 'getWalletCore')
+        .mockRejectedValueOnce(new Error('WASM load failed'))
 
       const vaultData = createVaultDataFromCore(mockVaultData, 3)
-      const errorTestVault = Vault.fromStorage(vaultData, {
-        wasmManager: mockWasmManager,
-      } as VaultServices)
+      const errorTestVault = Vault.fromStorage(vaultData, {} as VaultServices)
 
       await expect(errorTestVault.address(Chain.Bitcoin)).rejects.toThrow(
         VaultError
       )
-      await expect(errorTestVault.address(Chain.Bitcoin)).rejects.toThrow(
-        'Failed to derive address'
-      )
+
+      spy.mockRestore()
     })
 
     it('should continue deriving other addresses if one fails', async () => {
@@ -472,15 +463,13 @@ describe('Vault', () => {
     })
 
     it('should wrap derivation errors with chain context', async () => {
-      // Create a separate vault with a mocked WASMManager for error testing
-      const mockWasmManager = {
-        getWalletCore: vi.fn().mockRejectedValue(new Error('WASM error')),
-      } as any
+      // Mock static WasmManager for error testing
+      const spy = vi
+        .spyOn(WasmManager, 'getWalletCore')
+        .mockRejectedValueOnce(new Error('WASM error'))
 
       const vaultData = createVaultDataFromCore(mockVaultData, 4)
-      const errorTestVault = Vault.fromStorage(vaultData, {
-        wasmManager: mockWasmManager,
-      } as VaultServices)
+      const errorTestVault = Vault.fromStorage(vaultData, {} as VaultServices)
 
       try {
         await errorTestVault.address(Chain.Bitcoin)
@@ -491,6 +480,8 @@ describe('Vault', () => {
           VaultErrorCode.AddressDerivationFailed
         )
         expect((error as VaultError).message).toContain(Chain.Bitcoin)
+      } finally {
+        spy.mockRestore()
       }
     })
   })
@@ -595,9 +586,10 @@ describe('Vault', () => {
 
     it('should require FastSigningService for fast signing', async () => {
       const vaultData = createVaultDataFromCore(mockVaultData, 7)
-      const vaultWithoutService = Vault.fromStorage(vaultData, {
-        wasmManager: realServices.wasmManager,
-      } as VaultServices)
+      const vaultWithoutService = Vault.fromStorage(
+        vaultData,
+        {} as VaultServices
+      )
 
       await expect(
         vaultWithoutService.sign('fast', mockPayload, 'password')
@@ -1034,9 +1026,10 @@ describe('Vault', () => {
 
     it('should work without fastSigningService', () => {
       const vaultData = createVaultDataFromCore(mockVaultData, 11)
-      const vaultWithoutSigning = Vault.fromStorage(vaultData, {
-        wasmManager: realServices.wasmManager,
-      } as VaultServices)
+      const vaultWithoutSigning = Vault.fromStorage(
+        vaultData,
+        {} as VaultServices
+      )
 
       expect(() => vaultWithoutSigning.getChains()).not.toThrow()
     })

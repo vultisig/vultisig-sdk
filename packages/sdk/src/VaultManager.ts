@@ -13,7 +13,6 @@ import { createVaultBackup } from './utils/export'
 import { Vault } from './vault/Vault'
 import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
 import { VaultConfig, VaultServices } from './vault/VaultServices'
-import { WASMManager } from './wasm'
 
 /**
  * VaultManager handles vault lifecycle operations
@@ -23,7 +22,6 @@ export class VaultManager {
   private storage: Storage
 
   constructor(
-    private wasmManager: WASMManager,
     private serverManager: ServerManager,
     private config: VaultConfig,
     storage: Storage
@@ -81,11 +79,7 @@ export class VaultManager {
    */
   private createVaultServices(): VaultServices {
     return {
-      wasmManager: this.wasmManager,
-      fastSigningService: new FastSigningService(
-        this.serverManager,
-        this.wasmManager
-      ),
+      fastSigningService: new FastSigningService(this.serverManager),
     }
   }
 

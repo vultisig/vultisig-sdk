@@ -32,7 +32,6 @@ import {
   Value,
   VaultData,
 } from '../types'
-import { WASMManager } from '../wasm/WASMManager'
 // Vault services
 import { AddressService } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
@@ -68,7 +67,6 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
  */
 export class Vault extends UniversalEventEmitter<VaultEvents> {
   // Essential services only
-  private wasmManager: WASMManager
   private cacheService: CacheService
   private fastSigningService?: FastSigningService
   private fiatValueService: FiatValueService
@@ -108,7 +106,6 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     this.password = password
 
     // Inject essential services
-    this.wasmManager = services.wasmManager
     this.fastSigningService = services.fastSigningService
     // Use provided storage or default to in-memory storage
     this.storage = storage ?? new MemoryStorage()
@@ -237,15 +234,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     )
 
     // Initialize extracted services
-    this.addressService = new AddressService(
-      this.coreVault,
-      this.wasmManager,
-      this.cacheService
-    )
-    this.transactionBuilder = new TransactionBuilder(
-      this.coreVault,
-      this.wasmManager
-    )
+    this.addressService = new AddressService(this.coreVault, this.cacheService)
+    this.transactionBuilder = new TransactionBuilder(this.coreVault)
     this.balanceService = new BalanceService(
       this.cacheService,
       data => this.emit('balanceUpdated', data),
@@ -256,12 +246,10 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     )
     this.gasEstimationService = new GasEstimationService(
       this.coreVault,
-      this.wasmManager,
       chain => this.address(chain)
     )
-    this.broadcastService = new BroadcastService(
-      this.wasmManager,
-      keysignPayload => this.extractMessageHashes(keysignPayload)
+    this.broadcastService = new BroadcastService(keysignPayload =>
+      this.extractMessageHashes(keysignPayload)
     )
 
     // Setup event-driven cache invalidation

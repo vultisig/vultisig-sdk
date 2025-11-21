@@ -94,7 +94,6 @@ describe('Integration: Vault Export', () => {
     } as CoreVault
 
     const services: VaultServices = {
-      wasmManager: sdk.getWasmManager(),
       fastSigningService: {} as any, // Not needed for export
     }
 

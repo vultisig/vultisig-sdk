@@ -427,3 +427,18 @@ export class BrowserStorage implements Storage {
     )
   }
 }
+
+// Self-register at module load
+import { storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'browser',
+  priority: 100,
+  isSupported: () => {
+    // Support both IndexedDB and localStorage
+    return (
+      typeof indexedDB !== 'undefined' || typeof localStorage !== 'undefined'
+    )
+  },
+  create: () => new BrowserStorage(),
+})

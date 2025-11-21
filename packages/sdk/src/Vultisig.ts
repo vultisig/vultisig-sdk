@@ -12,6 +12,7 @@ import type { SdkEvents } from './events/types'
 import { isNode } from './runtime/environment'
 import { StorageManager } from './runtime/storage/StorageManager'
 import type { Storage } from './runtime/storage/types'
+import { WasmManager } from './runtime/wasm'
 import { ServerManager } from './server/ServerManager'
 import {
   AddressBook,
@@ -25,7 +26,6 @@ import {
 import { ValidationHelpers } from './utils/validation'
 import { Vault } from './vault/Vault'
 import { VaultManager } from './VaultManager'
-import { WASMManager } from './wasm'
 
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
@@ -33,7 +33,6 @@ import { WASMManager } from './wasm'
  */
 export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private serverManager: ServerManager
-  private wasmManager: WASMManager
   private initialized = false
   private initializationPromise?: Promise<void>
 
@@ -61,7 +60,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Initialize managers
     this.serverManager = new ServerManager(config?.serverEndpoints)
-    this.wasmManager = new WASMManager(config?.wasmConfig)
+
+    // Configure WASM if config provided
+    if (config?.wasmConfig) {
+      WasmManager.configure(config.wasmConfig)
+    }
 
     // Initialize chain and currency configuration
     this.defaultChains = config?.defaultChains ?? DEFAULT_CHAINS
@@ -75,7 +78,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Initialize module managers
     this.addressBookManager = new AddressBookManager(this.storage)
     this.vaultManager = new VaultManager(
-      this.wasmManager,
       this.serverManager,
       {
         defaultChains: config?.defaultChains,
@@ -167,7 +169,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
           await initializeNodePolyfills()
         }
 
-        await this.wasmManager.initialize()
+        await WasmManager.initialize()
 
         // Load configuration from storage
         await this.loadConfigFromStorage()
@@ -375,10 +377,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       vultContent,
       password,
       {
-        wasmManager: this.wasmManager,
         fastSigningService: new (
           await import('./services/FastSigningService')
-        ).FastSigningService(this.serverManager, this.wasmManager),
+        ).FastSigningService(this.serverManager),
       },
       {
         defaultChains: this.defaultChains,
@@ -795,9 +796,5 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   getServerManager(): ServerManager {
     return this.serverManager
-  }
-
-  getWasmManager(): WASMManager {
-    return this.wasmManager
   }
 }

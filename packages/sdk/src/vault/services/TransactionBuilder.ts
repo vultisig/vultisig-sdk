@@ -5,6 +5,7 @@ import { buildSendKeysignPayload } from '@core/mpc/keysign/send/build'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
+import { WasmManager } from '../../runtime/wasm'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -14,10 +15,7 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * Extracted from Vault.ts to reduce file size and improve maintainability.
  */
 export class TransactionBuilder {
-  constructor(
-    private vaultData: CoreVault,
-    private wasmManager: any
-  ) {}
+  constructor(private vaultData: CoreVault) {}
 
   /**
    * Prepare a send transaction keysign payload
@@ -58,7 +56,7 @@ export class TransactionBuilder {
   }): Promise<KeysignPayload> {
     try {
       // Get WalletCore
-      const walletCore = await this.wasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore()
 
       // Get public key for the coin's chain
       const publicKey = getPublicKey({
@@ -130,7 +128,7 @@ export class TransactionBuilder {
       )
 
       // Get WalletCore instance
-      const walletCore = await this.wasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore()
 
       // Get chain from keysign payload
       const chain = getKeysignChain(keysignPayload)

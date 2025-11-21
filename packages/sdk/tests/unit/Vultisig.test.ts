@@ -1,6 +1,7 @@
 import { Chain } from '@core/chain/Chain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { WasmManager } from '../../src/runtime/wasm'
 import { Vault } from '../../src/vault/Vault'
 import { Vultisig } from '../../src/Vultisig'
 
@@ -65,7 +66,7 @@ describe('Vultisig', () => {
       expect(sdk.isInitialized()).toBe(false)
 
       // Mock wasmManager.initialize to avoid actual WASM loading
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockResolvedValue()
+      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
       await sdk.initialize()
 
@@ -74,7 +75,7 @@ describe('Vultisig', () => {
 
     it('should handle initialization failure', async () => {
       // Mock wasmManager.initialize to throw error
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockRejectedValue(
+      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(
         new Error('WASM load failed')
       )
 
@@ -83,7 +84,7 @@ describe('Vultisig', () => {
 
     it('should not initialize twice', async () => {
       const initializeSpy = vi
-        .spyOn(sdk.getWasmManager(), 'initialize')
+        .spyOn(WasmManager, 'initialize')
         .mockResolvedValue()
 
       await sdk.initialize()
@@ -104,7 +105,7 @@ describe('Vultisig', () => {
 
     it('should connect and initialize', async () => {
       // Mock initialization
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockResolvedValue()
+      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
       await sdk.connect()
 
@@ -342,7 +343,7 @@ describe('Vultisig', () => {
   describe('vault lifecycle operations', () => {
     beforeEach(() => {
       // Mock initialization for vault operations
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockResolvedValue()
+      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
     })
 
     it('should list vaults when empty', async () => {
@@ -366,7 +367,7 @@ describe('Vultisig', () => {
 
   describe('error handling', () => {
     it('should handle initialization errors', async () => {
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockRejectedValue(
+      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(
         new Error('Init failed')
       )
 
@@ -424,10 +425,7 @@ describe('Vultisig', () => {
       // Operations that require initialization should auto-initialize
       const uninitializedSdk = new Vultisig({ autoInit: false })
 
-      vi.spyOn(
-        uninitializedSdk.getWasmManager(),
-        'initialize'
-      ).mockResolvedValue()
+      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
       expect(uninitializedSdk.isInitialized()).toBe(false)
 
@@ -442,9 +440,7 @@ describe('Vultisig', () => {
       // Create a fresh SDK for this test
       const concurrentSdk = new Vultisig({ autoInit: false })
 
-      const initSpy = vi
-        .spyOn(concurrentSdk.getWasmManager(), 'initialize')
-        .mockResolvedValue()
+      const initSpy = vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
       // Call initialize multiple times concurrently
       const promises = await Promise.all([
@@ -467,7 +463,7 @@ describe('Vultisig', () => {
 
       let attempts = 0
       const initSpy = vi
-        .spyOn(retrySdk.getWasmManager(), 'initialize')
+        .spyOn(WasmManager, 'initialize')
         .mockImplementation(async () => {
           attempts++
           if (attempts === 1) {

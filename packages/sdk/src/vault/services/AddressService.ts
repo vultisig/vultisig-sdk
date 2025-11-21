@@ -3,8 +3,8 @@ import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
+import { WasmManager } from '../../runtime/wasm'
 import { CacheScope, type CacheService } from '../../services/CacheService'
-import { WASMManager } from '../../wasm/WASMManager'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -16,7 +16,6 @@ import { VaultError, VaultErrorCode } from '../VaultError'
 export class AddressService {
   constructor(
     private vaultData: CoreVault,
-    private wasmManager: WASMManager,
     private cacheService: CacheService
   ) {}
 
@@ -31,7 +30,7 @@ export class AddressService {
       async () => {
         // Derive address (expensive WASM operation)
         try {
-          const walletCore = await this.wasmManager.getWalletCore()
+          const walletCore = await WasmManager.getWalletCore()
 
           const publicKey = getPublicKey({
             chain,

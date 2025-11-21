@@ -1,8 +1,8 @@
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
+import { WasmManager } from '../runtime/wasm'
 import { ServerManager } from '../server/ServerManager'
 import { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
-import { WASMManager } from '../wasm/WASMManager'
 
 /**
  * Fast signing service for server-assisted signing (2-of-2 MPC with VultiServer)
@@ -15,10 +15,7 @@ import { WASMManager } from '../wasm/WASMManager'
  * 5. Return formatted signature
  */
 export class FastSigningService {
-  constructor(
-    private serverManager: ServerManager,
-    private wasmManager: WASMManager
-  ) {}
+  constructor(private serverManager: ServerManager) {}
 
   /**
    * Sign transaction with VultiServer assistance (2-of-2 threshold signing)
@@ -58,7 +55,7 @@ export class FastSigningService {
     }
 
     // Get WalletCore instance
-    const walletCore = await this.wasmManager.getWalletCore()
+    const walletCore = await WasmManager.getWalletCore()
 
     console.log(
       `📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`

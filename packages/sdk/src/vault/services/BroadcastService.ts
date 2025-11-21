@@ -8,6 +8,7 @@ import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@core/mpc/keysign/tw/getKeysignTwPublicKey'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
+import { WasmManager } from '../../runtime/wasm'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
@@ -26,7 +27,6 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  */
 export class BroadcastService {
   constructor(
-    private wasmManager: any,
     private extractMessageHashes: (
       keysignPayload: KeysignPayload
     ) => Promise<string[]>
@@ -66,7 +66,7 @@ export class BroadcastService {
 
     try {
       // Get WalletCore instance
-      const walletCore = await this.wasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore()
 
       // Extract message hashes from payload
       const messageHashes = await this.extractMessageHashes(keysignPayload)

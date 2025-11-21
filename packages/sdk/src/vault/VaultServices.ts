@@ -1,5 +1,4 @@
 import { FastSigningService } from '../services/FastSigningService'
-import { WASMManager } from '../wasm/WASMManager'
 
 /**
  * Services required by Vault for operations
@@ -7,9 +6,9 @@ import { WASMManager } from '../wasm/WASMManager'
  * Vault calls core functions directly - no service layers
  *
  * Note: CacheService and FiatValueService are created internally by Vault
+ * Note: WasmManager is now static and accessed directly
  */
 export type VaultServices = {
-  wasmManager: WASMManager
   fastSigningService?: FastSigningService
 }
 

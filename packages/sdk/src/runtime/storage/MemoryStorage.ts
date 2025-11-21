@@ -59,3 +59,13 @@ export class MemoryStorage implements Storage {
     return undefined
   }
 }
+
+// Self-register with lowest priority (universal fallback)
+import { storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'memory',
+  priority: 0,
+  isSupported: () => true, // Always works
+  create: () => new MemoryStorage(),
+})

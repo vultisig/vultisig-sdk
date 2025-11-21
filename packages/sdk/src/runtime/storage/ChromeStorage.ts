@@ -239,3 +239,19 @@ export class ChromeStorage implements Storage {
     }
   }
 }
+
+// Self-register with higher priority than browser storage
+import { storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'chrome',
+  priority: 110, // Preferred over generic browser storage
+  isSupported: () => {
+    return (
+      typeof chrome !== 'undefined' &&
+      chrome.runtime !== undefined &&
+      chrome.runtime.id !== undefined
+    )
+  },
+  create: () => new ChromeStorage(),
+})

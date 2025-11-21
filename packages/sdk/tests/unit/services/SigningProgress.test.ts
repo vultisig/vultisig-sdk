@@ -18,7 +18,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerManager } from '../../../src/server/ServerManager'
 import { FastSigningService } from '../../../src/services/FastSigningService'
 import type { SigningStep } from '../../../src/types'
-import { WASMManager } from '../../../src/wasm/WASMManager'
 
 // Mock ServerManager methods
 vi.mock('../../../src/server/ServerManager', () => {
@@ -90,21 +89,13 @@ vi.mock('../../../src/server/ServerManager', () => {
 describe('SigningProgress', () => {
   let fastSigningService: FastSigningService
   let mockServerManager: ServerManager
-  let mockWasmManager: WASMManager
-  let mockVault: Vault
+  let mockVault: any
 
   beforeEach(() => {
     // Create mock dependencies
-    mockWasmManager = {
-      getWalletCore: vi.fn().mockResolvedValue({}),
-    } as any
-
     mockServerManager = new ServerManager()
 
-    fastSigningService = new FastSigningService(
-      mockServerManager,
-      mockWasmManager
-    )
+    fastSigningService = new FastSigningService(mockServerManager)
 
     // Create mock vault with server signer (fast vault)
     mockVault = {

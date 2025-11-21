@@ -16,7 +16,8 @@ export { BrowserStorage } from './storage/BrowserStorage'
 export { ChromeStorage } from './storage/ChromeStorage'
 export { MemoryStorage } from './storage/MemoryStorage'
 export { NodeStorage } from './storage/NodeStorage'
-export type { StorageOptions } from './storage/StorageManager'
+export type { StorageOptions, StorageProvider } from './storage/registry'
+export { storageRegistry } from './storage/registry'
 export { StorageManager } from './storage/StorageManager'
 export type {
   StorageMetadata,
@@ -47,3 +48,9 @@ export {
 // Environment-Specific Utilities
 // ============================================
 export * from './utils'
+
+// ============================================
+// WASM Management
+// ============================================
+export type { WasmConfig, WasmLoader } from './wasm'
+export { wasmLoaderRegistry, WasmManager } from './wasm'

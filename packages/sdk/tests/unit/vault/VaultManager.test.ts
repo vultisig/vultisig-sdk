@@ -28,7 +28,6 @@ import {
   VaultImportErrorCode,
 } from '../../../src/vault/VaultError'
 import { VaultManager } from '../../../src/VaultManager'
-import { WASMManager } from '../../../src/wasm/WASMManager'
 
 // Mock modules
 vi.mock('@lib/utils/file/initiateFileDownload', () => ({
@@ -44,15 +43,10 @@ async function fileToContent(file: File): Promise<string> {
 
 describe('VaultManager', () => {
   let vaultManager: VaultManager
-  let mockWasmManager: WASMManager
   let mockServerManager: ServerManager
 
   beforeEach(() => {
     // Create mock dependencies
-    mockWasmManager = {
-      getWalletCore: vi.fn().mockResolvedValue({}),
-    } as any
-
     mockServerManager = {
       createFastVault: vi.fn().mockResolvedValue({
         vault: {
@@ -76,7 +70,6 @@ describe('VaultManager', () => {
     } as any
 
     vaultManager = new VaultManager(
-      mockWasmManager,
       mockServerManager,
       {
         defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
