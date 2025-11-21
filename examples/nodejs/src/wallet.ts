@@ -49,7 +49,7 @@ export class VaultManager {
       await this.sdk.initialize()
 
       // Check if there's an active vault in storage (from previous import/create)
-      const existingVault = await this.sdk.vaultManager.getActiveVault()
+      const existingVault = await this.sdk.getActiveVault()
       if (existingVault) {
         this.activeVault = existingVault
         this.setupVaultEvents(this.activeVault)
@@ -69,7 +69,7 @@ export class VaultManager {
 
           // Import vault with optional password from .env
           const vaultPassword = process.env.VAULT_PASSWORD
-          this.activeVault = await this.sdk.vaultManager.importVault(
+          this.activeVault = await this.sdk.importVault(
             vultContent,
             vaultPassword
           )
@@ -105,14 +105,21 @@ export class VaultManager {
     const spinner = ora('Creating vault...').start()
 
     try {
+      // Listen for progress events
+      const progressHandler = ({ step }: any) => {
+        spinner.text = `${step.message} (${step.progress}%)`
+      }
+      this.sdk.on('vaultCreationProgress', progressHandler)
+
       // Create fast vault (2-of-2 with VultiServer)
-      const result = await this.sdk.vaultManager.createFastVault(name, {
+      const result = await this.sdk.createFastVault({
+        name,
         password,
         email,
-        onProgressInternal: (step: any) => {
-          spinner.text = `${step.message} (${step.progress}%)`
-        },
       })
+
+      // Clean up progress listener
+      this.sdk.off('vaultCreationProgress', progressHandler)
 
       this.activeVault = result.vault
       this.setupVaultEvents(this.activeVault)
@@ -176,11 +183,8 @@ export class VaultManager {
       // Read vault file content
       const vultContent = await fs.readFile(filePath, 'utf-8')
 
-      // Import vault using VaultManager
-      const vault = await this.sdk.vaultManager.importVault(
-        vultContent,
-        password
-      )
+      // Import vault using SDK
+      const vault = await this.sdk.importVault(vultContent, password)
 
       this.activeVault = vault
       this.setupVaultEvents(this.activeVault)
@@ -204,10 +208,8 @@ export class VaultManager {
     const spinner = ora('Exporting vault...').start()
 
     try {
-      // Export vault using VaultManager (exports the encrypted .vult file as-is)
-      const vultContent = await this.sdk.vaultManager.exportVault(
-        this.activeVault.id
-      )
+      // Export vault using Vault instance method
+      const { data: vultContent } = await this.activeVault.export()
 
       // Determine output filename
       const fileName =

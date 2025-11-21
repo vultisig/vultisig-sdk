@@ -816,13 +816,12 @@ describe('Vault', () => {
       expect(chains).toEqual([Chain.Bitcoin, Chain.Ethereum])
     })
 
-    it('should validate chains when setting', async () => {
-      await expect(vault.setChains(['invalid_chain' as any])).rejects.toThrow(
-        VaultError
-      )
-      await expect(vault.setChains(['invalid_chain' as any])).rejects.toThrow(
-        'Chain not supported'
-      )
+    it('should accept valid Chain enums when setting', async () => {
+      // Chain enum validation now happens at compile-time via TypeScript
+      // This test verifies that valid Chain enums work correctly
+      await expect(
+        vault.setChains([Chain.Bitcoin, Chain.Ethereum])
+      ).resolves.not.toThrow()
     })
 
     it('should pre-derive addresses when setting chains', async () => {
@@ -872,13 +871,10 @@ describe('Vault', () => {
       expect(chainHandler).not.toHaveBeenCalled()
     })
 
-    it('should validate chain before adding', async () => {
-      await expect(vault.addChain('invalid_chain' as any)).rejects.toThrow(
-        VaultError
-      )
-      await expect(vault.addChain('invalid_chain' as any)).rejects.toThrow(
-        'Chain not supported'
-      )
+    it('should accept valid Chain enum when adding', async () => {
+      // Chain enum validation now happens at compile-time via TypeScript
+      // This test verifies that valid Chain enums work correctly
+      await expect(vault.addChain(Chain.Ripple)).resolves.not.toThrow()
     })
 
     it('should pre-derive address when adding chain', async () => {

@@ -22,18 +22,10 @@ export type SdkEvents = {
   /** Emitted when SDK disconnects */
   disconnect: Record<string, never>
 
-  /** Emitted when active chain changes */
-  chainChanged: {
-    chain: Chain
-  }
-
   /** Emitted when active vault changes */
   vaultChanged: {
     vaultId: string
   }
-
-  /** Emitted when all SDK data is cleared from storage */
-  dataCleared: Record<string, never>
 
   /** Emitted on SDK-level errors */
   error: Error

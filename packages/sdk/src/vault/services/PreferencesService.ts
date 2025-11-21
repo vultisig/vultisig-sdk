@@ -1,8 +1,7 @@
 import { Chain } from '@core/chain/Chain'
 
-import { DEFAULT_CHAINS, isChainSupported } from '../../ChainManager'
 import { type CacheService } from '../../services/CacheService'
-import { VaultError, VaultErrorCode } from '../VaultError'
+import { DEFAULT_CHAINS } from '../../Vultisig'
 
 /**
  * PreferencesService
@@ -30,22 +29,10 @@ export class PreferencesService {
 
   /**
    * Set user chains (replaces current list)
-   * Validates all chains before applying
    *
    * @param chains Array of chains to set
-   * @throws {VaultError} If any chain is not supported
    */
   async setChains(chains: Chain[]): Promise<void> {
-    // Validate all chains
-    chains.forEach(chain => {
-      if (!isChainSupported(chain)) {
-        throw new VaultError(
-          VaultErrorCode.ChainNotSupported,
-          `Chain not supported: ${chain}`
-        )
-      }
-    })
-
     this.setUserChains(chains)
 
     // Pre-derive addresses for all chains
@@ -59,16 +46,8 @@ export class PreferencesService {
    * Add single chain to user's list
    *
    * @param chain Chain to add
-   * @throws {VaultError} If chain is not supported
    */
   async addChain(chain: Chain): Promise<void> {
-    if (!isChainSupported(chain)) {
-      throw new VaultError(
-        VaultErrorCode.ChainNotSupported,
-        `Chain not supported: ${chain}`
-      )
-    }
-
     const currentChains = this.getUserChains()
 
     if (!currentChains.includes(chain)) {

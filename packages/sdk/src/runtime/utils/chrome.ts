@@ -77,13 +77,13 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
 
   switch (action) {
     case 'connect':
-      return await sdk.connect(params)
+      return await sdk.initialize()
 
     case 'disconnect':
-      return await sdk.disconnect()
+      return await sdk.setActiveVault(null)
 
     case 'isConnected':
-      return sdk.isConnected()
+      return await sdk.hasActiveVault()
 
     case 'createFastVault':
       return await sdk.createFastVault({
@@ -167,8 +167,14 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
     case 'listVaults':
       return await sdk.listVaults()
 
-    case 'switchVault':
-      return await sdk.switchVault(params.vaultId)
+    case 'switchVault': {
+      const vault = await sdk.getVaultById(params.vaultId)
+      if (!vault) {
+        throw new Error(`Vault not found: ${params.vaultId}`)
+      }
+      await sdk.setActiveVault(vault)
+      return
+    }
 
     case 'deleteVault': {
       const vaults = await sdk.listVaults()

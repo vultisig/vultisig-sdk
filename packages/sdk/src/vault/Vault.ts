@@ -11,8 +11,6 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
-// SDK utilities
-import { DEFAULT_CHAINS } from '../ChainManager'
 import { UniversalEventEmitter } from '../events/EventEmitter'
 import { VaultEvents } from '../events/types'
 import { MemoryStorage } from '../runtime/storage/MemoryStorage'
@@ -33,6 +31,8 @@ import {
   VaultData,
 } from '../types'
 import { createVaultBackup } from '../utils/export'
+// SDK utilities
+import { DEFAULT_CHAINS } from '../Vultisig'
 // Vault services
 import { AddressService } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'

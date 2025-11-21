@@ -48,6 +48,20 @@ export type { WasmConfig } from './runtime/wasm'
 export { WasmManager } from './runtime/wasm'
 
 // ============================================================================
+// PUBLIC API - Validation Utilities
+// ============================================================================
+
+// Validation helpers
+export { ValidationHelpers } from './utils/validation'
+
+// ============================================================================
+// PUBLIC API - Chain Configuration
+// ============================================================================
+
+// Supported chains constant
+export { SUPPORTED_CHAINS } from './Vultisig'
+
+// ============================================================================
 // PUBLIC API - Environment Utilities
 // ============================================================================
 
@@ -170,7 +184,6 @@ export type {
   VaultBackup,
   VaultCreationStep,
   VaultDetails,
-  VaultManagerConfig,
   VaultOptions,
   VaultSummary,
   VaultType,

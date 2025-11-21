@@ -2,33 +2,37 @@
 import { Chain } from '@core/chain/Chain'
 
 import { AddressBookManager } from './AddressBookManager'
-import {
-  DEFAULT_CHAINS,
-  getSupportedChains,
-  validateChains,
-} from './ChainManager'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
-import { isNode } from './runtime/environment'
 import { PolyfillManager } from './runtime/polyfills'
 import { StorageManager } from './runtime/storage/StorageManager'
 import type { Storage } from './runtime/storage/types'
 import { WasmManager } from './runtime/wasm'
 import { ServerManager } from './server/ServerManager'
-import { FastSigningService } from './services/FastSigningService'
 import {
   AddressBook,
   AddressBookEntry,
   ServerStatus,
-  Signature,
-  SigningPayload,
-  ValidationResult,
   VultisigConfig,
 } from './types'
-import { createVaultBackup } from './utils/export'
-import { ValidationHelpers } from './utils/validation'
 import { Vault } from './vault/Vault'
 import { VaultManager } from './VaultManager'
+
+/**
+ * Default chains for new vaults
+ */
+export const DEFAULT_CHAINS: Chain[] = [
+  Chain.Bitcoin,
+  Chain.Ethereum,
+  Chain.Solana,
+  Chain.THORChain,
+  Chain.Ripple,
+]
+
+/**
+ * All supported chains (from Chain enum)
+ */
+export const SUPPORTED_CHAINS: Chain[] = Object.values(Chain)
 
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
@@ -36,7 +40,7 @@ import { VaultManager } from './VaultManager'
  */
 export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private serverManager: ServerManager
-  private initialized = false
+  private _initialized = false
   private initializationPromise?: Promise<void>
 
   // Module managers
@@ -44,22 +48,31 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private vaultManager: VaultManager
 
   // Chain and currency configuration
-  private defaultChains: Chain[]
-  private defaultCurrency: string
+  private _defaultChains: Chain[]
+  private _defaultCurrency: string
 
-  // Storage and connection state
-  private storage: Storage
-  private connected = false
-  private activeChain: Chain
+  // Storage state
+  public readonly storage: Storage
+
+  // Public readonly properties (exposed via getters)
+  get initialized(): boolean {
+    return this._initialized
+  }
+
+  get defaultChains(): Chain[] {
+    return [...this._defaultChains]
+  }
+
+  get defaultCurrency(): string {
+    return this._defaultCurrency
+  }
 
   constructor(config?: VultisigConfig) {
     // Initialize EventEmitter
     super()
 
-    // Initialize storage and connection state
+    // Initialize storage
     this.storage = config?.storage ?? this.createDefaultStorage()
-    this.connected = false
-    this.activeChain = Chain.Ethereum
 
     // Initialize managers
     this.serverManager = new ServerManager(config?.serverEndpoints)
@@ -70,13 +83,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     }
 
     // Initialize chain and currency configuration
-    this.defaultChains = config?.defaultChains ?? DEFAULT_CHAINS
-    this.defaultCurrency = config?.defaultCurrency ?? 'USD'
-
-    // Validate chains if provided
-    if (config?.defaultChains) {
-      validateChains(config.defaultChains) // Throws if invalid
-    }
+    this._defaultChains = config?.defaultChains ?? DEFAULT_CHAINS
+    this._defaultCurrency = config?.defaultCurrency ?? 'USD'
 
     // Initialize module managers
     this.addressBookManager = new AddressBookManager(this.storage)
@@ -95,9 +103,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       this.initialize().catch(err => this.emit('error', err))
     }
 
-    // Auto-connection
+    // Auto-connection (deprecated, now same as autoInit)
     if (config?.autoConnect) {
-      this.connect().catch(err => this.emit('error', err))
+      this.initialize().catch(err => this.emit('error', err))
     }
   }
 
@@ -115,24 +123,28 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @private
    */
   private async loadConfigFromStorage(): Promise<void> {
-    // Load default currency
-    const storedCurrency = await this.storage.get<string>(
-      'config:defaultCurrency'
-    )
-    if (storedCurrency) {
-      this.defaultCurrency = storedCurrency
+    try {
+      // Load default currency
+      const storedCurrency = await this.storage.get<string>(
+        'config:defaultCurrency'
+      )
+      if (storedCurrency) {
+        this._defaultCurrency = storedCurrency
+      }
+    } catch {
+      // Ignore errors when loading currency (use constructor default)
     }
 
-    // Load default chains
-    const storedChains = await this.storage.get<Chain[]>('config:defaultChains')
-    if (storedChains) {
-      this.defaultChains = storedChains
-    }
-
-    // Load active chain
-    const storedActiveChain = await this.storage.get<Chain>('activeChain')
-    if (storedActiveChain) {
-      this.activeChain = storedActiveChain
+    try {
+      // Load default chains
+      const storedChains = await this.storage.get<Chain[]>(
+        'config:defaultChains'
+      )
+      if (storedChains) {
+        this._defaultChains = storedChains
+      }
+    } catch {
+      // Ignore errors when loading chains (use constructor default)
     }
   }
 
@@ -175,7 +187,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
         await this.addressBookManager.init()
         await this.vaultManager.init()
 
-        this.initialized = true
+        this._initialized = true
       } catch (error) {
         // Reset promise on error so initialization can be retried
         this.initializationPromise = undefined
@@ -184,87 +196,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     })()
 
     return this.initializationPromise
-  }
-
-  /**
-   * Check if SDK is initialized
-   */
-  isInitialized(): boolean {
-    return this.initialized
-  }
-
-  // === CONNECTION MANAGEMENT ===
-
-  /**
-   * Connect to storage and optionally load a vault
-   * Initializes WASM modules and loads the last active vault or a specific vault from storage
-   */
-  async connect(options?: { vaultId?: number }): Promise<void> {
-    try {
-      // Initialize WASM modules
-      await this.initialize()
-
-      if (options?.vaultId !== undefined) {
-        // Load specific vault
-        await this.loadVaultFromStorage(options.vaultId)
-      } else {
-        // Auto-load last active vault
-        await this.loadLastActiveVault()
-      }
-
-      this.connected = true
-      this.emit('connect', {})
-    } catch (error) {
-      this.emit('error', error as Error)
-      throw error
-    }
-  }
-
-  /**
-   * Disconnect and clear active vault
-   */
-  async disconnect(): Promise<void> {
-    await this.vaultManager.setActiveVault(null)
-    this.connected = false
-    this.emit('disconnect', {})
-  }
-
-  /**
-   * Check if connected with active vault
-   */
-  async isConnected(): Promise<boolean> {
-    return this.connected && (await this.hasActiveVault())
-  }
-
-  /**
-   * Load vault from storage by ID
-   * @private
-   */
-  private async loadVaultFromStorage(vaultId: number): Promise<void> {
-    const vault = await this.vaultManager.getVaultById(vaultId)
-    if (!vault) {
-      throw new Error(`Vault not found: ${vaultId}`)
-    }
-
-    // Vault is already loaded and set as active by VaultManager
-    // Just emit event
-    this.emit('vaultChanged', { vaultId: vaultId.toString() })
-  }
-
-  /**
-   * Load last active vault from storage
-   * @private
-   */
-  private async loadLastActiveVault(): Promise<void> {
-    const lastVaultId = await this.storage.get<number>('activeVaultId')
-    if (lastVaultId !== null && lastVaultId !== undefined) {
-      try {
-        await this.loadVaultFromStorage(lastVaultId)
-      } catch (error) {
-        console.warn('Failed to load last active vault:', error)
-        // Don't throw - continue with no active vault
-      }
-    }
   }
 
   // === VAULT LIFECYCLE ===
@@ -348,52 +279,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * Get vault from VultiServer
-   *
-   * Note: This method fetches a vault from the server and creates a local instance.
-   */
-  async getVault(vaultId: string, password: string): Promise<Vault> {
-    await this.ensureInitialized()
-
-    const coreVault = await this.serverManager.getVaultFromServer(
-      vaultId,
-      password
-    )
-
-    // Generate .vult file content from CoreVault
-    const vultContent = await createVaultBackup(coreVault, password)
-
-    // Get next vault ID
-    const nextId = await this.vaultManager['getNextVaultId']()
-
-    // Create vault instance using new constructor
-    const vault = new Vault(
-      nextId,
-      coreVault.name,
-      vultContent,
-      password,
-      {
-        fastSigningService: new FastSigningService(this.serverManager),
-      },
-      {
-        defaultChains: this.defaultChains,
-        defaultCurrency: this.defaultCurrency,
-      },
-      this.storage
-    )
-
-    // Save to storage
-    await vault.save()
-
-    // Set as active
-    await this.storage.set('activeVaultId', nextId)
-
-    this.emit('vaultChanged', { vaultId: nextId.toString() })
-
-    return vault
-  }
-
-  /**
    * Import vault from .vult file content (sets as active)
    *
    * @param vultContent - The .vult file content as a string
@@ -414,60 +299,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     this.emit('vaultChanged', { vaultId: vault.id.toString() })
 
     return vault
-  }
-
-  /**
-   * Import vault from file path (Node.js only)
-   *
-   * Provides a convenient way to import vaults from file paths in Node.js.
-   * In browser environments, use importVault() with file content instead.
-   *
-   * @param filePath - Absolute path to vault file (Node.js only)
-   * @param password - Optional password for encrypted vaults
-   * @returns Imported vault instance
-   * @throws Error if not running in Node.js environment
-   *
-   * @example
-   * ```typescript
-   * // Node.js
-   * const vault = await sdk.importVaultFromFile('/path/to/vault.vult', 'password')
-   * ```
-   */
-  async importVaultFromFile(
-    filePath: string,
-    password?: string
-  ): Promise<Vault> {
-    if (!isNode()) {
-      throw new Error(
-        'importVaultFromFile can only be called in Node.js environment. Use importVault() with file content in browsers.'
-      )
-    }
-
-    // Dynamically import Node.js modules
-    const fs = await import('fs/promises')
-
-    // Read file as UTF-8 string
-    const vultContent = await fs.readFile(filePath, 'utf-8')
-
-    // Use existing importVault method
-    return this.importVault(vultContent, password)
-  }
-
-  /**
-   * Export vault to .vult file content
-   *
-   * @param vaultId - Numeric vault ID
-   * @returns Base64-encoded .vult file content
-   *
-   * @example
-   * ```typescript
-   * const vultContent = await sdk.exportVault(0)
-   * fs.writeFileSync('backup.vult', vultContent)
-   * ```
-   */
-  async exportVault(vaultId: number): Promise<string> {
-    await this.ensureInitialized()
-    return this.vaultManager.exportVault(vaultId)
   }
 
   /**
@@ -516,10 +347,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   // === ACTIVE VAULT MANAGEMENT ===
 
   /**
-   * Switch to different vault
+   * Switch to different vault or clear active vault
+   * @param vault - Vault to set as active, or null to clear active vault
    */
-  async setActiveVault(vault: Vault): Promise<void> {
-    await this.vaultManager.setActiveVault(vault.id)
+  async setActiveVault(vault: Vault | null): Promise<void> {
+    await this.vaultManager.setActiveVault(vault?.id ?? null)
   }
 
   /**
@@ -546,80 +378,24 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return this.vaultManager.getVaultById(vaultId)
   }
 
-  /**
-   * Get all vault instances (convenience method)
-   * Equivalent to listVaults()
-   *
-   * @returns Array of all vault instances
-   */
-  async getAllVaults(): Promise<Vault[]> {
-    return this.vaultManager.getAllVaults()
-  }
-
   // === GLOBAL CONFIGURATION ===
 
   /**
    * Set global default currency
    */
   async setDefaultCurrency(currency: string): Promise<void> {
-    this.defaultCurrency = currency
+    this._defaultCurrency = currency
     await this.storage.set('config:defaultCurrency', currency)
-  }
-
-  /**
-   * Get global default currency
-   */
-  getDefaultCurrency(): string {
-    return this.defaultCurrency
   }
 
   // === CHAIN OPERATIONS ===
 
   /**
-   * Get all hardcoded supported chains (immutable)
-   */
-  getSupportedChains(): string[] {
-    return getSupportedChains()
-  }
-
-  /**
    * Set SDK-level default chains for new vaults
    */
-  async setDefaultChains(chains: string[]): Promise<void> {
-    // Validate chains (will throw if invalid)
-    const validatedChains = validateChains(chains)
-    this.defaultChains = validatedChains
-    await this.storage.set('config:defaultChains', validatedChains)
-  }
-
-  /**
-   * Get SDK-level default chains (returns a copy for immutability)
-   */
-  getDefaultChains(): string[] {
-    return [...this.defaultChains]
-  }
-
-  // === VALIDATION HELPERS ===
-
-  /**
-   * Validate email format
-   */
-  static validateEmail(email: string): ValidationResult {
-    return ValidationHelpers.validateEmail(email)
-  }
-
-  /**
-   * Validate password strength
-   */
-  static validatePassword(password: string): ValidationResult {
-    return ValidationHelpers.validatePassword(password)
-  }
-
-  /**
-   * Validate vault name
-   */
-  static validateVaultName(name: string): ValidationResult {
-    return ValidationHelpers.validateVaultName(name)
+  async setDefaultChains(chains: Chain[]): Promise<void> {
+    this._defaultChains = chains
+    await this.storage.set('config:defaultChains', chains)
   }
 
   // === FILE OPERATIONS ===
@@ -679,111 +455,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     name: string
   ): Promise<void> {
     return this.addressBookManager.updateAddressBookEntry(chain, address, name)
-  }
-
-  // === SIGNING OPERATIONS ===
-
-  /**
-   * Sign transaction with the active vault using fast signing mode
-   * Only works with fast vaults (vaults with VultiServer)
-   */
-  async signTransaction(
-    payload: SigningPayload,
-    password: string
-  ): Promise<Signature> {
-    await this.ensureInitialized()
-    const activeVault = await this.getActiveVault()
-    if (!activeVault) {
-      throw new Error('No active vault. Please set an active vault first.')
-    }
-    return activeVault.sign('fast', payload, password)
-  }
-
-  /**
-   * Sign transaction with a specific vault using fast signing mode
-   */
-  async signTransactionWithVault(
-    vault: Vault,
-    payload: SigningPayload,
-    password: string
-  ): Promise<Signature> {
-    await this.ensureInitialized()
-    return vault.sign('fast', payload, password)
-  }
-
-  // === SDK STATE MANAGEMENT ===
-
-  /**
-   * Set active chain and persist to storage
-   */
-  async setActiveChain(chain: Chain): Promise<void> {
-    this.activeChain = chain
-    await this.storage.set('activeChain', chain)
-    this.emit('chainChanged', { chain })
-  }
-
-  /**
-   * Get active chain from storage or memory
-   */
-  async getActiveChain(): Promise<Chain> {
-    // Try storage first
-    const stored = await this.storage.get<Chain>('activeChain')
-    return stored ?? this.activeChain
-  }
-
-  /**
-   * Switch to different vault by ID
-   * Loads vault from storage and sets as active
-   */
-  async switchVault(vaultId: number): Promise<void> {
-    try {
-      await this.loadVaultFromStorage(vaultId)
-      this.emit('vaultChanged', { vaultId: vaultId.toString() })
-    } catch (error) {
-      this.emit('error', error as Error)
-      throw error
-    }
-  }
-
-  // === STORAGE QUOTA MONITORING ===
-
-  /**
-   * Check storage quota and return usage statistics
-   */
-  async getStorageInfo(): Promise<{
-    usage: number
-    quota?: number
-    percentage?: number
-    isNearLimit: boolean
-  }> {
-    const usage = (await this.storage.getUsage?.()) ?? 0
-    const quota = await this.storage.getQuota?.()
-
-    const percentage = quota ? (usage / quota) * 100 : undefined
-    const isNearLimit = percentage ? percentage > 80 : false
-
-    // Emit warning if storage is >80% full
-    if (isNearLimit) {
-      console.warn(
-        `Storage usage is ${percentage?.toFixed(1)}% full (${usage} / ${quota} bytes). Consider clearing old data.`
-      )
-    }
-
-    return {
-      usage,
-      quota,
-      percentage,
-      isNearLimit,
-    }
-  }
-
-  /**
-   * Clear all SDK data from storage
-   * Warning: This will remove all vaults, address book, and configuration
-   */
-  async clearAllData(): Promise<void> {
-    await this.storage.clear()
-    this.emit('dataCleared', {})
   }
 
   // === INTERNAL ACCESS FOR VAULT ===

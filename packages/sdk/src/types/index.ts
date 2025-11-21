@@ -270,8 +270,12 @@ export type AddressResult = {
 export type VaultType = 'fast' | 'secure'
 export type KeygenMode = 'fast' | 'relay' | 'local'
 
+/**
+ * @internal
+ * Internal configuration for VaultManager - not part of public API
+ */
 export type VaultManagerConfig = {
-  defaultChains: string[]
+  defaultChains: Chain[]
   defaultCurrency: string
 }
 

@@ -11,7 +11,7 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import type { Vault, Vultisig } from '@/index'
+import { Chain, type Vault, type Vultisig } from '@/index'
 
 /**
  * Get test vault configuration from environment variables
@@ -75,18 +75,18 @@ export const TEST_VAULT_CONFIG = {
 
   /** Chains to test (subset of all supported chains) */
   testChains: [
-    'Bitcoin',
-    'Ethereum',
-    'Solana',
-    'THORChain',
-    'Cosmos',
-    'BSC',
-    'Polygon',
-    'Avalanche',
-    'Arbitrum',
-    'Optimism',
-    'Base',
-    'Osmosis',
+    Chain.Bitcoin,
+    Chain.Ethereum,
+    Chain.Solana,
+    Chain.THORChain,
+    Chain.Cosmos,
+    Chain.BSC,
+    Chain.Polygon,
+    Chain.Avalanche,
+    Chain.Arbitrum,
+    Chain.Optimism,
+    Chain.Base,
+    Chain.Osmosis,
   ],
 }
 
@@ -227,10 +227,10 @@ export function verifyTestVault(vault: Vault): void {
 /**
  * Check if a chain is in the test suite
  *
- * @param chain - Chain name to check
+ * @param chain - Chain to check
  * @returns True if the chain should be tested
  */
-export function isTestChain(chain: string): boolean {
+export function isTestChain(chain: Chain): boolean {
   return TEST_VAULT_CONFIG.testChains.includes(chain)
 }
 
