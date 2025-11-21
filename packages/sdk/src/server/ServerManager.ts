@@ -1,9 +1,31 @@
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
+import { DKLS } from '@core/mpc/dkls/dkls'
+import { getVaultFromServer } from '@core/mpc/fast/api/getVaultFromServer'
+import { reshareWithServer } from '@core/mpc/fast/api/reshareWithServer'
+import { setupVaultWithServer } from '@core/mpc/fast/api/setupVaultWithServer'
+import { signWithServer } from '@core/mpc/fast/api/signWithServer'
+import { verifyVaultEmailCode } from '@core/mpc/fast/api/verifyVaultEmailCode'
+import { fastVaultServerUrl } from '@core/mpc/fast/config'
+import {
+  setKeygenComplete,
+  waitForKeygenComplete,
+} from '@core/mpc/keygenComplete'
+import { keysign } from '@core/mpc/keysign'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
+import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
+import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
+import { startMpcSession } from '@core/mpc/session/startMpcSession'
+import { generateHexChainCode } from '@core/mpc/utils/generateHexChainCode'
+import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { without } from '@lib/utils/array/without'
+import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
 import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 import type { WalletCore } from '@trustwallet/wallet-core'
 
+import { formatSignature } from '../adapters/formatSignature'
+import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../runtime/crypto'
 import {
   KeygenProgressUpdate,
@@ -36,9 +58,6 @@ export class ServerManager {
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
     try {
-      const { verifyVaultEmailCode } = await import(
-        '@core/mpc/fast/api/verifyVaultEmailCode'
-      )
       await verifyVaultEmailCode({ vaultId, code })
       return true
     } catch {
@@ -50,9 +69,6 @@ export class ServerManager {
    * Resend vault verification email
    */
   async resendVaultVerification(vaultId: string): Promise<void> {
-    const { queryUrl } = await import('@lib/utils/query/queryUrl')
-    const { fastVaultServerUrl } = await import('@core/mpc/fast/config')
-
     await queryUrl(`${fastVaultServerUrl}/resend-verification/${vaultId}`, {
       responseType: 'none',
     })
@@ -68,10 +84,6 @@ export class ServerManager {
     vaultId: string,
     password: string
   ): Promise<CoreVault> {
-    const { getVaultFromServer } = await import(
-      '@core/mpc/fast/api/getVaultFromServer'
-    )
-
     const result = await getVaultFromServer({ vaultId, password })
 
     // TODO: Properly convert/decrypt the vault data from server response
@@ -103,23 +115,11 @@ export class ServerManager {
       options
     const reportProgress = onProgress || (() => {})
 
-    // Import required utilities
-    const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
-    const { startMpcSession } = await import(
-      '@core/mpc/session/startMpcSession'
-    )
-    const { signWithServer: callFastVaultAPI } = await import(
-      '@core/mpc/fast/api/signWithServer'
-    )
-    const { generateLocalPartyId } = await import(
-      '@core/mpc/devices/localPartyId'
-    )
-    const { keysign } = await import('@core/mpc/keysign')
-
     // Use SDK adapter to extract chain-specific signing information
-    const { getChainSigningInfo } = await import('../adapters')
-    const { signatureAlgorithm, derivePath, chainPath } =
-      await getChainSigningInfo(payload, walletCore)
+    const { signatureAlgorithm, derivePath, chainPath } = getChainSigningInfo(
+      payload,
+      walletCore
+    )
 
     // Generate session parameters
     const sessionId = randomUUID()
@@ -139,7 +139,7 @@ export class ServerManager {
       participantsReady: 1,
     })
 
-    const serverResponse = await callFastVaultAPI({
+    const serverResponse = await signWithServer({
       public_key: vault.publicKeys.ecdsa,
       messages,
       session: sessionId,
@@ -168,7 +168,6 @@ export class ServerManager {
 
     // Step 2.5: Register server as participant
     try {
-      const { queryUrl } = await import('@lib/utils/query/queryUrl')
       const serverSigner = vault.signers.find((signer: string) =>
         signer.startsWith('Server-')
       )
@@ -262,7 +261,6 @@ export class ServerManager {
       participantsReady: 2,
     })
 
-    const { formatSignature } = await import('../adapters')
     const signature = formatSignature(
       signatureResults,
       messages,
@@ -288,10 +286,6 @@ export class ServerManager {
     vault: CoreVault,
     reshareOptions: ReshareOptions & { password: string; email?: string }
   ): Promise<CoreVault> {
-    const { reshareWithServer } = await import(
-      '@core/mpc/fast/api/reshareWithServer'
-    )
-
     await reshareWithServer({
       name: vault.name,
       session_id: randomUUID(),
@@ -324,22 +318,8 @@ export class ServerManager {
     vaultId: string
     verificationRequired: boolean
   }> {
-    const { setupVaultWithServer } = await import(
-      '@core/mpc/fast/api/setupVaultWithServer'
-    )
-    const { joinMpcSession } = await import('@core/mpc/session/joinMpcSession')
-    const { startMpcSession } = await import(
-      '@core/mpc/session/startMpcSession'
-    )
-
     // Generate session parameters using core MPC utilities
     const sessionId = randomUUID()
-    const { generateHexEncryptionKey } = await import(
-      '@core/mpc/utils/generateHexEncryptionKey'
-    )
-    const { generateHexChainCode } = await import(
-      '@core/mpc/utils/generateHexChainCode'
-    )
     const hexEncryptionKey = generateHexEncryptionKey()
     const hexChainCode = generateHexChainCode()
     const localPartyId = generateLocalPartyId('extension')
@@ -383,12 +363,6 @@ export class ServerManager {
 
     // Real MPC keygen - ECDSA first
     progress({ phase: 'ecdsa', message: 'Generating ECDSA keys...' })
-
-    const { DKLS } = await import('@core/mpc/dkls/dkls')
-    const { Schnorr } = await import('@core/mpc/schnorr/schnorrKeygen')
-    const { setKeygenComplete, waitForKeygenComplete } = await import(
-      '@core/mpc/keygenComplete'
-    )
 
     // Create DKLS instance for ECDSA keygen
     const dkls = new DKLS(
@@ -502,12 +476,6 @@ export class ServerManager {
     sessionId: string,
     localPartyId: string
   ): Promise<string[]> {
-    const { queryUrl } = await import('@lib/utils/query/queryUrl')
-    const { without } = await import('@lib/utils/array/without')
-    const { withoutDuplicates } = await import(
-      '@lib/utils/array/withoutDuplicates'
-    )
-
     const maxWaitTime = 30000
     const checkInterval = 2000
     const startTime = Date.now()

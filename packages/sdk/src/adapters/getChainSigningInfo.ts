@@ -1,5 +1,8 @@
 import type { Chain } from '@core/chain/Chain'
+import { getChainKind } from '@core/chain/ChainKind'
+import { getCoinType } from '@core/chain/coin/coinType'
 import type { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
+import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
 import type { WalletCore } from '@trustwallet/wallet-core'
 
 /**
@@ -21,17 +24,10 @@ export type ChainSigningInfo = {
  * @param walletCore - WalletCore instance for chain utilities
  * @returns Chain signing information
  */
-export async function getChainSigningInfo(
+export function getChainSigningInfo(
   payload: { chain: Chain; derivePath?: string },
   walletCore: WalletCore
-): Promise<ChainSigningInfo> {
-  // Dynamic imports to avoid circular dependencies
-  const { getChainKind } = await import('@core/chain/ChainKind')
-  const { signatureAlgorithms } = await import(
-    '@core/chain/signing/SignatureAlgorithm'
-  )
-  const { getCoinType } = await import('@core/chain/coin/coinType')
-
+): ChainSigningInfo {
   const chain = payload.chain
 
   // Determine signature algorithm based on chain kind

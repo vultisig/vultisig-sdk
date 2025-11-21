@@ -15,6 +15,7 @@ import { StorageManager } from './runtime/storage/StorageManager'
 import type { Storage } from './runtime/storage/types'
 import { WasmManager } from './runtime/wasm'
 import { ServerManager } from './server/ServerManager'
+import { FastSigningService } from './services/FastSigningService'
 import {
   AddressBook,
   AddressBookEntry,
@@ -24,6 +25,7 @@ import {
   ValidationResult,
   VultisigConfig,
 } from './types'
+import { createVaultBackup } from './utils/export'
 import { ValidationHelpers } from './utils/validation'
 import { Vault } from './vault/Vault'
 import { VaultManager } from './VaultManager'
@@ -359,22 +361,19 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     )
 
     // Generate .vult file content from CoreVault
-    const { createVaultBackup } = await import('./utils/export')
     const vultContent = await createVaultBackup(coreVault, password)
 
     // Get next vault ID
     const nextId = await this.vaultManager['getNextVaultId']()
 
     // Create vault instance using new constructor
-    const vault = new (await import('./vault/Vault')).Vault(
+    const vault = new Vault(
       nextId,
       coreVault.name,
       vultContent,
       password,
       {
-        fastSigningService: new (
-          await import('./services/FastSigningService')
-        ).FastSigningService(this.serverManager),
+        fastSigningService: new FastSigningService(this.serverManager),
       },
       {
         defaultChains: this.defaultChains,

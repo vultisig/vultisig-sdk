@@ -29,11 +29,6 @@ import { Vault } from '../../../src/vault/Vault'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 import type { VaultServices } from '../../../src/vault/VaultServices'
 
-// Mock only external dependencies, NOT WASM or core functions
-vi.mock('@lib/utils/file/initiateFileDownload', () => ({
-  initiateFileDownload: vi.fn(),
-}))
-
 // Helper to create mock vault data
 function createMockVaultData(overrides?: Partial<CoreVault>): CoreVault {
   return {
@@ -332,39 +327,54 @@ describe('Vault', () => {
   })
 
   describe('Vault Export', () => {
-    it('should export vault as blob', async () => {
-      const blob = await vault.export()
+    it('should export vault with filename and data', async () => {
+      const result = await vault.export()
 
-      expect(blob).toBeInstanceOf(Blob)
-      expect(blob.type).toBe('application/octet-stream')
-      expect(blob.size).toBeGreaterThan(0)
+      expect(result).toHaveProperty('filename')
+      expect(result).toHaveProperty('data')
+      expect(typeof result.filename).toBe('string')
+      expect(typeof result.data).toBe('string')
+      expect(result.filename).toMatch(/\.vult$/)
+      expect(result.data.length).toBeGreaterThan(0)
     })
 
     it('should export vault with password (encrypted)', async () => {
-      const blob = await vault.export('SecurePassword123')
+      const result = await vault.export('SecurePassword123')
 
-      expect(blob).toBeInstanceOf(Blob)
-      expect(blob.size).toBeGreaterThan(0)
+      expect(result).toHaveProperty('filename')
+      expect(result).toHaveProperty('data')
+      expect(result.data.length).toBeGreaterThan(0)
     })
 
     it('should export vault without password (unencrypted)', async () => {
-      const blob = await vault.export()
+      const result = await vault.export()
 
-      expect(blob).toBeInstanceOf(Blob)
-      expect(blob.size).toBeGreaterThan(0)
+      expect(result).toHaveProperty('filename')
+      expect(result).toHaveProperty('data')
+      expect(result.data.length).toBeGreaterThan(0)
     })
 
-    it('should return different blob content when encrypted vs unencrypted', async () => {
+    it('should return different data when encrypted vs unencrypted', async () => {
       const unencrypted = await vault.export()
       const encrypted = await vault.export('password123')
 
-      // Both should be valid blobs
-      expect(unencrypted).toBeInstanceOf(Blob)
-      expect(encrypted).toBeInstanceOf(Blob)
+      // Both should be valid exports
+      expect(unencrypted.filename).toBeDefined()
+      expect(encrypted.filename).toBeDefined()
 
       // They should have content
-      expect(unencrypted.size).toBeGreaterThan(0)
-      expect(encrypted.size).toBeGreaterThan(0)
+      expect(unencrypted.data.length).toBeGreaterThan(0)
+      expect(encrypted.data.length).toBeGreaterThan(0)
+
+      // Encrypted should be different from unencrypted
+      expect(unencrypted.data).not.toBe(encrypted.data)
+    })
+
+    it('should include vault name and signer info in filename', async () => {
+      const result = await vault.export()
+
+      expect(result.filename).toContain('Test Vault')
+      expect(result.filename).toMatch(/share\d+of\d+\.vult$/)
     })
   })
 

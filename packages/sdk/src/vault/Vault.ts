@@ -32,6 +32,7 @@ import {
   Value,
   VaultData,
 } from '../types'
+import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
 import { BalanceService } from './services/BalanceService'
@@ -606,50 +607,45 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Get the export filename for this vault
-   * Format: {vaultName}-{localPartyId}-share{index}of{total}.vult
+   * Export vault backup
+   *
+   * Returns the vault backup data as a base64 string along with the suggested filename.
+   * The backup can be optionally encrypted with a password. The caller is responsible
+   * for handling the data (e.g., downloading in browser, saving to file in Node.js).
+   *
+   * @param password - Optional password to encrypt the backup
+   * @returns Object containing the filename and base64-encoded backup data
+   *
+   * @example
+   * ```typescript
+   * // Export unencrypted backup
+   * const { filename, data } = await vault.export()
+   *
+   * // Export encrypted backup
+   * const { filename, data } = await vault.export('mySecurePassword')
+   *
+   * // In a browser - download the file:
+   * const { filename, data } = await vault.export()
+   * const blob = new Blob([data], { type: 'application/octet-stream' })
+   * initiateFileDownload({ blob, name: filename })
+   *
+   * // In Node.js - save to file:
+   * const { filename, data } = await vault.export('password')
+   * await fs.writeFile(filename, data, 'utf-8')
+   * ```
    */
-  getExportFileName(): string {
+  async export(password?: string): Promise<{ filename: string; data: string }> {
     const totalSigners = this.vaultData.signers.length
     const localPartyIndex =
       this.vaultData.signers.indexOf(this.vaultData.localPartyId) + 1
 
-    // Always use DKLS share format
-    return `${this.vaultData.name}-${this.vaultData.localPartyId}-share${localPartyIndex}of${totalSigners}.vult`
-  }
+    // Format: {vaultName}-{localPartyId}-share{index}of{total}.vult
+    const filename = `${this.vaultData.name}-${this.vaultData.localPartyId}-share${localPartyIndex}of${totalSigners}.vult`
 
-  /**
-   * Export vault data as base64 string
-   * Useful for storing vault backups in localStorage or other text-based storage
-   */
-  async exportAsBase64(password?: string): Promise<string> {
-    const { createVaultBackup } = await import('../utils/export')
-    // Pass CoreVault which has current name/metadata synced
-    return createVaultBackup(this.coreVault, password)
-  }
+    // Generate base64-encoded backup (possibly encrypted)
+    const data = await createVaultBackup(this.coreVault, password)
 
-  /**
-   * Export vault data as downloadable file
-   */
-  async export(password?: string): Promise<Blob> {
-    const base64Data = await this.exportAsBase64(password)
-    const filename = this.getExportFileName()
-
-    const blob = new Blob([base64Data], { type: 'application/octet-stream' })
-
-    // Automatically download if in browser
-    if (
-      typeof globalThis !== 'undefined' &&
-      'window' in globalThis &&
-      'document' in globalThis
-    ) {
-      const { initiateFileDownload } = await import(
-        '@lib/utils/file/initiateFileDownload'
-      )
-      initiateFileDownload({ blob, name: filename })
-    }
-
-    return blob
+    return { filename, data }
   }
 
   /**
