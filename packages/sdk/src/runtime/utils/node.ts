@@ -53,15 +53,11 @@ export async function exportVaultToFile(
 
   const fs = await import('fs/promises')
 
-  // Export vault as blob
-  const blob = await vault.export()
-
-  // Convert blob to buffer
-  const arrayBuffer = await blob.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+  // Export vault backup data
+  const { data } = await vault.export()
 
   // Write to file with secure permissions (owner read/write only)
-  await fs.writeFile(filePath, buffer, { mode: 0o600 })
+  await fs.writeFile(filePath, data, { encoding: 'utf-8', mode: 0o600 })
 }
 
 /**
