@@ -34,13 +34,6 @@ vi.mock('@lib/utils/file/initiateFileDownload', () => ({
   initiateFileDownload: vi.fn(),
 }))
 
-// Helper to convert File to content string for importVault
-async function fileToContent(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer()
-  const decoder = new TextDecoder()
-  return decoder.decode(buffer)
-}
-
 describe('VaultManager', () => {
   let vaultManager: VaultManager
   let mockServerManager: ServerManager
@@ -249,18 +242,18 @@ describe('VaultManager', () => {
 
   describe('importVault', () => {
     it('should reject corrupted files', async () => {
-      const file = new File([new Blob(['corrupted data'])], 'not-a-vault.txt')
+      const corruptedContent = 'corrupted data'
 
-      await expect(
-        vaultManager.importVault(await fileToContent(file))
-      ).rejects.toThrow(VaultImportError)
+      await expect(vaultManager.importVault(corruptedContent)).rejects.toThrow(
+        VaultImportError
+      )
     })
 
     it('should throw VaultImportError with correct error code', async () => {
-      const file = new File([new Blob(['bad'])], 'bad.vult')
+      const badContent = 'bad'
 
       try {
-        await vaultManager.importVault(await fileToContent(file))
+        await vaultManager.importVault(badContent)
         expect.fail('Should have thrown VaultImportError')
       } catch (error) {
         expect(error).toBeInstanceOf(VaultImportError)

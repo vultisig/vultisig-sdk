@@ -118,7 +118,6 @@ export {
   exportVaultToFile,
   getNodeStorageInfo,
   getStoragePath,
-  importVaultFromFile,
 } from './runtime/utils/node'
 
 // Browser utilities
@@ -128,7 +127,6 @@ export {
   isBrowserStorageLow,
   isPersistentStorage,
   requestPersistentStorage,
-  uploadVaultFile,
 } from './runtime/utils/browser'
 
 // Chrome extension utilities

@@ -8,7 +8,6 @@ export {
   isBrowserStorageLow,
   isPersistentStorage,
   requestPersistentStorage,
-  uploadVaultFile,
 } from './browser'
 
 // Node.js utilities
@@ -17,7 +16,6 @@ export {
   exportVaultToFile,
   getNodeStorageInfo,
   getStoragePath,
-  importVaultFromFile,
 } from './node'
 
 // Electron utilities - TODO: Re-enable when Electron integration is ready

@@ -2,14 +2,14 @@
  * Node.js-specific utility functions.
  *
  * These helpers simplify Node.js integration by providing:
- * - File-based vault import/export
+ * - File-based vault export
  * - Storage path access
  * - Storage usage information
  *
  * Usage:
  * ```typescript
  * import { Vultisig } from '@vultisig/sdk'
- * import { exportVaultToFile, importVaultFromFile } from '@vultisig/sdk'
+ * import { exportVaultToFile } from '@vultisig/sdk'
  *
  * const sdk = new Vultisig()
  * const vault = sdk.getActiveVault()
@@ -18,8 +18,8 @@
  * await exportVaultToFile(vault, '/path/to/backup.vult')
  *
  * // Import vault
- * const file = await importVaultFromFile('/path/to/vault.vult', 'password')
- * await sdk.addVault(file, 'password')
+ * const vaultContent = await fs.readFile('/path/to/vault.vult', 'utf-8')
+ * await sdk.importVault(vaultContent, 'password')
  * ```
  */
 
@@ -58,45 +58,6 @@ export async function exportVaultToFile(
 
   // Write to file with secure permissions (owner read/write only)
   await fs.writeFile(filePath, data, { encoding: 'utf-8', mode: 0o600 })
-}
-
-/**
- * Import vault from file (Node.js only).
- * Reads a vault file and returns a File object that can be passed to sdk.addVault().
- *
- * @param filePath - Absolute path to vault file
- * @param password - Optional password for encrypted vaults
- * @returns File object ready for import
- * @throws Error if not running in Node.js environment
- *
- * @example
- * ```typescript
- * const file = await importVaultFromFile('/path/to/vault.vult', 'password')
- * const vault = await sdk.addVault(file, 'password')
- * ```
- */
-export async function importVaultFromFile(
-  filePath: string,
-  _password?: string
-): Promise<File> {
-  if (!isNode()) {
-    throw new Error(
-      'importVaultFromFile can only be called in Node.js environment'
-    )
-  }
-
-  const fs = await import('fs/promises')
-  const path = await import('path')
-
-  // Read file
-  const buffer = await fs.readFile(filePath)
-
-  // Create File object
-  const filename = path.basename(filePath)
-  const blob = new Blob([buffer as BlobPart], { type: 'application/json' })
-  const file = new File([blob], filename)
-
-  return file
 }
 
 /**
