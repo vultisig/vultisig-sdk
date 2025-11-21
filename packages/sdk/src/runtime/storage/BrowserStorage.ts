@@ -1,10 +1,10 @@
 import {
+  Storage,
   STORAGE_VERSION,
   StorageError,
   StorageErrorCode,
   StorageMetadata,
   StoredValue,
-  VaultStorage,
 } from './types'
 
 /**
@@ -32,7 +32,7 @@ type StorageMode = 'indexeddb' | 'localstorage' | 'memory'
  *   and store encrypted vault data
  * - Subject to XSS attacks - ensure proper CSP headers
  */
-export class BrowserStorage implements VaultStorage {
+export class BrowserStorage implements Storage {
   private db?: IDBDatabase
   private mode: StorageMode = 'memory'
   private memoryStore = new Map<string, StoredValue>()

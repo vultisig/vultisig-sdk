@@ -1,6 +1,6 @@
 import type { Chain } from '@core/chain/Chain'
 
-import type { VaultStorage } from './runtime/storage/types'
+import type { Storage } from './runtime/storage/types'
 import { AddressBook, AddressBookEntry } from './types'
 
 /**
@@ -9,9 +9,9 @@ import { AddressBook, AddressBookEntry } from './types'
  */
 export class AddressBookManager {
   private addressBookData: AddressBook = { saved: [], vaults: [] }
-  private storage: VaultStorage
+  private storage: Storage
 
-  constructor(storage: VaultStorage) {
+  constructor(storage: Storage) {
     this.storage = storage
   }
 

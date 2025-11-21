@@ -12,6 +12,10 @@ export type { FiatCurrency } from '@core/config/FiatCurrency'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
 
+// Import MpcLib for use in VaultData type
+import type { MpcLib } from '@core/mpc/mpcLib'
+export type { MpcLib }
+
 // Import and export Chain types
 import type {
   CosmosChain,
@@ -186,6 +190,9 @@ export type SDKConfig = {
 
 import type { Chain } from '@core/chain/Chain'
 
+// Cache types
+export type { CacheConfig, CacheScope } from '../services/cache-types'
+
 // Extended SDK config with storage and connection options
 export type VultisigConfig = SDKConfig & {
   storage?: any // VaultStorage interface (avoiding circular dependency)
@@ -193,6 +200,7 @@ export type VultisigConfig = SDKConfig & {
   autoConnect?: boolean
   defaultChains?: Chain[]
   defaultCurrency?: string
+  cacheConfig?: import('../services/cache-types').CacheConfig
 }
 
 // Connection options
@@ -289,36 +297,6 @@ export type SigningStep = {
   participantsReady?: number
 }
 
-export type VaultSigner = {
-  id: string
-  publicKey: string
-  name?: string
-}
-
-export type Summary = {
-  id: string
-  name: string
-  isEncrypted: boolean
-  createdAt: number
-  lastModified: number
-  size: number
-  type: VaultType
-  currency: string
-  chains: string[]
-  tokens: Record<string, Token[]>
-  threshold: number
-  totalSigners: number
-  vaultIndex: number
-  signers: VaultSigner[]
-  isBackedUp: () => boolean
-  keys: {
-    ecdsa: string
-    eddsa: string
-    hexChainCode: string
-    hexEncryptionKey: string
-  }
-}
-
 export type AddressBookEntry = {
   chain: Chain
   address: string
@@ -346,44 +324,92 @@ export type Token = {
 }
 
 /**
- * Unified vault data structure that consolidates all vault information
- * into a single, self-contained record. Replaces the previous split
- * between vault_summary and vault_preferences.
+ * VaultData - Clean, focused vault state
+ * Replaces the old VaultData and Summary types
+ *
+ * This is the single source of truth for vault data in the SDK.
+ * It combines immutable vault identity with mutable user preferences.
+ *
+ * ## Structure
+ *
+ * The type is organized into four logical groups:
+ *
+ * 1. **Identity** - Immutable cryptographic identity (readonly)
+ *    - Public keys, signers, chain code
+ *    - Never changes after vault creation
+ *
+ * 2. **Metadata** - Vault metadata (some readonly, some mutable)
+ *    - ID, name, type, backup status
+ *    - Some fields can be changed by user
+ *
+ * 3. **Preferences** - User preferences (all mutable)
+ *    - Currency, chains, tokens
+ *    - Fully customizable by user
+ *
+ * 4. **Vault File** - Raw vault backup (readonly)
+ *    - Base64 encoded .vult file
+ *    - Regenerated on export with current metadata
+ *
+ * ## Readonly Fields
+ *
+ * Fields marked `readonly` represent immutable vault characteristics.
+ * These cannot be changed without creating a new vault.
+ *
+ * ## Storage
+ *
+ * VaultData is stored at: `vault:{id}`
+ * Persistent cache is stored at: `vault:{id}:cache`
+ *
+ * @example
+ * ```typescript
+ * // Access vault data
+ * const vault = await vaultManager.getVaultById(0)
+ * console.log(vault.name)              // Direct getter
+ * console.log(vault.data)              // Full VaultData object
+ * console.log(vault.threshold)         // Computed getter
+ * ```
  */
 export type VaultData = {
-  // Identity
-  id: number // Sequential ID (0, 1, 2...)
-  publicKeyEcdsa: string // ECDSA public key (for signing, addresses)
-  publicKeyEddsa: string // EdDSA public key
-  name: string // Vault name
+  // === Identity (immutable, from .vult file) ===
+  // These fields define the cryptographic identity of the vault
+  // and NEVER change after vault creation
+  readonly publicKeys: Readonly<{ ecdsa: string; eddsa: string }>
+  readonly hexChainCode: string
+  readonly signers: readonly string[] // Simple string array, readonly
+  readonly localPartyId: string
+  readonly createdAt: number
+  readonly libType: MpcLib
+  readonly isEncrypted: boolean // Immutable - whether .vult file needs password
+  readonly type: 'fast' | 'secure' // Immutable - computed from signers
 
-  // Metadata
-  isEncrypted: boolean // Whether .vult file is encrypted
-  type: 'fast' | 'secure' // Vault type
-  createdAt: number // Creation timestamp
-  lastModified: number // Last modification timestamp
+  // === Metadata (SDK-managed) ===
+  readonly id: number // Immutable - SDK sequential ID (storage key)
+  name: string // Mutable - user can rename vault
+  isBackedUp: boolean // Mutable - user can toggle backup status
+  order: number // Mutable - user can reorder vaults
+  folderId?: string // Mutable - user can move to different folder
+  lastModified: number // Mutable - updated on every change
 
-  // User Preferences (single source of truth)
-  currency: string // Fiat currency (e.g., 'usd')
-  chains: string[] // Active blockchain chains
-  tokens: Record<string, Token[]> // Tokens per chain
+  // === User Preferences (mutable, SDK-managed) ===
+  currency: string // Mutable - user's preferred fiat currency
+  chains: string[] // Mutable - user's active blockchain chains
+  tokens: Record<string, Token[]> // Mutable - user's custom tokens per chain
+  lastValueUpdate?: number // Mutable - last portfolio value calculation
 
-  // Vault Structure
-  threshold: number // Signing threshold (e.g., 2 of 2)
-  totalSigners: number // Total number of signers
-  vaultIndex: number // Vault order index
-  signers: VaultSigner[] // Array of signer info
+  // === Raw Vault File (immutable after load) ===
+  readonly vultFileContent: string // Set once at import/creation, regenerated on export
+}
 
-  // Cryptographic Keys
-  hexChainCode: string // BIP32 chain code
-  hexEncryptionKey: string // Encryption key
-
-  // Self-Contained Backup
-  vultFileContent: string // Original base64 .vult file content
-
-  // Computed/Optional
-  lastValueUpdate?: number // Last portfolio value update
-  isBackedUp: boolean // Backup status
+/**
+ * Helper type to make all readonly fields mutable
+ * Used internally when we need to update readonly fields
+ */
+export type Mutable<T> = {
+  -readonly [P in keyof T]: T[P] extends readonly (infer U)[]
+    ? U[]
+    : T[P] extends Readonly<infer O>
+      ? O
+      : T[P]
 }
 
 // Base properties shared by all gas info

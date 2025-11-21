@@ -2,7 +2,7 @@ import { Chain } from '@core/chain/Chain'
 import { getCoinBalance } from '@core/chain/coin/balance'
 
 import { formatBalance } from '../../adapters/formatBalance'
-import type { CacheService } from '../../services/CacheService'
+import { CacheScope, type CacheService } from '../../services/CacheService'
 import type { Balance, Token } from '../../types'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
@@ -10,7 +10,7 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * BalanceService
  *
  * Handles balance fetching, caching, and updates for vault accounts.
- * Extracted from Vault.ts to reduce file size and improve maintainability.
+ * Uses CacheService with BALANCE scope for automatic TTL-based caching.
  */
 export class BalanceService {
   constructor(
@@ -28,13 +28,13 @@ export class BalanceService {
 
   /**
    * Get balance for chain (with optional token)
-   * Uses core's getCoinBalance() with 5-minute TTL cache
+   * Uses CacheService with automatic TTL-based caching
    */
   async getBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
+    const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
 
-    // Check 5-min TTL cache
-    const cached = this.cacheService.get<Balance>(cacheKey, 5 * 60 * 1000)
+    // Check scoped cache (uses configured TTL)
+    const cached = this.cacheService.getScoped<Balance>(key, CacheScope.BALANCE)
     if (cached) return cached
 
     let address: string | undefined
@@ -53,8 +53,8 @@ export class BalanceService {
       const tokens = this.getTokensRecord()
       const balance = formatBalance(rawBalance, chain, tokenId, tokens)
 
-      // Cache with 5-min TTL
-      this.cacheService.set(cacheKey, balance)
+      // Cache with configured TTL
+      await this.cacheService.setScoped(key, CacheScope.BALANCE, balance)
 
       // Emit balance updated event
       this.emitBalanceUpdated({
@@ -111,11 +111,11 @@ export class BalanceService {
   }
 
   /**
-   * Force refresh balance (clear cache)
+   * Force refresh balance (invalidate cache)
    */
   async updateBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
-    this.cacheService.clear(cacheKey)
+    const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
+    await this.cacheService.invalidateScoped(key, CacheScope.BALANCE)
     // getBalance() will emit the balanceUpdated event
     return this.getBalance(chain, tokenId)
   }
@@ -127,16 +127,16 @@ export class BalanceService {
     chains: Chain[],
     includeTokens = false
   ): Promise<Record<string, Balance>> {
-    // Clear cache for all chains
+    // Invalidate cache for all chains
     for (const chain of chains) {
-      const cacheKey = `balance:${chain}:native`
-      this.cacheService.clear(cacheKey)
+      const key = `${chain.toLowerCase()}:native`
+      await this.cacheService.invalidateScoped(key, CacheScope.BALANCE)
 
       if (includeTokens) {
         const tokens = this.getTokens(chain)
         for (const token of tokens) {
-          const tokenCacheKey = `balance:${chain}:${token.id}`
-          this.cacheService.clear(tokenCacheKey)
+          const tokenKey = `${chain.toLowerCase()}:${token.id}`
+          await this.cacheService.invalidateScoped(tokenKey, CacheScope.BALANCE)
         }
       }
     }

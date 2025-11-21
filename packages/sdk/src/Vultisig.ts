@@ -11,7 +11,7 @@ import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import { isNode } from './runtime/environment'
 import { StorageManager } from './runtime/storage/StorageManager'
-import type { VaultStorage } from './runtime/storage/types'
+import type { Storage } from './runtime/storage/types'
 import { ServerManager } from './server/ServerManager'
 import {
   AddressBook,
@@ -46,7 +46,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private defaultCurrency: string
 
   // Storage and connection state
-  private storage: VaultStorage
+  private storage: Storage
   private connected = false
   private activeChain: Chain
 
@@ -80,6 +80,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       {
         defaultChains: config?.defaultChains,
         defaultCurrency: config?.defaultCurrency,
+        cacheConfig: config?.cacheConfig,
       },
       this.storage
     )
@@ -100,7 +101,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Delegates to StorageManager for environment detection and storage creation.
    * @private
    */
-  private createDefaultStorage(): VaultStorage {
+  private createDefaultStorage(): Storage {
     return StorageManager.createDefaultStorage()
   }
 
@@ -267,55 +268,16 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     }
   }
 
-  /**
-   * Save vault to storage
-   * @private
-   */
-  // Note: Storage is now handled by VaultManager, so this method is no longer needed
-  // Keeping for backward compatibility but it's a no-op
-  private async saveVaultToStorage(_vault: Vault): Promise<void> {
-    // VaultManager already handles all storage operations
-    // This method is kept for compatibility but does nothing
-  }
-
   // === VAULT LIFECYCLE ===
 
   /**
-   * Create new vault (auto-initializes SDK, sets as active)
-   */
-  async createVault(
-    name: string,
-    options?: {
-      type?: 'fast' | 'secure'
-      keygenMode?: 'relay' | 'local'
-      password?: string
-      email?: string
-    }
-  ): Promise<Vault> {
-    await this.ensureInitialized()
-
-    // Create vault with internal progress handling
-    const vault = await this.vaultManager.createVault(name, {
-      ...options,
-      onProgressInternal: (step, vaultRef) => {
-        // Emit progress events with vault reference (undefined early, then populated)
-        this.emit('vaultCreationProgress', { vault: vaultRef, step })
-      },
-    })
-
-    // Emit completion event
-    this.emit('vaultCreationComplete', { vault })
-
-    // Save to storage and emit vaultChanged event
-    await this.saveVaultToStorage(vault)
-    this.emit('vaultChanged', { vaultId: vault.summary().id })
-
-    return vault
-  }
-
-  /**
-   * Create fast vault (convenience method)
-   * Equivalent to createVault(name, { type: 'fast', ...options })
+   * Create fast vault (2-of-2 with VultiServer)
+   * Requires password and email for server coordination and backup delivery
+   *
+   * @param options.name - Vault name
+   * @param options.password - Vault password for encryption
+   * @param options.email - Email for verification code delivery
+   * @returns Vault instance, vaultId for verification, and verificationRequired flag
    */
   async createFastVault(options: {
     name: string
@@ -324,13 +286,12 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }): Promise<{
     vault: Vault
     vaultId: string
-    verificationRequired: boolean
+    verificationRequired: true
   }> {
     await this.ensureInitialized()
 
     // Create vault with internal progress handling
-    const vault = await this.vaultManager.createVault(options.name, {
-      type: 'fast',
+    const result = await this.vaultManager.createFastVault(options.name, {
       password: options.password,
       email: options.email,
       onProgressInternal: (step, vaultRef) => {
@@ -339,20 +300,44 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       },
     })
 
-    const vaultId = vault.data.publicKeys.ecdsa
+    // Emit completion event
+    this.emit('vaultCreationComplete', { vault: result.vault })
+
+    // Emit vaultChanged event (VaultManager already saved to storage)
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+
+    return result
+  }
+
+  /**
+   * Create secure vault (multi-device MPC)
+   * Not yet implemented - requires multi-device keygen coordination
+   *
+   * @param options.name - Vault name
+   * @param options.keygenMode - Keygen mode configuration
+   * @returns Vault instance
+   * @throws Error - Not yet implemented
+   */
+  async createSecureVault(options: {
+    name: string
+    keygenMode?: 'relay' | 'local'
+  }): Promise<Vault> {
+    await this.ensureInitialized()
+
+    const vault = await this.vaultManager.createSecureVault(options.name, {
+      keygenMode: options.keygenMode,
+      onProgressInternal: (step, vaultRef) => {
+        this.emit('vaultCreationProgress', { vault: vaultRef, step })
+      },
+    })
 
     // Emit completion event
     this.emit('vaultCreationComplete', { vault })
 
-    // Save to storage and emit vaultChanged event
-    await this.saveVaultToStorage(vault)
-    this.emit('vaultChanged', { vaultId })
+    // Emit vaultChanged event
+    this.emit('vaultChanged', { vaultId: vault.publicKeys.ecdsa })
 
-    return {
-      vault,
-      vaultId,
-      verificationRequired: true,
-    }
+    return vault
   }
 
   /**
@@ -366,55 +351,47 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Get vault from VultiServer
    *
-   * Note: This method currently has limitations as getVaultFromServer
-   * returns incomplete data. Consider using importVault() with a .vult file instead.
+   * Note: This method fetches a vault from the server and creates a local instance.
    */
   async getVault(vaultId: string, password: string): Promise<Vault> {
     await this.ensureInitialized()
+
     const coreVault = await this.serverManager.getVaultFromServer(
       vaultId,
       password
     )
 
-    // TODO: This is incomplete - getVaultFromServer doesn't return full vault data
-    // We need to build VaultData from CoreVault, but we're missing the .vult content
-    // For now, create a minimal VaultData
+    // Generate .vult file content from CoreVault
+    const { createVaultBackup } = await import('./utils/export')
+    const vultContent = await createVaultBackup(coreVault, password)
+
+    // Get next vault ID
     const nextId = await this.vaultManager['getNextVaultId']()
 
-    const vaultData: import('./types').VaultData = {
-      id: nextId,
-      publicKeyEcdsa: coreVault.publicKeys.ecdsa,
-      publicKeyEddsa: coreVault.publicKeys.eddsa,
-      name: coreVault.name,
-      isEncrypted: true,
-      type: coreVault.signers.some(s => s.startsWith('Server-'))
-        ? 'fast'
-        : 'secure',
-      createdAt: coreVault.createdAt || Date.now(),
-      lastModified: Date.now(),
-      currency: 'usd',
-      chains: [],
-      tokens: {},
-      threshold: Object.keys(coreVault.keyShares).length,
-      totalSigners: coreVault.signers.length,
-      vaultIndex: coreVault.order,
-      signers: coreVault.signers.map(s => ({
-        id: s,
-        publicKey: s.startsWith('Server-') ? s : coreVault.publicKeys.ecdsa,
-        name: s,
-      })),
-      hexChainCode: coreVault.hexChainCode,
-      hexEncryptionKey: '',
-      vultFileContent: '', // Missing - this is a problem!
-      isBackedUp: coreVault.isBackedUp,
-    }
+    // Create vault instance using new constructor
+    const vault = new (await import('./vault/Vault')).Vault(
+      nextId,
+      coreVault.name,
+      vultContent,
+      password,
+      {
+        wasmManager: this.wasmManager,
+        fastSigningService: new (
+          await import('./services/FastSigningService')
+        ).FastSigningService(this.serverManager, this.wasmManager),
+      },
+      {
+        defaultChains: this.defaultChains,
+        defaultCurrency: this.defaultCurrency,
+      },
+      this.storage
+    )
 
     // Save to storage
-    await this.storage.set(`vault:${nextId}`, vaultData)
-    await this.storage.set('activeVaultId', nextId)
+    await vault.save()
 
-    // Create Vault instance
-    const vault = this.vaultManager.createVaultInstance(nextId, vaultData)
+    // Set as active
+    await this.storage.set('activeVaultId', nextId)
 
     this.emit('vaultChanged', { vaultId: nextId.toString() })
 

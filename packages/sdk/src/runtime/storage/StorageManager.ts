@@ -3,7 +3,7 @@ import { BrowserStorage } from './BrowserStorage'
 import { ChromeStorage } from './ChromeStorage'
 import { MemoryStorage } from './MemoryStorage'
 import { NodeStorage } from './NodeStorage'
-import type { VaultStorage } from './types'
+import type { Storage } from './types'
 
 /**
  * Options for configuring storage behavior
@@ -22,7 +22,7 @@ export type StorageOptions = {
   /**
    * Custom storage implementation
    */
-  customStorage?: VaultStorage
+  customStorage?: Storage
 }
 
 /**
@@ -53,7 +53,7 @@ export class StorageManager {
    * @param options - Storage configuration options
    * @returns Configured storage instance
    */
-  static createStorage(options?: StorageOptions): VaultStorage {
+  static createStorage(options?: StorageOptions): Storage {
     // Use custom storage if provided
     if (options?.customStorage) {
       return options.customStorage
@@ -80,7 +80,7 @@ export class StorageManager {
    * @param options - Optional storage configuration
    * @returns Storage instance appropriate for current environment
    */
-  static createDefaultStorage(options?: StorageOptions): VaultStorage {
+  static createDefaultStorage(options?: StorageOptions): Storage {
     const env = detectEnvironment()
 
     switch (env) {
@@ -131,7 +131,7 @@ export class StorageManager {
   static createStorageByType(
     type: 'memory' | 'browser' | 'node' | 'chrome',
     options?: StorageOptions
-  ): VaultStorage {
+  ): Storage {
     switch (type) {
       case 'memory':
         return new MemoryStorage()
@@ -158,7 +158,7 @@ export class StorageManager {
    * @private
    * @returns ChromeStorage or MemoryStorage fallback
    */
-  private static createChromeStorageWithFallback(): VaultStorage {
+  private static createChromeStorageWithFallback(): Storage {
     try {
       return new ChromeStorage()
     } catch (error) {
@@ -178,9 +178,7 @@ export class StorageManager {
    * @param options - Optional storage configuration
    * @returns NodeStorage configured for Electron or default location
    */
-  private static createElectronMainStorage(
-    options?: StorageOptions
-  ): VaultStorage {
+  private static createElectronMainStorage(options?: StorageOptions): Storage {
     // If custom basePath provided, use it
     if (options?.basePath) {
       return new NodeStorage({ basePath: options.basePath })

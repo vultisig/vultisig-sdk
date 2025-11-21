@@ -98,33 +98,32 @@ describe('Integration: Vault Export', () => {
       fastSigningService: {} as any, // Not needed for export
     }
 
-    // Create mock VaultData to match new constructor signature
+    // Create mock VaultData with correct structure
     const vaultData = {
-      id: 0,
-      publicKeyEcdsa: mockVaultData.publicKeys.ecdsa,
-      publicKeyEddsa: mockVaultData.publicKeys.eddsa,
-      name,
+      // Identity (readonly fields)
+      publicKeys: mockVaultData.publicKeys,
+      hexChainCode: mockVaultData.hexChainCode,
+      signers: mockVaultData.signers,
+      localPartyId: mockVaultData.localPartyId,
+      createdAt: now,
+      libType: mockVaultData.libType,
       isEncrypted: false,
       type: 'fast' as const,
-      createdAt: now,
+      // Metadata
+      id: 0,
+      name,
+      isBackedUp: false,
+      order: 0,
       lastModified: now,
+      // User Preferences
       currency: 'usd',
       chains: ['Bitcoin', 'Ethereum', 'Solana'],
       tokens: {},
-      threshold: 2,
-      totalSigners: 2,
-      vaultIndex: 0,
-      signers: [
-        { id: 'test-device', publicKey: mockVaultData.publicKeys.ecdsa },
-        { id: 'Server-1', publicKey: mockVaultData.publicKeys.ecdsa },
-      ],
-      hexChainCode: mockVaultData.hexChainCode,
-      hexEncryptionKey: '',
+      // Vault file
       vultFileContent: '',
-      isBackedUp: false,
     }
 
-    return new Vault(0, vaultData, mockVaultData, services)
+    return Vault.fromStorage(vaultData, services)
   }
 
   describe('Unencrypted Export', () => {
@@ -140,9 +139,8 @@ describe('Integration: Vault Export', () => {
       expect(ethAddress).toBeDefined()
 
       // Get vault summary for verification
-      const summary = vault.summary()
-      expect(summary.name).toBe('Unencrypted Export Test')
-      expect(summary.type).toBe('fast') // Has Server-1 signer
+      expect(vault.name).toBe('Unencrypted Export Test')
+      expect(vault.type).toBe('fast') // Has Server-1 signer
 
       // Export vault (unencrypted - no password)
       const exportBlob = await vault.export()
@@ -169,8 +167,8 @@ describe('Integration: Vault Export', () => {
       expect(base64Content).toMatch(/^[A-Za-z0-9+/]+=*$/)
 
       console.log('✅ Unencrypted export successful')
-      console.log(`   Vault: ${summary.name}`)
-      console.log(`   Type: ${summary.type}`)
+      console.log(`   Vault: ${vault.name}`)
+      console.log(`   Type: ${vault.type}`)
       console.log(`   File size: ${stats.size} bytes`)
       console.log(`   BTC address: ${btcAddress}`)
       console.log(`   ETH address: ${ethAddress}`)

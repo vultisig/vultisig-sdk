@@ -51,12 +51,11 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
     verifyTestVault(vault)
 
     // Verify vault is fast type
-    const summary = vault.summary()
-    if (summary.type !== 'fast') {
+    if (vault.type !== 'fast') {
       throw new Error(
         'Fast signing tests require a "fast" vault with Server- signer. ' +
           'Current vault type: ' +
-          summary.type
+          vault.type
       )
     }
     console.log('✅ Vault is fast type - can proceed with signing tests')
@@ -364,7 +363,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         console.log(`   EdDSA signature (Solana-specific)`)
       })
 
-      it.skip('Polkadot: Sign native DOT transfer (EdDSA)', async () => {
+      it('Polkadot: Sign native DOT transfer (EdDSA)', async () => {
         console.log('\n🔐 Testing Polkadot fast signing...')
 
         const coin = {
@@ -400,7 +399,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         )
       })
 
-      it.skip('Sui: Sign native SUI transfer (EdDSA)', async () => {
+      it('Sui: Sign native SUI transfer (EdDSA)', async () => {
         console.log('\n🔐 Testing Sui fast signing...')
 
         const coin = {

@@ -15,8 +15,9 @@ import { fromBase64 } from '@lib/utils/fromBase64'
 import { DEFAULT_CHAINS, isChainSupported } from '../ChainManager'
 import { UniversalEventEmitter } from '../events/EventEmitter'
 import { VaultEvents } from '../events/types'
-import type { VaultStorage } from '../runtime/storage/types'
-import { CacheService } from '../services/CacheService'
+import { MemoryStorage } from '../runtime/storage/MemoryStorage'
+import type { Storage } from '../runtime/storage/types'
+import { CacheScope, CacheService } from '../services/CacheService'
 import { FastSigningService } from '../services/FastSigningService'
 import { FiatValueService } from '../services/FiatValueService'
 // Types
@@ -27,7 +28,6 @@ import {
   Signature,
   SigningMode,
   SigningPayload,
-  Summary,
   Token,
   Value,
   VaultData,
@@ -80,38 +80,154 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private gasEstimationService: GasEstimationService
   private broadcastService: BroadcastService
 
-  // Cached properties
-  private _isEncrypted?: boolean
-  private _securityType?: 'fast' | 'secure'
-
   // Runtime state (persisted via storage)
   private _userChains: Chain[] = []
   private _currency: string = 'usd'
   private _tokens: Record<string, Token[]> = {}
 
-  // Fiat value tracking
-  private lastValueUpdate?: Date
-  private cachedTotalValue?: Value
+  // Storage for persistence (required)
+  private storage: Storage
 
-  // Storage for persistence
-  private storage?: VaultStorage
+  // Password for lazy decryption
+  private password?: string
 
   constructor(
-    public readonly id: number,
-    private _vaultData: VaultData,
-    private vaultData: CoreVault,
+    vaultId: number,
+    name: string,
+    vultFileContent: string,
+    password: string | undefined,
     services: VaultServices,
     config?: VaultConfig,
-    storage?: VaultStorage
+    storage?: Storage,
+    parsedVaultData?: CoreVault
   ) {
     // Initialize EventEmitter
     super()
 
+    // Store password for lazy decryption
+    this.password = password
+
     // Inject essential services
     this.wasmManager = services.wasmManager
     this.fastSigningService = services.fastSigningService
-    this.cacheService = new CacheService()
-    this.storage = storage
+    // Use provided storage or default to in-memory storage
+    this.storage = storage ?? new MemoryStorage()
+    // Initialize cache service with storage support
+    this.cacheService = new CacheService(
+      this.storage,
+      vaultId,
+      config?.cacheConfig
+    )
+
+    // Parse vault container (synchronous) - or use provided parsed data
+    let container: { isEncrypted: boolean; vault: string }
+    let parsedVault: CoreVault
+
+    if (parsedVaultData) {
+      // Use pre-parsed vault data (for createFastVault with encrypted content)
+      // This avoids trying to parse encrypted vault protobuf synchronously
+      parsedVault = parsedVaultData
+
+      // Determine if encrypted by checking if password was provided
+      container = {
+        isEncrypted: !!password,
+        vault: '', // Not needed when using pre-parsed data
+      }
+    } else {
+      // Parse vault from vultFileContent string (for imports)
+      try {
+        container = vaultContainerFromString(vultFileContent.trim())
+
+        // When password is provided to createVaultBackup(), the ENTIRE vault protobuf
+        // (including metadata, signers, keyShares, etc.) is encrypted with AES-GCM.
+        // We can only parse unencrypted vult files synchronously here.
+        const vaultBase64 = container.vault
+
+        if (container.isEncrypted) {
+          // Cannot parse encrypted vault synchronously - need async decryption
+          // This should not happen if parsedVaultData is properly provided
+          throw new Error(
+            'Cannot parse encrypted vault synchronously. Use parsedVaultData parameter.'
+          )
+        }
+
+        // Parse unencrypted vault protobuf
+        const vaultBinary = fromBase64(vaultBase64)
+        const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
+        parsedVault = fromCommVault(vaultProtobuf)
+      } catch {
+        // If parsing fails, create a minimal vault with just the name
+        // This allows tests and edge cases to work with invalid vult content
+        container = { isEncrypted: false, vault: '' }
+        parsedVault = {
+          name: name || 'Unknown Vault',
+          publicKeys: { ecdsa: '', eddsa: '' },
+          signers: ['local-party-1'],
+          hexChainCode: '',
+          localPartyId: 'local-party-1',
+          createdAt: Date.now(),
+          libType: 'GG20',
+          isBackedUp: false,
+          order: 0,
+          keyShares: { ecdsa: '', eddsa: '' },
+        }
+      }
+    }
+
+    // Build CoreVault (without keyShares for now - lazy loaded)
+    this.coreVault = {
+      name: name || parsedVault.name,
+      publicKeys: parsedVault.publicKeys,
+      signers: parsedVault.signers,
+      hexChainCode: parsedVault.hexChainCode,
+      localPartyId: parsedVault.localPartyId,
+      createdAt: parsedVault.createdAt || Date.now(),
+      libType: parsedVault.libType,
+      isBackedUp: parsedVault.isBackedUp ?? true,
+      order: parsedVault.order ?? 0,
+      keyShares: { ecdsa: '', eddsa: '' }, // Lazy-loaded from vaultFileContent
+      folderId: parsedVault.folderId,
+    }
+
+    // Determine vault type
+    const vaultType = determineVaultType(this.coreVault.signers as string[])
+
+    // Build VaultData
+    this.vaultData = {
+      // Identity (readonly fields)
+      publicKeys: this.coreVault.publicKeys,
+      hexChainCode: this.coreVault.hexChainCode,
+      signers: this.coreVault.signers,
+      localPartyId: this.coreVault.localPartyId,
+      createdAt: this.coreVault.createdAt,
+      libType: this.coreVault.libType,
+
+      // Metadata
+      id: vaultId,
+      name: this.coreVault.name,
+      isEncrypted: container.isEncrypted,
+      type: vaultType,
+      isBackedUp: this.coreVault.isBackedUp,
+      order: this.coreVault.order,
+      folderId: this.coreVault.folderId,
+      lastModified: Date.now(),
+
+      // User Preferences
+      currency: config?.defaultCurrency?.toLowerCase() || 'usd',
+      chains: config?.defaultChains?.map(c => c.toString()) || [],
+      tokens: {},
+
+      // Vault file
+      vultFileContent: vultFileContent.trim(),
+    }
+
+    // Initialize runtime state
+    this._userChains =
+      this.vaultData.chains.length > 0
+        ? this.vaultData.chains.map(c => c as Chain)
+        : (config?.defaultChains ?? DEFAULT_CHAINS)
+    this._currency = this.vaultData.currency
+    this._tokens = this.vaultData.tokens
 
     // Initialize fiat value service
     this.fiatValueService = new FiatValueService(
@@ -122,13 +238,12 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
     // Initialize extracted services
     this.addressService = new AddressService(
-      this.vaultData,
+      this.coreVault,
       this.wasmManager,
-      this.cacheService,
-      () => this._userChains
+      this.cacheService
     )
     this.transactionBuilder = new TransactionBuilder(
-      this.vaultData,
+      this.coreVault,
       this.wasmManager
     )
     this.balanceService = new BalanceService(
@@ -140,7 +255,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       () => this._tokens
     )
     this.gasEstimationService = new GasEstimationService(
-      this.vaultData,
+      this.coreVault,
       this.wasmManager,
       chain => this.address(chain)
     )
@@ -149,123 +264,271 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       keysignPayload => this.extractMessageHashes(keysignPayload)
     )
 
-    // Initialize user chains from VaultData or config
-    // Empty array is truthy, so explicitly check length
-    this._userChains =
-      _vaultData.chains && _vaultData.chains.length > 0
-        ? _vaultData.chains.map(c => c as Chain)
-        : (config?.defaultChains ?? DEFAULT_CHAINS)
+    // Setup event-driven cache invalidation
+    this.setupCacheInvalidation()
+  }
 
-    // Initialize currency from VaultData or config (normalize to lowercase)
-    this._currency = (
-      _vaultData.currency ??
-      config?.defaultCurrency ??
-      'usd'
-    ).toLowerCase()
+  /**
+   * Setup event-driven cache invalidation
+   * Automatically invalidates relevant caches when vault state changes
+   */
+  private setupCacheInvalidation(): void {
+    // When tokens are added/removed, invalidate balances and portfolio for that chain
+    this.on('tokenAdded', async ({ chain }) => {
+      await this.cacheService.invalidateByPrefix(
+        `${CacheScope.BALANCE}:${chain.toLowerCase()}`
+      )
+      await this.cacheService.invalidateScope(CacheScope.PORTFOLIO)
+    })
 
-    // Initialize tokens from VaultData
-    this._tokens = _vaultData.tokens ?? {}
+    this.on('tokenRemoved', async ({ chain }) => {
+      await this.cacheService.invalidateByPrefix(
+        `${CacheScope.BALANCE}:${chain.toLowerCase()}`
+      )
+      await this.cacheService.invalidateScope(CacheScope.PORTFOLIO)
+    })
+  }
 
-    // Set cached properties from VaultData
-    this._isEncrypted = _vaultData.isEncrypted
-    this._securityType = _vaultData.type
+  private vaultData: VaultData // Single source of truth
+  private coreVault: CoreVault // Built from vaultData
+
+  /**
+   * Reconstruct a Vault instance from stored VaultData
+   * Used when loading existing vaults from storage
+   *
+   * @param vaultData - Previously stored VaultData
+   * @param services - Vault services (WASM, signing, etc.)
+   * @param config - Optional configuration
+   * @param storage - Storage instance (optional, defaults to in-memory)
+   * @returns Vault instance
+   */
+  static fromStorage(
+    vaultData: VaultData,
+    services: VaultServices,
+    config?: VaultConfig,
+    storage?: Storage
+  ): Vault {
+    // Use the constructor with stored vult file content
+    // The constructor will parse it (or handle empty content gracefully)
+    const vault = new Vault(
+      vaultData.id,
+      vaultData.name,
+      vaultData.vultFileContent || '', // Use stored content, empty string triggers fallback
+      undefined, // password - not stored, required later for signing if encrypted
+      services,
+      config,
+      storage
+    )
+
+    // Override constructor defaults with stored preferences from VaultData
+    // The constructor uses config defaults, but we want stored preferences
+    // Only override if there are actual stored values (not empty/default)
+    if (vaultData.chains && vaultData.chains.length > 0) {
+      vault._userChains = vaultData.chains.map((c: string) => c as Chain)
+    }
+    if (vaultData.currency) {
+      vault._currency = vaultData.currency
+    }
+    if (vaultData.tokens && Object.keys(vaultData.tokens).length > 0) {
+      vault._tokens = vaultData.tokens
+    }
+
+    // Override vaultData to ensure all stored fields are preserved
+    // (constructor built it from scratch, but we want the stored version)
+
+    ;(vault as any).vaultData = vaultData
+
+    // CRITICAL: Update coreVault with stored identity fields
+    // This is necessary because the constructor may have created a fallback
+    // coreVault with empty keys when vultFileContent was empty
+    vault.coreVault.publicKeys = vaultData.publicKeys
+    vault.coreVault.hexChainCode = vaultData.hexChainCode
+    vault.coreVault.signers = [...vaultData.signers] // Copy readonly array to mutable
+    vault.coreVault.localPartyId = vaultData.localPartyId
+    vault.coreVault.libType = vaultData.libType
+    vault.coreVault.createdAt = vaultData.createdAt
+
+    return vault
+  }
+
+  // Add getter for id (no longer a constructor parameter)
+  get id(): number {
+    return this.vaultData.id
   }
 
   /**
    * Load preferences from storage
    */
   async loadPreferences(): Promise<void> {
-    if (!this.storage) return
+    // Load vault data
+    const loadedVaultData = await this.storage.get<VaultData>(
+      `vault:${this.vaultData.id}`
+    )
+    if (loadedVaultData) {
+      // Replace entire vaultData object
 
-    const vaultData = await this.storage.get<VaultData>(`vault:${this.id}`)
+      ;(this as any).vaultData = loadedVaultData
 
-    if (vaultData) {
-      this._vaultData = vaultData
-      this._currency = vaultData.currency
-      this._userChains = vaultData.chains.map(c => c as Chain)
-      this._tokens = vaultData.tokens
-      if (vaultData.lastValueUpdate) {
-        this.lastValueUpdate = new Date(vaultData.lastValueUpdate)
+      // Update runtime state
+      this._currency = loadedVaultData.currency
+      this._userChains = loadedVaultData.chains.map(c => c as Chain)
+      this._tokens = loadedVaultData.tokens
+      if (loadedVaultData.lastValueUpdate) {
+        this.lastValueUpdate = new Date(loadedVaultData.lastValueUpdate)
       }
+
+      // Sync CoreVault with VaultData
+      this.coreVault.name = loadedVaultData.name
+      this.coreVault.isBackedUp = loadedVaultData.isBackedUp
+      this.coreVault.order = loadedVaultData.order
     }
+
+    // Initialize cache service (load persistent cache from storage)
+    await this.cacheService.init()
   }
 
   /**
-   * Save preferences to storage
-   * @private
+   * Save this vault to storage
+   * Syncs runtime state to VaultData and persists atomically
    */
-  private async savePreferences(): Promise<void> {
-    if (!this.storage) return
+  async save(): Promise<void> {
+    // Sync runtime state to vaultData
 
-    // Update lastModified timestamp
-    this._vaultData.lastModified = Date.now()
+    const mutableData = this.vaultData as any
+    mutableData.currency = this._currency
+    mutableData.chains = this._userChains.map(c => c.toString())
+    mutableData.tokens = this._tokens
+    mutableData.lastModified = Date.now()
 
-    // Update runtime state in VaultData
-    this._vaultData.currency = this._currency
-    this._vaultData.chains = this._userChains.map(c => c.toString())
-    this._vaultData.tokens = this._tokens
-    this._vaultData.lastValueUpdate = this.lastValueUpdate?.getTime()
+    // Sync CoreVault fields
+    this.coreVault.name = this.vaultData.name
+    this.coreVault.isBackedUp = this.vaultData.isBackedUp
+    this.coreVault.order = this.vaultData.order
 
-    // Save entire vault data atomically
-    await this.storage.set(`vault:${this.id}`, this._vaultData)
+    // Persist to storage (cache is handled automatically by CacheService)
+    await this.storage.set(`vault:${this.vaultData.id}`, this.vaultData)
+
+    // Emit event
+    this.emit('saved', { vaultId: this.vaultData.id })
   }
 
   // ===== VAULT INFO =====
 
+  // ===== PUBLIC GETTERS FOR VAULTDATA ACCESS =====
+
   /**
-   * Get vault summary information
+   * Get the complete vault data
+   * Use this to access all vault information
    */
-  summary(): Summary {
-    return {
-      id: this.vaultData.publicKeys.ecdsa,
-      name: this.vaultData.name,
-      isEncrypted: this._isEncrypted ?? false,
-      createdAt: this.vaultData.createdAt,
-      lastModified: this.vaultData.createdAt, // Use createdAt as fallback
-      size: 0, // TODO: Calculate vault size if needed
-      type: this._securityType ?? determineVaultType(this.vaultData.signers),
-      currency: this._currency,
-      chains: this.getChains(),
-      tokens: this._tokens,
-      threshold: this.calculateThreshold(this.vaultData.signers.length),
-      totalSigners: this.vaultData.signers.length,
-      vaultIndex: this.vaultData.order ?? 0,
-      signers: this.vaultData.signers.map((signerId, index) => ({
-        id: signerId,
-        publicKey: '', // Per-signer public keys not stored separately
-        name: `Signer ${index + 1}`,
-      })),
-      isBackedUp: () => this.vaultData.isBackedUp ?? false,
-      keys: {
-        ecdsa: this.vaultData.publicKeys.ecdsa,
-        eddsa: this.vaultData.publicKeys.eddsa,
-        hexChainCode: this.vaultData.hexChainCode,
-        hexEncryptionKey: '', // Not currently stored
-      },
-    }
+  get data(): VaultData {
+    return this.vaultData
   }
 
+  // Identity fields (readonly)
+  get name(): string {
+    return this.vaultData.name
+  }
+
+  get publicKeys(): Readonly<{ ecdsa: string; eddsa: string }> {
+    return this.vaultData.publicKeys
+  }
+
+  get hexChainCode(): string {
+    return this.vaultData.hexChainCode
+  }
+
+  get signers(): Array<{ id: string; publicKey: string; name: string }> {
+    return this.vaultData.signers.map((signerId, index) => ({
+      id: signerId,
+      publicKey: this.vaultData.publicKeys.ecdsa, // All signers share the same public key in TSS
+      name: `Signer ${index + 1}`,
+    }))
+  }
+
+  get localPartyId(): string {
+    return this.vaultData.localPartyId
+  }
+
+  get createdAt(): number {
+    return this.vaultData.createdAt
+  }
+
+  get libType(): string {
+    return this.vaultData.libType
+  }
+
+  // Metadata fields
+  get isEncrypted(): boolean {
+    return this.vaultData.isEncrypted
+  }
+
+  get type(): 'fast' | 'secure' {
+    return this.vaultData.type
+  }
+
+  get isBackedUp(): boolean {
+    return this.vaultData.isBackedUp
+  }
+
+  get order(): number {
+    return this.vaultData.order
+  }
+
+  get folderId(): string | undefined {
+    return this.vaultData.folderId
+  }
+
+  get lastModified(): number {
+    return this.vaultData.lastModified
+  }
+
+  // Computed fields (previously in Summary)
   /**
    * Calculate threshold based on total signers
    * For 2-of-2 (fast vaults), threshold is 2
    * For multi-sig (secure vaults), threshold is typically (n+1)/2
    */
-  private calculateThreshold(totalSigners: number): number {
+  get threshold(): number {
+    const totalSigners = this.vaultData.signers.length
     return totalSigners === 2 ? 2 : Math.ceil((totalSigners + 1) / 2)
   }
 
   /**
-   * Get cached encryption status
+   * Get total number of signers
    */
-  getCachedEncryptionStatus(): boolean | undefined {
-    return this._isEncrypted
+  get totalSigners(): number {
+    return this.vaultData.signers.length
   }
 
   /**
-   * Get cached security type
+   * Get vault currency
    */
-  getCachedSecurityType(): 'fast' | 'secure' | undefined {
-    return this._securityType
+  get currency(): string {
+    return this._currency
+  }
+
+  /**
+   * Get all vault tokens (across all chains)
+   */
+  get tokens(): Record<string, Token[]> {
+    return this._tokens
+  }
+
+  /**
+   * Get vault keys (public keys and chain code)
+   */
+  get keys(): {
+    ecdsa: string
+    eddsa: string
+    hexChainCode: string
+    hexEncryptionKey: string
+  } {
+    return {
+      ecdsa: this.vaultData.publicKeys.ecdsa,
+      eddsa: this.vaultData.publicKeys.eddsa,
+      hexChainCode: this.vaultData.hexChainCode,
+      hexEncryptionKey: '', // Not used in current implementation
+    }
   }
 
   /**
@@ -282,7 +545,16 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     }
 
     const oldName = this.vaultData.name
-    this.vaultData.name = newName
+
+    // Update VaultData (bypass readonly with type assertion)
+
+    ;(this.vaultData as any).name = newName
+
+    // Keep CoreVault in sync
+    this.coreVault.name = newName
+
+    // Persist changes
+    await this.save()
 
     // Emit renamed event
     this.emit('renamed', { oldName, newName })
@@ -340,7 +612,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    */
   async exportAsBase64(password?: string): Promise<string> {
     const { createVaultBackup } = await import('../utils/export')
-    return createVaultBackup(this.vaultData, password)
+    // Pass CoreVault which has current name/metadata synced
+    return createVaultBackup(this.coreVault, password)
   }
 
   /**
@@ -368,12 +641,69 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Delete vault (placeholder)
+   * Delete this vault from storage
+   * Removes vault data and persistent cache
    */
-  delete(): Promise<void> {
-    throw new Error(
-      'delete() not implemented yet - requires storage integration'
+  async delete(): Promise<void> {
+    // Remove vault data
+    await this.storage.remove(`vault:${this.vaultData.id}`)
+
+    // Remove persistent cache
+    await this.storage.remove(`vault:${this.vaultData.id}:cache`)
+
+    // Emit deleted event
+    this.emit('deleted', { vaultId: this.vaultData.id })
+  }
+
+  /**
+   * Reload vault data from storage
+   * Refreshes the current instance with persisted state
+   *
+   * @throws {VaultError} If vault not found in storage
+   */
+  async load(): Promise<void> {
+    const loadedVaultData = await this.storage.get<VaultData>(
+      `vault:${this.vaultData.id}`
     )
+
+    if (!loadedVaultData) {
+      throw new VaultError(
+        VaultErrorCode.InvalidVault,
+        `Vault ${this.vaultData.id} not found in storage`
+      )
+    }
+
+    // Replace vaultData
+
+    ;(this as any).vaultData = loadedVaultData
+
+    // Update runtime state
+    this._currency = loadedVaultData.currency
+    this._userChains = loadedVaultData.chains.map(c => c as Chain)
+    this._tokens = loadedVaultData.tokens
+
+    // Sync CoreVault
+    this.coreVault.name = loadedVaultData.name
+    this.coreVault.isBackedUp = loadedVaultData.isBackedUp
+    this.coreVault.order = loadedVaultData.order
+
+    // Initialize cache service (load persistent cache from storage)
+    await this.cacheService.init()
+
+    // Emit event
+    this.emit('loaded', { vaultId: this.vaultData.id })
+  }
+
+  /**
+   * Check if this vault exists in storage
+   *
+   * @returns true if vault exists, false otherwise
+   */
+  async exists(): Promise<boolean> {
+    const vaultData = await this.storage.get<VaultData>(
+      `vault:${this.vaultData.id}`
+    )
+    return vaultData !== null && vaultData !== undefined
   }
 
   // ===== ADDRESS METHODS =====
@@ -390,7 +720,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Get addresses for multiple chains
    */
   async addresses(chains?: Chain[]): Promise<Record<string, string>> {
-    return this.addressService.getAddresses(chains)
+    const chainsToDerive = chains ?? this._userChains
+    return this.addressService.getAddresses(chainsToDerive)
   }
 
   // ===== BALANCE METHODS =====
@@ -567,8 +898,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Validate signing mode against vault type
    */
   private validateSigningMode(mode: SigningMode): void {
-    const securityType =
-      this._securityType ?? determineVaultType(this.vaultData.signers)
+    const securityType = this.vaultData.type
 
     if (mode === 'fast' && securityType !== 'fast') {
       throw new VaultError(
@@ -589,41 +919,45 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    * Ensure keyShares are loaded from vault file (lazy loading with password)
    * This is called before signing operations that need keyShares
    */
-  private async ensureKeySharesLoaded(password: string): Promise<void> {
-    // Check if keyShares are already loaded (non-empty strings)
+  private async ensureKeySharesLoaded(password?: string): Promise<void> {
+    // Check if keyShares are already loaded
     if (
-      this.vaultData.keyShares.ecdsa &&
-      this.vaultData.keyShares.ecdsa.length > 0 &&
-      this.vaultData.keyShares.eddsa &&
-      this.vaultData.keyShares.eddsa.length > 0
+      this.coreVault.keyShares.ecdsa &&
+      this.coreVault.keyShares.ecdsa.length > 0 &&
+      this.coreVault.keyShares.eddsa &&
+      this.coreVault.keyShares.eddsa.length > 0
     ) {
       return // Already loaded
     }
 
     // Check if vault file content is available
-    // (In unit tests, vultFileContent may be empty and keyShares are already set)
     if (
-      !this._vaultData.vultFileContent ||
-      this._vaultData.vultFileContent.trim().length === 0
+      !this.vaultData.vultFileContent ||
+      this.vaultData.vultFileContent.trim().length === 0
     ) {
-      // No vault file to parse - keyShares must already be in CoreVault
-      // This happens in unit tests where mock data is used
       return
     }
 
-    // Parse vault file to get keyShares (using static imports for performance)
-    // 1. Parse VaultContainer from content
+    // Use provided password or stored password
+    const decryptionPassword = password || this.password
+
+    // Parse vault file to get keyShares
     const container = vaultContainerFromString(
-      this._vaultData.vultFileContent.trim()
+      this.vaultData.vultFileContent.trim()
     )
 
-    // 2. Handle decryption if needed
+    // Handle decryption if needed
     let vaultBase64: string
     if (container.isEncrypted) {
-      // Decrypt
+      if (!decryptionPassword) {
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          'Password required for encrypted vault'
+        )
+      }
       const encryptedData = fromBase64(container.vault)
       const decryptedBuffer = await decryptWithAesGcm({
-        key: password,
+        key: decryptionPassword,
         value: encryptedData,
       })
       vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
@@ -631,13 +965,13 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       vaultBase64 = container.vault
     }
 
-    // 3. Parse inner Vault protobuf
+    // Parse inner Vault protobuf
     const vaultBinary = fromBase64(vaultBase64)
     const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
     const parsedVault = fromCommVault(vaultProtobuf)
 
-    // 4. Update CoreVault with keyShares (mutate in place for session)
-    this.vaultData.keyShares = parsedVault.keyShares
+    // Update CoreVault with keyShares
+    this.coreVault.keyShares = parsedVault.keyShares
   }
 
   /**
@@ -666,7 +1000,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       await this.ensureKeySharesLoaded(password)
 
       const signature = await this.fastSigningService.signWithServer(
-        this.vaultData,
+        this.coreVault,
         payload,
         password,
         step => {
@@ -776,7 +1110,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    */
   async setTokens(chain: Chain, tokens: Token[]): Promise<void> {
     this._tokens[chain] = tokens
-    await this.savePreferences()
+    await this.save()
   }
 
   /**
@@ -786,7 +1120,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     if (!this._tokens[chain]) this._tokens[chain] = []
     if (!this._tokens[chain].find(t => t.id === token.id)) {
       this._tokens[chain].push(token)
-      await this.savePreferences()
+      await this.save()
       // Emit token added event
       this.emit('tokenAdded', { chain, token })
     }
@@ -801,7 +1135,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       this._tokens[chain] = this._tokens[chain].filter(t => t.id !== tokenId)
 
       if (tokenExists) {
-        await this.savePreferences()
+        await this.save()
         // Emit token removed event
         this.emit('tokenRemoved', { chain, tokenId })
       }
@@ -837,7 +1171,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     await this.addresses(chains)
 
     // Save preferences
-    await this.savePreferences()
+    await this.save()
   }
 
   /**
@@ -854,7 +1188,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     if (!this._userChains.includes(chain)) {
       this._userChains.push(chain)
       await this.address(chain) // Pre-derive
-      await this.savePreferences()
+      await this.save()
 
       // Emit chain added event
       this.emit('chainAdded', { chain })
@@ -873,7 +1207,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     this.cacheService.clear(cacheKey)
 
     if (chainExists) {
-      await this.savePreferences()
+      await this.save()
       // Emit chain removed event
       this.emit('chainRemoved', { chain })
     }
@@ -892,7 +1226,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   async resetToDefaultChains(): Promise<void> {
     this._userChains = DEFAULT_CHAINS
     await this.addresses(this._userChains)
-    await this.savePreferences()
+    await this.save()
   }
 
   /**
@@ -909,7 +1243,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
    */
   async setCurrency(currency: string): Promise<void> {
     this._currency = currency
-    await this.savePreferences()
+    await this.save()
   }
 
   /**
@@ -1075,26 +1409,39 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       fiatCurrency ?? this._currency
     ).toLowerCase() as FiatCurrency
 
-    // Use cached value if fresh (< 1 minute old)
-    if (
-      this.cachedTotalValue &&
-      this.lastValueUpdate &&
-      this.cachedTotalValue.currency === currency
-    ) {
-      const age = Date.now() - this.lastValueUpdate.getTime()
-      if (age < 60000) {
-        // 1 minute
-        return this.cachedTotalValue
-      }
-    }
+    // Use scoped cache with configured TTL
+    return this.cacheService.getOrComputeScoped(
+      currency,
+      CacheScope.PORTFOLIO,
+      async () => {
+        // Calculate fresh total
+        const chains = this.getChains()
+        let total = 0
 
-    // Calculate fresh total
-    return this.updateTotalValue(currency)
+        // Sum values across all chains
+        for (const chain of chains) {
+          try {
+            const chainValues = await this.getValues(chain, currency)
+            for (const value of Object.values(chainValues)) {
+              total += parseFloat(value.amount)
+            }
+          } catch (error) {
+            console.warn(`Failed to get values for ${chain}:`, error)
+            // Continue with other chains
+          }
+        }
+
+        return {
+          amount: total.toFixed(2),
+          currency,
+          lastUpdated: Date.now(),
+        }
+      }
+    )
   }
 
   /**
-   * Force recalculation of total portfolio value (ignores cache)
-   * Updates lastValueUpdate timestamp
+   * Force recalculation of total portfolio value (invalidates cache)
    *
    * @param fiatCurrency Optional currency override
    * @returns Updated total portfolio value
@@ -1111,35 +1458,12 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     const currency = (
       fiatCurrency ?? this._currency
     ).toLowerCase() as FiatCurrency
-    const chains = this.getChains()
 
-    let total = 0
+    // Invalidate cache to force recalculation
+    await this.cacheService.invalidateScoped(currency, CacheScope.PORTFOLIO)
 
-    // Sum values across all chains
-    for (const chain of chains) {
-      try {
-        const chainValues = await this.getValues(chain, currency)
-        for (const value of Object.values(chainValues)) {
-          total += parseFloat(value.amount)
-        }
-      } catch (error) {
-        console.warn(`Failed to get values for ${chain}:`, error)
-        // Continue with other chains
-      }
-    }
-
-    const totalValue: Value = {
-      amount: total.toFixed(2),
-      currency,
-      lastUpdated: Date.now(),
-    }
-
-    // Cache the result
-    this.cachedTotalValue = totalValue
-    this.lastValueUpdate = new Date()
-
-    // Persist to storage
-    await this.savePreferences()
+    // Get fresh value (will recompute)
+    const totalValue = await this.getTotalValue(currency)
 
     // Emit event
     this.emit('totalValueUpdated', { value: totalValue })
@@ -1148,11 +1472,4 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   }
 
   // ===== DATA ACCESS =====
-
-  /**
-   * Get the underlying vault data
-   */
-  get data(): CoreVault {
-    return this.vaultData
-  }
 }

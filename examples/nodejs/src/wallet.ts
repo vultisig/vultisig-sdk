@@ -43,24 +43,17 @@ export class VaultManager {
 
     try {
       this.sdk = new Vultisig({
-        storage: new NodeStorage(this.config.storagePath),
-        serverEndpoints: {
-          fastVault: this.config.serverUrl,
-          messageRelay: this.config.relayUrl,
-        },
-        autoInit: true,
-        defaultCurrency: this.config.defaultCurrency,
+        storage: new NodeStorage({ basePath: this.config.storagePath }),
       })
 
       await this.sdk.initialize()
 
       // Check if there's an active vault in storage (from previous import/create)
-      const existingVault = await this.sdk.getActiveVault()
+      const existingVault = await this.sdk.vaultManager.getActiveVault()
       if (existingVault) {
         this.activeVault = existingVault
         this.setupVaultEvents(this.activeVault)
-        const summary = this.activeVault.summary()
-        spinner.succeed(`SDK initialized - Vault loaded: ${summary.name}`)
+        spinner.succeed(`SDK initialized - Vault loaded: ${existingVault.name}`)
         return
       }
 
@@ -71,15 +64,19 @@ export class VaultManager {
           // Check if file exists
           await fs.access(vaultFilePath)
 
+          // Read vault file
+          const vultContent = await fs.readFile(vaultFilePath, 'utf-8')
+
           // Import vault with optional password from .env
           const vaultPassword = process.env.VAULT_PASSWORD
-          this.activeVault = await this.sdk.importVaultFromFile(
-            vaultFilePath,
+          this.activeVault = await this.sdk.vaultManager.importVault(
+            vultContent,
             vaultPassword
           )
           this.setupVaultEvents(this.activeVault)
-          const summary = this.activeVault.summary()
-          spinner.succeed(`SDK initialized - Vault imported: ${summary.name}`)
+          spinner.succeed(
+            `SDK initialized - Vault imported: ${this.activeVault.name}`
+          )
           return
         } catch (error: any) {
           // If vault file doesn't exist or import fails, continue without it
@@ -97,58 +94,74 @@ export class VaultManager {
   }
 
   /**
-   * Create new vault with progress tracking
+   * Create new fast vault with progress tracking
+   * Returns vaultId for email verification
    */
   async createVault(
     name: string,
     password: string,
     email: string
-  ): Promise<{ vault: Vault; vaultId: string; verificationRequired: boolean }> {
+  ): Promise<{ vaultId: string; verificationRequired: boolean }> {
     const spinner = ora('Creating vault...').start()
 
-    // Setup progress tracking
-    this.sdk.on('vaultCreationProgress', ({ step }: any) => {
-      spinner.text = `${step.message} (${step.progress}%)`
-    })
-
     try {
-      const result = await this.sdk.createFastVault({
-        name,
+      // Create fast vault (2-of-2 with VultiServer)
+      const result = await this.sdk.vaultManager.createFastVault(name, {
         password,
         email,
+        onProgressInternal: (step: any) => {
+          spinner.text = `${step.message} (${step.progress}%)`
+        },
       })
 
       this.activeVault = result.vault
       this.setupVaultEvents(this.activeVault)
       spinner.succeed(`Vault created: ${name}`)
 
-      return result
+      return {
+        vaultId: result.vaultId,
+        verificationRequired: result.verificationRequired,
+      }
     } catch (error) {
       spinner.fail('Vault creation failed')
       throw error
-    } finally {
-      this.sdk.removeAllListeners('vaultCreationProgress')
     }
   }
 
   /**
    * Verify vault with email code
+   * Call this after creating a fast vault to verify email delivery
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
-    const spinner = ora('Verifying email...').start()
+    const spinner = ora('Verifying email code...').start()
 
     try {
-      const verified = await this.sdk.verifyVault(vaultId, code)
+      const verified = await this.sdk.serverManager.verifyVault(vaultId, code)
 
       if (verified) {
-        spinner.succeed('Vault verified')
+        spinner.succeed('Email verified successfully!')
+        return true
       } else {
-        spinner.fail('Verification failed')
+        spinner.fail('Invalid verification code')
+        return false
       }
-
-      return verified
     } catch (error) {
-      spinner.fail('Verification error')
+      spinner.fail('Verification failed')
+      throw error
+    }
+  }
+
+  /**
+   * Resend verification email
+   */
+  async resendVerification(vaultId: string): Promise<void> {
+    const spinner = ora('Resending verification email...').start()
+
+    try {
+      await this.sdk.serverManager.resendVaultVerification(vaultId)
+      spinner.succeed('Verification email sent!')
+    } catch (error) {
+      spinner.fail('Failed to resend verification email')
       throw error
     }
   }
@@ -160,13 +173,18 @@ export class VaultManager {
     const spinner = ora('Importing vault...').start()
 
     try {
-      // Use SDK's importVaultFromFile method
-      const vault = await this.sdk.importVaultFromFile(filePath, password)
+      // Read vault file content
+      const vultContent = await fs.readFile(filePath, 'utf-8')
+
+      // Import vault using VaultManager
+      const vault = await this.sdk.vaultManager.importVault(
+        vultContent,
+        password
+      )
 
       this.activeVault = vault
       this.setupVaultEvents(this.activeVault)
-      const summary = vault.summary()
-      spinner.succeed(`Vault imported: ${summary.name}`)
+      spinner.succeed(`Vault imported: ${vault.name}`)
 
       return vault
     } catch (error: any) {
@@ -178,7 +196,7 @@ export class VaultManager {
   /**
    * Export vault to file
    */
-  async exportVault(outputPath?: string, password?: string): Promise<string> {
+  async exportVault(outputPath?: string, _password?: string): Promise<string> {
     if (!this.activeVault) {
       throw new Error('No active vault')
     }
@@ -186,11 +204,18 @@ export class VaultManager {
     const spinner = ora('Exporting vault...').start()
 
     try {
-      const blob = await this.activeVault.export(password)
-      const buffer = await blob.arrayBuffer()
+      // Export vault using VaultManager (exports the encrypted .vult file as-is)
+      const vultContent = await this.sdk.vaultManager.exportVault(
+        this.activeVault.id
+      )
 
-      const fileName = outputPath || this.activeVault.getExportFileName()
-      await fs.writeFile(fileName, Buffer.from(buffer))
+      // Determine output filename
+      const fileName =
+        outputPath ||
+        `${this.activeVault.name}-${this.activeVault.localPartyId}-vault.vult`
+
+      // Write to file
+      await fs.writeFile(fileName, vultContent, 'utf-8')
 
       spinner.succeed(`Vault exported: ${fileName}`)
       return fileName

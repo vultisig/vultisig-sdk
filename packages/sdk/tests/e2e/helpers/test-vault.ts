@@ -204,26 +204,22 @@ export async function loadTestVault(
  * @throws Error if vault is invalid or missing required data
  */
 export function verifyTestVault(vault: Vault): void {
-  const summary = vault.summary()
-
   // Basic validation checks
-  if (!summary.name) {
+  if (!vault.name) {
     throw new Error('Vault has no name')
   }
 
-  if (!summary.type) {
+  if (!vault.type) {
     throw new Error('Vault has no type')
   }
 
-  const keys = summary.keys
+  const keys = vault.keys
   if (!keys || !keys.ecdsa || !keys.eddsa) {
     throw new Error('Vault is missing required public keys (ecdsa/eddsa)')
   }
 
   // Log vault info for debugging
-  console.log(
-    `✅ Test vault verified: "${summary.name}" (type: ${summary.type})`
-  )
+  console.log(`✅ Test vault verified: "${vault.name}" (type: ${vault.type})`)
   console.log(`   ECDSA: ${keys.ecdsa.substring(0, 20)}...`)
   console.log(`   EdDSA: ${keys.eddsa.substring(0, 20)}...`)
 }

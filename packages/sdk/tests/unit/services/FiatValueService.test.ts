@@ -424,7 +424,7 @@ describe('FiatValueService', () => {
     })
   })
 
-  describe('clearCache', () => {
+  describe('clearPrices', () => {
     it('should clear all cached prices', async () => {
       const { getCoinPrices } = await import(
         '@core/chain/coin/price/getCoinPrices'
@@ -437,7 +437,7 @@ describe('FiatValueService', () => {
       await service.getPrice(Chain.Ethereum)
 
       // Clear cache
-      service.clearCache()
+      await service.clearPrices()
 
       // Next call should fetch fresh
       vi.mocked(getCoinPrices).mockResolvedValue({

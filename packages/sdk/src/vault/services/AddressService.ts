@@ -3,7 +3,7 @@ import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
-import type { CacheService } from '../../services/CacheService'
+import { CacheScope, type CacheService } from '../../services/CacheService'
 import { WASMManager } from '../../wasm/WASMManager'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
@@ -11,71 +11,64 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * AddressService
  *
  * Handles address derivation and caching for vault chains.
- * Extracted from Vault.ts to reduce file size and improve maintainability.
+ * Uses CacheService with ADDRESS scope for automatic storage persistence.
  */
 export class AddressService {
   constructor(
     private vaultData: CoreVault,
     private wasmManager: WASMManager,
-    private cacheService: CacheService,
-    private getUserChains: () => Chain[]
+    private cacheService: CacheService
   ) {}
 
   /**
    * Get address for specified chain
-   * Uses core's deriveAddress() with permanent caching
+   * Uses CacheService with automatic persistent caching
    */
   async getAddress(chain: Chain): Promise<string> {
-    const cacheKey = `address:${chain.toLowerCase()}`
+    return this.cacheService.getOrComputeScoped(
+      chain.toLowerCase(),
+      CacheScope.ADDRESS,
+      async () => {
+        // Derive address (expensive WASM operation)
+        try {
+          const walletCore = await this.wasmManager.getWalletCore()
 
-    // Check permanent cache
-    const cached = this.cacheService.get<string>(
-      cacheKey,
-      Number.MAX_SAFE_INTEGER
+          const publicKey = getPublicKey({
+            chain,
+            walletCore,
+            publicKeys: this.vaultData.publicKeys,
+            hexChainCode: this.vaultData.hexChainCode,
+          })
+
+          return deriveAddress({
+            chain,
+            publicKey,
+            walletCore,
+          })
+        } catch (error) {
+          throw new VaultError(
+            VaultErrorCode.AddressDerivationFailed,
+            `Failed to derive address for ${chain}`,
+            error as Error
+          )
+        }
+      }
     )
-    if (cached) return cached
-
-    try {
-      // Get WalletCore
-      const walletCore = await this.wasmManager.getWalletCore()
-
-      // Get public key using core
-      const publicKey = getPublicKey({
-        chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
-
-      // Derive address using core (handles all chain-specific logic)
-      const address = deriveAddress({
-        chain,
-        publicKey,
-        walletCore,
-      })
-
-      // Cache permanently (addresses don't change)
-      this.cacheService.set(cacheKey, address)
-      return address
-    } catch (error) {
-      throw new VaultError(
-        VaultErrorCode.AddressDerivationFailed,
-        `Failed to derive address for ${chain}`,
-        error as Error
-      )
-    }
   }
 
   /**
    * Get addresses for multiple chains
    */
   async getAddresses(chains?: Chain[]): Promise<Record<string, string>> {
-    const chainsToDerive = chains || this.getUserChains()
+    if (!chains || chains.length === 0) {
+      return {}
+    }
+
     const result: Record<string, string> = {}
 
     // Parallel derivation
     await Promise.all(
-      chainsToDerive.map(async chain => {
+      chains.map(async chain => {
         try {
           result[chain] = await this.getAddress(chain)
         } catch (error) {

@@ -76,7 +76,7 @@ export { StorageManager } from './runtime/storage/StorageManager'
 export type {
   StorageMetadata,
   StoredValue,
-  VaultStorage,
+  Storage as VaultStorage,
 } from './runtime/storage/types'
 export { StorageError, StorageErrorCode } from './runtime/storage/types'
 
@@ -163,7 +163,6 @@ export type {
   SigningMode,
   SigningPayload,
   SigningStep,
-  Summary,
   Token,
   ValidationResult,
   Value,
@@ -172,7 +171,6 @@ export type {
   VaultDetails,
   VaultManagerConfig,
   VaultOptions,
-  VaultSigner,
   VaultSummary,
   VaultType,
   VaultValidationResult,

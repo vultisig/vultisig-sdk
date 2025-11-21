@@ -13,7 +13,7 @@ import { BrowserStorage } from '@/runtime/storage/BrowserStorage'
 import { ChromeStorage } from '@/runtime/storage/ChromeStorage'
 import { MemoryStorage } from '@/runtime/storage/MemoryStorage'
 import { NodeStorage } from '@/runtime/storage/NodeStorage'
-import type { VaultStorage } from '@/runtime/storage/types'
+import type { Storage } from '@/runtime/storage/types'
 import { StorageError, StorageErrorCode } from '@/runtime/storage/types'
 
 /**
@@ -41,7 +41,7 @@ export type CreateTestStorageOptions = {
 export async function createTestStorage(
   type: StorageType,
   options?: CreateTestStorageOptions
-): Promise<VaultStorage> {
+): Promise<Storage> {
   switch (type) {
     case 'memory':
       return new MemoryStorage()
@@ -73,7 +73,7 @@ export const storageAssertions = {
    * Assert that a value is stored correctly
    */
   async expectStoredValue<T>(
-    storage: VaultStorage,
+    storage: Storage,
     key: string,
     expected: T
   ): Promise<void> {
@@ -88,10 +88,7 @@ export const storageAssertions = {
   /**
    * Assert that storage contains exactly the expected keys
    */
-  async expectStorageKeys(
-    storage: VaultStorage,
-    expected: string[]
-  ): Promise<void> {
+  async expectStorageKeys(storage: Storage, expected: string[]): Promise<void> {
     const actual = await storage.list()
     const sortedActual = [...actual].sort()
     const sortedExpected = [...expected].sort()
@@ -106,7 +103,7 @@ export const storageAssertions = {
   /**
    * Assert that storage is empty
    */
-  async expectStorageEmpty(storage: VaultStorage): Promise<void> {
+  async expectStorageEmpty(storage: Storage): Promise<void> {
     const keys = await storage.list()
     if (keys.length > 0) {
       throw new Error(
@@ -118,7 +115,7 @@ export const storageAssertions = {
   /**
    * Assert that a key does not exist
    */
-  async expectKeyNotFound(storage: VaultStorage, key: string): Promise<void> {
+  async expectKeyNotFound(storage: Storage, key: string): Promise<void> {
     const value = await storage.get(key)
     if (value !== null) {
       throw new Error(
@@ -131,7 +128,7 @@ export const storageAssertions = {
    * Assert that storage usage is within expected range
    */
   async expectUsageInRange(
-    storage: VaultStorage,
+    storage: Storage,
     min: number,
     max: number
   ): Promise<void> {
@@ -164,8 +161,8 @@ export const storageAssertions = {
  * )
  */
 export async function testPersistence<T>(
-  setup: (storage: VaultStorage) => Promise<T>,
-  verify: (storage: VaultStorage, setupResult: T) => Promise<void>,
+  setup: (storage: Storage) => Promise<T>,
+  verify: (storage: Storage, setupResult: T) => Promise<void>,
   storageType: StorageType,
   options?: CreateTestStorageOptions
 ): Promise<void> {
@@ -185,7 +182,7 @@ export async function testPersistence<T>(
 /**
  * Mock storage that fails with specific errors
  */
-export class FailingStorage implements VaultStorage {
+export class FailingStorage implements Storage {
   constructor(private errorCode: StorageErrorCode = StorageErrorCode.Unknown) {}
 
   async get<T>(key: string): Promise<T | null> {
@@ -222,14 +219,14 @@ export class FailingStorage implements VaultStorage {
  */
 export function createFailingStorage(
   errorCode: StorageErrorCode = StorageErrorCode.Unknown
-): VaultStorage {
+): Storage {
   return new FailingStorage(errorCode)
 }
 
 /**
  * Mock storage that simulates quota exceeded
  */
-export class QuotaExceededStorage implements VaultStorage {
+export class QuotaExceededStorage implements Storage {
   private data: Map<string, any> = new Map()
   private quota = 1024 * 100 // 100KB quota
 
@@ -426,9 +423,7 @@ export const storageContractTests = {
   /**
    * Run all contract tests against a storage instance
    */
-  async testContract(
-    createStorage: () => Promise<VaultStorage>
-  ): Promise<void> {
+  async testContract(createStorage: () => Promise<Storage>): Promise<void> {
     const tests = [
       storageContractTests.testBasicOperations,
       storageContractTests.testDataTypes,
@@ -449,7 +444,7 @@ export const storageContractTests = {
   /**
    * Test basic get/set/remove operations
    */
-  async testBasicOperations(storage: VaultStorage): Promise<void> {
+  async testBasicOperations(storage: Storage): Promise<void> {
     // Set and get
     await storage.set('test-key', 'test-value')
     const value = await storage.get<string>('test-key')
@@ -468,7 +463,7 @@ export const storageContractTests = {
   /**
    * Test different data types
    */
-  async testDataTypes(storage: VaultStorage): Promise<void> {
+  async testDataTypes(storage: Storage): Promise<void> {
     const testCases: [string, any][] = [
       ['string', 'test'],
       ['number', 123],
@@ -490,7 +485,7 @@ export const storageContractTests = {
   /**
    * Test list and clear operations
    */
-  async testListAndClear(storage: VaultStorage): Promise<void> {
+  async testListAndClear(storage: Storage): Promise<void> {
     // Add multiple keys
     await storage.set('key1', 'value1')
     await storage.set('key2', 'value2')
@@ -513,7 +508,7 @@ export const storageContractTests = {
   /**
    * Test metadata tracking (if supported)
    */
-  async testMetadata(storage: VaultStorage): Promise<void> {
+  async testMetadata(storage: Storage): Promise<void> {
     await storage.set('test', 'value')
 
     // Optional: test getUsage and getQuota

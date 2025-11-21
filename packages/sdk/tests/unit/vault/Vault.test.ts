@@ -75,42 +75,30 @@ function createVaultDataFromCore(
   )
 
   return {
-    // Identity
-    id: vaultId,
-    publicKeyEcdsa: coreVault.publicKeys.ecdsa,
-    publicKeyEddsa: coreVault.publicKeys.eddsa,
-    name: coreVault.name,
-
-    // Metadata
+    // Identity (readonly fields)
+    publicKeys: coreVault.publicKeys,
+    hexChainCode: coreVault.hexChainCode,
+    signers: coreVault.signers,
+    localPartyId: coreVault.localPartyId,
+    createdAt: coreVault.createdAt || Date.now(),
+    libType: coreVault.libType,
     isEncrypted: false,
     type: isFastVault ? 'fast' : 'secure',
-    createdAt: coreVault.createdAt,
-    lastModified: coreVault.createdAt,
+
+    // Metadata
+    id: vaultId,
+    name: coreVault.name,
+    isBackedUp: coreVault.isBackedUp,
+    order: coreVault.order || 0,
+    lastModified: coreVault.createdAt || Date.now(),
 
     // User Preferences
     currency: 'usd',
     chains: [],
     tokens: {},
 
-    // Vault Structure
-    threshold: 2,
-    totalSigners: coreVault.signers.length,
-    vaultIndex: 0,
-    signers: coreVault.signers.map((id: string) => ({
-      id,
-      name: id,
-      publicKey: '',
-    })),
-
-    // Cryptographic Keys
-    hexChainCode: coreVault.hexChainCode,
-    hexEncryptionKey: '',
-
-    // Self-Contained Backup
+    // Vault file
     vultFileContent: '',
-
-    // Optional
-    isBackedUp: coreVault.isBackedUp,
   }
 }
 
@@ -152,66 +140,57 @@ describe('Vault', () => {
         }),
     })
 
-    // Create vault instance with REAL WASM using new constructor
+    // Create vault instance with REAL WASM using fromStorage factory
     const vaultData = createVaultDataFromCore(mockVaultData, 0)
-    vault = new Vault(
-      0, // id
-      vaultData, // VaultData
-      mockVaultData, // CoreVault
-      realServices,
-      {
-        defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
-        defaultCurrency: 'USD',
-      }
-    )
+    vault = Vault.fromStorage(vaultData, realServices, {
+      defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
+      defaultCurrency: 'USD',
+    })
   })
 
-  describe('Vault Info & Summary', () => {
-    it('should return complete vault summary with all Summary type properties', () => {
-      const summary = vault.summary()
-
+  describe('Vault Info & Getters', () => {
+    it('should expose all vault data via getters', () => {
       // Basic properties
-      expect(summary).toHaveProperty('id')
-      expect(summary).toHaveProperty('name', 'Test Vault')
-      expect(summary).toHaveProperty('type')
-      expect(summary).toHaveProperty('chains')
-      expect(summary).toHaveProperty('createdAt')
+      expect(vault.id).toBeDefined()
+      expect(vault.name).toBe('Test Vault')
+      expect(vault.type).toBeDefined()
+      expect(vault.getChains()).toBeDefined()
+      expect(vault.createdAt).toBeDefined()
 
-      // New Summary properties
-      expect(summary).toHaveProperty('isEncrypted')
-      expect(summary).toHaveProperty('lastModified')
-      expect(summary).toHaveProperty('size')
-      expect(summary).toHaveProperty('currency')
-      expect(summary).toHaveProperty('tokens')
-      expect(summary).toHaveProperty('threshold')
-      expect(summary).toHaveProperty('totalSigners')
-      expect(summary).toHaveProperty('vaultIndex')
-      expect(summary).toHaveProperty('signers')
-      expect(summary).toHaveProperty('keys')
+      // Identity fields
+      expect(vault.isEncrypted).toBeDefined()
+      expect(vault.lastModified).toBeDefined()
+      expect(vault.publicKeys).toHaveProperty('ecdsa')
+      expect(vault.publicKeys).toHaveProperty('eddsa')
+      expect(vault.hexChainCode).toBeDefined()
+      expect(vault.signers).toBeDefined()
+      expect(vault.localPartyId).toBeDefined()
+      expect(vault.libType).toBeDefined()
+
+      // Computed fields
+      expect(typeof vault.threshold).toBe('number')
+      expect(typeof vault.totalSigners).toBe('number')
 
       // Verify specific values
-      expect(summary.chains).toEqual([
+      expect(vault.getChains()).toEqual([
         Chain.Bitcoin,
         Chain.Ethereum,
         Chain.Solana,
       ])
-      expect(typeof summary.isEncrypted).toBe('boolean')
-      expect(typeof summary.threshold).toBe('number')
-      expect(typeof summary.totalSigners).toBe('number')
-      expect(Array.isArray(summary.signers)).toBe(true)
-      expect(summary.keys).toHaveProperty('ecdsa')
-      expect(summary.keys).toHaveProperty('eddsa')
-      expect(summary.keys).toHaveProperty('hexChainCode')
-      expect(summary.keys).toHaveProperty('hexEncryptionKey')
-
-      // isBackedUp should be a function
-      expect(typeof summary.isBackedUp).toBe('function')
-      expect(summary.isBackedUp()).toBe(false)
+      expect(typeof vault.isEncrypted).toBe('boolean')
+      expect(vault.threshold).toBeGreaterThan(0)
+      expect(vault.totalSigners).toBeGreaterThan(0)
+      expect(Array.isArray(vault.signers)).toBe(true)
+      expect(vault.publicKeys).toHaveProperty('ecdsa')
+      expect(vault.publicKeys).toHaveProperty('eddsa')
+      expect(vault.hexChainCode).toBeDefined()
+      // isBackedUp should be a boolean
+      expect(typeof vault.isBackedUp).toBe('boolean')
+      expect(vault.isBackedUp).toBe(false)
     })
 
     it('should detect fast vault type (signers contain Server-)', () => {
-      const summary = vault.summary()
-      expect(summary.type).toBe('fast')
+      expect(vault.type).toBe('fast')
     })
 
     it('should detect secure vault type (no Server- prefix)', () => {
@@ -220,31 +199,29 @@ describe('Vault', () => {
       })
 
       const vaultData = createVaultDataFromCore(secureVaultData, 1)
-      const secureVault = new Vault(1, vaultData, secureVaultData, realServices)
-      const summary = secureVault.summary()
-      expect(summary.type).toBe('secure')
+      const secureVault = Vault.fromStorage(vaultData, realServices)
+      expect(secureVault.type).toBe('secure')
     })
 
-    it('should use id from ECDSA public key', () => {
-      const summary = vault.summary()
-      expect(summary.id).toBe(mockVaultData.publicKeys.ecdsa)
+    it('should have numeric vault id', () => {
+      expect(vault.id).toBe(0) // Vault ID is now numeric, not ECDSA key
+      expect(vault.publicKeys.ecdsa).toBe(mockVaultData.publicKeys.ecdsa)
     })
 
     it('should return encryption status from VaultData', () => {
-      // Encryption status is initialized from VaultData
-      expect(vault.getCachedEncryptionStatus()).toBe(false)
+      // Encryption status comes from VaultData
+      expect(vault.isEncrypted).toBe(false)
     })
 
     it('should return security type from VaultData', () => {
-      // Security type is initialized from VaultData
-      expect(vault.getCachedSecurityType()).toBe('fast')
+      // Security type comes from VaultData
+      expect(vault.type).toBe('fast')
     })
 
     it('should calculate threshold as 2 for 2-of-2 vaults', () => {
       // Mock vault has 2 signers: ['local-party-1', 'Server-1']
-      const summary = vault.summary()
-      expect(summary.totalSigners).toBe(2)
-      expect(summary.threshold).toBe(2)
+      expect(vault.totalSigners).toBe(2)
+      expect(vault.threshold).toBe(2)
     })
 
     it('should calculate threshold correctly for multi-sig vaults', () => {
@@ -253,39 +230,30 @@ describe('Vault', () => {
       })
 
       const vaultData = createVaultDataFromCore(multiSigVaultData, 2)
-      const multiSigVault = new Vault(
-        2,
-        vaultData,
-        multiSigVaultData,
-        realServices
-      )
-      const summary = multiSigVault.summary()
+      const multiSigVault = Vault.fromStorage(vaultData, realServices)
 
-      expect(summary.totalSigners).toBe(4)
+      expect(multiSigVault.totalSigners).toBe(4)
       // For 4 signers: (4 + 1) / 2 = 2.5 -> ceil = 3
-      expect(summary.threshold).toBe(3)
+      expect(multiSigVault.threshold).toBe(3)
     })
 
     it('should include encryption status in summary', () => {
-      const summary = vault.summary()
       // Encryption status comes from VaultData
-      expect(summary.isEncrypted).toBe(false)
+      expect(vault.isEncrypted).toBe(false)
     })
 
     it('should include signers array in summary', () => {
-      const summary = vault.summary()
-      expect(Array.isArray(summary.signers)).toBe(true)
-      expect(summary.signers.length).toBe(2)
-      expect(summary.signers[0]).toHaveProperty('id')
-      expect(summary.signers[0]).toHaveProperty('publicKey')
-      expect(summary.signers[0]).toHaveProperty('name')
-      expect(summary.signers[0].id).toBe('local-party-1')
-      expect(summary.signers[0].name).toBe('Signer 1')
+      expect(Array.isArray(vault.signers)).toBe(true)
+      expect(vault.signers.length).toBe(2)
+      expect(vault.signers[0]).toHaveProperty('id')
+      expect(vault.signers[0]).toHaveProperty('publicKey')
+      expect(vault.signers[0]).toHaveProperty('name')
+      expect(vault.signers[0].id).toBe('local-party-1')
+      expect(vault.signers[0].name).toBe('Signer 1')
     })
 
     it('should include vault keys in summary', () => {
-      const summary = vault.summary()
-      expect(summary.keys).toEqual({
+      expect(vault.keys).toEqual({
         ecdsa: mockVaultData.publicKeys.ecdsa,
         eddsa: mockVaultData.publicKeys.eddsa,
         hexChainCode: mockVaultData.hexChainCode,
@@ -294,17 +262,15 @@ describe('Vault', () => {
     })
 
     it('should include currency and tokens in summary', () => {
-      const summary = vault.summary()
-      expect(typeof summary.currency).toBe('string')
-      expect(typeof summary.tokens).toBe('object')
+      expect(typeof vault.currency).toBe('string')
+      expect(typeof vault.tokens).toBe('object')
     })
   })
 
   describe('Vault Rename', () => {
     it('should rename vault with valid name', async () => {
       await vault.rename('New Vault Name')
-      const summary = vault.summary()
-      expect(summary.name).toBe('New Vault Name')
+      expect(vault.name).toBe('New Vault Name')
     })
 
     it('should emit renamed event with old and new names', async () => {
@@ -349,16 +315,15 @@ describe('Vault', () => {
 
     it('should accept vault name with letters, numbers, spaces, hyphens, and underscores', async () => {
       await vault.rename('My Vault 2024-Test_1')
-      const summary = vault.summary()
-      expect(summary.name).toBe('My Vault 2024-Test_1')
+      expect(vault.name).toBe('My Vault 2024-Test_1')
     })
 
     it('should accept vault name with only allowed special characters', async () => {
       await vault.rename('Vault-Name_123')
-      expect(vault.summary().name).toBe('Vault-Name_123')
+      expect(vault.name).toBe('Vault-Name_123')
 
       await vault.rename('My Main Vault')
-      expect(vault.summary().name).toBe('My Main Vault')
+      expect(vault.name).toBe('My Main Vault')
     })
 
     it('should throw VaultError with InvalidConfig code', async () => {
@@ -481,7 +446,7 @@ describe('Vault', () => {
       } as any
 
       const vaultData = createVaultDataFromCore(mockVaultData, 3)
-      const errorTestVault = new Vault(3, vaultData, mockVaultData, {
+      const errorTestVault = Vault.fromStorage(vaultData, {
         wasmManager: mockWasmManager,
       } as VaultServices)
 
@@ -513,7 +478,7 @@ describe('Vault', () => {
       } as any
 
       const vaultData = createVaultDataFromCore(mockVaultData, 4)
-      const errorTestVault = new Vault(4, vaultData, mockVaultData, {
+      const errorTestVault = Vault.fromStorage(vaultData, {
         wasmManager: mockWasmManager,
       } as VaultServices)
 
@@ -585,7 +550,7 @@ describe('Vault', () => {
       })
 
       const vaultData = createVaultDataFromCore(secureVaultData, 5)
-      const secureVault = new Vault(5, vaultData, secureVaultData, realServices)
+      const secureVault = Vault.fromStorage(vaultData, realServices)
 
       await expect(
         secureVault.sign('fast', mockPayload, 'password')
@@ -601,7 +566,7 @@ describe('Vault', () => {
       })
 
       const vaultData = createVaultDataFromCore(secureVaultData, 6)
-      const secureVault = new Vault(6, vaultData, secureVaultData, realServices)
+      const secureVault = Vault.fromStorage(vaultData, realServices)
 
       // Relay mode should pass validation but fail on not implemented
       await expect(
@@ -630,7 +595,7 @@ describe('Vault', () => {
 
     it('should require FastSigningService for fast signing', async () => {
       const vaultData = createVaultDataFromCore(mockVaultData, 7)
-      const vaultWithoutService = new Vault(7, vaultData, mockVaultData, {
+      const vaultWithoutService = Vault.fromStorage(vaultData, {
         wasmManager: realServices.wasmManager,
       } as VaultServices)
 
@@ -1003,9 +968,12 @@ describe('Vault', () => {
       const data = vault.data
 
       expect(data).toBeDefined()
-      expect(data).toEqual(mockVaultData)
+      // data is VaultData, not CoreVault
       expect(data.name).toBe('Test Vault')
       expect(data.publicKeys).toEqual(mockVaultData.publicKeys)
+      expect(data.hexChainCode).toBe(mockVaultData.hexChainCode)
+      expect(data.signers).toEqual(mockVaultData.signers)
+      expect(data.type).toBe('fast')
     })
 
     it('should return reference to actual data (not copy)', () => {
@@ -1027,7 +995,7 @@ describe('Vault', () => {
   describe('Initialization & Configuration', () => {
     it('should initialize with default config when not provided', () => {
       const vaultData = createVaultDataFromCore(mockVaultData, 8)
-      const defaultVault = new Vault(8, vaultData, mockVaultData, realServices)
+      const defaultVault = Vault.fromStorage(vaultData, realServices)
 
       const chains = defaultVault.getChains()
       const currency = defaultVault.getCurrency()
@@ -1039,7 +1007,7 @@ describe('Vault', () => {
 
     it('should initialize with custom default chains', () => {
       const vaultData = createVaultDataFromCore(mockVaultData, 9)
-      const customVault = new Vault(9, vaultData, mockVaultData, realServices, {
+      const customVault = Vault.fromStorage(vaultData, realServices, {
         defaultChains: [Chain.Bitcoin, Chain.Ripple],
       })
 
@@ -1053,10 +1021,8 @@ describe('Vault', () => {
         ...vaultData,
         currency: undefined as any,
       }
-      const customVault = new Vault(
-        10,
+      const customVault = Vault.fromStorage(
         vaultDataWithoutCurrency,
-        mockVaultData,
         realServices,
         {
           defaultCurrency: 'eur',
@@ -1068,11 +1034,10 @@ describe('Vault', () => {
 
     it('should work without fastSigningService', () => {
       const vaultData = createVaultDataFromCore(mockVaultData, 11)
-      const vaultWithoutSigning = new Vault(11, vaultData, mockVaultData, {
+      const vaultWithoutSigning = Vault.fromStorage(vaultData, {
         wasmManager: realServices.wasmManager,
       } as VaultServices)
 
-      expect(() => vaultWithoutSigning.summary()).not.toThrow()
       expect(() => vaultWithoutSigning.getChains()).not.toThrow()
     })
   })

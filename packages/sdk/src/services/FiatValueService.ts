@@ -7,20 +7,14 @@ import { getCoinValue } from '@core/chain/coin/utils/getCoinValue'
 import type { FiatCurrency } from '@core/config/FiatCurrency'
 
 import type { Balance, Token } from '../types'
-import type { CacheService } from './CacheService'
-
-/**
- * Price cache TTL (5 minutes)
- * Balances use 5-minute cache, prices should match to avoid stale value calculations
- */
-const PRICE_CACHE_TTL = 5 * 60 * 1000
+import { CacheScope, type CacheService } from './CacheService'
 
 /**
  * Service for fetching cryptocurrency prices and calculating fiat values
  *
  * Features:
  * - Fetches prices from Vultisig API (proxied CoinGecko)
- * - Caches prices with 5-minute TTL
+ * - Caches prices with configurable TTL (via CacheService)
  * - Supports native coins and ERC-20 tokens
  * - Batch price fetching for efficiency
  * - Multi-currency support (USD, EUR, GBP, etc.)
@@ -48,7 +42,7 @@ export class FiatValueService {
 
   /**
    * Get current price for a chain's native token or specific token
-   * Uses 5-minute cache to match balance caching strategy
+   * Uses CacheService with configurable TTL
    *
    * @param chain Chain to get price for
    * @param tokenId Optional token contract address (omit for native token)
@@ -76,10 +70,10 @@ export class FiatValueService {
     fiatCurrency?: FiatCurrency
   ): Promise<number> {
     const currency = fiatCurrency ? fiatCurrency : this.getCurrency()
-    const cacheKey = `price:${chain}:${tokenId ?? 'native'}:${currency}`
+    const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}:${currency}`
 
-    // Check cache first (5-minute TTL)
-    const cached = this.cacheService.get<number>(cacheKey, PRICE_CACHE_TTL)
+    // Check scoped cache (uses configured TTL)
+    const cached = this.cacheService.getScoped<number>(key, CacheScope.PRICE)
     if (cached !== null) {
       return cached
     }
@@ -96,7 +90,7 @@ export class FiatValueService {
     }
 
     // Cache the price
-    this.cacheService.set(cacheKey, price)
+    await this.cacheService.setScoped(key, CacheScope.PRICE, price)
 
     return price
   }
@@ -129,8 +123,8 @@ export class FiatValueService {
     // Separate cached and uncached
     const uncached: Chain[] = []
     for (const chain of chains) {
-      const cacheKey = `price:${chain}:native:${currency}`
-      const cached = this.cacheService.get<number>(cacheKey, PRICE_CACHE_TTL)
+      const key = `${chain.toLowerCase()}:native:${currency}`
+      const cached = this.cacheService.getScoped<number>(key, CacheScope.PRICE)
 
       if (cached !== null) {
         prices[chain] = cached
@@ -146,8 +140,8 @@ export class FiatValueService {
       // Merge and cache
       for (const [chain, price] of Object.entries(freshPrices)) {
         prices[chain] = price
-        const cacheKey = `price:${chain}:native:${currency}`
-        this.cacheService.set(cacheKey, price)
+        const key = `${chain.toLowerCase()}:native:${currency}`
+        await this.cacheService.setScoped(key, CacheScope.PRICE, price)
       }
     }
 
@@ -245,14 +239,13 @@ export class FiatValueService {
    * @example
    * ```typescript
    * // User clicks "Refresh Prices" button
-   * service.clearCache()
+   * await service.clearPrices()
    * await vault.updateValues('all')
    * ```
    */
-  clearCache(): void {
-    // Clear all price-related cache entries
-    // CacheService doesn't have prefix-based clear, so we clear all
-    this.cacheService.clearAll()
+  async clearPrices(): Promise<void> {
+    // Clear only price-related cache entries (not addresses or balances!)
+    await this.cacheService.invalidateScope(CacheScope.PRICE)
   }
 
   // ========== PRIVATE METHODS ==========

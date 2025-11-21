@@ -4,6 +4,7 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
 import type { WalletCore } from '@trustwallet/wallet-core'
 
+import { randomUUID } from '../runtime/crypto'
 import {
   KeygenProgressUpdate,
   ReshareOptions,
@@ -121,7 +122,7 @@ export class ServerManager {
       await getChainSigningInfo(payload, walletCore)
 
     // Generate session parameters
-    const sessionId = crypto.randomUUID()
+    const sessionId = randomUUID()
     const hexEncryptionKey = getHexEncodedRandomBytes(32)
     const signingLocalPartyId = generateLocalPartyId('extension')
 
@@ -293,7 +294,7 @@ export class ServerManager {
 
     await reshareWithServer({
       name: vault.name,
-      session_id: crypto.randomUUID(),
+      session_id: randomUUID(),
       public_key: vault.publicKeys.ecdsa,
       hex_encryption_key: vault.hexChainCode,
       hex_chain_code: vault.hexChainCode,
@@ -332,7 +333,7 @@ export class ServerManager {
     )
 
     // Generate session parameters using core MPC utilities
-    const sessionId = crypto.randomUUID()
+    const sessionId = randomUUID()
     const { generateHexEncryptionKey } = await import(
       '@core/mpc/utils/generateHexEncryptionKey'
     )

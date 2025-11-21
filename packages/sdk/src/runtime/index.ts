@@ -21,7 +21,7 @@ export { StorageManager } from './storage/StorageManager'
 export type {
   StorageMetadata,
   StoredValue,
-  VaultStorage,
+  Storage as VaultStorage,
 } from './storage/types'
 export { StorageError, StorageErrorCode } from './storage/types'
 

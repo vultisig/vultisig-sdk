@@ -1,3 +1,6 @@
+// Crypto utilities (cross-platform)
+export { getCrypto, randomUUID } from '../crypto'
+
 // Browser utilities
 export {
   downloadVault,

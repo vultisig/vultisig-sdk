@@ -132,15 +132,14 @@ export class RunCommand {
       vaultStorage = vault
     }
 
-    const summary = vaultStorage.summary()
     console.log('✅ Vault loaded successfully!')
-    console.log(`📍 Vault: ${summary.name}`)
-    console.log(`🆔 Vault ID: ${summary.id}`)
+    console.log(`📍 Vault: ${vaultStorage.name}`)
+    console.log(`🆔 Vault ID: ${vaultStorage.publicKeys.ecdsa}`)
     console.log(
-      `👥 Signers: ${summary.totalSigners} (threshold: ${summary.threshold})`
+      `👥 Signers: ${vaultStorage.totalSigners} (threshold: ${vaultStorage.threshold})`
     )
-    console.log(`🏷️  Type: ${summary.type}`)
-    console.log(`💰 Currency: ${summary.currency}`)
+    console.log(`🏷️  Type: ${vaultStorage.type}`)
+    console.log(`💰 Currency: ${vaultStorage.getChains()[0] || 'N/A'}`)
 
     // Set as active vault
     // Vault is automatically set as active by sdk.addVault()

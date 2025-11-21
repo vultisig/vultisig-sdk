@@ -75,38 +75,47 @@ program
       ])) as any
 
       // Create vault
-      const { vaultId, verificationRequired } = await vaultManager.createVault(
+      const result = await vaultManager.createVault(
         answers.name,
         answers.password,
         answers.email
       )
 
-      if (verificationRequired) {
-        // Get verification code
+      // Handle email verification
+      if (result.verificationRequired) {
+        console.log(
+          chalk.yellow('\n📧 A verification code has been sent to your email.')
+        )
+        console.log(chalk.blue('Please check your inbox and enter the code.'))
+
         const { code } = await inquirer.prompt([
           {
             type: 'input',
             name: 'code',
             message: `Verification code sent to ${answers.email}. Enter code:`,
             validate: (input: string) =>
-              /^\d{6}$/.test(input) || 'Code must be 6 digits',
+              /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
           },
         ])
 
-        // Verify vault
-        const verified = await vaultManager.verifyVault(vaultId, code)
+        const verified = await vaultManager.verifyVault(result.vaultId, code)
 
-        if (verified) {
-          console.log(chalk.green('\n✓ Vault created and verified!'))
-        } else {
-          console.log(
-            chalk.yellow('\n⚠ Vault created but verification failed')
+        if (!verified) {
+          console.error(
+            chalk.red(
+              '\n✗ Verification failed. Please check the code and try again.'
+            )
           )
+          console.log(chalk.yellow('\nTo retry verification, use:'))
+          console.log(chalk.cyan(`  npm run wallet verify ${result.vaultId}`))
+          console.log(chalk.yellow('\nTo resend the verification email:'))
+          console.log(
+            chalk.cyan(`  npm run wallet verify ${result.vaultId} --resend`)
+          )
+          process.exit(1)
         }
-      } else {
-        console.log(chalk.green('\n✓ Vault created!'))
       }
-
+      console.log(chalk.green('\n✓ Vault created!'))
       console.log(
         chalk.blue('\nYour vault is ready. Run the following commands:')
       )
@@ -149,6 +158,59 @@ program
       console.log(chalk.blue('\nRun "npm run wallet balance" to view balances'))
     } catch (error: any) {
       console.error(chalk.red(`\n✗ Failed to import vault: ${error.message}`))
+      process.exit(1)
+    }
+  })
+
+// Command: Verify vault with email code
+program
+  .command('verify <vaultId>')
+  .description('Verify vault with email verification code')
+  .option('-r, --resend', 'Resend verification email')
+  .action(async (vaultId: string, options: { resend?: boolean }) => {
+    try {
+      await init()
+
+      // Optionally resend verification email
+      if (options.resend) {
+        const spinner = ora('Resending verification email...').start()
+        await vaultManager.resendVerification(vaultId)
+        spinner.succeed('Verification email sent!')
+        console.log(
+          chalk.blue('Check your inbox for the new verification code.')
+        )
+      }
+
+      // Prompt for verification code
+      const { code } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'code',
+          message: 'Enter verification code:',
+          validate: (input: string) =>
+            /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+        },
+      ])
+
+      // Verify the vault
+      const verified = await vaultManager.verifyVault(vaultId, code)
+
+      if (verified) {
+        console.log(chalk.green('\n✓ Vault verified successfully!'))
+      } else {
+        console.error(
+          chalk.red(
+            '\n✗ Verification failed. Please check the code and try again.'
+          )
+        )
+        console.log(
+          chalk.yellow('\nTip: Use --resend to get a new verification code:')
+        )
+        console.log(chalk.cyan(`  npm run wallet verify ${vaultId} --resend`))
+        process.exit(1)
+      }
+    } catch (error: any) {
+      console.error(chalk.red(`\n✗ Verification failed: ${error.message}`))
       process.exit(1)
     }
   })

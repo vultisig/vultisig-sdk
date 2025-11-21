@@ -15,6 +15,8 @@ export type VaultServices = {
 
 import type { Chain } from '@core/chain/Chain'
 
+import type { CacheConfig } from '../services/cache-types'
+
 /**
  * Configuration for Vault initialization
  * Contains user-level preferences, not static chain data
@@ -24,4 +26,6 @@ export type VaultConfig = {
   defaultChains?: Chain[]
   /** Default currency for balance display (from SDK config) */
   defaultCurrency?: string
+  /** Cache configuration (TTLs, size limits) */
+  cacheConfig?: CacheConfig
 }

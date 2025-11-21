@@ -1,10 +1,10 @@
 import {
+  Storage,
   STORAGE_VERSION,
   StorageError,
   StorageErrorCode,
   StorageMetadata,
   StoredValue,
-  VaultStorage,
 } from './types'
 
 /**
@@ -32,7 +32,7 @@ import {
  * - This prevents bundler errors when this file is included in browser/extension builds
  * - StorageManager imports all storage implementations, so top-level imports would fail in browsers
  */
-export class NodeStorage implements VaultStorage {
+export class NodeStorage implements Storage {
   public readonly basePath: string
   private initPromise?: Promise<void>
 

@@ -387,14 +387,13 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
 
   describe('Final Summary', () => {
     it('should print comprehensive test summary', () => {
-      const summary = vault.summary()
       const publicKeys = vault.data.publicKeys
 
       console.log('\n' + '='.repeat(60))
       console.log('📋 E2E MULTI-CHAIN COVERAGE TEST SUMMARY')
       console.log('='.repeat(60))
-      console.log(`\n✅ Test Vault: ${summary.name}`)
-      console.log(`📦 Vault Type: ${summary.type}`)
+      console.log(`\n✅ Test Vault: ${vault.name}`)
+      console.log(`📦 Vault Type: ${vault.type}`)
       console.log(`🔑 ECDSA Key: ${publicKeys.ecdsa.substring(0, 20)}...`)
       console.log(`🔑 EdDSA Key: ${publicKeys.eddsa.substring(0, 20)}...`)
       console.log(`\n🌍 Chains Tested: ${TEST_VAULT_CONFIG.testChains.length}`)

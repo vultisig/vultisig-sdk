@@ -88,10 +88,9 @@ describe('VaultManager', () => {
 
   // ===== VAULT CREATION =====
 
-  describe('createVault', () => {
+  describe('createFastVault', () => {
     it('should create a fast vault by default', async () => {
-      const vault = await vaultManager.createVault('Test Fast Vault', {
-        type: 'fast',
+      const { vault } = await vaultManager.createFastVault('Test Fast Vault', {
         email: 'test@example.com',
         password: 'SecurePassword123!',
       })
@@ -108,49 +107,21 @@ describe('VaultManager', () => {
     })
 
     it('should set newly created vault as active', async () => {
-      await vaultManager.createVault('Fast Vault', {
-        type: 'fast',
+      await vaultManager.createFastVault('Fast Vault', {
         email: 'test@example.com',
         password: 'pass123',
       })
 
       const activeVault = await vaultManager.getActiveVault()
       expect(activeVault).toBeDefined()
-      expect(activeVault?.summary().name).toBe('Fast Vault')
+      expect(activeVault?.name).toBe('Fast Vault')
       expect(activeVault).not.toBeNull()
-    })
-
-    it('should require email for fast vault creation', async () => {
-      await expect(
-        vaultManager.createVault('No Email Vault', {
-          type: 'fast',
-          password: 'pass123',
-        })
-      ).rejects.toThrow('Email is required for fast vault creation')
-    })
-
-    it('should require password for fast vault creation', async () => {
-      await expect(
-        vaultManager.createVault('No Password Vault', {
-          type: 'fast',
-          email: 'test@example.com',
-        })
-      ).rejects.toThrow('Password is required for fast vault creation')
-    })
-
-    it('should throw error for secure vault creation (not implemented)', async () => {
-      await expect(
-        vaultManager.createVault('Secure Vault', {
-          type: 'secure',
-        })
-      ).rejects.toThrow('Secure vault creation not implemented yet')
     })
 
     it('should call onProgressInternal callback during creation', async () => {
       const onProgressInternal = vi.fn()
 
-      await vaultManager.createVault('Progress Vault', {
-        type: 'fast',
+      await vaultManager.createFastVault('Progress Vault', {
         email: 'test@example.com',
         password: 'pass123',
         onProgressInternal,
@@ -201,8 +172,7 @@ describe('VaultManager', () => {
           })
         })
 
-      await vaultManager.createVault('Progress Vault', {
-        type: 'fast',
+      await vaultManager.createFastVault('Progress Vault', {
         email: 'test@example.com',
         password: 'pass123',
         onProgressInternal,
@@ -257,8 +227,7 @@ describe('VaultManager', () => {
         progressSteps.push(step)
       })
 
-      await vaultManager.createVault('Progress Vault', {
-        type: 'fast',
+      await vaultManager.createFastVault('Progress Vault', {
         email: 'test@example.com',
         password: 'pass123',
         onProgressInternal,
@@ -270,6 +239,14 @@ describe('VaultManager', () => {
         expect(typeof step.message).toBe('string')
         expect(step.message.length).toBeGreaterThan(0)
       })
+    })
+  })
+
+  describe('createSecureVault', () => {
+    it('should throw error for secure vault creation (not implemented)', async () => {
+      await expect(
+        vaultManager.createSecureVault('Secure Vault')
+      ).rejects.toThrow('Secure vault creation not implemented yet')
     })
   })
 
@@ -311,8 +288,7 @@ describe('VaultManager', () => {
 
     it('should list all created vaults', async () => {
       // Create two vaults
-      await vaultManager.createVault('Vault 1', {
-        type: 'fast',
+      await vaultManager.createFastVault('Vault 1', {
         email: 'test1@example.com',
         password: 'pass1',
       })
@@ -338,8 +314,7 @@ describe('VaultManager', () => {
         sessionId: 'test-session-id-2',
       })
 
-      await vaultManager.createVault('Vault 2', {
-        type: 'fast',
+      await vaultManager.createFastVault('Vault 2', {
         email: 'test2@example.com',
         password: 'pass2',
       })
@@ -347,13 +322,12 @@ describe('VaultManager', () => {
       const vaults = await vaultManager.listVaults()
 
       expect(vaults).toHaveLength(2)
-      expect(vaults[0].summary().name).toBe('Fast Vault')
-      expect(vaults[1].summary().name).toBe('Vault 2')
+      expect(vaults[0].name).toBe('Fast Vault')
+      expect(vaults[1].name).toBe('Vault 2')
     })
 
     it('should return vault instances with accessible metadata', async () => {
-      await vaultManager.createVault('Metadata Vault', {
-        type: 'fast',
+      await vaultManager.createFastVault('Metadata Vault', {
         email: 'test@example.com',
         password: 'pass',
       })
@@ -362,39 +336,35 @@ describe('VaultManager', () => {
       const vault = vaults[0]
 
       // Verify it's a Vault instance with methods
-      expect(typeof vault.summary).toBe('function')
       expect(typeof vault.balance).toBe('function')
       expect(typeof vault.address).toBe('function')
 
-      // Verify summary() returns expected properties
-      const summary = vault.summary()
-      expect(summary).toHaveProperty('id')
-      expect(summary).toHaveProperty('name')
-      expect(summary).toHaveProperty('type')
-      expect(summary).toHaveProperty('chains')
-      expect(summary).toHaveProperty('createdAt')
-      expect(summary).toHaveProperty('isBackedUp')
+      // Verify vault properties are accessible
+      expect(vault).toHaveProperty('id')
+      expect(vault).toHaveProperty('name')
+      expect(vault).toHaveProperty('type')
+      expect(vault).toHaveProperty('createdAt')
+      expect(vault).toHaveProperty('isBackedUp')
 
       // Verify vault data is accessible
-      expect(summary).toHaveProperty('signers')
-      expect(summary.signers.length).toBeGreaterThan(0)
+      expect(vault).toHaveProperty('signers')
+      expect(vault.signers.length).toBeGreaterThan(0)
     })
 
     it('should include correct threshold for 2-of-2 vaults', async () => {
-      await vaultManager.createVault('2-of-2 Vault', {
-        type: 'fast',
+      await vaultManager.createFastVault('2-of-2 Vault', {
         email: 'test@example.com',
         password: 'pass',
       })
 
       const vaults = await vaultManager.listVaults()
-      const summary = vaults[0].summary()
+      const vault = vaults[0]
 
       // Verify it's a 2-of-2 vault (2 signers)
-      expect(summary.signers.length).toBe(2)
+      expect(vault.signers.length).toBe(2)
       // If threshold is set, it should be 2
-      if (summary.threshold !== undefined) {
-        expect(summary.threshold).toBe(2)
+      if (vault.threshold !== undefined) {
+        expect(vault.threshold).toBe(2)
       }
     })
   })
@@ -403,8 +373,7 @@ describe('VaultManager', () => {
 
   describe('deleteVault', () => {
     it('should delete a vault', async () => {
-      const vault = await vaultManager.createVault('To Delete', {
-        type: 'fast',
+      const { vault } = await vaultManager.createFastVault('To Delete', {
         email: 'test@example.com',
         password: 'pass',
       })
@@ -416,8 +385,7 @@ describe('VaultManager', () => {
     })
 
     it('should clear active vault if deleted vault was active', async () => {
-      const vault = await vaultManager.createVault('Active To Delete', {
-        type: 'fast',
+      const { vault } = await vaultManager.createFastVault('Active To Delete', {
         email: 'test@example.com',
         password: 'pass',
       })
@@ -430,8 +398,7 @@ describe('VaultManager', () => {
     })
 
     it('should not affect active vault if different vault is deleted', async () => {
-      const vault1 = await vaultManager.createVault('Vault 1', {
-        type: 'fast',
+      const { vault: vault1 } = await vaultManager.createFastVault('Vault 1', {
         email: 'test1@example.com',
         password: 'pass1',
       })
@@ -456,8 +423,7 @@ describe('VaultManager', () => {
         sessionId: 'session-2',
       })
 
-      await vaultManager.createVault('Vault 2', {
-        type: 'fast',
+      await vaultManager.createFastVault('Vault 2', {
         email: 'test2@example.com',
         password: 'pass2',
       })
@@ -467,14 +433,13 @@ describe('VaultManager', () => {
 
       const activeVault = await vaultManager.getActiveVault()
       expect(activeVault).toBeDefined()
-      expect(activeVault?.summary().name).toBe('Vault 2')
+      expect(activeVault?.name).toBe('Vault 2')
     })
   })
 
   describe('clearVaults', () => {
     it('should remove all vaults', async () => {
-      await vaultManager.createVault('Vault 1', {
-        type: 'fast',
+      await vaultManager.createFastVault('Vault 1', {
         email: 'test@example.com',
         password: 'pass',
       })
@@ -486,8 +451,7 @@ describe('VaultManager', () => {
     })
 
     it('should clear active vault', async () => {
-      await vaultManager.createVault('Active', {
-        type: 'fast',
+      await vaultManager.createFastVault('Active', {
         email: 'test@example.com',
         password: 'pass',
       })
@@ -507,8 +471,7 @@ describe('VaultManager', () => {
     })
 
     it('should set active vault', async () => {
-      const vault = await vaultManager.createVault('Active', {
-        type: 'fast',
+      const { vault } = await vaultManager.createFastVault('Active', {
         email: 'test@example.com',
         password: 'pass',
       })
@@ -520,8 +483,7 @@ describe('VaultManager', () => {
     })
 
     it('should switch between vaults', async () => {
-      const vault1 = await vaultManager.createVault('Vault 1', {
-        type: 'fast',
+      const { vault: vault1 } = await vaultManager.createFastVault('Vault 1', {
         email: 'test1@example.com',
         password: 'pass1',
       })
@@ -546,21 +508,16 @@ describe('VaultManager', () => {
         sessionId: 'session-2',
       })
 
-      const vault2 = await vaultManager.createVault('Vault 2', {
-        type: 'fast',
+      const { vault: vault2 } = await vaultManager.createFastVault('Vault 2', {
         email: 'test2@example.com',
         password: 'pass2',
       })
 
       await vaultManager.setActiveVault(vault1.id)
-      expect((await vaultManager.getActiveVault())?.summary().name).toBe(
-        'Fast Vault'
-      )
+      expect((await vaultManager.getActiveVault())?.name).toBe('Fast Vault')
 
       await vaultManager.setActiveVault(vault2.id)
-      expect((await vaultManager.getActiveVault())?.summary().name).toBe(
-        'Vault 2'
-      )
+      expect((await vaultManager.getActiveVault())?.name).toBe('Vault 2')
     })
   })
 
@@ -573,8 +530,7 @@ describe('VaultManager', () => {
 
   describe('edge cases', () => {
     it('should create VaultClass instance with proper dependencies', async () => {
-      const vault = await vaultManager.createVault('Test', {
-        type: 'fast',
+      const { vault } = await vaultManager.createFastVault('Test', {
         email: 'test@example.com',
         password: 'pass',
       })
@@ -582,7 +538,6 @@ describe('VaultManager', () => {
       // Verify vault has access to services
       expect(vault).toBeDefined()
       expect(vault.data).toBeDefined()
-      expect(vault.summary).toBeDefined()
     })
   })
 })

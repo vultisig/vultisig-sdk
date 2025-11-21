@@ -123,4 +123,19 @@ export type VaultEvents = {
     /** The original keysign payload used to create the transaction */
     keysignPayload: any
   }
+
+  /** Emitted when vault is saved to storage */
+  saved: {
+    vaultId: number
+  }
+
+  /** Emitted when vault is deleted from storage */
+  deleted: {
+    vaultId: number
+  }
+
+  /** Emitted when vault is loaded from storage */
+  loaded: {
+    vaultId: number
+  }
 }

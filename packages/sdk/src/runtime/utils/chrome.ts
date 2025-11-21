@@ -85,8 +85,18 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
     case 'isConnected':
       return sdk.isConnected()
 
-    case 'createVault':
-      return await sdk.createVault(params.name, params.options)
+    case 'createFastVault':
+      return await sdk.createFastVault({
+        name: params.name,
+        password: params.password,
+        email: params.email,
+      })
+
+    case 'createSecureVault':
+      return await sdk.createSecureVault({
+        name: params.name,
+        keygenMode: params.keygenMode,
+      })
 
     case 'getAccounts': {
       const vault = await sdk.getActiveVault()
@@ -174,7 +184,7 @@ async function handleChromeMessage(sdk: Vultisig, request: any): Promise<any> {
 
     case 'getActiveVault': {
       const activeVault = await sdk.getActiveVault()
-      return activeVault ? activeVault.summary() : null
+      return activeVault ? activeVault.data : null
     }
 
     default:

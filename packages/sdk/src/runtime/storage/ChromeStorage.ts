@@ -26,10 +26,10 @@
  * ```
  */
 
-import type { StoredValue, VaultStorage } from './types'
+import type { Storage, StoredValue } from './types'
 import { StorageError, StorageErrorCode } from './types'
 
-export class ChromeStorage implements VaultStorage {
+export class ChromeStorage implements Storage {
   constructor() {
     // Verify chrome.storage API is available
     if (

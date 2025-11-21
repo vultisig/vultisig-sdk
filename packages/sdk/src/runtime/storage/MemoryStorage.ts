@@ -1,9 +1,4 @@
-import {
-  STORAGE_VERSION,
-  StorageMetadata,
-  StoredValue,
-  VaultStorage,
-} from './types'
+import { Storage, STORAGE_VERSION, StorageMetadata, StoredValue } from './types'
 
 /**
  * In-memory storage implementation for testing and temporary vaults.
@@ -15,7 +10,7 @@ import {
  * - Automatic metadata tracking
  * - Usage estimation
  */
-export class MemoryStorage implements VaultStorage {
+export class MemoryStorage implements Storage {
   private store = new Map<string, StoredValue>()
 
   async get<T>(key: string): Promise<T | null> {

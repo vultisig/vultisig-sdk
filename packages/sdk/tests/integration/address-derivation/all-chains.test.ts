@@ -126,33 +126,32 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       fastSigningService: {} as any, // Not needed for address derivation
     }
 
-    // Create mock VaultData to match new constructor signature
+    // Create mock VaultData with correct structure
     const vaultData = {
-      id: 0,
-      publicKeyEcdsa: mockVaultData.publicKeys.ecdsa,
-      publicKeyEddsa: mockVaultData.publicKeys.eddsa,
-      name: 'Integration Test Vault',
+      // Identity (readonly fields)
+      publicKeys: mockVaultData.publicKeys,
+      hexChainCode: mockVaultData.hexChainCode,
+      signers: mockVaultData.signers,
+      localPartyId: mockVaultData.localPartyId,
+      createdAt: now,
+      libType: mockVaultData.libType,
       isEncrypted: false,
       type: 'fast' as const,
-      createdAt: now,
+      // Metadata
+      id: 0,
+      name: 'Integration Test Vault',
+      isBackedUp: false,
+      order: 0,
       lastModified: now,
+      // User Preferences
       currency: 'usd',
       chains: ALL_CHAINS.map(c => c.toString()),
       tokens: {},
-      threshold: 2,
-      totalSigners: 2,
-      vaultIndex: 0,
-      signers: [
-        { id: 'test-device', publicKey: mockVaultData.publicKeys.ecdsa },
-        { id: 'Server-1', publicKey: mockVaultData.publicKeys.ecdsa },
-      ],
-      hexChainCode: mockVaultData.hexChainCode,
-      hexEncryptionKey: '',
+      // Vault file
       vultFileContent: '',
-      isBackedUp: false,
     }
 
-    vault = new Vault(0, vaultData, mockVaultData, services)
+    vault = Vault.fromStorage(vaultData, services)
 
     console.log('✅ SDK initialized and vault created with REAL WASM')
     console.log(`   Testing ${ALL_CHAINS.length} chains\n`)

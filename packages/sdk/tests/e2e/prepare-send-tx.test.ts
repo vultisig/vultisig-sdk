@@ -302,7 +302,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         console.log('✅ Solana transaction prepared (NOT broadcast)')
       })
 
-      it.skip('Polkadot: Substrate-based extrinsics', async () => {
+      it('Polkadot: Substrate-based extrinsics', async () => {
         // TODO: Requires Polkadot funding (~$2-5)
         // Tests Substrate framework (used by Polkadot, Kusama, parachains)
         // Different from all other architectures - uses extrinsics, SS58 addresses
@@ -328,7 +328,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         console.log('✅ Polkadot extrinsic prepared (NOT broadcast)')
       })
 
-      it.skip('Sui: Move VM object model', async () => {
+      it('Sui: Move VM object model', async () => {
         // TODO: Requires Sui funding (~$2-5)
         // Tests Move-based blockchain (different paradigm)
         // Uses object model instead of account/UTXO model
