@@ -11,10 +11,11 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
 // SDK utilities
+import { GlobalConfig } from '../config/GlobalConfig'
 import { DEFAULT_CHAINS } from '../constants'
 import { UniversalEventEmitter } from '../events/EventEmitter'
 import { VaultEvents } from '../events/types'
-import { MemoryStorage } from '../runtime/storage/MemoryStorage'
+import { GlobalStorage } from '../runtime/storage/GlobalStorage'
 import type { Storage } from '../runtime/storage/types'
 import { CacheScope, CacheService } from '../services/CacheService'
 import { FiatValueService } from '../services/FiatValueService'
@@ -104,27 +105,32 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     name: string,
     vultFileContent: string,
     config?: VaultConfig,
-    storage?: Storage,
     parsedVaultData?: CoreVault
   ) {
     // Initialize EventEmitter
     super()
 
-    // Store config for password callback
-    this.config = config
+    // Merge passed config with global config (passed config takes precedence)
+    const globalConfig = GlobalConfig.getInstance()
+    this.config = {
+      defaultChains: config?.defaultChains ?? globalConfig.defaultChains,
+      defaultCurrency: config?.defaultCurrency ?? globalConfig.defaultCurrency,
+      cacheConfig: config?.cacheConfig ?? globalConfig.cacheConfig,
+      passwordCache: config?.passwordCache ?? globalConfig.passwordCache,
+      onPasswordRequired:
+        config?.onPasswordRequired ?? globalConfig.onPasswordRequired,
+    }
 
-    // Use provided storage or default to in-memory storage
-    this.storage = storage ?? new MemoryStorage()
+    // Use global storage
+    this.storage = GlobalStorage.getInstance()
 
-    // Initialize cache service with storage support
-    this.cacheService = new CacheService(
-      this.storage,
-      vaultId,
-      config?.cacheConfig
-    )
+    // Initialize cache service
+    this.cacheService = new CacheService(vaultId, this.config.cacheConfig)
 
     // Initialize password cache service
-    this.passwordCache = PasswordCacheService.getInstance(config?.passwordCache)
+    this.passwordCache = PasswordCacheService.getInstance(
+      this.config.passwordCache
+    )
 
     // Parse vault container (synchronous) - or use provided parsed data
     let container: { isEncrypted: boolean; vault: string }

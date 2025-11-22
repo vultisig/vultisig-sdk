@@ -6,6 +6,7 @@ import {
   fiatCurrencies,
   FiatCurrency,
   fiatCurrencyNameRecord,
+  GlobalConfig,
 } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
@@ -18,6 +19,28 @@ import { VaultManager } from './wallet'
 // Global state
 let vaultManager: VaultManager
 let transactionManager: TransactionManager
+
+// Configure password cache
+const PASSWORD_CACHE_TTL = process.env.PASSWORD_CACHE_TTL
+  ? parseInt(process.env.PASSWORD_CACHE_TTL)
+  : 5 * 60 * 1000 // 5 minutes default
+
+GlobalConfig.configure({
+  passwordCache: {
+    defaultTTL: PASSWORD_CACHE_TTL,
+  },
+  onPasswordRequired: async (vaultId: string, vaultName?: string) => {
+    const { password } = await inquirer.prompt([
+      {
+        type: 'password',
+        name: 'password',
+        message: `Enter password for vault "${vaultName || vaultId}":`,
+        mask: '*',
+      },
+    ])
+    return password
+  },
+})
 
 // Initialize managers
 async function init() {
@@ -315,27 +338,14 @@ program
           throw new Error('Invalid amount')
         }
 
-        // Get password
-        const { password } = await inquirer.prompt([
-          {
-            type: 'password',
-            name: 'password',
-            message: 'Enter vault password to sign transaction:',
-            mask: '*',
-          },
-        ])
-
-        // Execute send
-        const result = await transactionManager.send(
-          {
-            chain,
-            to,
-            amount,
-            tokenId: options.token,
-            memo: options.memo,
-          },
-          password
-        )
+        // Execute send (password will be prompted via GlobalConfig.onPasswordRequired)
+        const result = await transactionManager.send({
+          chain,
+          to,
+          amount,
+          tokenId: options.token,
+          memo: options.memo,
+        })
 
         // Display result
         console.log(chalk.green('\n✓ Transaction successful!'))
@@ -553,6 +563,101 @@ program
       }
     } catch (error: any) {
       console.error(chalk.red(`\n✗ Operation failed: ${error.message}`))
+      process.exit(1)
+    }
+  })
+
+// Command: Lock vault
+program
+  .command('lock')
+  .description('Lock the vault (clear password cache)')
+  .action(async () => {
+    try {
+      await init()
+
+      if (!vaultManager.getActiveVault()) {
+        console.error(
+          chalk.red('\n✗ No active vault. Create or import a vault first.')
+        )
+        process.exit(1)
+      }
+
+      vaultManager.lockVault()
+    } catch (error: any) {
+      console.error(chalk.red(`\n✗ Failed to lock vault: ${error.message}`))
+      process.exit(1)
+    }
+  })
+
+// Command: Unlock vault
+program
+  .command('unlock')
+  .description('Unlock the vault (cache password for configured TTL)')
+  .action(async () => {
+    try {
+      await init()
+
+      if (!vaultManager.getActiveVault()) {
+        console.error(
+          chalk.red('\n✗ No active vault. Create or import a vault first.')
+        )
+        process.exit(1)
+      }
+
+      const { password } = await inquirer.prompt([
+        {
+          type: 'password',
+          name: 'password',
+          message: 'Enter vault password:',
+          mask: '*',
+        },
+      ])
+
+      await vaultManager.unlockVault(password)
+    } catch (error: any) {
+      console.error(chalk.red(`\n✗ Failed to unlock vault: ${error.message}`))
+      process.exit(1)
+    }
+  })
+
+// Command: Check vault status
+program
+  .command('status')
+  .description('Check vault lock status and password cache TTL')
+  .action(async () => {
+    try {
+      await init()
+
+      if (!vaultManager.getActiveVault()) {
+        console.error(
+          chalk.red('\n✗ No active vault. Create or import a vault first.')
+        )
+        process.exit(1)
+      }
+
+      const vault = vaultManager.getActiveVault()!
+      const status = vaultManager.getVaultStatus()
+
+      console.log(chalk.cyan('\nVault Status:\n'))
+      console.log(`  Name:     ${vault.name}`)
+      console.log(`  Type:     Fast Vault (2-of-2 with VultiServer)`)
+      console.log(
+        `  Status:   ${status.isUnlocked ? chalk.green('Unlocked 🔓') : chalk.yellow('Locked 🔒')}`
+      )
+
+      if (status.isUnlocked && status.timeRemainingFormatted) {
+        console.log(
+          `  TTL:      ${chalk.blue(status.timeRemainingFormatted)} remaining`
+        )
+      }
+
+      console.log(
+        chalk.gray(
+          '\nUse "npm run wallet lock" to lock or "npm run wallet unlock" to unlock'
+        )
+      )
+    } catch (error: any) {
+      console.error(chalk.red(`\n✗ Failed to get status: ${error.message}`))
       process.exit(1)
     }
   })

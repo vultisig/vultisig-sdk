@@ -16,7 +16,7 @@ import { Chain } from '@core/chain/Chain'
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import type { Vault } from '@/index'
+import { VaultBase } from '@/index'
 
 // Well-known token addresses for testing
 const TOKENS = {
@@ -27,7 +27,7 @@ const TOKENS = {
 } as const
 
 describe('E2E: Fiat Value Service (Production)', () => {
-  let vault: Vault
+  let vault: VaultBase
 
   beforeAll(async () => {
     console.log('📦 Loading persistent test vault...')

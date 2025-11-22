@@ -116,7 +116,7 @@ describe('SigningProgress', () => {
       isBackedUp: false,
       order: 0,
       createdAt: Date.now(),
-    } as Vault
+    }
   })
 
   describe('signWithServer', () => {

@@ -6,14 +6,20 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
+import { GlobalConfig } from '../config/GlobalConfig'
+import { GlobalStorage } from '../runtime/storage/GlobalStorage'
 import type { Storage } from '../runtime/storage/types'
+import { GlobalServerManager } from '../server/GlobalServerManager'
 import { FastSigningService } from '../services/FastSigningService'
+import { PasswordCacheService } from '../services/PasswordCacheService'
 import type {
   Signature,
   SigningMode,
   SigningPayload,
+  VaultCreationStep,
   VaultData,
 } from '../types'
+import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
 import type { VaultConfig } from './VaultServices'
@@ -39,10 +45,9 @@ export class FastVault extends VaultBase {
     vultFileContent: string,
     fastSigningService: FastSigningService,
     config?: VaultConfig,
-    storage?: Storage,
     parsedVaultData?: CoreVault
   ) {
-    super(vaultId, name, vultFileContent, config, storage, parsedVaultData)
+    super(vaultId, name, vultFileContent, config, parsedVaultData)
 
     this.fastSigningService = fastSigningService
   }
@@ -165,7 +170,177 @@ export class FastVault extends VaultBase {
     this.coreVault.keyShares = parsedVault.keyShares
 
     // Emit unlocked event
-    this.emit('vault:unlocked', { vaultId: this.id })
+    this.emit('unlocked', { vaultId: this.id })
+  }
+
+  /**
+   * Create a new fast vault (2-of-2 with VultiServer).
+   *
+   * Uses global singletons for dependencies:
+   * - GlobalStorage for vault persistence
+   * - GlobalServerManager for server communication
+   * - GlobalConfig for default settings
+   * - PasswordCacheService for password caching
+   *
+   * @param options - Vault creation options
+   * @returns Promise resolving to vault instance, ID, and verification status
+   *
+   * @example
+   * ```typescript
+   * const { vault, vaultId, verificationRequired } = await FastVault.create({
+   *   name: 'My Wallet',
+   *   password: 'secure-password',
+   *   email: 'user@example.com',
+   *   onProgress: (step) => {
+   *     console.log(`Step: ${step.step}, Progress: ${step.progress}%`)
+   *   }
+   * })
+   * ```
+   */
+  static async create(options: {
+    name: string
+    password: string
+    email: string
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{
+    vault: FastVault
+    vaultId: string
+    verificationRequired: true
+  }> {
+    // Get global dependencies
+    const storage = GlobalStorage.getInstance()
+    const serverManager = GlobalServerManager.getInstance()
+    const config = GlobalConfig.getInstance()
+    const passwordCache = PasswordCacheService.getInstance()
+
+    const reportProgress = options.onProgress || (() => {})
+
+    try {
+      // Step 1: Get next available vault ID
+      reportProgress({
+        step: 'initializing',
+        progress: 5,
+        message: 'Generating vault ID',
+      })
+
+      const vaultId = await FastVault.getNextVaultId(storage)
+
+      // Step 2: Create vault on server with MPC keygen
+      reportProgress({
+        step: 'keygen',
+        progress: 10,
+        message: 'Starting key generation',
+      })
+
+      const result = await serverManager.createFastVault({
+        name: options.name,
+        email: options.email,
+        password: options.password,
+        onProgress: update => {
+          // Map server progress updates to vault creation progress
+          let progress = 10
+          if (update.phase === 'ecdsa') {
+            progress = 35 // 20-50% range
+          } else if (update.phase === 'eddsa') {
+            progress = 65 // 50-80% range
+          }
+
+          reportProgress({
+            step: 'keygen',
+            progress: Math.round(progress),
+            message: update.message || 'Generating keys...',
+          })
+        },
+      })
+
+      // Step 3: Generate .vult backup file
+      reportProgress({
+        step: 'complete',
+        progress: 85,
+        message: 'Creating backup file',
+      })
+
+      const vultContent = await createVaultBackup(
+        result.vault,
+        options.password
+      )
+
+      // Step 4: Create FastSigningService
+      const fastSigningService = new FastSigningService(serverManager)
+
+      // Step 5: Instantiate vault
+      reportProgress({
+        step: 'complete',
+        progress: 90,
+        message: 'Creating vault instance',
+      })
+
+      const vaultInstance = new FastVault(
+        vaultId,
+        result.vault.name,
+        vultContent,
+        fastSigningService,
+        config, // Pass global config
+        result.vault // Pre-parsed vault data
+      )
+
+      // Step 6: Cache password
+      passwordCache.set(vaultId.toString(), options.password)
+
+      // Step 7: Save to storage
+      reportProgress({
+        step: 'complete',
+        progress: 95,
+        message: 'Saving vault',
+      })
+
+      await vaultInstance.save()
+
+      // Step 8: Set as active vault
+      await storage.set('activeVaultId', vaultId)
+
+      // Step 9: Complete
+      reportProgress({
+        step: 'complete',
+        progress: 100,
+        message: 'Vault created successfully',
+      })
+
+      return {
+        vault: vaultInstance,
+        vaultId: result.vaultId,
+        verificationRequired: true,
+      }
+    } catch (error) {
+      // Wrap errors with context
+      if (error instanceof Error) {
+        throw new VaultError(
+          VaultErrorCode.CreateFailed,
+          `Failed to create fast vault: ${error.message}`,
+          error
+        )
+      }
+      throw error
+    }
+  }
+
+  /**
+   * Get the next available vault ID by scanning storage.
+   *
+   * @param storage - Storage instance to scan
+   * @returns Next available vault ID
+   * @internal
+   */
+  private static async getNextVaultId(storage: Storage): Promise<number> {
+    const keys = await storage.list()
+    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
+
+    if (vaultKeys.length === 0) {
+      return 0
+    }
+
+    const ids = vaultKeys.map(k => parseInt(k.split(':')[1], 10))
+    return Math.max(...ids) + 1
   }
 
   /**
@@ -174,8 +349,7 @@ export class FastVault extends VaultBase {
   static fromStorage(
     vaultData: VaultData,
     fastSigningService: FastSigningService,
-    config?: VaultConfig,
-    storage?: Storage
+    config?: VaultConfig
   ): FastVault {
     // Validate vault type
     if (vaultData.type !== 'fast') {
@@ -191,8 +365,7 @@ export class FastVault extends VaultBase {
       vaultData.name,
       vaultData.vultFileContent || '',
       fastSigningService,
-      config,
-      storage
+      config
     )
 
     // Override constructor defaults with stored preferences from VaultData

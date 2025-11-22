@@ -2,14 +2,15 @@
 import { Chain } from '@core/chain/Chain'
 
 import { AddressBookManager } from './AddressBookManager'
+import { GlobalConfig } from './config/GlobalConfig'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import { PolyfillManager } from './runtime/polyfills'
-import { StorageManager } from './runtime/storage/StorageManager'
+import { GlobalStorage } from './runtime/storage/GlobalStorage'
 import type { Storage } from './runtime/storage/types'
 import { WasmManager } from './runtime/wasm'
-import { ServerManager } from './server/ServerManager'
+import { GlobalServerManager } from './server/GlobalServerManager'
 import {
   AddressBook,
   AddressBookEntry,
@@ -25,9 +26,10 @@ export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
  * Now with integrated storage, events, and connection management
+ *
+ * Uses global singletons for ServerManager and VaultConfig
  */
 export class Vultisig extends UniversalEventEmitter<SdkEvents> {
-  private serverManager: ServerManager
   private _initialized = false
   private initializationPromise?: Promise<void>
 
@@ -39,8 +41,10 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private _defaultChains: Chain[]
   private _defaultCurrency: string
 
-  // Storage state
-  public readonly storage: Storage
+  // Storage state (kept for backward compatibility)
+  public get storage(): Storage {
+    return GlobalStorage.getInstance()
+  }
 
   // Public readonly properties (exposed via getters)
   get initialized(): boolean {
@@ -59,11 +63,24 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Initialize EventEmitter
     super()
 
-    // Initialize storage
-    this.storage = config?.storage ?? this.createDefaultStorage()
+    // Configure global storage if provided
+    if (config?.storage) {
+      GlobalStorage.configure(config.storage)
+    }
 
-    // Initialize managers
-    this.serverManager = new ServerManager(config?.serverEndpoints)
+    // Configure global server manager
+    if (config?.serverEndpoints) {
+      GlobalServerManager.configure(config.serverEndpoints)
+    }
+
+    // Configure global config
+    GlobalConfig.configure({
+      defaultChains: config?.defaultChains,
+      defaultCurrency: config?.defaultCurrency,
+      cacheConfig: config?.cacheConfig,
+      passwordCache: config?.passwordCache,
+      onPasswordRequired: config?.onPasswordRequired,
+    })
 
     // Configure WASM if config provided
     if (config?.wasmConfig) {
@@ -74,17 +91,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     this._defaultChains = config?.defaultChains ?? DEFAULT_CHAINS
     this._defaultCurrency = config?.defaultCurrency ?? 'USD'
 
-    // Initialize module managers
-    this.addressBookManager = new AddressBookManager(this.storage)
-    this.vaultManager = new VaultManager(
-      this.serverManager,
-      {
-        defaultChains: config?.defaultChains,
-        defaultCurrency: config?.defaultCurrency,
-        cacheConfig: config?.cacheConfig,
-      },
-      this.storage
-    )
+    // Initialize module managers (no parameters needed)
+    this.addressBookManager = new AddressBookManager()
+    this.vaultManager = new VaultManager()
 
     // Auto-initialization
     if (config?.autoInit) {
@@ -95,15 +104,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     if (config?.autoConnect) {
       this.initialize().catch(err => this.emit('error', err))
     }
-  }
-
-  /**
-   * Create default storage based on detected environment.
-   * Delegates to StorageManager for environment detection and storage creation.
-   * @private
-   */
-  private createDefaultStorage(): Storage {
-    return StorageManager.createDefaultStorage()
   }
 
   /**
@@ -189,81 +189,12 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   // === VAULT LIFECYCLE ===
 
   /**
-   * Create fast vault (2-of-2 with VultiServer)
-   * Requires password and email for server coordination and backup delivery
-   *
-   * @param options.name - Vault name
-   * @param options.password - Vault password for encryption
-   * @param options.email - Email for verification code delivery
-   * @returns Vault instance, vaultId for verification, and verificationRequired flag
-   */
-  async createFastVault(options: {
-    name: string
-    password: string
-    email: string
-  }): Promise<{
-    vault: VaultBase
-    vaultId: string
-    verificationRequired: true
-  }> {
-    await this.ensureInitialized()
-
-    // Create vault with internal progress handling
-    const result = await this.vaultManager.createFastVault(options.name, {
-      password: options.password,
-      email: options.email,
-      onProgressInternal: (step, vaultRef) => {
-        // Emit progress events with vault reference (undefined early, then populated)
-        this.emit('vaultCreationProgress', { vault: vaultRef, step })
-      },
-    })
-
-    // Emit completion event
-    this.emit('vaultCreationComplete', { vault: result.vault })
-
-    // Emit vaultChanged event (VaultManager already saved to storage)
-    this.emit('vaultChanged', { vaultId: result.vaultId })
-
-    return result
-  }
-
-  /**
-   * Create secure vault (multi-device MPC)
-   * Not yet implemented - requires multi-device keygen coordination
-   *
-   * @param options.name - Vault name
-   * @param options.keygenMode - Keygen mode configuration
-   * @returns Vault instance
-   * @throws Error - Not yet implemented
-   */
-  async createSecureVault(options: {
-    name: string
-    keygenMode?: 'relay' | 'local'
-  }): Promise<VaultBase> {
-    await this.ensureInitialized()
-
-    const vault = await this.vaultManager.createSecureVault(options.name, {
-      keygenMode: options.keygenMode,
-      onProgressInternal: (step, vaultRef) => {
-        this.emit('vaultCreationProgress', { vault: vaultRef, step })
-      },
-    })
-
-    // Emit completion event
-    this.emit('vaultCreationComplete', { vault })
-
-    // Emit vaultChanged event
-    this.emit('vaultChanged', { vaultId: vault.publicKeys.ecdsa })
-
-    return vault
-  }
-
-  /**
    * Verify fast vault with email code
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
     await this.ensureInitialized()
-    return this.serverManager.verifyVault(vaultId, code)
+    const serverManager = GlobalServerManager.getInstance()
+    return serverManager.verifyVault(vaultId, code)
   }
 
   /**
@@ -409,7 +340,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Check server connectivity
    */
   async getServerStatus(): Promise<ServerStatus> {
-    return this.serverManager.checkServerStatus()
+    const serverManager = GlobalServerManager.getInstance()
+    return serverManager.checkServerStatus()
   }
 
   // === ADDRESS BOOK (GLOBAL) ===
@@ -448,9 +380,19 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return this.addressBookManager.updateAddressBookEntry(chain, address, name)
   }
 
-  // === INTERNAL ACCESS FOR VAULT ===
+  // === CONVENIENCE GETTERS FOR GLOBAL SINGLETONS ===
 
-  getServerManager(): ServerManager {
-    return this.serverManager
+  /**
+   * Get the global storage instance
+   */
+  get serverManager() {
+    return GlobalServerManager.getInstance()
+  }
+
+  /**
+   * Get the global configuration
+   */
+  get config() {
+    return GlobalConfig.getInstance()
   }
 }

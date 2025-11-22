@@ -17,10 +17,10 @@ import { Chain } from '@core/chain/Chain'
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import type { Vault } from '@/index'
+import { VaultBase } from '@/index'
 
 describe('E2E: Balance Operations (Production)', () => {
-  let vault: Vault
+  let vault: VaultBase
 
   beforeAll(async () => {
     console.log('📦 Loading persistent test vault...')

@@ -1,5 +1,6 @@
 import type { Chain } from '@core/chain/Chain'
 
+import { GlobalStorage } from './runtime/storage/GlobalStorage'
 import type { Storage } from './runtime/storage/types'
 import { AddressBook, AddressBookEntry } from './types'
 
@@ -11,8 +12,8 @@ export class AddressBookManager {
   private addressBookData: AddressBook = { saved: [], vaults: [] }
   private storage: Storage
 
-  constructor(storage: Storage) {
-    this.storage = storage
+  constructor() {
+    this.storage = GlobalStorage.getInstance()
   }
 
   /**

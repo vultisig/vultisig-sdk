@@ -6,11 +6,11 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
-import type { Storage } from '../runtime/storage/types'
 import type {
   Signature,
   SigningMode,
   SigningPayload,
+  VaultCreationStep,
   VaultData,
 } from '../types'
 import { VaultBase } from './VaultBase'
@@ -35,10 +35,9 @@ export class SecureVault extends VaultBase {
     name: string,
     vultFileContent: string,
     config?: VaultConfig,
-    storage?: Storage,
     parsedVaultData?: CoreVault
   ) {
-    super(vaultId, name, vultFileContent, config, storage, parsedVaultData)
+    super(vaultId, name, vultFileContent, config, parsedVaultData)
   }
 
   /**
@@ -182,17 +181,40 @@ export class SecureVault extends VaultBase {
     this.coreVault.keyShares = parsedVault.keyShares
 
     // Emit unlocked event (even for unencrypted vaults, keyShares are now loaded)
-    this.emit('vault:unlocked', { vaultId: this.id })
+    this.emit('unlocked', { vaultId: this.id })
+  }
+
+  /**
+   * Create a new secure vault (multi-device MPC).
+   *
+   * @param options - Vault creation options
+   * @throws Not yet implemented
+   * @todo Implement secure vault creation
+   */
+  static async create(options: {
+    name: string
+    password: string
+    devices: number
+    threshold?: number
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{
+    vault: SecureVault
+    vaultId: string
+    sessionId: string
+  }> {
+    // Suppress unused parameter warnings
+    void options
+
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      'SecureVault.create() is not yet implemented. Use relay server for multi-device setup.'
+    )
   }
 
   /**
    * Reconstruct a SecureVault instance from stored VaultData
    */
-  static fromStorage(
-    vaultData: VaultData,
-    config?: VaultConfig,
-    storage?: Storage
-  ): SecureVault {
+  static fromStorage(vaultData: VaultData, config?: VaultConfig): SecureVault {
     // Validate vault type
     if (vaultData.type !== 'secure') {
       throw new VaultError(
@@ -206,8 +228,7 @@ export class SecureVault extends VaultBase {
       vaultData.id,
       vaultData.name,
       vaultData.vultFileContent || '',
-      config,
-      storage
+      config
     )
 
     // Override constructor defaults with stored preferences from VaultData

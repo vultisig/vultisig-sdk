@@ -5,30 +5,29 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
+import { GlobalConfig } from './config/GlobalConfig'
+import { GlobalStorage } from './runtime/storage/GlobalStorage'
 import type { Storage } from './runtime/storage/types'
-import { ServerManager } from './server/ServerManager'
+import { GlobalServerManager } from './server/GlobalServerManager'
 import { FastSigningService } from './services/FastSigningService'
-import { KeygenMode, VaultCreationStep, VaultData } from './types'
-import { createVaultBackup } from './utils/export'
+import { PasswordCacheService } from './services/PasswordCacheService'
+import { VaultData } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
 import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
-import { VaultConfig } from './vault/VaultServices'
 
 /**
  * VaultManager handles vault lifecycle operations
  * Manages vault storage, import/export, and active vault state
+ *
+ * Uses global singletons for dependencies (no constructor parameters needed)
  */
 export class VaultManager {
   private storage: Storage
 
-  constructor(
-    private serverManager: ServerManager,
-    private config: VaultConfig,
-    storage: Storage
-  ) {
-    this.storage = storage
+  constructor() {
+    this.storage = GlobalStorage.getInstance()
   }
 
   /**
@@ -79,202 +78,23 @@ export class VaultManager {
    * Create Vault instance with proper service injection
    * Internal helper for consistent vault instantiation
    * Returns appropriate subclass based on vault type
+   *
+   * Uses global singletons for dependencies
    */
   createVaultInstance(vaultData: VaultData): VaultBase {
+    const config = GlobalConfig.getInstance()
+
     // Factory pattern - return appropriate subclass based on vault type
     if (vaultData.type === 'fast') {
-      const fastSigningService = new FastSigningService(this.serverManager)
-      return FastVault.fromStorage(
-        vaultData,
-        fastSigningService,
-        this.config,
-        this.storage
-      )
+      const serverManager = GlobalServerManager.getInstance()
+      const fastSigningService = new FastSigningService(serverManager)
+      return FastVault.fromStorage(vaultData, fastSigningService, config)
     } else {
-      return SecureVault.fromStorage(vaultData, this.config, this.storage)
+      return SecureVault.fromStorage(vaultData, config)
     }
   }
 
   // ===== VAULT LIFECYCLE =====
-
-  /**
-   * Create a fast vault (2-of-2 with VultiServer)
-   * Fast vaults ALWAYS require both password and email
-   * Returns vault instance and vaultId string for email verification
-   *
-   * @param name - Vault name
-   * @param options.password - Vault password for encryption
-   * @param options.email - Email for verification code delivery
-   * @param options.onProgressInternal - Optional progress callback
-   * @returns FastVault instance, vaultId for verification, and verificationRequired flag
-   */
-  async createFastVault(
-    name: string,
-    options: {
-      password: string
-      email: string
-      onProgressInternal?: (step: VaultCreationStep, vault?: VaultBase) => void
-    }
-  ): Promise<{
-    vault: FastVault
-    vaultId: string
-    verificationRequired: true
-  }> {
-    // Password and email are required (enforced by type system)
-    const reportProgress = options.onProgressInternal || (() => {})
-
-    // Step 1: Initializing (vault not created yet)
-    reportProgress(
-      {
-        step: 'initializing',
-        progress: 0,
-        message: 'Initializing vault creation...',
-      },
-      undefined
-    )
-
-    // Get next vault ID
-    const vaultId = await this.getNextVaultId()
-
-    // Step 2: Keygen (MPC key generation) - vault not created yet
-    const result = await this.serverManager.createFastVault({
-      name,
-      password: options.password,
-      email: options.email,
-      onProgress: options.onProgressInternal
-        ? update => {
-            if (update.phase === 'ecdsa') {
-              reportProgress(
-                {
-                  step: 'keygen',
-                  progress: 25,
-                  message: update.message || 'Generating ECDSA keys...',
-                },
-                undefined
-              )
-            } else if (update.phase === 'eddsa') {
-              reportProgress(
-                {
-                  step: 'keygen',
-                  progress: 50,
-                  message: update.message || 'Generating EdDSA keys...',
-                },
-                undefined
-              )
-            } else if (update.phase === 'complete') {
-              reportProgress(
-                {
-                  step: 'keygen',
-                  progress: 60,
-                  message: 'Key generation complete',
-                },
-                undefined
-              )
-            }
-          }
-        : undefined,
-    })
-
-    // Generate .vult file content
-    const vultContent = await createVaultBackup(result.vault, options.password)
-
-    // Create vault instance using FastVault constructor
-    // Pass result.vault as parsedVaultData to avoid parsing encrypted content synchronously
-    const fastSigningService = new FastSigningService(this.serverManager)
-    const vaultInstance = new FastVault(
-      vaultId,
-      result.vault.name,
-      vultContent,
-      fastSigningService,
-      this.config,
-      this.storage,
-      result.vault // Pre-parsed vault data from server
-    )
-
-    // Cache password for fast vault (fast vaults are always encrypted with password)
-    if (options.password) {
-      const { PasswordCacheService } = await import(
-        './services/PasswordCacheService'
-      )
-      const passwordCache = PasswordCacheService.getInstance()
-      passwordCache.set(vaultId.toString(), options.password)
-    }
-
-    // Save to storage (vault creates VaultData internally and saves it)
-    await vaultInstance.save()
-
-    // Set as active
-    await this.storage.set('activeVaultId', vaultId)
-
-    // Step 3: Deriving addresses (vault now available)
-    reportProgress(
-      {
-        step: 'deriving_addresses',
-        progress: 70,
-        message: 'Deriving addresses for default chains...',
-      },
-      vaultInstance
-    )
-
-    // Step 4: Fetching balances (vault available)
-    reportProgress(
-      {
-        step: 'fetching_balances',
-        progress: 85,
-        message: 'Preparing balance tracking...',
-      },
-      vaultInstance
-    )
-
-    // Step 5: Applying tokens (vault available)
-    reportProgress(
-      {
-        step: 'applying_tokens',
-        progress: 90,
-        message: 'Setting up default tokens...',
-      },
-      vaultInstance
-    )
-
-    // Step 6: Complete (vault available)
-    reportProgress(
-      {
-        step: 'complete',
-        progress: 100,
-        message: 'Vault created successfully',
-      },
-      vaultInstance
-    )
-
-    return {
-      vault: vaultInstance,
-      vaultId: result.vaultId,
-      verificationRequired: true,
-    }
-  }
-
-  /**
-   * Create a secure vault (multi-device MPC)
-   * Secure vaults use threshold signing across multiple devices
-   *
-   * @param name - Vault name
-   * @param options.keygenMode - Keygen mode configuration
-   * @param options.onProgressInternal - Optional progress callback
-   * @returns SecureVault instance
-   * @throws Error - Not yet implemented
-   */
-  async createSecureVault(
-    _name: string,
-    _options?: {
-      keygenMode?: KeygenMode
-      onProgressInternal?: (step: VaultCreationStep, vault?: VaultBase) => void
-    }
-  ): Promise<SecureVault> {
-    // TODO: Implement secure vault creation with multi-device MPC keygen
-    throw new Error(
-      'Secure vault creation not implemented yet - requires multi-device MPC keygen integration'
-    )
-  }
 
   /**
    * Import vault from .vult file content (sets as active)
@@ -338,18 +158,21 @@ export class VaultManager {
         ? 'fast'
         : 'secure'
 
+      // Get global dependencies
+      const config = GlobalConfig.getInstance()
+
       // Create vault instance using appropriate constructor
       // Pass parsedVault to avoid parsing encrypted content synchronously
       let vaultInstance: VaultBase
       if (vaultType === 'fast') {
-        const fastSigningService = new FastSigningService(this.serverManager)
+        const serverManager = GlobalServerManager.getInstance()
+        const fastSigningService = new FastSigningService(serverManager)
         vaultInstance = new FastVault(
           vaultId,
           parsedVault.name,
           vultContent.trim(),
           fastSigningService,
-          this.config,
-          this.storage,
+          config,
           parsedVault // Pre-parsed vault data
         )
       } else {
@@ -357,17 +180,13 @@ export class VaultManager {
           vaultId,
           parsedVault.name,
           vultContent.trim(),
-          this.config,
-          this.storage,
+          config,
           parsedVault // Pre-parsed vault data
         )
       }
 
       // Cache password if provided (for encrypted vaults)
       if (password && container.isEncrypted) {
-        const { PasswordCacheService } = await import(
-          './services/PasswordCacheService'
-        )
         const passwordCache = PasswordCacheService.getInstance()
         passwordCache.set(vaultId.toString(), password)
       }

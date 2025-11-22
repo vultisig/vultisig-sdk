@@ -132,28 +132,10 @@ export type VaultEvents = {
   }
 
   /** Emitted when vault is unlocked (keyshares loaded) */
-  'vault:unlocked': {
+  unlocked: {
     vaultId: number
   }
 
   /** Emitted when vault is locked (keyshares cleared) */
-  'vault:locked': Record<string, never>
-
-  /** Emitted when vault transaction is signed */
-  'vault:signed': Signature
-
-  /** Emitted when vault is renamed */
-  'vault:renamed': string
-
-  /** Emitted when vault is saved */
-  'vault:saved': any
-
-  /** Emitted when tokens are updated */
-  'tokens:updated': Record<string, Token[]>
-
-  /** Emitted when chains are updated */
-  'chains:updated': Chain[]
-
-  /** Emitted when currency is updated */
-  'currency:updated': string
+  locked: Record<string, never>
 }

@@ -77,10 +77,7 @@ export class TransactionManager {
   /**
    * Sign transaction with progress tracking
    */
-  async signTransaction(
-    payload: KeysignPayload,
-    password?: string
-  ): Promise<Signature> {
+  async signTransaction(payload: KeysignPayload): Promise<Signature> {
     const spinner = ora('Signing transaction...').start()
 
     // Setup progress tracking
@@ -91,15 +88,11 @@ export class TransactionManager {
     try {
       const messageHashes = await this.vault.extractMessageHashes(payload)
 
-      const signature = await this.vault.sign(
-        'fast',
-        {
-          transaction: payload,
-          chain: payload.coin.chain,
-          messageHashes,
-        },
-        password
-      )
+      const signature = await this.vault.sign({
+        transaction: payload,
+        chain: payload.coin.chain,
+        messageHashes,
+      })
 
       spinner.succeed('Transaction signed')
       return signature
@@ -139,10 +132,7 @@ export class TransactionManager {
   /**
    * Complete send flow: prepare → confirm → sign → broadcast
    */
-  async send(
-    params: SendParams,
-    password?: string
-  ): Promise<TransactionResult> {
+  async send(params: SendParams): Promise<TransactionResult> {
     // 1. Prepare transaction
     const payload = await this.prepareSend(params)
 
@@ -181,8 +171,8 @@ export class TransactionManager {
       throw new Error('Transaction cancelled by user')
     }
 
-    // 5. Sign transaction
-    const signature = await this.signTransaction(payload, password)
+    // 5. Sign transaction (password resolved via GlobalConfig.onPasswordRequired)
+    const signature = await this.signTransaction(payload)
 
     // 6. Broadcast transaction
     const txHash = await this.broadcastTransaction(

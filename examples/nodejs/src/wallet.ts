@@ -2,7 +2,6 @@ import {
   Balance,
   Chain,
   FiatCurrency,
-  NodeStorage,
   Token,
   Vault,
   Vultisig,
@@ -43,7 +42,7 @@ export class VaultManager {
 
     try {
       this.sdk = new Vultisig({
-        storage: new NodeStorage({ basePath: this.config.storagePath }),
+        storage: { type: 'node', basePath: this.config.storagePath },
       })
 
       await this.sdk.initialize()
@@ -143,7 +142,7 @@ export class VaultManager {
     const spinner = ora('Verifying email code...').start()
 
     try {
-      const verified = await this.sdk.serverManager.verifyVault(vaultId, code)
+      const verified = await this.sdk.verifyVault(vaultId, code)
 
       if (verified) {
         spinner.succeed('Email verified successfully!')
@@ -348,6 +347,68 @@ export class VaultManager {
     }
 
     return await this.activeVault.addresses()
+  }
+
+  /**
+   * Lock vault (clear cached password/keyShares)
+   */
+  lockVault(): void {
+    if (!this.activeVault) {
+      throw new Error('No active vault')
+    }
+
+    this.activeVault.lock()
+    console.log(chalk.green('✓ Vault locked'))
+  }
+
+  /**
+   * Unlock vault with password (cache for TTL duration)
+   */
+  async unlockVault(password: string): Promise<void> {
+    if (!this.activeVault) {
+      throw new Error('No active vault')
+    }
+
+    const spinner = ora('Unlocking vault...').start()
+
+    try {
+      await this.activeVault.unlock(password)
+      const ttlRemaining = this.activeVault.getUnlockTimeRemaining()
+      const minutes = Math.floor(ttlRemaining / 60000)
+      const seconds = Math.floor((ttlRemaining % 60000) / 1000)
+      spinner.succeed(`Vault unlocked (valid for ${minutes}m ${seconds}s)`)
+    } catch (error) {
+      spinner.fail('Failed to unlock vault')
+      throw error
+    }
+  }
+
+  /**
+   * Check if vault is unlocked and get remaining time
+   */
+  getVaultStatus(): {
+    isUnlocked: boolean
+    timeRemaining?: number
+    timeRemainingFormatted?: string
+  } {
+    if (!this.activeVault) {
+      throw new Error('No active vault')
+    }
+
+    const isUnlocked = this.activeVault.isUnlocked()
+    if (!isUnlocked) {
+      return { isUnlocked: false }
+    }
+
+    const timeRemaining = this.activeVault.getUnlockTimeRemaining()
+    const minutes = Math.floor(timeRemaining / 60000)
+    const seconds = Math.floor((timeRemaining % 60000) / 1000)
+
+    return {
+      isUnlocked: true,
+      timeRemaining,
+      timeRemainingFormatted: `${minutes}m ${seconds}s`,
+    }
   }
 
   /**

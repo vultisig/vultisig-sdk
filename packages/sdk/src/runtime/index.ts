@@ -14,6 +14,7 @@
 // ============================================
 export { BrowserStorage } from './storage/BrowserStorage'
 export { ChromeStorage } from './storage/ChromeStorage'
+export { GlobalStorage } from './storage/GlobalStorage'
 export { MemoryStorage } from './storage/MemoryStorage'
 export { NodeStorage } from './storage/NodeStorage'
 export type { StorageOptions, StorageProvider } from './storage/registry'

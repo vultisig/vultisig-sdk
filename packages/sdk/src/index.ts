@@ -53,6 +53,20 @@ export type { WasmConfig } from './runtime/wasm'
 export { WasmManager } from './runtime/wasm'
 
 // ============================================================================
+// PUBLIC API - Server Management
+// ============================================================================
+
+// Global server manager singleton
+export { GlobalServerManager, type ServerEndpoints } from './server'
+
+// ============================================================================
+// PUBLIC API - Configuration
+// ============================================================================
+
+// Global configuration singleton
+export { GlobalConfig, type GlobalConfigOptions } from './config'
+
+// ============================================================================
 // PUBLIC API - Validation Utilities
 // ============================================================================
 

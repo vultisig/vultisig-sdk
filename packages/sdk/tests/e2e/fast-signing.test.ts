@@ -1,7 +1,7 @@
 /**
  * E2E Tests: Fast Signing - Transaction Signing
  *
- * This test suite validates the `vault.sign('fast', payload)` method
+ * This test suite validates the `vault.sign(payload)` method
  * across different blockchain architectures. The method signs transaction payloads
  * using 2-of-2 MPC with VultiServer but does NOT broadcast them.
  *
@@ -38,11 +38,10 @@ import {
 } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import type { Vault } from '@/index'
-import { Chain } from '@/types'
+import { Chain, VaultBase } from '@/index'
 
 describe('E2E: Fast Signing - Transaction Signing', () => {
-  let vault: Vault
+  let vault: VaultBase
 
   beforeAll(async () => {
     console.log('📦 Loading persistent test vault...')
@@ -102,11 +101,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.Bitcoin
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         // 4. Validate signature
         validateSignatureFormat(signature, Chain.Bitcoin, 'ECDSA')
@@ -140,11 +135,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.Litecoin
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Litecoin, 'ECDSA')
         console.log(
@@ -185,11 +176,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.Ethereum
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Ethereum, 'ECDSA')
         expect(signature.recovery).toBeDefined()
@@ -225,11 +212,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.Ethereum
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Ethereum, 'ECDSA')
         console.log(
@@ -271,11 +254,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.THORChain
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.THORChain, 'ECDSA')
         console.log(
@@ -309,11 +288,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.Cosmos
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Cosmos, 'ECDSA')
         console.log(
@@ -352,11 +327,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.Solana
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Solana, 'EdDSA')
         console.log('✅ Solana transaction signed successfully (NOT broadcast)')
@@ -387,11 +358,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.Polkadot
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Polkadot, 'EdDSA')
         console.log(
@@ -423,11 +390,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           messageHashes,
           Chain.Sui
         )
-        const signature = await vault.sign(
-          'fast',
-          signingPayload,
-          TEST_VAULT_CONFIG.password
-        )
+        const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Sui, 'EdDSA')
         console.log('✅ Sui transaction signed successfully (NOT broadcast)')
@@ -464,11 +427,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         messageHashes,
         Chain.Bitcoin
       )
-      const signature = await vault.sign(
-        'fast',
-        signingPayload,
-        TEST_VAULT_CONFIG.password
-      )
+      const signature = await vault.sign(signingPayload)
 
       // ECDSA-specific validations
       expect(signature.format).toBe('ECDSA')
@@ -508,11 +467,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         messageHashes,
         Chain.Solana
       )
-      const signature = await vault.sign(
-        'fast',
-        signingPayload,
-        TEST_VAULT_CONFIG.password
-      )
+      const signature = await vault.sign(signingPayload)
 
       // EdDSA-specific validations
       expect(signature.format).toBe('EdDSA')
@@ -554,7 +509,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
       // Lock the vault to clear the password cache
       vault.lock()
 
-      await expect(vault.sign('fast', signingPayload)).rejects.toThrow()
+      await expect(vault.sign(signingPayload)).rejects.toThrow()
 
       console.log('✅ Correctly rejected signing with locked vault')
 
@@ -583,7 +538,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         messageHashes: [], // Empty array - should fail
       }
 
-      await expect(vault.sign('fast', signingPayload)).rejects.toThrow()
+      await expect(vault.sign(signingPayload)).rejects.toThrow()
 
       console.log('✅ Correctly rejected missing messageHashes')
     })
@@ -622,11 +577,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         chain
       )
 
-      const signature = await vault.sign(
-        'fast',
-        signingPayload,
-        TEST_VAULT_CONFIG.password
-      )
+      const signature = await vault.sign(signingPayload)
 
       expect(signature).toBeDefined()
 

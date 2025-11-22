@@ -1,3 +1,4 @@
+import { GlobalStorage } from '../runtime/storage/GlobalStorage'
 import type { Storage } from '../runtime/storage/types'
 import { type CacheConfig, type CachedItem, CacheScope } from './cache-types'
 
@@ -30,7 +31,7 @@ export class CacheService {
   private pendingComputations = new Map<string, Promise<any>>()
 
   // Storage integration for persistent cache
-  private storage?: Storage
+  private storage: Storage
   private vaultId?: number
   private config: Required<CacheConfig>
 
@@ -39,12 +40,11 @@ export class CacheService {
 
   /**
    * Create a new CacheService instance
-   * @param storage Optional storage backend for persistent cache
-   * @param vaultId Vault ID for storage keys (required if storage provided)
+   * @param vaultId Vault ID for storage keys
    * @param config Cache configuration (TTLs, size limits)
    */
-  constructor(storage?: Storage, vaultId?: number, config?: CacheConfig) {
-    this.storage = storage
+  constructor(vaultId?: number, config?: CacheConfig) {
+    this.storage = GlobalStorage.getInstance()
     this.vaultId = vaultId
     this.config = {
       balanceTTL: config?.balanceTTL ?? 5 * 60 * 1000,

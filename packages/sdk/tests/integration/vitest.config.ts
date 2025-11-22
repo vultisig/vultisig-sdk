@@ -24,10 +24,7 @@ export default defineConfig({
       '**/build/**',
       '**/.{idea,git,cache,output,temp}/**',
     ],
-    setupFiles: [
-      resolve(__dirname, '../unit/vitest.setup.ts'),
-      resolve(__dirname, './setup.ts'),
-    ],
+    setupFiles: [resolve(__dirname, './setup.ts')],
     testTimeout: 60000, // 60 seconds for integration tests (may need network/WASM)
     hookTimeout: 60000,
     teardownTimeout: 10000,

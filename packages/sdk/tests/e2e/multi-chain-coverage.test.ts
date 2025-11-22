@@ -20,10 +20,10 @@ import {
 } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { Chain, type Vault } from '@/index'
+import { Chain, VaultBase } from '@/index'
 
 describe('E2E: Multi-Chain Coverage (Production)', () => {
-  let vault: Vault
+  let vault: VaultBase
 
   beforeAll(async () => {
     console.log('📦 Loading persistent test vault for multi-chain testing...')

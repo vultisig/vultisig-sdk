@@ -20,9 +20,14 @@ import { Chain } from '@core/chain/Chain'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { Vultisig } from '../../../src'
+import { GlobalConfig } from '../../../src/config/GlobalConfig'
+import { GlobalStorage } from '../../../src/runtime/storage/GlobalStorage'
+import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
+import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
 import { FastSigningService } from '../../../src/services/FastSigningService'
+import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
 import { FastVault } from '../../../src/vault/FastVault'
+import { Vultisig } from '../../../src/Vultisig'
 
 /**
  * ALL SUPPORTED CHAINS
@@ -85,11 +90,33 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
 describe('Integration: Multi-Chain Address Derivation', () => {
   let sdk: Vultisig
   let vault: FastVault
+  let memoryStorage: MemoryStorage
 
   beforeAll(async () => {
+    // Reset all global singletons before test
+    GlobalStorage.reset()
+    GlobalServerManager.reset()
+    GlobalConfig.reset()
+    PasswordCacheService.resetInstance()
+
+    // Configure global singletons
+    memoryStorage = new MemoryStorage()
+    GlobalStorage.configure({ customStorage: memoryStorage })
+
+    GlobalServerManager.configure({
+      fastVault: 'https://api.vultisig.com/vault',
+      messageRelay: 'https://api.vultisig.com/router',
+    })
+
+    GlobalConfig.configure({
+      defaultChains: ALL_CHAINS,
+      defaultCurrency: 'USD',
+    })
+
     // Initialize SDK with WASM
     sdk = new Vultisig({
       autoInit: true,
+      storage: { customStorage: memoryStorage },
       defaultChains: ALL_CHAINS,
     })
 
@@ -148,8 +175,9 @@ describe('Integration: Multi-Chain Address Derivation', () => {
 
     // Create a mock FastSigningService for testing
     const mockFastSigningService = {} as FastSigningService
+    const config = GlobalConfig.getInstance()
 
-    vault = FastVault.fromStorage(vaultData, mockFastSigningService)
+    vault = FastVault.fromStorage(vaultData, mockFastSigningService, config)
 
     console.log('✅ SDK initialized and vault created with REAL WASM')
     console.log(`   Testing ${ALL_CHAINS.length} chains\n`)

@@ -193,9 +193,14 @@ import type { Chain } from '@core/chain/Chain'
 // Cache types
 export type { CacheConfig, CacheScope } from '../services/cache-types'
 
-// Extended SDK config with storage and connection options
+// Extended SDK config with connection options and defaults
 export type VultisigConfig = SDKConfig & {
-  storage?: any // VaultStorage interface (avoiding circular dependency)
+  /**
+   * Storage configuration options
+   * Configures the global storage used by all vaults and managers
+   * @see GlobalStorage.configure()
+   */
+  storage?: import('../runtime/storage/registry').StorageOptions
   autoInit?: boolean
   autoConnect?: boolean
   defaultChains?: Chain[]
