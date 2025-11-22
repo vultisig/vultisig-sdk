@@ -201,6 +201,47 @@ export type VultisigConfig = SDKConfig & {
   defaultChains?: Chain[]
   defaultCurrency?: string
   cacheConfig?: import('../services/cache-types').CacheConfig
+
+  /**
+   * Password cache configuration
+   */
+  passwordCache?: {
+    /**
+     * Time to live for cached passwords in milliseconds
+     * - Set to 0 to disable caching (prompt every time)
+     * - Set to positive number for cache duration
+     * @default 300000 (5 minutes)
+     */
+    defaultTTL?: number
+  }
+
+  /**
+   * Callback function to prompt user for password when required
+   * Called when:
+   * - Operation requires password for encrypted vault
+   * - Password not in cache
+   * - Password not provided as parameter
+   *
+   * @param vaultId - ID of vault requiring password
+   * @param vaultName - Name of vault requiring password
+   * @returns Promise resolving to password string
+   * @throws If user cancels or prompt fails
+   *
+   * @example
+   * // React implementation
+   * onPasswordRequired: async (vaultId, vaultName) => {
+   *   const password = await showPasswordModal(vaultName);
+   *   if (!password) throw new Error('Password required');
+   *   return password;
+   * }
+   *
+   * @example
+   * // CLI implementation
+   * onPasswordRequired: async (vaultId, vaultName) => {
+   *   return await promptForPassword(`Enter password for ${vaultName}: `);
+   * }
+   */
+  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
 }
 
 // Connection options

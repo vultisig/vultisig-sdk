@@ -24,6 +24,7 @@ import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { WasmManager } from '../../../src/runtime/wasm'
+import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
 import type { SigningPayload, Token, VaultData } from '../../../src/types/index'
 import { Vault } from '../../../src/vault/Vault'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
@@ -66,6 +67,11 @@ function createVaultDataFromCore(
     s.startsWith('Server-')
   )
 
+  // Fast vaults are always encrypted
+  // For unit tests, use empty vultFileContent (keyShares mocked via FastSigningService)
+  // This prevents ensureKeySharesLoaded() from trying to parse invalid mock data
+  const vultFileContent = ''
+
   return {
     // Identity (readonly fields)
     publicKeys: coreVault.publicKeys,
@@ -74,7 +80,7 @@ function createVaultDataFromCore(
     localPartyId: coreVault.localPartyId,
     createdAt: coreVault.createdAt || Date.now(),
     libType: coreVault.libType,
-    isEncrypted: false,
+    isEncrypted: isFastVault, // Fast vaults are always encrypted
     type: isFastVault ? 'fast' : 'secure',
 
     // Metadata
@@ -90,7 +96,7 @@ function createVaultDataFromCore(
     tokens: {},
 
     // Vault file
-    vultFileContent: '',
+    vultFileContent,
   }
 }
 
@@ -135,6 +141,11 @@ describe('Vault', () => {
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
     })
+
+    // Cache mock password for fast vault (fast vaults always require password)
+    // This simulates what happens when user imports/creates vault
+    const passwordCache = PasswordCacheService.getInstance()
+    passwordCache.set('0', 'mock-password')
   })
 
   describe('Vault Info & Getters', () => {
@@ -198,8 +209,8 @@ describe('Vault', () => {
     })
 
     it('should return encryption status from VaultData', () => {
-      // Encryption status comes from VaultData
-      expect(vault.isEncrypted).toBe(false)
+      // Fast vaults are always encrypted
+      expect(vault.isEncrypted).toBe(true)
     })
 
     it('should return security type from VaultData', () => {
@@ -227,8 +238,8 @@ describe('Vault', () => {
     })
 
     it('should include encryption status in summary', () => {
-      // Encryption status comes from VaultData
-      expect(vault.isEncrypted).toBe(false)
+      // Fast vaults are always encrypted
+      expect(vault.isEncrypted).toBe(true)
     })
 
     it('should include signers array in summary', () => {
@@ -509,7 +520,7 @@ describe('Vault', () => {
     }
 
     it('should sign transaction with fast mode', async () => {
-      const signature = await vault.sign('fast', mockPayload, 'password123')
+      const signature = await vault.sign('fast', mockPayload)
 
       expect(signature).toBeDefined()
       expect(signature).toHaveProperty('signature')
@@ -521,7 +532,7 @@ describe('Vault', () => {
       const signedHandler = vi.fn()
       vault.on('transactionSigned', signedHandler)
 
-      await vault.sign('fast', mockPayload, 'password123')
+      await vault.sign('fast', mockPayload)
 
       expect(signedHandler).toHaveBeenCalled()
       expect(signedHandler).toHaveBeenCalledWith(
@@ -532,16 +543,29 @@ describe('Vault', () => {
       )
     })
 
-    it('should require password for fast signing', async () => {
-      await expect(vault.sign('fast', mockPayload)).rejects.toThrow(VaultError)
-      await expect(vault.sign('fast', mockPayload)).rejects.toThrow(
-        'Password is required'
+    it('should work without password for unencrypted vaults', async () => {
+      // Create a secure vault (no Server- signer) which can be unencrypted
+      const secureVaultData = createMockVaultData({
+        signers: ['device-1', 'device-2'], // No Server- = secure vault
+      })
+      const secureVault = Vault.fromStorage(
+        createVaultDataFromCore(secureVaultData, 99),
+        realServices
       )
+
+      // Secure vaults can be unencrypted
+      expect(secureVault.isEncrypted).toBe(false)
+
+      // Lock should be a no-op for unencrypted vaults
+      secureVault.lock()
+
+      // isUnlocked should always return true for unencrypted vaults
+      expect(secureVault.isUnlocked()).toBe(true)
     })
 
     it('should validate signing mode against vault type - fast vault allows fast mode', async () => {
       // vault is a fast vault (has Server- in signers)
-      const signature = await vault.sign('fast', mockPayload, 'password')
+      const signature = await vault.sign('fast', mockPayload)
       expect(signature).toBeDefined()
     })
 
@@ -570,28 +594,24 @@ describe('Vault', () => {
       const secureVault = Vault.fromStorage(vaultData, realServices)
 
       // Relay mode should pass validation but fail on not implemented
-      await expect(
-        secureVault.sign('relay', mockPayload, 'password')
-      ).rejects.toThrow('Relay signing not implemented yet')
+      await expect(secureVault.sign('relay', mockPayload)).rejects.toThrow(
+        'Relay signing not implemented yet'
+      )
     })
 
     it('should throw error for relay mode (fast vault rejects relay mode)', async () => {
       // Fast vault (with Server- signer) rejects relay mode
-      await expect(
-        vault.sign('relay', mockPayload, 'password')
-      ).rejects.toThrow(VaultError)
-      await expect(
-        vault.sign('relay', mockPayload, 'password')
-      ).rejects.toThrow('Relay signing is only available for secure vaults')
+      await expect(vault.sign('relay', mockPayload)).rejects.toThrow(VaultError)
+      await expect(vault.sign('relay', mockPayload)).rejects.toThrow(
+        'Relay signing is only available for secure vaults'
+      )
     })
 
     it('should throw error for local mode (not implemented)', async () => {
-      await expect(
-        vault.sign('local', mockPayload, 'password')
-      ).rejects.toThrow(VaultError)
-      await expect(
-        vault.sign('local', mockPayload, 'password')
-      ).rejects.toThrow('not implemented')
+      await expect(vault.sign('local', mockPayload)).rejects.toThrow(VaultError)
+      await expect(vault.sign('local', mockPayload)).rejects.toThrow(
+        'not implemented'
+      )
     })
 
     it('should require FastSigningService for fast signing', async () => {
@@ -614,9 +634,7 @@ describe('Vault', () => {
         .fn()
         .mockRejectedValue(new Error('Server timeout'))
 
-      await expect(
-        vault.sign('fast', mockPayload, 'password')
-      ).rejects.toThrow()
+      await expect(vault.sign('fast', mockPayload)).rejects.toThrow()
       expect(errorHandler).toHaveBeenCalled()
     })
 
@@ -626,7 +644,7 @@ describe('Vault', () => {
         .mockRejectedValue(new Error('Generic error'))
 
       try {
-        await vault.sign('fast', mockPayload, 'password')
+        await vault.sign('fast', mockPayload)
         expect.fail('Should have thrown')
       } catch (error) {
         expect(error).toBeInstanceOf(VaultError)
@@ -644,7 +662,7 @@ describe('Vault', () => {
         .mockRejectedValue(vaultError)
 
       try {
-        await vault.sign('fast', mockPayload, 'password')
+        await vault.sign('fast', mockPayload)
         expect.fail('Should have thrown')
       } catch (error) {
         expect(error).toBe(vaultError)

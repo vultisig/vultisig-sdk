@@ -27,4 +27,10 @@ export type VaultConfig = {
   defaultCurrency?: string
   /** Cache configuration (TTLs, size limits) */
   cacheConfig?: CacheConfig
+  /** Password cache configuration */
+  passwordCache?: {
+    defaultTTL?: number
+  }
+  /** Password prompt callback */
+  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
 }

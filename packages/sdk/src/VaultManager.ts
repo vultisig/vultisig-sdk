@@ -182,12 +182,20 @@ export class VaultManager {
       vaultId,
       result.vault.name,
       vultContent,
-      options.password,
       this.createVaultServices(),
       this.config,
       this.storage,
       result.vault // Pre-parsed vault data from server
     )
+
+    // Cache password for fast vault (fast vaults are always encrypted with password)
+    if (options.password) {
+      const { PasswordCacheService } = await import(
+        './services/PasswordCacheService'
+      )
+      const passwordCache = PasswordCacheService.getInstance()
+      passwordCache.set(vaultId.toString(), options.password)
+    }
 
     // Save to storage (vault creates VaultData internally and saves it)
     await vaultInstance.save()
@@ -323,12 +331,20 @@ export class VaultManager {
         vaultId,
         parsedVault.name,
         vultContent.trim(),
-        password,
         this.createVaultServices(),
         this.config,
         this.storage,
         parsedVault // Pre-parsed vault data
       )
+
+      // Cache password if provided (for encrypted vaults)
+      if (password && container.isEncrypted) {
+        const { PasswordCacheService } = await import(
+          './services/PasswordCacheService'
+        )
+        const passwordCache = PasswordCacheService.getInstance()
+        passwordCache.set(vaultId.toString(), password)
+      }
 
       // Save to storage
       await vaultInstance.save()

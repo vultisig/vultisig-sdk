@@ -18,6 +18,7 @@ import type { Storage } from '../runtime/storage/types'
 import { CacheScope, CacheService } from '../services/CacheService'
 import { FastSigningService } from '../services/FastSigningService'
 import { FiatValueService } from '../services/FiatValueService'
+import { PasswordCacheService } from '../services/PasswordCacheService'
 // Types
 import {
   Balance,
@@ -72,6 +73,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   private cacheService: CacheService
   private fastSigningService?: FastSigningService
   private fiatValueService: FiatValueService
+  private passwordCache: PasswordCacheService
 
   // Extracted services
   private addressService: AddressService
@@ -89,14 +91,13 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   // Storage for persistence (required)
   private storage: Storage
 
-  // Password for lazy decryption
-  private password?: string
+  // Vault configuration for password callback
+  private config?: VaultConfig
 
   constructor(
     vaultId: number,
     name: string,
     vultFileContent: string,
-    password: string | undefined,
     services: VaultServices,
     config?: VaultConfig,
     storage?: Storage,
@@ -105,8 +106,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     // Initialize EventEmitter
     super()
 
-    // Store password for lazy decryption
-    this.password = password
+    // Store config for password callback
+    this.config = config
 
     // Inject essential services
     this.fastSigningService = services.fastSigningService
@@ -118,6 +119,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       vaultId,
       config?.cacheConfig
     )
+    // Initialize password cache service
+    this.passwordCache = PasswordCacheService.getInstance(config?.passwordCache)
 
     // Parse vault container (synchronous) - or use provided parsed data
     let container: { isEncrypted: boolean; vault: string }
@@ -128,10 +131,16 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       // This avoids trying to parse encrypted vault protobuf synchronously
       parsedVault = parsedVaultData
 
-      // Determine if encrypted by checking if password was provided
-      container = {
-        isEncrypted: !!password,
-        vault: '', // Not needed when using pre-parsed data
+      // Determine if encrypted by checking the vault file content
+      // If vultFileContent is provided, parse it to check encryption status
+      if (vultFileContent && vultFileContent.trim()) {
+        container = vaultContainerFromString(vultFileContent.trim())
+      } else {
+        // No vault file content - assume not encrypted (fast vault creation case)
+        container = {
+          isEncrypted: false,
+          vault: '', // Not needed when using pre-parsed data
+        }
       }
     } else {
       // Parse vault from vultFileContent string (for imports)
@@ -330,7 +339,6 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       vaultData.id,
       vaultData.name,
       vaultData.vultFileContent || '', // Use stored content, empty string triggers fallback
-      undefined, // password - not stored, required later for signing if encrypted
       services,
       config,
       storage
@@ -648,6 +656,81 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     return { filename, data }
   }
 
+  // ===== PASSWORD MANAGEMENT =====
+
+  /**
+   * Lock this vault by removing password from cache
+   * After locking, user will be prompted for password on next operation requiring it
+   *
+   * Note: This is a no-op for unencrypted vaults (they cannot be locked)
+   */
+  public lock(): void {
+    if (!this.isVaultEncrypted()) {
+      return // Cannot lock unencrypted vault
+    }
+    this.passwordCache.delete(this.id.toString())
+  }
+
+  /**
+   * Unlock this vault by caching password
+   * Password validity is verified by attempting to load key shares
+   *
+   * @param password - Password to cache
+   * @throws {VaultError} If vault is unencrypted (nothing to unlock)
+   * @throws {VaultError} If password is incorrect
+   */
+  public async unlock(password: string): Promise<void> {
+    if (!this.isVaultEncrypted()) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'Cannot unlock unencrypted vault'
+      )
+    }
+
+    // Temporarily cache password for verification
+    this.passwordCache.set(this.id.toString(), password)
+
+    try {
+      // Verify password by attempting to load key shares
+      await this.ensureKeySharesLoaded()
+      // Password is valid and now cached
+    } catch (error) {
+      // Password is invalid - remove from cache
+      this.passwordCache.delete(this.id.toString())
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Failed to unlock vault: ${error instanceof Error ? error.message : String(error)}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Check if vault is unlocked (password cached)
+   * - Unencrypted vaults are always "unlocked" (return true)
+   * - Encrypted vaults check password cache
+   *
+   * @returns True if vault is unlocked and ready for operations
+   */
+  public isUnlocked(): boolean {
+    if (!this.isVaultEncrypted()) {
+      return true // Unencrypted vaults are always unlocked
+    }
+    return this.passwordCache.has(this.id.toString())
+  }
+
+  /**
+   * Get remaining time before password cache expires
+   *
+   * @returns Milliseconds until expiry, or undefined if not cached or vault is unencrypted
+   */
+  public getUnlockTimeRemaining(): number | undefined {
+    if (!this.isVaultEncrypted()) {
+      return undefined // Unencrypted vaults don't have unlock time
+    }
+    return this.passwordCache.getRemainingTTL(this.id.toString())
+  }
+
   /**
    * Delete this vault from storage
    * Removes vault data and persistent cache
@@ -873,17 +956,14 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
   /**
    * Sign transaction
+   * Password is resolved automatically from cache or onPasswordRequired callback
    */
-  async sign(
-    mode: SigningMode,
-    payload: SigningPayload,
-    password?: string
-  ): Promise<Signature> {
+  async sign(mode: SigningMode, payload: SigningPayload): Promise<Signature> {
     this.validateSigningMode(mode)
 
     switch (mode) {
       case 'fast':
-        return this.signFast(payload, password)
+        return this.signFast(payload)
       case 'relay':
         throw new VaultError(
           VaultErrorCode.NotImplemented,
@@ -924,10 +1004,60 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Check if this vault is encrypted and requires a password
+   * Uses VaultData.isEncrypted as the source of truth
+   */
+  private isVaultEncrypted(): boolean {
+    return this.vaultData.isEncrypted
+  }
+
+  /**
+   * Resolve password from cache or prompt callback
+   * Returns undefined for unencrypted vaults
+   */
+  private async resolvePassword(): Promise<string | undefined> {
+    // If vault is not encrypted, no password needed
+    if (!this.isVaultEncrypted()) {
+      return undefined
+    }
+
+    // For encrypted vaults, check cache first
+    const cachedPassword = this.passwordCache.get(this.id.toString())
+    if (cachedPassword) {
+      return cachedPassword
+    }
+
+    // Try callback
+    if (this.config?.onPasswordRequired) {
+      try {
+        const password = await this.config.onPasswordRequired(
+          this.id.toString(),
+          this.name
+        )
+        // Cache for future use
+        this.passwordCache.set(this.id.toString(), password)
+        return password
+      } catch (error) {
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          `Failed to get password for vault "${this.name}": ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    }
+
+    // No password available for ENCRYPTED vault
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `Password required for encrypted vault "${this.name}" but not cached. ` +
+        `Please unlock vault with unlock() method or configure onPasswordRequired callback.`
+    )
+  }
+
+  /**
    * Ensure keyShares are loaded from vault file (lazy loading with password)
    * This is called before signing operations that need keyShares
    */
-  private async ensureKeySharesLoaded(password?: string): Promise<void> {
+  private async ensureKeySharesLoaded(): Promise<void> {
     // Check if keyShares are already loaded
     if (
       this.coreVault.keyShares.ecdsa &&
@@ -946,9 +1076,6 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       return
     }
 
-    // Use provided password or stored password
-    const decryptionPassword = password || this.password
-
     // Parse vault file to get keyShares
     const container = vaultContainerFromString(
       this.vaultData.vultFileContent.trim()
@@ -957,6 +1084,8 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
     // Handle decryption if needed
     let vaultBase64: string
     if (container.isEncrypted) {
+      // Resolve password from cache or callback
+      const decryptionPassword = await this.resolvePassword()
       if (!decryptionPassword) {
         throw new VaultError(
           VaultErrorCode.InvalidConfig,
@@ -970,6 +1099,7 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
       })
       vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
     } else {
+      // Unencrypted vault - no password needed
       vaultBase64 = container.vault
     }
 
@@ -984,18 +1114,11 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
   /**
    * Fast signing with VultiServer
+   *
+   * NOTE: Fast vaults are ALWAYS encrypted and require a password.
+   * They use 2-of-2 MPC with VultiServer and are created with password protection.
    */
-  private async signFast(
-    payload: SigningPayload,
-    password?: string
-  ): Promise<Signature> {
-    if (!password) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Password is required for fast signing'
-      )
-    }
-
+  private async signFast(payload: SigningPayload): Promise<Signature> {
     if (!this.fastSigningService) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
@@ -1005,7 +1128,19 @@ export class Vault extends UniversalEventEmitter<VaultEvents> {
 
     try {
       // Ensure keyShares are loaded from vault file (lazy loading)
-      await this.ensureKeySharesLoaded(password)
+      await this.ensureKeySharesLoaded()
+
+      // Fast vaults are always encrypted - resolve password
+      // resolvePassword() will throw if password not available
+      const password = await this.resolvePassword()
+
+      if (!password) {
+        // This should never happen for fast vaults, but check for safety
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          'Password is required for fast signing. Fast vaults are always encrypted.'
+        )
+      }
 
       const signature = await this.fastSigningService.signWithServer(
         this.coreVault,

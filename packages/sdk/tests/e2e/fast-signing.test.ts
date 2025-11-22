@@ -1,7 +1,7 @@
 /**
  * E2E Tests: Fast Signing - Transaction Signing
  *
- * This test suite validates the `vault.sign('fast', payload, password)` method
+ * This test suite validates the `vault.sign('fast', payload)` method
  * across different blockchain architectures. The method signs transaction payloads
  * using 2-of-2 MPC with VultiServer but does NOT broadcast them.
  *
@@ -530,7 +530,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
   // ============================================================================
 
   describe.concurrent('Error Handling', () => {
-    it('Rejects signing with incorrect password', async () => {
+    it('Rejects signing with locked vault (no cached password)', async () => {
       const coin = {
         chain: Chain.Ethereum,
         address: await vault.address(Chain.Ethereum),
@@ -551,11 +551,15 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         Chain.Ethereum
       )
 
-      await expect(
-        vault.sign('fast', signingPayload, 'wrong-password')
-      ).rejects.toThrow()
+      // Lock the vault to clear the password cache
+      vault.lock()
 
-      console.log('✅ Correctly rejected incorrect password')
+      await expect(vault.sign('fast', signingPayload)).rejects.toThrow()
+
+      console.log('✅ Correctly rejected signing with locked vault')
+
+      // Unlock vault again for subsequent tests
+      await vault.unlock(TEST_VAULT_CONFIG.password)
     })
 
     it('Rejects signing without messageHashes', async () => {
@@ -579,9 +583,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         messageHashes: [], // Empty array - should fail
       }
 
-      await expect(
-        vault.sign('fast', signingPayload, TEST_VAULT_CONFIG.password)
-      ).rejects.toThrow()
+      await expect(vault.sign('fast', signingPayload)).rejects.toThrow()
 
       console.log('✅ Correctly rejected missing messageHashes')
     })
