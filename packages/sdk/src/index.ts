@@ -17,8 +17,13 @@
 export { Vultisig } from './Vultisig'
 
 // Vault management
+export type { VaultConfig, VaultServices } from './vault'
 export {
-  Vault,
+  FastVault,
+  isFastVault,
+  isSecureVault,
+  SecureVault,
+  VaultBase,
   VaultError,
   VaultErrorCode,
   VaultImportError,
@@ -98,45 +103,6 @@ export { StorageError, StorageErrorCode } from './runtime/storage/types'
 // Event system
 export { UniversalEventEmitter } from './events/EventEmitter'
 export type { SdkEvents, VaultEvents } from './events/types'
-
-// ============================================================================
-// PUBLIC API - Environment-Specific Utilities
-// ============================================================================
-
-// Electron utilities - TODO: Re-enable when Electron integration is ready
-// export {
-//   downloadElectronVault,
-//   exportElectronVaultToFile,
-//   getElectronHandlers,
-//   getElectronProcessType,
-//   setupElectronIPC,
-// } from './runtime/utils/electron'
-
-// Node.js utilities
-export {
-  ensureDirectory,
-  exportVaultToFile,
-  getNodeStorageInfo,
-  getStoragePath,
-} from './runtime/utils/node'
-
-// Browser utilities
-export {
-  downloadVault,
-  getBrowserStorageInfo,
-  isBrowserStorageLow,
-  isPersistentStorage,
-  requestPersistentStorage,
-} from './runtime/utils/browser'
-
-// Chrome extension utilities
-export {
-  isServiceWorkerAlive,
-  keepServiceWorkerAlive,
-  onChromeStorageChanged,
-  sendChromeMessage,
-  setupChromeMessageHandlers,
-} from './runtime/utils/chrome'
 
 // ============================================================================
 // PUBLIC API - Types (keep all types for TypeScript users)

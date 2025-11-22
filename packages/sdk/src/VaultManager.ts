@@ -10,7 +10,9 @@ import { ServerManager } from './server/ServerManager'
 import { FastSigningService } from './services/FastSigningService'
 import { KeygenMode, VaultCreationStep, VaultData } from './types'
 import { createVaultBackup } from './utils/export'
-import { Vault } from './vault/Vault'
+import { FastVault } from './vault/FastVault'
+import { SecureVault } from './vault/SecureVault'
+import { VaultBase } from './vault/VaultBase'
 import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
 import { VaultConfig, VaultServices } from './vault/VaultServices'
 
@@ -86,15 +88,25 @@ export class VaultManager {
   /**
    * Create Vault instance with proper service injection
    * Internal helper for consistent vault instantiation
+   * Returns appropriate subclass based on vault type
    */
-  createVaultInstance(vaultData: VaultData): Vault {
-    // Use static factory method for loading from storage
-    return Vault.fromStorage(
-      vaultData,
-      this.createVaultServices(),
-      this.config,
-      this.storage
-    )
+  createVaultInstance(vaultData: VaultData): VaultBase {
+    // Factory pattern - return appropriate subclass based on vault type
+    if (vaultData.type === 'fast') {
+      return FastVault.fromStorage(
+        vaultData,
+        this.createVaultServices(),
+        this.config,
+        this.storage
+      )
+    } else {
+      return SecureVault.fromStorage(
+        vaultData,
+        this.createVaultServices(),
+        this.config,
+        this.storage
+      )
+    }
   }
 
   // ===== VAULT LIFECYCLE =====
@@ -108,16 +120,20 @@ export class VaultManager {
    * @param options.password - Vault password for encryption
    * @param options.email - Email for verification code delivery
    * @param options.onProgressInternal - Optional progress callback
-   * @returns Vault instance, vaultId for verification, and verificationRequired flag
+   * @returns FastVault instance, vaultId for verification, and verificationRequired flag
    */
   async createFastVault(
     name: string,
     options: {
       password: string
       email: string
-      onProgressInternal?: (step: VaultCreationStep, vault?: Vault) => void
+      onProgressInternal?: (step: VaultCreationStep, vault?: VaultBase) => void
     }
-  ): Promise<{ vault: Vault; vaultId: string; verificationRequired: true }> {
+  ): Promise<{
+    vault: FastVault
+    vaultId: string
+    verificationRequired: true
+  }> {
     // Password and email are required (enforced by type system)
     const reportProgress = options.onProgressInternal || (() => {})
 
@@ -176,9 +192,9 @@ export class VaultManager {
     // Generate .vult file content
     const vultContent = await createVaultBackup(result.vault, options.password)
 
-    // Create vault instance using constructor (it creates VaultData internally)
+    // Create vault instance using FastVault constructor
     // Pass result.vault as parsedVaultData to avoid parsing encrypted content synchronously
-    const vaultInstance = new Vault(
+    const vaultInstance = new FastVault(
       vaultId,
       result.vault.name,
       vultContent,
@@ -257,16 +273,16 @@ export class VaultManager {
    * @param name - Vault name
    * @param options.keygenMode - Keygen mode configuration
    * @param options.onProgressInternal - Optional progress callback
-   * @returns Vault instance
+   * @returns SecureVault instance
    * @throws Error - Not yet implemented
    */
   async createSecureVault(
     _name: string,
     _options?: {
       keygenMode?: KeygenMode
-      onProgressInternal?: (step: VaultCreationStep, vault?: Vault) => void
+      onProgressInternal?: (step: VaultCreationStep, vault?: VaultBase) => void
     }
-  ): Promise<Vault> {
+  ): Promise<SecureVault> {
     // TODO: Implement secure vault creation with multi-device MPC keygen
     throw new Error(
       'Secure vault creation not implemented yet - requires multi-device MPC keygen integration'
@@ -278,13 +294,16 @@ export class VaultManager {
    *
    * @param vultContent - The base64-encoded .vult file content (as string)
    * @param password - Optional password for encrypted vaults
-   * @returns Vault instance
+   * @returns VaultBase instance (FastVault or SecureVault depending on vault type)
    *
    * @example
    * const vultContent = fs.readFileSync('my-vault.vult', 'utf-8')
    * const vault = await vaultManager.importVault(vultContent, 'password123')
    */
-  async importVault(vultContent: string, password?: string): Promise<Vault> {
+  async importVault(
+    vultContent: string,
+    password?: string
+  ): Promise<VaultBase> {
     try {
       // Parse to check if it already exists
       const container = vaultContainerFromString(vultContent.trim())
@@ -325,17 +344,35 @@ export class VaultManager {
         vaultId = await this.getNextVaultId()
       }
 
-      // Create vault instance using new constructor
-      // Pass parsedVault to avoid parsing encrypted content synchronously
-      const vaultInstance = new Vault(
-        vaultId,
-        parsedVault.name,
-        vultContent.trim(),
-        this.createVaultServices(),
-        this.config,
-        this.storage,
-        parsedVault // Pre-parsed vault data
+      // Determine vault type from parsed vault
+      const vaultType = parsedVault.signers.some((s: string) =>
+        s.startsWith('Server-')
       )
+        ? 'fast'
+        : 'secure'
+
+      // Create vault instance using appropriate constructor
+      // Pass parsedVault to avoid parsing encrypted content synchronously
+      const vaultInstance =
+        vaultType === 'fast'
+          ? new FastVault(
+              vaultId,
+              parsedVault.name,
+              vultContent.trim(),
+              this.createVaultServices(),
+              this.config,
+              this.storage,
+              parsedVault // Pre-parsed vault data
+            )
+          : new SecureVault(
+              vaultId,
+              parsedVault.name,
+              vultContent.trim(),
+              this.createVaultServices(),
+              this.config,
+              this.storage,
+              parsedVault // Pre-parsed vault data
+            )
 
       // Cache password if provided (for encrypted vaults)
       if (password && container.isEncrypted) {
@@ -386,23 +423,22 @@ export class VaultManager {
   }
 
   /**
-   * List all stored vaults as Vault instances
-   * Users can call vault.summary() on each instance to get summary data
+   * List all stored vaults as VaultBase instances
+   * Users can call vault methods on each instance to get data
    *
-   * @returns Array of Vault class instances
+   * @returns Array of VaultBase instances (FastVault or SecureVault)
    * @example
    * ```typescript
    * const vaults = await vaultManager.listVaults()
    * vaults.forEach(vault => {
-   *   const summary = vault.summary()
-   *   console.log(`${summary.name}: ${summary.chains.join(', ')}`)
+   *   console.log(`${vault.name}: ${vault.type}`)
    * })
    * ```
    */
-  async listVaults(): Promise<Vault[]> {
+  async listVaults(): Promise<VaultBase[]> {
     const keys = await this.storage.list()
     const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
-    const vaults: Vault[] = []
+    const vaults: VaultBase[] = []
 
     for (const key of vaultKeys) {
       const vaultData = await this.storage.get<VaultData>(key)
@@ -420,7 +456,7 @@ export class VaultManager {
    * Get vault instance by ID
    *
    * @param id - Numeric vault ID
-   * @returns Vault instance or null if not found
+   * @returns VaultBase instance or null if not found
    * @example
    * ```typescript
    * const vault = await vaultManager.getVaultById(0)
@@ -429,7 +465,7 @@ export class VaultManager {
    * }
    * ```
    */
-  async getVaultById(id: number): Promise<Vault | null> {
+  async getVaultById(id: number): Promise<VaultBase | null> {
     const vaultData = await this.storage.get<VaultData>(`vault:${id}`)
 
     if (!vaultData) {
@@ -445,7 +481,7 @@ export class VaultManager {
    *
    * @returns Array of all vault instances
    */
-  async getAllVaults(): Promise<Vault[]> {
+  async getAllVaults(): Promise<VaultBase[]> {
     return this.listVaults()
   }
 
@@ -502,7 +538,7 @@ export class VaultManager {
   /**
    * Get current active vault
    */
-  async getActiveVault(): Promise<Vault | null> {
+  async getActiveVault(): Promise<VaultBase | null> {
     const id = await this.storage.get<number>('activeVaultId')
 
     if (id === null || id === undefined) {

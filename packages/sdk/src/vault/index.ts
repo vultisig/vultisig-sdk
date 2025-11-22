@@ -1,9 +1,16 @@
 /**
  * Vault management module
- * Wraps existing vault handling code from core/ui/vault
+ * Provides polymorphic vault hierarchy with type-specific implementations
  */
 
-export { Vault } from './Vault'
+// Import and export vault class hierarchy
+import { FastVault } from './FastVault'
+import { SecureVault } from './SecureVault'
+import { VaultBase } from './VaultBase'
+
+export { FastVault, SecureVault, VaultBase }
+
+// Export errors
 export {
   VaultError,
   VaultErrorCode,
@@ -11,9 +18,19 @@ export {
   VaultImportErrorCode,
 } from './VaultError'
 
-// Vault utilities - use VaultManager for encryption/decryption operations
+// Export vault services configuration
+export type { VaultConfig, VaultServices } from './VaultServices'
 
-// Re-export main vault type with alias to avoid conflict
+// Type guards for vault types
+export function isFastVault(vault: VaultBase): vault is FastVault {
+  return vault.type === 'fast'
+}
+
+export function isSecureVault(vault: VaultBase): vault is SecureVault {
+  return vault.type === 'secure'
+}
+
+// Re-export core vault type with alias to avoid conflict
 export type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 // Stub types for compilation - actual types come from core workspace

@@ -2,6 +2,7 @@
 import { Chain } from '@core/chain/Chain'
 
 import { AddressBookManager } from './AddressBookManager'
+import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import { PolyfillManager } from './runtime/polyfills'
@@ -15,24 +16,11 @@ import {
   ServerStatus,
   VultisigConfig,
 } from './types'
-import { Vault } from './vault/Vault'
+import { VaultBase } from './vault/VaultBase'
 import { VaultManager } from './VaultManager'
 
-/**
- * Default chains for new vaults
- */
-export const DEFAULT_CHAINS: Chain[] = [
-  Chain.Bitcoin,
-  Chain.Ethereum,
-  Chain.Solana,
-  Chain.THORChain,
-  Chain.Ripple,
-]
-
-/**
- * All supported chains (from Chain enum)
- */
-export const SUPPORTED_CHAINS: Chain[] = Object.values(Chain)
+// Re-export constants
+export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
 
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
@@ -214,7 +202,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     password: string
     email: string
   }): Promise<{
-    vault: Vault
+    vault: VaultBase
     vaultId: string
     verificationRequired: true
   }> {
@@ -251,7 +239,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async createSecureVault(options: {
     name: string
     keygenMode?: 'relay' | 'local'
-  }): Promise<Vault> {
+  }): Promise<VaultBase> {
     await this.ensureInitialized()
 
     const vault = await this.vaultManager.createSecureVault(options.name, {
@@ -291,7 +279,10 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * const vault = await sdk.importVault(vultContent, 'password123')
    * ```
    */
-  async importVault(vultContent: string, password?: string): Promise<Vault> {
+  async importVault(
+    vultContent: string,
+    password?: string
+  ): Promise<VaultBase> {
     await this.ensureInitialized()
     const vault = await this.vaultManager.importVault(vultContent, password)
 
@@ -314,7 +305,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * })
    * ```
    */
-  async listVaults(): Promise<Vault[]> {
+  async listVaults(): Promise<VaultBase[]> {
     await this.ensureInitialized()
     return this.vaultManager.listVaults()
   }
@@ -322,7 +313,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Delete vault from storage (clears active if needed)
    */
-  async deleteVault(vault: Vault): Promise<void> {
+  async deleteVault(vault: VaultBase): Promise<void> {
     await this.ensureInitialized()
     const vaultId = vault.id
 
@@ -350,14 +341,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Switch to different vault or clear active vault
    * @param vault - Vault to set as active, or null to clear active vault
    */
-  async setActiveVault(vault: Vault | null): Promise<void> {
+  async setActiveVault(vault: VaultBase | null): Promise<void> {
     await this.vaultManager.setActiveVault(vault?.id ?? null)
   }
 
   /**
    * Get current active vault
    */
-  async getActiveVault(): Promise<Vault | null> {
+  async getActiveVault(): Promise<VaultBase | null> {
     return this.vaultManager.getActiveVault()
   }
 
@@ -374,7 +365,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @param vaultId - Numeric vault ID
    * @returns Vault instance or null if not found
    */
-  async getVaultById(vaultId: number): Promise<Vault | null> {
+  async getVaultById(vaultId: number): Promise<VaultBase | null> {
     return this.vaultManager.getVaultById(vaultId)
   }
 

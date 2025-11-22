@@ -9,7 +9,7 @@ import type {
   Value,
   VaultCreationStep,
 } from '../types'
-import type { Vault } from '../vault/Vault'
+import type { VaultBase } from '../vault/VaultBase'
 
 /**
  * Events emitted by the Vultisig SDK for state changes.
@@ -32,13 +32,13 @@ export type SdkEvents = {
 
   /** Emitted during vault creation with progress updates */
   vaultCreationProgress: {
-    vault?: Vault // undefined until vault object created, then populated
+    vault?: VaultBase // undefined until vault object created, then populated
     step: VaultCreationStep
   }
 
   /** Emitted when vault creation completes successfully */
   vaultCreationComplete: {
-    vault: Vault
+    vault: VaultBase
   }
 }
 
@@ -130,4 +130,30 @@ export type VaultEvents = {
   loaded: {
     vaultId: number
   }
+
+  /** Emitted when vault is unlocked (keyshares loaded) */
+  'vault:unlocked': {
+    vaultId: number
+  }
+
+  /** Emitted when vault is locked (keyshares cleared) */
+  'vault:locked': Record<string, never>
+
+  /** Emitted when vault transaction is signed */
+  'vault:signed': Signature
+
+  /** Emitted when vault is renamed */
+  'vault:renamed': string
+
+  /** Emitted when vault is saved */
+  'vault:saved': any
+
+  /** Emitted when tokens are updated */
+  'tokens:updated': Record<string, Token[]>
+
+  /** Emitted when chains are updated */
+  'chains:updated': Chain[]
+
+  /** Emitted when currency is updated */
+  'currency:updated': string
 }

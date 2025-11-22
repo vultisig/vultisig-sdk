@@ -1,7 +1,7 @@
 import { Chain } from '@core/chain/Chain'
 
+import { DEFAULT_CHAINS } from '../../constants'
 import { type CacheService } from '../../services/CacheService'
-import { DEFAULT_CHAINS } from '../../Vultisig'
 
 /**
  * PreferencesService

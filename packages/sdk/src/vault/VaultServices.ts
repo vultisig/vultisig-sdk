@@ -10,6 +10,8 @@ import { FastSigningService } from '../services/FastSigningService'
  */
 export type VaultServices = {
   fastSigningService?: FastSigningService
+  relaySigningService?: any // RelaySigningService when implemented
+  localSigningService?: any // LocalSigningService when implemented
 }
 
 import type { Chain } from '@core/chain/Chain'

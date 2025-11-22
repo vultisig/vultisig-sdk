@@ -19,11 +19,7 @@ export { NodeStorage } from './storage/NodeStorage'
 export type { StorageOptions, StorageProvider } from './storage/registry'
 export { storageRegistry } from './storage/registry'
 export { StorageManager } from './storage/StorageManager'
-export type {
-  StorageMetadata,
-  StoredValue,
-  Storage as VaultStorage,
-} from './storage/types'
+export type { Storage, StorageMetadata, StoredValue } from './storage/types'
 export { StorageError, StorageErrorCode } from './storage/types'
 
 // ============================================
@@ -43,11 +39,6 @@ export {
   isNode,
   isWorker,
 } from './environment'
-
-// ============================================
-// Environment-Specific Utilities
-// ============================================
-export * from './utils'
 
 // ============================================
 // Polyfill Management
