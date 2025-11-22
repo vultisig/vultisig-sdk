@@ -2,7 +2,6 @@ import {
   Balance,
   Chain,
   FiatCurrency,
-  NodeStorage,
   Token,
   Vault,
   Vultisig,
@@ -43,32 +42,41 @@ export class VaultManager {
 
     try {
       this.sdk = new Vultisig({
-        storage: new NodeStorage(this.config.storagePath),
-        serverEndpoints: {
-          fastVault: this.config.serverUrl,
-          messageRelay: this.config.relayUrl,
-        },
-        autoInit: true,
-        defaultCurrency: this.config.defaultCurrency,
+        storage: { type: 'node', basePath: this.config.storagePath },
       })
 
       await this.sdk.initialize()
 
-      // Auto-import vault from .env if configured
+      // Check if there's an active vault in storage (from previous import/create)
+      const existingVault = await this.sdk.getActiveVault()
+      if (existingVault) {
+        this.activeVault = existingVault
+        this.setupVaultEvents(this.activeVault)
+        spinner.succeed(`SDK initialized - Vault loaded: ${existingVault.name}`)
+        return
+      }
+
+      // Auto-import vault from .env if configured and no active vault
       const vaultFilePath = process.env.VAULT_FILE_PATH
       if (vaultFilePath) {
         try {
           // Check if file exists
           await fs.access(vaultFilePath)
 
+          // Read vault file
+          const vultContent = await fs.readFile(vaultFilePath, 'utf-8')
+
           // Import vault with optional password from .env
           const vaultPassword = process.env.VAULT_PASSWORD
-          this.activeVault = await this.sdk.addVaultFromFile(
-            vaultFilePath,
+          this.activeVault = await this.sdk.importVault(
+            vultContent,
             vaultPassword
           )
           this.setupVaultEvents(this.activeVault)
-          spinner.text = `Vault loaded: ${this.activeVault.data.name}`
+          spinner.succeed(
+            `SDK initialized - Vault imported: ${this.activeVault.name}`
+          )
+          return
         } catch (error: any) {
           // If vault file doesn't exist or import fails, continue without it
           if (error.code !== 'ENOENT') {
@@ -85,58 +93,81 @@ export class VaultManager {
   }
 
   /**
-   * Create new vault with progress tracking
+   * Create new fast vault with progress tracking
+   * Returns vaultId for email verification
    */
   async createVault(
     name: string,
     password: string,
     email: string
-  ): Promise<{ vault: Vault; vaultId: string; verificationRequired: boolean }> {
+  ): Promise<{ vaultId: string; verificationRequired: boolean }> {
     const spinner = ora('Creating vault...').start()
 
-    // Setup progress tracking
-    this.sdk.on('vaultCreationProgress', ({ step }: any) => {
-      spinner.text = `${step.message} (${step.progress}%)`
-    })
-
     try {
+      // Listen for progress events
+      const progressHandler = ({ step }: any) => {
+        spinner.text = `${step.message} (${step.progress}%)`
+      }
+      this.sdk.on('vaultCreationProgress', progressHandler)
+
+      // Create fast vault (2-of-2 with VultiServer)
       const result = await this.sdk.createFastVault({
         name,
         password,
         email,
       })
 
+      // Clean up progress listener
+      this.sdk.off('vaultCreationProgress', progressHandler)
+
       this.activeVault = result.vault
       this.setupVaultEvents(this.activeVault)
       spinner.succeed(`Vault created: ${name}`)
 
-      return result
+      return {
+        vaultId: result.vaultId,
+        verificationRequired: result.verificationRequired,
+      }
     } catch (error) {
       spinner.fail('Vault creation failed')
       throw error
-    } finally {
-      this.sdk.removeAllListeners('vaultCreationProgress')
     }
   }
 
   /**
    * Verify vault with email code
+   * Call this after creating a fast vault to verify email delivery
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
-    const spinner = ora('Verifying email...').start()
+    const spinner = ora('Verifying email code...').start()
 
     try {
       const verified = await this.sdk.verifyVault(vaultId, code)
 
       if (verified) {
-        spinner.succeed('Vault verified')
+        spinner.succeed('Email verified successfully!')
+        return true
       } else {
-        spinner.fail('Verification failed')
+        spinner.fail('Invalid verification code')
+        return false
       }
-
-      return verified
     } catch (error) {
-      spinner.fail('Verification error')
+      spinner.fail('Verification failed')
+      throw error
+    }
+  }
+
+  /**
+   * Resend verification email
+   */
+  async resendVerification(vaultId: string): Promise<void> {
+    const spinner = ora('Resending verification email...').start()
+
+    try {
+      await this.sdk.serverManager.resendVaultVerification(vaultId)
+      spinner.succeed('Verification email sent!')
+    } catch (error) {
+      spinner.fail('Failed to resend verification email')
       throw error
     }
   }
@@ -148,12 +179,15 @@ export class VaultManager {
     const spinner = ora('Importing vault...').start()
 
     try {
-      // Use SDK's built-in addVaultFromFile method
-      const vault = await this.sdk.addVaultFromFile(filePath, password)
+      // Read vault file content
+      const vultContent = await fs.readFile(filePath, 'utf-8')
+
+      // Import vault using SDK
+      const vault = await this.sdk.importVault(vultContent, password)
 
       this.activeVault = vault
       this.setupVaultEvents(this.activeVault)
-      spinner.succeed(`Vault imported: ${vault.data.name}`)
+      spinner.succeed(`Vault imported: ${vault.name}`)
 
       return vault
     } catch (error: any) {
@@ -165,7 +199,7 @@ export class VaultManager {
   /**
    * Export vault to file
    */
-  async exportVault(outputPath?: string, password?: string): Promise<string> {
+  async exportVault(outputPath?: string, _password?: string): Promise<string> {
     if (!this.activeVault) {
       throw new Error('No active vault')
     }
@@ -173,11 +207,16 @@ export class VaultManager {
     const spinner = ora('Exporting vault...').start()
 
     try {
-      const blob = await this.activeVault.export(password)
-      const buffer = await blob.arrayBuffer()
+      // Export vault using Vault instance method
+      const { data: vultContent } = await this.activeVault.export()
 
-      const fileName = outputPath || this.activeVault.getExportFileName()
-      await fs.writeFile(fileName, Buffer.from(buffer))
+      // Determine output filename
+      const fileName =
+        outputPath ||
+        `${this.activeVault.name}-${this.activeVault.localPartyId}-vault.vult`
+
+      // Write to file
+      await fs.writeFile(fileName, vultContent, 'utf-8')
 
       spinner.succeed(`Vault exported: ${fileName}`)
       return fileName
@@ -308,6 +347,68 @@ export class VaultManager {
     }
 
     return await this.activeVault.addresses()
+  }
+
+  /**
+   * Lock vault (clear cached password/keyShares)
+   */
+  lockVault(): void {
+    if (!this.activeVault) {
+      throw new Error('No active vault')
+    }
+
+    this.activeVault.lock()
+    console.log(chalk.green('✓ Vault locked'))
+  }
+
+  /**
+   * Unlock vault with password (cache for TTL duration)
+   */
+  async unlockVault(password: string): Promise<void> {
+    if (!this.activeVault) {
+      throw new Error('No active vault')
+    }
+
+    const spinner = ora('Unlocking vault...').start()
+
+    try {
+      await this.activeVault.unlock(password)
+      const ttlRemaining = this.activeVault.getUnlockTimeRemaining()
+      const minutes = Math.floor(ttlRemaining / 60000)
+      const seconds = Math.floor((ttlRemaining % 60000) / 1000)
+      spinner.succeed(`Vault unlocked (valid for ${minutes}m ${seconds}s)`)
+    } catch (error) {
+      spinner.fail('Failed to unlock vault')
+      throw error
+    }
+  }
+
+  /**
+   * Check if vault is unlocked and get remaining time
+   */
+  getVaultStatus(): {
+    isUnlocked: boolean
+    timeRemaining?: number
+    timeRemainingFormatted?: string
+  } {
+    if (!this.activeVault) {
+      throw new Error('No active vault')
+    }
+
+    const isUnlocked = this.activeVault.isUnlocked()
+    if (!isUnlocked) {
+      return { isUnlocked: false }
+    }
+
+    const timeRemaining = this.activeVault.getUnlockTimeRemaining()
+    const minutes = Math.floor(timeRemaining / 60000)
+    const seconds = Math.floor((timeRemaining % 60000) / 1000)
+
+    return {
+      isUnlocked: true,
+      timeRemaining,
+      timeRemainingFormatted: `${minutes}m ${seconds}s`,
+    }
   }
 
   /**

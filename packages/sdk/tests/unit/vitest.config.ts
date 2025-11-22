@@ -26,7 +26,6 @@ export default defineConfig({
       '../integration/**', // Integration tests run separately
       '../runtime/**', // Runtime tests run separately
     ],
-    setupFiles: [resolve(__dirname, './vitest.setup.ts')],
     testTimeout: 30000, // 30 seconds for unit tests (WASM loading can take time)
     hookTimeout: 30000, // 30 seconds for hooks
     teardownTimeout: 10000, // 10 seconds for cleanup

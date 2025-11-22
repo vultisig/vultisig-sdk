@@ -20,9 +20,14 @@ import { Chain } from '@core/chain/Chain'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { Vultisig } from '../../../src'
-import { Vault } from '../../../src/vault/Vault'
-import type { VaultServices } from '../../../src/vault/VaultServices'
+import { GlobalConfig } from '../../../src/config/GlobalConfig'
+import { GlobalStorage } from '../../../src/runtime/storage/GlobalStorage'
+import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
+import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
+import { FastSigningService } from '../../../src/services/FastSigningService'
+import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
+import { FastVault } from '../../../src/vault/FastVault'
+import { Vultisig } from '../../../src/Vultisig'
 
 /**
  * ALL SUPPORTED CHAINS
@@ -84,18 +89,41 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
 
 describe('Integration: Multi-Chain Address Derivation', () => {
   let sdk: Vultisig
-  let vault: Vault
+  let vault: FastVault
+  let memoryStorage: MemoryStorage
 
   beforeAll(async () => {
+    // Reset all global singletons before test
+    GlobalStorage.reset()
+    GlobalServerManager.reset()
+    GlobalConfig.reset()
+    PasswordCacheService.resetInstance()
+
+    // Configure global singletons
+    memoryStorage = new MemoryStorage()
+    GlobalStorage.configure({ customStorage: memoryStorage })
+
+    GlobalServerManager.configure({
+      fastVault: 'https://api.vultisig.com/vault',
+      messageRelay: 'https://api.vultisig.com/router',
+    })
+
+    GlobalConfig.configure({
+      defaultChains: ALL_CHAINS,
+      defaultCurrency: 'USD',
+    })
+
     // Initialize SDK with WASM
     sdk = new Vultisig({
       autoInit: true,
+      storage: { customStorage: memoryStorage },
       defaultChains: ALL_CHAINS,
     })
 
     await sdk.initialize()
 
     // Create a vault directly with mock data (no MPC keygen needed for address derivation)
+    const now = Date.now()
     const mockVaultData: CoreVault = {
       name: 'Integration Test Vault',
       publicKeys: {
@@ -115,17 +143,41 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       },
       resharePrefix: '',
       libType: 'GG20',
-      createdAt: Date.now(),
+      createdAt: now,
       isBackedUp: false,
       order: 0,
     } as CoreVault
 
-    const services: VaultServices = {
-      wasmManager: sdk.getWasmManager(),
-      fastSigningService: {} as any, // Not needed for address derivation
+    // Create mock VaultData with correct structure
+    const vaultData = {
+      // Identity (readonly fields)
+      publicKeys: mockVaultData.publicKeys,
+      hexChainCode: mockVaultData.hexChainCode,
+      signers: mockVaultData.signers,
+      localPartyId: mockVaultData.localPartyId,
+      createdAt: now,
+      libType: mockVaultData.libType,
+      isEncrypted: false,
+      type: 'fast' as const,
+      // Metadata
+      id: 0,
+      name: 'Integration Test Vault',
+      isBackedUp: false,
+      order: 0,
+      lastModified: now,
+      // User Preferences
+      currency: 'usd',
+      chains: ALL_CHAINS.map(c => c.toString()),
+      tokens: {},
+      // Vault file
+      vultFileContent: '',
     }
 
-    vault = new Vault(mockVaultData, services)
+    // Create a mock FastSigningService for testing
+    const mockFastSigningService = {} as FastSigningService
+    const config = GlobalConfig.getInstance()
+
+    vault = FastVault.fromStorage(vaultData, mockFastSigningService, config)
 
     console.log('✅ SDK initialized and vault created with REAL WASM')
     console.log(`   Testing ${ALL_CHAINS.length} chains\n`)

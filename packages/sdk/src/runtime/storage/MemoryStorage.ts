@@ -1,9 +1,4 @@
-import {
-  STORAGE_VERSION,
-  StorageMetadata,
-  StoredValue,
-  VaultStorage,
-} from './types'
+import { Storage, STORAGE_VERSION, StorageMetadata, StoredValue } from './types'
 
 /**
  * In-memory storage implementation for testing and temporary vaults.
@@ -15,7 +10,7 @@ import {
  * - Automatic metadata tracking
  * - Usage estimation
  */
-export class MemoryStorage implements VaultStorage {
+export class MemoryStorage implements Storage {
   private store = new Map<string, StoredValue>()
 
   async get<T>(key: string): Promise<T | null> {
@@ -64,3 +59,13 @@ export class MemoryStorage implements VaultStorage {
     return undefined
   }
 }
+
+// Self-register with lowest priority (universal fallback)
+import { storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'memory',
+  priority: 0,
+  isSupported: () => true, // Always works
+  create: () => new MemoryStorage(),
+})

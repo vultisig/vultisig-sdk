@@ -26,10 +26,10 @@
  * ```
  */
 
-import type { StoredValue, VaultStorage } from './types'
+import type { Storage, StoredValue } from './types'
 import { StorageError, StorageErrorCode } from './types'
 
-export class ChromeStorage implements VaultStorage {
+export class ChromeStorage implements Storage {
   constructor() {
     // Verify chrome.storage API is available
     if (
@@ -239,3 +239,19 @@ export class ChromeStorage implements VaultStorage {
     }
   }
 }
+
+// Self-register with higher priority than browser storage
+import { storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'chrome',
+  priority: 110, // Preferred over generic browser storage
+  isSupported: () => {
+    return (
+      typeof chrome !== 'undefined' &&
+      chrome.runtime !== undefined &&
+      chrome.runtime.id !== undefined
+    )
+  },
+  create: () => new ChromeStorage(),
+})

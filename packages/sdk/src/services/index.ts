@@ -8,3 +8,4 @@
 export { CacheService } from './CacheService'
 export { FastSigningService } from './FastSigningService'
 export { FiatValueService } from './FiatValueService'
+export { PasswordCacheService } from './PasswordCacheService'

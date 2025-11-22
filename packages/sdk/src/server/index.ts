@@ -42,3 +42,9 @@ export {
 
 // Re-export types
 export type { MpcRelayMessage } from '@core/mpc/message/relay'
+
+// Global ServerManager singleton
+export {
+  GlobalServerManager,
+  type ServerEndpoints,
+} from './GlobalServerManager'

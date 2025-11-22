@@ -1,12 +1,8 @@
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+
+import { WasmManager } from '../runtime/wasm'
 import { ServerManager } from '../server/ServerManager'
-import {
-  Signature,
-  SigningMode,
-  SigningPayload,
-  SigningStep,
-  Vault,
-} from '../types'
-import { WASMManager } from '../wasm/WASMManager'
+import { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
 
 /**
  * Fast signing service for server-assisted signing (2-of-2 MPC with VultiServer)
@@ -19,10 +15,7 @@ import { WASMManager } from '../wasm/WASMManager'
  * 5. Return formatted signature
  */
 export class FastSigningService {
-  constructor(
-    private serverManager: ServerManager,
-    private wasmManager: WASMManager
-  ) {}
+  constructor(private serverManager: ServerManager) {}
 
   /**
    * Sign transaction with VultiServer assistance (2-of-2 threshold signing)
@@ -33,7 +26,7 @@ export class FastSigningService {
    * @returns Signed transaction ready for broadcast
    */
   async signWithServer(
-    vault: Vault,
+    vault: CoreVault,
     payload: SigningPayload,
     vaultPassword: string,
     onProgress?: (step: SigningStep) => void
@@ -62,7 +55,7 @@ export class FastSigningService {
     }
 
     // Get WalletCore instance
-    const walletCore = await this.wasmManager.getWalletCore()
+    const walletCore = await WasmManager.getWalletCore()
 
     console.log(
       `📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`
@@ -98,7 +91,7 @@ export class FastSigningService {
    * @param vault Vault to validate
    * @throws Error if vault doesn't have server signer
    */
-  private validateFastVault(vault: Vault): void {
+  private validateFastVault(vault: CoreVault): void {
     const hasFastVaultServer = vault.signers.some((signer: string) =>
       signer.startsWith('Server-')
     )

@@ -1,10 +1,10 @@
 import {
+  Storage,
   STORAGE_VERSION,
   StorageError,
   StorageErrorCode,
   StorageMetadata,
   StoredValue,
-  VaultStorage,
 } from './types'
 
 /**
@@ -32,7 +32,7 @@ import {
  * - This prevents bundler errors when this file is included in browser/extension builds
  * - StorageManager imports all storage implementations, so top-level imports would fail in browsers
  */
-export class NodeStorage implements VaultStorage {
+export class NodeStorage implements Storage {
   public readonly basePath: string
   private initPromise?: Promise<void>
 
@@ -312,3 +312,23 @@ export class NodeStorage implements VaultStorage {
     }
   }
 }
+
+// Self-register
+import { type StorageOptions, storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'node',
+  priority: 100,
+  isSupported: () => {
+    return (
+      typeof process !== 'undefined' &&
+      process.versions?.node !== undefined &&
+      typeof window === 'undefined' // Not Electron renderer
+    )
+  },
+  create: (options?: StorageOptions) => {
+    return new NodeStorage(
+      options?.basePath ? { basePath: options.basePath } : undefined
+    )
+  },
+})
