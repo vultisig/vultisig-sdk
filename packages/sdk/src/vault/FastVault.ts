@@ -16,7 +16,7 @@ import type {
 } from '../types'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
-import type { VaultConfig, VaultServices } from './VaultServices'
+import type { VaultConfig } from './VaultServices'
 
 /**
  * FastVault - 2-of-2 MPC with VultiServer
@@ -37,31 +37,14 @@ export class FastVault extends VaultBase {
     vaultId: number,
     name: string,
     vultFileContent: string,
-    services: VaultServices,
+    fastSigningService: FastSigningService,
     config?: VaultConfig,
     storage?: Storage,
     parsedVaultData?: CoreVault
   ) {
-    super(
-      vaultId,
-      name,
-      vultFileContent,
-      services,
-      config,
-      storage,
-      parsedVaultData
-    )
+    super(vaultId, name, vultFileContent, config, storage, parsedVaultData)
 
-    // Fast vaults REQUIRE FastSigningService
-    if (!services.fastSigningService) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'FastSigningService required for fast vaults. ' +
-          'Fast vaults use 2-of-2 MPC signing with VultiServer.'
-      )
-    }
-
-    this.fastSigningService = services.fastSigningService
+    this.fastSigningService = fastSigningService
   }
 
   /**
@@ -190,7 +173,7 @@ export class FastVault extends VaultBase {
    */
   static fromStorage(
     vaultData: VaultData,
-    services: VaultServices,
+    fastSigningService: FastSigningService,
     config?: VaultConfig,
     storage?: Storage
   ): FastVault {
@@ -207,7 +190,7 @@ export class FastVault extends VaultBase {
       vaultData.id,
       vaultData.name,
       vaultData.vultFileContent || '',
-      services,
+      fastSigningService,
       config,
       storage
     )

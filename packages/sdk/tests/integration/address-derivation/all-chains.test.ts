@@ -21,8 +21,8 @@ import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Vultisig } from '../../../src'
-import { Vault } from '../../../src/vault/Vault'
-import type { VaultServices } from '../../../src/vault/VaultServices'
+import { FastSigningService } from '../../../src/services/FastSigningService'
+import { FastVault } from '../../../src/vault/FastVault'
 
 /**
  * ALL SUPPORTED CHAINS
@@ -84,7 +84,7 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
 
 describe('Integration: Multi-Chain Address Derivation', () => {
   let sdk: Vultisig
-  let vault: Vault
+  let vault: FastVault
 
   beforeAll(async () => {
     // Initialize SDK with WASM
@@ -121,10 +121,6 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       order: 0,
     } as CoreVault
 
-    const services: VaultServices = {
-      fastSigningService: {} as any, // Not needed for address derivation
-    }
-
     // Create mock VaultData with correct structure
     const vaultData = {
       // Identity (readonly fields)
@@ -150,7 +146,10 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       vultFileContent: '',
     }
 
-    vault = Vault.fromStorage(vaultData, services)
+    // Create a mock FastSigningService for testing
+    const mockFastSigningService = {} as FastSigningService
+
+    vault = FastVault.fromStorage(vaultData, mockFastSigningService)
 
     console.log('✅ SDK initialized and vault created with REAL WASM')
     console.log(`   Testing ${ALL_CHAINS.length} chains\n`)

@@ -28,8 +28,8 @@ import path from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { Vultisig } from '../../../src'
-import { Vault } from '../../../src/vault/Vault'
-import type { VaultServices } from '../../../src/vault/VaultServices'
+import { FastSigningService } from '../../../src/services/FastSigningService'
+import { FastVault } from '../../../src/vault/FastVault'
 
 describe('Integration: Vault Export', () => {
   let sdk: Vultisig
@@ -67,7 +67,7 @@ describe('Integration: Vault Export', () => {
   /**
    * Helper function to create a test vault
    */
-  async function createTestVault(name: string): Promise<Vault> {
+  async function createTestVault(name: string): Promise<FastVault> {
     const now = Date.now()
     const mockVaultData: CoreVault = {
       name,
@@ -92,10 +92,6 @@ describe('Integration: Vault Export', () => {
       isBackedUp: false,
       order: 0,
     } as CoreVault
-
-    const services: VaultServices = {
-      fastSigningService: {} as any, // Not needed for export
-    }
 
     // Create mock VaultData with correct structure
     const vaultData = {
@@ -122,7 +118,10 @@ describe('Integration: Vault Export', () => {
       vultFileContent: '',
     }
 
-    return Vault.fromStorage(vaultData, services)
+    // Create a mock FastSigningService for testing
+    const mockFastSigningService = {} as FastSigningService
+
+    return FastVault.fromStorage(vaultData, mockFastSigningService)
   }
 
   describe('Unencrypted Export', () => {

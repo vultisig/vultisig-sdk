@@ -14,7 +14,7 @@ import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
 import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
-import { VaultConfig, VaultServices } from './vault/VaultServices'
+import { VaultConfig } from './vault/VaultServices'
 
 /**
  * VaultManager handles vault lifecycle operations
@@ -76,16 +76,6 @@ export class VaultManager {
   }
 
   /**
-   * Create VaultServices instance for dependency injection
-   * Simplified - only essential services needed
-   */
-  private createVaultServices(): VaultServices {
-    return {
-      fastSigningService: new FastSigningService(this.serverManager),
-    }
-  }
-
-  /**
    * Create Vault instance with proper service injection
    * Internal helper for consistent vault instantiation
    * Returns appropriate subclass based on vault type
@@ -93,19 +83,15 @@ export class VaultManager {
   createVaultInstance(vaultData: VaultData): VaultBase {
     // Factory pattern - return appropriate subclass based on vault type
     if (vaultData.type === 'fast') {
+      const fastSigningService = new FastSigningService(this.serverManager)
       return FastVault.fromStorage(
         vaultData,
-        this.createVaultServices(),
+        fastSigningService,
         this.config,
         this.storage
       )
     } else {
-      return SecureVault.fromStorage(
-        vaultData,
-        this.createVaultServices(),
-        this.config,
-        this.storage
-      )
+      return SecureVault.fromStorage(vaultData, this.config, this.storage)
     }
   }
 
@@ -194,11 +180,12 @@ export class VaultManager {
 
     // Create vault instance using FastVault constructor
     // Pass result.vault as parsedVaultData to avoid parsing encrypted content synchronously
+    const fastSigningService = new FastSigningService(this.serverManager)
     const vaultInstance = new FastVault(
       vaultId,
       result.vault.name,
       vultContent,
-      this.createVaultServices(),
+      fastSigningService,
       this.config,
       this.storage,
       result.vault // Pre-parsed vault data from server
@@ -353,26 +340,28 @@ export class VaultManager {
 
       // Create vault instance using appropriate constructor
       // Pass parsedVault to avoid parsing encrypted content synchronously
-      const vaultInstance =
-        vaultType === 'fast'
-          ? new FastVault(
-              vaultId,
-              parsedVault.name,
-              vultContent.trim(),
-              this.createVaultServices(),
-              this.config,
-              this.storage,
-              parsedVault // Pre-parsed vault data
-            )
-          : new SecureVault(
-              vaultId,
-              parsedVault.name,
-              vultContent.trim(),
-              this.createVaultServices(),
-              this.config,
-              this.storage,
-              parsedVault // Pre-parsed vault data
-            )
+      let vaultInstance: VaultBase
+      if (vaultType === 'fast') {
+        const fastSigningService = new FastSigningService(this.serverManager)
+        vaultInstance = new FastVault(
+          vaultId,
+          parsedVault.name,
+          vultContent.trim(),
+          fastSigningService,
+          this.config,
+          this.storage,
+          parsedVault // Pre-parsed vault data
+        )
+      } else {
+        vaultInstance = new SecureVault(
+          vaultId,
+          parsedVault.name,
+          vultContent.trim(),
+          this.config,
+          this.storage,
+          parsedVault // Pre-parsed vault data
+        )
+      }
 
       // Cache password if provided (for encrypted vaults)
       if (password && container.isEncrypted) {

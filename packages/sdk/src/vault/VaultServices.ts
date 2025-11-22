@@ -1,19 +1,3 @@
-import { FastSigningService } from '../services/FastSigningService'
-
-/**
- * Services required by Vault for operations
- * Simplified - only essential services needed
- * Vault calls core functions directly - no service layers
- *
- * Note: CacheService and FiatValueService are created internally by Vault
- * Note: WasmManager is now static and accessed directly
- */
-export type VaultServices = {
-  fastSigningService?: FastSigningService
-  relaySigningService?: any // RelaySigningService when implemented
-  localSigningService?: any // LocalSigningService when implemented
-}
-
 import type { Chain } from '@core/chain/Chain'
 
 import type { CacheConfig } from '../services/cache-types'

@@ -17,7 +17,7 @@
 export { Vultisig } from './Vultisig'
 
 // Vault management
-export type { VaultConfig, VaultServices } from './vault'
+export type { VaultConfig } from './vault'
 export {
   FastVault,
   isFastVault,

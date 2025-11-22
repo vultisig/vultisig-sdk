@@ -18,8 +18,8 @@ export {
   VaultImportErrorCode,
 } from './VaultError'
 
-// Export vault services configuration
-export type { VaultConfig, VaultServices } from './VaultServices'
+// Export vault configuration
+export type { VaultConfig } from './VaultServices'
 
 // Type guards for vault types
 export function isFastVault(vault: VaultBase): vault is FastVault {

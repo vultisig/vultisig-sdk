@@ -40,7 +40,7 @@ import { GasEstimationService } from './services/GasEstimationService'
 import { PreferencesService } from './services/PreferencesService'
 import { TransactionBuilder } from './services/TransactionBuilder'
 import { VaultError, VaultErrorCode } from './VaultError'
-import { VaultConfig, VaultServices } from './VaultServices'
+import { VaultConfig } from './VaultServices'
 
 /**
  * Determine vault type based on signer names
@@ -103,7 +103,6 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     vaultId: number,
     name: string,
     vultFileContent: string,
-    services: VaultServices,
     config?: VaultConfig,
     storage?: Storage,
     parsedVaultData?: CoreVault
@@ -327,27 +326,6 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * - Secure vaults: Check isEncrypted, decrypt if needed
    */
   protected abstract ensureKeySharesLoaded(): Promise<void>
-
-  // ===== STATIC FACTORY METHOD =====
-
-  /**
-   * Reconstruct a Vault instance from stored VaultData
-   * Used when loading existing vaults from storage
-   *
-   * NOTE: This is implemented in VaultManager as a factory method
-   * that returns the appropriate subclass (FastVault or SecureVault)
-   */
-  static fromStorage(
-    _vaultData: VaultData,
-    _services: VaultServices,
-    _config?: VaultConfig,
-    _storage?: Storage
-  ): VaultBase {
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      'fromStorage must be called through VaultManager factory'
-    )
-  }
 
   // ===== PRIVATE METHODS =====
 

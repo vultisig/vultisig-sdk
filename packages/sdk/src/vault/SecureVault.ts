@@ -15,7 +15,7 @@ import type {
 } from '../types'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
-import type { VaultConfig, VaultServices } from './VaultServices'
+import type { VaultConfig } from './VaultServices'
 
 /**
  * SecureVault - Multi-device MPC vault
@@ -30,43 +30,23 @@ import type { VaultConfig, VaultServices } from './VaultServices'
  * - Does NOT support 'fast' signing mode
  */
 export class SecureVault extends VaultBase {
-  // Optional signing services (not yet implemented)
-  private readonly relaySigningService?: any // RelaySigningService when implemented
-  private readonly localSigningService?: any // LocalSigningService when implemented
-
   constructor(
     vaultId: number,
     name: string,
     vultFileContent: string,
-    services: VaultServices,
     config?: VaultConfig,
     storage?: Storage,
     parsedVaultData?: CoreVault
   ) {
-    super(
-      vaultId,
-      name,
-      vultFileContent,
-      services,
-      config,
-      storage,
-      parsedVaultData
-    )
-
-    // Secure vaults use relay or local signing (optional for now - not implemented)
-    this.relaySigningService = services.relaySigningService
-    this.localSigningService = services.localSigningService
+    super(vaultId, name, vultFileContent, config, storage, parsedVaultData)
   }
 
   /**
    * Secure vaults support relay and/or local signing modes
-   * Available modes depend on which services are configured
+   * Not yet implemented - returns empty array
    */
   get availableSigningModes(): SigningMode[] {
-    const modes: SigningMode[] = []
-    if (this.relaySigningService) modes.push('relay')
-    if (this.localSigningService) modes.push('local')
-    return modes
+    return []
   }
 
   /**
@@ -210,7 +190,6 @@ export class SecureVault extends VaultBase {
    */
   static fromStorage(
     vaultData: VaultData,
-    services: VaultServices,
     config?: VaultConfig,
     storage?: Storage
   ): SecureVault {
@@ -227,7 +206,6 @@ export class SecureVault extends VaultBase {
       vaultData.id,
       vaultData.name,
       vaultData.vultFileContent || '',
-      services,
       config,
       storage
     )
