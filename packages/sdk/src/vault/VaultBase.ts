@@ -101,7 +101,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   protected coreVault: CoreVault // Built from vaultData
 
   constructor(
-    vaultId: number,
+    vaultId: string,
     name: string,
     vultFileContent: string,
     config?: VaultConfig,
@@ -410,7 +410,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   protected async resolvePassword(): Promise<string> {
     // Check password cache first
-    const cached = this.passwordCache.get(this.id.toString())
+    const cached = this.passwordCache.get(this.id)
     if (cached) {
       return cached
     }
@@ -426,10 +426,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     let password: string
     try {
-      password = await this.config.onPasswordRequired(
-        this.id.toString(),
-        this.name
-      )
+      password = await this.config.onPasswordRequired(this.id, this.name)
     } catch (error) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
@@ -445,14 +442,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     // Cache for future use
-    this.passwordCache.set(this.id.toString(), password)
+    this.passwordCache.set(this.id, password)
 
     return password
   }
 
   // ===== PUBLIC GETTERS =====
 
-  get id(): number {
+  get id(): string {
     return this.vaultData.id
   }
 
@@ -708,7 +705,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (!this.isVaultEncrypted()) {
       return // Cannot lock unencrypted vault
     }
-    this.passwordCache.delete(this.id.toString())
+    this.passwordCache.delete(this.id)
     // Clear keyShares from memory
     this.coreVault.keyShares = { ecdsa: '', eddsa: '' }
   }
@@ -725,7 +722,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     // Temporarily cache password for verification
-    this.passwordCache.set(this.id.toString(), password)
+    this.passwordCache.set(this.id, password)
 
     try {
       // Verify password by attempting to load key shares
@@ -733,7 +730,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // Password is valid and now cached
     } catch (error) {
       // Password is invalid - remove from cache
-      this.passwordCache.delete(this.id.toString())
+      this.passwordCache.delete(this.id)
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Failed to unlock vault: ${error instanceof Error ? error.message : String(error)}`,
@@ -752,7 +749,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Check if keyShares are loaded OR password is cached
     return (
       (!!this.coreVault.keyShares.ecdsa && !!this.coreVault.keyShares.eddsa) ||
-      this.passwordCache.has(this.id.toString())
+      this.passwordCache.has(this.id)
     )
   }
 
@@ -763,7 +760,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (!this.isVaultEncrypted()) {
       return undefined // Unencrypted vaults don't have unlock time
     }
-    return this.passwordCache.getRemainingTTL(this.id.toString())
+    return this.passwordCache.getRemainingTTL(this.id)
   }
 
   // ===== ADDRESS METHODS =====

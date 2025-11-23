@@ -1,23 +1,23 @@
-# Vultisig CLI Wallet - Node.js Example
+# Vultisig CLI Wallet
 
-A complete command-line wallet application demonstrating the Vultisig SDK for Node.js developers.
+A complete command-line wallet application demonstrating the Vultisig SDK.
 
 ## What's New 🆕
 
 This example has been updated to showcase the latest Vultisig SDK features:
 
-- **🔓 Password Cache System**: Unlock your vault once and sign multiple transactions without re-entering your password
+- **🔑 Optional Password Storage**: Configure passwords in .env for automation or get prompted interactively
 - **⚙️ Global Configuration**: Simplified SDK initialization with global singletons for storage, server endpoints, and config
-- **🎯 Smart Password Prompts**: Automatic password prompting with configurable TTL (time-to-live)
+- **🎯 Smart Password Resolution**: Automatic password lookup from environment or prompt user
 - **🏗️ Polymorphic Vaults**: Type-safe vault operations with FastVault and SecureVault classes
-- **🔐 Lock/Unlock Commands**: Manually control password cache for enhanced security
+- **🚀 CLI-Optimized**: No unnecessary caching - each command runs independently
 
 ### Migration from Previous Versions
 
 The SDK has simplified its API:
 - Storage is now configured with `StorageOptions` instead of instantiating `NodeStorage`
 - Password management is handled globally via `GlobalConfig.onPasswordRequired` callback
-- Sign operations no longer require password parameter (resolved automatically from cache or callback)
+- Sign operations no longer require password parameter (resolved automatically)
 - Vault verification uses `sdk.verifyVault()` instead of `sdk.serverManager.verifyVault()`
 
 ## Features
@@ -29,7 +29,7 @@ The SDK has simplified its API:
 - 📊 Fiat value tracking
 - 🎯 Event-driven architecture
 - 🛡️ Production-ready error handling
-- 🔓 Password caching with configurable TTL
+- 🔑 Optional password storage for automation
 
 ## Quick Start
 
@@ -93,15 +93,13 @@ npm run wallet send Cosmos cosmos1recipient... 10 --memo "Payment for services"
 |---------|-------------|
 | `create` | Create a new vault |
 | `import <file>` | Import vault from .vult file |
+| `verify <vaultId>` | Verify vault with email code (use --resend to resend) |
 | `balance [chain]` | Show balances for all chains or a specific chain |
 | `send <chain> <to> <amount>` | Send transaction |
 | `portfolio` | Show total portfolio value |
 | `export [path]` | Export vault to file |
 | `addresses` | Show all vault addresses |
 | `chains` | List chains (use --add or --remove to manage) |
-| `lock` | Lock the vault (clear password cache) |
-| `unlock` | Unlock the vault (cache password for configured TTL) |
-| `status` | Check vault lock status and password cache TTL |
 
 ## Configuration
 
@@ -119,9 +117,17 @@ VULTISIG_SERVER_URL=https://api.vultisig.com/vault
 VULTISIG_RELAY_URL=https://api.vultisig.com/router
 DEFAULT_CURRENCY=USD
 VAULT_STORAGE_PATH=./vaults
-PASSWORD_CACHE_TTL=300000  # 5 minutes (in milliseconds)
 USE_TESTNET=true  # Recommended for development
+
+# Optional: Store vault passwords (use with caution!)
+# Single vault (any vault will use this password)
+VAULT_PASSWORD=mypassword
+
+# Multiple vaults (space-separated "name:password" pairs)
+VAULT_PASSWORDS=MyVault:pass123 WorkVault:pass456
 ```
+
+**Security Note**: Storing passwords in `.env` is convenient for development and automation but less secure. For production use, omit these variables and the CLI will prompt you for passwords interactively.
 
 ## Examples
 
@@ -187,57 +193,6 @@ npm run wallet portfolio --currency EUR
 npm run wallet portfolio --currency GBP
 ```
 
-### Password Cache Management
-
-The SDK includes a smart password cache system that keeps your vault unlocked for a configurable duration (default: 5 minutes).
-
-```bash
-# Check if vault is locked or unlocked
-npm run wallet status
-
-# Unlock vault (will prompt for password)
-npm run wallet unlock
-
-# Now you can sign transactions without re-entering password
-npm run wallet send Ethereum 0xRecipient... 0.01
-
-# Lock vault manually for security
-npm run wallet lock
-
-# Next operation will prompt for password again
-npm run wallet balance
-```
-
-**How it works:**
-- First operation requires your password
-- Password is cached securely for the configured TTL
-- Subsequent operations use the cached password automatically
-- Cache expires after TTL or when you run `lock`
-- You can customize TTL via `PASSWORD_CACHE_TTL` in `.env`
-
-**Example workflow:**
-```bash
-# 1. Check vault status
-npm run wallet status
-# Output: Status: Locked 🔒
-
-# 2. Unlock vault
-npm run wallet unlock
-# Enter password once
-
-# 3. Send multiple transactions without re-entering password
-npm run wallet send Ethereum 0xAddr1... 0.01
-npm run wallet send Ethereum 0xAddr2... 0.02
-npm run wallet send Ethereum 0xAddr3... 0.03
-
-# 4. Check remaining time
-npm run wallet status
-# Output: TTL: 3m 45s remaining
-
-# 5. Lock when done for security
-npm run wallet lock
-```
-
 ## Architecture
 
 This example demonstrates:
@@ -271,7 +226,7 @@ This example demonstrates:
 ## Project Structure
 
 ```
-examples/nodejs/
+examples/cli/
 ├── package.json           # Dependencies and scripts
 ├── tsconfig.json          # TypeScript configuration
 ├── README.md              # This file
@@ -331,10 +286,9 @@ npm run wallet send Ethereum 0xRecipientAddress... 0.001
 - Never log or display passwords
 - Use strong passwords (min 8 characters, ideally 16+)
 - Password input is masked in the CLI
-- Passwords are cached securely in memory with configurable TTL
-- Use `npm run wallet lock` to clear password cache when finished
-- Consider shorter TTL values for production environments
-- Password cache automatically expires after configured duration
+- Store passwords in `.env` only for development/testing (see Configuration section)
+- For production, omit `VAULT_PASSWORD` variables to get prompted interactively
+- Each CLI command runs independently - no password caching between commands
 
 ### Vault Files
 - Always encrypt exports with a password

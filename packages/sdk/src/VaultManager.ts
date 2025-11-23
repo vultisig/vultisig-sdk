@@ -40,41 +40,6 @@ export class VaultManager {
   }
 
   /**
-   * Get next available vault ID by scanning existing vaults
-   * Returns 0 if no vaults exist, otherwise max(existing IDs) + 1
-   */
-  private async getNextVaultId(): Promise<number> {
-    const keys = await this.storage.list()
-    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
-
-    if (vaultKeys.length === 0) {
-      return 0
-    }
-
-    const ids = vaultKeys.map(k => parseInt(k.split(':')[1]))
-    return Math.max(...ids) + 1
-  }
-
-  /**
-   * Find vault ID by public key (for detecting re-imports)
-   */
-  private async findVaultByPublicKey(
-    publicKey: string
-  ): Promise<number | null> {
-    const keys = await this.storage.list()
-    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
-
-    for (const key of vaultKeys) {
-      const vaultData = await this.storage.get<VaultData>(key)
-      if (vaultData?.publicKeys?.ecdsa === publicKey) {
-        return vaultData.id
-      }
-    }
-
-    return null
-  }
-
-  /**
    * Create Vault instance with proper service injection
    * Internal helper for consistent vault instantiation
    * Returns appropriate subclass based on vault type
@@ -139,17 +104,8 @@ export class VaultManager {
       const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
       const parsedVault = fromCommVault(vaultProtobuf)
 
-      // Check if vault already exists
-      let vaultId: number
-      const existingVaultId = await this.findVaultByPublicKey(
-        parsedVault.publicKeys.ecdsa
-      )
-
-      if (existingVaultId !== null) {
-        vaultId = existingVaultId
-      } else {
-        vaultId = await this.getNextVaultId()
-      }
+      // Use ECDSA public key as vault ID
+      const vaultId = parsedVault.publicKeys.ecdsa
 
       // Determine vault type from parsed vault
       const vaultType = parsedVault.signers.some((s: string) =>
@@ -188,7 +144,7 @@ export class VaultManager {
       // Cache password if provided (for encrypted vaults)
       if (password && container.isEncrypted) {
         const passwordCache = PasswordCacheService.getInstance()
-        passwordCache.set(vaultId.toString(), password)
+        passwordCache.set(vaultId, password)
       }
 
       // Save to storage
@@ -212,15 +168,15 @@ export class VaultManager {
 
   /**
    * Export vault as .vult file content
-   * @param id - Vault ID (numeric)
+   * @param id - Vault ID (ECDSA public key)
    * @returns Base64-encoded .vult file content
    * @throws Error if vault not found
    *
    * @example
-   * const vultContent = await vaultManager.exportVault(0)
+   * const vultContent = await vaultManager.exportVault('0254b580acd52b5c...')
    * fs.writeFileSync('backup.vult', vultContent)
    */
-  async exportVault(id: number): Promise<string> {
+  async exportVault(id: string): Promise<string> {
     const vaultData = await this.storage.get<VaultData>(`vault:${id}`)
 
     if (!vaultData) {
@@ -245,7 +201,9 @@ export class VaultManager {
    */
   async listVaults(): Promise<VaultBase[]> {
     const keys = await this.storage.list()
-    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
+    const vaultKeys = keys.filter(
+      k => k.startsWith('vault:') && k !== 'vault:nextId'
+    )
     const vaults: VaultBase[] = []
 
     for (const key of vaultKeys) {
@@ -263,17 +221,17 @@ export class VaultManager {
   /**
    * Get vault instance by ID
    *
-   * @param id - Numeric vault ID
+   * @param id - Vault ID (ECDSA public key)
    * @returns VaultBase instance or null if not found
    * @example
    * ```typescript
-   * const vault = await vaultManager.getVaultById(0)
+   * const vault = await vaultManager.getVaultById('0254b580acd52b5c...')
    * if (vault) {
    *   const balance = await vault.balance('Bitcoin')
    * }
    * ```
    */
-  async getVaultById(id: number): Promise<VaultBase | null> {
+  async getVaultById(id: string): Promise<VaultBase | null> {
     const vaultData = await this.storage.get<VaultData>(`vault:${id}`)
 
     if (!vaultData) {
@@ -296,7 +254,7 @@ export class VaultManager {
   /**
    * Delete vault from storage (clears active if needed)
    */
-  async deleteVault(id: number): Promise<void> {
+  async deleteVault(id: string): Promise<void> {
     // Get vault instance
     const vault = await this.getVaultById(id)
 
@@ -308,7 +266,7 @@ export class VaultManager {
     await vault.delete()
 
     // Clear active vault if it was the deleted one
-    const activeId = await this.storage.get<number>('activeVaultId')
+    const activeId = await this.storage.get<string>('activeVaultId')
     if (activeId === id) {
       await this.storage.remove('activeVaultId')
     }
@@ -320,7 +278,9 @@ export class VaultManager {
   async clearVaults(): Promise<void> {
     // Remove all vault data
     const keys = await this.storage.list()
-    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
+    const vaultKeys = keys.filter(
+      k => k.startsWith('vault:') && k !== 'vault:nextId'
+    )
 
     for (const key of vaultKeys) {
       await this.storage.remove(key)
@@ -335,7 +295,7 @@ export class VaultManager {
   /**
    * Switch to different vault
    */
-  async setActiveVault(id: number | null): Promise<void> {
+  async setActiveVault(id: string | null): Promise<void> {
     if (id !== null) {
       await this.storage.set('activeVaultId', id)
     } else {
@@ -347,7 +307,7 @@ export class VaultManager {
    * Get current active vault
    */
   async getActiveVault(): Promise<VaultBase | null> {
-    const id = await this.storage.get<number>('activeVaultId')
+    const id = await this.storage.get<string>('activeVaultId')
 
     if (id === null || id === undefined) {
       return null
@@ -360,7 +320,7 @@ export class VaultManager {
    * Check if there's an active vault
    */
   async hasActiveVault(): Promise<boolean> {
-    const id = await this.storage.get<number>('activeVaultId')
+    const id = await this.storage.get<string>('activeVaultId')
     return id !== null && id !== undefined
   }
 

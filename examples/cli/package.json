@@ -1,7 +1,7 @@
 {
-  "name": "@vultisig/example-nodejs",
+  "name": "@vultisig/example-cli",
   "version": "1.0.0",
-  "description": "Complete CLI wallet example demonstrating the Vultisig SDK for Node.js",
+  "description": "Complete CLI wallet example demonstrating the Vultisig SDK",
   "private": true,
   "scripts": {
     "build": "tsc",

@@ -22,7 +22,7 @@ export class CreateCommand {
 
     const mode = options.mode || 'fast'
     const vaultType = mode === 'fast' ? 'fast' : 'secure'
-    const keygenMode = mode === 'local' ? 'local' : 'relay'
+    // const keygenMode = mode === 'local' ? 'local' : 'relay'
 
     console.log(`🔐 Creating ${vaultType} vault...`)
     console.log(`   Name: ${options.name}`)
@@ -76,40 +76,51 @@ export class CreateCommand {
 
       // Create SDK instance
       const sdk = new Vultisig()
+      await sdk.initialize()
 
       console.log(
         `📡 ${vaultType === 'fast' ? 'Connecting to VultiServer' : 'Starting MPC keygen'}...`
       )
 
       let vaultId: string
+      let vault: any
 
-      // Use createVault for both fast and secure vaults
-      const vault = await sdk.createVault(options.name, {
-        type: vaultType,
-        keygenMode: keygenMode,
-        password: password || undefined,
-        email: email || undefined,
-        onProgress: update => {
-          const step = update.step || update.phase || 'unknown'
-          const progress = update.progress || 0
-          const message = update.message || 'Processing...'
-          if (progress > 0) {
-            console.log(`   ${step} (${progress}%): ${message}`)
-          } else {
-            console.log(`   ${step}: ${message}`)
-          }
-        },
-      })
+      if (vaultType === 'fast') {
+        // Import FastVault for fast vault creation
+        const { FastVault } = await import('@vultisig/sdk')
+
+        const result = await FastVault.create({
+          name: options.name,
+          password: password!,
+          email: email!,
+          onProgress: update => {
+            const step = update.step || 'unknown'
+            const progress = update.progress || 0
+            const message = update.message || 'Processing...'
+            if (progress > 0) {
+              console.log(`   ${step} (${progress}%): ${message}`)
+            } else {
+              console.log(`   ${step}: ${message}`)
+            }
+          },
+        })
+
+        vault = result.vault
+        vaultId = result.vaultId
+      } else {
+        // Secure vault creation not yet implemented in this CLI
+        throw new Error(
+          'Secure vault creation is not yet supported in this CLI. Use fast vault mode.'
+        )
+      }
 
       if (vaultType === 'fast') {
         // For fast vaults, handle verification
-        vaultId = vault.data.publicKeys.ecdsa
-
         console.log('✅ Fast vault created successfully!')
         console.log(`   Vault ID: ${vaultId}`)
-        console.log(`   Name: ${vault.data.name}`)
+        console.log(`   Name: ${vault.name}`)
         console.log(`   Type: Fast (2-of-2 with VultiServer)`)
-        console.log(`   Signers: ${vault.data.signers.length}`)
+        console.log(`   Signers: ${vault.signers.length}`)
 
         // Check if verification is needed (fast vaults typically require verification)
         if (email && vaultType === 'fast') {
@@ -165,10 +176,8 @@ export class CreateCommand {
       } else {
         // For secure vaults
         console.log('✅ Secure vault created successfully!')
-        console.log(`   Name: ${vault.data.name}`)
-        console.log(
-          `   Type: ${vaultType} (${vault.data.signers.length} signers)`
-        )
+        console.log(`   Name: ${vault.name}`)
+        console.log(`   Type: ${vaultType} (${vault.signers.length} signers)`)
         console.log(`   Encrypted: ${password ? 'Yes' : 'No'}`)
       }
 

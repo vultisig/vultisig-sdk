@@ -160,7 +160,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       isEncrypted: false,
       type: 'fast' as const,
       // Metadata
-      id: 0,
+      id: mockVaultData.publicKeys.ecdsa, // Use ECDSA public key as ID
       name: 'Integration Test Vault',
       isBackedUp: false,
       order: 0,

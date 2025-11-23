@@ -1,0 +1,56 @@
+import { Balance, Chain, Vault } from '@vultisig/sdk'
+import chalk from 'chalk'
+
+export type BalanceOptions = {
+  tokens?: boolean
+}
+
+/**
+ * Get balance for a chain or all chains
+ */
+export async function handleBalance(
+  vault: Vault,
+  chainStr?: string,
+  options?: BalanceOptions
+): Promise<Balance | Record<string, Balance>> {
+  if (chainStr) {
+    const chain = chainStr as Chain
+    return await vault.balance(chain, undefined)
+  }
+
+  return await vault.balances(undefined, options?.tokens ?? false)
+}
+
+/**
+ * Display balance results
+ */
+export function displayBalances(
+  result: Balance | Record<string, Balance>,
+  chainStr?: string
+): void {
+  if (chainStr) {
+    // Single chain
+    const balance = result as Balance
+    console.log(chalk.cyan(`\n${chainStr} Balance:`))
+    console.log(`  Amount: ${balance.amount} ${balance.symbol}`)
+    if (balance.fiatValue && balance.fiatCurrency) {
+      console.log(
+        `  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`
+      )
+    }
+  } else {
+    // All chains
+    console.log(chalk.cyan('\nPortfolio Balances:\n'))
+    const balances = result as Record<string, Balance>
+    const tableData = Object.entries(balances).map(([chain, balance]) => ({
+      Chain: chain,
+      Amount: balance.amount,
+      Symbol: balance.symbol,
+      Value:
+        balance.fiatValue && balance.fiatCurrency
+          ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`
+          : 'N/A',
+    }))
+    console.table(tableData)
+  }
+}

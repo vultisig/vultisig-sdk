@@ -33,10 +33,13 @@ export class PreferencesService {
    * @param chains Array of chains to set
    */
   async setChains(chains: Chain[]): Promise<void> {
-    this.setUserChains(chains)
-
-    // Pre-derive addresses for all chains
+    // Pre-derive addresses for all chains BEFORE mutating state
+    // This ensures validation happens first - if any derivation fails,
+    // the vault state remains unchanged
     await this.deriveAddresses(chains)
+
+    // Only mutate state after validation succeeds
+    this.setUserChains(chains)
 
     // Save preferences
     await this.saveVault()
@@ -51,10 +54,13 @@ export class PreferencesService {
     const currentChains = this.getUserChains()
 
     if (!currentChains.includes(chain)) {
-      this.setUserChains([...currentChains, chain])
-
-      // Pre-derive address for this chain
+      // Pre-derive address for this chain BEFORE mutating state
+      // This ensures validation happens first - if derivation fails,
+      // the vault state remains unchanged
       await this.deriveAddresses([chain])
+
+      // Only mutate state after validation succeeds
+      this.setUserChains([...currentChains, chain])
 
       await this.saveVault()
 
@@ -73,18 +79,26 @@ export class PreferencesService {
     const currentChains = this.getUserChains()
     const chainExists = currentChains.includes(chain)
 
-    // Remove from list
-    this.setUserChains(currentChains.filter(c => c !== chain))
-
-    // Clear address cache
-    const cacheKey = `address:${chain.toLowerCase()}`
-    this.cacheService.clear(cacheKey)
-
     if (chainExists) {
-      await this.saveVault()
+      const cacheKey = `address:${chain.toLowerCase()}`
 
-      // Emit chain removed event
-      this.emitChainRemoved({ chain })
+      // Optimistically remove from list and clear cache
+      this.setUserChains(currentChains.filter(c => c !== chain))
+      this.cacheService.clear(cacheKey)
+
+      try {
+        // Attempt to persist changes
+        await this.saveVault()
+
+        // Emit chain removed event only after successful save
+        this.emitChainRemoved({ chain })
+      } catch (error) {
+        // Rollback on failure to maintain consistency
+        this.setUserChains(currentChains)
+        // Note: Cache clear is not rolled back as it's a performance optimization
+        // and clearing a non-existent entry is harmless
+        throw error
+      }
     }
   }
 

@@ -174,6 +174,13 @@ export class BalanceService {
    *
    * @param chain Chain to add token to
    * @param token Token to add
+   *
+   * @important ATOMICITY WARNING: This method currently mutates state before
+   * calling saveVault(). It is SAFE because there is no async validation
+   * between mutation and save. However, if you add ANY async validation
+   * (e.g., checking token contract existence on-chain), you MUST move that
+   * validation BEFORE the state mutation to prevent partial state corruption.
+   * See addChain() in PreferencesService for the correct pattern.
    */
   async addToken(chain: Chain, token: Token): Promise<void> {
     const allTokens = this.getAllTokens()
@@ -184,6 +191,7 @@ export class BalanceService {
 
     // Check if token already exists
     if (!allTokens[chain].find(t => t.id === token.id)) {
+      // State mutation - SAFE only because no async validation follows
       allTokens[chain].push(token)
       this.setAllTokens(allTokens)
       await this.saveVault()
@@ -205,14 +213,26 @@ export class BalanceService {
 
     if (allTokens[chain]) {
       const tokenExists = allTokens[chain].some(t => t.id === tokenId)
-      allTokens[chain] = allTokens[chain].filter(t => t.id !== tokenId)
-      this.setAllTokens(allTokens)
 
       if (tokenExists) {
-        await this.saveVault()
+        // Store original state for rollback
+        const originalTokens = { ...allTokens }
 
-        // Emit token removed event
-        this.emitTokenRemoved({ chain, tokenId })
+        // Optimistically remove token
+        allTokens[chain] = allTokens[chain].filter(t => t.id !== tokenId)
+        this.setAllTokens(allTokens)
+
+        try {
+          // Attempt to persist changes
+          await this.saveVault()
+
+          // Emit token removed event only after successful save
+          this.emitTokenRemoved({ chain, tokenId })
+        } catch (error) {
+          // Rollback on failure to maintain consistency
+          this.setAllTokens(originalTokens)
+          throw error
+        }
       }
     }
   }

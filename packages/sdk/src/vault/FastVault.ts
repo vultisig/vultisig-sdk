@@ -8,7 +8,6 @@ import { fromBase64 } from '@lib/utils/fromBase64'
 
 import { GlobalConfig } from '../config/GlobalConfig'
 import { GlobalStorage } from '../runtime/storage/GlobalStorage'
-import type { Storage } from '../runtime/storage/types'
 import { GlobalServerManager } from '../server/GlobalServerManager'
 import { FastSigningService } from '../services/FastSigningService'
 import { PasswordCacheService } from '../services/PasswordCacheService'
@@ -40,7 +39,7 @@ export class FastVault extends VaultBase {
   private readonly fastSigningService: FastSigningService
 
   constructor(
-    vaultId: number,
+    vaultId: string,
     name: string,
     vultFileContent: string,
     fastSigningService: FastSigningService,
@@ -216,16 +215,7 @@ export class FastVault extends VaultBase {
     const reportProgress = options.onProgress || (() => {})
 
     try {
-      // Step 1: Get next available vault ID
-      reportProgress({
-        step: 'initializing',
-        progress: 5,
-        message: 'Generating vault ID',
-      })
-
-      const vaultId = await FastVault.getNextVaultId(storage)
-
-      // Step 2: Create vault on server with MPC keygen
+      // Step 1: Create vault on server with MPC keygen
       reportProgress({
         step: 'keygen',
         progress: 10,
@@ -252,6 +242,9 @@ export class FastVault extends VaultBase {
           })
         },
       })
+
+      // Step 2: Derive vault ID from public key
+      const vaultId = result.vault.publicKeys.ecdsa
 
       // Step 3: Generate .vult backup file
       reportProgress({
@@ -285,7 +278,7 @@ export class FastVault extends VaultBase {
       )
 
       // Step 6: Cache password
-      passwordCache.set(vaultId.toString(), options.password)
+      passwordCache.set(vaultId, options.password)
 
       // Step 7: Save to storage
       reportProgress({
@@ -322,25 +315,6 @@ export class FastVault extends VaultBase {
       }
       throw error
     }
-  }
-
-  /**
-   * Get the next available vault ID by scanning storage.
-   *
-   * @param storage - Storage instance to scan
-   * @returns Next available vault ID
-   * @internal
-   */
-  private static async getNextVaultId(storage: Storage): Promise<number> {
-    const keys = await storage.list()
-    const vaultKeys = keys.filter(k => /^vault:\d+$/.test(k))
-
-    if (vaultKeys.length === 0) {
-      return 0
-    }
-
-    const ids = vaultKeys.map(k => parseInt(k.split(':')[1], 10))
-    return Math.max(...ids) + 1
   }
 
   /**

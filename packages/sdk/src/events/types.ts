@@ -118,22 +118,22 @@ export type VaultEvents = {
 
   /** Emitted when vault is saved to storage */
   saved: {
-    vaultId: number
+    vaultId: string
   }
 
   /** Emitted when vault is deleted from storage */
   deleted: {
-    vaultId: number
+    vaultId: string
   }
 
   /** Emitted when vault is loaded from storage */
   loaded: {
-    vaultId: number
+    vaultId: string
   }
 
   /** Emitted when vault is unlocked (keyshares loaded) */
   unlocked: {
-    vaultId: number
+    vaultId: string
   }
 
   /** Emitted when vault is locked (keyshares cleared) */

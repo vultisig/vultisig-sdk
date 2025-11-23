@@ -1,16 +1,18 @@
 import {
   Balance,
   Chain,
+  FastVault,
   FiatCurrency,
+  SecureVault,
   Token,
-  Vault,
+  VaultBase,
   Vultisig,
 } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
 import ora from 'ora'
 
-import type { PortfolioSummary, WalletConfig } from './types'
+import type { PortfolioSummary } from './types'
 
 /**
  * VaultManager - High-level vault management and operations
@@ -23,16 +25,9 @@ import type { PortfolioSummary, WalletConfig } from './types'
  */
 export class VaultManager {
   private sdk!: Vultisig
-  private activeVault: Vault | null = null
-  private config: WalletConfig
+  private activeVault: VaultBase | null = null
 
-  constructor(config?: WalletConfig) {
-    this.config = {
-      storagePath: process.env.VAULT_STORAGE_PATH || './vaults',
-      defaultCurrency: process.env.DEFAULT_CURRENCY || 'usd',
-      ...config,
-    }
-  }
+  constructor() {}
 
   /**
    * Initialize SDK with NodeStorage
@@ -41,9 +36,8 @@ export class VaultManager {
     const spinner = ora('Initializing Vultisig SDK...').start()
 
     try {
-      this.sdk = new Vultisig({
-        storage: { type: 'node', basePath: this.config.storagePath },
-      })
+      // SDK automatically defaults to Node storage at ~/.vultisig
+      this.sdk = new Vultisig()
 
       await this.sdk.initialize()
 
@@ -54,35 +48,6 @@ export class VaultManager {
         this.setupVaultEvents(this.activeVault)
         spinner.succeed(`SDK initialized - Vault loaded: ${existingVault.name}`)
         return
-      }
-
-      // Auto-import vault from .env if configured and no active vault
-      const vaultFilePath = process.env.VAULT_FILE_PATH
-      if (vaultFilePath) {
-        try {
-          // Check if file exists
-          await fs.access(vaultFilePath)
-
-          // Read vault file
-          const vultContent = await fs.readFile(vaultFilePath, 'utf-8')
-
-          // Import vault with optional password from .env
-          const vaultPassword = process.env.VAULT_PASSWORD
-          this.activeVault = await this.sdk.importVault(
-            vultContent,
-            vaultPassword
-          )
-          this.setupVaultEvents(this.activeVault)
-          spinner.succeed(
-            `SDK initialized - Vault imported: ${this.activeVault.name}`
-          )
-          return
-        } catch (error: any) {
-          // If vault file doesn't exist or import fails, continue without it
-          if (error.code !== 'ENOENT') {
-            spinner.warn(`Failed to auto-import vault: ${error.message}`)
-          }
-        }
       }
 
       spinner.succeed('SDK initialized')
@@ -104,21 +69,15 @@ export class VaultManager {
     const spinner = ora('Creating vault...').start()
 
     try {
-      // Listen for progress events
-      const progressHandler = ({ step }: any) => {
-        spinner.text = `${step.message} (${step.progress}%)`
-      }
-      this.sdk.on('vaultCreationProgress', progressHandler)
-
       // Create fast vault (2-of-2 with VultiServer)
-      const result = await this.sdk.createFastVault({
+      const result = await FastVault.create({
         name,
         password,
         email,
+        onProgress: step => {
+          spinner.text = `${step.message} (${step.progress}%)`
+        },
       })
-
-      // Clean up progress listener
-      this.sdk.off('vaultCreationProgress', progressHandler)
 
       this.activeVault = result.vault
       this.setupVaultEvents(this.activeVault)
@@ -130,6 +89,50 @@ export class VaultManager {
       }
     } catch (error) {
       spinner.fail('Vault creation failed')
+      throw error
+    }
+  }
+
+  /**
+   * Create new secure vault with m-of-n threshold
+   */
+  async createSecureVault(
+    name: string,
+    password: string,
+    threshold: number,
+    totalShares: number
+  ): Promise<VaultBase> {
+    const spinner = ora('Creating secure vault...').start()
+
+    try {
+      // Create secure vault (m-of-n threshold)
+      const result = await SecureVault.create({
+        name,
+        password,
+        devices: totalShares,
+        threshold,
+        onProgress: step => {
+          spinner.text = `${step.message} (${step.progress}%)`
+        },
+      })
+
+      this.activeVault = result.vault
+      this.setupVaultEvents(this.activeVault)
+      spinner.succeed(
+        `Secure vault created: ${name} (${threshold}-of-${totalShares})`
+      )
+
+      return result.vault
+    } catch (error: any) {
+      spinner.fail('Secure vault creation failed')
+      // Check if it's a "not implemented" error
+      if (error.message?.includes('not implemented')) {
+        console.error(
+          chalk.yellow(
+            '\n⚠ Secure vault creation is not yet implemented in the SDK'
+          )
+        )
+      }
       throw error
     }
   }
@@ -175,7 +178,7 @@ export class VaultManager {
   /**
    * Import vault from file
    */
-  async importVault(filePath: string, password?: string): Promise<Vault> {
+  async importVault(filePath: string, password?: string): Promise<VaultBase> {
     const spinner = ora('Importing vault...').start()
 
     try {
@@ -229,7 +232,7 @@ export class VaultManager {
   /**
    * Get active vault
    */
-  getActiveVault(): Vault | null {
+  getActiveVault(): VaultBase | null {
     return this.activeVault
   }
 
@@ -350,71 +353,16 @@ export class VaultManager {
   }
 
   /**
-   * Lock vault (clear cached password/keyShares)
+   * Get SDK instance (for advanced operations)
    */
-  lockVault(): void {
-    if (!this.activeVault) {
-      throw new Error('No active vault')
-    }
-
-    this.activeVault.lock()
-    console.log(chalk.green('✓ Vault locked'))
-  }
-
-  /**
-   * Unlock vault with password (cache for TTL duration)
-   */
-  async unlockVault(password: string): Promise<void> {
-    if (!this.activeVault) {
-      throw new Error('No active vault')
-    }
-
-    const spinner = ora('Unlocking vault...').start()
-
-    try {
-      await this.activeVault.unlock(password)
-      const ttlRemaining = this.activeVault.getUnlockTimeRemaining()
-      const minutes = Math.floor(ttlRemaining / 60000)
-      const seconds = Math.floor((ttlRemaining % 60000) / 1000)
-      spinner.succeed(`Vault unlocked (valid for ${minutes}m ${seconds}s)`)
-    } catch (error) {
-      spinner.fail('Failed to unlock vault')
-      throw error
-    }
-  }
-
-  /**
-   * Check if vault is unlocked and get remaining time
-   */
-  getVaultStatus(): {
-    isUnlocked: boolean
-    timeRemaining?: number
-    timeRemainingFormatted?: string
-  } {
-    if (!this.activeVault) {
-      throw new Error('No active vault')
-    }
-
-    const isUnlocked = this.activeVault.isUnlocked()
-    if (!isUnlocked) {
-      return { isUnlocked: false }
-    }
-
-    const timeRemaining = this.activeVault.getUnlockTimeRemaining()
-    const minutes = Math.floor(timeRemaining / 60000)
-    const seconds = Math.floor((timeRemaining % 60000) / 1000)
-
-    return {
-      isUnlocked: true,
-      timeRemaining,
-      timeRemainingFormatted: `${minutes}m ${seconds}s`,
-    }
+  getSDK(): Vultisig {
+    return this.sdk
   }
 
   /**
    * Setup event listeners for vault
    */
-  private setupVaultEvents(vault: Vault): void {
+  private setupVaultEvents(vault: VaultBase): void {
     // Balance updates
     vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
       const asset = tokenId ? `${balance.symbol} token` : balance.symbol

@@ -31,7 +31,7 @@ import type { VaultConfig } from './VaultServices'
  */
 export class SecureVault extends VaultBase {
   constructor(
-    vaultId: number,
+    vaultId: string,
     name: string,
     vultFileContent: string,
     config?: VaultConfig,

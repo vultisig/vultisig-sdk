@@ -251,8 +251,8 @@ describe('Vultisig', () => {
       // The full functionality is tested in integration tests
       // For unit test, we verify the API exists and accepts parameters
       const mockVault = {
-        id: 0,
-        summary: () => ({ id: 0 }),
+        id: 'mock-public-key-string',
+        summary: () => ({ id: 'mock-public-key-string' }),
       } as any as VaultBase
 
       // Verify the method can be called without throwing

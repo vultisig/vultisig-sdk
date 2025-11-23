@@ -108,7 +108,9 @@ describe('VaultManager', () => {
 
   describe('getVaultById', () => {
     it('should return null for non-existent vault', async () => {
-      const vault = await vaultManager.getVaultById(999)
+      const vault = await vaultManager.getVaultById(
+        'nonexistent_public_key_string'
+      )
       expect(vault).toBeNull()
     })
   })
@@ -124,8 +126,9 @@ describe('VaultManager', () => {
 
   describe('deleteVault', () => {
     it('should throw error when deleting non-existent vault', async () => {
-      await expect(vaultManager.deleteVault(999)).rejects.toThrow(
-        'Vault 999 not found'
+      const nonExistentId = 'nonexistent_public_key_string'
+      await expect(vaultManager.deleteVault(nonExistentId)).rejects.toThrow(
+        `Vault ${nonExistentId} not found`
       )
     })
   })

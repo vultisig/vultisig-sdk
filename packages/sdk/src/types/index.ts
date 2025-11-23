@@ -433,7 +433,7 @@ export type VaultData = {
   readonly type: 'fast' | 'secure' // Immutable - computed from signers
 
   // === Metadata (SDK-managed) ===
-  readonly id: number // Immutable - SDK sequential ID (storage key)
+  readonly id: string // Immutable - ECDSA public key (storage key)
   name: string // Mutable - user can rename vault
   isBackedUp: boolean // Mutable - user can toggle backup status
   order: number // Mutable - user can reorder vaults

@@ -32,7 +32,7 @@ export class CacheService {
 
   // Storage integration for persistent cache
   private storage: Storage
-  private vaultId?: number
+  private vaultId?: string
   private config: Required<CacheConfig>
 
   // Persistent scopes (stored to disk, infinite TTL)
@@ -43,7 +43,7 @@ export class CacheService {
    * @param vaultId Vault ID for storage keys
    * @param config Cache configuration (TTLs, size limits)
    */
-  constructor(vaultId?: number, config?: CacheConfig) {
+  constructor(vaultId?: string, config?: CacheConfig) {
     this.storage = GlobalStorage.getInstance()
     this.vaultId = vaultId
     this.config = {

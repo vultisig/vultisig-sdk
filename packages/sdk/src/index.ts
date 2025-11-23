@@ -52,6 +52,9 @@ export {
 export type { WasmConfig } from './runtime/wasm'
 export { WasmManager } from './runtime/wasm'
 
+// Crypto initialization
+export { initializeCrypto } from './runtime/crypto'
+
 // ============================================================================
 // PUBLIC API - Server Management
 // ============================================================================

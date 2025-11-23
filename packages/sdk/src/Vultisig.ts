@@ -6,6 +6,7 @@ import { GlobalConfig } from './config/GlobalConfig'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
+import { initializeCrypto } from './runtime/crypto'
 import { PolyfillManager } from './runtime/polyfills'
 import { GlobalStorage } from './runtime/storage/GlobalStorage'
 import type { Storage } from './runtime/storage/types'
@@ -166,6 +167,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       try {
         // Initialize platform-specific items
         await PolyfillManager.initialize()
+        await initializeCrypto()
         await WasmManager.initialize()
 
         // Load configuration from storage
@@ -218,7 +220,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     const vault = await this.vaultManager.importVault(vultContent, password)
 
     // VaultManager already handles storage, just emit event
-    this.emit('vaultChanged', { vaultId: vault.id.toString() })
+    this.emit('vaultChanged', { vaultId: vault.id })
 
     return vault
   }
@@ -293,10 +295,10 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Get vault instance by ID
    *
-   * @param vaultId - Numeric vault ID
+   * @param vaultId - Vault ID (ECDSA public key)
    * @returns Vault instance or null if not found
    */
-  async getVaultById(vaultId: number): Promise<VaultBase | null> {
+  async getVaultById(vaultId: string): Promise<VaultBase | null> {
     return this.vaultManager.getVaultById(vaultId)
   }
 
