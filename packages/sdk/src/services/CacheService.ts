@@ -96,12 +96,8 @@ export class CacheService {
     this.set(cacheKey, value)
 
     // If persistent scope, also write to storage
-    if (
-      CacheService.PERSISTENT_SCOPES.has(scope) &&
-      this.storage &&
-      this.vaultId
-    ) {
-      const storageKey = `vault:${this.vaultId}:cache:${cacheKey}`
+    if (CacheService.PERSISTENT_SCOPES.has(scope) && this.storage && this.vaultId) {
+      const storageKey = `cache:${this.vaultId}:${cacheKey}`
       await this.storage.set(storageKey, value)
     }
 
@@ -115,11 +111,7 @@ export class CacheService {
    * @param scope Cache scope
    * @param compute Function to compute value if not cached
    */
-  async getOrComputeScoped<T>(
-    key: string,
-    scope: CacheScope,
-    compute: () => Promise<T>
-  ): Promise<T> {
+  async getOrComputeScoped<T>(key: string, scope: CacheScope, compute: () => Promise<T>): Promise<T> {
     const ttl = this.getTTLForScope(scope)
     const cacheKey = this.buildKey(key, scope)
 
@@ -156,12 +148,8 @@ export class CacheService {
     this.cache.delete(cacheKey)
 
     // If persistent, also remove from storage
-    if (
-      CacheService.PERSISTENT_SCOPES.has(scope) &&
-      this.storage &&
-      this.vaultId
-    ) {
-      const storageKey = `vault:${this.vaultId}:cache:${cacheKey}`
+    if (CacheService.PERSISTENT_SCOPES.has(scope) && this.storage && this.vaultId) {
+      const storageKey = `cache:${this.vaultId}:${cacheKey}`
       await this.storage.remove(storageKey)
     }
   }
@@ -180,13 +168,8 @@ export class CacheService {
 
         // Check if this key is from a persistent scope
         const scope = this.parseScopeFromKey(key)
-        if (
-          scope &&
-          CacheService.PERSISTENT_SCOPES.has(scope) &&
-          this.storage &&
-          this.vaultId
-        ) {
-          const storageKey = `vault:${this.vaultId}:cache:${key}`
+        if (scope && CacheService.PERSISTENT_SCOPES.has(scope) && this.storage && this.vaultId) {
+          const storageKey = `cache:${this.vaultId}:${key}`
           await this.storage.remove(storageKey)
         }
       })
@@ -272,11 +255,7 @@ export class CacheService {
    * @param ttl Time-to-live in milliseconds
    * @param compute Function to compute value if not cached
    */
-  async getOrCompute<T>(
-    key: string,
-    ttl: number,
-    compute: () => Promise<T>
-  ): Promise<T> {
+  async getOrCompute<T>(key: string, ttl: number, compute: () => Promise<T>): Promise<T> {
     // Check cache first
     const cached = this.get<T>(key, ttl)
     if (cached !== null) return cached
@@ -343,9 +322,7 @@ export class CacheService {
    */
   private parseScopeFromKey(key: string): CacheScope | null {
     const prefix = key.split(':')[0]
-    return Object.values(CacheScope).includes(prefix as CacheScope)
-      ? (prefix as CacheScope)
-      : null
+    return Object.values(CacheScope).includes(prefix as CacheScope) ? (prefix as CacheScope) : null
   }
 
   /**
@@ -357,7 +334,7 @@ export class CacheService {
 
     // For now, we load addresses individually as chains are accessed
     // Future: implement storage.listKeys() for full enumeration
-    // Storage pattern: vault:{id}:cache:{scope}:*
+    // Storage pattern: cache:{id}:{scope}:*
   }
 
   /**

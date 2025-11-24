@@ -1,11 +1,4 @@
-import {
-  Storage,
-  STORAGE_VERSION,
-  StorageError,
-  StorageErrorCode,
-  StorageMetadata,
-  StoredValue,
-} from './types'
+import { Storage, STORAGE_VERSION, StorageError, StorageErrorCode, StorageMetadata, StoredValue } from './types'
 
 /**
  * Node.js filesystem storage implementation with Electron support.
@@ -117,7 +110,7 @@ export class NodeStorage implements Storage {
     const path = require('path')
 
     // Put cache files in cache subdirectory for cleaner organization
-    if (key.includes(':cache:')) {
+    if (key.startsWith('cache:')) {
       return path.join(this.basePath, 'cache', `${sanitized}.json`)
     }
 
@@ -147,11 +140,7 @@ export class NodeStorage implements Storage {
         return null
       }
 
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to read value for key "${key}"`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to read value for key "${key}"`, error as Error)
     }
   }
 
@@ -182,18 +171,10 @@ export class NodeStorage implements Storage {
     } catch (error) {
       // Check for disk full
       if ((error as NodeJS.ErrnoException).code === 'ENOSPC') {
-        throw new StorageError(
-          StorageErrorCode.QuotaExceeded,
-          'Disk space quota exceeded',
-          error as Error
-        )
+        throw new StorageError(StorageErrorCode.QuotaExceeded, 'Disk space quota exceeded', error as Error)
       }
 
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to write value for key "${key}"`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to write value for key "${key}"`, error as Error)
     }
   }
 
@@ -215,11 +196,7 @@ export class NodeStorage implements Storage {
         // File doesn't exist - that's ok
       }
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to remove key "${key}"`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
     }
   }
 
@@ -263,11 +240,7 @@ export class NodeStorage implements Storage {
 
       return keys
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        'Failed to list keys',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, 'Failed to list keys', error as Error)
     }
   }
 
@@ -283,9 +256,7 @@ export class NodeStorage implements Storage {
       // Remove all .json files from base directory
       const files = await fs.readdir(this.basePath)
       await Promise.all(
-        files
-          .filter(file => file.endsWith('.json'))
-          .map(file => fs.unlink(path.join(this.basePath, file)))
+        files.filter(file => file.endsWith('.json')).map(file => fs.unlink(path.join(this.basePath, file)))
       )
 
       // Remove all .json files from cache directory
@@ -293,9 +264,7 @@ export class NodeStorage implements Storage {
         const cacheDir = path.join(this.basePath, 'cache')
         const cacheFiles = await fs.readdir(cacheDir)
         await Promise.all(
-          cacheFiles
-            .filter(file => file.endsWith('.json'))
-            .map(file => fs.unlink(path.join(cacheDir, file)))
+          cacheFiles.filter(file => file.endsWith('.json')).map(file => fs.unlink(path.join(cacheDir, file)))
         )
       } catch (error) {
         // Cache directory might not exist, that's ok
@@ -304,11 +273,7 @@ export class NodeStorage implements Storage {
         }
       }
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        'Failed to clear storage',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }
   }
 
@@ -392,14 +357,10 @@ storageRegistry.register({
   priority: 100,
   isSupported: () => {
     return (
-      typeof process !== 'undefined' &&
-      process.versions?.node !== undefined &&
-      typeof window === 'undefined' // Not Electron renderer
+      typeof process !== 'undefined' && process.versions?.node !== undefined && typeof window === 'undefined' // Not Electron renderer
     )
   },
   create: (options?: StorageOptions) => {
-    return new NodeStorage(
-      options?.basePath ? { basePath: options.basePath } : undefined
-    )
+    return new NodeStorage(options?.basePath ? { basePath: options.basePath } : undefined)
   },
 })

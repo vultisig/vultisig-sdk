@@ -72,10 +72,7 @@ export class VaultManager {
    * const vultContent = fs.readFileSync('my-vault.vult', 'utf-8')
    * const vault = await vaultManager.importVault(vultContent, 'password123')
    */
-  async importVault(
-    vultContent: string,
-    password?: string
-  ): Promise<VaultBase> {
+  async importVault(vultContent: string, password?: string): Promise<VaultBase> {
     try {
       // Parse to check if it already exists
       const container = vaultContainerFromString(vultContent.trim())
@@ -85,10 +82,7 @@ export class VaultManager {
       let vaultBase64: string
       if (container.isEncrypted) {
         if (!password) {
-          throw new VaultImportError(
-            VaultImportErrorCode.PASSWORD_REQUIRED,
-            'Password required for encrypted vault'
-          )
+          throw new VaultImportError(VaultImportErrorCode.PASSWORD_REQUIRED, 'Password required for encrypted vault')
         }
         const encryptedData = fromBase64(container.vault)
         const decryptedBuffer = await decryptWithAesGcm({
@@ -108,11 +102,7 @@ export class VaultManager {
       const vaultId = parsedVault.publicKeys.ecdsa
 
       // Determine vault type from parsed vault
-      const vaultType = parsedVault.signers.some((s: string) =>
-        s.startsWith('Server-')
-      )
-        ? 'fast'
-        : 'secure'
+      const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
 
       // Get global dependencies
       const config = GlobalConfig.getInstance()
@@ -201,9 +191,10 @@ export class VaultManager {
    */
   async listVaults(): Promise<VaultBase[]> {
     const keys = await this.storage.list()
-    const vaultKeys = keys.filter(
-      k => k.startsWith('vault:') && k !== 'vault:nextId'
-    )
+    const vaultKeys = keys.filter(k => {
+      const parts = k.split(':')
+      return parts.length === 2 && parts[0] === 'vault' // Only vault storage keys (not cache)
+    })
     const vaults: VaultBase[] = []
 
     for (const key of vaultKeys) {
@@ -278,9 +269,7 @@ export class VaultManager {
   async clearVaults(): Promise<void> {
     // Remove all vault data
     const keys = await this.storage.list()
-    const vaultKeys = keys.filter(
-      k => k.startsWith('vault:') && k !== 'vault:nextId'
-    )
+    const vaultKeys = keys.filter(k => k.startsWith('vault:'))
 
     for (const key of vaultKeys) {
       await this.storage.remove(key)

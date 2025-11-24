@@ -49,9 +49,7 @@ import { VaultConfig } from './VaultServices'
  * Secure vaults have only device signers (no "Server-" prefix)
  */
 function determineVaultType(signers: string[]): 'fast' | 'secure' {
-  return signers.some(signer => signer.startsWith('Server-'))
-    ? 'fast'
-    : 'secure'
+  return signers.some(signer => signer.startsWith('Server-')) ? 'fast' : 'secure'
 }
 
 /**
@@ -117,8 +115,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       defaultCurrency: config?.defaultCurrency ?? globalConfig.defaultCurrency,
       cacheConfig: config?.cacheConfig ?? globalConfig.cacheConfig,
       passwordCache: config?.passwordCache ?? globalConfig.passwordCache,
-      onPasswordRequired:
-        config?.onPasswordRequired ?? globalConfig.onPasswordRequired,
+      onPasswordRequired: config?.onPasswordRequired ?? globalConfig.onPasswordRequired,
     }
 
     // Use global storage
@@ -128,9 +125,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     this.cacheService = new CacheService(vaultId, this.config.cacheConfig)
 
     // Initialize password cache service
-    this.passwordCache = PasswordCacheService.getInstance(
-      this.config.passwordCache
-    )
+    this.passwordCache = PasswordCacheService.getInstance(this.config.passwordCache)
 
     // Parse vault container (synchronous) - or use provided parsed data
     let container: { isEncrypted: boolean; vault: string }
@@ -165,9 +160,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         if (container.isEncrypted) {
           // Cannot parse encrypted vault synchronously - need async decryption
           // This should not happen if parsedVaultData is properly provided
-          throw new Error(
-            'Cannot parse encrypted vault synchronously. Use parsedVaultData parameter.'
-          )
+          throw new Error('Cannot parse encrypted vault synchronously. Use parsedVaultData parameter.')
         }
 
         // Parse unencrypted vault protobuf
@@ -274,13 +267,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       data => this.emit('tokenAdded', data),
       data => this.emit('tokenRemoved', data)
     )
-    this.gasEstimationService = new GasEstimationService(
-      this.coreVault,
-      chain => this.address(chain)
-    )
-    this.broadcastService = new BroadcastService(keysignPayload =>
-      this.extractMessageHashes(keysignPayload)
-    )
+    this.gasEstimationService = new GasEstimationService(this.coreVault, chain => this.address(chain))
+    this.broadcastService = new BroadcastService(keysignPayload => this.extractMessageHashes(keysignPayload))
     this.preferencesService = new PreferencesService(
       this.cacheService,
       () => this._userChains,
@@ -342,16 +330,12 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   private setupCacheInvalidation(): void {
     // When tokens are added/removed, invalidate balances and portfolio for that chain
     this.on('tokenAdded', async ({ chain }) => {
-      await this.cacheService.invalidateByPrefix(
-        `${CacheScope.BALANCE}:${chain.toLowerCase()}`
-      )
+      await this.cacheService.invalidateByPrefix(`${CacheScope.BALANCE}:${chain.toLowerCase()}`)
       await this.cacheService.invalidateScope(CacheScope.PORTFOLIO)
     })
 
     this.on('tokenRemoved', async ({ chain }) => {
-      await this.cacheService.invalidateByPrefix(
-        `${CacheScope.BALANCE}:${chain.toLowerCase()}`
-      )
+      await this.cacheService.invalidateByPrefix(`${CacheScope.BALANCE}:${chain.toLowerCase()}`)
       await this.cacheService.invalidateScope(CacheScope.PORTFOLIO)
     })
   }
@@ -378,9 +362,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
-      errors.push(
-        'Vault name can only contain letters, numbers, spaces, hyphens, and underscores'
-      )
+      errors.push('Vault name can only contain letters, numbers, spaces, hyphens, and underscores')
     }
 
     return {
@@ -435,10 +417,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     if (!password) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Password required but callback returned empty value'
-      )
+      throw new VaultError(VaultErrorCode.InvalidConfig, 'Password required but callback returned empty value')
     }
 
     // Cache for future use
@@ -546,9 +525,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async loadPreferences(): Promise<void> {
     // Load vault data
-    const loadedVaultData = await this.storage.get<VaultData>(
-      `vault:${this.vaultData.id}`
-    )
+    const loadedVaultData = await this.storage.get<VaultData>(`vault:${this.vaultData.id}`)
     if (loadedVaultData) {
       // Replace entire vaultData object
       ;(this as any).vaultData = loadedVaultData
@@ -599,10 +576,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Validate new name
     const validationResult = this.validateVaultName(newName)
     if (!validationResult.isValid) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        validationResult.errors?.[0] || 'Invalid vault name'
-      )
+      throw new VaultError(VaultErrorCode.InvalidConfig, validationResult.errors?.[0] || 'Invalid vault name')
     }
 
     const oldName = this.vaultData.name
@@ -625,8 +599,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async export(password?: string): Promise<{ filename: string; data: string }> {
     const totalSigners = this.vaultData.signers.length
-    const localPartyIndex =
-      this.vaultData.signers.indexOf(this.vaultData.localPartyId) + 1
+    const localPartyIndex = this.vaultData.signers.indexOf(this.vaultData.localPartyId) + 1
 
     // Format: {vaultName}-{localPartyId}-share{index}of{total}.vult
     const filename = `${this.vaultData.name}-${this.vaultData.localPartyId}-share${localPartyIndex}of${totalSigners}.vult`
@@ -644,8 +617,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Remove vault data
     await this.storage.remove(`vault:${this.vaultData.id}`)
 
-    // Remove persistent cache
-    await this.storage.remove(`vault:${this.vaultData.id}:cache`)
+    // Remove all cache entries for this vault
+    const allKeys = await this.storage.list()
+    const cacheKeys = allKeys.filter(k => k.startsWith(`cache:${this.vaultData.id}:`))
+    await Promise.all(cacheKeys.map(key => this.storage.remove(key)))
 
     // Emit deleted event
     this.emit('deleted', { vaultId: this.vaultData.id })
@@ -655,15 +630,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Reload vault data from storage
    */
   async load(): Promise<void> {
-    const loadedVaultData = await this.storage.get<VaultData>(
-      `vault:${this.vaultData.id}`
-    )
+    const loadedVaultData = await this.storage.get<VaultData>(`vault:${this.vaultData.id}`)
 
     if (!loadedVaultData) {
-      throw new VaultError(
-        VaultErrorCode.InvalidVault,
-        `Vault ${this.vaultData.id} not found in storage`
-      )
+      throw new VaultError(VaultErrorCode.InvalidVault, `Vault ${this.vaultData.id} not found in storage`)
     }
 
     // Replace vaultData
@@ -690,9 +660,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Check if this vault exists in storage
    */
   async exists(): Promise<boolean> {
-    const vaultData = await this.storage.get<VaultData>(
-      `vault:${this.vaultData.id}`
-    )
+    const vaultData = await this.storage.get<VaultData>(`vault:${this.vaultData.id}`)
     return vaultData !== null && vaultData !== undefined
   }
 
@@ -715,10 +683,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   public async unlock(password: string): Promise<void> {
     if (!this.isVaultEncrypted()) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Cannot unlock unencrypted vault'
-      )
+      throw new VaultError(VaultErrorCode.InvalidConfig, 'Cannot unlock unencrypted vault')
     }
 
     // Temporarily cache password for verification
@@ -747,10 +712,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       return true // Unencrypted vaults are always unlocked
     }
     // Check if keyShares are loaded OR password is cached
-    return (
-      (!!this.coreVault.keyShares.ecdsa && !!this.coreVault.keyShares.eddsa) ||
-      this.passwordCache.has(this.id)
-    )
+    return (!!this.coreVault.keyShares.ecdsa && !!this.coreVault.keyShares.eddsa) || this.passwordCache.has(this.id)
   }
 
   /**
@@ -792,10 +754,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Get balances for multiple chains
    */
-  async balances(
-    chains?: Chain[],
-    includeTokens = false
-  ): Promise<Record<string, Balance>> {
+  async balances(chains?: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const chainsToFetch = chains || this._userChains
     return this.balanceService.getBalances(chainsToFetch, includeTokens)
   }
@@ -810,10 +769,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Force refresh multiple balances
    */
-  async updateBalances(
-    chains?: Chain[],
-    includeTokens = false
-  ): Promise<Record<string, Balance>> {
+  async updateBalances(chains?: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const chainsToUpdate = chains || this._userChains
     return this.balanceService.updateBalances(chainsToUpdate, includeTokens)
   }
@@ -845,9 +801,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Extract message hashes from a KeysignPayload
    */
-  async extractMessageHashes(
-    keysignPayload: KeysignPayload
-  ): Promise<string[]> {
+  async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]> {
     return this.transactionBuilder.extractMessageHashes(keysignPayload)
   }
 
@@ -856,11 +810,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Broadcast a signed transaction to the blockchain network
    */
-  async broadcastTx(params: {
-    chain: Chain
-    keysignPayload: KeysignPayload
-    signature: Signature
-  }): Promise<string> {
+  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<string> {
     const { chain, keysignPayload, signature } = params
 
     try {
@@ -974,26 +924,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Get fiat value for a specific asset
    */
-  async getValue(
-    chain: Chain,
-    tokenId?: string,
-    fiatCurrency?: FiatCurrency
-  ): Promise<Value> {
-    const value = await this.fiatValueService.getValue(
-      chain,
-      tokenId,
-      fiatCurrency
-    )
+  async getValue(chain: Chain, tokenId?: string, fiatCurrency?: FiatCurrency): Promise<Value> {
+    const value = await this.fiatValueService.getValue(chain, tokenId, fiatCurrency)
     return value
   }
 
   /**
    * Get fiat values for all assets on a chain (native + tokens)
    */
-  async getValues(
-    chain: Chain,
-    fiatCurrency?: FiatCurrency
-  ): Promise<Record<string, Value>> {
+  async getValues(chain: Chain, fiatCurrency?: FiatCurrency): Promise<Record<string, Value>> {
     return this.fiatValueService.getValues(chain, fiatCurrency)
   }
 
@@ -1017,8 +956,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Force recalculation of total portfolio value (invalidates cache)
    */
   async updateTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
-    const totalValue =
-      await this.fiatValueService.updateTotalValue(fiatCurrency)
+    const totalValue = await this.fiatValueService.updateTotalValue(fiatCurrency)
     // Emit event
     this.emit('totalValueUpdated', { value: totalValue })
     return totalValue
