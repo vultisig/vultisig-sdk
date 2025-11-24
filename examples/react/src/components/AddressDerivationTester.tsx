@@ -26,9 +26,7 @@ export const AddressDerivationTester = ({ vault }: { vault: Vault }) => {
     'bsc',
   ]
 
-  const deriveWithSDK = async (
-    chainName: string
-  ): Promise<DerivationResult> => {
+  const deriveWithSDK = async (chainName: string): Promise<DerivationResult> => {
     const startTime = performance.now()
     const address = await vault.address(chainName)
     const duration = performance.now() - startTime
@@ -41,9 +39,7 @@ export const AddressDerivationTester = ({ vault }: { vault: Vault }) => {
     }
   }
 
-  const deriveWithVault = async (
-    chainName: string
-  ): Promise<DerivationResult> => {
+  const deriveWithVault = async (chainName: string): Promise<DerivationResult> => {
     const startTime = performance.now()
 
     // Use the Vault's address method directly
@@ -65,10 +61,7 @@ export const AddressDerivationTester = ({ vault }: { vault: Vault }) => {
 
     try {
       // Test both methods in parallel
-      const [sdkResult, vaultResult] = await Promise.all([
-        deriveWithSDK(chain),
-        deriveWithVault(chain),
-      ])
+      const [sdkResult, vaultResult] = await Promise.all([deriveWithSDK(chain), deriveWithVault(chain)])
 
       setResults([sdkResult, vaultResult])
     } catch (err) {
@@ -133,16 +126,12 @@ export const AddressDerivationTester = ({ vault }: { vault: Vault }) => {
         backgroundColor: '#f8f9fa',
       }}
     >
-      <h3 style={{ marginTop: 0, color: '#333' }}>
-        🧪 Address Derivation Tester
-      </h3>
+      <h3 style={{ marginTop: 0, color: '#333' }}>🧪 Address Derivation Tester</h3>
       <p style={{ color: '#666', fontSize: '14px', marginBottom: 16 }}>
         Test the Vault.address(chain: string) implementation
       </p>
 
-      <div
-        style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}
-      >
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <select
           value={chain}
           onChange={e => setChain(e.target.value)}
@@ -248,9 +237,7 @@ export const AddressDerivationTester = ({ vault }: { vault: Vault }) => {
                   <div>
                     <strong>{result.method.toUpperCase()}</strong> - {chain}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    {result.duration.toFixed(2)}ms
-                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{result.duration.toFixed(2)}ms</div>
                 </div>
                 <div
                   style={{

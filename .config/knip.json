@@ -1,10 +1,6 @@
 {
-  "ignore": [
-    "packages/core/mpc/types/**"
-  ],
-  "ignoreBinaries": [
-    "tsx"
-  ],
+  "ignore": ["packages/core/mpc/types/**"],
+  "ignoreBinaries": ["tsx"],
   "entry": [
     "clients/extension/src/background/index.ts",
     "clients/extension/src/content/index.ts",

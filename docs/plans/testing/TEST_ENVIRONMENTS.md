@@ -19,7 +19,11 @@ The SDK uses feature detection rather than hard-coded environment checks to ensu
 
 ```typescript
 // src/utils/environment.ts
-import { detectEnvironment, hasFeature, getCryptoImplementation } from '@/utils/environment';
+import {
+  detectEnvironment,
+  hasFeature,
+  getCryptoImplementation,
+} from "@/utils/environment";
 
 const env = detectEnvironment();
 console.log(`Running in: ${env.type}`);
@@ -34,31 +38,33 @@ console.log(`Crypto implementation: ${getCryptoImplementation()}`);
 Different environments handle file operations differently. The SDK must adapt to each environment's capabilities.
 
 #### Node.js
+
 ```typescript
 // Direct file system access
-import fs from 'fs/promises';
+import fs from "fs/promises";
 
 async function exportVault(vault: Vault, path: string) {
   const data = JSON.stringify(vault);
-  await fs.writeFile(path, data, 'utf-8');
+  await fs.writeFile(path, data, "utf-8");
 }
 
 async function importVault(path: string): Promise<Vault> {
-  const data = await fs.readFile(path, 'utf-8');
+  const data = await fs.readFile(path, "utf-8");
   return JSON.parse(data);
 }
 ```
 
 #### Browser
+
 ```typescript
 // FileReader API for imports, download for exports
 async function exportVault(vault: Vault) {
-  const blob = new Blob([JSON.stringify(vault)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(vault)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
-  const a = document.createElement('a');
+  const a = document.createElement("a");
   a.href = url;
-  a.download = 'vault.json';
+  a.download = "vault.json";
   a.click();
 
   URL.revokeObjectURL(url);
@@ -71,16 +77,17 @@ async function importVault(file: File): Promise<Vault> {
 ```
 
 #### Chrome Extension
+
 ```typescript
 // Chrome downloads API for export, no direct file import
 async function exportVault(vault: Vault) {
-  const blob = new Blob([JSON.stringify(vault)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(vault)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
   chrome.downloads.download({
     url: url,
-    filename: 'vault.json',
-    saveAs: true
+    filename: "vault.json",
+    saveAs: true,
   });
 }
 
@@ -88,17 +95,18 @@ async function exportVault(vault: Vault) {
 ```
 
 #### React Native
+
 ```typescript
 // React Native file system
-import RNFS from 'react-native-fs';
+import RNFS from "react-native-fs";
 
 async function exportVault(vault: Vault) {
   const path = `${RNFS.DocumentDirectoryPath}/vault.json`;
-  await RNFS.writeFile(path, JSON.stringify(vault), 'utf8');
+  await RNFS.writeFile(path, JSON.stringify(vault), "utf8");
 }
 
 async function importVault(path: string): Promise<Vault> {
-  const data = await RNFS.readFile(path, 'utf8');
+  const data = await RNFS.readFile(path, "utf8");
   return JSON.parse(data);
 }
 ```
@@ -108,46 +116,45 @@ async function importVault(path: string): Promise<Vault> {
 Different crypto APIs across environments require abstraction.
 
 #### Node.js
+
 ```typescript
-import crypto from 'crypto';
+import crypto from "crypto";
 
 function encrypt(data: string, password: string): Buffer {
-  const cipher = crypto.createCipher('aes-256-gcm', password);
+  const cipher = crypto.createCipher("aes-256-gcm", password);
   const encrypted = Buffer.concat([
-    cipher.update(data, 'utf8'),
-    cipher.final()
+    cipher.update(data, "utf8"),
+    cipher.final(),
   ]);
   return encrypted;
 }
 ```
 
 #### Browser/Chrome Extension
+
 ```typescript
 async function encrypt(data: string, password: string): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(data);
 
   const key = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     encoder.encode(password),
-    'AES-GCM',
+    "AES-GCM",
     false,
-    ['encrypt']
+    ["encrypt"],
   );
 
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  return crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    dataBuffer
-  );
+  return crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, dataBuffer);
 }
 ```
 
 #### React Native
+
 ```typescript
 // Requires polyfill or native module
-import CryptoJS from 'crypto-js';
+import CryptoJS from "crypto-js";
 
 function encrypt(data: string, password: string): string {
   return CryptoJS.AES.encrypt(data, password).toString();
@@ -159,6 +166,7 @@ function encrypt(data: string, password: string): string {
 Each environment has different storage capabilities.
 
 #### Node.js
+
 ```typescript
 class NodeStorage {
   private basePath: string;
@@ -170,32 +178,34 @@ class NodeStorage {
 
   async get(key: string): Promise<any> {
     const filePath = path.join(this.basePath, `${key}.json`);
-    const data = await fs.readFile(filePath, 'utf-8');
+    const data = await fs.readFile(filePath, "utf-8");
     return JSON.parse(data);
   }
 }
 ```
 
 #### Browser
+
 ```typescript
 class BrowserStorage {
   private db: IDBDatabase;
 
   async set(key: string, value: any): Promise<void> {
-    const transaction = this.db.transaction(['vaults'], 'readwrite');
-    const store = transaction.objectStore('vaults');
+    const transaction = this.db.transaction(["vaults"], "readwrite");
+    const store = transaction.objectStore("vaults");
     await store.put(value, key);
   }
 
   async get(key: string): Promise<any> {
-    const transaction = this.db.transaction(['vaults'], 'readonly');
-    const store = transaction.objectStore('vaults');
+    const transaction = this.db.transaction(["vaults"], "readonly");
+    const store = transaction.objectStore("vaults");
     return store.get(key);
   }
 }
 ```
 
 #### Chrome Extension
+
 ```typescript
 class ChromeExtensionStorage {
   async set(key: string, value: any): Promise<void> {
@@ -225,8 +235,9 @@ class ChromeExtensionStorage {
 ```
 
 #### React Native
+
 ```typescript
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 class ReactNativeStorage {
   async set(key: string, value: any): Promise<void> {
@@ -245,9 +256,10 @@ class ReactNativeStorage {
 WebAssembly loading varies by environment.
 
 #### Node.js
+
 ```typescript
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
 
 async function loadWASM(moduleName: string): Promise<WebAssembly.Module> {
   const wasmPath = path.join(__dirname, `${moduleName}.wasm`);
@@ -257,6 +269,7 @@ async function loadWASM(moduleName: string): Promise<WebAssembly.Module> {
 ```
 
 #### Browser
+
 ```typescript
 async function loadWASM(moduleName: string): Promise<WebAssembly.Module> {
   const response = await fetch(`/wasm/${moduleName}.wasm`);
@@ -266,6 +279,7 @@ async function loadWASM(moduleName: string): Promise<WebAssembly.Module> {
 ```
 
 #### Chrome Extension
+
 ```typescript
 async function loadWASM(moduleName: string): Promise<WebAssembly.Module> {
   // May face CSP restrictions in Manifest V3
@@ -285,12 +299,13 @@ async function loadWASM(moduleName: string): Promise<WebAssembly.Module> {
 ```
 
 #### React Native
+
 ```typescript
 // React Native doesn't support WASM directly
 // Must use JavaScript fallback or bridge to native code
 async function loadWASM(moduleName: string): Promise<any> {
   // Use JavaScript implementation or native module
-  throw new Error('WASM not supported in React Native - use native module');
+  throw new Error("WASM not supported in React Native - use native module");
 }
 ```
 
@@ -310,7 +325,7 @@ async function loadWASM(moduleName: string): Promise<any> {
 
 ```typescript
 // tests/setup.node.ts
-import { TextEncoder, TextDecoder } from 'util';
+import { TextEncoder, TextDecoder } from "util";
 
 // Polyfills for Node.js
 global.TextEncoder = TextEncoder;
@@ -337,7 +352,7 @@ global.crypto = {
   subtle: mockWebCrypto(),
   getRandomValues: (arr) => {
     // Implementation
-  }
+  },
 };
 ```
 
@@ -347,16 +362,16 @@ global.crypto = {
 // tests/setup.chrome-extension.ts
 global.chrome = {
   runtime: {
-    id: 'test-extension-id',
-    getManifest: () => ({ manifest_version: 3 })
+    id: "test-extension-id",
+    getManifest: () => ({ manifest_version: 3 }),
   },
   storage: {
     local: mockChromeStorage(),
-    sync: mockChromeStorage()
+    sync: mockChromeStorage(),
   },
   downloads: {
-    download: vi.fn()
-  }
+    download: vi.fn(),
+  },
 };
 ```
 
@@ -364,18 +379,18 @@ global.chrome = {
 
 ```typescript
 // tests/setup.react-native.ts
-jest.mock('react-native', () => ({
+jest.mock("react-native", () => ({
   Platform: {
-    OS: 'ios',
-    Version: 14
+    OS: "ios",
+    Version: 14,
   },
-  AsyncStorage: mockAsyncStorage()
+  AsyncStorage: mockAsyncStorage(),
 }));
 
-jest.mock('react-native-fs', () => ({
-  DocumentDirectoryPath: '/mock/documents',
+jest.mock("react-native-fs", () => ({
+  DocumentDirectoryPath: "/mock/documents",
   readFile: jest.fn(),
-  writeFile: jest.fn()
+  writeFile: jest.fn(),
 }));
 ```
 
@@ -437,14 +452,14 @@ npm test:react-native
 
 ```typescript
 // ❌ Bad - Hard-coded environment check
-if (process.env.NODE_ENV === 'node') {
-  const fs = require('fs');
+if (process.env.NODE_ENV === "node") {
+  const fs = require("fs");
   // Node.js specific code
 }
 
 // ✅ Good - Feature detection
-if (typeof require !== 'undefined' && require.resolve) {
-  const fs = require('fs');
+if (typeof require !== "undefined" && require.resolve) {
+  const fs = require("fs");
   // Node.js specific code
 }
 ```
@@ -457,13 +472,13 @@ export function createStorage(): Storage {
   const env = detectEnvironment();
 
   switch (env.type) {
-    case 'node':
+    case "node":
       return new NodeStorage();
-    case 'browser':
+    case "browser":
       return new BrowserStorage();
-    case 'chrome-extension':
+    case "chrome-extension":
       return new ChromeExtensionStorage();
-    case 'react-native':
+    case "react-native":
       return new ReactNativeStorage();
     default:
       return new MemoryStorage();
@@ -479,13 +494,13 @@ class VaultExporter {
     const data = JSON.stringify(vault);
 
     // Try best method first, fall back gracefully
-    if (hasFeature('hasFileSystem')) {
+    if (hasFeature("hasFileSystem")) {
       // Direct file write
       await fs.writeFile(filename, data);
-    } else if (hasFeature('hasChromeStorage')) {
+    } else if (hasFeature("hasChromeStorage")) {
       // Chrome downloads API
       await this.chromeDownload(data, filename);
-    } else if (typeof document !== 'undefined') {
+    } else if (typeof document !== "undefined") {
       // Browser download
       this.browserDownload(data, filename);
     } else {
@@ -575,21 +590,25 @@ For each environment, ensure:
 ### Environment-Specific Optimizations
 
 #### Node.js
+
 - Use native crypto for best performance
 - Stream large files instead of loading to memory
 - Use worker threads for CPU-intensive operations
 
 #### Browser
+
 - Use Web Workers for heavy computations
 - Implement progressive loading
 - Cache in IndexedDB for offline support
 
 #### Chrome Extension
+
 - Minimize storage operations
 - Use chrome.storage.local for large data
 - Implement efficient message passing
 
 #### React Native
+
 - Use native modules for performance-critical code
 - Implement lazy loading
 - Optimize bundle size
@@ -648,6 +667,7 @@ jobs:
 Testing the Vultisig SDK across multiple environments requires careful attention to environment-specific capabilities and limitations. By using feature detection, proper abstraction, and comprehensive testing, we ensure the SDK works reliably in all supported environments.
 
 Remember:
+
 1. **Test where code differs** - Don't duplicate tests for identical logic
 2. **Start simple** - Begin with Node.js, then add complexity
 3. **Use feature detection** - Avoid hard-coded environment checks
@@ -656,4 +676,4 @@ Remember:
 
 ---
 
-*This guide is a living document and should be updated as new environments are supported or new patterns emerge.*
+_This guide is a living document and should be updated as new environments are supported or new patterns emerge._

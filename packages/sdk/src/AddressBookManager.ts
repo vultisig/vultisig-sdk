@@ -1,6 +1,7 @@
 import type { Chain } from '@core/chain/Chain'
 
-import type { VaultStorage } from './runtime/storage/types'
+import { GlobalStorage } from './runtime/storage/GlobalStorage'
+import type { Storage } from './runtime/storage/types'
 import { AddressBook, AddressBookEntry } from './types'
 
 /**
@@ -9,20 +10,18 @@ import { AddressBook, AddressBookEntry } from './types'
  */
 export class AddressBookManager {
   private addressBookData: AddressBook = { saved: [], vaults: [] }
-  private storage: VaultStorage
+  private storage: Storage
 
-  constructor(storage: VaultStorage) {
-    this.storage = storage
+  constructor() {
+    this.storage = GlobalStorage.getInstance()
   }
 
   /**
    * Initialize address book by loading data from storage
    */
   async init(): Promise<void> {
-    const saved =
-      await this.storage.get<AddressBookEntry[]>('addressBook:saved')
-    const vaults =
-      await this.storage.get<AddressBookEntry[]>('addressBook:vaults')
+    const saved = await this.storage.get<AddressBookEntry[]>('addressBook:saved')
+    const vaults = await this.storage.get<AddressBookEntry[]>('addressBook:vaults')
 
     this.addressBookData = {
       saved: saved ?? [],
@@ -36,12 +35,8 @@ export class AddressBookManager {
   async getAddressBook(chain?: Chain): Promise<AddressBook> {
     if (chain) {
       return {
-        saved: this.addressBookData.saved.filter(
-          entry => entry.chain === chain
-        ),
-        vaults: this.addressBookData.vaults.filter(
-          entry => entry.chain === chain
-        ),
+        saved: this.addressBookData.saved.filter(entry => entry.chain === chain),
+        vaults: this.addressBookData.vaults.filter(entry => entry.chain === chain),
       }
     }
     return { ...this.addressBookData }
@@ -72,8 +67,7 @@ export class AddressBookManager {
       } else {
         // Check if saved entry already exists
         const existingIndex = this.addressBookData.saved.findIndex(
-          existing =>
-            existing.chain === entry.chain && existing.address === entry.address
+          existing => existing.chain === entry.chain && existing.address === entry.address
         )
 
         if (existingIndex === -1) {
@@ -95,9 +89,7 @@ export class AddressBookManager {
   /**
    * Remove address book entries
    */
-  async removeAddressBookEntry(
-    addresses: Array<{ chain: Chain; address: string }>
-  ): Promise<void> {
+  async removeAddressBookEntry(addresses: Array<{ chain: Chain; address: string }>): Promise<void> {
     for (const { chain, address } of addresses) {
       // Remove from saved entries
       this.addressBookData.saved = this.addressBookData.saved.filter(
@@ -118,15 +110,9 @@ export class AddressBookManager {
   /**
    * Update address book entry name
    */
-  async updateAddressBookEntry(
-    chain: Chain,
-    address: string,
-    name: string
-  ): Promise<void> {
+  async updateAddressBookEntry(chain: Chain, address: string, name: string): Promise<void> {
     // Try to find and update in saved entries
-    const savedEntry = this.addressBookData.saved.find(
-      entry => entry.chain === chain && entry.address === address
-    )
+    const savedEntry = this.addressBookData.saved.find(entry => entry.chain === chain && entry.address === address)
 
     if (savedEntry) {
       savedEntry.name = name
@@ -135,9 +121,7 @@ export class AddressBookManager {
     }
 
     // Try to find and update in vault entries
-    const vaultEntry = this.addressBookData.vaults.find(
-      entry => entry.chain === chain && entry.address === address
-    )
+    const vaultEntry = this.addressBookData.vaults.find(entry => entry.chain === chain && entry.address === address)
 
     if (vaultEntry) {
       vaultEntry.name = name

@@ -17,8 +17,13 @@
 export { Vultisig } from './Vultisig'
 
 // Vault management
+export type { VaultConfig } from './vault'
 export {
-  Vault,
+  FastVault,
+  isFastVault,
+  isSecureVault,
+  SecureVault,
+  VaultBase,
   VaultError,
   VaultErrorCode,
   VaultImportError,
@@ -43,8 +48,40 @@ export {
 // NOTE: Cryptographic utilities are internal-only
 // Users don't need direct access to crypto primitives
 
-// NOTE: WASM management is internal-only
-// WalletCore initialization is handled by the SDK
+// WASM Management (now static - no instance needed)
+export type { WasmConfig } from './runtime/wasm'
+export { WasmManager } from './runtime/wasm'
+
+// Crypto initialization
+export { initializeCrypto } from './runtime/crypto'
+
+// ============================================================================
+// PUBLIC API - Server Management
+// ============================================================================
+
+// Global server manager singleton
+export { GlobalServerManager, type ServerEndpoints } from './server'
+
+// ============================================================================
+// PUBLIC API - Configuration
+// ============================================================================
+
+// Global configuration singleton
+export { GlobalConfig, type GlobalConfigOptions } from './config'
+
+// ============================================================================
+// PUBLIC API - Validation Utilities
+// ============================================================================
+
+// Validation helpers
+export { ValidationHelpers } from './utils/validation'
+
+// ============================================================================
+// PUBLIC API - Chain Configuration
+// ============================================================================
+
+// Supported chains constant
+export { SUPPORTED_CHAINS } from './Vultisig'
 
 // ============================================================================
 // PUBLIC API - Environment Utilities
@@ -73,57 +110,12 @@ export { MemoryStorage } from './runtime/storage/MemoryStorage'
 export { NodeStorage } from './runtime/storage/NodeStorage'
 export type { StorageOptions } from './runtime/storage/StorageManager'
 export { StorageManager } from './runtime/storage/StorageManager'
-export type {
-  StorageMetadata,
-  StoredValue,
-  VaultStorage,
-} from './runtime/storage/types'
+export type { StorageMetadata, StoredValue, Storage as VaultStorage } from './runtime/storage/types'
 export { StorageError, StorageErrorCode } from './runtime/storage/types'
 
 // Event system
 export { UniversalEventEmitter } from './events/EventEmitter'
 export type { SdkEvents, VaultEvents } from './events/types'
-
-// ============================================================================
-// PUBLIC API - Environment-Specific Utilities
-// ============================================================================
-
-// Electron utilities - TODO: Re-enable when Electron integration is ready
-// export {
-//   downloadElectronVault,
-//   exportElectronVaultToFile,
-//   getElectronHandlers,
-//   getElectronProcessType,
-//   setupElectronIPC,
-// } from './runtime/utils/electron'
-
-// Node.js utilities
-export {
-  ensureDirectory,
-  exportVaultToFile,
-  getNodeStorageInfo,
-  getStoragePath,
-  importVaultFromFile,
-} from './runtime/utils/node'
-
-// Browser utilities
-export {
-  downloadVault,
-  getBrowserStorageInfo,
-  isBrowserStorageLow,
-  isPersistentStorage,
-  requestPersistentStorage,
-  uploadVaultFile,
-} from './runtime/utils/browser'
-
-// Chrome extension utilities
-export {
-  isServiceWorkerAlive,
-  keepServiceWorkerAlive,
-  onChromeStorageChanged,
-  sendChromeMessage,
-  setupChromeMessageHandlers,
-} from './runtime/utils/chrome'
 
 // ============================================================================
 // PUBLIC API - Types (keep all types for TypeScript users)
@@ -163,16 +155,13 @@ export type {
   SigningMode,
   SigningPayload,
   SigningStep,
-  Summary,
   Token,
   ValidationResult,
   Value,
   VaultBackup,
   VaultCreationStep,
   VaultDetails,
-  VaultManagerConfig,
   VaultOptions,
-  VaultSigner,
   VaultSummary,
   VaultType,
   VaultValidationResult,

@@ -148,12 +148,7 @@ describe('formatBalance', () => {
     }
 
     it('should format USDC token balance with metadata', () => {
-      const result = formatBalance(
-        1000000n,
-        Chain.Ethereum,
-        '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-        tokens
-      )
+      const result = formatBalance(1000000n, Chain.Ethereum, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', tokens)
 
       expect(result).toEqual({
         amount: '1000000',
@@ -165,12 +160,7 @@ describe('formatBalance', () => {
     })
 
     it('should format USDT token balance with metadata', () => {
-      const result = formatBalance(
-        5000000n,
-        Chain.Ethereum,
-        '0xdac17f958d2ee523a2206206994597c13d831ec7',
-        tokens
-      )
+      const result = formatBalance(5000000n, Chain.Ethereum, '0xdac17f958d2ee523a2206206994597c13d831ec7', tokens)
 
       expect(result).toEqual({
         amount: '5000000',
@@ -199,12 +189,7 @@ describe('formatBalance', () => {
     })
 
     it('should handle token on different chain (Polygon USDC)', () => {
-      const result = formatBalance(
-        2000000n,
-        Chain.Polygon,
-        '0x2791bca1f2de4661ed88a30c99a7a9449aa84174',
-        tokens
-      )
+      const result = formatBalance(2000000n, Chain.Polygon, '0x2791bca1f2de4661ed88a30c99a7a9449aa84174', tokens)
 
       expect(result).toEqual({
         amount: '2000000',
@@ -216,12 +201,7 @@ describe('formatBalance', () => {
     })
 
     it('should default to 18 decimals for unknown token', () => {
-      const result = formatBalance(
-        1000000000000000000n,
-        Chain.Ethereum,
-        '0xunknowntoken123456789',
-        tokens
-      )
+      const result = formatBalance(1000000000000000000n, Chain.Ethereum, '0xunknowntoken123456789', tokens)
 
       expect(result).toEqual({
         amount: '1000000000000000000',
@@ -267,12 +247,7 @@ describe('formatBalance', () => {
     })
 
     it('should handle zero token balance', () => {
-      const result = formatBalance(
-        0n,
-        Chain.Ethereum,
-        '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-        tokens
-      )
+      const result = formatBalance(0n, Chain.Ethereum, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', tokens)
 
       expect(result).toEqual({
         amount: '0',
@@ -285,12 +260,7 @@ describe('formatBalance', () => {
 
     it('should handle very large token balances', () => {
       const largeBalance = 999999999999999999n
-      const result = formatBalance(
-        largeBalance,
-        Chain.Ethereum,
-        '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-        tokens
-      )
+      const result = formatBalance(largeBalance, Chain.Ethereum, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', tokens)
 
       expect(result.amount).toBe('999999999999999999')
       expect(result.symbol).toBe('USDC')
@@ -332,12 +302,7 @@ describe('formatBalance', () => {
         ],
       }
 
-      const result = formatBalance(
-        1000000n,
-        Chain.Solana,
-        splTokenAddress,
-        tokens
-      )
+      const result = formatBalance(1000000n, Chain.Solana, splTokenAddress, tokens)
 
       expect(result).toEqual({
         amount: '1000000',

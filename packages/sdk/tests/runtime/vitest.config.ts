@@ -18,12 +18,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/*.{test,spec}.{js,ts,tsx}'],
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/.{idea,git,cache,output,temp}/**',
-    ],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.{idea,git,cache,output,temp}/**'],
     setupFiles: [resolve(__dirname, '../unit/vitest.setup.ts')],
     testTimeout: 30000, // 30 seconds for runtime tests (WASM loading can take time)
     hookTimeout: 30000, // 30 seconds for hooks

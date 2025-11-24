@@ -12,9 +12,7 @@ if (typeof File === 'undefined') {
       public options?: any
     ) {}
     arrayBuffer() {
-      return Promise.resolve(
-        Buffer.concat(this.chunks.map(chunk => Buffer.from(chunk)))
-      )
+      return Promise.resolve(Buffer.concat(this.chunks.map(chunk => Buffer.from(chunk))))
     }
   } as any
 }
@@ -43,9 +41,7 @@ export class ListCommand {
 
     if (vultFiles.length === 0) {
       console.log(`📁 No vault files found in: ${vaultsDir}`)
-      console.log(
-        '\nPlace your .vult files in this directory to use them with the CLI.'
-      )
+      console.log('\nPlace your .vult files in this directory to use them with the CLI.')
       return
     }
 
@@ -55,8 +51,7 @@ export class ListCommand {
       try {
         const fileName = path.basename(filePath)
         const isEncrypted =
-          fileName.toLowerCase().includes('password') &&
-          !fileName.toLowerCase().includes('nopassword')
+          fileName.toLowerCase().includes('password') && !fileName.toLowerCase().includes('nopassword')
         const status = isEncrypted ? '🔐 encrypted' : '🔓 unencrypted'
 
         console.log(`  📄 ${path.basename(filePath)} (${status})`)

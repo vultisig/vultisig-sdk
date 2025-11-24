@@ -22,16 +22,7 @@ describe('ValidationHelpers', () => {
     })
 
     it('should reject invalid email formats', () => {
-      const invalidEmails = [
-        '',
-        'invalid',
-        '@domain.com',
-        'user@',
-        'user',
-        'user @domain.com',
-        'user@domain .com',
-        '@',
-      ]
+      const invalidEmails = ['', 'invalid', '@domain.com', 'user@', 'user', 'user @domain.com', 'user@domain .com', '@']
 
       invalidEmails.forEach(email => {
         const result = ValidationHelpers.validateEmail(email)
@@ -93,9 +84,7 @@ describe('ValidationHelpers', () => {
       const tooLong = 'a'.repeat(129)
       const result = ValidationHelpers.validatePassword(tooLong)
       expect(result.valid).toBe(false)
-      expect(result.error).toContain(
-        'Password must be no more than 128 characters'
-      )
+      expect(result.error).toContain('Password must be no more than 128 characters')
     })
 
     it('should handle boundary cases', () => {
@@ -116,11 +105,7 @@ describe('ValidationHelpers', () => {
     })
 
     it('should accept passwords with special characters', () => {
-      const specialPasswords = [
-        '!@#$%^&*()',
-        'Pass123!@#',
-        'unicode-密码-пароль',
-      ]
+      const specialPasswords = ['!@#$%^&*()', 'Pass123!@#', 'unicode-密码-пароль']
 
       specialPasswords.forEach(password => {
         const result = ValidationHelpers.validatePassword(password)
@@ -207,13 +192,7 @@ describe('ValidationHelpers', () => {
     })
 
     it('should accept names with various characters', () => {
-      const specialNames = [
-        'Vault-2024',
-        'My_Vault',
-        'Vault #1',
-        'Vault (Personal)',
-        'Vault [Main]',
-      ]
+      const specialNames = ['Vault-2024', 'My_Vault', 'Vault #1', 'Vault (Personal)', 'Vault [Main]']
 
       specialNames.forEach(name => {
         const result = ValidationHelpers.validateVaultName(name)

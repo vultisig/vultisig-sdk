@@ -13,7 +13,7 @@ Vultisig keyshare files use a layered approach with base64 encoding and Protocol
 ├── Base64 encoding (outer layer)
 └── VaultContainer (protobuf)
     ├── version: uint64
-    ├── is_encrypted: bool  
+    ├── is_encrypted: bool
     └── vault: string
         ├── Base64 encoding (if unencrypted)
         ├── OR AES-256-GCM encryption (if encrypted)
@@ -33,11 +33,12 @@ Vultisig keyshare files use a layered approach with base64 encoding and Protocol
 ## Protocol Buffer Definitions
 
 ### VaultContainer
+
 ```protobuf
 message VaultContainer {
   // version of data format
   uint64 version = 1;
-  // vault contained the container  
+  // vault contained the container
   string vault = 2;
   // is vault encrypted with password
   bool is_encrypted = 3;
@@ -45,6 +46,7 @@ message VaultContainer {
 ```
 
 ### Vault
+
 ```protobuf
 message Vault {
   string name = 1;
@@ -61,6 +63,7 @@ message Vault {
 ```
 
 ### KeyShare
+
 ```protobuf
 message KeyShare {
   string public_key = 1;
@@ -70,48 +73,50 @@ message KeyShare {
 
 ## Field Descriptions
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `version` | uint64 | Data format version number |
-| `is_encrypted` | bool | Whether vault data is password-encrypted |
-| `vault` | string | Base64-encoded or encrypted vault data |
-| `name` | string | Human-readable vault name |
-| `public_key_ecdsa` | string | Hex-encoded compressed secp256k1 public key (66 chars) |
-| `public_key_eddsa` | string | Hex-encoded Ed25519 public key (64 chars) |
-| `signers` | []string | MPC participant identifiers |
-| `created_at` | timestamp | Vault creation time |
-| `hex_chain_code` | string | BIP32 chain code for HD derivation (64 chars) |
-| `key_shares` | []KeyShare | MPC threshold signature shares |
-| `local_party_id` | string | Local participant ID |
-| `reshare_prefix` | string | Prefix for key resharing |
-| `lib_type` | LibType | MPC library type (GG20 = 0) |
+| Field              | Type       | Description                                            |
+| ------------------ | ---------- | ------------------------------------------------------ |
+| `version`          | uint64     | Data format version number                             |
+| `is_encrypted`     | bool       | Whether vault data is password-encrypted               |
+| `vault`            | string     | Base64-encoded or encrypted vault data                 |
+| `name`             | string     | Human-readable vault name                              |
+| `public_key_ecdsa` | string     | Hex-encoded compressed secp256k1 public key (66 chars) |
+| `public_key_eddsa` | string     | Hex-encoded Ed25519 public key (64 chars)              |
+| `signers`          | []string   | MPC participant identifiers                            |
+| `created_at`       | timestamp  | Vault creation time                                    |
+| `hex_chain_code`   | string     | BIP32 chain code for HD derivation (64 chars)          |
+| `key_shares`       | []KeyShare | MPC threshold signature shares                         |
+| `local_party_id`   | string     | Local participant ID                                   |
+| `reshare_prefix`   | string     | Prefix for key resharing                               |
+| `lib_type`         | LibType    | MPC library type (GG20 = 0)                            |
 
 ## Supported Blockchain Networks
 
 ### ECDSA-based Networks
+
 The `public_key_ecdsa` field enables support for:
 
-| Network | Symbol | Derivation Path |
-|---------|--------|-----------------|
-| Ethereum | ETH | `m/44'/60'/0'/0/0` |
-| Bitcoin | BTC | `m/84'/0'/0'/0/0` |
-| THORChain | RUNE | `m/44'/931'/0'/0/0` |
-| Cosmos | ATOM | `m/44'/118'/0'/0/0` |
-| Binance Smart Chain | BSC | `m/44'/60'/0'/0/0` |
+| Network             | Symbol | Derivation Path     |
+| ------------------- | ------ | ------------------- |
+| Ethereum            | ETH    | `m/44'/60'/0'/0/0`  |
+| Bitcoin             | BTC    | `m/84'/0'/0'/0/0`   |
+| THORChain           | RUNE   | `m/44'/931'/0'/0/0` |
+| Cosmos              | ATOM   | `m/44'/118'/0'/0/0` |
+| Binance Smart Chain | BSC    | `m/44'/60'/0'/0/0`  |
 
-### EdDSA-based Networks  
+### EdDSA-based Networks
+
 The `public_key_eddsa` field enables support for:
 
-| Network | Symbol | Derivation Path |
-|---------|--------|-----------------|
-| Solana | SOL | `m/44'/501'/0'/0'` |
+| Network | Symbol | Derivation Path    |
+| ------- | ------ | ------------------ |
+| Solana  | SOL    | `m/44'/501'/0'/0'` |
 
 ## Encryption Details
 
 When `is_encrypted = true`, the vault data is encrypted using:
 
 - **Algorithm**: AES-256-GCM
-- **Key Derivation**: SHA256(password) 
+- **Key Derivation**: SHA256(password)
 - **Nonce**: First 12 bytes of encrypted data
 - **Ciphertext**: Remaining bytes after nonce
 
@@ -123,7 +128,7 @@ When `is_encrypted = true`, the vault data is encrypted using:
 # Inspect unencrypted keyshare
 node scripts/inspect_keyshare.js vault.vult
 
-# Inspect encrypted keyshare  
+# Inspect encrypted keyshare
 node scripts/inspect_keyshare.js vault.vult mypassword123
 ```
 
@@ -147,23 +152,23 @@ let sol_addr = keyshare.derive_sol_address()?;
 ### Using Node.js (manual)
 
 ```javascript
-const fs = require('fs');
+const fs = require("fs");
 
 // Read and decode outer base64
-const content = fs.readFileSync('vault.vult', 'utf8');
-const decoded = Buffer.from(content.trim(), 'base64');
+const content = fs.readFileSync("vault.vult", "utf8");
+const decoded = Buffer.from(content.trim(), "base64");
 
 // Parse VaultContainer protobuf
 const container = parseVaultContainer(decoded);
 
 if (!container.is_encrypted) {
-    // Decode inner vault
-    const vaultData = Buffer.from(container.vault, 'base64');
-    const vault = parseVault(vaultData);
-    
-    console.log('Vault name:', vault.name);
-    console.log('ECDSA key:', vault.public_key_ecdsa);
-    console.log('EdDSA key:', vault.public_key_eddsa);
+  // Decode inner vault
+  const vaultData = Buffer.from(container.vault, "base64");
+  const vault = parseVault(vaultData);
+
+  console.log("Vault name:", vault.name);
+  console.log("ECDSA key:", vault.public_key_ecdsa);
+  console.log("EdDSA key:", vault.public_key_eddsa);
 }
 ```
 
@@ -172,7 +177,7 @@ if (!container.is_encrypted) {
 Vultisig uses TSS (Threshold Signature Scheme) compatible HD key derivation:
 
 1. **Master Keys**: Stored in `public_key_ecdsa`/`public_key_eddsa` fields
-2. **Chain Code**: Stored in `hex_chain_code` field  
+2. **Chain Code**: Stored in `hex_chain_code` field
 3. **Derivation**: Uses `TssGetDerivedPubKey()` function
 4. **Paths**: Standard BIP44/BIP84 derivation paths per network
 
@@ -188,6 +193,7 @@ The derived addresses are deterministic and match those generated by the Vultisi
 ## File Location
 
 Keyshare files are typically stored in:
+
 - **macOS/Linux**: `~/.vultisigd/keyshares/`
 - **File Extension**: `.vult`
 

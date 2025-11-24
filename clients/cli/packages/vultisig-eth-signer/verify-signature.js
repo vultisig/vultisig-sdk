@@ -92,13 +92,7 @@ async function verifySignature() {
   }
 
   console.log('\n📋 Transaction for hashing:')
-  console.log(
-    JSON.stringify(
-      viemTx,
-      (k, v) => (typeof v === 'bigint' ? v.toString() : v),
-      2
-    )
-  )
+  console.log(JSON.stringify(viemTx, (k, v) => (typeof v === 'bigint' ? v.toString() : v), 2))
 
   const serialized = viemSerialize(viemTx)
   const txHash = keccak256(getBytes(serialized))

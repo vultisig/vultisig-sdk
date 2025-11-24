@@ -35,10 +35,7 @@ export class DaemonManager {
   private jsonRpcServer?: JsonRpcServer
   private vault?: VaultClass
 
-  constructor(
-    socketPath: string = '/tmp/vultisig.sock',
-    pidFile: string = '/tmp/vultisig.pid'
-  ) {
+  constructor(socketPath: string = '/tmp/vultisig.sock', pidFile: string = '/tmp/vultisig.pid') {
     this.socketPath = socketPath
     this.pidFile = pidFile
   }
@@ -105,9 +102,7 @@ export class DaemonManager {
     }
   }
 
-  async autoStartDaemonIfNeeded(
-    _options: AutoStartDaemonInput
-  ): Promise<boolean> {
+  async autoStartDaemonIfNeeded(_options: AutoStartDaemonInput): Promise<boolean> {
     try {
       await this.checkDaemonStatus()
       return false // Daemon already running
@@ -152,17 +147,11 @@ export class DaemonManager {
     ;(file as any).buffer = buffer
 
     const fileName = path.basename(vaultName)
-    const isEncrypted =
-      fileName.toLowerCase().includes('password') &&
-      !fileName.toLowerCase().includes('nopassword')
+    const isEncrypted = fileName.toLowerCase().includes('password') && !fileName.toLowerCase().includes('nopassword')
 
-    let password = options.password
-      ? stripPasswordQuotes(options.password)
-      : undefined
+    let password = options.password ? stripPasswordQuotes(options.password) : undefined
     if (isEncrypted && !password) {
-      const { promptForPasswordWithValidation } = await import(
-        '../utils/password'
-      )
+      const { promptForPasswordWithValidation } = await import('../utils/password')
       password = await promptForPasswordWithValidation(vaultName)
     }
 
@@ -171,10 +160,7 @@ export class DaemonManager {
     return vault
   }
 
-  async performEphemeralOperation<T>(
-    options: AutoStartDaemonInput,
-    operation: (vault: any) => Promise<T>
-  ): Promise<T> {
+  async performEphemeralOperation<T>(options: AutoStartDaemonInput, operation: (vault: any) => Promise<T>): Promise<T> {
     let vault: any = null
 
     try {
@@ -219,9 +205,7 @@ export class DaemonManager {
       })
       return response.addresses || {}
     } catch {
-      throw new Error(
-        'No Vultisig daemon running, start with "vultisig run" first'
-      )
+      throw new Error('No Vultisig daemon running, start with "vultisig run" first')
     }
   }
 
@@ -234,9 +218,7 @@ export class DaemonManager {
       const response = await this.sendSocketCommand('get_balances', { chains })
       return response.balances || {}
     } catch {
-      throw new Error(
-        'No Vultisig daemon running, start with "vultisig run" first'
-      )
+      throw new Error('No Vultisig daemon running, start with "vultisig run" first')
     }
   }
 
@@ -318,19 +300,14 @@ export class DaemonManager {
             throw new Error('No vault loaded')
           }
 
-          const chains = request.params?.chains || [
-            'bitcoin',
-            'ethereum',
-            'solana',
-          ]
+          const chains = request.params?.chains || ['bitcoin', 'ethereum', 'solana']
           const addresses: Record<string, string> = {}
 
           for (const chain of chains) {
             try {
               addresses[chain] = await (this.vault as any).address(chain)
             } catch (error) {
-              addresses[chain] =
-                `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+              addresses[chain] = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
             }
           }
 
@@ -342,19 +319,14 @@ export class DaemonManager {
             throw new Error('No vault loaded')
           }
 
-          const balanceChains = request.params?.chains || [
-            'bitcoin',
-            'ethereum',
-            'solana',
-          ]
+          const balanceChains = request.params?.chains || ['bitcoin', 'ethereum', 'solana']
           const balances: Record<string, any> = {}
 
           for (const chain of balanceChains) {
             try {
               balances[chain] = await (this.vault as any).balance(chain)
             } catch (error) {
-              balances[chain] =
-                `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+              balances[chain] = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
             }
           }
 
@@ -369,20 +341,14 @@ export class DaemonManager {
           const signRequest = request.params as SignTransactionRequest
           console.log('Daemon received sign_transaction request')
           console.log('  Network:', signRequest.network)
-          console.log(
-            '  Payload:',
-            JSON.stringify(signRequest.payload, null, 2)
-          )
+          console.log('  Payload:', JSON.stringify(signRequest.payload, null, 2))
 
           const signingPayload = {
             transaction: signRequest.payload,
             chain: signRequest.network,
           }
 
-          const signature = await (this.vault as any).signWithPayload(
-            signingPayload,
-            signRequest.password
-          )
+          const signature = await (this.vault as any).signWithPayload(signingPayload, signRequest.password)
 
           console.log('Daemon completed signing')
 
@@ -506,9 +472,7 @@ export class DaemonManager {
 
       console.log('✅ Daemon shutdown via PID')
     } catch (error) {
-      throw new Error(
-        `Failed to shutdown daemon: ${error instanceof Error ? error.message : error}`
-      )
+      throw new Error(`Failed to shutdown daemon: ${error instanceof Error ? error.message : error}`)
     }
   }
 

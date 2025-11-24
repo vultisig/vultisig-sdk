@@ -7,6 +7,7 @@
 ## Implementation Strategy
 
 **Approach:** Hybrid (Mock-first, Browser-optional)
+
 - **Phase 1-4:** Mock-based testing in Node.js (fast, reliable)
 - **Phase 5:** Optional real browser validation via Vitest browser mode
 
@@ -24,12 +25,12 @@
 **Status:** Complete
 **Priority:** HIGH
 
-| Task | Status | File | Lines | Notes |
-|------|--------|------|-------|-------|
-| Progress tracking file | ✅ Complete | `STORAGE_TEST_PROGRESS.md` | - | This file |
-| Install dependencies | ✅ Complete | `package.json` | - | fake-indexeddb, node-localstorage |
-| Storage test utilities | ✅ Complete | `tests/runtime/helpers/storage-test-utils.ts` | 521 | Factory, assertions, helpers |
-| Browser API mocks | ✅ Complete | `tests/runtime/mocks/browser-apis.ts` | ~310 | IndexedDB, localStorage, chrome |
+| Task                   | Status      | File                                          | Lines | Notes                             |
+| ---------------------- | ----------- | --------------------------------------------- | ----- | --------------------------------- |
+| Progress tracking file | ✅ Complete | `STORAGE_TEST_PROGRESS.md`                    | -     | This file                         |
+| Install dependencies   | ✅ Complete | `package.json`                                | -     | fake-indexeddb, node-localstorage |
+| Storage test utilities | ✅ Complete | `tests/runtime/helpers/storage-test-utils.ts` | 521   | Factory, assertions, helpers      |
+| Browser API mocks      | ✅ Complete | `tests/runtime/mocks/browser-apis.ts`         | ~310  | IndexedDB, localStorage, chrome   |
 
 **Blockers:** None
 
@@ -40,11 +41,11 @@
 **Status:** Complete
 **Priority:** HIGH
 
-| Test File | Status | Lines | Tests | Coverage | Notes |
-|-----------|--------|-------|-------|----------|-------|
-| `BrowserStorage.test.ts` | ✅ Complete | 428 | 35 | ~95% | IndexedDB + fallback scenarios (6 tests) |
-| `NodeStorage.test.ts` | ✅ Complete | 493 | 43 | ~90% | Filesystem, permissions, Electron paths |
-| `ChromeStorage.test.ts` | ✅ Complete | 495 | 56 | ~90% | chrome.storage.local, quota, listeners |
+| Test File                | Status      | Lines | Tests | Coverage | Notes                                    |
+| ------------------------ | ----------- | ----- | ----- | -------- | ---------------------------------------- |
+| `BrowserStorage.test.ts` | ✅ Complete | 428   | 35    | ~95%     | IndexedDB + fallback scenarios (6 tests) |
+| `NodeStorage.test.ts`    | ✅ Complete | 493   | 43    | ~90%     | Filesystem, permissions, Electron paths  |
+| `ChromeStorage.test.ts`  | ✅ Complete | 495   | 56    | ~90%     | chrome.storage.local, quota, listeners   |
 
 **Tests:** 134 / 134
 **Blockers:** None
@@ -56,12 +57,12 @@
 **Status:** Not Started
 **Priority:** HIGH
 
-| Test File | Status | Lines | Tests | Coverage | Notes |
-|-----------|--------|-------|-------|----------|-------|
-| `AddressBookManager-persistence.test.ts` | ⏳ Pending | ~250 | ~20 | 40% → 95% | Entry persistence, cross-session |
-| `Vultisig-persistence.test.ts` | ⏳ Pending | ~300 | ~25 | 65% → 95% | Config, quota, clearAllData() |
-| `VaultManager-persistence.test.ts` | ⏳ Pending | ~300 | ~25 | 80% → 95% | Summaries, activeVault |
-| `Vault-persistence.test.ts` | ⏳ Pending | ~250 | ~20 | 85% → 95% | Preferences, per-vault isolation |
+| Test File                                | Status     | Lines | Tests | Coverage  | Notes                            |
+| ---------------------------------------- | ---------- | ----- | ----- | --------- | -------------------------------- |
+| `AddressBookManager-persistence.test.ts` | ⏳ Pending | ~250  | ~20   | 40% → 95% | Entry persistence, cross-session |
+| `Vultisig-persistence.test.ts`           | ⏳ Pending | ~300  | ~25   | 65% → 95% | Config, quota, clearAllData()    |
+| `VaultManager-persistence.test.ts`       | ⏳ Pending | ~300  | ~25   | 80% → 95% | Summaries, activeVault           |
+| `Vault-persistence.test.ts`              | ⏳ Pending | ~250  | ~20   | 85% → 95% | Preferences, per-vault isolation |
 
 **Tests:** 0 / ~90
 **Blockers:** Requires Phase 2 completion
@@ -73,11 +74,11 @@
 **Status:** Not Started
 **Priority:** MEDIUM
 
-| Test File | Status | Lines | Tests | Coverage | Notes |
-|-----------|--------|-------|-------|----------|-------|
-| `storage-failures.test.ts` | ⏳ Pending | ~200 | ~15 | - | Quota, unavailable, corrupted |
-| `storage-edge-cases.test.ts` | ⏳ Pending | ~250 | ~20 | - | Concurrent, Unicode, large data |
-| `backend-compatibility.test.ts` | ⏳ Pending | ~200 | ~15 | - | All backends, cross-compat |
+| Test File                       | Status     | Lines | Tests | Coverage | Notes                           |
+| ------------------------------- | ---------- | ----- | ----- | -------- | ------------------------------- |
+| `storage-failures.test.ts`      | ⏳ Pending | ~200  | ~15   | -        | Quota, unavailable, corrupted   |
+| `storage-edge-cases.test.ts`    | ⏳ Pending | ~250  | ~20   | -        | Concurrent, Unicode, large data |
+| `backend-compatibility.test.ts` | ⏳ Pending | ~200  | ~15   | -        | All backends, cross-compat      |
 
 **Tests:** 0 / ~50
 **Blockers:** Requires Phase 3 completion
@@ -89,11 +90,11 @@
 **Status:** Not Started
 **Priority:** LOW
 
-| Task | Status | File | Notes |
-|------|--------|------|-------|
-| Vitest browser config | ⏳ Pending | `tests/browser/vitest.config.ts` | Playwright provider |
-| Browser smoke tests | ⏳ Pending | `tests/browser/BrowserStorage-real.test.ts` | Real IndexedDB validation |
-| Install browser deps | ⏳ Pending | `package.json` | @vitest/browser, playwright |
+| Task                  | Status     | File                                        | Notes                       |
+| --------------------- | ---------- | ------------------------------------------- | --------------------------- |
+| Vitest browser config | ⏳ Pending | `tests/browser/vitest.config.ts`            | Playwright provider         |
+| Browser smoke tests   | ⏳ Pending | `tests/browser/BrowserStorage-real.test.ts` | Real IndexedDB validation   |
+| Install browser deps  | ⏳ Pending | `package.json`                              | @vitest/browser, playwright |
 
 **Tests:** 0 / ~10
 **Blockers:** Optional - can be done after Phase 4
@@ -104,29 +105,29 @@
 
 ### Required Dependencies
 
-| Package | Version | Status | Purpose |
-|---------|---------|--------|---------|
-| `fake-indexeddb` | ^6.0.0 | ⏳ Not Installed | Mock IndexedDB for Node.js |
-| `node-localstorage` | ^3.0.5 | ⏳ Not Installed | Mock localStorage for Node.js |
+| Package             | Version | Status           | Purpose                       |
+| ------------------- | ------- | ---------------- | ----------------------------- |
+| `fake-indexeddb`    | ^6.0.0  | ⏳ Not Installed | Mock IndexedDB for Node.js    |
+| `node-localstorage` | ^3.0.5  | ⏳ Not Installed | Mock localStorage for Node.js |
 
 ### Optional Dependencies (Phase 5)
 
-| Package | Version | Status | Purpose |
-|---------|---------|--------|---------|
-| `@vitest/browser` | ^3.0.9 | ⏳ Not Installed | Vitest browser mode |
-| `playwright` | ^1.47.0 | ⏳ Not Installed | Browser automation |
+| Package           | Version | Status           | Purpose             |
+| ----------------- | ------- | ---------------- | ------------------- |
+| `@vitest/browser` | ^3.0.9  | ⏳ Not Installed | Vitest browser mode |
+| `playwright`      | ^1.47.0 | ⏳ Not Installed | Browser automation  |
 
 ---
 
 ## Test Execution Stats
 
-| Metric | Current | Target | Progress |
-|--------|---------|--------|----------|
-| Total Tests | 236 (runtime) | ~300 | 236 / 300 (79%) |
-| Storage Tests | 178 (Memory + Browser + Node + Chrome) | 200 | 178 / 200 (89%) |
-| Storage Coverage | ~75% | 92% | 75% / 92% |
-| Execution Time | ~3.2s | <5min | ✅ |
-| Flakiness Rate | <1% | <1% | ✅ |
+| Metric           | Current                                | Target | Progress        |
+| ---------------- | -------------------------------------- | ------ | --------------- |
+| Total Tests      | 236 (runtime)                          | ~300   | 236 / 300 (79%) |
+| Storage Tests    | 178 (Memory + Browser + Node + Chrome) | 200    | 178 / 200 (89%) |
+| Storage Coverage | ~75%                                   | 92%    | 75% / 92%       |
+| Execution Time   | ~3.2s                                  | <5min  | ✅              |
+| Flakiness Rate   | <1%                                    | <1%    | ✅              |
 
 ---
 
@@ -164,18 +165,19 @@ None currently
 
 ## Timeline
 
-| Week | Phase | Status | Completion Date |
-|------|-------|--------|-----------------|
+| Week   | Phase                                      | Status         | Completion Date    |
+| ------ | ------------------------------------------ | -------------- | ------------------ |
 | Week 1 | Phase 1-2 (Infrastructure + Backend Tests) | ⏳ In Progress | Target: 2025-11-21 |
-| Week 2 | Phase 3 (Component Integration) | ⏳ Pending | Target: 2025-11-28 |
-| Week 3 | Phase 4 (Error Handling & Edge Cases) | ⏳ Pending | Target: 2025-12-05 |
-| Week 4 | Review, Fixes, Documentation | ⏳ Pending | Target: 2025-12-12 |
+| Week 2 | Phase 3 (Component Integration)            | ⏳ Pending     | Target: 2025-11-28 |
+| Week 3 | Phase 4 (Error Handling & Edge Cases)      | ⏳ Pending     | Target: 2025-12-05 |
+| Week 4 | Review, Fixes, Documentation               | ⏳ Pending     | Target: 2025-12-12 |
 
 ---
 
 ## Next Steps
 
 **Completed (2025-11-15) - Phase 2 Complete! ✅**
+
 1. ✅ Create progress tracking file
 2. ✅ Install fake-indexeddb and node-localstorage
 3. ✅ Create storage-test-utils.ts (521 lines)
@@ -185,12 +187,7 @@ None currently
 7. ✅ ChromeStorage.test.ts (56 tests, ~495 lines)
 8. ✅ All 236 runtime tests passing in ~3.2s
 
-**Next Steps (Phase 3):**
-9. Begin component integration tests
-10. AddressBookManager-persistence.test.ts (~20 tests)
-11. Vultisig-persistence.test.ts (~25 tests)
-12. VaultManager-persistence.test.ts (~25 tests)
-13. Vault-persistence.test.ts (~20 tests)
+**Next Steps (Phase 3):** 9. Begin component integration tests 10. AddressBookManager-persistence.test.ts (~20 tests) 11. Vultisig-persistence.test.ts (~25 tests) 12. VaultManager-persistence.test.ts (~25 tests) 13. Vault-persistence.test.ts (~20 tests)
 
 ## Known Issues
 
@@ -202,26 +199,29 @@ None currently
 Dynamic import in `beforeAll` caused Vitest module transformation timing issues with fake-indexeddb.
 
 **Solution (2025-11-14):**
+
 ```typescript
 // ❌ Was causing hang (dynamic import in beforeAll)
 beforeAll(async () => {
-  const module = await import('../../../../src/runtime/storage/BrowserStorage')
-  BrowserStorage = module.BrowserStorage
-})
+  const module = await import("../../../../src/runtime/storage/BrowserStorage");
+  BrowserStorage = module.BrowserStorage;
+});
 
 // ✅ Fixed with static import after require
-if (typeof indexedDB === 'undefined') {
-  require('fake-indexeddb/auto')  // Load globals FIRST (synchronous)
+if (typeof indexedDB === "undefined") {
+  require("fake-indexeddb/auto"); // Load globals FIRST (synchronous)
 }
-import { BrowserStorage } from '../../../../src/runtime/storage/BrowserStorage'  // THEN import
+import { BrowserStorage } from "../../../../src/runtime/storage/BrowserStorage"; // THEN import
 ```
 
 **Result:**
+
 - ✅ All 29 tests pass in ~3 seconds
 - ✅ No file splitting needed
 - ✅ Large test files work fine with correct import pattern
 
 **Key Learnings:**
+
 1. `fake-indexeddb/auto` must use `require()` (it's a CommonJS side-effect module)
 2. Static imports work fine AFTER the `require()` call
 3. Dynamic imports in `beforeAll` cause Vitest transformation issues
@@ -234,14 +234,17 @@ import { BrowserStorage } from '../../../../src/runtime/storage/BrowserStorage' 
 ### Created Files ✅
 
 **Documentation:**
+
 - ✅ `tests/STORAGE_TEST_PROGRESS.md` (this file)
 - ✅ `tests/STORAGE_INTEGRATION_TEST_PLAN.md`
 
 **Phase 1 - Infrastructure:**
+
 - ✅ `tests/runtime/helpers/storage-test-utils.ts` (521 lines)
 - ✅ `tests/runtime/mocks/browser-apis.ts` (~310 lines)
 
 **Phase 2 - Storage Backend Tests:**
+
 - ✅ `tests/runtime/storage/BrowserStorage.test.ts` (428 lines, 35 tests)
 - ✅ `tests/runtime/storage/NodeStorage.test.ts` (493 lines, 43 tests)
 - ✅ `tests/runtime/storage/ChromeStorage.test.ts` (495 lines, 56 tests)
@@ -249,17 +252,20 @@ import { BrowserStorage } from '../../../../src/runtime/storage/BrowserStorage' 
 ### To Be Created ⏳
 
 **Phase 3:**
+
 - ⏳ `tests/integration/storage-integration/AddressBookManager-persistence.test.ts`
 - ⏳ `tests/integration/storage-integration/Vultisig-persistence.test.ts`
 - ⏳ `tests/integration/storage-integration/VaultManager-persistence.test.ts`
 - ⏳ `tests/integration/storage-integration/Vault-persistence.test.ts`
 
 **Phase 4:**
+
 - ⏳ `tests/integration/storage-edge-cases/storage-failures.test.ts`
 - ⏳ `tests/integration/storage-edge-cases/storage-edge-cases.test.ts`
 - ⏳ `tests/integration/storage-backends/backend-compatibility.test.ts`
 
 **Phase 5 (Optional):**
+
 - ⏳ `tests/browser/vitest.config.ts`
 - ⏳ `tests/browser/BrowserStorage-real.test.ts`
 
@@ -267,17 +273,17 @@ import { BrowserStorage } from '../../../../src/runtime/storage/BrowserStorage' 
 
 ## Coverage Goals
 
-| Component | Baseline | Current | Target | Delta |
-|-----------|----------|---------|--------|-------|
-| StorageManager | 60% | 60% | 95% | +35% |
-| BrowserStorage | 0% | ~95% | 90% | +95% ✅ |
-| NodeStorage | 0% | ~90% | 90% | +90% ✅ |
-| ChromeStorage | 0% | ~90% | 85% | +90% ✅ |
-| AddressBookManager | 40% | 40% | 95% | +55% |
-| Vultisig | 65% | 65% | 95% | +30% |
-| VaultManager | 80% | 80% | 95% | +15% |
-| Vault | 85% | 85% | 95% | +10% |
-| **Overall Storage** | **45%** | **~75%** | **92%** | **+30%** |
+| Component           | Baseline | Current  | Target  | Delta    |
+| ------------------- | -------- | -------- | ------- | -------- |
+| StorageManager      | 60%      | 60%      | 95%     | +35%     |
+| BrowserStorage      | 0%       | ~95%     | 90%     | +95% ✅  |
+| NodeStorage         | 0%       | ~90%     | 90%     | +90% ✅  |
+| ChromeStorage       | 0%       | ~90%     | 85%     | +90% ✅  |
+| AddressBookManager  | 40%      | 40%      | 95%     | +55%     |
+| Vultisig            | 65%      | 65%      | 95%     | +30%     |
+| VaultManager        | 80%      | 80%      | 95%     | +15%     |
+| Vault               | 85%      | 85%      | 95%     | +10%     |
+| **Overall Storage** | **45%**  | **~75%** | **92%** | **+30%** |
 
 ---
 
@@ -288,6 +294,7 @@ import { BrowserStorage } from '../../../../src/runtime/storage/BrowserStorage' 
 ### 2025-11-15 - Phase 2 Complete! ✅
 
 **Completed Files:**
+
 1. ✅ **NodeStorage.test.ts** (493 lines, 43 tests)
    - Filesystem operations with atomic writes
    - Electron path detection and mocking
@@ -311,12 +318,14 @@ import { BrowserStorage } from '../../../../src/runtime/storage/BrowserStorage' 
    - Edge cases in memory-only mode
 
 **Test Results:**
+
 - ✅ All 236 runtime tests passing
 - ✅ Execution time: ~3.2s (well under 5min target)
 - ✅ Zero flaky tests
 - ✅ Storage coverage: 55% → ~75% (+20%)
 
 **Phase 2 Summary:**
+
 - **Tests Created:** 105 new tests (43 + 56 + 6)
 - **Lines Written:** ~1,416 lines of test code
 - **Coverage Increase:** BrowserStorage ~95%, NodeStorage ~90%, ChromeStorage ~90%
@@ -336,6 +345,7 @@ Dynamic import in `beforeAll` hook caused Vitest module transformation issues wi
 Changed from dynamic import to static import after synchronous `require('fake-indexeddb/auto')`.
 
 **Results:**
+
 - ✅ 29 BrowserStorage tests passing (3s execution time)
 - ✅ Coverage: BrowserStorage ~85%
 

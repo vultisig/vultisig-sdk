@@ -69,10 +69,7 @@ async function testCliSigning() {
     console.log('   Balance ETH:', formatEther(balance))
 
     console.log('\n🔢 3. Fetching current nonce from RPC...')
-    const currentNonce = await readProvider.getTransactionCount(
-      signerAddress,
-      'pending'
-    )
+    const currentNonce = await readProvider.getTransactionCount(signerAddress, 'pending')
     console.log('   Current nonce:', currentNonce)
 
     // Update payload with current nonce
@@ -91,18 +88,12 @@ async function testCliSigning() {
 
     console.log('\n🔍 5. Checking transaction format...')
 
-    if (
-      signedTx.startsWith('0x02') ||
-      signedTx.startsWith('0x01') ||
-      signedTx.startsWith('0x00')
-    ) {
+    if (signedTx.startsWith('0x02') || signedTx.startsWith('0x01') || signedTx.startsWith('0x00')) {
       console.log('✅ Received complete serialized transaction from CLI')
       console.log('📝 Transaction ready for immediate broadcast')
       console.log('📏 Length:', signedTx.length, 'characters')
     } else {
-      console.log(
-        '⚠️  Received DER signature, will need client-side serialization'
-      )
+      console.log('⚠️  Received DER signature, will need client-side serialization')
       console.log('📝 Signature:', signedTx.substring(0, 20) + '...')
     }
 
@@ -113,9 +104,7 @@ async function testCliSigning() {
       const shouldBroadcast = process.env.BROADCAST_TX === 'true'
 
       if (shouldBroadcast) {
-        console.log(
-          '   🚀 Broadcasting to mainnet using direct fetch (no batching)...'
-        )
+        console.log('   🚀 Broadcasting to mainnet using direct fetch (no batching)...')
 
         // Use direct fetch to avoid all ethers.js batching issues
         const response = await fetch(rpcUrl, {
@@ -139,16 +128,11 @@ async function testCliSigning() {
         const txHash = result.result
         console.log('   ✅ Transaction broadcast successful!')
         console.log('   📋 Transaction hash:', txHash)
-        console.log(
-          '   🔗 View on Etherscan: https://etherscan.io/tx/' + txHash
-        )
+        console.log('   🔗 View on Etherscan: https://etherscan.io/tx/' + txHash)
 
         console.log('   ⏳ Waiting for confirmation...')
         const receipt = await readProvider.waitForTransaction(txHash)
-        console.log(
-          '   ✅ Transaction confirmed in block:',
-          receipt.blockNumber
-        )
+        console.log('   ✅ Transaction confirmed in block:', receipt.blockNumber)
 
         return {
           signedTx,
@@ -157,9 +141,7 @@ async function testCliSigning() {
           payload: updatedPayload,
         }
       } else {
-        console.log(
-          '   ⚠️  Skipping broadcast (set BROADCAST_TX=true to broadcast)'
-        )
+        console.log('   ⚠️  Skipping broadcast (set BROADCAST_TX=true to broadcast)')
         console.log('   📝 Transaction is ready for broadcast')
         console.log('   🔗 Signed transaction:', signedTx)
 
@@ -171,9 +153,7 @@ async function testCliSigning() {
       }
     } catch (error) {
       console.error('   ❌ Broadcast failed:', error.message)
-      console.log(
-        '   💡 This might be expected if account has insufficient balance'
-      )
+      console.log('   💡 This might be expected if account has insufficient balance')
       console.log('   📝 But the signature is still valid!')
 
       return {
@@ -189,18 +169,12 @@ async function testCliSigning() {
     if (error.message.includes('ENOENT') || error.message.includes('socket')) {
       console.error('\n💡 Make sure Vultisig daemon is running:')
       console.error('   cd /path/to/vultisig-sdk/clients/cli')
-      console.error(
-        '   ./bin/vultisig run --vault $VAULT_NAME --password $VAULT_PASSWORD'
-      )
+      console.error('   ./bin/vultisig run --vault $VAULT_NAME --password $VAULT_PASSWORD')
       console.error('\n💡 Or set environment variables:')
       console.error('   export VAULT_NAME="/path/to/your/vault.vult"')
       console.error('   export VAULT_PASSWORD="your-password"')
-      console.error(
-        '   export RPC_URL="https://your-ethereum-rpc-url" # optional'
-      )
-      console.error(
-        '   export BROADCAST_TX="true" # optional, for actual broadcasting'
-      )
+      console.error('   export RPC_URL="https://your-ethereum-rpc-url" # optional')
+      console.error('   export BROADCAST_TX="true" # optional, for actual broadcasting')
     }
 
     throw error
@@ -229,9 +203,7 @@ testCliSigning()
       } else if (result.broadcastError) {
         console.log('⚠️  Broadcast skipped due to:', result.broadcastError)
       } else {
-        console.log(
-          '⚠️  Broadcast skipped (set BROADCAST_TX=true to broadcast)'
-        )
+        console.log('⚠️  Broadcast skipped (set BROADCAST_TX=true to broadcast)')
       }
 
       console.log('\n🎯 Integration ready for:')
@@ -241,12 +213,8 @@ testCliSigning()
       console.log('   • Enterprise MPC applications')
 
       console.log('\n📚 Usage in your application:')
-      console.log(
-        '   const signer = new VultisigSigner(provider, { mode: "fast", password: env.VAULT_PASSWORD })'
-      )
-      console.log(
-        '   const tx = await signer.signTransaction(transactionRequest)'
-      )
+      console.log('   const signer = new VultisigSigner(provider, { mode: "fast", password: env.VAULT_PASSWORD })')
+      console.log('   const tx = await signer.signTransaction(transactionRequest)')
       console.log('   const receipt = await provider.broadcastTransaction(tx)')
     }
   })

@@ -24,7 +24,7 @@ export type StoredValue<T = unknown> = {
  * Universal storage interface for vault persistence.
  * All implementations must support async operations and provide atomic writes.
  */
-export type VaultStorage = {
+export type Storage = {
   /**
    * Retrieve a value by key.
    * @returns The value if found, null otherwise

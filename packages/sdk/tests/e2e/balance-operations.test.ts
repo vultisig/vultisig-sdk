@@ -13,13 +13,14 @@
  * - See tests/e2e/SECURITY.md and .env.example for setup instructions
  */
 
+import { Chain } from '@core/chain/Chain'
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import type { Vault } from '@/index'
+import { VaultBase } from '@/index'
 
 describe('E2E: Balance Operations (Production)', () => {
-  let vault: Vault
+  let vault: VaultBase
 
   beforeAll(async () => {
     console.log('📦 Loading persistent test vault...')
@@ -39,13 +40,13 @@ describe('E2E: Balance Operations (Production)', () => {
     it('should fetch Bitcoin balance', async () => {
       console.log('🔍 Fetching Bitcoin balance...')
 
-      const balance = await vault.balance('Bitcoin')
+      const balance = await vault.balance(Chain.Bitcoin)
 
       expect(balance).toBeDefined()
       expect(balance.symbol).toBe('BTC')
       expect(balance.decimals).toBe(8)
       expect(balance.amount).toBeTypeOf('string')
-      expect(balance.chainId).toBe('Bitcoin')
+      expect(balance.chainId).toBe(Chain.Bitcoin)
 
       // Parse the amount to verify it's a valid number
       const amountNum = parseFloat(balance.amount)
@@ -57,13 +58,13 @@ describe('E2E: Balance Operations (Production)', () => {
     it('should fetch Ethereum balance', async () => {
       console.log('🔍 Fetching Ethereum balance...')
 
-      const balance = await vault.balance('Ethereum')
+      const balance = await vault.balance(Chain.Ethereum)
 
       expect(balance).toBeDefined()
       expect(balance.symbol).toBe('ETH')
       expect(balance.decimals).toBe(18)
       expect(balance.amount).toBeTypeOf('string')
-      expect(balance.chainId).toBe('Ethereum')
+      expect(balance.chainId).toBe(Chain.Ethereum)
 
       // Parse the amount to verify it's a valid number
       const amountNum = parseFloat(balance.amount)
@@ -75,13 +76,13 @@ describe('E2E: Balance Operations (Production)', () => {
     it('should fetch Solana balance', async () => {
       console.log('🔍 Fetching Solana balance...')
 
-      const balance = await vault.balance('Solana')
+      const balance = await vault.balance(Chain.Solana)
 
       expect(balance).toBeDefined()
       expect(balance.symbol).toBe('SOL')
       expect(balance.decimals).toBe(9)
       expect(balance.amount).toBeTypeOf('string')
-      expect(balance.chainId).toBe('Solana')
+      expect(balance.chainId).toBe(Chain.Solana)
 
       // Parse the amount to verify it's a valid number
       const amountNum = parseFloat(balance.amount)
@@ -93,13 +94,13 @@ describe('E2E: Balance Operations (Production)', () => {
     it('should fetch Polygon balance', async () => {
       console.log('🔍 Fetching Polygon balance...')
 
-      const balance = await vault.balance('Polygon')
+      const balance = await vault.balance(Chain.Polygon)
 
       expect(balance).toBeDefined()
       expect(balance.symbol).toBe('POL') // Polygon rebranded from MATIC to POL in Sept 2024
       expect(balance.decimals).toBe(18)
       expect(balance.amount).toBeTypeOf('string')
-      expect(balance.chainId).toBe('Polygon')
+      expect(balance.chainId).toBe(Chain.Polygon)
 
       // Parse the amount to verify it's a valid number
       const amountNum = parseFloat(balance.amount)
@@ -116,13 +117,13 @@ describe('E2E: Balance Operations (Production)', () => {
       // USDC contract address on Ethereum mainnet
       const USDC_ADDRESS = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 
-      const balance = await vault.balance('Ethereum', USDC_ADDRESS)
+      const balance = await vault.balance(Chain.Ethereum, USDC_ADDRESS)
 
       expect(balance).toBeDefined()
       expect(balance.symbol).toBeDefined() // Symbol may vary
       expect(balance.decimals).toBeDefined()
       expect(balance.amount).toBeTypeOf('string')
-      expect(balance.chainId).toBe('Ethereum')
+      expect(balance.chainId).toBe(Chain.Ethereum)
       expect(balance.tokenId).toBe(USDC_ADDRESS)
 
       console.log(`💰 USDC: ${balance.amount} ${balance.symbol}`)
@@ -134,13 +135,13 @@ describe('E2E: Balance Operations (Production)', () => {
       // USDT contract address on Ethereum mainnet
       const USDT_ADDRESS = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
 
-      const balance = await vault.balance('Ethereum', USDT_ADDRESS)
+      const balance = await vault.balance(Chain.Ethereum, USDT_ADDRESS)
 
       expect(balance).toBeDefined()
       expect(balance.symbol).toBeDefined() // Symbol may vary
       expect(balance.decimals).toBeDefined()
       expect(balance.amount).toBeTypeOf('string')
-      expect(balance.chainId).toBe('Ethereum')
+      expect(balance.chainId).toBe(Chain.Ethereum)
       expect(balance.tokenId).toBe(USDT_ADDRESS)
 
       console.log(`💰 USDT: ${balance.amount} ${balance.symbol}`)
@@ -151,7 +152,7 @@ describe('E2E: Balance Operations (Production)', () => {
     it('should fetch balances for multiple chains in parallel', async () => {
       console.log('🔍 Fetching balances for multiple chains...')
 
-      const chains = ['Bitcoin', 'Ethereum', 'Solana', 'Polygon']
+      const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.Polygon]
       const startTime = Date.now()
 
       const balances = await vault.balances(chains)
@@ -165,9 +166,7 @@ describe('E2E: Balance Operations (Production)', () => {
         expect(balances[chain].symbol).toBeDefined()
         expect(balances[chain].amount).toBeTypeOf('string')
         expect(balances[chain].chainId).toBe(chain)
-        console.log(
-          `💰 ${chain}: ${balances[chain].amount} ${balances[chain].symbol}`
-        )
+        console.log(`💰 ${chain}: ${balances[chain].amount} ${balances[chain].symbol}`)
       }
 
       console.log(`⚡ Fetched ${chains.length} balances in ${fetchTime}ms`)
@@ -197,12 +196,12 @@ describe('E2E: Balance Operations (Production)', () => {
 
       // First fetch (force fresh by using updateBalance which clears cache)
       const startTime1 = performance.now()
-      const balance1 = await vault.updateBalance('Ethereum')
+      const balance1 = await vault.updateBalance(Chain.Ethereum)
       const fetchTime1 = performance.now() - startTime1
 
       // Second fetch (cached - should be much faster)
       const startTime2 = performance.now()
-      const balance2 = await vault.balance('Ethereum')
+      const balance2 = await vault.balance(Chain.Ethereum)
       const fetchTime2 = performance.now() - startTime2
 
       // Cached fetch should be significantly faster (at least 5x)
@@ -216,19 +215,17 @@ describe('E2E: Balance Operations (Production)', () => {
 
       console.log(`⚡ First fetch: ${fetchTime1.toFixed(2)}ms`)
       console.log(`⚡ Cached fetch: ${fetchTime2.toFixed(2)}ms`)
-      console.log(
-        `🚀 Speedup: ${(fetchTime1 / fetchTime2Adjusted).toFixed(1)}x`
-      )
+      console.log(`🚀 Speedup: ${(fetchTime1 / fetchTime2Adjusted).toFixed(1)}x`)
     })
 
     it('should update balance when explicitly refreshed', async () => {
       console.log('🔍 Testing balance refresh...')
 
       // Get cached balance
-      const balance1 = await vault.balance('Polygon')
+      const balance1 = await vault.balance(Chain.Polygon)
 
       // Force refresh
-      const balance2 = await vault.updateBalance('Polygon')
+      const balance2 = await vault.updateBalance(Chain.Polygon)
 
       // Both should be valid balances
       expect(balance1).toBeDefined()
@@ -243,7 +240,7 @@ describe('E2E: Balance Operations (Production)', () => {
 
   describe('Address Verification', () => {
     it('should derive valid Bitcoin address', async () => {
-      const address = await vault.address('Bitcoin')
+      const address = await vault.address(Chain.Bitcoin)
 
       expect(address).toBeDefined()
       expect(address).toMatch(/^bc1/) // Bech32 format
@@ -252,7 +249,7 @@ describe('E2E: Balance Operations (Production)', () => {
     })
 
     it('should derive valid Ethereum address', async () => {
-      const address = await vault.address('Ethereum')
+      const address = await vault.address(Chain.Ethereum)
 
       expect(address).toBeDefined()
       expect(address).toMatch(/^0x[a-fA-F0-9]{40}$/) // EVM format
@@ -262,18 +259,16 @@ describe('E2E: Balance Operations (Production)', () => {
 
     it('should derive same address for all EVM chains', async () => {
       const evmChains = [
-        'Ethereum',
-        'BSC',
-        'Polygon',
-        'Avalanche',
-        'Arbitrum',
-        'Optimism',
-        'Base',
+        Chain.Ethereum,
+        Chain.BSC,
+        Chain.Polygon,
+        Chain.Avalanche,
+        Chain.Arbitrum,
+        Chain.Optimism,
+        Chain.Base,
       ]
 
-      const addresses = await Promise.all(
-        evmChains.map(chain => vault.address(chain))
-      )
+      const addresses = await Promise.all(evmChains.map(chain => vault.address(chain)))
 
       // All EVM chains should have the same address
       const uniqueAddresses = new Set(addresses)
@@ -293,9 +288,7 @@ describe('E2E: Balance Operations (Production)', () => {
     })
 
     it('should handle invalid token address gracefully', async () => {
-      await expect(
-        vault.balance('Ethereum', 'invalid_address')
-      ).rejects.toThrow()
+      await expect(vault.balance(Chain.Ethereum, 'invalid_address')).rejects.toThrow()
     })
   })
 })

@@ -59,15 +59,7 @@ export class SendCommand {
     })
   }
 
-  private buildEthTransactionPayload({
-    to,
-    amount,
-    memo,
-  }: {
-    to: string
-    amount: string
-    memo?: string
-  }) {
+  private buildEthTransactionPayload({ to, amount, memo }: { to: string; amount: string; memo?: string }) {
     const amountInWei = BigInt(Math.floor(parseFloat(amount) * 1e18))
     const gasLimit = 21000
 

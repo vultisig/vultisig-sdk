@@ -1,10 +1,4 @@
-import {
-  AbstractSigner,
-  Provider,
-  TransactionRequest,
-  TypedDataDomain,
-  TypedDataField,
-} from 'ethers'
+import { AbstractSigner, Provider, TransactionRequest, TypedDataDomain, TypedDataField } from 'ethers'
 import * as net from 'net'
 
 export type JsonRpcRequest = {
@@ -97,9 +91,7 @@ export class VultisigSigner extends AbstractSigner {
       gasLimit: tx.gasLimit ? tx.gasLimit.toString() : '21000',
       gasPrice: tx.gasPrice ? tx.gasPrice.toString() : undefined,
       maxFeePerGas: tx.maxFeePerGas ? tx.maxFeePerGas.toString() : undefined,
-      maxPriorityFeePerGas: tx.maxPriorityFeePerGas
-        ? tx.maxPriorityFeePerGas.toString()
-        : undefined,
+      maxPriorityFeePerGas: tx.maxPriorityFeePerGas ? tx.maxPriorityFeePerGas.toString() : undefined,
       nonce: tx.nonce,
       type: tx.type || 2, // EIP-1559 by default
       chainId: tx.chainId || 1,
@@ -175,8 +167,7 @@ export class VultisigSigner extends AbstractSigner {
 
   async signMessage(message: string | Uint8Array): Promise<string> {
     // Convert message to string if it's Uint8Array
-    const messageStr =
-      typeof message === 'string' ? message : new TextDecoder().decode(message)
+    const messageStr = typeof message === 'string' ? message : new TextDecoder().decode(message)
 
     const request: JsonRpcRequest = {
       id: this.requestId++,

@@ -99,8 +99,7 @@ async function main() {
     const amount = '1000000' // 1 USDC in smallest units
     const amountHex = parseInt(amount).toString(16).padStart(64, '0')
 
-    const transactionData =
-      transferFunctionSignature + recipientAddress + amountHex
+    const transactionData = transferFunctionSignature + recipientAddress + amountHex
 
     const transaction = {
       to: usdcContractAddress,
@@ -129,9 +128,7 @@ async function main() {
     } catch (error) {
       console.error('❌ Daemon not running or vault not loaded')
       console.error('\n💡 Please start the daemon first:')
-      console.error(
-        '   vultisig run --vault /path/to/your/vault.vult --password $PASSWORD'
-      )
+      console.error('   vultisig run --vault /path/to/your/vault.vult --password $PASSWORD')
       process.exit(1)
     }
 
@@ -160,17 +157,13 @@ async function main() {
     console.log('💸 1 USDC sent to self successfully!')
 
     console.log('\n🎉 USDC transfer completed successfully!')
-    console.log(
-      `🔍 View on Etherscan: https://etherscan.io/tx/${txResponse.hash}`
-    )
+    console.log(`🔍 View on Etherscan: https://etherscan.io/tx/${txResponse.hash}`)
   } catch (error) {
     console.error('\n❌ Error:', error.message)
 
     if (error.message.includes('ENOENT') || error.message.includes('socket')) {
       console.error('\n💡 Make sure Vultisig daemon is running:')
-      console.error(
-        '   vultisig run --vault /path/to/your/vault.vult --password $PASSWORD'
-      )
+      console.error('   vultisig run --vault /path/to/your/vault.vult --password $PASSWORD')
     } else if (error.message.includes('password')) {
       console.error('\n💡 Check your vault password in .env file')
     }

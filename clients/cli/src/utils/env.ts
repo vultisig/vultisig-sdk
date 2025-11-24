@@ -19,10 +19,7 @@ export type VaultConfig = {
  * 2. Try to load from .env file if it exists
  * 3. Return undefined to trigger auto-discovery
  */
-export function getVaultConfig(
-  providedVault?: string,
-  providedPassword?: string
-): VaultConfig {
+export function getVaultConfig(providedVault?: string, providedPassword?: string): VaultConfig {
   // If both are provided, use them
   if (providedVault && providedPassword !== undefined) {
     return {
@@ -102,16 +99,12 @@ function resolveVaultName(vaultName: string): string {
 
     // Find files that start with the base name
     const matches = files.filter(
-      file =>
-        file.toLowerCase().startsWith(baseName.toLowerCase()) &&
-        file.toLowerCase().endsWith('.vult')
+      file => file.toLowerCase().startsWith(baseName.toLowerCase()) && file.toLowerCase().endsWith('.vult')
     )
 
     if (matches.length > 0) {
       // If multiple matches, prefer exact match
-      const exactMatch = matches.find(
-        file => file.toLowerCase() === `${baseName.toLowerCase()}.vult`
-      )
+      const exactMatch = matches.find(file => file.toLowerCase() === `${baseName.toLowerCase()}.vult`)
       const selectedFile = exactMatch || matches[0]
       return path.join(vaultsDir, selectedFile)
     }

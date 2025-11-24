@@ -10,20 +10,14 @@
  */
 export class UniversalEventEmitter<Events extends Record<string, unknown>> {
   private listeners = new Map<keyof Events, Set<EventHandler<unknown>>>()
-  private onceWrappers = new WeakMap<
-    EventHandler<unknown>,
-    EventHandler<unknown>
-  >()
+  private onceWrappers = new WeakMap<EventHandler<unknown>, EventHandler<unknown>>()
   private maxListeners = 10 // Memory leak protection
 
   /**
    * Register an event listener.
    * @returns Unsubscribe function
    */
-  on<K extends keyof Events>(
-    event: K,
-    handler: EventHandler<Events[K]>
-  ): () => void {
+  on<K extends keyof Events>(event: K, handler: EventHandler<Events[K]>): () => void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set())
     }
@@ -48,10 +42,7 @@ export class UniversalEventEmitter<Events extends Record<string, unknown>> {
    * The listener will be automatically removed after being called once.
    * @returns Unsubscribe function
    */
-  once<K extends keyof Events>(
-    event: K,
-    handler: EventHandler<Events[K]>
-  ): () => void {
+  once<K extends keyof Events>(event: K, handler: EventHandler<Events[K]>): () => void {
     // Create wrapper that removes itself after calling the original handler
     const onceWrapper: EventHandler<Events[K]> = (data: Events[K]) => {
       this.off(event, handler)
@@ -59,10 +50,7 @@ export class UniversalEventEmitter<Events extends Record<string, unknown>> {
     }
 
     // Store mapping so we can remove it if off() is called with original handler
-    this.onceWrappers.set(
-      handler as EventHandler<unknown>,
-      onceWrapper as EventHandler<unknown>
-    )
+    this.onceWrappers.set(handler as EventHandler<unknown>, onceWrapper as EventHandler<unknown>)
 
     // Register the wrapper
     return this.on(event, onceWrapper)
@@ -71,10 +59,7 @@ export class UniversalEventEmitter<Events extends Record<string, unknown>> {
   /**
    * Unregister an event listener.
    */
-  off<K extends keyof Events>(
-    event: K,
-    handler: EventHandler<Events[K]>
-  ): void {
+  off<K extends keyof Events>(event: K, handler: EventHandler<Events[K]>): void {
     const handlers = this.listeners.get(event)
     if (!handlers) return
 
@@ -104,9 +89,7 @@ export class UniversalEventEmitter<Events extends Record<string, unknown>> {
    */
   protected emit<K extends keyof Events>(
     event: K,
-    ...args: Events[K] extends Record<string, never>
-      ? [] | [Events[K]]
-      : [Events[K]]
+    ...args: Events[K] extends Record<string, never> ? [] | [Events[K]] : [Events[K]]
   ): void {
     const data = (args.length > 0 ? args[0] : {}) as Events[K]
     const handlers = this.listeners.get(event)
@@ -119,10 +102,7 @@ export class UniversalEventEmitter<Events extends Record<string, unknown>> {
       try {
         ;(handler as EventHandler<Events[K]>)(data)
       } catch (error) {
-        console.error(
-          `[EventEmitter] Error in handler for event "${String(event)}":`,
-          error
-        )
+        console.error(`[EventEmitter] Error in handler for event "${String(event)}":`, error)
         // Store error for potential debugging
         this.emitError(error as Error, event)
       }

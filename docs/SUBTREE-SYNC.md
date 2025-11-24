@@ -52,18 +52,20 @@ git sparse-checkout set core/ lib/ clients/extension/
 Copies selected folders from `upstream/` to `src/`:
 
 **Folders copied:**
+
 ```typescript
 const foldersToCoopy = [
-  'upstream/core/chain',      // → src/core/chain/
-  'upstream/core/mpc',        // → src/core/mpc/
-  'upstream/core/config',     // → src/core/config/
-  'upstream/lib/utils',       // → src/lib/utils/
-  'upstream/lib/dkls',        // → src/lib/dkls/
-  'upstream/lib/schnorr',     // → src/lib/schnorr/
-]
+  "upstream/core/chain", // → src/core/chain/
+  "upstream/core/mpc", // → src/core/mpc/
+  "upstream/core/config", // → src/core/config/
+  "upstream/lib/utils", // → src/lib/utils/
+  "upstream/lib/dkls", // → src/lib/dkls/
+  "upstream/lib/schnorr", // → src/lib/schnorr/
+];
 ```
 
 **Copy process:**
+
 - Recursively copies all files and subdirectories
 - Transforms imports: `@core/chain/Chain` → `../../chain/Chain`
 - Handles `.ts`, `.tsx`, `.js`, `.d.ts` (with transformations)

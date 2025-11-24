@@ -37,13 +37,7 @@ export const VaultDirectTester = ({ vaultData }: { vaultData: VaultData }) => {
   const [results, setResults] = useState<DirectTestResult[]>([])
   const [loading, setLoading] = useState(false)
 
-  const supportedChains = [
-    'bitcoin',
-    'ethereum',
-    'thorchain',
-    'litecoin',
-    'solana',
-  ]
+  const supportedChains = ['bitcoin', 'ethereum', 'thorchain', 'litecoin', 'solana']
 
   const testDirectVaultMethod = async () => {
     setLoading(true)
@@ -156,16 +150,12 @@ export const VaultDirectTester = ({ vaultData }: { vaultData: VaultData }) => {
         backgroundColor: '#d1ecf1',
       }}
     >
-      <h3 style={{ marginTop: 0, color: '#0c5460' }}>
-        🔧 Direct Vault Method Tester
-      </h3>
+      <h3 style={{ marginTop: 0, color: '#0c5460' }}>🔧 Direct Vault Method Tester</h3>
       <p style={{ color: '#0c5460', fontSize: '14px', marginBottom: 16 }}>
         Test the Vault.address(chain: string) method directly
       </p>
 
-      <div
-        style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}
-      >
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <select
           value={chain}
           onChange={e => setChain(e.target.value)}
@@ -218,9 +208,7 @@ export const VaultDirectTester = ({ vaultData }: { vaultData: VaultData }) => {
 
       {results.length > 0 && (
         <div>
-          <h4 style={{ marginBottom: 8, color: '#0c5460' }}>
-            Direct Test Results:
-          </h4>
+          <h4 style={{ marginBottom: 8, color: '#0c5460' }}>Direct Test Results:</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {results.map((result, index) => (
               <div
@@ -240,15 +228,11 @@ export const VaultDirectTester = ({ vaultData }: { vaultData: VaultData }) => {
                   }}
                 >
                   <div>
-                    <strong
-                      style={{ color: result.success ? '#155724' : '#721c24' }}
-                    >
+                    <strong style={{ color: result.success ? '#155724' : '#721c24' }}>
                       {result.success ? '✅ SUCCESS' : '❌ ERROR'}
                     </strong>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    {result.duration.toFixed(2)}ms
-                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{result.duration.toFixed(2)}ms</div>
                 </div>
 
                 {result.address && (
@@ -294,12 +278,9 @@ export const VaultDirectTester = ({ vaultData }: { vaultData: VaultData }) => {
         </p>
         <ul style={{ margin: 0, paddingLeft: 16 }}>
           <li>
-            Tests the <code>address(chain: string)</code> method directly on
-            Vault instance
+            Tests the <code>address(chain: string)</code> method directly on Vault instance
           </li>
-          <li>
-            Requires WalletCore instance to be passed to Vault constructor
-          </li>
+          <li>Requires WalletCore instance to be passed to Vault constructor</li>
           <li>Demonstrates proper error handling with VaultError codes</li>
           <li>Shows performance timing for address derivation</li>
         </ul>

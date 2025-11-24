@@ -40,9 +40,7 @@ function App() {
   const [vault, setVault] = useState<Vault | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [activeKeyshare, setActiveKeyshare] = useState<LoadedKeyshare | null>(
-    null
-  )
+  const [activeKeyshare, setActiveKeyshare] = useState<LoadedKeyshare | null>(null)
   const [serverVerified, setServerVerified] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -100,20 +98,15 @@ function App() {
     ev.target.value = ''
   }
 
-  const handleVaultCreated = (
-    vault: Vault,
-    options?: { serverVerified?: boolean }
-  ) => {
+  const handleVaultCreated = (vault: Vault, options?: { serverVerified?: boolean }) => {
     setVault(vault)
     setShowCreate(false)
     setServerVerified(Boolean(options?.serverVerified))
 
     // Save or update vault in storage
-    keysharesStorage
-      .saveVaultToStorage(vault, { name: vault.data.name })
-      .catch(error => {
-        console.error('Failed to save vault to storage:', error)
-      })
+    keysharesStorage.saveVaultToStorage(vault, { name: vault.data.name }).catch(error => {
+      console.error('Failed to save vault to storage:', error)
+    })
   }
 
   const saveVaultImmediately = async (vault: Vault) => {
@@ -129,10 +122,7 @@ function App() {
     setActiveKeyshare(keyshare)
   }
 
-  const handleVaultLoaded = (
-    vault: Vault,
-    options?: { serverVerified?: boolean }
-  ) => {
+  const handleVaultLoaded = (vault: Vault, options?: { serverVerified?: boolean }) => {
     setVault(vault)
     setServerVerified(Boolean(options?.serverVerified))
   }
@@ -191,9 +181,7 @@ function App() {
               marginBottom: '16px',
             }}
           >
-            <h1 style={{ color: '#333', margin: 0 }}>
-              VultiSig SDK - App Home
-            </h1>
+            <h1 style={{ color: '#333', margin: 0 }}>VultiSig SDK - App Home</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {keysharesStorage.storageInfo.keyshareCount > 0 && (
                 <div
@@ -206,8 +194,7 @@ function App() {
                     border: '1px solid #e9ecef',
                   }}
                 >
-                  {keysharesStorage.storageInfo.keyshareCount} stored -{' '}
-                  {keysharesStorage.storageInfo.estimatedSize}
+                  {keysharesStorage.storageInfo.keyshareCount} stored - {keysharesStorage.storageInfo.estimatedSize}
                 </div>
               )}
               <ServerStatus status={serverStatus} />
@@ -333,11 +320,7 @@ function App() {
                 }}
                 onOpenExport={() => setShowExportModal(true)}
               />
-              <VaultDisplay
-                vault={vault}
-                sdk={sdk}
-                fastVault={serverVerified}
-              />
+              <VaultDisplay vault={vault} sdk={sdk} fastVault={serverVerified} />
               <AddressDerivationTester vault={vault} />
               <BalanceDisplay vault={vault} />
               <SignTransaction vault={vault} sdk={sdk} />

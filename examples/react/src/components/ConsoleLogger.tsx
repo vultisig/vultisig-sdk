@@ -97,8 +97,7 @@ const ConsoleLogger: React.FC<ConsoleLoggerProps> = ({ logs }) => {
           overflowY: 'auto',
           padding: '10px',
           backgroundColor: '#1e1e1e',
-          fontFamily:
-            'Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace',
+          fontFamily: 'Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace',
           fontSize: '12px',
           lineHeight: '1.4',
         }}

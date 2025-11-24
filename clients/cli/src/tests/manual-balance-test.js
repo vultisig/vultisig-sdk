@@ -18,12 +18,7 @@ globalThis.File = function File(chunks, name, options) {
   this.buffer = buffer
   this._buffer = buffer
   this.arrayBuffer = function () {
-    return Promise.resolve(
-      buffer.buffer.slice(
-        buffer.byteOffset,
-        buffer.byteOffset + buffer.byteLength
-      )
-    )
+    return Promise.resolve(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength))
   }
 }
 
@@ -36,10 +31,7 @@ globalThis.fetch = async function (url) {
 
     let wasmPath
     if (urlString.includes('wallet-core.wasm')) {
-      wasmPath = path.join(
-        projectRoot,
-        'node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'
-      )
+      wasmPath = path.join(projectRoot, 'node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm')
     } else if (urlString.includes('vs_wasm_bg.wasm')) {
       wasmPath = path.join(projectRoot, 'lib/dkls/vs_wasm_bg.wasm')
     } else if (urlString.includes('vs_schnorr_wasm_bg.wasm')) {
@@ -48,10 +40,7 @@ globalThis.fetch = async function (url) {
 
     if (wasmPath && fs.existsSync(wasmPath)) {
       const wasmBuffer = fs.readFileSync(wasmPath)
-      const arrayBuffer = wasmBuffer.buffer.slice(
-        wasmBuffer.byteOffset,
-        wasmBuffer.byteOffset + wasmBuffer.byteLength
-      )
+      const arrayBuffer = wasmBuffer.buffer.slice(wasmBuffer.byteOffset, wasmBuffer.byteOffset + wasmBuffer.byteLength)
 
       return new Response(arrayBuffer, {
         status: 200,
@@ -136,8 +125,7 @@ async function testBalanceManually() {
         const balance = await vault.balance('ethereum')
         console.log('✅ Balance result:', balance)
 
-        const amount =
-          parseFloat(balance.amount) / Math.pow(10, balance.decimals)
+        const amount = parseFloat(balance.amount) / Math.pow(10, balance.decimals)
         console.log(`💰 Formatted: ${amount} ${balance.symbol}`)
       } catch (error) {
         console.log('❌ Balance method error:', error.message)

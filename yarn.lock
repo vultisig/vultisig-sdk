@@ -4818,9 +4818,28 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/example-nodejs@workspace:examples/nodejs":
+"@vultisig/example-cli@workspace:examples/cli":
   version: 0.0.0-use.local
-  resolution: "@vultisig/example-nodejs@workspace:examples/nodejs"
+  resolution: "@vultisig/example-cli@workspace:examples/cli"
+  dependencies:
+    "@types/inquirer": "npm:^9.0.0"
+    "@types/node": "npm:^20.0.0"
+    "@types/ws": "npm:^8.18.1"
+    "@vultisig/sdk": "workspace:*"
+    chalk: "npm:^5.3.0"
+    commander: "npm:^12.0.0"
+    dotenv: "npm:^16.4.0"
+    inquirer: "npm:^9.2.0"
+    ora: "npm:^8.0.0"
+    tsx: "npm:^4.7.0"
+    typescript: "npm:^5.3.0"
+    ws: "npm:^8.18.3"
+  languageName: unknown
+  linkType: soft
+
+"@vultisig/example-shell@workspace:examples/shell":
+  version: 0.0.0-use.local
+  resolution: "@vultisig/example-shell@workspace:examples/shell"
   dependencies:
     "@types/inquirer": "npm:^9.0.0"
     "@types/node": "npm:^20.0.0"

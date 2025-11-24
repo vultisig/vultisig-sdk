@@ -1,10 +1,16 @@
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
+import { getTwPublicKeyType } from '@core/chain/publicKey/tw/getTwPublicKeyType'
+import { getPreSigningHashes } from '@core/chain/tx/preSigningHashes'
 import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
 import { buildSendKeysignPayload } from '@core/mpc/keysign/send/build'
+import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
+import { getKeysignTwPublicKey } from '@core/mpc/keysign/tw/getKeysignTwPublicKey'
+import { getKeysignChain } from '@core/mpc/keysign/utils/getKeysignChain'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
+import { WasmManager } from '../../runtime/wasm'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -14,10 +20,7 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * Extracted from Vault.ts to reduce file size and improve maintainability.
  */
 export class TransactionBuilder {
-  constructor(
-    private vaultData: CoreVault,
-    private wasmManager: any
-  ) {}
+  constructor(private vaultData: CoreVault) {}
 
   /**
    * Prepare a send transaction keysign payload
@@ -58,7 +61,7 @@ export class TransactionBuilder {
   }): Promise<KeysignPayload> {
     try {
       // Get WalletCore
-      const walletCore = await this.wasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore()
 
       // Get public key for the coin's chain
       const publicKey = getPublicKey({
@@ -109,28 +112,10 @@ export class TransactionBuilder {
    * const signature = await vault.sign('fast', signingPayload, password)
    * ```
    */
-  async extractMessageHashes(
-    keysignPayload: KeysignPayload
-  ): Promise<string[]> {
+  async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]> {
     try {
-      const { getPreSigningHashes } = await import(
-        '@core/chain/tx/preSigningHashes'
-      )
-      const { getEncodedSigningInputs } = await import(
-        '@core/mpc/keysign/signingInputs'
-      )
-      const { getKeysignChain } = await import(
-        '@core/mpc/keysign/utils/getKeysignChain'
-      )
-      const { getKeysignTwPublicKey } = await import(
-        '@core/mpc/keysign/tw/getKeysignTwPublicKey'
-      )
-      const { getTwPublicKeyType } = await import(
-        '@core/chain/publicKey/tw/getTwPublicKeyType'
-      )
-
       // Get WalletCore instance
-      const walletCore = await this.wasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore()
 
       // Get chain from keysign payload
       const chain = getKeysignChain(keysignPayload)
@@ -138,10 +123,7 @@ export class TransactionBuilder {
       // Get public key data and create WalletCore PublicKey
       const publicKeyData = getKeysignTwPublicKey(keysignPayload)
       const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-      const publicKey = walletCore.PublicKey.createWithData(
-        publicKeyData,
-        publicKeyType
-      )
+      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, publicKeyType)
 
       // Get encoded signing inputs (compiled transaction data)
       const txInputsArray = getEncodedSigningInputs({
@@ -160,9 +142,7 @@ export class TransactionBuilder {
         })
 
         // Convert Uint8Array hashes to hex strings
-        const hexHashes = messageHashes.map(hash =>
-          Buffer.from(hash).toString('hex')
-        )
+        const hexHashes = messageHashes.map(hash => Buffer.from(hash).toString('hex'))
         allMessageHashes.push(...hexHashes)
       }
 

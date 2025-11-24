@@ -27,18 +27,45 @@ import os from 'os'
 import path from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { Vultisig } from '../../../src'
-import { Vault } from '../../../src/vault/Vault'
-import type { VaultServices } from '../../../src/vault/VaultServices'
+import { GlobalConfig } from '../../../src/config/GlobalConfig'
+import { GlobalStorage } from '../../../src/runtime/storage/GlobalStorage'
+import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
+import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
+import { FastSigningService } from '../../../src/services/FastSigningService'
+import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
+import { FastVault } from '../../../src/vault/FastVault'
+import { Vultisig } from '../../../src/Vultisig'
 
 describe('Integration: Vault Export', () => {
   let sdk: Vultisig
   let testDir: string
+  let memoryStorage: MemoryStorage
 
   beforeAll(async () => {
+    // Reset all global singletons before test
+    GlobalStorage.reset()
+    GlobalServerManager.reset()
+    GlobalConfig.reset()
+    PasswordCacheService.resetInstance()
+
+    // Configure global singletons
+    memoryStorage = new MemoryStorage()
+    GlobalStorage.configure({ customStorage: memoryStorage })
+
+    GlobalServerManager.configure({
+      fastVault: 'https://api.vultisig.com/vault',
+      messageRelay: 'https://api.vultisig.com/router',
+    })
+
+    GlobalConfig.configure({
+      defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
+      defaultCurrency: 'USD',
+    })
+
     // Initialize SDK with WASM
     sdk = new Vultisig({
       autoInit: true,
+      storage: { customStorage: memoryStorage },
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
     })
 
@@ -67,18 +94,16 @@ describe('Integration: Vault Export', () => {
   /**
    * Helper function to create a test vault
    */
-  async function createTestVault(name: string): Promise<Vault> {
+  async function createTestVault(name: string): Promise<FastVault> {
+    const now = Date.now()
     const mockVaultData: CoreVault = {
       name,
       publicKeys: {
         // Real-ish looking public keys
-        ecdsa:
-          '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
-        eddsa:
-          'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
+        ecdsa: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
+        eddsa: 'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
       },
-      hexChainCode:
-        '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+      hexChainCode: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
       localPartyId: 'test-device',
       signers: ['test-device', 'Server-1'],
       keyShares: {
@@ -87,17 +112,41 @@ describe('Integration: Vault Export', () => {
       },
       resharePrefix: '',
       libType: 'GG20',
-      createdAt: Date.now(),
+      createdAt: now,
       isBackedUp: false,
       order: 0,
     } as CoreVault
 
-    const services: VaultServices = {
-      wasmManager: sdk.getWasmManager(),
-      fastSigningService: {} as any, // Not needed for export
+    // Create mock VaultData with correct structure
+    const vaultData = {
+      // Identity (readonly fields)
+      publicKeys: mockVaultData.publicKeys,
+      hexChainCode: mockVaultData.hexChainCode,
+      signers: mockVaultData.signers,
+      localPartyId: mockVaultData.localPartyId,
+      createdAt: now,
+      libType: mockVaultData.libType,
+      isEncrypted: false,
+      type: 'fast' as const,
+      // Metadata
+      id: mockVaultData.publicKeys.ecdsa, // Use ECDSA public key as ID
+      name,
+      isBackedUp: false,
+      order: 0,
+      lastModified: now,
+      // User Preferences
+      currency: 'usd',
+      chains: ['Bitcoin', 'Ethereum', 'Solana'],
+      tokens: {},
+      // Vault file
+      vultFileContent: '',
     }
 
-    return new Vault(mockVaultData, services)
+    // Create a mock FastSigningService for testing
+    const mockFastSigningService = {} as FastSigningService
+    const config = GlobalConfig.getInstance()
+
+    return FastVault.fromStorage(vaultData, mockFastSigningService, config)
   }
 
   describe('Unencrypted Export', () => {
@@ -113,17 +162,15 @@ describe('Integration: Vault Export', () => {
       expect(ethAddress).toBeDefined()
 
       // Get vault summary for verification
-      const summary = vault.summary()
-      expect(summary.name).toBe('Unencrypted Export Test')
-      expect(summary.type).toBe('fast') // Has Server-1 signer
+      expect(vault.name).toBe('Unencrypted Export Test')
+      expect(vault.type).toBe('fast') // Has Server-1 signer
 
       // Export vault (unencrypted - no password)
-      const exportBlob = await vault.export()
-      const exportPath = path.join(testDir, 'unencrypted-vault.vult')
+      const { filename, data } = await vault.export()
+      const exportPath = path.join(testDir, filename)
 
-      // Write blob to file
-      const arrayBuffer = await exportBlob.arrayBuffer()
-      await fs.writeFile(exportPath, Buffer.from(arrayBuffer))
+      // Write data to file
+      await fs.writeFile(exportPath, data, 'utf-8')
 
       // Verify file was created
       const stats = await fs.stat(exportPath)
@@ -142,8 +189,8 @@ describe('Integration: Vault Export', () => {
       expect(base64Content).toMatch(/^[A-Za-z0-9+/]+=*$/)
 
       console.log('✅ Unencrypted export successful')
-      console.log(`   Vault: ${summary.name}`)
-      console.log(`   Type: ${summary.type}`)
+      console.log(`   Vault: ${vault.name}`)
+      console.log(`   Type: ${vault.type}`)
       console.log(`   File size: ${stats.size} bytes`)
       console.log(`   BTC address: ${btcAddress}`)
       console.log(`   ETH address: ${ethAddress}`)
@@ -155,20 +202,20 @@ describe('Integration: Vault Export', () => {
       const vault3 = await createTestVault('Vault Three')
 
       // Export all three
-      const blob1 = await vault1.export()
-      const blob2 = await vault2.export()
-      const blob3 = await vault3.export()
+      const export1 = await vault1.export()
+      const export2 = await vault2.export()
+      const export3 = await vault3.export()
 
-      // Write to different files
+      // Write to different files using generated filenames
       const paths = [
-        path.join(testDir, 'vault1.vult'),
-        path.join(testDir, 'vault2.vult'),
-        path.join(testDir, 'vault3.vult'),
+        path.join(testDir, export1.filename),
+        path.join(testDir, export2.filename),
+        path.join(testDir, export3.filename),
       ]
 
-      await fs.writeFile(paths[0], Buffer.from(await blob1.arrayBuffer()))
-      await fs.writeFile(paths[1], Buffer.from(await blob2.arrayBuffer()))
-      await fs.writeFile(paths[2], Buffer.from(await blob3.arrayBuffer()))
+      await fs.writeFile(paths[0], export1.data, 'utf-8')
+      await fs.writeFile(paths[1], export2.data, 'utf-8')
+      await fs.writeFile(paths[2], export3.data, 'utf-8')
 
       // Verify all files exist and have content
       for (const exportPath of paths) {
@@ -187,15 +234,12 @@ describe('Integration: Vault Export', () => {
       const export1 = await vault.export()
       const export2 = await vault.export()
 
-      // Convert to buffers
-      const buffer1 = Buffer.from(await export1.arrayBuffer())
-      const buffer2 = Buffer.from(await export2.arrayBuffer())
-
       // Exports should be identical (same vault data, no random elements in unencrypted export)
-      expect(buffer1.equals(buffer2)).toBe(true)
+      expect(export1.data).toBe(export2.data)
+      expect(export1.filename).toBe(export2.filename)
 
       console.log('✅ Exports are consistent')
-      console.log(`   Export size: ${buffer1.length} bytes`)
+      console.log(`   Export size: ${export1.data.length} bytes`)
     })
   })
 
@@ -209,12 +253,11 @@ describe('Integration: Vault Export', () => {
       const solAddress = await vault.address(Chain.Solana)
 
       // Export with password (encrypted)
-      const exportBlob = await vault.export(password)
-      const exportPath = path.join(testDir, 'encrypted-vault.vult')
+      const { filename, data } = await vault.export(password)
+      const exportPath = path.join(testDir, filename)
 
       // Write to file
-      const arrayBuffer = await exportBlob.arrayBuffer()
-      await fs.writeFile(exportPath, Buffer.from(arrayBuffer))
+      await fs.writeFile(exportPath, data, 'utf-8')
 
       // Verify file created
       const stats = await fs.stat(exportPath)
@@ -242,15 +285,12 @@ describe('Integration: Vault Export', () => {
       const export1 = await vault.export('password1')
       const export2 = await vault.export('password2')
 
-      const buffer1 = Buffer.from(await export1.arrayBuffer())
-      const buffer2 = Buffer.from(await export2.arrayBuffer())
-
       // Different passwords should produce different encrypted outputs
-      expect(buffer1.equals(buffer2)).toBe(false)
+      expect(export1.data).not.toBe(export2.data)
 
       console.log('✅ Different passwords produce different encrypted outputs')
-      console.log(`   Export 1 size: ${buffer1.length} bytes`)
-      console.log(`   Export 2 size: ${buffer2.length} bytes`)
+      console.log(`   Export 1 size: ${export1.data.length} bytes`)
+      console.log(`   Export 2 size: ${export2.data.length} bytes`)
     })
 
     it('should produce different outputs each time with same password (due to random IV)', async () => {
@@ -261,15 +301,12 @@ describe('Integration: Vault Export', () => {
       const export1 = await vault.export(password)
       const export2 = await vault.export(password)
 
-      const buffer1 = Buffer.from(await export1.arrayBuffer())
-      const buffer2 = Buffer.from(await export2.arrayBuffer())
-
       // Should be different due to random IV/salt in encryption
-      expect(buffer1.equals(buffer2)).toBe(false)
+      expect(export1.data).not.toBe(export2.data)
 
       console.log('✅ Encrypted exports use random IV (different each time)')
-      console.log(`   Export 1 size: ${buffer1.length} bytes`)
-      console.log(`   Export 2 size: ${buffer2.length} bytes`)
+      console.log(`   Export 1 size: ${export1.data.length} bytes`)
+      console.log(`   Export 2 size: ${export2.data.length} bytes`)
     })
   })
 
@@ -278,37 +315,37 @@ describe('Integration: Vault Export', () => {
       const vault = await createTestVault('Format Test')
 
       // Export both encrypted and unencrypted
-      const unencryptedBlob = await vault.export()
-      const encryptedBlob = await vault.export('test-password')
+      const unencrypted = await vault.export()
+      const encrypted = await vault.export('test-password')
 
-      // Both should produce valid blobs
-      expect(unencryptedBlob).toBeInstanceOf(Blob)
-      expect(encryptedBlob).toBeInstanceOf(Blob)
+      // Both should have filename and data
+      expect(unencrypted.filename).toMatch(/\.vult$/)
+      expect(encrypted.filename).toMatch(/\.vult$/)
 
       // Both should have content
-      expect(unencryptedBlob.size).toBeGreaterThan(0)
-      expect(encryptedBlob.size).toBeGreaterThan(0)
+      expect(unencrypted.data.length).toBeGreaterThan(0)
+      expect(encrypted.data.length).toBeGreaterThan(0)
 
-      // Blob type should be correct
-      expect(unencryptedBlob.type).toBe('application/octet-stream')
-      expect(encryptedBlob.type).toBe('application/octet-stream')
+      // Both should be valid base64 strings
+      expect(unencrypted.data).toMatch(/^[A-Za-z0-9+/]+={0,2}$/)
+      expect(encrypted.data).toMatch(/^[A-Za-z0-9+/]+={0,2}$/)
 
       console.log('✅ Export format is valid')
-      console.log(`   Unencrypted size: ${unencryptedBlob.size} bytes`)
-      console.log(`   Encrypted size: ${encryptedBlob.size} bytes`)
+      console.log(`   Unencrypted size: ${unencrypted.data.length} bytes`)
+      console.log(`   Encrypted size: ${encrypted.data.length} bytes`)
     })
 
     it('should export reasonable file sizes', async () => {
       const vault = await createTestVault('Size Test Vault')
 
-      const exportBlob = await vault.export()
+      const { data } = await vault.export()
 
       // File should be reasonable size (not empty, not huge)
-      expect(exportBlob.size).toBeGreaterThan(100) // At least 100 bytes
-      expect(exportBlob.size).toBeLessThan(1024 * 1024) // Less than 1MB
+      expect(data.length).toBeGreaterThan(100) // At least 100 bytes
+      expect(data.length).toBeLessThan(1024 * 1024) // Less than 1MB
 
       console.log('✅ Export size is reasonable')
-      console.log(`   Size: ${exportBlob.size} bytes`)
+      console.log(`   Size: ${data.length} bytes`)
     })
   })
 
@@ -329,13 +366,10 @@ describe('Integration: Vault Export', () => {
       expect(addresses.sol).toBeDefined()
 
       // Now export the vault
-      const exportBlob = await vault.export()
-      const exportPath = path.join(testDir, 'multi-chain-vault.vult')
+      const { filename, data } = await vault.export()
+      const exportPath = path.join(testDir, filename)
 
-      await fs.writeFile(
-        exportPath,
-        Buffer.from(await exportBlob.arrayBuffer())
-      )
+      await fs.writeFile(exportPath, data, 'utf-8')
 
       // Verify export successful
       const stats = await fs.stat(exportPath)
@@ -356,13 +390,13 @@ describe('Integration: Vault Export', () => {
 
       // Export with empty string password
       // This should either treat it as unencrypted or use the empty string as password
-      const exportBlob = await vault.export('')
+      const { filename, data } = await vault.export('')
 
-      expect(exportBlob).toBeInstanceOf(Blob)
-      expect(exportBlob.size).toBeGreaterThan(0)
+      expect(filename).toMatch(/\.vult$/)
+      expect(data.length).toBeGreaterThan(0)
 
       console.log('✅ Export with empty password handled')
-      console.log(`   Size: ${exportBlob.size} bytes`)
+      console.log(`   Size: ${data.length} bytes`)
     })
 
     it('should handle export with very long password', async () => {
@@ -370,14 +404,14 @@ describe('Integration: Vault Export', () => {
 
       // Export with very long password (200 characters)
       const longPassword = 'a'.repeat(200)
-      const exportBlob = await vault.export(longPassword)
+      const { filename, data } = await vault.export(longPassword)
 
-      expect(exportBlob).toBeInstanceOf(Blob)
-      expect(exportBlob.size).toBeGreaterThan(0)
+      expect(filename).toMatch(/\.vult$/)
+      expect(data.length).toBeGreaterThan(0)
 
       console.log('✅ Export with long password handled')
       console.log(`   Password length: ${longPassword.length}`)
-      console.log(`   Export size: ${exportBlob.size} bytes`)
+      console.log(`   Export size: ${data.length} bytes`)
     })
 
     it('should handle export with special characters in password', async () => {
@@ -385,14 +419,14 @@ describe('Integration: Vault Export', () => {
 
       // Password with special characters
       const specialPassword = '!@#$%^&*()_+-=[]{}|;:,.<>?/'
-      const exportBlob = await vault.export(specialPassword)
+      const { filename, data } = await vault.export(specialPassword)
 
-      expect(exportBlob).toBeInstanceOf(Blob)
-      expect(exportBlob.size).toBeGreaterThan(0)
+      expect(filename).toMatch(/\.vult$/)
+      expect(data.length).toBeGreaterThan(0)
 
       console.log('✅ Export with special character password handled')
       console.log(`   Password: ${specialPassword}`)
-      console.log(`   Export size: ${exportBlob.size} bytes`)
+      console.log(`   Export size: ${data.length} bytes`)
     })
   })
 })

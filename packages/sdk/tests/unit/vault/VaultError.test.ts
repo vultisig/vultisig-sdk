@@ -1,19 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  VaultError,
-  VaultErrorCode,
-  VaultImportError,
-  VaultImportErrorCode,
-} from '../../../src/vault/VaultError'
+import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '../../../src/vault/VaultError'
 
 describe('VaultError', () => {
   describe('constructor', () => {
     it('should create error with correct code and message', () => {
-      const error = new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Configuration is invalid'
-      )
+      const error = new VaultError(VaultErrorCode.InvalidConfig, 'Configuration is invalid')
 
       expect(error).toBeInstanceOf(Error)
       expect(error).toBeInstanceOf(VaultError)
@@ -24,11 +16,7 @@ describe('VaultError', () => {
 
     it('should wrap underlying errors', () => {
       const cause = new Error('Network timeout')
-      const error = new VaultError(
-        VaultErrorCode.NetworkError,
-        'Failed to connect to server',
-        cause
-      )
+      const error = new VaultError(VaultErrorCode.NetworkError, 'Failed to connect to server', cause)
 
       expect(error.code).toBe(VaultErrorCode.NetworkError)
       expect(error.message).toBe('Failed to connect to server')
@@ -37,19 +25,13 @@ describe('VaultError', () => {
     })
 
     it('should handle error without original error', () => {
-      const error = new VaultError(
-        VaultErrorCode.SigningFailed,
-        'Signature generation failed'
-      )
+      const error = new VaultError(VaultErrorCode.SigningFailed, 'Signature generation failed')
 
       expect(error.originalError).toBeUndefined()
     })
 
     it('should maintain proper stack trace', () => {
-      const error = new VaultError(
-        VaultErrorCode.InvalidVault,
-        'Vault data is corrupted'
-      )
+      const error = new VaultError(VaultErrorCode.InvalidVault, 'Vault data is corrupted')
 
       expect(error.stack).toBeDefined()
       expect(error.stack).toContain('VaultError')
@@ -82,32 +64,20 @@ describe('VaultError', () => {
     })
 
     it('should use specific error codes for different scenarios', () => {
-      const configError = new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'Invalid configuration'
-      )
+      const configError = new VaultError(VaultErrorCode.InvalidConfig, 'Invalid configuration')
       expect(configError.code).toBe('INVALID_CONFIG')
 
-      const signingError = new VaultError(
-        VaultErrorCode.SigningFailed,
-        'Signature failed'
-      )
+      const signingError = new VaultError(VaultErrorCode.SigningFailed, 'Signature failed')
       expect(signingError.code).toBe('SIGNING_FAILED')
 
-      const networkError = new VaultError(
-        VaultErrorCode.NetworkError,
-        'Network error'
-      )
+      const networkError = new VaultError(VaultErrorCode.NetworkError, 'Network error')
       expect(networkError.code).toBe('NETWORK_ERROR')
     })
   })
 
   describe('toJSON', () => {
     it('should serialize to JSON correctly', () => {
-      const error = new VaultError(
-        VaultErrorCode.InvalidPublicKey,
-        'Invalid public key provided'
-      )
+      const error = new VaultError(VaultErrorCode.InvalidPublicKey, 'Invalid public key provided')
 
       const json = error.toJSON()
 
@@ -119,11 +89,7 @@ describe('VaultError', () => {
 
     it('should include original error in JSON', () => {
       const original = new Error('Original error message')
-      const error = new VaultError(
-        VaultErrorCode.SigningFailed,
-        'Wrapper error',
-        original
-      )
+      const error = new VaultError(VaultErrorCode.SigningFailed, 'Wrapper error', original)
 
       const json = error.toJSON()
 
@@ -131,10 +97,7 @@ describe('VaultError', () => {
     })
 
     it('should not include originalError when none exists', () => {
-      const error = new VaultError(
-        VaultErrorCode.NotImplemented,
-        'Feature not implemented'
-      )
+      const error = new VaultError(VaultErrorCode.NotImplemented, 'Feature not implemented')
 
       const json = error.toJSON()
 
@@ -142,10 +105,7 @@ describe('VaultError', () => {
     })
 
     it('should be stringifiable', () => {
-      const error = new VaultError(
-        VaultErrorCode.BalanceFetchFailed,
-        'Failed to fetch balance'
-      )
+      const error = new VaultError(VaultErrorCode.BalanceFetchFailed, 'Failed to fetch balance')
 
       const stringified = JSON.stringify(error)
       const parsed = JSON.parse(stringified)
@@ -158,20 +118,14 @@ describe('VaultError', () => {
 
   describe('error handling scenarios', () => {
     it('should handle address derivation errors', () => {
-      const error = new VaultError(
-        VaultErrorCode.AddressDerivationFailed,
-        'Failed to derive address for Bitcoin'
-      )
+      const error = new VaultError(VaultErrorCode.AddressDerivationFailed, 'Failed to derive address for Bitcoin')
 
       expect(error.code).toBe(VaultErrorCode.AddressDerivationFailed)
       expect(error.message).toContain('Bitcoin')
     })
 
     it('should handle unsupported chain errors', () => {
-      const error = new VaultError(
-        VaultErrorCode.UnsupportedChain,
-        'Chain "MyCustomChain" is not supported'
-      )
+      const error = new VaultError(VaultErrorCode.UnsupportedChain, 'Chain "MyCustomChain" is not supported')
 
       expect(error.code).toBe(VaultErrorCode.UnsupportedChain)
       expect(error.message).toContain('MyCustomChain')
@@ -190,10 +144,7 @@ describe('VaultError', () => {
     })
 
     it('should handle gas estimation failures', () => {
-      const error = new VaultError(
-        VaultErrorCode.GasEstimationFailed,
-        'Failed to estimate gas for transaction'
-      )
+      const error = new VaultError(VaultErrorCode.GasEstimationFailed, 'Failed to estimate gas for transaction')
 
       expect(error.code).toBe(VaultErrorCode.GasEstimationFailed)
     })
@@ -221,10 +172,7 @@ describe('VaultError', () => {
 describe('VaultImportError', () => {
   describe('constructor', () => {
     it('should create import error with correct code and message', () => {
-      const error = new VaultImportError(
-        VaultImportErrorCode.INVALID_FILE_FORMAT,
-        'File format is not recognized'
-      )
+      const error = new VaultImportError(VaultImportErrorCode.INVALID_FILE_FORMAT, 'File format is not recognized')
 
       expect(error).toBeInstanceOf(Error)
       expect(error).toBeInstanceOf(VaultImportError)
@@ -235,11 +183,7 @@ describe('VaultImportError', () => {
 
     it('should wrap underlying errors', () => {
       const cause = new Error('Decryption failed')
-      const error = new VaultImportError(
-        VaultImportErrorCode.INVALID_PASSWORD,
-        'Password is incorrect',
-        cause
-      )
+      const error = new VaultImportError(VaultImportErrorCode.INVALID_PASSWORD, 'Password is incorrect', cause)
 
       expect(error.code).toBe(VaultImportErrorCode.INVALID_PASSWORD)
       expect(error.originalError).toBe(cause)
@@ -257,10 +201,7 @@ describe('VaultImportError', () => {
       ]
 
       errorCodes.forEach(code => {
-        const error = new VaultImportError(
-          code,
-          `Test import error for ${code}`
-        )
+        const error = new VaultImportError(code, `Test import error for ${code}`)
         expect(error.code).toBe(code)
       })
     })
@@ -272,20 +213,14 @@ describe('VaultImportError', () => {
       )
       expect(passwordRequired.code).toBe('PASSWORD_REQUIRED')
 
-      const invalidPassword = new VaultImportError(
-        VaultImportErrorCode.INVALID_PASSWORD,
-        'Password is incorrect'
-      )
+      const invalidPassword = new VaultImportError(VaultImportErrorCode.INVALID_PASSWORD, 'Password is incorrect')
       expect(invalidPassword.code).toBe('INVALID_PASSWORD')
     })
   })
 
   describe('toJSON', () => {
     it('should serialize to JSON correctly', () => {
-      const error = new VaultImportError(
-        VaultImportErrorCode.CORRUPTED_DATA,
-        'Vault data is corrupted'
-      )
+      const error = new VaultImportError(VaultImportErrorCode.CORRUPTED_DATA, 'Vault data is corrupted')
 
       const json = error.toJSON()
 
@@ -297,11 +232,7 @@ describe('VaultImportError', () => {
 
     it('should include original error in JSON', () => {
       const original = new Error('Base64 decode failed')
-      const error = new VaultImportError(
-        VaultImportErrorCode.INVALID_FILE_FORMAT,
-        'Invalid base64 encoding',
-        original
-      )
+      const error = new VaultImportError(VaultImportErrorCode.INVALID_FILE_FORMAT, 'Invalid base64 encoding', original)
 
       const json = error.toJSON()
 
@@ -311,10 +242,7 @@ describe('VaultImportError', () => {
 
   describe('import scenarios', () => {
     it('should handle invalid file format', () => {
-      const error = new VaultImportError(
-        VaultImportErrorCode.INVALID_FILE_FORMAT,
-        'File is not a valid .vult file'
-      )
+      const error = new VaultImportError(VaultImportErrorCode.INVALID_FILE_FORMAT, 'File is not a valid .vult file')
 
       expect(error.code).toBe(VaultImportErrorCode.INVALID_FILE_FORMAT)
     })
@@ -350,26 +278,17 @@ describe('VaultImportError', () => {
 
   describe('instanceof checks', () => {
     it('should be instanceof Error', () => {
-      const error = new VaultImportError(
-        VaultImportErrorCode.INVALID_FILE_FORMAT,
-        'Test'
-      )
+      const error = new VaultImportError(VaultImportErrorCode.INVALID_FILE_FORMAT, 'Test')
       expect(error instanceof Error).toBe(true)
     })
 
     it('should be instanceof VaultImportError', () => {
-      const error = new VaultImportError(
-        VaultImportErrorCode.INVALID_FILE_FORMAT,
-        'Test'
-      )
+      const error = new VaultImportError(VaultImportErrorCode.INVALID_FILE_FORMAT, 'Test')
       expect(error instanceof VaultImportError).toBe(true)
     })
 
     it('should not be instanceof VaultError', () => {
-      const error = new VaultImportError(
-        VaultImportErrorCode.INVALID_FILE_FORMAT,
-        'Test'
-      )
+      const error = new VaultImportError(VaultImportErrorCode.INVALID_FILE_FORMAT, 'Test')
       expect(error instanceof VaultError).toBe(false)
     })
   })

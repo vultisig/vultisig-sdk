@@ -64,9 +64,7 @@ async function checkBalance() {
 
     if (!hasEnough) {
       console.log('\n⚠️  WARNING: Insufficient balance for test!')
-      console.log(
-        '   Please send at least 0.001 ETH to the address above (~$3 + gas)'
-      )
+      console.log('   Please send at least 0.001 ETH to the address above (~$3 + gas)')
     } else {
       console.log('\n✅ Ready to run transaction preparation tests!')
     }

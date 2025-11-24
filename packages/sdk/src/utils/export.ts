@@ -6,23 +6,9 @@ import { Vault } from '@core/mpc/vault/Vault'
 import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGcm'
 
 /**
- * Generate export filename based on vault details (DKLS format only)
- */
-export const getExportFileName = (vault: Vault): string => {
-  const totalSigners = vault.signers.length
-  const localPartyIndex = vault.signers.indexOf(vault.localPartyId) + 1
-
-  // Always use DKLS share format
-  return `${vault.name}-${vault.localPartyId}-share${localPartyIndex}of${totalSigners}.vult`
-}
-
-/**
  * Create vault backup data with optional password encryption
  */
-export const createVaultBackup = async (
-  vault: Vault,
-  password?: string
-): Promise<string> => {
+export const createVaultBackup = async (vault: Vault, password?: string): Promise<string> => {
   const commVault = toCommVault(vault)
   const vaultData = toBinary(VaultSchema, commVault)
 

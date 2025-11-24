@@ -68,10 +68,7 @@ export function mockFastSigningResponse() {
 /**
  * Mock response for message relay session participants
  */
-export function mockRelayParticipants(
-  localPartyId: string,
-  includeServer = true
-) {
+export function mockRelayParticipants(localPartyId: string, includeServer = true) {
   const participants = [localPartyId]
   if (includeServer) {
     participants.push(`Server-${generateTestUUID().slice(0, 8)}`)
@@ -96,77 +93,65 @@ export function mockServerHealthResponse() {
 export function createVultisigServerMock(): Mock {
   const fetchMock = vi.fn()
 
-  fetchMock.mockImplementation(
-    async (url: string | URL | Request, options?: RequestInit) => {
-      const urlString = url.toString()
-      const method = options?.method || 'GET'
+  fetchMock.mockImplementation(async (url: string | URL | Request, options?: RequestInit) => {
+    const urlString = url.toString()
+    const method = options?.method || 'GET'
 
-      // FastVault: Create/Setup vault
-      if (
-        urlString.includes('/vault') &&
-        method === 'POST' &&
-        !urlString.includes('/sign')
-      ) {
-        return createMockResponse(200, mockVaultCreationResponse())
-      }
-
-      // FastVault: Verify email code
-      if (
-        urlString.match(/\/vault\/verify\/[^/]+\/[^/]+/) &&
-        method === 'GET'
-      ) {
-        return createMockResponse(200, mockEmailVerificationResponse(true))
-      }
-
-      // FastVault: Resend verification email
-      if (urlString.includes('/resend-verification/') && method === 'GET') {
-        return createMockResponse(200, { status: 'sent' })
-      }
-
-      // FastVault: Get vault from server
-      if (urlString.includes('/vault/') && method === 'POST') {
-        return createMockResponse(200, {
-          password: 'encrypted_vault_data',
-          vaultData: {},
-        })
-      }
-
-      // FastVault: Sign with server
-      if (urlString.includes('/sign') && method === 'POST') {
-        return createMockResponse(200, mockFastSigningResponse())
-      }
-
-      // Message Relay: Join session (POST)
-      if (urlString.includes('/router/') && method === 'POST') {
-        const body = options?.body ? JSON.parse(options.body as string) : []
-        return createMockResponse(201, { participants: body })
-      }
-
-      // Message Relay: Get participants (GET)
-      if (urlString.includes('/router/') && method === 'GET') {
-        const sessionId = urlString.split('/router/')[1]?.split('?')[0]
-        const localPartyId = `client-${sessionId?.slice(0, 8) || 'test'}`
-        return createMockResponse(200, mockRelayParticipants(localPartyId))
-      }
-
-      // Message Relay: Start session
-      if (urlString.includes('/start') && method === 'POST') {
-        return createMockResponse(200, { status: 'started' })
-      }
-
-      // Health check / Ping
-      if (
-        urlString.includes('/ping') ||
-        (urlString.endsWith('/') && method === 'GET')
-      ) {
-        return createMockResponse(200, mockServerHealthResponse())
-      }
-
-      // Default: Not found
-      console.warn(`Unmocked fetch request: ${method} ${urlString}`)
-      return createMockResponse(404, { error: 'Not Found' })
+    // FastVault: Create/Setup vault
+    if (urlString.includes('/vault') && method === 'POST' && !urlString.includes('/sign')) {
+      return createMockResponse(200, mockVaultCreationResponse())
     }
-  )
+
+    // FastVault: Verify email code
+    if (urlString.match(/\/vault\/verify\/[^/]+\/[^/]+/) && method === 'GET') {
+      return createMockResponse(200, mockEmailVerificationResponse(true))
+    }
+
+    // FastVault: Resend verification email
+    if (urlString.includes('/resend-verification/') && method === 'GET') {
+      return createMockResponse(200, { status: 'sent' })
+    }
+
+    // FastVault: Get vault from server
+    if (urlString.includes('/vault/') && method === 'POST') {
+      return createMockResponse(200, {
+        password: 'encrypted_vault_data',
+        vaultData: {},
+      })
+    }
+
+    // FastVault: Sign with server
+    if (urlString.includes('/sign') && method === 'POST') {
+      return createMockResponse(200, mockFastSigningResponse())
+    }
+
+    // Message Relay: Join session (POST)
+    if (urlString.includes('/router/') && method === 'POST') {
+      const body = options?.body ? JSON.parse(options.body as string) : []
+      return createMockResponse(201, { participants: body })
+    }
+
+    // Message Relay: Get participants (GET)
+    if (urlString.includes('/router/') && method === 'GET') {
+      const sessionId = urlString.split('/router/')[1]?.split('?')[0]
+      const localPartyId = `client-${sessionId?.slice(0, 8) || 'test'}`
+      return createMockResponse(200, mockRelayParticipants(localPartyId))
+    }
+
+    // Message Relay: Start session
+    if (urlString.includes('/start') && method === 'POST') {
+      return createMockResponse(200, { status: 'started' })
+    }
+
+    // Health check / Ping
+    if (urlString.includes('/ping') || (urlString.endsWith('/') && method === 'GET')) {
+      return createMockResponse(200, mockServerHealthResponse())
+    }
+
+    // Default: Not found
+    console.warn(`Unmocked fetch request: ${method} ${urlString}`)
+    return createMockResponse(404, { error: 'Not Found' })
+  })
 
   return fetchMock
 }
@@ -174,9 +159,7 @@ export function createVultisigServerMock(): Mock {
 /**
  * Create a failing server mock for error testing
  */
-export function createFailingServerMock(
-  errorType: 'network' | 'timeout' | '500' = 'network'
-): Mock {
+export function createFailingServerMock(errorType: 'network' | 'timeout' | '500' = 'network'): Mock {
   const fetchMock = vi.fn()
 
   fetchMock.mockImplementation(async () => {
@@ -281,12 +264,7 @@ export function getServerMockCallHistory(mock: Mock) {
 /**
  * Assert that a specific endpoint was called
  */
-export function assertEndpointCalled(
-  mock: Mock,
-  urlPattern: string,
-  method: string = 'GET',
-  times?: number
-) {
+export function assertEndpointCalled(mock: Mock, urlPattern: string, method: string = 'GET', times?: number) {
   const matchingCalls = mock.mock.calls.filter(call => {
     const url = call[0]?.toString() || ''
     const callMethod = call[1]?.method || 'GET'
@@ -301,9 +279,7 @@ export function assertEndpointCalled(
     }
   } else {
     if (matchingCalls.length === 0) {
-      throw new Error(
-        `Expected ${urlPattern} (${method}) to be called at least once, but was never called`
-      )
+      throw new Error(`Expected ${urlPattern} (${method}) to be called at least once, but was never called`)
     }
   }
 

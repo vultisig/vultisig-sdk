@@ -176,15 +176,9 @@ describe('CacheService', () => {
         return `value-${suffix}`
       }
 
-      const result1 = await cache.getOrCompute('key1', 1000, () =>
-        compute('first')
-      )
-      const result2 = await cache.getOrCompute('key2', 1000, () =>
-        compute('second')
-      )
-      const result3 = await cache.getOrCompute('key1', 1000, () =>
-        compute('third')
-      )
+      const result1 = await cache.getOrCompute('key1', 1000, () => compute('first'))
+      const result2 = await cache.getOrCompute('key2', 1000, () => compute('second'))
+      const result3 = await cache.getOrCompute('key1', 1000, () => compute('third'))
 
       expect(result1).toBe('value-first')
       expect(result2).toBe('value-second')
@@ -315,9 +309,7 @@ describe('CacheService', () => {
       }
 
       // First call should fail
-      await expect(
-        cache.getOrCompute('error-key', 1000, flakyCompute)
-      ).rejects.toThrow('Computation failed')
+      await expect(cache.getOrCompute('error-key', 1000, flakyCompute)).rejects.toThrow('Computation failed')
 
       // Second call should succeed (error was not cached)
       const result = await cache.getOrCompute('error-key', 1000, flakyCompute)
@@ -338,15 +330,9 @@ describe('CacheService', () => {
 
       // Multiple concurrent calls, all should fail
       const promises = Promise.all([
-        cache
-          .getOrCompute('error-concurrent', 1000, flakyCompute)
-          .catch(e => e.message),
-        cache
-          .getOrCompute('error-concurrent', 1000, flakyCompute)
-          .catch(e => e.message),
-        cache
-          .getOrCompute('error-concurrent', 1000, flakyCompute)
-          .catch(e => e.message),
+        cache.getOrCompute('error-concurrent', 1000, flakyCompute).catch(e => e.message),
+        cache.getOrCompute('error-concurrent', 1000, flakyCompute).catch(e => e.message),
+        cache.getOrCompute('error-concurrent', 1000, flakyCompute).catch(e => e.message),
       ])
 
       const results = await promises
@@ -354,11 +340,7 @@ describe('CacheService', () => {
       expect(attempts).toBe(1) // Only called once (shared promise)
 
       // Retry should work (pending promise was cleaned up)
-      const retryResult = await cache.getOrCompute(
-        'error-concurrent',
-        1000,
-        flakyCompute
-      )
+      const retryResult = await cache.getOrCompute('error-concurrent', 1000, flakyCompute)
       expect(retryResult).toBe('success')
       expect(attempts).toBe(2)
     })
@@ -370,15 +352,9 @@ describe('CacheService', () => {
       }
 
       const promises = [
-        cache
-          .getOrCompute('fail-key', 1000, failingCompute)
-          .catch(e => e.message),
-        cache
-          .getOrCompute('fail-key', 1000, failingCompute)
-          .catch(e => e.message),
-        cache
-          .getOrCompute('fail-key', 1000, failingCompute)
-          .catch(e => e.message),
+        cache.getOrCompute('fail-key', 1000, failingCompute).catch(e => e.message),
+        cache.getOrCompute('fail-key', 1000, failingCompute).catch(e => e.message),
+        cache.getOrCompute('fail-key', 1000, failingCompute).catch(e => e.message),
       ]
 
       const results = await Promise.all(promises)

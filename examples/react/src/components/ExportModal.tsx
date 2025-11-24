@@ -62,9 +62,7 @@ export const ExportModal = ({
             x
           </button>
         </div>
-        <div style={{ marginBottom: 12, color: '#666' }}>
-          Optionally protect the exported .vult with a password.
-        </div>
+        <div style={{ marginBottom: 12, color: '#666' }}>Optionally protect the exported .vult with a password.</div>
         <input
           type="password"
           placeholder="Password (optional)"
@@ -79,11 +77,7 @@ export const ExportModal = ({
             marginBottom: 12,
           }}
         />
-        {error && (
-          <div style={{ color: '#dc3545', fontSize: 12, marginBottom: 8 }}>
-            {error}
-          </div>
-        )}
+        {error && <div style={{ color: '#dc3545', fontSize: 12, marginBottom: 8 }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button
             onClick={onClose}

@@ -27,10 +27,7 @@ describe('SDK Integration Tests', () => {
     test('should load unencrypted vault using SDK API', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer
@@ -49,10 +46,7 @@ describe('SDK Integration Tests', () => {
     test('should load encrypted vault using SDK API', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestFastVault-44fd-share2of2-Password123!.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer
@@ -69,17 +63,13 @@ describe('SDK Integration Tests', () => {
     test('should derive addresses using vault.address() method', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer
 
       const vault = await sdk.addVault(file)
-      const expected =
-        expectedAddresses['TestSecureVault-cfa0-share2of2-NoPassword.vult']
+      const expected = expectedAddresses['TestSecureVault-cfa0-share2of2-NoPassword.vult']
 
       // Test Bitcoin
       const btcAddress = await vault.address('bitcoin')
@@ -98,10 +88,7 @@ describe('SDK Integration Tests', () => {
       const sdk = new Vultisig()
 
       // Load first vault
-      const vault1Path = path.join(
-        vaultsDir,
-        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
-      )
+      const vault1Path = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       const file1Buffer = fs.readFileSync(vault1Path)
       const file1 = new File([file1Buffer], path.basename(vault1Path))
       file1.buffer = file1Buffer
@@ -113,10 +100,7 @@ describe('SDK Integration Tests', () => {
       await sdk.clearVaults()
 
       // Load second vault
-      const vault2Path = path.join(
-        vaultsDir,
-        'TestFastVault-44fd-share2of2-Password123!.vult'
-      )
+      const vault2Path = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
       const file2Buffer = fs.readFileSync(vault2Path)
       const file2 = new File([file2Buffer], path.basename(vault2Path))
       file2.buffer = file2Buffer
@@ -134,10 +118,7 @@ describe('SDK Integration Tests', () => {
     test('should initialize WalletCore correctly', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer
@@ -156,10 +137,7 @@ describe('SDK Integration Tests', () => {
     test('should handle all supported WASM operations', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer
@@ -180,10 +158,7 @@ describe('SDK Integration Tests', () => {
     test('should cache addresses for performance', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer
@@ -208,10 +183,7 @@ describe('SDK Integration Tests', () => {
     test('should derive multiple addresses efficiently', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestSecureVault-cfa0-share2of2-NoPassword.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestSecureVault-cfa0-share2of2-NoPassword.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer
@@ -225,8 +197,7 @@ describe('SDK Integration Tests', () => {
       expect(Object.keys(addresses)).toHaveLength(3)
       expect(totalTime).toBeLessThan(5000) // Should complete within 5 seconds
 
-      const expected =
-        expectedAddresses['TestSecureVault-cfa0-share2of2-NoPassword.vult']
+      const expected = expectedAddresses['TestSecureVault-cfa0-share2of2-NoPassword.vult']
       expect(addresses.bitcoin).toBe(expected.Bitcoin)
       expect(addresses.ethereum).toBe(expected.Ethereum)
       expect(addresses.solana).toBe(expected.Solana)
@@ -247,10 +218,7 @@ describe('SDK Integration Tests', () => {
     test('should handle missing passwords for encrypted vaults', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestFastVault-44fd-share2of2-Password123!.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer
@@ -262,10 +230,7 @@ describe('SDK Integration Tests', () => {
     test('should handle wrong passwords for encrypted vaults', async () => {
       const sdk = new Vultisig()
 
-      const vaultName = path.join(
-        vaultsDir,
-        'TestFastVault-44fd-share2of2-Password123!.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
       const fileBuffer = fs.readFileSync(vaultName)
       const file = new File([fileBuffer], path.basename(vaultName))
       file.buffer = fileBuffer

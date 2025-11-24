@@ -242,7 +242,8 @@ describe('NodeStorage', () => {
     it('should sanitize special characters in keys', async () => {
       await storage.set('key:with/special\\chars', 'value')
       const files = await fs.readdir(tempDir)
-      expect(files).toContain('key_with_special_chars.json')
+      // Only path separators (/ and \) are replaced with underscores
+      expect(files).toContain('key:with_special_chars.json')
     })
 
     it('should prevent directory traversal attacks', async () => {
@@ -251,8 +252,8 @@ describe('NodeStorage', () => {
 
       // Verify file was created in temp dir, not outside
       const files = await fs.readdir(tempDir)
-      // '../../../etc/passwd' -> 9 special chars replaced with underscores
-      expect(files).toContain('_________etc_passwd.json')
+      // '../../../etc/passwd' -> only slashes replaced with underscores
+      expect(files).toContain('.._.._.._etc_passwd.json')
 
       // Verify we can retrieve it
       const result = await storage.get<string>(maliciousKey)
@@ -263,9 +264,7 @@ describe('NodeStorage', () => {
       await storage.set('key-🔑-unicode', 'value')
       const files = await fs.readdir(tempDir)
       // Unicode chars should be sanitized to underscores
-      expect(files.some(f => f.startsWith('key-') && f.endsWith('.json'))).toBe(
-        true
-      )
+      expect(files.some(f => f.startsWith('key-') && f.endsWith('.json'))).toBe(true)
 
       // Should still be retrievable
       const result = await storage.get<string>('key-🔑-unicode')

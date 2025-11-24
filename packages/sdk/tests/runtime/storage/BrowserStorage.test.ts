@@ -257,11 +257,7 @@ describe('BrowserStorage', () => {
 
   describe('Concurrent Operations', () => {
     it('should handle concurrent writes', async () => {
-      await Promise.all([
-        storage.set('key1', 'value1'),
-        storage.set('key2', 'value2'),
-        storage.set('key3', 'value3'),
-      ])
+      await Promise.all([storage.set('key1', 'value1'), storage.set('key2', 'value2'), storage.set('key3', 'value3')])
 
       expect(await storage.get('key1')).toBe('value1')
       expect(await storage.get('key2')).toBe('value2')
@@ -272,10 +268,7 @@ describe('BrowserStorage', () => {
       await storage.set('key1', 'value1')
       await storage.set('key2', 'value2')
 
-      const [result1, result2] = await Promise.all([
-        storage.get('key1'),
-        storage.get('key2'),
-      ])
+      const [result1, result2] = await Promise.all([storage.get('key1'), storage.get('key2')])
 
       expect(result1).toBe('value1')
       expect(result2).toBe('value2')
@@ -411,9 +404,7 @@ describe('BrowserStorage', () => {
 
       // Test edge cases
       await fallbackStorage.set('unicode-key-🔑', 'unicode-value-🌍')
-      expect(await fallbackStorage.get('unicode-key-🔑')).toBe(
-        'unicode-value-🌍'
-      )
+      expect(await fallbackStorage.get('unicode-key-🔑')).toBe('unicode-value-🌍')
 
       await fallbackStorage.set('', 'empty-key')
       expect(await fallbackStorage.get('')).toBe('empty-key')

@@ -32,15 +32,11 @@ export class SignCommand {
 
     // Get vault configuration with automatic fallback logic
     const vaultConfig = getVaultConfig(options.vault, options.password)
-    const strippedPassword = vaultConfig.vaultPassword
-      ? stripPasswordQuotes(vaultConfig.vaultPassword)
-      : undefined
+    const strippedPassword = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
 
     // Validate fast mode requirements
     if (mode === 'fast' && !strippedPassword) {
-      throw new Error(
-        '--password is required when using fast mode (provide via --password or VAULT_PASSWORD in .env)'
-      )
+      throw new Error('--password is required when using fast mode (provide via --password or VAULT_PASSWORD in .env)')
     }
 
     // Read payload from payloadData, file, or stdin
@@ -106,10 +102,7 @@ export class SignCommand {
 
         return
       } catch (error) {
-        console.log(
-          '⚠️  Daemon signing failed:',
-          error instanceof Error ? error.message : error
-        )
+        console.log('⚠️  Daemon signing failed:', error instanceof Error ? error.message : error)
         console.log('⚠️  Trying direct vault signing...')
         shouldLoadDirectly = true
       }
@@ -129,10 +122,7 @@ export class SignCommand {
               chain: options.network,
             }
 
-            const signature = await vault.signWithPayload(
-              signingPayload,
-              strippedPassword
-            )
+            const signature = await vault.signWithPayload(signingPayload, strippedPassword)
 
             console.log('\n✅ Transaction signed successfully!')
             console.log('📝 Signature:', signature.signature)
@@ -156,18 +146,14 @@ export class SignCommand {
 
     // If no active vault, try to load from vaults directory
     if (!activeVault) {
-      console.log(
-        '📂 No active vault found, attempting to load from vaults directory...'
-      )
+      console.log('📂 No active vault found, attempting to load from vaults directory...')
 
       const { findVultFiles, getVaultsDir } = await import('../utils/paths')
       const vaultsDir = getVaultsDir()
       const vultFiles = await findVultFiles(vaultsDir)
 
       if (vultFiles.length === 0) {
-        throw new Error(
-          `No vault files found in ${vaultsDir}. Start with "vultisig run" first.`
-        )
+        throw new Error(`No vault files found in ${vaultsDir}. Start with "vultisig run" first.`)
       }
 
       // Load the first vault file (or HotVault.vult if it exists)
@@ -197,10 +183,7 @@ export class SignCommand {
       }
 
       // Use the new signWithPayload method that handles raw transaction data
-      const signature = await activeVault.signWithPayload(
-        signingPayload,
-        strippedPassword
-      )
+      const signature = await activeVault.signWithPayload(signingPayload, strippedPassword)
 
       console.log('\n✅ Transaction signed successfully!')
       console.log('📝 Signature:', signature.signature)
@@ -210,10 +193,7 @@ export class SignCommand {
         console.log('🔢 Recovery:', signature.recovery)
       }
     } catch (error) {
-      console.error(
-        '❌ Signing failed:',
-        error instanceof Error ? error.message : error
-      )
+      console.error('❌ Signing failed:', error instanceof Error ? error.message : error)
       throw error
     }
   }

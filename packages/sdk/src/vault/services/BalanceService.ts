@@ -2,7 +2,7 @@ import { Chain } from '@core/chain/Chain'
 import { getCoinBalance } from '@core/chain/coin/balance'
 
 import { formatBalance } from '../../adapters/formatBalance'
-import type { CacheService } from '../../services/CacheService'
+import { CacheScope, type CacheService } from '../../services/CacheService'
 import type { Balance, Token } from '../../types'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
@@ -10,31 +10,31 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * BalanceService
  *
  * Handles balance fetching, caching, and updates for vault accounts.
- * Extracted from Vault.ts to reduce file size and improve maintainability.
+ * Uses CacheService with BALANCE scope for automatic TTL-based caching.
  */
 export class BalanceService {
   constructor(
     private cacheService: CacheService,
-    private emitBalanceUpdated: (data: {
-      chain: Chain
-      balance: Balance
-      tokenId?: string
-    }) => void,
+    private emitBalanceUpdated: (data: { chain: Chain; balance: Balance; tokenId?: string }) => void,
     private emitError: (error: Error) => void,
     private getAddress: (chain: Chain) => Promise<string>,
     private getTokens: (chain: Chain) => Token[],
-    private getAllTokens: () => Record<string, Token[]>
+    private getAllTokens: () => Record<string, Token[]>,
+    private setAllTokens: (tokens: Record<string, Token[]>) => void,
+    private saveVault: () => Promise<void>,
+    private emitTokenAdded: (data: { chain: Chain; token: Token }) => void,
+    private emitTokenRemoved: (data: { chain: Chain; tokenId: string }) => void
   ) {}
 
   /**
    * Get balance for chain (with optional token)
-   * Uses core's getCoinBalance() with 5-minute TTL cache
+   * Uses CacheService with automatic TTL-based caching
    */
   async getBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
+    const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
 
-    // Check 5-min TTL cache
-    const cached = this.cacheService.get<Balance>(cacheKey, 5 * 60 * 1000)
+    // Check scoped cache (uses configured TTL)
+    const cached = this.cacheService.getScoped<Balance>(key, CacheScope.BALANCE)
     if (cached) return cached
 
     let address: string | undefined
@@ -53,8 +53,8 @@ export class BalanceService {
       const tokens = this.getTokensRecord()
       const balance = formatBalance(rawBalance, chain, tokenId, tokens)
 
-      // Cache with 5-min TTL
-      this.cacheService.set(cacheKey, balance)
+      // Cache with configured TTL
+      await this.cacheService.setScoped(key, CacheScope.BALANCE, balance)
 
       // Emit balance updated event
       this.emitBalanceUpdated({
@@ -81,10 +81,7 @@ export class BalanceService {
   /**
    * Get balances for multiple chains
    */
-  async getBalances(
-    chains: Chain[],
-    includeTokens = false
-  ): Promise<Record<string, Balance>> {
+  async getBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const result: Record<string, Balance> = {}
 
     for (const chain of chains) {
@@ -96,10 +93,7 @@ export class BalanceService {
         if (includeTokens) {
           const tokens = this.getTokens(chain)
           for (const token of tokens) {
-            result[`${chain}:${token.id}`] = await this.getBalance(
-              chain,
-              token.id
-            )
+            result[`${chain}:${token.id}`] = await this.getBalance(chain, token.id)
           }
         }
       } catch (error) {
@@ -111,11 +105,11 @@ export class BalanceService {
   }
 
   /**
-   * Force refresh balance (clear cache)
+   * Force refresh balance (invalidate cache)
    */
   async updateBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    const cacheKey = `balance:${chain}:${tokenId ?? 'native'}`
-    this.cacheService.clear(cacheKey)
+    const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
+    await this.cacheService.invalidateScoped(key, CacheScope.BALANCE)
     // getBalance() will emit the balanceUpdated event
     return this.getBalance(chain, tokenId)
   }
@@ -123,20 +117,17 @@ export class BalanceService {
   /**
    * Force refresh multiple balances
    */
-  async updateBalances(
-    chains: Chain[],
-    includeTokens = false
-  ): Promise<Record<string, Balance>> {
-    // Clear cache for all chains
+  async updateBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
+    // Invalidate cache for all chains
     for (const chain of chains) {
-      const cacheKey = `balance:${chain}:native`
-      this.cacheService.clear(cacheKey)
+      const key = `${chain.toLowerCase()}:native`
+      await this.cacheService.invalidateScoped(key, CacheScope.BALANCE)
 
       if (includeTokens) {
         const tokens = this.getTokens(chain)
         for (const token of tokens) {
-          const tokenCacheKey = `balance:${chain}:${token.id}`
-          this.cacheService.clear(tokenCacheKey)
+          const tokenKey = `${chain.toLowerCase()}:${token.id}`
+          await this.cacheService.invalidateScoped(tokenKey, CacheScope.BALANCE)
         }
       }
     }
@@ -149,5 +140,87 @@ export class BalanceService {
    */
   private getTokensRecord(): Record<string, Token[]> {
     return this.getAllTokens()
+  }
+
+  /**
+   * Set tokens for a chain (replaces existing list)
+   *
+   * @param chain Chain to set tokens for
+   * @param tokens Array of tokens
+   */
+  async setTokens(chain: Chain, tokens: Token[]): Promise<void> {
+    const allTokens = this.getAllTokens()
+    allTokens[chain] = tokens
+    this.setAllTokens(allTokens)
+    await this.saveVault()
+  }
+
+  /**
+   * Add single token to chain
+   * Emits tokenAdded event and invalidates balance cache
+   *
+   * @param chain Chain to add token to
+   * @param token Token to add
+   *
+   * @important ATOMICITY WARNING: This method currently mutates state before
+   * calling saveVault(). It is SAFE because there is no async validation
+   * between mutation and save. However, if you add ANY async validation
+   * (e.g., checking token contract existence on-chain), you MUST move that
+   * validation BEFORE the state mutation to prevent partial state corruption.
+   * See addChain() in PreferencesService for the correct pattern.
+   */
+  async addToken(chain: Chain, token: Token): Promise<void> {
+    const allTokens = this.getAllTokens()
+
+    if (!allTokens[chain]) {
+      allTokens[chain] = []
+    }
+
+    // Check if token already exists
+    if (!allTokens[chain].find(t => t.id === token.id)) {
+      // State mutation - SAFE only because no async validation follows
+      allTokens[chain].push(token)
+      this.setAllTokens(allTokens)
+      await this.saveVault()
+
+      // Emit token added event
+      this.emitTokenAdded({ chain, token })
+    }
+  }
+
+  /**
+   * Remove token from chain
+   * Emits tokenRemoved event and invalidates balance cache
+   *
+   * @param chain Chain to remove token from
+   * @param tokenId Token ID (contract address) to remove
+   */
+  async removeToken(chain: Chain, tokenId: string): Promise<void> {
+    const allTokens = this.getAllTokens()
+
+    if (allTokens[chain]) {
+      const tokenExists = allTokens[chain].some(t => t.id === tokenId)
+
+      if (tokenExists) {
+        // Store original state for rollback
+        const originalTokens = { ...allTokens }
+
+        // Optimistically remove token
+        allTokens[chain] = allTokens[chain].filter(t => t.id !== tokenId)
+        this.setAllTokens(allTokens)
+
+        try {
+          // Attempt to persist changes
+          await this.saveVault()
+
+          // Emit token removed event only after successful save
+          this.emitTokenRemoved({ chain, tokenId })
+        } catch (error) {
+          // Rollback on failure to maintain consistency
+          this.setAllTokens(originalTokens)
+          throw error
+        }
+      }
+    }
   }
 }

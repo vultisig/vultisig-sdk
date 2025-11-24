@@ -71,23 +71,23 @@ This example uses environment variables for default form values. The hierarchy i
 ## SDK Integration
 
 ```typescript
-import { VultisigSDK } from '@vultisig/sdk'
+import { VultisigSDK } from "@vultisig/sdk";
 
 const sdk = new VultisigSDK({
-  serverUrl: 'https://api.vultisig.com/router',
-  theme: 'light',
-})
+  serverUrl: "https://api.vultisig.com/router",
+  theme: "light",
+});
 
 // Initialize SDK
-await sdk.initialize()
+await sdk.initialize();
 
 // Create vault
 const { vault, vaultId } = await sdk.createFastVault({
-  name: 'My Vault',
-  email: 'user@example.com',
-  password: 'secure_password',
-})
+  name: "My Vault",
+  email: "user@example.com",
+  password: "secure_password",
+});
 
 // Sign transaction
-const signature = await sdk.signTransaction(vault, txData)
+const signature = await sdk.signTransaction(vault, txData);
 ```

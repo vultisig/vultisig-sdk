@@ -5,21 +5,14 @@ export function stripPasswordQuotes(password: string): string {
 
   // Strip surrounding quotes if they exist
   const trimmed = password.trim()
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
     return trimmed.slice(1, -1)
   }
 
   return password
 }
 
-export async function promptForPassword(
-  prompt: string,
-  attempt: number,
-  total: number
-): Promise<string> {
+export async function promptForPassword(prompt: string, attempt: number, total: number): Promise<string> {
   const answer = await inquirer.prompt([
     {
       type: 'password',
@@ -31,19 +24,12 @@ export async function promptForPassword(
   return answer.password
 }
 
-export async function promptForPasswordWithValidation(
-  filePath: string,
-  maxAttempts: number = 3
-): Promise<string> {
+export async function promptForPasswordWithValidation(filePath: string, maxAttempts: number = 3): Promise<string> {
   console.log('🔐 Vault is encrypted. Password required.')
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const password = await promptForPassword(
-        'Enter password',
-        attempt,
-        maxAttempts
-      )
+      const password = await promptForPassword('Enter password', attempt, maxAttempts)
 
       if (!password.trim()) {
         if (attempt < maxAttempts) {

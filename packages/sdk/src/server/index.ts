@@ -35,10 +35,10 @@ export { uploadMpcSetupMessage } from '@core/mpc/message/setup/upload'
 export { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 
 // Re-export message server functions
-export {
-  fromMpcServerMessage,
-  toMpcServerMessage,
-} from '@core/mpc/message/server'
+export { fromMpcServerMessage, toMpcServerMessage } from '@core/mpc/message/server'
 
 // Re-export types
 export type { MpcRelayMessage } from '@core/mpc/message/relay'
+
+// Global ServerManager singleton
+export { GlobalServerManager, type ServerEndpoints } from './GlobalServerManager'

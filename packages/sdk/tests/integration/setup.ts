@@ -24,16 +24,8 @@ if (typeof globalThis.crypto === 'undefined') {
  * IMPORTANT: We save a reference and wrap fetch dynamically so it works even if fetch
  * gets replaced later (e.g., by server mocks)
  */
-const wasmFetchHandler = async (
-  input: RequestInfo | URL,
-  _init?: RequestInit
-): Promise<Response | null> => {
-  const url =
-    typeof input === 'string'
-      ? input
-      : input instanceof URL
-        ? input.href
-        : input.url
+const wasmFetchHandler = async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response | null> => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
 
   // Check if this is a WASM file request with file:// protocol
   if (url.endsWith('.wasm') && url.startsWith('file://')) {
@@ -69,18 +61,14 @@ const wasmFetchHandler = async (
 const originalFetch = globalThis.fetch
 
 // Create wrapper that handles WASM and delegates to whatever fetch is currently set
-const wrappedFetch = async function (
-  input: RequestInfo | URL,
-  init?: RequestInit
-): Promise<Response> {
+const wrappedFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   // Try WASM handler first
   const wasmResponse = await wasmFetchHandler(input, undefined)
   if (wasmResponse) return wasmResponse
 
   // Delegate to current globalThis.fetch (which might be a mock)
   // We check globalThis.fetch at call time, not setup time
-  const currentFetch =
-    globalThis.fetch === wrappedFetch ? originalFetch : globalThis.fetch
+  const currentFetch = globalThis.fetch === wrappedFetch ? originalFetch : globalThis.fetch
   return currentFetch(input as any, init)
 }
 

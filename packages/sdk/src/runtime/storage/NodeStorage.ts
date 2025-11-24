@@ -1,11 +1,4 @@
-import {
-  STORAGE_VERSION,
-  StorageError,
-  StorageErrorCode,
-  StorageMetadata,
-  StoredValue,
-  VaultStorage,
-} from './types'
+import { Storage, STORAGE_VERSION, StorageError, StorageErrorCode, StorageMetadata, StoredValue } from './types'
 
 /**
  * Node.js filesystem storage implementation with Electron support.
@@ -32,7 +25,7 @@ import {
  * - This prevents bundler errors when this file is included in browser/extension builds
  * - StorageManager imports all storage implementations, so top-level imports would fail in browsers
  */
-export class NodeStorage implements VaultStorage {
+export class NodeStorage implements Storage {
   public readonly basePath: string
   private initPromise?: Promise<void>
 
@@ -83,7 +76,17 @@ export class NodeStorage implements VaultStorage {
     this.initPromise = (async () => {
       try {
         const fs = await import('fs/promises')
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const path = require('path')
+
+        // Create base directory
         await fs.mkdir(this.basePath, { recursive: true, mode: 0o700 })
+
+        // Create cache subdirectory
+        await fs.mkdir(path.join(this.basePath, 'cache'), {
+          recursive: true,
+          mode: 0o700,
+        })
       } catch (error) {
         throw new StorageError(
           StorageErrorCode.PermissionDenied,
@@ -100,11 +103,17 @@ export class NodeStorage implements VaultStorage {
    * Get file path for a key
    */
   private getFilePath(key: string): string {
-    // Sanitize key to prevent directory traversal
-    const sanitized = key.replace(/[^a-zA-Z0-9_-]/g, '_')
+    // Sanitize key to prevent directory traversal - only block path separators
+    const sanitized = key.replace(/[/\\]/g, '_')
     // Dynamic require prevents bundler errors in browser builds
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('path')
+
+    // Put cache files in cache subdirectory for cleaner organization
+    if (key.startsWith('cache:')) {
+      return path.join(this.basePath, 'cache', `${sanitized}.json`)
+    }
+
     return path.join(this.basePath, `${sanitized}.json`)
   }
 
@@ -131,11 +140,7 @@ export class NodeStorage implements VaultStorage {
         return null
       }
 
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to read value for key "${key}"`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to read value for key "${key}"`, error as Error)
     }
   }
 
@@ -166,18 +171,10 @@ export class NodeStorage implements VaultStorage {
     } catch (error) {
       // Check for disk full
       if ((error as NodeJS.ErrnoException).code === 'ENOSPC') {
-        throw new StorageError(
-          StorageErrorCode.QuotaExceeded,
-          'Disk space quota exceeded',
-          error as Error
-        )
+        throw new StorageError(StorageErrorCode.QuotaExceeded, 'Disk space quota exceeded', error as Error)
       }
 
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to write value for key "${key}"`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to write value for key "${key}"`, error as Error)
     }
   }
 
@@ -199,11 +196,7 @@ export class NodeStorage implements VaultStorage {
         // File doesn't exist - that's ok
       }
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to remove key "${key}"`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
     }
   }
 
@@ -212,10 +205,13 @@ export class NodeStorage implements VaultStorage {
 
     try {
       const fs = await import('fs/promises')
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const path = require('path')
 
-      const files = await fs.readdir(this.basePath)
       const keys: string[] = []
 
+      // List files from base directory
+      const files = await fs.readdir(this.basePath)
       for (const file of files) {
         if (file.endsWith('.json') && !file.endsWith('.tmp')) {
           // Remove .json extension to get key
@@ -224,13 +220,27 @@ export class NodeStorage implements VaultStorage {
         }
       }
 
+      // List files from cache subdirectory
+      try {
+        const cacheDir = path.join(this.basePath, 'cache')
+        const cacheFiles = await fs.readdir(cacheDir)
+        for (const file of cacheFiles) {
+          if (file.endsWith('.json') && !file.endsWith('.tmp')) {
+            // Remove .json extension to get key
+            const key = file.slice(0, -5)
+            keys.push(key)
+          }
+        }
+      } catch (error) {
+        // Cache directory might not exist yet, that's ok
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
+        }
+      }
+
       return keys
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        'Failed to list keys',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, 'Failed to list keys', error as Error)
     }
   }
 
@@ -239,24 +249,31 @@ export class NodeStorage implements VaultStorage {
 
     try {
       const fs = await import('fs/promises')
-
-      const files = await fs.readdir(this.basePath)
-
-      // Remove all .json files
       // Dynamic require prevents bundler errors in browser builds
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const path = require('path')
+
+      // Remove all .json files from base directory
+      const files = await fs.readdir(this.basePath)
       await Promise.all(
-        files
-          .filter(file => file.endsWith('.json'))
-          .map(file => fs.unlink(path.join(this.basePath, file)))
+        files.filter(file => file.endsWith('.json')).map(file => fs.unlink(path.join(this.basePath, file)))
       )
+
+      // Remove all .json files from cache directory
+      try {
+        const cacheDir = path.join(this.basePath, 'cache')
+        const cacheFiles = await fs.readdir(cacheDir)
+        await Promise.all(
+          cacheFiles.filter(file => file.endsWith('.json')).map(file => fs.unlink(path.join(cacheDir, file)))
+        )
+      } catch (error) {
+        // Cache directory might not exist, that's ok
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
+        }
+      }
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        'Failed to clear storage',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }
   }
 
@@ -269,14 +286,33 @@ export class NodeStorage implements VaultStorage {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const path = require('path')
 
-      const files = await fs.readdir(this.basePath)
       let totalSize = 0
 
+      // Calculate size of files in base directory
+      const files = await fs.readdir(this.basePath)
       for (const file of files) {
         if (file.endsWith('.json')) {
           const filePath = path.join(this.basePath, file)
           const stats = await fs.stat(filePath)
           totalSize += stats.size
+        }
+      }
+
+      // Calculate size of files in cache directory
+      try {
+        const cacheDir = path.join(this.basePath, 'cache')
+        const cacheFiles = await fs.readdir(cacheDir)
+        for (const file of cacheFiles) {
+          if (file.endsWith('.json')) {
+            const filePath = path.join(cacheDir, file)
+            const stats = await fs.stat(filePath)
+            totalSize += stats.size
+          }
+        }
+      } catch (error) {
+        // Cache directory might not exist, that's ok
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.warn('Failed to calculate cache usage:', error)
         }
       }
 
@@ -312,3 +348,19 @@ export class NodeStorage implements VaultStorage {
     }
   }
 }
+
+// Self-register
+import { type StorageOptions, storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'node',
+  priority: 100,
+  isSupported: () => {
+    return (
+      typeof process !== 'undefined' && process.versions?.node !== undefined && typeof window === 'undefined' // Not Electron renderer
+    )
+  },
+  create: (options?: StorageOptions) => {
+    return new NodeStorage(options?.basePath ? { basePath: options.basePath } : undefined)
+  },
+})

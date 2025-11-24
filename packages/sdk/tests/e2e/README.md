@@ -30,6 +30,7 @@ Instead of creating new vaults for every test run (which requires email verifica
 - **⚠️ WARNING**: NEVER fund the default vault addresses - use your own vault for funded tests!
 
 **Environment Variable Setup** (Optional):
+
 ```bash
 # Copy .env.example to .env and configure
 cp .env.example .env
@@ -50,6 +51,7 @@ TEST_VAULT_PASSWORD=your-secure-password
 ## Test Suites
 
 ### 1. Balance Operations (`balance-operations.test.ts`)
+
 - Fetch native token balances (BTC, ETH, SOL, etc.)
 - Fetch ERC-20 token balances (USDC, USDT)
 - Multi-chain balance fetching in parallel
@@ -57,6 +59,7 @@ TEST_VAULT_PASSWORD=your-secure-password
 - Address derivation validation
 
 ### 2. Gas Estimation (`gas-estimation.test.ts`)
+
 - EVM gas estimation (EIP-1559 for ETH, BSC, Polygon, etc.)
 - UTXO fee estimation (Bitcoin, Litecoin, Dogecoin)
 - L2 gas estimation (Arbitrum, Optimism, Base)
@@ -64,6 +67,7 @@ TEST_VAULT_PASSWORD=your-secure-password
 - Gas comparison across chains
 
 ### 3. Transaction Preparation (`prepare-send-tx.test.ts`)
+
 - Prepare ETH transfers (no broadcast)
 - Prepare ERC-20 transfers (no broadcast)
 - Prepare Bitcoin transfers (no broadcast)
@@ -74,6 +78,7 @@ TEST_VAULT_PASSWORD=your-secure-password
 - **Safety verification**: Confirms NO transactions were broadcast
 
 ### 4. Multi-Chain Coverage (`multi-chain-coverage.test.ts`)
+
 - Comprehensive balance fetching for 12+ chains
 - Address derivation for all chains
 - Gas estimation coverage
@@ -84,6 +89,7 @@ TEST_VAULT_PASSWORD=your-secure-password
 ## Running Tests
 
 ### Run All E2E Tests
+
 ```bash
 npm run test:e2e
 # or
@@ -91,6 +97,7 @@ yarn test:e2e
 ```
 
 ### Run Specific Test Suite
+
 ```bash
 npm run test:e2e -- balance-operations
 npm run test:e2e -- gas-estimation
@@ -99,11 +106,13 @@ npm run test:e2e -- multi-chain
 ```
 
 ### Run with Coverage
+
 ```bash
 npm run test:e2e:coverage
 ```
 
 ### Run in Watch Mode
+
 ```bash
 npm run test:e2e -- --watch
 ```
@@ -118,19 +127,23 @@ npm run test:e2e -- --watch
 ## Safety Guarantees
 
 ### Read-Only Operations
+
 All E2E tests perform **read-only operations only**:
+
 - ✅ Balance queries (RPC calls)
 - ✅ Gas estimation (RPC calls)
 - ✅ Address derivation (local cryptography)
 - ✅ Transaction preparation (builds payload, no broadcast)
 
 ### No Transaction Broadcasting
+
 - ❌ NO `vault.sign()` calls
 - ❌ NO transaction broadcasting to blockchain
 - ❌ NO fund transfers
 - ❌ NO state changes on blockchain
 
 ### Production Environment
+
 - Uses production VultiServer API: `https://api.vultisig.com`
 - Uses production blockchain RPCs (mainnet)
 - Tests real-world behavior
@@ -158,6 +171,7 @@ All E2E tests perform **read-only operations only**:
 ```
 
 **⚠️ SECURITY WARNING:**
+
 - These addresses correspond to the default test vault (credentials public in git)
 - **NEVER send funds to these addresses** - anyone can access them!
 - For funded tests, create your own vault with unique addresses
@@ -170,6 +184,7 @@ All E2E tests perform **read-only operations only**:
 **Error: "Cannot read vault file"**
 
 If using default vault:
+
 ```bash
 # Verify default vault file exists
 ls -la packages/sdk/tests/fixtures/vaults/
@@ -179,6 +194,7 @@ ls -la packages/sdk/tests/fixtures/vaults/
 ```
 
 If using custom vault (environment variables):
+
 ```bash
 # Verify your vault file exists
 ls -la "$TEST_VAULT_PATH"
@@ -194,6 +210,7 @@ cat packages/sdk/tests/e2e/.env
 **Error: "Both TEST_VAULT_PATH and TEST_VAULT_PASSWORD must be set"**
 
 You've set one environment variable but not the other. Either:
+
 1. Set both variables for custom vault, or
 2. Unset both to use the default public vault
 
@@ -208,7 +225,9 @@ unset TEST_VAULT_PASSWORD
 ```
 
 ### RPC Timeout Errors
+
 Some chains may experience RPC timeouts due to:
+
 - Rate limiting
 - Network congestion
 - RPC provider issues
@@ -216,12 +235,15 @@ Some chains may experience RPC timeouts due to:
 This is expected - the multi-chain test requires ≥80% success rate, not 100%.
 
 ### Balance is Zero
+
 Some test vault addresses may have zero balance. This is normal - we're testing the **balance fetching mechanism**, not requiring funded addresses.
 
 ## Maintenance
 
 ### Vault Refresh
+
 If the test vault needs to be refreshed (e.g., new chains added):
+
 ```bash
 # Use CLI to create new test vault
 cd clients/cli
@@ -232,7 +254,9 @@ npm run create-vault
 ```
 
 ### Adding New Chains
+
 To add a new chain to the test suite:
+
 1. Add chain name to `TEST_VAULT_CONFIG.testChains` in `tests/e2e/helpers/test-vault.ts`
 2. Run tests - address will be derived automatically
 3. (Optional) Add expected address to `TEST_VAULT_CONFIG.addresses`
@@ -240,6 +264,7 @@ To add a new chain to the test suite:
 ## Contributing
 
 When adding new E2E tests:
+
 1. Use `loadTestVault()` helper to import the persistent vault
 2. Use `verifyTestVault()` to confirm vault loaded correctly
 3. Only perform read-only operations (balance, gas, prepareSendTx)
@@ -270,6 +295,7 @@ tests/fixtures/vaults/
 ## Next Steps
 
 After E2E read-only tests pass:
+
 1. ✅ Phase 4.1 Complete: Read-only operations validated
 2. 🔜 Phase 4.2: Transaction signing with small amounts
    - **⚠️ Security required first**: Create dedicated test vault (see [SECURITY.md](./SECURITY.md))
@@ -282,6 +308,7 @@ After E2E read-only tests pass:
    - Consider using testnets where possible
 
 **Before proceeding to Phase 4.2+:**
+
 - Read [SECURITY.md](./SECURITY.md) completely
 - Verify `.gitignore` patterns are in place
 - Never commit vault files or passwords

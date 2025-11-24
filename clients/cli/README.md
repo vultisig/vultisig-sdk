@@ -17,6 +17,7 @@ Multi-Party Computation (MPC) wallet command-line interface for threshold signat
 ## ⚡ Quick Install
 
 **Complete installation:**
+
 ```bash
 git clone <repository>
 cd vultisig-sdk
@@ -27,13 +28,15 @@ make install                    # Install to system PATH
 ```
 
 That's it! The build process will:
+
 - ✅ Build the SDK for Node.js with WASM support
-- ✅ Compile CLI TypeScript to JavaScript  
+- ✅ Compile CLI TypeScript to JavaScript
 - ✅ Create launcher script with SDK integration
 - ✅ Install to `/usr/local/bin/vultisig`
 - ✅ Make it executable and verify installation
 
 **Now use anywhere:**
+
 ```bash
 vultisig version
 vultisig list
@@ -45,7 +48,9 @@ vultisig balance
 ## 🏃 Quick Start
 
 ### 1. Prepare Your Vaults
+
 Copy your `.vult` files to the vaults directory (will be created automatically):
+
 ```bash
 vultisig list  # Creates vaults/ directory if needed
 cp ~/Downloads/MyVault-*.vult ./vaults/
@@ -53,6 +58,7 @@ vultisig list  # Verify files are detected
 ```
 
 ### 2. Start Daemon
+
 ```bash
 vultisig run
 # 🚀 Starting Vultisig daemon...
@@ -68,44 +74,47 @@ vultisig run
 ```
 
 ### 3. Query Addresses (in another terminal)
+
 ```bash
 vultisig address
 # 🔍 Querying daemon for addresses...
-# 
+#
 # === Addresses ===
 #   ✅ Bitcoin: bc1qg7...
 #   ✅ Ethereum: 0x8c4E...
 #   ✅ Solana: G5Jm9g...
 #   ... (all 20 chains supported)
-# 
+#
 # 💡 Addresses retrieved from running daemon
 ```
 
 ### 4. Query Balances (in another terminal)
+
 ```bash
 vultisig balance
 # 💰 Querying balances...
-# 
+#
 # === Balances ===
 #   💰 Bitcoin: 0.00125 BTC
 #   💰 Ethereum: 2.4567 ETH
 #   💰 Solana: 12.345 SOL
 #   ... (all configured chains)
-# 
+#
 # 💡 Balances retrieved from running daemon
 ```
 
 ### 5. Sign Transaction (in another terminal)
+
 ```bash
 vultisig sign --network eth --payload-file transaction.json
 # 📡 Using vault already loaded in daemon...
-# 
+#
 # 🔐 Starting MPC transaction signing...
 # Network: ETH
 # Message Type: eth_tx
 # Mode: relay
 # Session ID: session-a1b2c3d4
-# 
+#
 # 🌐 MPC Server: http://localhost:18080
 # 🔌 Connecting to daemon...
 # 📡 Sending signing request to daemon...
@@ -114,6 +123,7 @@ vultisig sign --network eth --payload-file transaction.json
 ```
 
 ### 6. Stop Daemon
+
 ```bash
 vultisig quit
 # 🛑 Shutting down daemon...
@@ -123,14 +133,17 @@ vultisig quit
 ## 📖 Commands Reference
 
 ### `vultisig list`
+
 List available vault files with encryption status.
 
 **Usage:**
+
 ```bash
 vultisig list
 ```
 
 **Example Output:**
+
 ```
 📁 Found 2 vault file(s) in ./vaults:
   📄 MyVault-share1of2.vult (🔓 unencrypted)
@@ -139,6 +152,7 @@ vultisig list
 
 **First Run:**
 If the vaults directory doesn't exist, it will be created:
+
 ```
 📁 Vaults directory not found. Creating: ./vaults
 ✅ Created vaults directory
@@ -152,19 +166,23 @@ Next steps:
 ---
 
 ### `vultisig run`
+
 Start the MPC signing daemon.
 
 **Usage:**
+
 ```bash
 vultisig run [options]
 ```
 
 **Options:**
+
 - `--vault <path>` - Path to keyshare file (auto-discovers if not specified)
 - `--password <password>` - Password for encrypted keyshares (prompts if needed)
 - `--config <config>` - Custom configuration file
 
 **Examples:**
+
 ```bash
 # Auto-discover vault
 vultisig run
@@ -182,19 +200,23 @@ vultisig run --vault keyshares/secure.vult
 ---
 
 ### `vultisig balance`
+
 Show wallet balances for supported networks (queries running daemon or loads vault).
 
 **Usage:**
+
 ```bash
 vultisig balance [options]
 ```
 
 **Options:**
+
 - `--network <network>` - Network to query (default: all)
 - `--vault <path>` - Path to keyshare file (.vult) - starts daemon if not running
 - `--password <password>` - Password for encrypted keyshares
 
 **Examples:**
+
 ```bash
 # Show all balances (requires daemon to be running or vault file)
 vultisig balance
@@ -215,8 +237,9 @@ vultisig balance --vault keyshares/secure.vult --password mypassword
 **Note:** This command can work with a running daemon (started with `vultisig run`) or load a vault directly. If no daemon is running, it will attempt to auto-discover and load an available vault file.
 
 **Supported Networks:**
+
 - `btc` - Bitcoin
-- `eth` - Ethereum  
+- `eth` - Ethereum
 - `sol` - Solana
 - `ltc` - Litecoin
 - `doge` - Dogecoin
@@ -239,17 +262,21 @@ vultisig balance --vault keyshares/secure.vult --password mypassword
 ---
 
 ### `vultisig address`
+
 Show wallet addresses for supported networks (queries running daemon).
 
 **Usage:**
+
 ```bash
 vultisig address [options]
 ```
 
 **Options:**
+
 - `--network <networks>` - Networks to show (default: all)
 
 **Examples:**
+
 ```bash
 # Show all addresses (requires daemon to be running)
 vultisig address
@@ -264,8 +291,9 @@ vultisig address --network eth
 **Note:** This command requires a running daemon started with `vultisig run`. If no daemon is running, you'll get an error message: "No Vultisig daemon running, start with 'vultisig run' first".
 
 **Supported Networks:**
+
 - `btc` - Bitcoin
-- `eth` - Ethereum  
+- `eth` - Ethereum
 - `sol` - Solana
 - `ltc` - Litecoin
 - `doge` - Dogecoin
@@ -288,14 +316,17 @@ vultisig address --network eth
 ---
 
 ### `vultisig sign`
+
 Sign blockchain transactions using MPC (requires running daemon).
 
 **Usage:**
+
 ```bash
 vultisig sign --network <NETWORK> [options]
 ```
 
 **Options:**
+
 - `--network <network>` - **Required.** Blockchain network (ETH, BTC, SOL, etc.)
 - `--mode <mode>` - Signing mode: `local`, `fast` or `relay` (default: `fast`)
 - `--session-id <id>` - Custom session ID (auto-generated if empty)
@@ -303,6 +334,7 @@ vultisig sign --network <NETWORK> [options]
 - `--password <password>` - VultiServer decryption password (required for `fast` mode)
 
 **Examples:**
+
 ```bash
 # Sign Ethereum transaction from file (fast mode - default)
 vultisig sign --network eth --password myVultiServerPassword --payload-file transaction.json
@@ -313,12 +345,13 @@ echo '{"to":"bc1...","amount":"0.001"}' | vultisig sign --network btc --password
 # Local signing mode
 vultisig sign --network sol --mode local --payload-file sol-tx.json
 
-# Relay mode 
+# Relay mode
 vultisig sign --network eth --mode relay --payload-file transaction.json
 ```
 
 **⚡ Fast Mode with VultiServer:**
 Fast mode enables MPC signing ceremony directly between CLI and VultiServer without requiring mobile devices. This mode:
+
 1. **Requires `--password`**: The VultiServer decryption password (not your local vault password)
 2. **Requires local vault**: CLI loads local vault keyshare to participate in MPC ceremony
 3. **MPC ceremony**: Both CLI and VultiServer participate in full MPC protocol using WASM libraries
@@ -332,14 +365,17 @@ Fast mode enables MPC signing ceremony directly between CLI and VultiServer with
 ---
 
 ### `vultisig status`
+
 Check daemon status and connectivity.
 
 **Usage:**
+
 ```bash
 vultisig status
 ```
 
 **Example Output:**
+
 ```
 🔍 Checking daemon status...
 ✅ Daemon is running and responsive
@@ -348,15 +384,18 @@ vultisig status
 ---
 
 ### `vultisig verify`
+
 Verify fast vault with email code or check if vault exists on server.
 
 **Usage:**
+
 ```bash
 vultisig verify --vault-id <VAULT_ID> --email <CODE>
 vultisig verify --vault-id <VAULT_ID> --password <PASSWORD>
 ```
 
 **Options:**
+
 - `--vault-id <vaultId>` - **Required.** Vault ID (ECDSA public key)
 - `--email <code>` - Verify email verification code (mutually exclusive with --password)
 - `--password <password>` - Check if vault exists on server with password (mutually exclusive with --email)
@@ -364,6 +403,7 @@ vultisig verify --vault-id <VAULT_ID> --password <PASSWORD>
 **Examples:**
 
 **Email Verification:**
+
 ```bash
 # Verify email code received after fast vault creation
 vultisig verify --vault-id 04a1b2c3... --email 123456
@@ -382,6 +422,7 @@ vultisig verify --vault-id 04a1b2c3... --email 123456
 ```
 
 **Vault Existence Check:**
+
 ```bash
 # Check if vault exists on server with password
 vultisig verify --vault-id 04a1b2c3... --password myPassword123
@@ -400,9 +441,11 @@ vultisig verify --vault-id 04a1b2c3... --password myPassword123
 ---
 
 ### `vultisig quit`
+
 Gracefully shutdown the daemon.
 
 **Usage:**
+
 ```bash
 vultisig quit
 ```
@@ -412,22 +455,25 @@ Attempts graceful shutdown via Unix socket, falls back to PID-based termination 
 ## 🔧 Configuration
 
 ### Config File Location
+
 `~/.vultisig/vultisig-config.yaml`
 
 ### Default Configuration
+
 ```yaml
 # Vultisig CLI Configuration (vultisig-config.yaml)
 
-websocket_port: 8787          # WebSocket server port (auto-adjusts if busy)
-http_port: 18080              # HTTP relay port (fixed per protocol spec)
-enable_mobile_signing: true   # Enable mobile app discovery/signing
-use_vultisig_relay: false     # Use external Vultisig relay servers
-enable_local_relay: true      # Enable local relay server
+websocket_port: 8787 # WebSocket server port (auto-adjusts if busy)
+http_port: 18080 # HTTP relay port (fixed per protocol spec)
+enable_mobile_signing: true # Enable mobile app discovery/signing
+use_vultisig_relay: false # Use external Vultisig relay servers
+enable_local_relay: true # Enable local relay server
 ```
 
 ## 🗂️ File Structure
 
 ### Keyshare Files (`.vult`)
+
 VultiSig keyshare files use a layered format:
 
 ```
@@ -435,7 +481,7 @@ VultiSig keyshare files use a layered format:
 ├── Base64 encoding (outer layer)
 └── VaultContainer (protobuf)
     ├── version: uint64
-    ├── is_encrypted: bool  
+    ├── is_encrypted: bool
     └── vault: string
         ├── Base64 encoding (if unencrypted)
         ├── OR AES-256-GCM encryption (if encrypted)
@@ -450,7 +496,9 @@ VultiSig keyshare files use a layered format:
 ```
 
 ### Encryption Details
+
 When `is_encrypted = true`, vault data uses:
+
 - **Algorithm**: AES-256-GCM
 - **Key Derivation**: SHA256(password)
 - **Nonce**: First 12 bytes of encrypted data
@@ -459,11 +507,13 @@ When `is_encrypted = true`, vault data uses:
 ## 🔄 Daemon Architecture
 
 ### Unix Socket Communication
+
 - **Socket Path**: `/tmp/vultisig.sock`
 - **PID File**: `/tmp/vultisig.pid`
 - **Protocol**: JSON-RPC over Unix domain socket
 
 ### Supported Methods
+
 ```json
 // Ping daemon
 {"method": "ping", "params": {}}
@@ -473,6 +523,7 @@ When `is_encrypted = true`, vault data uses:
 ```
 
 ### Response Format
+
 ```json
 {
   "success": true,
@@ -482,6 +533,7 @@ When `is_encrypted = true`, vault data uses:
 ```
 
 ## 🛡️ Security Features
+
 - ✅ **AES-256-GCM encryption** with password validation (3 attempts)
 - ✅ **Trust Wallet Core integration** - Real BIP32/EdDSA derivation with 100% accuracy
 - ✅ **Unix socket permissions** (0600 - owner only) with PID validation
@@ -492,6 +544,7 @@ When `is_encrypted = true`, vault data uses:
 ### Common Issues
 
 #### "No vault files found"
+
 ```bash
 # Solution: Add vault files to vaults directory
 vultisig list  # Creates vaults directory if needed
@@ -500,6 +553,7 @@ vultisig list  # Verify files are detected
 ```
 
 #### "Authentication failed after 3 attempts"
+
 ```bash
 # Solution: Check password or use unencrypted vault
 vultisig list  # Check encryption status
@@ -507,6 +561,7 @@ vultisig address --vault keyshares/unencrypted.vult  # Try unencrypted
 ```
 
 #### "Daemon is not running"
+
 ```bash
 # Solution: Start daemon first
 vultisig run &  # Start in background
@@ -515,6 +570,7 @@ vultisig status  # Verify running
 ```
 
 #### "Socket connection failed"
+
 ```bash
 # Solution: Check daemon status and restart if needed
 vultisig quit   # Stop daemon
@@ -523,6 +579,7 @@ vultisig run    # Restart daemon
 ```
 
 ### Debug Mode
+
 ```bash
 # Enable debug logging
 export VULTISIG_DEBUG=1
@@ -532,6 +589,7 @@ vultisig run --verbose
 ## 🏗️ Development
 
 ### Project Structure
+
 ```
 src/
 ├── cli.ts                 # Main CLI entry point with commander.js
@@ -562,10 +620,12 @@ src/
 ### Build Commands
 
 **Prerequisites:**
+
 - Node.js 18+ with WebAssembly support
 - yarn package manager (as specified in package.json)
 
 **Build Process:**
+
 ```bash
 # 1. Setup workspace (from repository root)
 cd /path/to/vultisig-sdk
@@ -593,11 +653,12 @@ vultisig --version        # Verify installation
 ```
 
 **Development Workflow:**
+
 ```bash
 # Build SDK only (when SDK changes)
 cd src && yarn workspace @vultisig/sdk build
 
-# Build CLI only (when CLI changes)  
+# Build CLI only (when CLI changes)
 cd clients/cli && yarn build
 
 # Complete rebuild
@@ -609,17 +670,20 @@ make uninstall            # Remove from system PATH
 
 **Build Troubleshooting:**
 
-*TypeScript compilation errors in core/lib files:*
+_TypeScript compilation errors in core/lib files:_
+
 - These are expected - the CLI build script uses `--noEmitOnError false`
 - Browser-specific code (like `document.createElement`) causes errors in Node.js compilation
 - The build continues despite errors and produces working CLI output
 
-*WASM loading issues:*
+_WASM loading issues:_
+
 - Ensure Node.js 18+ with WebAssembly support
 - WASM files are automatically copied during SDK build
 - Check that `src/dist/index.node.cjs` exists after SDK build
 
-*Module resolution errors:*
+_Module resolution errors:_
+
 - Run `yarn install` from repository root first
 - Ensure workspace dependencies are properly linked
 - The launcher script handles SDK loading, not direct imports
@@ -627,6 +691,7 @@ make uninstall            # Remove from system PATH
 ## 🎯 Implementation Status
 
 ### ✅ Production Ready Features
+
 - [x] **Standalone Binary** - 60MB executable with all dependencies bundled
 - [x] **Monorepo Integration** - Full reuse of existing Windows app code
 - [x] **Real Protobuf Parsing** - `@bufbuild/protobuf` for vault containers and data
@@ -641,13 +706,16 @@ make uninstall            # Remove from system PATH
 - [x] **Error Handling** - Comprehensive error messages and validation
 
 ### 🚧 Future Enhancements
+
 - [ ] **MPC Signing Implementation** - Full transaction signing workflow
-- [ ] **Mobile Coordination** - QR code generation and peer discovery  
+- [ ] **Mobile Coordination** - QR code generation and peer discovery
 - [ ] **Additional Platforms** - Windows and Linux binary builds
 - [ ] **Performance Optimization** - Faster Trust Wallet Core initialization
 
 ### 🚀 Ready for Production
+
 The CLI is **fully functional** with:
+
 - ✅ Real vault parsing using existing Windows app infrastructure
 - ✅ Trust Wallet Core integration with 100% accurate address derivation
 - ✅ All 20 blockchain networks working perfectly (ECDSA + EdDSA)
@@ -664,7 +732,7 @@ MIT License - see LICENSE file for details.
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)  
+4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
 ## 📞 Support

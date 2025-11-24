@@ -4,8 +4,8 @@ Here's a **corrected, tighter** guide aligned to the two READMEs.
 
 This documents the fast 2-of-2 "Fast Vault" flow that uses:
 
-* **VultiServer (API Server)** on `https://api.vultisig.com` for `/vault/*` endpoints.
-* **Relay Server** on `https://api.vultisig.com/router` for session and MPC message coordination. ([GitHub][1])
+- **VultiServer (API Server)** on `https://api.vultisig.com` for `/vault/*` endpoints.
+- **Relay Server** on `https://api.vultisig.com/router` for session and MPC message coordination. ([GitHub][1])
 
 ---
 
@@ -22,23 +22,26 @@ Two services cooperate:
 
 Generate:
 
-* **Session ID**: UUID v4
-* **Party IDs**: free-form identifiers (string). Recommended convention: `browser-####` for the client, `Server-####` for VultiServer.
-* **Hex Encryption Key**: 32-byte hex
-* **Hex Chain Code**: 32-byte hex
+- **Session ID**: UUID v4
+- **Party IDs**: free-form identifiers (string). Recommended convention: `browser-####` for the client, `Server-####` for VultiServer.
+- **Hex Encryption Key**: 32-byte hex
+- **Hex Chain Code**: 32-byte hex
 
 > Note: the "capital S is required" is **not** a server constraint; it's just a convention. The relay treats participant IDs as opaque strings. ([GitHub][2])
 
 Example generators (unchanged):
 
 ```js
-const generateLocalPartyId = () => `browser-${Math.floor(1000 + Math.random()*9000)}`
-const generateServerPartyId = () => `Server-${Math.floor(1000 + Math.random()*9000)}`
+const generateLocalPartyId = () =>
+  `browser-${Math.floor(1000 + Math.random() * 9000)}`;
+const generateServerPartyId = () =>
+  `Server-${Math.floor(1000 + Math.random() * 9000)}`;
 const generateSessionId = () =>
-  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random()*16|0, v = c==='x'? r : (r&0x3|0x8)
-    return v.toString(16)
-  })
+  "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0,
+      v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 ```
 
 ---
@@ -62,7 +65,7 @@ const generateSessionId = () =>
 }
 ```
 
-* `lib_type`: `0` = GG20, `1` = DKLS. DKLS is the modern path and used broadly in Vultisig. ([GitHub][1])
+- `lib_type`: `0` = GG20, `1` = DKLS. DKLS is the modern path and used broadly in Vultisig. ([GitHub][1])
 
 **Response**: `200 OK`. ([GitHub][1])
 
@@ -87,15 +90,15 @@ Body = JSON array of current participants (start with the browser):
 ["browser-1355", "Server-1172"]
 ```
 
-*Note: Server may return `[]` (empty array) - participants don't always persist between calls.*
+_Note: Server may return `[]` (empty array) - participants don't always persist between calls._
 
 Poll until the server party appears. **Sessions auto-expire after \~5 minutes** on the relay, so keep polling within that window. ([GitHub][2])
 
 > Relay Session Endpoints (reference):
 >
-> * `POST /:sessionID` create
-> * `GET /:sessionID` list participants
-> * `DELETE /:sessionID` delete session. ([GitHub][2])
+> - `POST /:sessionID` create
+> - `GET /:sessionID` list participants
+> - `DELETE /:sessionID` delete session. ([GitHub][2])
 
 ---
 
@@ -104,7 +107,7 @@ Poll until the server party appears. **Sessions auto-expire after \~5 minutes** 
 **POST** `https://api.vultisig.com/router/start/{sessionId}`
 (no body)
 
-*Note: May return 500 error if session doesn't exist first.*
+_Note: May return 500 error if session doesn't exist first._
 
 You can also **GET** `/start/{sessionId}` to read start status. Completion markers exist too; see Keysign complete below. ([GitHub][2])
 
@@ -116,17 +119,17 @@ You can also **GET** `/start/{sessionId}` to read start status. Completion marke
 
 The relay exposes a single **setup-message** slot per `sessionId`.
 
-* **POST** `https://api.vultisig.com/router/setup-message/{sessionId}`
+- **POST** `https://api.vultisig.com/router/setup-message/{sessionId}`
   Body: binary (your WASM/SDK-emitted setup data)
 
-* **GET** `https://api.vultisig.com/router/setup-message/{sessionId}`
+- **GET** `https://api.vultisig.com/router/setup-message/{sessionId}`
   Returns whatever was posted. Typically the browser posts and VultiServer fetches. ([GitHub][2])
 
 > Your document previously claimed the GET returns a message "uploaded by Server"; invert that: the GET returns **the posted setup message**, whichever side posted it.
 
 #### 4.2 Message exchange loop
 
-* **POST** `https://api.vultisig.com/router/message/{sessionId}`
+- **POST** `https://api.vultisig.com/router/message/{sessionId}`
 
 Suggested JSON (fields are opaque to the relay, but this schema works well):
 
@@ -141,18 +144,18 @@ Suggested JSON (fields are opaque to the relay, but this schema works well):
 }
 ```
 
-* **GET** `https://api.vultisig.com/router/message/{sessionId}/{participantId}` → returns array of pending messages for `participantId` (returns `[]` empty array when no messages, not `{}` object).
-* **DELETE** `https://api.vultisig.com/router/message/{sessionId}/{participantId}/{hash}` → acknowledge/remove.
+- **GET** `https://api.vultisig.com/router/message/{sessionId}/{participantId}` → returns array of pending messages for `participantId` (returns `[]` empty array when no messages, not `{}` object).
+- **DELETE** `https://api.vultisig.com/router/message/{sessionId}/{participantId}/{hash}` → acknowledge/remove.
 
 Notes:
 
-* The relay verifies payloads by **SHA-256** hash and deduplicates; use the hash of the encrypted `body` as your `hash`. There is **no documented `message_id` header** on DELETE. ([GitHub][2])
-* Optional **payload** store: `POST /payload/{hash}`, `GET /payload/{hash}` if you want out-of-band large blob transfer. ([GitHub][2])
+- The relay verifies payloads by **SHA-256** hash and deduplicates; use the hash of the encrypted `body` as your `hash`. There is **no documented `message_id` header** on DELETE. ([GitHub][2])
+- Optional **payload** store: `POST /payload/{hash}`, `GET /payload/{hash}` if you want out-of-band large blob transfer. ([GitHub][2])
 
 #### 4.3 What you should expect from keygen results
 
-* **ECDSA public key**: uncompressed **65-byte** hex (`0x04 || X32 || Y32`).
-* **EdDSA public key** (Ed25519): 32 bytes.
+- **ECDSA public key**: uncompressed **65-byte** hex (`0x04 || X32 || Y32`).
+- **EdDSA public key** (Ed25519): 32 bytes.
 
 Your original said "ECDSA 64 bytes starting with 04", which is inconsistent; uncompressed points are 65 bytes including the `0x04` prefix.
 
@@ -184,7 +187,7 @@ Constraint: **once every \~3 minutes**. Your previous `/vault/resend-verificatio
 **Get vault**
 
 **GET** `https://api.vultisig.com/vault/get/{public_key_ecdsa}`
-Header: `x-password: <plaintext password>`  ← **not base64**.
+Header: `x-password: <plaintext password>` ← **not base64**.
 Response shape:
 
 ```json
@@ -228,44 +231,45 @@ Fast signing uses a **two-step approach** that matches the extension implementat
 
 After initiating with FastVault server, run the **relay message loop** with **no setup message exchange**:
 
-* **Key Difference**: Fast signing **bypasses** `/router/setup-message/{sessionId}` endpoints
-* Server coordinates MPC session directly after `/vault/sign` call
-* Proceed directly to MPC message exchange
+- **Key Difference**: Fast signing **bypasses** `/router/setup-message/{sessionId}` endpoints
+- Server coordinates MPC session directly after `/vault/sign` call
+- Proceed directly to MPC message exchange
 
 **Completion markers:**
-* `POST /complete/{sessionId}` for keygen complete  
-* `POST /complete/{sessionId}/keysign` for keysign complete (**404 - not implemented**)
-* Corresponding `GET` endpoints to read status
+
+- `POST /complete/{sessionId}` for keygen complete
+- `POST /complete/{sessionId}/keysign` for keysign complete (**404 - not implemented**)
+- Corresponding `GET` endpoints to read status
 
 ---
 
 ## Related (useful) VultiServer endpoints
 
-* **Reshare**: `POST /vault/reshare` (old\_parties, reshare prefix)
-* **Migrate GG20→DKLS**: `POST /vault/migrate`
+- **Reshare**: `POST /vault/reshare` (old_parties, reshare prefix)
+- **Migrate GG20→DKLS**: `POST /vault/migrate`
   See README for exact payloads. ([GitHub][1])
 
 ---
 
 ## Health Checks
 
-* **Relay**: `GET https://api.vultisig.com/router/ping`
-* **API Server**: `GET /ping` (returns text: `Vultisigner is running`)
+- **Relay**: `GET https://api.vultisig.com/router/ping`
+- **API Server**: `GET /ping` (returns text: `Vultisigner is running`)
   Both are visible in the respective READMEs; Cloudflare routes the production base. ([GitHub][2])
 
 ---
 
 ## Timeouts, Expiry, Retries
 
-* **Relay expiries**: sessions \~**5 min**, user data \~**1 hour**. Build your polling/backoff within that envelope. ([GitHub][2])
-* **Client retry**: your exponential backoff plan is fine; keep **4xx non-retriable**, **5xx retriable**.
+- **Relay expiries**: sessions \~**5 min**, user data \~**1 hour**. Build your polling/backoff within that envelope. ([GitHub][2])
+- **Client retry**: your exponential backoff plan is fine; keep **4xx non-retriable**, **5xx retriable**.
 
 ---
 
 ## Library Types
 
-* `0` = GG20
-* `1` = DKLS (current standard in Vultisig; supports ECDSA and EdDSA) ([GitHub][1])
+- `0` = GG20
+- `1` = DKLS (current standard in Vultisig; supports ECDSA and EdDSA) ([GitHub][1])
 
 ---
 
@@ -276,12 +280,12 @@ After initiating with FastVault server, run the **relay message loop** with **no
 const { vaultId } = await sdk.createFastVault({
   name: "TestVault",
   email: "user@example.com",
-  password: "Password123!"
-})
+  password: "Password123!",
+});
 
-await sdk.verifyVaultEmail(vaultId, "1234")
+await sdk.verifyVaultEmail(vaultId, "1234");
 
-const vault = await sdk.getVault(vaultId, "Password123!")
+const vault = await sdk.getVault(vaultId, "Password123!");
 ```
 
 ---
@@ -293,10 +297,12 @@ Based on comprehensive testing with real VultiServer and MessageRelay endpoints 
 ### ✅ Working Endpoints
 
 **VultiServer (api.vultisig.com/vault):**
+
 - `GET /get/{public_key_ecdsa}` → **200 OK** (returns vault object)
 
 **MessageRelay (api.vultisig.com/router):**
-- `POST /{sessionId}` with `[participantId]` → **200 OK** 
+
+- `POST /{sessionId}` with `[participantId]` → **200 OK**
 - `GET /{sessionId}` → **200 OK** (returns `[]` empty array - participants don't persist)
 - `DELETE /{sessionId}` → **200 OK**
 - `POST /start/{sessionId}` → **200 OK** (when session exists) or **500** (when session missing)
@@ -311,9 +317,11 @@ Based on comprehensive testing with real VultiServer and MessageRelay endpoints 
 ### ⚠️ Known Issues
 
 **VultiServer:**
+
 - `POST /vault/sign` → **405 Method Not Allowed** (server configuration issue)
 
 **MessageRelay:**
+
 - `POST /complete/{sessionId}/keysign` → **404** (not implemented)
 - `GET /complete/{sessionId}/keysign` → **404** (not implemented)
 - `POST /payload/{hash}` → **404** (not implemented)
@@ -343,7 +351,6 @@ Based on comprehensive testing with real VultiServer and MessageRelay endpoints 
 - ⚠️ **Waiting for server fix**: FastVault `/vault/sign` endpoint needs HTTP method configuration
 
 ---
-
 
 [1]: https://github.com/vultisig/vultiserver "GitHub - vultisig/vultiserver"
 [2]: https://github.com/vultisig/vultisig-relay "GitHub - vultisig/vultisig-relay: vultisig-relay is a service that will be used to route TSS communications, for both keygen and keysign"

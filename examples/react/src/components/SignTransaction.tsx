@@ -47,11 +47,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
       console.log('Signing transaction with payload:', payload)
       setSigningStatus('Connecting to VultiServer...')
 
-      const signature = await sdk.signTransactionWithVault(
-        vault,
-        payload,
-        password
-      )
+      const signature = await sdk.signTransactionWithVault(vault, payload, password)
       console.log('Transaction signed successfully:', signature)
 
       setResult(signature)
@@ -81,17 +77,15 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
   }
 
   // Check if this is a fast vault
-  const isFastVault = vault.data.signers.some(signer =>
-    signer.startsWith('Server-')
-  )
+  const isFastVault = vault.data.signers.some(signer => signer.startsWith('Server-'))
 
   if (!isFastVault) {
     return (
       <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
         <p className="font-bold">Fast signing not available</p>
         <p>
-          This vault doesn&apos;t support fast signing. Only fast vaults
-          (created with VultiServer) can use this feature.
+          This vault doesn&apos;t support fast signing. Only fast vaults (created with VultiServer) can use this
+          feature.
         </p>
       </div>
     )
@@ -103,10 +97,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
 
       <div className="space-y-4">
         <div>
-          <label
-            className="block text-sm font-medium mb-2"
-            htmlFor="chain_select"
-          >
+          <label className="block text-sm font-medium mb-2" htmlFor="chain_select">
             Chain
           </label>
           <select
@@ -122,10 +113,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
         </div>
 
         <div>
-          <label
-            className="block text-sm font-medium mb-2"
-            htmlFor="to_address"
-          >
+          <label className="block text-sm font-medium mb-2" htmlFor="to_address">
             To Address
           </label>
           <input
@@ -187,9 +175,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
 
         {result && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-            <p className="font-bold text-lg mb-2">
-              ✅ Transaction Signed Successfully!
-            </p>
+            <p className="font-bold text-lg mb-2">✅ Transaction Signed Successfully!</p>
 
             <div className="space-y-2">
               <div>
@@ -201,9 +187,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
                 <div>
                   <p className="font-semibold">Signature:</p>
                   <div className="bg-white p-2 rounded border border-green-300">
-                    <p className="text-xs font-mono break-all">
-                      {result.signature}
-                    </p>
+                    <p className="text-xs font-mono break-all">{result.signature}</p>
                   </div>
                 </div>
               )}
@@ -217,9 +201,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
 
               <div className="flex gap-2 mt-2">
                 <button
-                  onClick={() =>
-                    copyToClipboard(result.signature || JSON.stringify(result))
-                  }
+                  onClick={() => copyToClipboard(result.signature || JSON.stringify(result))}
                   className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
                 >
                   {copied ? '✓ Copied!' : '📋 Copy Signature'}
@@ -233,9 +215,7 @@ export function SignTransaction({ vault, sdk }: SignTransactionProps) {
               </div>
 
               <details className="mt-2">
-                <summary className="cursor-pointer text-sm font-semibold">
-                  View Raw Response
-                </summary>
+                <summary className="cursor-pointer text-sm font-semibold">View Raw Response</summary>
                 <pre className="mt-2 text-xs bg-white p-2 rounded overflow-x-auto">
                   {JSON.stringify(result, null, 2)}
                 </pre>

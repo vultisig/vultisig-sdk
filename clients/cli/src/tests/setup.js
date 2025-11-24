@@ -16,12 +16,7 @@ if (typeof globalThis.File === 'undefined') {
     this.buffer = buffer
     this._buffer = buffer
     this.arrayBuffer = function () {
-      return Promise.resolve(
-        buffer.buffer.slice(
-          buffer.byteOffset,
-          buffer.byteOffset + buffer.byteLength
-        )
-      )
+      return Promise.resolve(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength))
     }
   }
 }
@@ -41,10 +36,7 @@ globalThis.fetch = async function (url) {
     let wasmPath
 
     if (urlString.includes('wallet-core.wasm')) {
-      wasmPath = path.join(
-        projectRoot,
-        'node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'
-      )
+      wasmPath = path.join(projectRoot, 'node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm')
     } else if (urlString.includes('vs_wasm_bg.wasm')) {
       wasmPath = path.join(projectRoot, 'lib/dkls/vs_wasm_bg.wasm')
     } else if (urlString.includes('vs_schnorr_wasm_bg.wasm')) {
@@ -53,11 +45,7 @@ globalThis.fetch = async function (url) {
       // Extract filename and try common locations
       const filename = urlString.split('/').pop() || ''
       const possiblePaths = [
-        path.join(
-          projectRoot,
-          'node_modules/@trustwallet/wallet-core/dist/lib/',
-          filename
-        ),
+        path.join(projectRoot, 'node_modules/@trustwallet/wallet-core/dist/lib/', filename),
         path.join(projectRoot, 'lib/dkls/', filename),
         path.join(projectRoot, 'lib/schnorr/', filename),
         path.join(projectRoot, 'src/dist/wasm/', filename),
@@ -78,10 +66,7 @@ globalThis.fetch = async function (url) {
 
     try {
       const wasmBuffer = fs.readFileSync(wasmPath)
-      const arrayBuffer = wasmBuffer.buffer.slice(
-        wasmBuffer.byteOffset,
-        wasmBuffer.byteOffset + wasmBuffer.byteLength
-      )
+      const arrayBuffer = wasmBuffer.buffer.slice(wasmBuffer.byteOffset, wasmBuffer.byteOffset + wasmBuffer.byteLength)
 
       return new Response(arrayBuffer, {
         status: 200,
@@ -124,15 +109,11 @@ module.exports = {
   projectRoot: path.resolve(__dirname, '../../../..'),
   vaultsDir: path.resolve(__dirname, '../../vaults'),
   expectedAddresses: {
-    'TestFastVault-44fd-share2of2-Password123!.vult':
-      testFastVaultDetails.addresses,
-    'TestSecureVault-cfa0-share2of2-NoPassword.vult':
-      testSecureVaultDetails.addresses,
+    'TestFastVault-44fd-share2of2-Password123!.vult': testFastVaultDetails.addresses,
+    'TestSecureVault-cfa0-share2of2-NoPassword.vult': testSecureVaultDetails.addresses,
   },
   expectedVaultData: {
-    'TestFastVault-44fd-share2of2-Password123!.vult':
-      testFastVaultDetails.vault,
-    'TestSecureVault-cfa0-share2of2-NoPassword.vult':
-      testSecureVaultDetails.vault,
+    'TestFastVault-44fd-share2of2-Password123!.vult': testFastVaultDetails.vault,
+    'TestSecureVault-cfa0-share2of2-NoPassword.vult': testSecureVaultDetails.vault,
   },
 }

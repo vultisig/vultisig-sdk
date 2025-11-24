@@ -21,10 +21,7 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
     expect(fs.existsSync(CLI_PATH)).toBe(true)
 
     // Ensure test vault exists
-    const vaultName = path.join(
-      vaultsDir,
-      'TestFastVault-44fd-share2of2-Password123!.vult'
-    )
+    const vaultName = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
     expect(fs.existsSync(vaultName)).toBe(true)
 
     // Ensure payload file exists
@@ -35,10 +32,7 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
   test(
     'should load vault and sign ETH transaction using CLI fast mode',
     () => {
-      const vaultName = path.join(
-        vaultsDir,
-        'TestFastVault-44fd-share2of2-Password123!.vult'
-      )
+      const vaultName = path.join(vaultsDir, 'TestFastVault-44fd-share2of2-Password123!.vult')
       const payloadPath = path.join(__dirname, 'eth-tx-payload.json')
       const password = 'Password123!'
 
@@ -114,9 +108,7 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
 
         // Fast signing should work now - any error is a real failure
         console.log('❌ CLI signing failed unexpectedly')
-        console.log(
-          "   Fast signing should work with the updated flow that doesn't require setup messages"
-        )
+        console.log("   Fast signing should work with the updated flow that doesn't require setup messages")
 
         // Re-throw the error to fail the test
         throw error
@@ -140,8 +132,7 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
           output.includes('signature:')
 
         const hasSignatureData =
-          output.includes('📝 Signature:') &&
-          (output.includes('0x') || /Signature: [0-9a-f]{100,}/.test(output)) // hex or DER signature data
+          output.includes('📝 Signature:') && (output.includes('0x') || /Signature: [0-9a-f]{100,}/.test(output)) // hex or DER signature data
 
         expect(hasSigningSuccess).toBe(true)
         expect(hasSignatureData).toBe(true)
@@ -155,9 +146,7 @@ describe('CLI Real Fast Signing (ETH) with provided vault and payload', () => {
       // Handle case where CLI executed without error but produced no output
       if (!executionError && (!output || output.trim() === '')) {
         console.log('⚠️ CLI executed without error but produced no output')
-        console.log(
-          '   This might indicate the CLI is waiting for input or has a different execution flow'
-        )
+        console.log('   This might indicate the CLI is waiting for input or has a different execution flow')
         console.log('   Command executed:', cliCommand)
 
         // Consider this a partial success - the CLI didn't crash

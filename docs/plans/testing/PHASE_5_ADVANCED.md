@@ -1,4 +1,5 @@
 # Phase 5: Advanced Testing & Production Readiness
+
 **Duration**: Week 9-10
 **Coverage Target**: 85%
 **Priority**: HIGH
@@ -24,14 +25,18 @@
 ### Day 1-2: Security Testing
 
 #### Task 5.1: Cryptographic Security Tests
+
 ```typescript
 // tests/security/cryptographic-security.test.ts
-import { describe, it, expect } from 'vitest';
-import { VultisigSDK } from '@/VultisigSDK';
-import crypto from 'crypto';
-import { validateSignature, validateKeyDerivation } from '@helpers/crypto-validators';
+import { describe, it, expect } from "vitest";
+import { VultisigSDK } from "@/VultisigSDK";
+import crypto from "crypto";
+import {
+  validateSignature,
+  validateKeyDerivation,
+} from "@helpers/crypto-validators";
 
-describe('Security: Cryptographic Operations', () => {
+describe("Security: Cryptographic Operations", () => {
   let sdk: VultisigSDK;
 
   beforeEach(async () => {
@@ -39,8 +44,8 @@ describe('Security: Cryptographic Operations', () => {
     await sdk.init();
   });
 
-  describe('Key Generation Security', () => {
-    it('should generate unique key shares for each vault', async () => {
+  describe("Key Generation Security", () => {
+    it("should generate unique key shares for each vault", async () => {
       const vaults = [];
       const keyShares = new Set();
 
@@ -49,7 +54,7 @@ describe('Security: Cryptographic Operations', () => {
         const vault = await sdk.createFastVault({
           name: `Security Test ${i}`,
           email: `security${i}@test.com`,
-          password: `password${i}`
+          password: `password${i}`,
         });
         vaults.push(vault);
 
@@ -62,24 +67,24 @@ describe('Security: Cryptographic Operations', () => {
       expect(keyShares.size).toBe(20); // 2 shares per vault * 10 vaults
     });
 
-    it('should use cryptographically secure randomness', async () => {
+    it("should use cryptographically secure randomness", async () => {
       // Monitor random number generation
-      const randomSpy = vi.spyOn(crypto, 'randomBytes');
+      const randomSpy = vi.spyOn(crypto, "randomBytes");
 
       await sdk.createFastVault({
-        name: 'Random Test',
-        email: 'random@test.com',
-        password: 'password'
+        name: "Random Test",
+        email: "random@test.com",
+        password: "password",
       });
 
       // Verify secure random was used
       expect(randomSpy).toHaveBeenCalled();
-      randomSpy.mock.calls.forEach(call => {
+      randomSpy.mock.calls.forEach((call) => {
         expect(call[0]).toBeGreaterThanOrEqual(32); // At least 256 bits
       });
     });
 
-    it('should not expose private keys in memory', async () => {
+    it("should not expose private keys in memory", async () => {
       const vault = await createTestVault(sdk);
 
       // Try to access private keys through various methods
@@ -89,8 +94,8 @@ describe('Security: Cryptographic Operations', () => {
 
       // Should not contain private key patterns
       expect(vaultString).not.toMatch(/privKey|privateKey|secret/i);
-      expect(vaultKeys).not.toContain('privateKey');
-      expect(vaultKeys).not.toContain('localShare');
+      expect(vaultKeys).not.toContain("privateKey");
+      expect(vaultKeys).not.toContain("localShare");
 
       // Check memory dumps
       const memorySnapshot = process.memoryUsage();
@@ -99,36 +104,48 @@ describe('Security: Cryptographic Operations', () => {
     });
   });
 
-  describe('Signature Security', () => {
-    it('should produce deterministic signatures with same nonce', async () => {
+  describe("Signature Security", () => {
+    it("should produce deterministic signatures with same nonce", async () => {
       const vault = await createTestVault(sdk);
-      const messageHash = crypto.randomBytes(32).toString('hex');
+      const messageHash = crypto.randomBytes(32).toString("hex");
 
       // Sign same message twice with controlled nonce
-      const sig1 = await vault.signWithNonce('bitcoin', messageHash, 'test-nonce');
-      const sig2 = await vault.signWithNonce('bitcoin', messageHash, 'test-nonce');
+      const sig1 = await vault.signWithNonce(
+        "bitcoin",
+        messageHash,
+        "test-nonce",
+      );
+      const sig2 = await vault.signWithNonce(
+        "bitcoin",
+        messageHash,
+        "test-nonce",
+      );
 
       expect(sig1).toEqual(sig2); // Same nonce = same signature
     });
 
-    it('should produce different signatures with different nonces', async () => {
+    it("should produce different signatures with different nonces", async () => {
       const vault = await createTestVault(sdk);
-      const messageHash = crypto.randomBytes(32).toString('hex');
+      const messageHash = crypto.randomBytes(32).toString("hex");
 
-      const sig1 = await vault.signTransaction('bitcoin', { hash: messageHash });
-      const sig2 = await vault.signTransaction('bitcoin', { hash: messageHash });
+      const sig1 = await vault.signTransaction("bitcoin", {
+        hash: messageHash,
+      });
+      const sig2 = await vault.signTransaction("bitcoin", {
+        hash: messageHash,
+      });
 
       expect(sig1).not.toEqual(sig2); // Different nonces = different signatures
     });
 
-    it('should validate signature correctness', async () => {
+    it("should validate signature correctness", async () => {
       const vault = await createTestVault(sdk);
 
       // Test for each chain family
       const testCases = [
-        { chain: 'bitcoin', type: 'ecdsa' },
-        { chain: 'ethereum', type: 'ecdsa' },
-        { chain: 'solana', type: 'eddsa' }
+        { chain: "bitcoin", type: "ecdsa" },
+        { chain: "ethereum", type: "ecdsa" },
+        { chain: "solana", type: "eddsa" },
       ];
 
       for (const { chain, type } of testCases) {
@@ -139,43 +156,43 @@ describe('Security: Cryptographic Operations', () => {
         expect(isValid).toBe(true);
 
         // Tamper with signature
-        signed.signature = signed.signature.replace('a', 'b');
+        signed.signature = signed.signature.replace("a", "b");
         const isTampered = await validateSignature(signed, type);
         expect(isTampered).toBe(false);
       }
     });
   });
 
-  describe('Encryption Security', () => {
-    it('should use AES-256-GCM for vault encryption', async () => {
+  describe("Encryption Security", () => {
+    it("should use AES-256-GCM for vault encryption", async () => {
       const vault = await createTestVault(sdk);
-      const password = 'StrongPassword123!@#';
+      const password = "StrongPassword123!@#";
 
       const encrypted = await vault.exportEncrypted(password);
 
       // Check encryption metadata
-      expect(encrypted.algorithm).toBe('aes-256-gcm');
+      expect(encrypted.algorithm).toBe("aes-256-gcm");
       expect(encrypted.salt.length).toBeGreaterThanOrEqual(32); // 16+ bytes as hex
       expect(encrypted.iv.length).toBeGreaterThanOrEqual(24); // 12+ bytes as hex
       expect(encrypted.tag.length).toBe(32); // 16 bytes as hex
     });
 
-    it('should use key derivation with sufficient iterations', async () => {
+    it("should use key derivation with sufficient iterations", async () => {
       const vault = await createTestVault(sdk);
-      const password = 'TestPassword';
+      const password = "TestPassword";
 
       const encrypted = await vault.exportEncrypted(password);
 
       // Should use PBKDF2 or similar with high iteration count
-      expect(encrypted.kdf).toBe('pbkdf2');
+      expect(encrypted.kdf).toBe("pbkdf2");
       expect(encrypted.iterations).toBeGreaterThanOrEqual(100000);
     });
 
-    it('should not be vulnerable to padding oracle attacks', async () => {
+    it("should not be vulnerable to padding oracle attacks", async () => {
       const vault = await createTestVault(sdk);
-      const exportPath = '/tmp/security-test.vult';
+      const exportPath = "/tmp/security-test.vult";
 
-      await sdk.vaultManager.exportVault(vault.id, exportPath, 'password');
+      await sdk.vaultManager.exportVault(vault.id, exportPath, "password");
 
       // Tamper with encrypted data
       const content = await fs.readFile(exportPath);
@@ -186,50 +203,50 @@ describe('Security: Cryptographic Operations', () => {
 
       // Should fail authentication, not decryption
       await expect(
-        sdk.vaultManager.importVault(exportPath, 'password')
+        sdk.vaultManager.importVault(exportPath, "password"),
       ).rejects.toThrow(/authentication|invalid/i);
     });
   });
 
-  describe('Input Validation Security', () => {
-    it('should prevent XSS in vault names', async () => {
+  describe("Input Validation Security", () => {
+    it("should prevent XSS in vault names", async () => {
       const xssAttempts = [
         '<script>alert("XSS")</script>',
         '"><script>alert(1)</script>',
-        'javascript:alert(1)',
-        '<img src=x onerror=alert(1)>',
-        '<svg onload=alert(1)>'
+        "javascript:alert(1)",
+        "<img src=x onerror=alert(1)>",
+        "<svg onload=alert(1)>",
       ];
 
       for (const maliciousName of xssAttempts) {
         const vault = await sdk.createFastVault({
           name: maliciousName,
-          email: 'xss@test.com',
-          password: 'password'
+          email: "xss@test.com",
+          password: "password",
         });
 
         // Name should be sanitized or escaped
-        expect(vault.name).not.toContain('<script>');
-        expect(vault.name).not.toContain('javascript:');
-        expect(vault.name).not.toContain('onerror=');
-        expect(vault.name).not.toContain('onload=');
+        expect(vault.name).not.toContain("<script>");
+        expect(vault.name).not.toContain("javascript:");
+        expect(vault.name).not.toContain("onerror=");
+        expect(vault.name).not.toContain("onload=");
       }
     });
 
-    it('should prevent SQL injection in queries', async () => {
+    it("should prevent SQL injection in queries", async () => {
       const sqlInjectionAttempts = [
         "'; DROP TABLE vaults; --",
         "1' OR '1'='1",
         "admin'--",
-        "' UNION SELECT * FROM users--"
+        "' UNION SELECT * FROM users--",
       ];
 
       for (const maliciousInput of sqlInjectionAttempts) {
         // Should sanitize or parameterize
         const vault = await sdk.createFastVault({
           name: maliciousInput,
-          email: 'sql@test.com',
-          password: 'password'
+          email: "sql@test.com",
+          password: "password",
         });
 
         // Verify no SQL was executed
@@ -238,29 +255,29 @@ describe('Security: Cryptographic Operations', () => {
       }
     });
 
-    it('should prevent path traversal in imports', async () => {
+    it("should prevent path traversal in imports", async () => {
       const pathTraversalAttempts = [
-        '../../../etc/passwd',
-        '..\\..\\..\\windows\\system32\\config\\sam',
-        'file:///etc/passwd',
-        '/dev/null',
-        'CON', // Windows reserved name
+        "../../../etc/passwd",
+        "..\\..\\..\\windows\\system32\\config\\sam",
+        "file:///etc/passwd",
+        "/dev/null",
+        "CON", // Windows reserved name
       ];
 
       for (const maliciousPath of pathTraversalAttempts) {
         await expect(
-          sdk.vaultManager.importVault(maliciousPath)
+          sdk.vaultManager.importVault(maliciousPath),
         ).rejects.toThrow(/invalid|not found|access denied/i);
       }
     });
   });
 
-  describe('MPC Security', () => {
-    it('should not reveal other party shares', async () => {
+  describe("MPC Security", () => {
+    it("should not reveal other party shares", async () => {
       const vault = await sdk.createFastVault({
-        name: 'MPC Security Test',
-        email: 'mpc@test.com',
-        password: 'password'
+        name: "MPC Security Test",
+        email: "mpc@test.com",
+        password: "password",
       });
 
       // Should only have local share
@@ -269,24 +286,24 @@ describe('Security: Cryptographic Operations', () => {
 
       // Should not be able to extract server share
       const exported = await vault.export();
-      expect(JSON.stringify(exported)).not.toContain('serverShare');
+      expect(JSON.stringify(exported)).not.toContain("serverShare");
     });
 
-    it('should validate MPC message authenticity', async () => {
+    it("should validate MPC message authenticity", async () => {
       // Monitor MPC protocol messages
       const messageLog = [];
-      sdk.serverManager.on('mpc-message', (msg) => {
+      sdk.serverManager.on("mpc-message", (msg) => {
         messageLog.push(msg);
       });
 
       await sdk.createFastVault({
-        name: 'MPC Auth Test',
-        email: 'auth@test.com',
-        password: 'password'
+        name: "MPC Auth Test",
+        email: "auth@test.com",
+        password: "password",
       });
 
       // All messages should be signed/authenticated
-      messageLog.forEach(msg => {
+      messageLog.forEach((msg) => {
         expect(msg.signature).toBeDefined();
         expect(msg.from).toBeDefined();
 
@@ -302,28 +319,33 @@ describe('Security: Cryptographic Operations', () => {
 ### Day 3-4: Load and Stress Testing
 
 #### Task 5.2: Load Testing
+
 ```typescript
 // tests/load/load-testing.test.ts
-import { describe, it, expect } from 'vitest';
-import { VultisigSDK } from '@/VultisigSDK';
-import pLimit from 'p-limit';
+import { describe, it, expect } from "vitest";
+import { VultisigSDK } from "@/VultisigSDK";
+import pLimit from "p-limit";
 
-describe('Load Testing', () => {
-  describe('Concurrent Vault Operations', () => {
-    it('should handle 100 concurrent vault creations', async () => {
+describe("Load Testing", () => {
+  describe("Concurrent Vault Operations", () => {
+    it("should handle 100 concurrent vault creations", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
       const limit = pLimit(10); // Limit to 10 concurrent operations
       const startTime = Date.now();
 
-      const operations = Array(100).fill(null).map((_, i) =>
-        limit(() => sdk.createFastVault({
-          name: `Load Test Vault ${i}`,
-          email: `load${i}@test.com`,
-          password: `password${i}`
-        }))
-      );
+      const operations = Array(100)
+        .fill(null)
+        .map((_, i) =>
+          limit(() =>
+            sdk.createFastVault({
+              name: `Load Test Vault ${i}`,
+              email: `load${i}@test.com`,
+              password: `password${i}`,
+            }),
+          ),
+        );
 
       const vaults = await Promise.all(operations);
       const duration = Date.now() - startTime;
@@ -336,16 +358,16 @@ describe('Load Testing', () => {
 
       // Verify all vaults are functional
       const sampleVault = vaults[50];
-      const address = await sampleVault.getAddress('bitcoin');
+      const address = await sampleVault.getAddress("bitcoin");
       expect(address).toBeDefined();
     });
 
-    it('should handle 1000 concurrent address derivations', async () => {
+    it("should handle 1000 concurrent address derivations", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
       const vault = await createTestVault(sdk, {
-        chains: ALL_SUPPORTED_CHAINS
+        chains: ALL_SUPPORTED_CHAINS,
       });
 
       const operations = [];
@@ -353,9 +375,10 @@ describe('Load Testing', () => {
 
       // 1000 random address derivations
       for (let i = 0; i < 1000; i++) {
-        const randomChain = ALL_SUPPORTED_CHAINS[
-          Math.floor(Math.random() * ALL_SUPPORTED_CHAINS.length)
-        ];
+        const randomChain =
+          ALL_SUPPORTED_CHAINS[
+            Math.floor(Math.random() * ALL_SUPPORTED_CHAINS.length)
+          ];
         operations.push(vault.getAddress(randomChain));
       }
 
@@ -374,13 +397,13 @@ describe('Load Testing', () => {
       expect(cacheStats.hitRate).toBeGreaterThan(0.9); // >90% cache hit rate
     });
 
-    it('should handle 500 concurrent transactions', async () => {
+    it("should handle 500 concurrent transactions", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
       const vault = await createTestVault(sdk, {
-        type: 'fast',
-        chains: ['bitcoin', 'ethereum', 'solana']
+        type: "fast",
+        chains: ["bitcoin", "ethereum", "solana"],
       });
 
       const limit = pLimit(20); // 20 concurrent signing operations
@@ -388,12 +411,10 @@ describe('Load Testing', () => {
       const startTime = Date.now();
 
       for (let i = 0; i < 500; i++) {
-        const chain = ['bitcoin', 'ethereum', 'solana'][i % 3];
+        const chain = ["bitcoin", "ethereum", "solana"][i % 3];
         const tx = await createTestTransaction(chain);
 
-        operations.push(
-          limit(() => vault.signTransaction(chain, tx))
-        );
+        operations.push(limit(() => vault.signTransaction(chain, tx)));
       }
 
       const signedTxs = await Promise.all(operations);
@@ -412,8 +433,8 @@ describe('Load Testing', () => {
     });
   });
 
-  describe('Memory Stress Testing', () => {
-    it('should handle memory pressure gracefully', async () => {
+  describe("Memory Stress Testing", () => {
+    it("should handle memory pressure gracefully", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
@@ -424,7 +445,7 @@ describe('Load Testing', () => {
       for (let i = 0; i < 50; i++) {
         const vault = await createTestVault(sdk, {
           name: `Memory Test ${i}`,
-          chains: ALL_SUPPORTED_CHAINS
+          chains: ALL_SUPPORTED_CHAINS,
         });
 
         // Derive all addresses to increase memory usage
@@ -453,7 +474,7 @@ describe('Load Testing', () => {
       expect(totalIncrease).toBeLessThan(250); // Less than 250MB for 50 vaults
     });
 
-    it('should handle WASM module memory limits', async () => {
+    it("should handle WASM module memory limits", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
@@ -462,9 +483,9 @@ describe('Load Testing', () => {
 
       for (let i = 0; i < 100; i++) {
         operations.push(
-          sdk.wasmManager.loadModule('wallet-core'),
-          sdk.wasmManager.loadModule('dkls'),
-          sdk.wasmManager.loadModule('schnorr')
+          sdk.wasmManager.loadModule("wallet-core"),
+          sdk.wasmManager.loadModule("dkls"),
+          sdk.wasmManager.loadModule("schnorr"),
         );
       }
 
@@ -480,8 +501,8 @@ describe('Load Testing', () => {
     });
   });
 
-  describe('Network Stress Testing', () => {
-    it('should handle high-frequency server requests', async () => {
+  describe("Network Stress Testing", () => {
+    it("should handle high-frequency server requests", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
@@ -493,25 +514,27 @@ describe('Load Testing', () => {
         operations.push(
           sdk.serverManager.ping(),
           sdk.serverManager.getStatus(),
-          sdk.serverManager.checkSession('test-session-' + i)
+          sdk.serverManager.checkSession("test-session-" + i),
         );
       }
 
       const results = await Promise.allSettled(operations);
       const duration = Date.now() - startTime;
 
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
+      const successful = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected").length;
 
       console.log(`Completed 3000 requests in ${duration}ms`);
       console.log(`Success: ${successful}, Failed: ${failed}`);
-      console.log(`Requests per second: ${(3000 / (duration / 1000)).toFixed(2)}`);
+      console.log(
+        `Requests per second: ${(3000 / (duration / 1000)).toFixed(2)}`,
+      );
 
       // Should handle at least 90% successfully
       expect(successful / results.length).toBeGreaterThan(0.9);
     });
 
-    it('should handle message relay stress', async () => {
+    it("should handle message relay stress", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
@@ -521,26 +544,25 @@ describe('Load Testing', () => {
       const messages = [];
       for (let i = 0; i < 500; i++) {
         messages.push({
-          type: 'stress-test',
+          type: "stress-test",
           data: `Message ${i}`,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
       }
 
       const startTime = Date.now();
 
       // Send all messages
-      const sendPromises = messages.map(msg =>
-        sdk.serverManager.sendRelayMessage(sessionId, msg)
+      const sendPromises = messages.map((msg) =>
+        sdk.serverManager.sendRelayMessage(sessionId, msg),
       );
 
       await Promise.all(sendPromises);
 
       // Poll for messages
-      const received = await sdk.serverManager.pollRelayMessages(
-        sessionId,
-        { maxMessages: 500 }
-      );
+      const received = await sdk.serverManager.pollRelayMessages(sessionId, {
+        maxMessages: 500,
+      });
 
       const duration = Date.now() - startTime;
 
@@ -558,15 +580,16 @@ describe('Load Testing', () => {
 ### Day 5-6: Cross-Platform Compatibility
 
 #### Task 5.3: Multi-Environment Testing
+
 ```typescript
 // tests/compatibility/cross-platform.test.ts
-import { describe, it, expect } from 'vitest';
-import { VultisigSDK } from '@/VultisigSDK';
-import { detectEnvironment } from '@helpers/environment';
+import { describe, it, expect } from "vitest";
+import { VultisigSDK } from "@/VultisigSDK";
+import { detectEnvironment } from "@helpers/environment";
 
-describe('Cross-Platform Compatibility', () => {
-  describe('Node.js Environment', () => {
-    it('should work in Node.js 16+', async () => {
+describe("Cross-Platform Compatibility", () => {
+  describe("Node.js Environment", () => {
+    it("should work in Node.js 16+", async () => {
       const nodeVersion = process.version;
       console.log(`Testing in Node.js ${nodeVersion}`);
 
@@ -574,17 +597,17 @@ describe('Cross-Platform Compatibility', () => {
       await sdk.init();
 
       const vault = await createTestVault(sdk);
-      const address = await vault.getAddress('bitcoin');
+      const address = await vault.getAddress("bitcoin");
 
       expect(address).toBeDefined();
     });
 
-    it('should handle Node.js specific features', async () => {
+    it("should handle Node.js specific features", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
       // File system operations
-      const exportPath = path.join(os.tmpdir(), 'node-test.vult');
+      const exportPath = path.join(os.tmpdir(), "node-test.vult");
       const vault = await createTestVault(sdk);
 
       await sdk.vaultManager.exportVault(vault.id, exportPath);
@@ -598,21 +621,21 @@ describe('Cross-Platform Compatibility', () => {
     });
   });
 
-  describe('Browser Environment', () => {
-    it('should work in modern browsers', async () => {
+  describe("Browser Environment", () => {
+    it("should work in modern browsers", async () => {
       // Simulate browser environment
       const originalWindow = global.window;
       global.window = {
         crypto: {
           getRandomValues: (arr) => crypto.randomBytes(arr.length),
-          subtle: {} // WebCrypto API
+          subtle: {}, // WebCrypto API
         },
         localStorage: new Map(),
-        indexedDB: {} // Mock IndexedDB
+        indexedDB: {}, // Mock IndexedDB
       };
 
       const sdk = new VultisigSDK({
-        environment: 'browser'
+        environment: "browser",
       });
       await sdk.init();
 
@@ -623,14 +646,14 @@ describe('Cross-Platform Compatibility', () => {
       global.window = originalWindow;
     });
 
-    it('should use IndexedDB for storage in browser', async () => {
+    it("should use IndexedDB for storage in browser", async () => {
       // Mock browser with IndexedDB
       const mockIndexedDB = createMockIndexedDB();
       global.window = { indexedDB: mockIndexedDB };
 
       const sdk = new VultisigSDK({
-        environment: 'browser',
-        storage: 'indexeddb'
+        environment: "browser",
+        storage: "indexeddb",
       });
 
       await sdk.init();
@@ -639,7 +662,7 @@ describe('Cross-Platform Compatibility', () => {
       await sdk.vaultManager.saveToStorage();
 
       // Verify data saved to IndexedDB
-      const stored = await mockIndexedDB.get('vaults', vault.id);
+      const stored = await mockIndexedDB.get("vaults", vault.id);
       expect(stored).toBeDefined();
       expect(stored.name).toBe(vault.name);
 
@@ -647,22 +670,22 @@ describe('Cross-Platform Compatibility', () => {
       delete global.window;
     });
 
-    it('should handle WebAssembly in browser', async () => {
+    it("should handle WebAssembly in browser", async () => {
       // Mock WebAssembly
       global.WebAssembly = {
         instantiate: vi.fn().mockResolvedValue({
-          instance: { exports: {} }
+          instance: { exports: {} },
         }),
         compile: vi.fn(),
         Module: class {},
-        Instance: class {}
+        Instance: class {},
       };
 
-      const sdk = new VultisigSDK({ environment: 'browser' });
+      const sdk = new VultisigSDK({ environment: "browser" });
       await sdk.init();
 
       // WASM should load successfully
-      const walletCore = await sdk.wasmManager.loadModule('wallet-core');
+      const walletCore = await sdk.wasmManager.loadModule("wallet-core");
       expect(walletCore).toBeDefined();
 
       // Cleanup
@@ -670,15 +693,15 @@ describe('Cross-Platform Compatibility', () => {
     });
   });
 
-  describe('React Native Environment', () => {
-    it('should work in React Native', async () => {
+  describe("React Native Environment", () => {
+    it("should work in React Native", async () => {
       // Mock React Native environment
       global.navigator = {
-        product: 'ReactNative'
+        product: "ReactNative",
       };
 
       const sdk = new VultisigSDK({
-        environment: 'react-native'
+        environment: "react-native",
       });
 
       await sdk.init();
@@ -690,19 +713,19 @@ describe('Cross-Platform Compatibility', () => {
       delete global.navigator;
     });
 
-    it('should use AsyncStorage in React Native', async () => {
+    it("should use AsyncStorage in React Native", async () => {
       // Mock AsyncStorage
       const mockAsyncStorage = new Map();
       global.AsyncStorage = {
         setItem: async (key, value) => mockAsyncStorage.set(key, value),
         getItem: async (key) => mockAsyncStorage.get(key),
         removeItem: async (key) => mockAsyncStorage.delete(key),
-        getAllKeys: async () => Array.from(mockAsyncStorage.keys())
+        getAllKeys: async () => Array.from(mockAsyncStorage.keys()),
       };
 
       const sdk = new VultisigSDK({
-        environment: 'react-native',
-        storage: 'async-storage'
+        environment: "react-native",
+        storage: "async-storage",
       });
 
       await sdk.init();
@@ -719,14 +742,14 @@ describe('Cross-Platform Compatibility', () => {
     });
   });
 
-  describe('Electron Environment', () => {
-    it('should work in Electron main process', async () => {
+  describe("Electron Environment", () => {
+    it("should work in Electron main process", async () => {
       // Mock Electron main process
-      global.process.type = 'browser'; // Electron main process
-      global.process.versions.electron = '20.0.0';
+      global.process.type = "browser"; // Electron main process
+      global.process.versions.electron = "20.0.0";
 
       const sdk = new VultisigSDK({
-        environment: 'electron-main'
+        environment: "electron-main",
       });
 
       await sdk.init();
@@ -735,27 +758,27 @@ describe('Cross-Platform Compatibility', () => {
       expect(vault).toBeDefined();
 
       // Should have access to Node.js APIs
-      const exportPath = '/tmp/electron-test.vult';
+      const exportPath = "/tmp/electron-test.vult";
       await sdk.vaultManager.exportVault(vault.id, exportPath);
 
       // Cleanup
       delete global.process.versions.electron;
     });
 
-    it('should work in Electron renderer process', async () => {
+    it("should work in Electron renderer process", async () => {
       // Mock Electron renderer
-      global.process.type = 'renderer';
+      global.process.type = "renderer";
       global.window = { require: {} };
 
       const sdk = new VultisigSDK({
-        environment: 'electron-renderer'
+        environment: "electron-renderer",
       });
 
       await sdk.init();
 
       // Should work with limited APIs
       const vault = await createTestVault(sdk);
-      const address = await vault.getAddress('ethereum');
+      const address = await vault.getAddress("ethereum");
       expect(address).toBeDefined();
 
       // Cleanup
@@ -763,37 +786,37 @@ describe('Cross-Platform Compatibility', () => {
     });
   });
 
-  describe('Chrome Extension Environment', () => {
-    it('should work in extension background script', async () => {
+  describe("Chrome Extension Environment", () => {
+    it("should work in extension background script", async () => {
       // Mock Chrome Extension APIs
       global.chrome = {
         runtime: {
-          id: 'test-extension-id',
-          getManifest: () => ({ version: '1.0.0', manifest_version: 3 })
+          id: "test-extension-id",
+          getManifest: () => ({ version: "1.0.0", manifest_version: 3 }),
         },
         storage: {
           local: {
             get: vi.fn().mockResolvedValue({}),
             set: vi.fn().mockResolvedValue(undefined),
             remove: vi.fn().mockResolvedValue(undefined),
-            clear: vi.fn().mockResolvedValue(undefined)
+            clear: vi.fn().mockResolvedValue(undefined),
           },
           sync: {
             get: vi.fn().mockResolvedValue({}),
-            set: vi.fn().mockResolvedValue(undefined)
-          }
-        }
+            set: vi.fn().mockResolvedValue(undefined),
+          },
+        },
       };
 
       const sdk = new VultisigSDK({
-        environment: 'chrome-extension',
-        storage: 'chrome-storage'
+        environment: "chrome-extension",
+        storage: "chrome-storage",
       });
 
       await sdk.init();
 
       const vault = await createTestVault(sdk, {
-        name: 'Extension Test Vault'
+        name: "Extension Test Vault",
       });
 
       expect(vault).toBeDefined();
@@ -805,7 +828,7 @@ describe('Cross-Platform Compatibility', () => {
       delete global.chrome;
     });
 
-    it('should handle chrome.storage for vault persistence', async () => {
+    it("should handle chrome.storage for vault persistence", async () => {
       const mockStorage = new Map();
 
       global.chrome = {
@@ -814,12 +837,12 @@ describe('Cross-Platform Compatibility', () => {
             get: vi.fn((keys) => {
               const result = {};
               if (Array.isArray(keys)) {
-                keys.forEach(key => {
+                keys.forEach((key) => {
                   if (mockStorage.has(key)) {
                     result[key] = mockStorage.get(key);
                   }
                 });
-              } else if (typeof keys === 'string') {
+              } else if (typeof keys === "string") {
                 if (mockStorage.has(keys)) {
                   result[keys] = mockStorage.get(keys);
                 }
@@ -834,19 +857,19 @@ describe('Cross-Platform Compatibility', () => {
             }),
             remove: vi.fn((keys) => {
               if (Array.isArray(keys)) {
-                keys.forEach(key => mockStorage.delete(key));
+                keys.forEach((key) => mockStorage.delete(key));
               } else {
                 mockStorage.delete(keys);
               }
               return Promise.resolve();
-            })
-          }
-        }
+            }),
+          },
+        },
       };
 
       const sdk = new VultisigSDK({
-        environment: 'chrome-extension',
-        storage: 'chrome-storage'
+        environment: "chrome-extension",
+        storage: "chrome-storage",
       });
 
       // Create and save vault
@@ -856,8 +879,8 @@ describe('Cross-Platform Compatibility', () => {
       // Verify storage was called
       expect(global.chrome.storage.local.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          [`vault:${vault.id}`]: expect.any(Object)
-        })
+          [`vault:${vault.id}`]: expect.any(Object),
+        }),
       );
 
       // Load vaults from storage
@@ -871,39 +894,41 @@ describe('Cross-Platform Compatibility', () => {
       delete global.chrome;
     });
 
-    it('should handle CSP restrictions for WASM', async () => {
+    it("should handle CSP restrictions for WASM", async () => {
       // Mock Chrome Extension with CSP restrictions
       global.chrome = {
         runtime: {
-          id: 'test-extension',
+          id: "test-extension",
           getManifest: () => ({
             manifest_version: 3,
             content_security_policy: {
-              extension_pages: "script-src 'self' 'wasm-unsafe-eval'"
-            }
-          })
-        }
+              extension_pages: "script-src 'self' 'wasm-unsafe-eval'",
+            },
+          }),
+        },
       };
 
       // Mock WebAssembly with CSP check
       const originalWebAssembly = global.WebAssembly;
       global.WebAssembly = {
         ...originalWebAssembly,
-        instantiateStreaming: vi.fn().mockRejectedValue(
-          new Error('CSP violation: wasm-unsafe-eval not allowed')
-        ),
+        instantiateStreaming: vi
+          .fn()
+          .mockRejectedValue(
+            new Error("CSP violation: wasm-unsafe-eval not allowed"),
+          ),
         instantiate: vi.fn().mockResolvedValue({
           instance: { exports: {} },
-          module: {}
-        })
+          module: {},
+        }),
       };
 
       const sdk = new VultisigSDK({
-        environment: 'chrome-extension'
+        environment: "chrome-extension",
       });
 
       // Should fall back to alternative WASM loading
-      const wasmModule = await sdk.wasmManager.loadModule('wallet-core');
+      const wasmModule = await sdk.wasmManager.loadModule("wallet-core");
       expect(wasmModule).toBeDefined();
 
       // Verify fallback was used
@@ -915,7 +940,7 @@ describe('Cross-Platform Compatibility', () => {
       delete global.chrome;
     });
 
-    it('should handle extension-specific file operations', async () => {
+    it("should handle extension-specific file operations", async () => {
       // Chrome Extensions can't directly access file system
       // They use chrome.downloads API or blob URLs
 
@@ -923,21 +948,21 @@ describe('Cross-Platform Compatibility', () => {
         downloads: {
           download: vi.fn().mockResolvedValue(1), // Download ID
           onChanged: {
-            addListener: vi.fn()
-          }
+            addListener: vi.fn(),
+          },
         },
         runtime: {
-          getURL: vi.fn((path) => `chrome-extension://extension-id/${path}`)
-        }
+          getURL: vi.fn((path) => `chrome-extension://extension-id/${path}`),
+        },
       };
 
       global.URL = {
-        createObjectURL: vi.fn(() => 'blob:chrome-extension://id/blob-id'),
-        revokeObjectURL: vi.fn()
+        createObjectURL: vi.fn(() => "blob:chrome-extension://id/blob-id"),
+        revokeObjectURL: vi.fn(),
       };
 
       const sdk = new VultisigSDK({
-        environment: 'chrome-extension'
+        environment: "chrome-extension",
       });
 
       const vault = await createTestVault(sdk);
@@ -945,18 +970,18 @@ describe('Cross-Platform Compatibility', () => {
       // Export should use chrome.downloads API
       const exportData = await vault.export();
       const blob = new Blob([JSON.stringify(exportData)], {
-        type: 'application/json'
+        type: "application/json",
       });
 
       // Simulate download
-      await sdk.vaultManager.exportVault(vault.id, 'vault.json');
+      await sdk.vaultManager.exportVault(vault.id, "vault.json");
 
       expect(global.URL.createObjectURL).toHaveBeenCalled();
       expect(global.chrome.downloads.download).toHaveBeenCalledWith(
         expect.objectContaining({
-          url: expect.stringContaining('blob:'),
-          filename: expect.stringContaining('vault')
-        })
+          url: expect.stringContaining("blob:"),
+          filename: expect.stringContaining("vault"),
+        }),
       );
 
       // Cleanup
@@ -964,7 +989,7 @@ describe('Cross-Platform Compatibility', () => {
       delete global.URL;
     });
 
-    it('should handle content script vs background script context', async () => {
+    it("should handle content script vs background script context", async () => {
       // Content scripts have limited access to Chrome APIs
       // Background scripts have full access
 
@@ -973,15 +998,15 @@ describe('Cross-Platform Compatibility', () => {
         runtime: {
           sendMessage: vi.fn().mockResolvedValue({ success: true }),
           onMessage: {
-            addListener: vi.fn()
-          }
+            addListener: vi.fn(),
+          },
         },
-        storage: undefined // No direct storage access in content scripts
+        storage: undefined, // No direct storage access in content scripts
       };
 
       const contentScriptSDK = new VultisigSDK({
-        environment: 'chrome-extension-content',
-        useMessagePassing: true
+        environment: "chrome-extension-content",
+        useMessagePassing: true,
       });
 
       // Should use message passing for operations
@@ -989,58 +1014,58 @@ describe('Cross-Platform Compatibility', () => {
 
       // Vault operations should work via message passing
       const vault = await contentScriptSDK.createFastVault({
-        name: 'Content Script Vault',
-        email: 'content@test.com',
-        password: 'password'
+        name: "Content Script Vault",
+        email: "content@test.com",
+        password: "password",
       });
 
       expect(global.chrome.runtime.sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'CREATE_VAULT'
-        })
+          type: "CREATE_VAULT",
+        }),
       );
 
       // Cleanup
       delete global.chrome;
     });
 
-    it('should handle Manifest V3 service worker environment', async () => {
+    it("should handle Manifest V3 service worker environment", async () => {
       // Manifest V3 uses service workers instead of background pages
       // Different lifecycle and persistence model
 
       global.self = {
         addEventListener: vi.fn(),
         clients: {
-          matchAll: vi.fn().mockResolvedValue([])
-        }
+          matchAll: vi.fn().mockResolvedValue([]),
+        },
       };
 
       global.chrome = {
         runtime: {
-          id: 'extension-id',
+          id: "extension-id",
           getManifest: () => ({
             manifest_version: 3,
             background: {
-              service_worker: 'background.js'
-            }
-          })
+              service_worker: "background.js",
+            },
+          }),
         },
         storage: {
           local: {
             get: vi.fn().mockResolvedValue({}),
-            set: vi.fn().mockResolvedValue(undefined)
-          }
+            set: vi.fn().mockResolvedValue(undefined),
+          },
         },
         alarms: {
           create: vi.fn(),
           onAlarm: {
-            addListener: vi.fn()
-          }
-        }
+            addListener: vi.fn(),
+          },
+        },
       };
 
       const sdk = new VultisigSDK({
-        environment: 'chrome-extension-service-worker'
+        environment: "chrome-extension-service-worker",
       });
 
       await sdk.init();
@@ -1062,20 +1087,21 @@ describe('Cross-Platform Compatibility', () => {
 ### Day 7-8: Performance Optimization Testing
 
 #### Task 5.4: Optimization and Profiling
+
 ```typescript
 // tests/performance/optimization.test.ts
-import { describe, it, expect } from 'vitest';
-import { VultisigSDK } from '@/VultisigSDK';
-import { profile, measureMemory } from '@helpers/profiling';
+import { describe, it, expect } from "vitest";
+import { VultisigSDK } from "@/VultisigSDK";
+import { profile, measureMemory } from "@helpers/profiling";
 
-describe('Performance Optimization', () => {
-  describe('Caching Optimization', () => {
-    it('should optimize address derivation with caching', async () => {
+describe("Performance Optimization", () => {
+  describe("Caching Optimization", () => {
+    it("should optimize address derivation with caching", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
       const vault = await createTestVault(sdk, {
-        chains: ALL_SUPPORTED_CHAINS
+        chains: ALL_SUPPORTED_CHAINS,
       });
 
       // First run - no cache
@@ -1094,13 +1120,15 @@ describe('Performance Optimization', () => {
 
       console.log(`First run: ${firstRun.duration}ms`);
       console.log(`Second run: ${secondRun.duration}ms`);
-      console.log(`Speedup: ${(firstRun.duration / secondRun.duration).toFixed(2)}x`);
+      console.log(
+        `Speedup: ${(firstRun.duration / secondRun.duration).toFixed(2)}x`,
+      );
 
       // Cache should provide significant speedup
       expect(secondRun.duration).toBeLessThan(firstRun.duration * 0.1); // 10x faster
     });
 
-    it('should optimize balance queries with smart caching', async () => {
+    it("should optimize balance queries with smart caching", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
@@ -1108,32 +1136,32 @@ describe('Performance Optimization', () => {
 
       // Track network calls
       let networkCalls = 0;
-      sdk.networkMonitor.on('request', () => networkCalls++);
+      sdk.networkMonitor.on("request", () => networkCalls++);
 
       // First query - network call
-      await vault.getBalance('ethereum');
+      await vault.getBalance("ethereum");
       const firstCallCount = networkCalls;
 
       // Second query within TTL - cached
-      await vault.getBalance('ethereum');
+      await vault.getBalance("ethereum");
       expect(networkCalls).toBe(firstCallCount); // No new network call
 
       // Wait for TTL expiration
-      await new Promise(resolve => setTimeout(resolve, 5 * 60 * 1000 + 100));
+      await new Promise((resolve) => setTimeout(resolve, 5 * 60 * 1000 + 100));
 
       // Third query - network call again
-      await vault.getBalance('ethereum');
+      await vault.getBalance("ethereum");
       expect(networkCalls).toBe(firstCallCount + 1);
     });
   });
 
-  describe('Batch Operation Optimization', () => {
-    it('should optimize batch address derivation', async () => {
+  describe("Batch Operation Optimization", () => {
+    it("should optimize batch address derivation", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
       const vault = await createTestVault(sdk, {
-        chains: ALL_SUPPORTED_CHAINS
+        chains: ALL_SUPPORTED_CHAINS,
       });
 
       // Sequential derivation
@@ -1153,28 +1181,30 @@ describe('Performance Optimization', () => {
 
       console.log(`Sequential: ${sequentialTime.duration}ms`);
       console.log(`Batch: ${batchTime.duration}ms`);
-      console.log(`Improvement: ${((1 - batchTime.duration / sequentialTime.duration) * 100).toFixed(2)}%`);
+      console.log(
+        `Improvement: ${((1 - batchTime.duration / sequentialTime.duration) * 100).toFixed(2)}%`,
+      );
 
       // Batch should be faster
       expect(batchTime.duration).toBeLessThan(sequentialTime.duration);
     });
 
-    it('should optimize batch transaction signing', async () => {
+    it("should optimize batch transaction signing", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
-      const vault = await createTestVault(sdk, { type: 'fast' });
+      const vault = await createTestVault(sdk, { type: "fast" });
 
       const transactions = [];
       for (let i = 0; i < 10; i++) {
-        transactions.push(await createTestTransaction('bitcoin'));
+        transactions.push(await createTestTransaction("bitcoin"));
       }
 
       // Sign with session reuse
       const optimizedTime = await profile(async () => {
         const session = await vault.createSigningSession();
         for (const tx of transactions) {
-          await vault.signWithSession(session, 'bitcoin', tx);
+          await vault.signWithSession(session, "bitcoin", tx);
         }
         await session.close();
       });
@@ -1182,7 +1212,7 @@ describe('Performance Optimization', () => {
       // Sign without session reuse
       const unoptimizedTime = await profile(async () => {
         for (const tx of transactions) {
-          await vault.signTransaction('bitcoin', tx);
+          await vault.signTransaction("bitcoin", tx);
         }
       });
 
@@ -1193,8 +1223,8 @@ describe('Performance Optimization', () => {
     });
   });
 
-  describe('Memory Optimization', () => {
-    it('should optimize memory usage with lazy loading', async () => {
+  describe("Memory Optimization", () => {
+    it("should optimize memory usage with lazy loading", async () => {
       const sdk = new VultisigSDK({ autoInit: false });
 
       const beforeInit = await measureMemory();
@@ -1205,19 +1235,19 @@ describe('Performance Optimization', () => {
 
       // Create vault but don't use WASM yet
       const vault = await sdk.createFastVault({
-        name: 'Memory Test',
-        email: 'memory@test.com',
-        password: 'password'
+        name: "Memory Test",
+        email: "memory@test.com",
+        password: "password",
       });
 
       const afterVault = await measureMemory();
 
       // Now trigger WASM load
-      await vault.getAddress('bitcoin');
+      await vault.getAddress("bitcoin");
 
       const afterWASM = await measureMemory();
 
-      console.log('Memory Usage:');
+      console.log("Memory Usage:");
       console.log(`  Before init: ${beforeInit.heapUsed}MB`);
       console.log(`  After init: ${afterInit.heapUsed}MB`);
       console.log(`  After vault: ${afterVault.heapUsed}MB`);
@@ -1228,7 +1258,7 @@ describe('Performance Optimization', () => {
       expect(afterWASM.heapUsed - afterVault.heapUsed).toBeGreaterThan(10); // WASM adds >10MB
     });
 
-    it('should clean up unused resources', async () => {
+    it("should clean up unused resources", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
@@ -1252,10 +1282,10 @@ describe('Performance Optimization', () => {
     });
   });
 
-  describe('Bundle Size Optimization', () => {
-    it('should support tree shaking', async () => {
+  describe("Bundle Size Optimization", () => {
+    it("should support tree shaking", async () => {
       // Test that unused code can be eliminated
-      const { VultisigSDK: SDKOnly } = await import('@/VultisigSDK');
+      const { VultisigSDK: SDKOnly } = await import("@/VultisigSDK");
 
       // Should only import what's needed
       const sdk = new SDKOnly();
@@ -1265,16 +1295,16 @@ describe('Performance Optimization', () => {
       expect(sdk._unusedManager).toBeUndefined();
     });
 
-    it('should support code splitting', async () => {
+    it("should support code splitting", async () => {
       // Lazy load heavy modules
       const sdk = new VultisigSDK({ lazyLoad: true });
 
       // Core should be small
-      const coreSize = await getModuleSize('@/VultisigSDK');
+      const coreSize = await getModuleSize("@/VultisigSDK");
       expect(coreSize).toBeLessThan(50); // Less than 50KB
 
       // WASM modules load on demand
-      const wasmModule = await import('@/wasm/wallet-core');
+      const wasmModule = await import("@/wasm/wallet-core");
       expect(wasmModule).toBeDefined();
     });
   });
@@ -1284,20 +1314,21 @@ describe('Performance Optimization', () => {
 ### Day 9-10: Monitoring and Maintenance
 
 #### Task 5.5: Production Monitoring Setup
+
 ```typescript
 // tests/monitoring/production-monitoring.test.ts
-import { describe, it, expect } from 'vitest';
-import { VultisigSDK } from '@/VultisigSDK';
-import { MetricsCollector, HealthCheck } from '@/monitoring';
+import { describe, it, expect } from "vitest";
+import { VultisigSDK } from "@/VultisigSDK";
+import { MetricsCollector, HealthCheck } from "@/monitoring";
 
-describe('Production Monitoring', () => {
-  describe('Metrics Collection', () => {
-    it('should collect operation metrics', async () => {
+describe("Production Monitoring", () => {
+  describe("Metrics Collection", () => {
+    it("should collect operation metrics", async () => {
       const sdk = new VultisigSDK({
         monitoring: {
           enabled: true,
-          metricsEndpoint: 'https://metrics.example.com'
-        }
+          metricsEndpoint: "https://metrics.example.com",
+        },
       });
 
       const metrics = new MetricsCollector(sdk);
@@ -1305,56 +1336,56 @@ describe('Production Monitoring', () => {
 
       // Perform operations
       const vault = await sdk.createFastVault({
-        name: 'Metrics Test',
-        email: 'metrics@test.com',
-        password: 'password'
+        name: "Metrics Test",
+        email: "metrics@test.com",
+        password: "password",
       });
 
-      await vault.getAddress('bitcoin');
-      await vault.getBalance('ethereum');
+      await vault.getAddress("bitcoin");
+      await vault.getBalance("ethereum");
 
       // Collect metrics
       const collected = metrics.getMetrics();
 
-      expect(collected).toHaveProperty('vaultCreation');
+      expect(collected).toHaveProperty("vaultCreation");
       expect(collected.vaultCreation).toMatchObject({
         count: 1,
         avgDuration: expect.any(Number),
-        errors: 0
+        errors: 0,
       });
 
-      expect(collected).toHaveProperty('addressDerivation');
+      expect(collected).toHaveProperty("addressDerivation");
       expect(collected.addressDerivation.count).toBe(1);
 
-      expect(collected).toHaveProperty('balanceQuery');
+      expect(collected).toHaveProperty("balanceQuery");
       expect(collected.balanceQuery.count).toBe(1);
 
       metrics.stop();
     });
 
-    it('should track error rates', async () => {
+    it("should track error rates", async () => {
       const sdk = new VultisigSDK({ monitoring: { enabled: true } });
       const metrics = new MetricsCollector(sdk);
 
       // Cause some errors
       await expect(
-        sdk.vaultManager.importVault('/invalid/path')
+        sdk.vaultManager.importVault("/invalid/path"),
       ).rejects.toThrow();
 
       await expect(
-        sdk.createFastVault({ name: '', email: 'invalid', password: '' })
+        sdk.createFastVault({ name: "", email: "invalid", password: "" }),
       ).rejects.toThrow();
 
       const errorMetrics = metrics.getErrorMetrics();
 
       expect(errorMetrics.total).toBe(2);
-      expect(errorMetrics.byType).toHaveProperty('VaultImportError');
-      expect(errorMetrics.byType).toHaveProperty('ValidationError');
+      expect(errorMetrics.byType).toHaveProperty("VaultImportError");
+      expect(errorMetrics.byType).toHaveProperty("ValidationError");
     });
   });
 
-  describe('Health Checks', () => {
-    it('should perform comprehensive health checks', async () => {
+  describe("Health Checks", () => {
+    it("should perform comprehensive health checks", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
@@ -1362,19 +1393,19 @@ describe('Production Monitoring', () => {
       const report = await healthCheck.run();
 
       expect(report).toMatchObject({
-        status: 'healthy',
+        status: "healthy",
         checks: {
-          wasmModules: { status: 'ok' },
-          serverConnectivity: { status: 'ok' },
-          storage: { status: 'ok' },
-          memory: { status: 'ok' }
-        }
+          wasmModules: { status: "ok" },
+          serverConnectivity: { status: "ok" },
+          storage: { status: "ok" },
+          memory: { status: "ok" },
+        },
       });
 
-      console.log('Health Report:', JSON.stringify(report, null, 2));
+      console.log("Health Report:", JSON.stringify(report, null, 2));
     });
 
-    it('should detect degraded performance', async () => {
+    it("should detect degraded performance", async () => {
       const sdk = new VultisigSDK();
       await sdk.init();
 
@@ -1384,89 +1415,91 @@ describe('Production Monitoring', () => {
       const healthCheck = new HealthCheck(sdk);
       const report = await healthCheck.run();
 
-      expect(report.status).toBe('degraded');
-      expect(report.checks.serverConnectivity.status).toBe('slow');
+      expect(report.status).toBe("degraded");
+      expect(report.checks.serverConnectivity.status).toBe("slow");
       expect(report.checks.serverConnectivity.latency).toBeGreaterThan(1000);
     });
   });
 
-  describe('Logging and Debugging', () => {
-    it('should provide detailed debug logs', async () => {
+  describe("Logging and Debugging", () => {
+    it("should provide detailed debug logs", async () => {
       const logs = [];
       const sdk = new VultisigSDK({
         debug: true,
         logger: {
           log: (level, message, data) => {
             logs.push({ level, message, data });
-          }
-        }
+          },
+        },
       });
 
       await sdk.init();
 
       const vault = await sdk.createFastVault({
-        name: 'Debug Test',
-        email: 'debug@test.com',
-        password: 'password'
+        name: "Debug Test",
+        email: "debug@test.com",
+        password: "password",
       });
 
       // Check for important log entries
       expect(logs).toContainEqual(
         expect.objectContaining({
-          level: 'info',
-          message: expect.stringContaining('SDK initialized')
-        })
+          level: "info",
+          message: expect.stringContaining("SDK initialized"),
+        }),
       );
 
       expect(logs).toContainEqual(
         expect.objectContaining({
-          level: 'debug',
-          message: expect.stringContaining('Creating fast vault')
-        })
+          level: "debug",
+          message: expect.stringContaining("Creating fast vault"),
+        }),
       );
 
       // Should log MPC protocol steps
-      const mpcLogs = logs.filter(l => l.message.includes('MPC'));
+      const mpcLogs = logs.filter((l) => l.message.includes("MPC"));
       expect(mpcLogs.length).toBeGreaterThan(0);
     });
 
-    it('should support structured logging', async () => {
+    it("should support structured logging", async () => {
       const sdk = new VultisigSDK({
         logger: {
-          format: 'json'
-        }
+          format: "json",
+        },
       });
 
       const vault = await createTestVault(sdk);
 
       const logs = sdk.logger.getLogs();
 
-      logs.forEach(log => {
+      logs.forEach((log) => {
         // Should be valid JSON
         expect(() => JSON.parse(JSON.stringify(log))).not.toThrow();
 
         // Should have standard fields
-        expect(log).toHaveProperty('timestamp');
-        expect(log).toHaveProperty('level');
-        expect(log).toHaveProperty('message');
+        expect(log).toHaveProperty("timestamp");
+        expect(log).toHaveProperty("level");
+        expect(log).toHaveProperty("message");
       });
     });
   });
 
-  describe('Alerting', () => {
-    it('should trigger alerts on critical errors', async () => {
+  describe("Alerting", () => {
+    it("should trigger alerts on critical errors", async () => {
       const alerts = [];
 
       const sdk = new VultisigSDK({
         monitoring: {
           alerting: {
             enabled: true,
-            handlers: [{
-              type: 'callback',
-              handler: (alert) => alerts.push(alert)
-            }]
-          }
-        }
+            handlers: [
+              {
+                type: "callback",
+                handler: (alert) => alerts.push(alert),
+              },
+            ],
+          },
+        },
       });
 
       // Trigger critical error
@@ -1474,18 +1507,18 @@ describe('Production Monitoring', () => {
 
       await expect(
         sdk.createFastVault({
-          name: 'Alert Test',
-          email: 'alert@test.com',
-          password: 'password'
-        })
+          name: "Alert Test",
+          email: "alert@test.com",
+          password: "password",
+        }),
       ).rejects.toThrow();
 
       // Should have triggered alert
       expect(alerts).toHaveLength(1);
       expect(alerts[0]).toMatchObject({
-        severity: 'critical',
-        type: 'server_unavailable',
-        message: expect.stringContaining('Server')
+        severity: "critical",
+        type: "server_unavailable",
+        message: expect.stringContaining("Server"),
       });
     });
   });
@@ -1495,6 +1528,7 @@ describe('Production Monitoring', () => {
 ## Deliverables Checklist
 
 ### Security Testing ✓
+
 - [ ] Cryptographic security validation
 - [ ] Input sanitization testing
 - [ ] Encryption strength verification
@@ -1502,6 +1536,7 @@ describe('Production Monitoring', () => {
 - [ ] Vulnerability scanning
 
 ### Load Testing ✓
+
 - [ ] Concurrent operations (100+ vaults)
 - [ ] Memory stress testing
 - [ ] Network stress testing
@@ -1509,6 +1544,7 @@ describe('Production Monitoring', () => {
 - [ ] Throughput benchmarks
 
 ### Cross-Platform ✓
+
 - [ ] Node.js compatibility
 - [ ] Browser compatibility
 - [ ] React Native support
@@ -1516,6 +1552,7 @@ describe('Production Monitoring', () => {
 - [ ] Environment detection
 
 ### Performance Optimization ✓
+
 - [ ] Caching optimization
 - [ ] Batch operations
 - [ ] Memory optimization
@@ -1523,6 +1560,7 @@ describe('Production Monitoring', () => {
 - [ ] Lazy loading
 
 ### Monitoring ✓
+
 - [ ] Metrics collection
 - [ ] Health checks
 - [ ] Logging framework
@@ -1531,14 +1569,14 @@ describe('Production Monitoring', () => {
 
 ## Success Metrics
 
-| Metric | Target | Status |
-|--------|--------|--------|
-| Code Coverage | 85% | 🔄 |
-| Security Tests | All passing | 🔄 |
-| Load Tests | 100+ concurrent | 🔄 |
-| Platform Support | 4+ environments | 🔄 |
-| Performance | All targets met | 🔄 |
-| Monitoring | Full instrumentation | 🔄 |
+| Metric           | Target               | Status |
+| ---------------- | -------------------- | ------ |
+| Code Coverage    | 85%                  | 🔄     |
+| Security Tests   | All passing          | 🔄     |
+| Load Tests       | 100+ concurrent      | 🔄     |
+| Platform Support | 4+ environments      | 🔄     |
+| Performance      | All targets met      | 🔄     |
+| Monitoring       | Full instrumentation | 🔄     |
 
 ## Phase 5 Summary
 
@@ -1554,18 +1592,21 @@ With 85% coverage achieved, the Vultisig SDK is production-ready with enterprise
 ## Ongoing Maintenance
 
 ### Weekly Tasks
+
 - Review new security advisories
 - Update chain fixtures
 - Monitor performance metrics
 - Review error logs
 
 ### Monthly Tasks
+
 - Security audit
 - Performance regression testing
 - Dependency updates
 - Documentation updates
 
 ### Quarterly Tasks
+
 - Major version testing
 - New platform support
 - Load testing validation
@@ -1573,4 +1614,4 @@ With 85% coverage achieved, the Vultisig SDK is production-ready with enterprise
 
 ---
 
-*Phase 5 establishes the SDK as a production-ready, secure, and performant solution with comprehensive monitoring and cross-platform support.*
+_Phase 5 establishes the SDK as a production-ready, secure, and performant solution with comprehensive monitoring and cross-platform support._

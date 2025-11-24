@@ -77,10 +77,7 @@ export type UseKeysharesStorageReturn = {
 
   // Actions
   saveKeyshare: (keyshare: LoadedKeyshare) => Promise<StoredKeyshare | null>
-  saveVaultToStorage: (
-    vault: any,
-    options?: { name?: string; password?: string }
-  ) => Promise<StoredKeyshare | null>
+  saveVaultToStorage: (vault: any, options?: { name?: string; password?: string }) => Promise<StoredKeyshare | null>
   saveVaultFromFile: (input: {
     name: string
     size: number
@@ -214,17 +211,12 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
 
   // Save a live vault object into storage as a .vult container (optionally encrypted)
   const saveVaultToStorage = useCallback(
-    async (
-      vault: any,
-      options?: { name?: string; password?: string }
-    ): Promise<StoredKeyshare | null> => {
+    async (vault: any, options?: { name?: string; password?: string }): Promise<StoredKeyshare | null> => {
       try {
         console.log('saveVaultToStorage - vault input:', vault)
 
         // Use Vault's public exportAsBase64 method to serialize the vault
-        const containerVaultBase64 = await vault.exportAsBase64(
-          options?.password
-        )
+        const containerVaultBase64 = await vault.exportAsBase64(options?.password)
         const encrypted = !!options?.password
         // Check if a vault with this name already exists
         const vaultName = `${options?.name ?? vault.data.name}.vult`
@@ -260,11 +252,7 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
           if (!item) throw new Error('Failed to save vault to storage')
           // attach payload
           const cur = readAll()
-          const withPayload = cur.map(k =>
-            k.id === item.id
-              ? { ...k, containerBase64: containerVaultBase64 }
-              : k
-          )
+          const withPayload = cur.map(k => (k.id === item.id ? { ...k, containerBase64: containerVaultBase64 } : k))
           writeAll(withPayload)
           loadKeyshares()
           return { ...item, containerBase64: containerVaultBase64 }
@@ -328,10 +316,7 @@ export function useKeysharesStorage(): UseKeysharesStorageReturn {
     loadKeyshares()
   }, [loadKeyshares])
 
-  const getStoredKeyshareById = useCallback(
-    (id: string) => readAll().find(k => k.id === id),
-    []
-  )
+  const getStoredKeyshareById = useCallback((id: string) => readAll().find(k => k.id === id), [])
 
   // Load keyshares on mount
   useEffect(() => {

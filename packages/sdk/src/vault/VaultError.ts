@@ -19,6 +19,7 @@ export enum VaultErrorCode {
   UnsupportedToken = 'UNSUPPORTED_TOKEN',
   GasEstimationFailed = 'GAS_ESTIMATION_FAILED',
   BroadcastFailed = 'BROADCAST_FAILED',
+  CreateFailed = 'CREATE_FAILED',
 }
 
 /**
