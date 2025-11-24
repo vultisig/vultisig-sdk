@@ -3,8 +3,8 @@ import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
-import { WasmManager } from '../../runtime/wasm'
 import { CacheScope, type CacheService } from '../../services/CacheService'
+import { WasmManager } from '../../wasm'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**

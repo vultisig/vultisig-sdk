@@ -1,7 +1,7 @@
 import type { Chain } from '@core/chain/Chain'
 
-import { GlobalStorage } from './runtime/storage/GlobalStorage'
-import type { Storage } from './runtime/storage/types'
+import { GlobalStorage } from './storage/GlobalStorage'
+import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry } from './types'
 
 /**

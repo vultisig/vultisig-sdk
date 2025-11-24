@@ -10,7 +10,7 @@ import { getKeysignChain } from '@core/mpc/keysign/utils/getKeysignChain'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
-import { WasmManager } from '../../runtime/wasm'
+import { WasmManager } from '../../wasm'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**

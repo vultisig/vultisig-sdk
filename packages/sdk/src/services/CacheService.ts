@@ -1,5 +1,5 @@
-import { GlobalStorage } from '../runtime/storage/GlobalStorage'
-import type { Storage } from '../runtime/storage/types'
+import { GlobalStorage } from '../storage/GlobalStorage'
+import type { Storage } from '../storage/types'
 import { type CacheConfig, type CachedItem, CacheScope } from './cache-types'
 
 /**

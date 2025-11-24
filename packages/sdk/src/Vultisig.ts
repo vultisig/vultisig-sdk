@@ -4,17 +4,16 @@ import { Chain } from '@core/chain/Chain'
 import { AddressBookManager } from './AddressBookManager'
 import { GlobalConfig } from './config/GlobalConfig'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
+import { initializeCrypto } from './crypto'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
-import { initializeCrypto } from './runtime/crypto'
-import { PolyfillManager } from './runtime/polyfills'
-import { GlobalStorage } from './runtime/storage/GlobalStorage'
-import type { Storage } from './runtime/storage/types'
-import { WasmManager } from './runtime/wasm'
 import { GlobalServerManager } from './server/GlobalServerManager'
+import { GlobalStorage } from './storage/GlobalStorage'
+import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry, ServerStatus, VultisigConfig } from './types'
 import { VaultBase } from './vault/VaultBase'
 import { VaultManager } from './VaultManager'
+import { WasmManager } from './wasm'
 
 // Re-export constants
 export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
@@ -157,7 +156,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     this.initializationPromise = (async () => {
       try {
         // Initialize platform-specific items
-        await PolyfillManager.initialize()
         await initializeCrypto()
         await WasmManager.initialize()
 

@@ -15,11 +15,11 @@ import { GlobalConfig } from '../config/GlobalConfig'
 import { DEFAULT_CHAINS } from '../constants'
 import { UniversalEventEmitter } from '../events/EventEmitter'
 import { VaultEvents } from '../events/types'
-import { GlobalStorage } from '../runtime/storage/GlobalStorage'
-import type { Storage } from '../runtime/storage/types'
 import { CacheScope, CacheService } from '../services/CacheService'
 import { FiatValueService } from '../services/FiatValueService'
 import { PasswordCacheService } from '../services/PasswordCacheService'
+import { GlobalStorage } from '../storage/GlobalStorage'
+import type { Storage } from '../storage/types'
 // Types
 import {
   Balance,

@@ -3,8 +3,8 @@
   "version": "0.1.0-beta.1",
   "description": "TypeScript SDK for secure multi-party computation and blockchain operations",
   "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "main": "dist/index.node.cjs",
+  "module": "dist/index.node.esm.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
@@ -15,12 +15,39 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.esm.js",
-      "require": "./dist/index.js"
+      "react-native": "./dist/index.react-native.js",
+      "electron-main": "./dist/index.electron-main.cjs",
+      "electron-renderer": "./dist/index.electron-renderer.js",
+      "browser": "./dist/index.browser.js",
+      "worker": "./dist/index.browser.js",
+      "node": {
+        "import": "./dist/index.node.esm.js",
+        "require": "./dist/index.node.cjs"
+      },
+      "import": "./dist/index.node.esm.js",
+      "require": "./dist/index.node.cjs",
+      "default": "./dist/index.node.cjs"
     },
     "./node": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.node.js"
+      "import": "./dist/index.node.esm.js",
+      "require": "./dist/index.node.cjs"
+    },
+    "./browser": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.browser.js"
+    },
+    "./react-native": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.react-native.js"
+    },
+    "./electron-main": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.electron-main.cjs"
+    },
+    "./electron-renderer": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.electron-renderer.js"
     },
     "./wasm": {
       "types": "./dist/wasm/index.d.ts",
@@ -28,19 +55,18 @@
       "require": "./dist/wasm/index.js"
     }
   },
-  "imports": {
-    "#lib/dkls/*": "./dist/lib/dkls/*",
-    "#lib/schnorr/*": "./dist/lib/schnorr/*",
-    "@lib/dkls/*": "./dist/lib/dkls/*",
-    "@lib/schnorr/*": "./dist/lib/schnorr/*"
-  },
   "scripts": {
     "_____BUILD_____": "",
-    "build": "yarn build:js && yarn build:types",
-    "build:js": "node ../../node_modules/.bin/rollup -c rollup.config.js",
+    "build": "yarn build:platforms && yarn build:types",
+    "build:js": "yarn build:platforms",
     "build:types": "tsc -p tsconfig.declarations.json",
-    "build:debug": "node --max-old-space-size=16384 --trace-warnings --expose-gc --trace-gc ../../node_modules/.bin/rollup -c rollup.config.js --perf",
-    "dev": "rollup -c rollup.config.js -w",
+    "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
+    "_____PLATFORM_BUILDS_____": "",
+    "build:platforms": "yarn build:platform:node && yarn build:platform:browser",
+    "build:platform:node": "BUILD_TARGET=node rollup -c rollup.platforms.config.js",
+    "build:platform:browser": "BUILD_TARGET=browser rollup -c rollup.platforms.config.js",
+    "build:platform:react-native": "BUILD_TARGET=react-native rollup -c rollup.platforms.config.js",
+    "build:platform:electron": "BUILD_TARGET=electron rollup -c rollup.platforms.config.js",
     "_____QUALITY_____": "",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "lint": "eslint --config ../../.config/eslint.config.mjs src/**/*.{ts,tsx}",
@@ -50,7 +76,6 @@
     "test:all": "yarn test:unit && yarn test:integration && yarn test:e2e",
     "_____TEST_BY_TYPE_____": "",
     "test:unit": "vitest run --config tests/unit/vitest.config.ts tests/unit",
-    "test:runtime": "vitest run --config tests/runtime/vitest.config.ts tests/runtime",
     "test:integration": "vitest run --config tests/integration/vitest.config.ts tests/integration",
     "test:e2e": "yarn test:e2e:balance; yarn test:e2e:gas; yarn test:e2e:multi-chain; yarn test:e2e:prepare-send; yarn test:e2e:fast-signing; yarn test:e2e:fiat-value",
     "_____TEST_E2E_INDIVIDUAL_____": "",
@@ -63,7 +88,6 @@
     "_____TEST_WATCH_____": "",
     "test:watch": "vitest --config tests/unit/vitest.config.ts",
     "test:unit:watch": "vitest --config tests/unit/vitest.config.ts tests/unit",
-    "test:runtime:watch": "vitest --config tests/runtime/vitest.config.ts tests/runtime",
     "test:integration:watch": "vitest --config tests/integration/vitest.config.ts tests/integration",
     "test:e2e:watch": "vitest --config tests/e2e/vitest.config.ts tests/e2e",
     "_____TEST_UTILS_____": "",
@@ -128,15 +152,19 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@rollup/plugin-alias": "^6.0.0",
     "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-inject": "^5.0.5",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-replace": "^6.0.3",
     "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^12.1.1",
     "@types/chrome": "^0.1.27",
     "@types/node": "^22.13.10",
     "@vitest/coverage-v8": "3.2.4",
     "dotenv": "^17.2.3",
+    "electron": "^39.2.3",
     "fake-indexeddb": "^6.2.5",
     "node-localstorage": "^3.0.5",
     "rollup": "^4.32.1",
@@ -145,18 +173,6 @@
     "tsx": "^4.19.5",
     "typescript": "^5.8.2",
     "vitest": "^3.0.9"
-  },
-  "peerDependencies": {
-    "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    }
   },
   "sideEffects": false,
   "publishConfig": {

@@ -28,11 +28,11 @@ import path from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { GlobalConfig } from '../../../src/config/GlobalConfig'
-import { GlobalStorage } from '../../../src/runtime/storage/GlobalStorage'
-import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
 import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
 import { FastSigningService } from '../../../src/services/FastSigningService'
 import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
+import { GlobalStorage } from '../../../src/storage/GlobalStorage'
+import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import { FastVault } from '../../../src/vault/FastVault'
 import { Vultisig } from '../../../src/Vultisig'
 
@@ -50,7 +50,7 @@ describe('Integration: Vault Export', () => {
 
     // Configure global singletons
     memoryStorage = new MemoryStorage()
-    GlobalStorage.configure({ customStorage: memoryStorage })
+    GlobalStorage.configure(memoryStorage)
 
     GlobalServerManager.configure({
       fastVault: 'https://api.vultisig.com/vault',
@@ -65,7 +65,7 @@ describe('Integration: Vault Export', () => {
     // Initialize SDK with WASM
     sdk = new Vultisig({
       autoInit: true,
-      storage: { customStorage: memoryStorage },
+      storage: memoryStorage,
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
     })
 

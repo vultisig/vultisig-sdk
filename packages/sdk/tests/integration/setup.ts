@@ -77,3 +77,12 @@ globalThis.fetch = wrappedFetch as any
 
 console.log('✅ Integration test WASM polyfill loaded')
 console.log('📦 WASM files will be loaded from filesystem using fs.readFile()')
+
+/**
+ * Configure GlobalStorage for integration tests
+ * Uses MemoryStorage so tests don't persist data to filesystem
+ */
+import { GlobalStorage } from '../../src/storage/GlobalStorage'
+import { MemoryStorage } from '../../src/storage/MemoryStorage'
+
+GlobalStorage.configure(new MemoryStorage())

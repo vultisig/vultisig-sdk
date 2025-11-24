@@ -11,10 +11,10 @@ import { resolve } from 'path'
 import { expect } from 'vitest'
 
 import { GlobalConfig } from '../../../src/config/GlobalConfig'
-import { GlobalStorage } from '../../../src/runtime/storage/GlobalStorage'
-import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
 import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
 import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
+import { GlobalStorage } from '../../../src/storage/GlobalStorage'
+import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import { VaultBase } from '../../../src/vault/VaultBase'
 import { Vultisig } from '../../../src/Vultisig'
 
@@ -75,7 +75,7 @@ export async function loadTestVault(): Promise<{
 
   // Configure global singletons
   const memoryStorage = new MemoryStorage()
-  GlobalStorage.configure({ customStorage: memoryStorage })
+  GlobalStorage.configure(memoryStorage)
 
   GlobalServerManager.configure({
     fastVault: process.env.VULTISIG_API_URL || 'https://api.vultisig.com/vault',
@@ -90,7 +90,7 @@ export async function loadTestVault(): Promise<{
   // Initialize SDK with WASM
   const sdk = new Vultisig({
     autoInit: true,
-    storage: { customStorage: memoryStorage },
+    storage: memoryStorage,
     defaultChains: TEST_VAULT_CONFIG.testChains,
     defaultCurrency: 'usd',
   })

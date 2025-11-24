@@ -49,11 +49,11 @@ export {
 // Users don't need direct access to crypto primitives
 
 // WASM Management (now static - no instance needed)
-export type { WasmConfig } from './runtime/wasm'
-export { WasmManager } from './runtime/wasm'
+export type { WasmConfig } from './wasm'
+export { WasmManager } from './wasm'
 
 // Crypto initialization
-export { initializeCrypto } from './runtime/crypto'
+export { initializeCrypto } from './crypto'
 
 // ============================================================================
 // PUBLIC API - Server Management
@@ -84,34 +84,13 @@ export { ValidationHelpers } from './utils/validation'
 export { SUPPORTED_CHAINS } from './Vultisig'
 
 // ============================================================================
-// PUBLIC API - Environment Utilities
+// PUBLIC API - Storage
 // ============================================================================
 
-// Environment detection
-export type { Environment } from './runtime/environment'
-export {
-  detectEnvironment,
-  getEnvironmentInfo,
-  isBrowser,
-  isChromeExtension,
-  isChromeExtensionPage,
-  isChromeExtensionServiceWorker,
-  isElectron,
-  isElectronMain,
-  isElectronRenderer,
-  isNode,
-  isWorker,
-} from './runtime/environment'
-
-// Storage implementations
-export { BrowserStorage } from './runtime/storage/BrowserStorage'
-export { ChromeStorage } from './runtime/storage/ChromeStorage'
-export { MemoryStorage } from './runtime/storage/MemoryStorage'
-export { NodeStorage } from './runtime/storage/NodeStorage'
-export type { StorageOptions } from './runtime/storage/StorageManager'
-export { StorageManager } from './runtime/storage/StorageManager'
-export type { StorageMetadata, StoredValue, Storage as VaultStorage } from './runtime/storage/types'
-export { StorageError, StorageErrorCode } from './runtime/storage/types'
+// Storage system - MemoryStorage is available in all platforms
+export type { StorageMetadata, StoredValue, Storage as VaultStorage } from './storage'
+export { MemoryStorage } from './storage'
+export { StorageError, StorageErrorCode } from './storage'
 
 // Event system
 export { UniversalEventEmitter } from './events/EventEmitter'

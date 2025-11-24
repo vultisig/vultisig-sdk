@@ -7,10 +7,10 @@ import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGc
 import { fromBase64 } from '@lib/utils/fromBase64'
 
 import { GlobalConfig } from '../config/GlobalConfig'
-import { GlobalStorage } from '../runtime/storage/GlobalStorage'
 import { GlobalServerManager } from '../server/GlobalServerManager'
 import { FastSigningService } from '../services/FastSigningService'
 import { PasswordCacheService } from '../services/PasswordCacheService'
+import { GlobalStorage } from '../storage/GlobalStorage'
 import type { Signature, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'

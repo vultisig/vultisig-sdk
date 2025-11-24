@@ -184,7 +184,7 @@ export type VultisigConfig = SDKConfig & {
    * Configures the global storage used by all vaults and managers
    * @see GlobalStorage.configure()
    */
-  storage?: import('../runtime/storage/registry').StorageOptions
+  storage?: import('../storage/types').Storage
   autoInit?: boolean
   autoConnect?: boolean
   defaultChains?: Chain[]

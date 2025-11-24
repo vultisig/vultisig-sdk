@@ -6,11 +6,11 @@ import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGc
 import { fromBase64 } from '@lib/utils/fromBase64'
 
 import { GlobalConfig } from './config/GlobalConfig'
-import { GlobalStorage } from './runtime/storage/GlobalStorage'
-import type { Storage } from './runtime/storage/types'
 import { GlobalServerManager } from './server/GlobalServerManager'
 import { FastSigningService } from './services/FastSigningService'
 import { PasswordCacheService } from './services/PasswordCacheService'
+import { GlobalStorage } from './storage/GlobalStorage'
+import type { Storage } from './storage/types'
 import { VaultData } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'

@@ -1,11 +1,11 @@
 import { Chain } from '@core/chain/Chain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { MemoryStorage } from '../../src/runtime/storage/MemoryStorage'
-import { WasmManager } from '../../src/runtime/wasm'
+import { MemoryStorage } from '../../src/storage/MemoryStorage'
 import { ValidationHelpers } from '../../src/utils/validation'
 import { VaultBase } from '../../src/vault/VaultBase'
 import { SUPPORTED_CHAINS, Vultisig } from '../../src/Vultisig'
+import { WasmManager } from '../../src/wasm'
 
 describe('Vultisig', () => {
   let sdk: Vultisig
@@ -20,7 +20,7 @@ describe('Vultisig', () => {
       autoConnect: false, // Don't auto-connect
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
-      storage: { customStorage: new MemoryStorage() }, // Use memory storage for tests
+      storage: new MemoryStorage(), // Use memory storage for tests
     })
   })
 
@@ -387,17 +387,16 @@ describe('Vultisig', () => {
     it('should handle calling operations before initialization', async () => {
       // Operations that require initialization should auto-initialize
       // Need to provide storage configuration for global singleton
+      const mockStorage = {
+        get: vi.fn(),
+        set: vi.fn(),
+        remove: vi.fn(),
+        clear: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+      }
       const uninitializedSdk = new Vultisig({
         autoInit: false,
-        storage: {
-          customStorage: {
-            get: vi.fn(),
-            set: vi.fn(),
-            remove: vi.fn(),
-            clear: vi.fn(),
-            list: vi.fn().mockResolvedValue([]),
-          },
-        },
+        storage: mockStorage as any,
       })
 
       vi.spyOn(WasmManager, 'initialize').mockResolvedValue()

@@ -1,8 +1,8 @@
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
-import { WasmManager } from '../runtime/wasm'
 import { ServerManager } from '../server/ServerManager'
 import { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
+import { WasmManager } from '../wasm'
 
 /**
  * Fast signing service for server-assisted signing (2-of-2 MPC with VultiServer)

@@ -23,7 +23,7 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 
 import { formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
-import { randomUUID } from '../runtime/crypto'
+import { randomUUID } from '../crypto'
 import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
 
 /**

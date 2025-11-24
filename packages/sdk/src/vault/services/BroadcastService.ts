@@ -8,8 +8,8 @@ import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@core/mpc/keysign/tw/getKeysignTwPublicKey'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
-import { WasmManager } from '../../runtime/wasm'
 import type { Signature } from '../../types'
+import { WasmManager } from '../../wasm'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
