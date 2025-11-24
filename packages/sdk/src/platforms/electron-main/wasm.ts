@@ -5,7 +5,7 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
-import type { PlatformWasmLoader } from '../../shared/platform-types'
+import type { PlatformWasmLoader } from '../types'
 
 export class ElectronMainWasmLoader implements PlatformWasmLoader {
   async loadDkls(): Promise<ArrayBuffer> {

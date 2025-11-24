@@ -19,6 +19,10 @@ import { NodeStorage } from './storage'
 import { NodeWasmLoader } from './wasm'
 GlobalStorage.configure(new NodeStorage())
 
+// Configure global crypto to use Node implementation
+import { configureCrypto } from '../../crypto'
+configureCrypto(new NodeCrypto())
+
 // Configure WASM to use Node loader
 import { WasmManager } from '../../wasm'
 const wasmLoader = new NodeWasmLoader()

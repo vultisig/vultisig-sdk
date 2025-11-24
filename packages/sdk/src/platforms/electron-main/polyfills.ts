@@ -2,7 +2,7 @@
  * Electron Main process polyfills
  * No polyfills needed - has full Node.js APIs
  */
-import type { PlatformPolyfills } from '../../shared/platform-types'
+import type { PlatformPolyfills } from '../types'
 
 export class ElectronMainPolyfills implements PlatformPolyfills {
   async initialize(): Promise<void> {

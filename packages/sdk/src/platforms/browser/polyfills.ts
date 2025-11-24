@@ -2,7 +2,7 @@
  * Browser polyfills implementation
  * Polyfills for Node.js APIs needed in browser
  */
-import type { PlatformPolyfills } from '../../shared/platform-types'
+import type { PlatformPolyfills } from '../types'
 
 export class BrowserPolyfills implements PlatformPolyfills {
   async initialize(): Promise<void> {

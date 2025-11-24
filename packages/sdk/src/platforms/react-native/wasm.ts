@@ -1,15 +1,15 @@
 /**
  * React Native WASM loader implementation
- * Uses require() for bundled WASM or fetch for remote loading
+ * Uses fetch for WASM loading in React Native environments
  */
-import type { PlatformWasmLoader } from '../../shared/platform-types'
+import type { PlatformWasmLoader } from '../types'
 
 export class ReactNativeWasmLoader implements PlatformWasmLoader {
   async loadDkls(): Promise<ArrayBuffer> {
-    // React Native WASM loading depends on the setup
-    // Option 1: Bundle WASM files and use require
-    // Option 2: Load from remote URL
-    // Option 3: Use Hermes bytecode
+    // React Native WASM loading depends on the setup:
+    // - Bundle WASM files with Metro bundler
+    // - Load from remote URL via fetch
+    // - Use custom native module
 
     throw new Error('React Native WASM loading not yet implemented. Please configure WASM paths manually.')
   }

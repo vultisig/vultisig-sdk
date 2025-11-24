@@ -1,14 +1,12 @@
 /**
  * Browser crypto implementation
- * Uses Web Crypto API
+ * Uses Web Crypto API (standard in all modern browsers)
  */
-import type { PlatformCrypto } from '../../shared/platform-types'
+
+import type { PlatformCrypto } from '../types'
 
 export class BrowserCrypto implements PlatformCrypto {
-  async initialize(): Promise<void> {
-    // Check if crypto API is available
-    if (typeof window !== 'undefined' && !window.crypto) {
-      throw new Error('Web Crypto API not available')
-    }
+  randomUUID(): string {
+    return globalThis.crypto.randomUUID()
   }
 }

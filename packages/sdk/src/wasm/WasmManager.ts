@@ -1,19 +1,12 @@
 import { initWasm } from '@trustwallet/wallet-core'
 
-import initializeDkls from '../../../lib/dkls/vs_wasm.js'
-import initializeSchnorr from '../../../lib/schnorr/vs_schnorr_wasm.js'
 import { memoizeAsync } from '../utils/memoizeAsync'
 import type { WasmConfig } from './types'
 
 /**
- * WasmManager handles initialization and management of all WASM modules.
- *
- * Static methods - no instance needed.
- * Supports lazy loading for optimal performance.
- * Coordinates wallet-core, DKLS, and Schnorr WASM loading.
- *
- * Platform-specific implementations handle WASM loading.
- * Thread-safe: Uses memoizeAsync to prevent race conditions during concurrent initialization.
+ * WasmManager coordinates WASM module initialization.
+ * Platform bundles configure this with their WASM loaders.
+ * Thread-safe: Uses memoizeAsync to prevent race conditions.
  */
 export class WasmManager {
   private static config?: WasmConfig
@@ -32,50 +25,44 @@ export class WasmManager {
   })
 
   private static memoizedInitDkls = memoizeAsync(async () => {
-    const wasmPath = this.config?.wasmPaths?.dkls
+    const wasmLoader = this.config?.wasmPaths?.dkls
 
-    // If wasmPath is a function, call it to get the ArrayBuffer
-    if (typeof wasmPath === 'function') {
-      const arrayBuffer = await wasmPath()
-      await initializeDkls(arrayBuffer)
+    if (!wasmLoader) {
+      throw new Error(
+        'DKLS WASM loader not configured. ' +
+          'This should be configured automatically by platform bundles. ' +
+          'Ensure you are importing from the correct platform entry point.'
+      )
     }
-    // If wasmPath is already an ArrayBuffer, use it directly
-    else if (wasmPath instanceof ArrayBuffer) {
-      await initializeDkls(wasmPath)
-    }
-    // Default: expect WASM modules to be available via default import
-    // Platform-specific builds ensure WASM is accessible
-    else {
-      await initializeDkls()
-    }
+
+    const arrayBuffer = await wasmLoader()
+    const { default: initializeDkls } = await import('../../../lib/dkls/vs_wasm.js')
+    await initializeDkls(arrayBuffer)
 
     this.dklsInitialized = true
   })
 
   private static memoizedInitSchnorr = memoizeAsync(async () => {
-    const wasmPath = this.config?.wasmPaths?.schnorr
+    const wasmLoader = this.config?.wasmPaths?.schnorr
 
-    // If wasmPath is a function, call it to get the ArrayBuffer
-    if (typeof wasmPath === 'function') {
-      const arrayBuffer = await wasmPath()
-      await initializeSchnorr(arrayBuffer)
+    if (!wasmLoader) {
+      throw new Error(
+        'Schnorr WASM loader not configured. ' +
+          'This should be configured automatically by platform bundles. ' +
+          'Ensure you are importing from the correct platform entry point.'
+      )
     }
-    // If wasmPath is already an ArrayBuffer, use it directly
-    else if (wasmPath instanceof ArrayBuffer) {
-      await initializeSchnorr(wasmPath)
-    }
-    // Default: expect WASM modules to be available via default import
-    // Platform-specific builds ensure WASM is accessible
-    else {
-      await initializeSchnorr()
-    }
+
+    const arrayBuffer = await wasmLoader()
+    const { default: initializeSchnorr } = await import('../../../lib/schnorr/vs_schnorr_wasm.js')
+    await initializeSchnorr(arrayBuffer)
 
     this.schnorrInitialized = true
   })
 
   /**
-   * Configure WASM loading (optional).
-   * Must be called before any WASM modules are loaded.
+   * Configure WASM loading.
+   * Called automatically by platform bundles at module load time.
    */
   static configure(config: WasmConfig): void {
     if (this.walletCoreInstance || this.dklsInitialized || this.schnorrInitialized) {
@@ -103,9 +90,7 @@ export class WasmManager {
 
   /**
    * Initialize DKLS WASM module (ECDSA).
-   * Lazy loads on first access.
-   * Supports custom paths and environment-specific loading.
-   * Thread-safe: Concurrent calls will wait for same initialization promise.
+   * Thread-safe: Concurrent calls wait for same initialization promise.
    */
   static async initializeDkls(): Promise<void> {
     try {
@@ -121,9 +106,7 @@ export class WasmManager {
 
   /**
    * Initialize Schnorr WASM module (EdDSA).
-   * Lazy loads on first access.
-   * Supports custom paths and environment-specific loading.
-   * Thread-safe: Concurrent calls will wait for same initialization promise.
+   * Thread-safe: Concurrent calls wait for same initialization promise.
    */
   static async initializeSchnorr(): Promise<void> {
     try {
@@ -138,12 +121,11 @@ export class WasmManager {
   }
 
   /**
-   * Pre-load all WASM modules (optional).
-   * Useful for upfront initialization to avoid delays later.
+   * Pre-load all WASM modules.
+   * Initializes in parallel for better performance.
    */
   static async initialize(): Promise<void> {
     try {
-      // Initialize in parallel for better performance
       await Promise.all([this.getWalletCore(), this.initializeDkls(), this.initializeSchnorr()])
     } catch (error) {
       throw new Error(`Failed to initialize WASM modules: ${error}`)
@@ -182,31 +164,37 @@ export class WasmManager {
     })
 
     this.memoizedInitDkls = memoizeAsync(async () => {
-      const wasmPath = this.config?.wasmPaths?.dkls
+      const wasmLoader = this.config?.wasmPaths?.dkls
 
-      if (typeof wasmPath === 'function') {
-        const arrayBuffer = await wasmPath()
-        await initializeDkls(arrayBuffer)
-      } else if (wasmPath instanceof ArrayBuffer) {
-        await initializeDkls(wasmPath)
-      } else {
-        await initializeDkls()
+      if (!wasmLoader) {
+        throw new Error(
+          'DKLS WASM loader not configured. ' +
+            'This should be configured automatically by platform bundles. ' +
+            'Ensure you are importing from the correct platform entry point.'
+        )
       }
+
+      const arrayBuffer = await wasmLoader()
+      const { default: initializeDkls } = await import('../../../lib/dkls/vs_wasm.js')
+      await initializeDkls(arrayBuffer)
 
       this.dklsInitialized = true
     })
 
     this.memoizedInitSchnorr = memoizeAsync(async () => {
-      const wasmPath = this.config?.wasmPaths?.schnorr
+      const wasmLoader = this.config?.wasmPaths?.schnorr
 
-      if (typeof wasmPath === 'function') {
-        const arrayBuffer = await wasmPath()
-        await initializeSchnorr(arrayBuffer)
-      } else if (wasmPath instanceof ArrayBuffer) {
-        await initializeSchnorr(wasmPath)
-      } else {
-        await initializeSchnorr()
+      if (!wasmLoader) {
+        throw new Error(
+          'Schnorr WASM loader not configured. ' +
+            'This should be configured automatically by platform bundles. ' +
+            'Ensure you are importing from the correct platform entry point.'
+        )
       }
+
+      const arrayBuffer = await wasmLoader()
+      const { default: initializeSchnorr } = await import('../../../lib/schnorr/vs_schnorr_wasm.js')
+      await initializeSchnorr(arrayBuffer)
 
       this.schnorrInitialized = true
     })

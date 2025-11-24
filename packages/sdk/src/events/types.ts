@@ -8,12 +8,6 @@ import type { VaultBase } from '../vault/VaultBase'
  * Consumers can listen to these for reactive updates.
  */
 export type SdkEvents = {
-  /** Emitted when SDK successfully connects */
-  connect: Record<string, never>
-
-  /** Emitted when SDK disconnects */
-  disconnect: Record<string, never>
-
   /** Emitted when active vault changes */
   vaultChanged: {
     vaultId: string

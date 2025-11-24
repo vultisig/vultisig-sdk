@@ -1,18 +1,23 @@
 /**
  * React Native crypto implementation
- * Requires expo-crypto or react-native-crypto
+ * Requires crypto polyfills (expo-crypto or react-native-get-random-values)
  */
-import type { PlatformCrypto } from '../../shared/platform-types'
+
+import type { PlatformCrypto } from '../types'
 
 export class ReactNativeCrypto implements PlatformCrypto {
-  async initialize(): Promise<void> {
-    // React Native crypto setup
-    // Users should install expo-crypto or react-native-crypto
-    // and set up polyfills as needed
+  randomUUID(): string {
+    return globalThis.crypto.randomUUID()
+  }
 
-    // Check if crypto is available
-    if (typeof crypto === 'undefined') {
-      console.warn('Crypto API not available. Please install expo-crypto or react-native-crypto')
+  validateCrypto(): void {
+    if (!globalThis.crypto || typeof globalThis.crypto.randomUUID !== 'function') {
+      throw new Error(
+        'Crypto API not available in React Native. ' +
+          'Please install and import crypto polyfills before using the SDK:\n' +
+          '  - expo-crypto, OR\n' +
+          '  - react-native-get-random-values + uuid polyfill'
+      )
     }
   }
 }

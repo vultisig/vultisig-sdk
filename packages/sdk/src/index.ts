@@ -48,12 +48,9 @@ export {
 // NOTE: Cryptographic utilities are internal-only
 // Users don't need direct access to crypto primitives
 
-// WASM Management (now static - no instance needed)
-export type { WasmConfig } from './wasm'
-export { WasmManager } from './wasm'
-
-// Crypto initialization
-export { initializeCrypto } from './crypto'
+// NOTE: WasmManager is internal-only
+// Platform bundles automatically configure WASM at module load time
+// Users don't need direct access to WASM management
 
 // ============================================================================
 // PUBLIC API - Server Management

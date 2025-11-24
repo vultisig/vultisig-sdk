@@ -2,7 +2,7 @@
  * Browser WASM loader implementation
  * Uses fetch to load WASM files
  */
-import type { PlatformWasmLoader } from '../../shared/platform-types'
+import type { PlatformWasmLoader } from '../types'
 
 export class BrowserWasmLoader implements PlatformWasmLoader {
   async loadDkls(): Promise<ArrayBuffer> {

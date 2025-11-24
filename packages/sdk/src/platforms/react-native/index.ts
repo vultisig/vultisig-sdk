@@ -25,6 +25,10 @@ import { ReactNativeStorage } from './storage'
 import { ReactNativeWasmLoader } from './wasm'
 GlobalStorage.configure(new ReactNativeStorage())
 
+// Configure global crypto to use React Native implementation
+import { configureCrypto } from '../../crypto'
+configureCrypto(new ReactNativeCrypto())
+
 // Configure WASM to use React Native loader
 import { WasmManager } from '../../wasm'
 const wasmLoader = new ReactNativeWasmLoader()

@@ -92,13 +92,28 @@ const wrappedFetch = async function (input: RequestInfo | URL, init?: RequestIni
 globalThis.fetch = wrappedFetch as any
 
 /**
- * Configure GlobalStorage for e2e tests
+ * Configure GlobalStorage, GlobalCrypto, and WasmManager for e2e tests
  * Uses MemoryStorage so tests don't persist data to filesystem
+ * Uses Node.js WASM loader for test environment
  */
+import { configureCrypto } from '../../src/crypto'
+import { NodeCrypto } from '../../src/platforms/node/crypto'
+import { NodeWasmLoader } from '../../src/platforms/node/wasm'
 import { GlobalStorage } from '../../src/storage/GlobalStorage'
 import { MemoryStorage } from '../../src/storage/MemoryStorage'
+import { WasmManager } from '../../src/wasm'
 
 GlobalStorage.configure(new MemoryStorage())
+configureCrypto(new NodeCrypto())
+
+// Configure WASM to use Node.js loader
+const wasmLoader = new NodeWasmLoader()
+WasmManager.configure({
+  wasmPaths: {
+    dkls: () => wasmLoader.loadDkls(),
+    schnorr: () => wasmLoader.loadSchnorr(),
+  },
+})
 
 console.log('✅ E2E test setup loaded')
 console.log('🌐 Real network calls ENABLED (no API mocks)')

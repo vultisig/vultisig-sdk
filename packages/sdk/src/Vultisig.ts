@@ -4,7 +4,6 @@ import { Chain } from '@core/chain/Chain'
 import { AddressBookManager } from './AddressBookManager'
 import { GlobalConfig } from './config/GlobalConfig'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
-import { initializeCrypto } from './crypto'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import { GlobalServerManager } from './server/GlobalServerManager'
@@ -77,10 +76,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       onPasswordRequired: config?.onPasswordRequired,
     })
 
-    // Configure WASM if config provided
-    if (config?.wasmConfig) {
-      WasmManager.configure(config.wasmConfig)
-    }
+    // Note: WASM is configured automatically by platform bundles at module load time
+    // Users should not configure WASM directly
 
     // Initialize chain and currency configuration
     this._defaultChains = config?.defaultChains ?? DEFAULT_CHAINS
@@ -156,7 +153,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     this.initializationPromise = (async () => {
       try {
         // Initialize platform-specific items
-        await initializeCrypto()
         await WasmManager.initialize()
 
         // Load configuration from storage

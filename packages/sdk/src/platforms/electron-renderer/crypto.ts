@@ -1,5 +1,6 @@
 /**
  * Electron Renderer process crypto implementation
- * Uses Web Crypto API (same as browser)
+ * Re-exports Browser crypto (same environment)
  */
+
 export { BrowserCrypto as ElectronRendererCrypto } from '../browser/crypto'

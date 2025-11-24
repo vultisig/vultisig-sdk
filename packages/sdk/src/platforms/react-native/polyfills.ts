@@ -2,7 +2,7 @@
  * React Native polyfills implementation
  * Polyfills for Node.js and Web APIs
  */
-import type { PlatformPolyfills } from '../../shared/platform-types'
+import type { PlatformPolyfills } from '../types'
 
 export class ReactNativePolyfills implements PlatformPolyfills {
   async initialize(): Promise<void> {

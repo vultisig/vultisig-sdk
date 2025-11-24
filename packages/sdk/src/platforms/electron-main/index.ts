@@ -19,6 +19,10 @@ import { ElectronMainStorage } from './storage'
 import { ElectronMainWasmLoader } from './wasm'
 GlobalStorage.configure(new ElectronMainStorage())
 
+// Configure global crypto to use Electron Main implementation
+import { configureCrypto } from '../../crypto'
+configureCrypto(new ElectronMainCrypto())
+
 // Configure WASM to use Electron Main loader
 import { WasmManager } from '../../wasm'
 const wasmLoader = new ElectronMainWasmLoader()

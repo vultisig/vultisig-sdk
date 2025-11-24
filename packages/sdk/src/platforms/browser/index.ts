@@ -19,6 +19,10 @@ import { BrowserStorage } from './storage'
 import { BrowserWasmLoader } from './wasm'
 GlobalStorage.configure(new BrowserStorage())
 
+// Configure global crypto to use Browser implementation
+import { configureCrypto } from '../../crypto'
+configureCrypto(new BrowserCrypto())
+
 // Configure WASM to use Browser loader
 import { WasmManager } from '../../wasm'
 const wasmLoader = new BrowserWasmLoader()

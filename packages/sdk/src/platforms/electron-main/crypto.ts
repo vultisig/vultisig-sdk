@@ -1,11 +1,6 @@
 /**
  * Electron Main process crypto implementation
- * Uses native Node.js crypto (same as Node platform)
+ * Re-exports Node.js crypto (same environment)
  */
-import type { PlatformCrypto } from '../../shared/platform-types'
 
-export class ElectronMainCrypto implements PlatformCrypto {
-  async initialize(): Promise<void> {
-    // Electron main process has native Node.js crypto
-  }
-}
+export { NodeCrypto as ElectronMainCrypto } from '../node/crypto'

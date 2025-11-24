@@ -13,11 +13,15 @@
 // Platform-specific implementations (re-exported from browser)
 // Configure global storage to use Electron Renderer implementation
 import { GlobalStorage } from '../../storage/GlobalStorage'
-import { BrowserCrypto as ElectronRendererCrypto } from '../browser/crypto'
 import { BrowserPolyfills as ElectronRendererPolyfills } from '../browser/polyfills'
 import { BrowserStorage as ElectronRendererStorage } from '../browser/storage'
 import { BrowserWasmLoader as ElectronRendererWasmLoader } from '../browser/wasm'
+import { ElectronRendererCrypto } from './crypto'
 GlobalStorage.configure(new ElectronRendererStorage())
+
+// Configure global crypto to use Electron Renderer implementation
+import { configureCrypto } from '../../crypto'
+configureCrypto(new ElectronRendererCrypto())
 
 // Configure WASM to use Electron Renderer loader
 import { WasmManager } from '../../wasm'

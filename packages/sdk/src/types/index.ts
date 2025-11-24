@@ -162,14 +162,6 @@ export type SDKConfig = {
     fastVault?: string
     messageRelay?: string
   }
-  wasmConfig?: {
-    autoInit?: boolean
-    wasmPaths?: {
-      walletCore?: string
-      dkls?: string
-      schnorr?: string
-    }
-  }
 }
 
 import type { Chain } from '@core/chain/Chain'

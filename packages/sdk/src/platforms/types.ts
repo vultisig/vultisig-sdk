@@ -2,8 +2,6 @@
  * Platform-specific interfaces that each platform implementation must provide
  */
 
-import type { Storage } from '../storage/types'
-
 /**
  * WASM loader interface for platform-specific WASM loading
  */
@@ -29,9 +27,15 @@ export type PlatformWasmLoader = {
  */
 export type PlatformCrypto = {
   /**
-   * Initialize crypto subsystem if needed
+   * Generate a random UUID (v4)
    */
-  initialize(): Promise<void>
+  randomUUID(): string
+
+  /**
+   * Validate that crypto APIs are available (optional)
+   * Only needed for React Native to check polyfills
+   */
+  validateCrypto?(): void
 }
 
 /**
@@ -42,14 +46,4 @@ export type PlatformPolyfills = {
    * Initialize platform-specific polyfills
    */
   initialize(): Promise<void>
-}
-
-/**
- * Platform configuration that wires up all platform-specific implementations
- */
-export type PlatformConfig = {
-  storage: Storage
-  wasmLoader: PlatformWasmLoader
-  crypto: PlatformCrypto
-  polyfills: PlatformPolyfills
 }
