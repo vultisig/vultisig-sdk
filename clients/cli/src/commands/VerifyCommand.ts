@@ -1,12 +1,7 @@
 export class VerifyCommand {
-  readonly description =
-    'Verify fast vault with email code or check vault existence'
+  readonly description = 'Verify fast vault with email code or check vault existence'
 
-  async run(options: {
-    vaultId?: string
-    email?: string
-    password?: string
-  }): Promise<void> {
+  async run(options: { vaultId?: string; email?: string; password?: string }): Promise<void> {
     const Vultisig = globalThis.Vultisig
     if (!Vultisig) {
       console.error('❌ SDK not available')
@@ -41,11 +36,7 @@ export class VerifyCommand {
     }
   }
 
-  private async verifyEmailCode(
-    sdk: any,
-    vaultId: string,
-    code: string
-  ): Promise<void> {
+  private async verifyEmailCode(sdk: any, vaultId: string, code: string): Promise<void> {
     console.log('🔄 Verifying email code...')
     console.log(`   Vault ID: ${vaultId}`)
     console.log(`   Code: ${code}`)
@@ -60,19 +51,13 @@ export class VerifyCommand {
         console.log('💡 Next steps:')
         console.log('   - You can now use this vault for signing transactions')
         console.log('   - The vault is backed up on VultiServer')
-        console.log(
-          '   - Keep your password safe - you need it to retrieve the vault'
-        )
+        console.log('   - Keep your password safe - you need it to retrieve the vault')
       } else {
         console.error('❌ Verification failed - invalid code')
         console.error('')
         console.error('💡 Troubleshooting:')
-        console.error(
-          '   - Check that you entered the correct verification code'
-        )
-        console.error(
-          "   - Make sure you're using the latest code from your email"
-        )
+        console.error('   - Check that you entered the correct verification code')
+        console.error("   - Make sure you're using the latest code from your email")
         console.error('   - Codes may expire after some time')
       }
     } catch (error) {
@@ -85,11 +70,7 @@ export class VerifyCommand {
     }
   }
 
-  private async checkVaultExists(
-    sdk: any,
-    vaultId: string,
-    password: string
-  ): Promise<void> {
+  private async checkVaultExists(sdk: any, vaultId: string, password: string): Promise<void> {
     console.log('🔄 Checking vault existence on server...')
 
     try {

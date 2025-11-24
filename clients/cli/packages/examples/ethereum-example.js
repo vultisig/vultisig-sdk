@@ -9,8 +9,7 @@ async function testEthereumSigner() {
 
   try {
     // Create provider (using Sepolia testnet)
-    const infuraUrl =
-      process.env.INFURA_URL || 'https://sepolia.infura.io/v3/YOUR_INFURA_KEY'
+    const infuraUrl = process.env.INFURA_URL || 'https://sepolia.infura.io/v3/YOUR_INFURA_KEY'
     const provider = new JsonRpcProvider(infuraUrl)
 
     // Create signer
@@ -33,9 +32,7 @@ async function testEthereumSigner() {
       const signedTx = await signer.sign(tx)
       console.log(`✅ Signed transaction: ${signedTx.substring(0, 66)}...`)
     } catch (error) {
-      console.log(
-        `⚠️  Signing failed (expected if daemon not running): ${error.message}`
-      )
+      console.log(`⚠️  Signing failed (expected if daemon not running): ${error.message}`)
     }
 
     // Test typed data signing
@@ -59,9 +56,7 @@ async function testEthereumSigner() {
       const signature = await signer.signTypedData(domain, types, value)
       console.log(`✅ Signed typed data: ${signature.substring(0, 66)}...`)
     } catch (error) {
-      console.log(
-        `⚠️  Typed data signing failed (expected if daemon not running): ${error.message}`
-      )
+      console.log(`⚠️  Typed data signing failed (expected if daemon not running): ${error.message}`)
     }
 
     console.log('🎉 Ethereum signer test completed!')

@@ -79,10 +79,7 @@ export default [
       'jsx-a11y/no-autofocus': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-empty-object-type': [
-        'off',
-        { allowEmptyObject: true },
-      ],
+      '@typescript-eslint/no-empty-object-type': ['off', { allowEmptyObject: true }],
 
       'unused-imports/no-unused-imports': 'error',
 

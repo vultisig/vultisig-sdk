@@ -14,15 +14,13 @@
 // ============================================
 export { BrowserStorage } from './storage/BrowserStorage'
 export { ChromeStorage } from './storage/ChromeStorage'
+export { GlobalStorage } from './storage/GlobalStorage'
 export { MemoryStorage } from './storage/MemoryStorage'
 export { NodeStorage } from './storage/NodeStorage'
-export type { StorageOptions } from './storage/StorageManager'
+export type { StorageOptions, StorageProvider } from './storage/registry'
+export { storageRegistry } from './storage/registry'
 export { StorageManager } from './storage/StorageManager'
-export type {
-  StorageMetadata,
-  StoredValue,
-  VaultStorage,
-} from './storage/types'
+export type { Storage, StorageMetadata, StoredValue } from './storage/types'
 export { StorageError, StorageErrorCode } from './storage/types'
 
 // ============================================
@@ -44,6 +42,13 @@ export {
 } from './environment'
 
 // ============================================
-// Environment-Specific Utilities
+// Polyfill Management
 // ============================================
-export * from './utils'
+export type { PolyfillProvider } from './polyfills'
+export { PolyfillManager, polyfillRegistry } from './polyfills'
+
+// ============================================
+// WASM Management
+// ============================================
+export type { WasmConfig, WasmLoader } from './wasm'
+export { wasmLoaderRegistry, WasmManager } from './wasm'

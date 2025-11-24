@@ -32,9 +32,8 @@ export default defineConfig({
       },
     },
 
-    // Setup files - MUST use E2E-specific WASM loader (no API mocks!)
+    // Setup files
     setupFiles: [
-      resolve(__dirname, './vitest.setup.ts'), // E2E WASM loader (NO getCoinBalance mock)
       resolve(__dirname, './setup.ts'), // E2E-specific setup
       resolve(__dirname, '../setup.ts'), // Test utilities
     ],

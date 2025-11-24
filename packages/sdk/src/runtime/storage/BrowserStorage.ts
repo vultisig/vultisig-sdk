@@ -1,11 +1,4 @@
-import {
-  STORAGE_VERSION,
-  StorageError,
-  StorageErrorCode,
-  StorageMetadata,
-  StoredValue,
-  VaultStorage,
-} from './types'
+import { Storage, STORAGE_VERSION, StorageError, StorageErrorCode, StorageMetadata, StoredValue } from './types'
 
 /**
  * Storage mode for browser storage
@@ -32,7 +25,7 @@ type StorageMode = 'indexeddb' | 'localstorage' | 'memory'
  *   and store encrypted vault data
  * - Subject to XSS attacks - ensure proper CSP headers
  */
-export class BrowserStorage implements VaultStorage {
+export class BrowserStorage implements Storage {
   private db?: IDBDatabase
   private mode: StorageMode = 'memory'
   private memoryStore = new Map<string, StoredValue>()
@@ -42,9 +35,7 @@ export class BrowserStorage implements VaultStorage {
 
   constructor() {
     // Initialize on construction (async init handled in methods)
-    this.initializeAsync().catch(err =>
-      console.warn('BrowserStorage initialization warning:', err)
-    )
+    this.initializeAsync().catch(err => console.warn('BrowserStorage initialization warning:', err))
   }
 
   /**
@@ -78,10 +69,7 @@ export class BrowserStorage implements VaultStorage {
    */
   private async tryIndexedDB(): Promise<void> {
     if (typeof indexedDB === 'undefined') {
-      throw new StorageError(
-        StorageErrorCode.StorageUnavailable,
-        'IndexedDB not available'
-      )
+      throw new StorageError(StorageErrorCode.StorageUnavailable, 'IndexedDB not available')
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -110,10 +98,7 @@ export class BrowserStorage implements VaultStorage {
    */
   private tryLocalStorage(): void {
     if (typeof localStorage === 'undefined') {
-      throw new StorageError(
-        StorageErrorCode.StorageUnavailable,
-        'localStorage not available'
-      )
+      throw new StorageError(StorageErrorCode.StorageUnavailable, 'localStorage not available')
     }
 
     // Test if localStorage is writable (private browsing might block)
@@ -122,11 +107,7 @@ export class BrowserStorage implements VaultStorage {
       localStorage.setItem(testKey, 'test')
       localStorage.removeItem(testKey)
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.PermissionDenied,
-        'localStorage not writable',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.PermissionDenied, 'localStorage not writable', error as Error)
     }
   }
 
@@ -142,11 +123,7 @@ export class BrowserStorage implements VaultStorage {
         return this.getFromMemory<T>(key)
       }
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to get value for key "${key}"`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to get value for key "${key}"`, error as Error)
     }
   }
 
@@ -174,11 +151,7 @@ export class BrowserStorage implements VaultStorage {
       if ((error as Error).name === 'QuotaExceededError') {
         await this.handleQuotaExceeded(key, stored)
       } else {
-        throw new StorageError(
-          StorageErrorCode.Unknown,
-          `Failed to set value for key "${key}"`,
-          error as Error
-        )
+        throw new StorageError(StorageErrorCode.Unknown, `Failed to set value for key "${key}"`, error as Error)
       }
     }
   }
@@ -195,11 +168,7 @@ export class BrowserStorage implements VaultStorage {
         this.memoryStore.delete(key)
       }
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to remove key "${key}"`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
     }
   }
 
@@ -215,11 +184,7 @@ export class BrowserStorage implements VaultStorage {
         return Array.from(this.memoryStore.keys())
       }
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        'Failed to list keys',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, 'Failed to list keys', error as Error)
     }
   }
 
@@ -237,20 +202,12 @@ export class BrowserStorage implements VaultStorage {
         this.memoryStore.clear()
       }
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        'Failed to clear storage',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }
   }
 
   async getUsage(): Promise<number> {
-    if (
-      this.mode === 'indexeddb' &&
-      typeof navigator !== 'undefined' &&
-      navigator.storage
-    ) {
+    if (this.mode === 'indexeddb' && typeof navigator !== 'undefined' && navigator.storage) {
       try {
         const estimate = await navigator.storage.estimate()
         return estimate.usage || 0
@@ -271,11 +228,7 @@ export class BrowserStorage implements VaultStorage {
   }
 
   async getQuota(): Promise<number | undefined> {
-    if (
-      this.mode === 'indexeddb' &&
-      typeof navigator !== 'undefined' &&
-      navigator.storage
-    ) {
+    if (this.mode === 'indexeddb' && typeof navigator !== 'undefined' && navigator.storage) {
       try {
         const estimate = await navigator.storage.estimate()
         return estimate.quota
@@ -309,10 +262,7 @@ export class BrowserStorage implements VaultStorage {
     })
   }
 
-  private async setToIndexedDB<T>(
-    key: string,
-    value: StoredValue<T>
-  ): Promise<void> {
+  private async setToIndexedDB<T>(key: string, value: StoredValue<T>): Promise<void> {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(this.storeName, 'readwrite')
       const store = transaction.objectStore(this.storeName)
@@ -396,10 +346,7 @@ export class BrowserStorage implements VaultStorage {
 
   // ===== Fallback Handling =====
 
-  private async handleQuotaExceeded<T>(
-    key: string,
-    value: StoredValue<T>
-  ): Promise<void> {
+  private async handleQuotaExceeded<T>(key: string, value: StoredValue<T>): Promise<void> {
     if (this.mode === 'indexeddb') {
       // Try falling back to localStorage
       try {
@@ -421,9 +368,19 @@ export class BrowserStorage implements VaultStorage {
     }
 
     // Already in memory mode
-    throw new StorageError(
-      StorageErrorCode.QuotaExceeded,
-      'Storage quota exceeded in all storage modes'
-    )
+    throw new StorageError(StorageErrorCode.QuotaExceeded, 'Storage quota exceeded in all storage modes')
   }
 }
+
+// Self-register at module load
+import { storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'browser',
+  priority: 100,
+  isSupported: () => {
+    // Support both IndexedDB and localStorage
+    return typeof indexedDB !== 'undefined' || typeof localStorage !== 'undefined'
+  },
+  create: () => new BrowserStorage(),
+})

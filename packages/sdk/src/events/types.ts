@@ -1,15 +1,7 @@
 import type { Chain } from '@core/chain/Chain'
 
-import type {
-  Balance,
-  Signature,
-  SigningPayload,
-  SigningStep,
-  Token,
-  Value,
-  VaultCreationStep,
-} from '../types'
-import type { Vault } from '../vault/Vault'
+import type { Balance, Signature, SigningPayload, SigningStep, Token, Value, VaultCreationStep } from '../types'
+import type { VaultBase } from '../vault/VaultBase'
 
 /**
  * Events emitted by the Vultisig SDK for state changes.
@@ -22,31 +14,23 @@ export type SdkEvents = {
   /** Emitted when SDK disconnects */
   disconnect: Record<string, never>
 
-  /** Emitted when active chain changes */
-  chainChanged: {
-    chain: Chain
-  }
-
   /** Emitted when active vault changes */
   vaultChanged: {
     vaultId: string
   }
-
-  /** Emitted when all SDK data is cleared from storage */
-  dataCleared: Record<string, never>
 
   /** Emitted on SDK-level errors */
   error: Error
 
   /** Emitted during vault creation with progress updates */
   vaultCreationProgress: {
-    vault?: Vault // undefined until vault object created, then populated
+    vault?: VaultBase // undefined until vault object created, then populated
     step: VaultCreationStep
   }
 
   /** Emitted when vault creation completes successfully */
   vaultCreationComplete: {
-    vault: Vault
+    vault: VaultBase
   }
 }
 
@@ -123,4 +107,27 @@ export type VaultEvents = {
     /** The original keysign payload used to create the transaction */
     keysignPayload: any
   }
+
+  /** Emitted when vault is saved to storage */
+  saved: {
+    vaultId: string
+  }
+
+  /** Emitted when vault is deleted from storage */
+  deleted: {
+    vaultId: string
+  }
+
+  /** Emitted when vault is loaded from storage */
+  loaded: {
+    vaultId: string
+  }
+
+  /** Emitted when vault is unlocked (keyshares loaded) */
+  unlocked: {
+    vaultId: string
+  }
+
+  /** Emitted when vault is locked (keyshares cleared) */
+  locked: Record<string, never>
 }

@@ -14,11 +14,7 @@ type VaultCreatorProps = {
   onInitialize: () => Promise<void>
 }
 
-const VaultCreator: React.FC<VaultCreatorProps> = ({
-  sdk,
-  onVaultCreated,
-  onInitialize,
-}) => {
+const VaultCreator: React.FC<VaultCreatorProps> = ({ sdk, onVaultCreated, onInitialize }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -92,9 +88,7 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
       setVaultId(result.vaultId)
 
       if (result.verificationRequired) {
-        console.log(
-          'Email verification required - switching to verification step'
-        )
+        console.log('Email verification required - switching to verification step')
         setStep('verifying')
       } else {
         console.log('Vault created successfully without verification needed')
@@ -144,9 +138,7 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
       console.log('✅ Email verification response:', verified)
 
       if (!verified) {
-        setError(
-          'Wrong verification code. Please check your email and try again.'
-        )
+        setError('Wrong verification code. Please check your email and try again.')
         return
       }
 
@@ -157,9 +149,7 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
       console.log('🎉 Vault retrieved successfully!', {
         name: vaultData?.name || 'Unknown',
         libType: vaultData?.libType || 'Unknown',
-        hasPublicKeys: !!(
-          vaultData?.publicKeys?.ecdsa && vaultData?.publicKeys?.eddsa
-        ),
+        hasPublicKeys: !!(vaultData?.publicKeys?.ecdsa && vaultData?.publicKeys?.eddsa),
         signers: vaultData?.signers?.length || 0,
       })
 
@@ -167,13 +157,8 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
     } catch (err) {
       console.error('❌ Verification failed:', err)
       const errorMessage = (err as Error).message
-      if (
-        errorMessage.includes('400') ||
-        errorMessage.includes('Bad Request')
-      ) {
-        setError(
-          'Wrong verification code. Please check your email and try again.'
-        )
+      if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
+        setError('Wrong verification code. Please check your email and try again.')
       } else if (errorMessage.includes('404')) {
         setError('Vault not found. Please try creating the vault again.')
       } else {
@@ -224,12 +209,8 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
             margin: '0 auto 20px',
           }}
         />
-        <h3 style={{ color: '#333', marginBottom: '10px' }}>
-          Creating Fast Vault with Server...
-        </h3>
-        <p style={{ color: '#666', margin: '0' }}>
-          Server is generating your MPC keyshares
-        </p>
+        <h3 style={{ color: '#333', marginBottom: '10px' }}>Creating Fast Vault with Server...</h3>
+        <p style={{ color: '#666', margin: '0' }}>Server is generating your MPC keyshares</p>
         <style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -251,17 +232,10 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
           border: '1px solid #e9ecef',
         }}
       >
-        <h3 style={{ color: '#333', marginBottom: '10px' }}>
-          Email Verification Required
-        </h3>
-        <p style={{ color: '#666', marginBottom: '20px' }}>
-          Please check your email for a 4-digit verification code.
-        </p>
+        <h3 style={{ color: '#333', marginBottom: '10px' }}>Email Verification Required</h3>
+        <p style={{ color: '#666', marginBottom: '20px' }}>Please check your email for a 4-digit verification code.</p>
 
-        <form
-          onSubmit={handleVerification}
-          style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}
-        >
+        <form onSubmit={handleVerification} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <input
             type="text"
             placeholder="Enter 4-digit verification code"
@@ -345,24 +319,15 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
         boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
       }}
     >
-      <h2 style={{ color: '#333', marginBottom: '10px' }}>
-        Create Fast Vault (Server-Assisted)
-      </h2>
-      <p style={{ color: '#666', marginBottom: '25px' }}>
-        Server will generate MPC keyshares for you
-      </p>
+      <h2 style={{ color: '#333', marginBottom: '10px' }}>Create Fast Vault (Server-Assisted)</h2>
+      <p style={{ color: '#666', marginBottom: '25px' }}>Server will generate MPC keyshares for you</p>
 
-      <form
-        onSubmit={handleFormSubmit}
-        style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}
-      >
+      <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <input
           type="text"
           placeholder="Vault Name"
           value={formData.name}
-          onChange={e =>
-            setFormData(prev => ({ ...prev, name: e.target.value }))
-          }
+          onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
           style={{
             padding: '12px',
             border: '1px solid #ccc',
@@ -376,14 +341,11 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
           type="email"
           placeholder="Email Address"
           value={formData.email}
-          onChange={e =>
-            setFormData(prev => ({ ...prev, email: e.target.value }))
-          }
+          onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
           style={{
             padding: '12px',
             border:
-              formData.email &&
-              Vultisig.validateEmail(formData.email).valid === false
+              formData.email && Vultisig.validateEmail(formData.email).valid === false
                 ? '1px solid #dc3545'
                 : '1px solid #ccc',
             borderRadius: '6px',
@@ -392,32 +354,26 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
           required
         />
 
-        {formData.email &&
-          Vultisig.validateEmail(formData.email).valid === false && (
-            <div
-              style={{
-                color: '#dc3545',
-                fontSize: '12px',
-                marginTop: '-10px',
-              }}
-            >
-              Please enter a valid email address
-            </div>
-          )}
+        {formData.email && Vultisig.validateEmail(formData.email).valid === false && (
+          <div
+            style={{
+              color: '#dc3545',
+              fontSize: '12px',
+              marginTop: '-10px',
+            }}
+          >
+            Please enter a valid email address
+          </div>
+        )}
 
         <input
           type="password"
           placeholder="Password (minimum 8 characters)"
           value={formData.password}
-          onChange={e =>
-            setFormData(prev => ({ ...prev, password: e.target.value }))
-          }
+          onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
           style={{
             padding: '12px',
-            border:
-              formData.password && formData.password.length < 8
-                ? '1px solid #dc3545'
-                : '1px solid #ccc',
+            border: formData.password && formData.password.length < 8 ? '1px solid #dc3545' : '1px solid #ccc',
             borderRadius: '6px',
             fontSize: '14px',
           }}
@@ -450,8 +406,7 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
           style={{
             padding: '12px',
             border:
-              formData.confirmPassword &&
-              formData.password !== formData.confirmPassword
+              formData.confirmPassword && formData.password !== formData.confirmPassword
                 ? '1px solid #dc3545'
                 : '1px solid #ccc',
             borderRadius: '6px',
@@ -460,18 +415,17 @@ const VaultCreator: React.FC<VaultCreatorProps> = ({
           required
         />
 
-        {formData.confirmPassword &&
-          formData.password !== formData.confirmPassword && (
-            <div
-              style={{
-                color: '#dc3545',
-                fontSize: '12px',
-                marginTop: '-10px',
-              }}
-            >
-              Passwords do not match
-            </div>
-          )}
+        {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+          <div
+            style={{
+              color: '#dc3545',
+              fontSize: '12px',
+              marginTop: '-10px',
+            }}
+          >
+            Passwords do not match
+          </div>
+        )}
 
         <button
           type="submit"

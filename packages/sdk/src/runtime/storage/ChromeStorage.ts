@@ -26,17 +26,13 @@
  * ```
  */
 
-import type { StoredValue, VaultStorage } from './types'
+import type { Storage, StoredValue } from './types'
 import { StorageError, StorageErrorCode } from './types'
 
-export class ChromeStorage implements VaultStorage {
+export class ChromeStorage implements Storage {
   constructor() {
     // Verify chrome.storage API is available
-    if (
-      typeof chrome === 'undefined' ||
-      !chrome.storage ||
-      !chrome.storage.local
-    ) {
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
       throw new StorageError(
         StorageErrorCode.StorageUnavailable,
         'Chrome storage API not available. This storage can only be used in Chrome extensions.'
@@ -64,11 +60,7 @@ export class ChromeStorage implements VaultStorage {
       // Handle direct value (backwards compatibility)
       return stored as T
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to get item from Chrome storage: ${key}`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to get item from Chrome storage: ${key}`, error as Error)
     }
   }
 
@@ -90,18 +82,10 @@ export class ChromeStorage implements VaultStorage {
     } catch (error) {
       // Check for quota exceeded
       if (error instanceof Error && error.message.includes('QUOTA_BYTES')) {
-        throw new StorageError(
-          StorageErrorCode.QuotaExceeded,
-          'Chrome extension storage quota exceeded',
-          error
-        )
+        throw new StorageError(StorageErrorCode.QuotaExceeded, 'Chrome extension storage quota exceeded', error)
       }
 
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        `Failed to set item in Chrome storage: ${key}`,
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to set item in Chrome storage: ${key}`, error as Error)
     }
   }
 
@@ -127,11 +111,7 @@ export class ChromeStorage implements VaultStorage {
     try {
       await chrome.storage.local.clear()
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        'Failed to clear Chrome storage',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear Chrome storage', error as Error)
     }
   }
 
@@ -143,11 +123,7 @@ export class ChromeStorage implements VaultStorage {
       const items = await chrome.storage.local.get(null)
       return Object.keys(items)
     } catch (error) {
-      throw new StorageError(
-        StorageErrorCode.Unknown,
-        'Failed to get keys from Chrome storage',
-        error as Error
-      )
+      throw new StorageError(StorageErrorCode.Unknown, 'Failed to get keys from Chrome storage', error as Error)
     }
   }
 
@@ -166,11 +142,7 @@ export class ChromeStorage implements VaultStorage {
         const size = new Blob([JSON.stringify(items)]).size
         return size
       } catch {
-        throw new StorageError(
-          StorageErrorCode.Unknown,
-          'Failed to get Chrome storage usage',
-          error as Error
-        )
+        throw new StorageError(StorageErrorCode.Unknown, 'Failed to get Chrome storage usage', error as Error)
       }
     }
   }
@@ -217,15 +189,8 @@ export class ChromeStorage implements VaultStorage {
    * })
    * ```
    */
-  onChanged(
-    callback: (changes: {
-      [key: string]: { oldValue?: unknown; newValue?: unknown }
-    }) => void
-  ): () => void {
-    const listener = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string
-    ) => {
+  onChanged(callback: (changes: { [key: string]: { oldValue?: unknown; newValue?: unknown } }) => void): () => void {
+    const listener = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'local') {
         callback(changes)
       }
@@ -239,3 +204,15 @@ export class ChromeStorage implements VaultStorage {
     }
   }
 }
+
+// Self-register with higher priority than browser storage
+import { storageRegistry } from './registry'
+
+storageRegistry.register({
+  name: 'chrome',
+  priority: 110, // Preferred over generic browser storage
+  isSupported: () => {
+    return typeof chrome !== 'undefined' && chrome.runtime !== undefined && chrome.runtime.id !== undefined
+  },
+  create: () => new ChromeStorage(),
+})

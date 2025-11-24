@@ -10,23 +10,17 @@ export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
 export type { FiatCurrency } from '@core/config/FiatCurrency'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
-import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
 
+// Import MpcLib for use in VaultData type
+import type { MpcLib } from '@core/mpc/mpcLib'
+export type { MpcLib }
+
 // Import and export Chain types
-import type {
-  CosmosChain,
-  EvmChain,
-  OtherChain,
-  UtxoChain,
-} from '@core/chain/Chain'
+import type { CosmosChain, EvmChain, OtherChain, UtxoChain } from '@core/chain/Chain'
 export type { Chain as ChainType } from '@core/chain/Chain'
 export { Chain } from '@core/chain/Chain'
 
-// SDK-extended vault type that includes calculated threshold
-export type Vault = CoreVault & {
-  threshold?: number
-}
 // VaultFolder and VaultSecurityType not available in copied core - using local types
 export type VaultFolder = 'fast' | 'secure'
 export type VaultSecurityType = 'fast' | 'secure'
@@ -53,18 +47,7 @@ export type VaultDetails = {
   securityType: 'fast' | 'secure'
   threshold: number
   participants: number
-  chains: Array<
-    | 'evm'
-    | 'utxo'
-    | 'cosmos'
-    | 'solana'
-    | 'sui'
-    | 'polkadot'
-    | 'ton'
-    | 'ripple'
-    | 'tron'
-    | 'cardano'
-  >
+  chains: Array<'evm' | 'utxo' | 'cosmos' | 'solana' | 'sui' | 'polkadot' | 'ton' | 'ripple' | 'tron' | 'cardano'>
   createdAt?: number
   isBackedUp: boolean
 }
@@ -191,13 +174,63 @@ export type SDKConfig = {
 
 import type { Chain } from '@core/chain/Chain'
 
-// Extended SDK config with storage and connection options
+// Cache types
+export type { CacheConfig, CacheScope } from '../services/cache-types'
+
+// Extended SDK config with connection options and defaults
 export type VultisigConfig = SDKConfig & {
-  storage?: any // VaultStorage interface (avoiding circular dependency)
+  /**
+   * Storage configuration options
+   * Configures the global storage used by all vaults and managers
+   * @see GlobalStorage.configure()
+   */
+  storage?: import('../runtime/storage/registry').StorageOptions
   autoInit?: boolean
   autoConnect?: boolean
   defaultChains?: Chain[]
   defaultCurrency?: string
+  cacheConfig?: import('../services/cache-types').CacheConfig
+
+  /**
+   * Password cache configuration
+   */
+  passwordCache?: {
+    /**
+     * Time to live for cached passwords in milliseconds
+     * - Set to 0 to disable caching (prompt every time)
+     * - Set to positive number for cache duration
+     * @default 300000 (5 minutes)
+     */
+    defaultTTL?: number
+  }
+
+  /**
+   * Callback function to prompt user for password when required
+   * Called when:
+   * - Operation requires password for encrypted vault
+   * - Password not in cache
+   * - Password not provided as parameter
+   *
+   * @param vaultId - ID of vault requiring password
+   * @param vaultName - Name of vault requiring password
+   * @returns Promise resolving to password string
+   * @throws If user cancels or prompt fails
+   *
+   * @example
+   * // React implementation
+   * onPasswordRequired: async (vaultId, vaultName) => {
+   *   const password = await showPasswordModal(vaultName);
+   *   if (!password) throw new Error('Password required');
+   *   return password;
+   * }
+   *
+   * @example
+   * // CLI implementation
+   * onPasswordRequired: async (vaultId, vaultName) => {
+   *   return await promptForPassword(`Enter password for ${vaultName}: `);
+   * }
+   */
+  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
 }
 
 // Connection options
@@ -267,19 +300,17 @@ export type AddressResult = {
 export type VaultType = 'fast' | 'secure'
 export type KeygenMode = 'fast' | 'relay' | 'local'
 
+/**
+ * @internal
+ * Internal configuration for VaultManager - not part of public API
+ */
 export type VaultManagerConfig = {
-  defaultChains: string[]
+  defaultChains: Chain[]
   defaultCurrency: string
 }
 
 export type VaultCreationStep = {
-  step:
-    | 'initializing'
-    | 'keygen'
-    | 'deriving_addresses'
-    | 'fetching_balances'
-    | 'applying_tokens'
-    | 'complete'
+  step: 'initializing' | 'keygen' | 'deriving_addresses' | 'fetching_balances' | 'applying_tokens' | 'complete'
   progress: number
   message: string
   chainId?: string
@@ -292,36 +323,6 @@ export type SigningStep = {
   mode: SigningMode
   participantCount?: number
   participantsReady?: number
-}
-
-export type VaultSigner = {
-  id: string
-  publicKey: string
-  name?: string
-}
-
-export type Summary = {
-  id: string
-  name: string
-  isEncrypted: boolean
-  createdAt: number
-  lastModified: number
-  size: number
-  type: VaultType
-  currency: string
-  chains: string[]
-  tokens: Record<string, Token[]>
-  threshold: number
-  totalSigners: number
-  vaultIndex: number
-  signers: VaultSigner[]
-  isBackedUp: () => boolean
-  keys: {
-    ecdsa: string
-    eddsa: string
-    hexChainCode: string
-    hexEncryptionKey: string
-  }
 }
 
 export type AddressBookEntry = {
@@ -348,6 +349,91 @@ export type Token = {
   chainId: string
   logoUrl?: string
   isNative?: boolean
+}
+
+/**
+ * VaultData - Clean, focused vault state
+ * Replaces the old VaultData and Summary types
+ *
+ * This is the single source of truth for vault data in the SDK.
+ * It combines immutable vault identity with mutable user preferences.
+ *
+ * ## Structure
+ *
+ * The type is organized into four logical groups:
+ *
+ * 1. **Identity** - Immutable cryptographic identity (readonly)
+ *    - Public keys, signers, chain code
+ *    - Never changes after vault creation
+ *
+ * 2. **Metadata** - Vault metadata (some readonly, some mutable)
+ *    - ID, name, type, backup status
+ *    - Some fields can be changed by user
+ *
+ * 3. **Preferences** - User preferences (all mutable)
+ *    - Currency, chains, tokens
+ *    - Fully customizable by user
+ *
+ * 4. **Vault File** - Raw vault backup (readonly)
+ *    - Base64 encoded .vult file
+ *    - Regenerated on export with current metadata
+ *
+ * ## Readonly Fields
+ *
+ * Fields marked `readonly` represent immutable vault characteristics.
+ * These cannot be changed without creating a new vault.
+ *
+ * ## Storage
+ *
+ * VaultData is stored at: `vault:{id}`
+ * Persistent cache is stored at: `vault:{id}:cache`
+ *
+ * @example
+ * ```typescript
+ * // Access vault data
+ * const vault = await vaultManager.getVaultById(0)
+ * console.log(vault.name)              // Direct getter
+ * console.log(vault.data)              // Full VaultData object
+ * console.log(vault.threshold)         // Computed getter
+ * ```
+ */
+export type VaultData = {
+  // === Identity (immutable, from .vult file) ===
+  // These fields define the cryptographic identity of the vault
+  // and NEVER change after vault creation
+  readonly publicKeys: Readonly<{ ecdsa: string; eddsa: string }>
+  readonly hexChainCode: string
+  readonly signers: readonly string[] // Simple string array, readonly
+  readonly localPartyId: string
+  readonly createdAt: number
+  readonly libType: MpcLib
+  readonly isEncrypted: boolean // Immutable - whether .vult file needs password
+  readonly type: 'fast' | 'secure' // Immutable - computed from signers
+
+  // === Metadata (SDK-managed) ===
+  readonly id: string // Immutable - ECDSA public key (storage key)
+  name: string // Mutable - user can rename vault
+  isBackedUp: boolean // Mutable - user can toggle backup status
+  order: number // Mutable - user can reorder vaults
+  folderId?: string // Mutable - user can move to different folder
+  lastModified: number // Mutable - updated on every change
+
+  // === User Preferences (mutable, SDK-managed) ===
+  currency: string // Mutable - user's preferred fiat currency
+  chains: string[] // Mutable - user's active blockchain chains
+  tokens: Record<string, Token[]> // Mutable - user's custom tokens per chain
+  lastValueUpdate?: number // Mutable - last portfolio value calculation
+
+  // === Raw Vault File (immutable after load) ===
+  readonly vultFileContent: string // Set once at import/creation, regenerated on export
+}
+
+/**
+ * Helper type to make all readonly fields mutable
+ * Used internally when we need to update readonly fields
+ */
+export type Mutable<T> = {
+  -readonly [P in keyof T]: T[P] extends readonly (infer U)[] ? U[] : T[P] extends Readonly<infer O> ? O : T[P]
 }
 
 // Base properties shared by all gas info

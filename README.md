@@ -26,25 +26,25 @@ yarn add vultisig-sdk
 ## Quick Start
 
 ```typescript
-import { Vultisig } from 'vultisig-sdk'
+import { Vultisig } from "vultisig-sdk";
 
 // Initialize SDK
-const sdk = new Vultisig()
-await sdk.initialize()
+const sdk = new Vultisig();
+await sdk.initialize();
 
 // Create a fast vault (server-assisted)
-const vault = await sdk.createVault('My Wallet', {
-  type: 'fast',
-  email: 'user@example.com',
-  password: 'secure-password'
-})
+const vault = await sdk.createVault("My Wallet", {
+  type: "fast",
+  email: "user@example.com",
+  password: "secure-password",
+});
 
 // Derive addresses for different chains
-const btcAddress = await vault.address('Bitcoin')
-const ethAddress = await vault.address('Ethereum')
+const btcAddress = await vault.address("Bitcoin");
+const ethAddress = await vault.address("Ethereum");
 
-console.log('Bitcoin Address:', btcAddress)
-console.log('Ethereum Address:', ethAddress)
+console.log("Bitcoin Address:", btcAddress);
+console.log("Ethereum Address:", ethAddress);
 ```
 
 ## Development
@@ -114,6 +114,7 @@ The `packages/core/` and `packages/lib/` directories contain code synced from th
 - ✅ **Do** sync changes using `yarn sync-and-copy` after upstream updates
 
 All imports use TypeScript path aliases:
+
 - `@core/*` → `packages/core/*`
 - `@lib/*` → `packages/lib/*`
 
@@ -122,18 +123,20 @@ All imports use TypeScript path aliases:
 The SDK uses **workspace bundling** - it includes all necessary code from `core/` and `lib/` packages into a single distributable bundle.
 
 #### Build SDK
+
 ```bash
 # From root directory (after yarn install)
 yarn workspace @vultisig/sdk build
 ```
+
 This creates the distributable SDK package in `src/dist/` with all workspace dependencies bundled.
 
 #### Run Tests
+
 ```bash
 # From root directory
 yarn workspace @vultisig/sdk test
 ```
-
 
 ### Syncing from vultisig-windows
 

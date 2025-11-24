@@ -11,12 +11,13 @@ The `/packages` directory contains TypeScript integration libraries that provide
 ```
 packages/
 ├── vultisig-eth-signer/     # Ethereum signing integration
-├── vultisig-btc-signer/     # Bitcoin signing integration  
+├── vultisig-btc-signer/     # Bitcoin signing integration
 ├── vultisig-sol-signer/     # Solana signing integration
 └── examples/                # Integration examples and patterns
 ```
 
 Each package follows a consistent structure:
+
 - **TypeScript ES modules** with `"type": "module"` in `package.json`
 - **Compiled output** in `dist/` directory
 - **Consistent API patterns** across all blockchain implementations
@@ -36,28 +37,31 @@ Each package follows a consistent structure:
 **Dependencies**: `ethers@^6.13.2`
 
 **Key Features**:
+
 - Extends `ethers.AbstractSigner` for seamless integration
 - Supports EIP-1559 transactions (Type 2)
 - EIP-712 typed data signing
 - Address derivation with checksum validation
 
 **API Methods**:
+
 ```typescript
 class VultisigSigner extends AbstractSigner {
   // Standardized methods
-  async address(): Promise<string>
-  async sign(tx: TransactionRequest): Promise<string>
-  
+  async address(): Promise<string>;
+  async sign(tx: TransactionRequest): Promise<string>;
+
   // Ethers.js compatibility methods (delegate to standardized methods)
-  async getAddress(): Promise<string>
-  async signTransaction(tx: TransactionRequest): Promise<string>
-  
-  async signTypedData(domain, types, value): Promise<string>
+  async getAddress(): Promise<string>;
+  async signTransaction(tx: TransactionRequest): Promise<string>;
+
+  async signTypedData(domain, types, value): Promise<string>;
   // signMessage() - not yet implemented
 }
 ```
 
 **JSON-RPC Calls**:
+
 - `address`: `{scheme: "ecdsa", curve: "secp256k1", network: "eth"}`
 - `sign`: `{scheme: "ecdsa", curve: "secp256k1", network: "eth", messageType: "eth_tx|eth_typed", payload: {...}}`
 
@@ -67,19 +71,24 @@ class VultisigSigner extends AbstractSigner {
 **Dependencies**: `bitcoinjs-lib@^6.1.6`
 
 **Key Features**:
+
 - PSBT-based transaction signing
 - secp256k1 ECDSA signatures
 - Base64 encoded transaction handling
 
 **API Methods**:
+
 ```typescript
 class VultisigSigner {
-  async address(): Promise<string>
-  async sign(psbtBase64: string): Promise<{signedPsbtBase64?: string; finalTxHex?: string}>
+  async address(): Promise<string>;
+  async sign(
+    psbtBase64: string,
+  ): Promise<{ signedPsbtBase64?: string; finalTxHex?: string }>;
 }
 ```
 
 **JSON-RPC Calls**:
+
 - `sign`: `{scheme: "ecdsa", curve: "secp256k1", network: "btc", messageType: "btc_psbt", payload: {psbtBase64}}`
 
 ### 3. vultisig-sol-signer
@@ -88,19 +97,22 @@ class VultisigSigner {
 **Dependencies**: `@solana/web3.js@^1.95.3`
 
 **Key Features**:
+
 - Ed25519 signature scheme
 - Raw transaction byte signing
 - Base64 encoded payload handling
 
 **API Methods**:
+
 ```typescript
 class VultisigSigner {
-  async address(): Promise<string>
-  async sign(bytes: Uint8Array): Promise<string>
+  async address(): Promise<string>;
+  async sign(bytes: Uint8Array): Promise<string>;
 }
 ```
 
 **JSON-RPC Calls**:
+
 - `address`: `{scheme: "eddsa", curve: "ed25519", network: "sol"}`
 - `sign`: `{scheme: "eddsa", curve: "ed25519", network: "sol", messageType: "sol_tx", payload: {bytes: base64}}`
 
@@ -115,22 +127,26 @@ class VultisigSigner {
 ### Request/Response Format
 
 **Request**:
+
 ```json
 {
   "id": 1,
   "method": "address|sign",
   "params": {
     "scheme": "ecdsa|eddsa",
-    "curve": "secp256k1|ed25519", 
+    "curve": "secp256k1|ed25519",
     "network": "eth|btc|sol|...",
     "messageType": "eth_tx|eth_typed|btc_psbt|sol_tx",
-    "payload": { /* network-specific data */ },
+    "payload": {
+      /* network-specific data */
+    },
     "policyContext": {}
   }
 }
 ```
 
 **Response**:
+
 ```json
 {
   "id": 1,
@@ -149,6 +165,7 @@ class VultisigSigner {
 ### Daemon Implementation
 
 The CLI daemon (`vultisig run`) implements:
+
 1. **Unix socket listener** at `/tmp/vultisig.sock`
 2. **JSON-RPC request handler** for vault operations
 3. **MPC coordination** for threshold signatures
@@ -168,7 +185,7 @@ const signer = new VultisigSigner(provider);
 // Use like any ethers signer
 const tx = await signer.sign({
   to: "0x...",
-  value: ethers.parseEther("0.1")
+  value: ethers.parseEther("0.1"),
 });
 ```
 
@@ -208,6 +225,7 @@ const signature = await signer.sign(transactionBytes);
 ### Example Integration
 
 The `packages/examples/` directory demonstrates:
+
 - **Hardhat integration** with custom signer
 - **Transaction examples** for each blockchain
 - **Error handling** patterns
@@ -216,16 +234,19 @@ The `packages/examples/` directory demonstrates:
 ## Security Considerations
 
 ### Socket Security
+
 - Unix socket permissions restrict access to user/group
 - No network exposure of signing operations
 - Process isolation between daemon and clients
 
 ### Cryptographic Security
+
 - MPC 2-of-2 threshold signatures
 - Mobile app co-signing requirement
 - No private key exposure to packages
 
 ### Request Validation
+
 - JSON-RPC parameter validation in daemon
 - Network-specific payload verification
 - Signature scheme enforcement per blockchain
@@ -246,7 +267,7 @@ The `packages/examples/` directory demonstrates:
   "id": 1,
   "error": {
     "message": "Human-readable error description",
-    "code": -32600  // JSON-RPC error codes
+    "code": -32600 // JSON-RPC error codes
   }
 }
 ```
@@ -254,11 +275,13 @@ The `packages/examples/` directory demonstrates:
 ## Future Extensions
 
 ### Additional Blockchains
+
 - Consistent package structure for new chains
 - Standardized signing parameter patterns
 - Unified error handling across packages
 
 ### Enhanced Features
+
 - Batch transaction signing
 - Hardware wallet integration
 - Policy-based signing controls
@@ -267,11 +290,13 @@ The `packages/examples/` directory demonstrates:
 ## Dependencies and Requirements
 
 ### Runtime Requirements
+
 - **Node.js**: ES modules support (Node 14+)
 - **Daemon**: Vultisig CLI running with vault loaded
 - **Socket**: Unix domain socket at `/tmp/vultisig.sock`
 
 ### Build Requirements
+
 - **TypeScript**: ^5.5.4 with strict configuration
 - **Chain Libraries**: ethers, bitcoinjs-lib, @solana/web3.js
 - **Node Types**: @types/node for Unix socket support

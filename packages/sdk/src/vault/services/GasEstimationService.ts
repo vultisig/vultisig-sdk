@@ -8,6 +8,7 @@ import { KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysig
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 import { formatGasInfo } from '../../adapters/formatGasInfo'
+import { WasmManager } from '../../runtime/wasm'
 import type { GasInfo } from '../../types'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
@@ -23,9 +24,7 @@ export class GasEstimationService {
    * Used for gas estimation to avoid errors when user's address doesn't exist on-chain yet
    * Gas prices are global, so any active address works for estimation
    */
-  private static readonly COSMOS_GAS_ESTIMATION_ADDRESSES: Partial<
-    Record<Chain, string>
-  > = {
+  private static readonly COSMOS_GAS_ESTIMATION_ADDRESSES: Partial<Record<Chain, string>> = {
     [Chain.THORChain]: 'thor1dheycdevq39qlkxs2a6wuuzyn4aqxhve4qxtxt',
     [Chain.Cosmos]: 'cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh',
     [Chain.Osmosis]: 'osmo1clpqr4nrk4khgkxj78fcwwh6dl3uw4epasmvnj',
@@ -36,7 +35,6 @@ export class GasEstimationService {
 
   constructor(
     private vaultData: CoreVault,
-    private wasmManager: any,
     private getAddress: (chain: Chain) => Promise<string>
   ) {}
 
@@ -52,20 +50,17 @@ export class GasEstimationService {
 
       // For Cosmos chains, use well-known addresses to avoid account-doesn't-exist errors
       // Gas prices are global, so any active address works for estimation
-      const cosmosAddress =
-        GasEstimationService.COSMOS_GAS_ESTIMATION_ADDRESSES[chain]
+      const cosmosAddress = GasEstimationService.COSMOS_GAS_ESTIMATION_ADDRESSES[chain]
       if (cosmosAddress) {
         address = cosmosAddress
-        console.log(
-          `  📍 Using well-known address for Cosmos gas estimation: ${address}`
-        )
+        console.log(`  📍 Using well-known address for Cosmos gas estimation: ${address}`)
       } else {
         address = await this.getAddress(chain)
         console.log(`  📍 Address: ${address}`)
       }
 
       // Get WalletCore
-      const walletCore = await this.wasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore()
 
       // Get public key
       const publicKey = getPublicKey({

@@ -2,13 +2,13 @@ name: Vultisig build
 
 on:
   push:
-    branches: ['main']
+    branches: ["main"]
   pull_request:
-    branches: ['main']
+    branches: ["main"]
 
 env:
   # Necessary for most environments as build failure can occur due to OOM issues
-  NODE_OPTIONS: '--max-old-space-size=4096'
+  NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
   setup:
@@ -24,7 +24,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '23.7.0'
+          node-version: "23.7.0"
 
       - name: Enable Corepack
         run: corepack enable

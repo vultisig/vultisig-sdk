@@ -34,9 +34,7 @@ export class StatusCommand {
         const sdk = new Vultisig()
         const vaults = await sdk.listVaults()
         if (vaults.length > 0) {
-          console.log(
-            `\n💾 Found ${vaults.length} stored vault(s) available to load`
-          )
+          console.log(`\n💾 Found ${vaults.length} stored vault(s) available to load`)
         }
       } catch {
         // Storage not initialized

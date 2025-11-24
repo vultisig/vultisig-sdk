@@ -1,3 +1,4 @@
+import { Chain } from '@core/chain/Chain'
 /**
  * E2E Tests: Fiat Value Service (Production)
  *
@@ -12,11 +13,10 @@
  * - Vault credentials MUST be loaded from environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
  * - See tests/e2e/SECURITY.md and .env.example for setup instructions
  */
-
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import type { Vault } from '@/index'
+import { VaultBase } from '@/index'
 
 // Well-known token addresses for testing
 const TOKENS = {
@@ -27,7 +27,7 @@ const TOKENS = {
 } as const
 
 describe('E2E: Fiat Value Service (Production)', () => {
-  let vault: Vault
+  let vault: VaultBase
 
   beforeAll(async () => {
     console.log('📦 Loading persistent test vault...')
@@ -48,10 +48,10 @@ describe('E2E: Fiat Value Service (Production)', () => {
       console.log('💰 Fetching Bitcoin price...')
 
       // Get Bitcoin balance first
-      const balance = await vault.balance('Bitcoin')
+      const balance = await vault.balance(Chain.Bitcoin)
 
       // Get fiat value
-      const value = await vault.getValue('Bitcoin')
+      const value = await vault.getValue(Chain.Bitcoin)
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('usd')
@@ -69,8 +69,8 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch Ethereum price in USD', async () => {
       console.log('💰 Fetching Ethereum price...')
 
-      const balance = await vault.balance('Ethereum')
-      const value = await vault.getValue('Ethereum')
+      const balance = await vault.balance(Chain.Ethereum)
+      const value = await vault.getValue(Chain.Ethereum)
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('usd')
@@ -87,8 +87,8 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch Solana price in USD', async () => {
       console.log('💰 Fetching Solana price...')
 
-      const balance = await vault.balance('Solana')
-      const value = await vault.getValue('Solana')
+      const balance = await vault.balance(Chain.Solana)
+      const value = await vault.getValue(Chain.Solana)
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('usd')
@@ -105,8 +105,8 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch Polygon price in USD', async () => {
       console.log('💰 Fetching Polygon price...')
 
-      const balance = await vault.balance('Polygon')
-      const value = await vault.getValue('Polygon')
+      const balance = await vault.balance(Chain.Polygon)
+      const value = await vault.getValue(Chain.Polygon)
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('usd')
@@ -125,8 +125,8 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch USDC price on Ethereum', async () => {
       console.log('💰 Fetching USDC price on Ethereum...')
 
-      const balance = await vault.balance('Ethereum', TOKENS.USDC_ETHEREUM)
-      const value = await vault.getValue('Ethereum', TOKENS.USDC_ETHEREUM)
+      const balance = await vault.balance(Chain.Ethereum, TOKENS.USDC_ETHEREUM)
+      const value = await vault.getValue(Chain.Ethereum, TOKENS.USDC_ETHEREUM)
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('usd')
@@ -143,8 +143,8 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch USDT price on Ethereum', async () => {
       console.log('💰 Fetching USDT price on Ethereum...')
 
-      const balance = await vault.balance('Ethereum', TOKENS.USDT_ETHEREUM)
-      const value = await vault.getValue('Ethereum', TOKENS.USDT_ETHEREUM)
+      const balance = await vault.balance(Chain.Ethereum, TOKENS.USDT_ETHEREUM)
+      const value = await vault.getValue(Chain.Ethereum, TOKENS.USDT_ETHEREUM)
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('usd')
@@ -161,8 +161,8 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch USDC price on Polygon', async () => {
       console.log('💰 Fetching USDC price on Polygon...')
 
-      const balance = await vault.balance('Polygon', TOKENS.USDC_POLYGON)
-      const value = await vault.getValue('Polygon', TOKENS.USDC_POLYGON)
+      const balance = await vault.balance(Chain.Polygon, TOKENS.USDC_POLYGON)
+      const value = await vault.getValue(Chain.Polygon, TOKENS.USDC_POLYGON)
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('usd')
@@ -181,7 +181,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch price in EUR', async () => {
       console.log('💰 Fetching Ethereum price in EUR...')
 
-      const value = await vault.getValue('Ethereum', undefined, 'eur')
+      const value = await vault.getValue(Chain.Ethereum, undefined, 'eur')
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('eur')
@@ -196,7 +196,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch price in GBP', async () => {
       console.log('💰 Fetching Bitcoin price in GBP...')
 
-      const value = await vault.getValue('Bitcoin', undefined, 'gbp')
+      const value = await vault.getValue(Chain.Bitcoin, undefined, 'gbp')
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('gbp')
@@ -211,7 +211,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch price in JPY', async () => {
       console.log('💰 Fetching Solana price in JPY...')
 
-      const value = await vault.getValue('Solana', undefined, 'jpy')
+      const value = await vault.getValue(Chain.Solana, undefined, 'jpy')
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('jpy')
@@ -228,7 +228,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch values for all assets on a chain', async () => {
       console.log('💰 Fetching all Ethereum asset values...')
 
-      const values = await vault.getValues('Ethereum')
+      const values = await vault.getValues(Chain.Ethereum)
 
       expect(values).toBeDefined()
       expect(typeof values).toBe('object')
@@ -247,7 +247,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch values for multiple chains', async () => {
       console.log('💰 Fetching values for multiple chains...')
 
-      const chains = ['Bitcoin', 'Ethereum', 'Solana', 'Polygon']
+      const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.Polygon]
       const results: Record<string, any> = {}
 
       for (const chain of chains) {
@@ -265,9 +265,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
       const successCount = Object.values(results).filter(r => r.success).length
       const successRate = (successCount / chains.length) * 100
 
-      console.log(
-        `📊 Success rate: ${successCount}/${chains.length} (${successRate.toFixed(1)}%)`
-      )
+      console.log(`📊 Success rate: ${successCount}/${chains.length} (${successRate.toFixed(1)}%)`)
 
       // Expect at least 80% success rate
       expect(successRate).toBeGreaterThan(80)
@@ -279,14 +277,14 @@ describe('E2E: Fiat Value Service (Production)', () => {
       console.log('🔍 Testing price caching...')
 
       // First fetch (force fresh by clearing cache)
-      await vault.updateValues('Ethereum')
+      await vault.updateValues(Chain.Ethereum)
       const startTime1 = performance.now()
-      const value1 = await vault.getValue('Ethereum')
+      const value1 = await vault.getValue(Chain.Ethereum)
       const fetchTime1 = performance.now() - startTime1
 
       // Second fetch (cached - should be faster or same speed)
       const startTime2 = performance.now()
-      const value2 = await vault.getValue('Ethereum')
+      const value2 = await vault.getValue(Chain.Ethereum)
       const fetchTime2 = performance.now() - startTime2
 
       // Cached fetch should be faster or equal (allow for timing variance)
@@ -300,9 +298,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
       console.log(`⚡ First fetch: ${fetchTime1.toFixed(2)}ms`)
       console.log(`⚡ Cached fetch: ${fetchTime2.toFixed(2)}ms`)
       if (fetchTime2 > 0) {
-        console.log(
-          `🚀 Speedup: ${(fetchTime1 / Math.max(fetchTime2, 0.1)).toFixed(1)}x`
-        )
+        console.log(`🚀 Speedup: ${(fetchTime1 / Math.max(fetchTime2, 0.1)).toFixed(1)}x`)
       }
     })
 
@@ -310,13 +306,13 @@ describe('E2E: Fiat Value Service (Production)', () => {
       console.log('🔍 Testing cache clearing...')
 
       // Get cached value
-      const value1 = await vault.getValue('Polygon')
+      const value1 = await vault.getValue(Chain.Polygon)
 
       // Clear cache
-      await vault.updateValues('Polygon')
+      await vault.updateValues(Chain.Polygon)
 
       // Get fresh value
-      const value2 = await vault.getValue('Polygon')
+      const value2 = await vault.getValue(Chain.Polygon)
 
       // Both should be valid values
       expect(value1).toBeDefined()
@@ -331,16 +327,16 @@ describe('E2E: Fiat Value Service (Production)', () => {
       console.log('🔍 Testing cache usage across assets...')
 
       // Clear cache first
-      await vault.updateValues('Ethereum')
+      await vault.updateValues(Chain.Ethereum)
 
       // Fetch native token value (triggers price fetch)
       const startTime1 = performance.now()
-      const nativeValue = await vault.getValue('Ethereum')
+      const nativeValue = await vault.getValue(Chain.Ethereum)
       const fetchTime1 = performance.now() - startTime1
 
       // Fetch token value on same chain (should use cached ETH price for gas estimation)
       const startTime2 = performance.now()
-      const tokenValue = await vault.getValue('Ethereum', TOKENS.USDC_ETHEREUM)
+      const tokenValue = await vault.getValue(Chain.Ethereum, TOKENS.USDC_ETHEREUM)
       const fetchTime2 = performance.now() - startTime2
 
       expect(nativeValue).toBeDefined()
@@ -355,7 +351,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should calculate total portfolio value across chains', async () => {
       console.log('💰 Calculating total portfolio value...')
 
-      const chains = ['Bitcoin', 'Ethereum', 'Solana', 'Polygon']
+      const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.Polygon]
       let totalValue = 0
       const chainValues: Record<string, number> = {}
 
@@ -382,7 +378,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
       console.log('💰 Testing zero balance handling...')
 
       // All chains should return valid values even if balance is 0
-      const value = await vault.getValue('Bitcoin')
+      const value = await vault.getValue(Chain.Bitcoin)
 
       expect(value).toBeDefined()
       expect(value.currency).toBe('usd')
@@ -407,9 +403,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should handle invalid token address gracefully', async () => {
       console.log('🔍 Testing invalid token address error handling...')
 
-      await expect(
-        vault.getValue('Ethereum', 'invalid_address')
-      ).rejects.toThrow()
+      await expect(vault.getValue(Chain.Ethereum, 'invalid_address')).rejects.toThrow()
 
       console.log('✅ Correctly rejected invalid token address')
     })
@@ -419,7 +413,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
 
       // Invalid currency should either throw or fallback to default
       try {
-        await vault.getValue('Ethereum', undefined, 'invalid' as any)
+        await vault.getValue(Chain.Ethereum, undefined, 'invalid' as any)
         console.log('⚠️  Invalid currency was accepted (possible fallback)')
       } catch (error) {
         console.log('✅ Correctly rejected invalid currency')
@@ -435,7 +429,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
       // Clear cache
       await vault.updateValues('all')
 
-      const chains = ['Bitcoin', 'Ethereum', 'Solana', 'Polygon']
+      const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.Polygon]
 
       // Sequential fetching
       const startSeq = performance.now()
@@ -453,17 +447,16 @@ describe('E2E: Fiat Value Service (Production)', () => {
 
       // Parallel fetching
       const startPar = performance.now()
-      await Promise.all(
-        chains.map(chain => vault.getValue(chain).catch(() => null))
-      )
+      await Promise.all(chains.map(chain => vault.getValue(chain).catch(() => null)))
       const parallelTime = performance.now() - startPar
 
       console.log(`⚡ Sequential: ${sequentialTime.toFixed(2)}ms`)
       console.log(`⚡ Parallel: ${parallelTime.toFixed(2)}ms`)
       console.log(`🚀 Speedup: ${(sequentialTime / parallelTime).toFixed(1)}x`)
 
-      // Parallel should be faster (though maybe not much due to HTTP/2 multiplexing)
-      expect(parallelTime).toBeLessThanOrEqual(sequentialTime)
+      // Parallel should be faster or comparable (allow 20% tolerance for timing variance)
+      // Network conditions, API response times, and parallel overhead can affect results
+      expect(parallelTime).toBeLessThanOrEqual(sequentialTime * 1.2)
     })
 
     it('should handle rapid repeated fetches efficiently', async () => {
@@ -474,15 +467,13 @@ describe('E2E: Fiat Value Service (Production)', () => {
 
       // First call will fetch, rest should use cache
       for (let i = 0; i < iterations; i++) {
-        await vault.getValue('Ethereum')
+        await vault.getValue(Chain.Ethereum)
       }
 
       const totalTime = performance.now() - startTime
       const avgTime = totalTime / iterations
 
-      console.log(
-        `⚡ Total time for ${iterations} fetches: ${totalTime.toFixed(2)}ms`
-      )
+      console.log(`⚡ Total time for ${iterations} fetches: ${totalTime.toFixed(2)}ms`)
       console.log(`⚡ Average time per fetch: ${avgTime.toFixed(2)}ms`)
 
       // With caching, should be very fast
@@ -495,8 +486,8 @@ describe('E2E: Fiat Value Service (Production)', () => {
       console.log('🔗 Testing integration with balance fetching...')
 
       // Fetch balance and value together
-      const balance = await vault.balance('Ethereum')
-      const value = await vault.getValue('Ethereum')
+      const balance = await vault.balance(Chain.Ethereum)
+      const value = await vault.getValue(Chain.Ethereum)
 
       expect(balance).toBeDefined()
       expect(value).toBeDefined()
@@ -531,7 +522,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
 
       // Verify cache was cleared by fetching a value
       // (it should be fast but not instant since cache was cleared)
-      const value = await vault.getValue('Ethereum')
+      const value = await vault.getValue(Chain.Ethereum)
       expect(value).toBeDefined()
 
       console.log(`✅ Cache cleared and values can be re-fetched`)

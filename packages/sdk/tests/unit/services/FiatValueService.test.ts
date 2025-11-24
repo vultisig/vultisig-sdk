@@ -37,8 +37,10 @@ import type { Balance } from '../../../src/types'
 describe('FiatValueService', () => {
   let service: FiatValueService
   let cache: CacheService
-  let getCurrency: () => string
+  let getCurrency: any
   let getTokens: () => Record<string, any[]>
+  let getChains: () => Chain[]
+  let getBalance: (chain: Chain, tokenId?: string) => Promise<Balance>
 
   beforeEach(async () => {
     // Clear all mocks before each test
@@ -53,15 +55,24 @@ describe('FiatValueService', () => {
     // Mock tokens getter
     getTokens = vi.fn(() => ({}))
 
+    // Mock chains getter
+    getChains = vi.fn(() => [Chain.Ethereum, Chain.Bitcoin])
+
+    // Mock balance getter
+    getBalance = vi.fn(async () => ({
+      amount: '1000000000000000000',
+      decimals: 18,
+      symbol: 'ETH',
+      chainId: Chain.Ethereum,
+    }))
+
     // Create service
-    service = new FiatValueService(cache, getCurrency, getTokens)
+    service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
   })
 
   describe('getPrice', () => {
     it('should fetch native token price', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 3000.5,
       })
@@ -76,9 +87,7 @@ describe('FiatValueService', () => {
     })
 
     it('should cache prices for 5 minutes', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
       vi.mocked(getCoinPrices).mockResolvedValue({
         bitcoin: 50000,
       })
@@ -94,17 +103,12 @@ describe('FiatValueService', () => {
     })
 
     it('should fetch token price for ERC-20 tokens', async () => {
-      const { getErc20Prices } = await import(
-        '@core/chain/coin/price/evm/getErc20Prices'
-      )
+      const { getErc20Prices } = await import('@core/chain/coin/price/evm/getErc20Prices')
       vi.mocked(getErc20Prices).mockResolvedValue({
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 1.0, // USDC
       })
 
-      const price = await service.getPrice(
-        Chain.Ethereum,
-        '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
-      )
+      const price = await service.getPrice(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 
       expect(price).toBe(1.0)
       expect(getErc20Prices).toHaveBeenCalledWith({
@@ -115,9 +119,7 @@ describe('FiatValueService', () => {
     })
 
     it('should support different fiat currencies', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 2500,
       })
@@ -132,33 +134,23 @@ describe('FiatValueService', () => {
     })
 
     it('should throw error if price not found', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
       vi.mocked(getCoinPrices).mockResolvedValue({})
 
-      await expect(service.getPrice(Chain.Ethereum)).rejects.toThrow(
-        'Price not found for Ethereum'
-      )
+      await expect(service.getPrice(Chain.Ethereum)).rejects.toThrow('Price not found for Ethereum')
     })
   })
 
   describe('getPrices', () => {
     it('should fetch multiple prices in batch', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 3000,
         bitcoin: 50000,
         solana: 100,
       })
 
-      const prices = await service.getPrices([
-        Chain.Ethereum,
-        Chain.Bitcoin,
-        Chain.Solana,
-      ])
+      const prices = await service.getPrices([Chain.Ethereum, Chain.Bitcoin, Chain.Solana])
 
       expect(prices).toEqual({
         [Chain.Ethereum]: 3000,
@@ -173,9 +165,7 @@ describe('FiatValueService', () => {
     })
 
     it('should use cached prices and only fetch uncached', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
 
       // First call - caches ETH price
       vi.mocked(getCoinPrices).mockResolvedValueOnce({
@@ -205,9 +195,7 @@ describe('FiatValueService', () => {
     })
 
     it('should cache individual prices from batch fetch', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 3000,
         bitcoin: 50000,
@@ -227,12 +215,8 @@ describe('FiatValueService', () => {
 
   describe('getBalanceValue', () => {
     it('should calculate balance value', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
-      const { getCoinValue } = await import(
-        '@core/chain/coin/utils/getCoinValue'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
+      const { getCoinValue } = await import('@core/chain/coin/utils/getCoinValue')
 
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 3000.5,
@@ -257,12 +241,8 @@ describe('FiatValueService', () => {
     })
 
     it('should calculate token balance value', async () => {
-      const { getErc20Prices } = await import(
-        '@core/chain/coin/price/evm/getErc20Prices'
-      )
-      const { getCoinValue } = await import(
-        '@core/chain/coin/utils/getCoinValue'
-      )
+      const { getErc20Prices } = await import('@core/chain/coin/price/evm/getErc20Prices')
+      const { getCoinValue } = await import('@core/chain/coin/utils/getCoinValue')
 
       const usdcAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
 
@@ -285,12 +265,8 @@ describe('FiatValueService', () => {
     })
 
     it('should support different fiat currencies', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
-      const { getCoinValue } = await import(
-        '@core/chain/coin/utils/getCoinValue'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
+      const { getCoinValue } = await import('@core/chain/coin/utils/getCoinValue')
 
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 2500, // EUR price
@@ -315,12 +291,8 @@ describe('FiatValueService', () => {
 
   describe('getPortfolioValue', () => {
     it('should calculate total portfolio value from balance array', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
-      const { getCoinValue } = await import(
-        '@core/chain/coin/utils/getCoinValue'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
+      const { getCoinValue } = await import('@core/chain/coin/utils/getCoinValue')
 
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 3000,
@@ -353,12 +325,8 @@ describe('FiatValueService', () => {
     })
 
     it('should calculate total portfolio value from balance record', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
-      const { getCoinValue } = await import(
-        '@core/chain/coin/utils/getCoinValue'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
+      const { getCoinValue } = await import('@core/chain/coin/utils/getCoinValue')
 
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 3000,
@@ -380,12 +348,8 @@ describe('FiatValueService', () => {
     })
 
     it('should handle individual balance errors gracefully', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
-      const { getCoinValue } = await import(
-        '@core/chain/coin/utils/getCoinValue'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
+      const { getCoinValue } = await import('@core/chain/coin/utils/getCoinValue')
 
       // First balance succeeds
       vi.mocked(getCoinPrices).mockResolvedValueOnce({
@@ -394,9 +358,7 @@ describe('FiatValueService', () => {
       vi.mocked(getCoinValue).mockReturnValueOnce(3000)
 
       // Second balance fails
-      vi.mocked(getCoinPrices).mockRejectedValueOnce(
-        new Error('API rate limit')
-      )
+      vi.mocked(getCoinPrices).mockRejectedValueOnce(new Error('API rate limit'))
 
       const balances: Balance[] = [
         {
@@ -424,11 +386,9 @@ describe('FiatValueService', () => {
     })
   })
 
-  describe('clearCache', () => {
+  describe('clearPrices', () => {
     it('should clear all cached prices', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
 
       // Cache some prices
       vi.mocked(getCoinPrices).mockResolvedValue({
@@ -437,7 +397,7 @@ describe('FiatValueService', () => {
       await service.getPrice(Chain.Ethereum)
 
       // Clear cache
-      service.clearCache()
+      await service.clearPrices()
 
       // Next call should fetch fresh
       vi.mocked(getCoinPrices).mockResolvedValue({
@@ -452,32 +412,26 @@ describe('FiatValueService', () => {
 
   describe('error handling', () => {
     it('should throw error when token price not found', async () => {
-      const { getErc20Prices } = await import(
-        '@core/chain/coin/price/evm/getErc20Prices'
-      )
+      const { getErc20Prices } = await import('@core/chain/coin/price/evm/getErc20Prices')
       vi.mocked(getErc20Prices).mockResolvedValue({})
 
-      await expect(
-        service.getPrice(Chain.Ethereum, '0xInvalidToken')
-      ).rejects.toThrow('Price not found for token')
+      await expect(service.getPrice(Chain.Ethereum, '0xInvalidToken')).rejects.toThrow('Price not found for token')
     })
 
     it('should throw error for token pricing on non-EVM chains', async () => {
       // Bitcoin is not an EVM chain
-      await expect(
-        service.getPrice(Chain.Bitcoin, '0xSomeToken')
-      ).rejects.toThrow('Token pricing not supported for Bitcoin')
+      await expect(service.getPrice(Chain.Bitcoin, '0xSomeToken')).rejects.toThrow(
+        'Token pricing not supported for Bitcoin'
+      )
     })
   })
 
   describe('currency override', () => {
     it('should use vault currency by default', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
 
       getCurrency = vi.fn(() => 'eur')
-      service = new FiatValueService(cache, getCurrency, getTokens)
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
 
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 2500,
@@ -492,12 +446,10 @@ describe('FiatValueService', () => {
     })
 
     it('should allow currency override per call', async () => {
-      const { getCoinPrices } = await import(
-        '@core/chain/coin/price/getCoinPrices'
-      )
+      const { getCoinPrices } = await import('@core/chain/coin/price/getCoinPrices')
 
       getCurrency = vi.fn(() => 'usd')
-      service = new FiatValueService(cache, getCurrency, getTokens)
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
 
       vi.mocked(getCoinPrices).mockResolvedValue({
         ethereum: 2200,

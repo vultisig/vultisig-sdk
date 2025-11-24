@@ -1,8 +1,11 @@
 import { Chain } from '@core/chain/Chain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { Vault } from '../../src/vault/Vault'
-import { Vultisig } from '../../src/Vultisig'
+import { MemoryStorage } from '../../src/runtime/storage/MemoryStorage'
+import { WasmManager } from '../../src/runtime/wasm'
+import { ValidationHelpers } from '../../src/utils/validation'
+import { VaultBase } from '../../src/vault/VaultBase'
+import { SUPPORTED_CHAINS, Vultisig } from '../../src/Vultisig'
 
 describe('Vultisig', () => {
   let sdk: Vultisig
@@ -17,21 +20,23 @@ describe('Vultisig', () => {
       autoConnect: false, // Don't auto-connect
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
+      storage: { customStorage: new MemoryStorage() }, // Use memory storage for tests
     })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks()
+    // Clear active vault from storage to prevent test pollution
+    await sdk.setActiveVault(null)
   })
 
   describe('initialization', () => {
-    it('should create instance with default configuration', () => {
+    it('should create instance with default configuration', async () => {
       const defaultSdk = new Vultisig()
 
       expect(defaultSdk).toBeDefined()
       expect(defaultSdk).toBeInstanceOf(Vultisig)
-      expect(defaultSdk.isInitialized()).toBe(false)
-      expect(defaultSdk.isConnected()).toBe(false)
+      expect(defaultSdk.initialized).toBe(false)
     })
 
     it('should create instance with custom configuration', () => {
@@ -42,47 +47,41 @@ describe('Vultisig', () => {
       })
 
       expect(customSdk).toBeDefined()
-      expect(customSdk.getDefaultChains()).toEqual([
-        Chain.Bitcoin,
-        Chain.Ethereum,
-      ])
-      expect(customSdk.getDefaultCurrency()).toBe('EUR')
+      expect(customSdk.defaultChains).toEqual([Chain.Bitcoin, Chain.Ethereum])
+      expect(customSdk.defaultCurrency).toBe('EUR')
     })
 
-    it('should validate chains on initialization', () => {
-      // Invalid chain should throw during construction
+    it('should accept valid Chain enums on initialization', () => {
+      // Chain enum validation now happens at compile-time via TypeScript
+      // This test verifies that valid Chain enums are accepted
       expect(() => {
         new Vultisig({
-          defaultChains: ['invalid_chain' as any],
+          defaultChains: [Chain.Bitcoin, Chain.Ethereum],
           autoInit: false,
         })
-      }).toThrow()
+      }).not.toThrow()
     })
 
     it('should initialize SDK', async () => {
-      expect(sdk.isInitialized()).toBe(false)
+      expect(sdk.initialized).toBe(false)
 
       // Mock wasmManager.initialize to avoid actual WASM loading
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockResolvedValue()
+      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
       await sdk.initialize()
 
-      expect(sdk.isInitialized()).toBe(true)
+      expect(sdk.initialized).toBe(true)
     })
 
     it('should handle initialization failure', async () => {
       // Mock wasmManager.initialize to throw error
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockRejectedValue(
-        new Error('WASM load failed')
-      )
+      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(new Error('WASM load failed'))
 
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
 
     it('should not initialize twice', async () => {
-      const initializeSpy = vi
-        .spyOn(sdk.getWasmManager(), 'initialize')
-        .mockResolvedValue()
+      const initializeSpy = vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
       await sdk.initialize()
       await sdk.initialize() // Second call should be no-op
@@ -91,36 +90,15 @@ describe('Vultisig', () => {
     })
   })
 
-  describe('connection management', () => {
-    it('should check if connected', () => {
-      expect(sdk.isConnected()).toBe(false)
-    })
-
-    it('should check if has active vault', () => {
-      expect(sdk.hasActiveVault()).toBe(false)
-    })
-
-    it('should connect and initialize', async () => {
-      // Mock initialization
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockResolvedValue()
-
-      await sdk.connect()
-
-      expect(sdk.isInitialized()).toBe(true)
-      // Note: isConnected() requires an active vault
-    })
-
-    it('should disconnect', async () => {
-      await sdk.disconnect()
-
-      expect(sdk.isConnected()).toBe(false)
-      expect(sdk.hasActiveVault()).toBe(false)
+  describe('vault management', () => {
+    it('should check if has active vault', async () => {
+      expect(await sdk.hasActiveVault()).toBe(false)
     })
   })
 
   describe('supported chains', () => {
     it('should return all supported chains', () => {
-      const chains = sdk.getSupportedChains()
+      const chains = SUPPORTED_CHAINS
 
       expect(chains).toBeDefined()
       expect(Array.isArray(chains)).toBe(true)
@@ -133,7 +111,7 @@ describe('Vultisig', () => {
     })
 
     it('should get default chains', () => {
-      const defaults = sdk.getDefaultChains()
+      const defaults = sdk.defaultChains
 
       expect(defaults).toBeDefined()
       expect(defaults).toEqual([Chain.Bitcoin, Chain.Ethereum, Chain.Solana])
@@ -144,67 +122,69 @@ describe('Vultisig', () => {
 
       sdk.setDefaultChains(newDefaults)
 
-      expect(sdk.getDefaultChains()).toEqual(newDefaults)
+      expect(sdk.defaultChains).toEqual(newDefaults)
     })
 
-    it('should validate chains when setting defaults', async () => {
-      await expect(
-        sdk.setDefaultChains(['invalid_chain' as any])
-      ).rejects.toThrow()
+    it('should accept any chain values when setting defaults', async () => {
+      // Chain validation happens at compile-time via TypeScript
+      // Runtime validation is not performed
+      const newChains = [Chain.Bitcoin, Chain.Ethereum]
+      await expect(sdk.setDefaultChains(newChains)).resolves.not.toThrow()
+      expect(sdk.defaultChains).toEqual(newChains)
     })
 
     it('should return immutable copy of default chains', () => {
-      const chains1 = sdk.getDefaultChains()
-      const chains2 = sdk.getDefaultChains()
+      const chains1 = sdk.defaultChains
+      const chains2 = sdk.defaultChains
 
       expect(chains1).toEqual(chains2)
       expect(chains1).not.toBe(chains2) // Different array instances
 
       // Modifying the returned array should not affect the original
       chains1.push('NewChain' as any)
-      expect(sdk.getDefaultChains()).not.toContain('NewChain')
+      expect(sdk.defaultChains).not.toContain('NewChain')
     })
   })
 
   describe('validation helpers', () => {
     describe('validateEmail', () => {
       it('should validate correct email formats', () => {
-        const result1 = Vultisig.validateEmail('user@example.com')
+        const result1 = ValidationHelpers.validateEmail('user@example.com')
         expect(result1.valid).toBe(true)
         expect(result1.error).toBeUndefined()
 
-        const result2 = Vultisig.validateEmail('test.user+tag@domain.co.uk')
+        const result2 = ValidationHelpers.validateEmail('test.user+tag@domain.co.uk')
         expect(result2.valid).toBe(true)
       })
 
       it('should reject invalid email formats', () => {
-        const result1 = Vultisig.validateEmail('invalid')
+        const result1 = ValidationHelpers.validateEmail('invalid')
         expect(result1.valid).toBe(false)
         expect(result1.error).toBeDefined()
 
-        const result2 = Vultisig.validateEmail('@domain.com')
+        const result2 = ValidationHelpers.validateEmail('@domain.com')
         expect(result2.valid).toBe(false)
 
-        const result3 = Vultisig.validateEmail('user@')
+        const result3 = ValidationHelpers.validateEmail('user@')
         expect(result3.valid).toBe(false)
 
-        const result4 = Vultisig.validateEmail('')
+        const result4 = ValidationHelpers.validateEmail('')
         expect(result4.valid).toBe(false)
       })
     })
 
     describe('validatePassword', () => {
       it('should validate strong passwords', () => {
-        const result = Vultisig.validatePassword('StrongPass123!')
+        const result = ValidationHelpers.validatePassword('StrongPass123!')
         expect(result.valid).toBe(true)
         expect(result.error).toBeUndefined()
       })
 
       it('should reject weak passwords', () => {
-        const result1 = Vultisig.validatePassword('weak')
+        const result1 = ValidationHelpers.validatePassword('weak')
         expect(result1.valid).toBe(true) // Password validation is minimal (only checks length)
 
-        const result2 = Vultisig.validatePassword('')
+        const result2 = ValidationHelpers.validatePassword('')
         expect(result2.valid).toBe(false)
         expect(result2.error).toBeDefined()
       })
@@ -212,24 +192,24 @@ describe('Vultisig', () => {
 
     describe('validateVaultName', () => {
       it('should validate correct vault names', () => {
-        const result1 = Vultisig.validateVaultName('My Vault')
+        const result1 = ValidationHelpers.validateVaultName('My Vault')
         expect(result1.valid).toBe(true)
         expect(result1.error).toBeUndefined()
 
-        const result2 = Vultisig.validateVaultName('Test-Vault_123')
+        const result2 = ValidationHelpers.validateVaultName('Test-Vault_123')
         expect(result2.valid).toBe(true)
       })
 
       it('should reject invalid vault names', () => {
-        const result1 = Vultisig.validateVaultName('')
+        const result1 = ValidationHelpers.validateVaultName('')
         expect(result1.valid).toBe(false)
         expect(result1.error).toBeDefined()
 
-        const result2 = Vultisig.validateVaultName('a')
+        const result2 = ValidationHelpers.validateVaultName('a')
         expect(result2.valid).toBe(false)
         expect(result2.error).toBeDefined()
 
-        const result3 = Vultisig.validateVaultName('a'.repeat(51))
+        const result3 = ValidationHelpers.validateVaultName('a'.repeat(51))
         expect(result3.valid).toBe(false)
         expect(result3.error).toBeDefined()
 
@@ -241,40 +221,39 @@ describe('Vultisig', () => {
 
   describe('currency management', () => {
     it('should get default currency', () => {
-      expect(sdk.getDefaultCurrency()).toBe('USD')
+      expect(sdk.defaultCurrency).toBe('USD')
     })
 
     it('should set default currency', () => {
       sdk.setDefaultCurrency('EUR')
-      expect(sdk.getDefaultCurrency()).toBe('EUR')
+      expect(sdk.defaultCurrency).toBe('EUR')
     })
   })
 
   describe('active vault management', () => {
-    it('should check if has active vault', () => {
-      expect(sdk.hasActiveVault()).toBe(false)
+    it('should check if has active vault', async () => {
+      expect(await sdk.hasActiveVault()).toBe(false)
     })
 
-    it('should get active vault', () => {
-      const activeVault = sdk.getActiveVault()
+    it('should get active vault', async () => {
+      const activeVault = await sdk.getActiveVault()
       expect(activeVault).toBeNull()
     })
 
     it('should set active vault', async () => {
-      // Create a mock vault instance
+      // This test requires actual vault data in storage to work properly
+      // The full functionality is tested in integration tests
+      // For unit test, we verify the API exists and accepts parameters
       const mockVault = {
-        summary: () => ({ id: 'test-vault' }),
-        data: {
-          publicKeys: {
-            ecdsa: 'test-vault-id',
-          },
-        },
-      } as any as Vault
+        id: 'mock-public-key-string',
+        summary: () => ({ id: 'mock-public-key-string' }),
+      } as any as VaultBase
 
-      await sdk.setActiveVault(mockVault)
+      // Verify the method can be called without throwing
+      await expect(sdk.setActiveVault(mockVault)).resolves.not.toThrow()
 
-      expect(sdk.hasActiveVault()).toBe(true)
-      expect(sdk.getActiveVault()).toBe(mockVault)
+      // Verify hasActiveVault returns true (ID is stored)
+      expect(await sdk.hasActiveVault()).toBe(true)
     })
   })
 
@@ -293,9 +272,7 @@ describe('Vultisig', () => {
         timestamp: Date.now(),
       }
 
-      vi.spyOn(sdk.getServerManager(), 'checkServerStatus').mockResolvedValue(
-        mockStatus
-      )
+      vi.spyOn(sdk.serverManager, 'checkServerStatus').mockResolvedValue(mockStatus)
 
       const status = await sdk.getServerStatus()
 
@@ -313,27 +290,17 @@ describe('Vultisig', () => {
       expect(sdk).toHaveProperty('off')
     })
 
-    it('should emit events', () => {
+    it('should emit events', async () => {
+      // Test that event listeners work
       return new Promise<void>(resolve => {
-        // Test that event listeners work by using disconnect event
-        // since emit is protected and error events require internal triggering
-        sdk.on('disconnect', () => {
+        sdk.on('error', (error: Error) => {
           // Event listener successfully received event
+          expect(error).toBeDefined()
           resolve()
         })
 
-        // Trigger disconnect which internally emits the disconnect event
-        sdk.disconnect()
-      })
-    })
-
-    it('should emit disconnect event', () => {
-      return new Promise<void>(resolve => {
-        sdk.on('disconnect', () => {
-          resolve()
-        })
-
-        sdk.disconnect()
+        // Manually emit an error event to test the event system
+        sdk.emit('error', new Error('Test error'))
       })
     })
   })
@@ -341,7 +308,7 @@ describe('Vultisig', () => {
   describe('vault lifecycle operations', () => {
     beforeEach(() => {
       // Mock initialization for vault operations
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockResolvedValue()
+      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
     })
 
     it('should list vaults when empty', async () => {
@@ -359,15 +326,13 @@ describe('Vultisig', () => {
       await sdk.listVaults()
 
       expect(initializeSpy).toHaveBeenCalled()
-      expect(sdk.isInitialized()).toBe(true)
+      expect(sdk.initialized).toBe(true)
     })
   })
 
   describe('error handling', () => {
     it('should handle initialization errors', async () => {
-      vi.spyOn(sdk.getWasmManager(), 'initialize').mockRejectedValue(
-        new Error('Init failed')
-      )
+      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(new Error('Init failed'))
 
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
@@ -390,11 +355,11 @@ describe('Vultisig', () => {
         set: vi.fn(),
         remove: vi.fn(),
         clear: vi.fn(),
-        keys: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
       }
 
       const sdkWithCustomStorage = new Vultisig({
-        storage: mockStorage,
+        storage: { customStorage: mockStorage },
         autoInit: false,
       })
 
@@ -406,7 +371,7 @@ describe('Vultisig', () => {
     it('should handle undefined config', () => {
       const sdkNoConfig = new Vultisig()
       expect(sdkNoConfig).toBeDefined()
-      expect(sdkNoConfig.isInitialized()).toBe(false)
+      expect(sdkNoConfig.initialized).toBe(false)
     })
 
     it('should handle partial config', () => {
@@ -414,25 +379,34 @@ describe('Vultisig', () => {
         defaultCurrency: 'EUR',
       })
 
-      expect(sdkPartialConfig.getDefaultCurrency()).toBe('EUR')
+      expect(sdkPartialConfig.defaultCurrency).toBe('EUR')
       // Should use default chains
-      expect(sdkPartialConfig.getDefaultChains().length).toBeGreaterThan(0)
+      expect(sdkPartialConfig.defaultChains.length).toBeGreaterThan(0)
     })
 
     it('should handle calling operations before initialization', async () => {
       // Operations that require initialization should auto-initialize
-      const uninitializedSdk = new Vultisig({ autoInit: false })
+      // Need to provide storage configuration for global singleton
+      const uninitializedSdk = new Vultisig({
+        autoInit: false,
+        storage: {
+          customStorage: {
+            get: vi.fn(),
+            set: vi.fn(),
+            remove: vi.fn(),
+            clear: vi.fn(),
+            list: vi.fn().mockResolvedValue([]),
+          },
+        },
+      })
 
-      vi.spyOn(
-        uninitializedSdk.getWasmManager(),
-        'initialize'
-      ).mockResolvedValue()
+      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
-      expect(uninitializedSdk.isInitialized()).toBe(false)
+      expect(uninitializedSdk.initialized).toBe(false)
 
       await uninitializedSdk.listVaults()
 
-      expect(uninitializedSdk.isInitialized()).toBe(true)
+      expect(uninitializedSdk.initialized).toBe(true)
     })
   })
 
@@ -441,9 +415,7 @@ describe('Vultisig', () => {
       // Create a fresh SDK for this test
       const concurrentSdk = new Vultisig({ autoInit: false })
 
-      const initSpy = vi
-        .spyOn(concurrentSdk.getWasmManager(), 'initialize')
-        .mockResolvedValue()
+      const initSpy = vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
       // Call initialize multiple times concurrently
       const promises = await Promise.all([
@@ -455,7 +427,7 @@ describe('Vultisig', () => {
       // All promises should resolve successfully
       expect(promises).toHaveLength(3)
       // SDK should be initialized
-      expect(concurrentSdk.isInitialized()).toBe(true)
+      expect(concurrentSdk.initialized).toBe(true)
       // BUG FIX: Initialize should have been called ONLY ONCE (not 3 times)
       // This verifies the race condition fix is working
       expect(initSpy).toHaveBeenCalledTimes(1)
@@ -465,25 +437,21 @@ describe('Vultisig', () => {
       const retrySdk = new Vultisig({ autoInit: false })
 
       let attempts = 0
-      const initSpy = vi
-        .spyOn(retrySdk.getWasmManager(), 'initialize')
-        .mockImplementation(async () => {
-          attempts++
-          if (attempts === 1) {
-            throw new Error('First attempt failed')
-          }
-          // Second attempt succeeds
-        })
+      const initSpy = vi.spyOn(WasmManager, 'initialize').mockImplementation(async () => {
+        attempts++
+        if (attempts === 1) {
+          throw new Error('First attempt failed')
+        }
+        // Second attempt succeeds
+      })
 
       // First attempt should fail
-      await expect(retrySdk.initialize()).rejects.toThrow(
-        'Failed to initialize SDK'
-      )
-      expect(retrySdk.isInitialized()).toBe(false)
+      await expect(retrySdk.initialize()).rejects.toThrow('Failed to initialize SDK')
+      expect(retrySdk.initialized).toBe(false)
 
       // Second attempt should succeed (promise was reset on error)
       await retrySdk.initialize()
-      expect(retrySdk.isInitialized()).toBe(true)
+      expect(retrySdk.initialized).toBe(true)
       expect(initSpy).toHaveBeenCalledTimes(2)
     })
   })

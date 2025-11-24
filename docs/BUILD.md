@@ -17,18 +17,21 @@ Complete build process for the Vultisig SDK and CLI.
 The SDK has **three separate build outputs**:
 
 #### a) Standard Builds (Browser + Node.js CommonJS)
+
 ```bash
 cd src
 yarn build
 ```
 
 This creates:
+
 - `dist/index.esm.js` - ES Module (for browsers)
 - `dist/index.js` - CommonJS (standard Node.js)
 - `dist/index.umd.js` - UMD (universal)
 - `dist/index.d.ts` - TypeScript declarations
 
 #### b) Node.js-Specific Build (Required for CLI)
+
 ```bash
 cd src
 node --max-old-space-size=8192 ../node_modules/.bin/rollup -c rollup.node.config.js
@@ -37,14 +40,17 @@ node --max-old-space-size=8192 ../node_modules/.bin/rollup -c rollup.node.config
 **THIS IS CRITICAL**: The CLI uses `dist/index.node.cjs` which is **only** created by the Node.js-specific build.
 
 This creates:
+
 - `dist/index.node.cjs` - Node.js-optimized CommonJS build
 
 **Why separate builds?**
+
 - The Node.js build is optimized for server-side execution
 - Different handling of native modules and dependencies
 - CLI launcher specifically requires `index.node.cjs`
 
 #### Complete SDK Build Command
+
 ```bash
 cd src
 
@@ -88,15 +94,18 @@ ls -lh clients/cli/dist/cli.js
 **Symptom**: CLI doesn't reflect recent SDK changes
 
 **Solution**: You forgot to run the Node.js-specific build!
+
 ```bash
 cd src
 node --max-old-space-size=8192 ../node_modules/.bin/rollup -c rollup.node.config.js
 ```
 
 Check the timestamp:
+
 ```bash
 ls -lh src/dist/index.node.cjs
 ```
+
 It should be recent (just built).
 
 ### Issue: Out of memory during build
@@ -104,6 +113,7 @@ It should be recent (just built).
 **Symptom**: "JavaScript heap out of memory"
 
 **Solution**: Increase Node.js memory:
+
 ```bash
 node --max-old-space-size=16384 ../node_modules/.bin/rollup -c rollup.config.js
 ```
@@ -113,6 +123,7 @@ node --max-old-space-size=16384 ../node_modules/.bin/rollup -c rollup.config.js
 **Symptom**: "WASM file not found" errors
 
 **Solution**: WASM files should be in:
+
 - `lib/dkls/vs_wasm_bg.wasm`
 - `lib/schnorr/vs_schnorr_wasm_bg.wasm`
 - `node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm`
@@ -185,4 +196,3 @@ rm -rf dist node_modules
 yarn install
 yarn build
 ```
-

@@ -122,11 +122,7 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
         <h3 style={{ margin: 0, color: '#333' }}>
           Balances & Addresses
           {addressLoading && (
-            <span
-              style={{ fontSize: '12px', color: '#666', marginLeft: '8px' }}
-            >
-              (Loading addresses...)
-            </span>
+            <span style={{ fontSize: '12px', color: '#666', marginLeft: '8px' }}>(Loading addresses...)</span>
           )}
         </h3>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -207,10 +203,7 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
               }
 
               // Format balance to show up to 4 decimal places, taking into account the coin's decimals
-              const formatBalance = (
-                value: string,
-                decimals: number
-              ): string => {
+              const formatBalance = (value: string, decimals: number): string => {
                 const num = parseFloat(value)
                 if (num === 0) return '0'
 
@@ -227,10 +220,7 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
                 return parseFloat(formatted).toString()
               }
 
-              const formattedAmount = formatBalance(
-                balance.amount,
-                balance.decimals
-              )
+              const formattedAmount = formatBalance(balance.amount, balance.decimals)
               const isZero = formattedAmount === '0'
               const isBitcoin = coinId.toLowerCase() === 'bitcoin'
 
@@ -239,22 +229,14 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
                   key={coinId}
                   style={{
                     padding: isBitcoin ? '20px' : '16px',
-                    backgroundColor: isBitcoin
-                      ? 'linear-gradient(135deg, #fff9e6, #ffffff)'
-                      : 'white',
-                    background: isBitcoin
-                      ? 'linear-gradient(135deg, #fff9e6, #ffffff)'
-                      : 'white',
+                    backgroundColor: isBitcoin ? 'linear-gradient(135deg, #fff9e6, #ffffff)' : 'white',
+                    background: isBitcoin ? 'linear-gradient(135deg, #fff9e6, #ffffff)' : 'white',
                     borderRadius: isBitcoin ? '16px' : '12px',
-                    border: isBitcoin
-                      ? `3px solid ${getChainColor(coinId)}40`
-                      : `2px solid ${getChainColor(coinId)}20`,
+                    border: isBitcoin ? `3px solid ${getChainColor(coinId)}40` : `2px solid ${getChainColor(coinId)}20`,
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    boxShadow: isBitcoin
-                      ? '0 4px 16px rgba(247, 147, 26, 0.15)'
-                      : '0 2px 8px rgba(0,0,0,0.05)',
+                    boxShadow: isBitcoin ? '0 4px 16px rgba(247, 147, 26, 0.15)' : '0 2px 8px rgba(0,0,0,0.05)',
                     transition: 'all 0.2s ease',
                     position: 'relative',
                     overflow: 'hidden',
@@ -291,9 +273,7 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
                         fontSize: isBitcoin ? '22px' : '18px',
                         fontWeight: 'bold',
                         color: getChainColor(coinId),
-                        boxShadow: isBitcoin
-                          ? `0 2px 8px ${getChainColor(coinId)}30`
-                          : 'none',
+                        boxShadow: isBitcoin ? `0 2px 8px ${getChainColor(coinId)}30` : 'none',
                       }}
                     >
                       {getChainIcon(coinId)}
@@ -342,9 +322,7 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
                               : addresses[coinId]}
                           </div>
                           <button
-                            onClick={() =>
-                              navigator.clipboard.writeText(addresses[coinId])
-                            }
+                            onClick={() => navigator.clipboard.writeText(addresses[coinId])}
                             style={{
                               padding: '2px 4px',
                               backgroundColor: 'transparent',
@@ -400,9 +378,7 @@ function BalanceDisplay({ vault }: BalanceDisplayProps) {
           }}
         >
           <p>No balances found</p>
-          <p style={{ fontSize: '14px' }}>
-            This vault doesn&apos;t have any coins yet.
-          </p>
+          <p style={{ fontSize: '14px' }}>This vault doesn&apos;t have any coins yet.</p>
         </div>
       )}
     </div>

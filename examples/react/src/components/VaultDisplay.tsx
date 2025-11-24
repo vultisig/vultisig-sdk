@@ -3,15 +3,7 @@ import type { Vault, Vultisig } from 'vultisig-sdk'
 
 type AddressMap = Partial<Record<'BTC' | 'ETH' | 'SOL' | 'THOR', string>>
 
-export const VaultDisplay = ({
-  vault,
-  sdk,
-  fastVault,
-}: {
-  vault: Vault
-  sdk: Vultisig
-  fastVault?: boolean
-}) => {
+export const VaultDisplay = ({ vault, sdk, fastVault }: { vault: Vault; sdk: Vultisig; fastVault?: boolean }) => {
   const [addresses, setAddresses] = useState<AddressMap>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,8 +28,7 @@ export const VaultDisplay = ({
           vault.address('solana'),
           vault.address('thorchain'),
         ])
-        if (!cancelled)
-          setAddresses({ BTC: btc, ETH: eth, SOL: sol, THOR: thor })
+        if (!cancelled) setAddresses({ BTC: btc, ETH: eth, SOL: sol, THOR: thor })
       } catch (e) {
         if (!cancelled) setError((e as Error).message)
       } finally {
@@ -78,15 +69,9 @@ export const VaultDisplay = ({
       )}
       <h3 style={{ marginTop: 0, color: '#333' }}>Current Vault</h3>
       <div style={{ color: '#555' }}>Name: {vault.data.name}</div>
-      <div style={{ color: '#555' }}>
-        Local Party: {vault.data.localPartyId}
-      </div>
-      <div style={{ color: '#555' }}>
-        ECDSA PubKey: {vault.data.publicKeys.ecdsa}
-      </div>
-      <div style={{ color: '#555' }}>
-        EDDSA PubKey: {vault.data.publicKeys.eddsa}
-      </div>
+      <div style={{ color: '#555' }}>Local Party: {vault.data.localPartyId}</div>
+      <div style={{ color: '#555' }}>ECDSA PubKey: {vault.data.publicKeys.ecdsa}</div>
+      <div style={{ color: '#555' }}>EDDSA PubKey: {vault.data.publicKeys.eddsa}</div>
 
       <div style={{ marginTop: 12 }}>
         <h4 style={{ margin: '8px 0', color: '#333' }}>Addresses</h4>
@@ -102,21 +87,13 @@ export const VaultDisplay = ({
             }}
           >
             <div style={{ color: '#6c757d' }}>BTC</div>
-            <div style={{ wordBreak: 'break-all', color: '#222' }}>
-              {addresses.BTC || '-'}
-            </div>
+            <div style={{ wordBreak: 'break-all', color: '#222' }}>{addresses.BTC || '-'}</div>
             <div style={{ color: '#6c757d' }}>ETH</div>
-            <div style={{ wordBreak: 'break-all', color: '#222' }}>
-              {addresses.ETH || '-'}
-            </div>
+            <div style={{ wordBreak: 'break-all', color: '#222' }}>{addresses.ETH || '-'}</div>
             <div style={{ color: '#6c757d' }}>SOL</div>
-            <div style={{ wordBreak: 'break-all', color: '#222' }}>
-              {addresses.SOL || '-'}
-            </div>
+            <div style={{ wordBreak: 'break-all', color: '#222' }}>{addresses.SOL || '-'}</div>
             <div style={{ color: '#6c757d' }}>THOR</div>
-            <div style={{ wordBreak: 'break-all', color: '#222' }}>
-              {addresses.THOR || '-'}
-            </div>
+            <div style={{ wordBreak: 'break-all', color: '#222' }}>{addresses.THOR || '-'}</div>
           </div>
         )}
       </div>

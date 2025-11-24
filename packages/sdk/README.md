@@ -33,12 +33,12 @@ npm install react@^18.0.0 react-dom@^18.0.0
 ### 1. Initialize the SDK
 
 ```typescript
-import { Vultisig } from 'vultisig-sdk'
+import { Vultisig } from "vultisig-sdk";
 
-const sdk = new Vultisig()
+const sdk = new Vultisig();
 
 // Initialize WASM modules
-await sdk.initialize()
+await sdk.initialize();
 ```
 
 ### 2. Create a Fast Vault (Server-Assisted)
@@ -46,18 +46,18 @@ await sdk.initialize()
 ```typescript
 // Create a new vault using VultiServer
 const { vault, vaultId, verificationRequired } = await sdk.createFastVault({
-  name: 'My Secure Wallet',
-  email: 'user@example.com',
-  password: 'SecurePassword123!'
-})
+  name: "My Secure Wallet",
+  email: "user@example.com",
+  password: "SecurePassword123!",
+});
 
 if (verificationRequired) {
   // User will receive a 4-digit code via email
-  const code = '1234' // Get from user input
-  await sdk.verifyVault(vaultId, code)
+  const code = "1234"; // Get from user input
+  await sdk.verifyVault(vaultId, code);
 
   // Retrieve the complete vault after verification
-  const verifiedVault = await sdk.getVault(vaultId, 'SecurePassword123!')
+  const verifiedVault = await sdk.getVault(vaultId, "SecurePassword123!");
 }
 ```
 
@@ -65,53 +65,50 @@ if (verificationRequired) {
 
 ```typescript
 // Derive addresses for different blockchain networks
-const btcAddress = await vault.address('Bitcoin')
-const ethAddress = await vault.address('Ethereum')
-const solAddress = await vault.address('Solana')
+const btcAddress = await vault.address("Bitcoin");
+const ethAddress = await vault.address("Ethereum");
+const solAddress = await vault.address("Solana");
 
-console.log('BTC:', btcAddress) // bc1q...
-console.log('ETH:', ethAddress) // 0x...
-console.log('SOL:', solAddress) // 9WzD...
+console.log("BTC:", btcAddress); // bc1q...
+console.log("ETH:", ethAddress); // 0x...
+console.log("SOL:", solAddress); // 9WzD...
 ```
 
 ### 4. Import/Export Vaults
 
 ```typescript
 // Check if a vault file is encrypted
-const isEncrypted = await sdk.isVaultFileEncrypted(file)
+const isEncrypted = await sdk.isVaultFileEncrypted(file);
 
 // Import vault from file
-const vault = await sdk.addVault(
-  file,
-  isEncrypted ? 'password' : undefined
-)
+const vault = await sdk.addVault(file, isEncrypted ? "password" : undefined);
 
 // Export vault to backup format (as Blob)
-const backupBlob = await vault.export('BackupPassword123!')
+const backupBlob = await vault.export("BackupPassword123!");
 
 // Or export as base64 string
-const backupBase64 = await vault.exportAsBase64('BackupPassword123!')
+const backupBase64 = await vault.exportAsBase64("BackupPassword123!");
 ```
 
 ## Supported Blockchains
 
 The SDK supports address derivation and operations for 30+ blockchain networks:
 
-| Network | Chain ID | Description |
-|---------|----------|-------------|
-| Bitcoin | `bitcoin` | Bitcoin mainnet |
-| Ethereum | `ethereum` | Ethereum mainnet |
-| Solana | `solana` | Solana mainnet |
-| THORChain | `thorchain` | THORChain mainnet |
-| Polygon | `polygon` | Polygon (MATIC) |
-| Avalanche | `avalanche` | Avalanche C-Chain |
-| BSC | `bsc` | Binance Smart Chain |
-| Arbitrum | `arbitrum` | Arbitrum One |
-| Optimism | `optimism` | Optimism mainnet |
-| Cosmos | `cosmos` | Cosmos Hub |
-| Litecoin | `litecoin` | Litecoin mainnet |
-| Dogecoin | `dogecoin` | Dogecoin mainnet |
-| ... | ... | And many more |
+| Network   | Chain ID    | Description         |
+| --------- | ----------- | ------------------- |
+| Bitcoin   | `bitcoin`   | Bitcoin mainnet     |
+| Ethereum  | `ethereum`  | Ethereum mainnet    |
+| Solana    | `solana`    | Solana mainnet      |
+| THORChain | `thorchain` | THORChain mainnet   |
+| Polygon   | `polygon`   | Polygon (MATIC)     |
+| Avalanche | `avalanche` | Avalanche C-Chain   |
+| BSC       | `bsc`       | Binance Smart Chain |
+| Arbitrum  | `arbitrum`  | Arbitrum One        |
+| Optimism  | `optimism`  | Optimism mainnet    |
+| Cosmos    | `cosmos`    | Cosmos Hub          |
+| Litecoin  | `litecoin`  | Litecoin mainnet    |
+| Dogecoin  | `dogecoin`  | Dogecoin mainnet    |
+| ...       | ...         | And many more       |
 
 ## React Integration
 
@@ -213,10 +210,10 @@ export default VaultApp
 
 ```typescript
 const sdk = new Vultisig({
-  autoInit: true,  // Automatically initialize WASM modules on creation
-  serverUrl: 'https://api.vultisig.com',  // Custom VultiServer endpoint
-  relayUrl: 'https://relay.vultisig.com'  // Custom relay endpoint
-})
+  autoInit: true, // Automatically initialize WASM modules on creation
+  serverUrl: "https://api.vultisig.com", // Custom VultiServer endpoint
+  relayUrl: "https://relay.vultisig.com", // Custom relay endpoint
+});
 ```
 
 ### WASM Files
@@ -234,43 +231,55 @@ For Vite/React applications, place these files in the `public/` directory.
 ### Core Methods
 
 #### `initialize(): Promise<void>`
+
 Initialize the SDK and load all WASM modules.
 
 #### `createFastVault(options): Promise<{vault, vaultId, verificationRequired}>`
+
 Create a new vault using VultiServer assistance.
 
 **Parameters:**
+
 - `options.name: string` - Vault name
 - `options.email: string` - Email for verification
 - `options.password: string` - Vault encryption password
 
 #### `verifyVault(vaultId, code): Promise<boolean>`
+
 Verify vault creation with email verification code.
 
 #### `getVault(vaultId, password): Promise<Vault>`
+
 Retrieve a verified vault from VultiServer.
 
 #### `vault.address(chain): Promise<string>`
+
 Derive a blockchain address for the given chain (called on Vault instance).
 
 #### `addVault(file, password?): Promise<Vault>`
+
 Import a vault from a backup file.
 
 #### `vault.export(password?): Promise<Blob>`
+
 Export a vault to encrypted backup format as a Blob (called on Vault instance).
 
 #### `vault.exportAsBase64(password?): Promise<string>`
+
 Export a vault to encrypted backup format as a base64 string (called on Vault instance).
 
 ### Utility Methods
 
 #### `isVaultFileEncrypted(file): Promise<boolean>`
+
 Check if a vault backup file is encrypted.
 
 #### `validateVault(vault): VaultValidationResult`
+
 Validate vault structure and integrity.
 
 #### `getVaultDetails(vault): VaultDetails`
+
 Get vault metadata and information.
 
 ## Error Handling
@@ -280,17 +289,17 @@ The SDK throws descriptive errors that you can catch and handle:
 ```typescript
 try {
   const vault = await sdk.createFastVault({
-    name: 'Test Vault',
-    email: 'invalid-email',
-    password: '123'
-  })
+    name: "Test Vault",
+    email: "invalid-email",
+    password: "123",
+  });
 } catch (error) {
-  if (error.message.includes('email')) {
-    console.error('Invalid email address')
-  } else if (error.message.includes('password')) {
-    console.error('Password too weak')
+  if (error.message.includes("email")) {
+    console.error("Invalid email address");
+  } else if (error.message.includes("password")) {
+    console.error("Password too weak");
   } else {
-    console.error('Vault creation failed:', error)
+    console.error("Vault creation failed:", error);
   }
 }
 ```
@@ -389,6 +398,7 @@ src/                     # SDK source code
 **Current Approach:** TypeScript's native `tsc` generates type definitions in a distributed structure (one `.d.ts` file per source file). This is memory-efficient and reliable.
 
 **Future Consideration:** For better developer experience, consider implementing [@microsoft/api-extractor](https://api-extractor.com/) to:
+
 - Bundle distributed `.d.ts` files into a single rolled-up declaration file
 - Generate API documentation automatically
 - Provide API report generation for tracking changes

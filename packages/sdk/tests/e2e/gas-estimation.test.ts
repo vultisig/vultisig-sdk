@@ -16,10 +16,10 @@
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { Chain, type Vault } from '@/index'
+import { Chain, VaultBase } from '@/index'
 
 describe('E2E: Gas Estimation (Production)', () => {
-  let vault: Vault
+  let vault: VaultBase
 
   beforeAll(async () => {
     console.log('📦 Loading persistent test vault...')
@@ -44,10 +44,7 @@ describe('E2E: Gas Estimation (Production)', () => {
         if (error && typeof error === 'object' && 'cause' in error) {
           console.error('\n🔍 Root cause:')
           console.error('Cause:', (error as any).cause)
-          console.error(
-            'Cause message:',
-            ((error as any).cause as Error)?.message
-          )
+          console.error('Cause message:', ((error as any).cause as Error)?.message)
           console.error('Cause stack:', ((error as any).cause as Error)?.stack)
         }
         throw error
@@ -255,14 +252,7 @@ describe('E2E: Gas Estimation (Production)', () => {
     it('should compare gas costs across EVM chains', async () => {
       console.log('⛽ Comparing EVM chain gas costs...')
 
-      const evmChains = [
-        Chain.Ethereum,
-        Chain.BSC,
-        Chain.Polygon,
-        Chain.Arbitrum,
-        Chain.Optimism,
-        Chain.Base,
-      ]
+      const evmChains = [Chain.Ethereum, Chain.BSC, Chain.Polygon, Chain.Arbitrum, Chain.Optimism, Chain.Base]
       const gasCosts: Record<string, bigint> = {}
 
       for (const chain of evmChains) {
@@ -277,9 +267,7 @@ describe('E2E: Gas Estimation (Production)', () => {
       }
 
       // L2s should generally be cheaper than Ethereum (but not always guaranteed)
-      console.log(
-        `\n  Note: L2s (Arbitrum, Optimism, Base) typically have lower gas costs than Ethereum mainnet`
-      )
+      console.log(`\n  Note: L2s (Arbitrum, Optimism, Base) typically have lower gas costs than Ethereum mainnet`)
     }, 30000)
 
     it('should validate gas estimation response structure', async () => {
@@ -294,12 +282,9 @@ describe('E2E: Gas Estimation (Production)', () => {
       // Validate types according to GasInfo type definitions
       if (gasInfo.gasLimit) expect(typeof gasInfo.gasLimit).toBe('bigint')
       if (gasInfo.gasPrice) expect(typeof gasInfo.gasPrice).toBe('string') // gasPrice is string in BaseGasInfo
-      if (gasInfo.maxFeePerGas)
-        expect(typeof gasInfo.maxFeePerGas).toBe('bigint')
-      if (gasInfo.maxPriorityFeePerGas)
-        expect(typeof gasInfo.maxPriorityFeePerGas).toBe('bigint')
-      if (gasInfo.estimatedCost)
-        expect(typeof gasInfo.estimatedCost).toBe('bigint')
+      if (gasInfo.maxFeePerGas) expect(typeof gasInfo.maxFeePerGas).toBe('bigint')
+      if (gasInfo.maxPriorityFeePerGas) expect(typeof gasInfo.maxPriorityFeePerGas).toBe('bigint')
+      if (gasInfo.estimatedCost) expect(typeof gasInfo.estimatedCost).toBe('bigint')
     })
   })
 

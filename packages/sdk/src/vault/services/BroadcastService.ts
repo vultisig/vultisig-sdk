@@ -8,6 +8,7 @@ import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@core/mpc/keysign/tw/getKeysignTwPublicKey'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
+import { WasmManager } from '../../runtime/wasm'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
@@ -25,12 +26,7 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * - Extracts transaction hashes from signing outputs
  */
 export class BroadcastService {
-  constructor(
-    private wasmManager: any,
-    private extractMessageHashes: (
-      keysignPayload: KeysignPayload
-    ) => Promise<string[]>
-  ) {}
+  constructor(private extractMessageHashes: (keysignPayload: KeysignPayload) => Promise<string[]>) {}
 
   /**
    * Broadcast a signed transaction to the blockchain network
@@ -57,33 +53,23 @@ export class BroadcastService {
    * console.log(`Transaction: ${txHash}`)
    * ```
    */
-  async broadcastTx(params: {
-    chain: Chain
-    keysignPayload: KeysignPayload
-    signature: Signature
-  }): Promise<string> {
+  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<string> {
     const { chain, keysignPayload, signature } = params
 
     try {
       // Get WalletCore instance
-      const walletCore = await this.wasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore()
 
       // Extract message hashes from payload
       const messageHashes = await this.extractMessageHashes(keysignPayload)
 
       // Convert SDK Signature to KeysignSignature format
-      const keysignSignatures = convertToKeysignSignatures(
-        signature,
-        messageHashes
-      )
+      const keysignSignatures = convertToKeysignSignatures(signature, messageHashes)
 
       // Get public key from keysign payload
       const publicKeyData = getKeysignTwPublicKey(keysignPayload)
       const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-      const publicKey = walletCore.PublicKey.createWithData(
-        publicKeyData,
-        publicKeyType
-      )
+      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, publicKeyType)
 
       // Get transaction input data (same data used during signing)
       const txInputsArray = getEncodedSigningInputs({
@@ -124,9 +110,7 @@ export class BroadcastService {
     } catch (error) {
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
-        `Failed to broadcast transaction on ${chain}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to broadcast transaction on ${chain}: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error : new Error(String(error))
       )
     }

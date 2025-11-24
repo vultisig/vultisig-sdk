@@ -59,14 +59,7 @@ const plugins = [
     outputToFilesystem: true,
     exclude: ['**/*.test.*', '**/*.stories.*'],
     // Include workspace packages
-    include: [
-      '**/*.ts',
-      '**/*.tsx',
-      '../core/**/*.ts',
-      '../core/**/*.tsx',
-      '../lib/**/*.ts',
-      '../lib/**/*.tsx',
-    ],
+    include: ['**/*.ts', '**/*.tsx', '../core/**/*.ts', '../core/**/*.tsx', '../lib/**/*.ts', '../lib/**/*.tsx'],
     compilerOptions: {
       target: 'ES2020',
       module: 'ESNext',
