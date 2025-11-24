@@ -1,17 +1,6 @@
 import chalk from 'chalk'
 
-import { TransactionManager } from '../utils/transaction'
-import type { SendParams, TransactionResult } from '../utils/types'
-
-/**
- * Send transaction (complete flow: prepare → confirm → sign → broadcast)
- */
-export async function handleSend(
-  transactionManager: TransactionManager,
-  params: SendParams
-): Promise<TransactionResult> {
-  return await transactionManager.send(params)
-}
+import type { TransactionResult } from '../utils/types'
 
 /**
  * Display transaction result

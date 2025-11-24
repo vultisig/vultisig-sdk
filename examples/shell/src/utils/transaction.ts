@@ -1,9 +1,9 @@
-import { Chain, GasInfo, Signature, Vault } from '@vultisig/sdk'
+import { Chain, Vault } from '@vultisig/sdk'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 import ora from 'ora'
 
-import type { KeysignPayload, SendParams, TransactionResult } from './types'
+import type { SendParams, TransactionResult } from './types'
 
 // AccountCoin type from SDK internals
 type AccountCoin = {
@@ -15,36 +15,29 @@ type AccountCoin = {
 }
 
 /**
- * TransactionManager - Transaction preparation, signing, and broadcasting
+ * TransactionManager - High-level transaction orchestration with user confirmation
  *
- * Handles the complete transaction lifecycle:
- * - Prepare transaction payload
- * - Sign transaction with progress tracking
- * - Broadcast transaction to blockchain
- * - Generate explorer URLs
+ * Handles the complete transaction flow with UX:
+ * - Prepare transaction payload via SDK
+ * - Show preview to user
+ * - Get user confirmation
+ * - Sign and broadcast via SDK
  */
 export class TransactionManager {
   constructor(private vault: Vault) {}
 
   /**
-   * Estimate gas for a chain
+   * Complete send flow: prepare → confirm → sign → broadcast
+   * This is the orchestration layer with user interaction
    */
-  async estimateGas(chain: Chain): Promise<GasInfo> {
-    return await this.vault.gas(chain)
-  }
-
-  /**
-   * Prepare transaction payload
-   */
-  async prepareSend(params: SendParams): Promise<KeysignPayload> {
+  async send(params: SendParams): Promise<TransactionResult> {
+    // 1. Prepare transaction
     const spinner = ora('Preparing transaction...').start()
 
     try {
-      // Get chain address and info
       const address = await this.vault.address(params.chain)
       const balance = await this.vault.balance(params.chain, params.tokenId)
 
-      // Build coin info
       const coin: AccountCoin = {
         chain: params.chain,
         address,
@@ -53,12 +46,8 @@ export class TransactionManager {
         id: params.tokenId,
       }
 
-      // Convert human-readable amount to bigint
-      const amount = BigInt(
-        Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals))
-      )
+      const amount = BigInt(Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals)))
 
-      // Prepare transaction
       const payload = await this.vault.prepareSendTx({
         coin,
         receiver: params.to,
@@ -67,151 +56,104 @@ export class TransactionManager {
       })
 
       spinner.succeed('Transaction prepared')
-      return payload
-    } catch (error) {
-      spinner.fail('Failed to prepare transaction')
-      throw error
-    }
-  }
 
-  /**
-   * Sign transaction with progress tracking
-   */
-  async signTransaction(payload: KeysignPayload): Promise<Signature> {
-    const spinner = ora('Signing transaction...').start()
+      // 2. Get gas estimate
+      try {
+        const gas = await this.vault.gas(params.chain)
+        console.log(chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`))
+      } catch {
+        console.log(chalk.yellow('\nGas estimation unavailable'))
+      }
 
-    // Setup progress tracking
-    this.vault.on('signingProgress', ({ step }: any) => {
-      spinner.text = `${step.message} (${step.progress}%)`
-    })
+      // 3. Show transaction preview
+      console.log(chalk.cyan('\nTransaction Preview:'))
+      console.log(`  From:   ${payload.coin.address}`)
+      console.log(`  To:     ${params.to}`)
+      console.log(`  Amount: ${params.amount} ${payload.coin.ticker}`)
+      console.log(`  Chain:  ${params.chain}`)
+      if (params.memo) {
+        console.log(`  Memo:   ${params.memo}`)
+      }
 
-    try {
-      const messageHashes = await this.vault.extractMessageHashes(payload)
+      // 4. Confirm with user
+      const { confirmed } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirmed',
+          message: 'Proceed with this transaction?',
+          default: false,
+        },
+      ])
 
-      const signature = await this.vault.sign({
-        transaction: payload,
-        chain: payload.coin.chain,
-        messageHashes,
+      if (!confirmed) {
+        console.log(chalk.yellow('Transaction cancelled'))
+        throw new Error('Transaction cancelled by user')
+      }
+
+      // 5. Sign transaction
+      const signSpinner = ora('Signing transaction...').start()
+
+      this.vault.on('signingProgress', ({ step }: any) => {
+        signSpinner.text = `${step.message} (${step.progress}%)`
       })
 
-      spinner.succeed('Transaction signed')
-      return signature
+      try {
+        const messageHashes = await this.vault.extractMessageHashes(payload)
+        const signature = await this.vault.sign({
+          transaction: payload,
+          chain: payload.coin.chain,
+          messageHashes,
+        })
+
+        signSpinner.succeed('Transaction signed')
+
+        // 6. Broadcast transaction
+        const broadcastSpinner = ora('Broadcasting transaction...').start()
+        const txHash = await this.vault.broadcastTx({
+          chain: params.chain,
+          keysignPayload: payload,
+          signature,
+        })
+
+        broadcastSpinner.succeed(`Transaction broadcast: ${txHash}`)
+
+        // 7. Return result with explorer URL
+        return {
+          txHash,
+          chain: params.chain,
+          explorerUrl: formatTxExplorerUrl(params.chain, txHash),
+        }
+      } finally {
+        this.vault.removeAllListeners('signingProgress')
+      }
     } catch (error) {
-      spinner.fail('Signing failed')
-      throw error
-    } finally {
-      this.vault.removeAllListeners('signingProgress')
-    }
-  }
-
-  /**
-   * Broadcast signed transaction
-   */
-  async broadcastTransaction(
-    chain: Chain,
-    payload: KeysignPayload,
-    signature: Signature
-  ): Promise<string> {
-    const spinner = ora('Broadcasting transaction...').start()
-
-    try {
-      const txHash = await this.vault.broadcastTx({
-        chain,
-        keysignPayload: payload,
-        signature,
-      })
-
-      spinner.succeed(`Transaction broadcast: ${txHash}`)
-      return txHash
-    } catch (error) {
-      spinner.fail('Broadcast failed')
+      spinner.fail('Transaction failed')
       throw error
     }
   }
+}
 
-  /**
-   * Complete send flow: prepare → confirm → sign → broadcast
-   */
-  async send(params: SendParams): Promise<TransactionResult> {
-    // 1. Prepare transaction
-    const payload = await this.prepareSend(params)
-
-    // 2. Get gas estimate
-    try {
-      const gas = await this.estimateGas(params.chain)
-      console.log(
-        chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`)
-      )
-    } catch {
-      console.log(chalk.yellow('\nGas estimation unavailable'))
-    }
-
-    // 3. Show transaction preview
-    console.log(chalk.cyan('\nTransaction Preview:'))
-    console.log(`  From:   ${payload.coin.address}`)
-    console.log(`  To:     ${params.to}`)
-    console.log(`  Amount: ${params.amount} ${payload.coin.ticker}`)
-    console.log(`  Chain:  ${params.chain}`)
-    if (params.memo) {
-      console.log(`  Memo:   ${params.memo}`)
-    }
-
-    // 4. Confirm with user
-    const { confirmed } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirmed',
-        message: 'Proceed with this transaction?',
-        default: false,
-      },
-    ])
-
-    if (!confirmed) {
-      console.log(chalk.yellow('Transaction cancelled'))
-      throw new Error('Transaction cancelled by user')
-    }
-
-    // 5. Sign transaction (password resolved via GlobalConfig.onPasswordRequired)
-    const signature = await this.signTransaction(payload)
-
-    // 6. Broadcast transaction
-    const txHash = await this.broadcastTransaction(
-      params.chain,
-      payload,
-      signature
-    )
-
-    // 7. Return result with explorer URL
-    const explorerUrl = this.formatTxExplorerUrl(params.chain, txHash)
-
-    return {
-      txHash,
-      chain: params.chain,
-      explorerUrl,
-    }
+/**
+ * Format explorer URL for transaction hash
+ * TODO: Consider moving to SDK as chain-specific metadata
+ */
+export function formatTxExplorerUrl(chain: Chain, txHash: string): string {
+  const explorers: Record<string, string> = {
+    [Chain.Ethereum]: `https://etherscan.io/tx/${txHash}`,
+    [Chain.Polygon]: `https://polygonscan.com/tx/${txHash}`,
+    [Chain.Bitcoin]: `https://blockchair.com/bitcoin/transaction/${txHash}`,
+    [Chain.Arbitrum]: `https://arbiscan.io/tx/${txHash}`,
+    [Chain.Optimism]: `https://optimistic.etherscan.io/tx/${txHash}`,
+    [Chain.Base]: `https://basescan.org/tx/${txHash}`,
+    [Chain.BscChain]: `https://bscscan.com/tx/${txHash}`,
+    [Chain.Avalanche]: `https://snowtrace.io/tx/${txHash}`,
+    [Chain.Blast]: `https://blastscan.io/tx/${txHash}`,
+    [Chain.CronosChain]: `https://cronoscan.com/tx/${txHash}`,
+    [Chain.Solana]: `https://solscan.io/tx/${txHash}`,
+    [Chain.Doge]: `https://blockchair.com/dogecoin/transaction/${txHash}`,
+    [Chain.Litecoin]: `https://blockchair.com/litecoin/transaction/${txHash}`,
+    [Chain.BitcoinCash]: `https://blockchair.com/bitcoin-cash/transaction/${txHash}`,
   }
 
-  /**
-   * Format explorer URL for transaction
-   */
-  formatTxExplorerUrl(chain: Chain, txHash: string): string {
-    const explorers: Record<string, string> = {
-      [Chain.Ethereum]: `https://etherscan.io/tx/${txHash}`,
-      [Chain.Polygon]: `https://polygonscan.com/tx/${txHash}`,
-      [Chain.Bitcoin]: `https://blockchair.com/bitcoin/transaction/${txHash}`,
-      [Chain.Arbitrum]: `https://arbiscan.io/tx/${txHash}`,
-      [Chain.Optimism]: `https://optimistic.etherscan.io/tx/${txHash}`,
-      [Chain.Base]: `https://basescan.org/tx/${txHash}`,
-      [Chain.BscChain]: `https://bscscan.com/tx/${txHash}`,
-      [Chain.Avalanche]: `https://snowtrace.io/tx/${txHash}`,
-      [Chain.Blast]: `https://blastscan.io/tx/${txHash}`,
-      [Chain.CronosChain]: `https://cronoscan.com/tx/${txHash}`,
-      [Chain.Solana]: `https://solscan.io/tx/${txHash}`,
-      [Chain.Doge]: `https://blockchair.com/dogecoin/transaction/${txHash}`,
-      [Chain.Litecoin]: `https://blockchair.com/litecoin/transaction/${txHash}`,
-      [Chain.BitcoinCash]: `https://blockchair.com/bitcoin-cash/transaction/${txHash}`,
-    }
-
-    return explorers[chain] || `Transaction Hash: ${txHash}`
-  }
+  return explorers[chain] || `Transaction Hash: ${txHash}`
 }

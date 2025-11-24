@@ -1,34 +1,5 @@
-import { Chain, Vault } from '@vultisig/sdk'
+import { Chain } from '@vultisig/sdk'
 import chalk from 'chalk'
-
-/**
- * Add a chain to the vault
- */
-export async function handleAddChain(
-  vault: Vault,
-  chain: Chain
-): Promise<string> {
-  await vault.addChain(chain)
-  const address = await vault.address(chain)
-  return address
-}
-
-/**
- * Remove a chain from the vault
- */
-export async function handleRemoveChain(
-  vault: Vault,
-  chain: Chain
-): Promise<void> {
-  await vault.removeChain(chain)
-}
-
-/**
- * List all chains in the vault
- */
-export function handleListChains(vault: Vault): Chain[] {
-  return vault.getChains()
-}
 
 /**
  * Display list of chains
@@ -38,11 +9,7 @@ export function displayChains(chains: Chain[]): void {
   chains.forEach((chain: Chain) => {
     console.log(`  • ${chain}`)
   })
-  console.log(
-    chalk.gray(
-      '\nUse --add <chain> to add a chain or --remove <chain> to remove one'
-    )
-  )
+  console.log(chalk.gray('\nUse --add <chain> to add a chain or --remove <chain> to remove one'))
 }
 
 /**
