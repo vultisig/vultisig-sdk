@@ -80,18 +80,14 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
         // Validate UTXO-specific structure
         expect(payload).toBeDefined()
-        expect(payload.toAddress).toBe(
-          'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
-        )
+        expect(payload.toAddress).toBe('bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh')
         expect(payload.toAmount).toBe('1000')
         expect(payload.blockchainSpecific).toBeDefined()
         expect(payload.blockchainSpecific.case).toBe('utxoSpecific')
 
         console.log('✅ Bitcoin UTXO transaction prepared (NOT broadcast)')
         console.log(`  To: ${payload.toAddress}`)
-        console.log(
-          `  Amount: ${payload.toAmount} satoshis (~0.00001 BTC, ~$1)`
-        )
+        console.log(`  Amount: ${payload.toAmount} satoshis (~0.00001 BTC, ~$1)`)
       })
 
       it('Litecoin: Alternative UTXO implementation', async () => {
@@ -146,9 +142,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         // Validate EVM-specific structure
         expect(payload).toBeDefined()
         expect(payload.coin).toBeDefined()
-        expect(payload.toAddress).toBe(
-          '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8'
-        )
+        expect(payload.toAddress).toBe('0x742D35cC6634C0532925A3b844bc9E7595f0BEb8')
         expect(payload.toAmount).toBe('300000000000000')
         expect(payload.blockchainSpecific).toBeDefined()
         expect(payload.blockchainSpecific.case).toBe('ethereumSpecific')
@@ -179,9 +173,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         expect(payload).toBeDefined()
         expect(payload.coin).toBeDefined()
         expect(payload.coin.ticker).toBe('USDC')
-        expect(payload.toAddress).toBe(
-          '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8'
-        )
+        expect(payload.toAddress).toBe('0x742D35cC6634C0532925A3b844bc9E7595f0BEb8')
         expect(payload.toAmount).toBe('1000000')
         expect(payload.blockchainSpecific).toBeDefined()
         expect(payload.blockchainSpecific.case).toBe('ethereumSpecific')
@@ -222,13 +214,9 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         })
 
         expect(payload).toBeDefined()
-        expect(payload.toAddress).toBe(
-          'thor1g98cy3n9mmjrpn0sxmn63lztelera37n8n67c0'
-        )
+        expect(payload.toAddress).toBe('thor1g98cy3n9mmjrpn0sxmn63lztelera37n8n67c0')
         expect(payload.toAmount).toBe('20000000')
-        expect(payload.memo).toBe(
-          'SWAP:ETH.ETH:0x742D35cC6634C0532925A3b844bc9E7595f0BEb8'
-        )
+        expect(payload.memo).toBe('SWAP:ETH.ETH:0x742D35cC6634C0532925A3b844bc9E7595f0BEb8')
         expect(payload.blockchainSpecific).toBeDefined()
 
         console.log('✅ THORChain transaction prepared (NOT broadcast)')
@@ -257,9 +245,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         })
 
         expect(payload).toBeDefined()
-        expect(payload.toAddress).toBe(
-          'cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh'
-        )
+        expect(payload.toAddress).toBe('cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh')
         expect(payload.memo).toBe('Test IBC transfer')
 
         console.log('✅ Cosmos Hub transaction prepared (NOT broadcast)')
@@ -274,9 +260,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
     describe('Other Chain Architectures', () => {
       it('Solana: Account-based model', async () => {
-        console.log(
-          '📝 Testing Solana account-based transaction preparation...'
-        )
+        console.log('📝 Testing Solana account-based transaction preparation...')
 
         const coin = {
           chain: Chain.Solana,
@@ -293,9 +277,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
         // Validate Solana-specific structure
         expect(payload).toBeDefined()
-        expect(payload.toAddress).toBe(
-          'DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK'
-        )
+        expect(payload.toAddress).toBe('DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK')
         expect(payload.toAmount).toBe('5400000')
 
         console.log('✅ Solana transaction prepared (NOT broadcast)')
@@ -386,10 +368,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
       expect(payload.blockchainSpecific).toBeDefined()
       expect(payload.blockchainSpecific.case).toBe('ethereumSpecific')
 
-      if (
-        payload.blockchainSpecific.case === 'ethereumSpecific' &&
-        payload.blockchainSpecific.value
-      ) {
+      if (payload.blockchainSpecific.case === 'ethereumSpecific' && payload.blockchainSpecific.value) {
         const ethSpecific = payload.blockchainSpecific.value
         expect(ethSpecific).toBeDefined()
         // Note: Custom gas values are applied during preparation
@@ -520,9 +499,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
       expect(payload.vaultPublicKeyEcdsa).toBeDefined()
       expect(payload.vaultLocalPartyId).toBeDefined()
 
-      console.log(
-        `✅ Generated valid keysign payload with ${payload.blockchainSpecific.case}`
-      )
+      console.log(`✅ Generated valid keysign payload with ${payload.blockchainSpecific.case}`)
     })
 
     it('Includes all required payload fields', async () => {
@@ -564,9 +541,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
   describe('Safety Verification', () => {
     it('Confirms NO transactions were broadcast', async () => {
-      console.log(
-        '\n🔒 Safety Check: Verifying NO transactions were broadcast...'
-      )
+      console.log('\n🔒 Safety Check: Verifying NO transactions were broadcast...')
 
       // Prepare multiple transactions across different chain families
       // Use only funded chains to ensure test actually runs

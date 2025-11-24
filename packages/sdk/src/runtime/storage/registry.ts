@@ -70,14 +70,11 @@ class StorageProviderRegistry {
       const provider = this.providers.find(p => p.name === options.type)
       if (!provider) {
         throw new Error(
-          `Storage provider "${options.type}" not found. ` +
-            `Available: ${this.providers.map(p => p.name).join(', ')}`
+          `Storage provider "${options.type}" not found. ` + `Available: ${this.providers.map(p => p.name).join(', ')}`
         )
       }
       if (!provider.isSupported()) {
-        throw new Error(
-          `Storage provider "${options.type}" is not supported in this environment`
-        )
+        throw new Error(`Storage provider "${options.type}" is not supported in this environment`)
       }
       return provider.create(options)
     }

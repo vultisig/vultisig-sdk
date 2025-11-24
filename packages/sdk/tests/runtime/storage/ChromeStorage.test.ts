@@ -390,9 +390,7 @@ describe('ChromeStorage', () => {
     it('should throw error when quota exceeded', async () => {
       // Mock set to throw quota error
       const originalSet = chrome.storage.local.set
-      chrome.storage.local.set = vi
-        .fn()
-        .mockRejectedValue(new Error('QUOTA_BYTES exceeded'))
+      chrome.storage.local.set = vi.fn().mockRejectedValue(new Error('QUOTA_BYTES exceeded'))
 
       await expect(storage.set('key', 'value')).rejects.toMatchObject({
         code: StorageErrorCode.QuotaExceeded,
@@ -405,9 +403,7 @@ describe('ChromeStorage', () => {
     it('should handle API errors gracefully', async () => {
       // Mock get to throw error
       const originalGet = chrome.storage.local.get
-      chrome.storage.local.get = vi
-        .fn()
-        .mockRejectedValue(new Error('API Error'))
+      chrome.storage.local.get = vi.fn().mockRejectedValue(new Error('API Error'))
 
       await expect(storage.get('key')).rejects.toThrow()
 
@@ -416,11 +412,7 @@ describe('ChromeStorage', () => {
     })
 
     it('should handle concurrent operations', async () => {
-      await Promise.all([
-        storage.set('key1', 'value1'),
-        storage.set('key2', 'value2'),
-        storage.set('key3', 'value3'),
-      ])
+      await Promise.all([storage.set('key1', 'value1'), storage.set('key2', 'value2'), storage.set('key3', 'value3')])
 
       expect(await storage.get('key1')).toBe('value1')
       expect(await storage.get('key2')).toBe('value2')

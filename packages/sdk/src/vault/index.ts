@@ -11,12 +11,7 @@ import { VaultBase } from './VaultBase'
 export { FastVault, SecureVault, VaultBase }
 
 // Export errors
-export {
-  VaultError,
-  VaultErrorCode,
-  VaultImportError,
-  VaultImportErrorCode,
-} from './VaultError'
+export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
 
 // Export vault configuration
 export type { VaultConfig } from './VaultServices'
@@ -37,9 +32,4 @@ export type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 export type VaultFolder = any
 export type VaultSecurityType = any
 
-export type {
-  ExportOptions,
-  VaultBackup,
-  VaultDetails,
-  VaultValidationResult,
-} from '../types'
+export type { ExportOptions, VaultBackup, VaultDetails, VaultValidationResult } from '../types'

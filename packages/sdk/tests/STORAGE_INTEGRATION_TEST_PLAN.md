@@ -13,14 +13,17 @@ This document outlines a comprehensive test plan for the storage integration in 
 ### What Was Integrated
 
 **Phase 1: Core Data Persistence**
+
 - [AddressBookManager.ts](../../../packages/sdk/src/AddressBookManager.ts:21-31) - Persists address book entries via `init()`, `addAddressBookEntry()`, `removeAddressBookEntry()`, `updateAddressBookEntry()`
 - [Vultisig.ts](../../../packages/sdk/src/Vultisig.ts:111-131) - Persists SDK configuration (currency, chains, active chain) via `loadConfigFromStorage()`, `setDefaultCurrency()`, `setDefaultChains()`, `setActiveChain()`
 
 **Phase 2: Vault Persistence**
+
 - [VaultManager.ts](../../../packages/sdk/src/VaultManager.ts:55-75) - Persists vault summaries and active vault ID via `init()`, storage of summaries at `vault:summary:{vaultId}`
 - [Vault.ts](../../../packages/sdk/src/vault/Vault.ts:131-161) - Persists per-vault preferences (currency, chains, tokens) via `loadPreferences()`, `savePreferences()`
 
 **Phase 3: Storage Utilities**
+
 - [Vultisig.ts](../../../packages/sdk/src/Vultisig.ts:651-685) - Added `getStorageInfo()` and `clearAllData()` methods
 - Quota monitoring (warns at >80% usage)
 
@@ -54,6 +57,7 @@ This document outlines a comprehensive test plan for the storage integration in 
 ### Breaking Changes
 
 All preference/config setters became async:
+
 - `setDefaultCurrency()`, `setDefaultChains()`, `setCurrency()`, `setChains()`
 - `addToken()`, `removeToken()`, `removeChain()`
 
@@ -62,26 +66,31 @@ All preference/config setters became async:
 ### Existing Tests
 
 ✅ **MemoryStorage** ([tests/unit/runtime/storage/MemoryStorage.test.ts](../../../packages/sdk/tests/unit/runtime/storage/MemoryStorage.test.ts))
+
 - Comprehensive coverage: basic ops, data types, edge cases, isolation
 - 40+ test cases covering all VaultStorage interface methods
 - Tests: get/set/remove/list/clear, usage estimation, metadata tracking
 
 ✅ **Vultisig.test.ts** ([tests/unit/Vultisig.test.ts](../../../packages/sdk/tests/unit/Vultisig.test.ts:380-403))
+
 - Basic storage integration (accepts custom storage)
 - Does NOT test persistence or cross-session recovery
 
 ✅ **VaultManager.test.ts** ([tests/unit/vault/VaultManager.test.ts](../../../packages/sdk/tests/unit/vault/VaultManager.test.ts))
+
 - Vault lifecycle operations (create, import, delete)
 - Uses MemoryStorage for isolation
 - Does NOT test storage persistence across instances
 
 ✅ **Vault.test.ts** ([tests/unit/vault/Vault.test.ts](../../../packages/sdk/tests/unit/vault/Vault.test.ts))
+
 - Vault operations (address derivation, signing, token/chain management)
 - Does NOT test preference persistence
 
 ### Coverage Gaps
 
 ❌ **No tests for:**
+
 1. Storage persistence across SDK restart
 2. BrowserStorage, NodeStorage, ChromeStorage implementations
 3. AddressBookManager storage integration
@@ -100,6 +109,7 @@ All preference/config setters became async:
 **Location:** `packages/sdk/tests/unit/runtime/storage/`
 
 #### 1.1 BrowserStorage Tests
+
 **File:** `BrowserStorage.test.ts`
 
 ```typescript
@@ -138,6 +148,7 @@ describe('BrowserStorage', () => {
 ---
 
 #### 1.2 NodeStorage Tests
+
 **File:** `NodeStorage.test.ts`
 
 ```typescript
@@ -176,6 +187,7 @@ describe('NodeStorage', () => {
 ---
 
 #### 1.3 ChromeStorage Tests
+
 **File:** `ChromeStorage.test.ts`
 
 ```typescript
@@ -216,6 +228,7 @@ describe('ChromeStorage', () => {
 **Location:** `packages/sdk/tests/integration/storage-integration/`
 
 #### 2.1 AddressBookManager Persistence
+
 **File:** `AddressBookManager-persistence.test.ts`
 
 ```typescript
@@ -253,6 +266,7 @@ describe('AddressBookManager Storage Integration', () => {
 ---
 
 #### 2.2 Vultisig Configuration Persistence
+
 **File:** `Vultisig-persistence.test.ts`
 
 ```typescript
@@ -301,6 +315,7 @@ describe('Vultisig Configuration Persistence', () => {
 ---
 
 #### 2.3 VaultManager Persistence
+
 **File:** `VaultManager-persistence.test.ts`
 
 ```typescript
@@ -349,6 +364,7 @@ describe('VaultManager Storage Integration', () => {
 ---
 
 #### 2.4 Vault Preferences Persistence
+
 **File:** `Vault-persistence.test.ts`
 
 ```typescript
@@ -396,6 +412,7 @@ describe('Vault Preferences Persistence', () => {
 **Location:** `packages/sdk/tests/integration/storage-backends/`
 
 #### 3.1 Storage Backend Compatibility
+
 **File:** `backend-compatibility.test.ts`
 
 ```typescript
@@ -441,6 +458,7 @@ describe('Storage Backend Compatibility', () => {
 **Location:** `packages/sdk/tests/integration/storage-edge-cases/`
 
 #### 4.1 Storage Failure Scenarios
+
 **File:** `storage-failures.test.ts`
 
 ```typescript
@@ -477,6 +495,7 @@ describe('Storage Failure Scenarios', () => {
 ---
 
 #### 4.2 Edge Cases
+
 **File:** `storage-edge-cases.test.ts`
 
 ```typescript
@@ -523,6 +542,7 @@ describe('Storage Edge Cases', () => {
 **Location:** `packages/sdk/tests/e2e/storage-workflows/`
 
 #### 5.1 Complete User Workflows
+
 **File:** `user-workflows.test.ts`
 
 ```typescript
@@ -576,12 +596,14 @@ describe('Storage User Workflows', () => {
 ## Test Implementation Strategy
 
 ### Phase 1: Storage Backend Tests (Week 1)
+
 1. Implement BrowserStorage tests
 2. Implement NodeStorage tests
 3. Implement ChromeStorage tests
 4. Ensure all backends pass VaultStorage contract
 
 **Success Criteria:**
+
 - All 4 storage backends have comprehensive unit/integration tests
 - All backends pass same interface tests
 - Coverage > 90% for storage implementations
@@ -589,12 +611,14 @@ describe('Storage User Workflows', () => {
 ---
 
 ### Phase 2: Component Integration Tests (Week 2)
+
 1. Implement AddressBookManager persistence tests
 2. Implement Vultisig configuration persistence tests
 3. Implement VaultManager persistence tests
 4. Implement Vault preferences persistence tests
 
 **Success Criteria:**
+
 - All components correctly persist and restore data
 - Cross-session recovery works for all components
 - All async setters persist data correctly
@@ -602,12 +626,14 @@ describe('Storage User Workflows', () => {
 ---
 
 ### Phase 3: Error Handling & Edge Cases (Week 3)
+
 1. Implement storage failure scenario tests
 2. Implement edge case tests
 3. Test cross-backend compatibility
 4. Test quota monitoring and warnings
 
 **Success Criteria:**
+
 - Storage failures are handled gracefully
 - App doesn't crash on storage errors
 - Edge cases are covered
@@ -616,12 +642,14 @@ describe('Storage User Workflows', () => {
 ---
 
 ### Phase 4: E2E User Workflows (Week 4)
+
 1. Implement complete user workflow tests
 2. Test in real browser environment
 3. Test in Node.js environment
 4. Test in Chrome extension environment
 
 **Success Criteria:**
+
 - All user workflows work end-to-end
 - Data persists across app restarts
 - Storage integration feels seamless
@@ -630,25 +658,26 @@ describe('Storage User Workflows', () => {
 
 ## Test Execution Matrix
 
-| Test Suite | Environment | Backend | Priority |
-|------------|-------------|---------|----------|
-| MemoryStorage | Node/Browser | Memory | ✅ Complete |
-| BrowserStorage | Browser | IndexedDB/localStorage | HIGH |
-| NodeStorage | Node/Electron | Filesystem | HIGH |
-| ChromeStorage | Chrome Extension | chrome.storage | MEDIUM |
-| AddressBookManager | All | All | HIGH |
-| Vultisig Config | All | All | HIGH |
-| VaultManager | All | All | HIGH |
-| Vault Preferences | All | All | HIGH |
-| Error Handling | All | All | HIGH |
-| Edge Cases | All | All | MEDIUM |
-| User Workflows | Browser/Node | Browser/Node | MEDIUM |
+| Test Suite         | Environment      | Backend                | Priority    |
+| ------------------ | ---------------- | ---------------------- | ----------- |
+| MemoryStorage      | Node/Browser     | Memory                 | ✅ Complete |
+| BrowserStorage     | Browser          | IndexedDB/localStorage | HIGH        |
+| NodeStorage        | Node/Electron    | Filesystem             | HIGH        |
+| ChromeStorage      | Chrome Extension | chrome.storage         | MEDIUM      |
+| AddressBookManager | All              | All                    | HIGH        |
+| Vultisig Config    | All              | All                    | HIGH        |
+| VaultManager       | All              | All                    | HIGH        |
+| Vault Preferences  | All              | All                    | HIGH        |
+| Error Handling     | All              | All                    | HIGH        |
+| Edge Cases         | All              | All                    | MEDIUM      |
+| User Workflows     | Browser/Node     | Browser/Node           | MEDIUM      |
 
 ---
 
 ## Identified Gaps & Recommendations
 
 ### Critical Gaps
+
 1. ❌ **No tests for BrowserStorage, NodeStorage, ChromeStorage**
    - **Impact:** Cannot verify storage backends work correctly
    - **Recommendation:** HIGH priority - implement in Phase 1
@@ -662,6 +691,7 @@ describe('Storage User Workflows', () => {
    - **Recommendation:** HIGH priority - implement in Phase 3
 
 ### Medium Priority Gaps
+
 4. ❌ **No quota monitoring tests**
    - **Impact:** Cannot verify warnings work correctly
    - **Recommendation:** MEDIUM priority - implement in Phase 3
@@ -675,6 +705,7 @@ describe('Storage User Workflows', () => {
    - **Recommendation:** MEDIUM priority - implement in Phase 4
 
 ### Low Priority Gaps
+
 7. ❌ **No storage migration tests**
    - **Impact:** Future storage version upgrades may break
    - **Recommendation:** LOW priority - implement before v2.0
@@ -683,16 +714,16 @@ describe('Storage User Workflows', () => {
 
 ## Test Coverage Goals
 
-| Component | Current | Target | Delta |
-|-----------|---------|--------|-------|
-| StorageManager | 60% | 95% | +35% |
-| BrowserStorage | 0% | 90% | +90% |
-| NodeStorage | 0% | 90% | +90% |
-| ChromeStorage | 0% | 85% | +85% |
-| AddressBookManager | 40% | 95% | +55% |
-| Vultisig | 65% | 95% | +30% |
-| VaultManager | 80% | 95% | +15% |
-| Vault | 85% | 95% | +10% |
+| Component           | Current | Target  | Delta    |
+| ------------------- | ------- | ------- | -------- |
+| StorageManager      | 60%     | 95%     | +35%     |
+| BrowserStorage      | 0%      | 90%     | +90%     |
+| NodeStorage         | 0%      | 90%     | +90%     |
+| ChromeStorage       | 0%      | 85%     | +85%     |
+| AddressBookManager  | 40%     | 95%     | +55%     |
+| Vultisig            | 65%     | 95%     | +30%     |
+| VaultManager        | 80%     | 95%     | +15%     |
+| Vault               | 85%     | 95%     | +10%     |
 | **Overall Storage** | **45%** | **92%** | **+47%** |
 
 ---
@@ -700,12 +731,14 @@ describe('Storage User Workflows', () => {
 ## Success Metrics
 
 ### Quantitative Metrics
+
 - Total test count: +120 tests (current: 652 → target: 772)
 - Storage test coverage: 45% → 92%
 - Test execution time: < 5 minutes (with real backends)
 - Flakiness rate: < 1%
 
 ### Qualitative Metrics
+
 - All storage backends verified working
 - Cross-session recovery proven reliable
 - Error handling proven graceful
@@ -799,13 +832,13 @@ All storage backends must implement:
 
 ```typescript
 interface VaultStorage {
-  get<T>(key: string): Promise<T | null>
-  set<T>(key: string, value: T): Promise<void>
-  remove(key: string): Promise<void>
-  list(): Promise<string[]>
-  clear(): Promise<void>
-  getUsage?(): Promise<number>
-  getQuota?(): Promise<number | undefined>
+  get<T>(key: string): Promise<T | null>;
+  set<T>(key: string, value: T): Promise<void>;
+  remove(key: string): Promise<void>;
+  list(): Promise<string[]>;
+  clear(): Promise<void>;
+  getUsage?(): Promise<number>;
+  getQuota?(): Promise<number | undefined>;
 }
 ```
 
@@ -818,20 +851,24 @@ interface VaultStorage {
 ### D. Test Utilities Needed
 
 1. **Test Storage Factory**
+
    ```typescript
-   function createTestStorage(type: 'memory' | 'browser' | 'node' | 'chrome'): VaultStorage
+   function createTestStorage(
+     type: "memory" | "browser" | "node" | "chrome",
+   ): VaultStorage;
    ```
 
 2. **Storage Assertion Helpers**
+
    ```typescript
-   async function expectStoredValue(storage, key, expected)
-   async function expectStorageKeys(storage, expected)
-   async function expectStorageEmpty(storage)
+   async function expectStoredValue(storage, key, expected);
+   async function expectStorageKeys(storage, expected);
+   async function expectStorageEmpty(storage);
    ```
 
 3. **Cross-Session Test Helper**
    ```typescript
-   async function testPersistence(setup, verify)
+   async function testPersistence(setup, verify);
    ```
 
 ---

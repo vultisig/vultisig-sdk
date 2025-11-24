@@ -61,9 +61,7 @@ async function testEthereumRPCEndpoint() {
               hexBalance,
             })
           } else {
-            reject(
-              new Error(`RPC Error: ${response.error?.message || 'Unknown'}`)
-            )
+            reject(new Error(`RPC Error: ${response.error?.message || 'Unknown'}`))
           }
         } catch (error) {
           reject(error)
@@ -84,9 +82,7 @@ async function testBalanceCommand() {
   const vaultPassword = process.env.VAULT_PASSWORD || ''
 
   console.log(`📂 Vault: ${vaultName}`)
-  console.log(
-    `🔐 Password: ${vaultPassword ? '***' + vaultPassword.slice(-3) : '(none)'}`
-  )
+  console.log(`🔐 Password: ${vaultPassword ? '***' + vaultPassword.slice(-3) : '(none)'}`)
 
   return new Promise(resolve => {
     const args = ['balance', '--vault', vaultName, '--network', 'ethereum']
@@ -131,18 +127,10 @@ async function main() {
 
     if (commandResult !== 0) {
       console.log('\n🔧 Root Cause & Solution:')
-      console.log(
-        '❌ Issue: Vault object missing balance() and balances() methods'
-      )
-      console.log(
-        '🎯 Cause: WASMManager not properly passed to Vault constructor'
-      )
-      console.log(
-        '✅ Fix: Updated VaultManagement.ts to pass wasmManager parameter'
-      )
-      console.log(
-        '⚠️  Status: Fix implemented but Node.js SDK build failing due to Solana imports'
-      )
+      console.log('❌ Issue: Vault object missing balance() and balances() methods')
+      console.log('🎯 Cause: WASMManager not properly passed to Vault constructor')
+      console.log('✅ Fix: Updated VaultManagement.ts to pass wasmManager parameter')
+      console.log('⚠️  Status: Fix implemented but Node.js SDK build failing due to Solana imports')
       console.log('')
       console.log('📋 Next Steps:')
       console.log('1. Fix Solana import issues in SDK build')

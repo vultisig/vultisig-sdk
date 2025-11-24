@@ -112,9 +112,7 @@ export class TransactionBuilder {
    * const signature = await vault.sign('fast', signingPayload, password)
    * ```
    */
-  async extractMessageHashes(
-    keysignPayload: KeysignPayload
-  ): Promise<string[]> {
+  async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]> {
     try {
       // Get WalletCore instance
       const walletCore = await WasmManager.getWalletCore()
@@ -125,10 +123,7 @@ export class TransactionBuilder {
       // Get public key data and create WalletCore PublicKey
       const publicKeyData = getKeysignTwPublicKey(keysignPayload)
       const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-      const publicKey = walletCore.PublicKey.createWithData(
-        publicKeyData,
-        publicKeyType
-      )
+      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, publicKeyType)
 
       // Get encoded signing inputs (compiled transaction data)
       const txInputsArray = getEncodedSigningInputs({
@@ -147,9 +142,7 @@ export class TransactionBuilder {
         })
 
         // Convert Uint8Array hashes to hex strings
-        const hexHashes = messageHashes.map(hash =>
-          Buffer.from(hash).toString('hex')
-        )
+        const hexHashes = messageHashes.map(hash => Buffer.from(hash).toString('hex'))
         allMessageHashes.push(...hexHashes)
       }
 

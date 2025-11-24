@@ -40,10 +40,7 @@ export async function findVultFiles(dir: string): Promise<string[]> {
 
         if (entry.isDirectory()) {
           await walk(fullPath)
-        } else if (
-          entry.isFile() &&
-          entry.name.toLowerCase().endsWith('.vult')
-        ) {
+        } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.vult')) {
           vultFiles.push(fullPath)
         }
       }

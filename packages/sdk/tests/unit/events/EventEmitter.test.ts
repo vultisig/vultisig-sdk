@@ -25,10 +25,7 @@ type TestEvents = {
 
 // Create a testable class that exposes emit()
 class TestEventEmitter extends UniversalEventEmitter<TestEvents> {
-  public emitEvent<K extends keyof TestEvents>(
-    event: K,
-    data: TestEvents[K]
-  ): void {
+  public emitEvent<K extends keyof TestEvents>(event: K, data: TestEvents[K]): void {
     this.emit(event, data)
   }
 }
@@ -122,12 +119,8 @@ describe('UniversalEventEmitter', () => {
         emitter.on('message', () => {})
       }
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Possible memory leak')
-      )
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('11 listeners')
-      )
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Possible memory leak'))
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('11 listeners'))
     })
 
     it('should warn even when max listeners is 0 (check is size > max)', () => {
@@ -336,10 +329,7 @@ describe('UniversalEventEmitter', () => {
       expect(handler3).toHaveBeenCalledWith('test')
 
       // Error should be logged
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Error in handler'),
-        expect.any(Error)
-      )
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Error in handler'), expect.any(Error))
     })
 
     it('should emit error events to error handlers when handler throws', () => {

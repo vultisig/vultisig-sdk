@@ -25,17 +25,8 @@
  * - ✅ SAFE: No funds are transferred, all operations are signing-only
  */
 
-import {
-  createSigningPayload,
-  TEST_AMOUNTS,
-  TEST_RECEIVERS,
-  validateSignatureFormat,
-} from '@helpers/signing-helpers'
-import {
-  loadTestVault,
-  TEST_VAULT_CONFIG,
-  verifyTestVault,
-} from '@helpers/test-vault'
+import { createSigningPayload, TEST_AMOUNTS, TEST_RECEIVERS, validateSignatureFormat } from '@helpers/signing-helpers'
+import { loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain, VaultBase } from '@/index'
@@ -52,9 +43,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
     // Verify vault is fast type
     if (vault.type !== 'fast') {
       throw new Error(
-        'Fast signing tests require a "fast" vault with Server- signer. ' +
-          'Current vault type: ' +
-          vault.type
+        'Fast signing tests require a "fast" vault with Server- signer. ' + 'Current vault type: ' + vault.type
       )
     }
     console.log('✅ Vault is fast type - can proceed with signing tests')
@@ -96,18 +85,12 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         console.log(`   Extracted ${messageHashes.length} message hash(es)`)
 
         // 3. Sign transaction
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Bitcoin
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Bitcoin)
         const signature = await vault.sign(signingPayload)
 
         // 4. Validate signature
         validateSignatureFormat(signature, Chain.Bitcoin, 'ECDSA')
-        console.log(
-          '✅ Bitcoin transaction signed successfully (NOT broadcast)'
-        )
+        console.log('✅ Bitcoin transaction signed successfully (NOT broadcast)')
         console.log(`   Signature: ${signature.signature.substring(0, 60)}...`)
       })
 
@@ -130,17 +113,11 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Litecoin
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Litecoin)
         const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Litecoin, 'ECDSA')
-        console.log(
-          '✅ Litecoin transaction signed successfully (NOT broadcast)'
-        )
+        console.log('✅ Litecoin transaction signed successfully (NOT broadcast)')
       })
     })
 
@@ -171,18 +148,12 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         expect(messageHashes.length).toBeGreaterThan(0)
         console.log(`   Extracted ${messageHashes.length} message hash(es)`)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Ethereum
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Ethereum)
         const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Ethereum, 'ECDSA')
         expect(signature.recovery).toBeDefined()
-        console.log(
-          '✅ Ethereum transaction signed successfully (NOT broadcast)'
-        )
+        console.log('✅ Ethereum transaction signed successfully (NOT broadcast)')
         console.log(`   Signature: ${signature.signature.substring(0, 60)}...`)
         console.log(`   Recovery ID: ${signature.recovery}`)
       })
@@ -207,17 +178,11 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Ethereum
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Ethereum)
         const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Ethereum, 'ECDSA')
-        console.log(
-          '✅ ERC-20 token transaction signed successfully (NOT broadcast)'
-        )
+        console.log('✅ ERC-20 token transaction signed successfully (NOT broadcast)')
         console.log(`   Token: USDC (contract call signature)`)
       })
     })
@@ -249,17 +214,11 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.THORChain
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.THORChain)
         const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.THORChain, 'ECDSA')
-        console.log(
-          '✅ THORChain transaction signed successfully (NOT broadcast)'
-        )
+        console.log('✅ THORChain transaction signed successfully (NOT broadcast)')
         console.log(`   Memo included: ${keysignPayload.memo}`)
       })
 
@@ -283,17 +242,11 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Cosmos
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Cosmos)
         const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Cosmos, 'ECDSA')
-        console.log(
-          '✅ Cosmos Hub transaction signed successfully (NOT broadcast)'
-        )
+        console.log('✅ Cosmos Hub transaction signed successfully (NOT broadcast)')
       })
     })
 
@@ -322,11 +275,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Solana
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Solana)
         const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Solana, 'EdDSA')
@@ -353,17 +302,11 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Polkadot
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Polkadot)
         const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Polkadot, 'EdDSA')
-        console.log(
-          '✅ Polkadot transaction signed successfully (NOT broadcast)'
-        )
+        console.log('✅ Polkadot transaction signed successfully (NOT broadcast)')
       })
 
       it('Sui: Sign native SUI transfer (EdDSA)', async () => {
@@ -385,11 +328,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Sui
-        )
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Sui)
         const signature = await vault.sign(signingPayload)
 
         validateSignatureFormat(signature, Chain.Sui, 'EdDSA')
@@ -422,11 +361,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
       })
 
       const messageHashes = await vault.extractMessageHashes(keysignPayload)
-      const signingPayload = createSigningPayload(
-        keysignPayload,
-        messageHashes,
-        Chain.Bitcoin
-      )
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Bitcoin)
       const signature = await vault.sign(signingPayload)
 
       // ECDSA-specific validations
@@ -462,11 +397,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
       })
 
       const messageHashes = await vault.extractMessageHashes(keysignPayload)
-      const signingPayload = createSigningPayload(
-        keysignPayload,
-        messageHashes,
-        Chain.Solana
-      )
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Solana)
       const signature = await vault.sign(signingPayload)
 
       // EdDSA-specific validations
@@ -500,11 +431,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
       })
 
       const messageHashes = await vault.extractMessageHashes(keysignPayload)
-      const signingPayload = createSigningPayload(
-        keysignPayload,
-        messageHashes,
-        Chain.Ethereum
-      )
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Ethereum)
 
       // Lock the vault to clear the password cache
       vault.lock()
@@ -551,9 +478,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
 
   describe('Safety Verification', () => {
     it('Confirms NO transactions were broadcast to blockchain', async () => {
-      console.log(
-        '\n🔒 Safety Check: Verifying NO transactions were broadcast...'
-      )
+      console.log('\n🔒 Safety Check: Verifying NO transactions were broadcast...')
 
       // Sign one transaction to verify safety (no broadcast)
       const chain = Chain.Ethereum
@@ -571,11 +496,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
       })
 
       const messageHashes = await vault.extractMessageHashes(keysignPayload)
-      const signingPayload = createSigningPayload(
-        keysignPayload,
-        messageHashes,
-        chain
-      )
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, chain)
 
       const signature = await vault.sign(signingPayload)
 

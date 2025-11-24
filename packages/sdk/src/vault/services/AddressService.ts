@@ -24,35 +24,31 @@ export class AddressService {
    * Uses CacheService with automatic persistent caching
    */
   async getAddress(chain: Chain): Promise<string> {
-    return this.cacheService.getOrComputeScoped(
-      chain.toLowerCase(),
-      CacheScope.ADDRESS,
-      async () => {
-        // Derive address (expensive WASM operation)
-        try {
-          const walletCore = await WasmManager.getWalletCore()
+    return this.cacheService.getOrComputeScoped(chain.toLowerCase(), CacheScope.ADDRESS, async () => {
+      // Derive address (expensive WASM operation)
+      try {
+        const walletCore = await WasmManager.getWalletCore()
 
-          const publicKey = getPublicKey({
-            chain,
-            walletCore,
-            publicKeys: this.vaultData.publicKeys,
-            hexChainCode: this.vaultData.hexChainCode,
-          })
+        const publicKey = getPublicKey({
+          chain,
+          walletCore,
+          publicKeys: this.vaultData.publicKeys,
+          hexChainCode: this.vaultData.hexChainCode,
+        })
 
-          return deriveAddress({
-            chain,
-            publicKey,
-            walletCore,
-          })
-        } catch (error) {
-          throw new VaultError(
-            VaultErrorCode.AddressDerivationFailed,
-            `Failed to derive address for ${chain}`,
-            error as Error
-          )
-        }
+        return deriveAddress({
+          chain,
+          publicKey,
+          walletCore,
+        })
+      } catch (error) {
+        throw new VaultError(
+          VaultErrorCode.AddressDerivationFailed,
+          `Failed to derive address for ${chain}`,
+          error as Error
+        )
       }
-    )
+    })
   }
 
   /**

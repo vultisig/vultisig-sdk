@@ -57,9 +57,7 @@ export class FastSigningService {
     // Get WalletCore instance
     const walletCore = await WasmManager.getWalletCore()
 
-    console.log(
-      `📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`
-    )
+    console.log(`📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`)
 
     reportProgress({
       step: 'preparing',
@@ -92,9 +90,7 @@ export class FastSigningService {
    * @throws Error if vault doesn't have server signer
    */
   private validateFastVault(vault: CoreVault): void {
-    const hasFastVaultServer = vault.signers.some((signer: string) =>
-      signer.startsWith('Server-')
-    )
+    const hasFastVaultServer = vault.signers.some((signer: string) => signer.startsWith('Server-'))
 
     if (!hasFastVaultServer) {
       throw new Error(

@@ -15,6 +15,7 @@ This example has been updated to showcase the latest Vultisig SDK features:
 ### Migration from Previous Versions
 
 The SDK has simplified its API:
+
 - Storage is now configured with `StorageOptions` instead of instantiating `NodeStorage`
 - Password management is handled globally via `GlobalConfig.onPasswordRequired` callback
 - Sign operations no longer require password parameter (resolved automatically)
@@ -50,6 +51,7 @@ npm run wallet create
 ```
 
 You'll be prompted to:
+
 1. Enter a vault name
 2. Set a password (min 8 characters)
 3. Provide an email for verification
@@ -89,17 +91,17 @@ npm run wallet send Cosmos cosmos1recipient... 10 --memo "Payment for services"
 
 ## Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `create` | Create a new vault |
-| `import <file>` | Import vault from .vult file |
-| `verify <vaultId>` | Verify vault with email code (use --resend to resend) |
-| `balance [chain]` | Show balances for all chains or a specific chain |
-| `send <chain> <to> <amount>` | Send transaction |
-| `portfolio` | Show total portfolio value |
-| `export [path]` | Export vault to file |
-| `addresses` | Show all vault addresses |
-| `chains` | List chains (use --add or --remove to manage) |
+| Command                      | Description                                           |
+| ---------------------------- | ----------------------------------------------------- |
+| `create`                     | Create a new vault                                    |
+| `import <file>`              | Import vault from .vult file                          |
+| `verify <vaultId>`           | Verify vault with email code (use --resend to resend) |
+| `balance [chain]`            | Show balances for all chains or a specific chain      |
+| `send <chain> <to> <amount>` | Send transaction                                      |
+| `portfolio`                  | Show total portfolio value                            |
+| `export [path]`              | Export vault to file                                  |
+| `addresses`                  | Show all vault addresses                              |
+| `chains`                     | List chains (use --add or --remove to manage)         |
 
 ## Configuration
 
@@ -198,18 +200,21 @@ npm run wallet portfolio --currency GBP
 This example demonstrates:
 
 ### Vault Lifecycle
+
 - **Create**: Generate a new fast vault with email verification
 - **Import**: Load an existing vault from a .vult file
 - **Export**: Backup your vault to an encrypted file
 - **Verify**: Confirm vault creation via email
 
 ### Multi-Chain Operations
+
 - **40+ Blockchains**: Support for EVM, UTXO, Cosmos, and more
 - **Address Derivation**: Automatic address generation for all chains
 - **Balance Tracking**: Real-time balance updates with caching
 - **Gas Estimation**: Automatic fee calculation
 
 ### Transaction Flow
+
 1. **Prepare**: Build transaction payload with proper formatting
 2. **Preview**: Show transaction details and gas estimates
 3. **Confirm**: User confirmation before signing
@@ -218,6 +223,7 @@ This example demonstrates:
 6. **Track**: Generate explorer URLs for verification
 
 ### Event System
+
 - **Progress Tracking**: Real-time updates during vault creation and signing
 - **Balance Updates**: Notifications when balances change
 - **Transaction Events**: Alerts when transactions are broadcast
@@ -283,6 +289,7 @@ npm run wallet send Ethereum 0xRecipientAddress... 0.001
 ## Security Best Practices
 
 ### Password Management
+
 - Never log or display passwords
 - Use strong passwords (min 8 characters, ideally 16+)
 - Password input is masked in the CLI
@@ -291,17 +298,20 @@ npm run wallet send Ethereum 0xRecipientAddress... 0.001
 - Each CLI command runs independently - no password caching between commands
 
 ### Vault Files
+
 - Always encrypt exports with a password
 - Store vault files in a secure location
 - **Never commit .vult files to git** (already in .gitignore)
 - Create regular encrypted backups
 
 ### Environment Variables
+
 - Add `.env` to `.gitignore` (already included)
 - Use `.env.example` for safe defaults
 - Never commit API keys or passwords
 
 ### Transaction Safety
+
 - Always preview transactions before signing
 - Use testnet for development and testing
 - Double-check addresses before sending
@@ -355,22 +365,27 @@ npm run typecheck
 ## Troubleshooting
 
 ### "No active vault" error
+
 Create a vault first:
+
 ```bash
 npm run wallet create
 ```
 
 ### "Network error" during transaction
+
 1. Check your internet connection
 2. Verify the blockchain RPC is accessible
 3. Try again in a few moments
 
 ### "Insufficient balance" error
+
 1. Check your balance: `npm run wallet balance <chain>`
 2. Ensure you have enough for gas fees
 3. Get testnet tokens from a faucet
 
 ### Verification code not received
+
 1. Check your spam folder
 2. Wait a few minutes
 3. Try creating the vault again
@@ -391,5 +406,6 @@ MIT
 ## Support
 
 For issues and questions:
+
 - [GitHub Issues](https://github.com/vultisig/vultisig-sdk/issues)
 - [Documentation](https://docs.vultisig.com)

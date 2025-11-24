@@ -6,13 +6,7 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
-import type {
-  Signature,
-  SigningMode,
-  SigningPayload,
-  VaultCreationStep,
-  VaultData,
-} from '../types'
+import type { Signature, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
 import type { VaultConfig } from './VaultServices'
@@ -138,20 +132,12 @@ export class SecureVault extends VaultBase {
     }
 
     // Check if vault file content is available
-    if (
-      !this.vaultData.vultFileContent ||
-      this.vaultData.vultFileContent.trim().length === 0
-    ) {
-      throw new VaultError(
-        VaultErrorCode.InvalidVault,
-        'Vault file content is empty. Cannot load keyShares.'
-      )
+    if (!this.vaultData.vultFileContent || this.vaultData.vultFileContent.trim().length === 0) {
+      throw new VaultError(VaultErrorCode.InvalidVault, 'Vault file content is empty. Cannot load keyShares.')
     }
 
     // Parse vault file to get keyShares
-    const container = vaultContainerFromString(
-      this.vaultData.vultFileContent.trim()
-    )
+    const container = vaultContainerFromString(this.vaultData.vultFileContent.trim())
 
     let vaultBase64: string
 
@@ -217,25 +203,15 @@ export class SecureVault extends VaultBase {
   static fromStorage(vaultData: VaultData, config?: VaultConfig): SecureVault {
     // Validate vault type
     if (vaultData.type !== 'secure') {
-      throw new VaultError(
-        VaultErrorCode.InvalidVault,
-        `Cannot create SecureVault from ${vaultData.type} vault data`
-      )
+      throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create SecureVault from ${vaultData.type} vault data`)
     }
 
     // Use the constructor with stored vult file content
-    const vault = new SecureVault(
-      vaultData.id,
-      vaultData.name,
-      vaultData.vultFileContent || '',
-      config
-    )
+    const vault = new SecureVault(vaultData.id, vaultData.name, vaultData.vultFileContent || '', config)
 
     // Override constructor defaults with stored preferences from VaultData
     if (vaultData.chains && vaultData.chains.length > 0) {
-      ;(vault as any)._userChains = vaultData.chains.map(
-        (c: string) => c as any
-      )
+      ;(vault as any)._userChains = vaultData.chains.map((c: string) => c as any)
     }
     if (vaultData.currency) {
       ;(vault as any)._currency = vaultData.currency

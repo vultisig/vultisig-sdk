@@ -1,13 +1,7 @@
 #!/usr/bin/env node
 import 'dotenv/config'
 
-import {
-  Chain,
-  fiatCurrencies,
-  FiatCurrency,
-  fiatCurrencyNameRecord,
-  GlobalConfig,
-} from '@vultisig/sdk'
+import { Chain, fiatCurrencies, FiatCurrency, fiatCurrencyNameRecord, GlobalConfig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
 import inquirer from 'inquirer'
@@ -128,24 +122,21 @@ program
           type: 'input',
           name: 'name',
           message: 'Enter vault name:',
-          validate: (input: string) =>
-            input.trim() !== '' || 'Name is required',
+          validate: (input: string) => input.trim() !== '' || 'Name is required',
         },
         {
           type: 'password',
           name: 'password',
           message: 'Enter password:',
           mask: '*',
-          validate: (input: string) =>
-            input.length >= 8 || 'Password must be at least 8 characters',
+          validate: (input: string) => input.length >= 8 || 'Password must be at least 8 characters',
         },
         {
           type: 'password',
           name: 'confirmPassword',
           message: 'Confirm password:',
           mask: '*',
-          validate: (input: string, answers: any) =>
-            input === answers.password || 'Passwords do not match',
+          validate: (input: string, answers: any) => input === answers.password || 'Passwords do not match',
         },
       ])) as any
 
@@ -156,25 +147,16 @@ program
             type: 'input',
             name: 'email',
             message: 'Enter email for verification:',
-            validate: (input: string) =>
-              /\S+@\S+\.\S+/.test(input) || 'Invalid email format',
+            validate: (input: string) => /\S+@\S+\.\S+/.test(input) || 'Invalid email format',
           },
         ])
 
         // Create fast vault
-        const result = await vaultManager.createVault(
-          answers.name,
-          answers.password,
-          email
-        )
+        const result = await vaultManager.createVault(answers.name, answers.password, email)
 
         // Handle email verification
         if (result.verificationRequired) {
-          console.log(
-            chalk.yellow(
-              '\n📧 A verification code has been sent to your email.'
-            )
-          )
+          console.log(chalk.yellow('\n📧 A verification code has been sent to your email.'))
           console.log(chalk.blue('Please check your inbox and enter the code.'))
 
           const { code } = await inquirer.prompt([
@@ -182,25 +164,18 @@ program
               type: 'input',
               name: 'code',
               message: `Verification code sent to ${email}. Enter code:`,
-              validate: (input: string) =>
-                /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+              validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
             },
           ])
 
           const verified = await vaultManager.verifyVault(result.vaultId, code)
 
           if (!verified) {
-            console.error(
-              chalk.red(
-                '\n✗ Verification failed. Please check the code and try again.'
-              )
-            )
+            console.error(chalk.red('\n✗ Verification failed. Please check the code and try again.'))
             console.log(chalk.yellow('\nTo retry verification, use:'))
             console.log(chalk.cyan(`  npm run wallet verify ${result.vaultId}`))
             console.log(chalk.yellow('\nTo resend the verification email:'))
-            console.log(
-              chalk.cyan(`  npm run wallet verify ${result.vaultId} --resend`)
-            )
+            console.log(chalk.cyan(`  npm run wallet verify ${result.vaultId} --resend`))
             const error: any = new Error('Verification failed')
             error.exitCode = 1
             throw error
@@ -214,8 +189,7 @@ program
             name: 'threshold',
             message: 'Signing threshold (m):',
             default: 2,
-            validate: (input: number) =>
-              input > 0 || 'Threshold must be greater than 0',
+            validate: (input: number) => input > 0 || 'Threshold must be greater than 0',
           },
           {
             type: 'number',
@@ -223,8 +197,7 @@ program
             message: 'Total shares (n):',
             default: 3,
             validate: (input: number, answers: any) =>
-              input >= answers.threshold ||
-              `Total shares must be >= threshold (${answers.threshold})`,
+              input >= answers.threshold || `Total shares must be >= threshold (${answers.threshold})`,
           },
         ])) as any
 
@@ -236,11 +209,7 @@ program
           secureOptions.totalShares
         )
 
-        console.log(
-          chalk.yellow(
-            `\n⚠️  Important: Save your vault backup file (.vult) in a secure location.`
-          )
-        )
+        console.log(chalk.yellow(`\n⚠️  Important: Save your vault backup file (.vult) in a secure location.`))
         console.log(
           chalk.yellow(
             `This is a ${secureOptions.threshold}-of-${secureOptions.totalShares} vault. You'll need ${secureOptions.threshold} devices to sign transactions.`
@@ -249,18 +218,10 @@ program
       }
 
       console.log(chalk.green('\n✓ Vault created!'))
-      console.log(
-        chalk.blue('\nYour vault is ready. Run the following commands:')
-      )
-      console.log(
-        chalk.cyan('  npm run wallet balance     ') + '- View balances'
-      )
-      console.log(
-        chalk.cyan('  npm run wallet addresses   ') + '- View addresses'
-      )
-      console.log(
-        chalk.cyan('  npm run wallet portfolio   ') + '- View portfolio value'
-      )
+      console.log(chalk.blue('\nYour vault is ready. Run the following commands:'))
+      console.log(chalk.cyan('  npm run wallet balance     ') + '- View balances')
+      console.log(chalk.cyan('  npm run wallet addresses   ') + '- View addresses')
+      console.log(chalk.cyan('  npm run wallet portfolio   ') + '- View portfolio value')
     })
   )
 
@@ -303,9 +264,7 @@ program
         const spinner = ora('Resending verification email...').start()
         await vaultManager.resendVerification(vaultId)
         spinner.succeed('Verification email sent!')
-        console.log(
-          chalk.blue('Check your inbox for the new verification code.')
-        )
+        console.log(chalk.blue('Check your inbox for the new verification code.'))
       }
 
       // Prompt for verification code
@@ -314,8 +273,7 @@ program
           type: 'input',
           name: 'code',
           message: 'Enter verification code:',
-          validate: (input: string) =>
-            /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+          validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
         },
       ])
 
@@ -325,14 +283,8 @@ program
       if (verified) {
         console.log(chalk.green('\n✓ Vault verified successfully!'))
       } else {
-        console.error(
-          chalk.red(
-            '\n✗ Verification failed. Please check the code and try again.'
-          )
-        )
-        console.log(
-          chalk.yellow('\nTip: Use --resend to get a new verification code:')
-        )
+        console.error(chalk.red('\n✗ Verification failed. Please check the code and try again.'))
+        console.log(chalk.yellow('\nTip: Use --resend to get a new verification code:'))
         console.log(chalk.cyan(`  npm run wallet verify ${vaultId} --resend`))
         const error: any = new Error('Verification failed')
         error.exitCode = 1
@@ -347,54 +299,48 @@ program
   .description('Show balance for a chain or all chains')
   .option('-t, --tokens', 'Include token balances')
   .action(
-    withExit(
-      async (chainStr: string | undefined, options: { tokens?: boolean }) => {
-        await init()
+    withExit(async (chainStr: string | undefined, options: { tokens?: boolean }) => {
+      await init()
 
-        if (!vaultManager.getActiveVault()) {
-          throw new Error('No active vault. Create or import a vault first.')
-        }
-
-        const spinner = ora('Loading balances...').start()
-
-        if (chainStr) {
-          // Show balance for specific chain
-          const chain = chainStr as Chain
-          const balance = await vaultManager.getBalance(chain)
-
-          spinner.succeed('Balance loaded')
-
-          console.log(chalk.cyan(`\n${chain} Balance:`))
-          console.log(`  Amount: ${balance.amount} ${balance.symbol}`)
-          if (balance.fiatValue && balance.fiatCurrency) {
-            console.log(
-              `  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`
-            )
-          }
-        } else {
-          // Show all balances
-          const balances = await vaultManager.getAllBalances(options.tokens)
-
-          spinner.succeed('Balances loaded')
-
-          console.log(chalk.cyan('\nPortfolio Balances:\n'))
-
-          const tableData = Object.entries(balances).map(
-            ([chain, balance]) => ({
-              Chain: chain,
-              Amount: balance.amount,
-              Symbol: balance.symbol,
-              Value:
-                balance.fiatValue && balance.fiatCurrency
-                  ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`
-                  : 'N/A',
-            })
-          )
-
-          console.table(tableData)
-        }
+      if (!vaultManager.getActiveVault()) {
+        throw new Error('No active vault. Create or import a vault first.')
       }
-    )
+
+      const spinner = ora('Loading balances...').start()
+
+      if (chainStr) {
+        // Show balance for specific chain
+        const chain = chainStr as Chain
+        const balance = await vaultManager.getBalance(chain)
+
+        spinner.succeed('Balance loaded')
+
+        console.log(chalk.cyan(`\n${chain} Balance:`))
+        console.log(`  Amount: ${balance.amount} ${balance.symbol}`)
+        if (balance.fiatValue && balance.fiatCurrency) {
+          console.log(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
+        }
+      } else {
+        // Show all balances
+        const balances = await vaultManager.getAllBalances(options.tokens)
+
+        spinner.succeed('Balances loaded')
+
+        console.log(chalk.cyan('\nPortfolio Balances:\n'))
+
+        const tableData = Object.entries(balances).map(([chain, balance]) => ({
+          Chain: chain,
+          Amount: balance.amount,
+          Symbol: balance.symbol,
+          Value:
+            balance.fiatValue && balance.fiatCurrency
+              ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`
+              : 'N/A',
+        }))
+
+        console.table(tableData)
+      }
+    })
   )
 
 // Command: Send transaction
@@ -404,67 +350,56 @@ program
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .action(
-    withExit(
-      async (
-        chainStr: string,
-        to: string,
-        amount: string,
-        options: { token?: string; memo?: string }
-      ) => {
-        await init()
+    withExit(async (chainStr: string, to: string, amount: string, options: { token?: string; memo?: string }) => {
+      await init()
 
-        if (!vaultManager.getActiveVault()) {
-          throw new Error('No active vault. Create or import a vault first.')
-        }
-
-        if (!transactionManager) {
-          throw new Error('Transaction manager not initialized')
-        }
-
-        // Validate inputs
-        const chain = chainStr as Chain
-        if (!Object.values(Chain).includes(chain)) {
-          throw new Error(`Invalid chain: ${chain}`)
-        }
-
-        if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-          throw new Error('Invalid amount')
-        }
-
-        // Execute send (password will be prompted via GlobalConfig.onPasswordRequired)
-        try {
-          const result = await transactionManager.send({
-            chain,
-            to,
-            amount,
-            tokenId: options.token,
-            memo: options.memo,
-          })
-
-          // Display result
-          console.log(chalk.green('\n✓ Transaction successful!'))
-          console.log(chalk.blue(`\nTransaction Hash: ${result.txHash}`))
-          console.log(chalk.cyan(`View on explorer: ${result.explorerUrl}`))
-        } catch (error: any) {
-          if (error.message === 'Transaction cancelled by user') {
-            console.log(chalk.yellow('\n✗ Transaction cancelled'))
-            return // Exit cleanly
-          }
-          throw error
-        }
+      if (!vaultManager.getActiveVault()) {
+        throw new Error('No active vault. Create or import a vault first.')
       }
-    )
+
+      if (!transactionManager) {
+        throw new Error('Transaction manager not initialized')
+      }
+
+      // Validate inputs
+      const chain = chainStr as Chain
+      if (!Object.values(Chain).includes(chain)) {
+        throw new Error(`Invalid chain: ${chain}`)
+      }
+
+      if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+        throw new Error('Invalid amount')
+      }
+
+      // Execute send (password will be prompted via GlobalConfig.onPasswordRequired)
+      try {
+        const result = await transactionManager.send({
+          chain,
+          to,
+          amount,
+          tokenId: options.token,
+          memo: options.memo,
+        })
+
+        // Display result
+        console.log(chalk.green('\n✓ Transaction successful!'))
+        console.log(chalk.blue(`\nTransaction Hash: ${result.txHash}`))
+        console.log(chalk.cyan(`View on explorer: ${result.explorerUrl}`))
+      } catch (error: any) {
+        if (error.message === 'Transaction cancelled by user') {
+          console.log(chalk.yellow('\n✗ Transaction cancelled'))
+          return // Exit cleanly
+        }
+        throw error
+      }
+    })
   )
 
 // Command: Show portfolio value
 program
   .command('portfolio')
   .description('Show total portfolio value')
-  .option(
-    '-c, --currency <currency>',
-    `Fiat currency (${fiatCurrencies.join(', ')})`,
-    'usd'
-  )
+  .option('-c, --currency <currency>', `Fiat currency (${fiatCurrencies.join(', ')})`, 'usd')
   .action(
     withExit(async (options: { currency: string }) => {
       await init()
@@ -479,9 +414,7 @@ program
       const currency = options.currency.toLowerCase() as FiatCurrency
       if (!fiatCurrencies.includes(currency)) {
         console.error(chalk.red(`✗ Invalid currency: ${options.currency}`))
-        console.log(
-          chalk.yellow(`Supported currencies: ${fiatCurrencies.join(', ')}`)
-        )
+        console.log(chalk.yellow(`Supported currencies: ${fiatCurrencies.join(', ')}`))
         const error: any = new Error('Invalid currency')
         error.exitCode = 1
         throw error
@@ -501,31 +434,22 @@ program
 
       // Display total value
       console.log(chalk.cyan('\n╔════════════════════════════════════════╗'))
-      console.log(
-        chalk.cyan(`║       Portfolio Total Value (${currencyName})       ║`)
-      )
+      console.log(chalk.cyan(`║       Portfolio Total Value (${currencyName})       ║`))
       console.log(chalk.cyan('╠════════════════════════════════════════╣'))
       const totalDisplay =
-        portfolio.totalValue.amount.padEnd(20) +
-        portfolio.totalValue.currency.toUpperCase().padStart(16)
-      console.log(
-        chalk.cyan('║  ') + chalk.bold.green(totalDisplay) + chalk.cyan('  ║')
-      )
+        portfolio.totalValue.amount.padEnd(20) + portfolio.totalValue.currency.toUpperCase().padStart(16)
+      console.log(chalk.cyan('║  ') + chalk.bold.green(totalDisplay) + chalk.cyan('  ║'))
       console.log(chalk.cyan('╚════════════════════════════════════════╝\n'))
 
       // Display breakdown by chain
       console.log(chalk.bold('Chain Breakdown:\n'))
 
-      const table = portfolio.chainBalances.map(
-        ({ chain, balance, value }) => ({
-          Chain: chain,
-          Amount: balance.amount,
-          Symbol: balance.symbol,
-          Value: value
-            ? `${value.amount} ${value.currency.toUpperCase()}`
-            : 'N/A',
-        })
-      )
+      const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
+        Chain: chain,
+        Amount: balance.amount,
+        Symbol: balance.symbol,
+        Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
+      }))
 
       console.table(table)
     })
@@ -550,23 +474,15 @@ program
         const currentCurrency = vault.currency
         const currencyName = fiatCurrencyNameRecord[currentCurrency]
         console.log(chalk.cyan('\nCurrent Currency Preference:'))
-        console.log(
-          `  ${chalk.green(currentCurrency.toUpperCase())} - ${currencyName}`
-        )
-        console.log(
-          chalk.gray(`\nSupported currencies: ${fiatCurrencies.join(', ')}`)
-        )
-        console.log(
-          chalk.gray('Use "npm run wallet currency <code>" to change')
-        )
+        console.log(`  ${chalk.green(currentCurrency.toUpperCase())} - ${currencyName}`)
+        console.log(chalk.gray(`\nSupported currencies: ${fiatCurrencies.join(', ')}`))
+        console.log(chalk.gray('Use "npm run wallet currency <code>" to change'))
       } else {
         // Set new currency
         const currency = newCurrency.toLowerCase() as FiatCurrency
         if (!fiatCurrencies.includes(currency)) {
           console.error(chalk.red(`✗ Invalid currency: ${newCurrency}`))
-          console.log(
-            chalk.yellow(`Supported currencies: ${fiatCurrencies.join(', ')}`)
-          )
+          console.log(chalk.yellow(`Supported currencies: ${fiatCurrencies.join(', ')}`))
           const error: any = new Error('Invalid currency')
           error.exitCode = 1
           throw error
@@ -577,11 +493,7 @@ program
         spinner.succeed('Currency updated')
 
         const currencyName = fiatCurrencyNameRecord[currency]
-        console.log(
-          chalk.green(
-            `\n✓ Currency preference set to ${currency.toUpperCase()} (${currencyName})`
-          )
-        )
+        console.log(chalk.green(`\n✓ Currency preference set to ${currency.toUpperCase()} (${currencyName})`))
       }
     })
   )
@@ -601,9 +513,7 @@ program
         spinner.succeed('Server status retrieved')
 
         console.log(chalk.cyan('\nServer Status:\n'))
-        console.log(
-          `  Connected:     ${status.isConnected ? chalk.green('Yes') : chalk.red('No')}`
-        )
+        console.log(`  Connected:     ${status.isConnected ? chalk.green('Yes') : chalk.red('No')}`)
         console.log(`  Endpoint:      ${status.endpoint}`)
         if (status.version) {
           console.log(`  Version:       ${status.version}`)
@@ -696,99 +606,79 @@ program
   .option('--remove <address>', 'Remove an address from the address book')
   .option('--chain <chain>', 'Filter by chain')
   .action(
-    withExit(
-      async (options: { add?: boolean; remove?: string; chain?: string }) => {
-        await init()
+    withExit(async (options: { add?: boolean; remove?: string; chain?: string }) => {
+      await init()
 
-        const sdk = vaultManager.getSDK()
+      const sdk = vaultManager.getSDK()
 
-        if (options.add) {
-          // Add new address book entry
-          const answers = await inquirer.prompt([
-            {
-              type: 'list',
-              name: 'chain',
-              message: 'Select chain:',
-              choices: Object.values(Chain),
-            },
-            {
-              type: 'input',
-              name: 'address',
-              message: 'Enter address:',
-              validate: (input: string) =>
-                input.trim() !== '' || 'Address is required',
-            },
-            {
-              type: 'input',
-              name: 'name',
-              message: 'Enter name/label:',
-              validate: (input: string) =>
-                input.trim() !== '' || 'Name is required',
-            },
-          ])
+      if (options.add) {
+        // Add new address book entry
+        const answers = await inquirer.prompt([
+          {
+            type: 'list',
+            name: 'chain',
+            message: 'Select chain:',
+            choices: Object.values(Chain),
+          },
+          {
+            type: 'input',
+            name: 'address',
+            message: 'Enter address:',
+            validate: (input: string) => input.trim() !== '' || 'Address is required',
+          },
+          {
+            type: 'input',
+            name: 'name',
+            message: 'Enter name/label:',
+            validate: (input: string) => input.trim() !== '' || 'Name is required',
+          },
+        ])
 
-          const spinner = ora('Adding address to address book...').start()
-          await sdk.addAddressBookEntry([
-            {
-              chain: answers.chain,
-              address: answers.address.trim(),
-              name: answers.name.trim(),
-            },
-          ])
-          spinner.succeed('Address added')
+        const spinner = ora('Adding address to address book...').start()
+        await sdk.addAddressBookEntry([
+          {
+            chain: answers.chain,
+            address: answers.address.trim(),
+            name: answers.name.trim(),
+          },
+        ])
+        spinner.succeed('Address added')
 
-          console.log(
-            chalk.green(
-              `\n✓ Added ${answers.name} (${answers.chain}: ${answers.address})`
-            )
-          )
-        } else if (options.remove) {
-          // Remove address book entry
-          const chain = options.chain as Chain | undefined
+        console.log(chalk.green(`\n✓ Added ${answers.name} (${answers.chain}: ${answers.address})`))
+      } else if (options.remove) {
+        // Remove address book entry
+        const chain = options.chain as Chain | undefined
 
-          const spinner = ora('Removing address from address book...').start()
-          await sdk.removeAddressBookEntry([{ address: options.remove, chain }])
-          spinner.succeed('Address removed')
+        const spinner = ora('Removing address from address book...').start()
+        await sdk.removeAddressBookEntry([{ address: options.remove, chain }])
+        spinner.succeed('Address removed')
 
-          console.log(chalk.green(`\n✓ Removed ${options.remove}`))
+        console.log(chalk.green(`\n✓ Removed ${options.remove}`))
+      } else {
+        // List address book entries
+        const spinner = ora('Loading address book...').start()
+        const chain = options.chain as Chain | undefined
+        const entries = await sdk.getAddressBook(chain)
+        spinner.succeed('Address book loaded')
+
+        if (entries.length === 0) {
+          console.log(chalk.yellow(`\nNo addresses in address book${chain ? ` for ${chain}` : ''}`))
+          console.log(chalk.gray('\nUse --add to add an address to the address book'))
         } else {
-          // List address book entries
-          const spinner = ora('Loading address book...').start()
-          const chain = options.chain as Chain | undefined
-          const entries = await sdk.getAddressBook(chain)
-          spinner.succeed('Address book loaded')
+          console.log(chalk.cyan(`\nAddress Book${chain ? ` (${chain})` : ''}:\n`))
 
-          if (entries.length === 0) {
-            console.log(
-              chalk.yellow(
-                `\nNo addresses in address book${chain ? ` for ${chain}` : ''}`
-              )
-            )
-            console.log(
-              chalk.gray('\nUse --add to add an address to the address book')
-            )
-          } else {
-            console.log(
-              chalk.cyan(`\nAddress Book${chain ? ` (${chain})` : ''}:\n`)
-            )
+          const table = entries.map(entry => ({
+            Name: entry.name,
+            Chain: entry.chain,
+            Address: entry.address,
+          }))
 
-            const table = entries.map(entry => ({
-              Name: entry.name,
-              Chain: entry.chain,
-              Address: entry.address,
-            }))
+          console.table(table)
 
-            console.table(table)
-
-            console.log(
-              chalk.gray(
-                '\nUse --add to add or --remove <address> to remove an address'
-              )
-            )
-          }
+          console.log(chalk.gray('\nUse --add to add or --remove <address> to remove an address'))
         }
       }
-    )
+    })
   )
 
 // Command: Manage chains
@@ -824,11 +714,7 @@ program
         chains.forEach((chain: Chain) => {
           console.log(`  • ${chain}`)
         })
-        console.log(
-          chalk.gray(
-            '\nUse --add <chain> to add a chain or --remove <chain> to remove one'
-          )
-        )
+        console.log(chalk.gray('\nUse --add <chain> to add a chain or --remove <chain> to remove one'))
       }
     })
   )
@@ -846,9 +732,7 @@ program
       spinner.succeed('Vaults loaded')
 
       if (vaults.length === 0) {
-        console.log(
-          chalk.yellow('\nNo vaults found. Create or import a vault first.')
-        )
+        console.log(chalk.yellow('\nNo vaults found. Create or import a vault first.'))
         return
       }
 
@@ -858,10 +742,7 @@ program
 
       const table = vaults.map(vault => ({
         ID: vault.id,
-        Name:
-          vault.name === activeVault?.name
-            ? chalk.green(`${vault.name} (active)`)
-            : vault.name,
+        Name: vault.name === activeVault?.name ? chalk.green(`${vault.name} (active)`) : vault.name,
         Type: vault.type,
         Chains: vault.getChains().length,
         Created: new Date(vault.createdAt).toLocaleDateString(),
@@ -869,9 +750,7 @@ program
 
       console.table(table)
 
-      console.log(
-        chalk.gray('\nUse "npm run wallet switch <id>" to switch active vault')
-      )
+      console.log(chalk.gray('\nUse "npm run wallet switch <id>" to switch active vault'))
     })
   )
 
@@ -919,9 +798,7 @@ program
       await vault.rename(newName)
       spinner.succeed('Vault renamed')
 
-      console.log(
-        chalk.green(`\n✓ Vault renamed from "${oldName}" to "${newName}"`)
-      )
+      console.log(chalk.green(`\n✓ Vault renamed from "${oldName}" to "${newName}"`))
     })
   )
 
@@ -948,28 +825,18 @@ program
       console.log(`  Name:          ${chalk.green(vault.name)}`)
       console.log(`  ID:            ${vault.id}`)
       console.log(`  Type:          ${chalk.yellow(vault.type)}`)
-      console.log(
-        `  Created:       ${new Date(vault.createdAt).toLocaleString()}`
-      )
-      console.log(
-        `  Last Modified: ${new Date(vault.lastModified).toLocaleString()}`
-      )
+      console.log(`  Created:       ${new Date(vault.createdAt).toLocaleString()}`)
+      console.log(`  Last Modified: ${new Date(vault.lastModified).toLocaleString()}`)
 
       // Security info
       console.log(chalk.bold('\nSecurity:'))
-      console.log(
-        `  Encrypted:     ${vault.isEncrypted ? chalk.green('Yes') : chalk.gray('No')}`
-      )
-      console.log(
-        `  Backed Up:     ${vault.isBackedUp ? chalk.green('Yes') : chalk.yellow('No')}`
-      )
+      console.log(`  Encrypted:     ${vault.isEncrypted ? chalk.green('Yes') : chalk.gray('No')}`)
+      console.log(`  Backed Up:     ${vault.isBackedUp ? chalk.green('Yes') : chalk.yellow('No')}`)
 
       // MPC info
       console.log(chalk.bold('\nMPC Configuration:'))
       console.log(`  Library Type:  ${vault.libType}`)
-      console.log(
-        `  Threshold:     ${chalk.cyan(vault.threshold)} of ${chalk.cyan(vault.totalSigners)}`
-      )
+      console.log(`  Threshold:     ${chalk.cyan(vault.threshold)} of ${chalk.cyan(vault.totalSigners)}`)
       console.log(`  Local Party:   ${vault.localPartyId}`)
       console.log(`  Total Signers: ${vault.totalSigners}`)
 
@@ -994,15 +861,9 @@ program
 
       // Public keys
       console.log(chalk.bold('\nPublic Keys:'))
-      console.log(
-        `  ECDSA:         ${vault.publicKeys.ecdsa.substring(0, 20)}...`
-      )
-      console.log(
-        `  EdDSA:         ${vault.publicKeys.eddsa.substring(0, 20)}...`
-      )
-      console.log(
-        `  Chain Code:    ${vault.hexChainCode.substring(0, 20)}...\n`
-      )
+      console.log(`  ECDSA:         ${vault.publicKeys.ecdsa.substring(0, 20)}...`)
+      console.log(`  EdDSA:         ${vault.publicKeys.eddsa.substring(0, 20)}...`)
+      console.log(`  Chain Code:    ${vault.hexChainCode.substring(0, 20)}...\n`)
     })
   )
 
@@ -1013,80 +874,68 @@ program
   .option('--add <contractAddress>', 'Add a token by contract address')
   .option('--remove <tokenId>', 'Remove a token by ID')
   .action(
-    withExit(
-      async (chainStr: string, options: { add?: string; remove?: string }) => {
-        await init()
+    withExit(async (chainStr: string, options: { add?: string; remove?: string }) => {
+      await init()
 
-        if (!vaultManager.getActiveVault()) {
-          throw new Error('No active vault. Create or import a vault first.')
-        }
+      if (!vaultManager.getActiveVault()) {
+        throw new Error('No active vault. Create or import a vault first.')
+      }
 
-        const vault = vaultManager.getActiveVault()!
-        const chain = chainStr as Chain
+      const vault = vaultManager.getActiveVault()!
+      const chain = chainStr as Chain
 
-        if (options.add) {
-          // Add token by contract address
-          const { symbol, decimals } = await inquirer.prompt([
-            {
-              type: 'input',
-              name: 'symbol',
-              message: 'Enter token symbol (e.g., USDT):',
-              validate: (input: string) =>
-                input.trim() !== '' || 'Symbol is required',
-            },
-            {
-              type: 'number',
-              name: 'decimals',
-              message: 'Enter token decimals:',
-              default: 18,
-              validate: (input: number) =>
-                input >= 0 || 'Decimals must be non-negative',
-            },
-          ])
+      if (options.add) {
+        // Add token by contract address
+        const { symbol, decimals } = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'symbol',
+            message: 'Enter token symbol (e.g., USDT):',
+            validate: (input: string) => input.trim() !== '' || 'Symbol is required',
+          },
+          {
+            type: 'number',
+            name: 'decimals',
+            message: 'Enter token decimals:',
+            default: 18,
+            validate: (input: number) => input >= 0 || 'Decimals must be non-negative',
+          },
+        ])
 
-          await vaultManager.addToken(chain, {
-            contractAddress: options.add,
-            symbol: symbol.trim(),
-            decimals,
-            isNativeToken: false,
-          })
+        await vaultManager.addToken(chain, {
+          contractAddress: options.add,
+          symbol: symbol.trim(),
+          decimals,
+          isNativeToken: false,
+        })
 
-          console.log(chalk.green(`\n✓ Added token ${symbol} on ${chain}`))
-        } else if (options.remove) {
-          // Remove token
-          await vaultManager.removeToken(chain, options.remove)
-          console.log(
-            chalk.green(`\n✓ Removed token ${options.remove} from ${chain}`)
-          )
+        console.log(chalk.green(`\n✓ Added token ${symbol} on ${chain}`))
+      } else if (options.remove) {
+        // Remove token
+        await vaultManager.removeToken(chain, options.remove)
+        console.log(chalk.green(`\n✓ Removed token ${options.remove} from ${chain}`))
+      } else {
+        // List tokens for chain
+        const spinner = ora(`Loading tokens for ${chain}...`).start()
+        const tokens = vault.getTokens(chain)
+        spinner.succeed(`Tokens loaded for ${chain}`)
+
+        if (!tokens || tokens.length === 0) {
+          console.log(chalk.yellow(`\nNo tokens configured for ${chain}`))
+          console.log(chalk.gray(`\nUse --add <contractAddress> to add a token`))
         } else {
-          // List tokens for chain
-          const spinner = ora(`Loading tokens for ${chain}...`).start()
-          const tokens = vault.getTokens(chain)
-          spinner.succeed(`Tokens loaded for ${chain}`)
-
-          if (!tokens || tokens.length === 0) {
-            console.log(chalk.yellow(`\nNo tokens configured for ${chain}`))
-            console.log(
-              chalk.gray(`\nUse --add <contractAddress> to add a token`)
-            )
-          } else {
-            console.log(chalk.cyan(`\nTokens for ${chain}:\n`))
-            const table = tokens.map(token => ({
-              Symbol: token.symbol,
-              Contract: token.contractAddress,
-              Decimals: token.decimals,
-              Native: token.isNativeToken ? 'Yes' : 'No',
-            }))
-            console.table(table)
-            console.log(
-              chalk.gray(
-                `\nUse --add <contractAddress> to add or --remove <tokenId> to remove`
-              )
-            )
-          }
+          console.log(chalk.cyan(`\nTokens for ${chain}:\n`))
+          const table = tokens.map(token => ({
+            Symbol: token.symbol,
+            Contract: token.contractAddress,
+            Decimals: token.decimals,
+            Native: token.isNativeToken ? 'Yes' : 'No',
+          }))
+          console.table(table)
+          console.log(chalk.gray(`\nUse --add <contractAddress> to add or --remove <tokenId> to remove`))
         }
       }
-    )
+    })
   )
 
 // Cleanup on exit

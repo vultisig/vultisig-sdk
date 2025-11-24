@@ -47,8 +47,7 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
   Litecoin: addr => /^(ltc1|[LM])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(addr),
   Dogecoin: addr => /^D[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
   'Bitcoin-Cash': addr =>
-    /^(bitcoincash:|q)[a-zA-HJ-NP-Z0-9]{40,45}$/.test(addr) ||
-    /^[13][a-zA-HJ-NP-Z0-9]{25,34}$/.test(addr),
+    /^(bitcoincash:|q)[a-zA-HJ-NP-Z0-9]{40,45}$/.test(addr) || /^[13][a-zA-HJ-NP-Z0-9]{25,34}$/.test(addr),
   Dash: addr => /^X[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
   Zcash: addr => /^(t1|t3)[a-zA-HJ-NP-Z0-9]{33}$/.test(addr),
 
@@ -128,13 +127,10 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       name: 'Integration Test Vault',
       publicKeys: {
         // Real-ish looking public keys (proper format for address derivation)
-        ecdsa:
-          '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
-        eddsa:
-          'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
+        ecdsa: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
+        eddsa: 'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
       },
-      hexChainCode:
-        '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+      hexChainCode: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
       localPartyId: 'test-device',
       signers: ['test-device', 'Server-1'],
       keyShares: {
@@ -196,31 +192,18 @@ describe('Integration: Multi-Chain Address Derivation', () => {
 
       // Basic validations
       expect(address, `${chain} address should be defined`).toBeDefined()
-      expect(typeof address, `${chain} address should be a string`).toBe(
-        'string'
-      )
-      expect(
-        address.length,
-        `${chain} address should not be empty`
-      ).toBeGreaterThan(0)
+      expect(typeof address, `${chain} address should be a string`).toBe('string')
+      expect(address.length, `${chain} address should not be empty`).toBeGreaterThan(0)
 
       // Chain-specific validation
       const validator = CHAIN_VALIDATORS[chain]
       if (validator) {
-        expect(
-          validator(address),
-          `${chain} address "${address}" should match expected format`
-        ).toBe(true)
+        expect(validator(address), `${chain} address "${address}" should match expected format`).toBe(true)
       } else {
         // Fallback: at least check for reasonable length
-        expect(
-          address.length,
-          `${chain} address should have reasonable length (20+ chars)`
-        ).toBeGreaterThanOrEqual(20)
+        expect(address.length, `${chain} address should have reasonable length (20+ chars)`).toBeGreaterThanOrEqual(20)
 
-        console.warn(
-          `⚠️  No validator for ${chain}, only checked length. Address: ${address}`
-        )
+        console.warn(`⚠️  No validator for ${chain}, only checked length. Address: ${address}`)
       }
 
       console.log(`✅ ${chain.padEnd(20)} → ${address}`)
@@ -267,14 +250,10 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       // All addresses should be identical
       const firstAddress = addresses[0].address
       addresses.forEach(({ chain, address }) => {
-        expect(address, `${chain} should have same address as Ethereum`).toBe(
-          firstAddress
-        )
+        expect(address, `${chain} should have same address as Ethereum`).toBe(firstAddress)
       })
 
-      console.log(
-        `\n✅ All ${evmChains.length} EVM chains share address: ${firstAddress}`
-      )
+      console.log(`\n✅ All ${evmChains.length} EVM chains share address: ${firstAddress}`)
     })
   })
 
@@ -300,10 +279,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       it(`should derive ${chain} address with correct prefix "${expectedPrefix}"`, async () => {
         const address = await vault.address(chain as Chain)
 
-        expect(
-          address.startsWith(expectedPrefix),
-          `${chain} address should start with "${expectedPrefix}"`
-        ).toBe(true)
+        expect(address.startsWith(expectedPrefix), `${chain} address should start with "${expectedPrefix}"`).toBe(true)
       })
     })
   })
@@ -334,12 +310,8 @@ describe('Integration: Multi-Chain Address Derivation', () => {
         expect(address.length).toBeGreaterThan(0)
       })
 
-      console.log(
-        `\n⚡ Derived ${ALL_CHAINS.length} addresses in ${duration}ms`
-      )
-      console.log(
-        `   Average: ${(duration / ALL_CHAINS.length).toFixed(2)}ms per chain`
-      )
+      console.log(`\n⚡ Derived ${ALL_CHAINS.length} addresses in ${duration}ms`)
+      console.log(`   Average: ${(duration / ALL_CHAINS.length).toFixed(2)}ms per chain`)
 
       // Should complete within reasonable time (10 seconds for 40+ chains)
       expect(duration).toBeLessThan(10000)

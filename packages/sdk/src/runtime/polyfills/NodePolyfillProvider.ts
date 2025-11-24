@@ -32,11 +32,7 @@ polyfillRegistry.register({
   name: 'node',
   priority: 100,
   isSupported: () => {
-    return (
-      typeof process !== 'undefined' &&
-      process.versions?.node !== undefined &&
-      typeof window === 'undefined'
-    )
+    return typeof process !== 'undefined' && process.versions?.node !== undefined && typeof window === 'undefined'
   },
   initialize: initializeNodePolyfills,
 })

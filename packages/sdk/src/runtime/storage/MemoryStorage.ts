@@ -23,9 +23,7 @@ export class MemoryStorage implements Storage {
   async set<T>(key: string, value: T): Promise<void> {
     const metadata: StorageMetadata = {
       version: STORAGE_VERSION,
-      createdAt: this.store.has(key)
-        ? this.store.get(key)!.metadata.createdAt
-        : Date.now(),
+      createdAt: this.store.has(key) ? this.store.get(key)!.metadata.createdAt : Date.now(),
       lastModified: Date.now(),
     }
 

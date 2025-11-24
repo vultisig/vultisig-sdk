@@ -6,10 +6,7 @@ import { setupVaultWithServer } from '@core/mpc/fast/api/setupVaultWithServer'
 import { signWithServer } from '@core/mpc/fast/api/signWithServer'
 import { verifyVaultEmailCode } from '@core/mpc/fast/api/verifyVaultEmailCode'
 import { fastVaultServerUrl } from '@core/mpc/fast/config'
-import {
-  setKeygenComplete,
-  waitForKeygenComplete,
-} from '@core/mpc/keygenComplete'
+import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
 import { keysign } from '@core/mpc/keysign'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
@@ -27,13 +24,7 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../runtime/crypto'
-import {
-  KeygenProgressUpdate,
-  ReshareOptions,
-  ServerStatus,
-  Signature,
-  SigningPayload,
-} from '../types'
+import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
 
 /**
  * ServerManager coordinates all server communications
@@ -48,8 +39,7 @@ export class ServerManager {
   constructor(endpoints?: { fastVault?: string; messageRelay?: string }) {
     this.config = {
       fastVault: endpoints?.fastVault || 'https://api.vultisig.com/vault',
-      messageRelay:
-        endpoints?.messageRelay || 'https://api.vultisig.com/router',
+      messageRelay: endpoints?.messageRelay || 'https://api.vultisig.com/router',
     }
   }
 
@@ -80,10 +70,7 @@ export class ServerManager {
    * NOTE: The core getVaultFromServer currently returns minimal data.
    * This needs to be updated to properly retrieve and decrypt the vault data.
    */
-  async getVaultFromServer(
-    vaultId: string,
-    password: string
-  ): Promise<CoreVault> {
+  async getVaultFromServer(vaultId: string, password: string): Promise<CoreVault> {
     const result = await getVaultFromServer({ vaultId, password })
 
     // TODO: Properly convert/decrypt the vault data from server response
@@ -111,15 +98,11 @@ export class ServerManager {
     walletCore: WalletCore
     onProgress?: (step: import('../types').SigningStep) => void
   }): Promise<Signature> {
-    const { vault, messages, password, payload, walletCore, onProgress } =
-      options
+    const { vault, messages, password, payload, walletCore, onProgress } = options
     const reportProgress = onProgress || (() => {})
 
     // Use SDK adapter to extract chain-specific signing information
-    const { signatureAlgorithm, derivePath, chainPath } = getChainSigningInfo(
-      payload,
-      walletCore
-    )
+    const { signatureAlgorithm, derivePath, chainPath } = getChainSigningInfo(payload, walletCore)
 
     // Generate session parameters
     const sessionId = randomUUID()
@@ -168,9 +151,7 @@ export class ServerManager {
 
     // Step 2.5: Register server as participant
     try {
-      const serverSigner = vault.signers.find((signer: string) =>
-        signer.startsWith('Server-')
-      )
+      const serverSigner = vault.signers.find((signer: string) => signer.startsWith('Server-'))
       if (serverSigner) {
         await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
           body: [serverSigner],
@@ -261,11 +242,7 @@ export class ServerManager {
       participantsReady: 2,
     })
 
-    const signature = formatSignature(
-      signatureResults,
-      messages,
-      signatureAlgorithm
-    )
+    const signature = formatSignature(signatureResults, messages, signatureAlgorithm)
 
     reportProgress({
       step: 'complete',
@@ -456,15 +433,11 @@ export class ServerManager {
     return {
       fastVault: {
         online: fastVaultStatus.status === 'fulfilled',
-        latency:
-          fastVaultStatus.status === 'fulfilled'
-            ? fastVaultStatus.value
-            : undefined,
+        latency: fastVaultStatus.status === 'fulfilled' ? fastVaultStatus.value : undefined,
       },
       messageRelay: {
         online: relayStatus.status === 'fulfilled',
-        latency:
-          relayStatus.status === 'fulfilled' ? relayStatus.value : undefined,
+        latency: relayStatus.status === 'fulfilled' ? relayStatus.value : undefined,
       },
       timestamp: Date.now(),
     }
@@ -472,10 +445,7 @@ export class ServerManager {
 
   // ===== Private Helper Methods =====
 
-  private async waitForPeers(
-    sessionId: string,
-    localPartyId: string
-  ): Promise<string[]> {
+  private async waitForPeers(sessionId: string, localPartyId: string): Promise<string[]> {
     const maxWaitTime = 30000
     const checkInterval = 2000
     const startTime = Date.now()
@@ -500,11 +470,7 @@ export class ServerManager {
     throw new Error('Timeout waiting for peers to join session')
   }
 
-  private async pingServer(
-    baseUrl: string,
-    endpoint = '/ping',
-    timeout = 5000
-  ): Promise<number> {
+  private async pingServer(baseUrl: string, endpoint = '/ping', timeout = 5000): Promise<number> {
     const start = Date.now()
 
     try {

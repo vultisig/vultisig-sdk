@@ -11,13 +11,7 @@ import { GlobalStorage } from '../runtime/storage/GlobalStorage'
 import { GlobalServerManager } from '../server/GlobalServerManager'
 import { FastSigningService } from '../services/FastSigningService'
 import { PasswordCacheService } from '../services/PasswordCacheService'
-import type {
-  Signature,
-  SigningMode,
-  SigningPayload,
-  VaultCreationStep,
-  VaultData,
-} from '../types'
+import type { Signature, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -84,15 +78,10 @@ export class FastVault extends VaultBase {
       const password = await this.resolvePassword()
 
       // Sign with server coordination
-      const signature = await this.fastSigningService.signWithServer(
-        this.coreVault,
-        payload,
-        password,
-        step => {
-          // Emit progress on THIS vault instance
-          this.emit('signingProgress', { step })
-        }
-      )
+      const signature = await this.fastSigningService.signWithServer(this.coreVault, payload, password, step => {
+        // Emit progress on THIS vault instance
+        this.emit('signingProgress', { step })
+      })
 
       // Emit transaction signed event (serves as completion event)
       this.emit('transactionSigned', { signature, payload })
@@ -133,20 +122,12 @@ export class FastVault extends VaultBase {
     }
 
     // Check if vault file content is available
-    if (
-      !this.vaultData.vultFileContent ||
-      this.vaultData.vultFileContent.trim().length === 0
-    ) {
-      throw new VaultError(
-        VaultErrorCode.InvalidVault,
-        'Vault file content is empty. Cannot load keyShares.'
-      )
+    if (!this.vaultData.vultFileContent || this.vaultData.vultFileContent.trim().length === 0) {
+      throw new VaultError(VaultErrorCode.InvalidVault, 'Vault file content is empty. Cannot load keyShares.')
     }
 
     // Parse vault file to get keyShares
-    const container = vaultContainerFromString(
-      this.vaultData.vultFileContent.trim()
-    )
+    const container = vaultContainerFromString(this.vaultData.vultFileContent.trim())
 
     // Fast vaults are ALWAYS encrypted - no need to check container.isEncrypted
     // Resolve password (will throw if not available)
@@ -253,10 +234,7 @@ export class FastVault extends VaultBase {
         message: 'Creating backup file',
       })
 
-      const vultContent = await createVaultBackup(
-        result.vault,
-        options.password
-      )
+      const vultContent = await createVaultBackup(result.vault, options.password)
 
       // Step 4: Create FastSigningService
       const fastSigningService = new FastSigningService(serverManager)
@@ -307,11 +285,7 @@ export class FastVault extends VaultBase {
     } catch (error) {
       // Wrap errors with context
       if (error instanceof Error) {
-        throw new VaultError(
-          VaultErrorCode.CreateFailed,
-          `Failed to create fast vault: ${error.message}`,
-          error
-        )
+        throw new VaultError(VaultErrorCode.CreateFailed, `Failed to create fast vault: ${error.message}`, error)
       }
       throw error
     }
@@ -320,17 +294,10 @@ export class FastVault extends VaultBase {
   /**
    * Reconstruct a FastVault instance from stored VaultData
    */
-  static fromStorage(
-    vaultData: VaultData,
-    fastSigningService: FastSigningService,
-    config?: VaultConfig
-  ): FastVault {
+  static fromStorage(vaultData: VaultData, fastSigningService: FastSigningService, config?: VaultConfig): FastVault {
     // Validate vault type
     if (vaultData.type !== 'fast') {
-      throw new VaultError(
-        VaultErrorCode.InvalidVault,
-        `Cannot create FastVault from ${vaultData.type} vault data`
-      )
+      throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create FastVault from ${vaultData.type} vault data`)
     }
 
     // Use the constructor with stored vult file content
@@ -344,9 +311,7 @@ export class FastVault extends VaultBase {
 
     // Override constructor defaults with stored preferences from VaultData
     if (vaultData.chains && vaultData.chains.length > 0) {
-      ;(vault as any)._userChains = vaultData.chains.map(
-        (c: string) => c as any
-      )
+      ;(vault as any)._userChains = vaultData.chains.map((c: string) => c as any)
     }
     if (vaultData.currency) {
       ;(vault as any)._currency = vaultData.currency

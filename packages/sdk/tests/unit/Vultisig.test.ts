@@ -75,17 +75,13 @@ describe('Vultisig', () => {
 
     it('should handle initialization failure', async () => {
       // Mock wasmManager.initialize to throw error
-      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(
-        new Error('WASM load failed')
-      )
+      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(new Error('WASM load failed'))
 
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
 
     it('should not initialize twice', async () => {
-      const initializeSpy = vi
-        .spyOn(WasmManager, 'initialize')
-        .mockResolvedValue()
+      const initializeSpy = vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
 
       await sdk.initialize()
       await sdk.initialize() // Second call should be no-op
@@ -157,9 +153,7 @@ describe('Vultisig', () => {
         expect(result1.valid).toBe(true)
         expect(result1.error).toBeUndefined()
 
-        const result2 = ValidationHelpers.validateEmail(
-          'test.user+tag@domain.co.uk'
-        )
+        const result2 = ValidationHelpers.validateEmail('test.user+tag@domain.co.uk')
         expect(result2.valid).toBe(true)
       })
 
@@ -278,9 +272,7 @@ describe('Vultisig', () => {
         timestamp: Date.now(),
       }
 
-      vi.spyOn(sdk.serverManager, 'checkServerStatus').mockResolvedValue(
-        mockStatus
-      )
+      vi.spyOn(sdk.serverManager, 'checkServerStatus').mockResolvedValue(mockStatus)
 
       const status = await sdk.getServerStatus()
 
@@ -340,9 +332,7 @@ describe('Vultisig', () => {
 
   describe('error handling', () => {
     it('should handle initialization errors', async () => {
-      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(
-        new Error('Init failed')
-      )
+      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(new Error('Init failed'))
 
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
@@ -447,20 +437,16 @@ describe('Vultisig', () => {
       const retrySdk = new Vultisig({ autoInit: false })
 
       let attempts = 0
-      const initSpy = vi
-        .spyOn(WasmManager, 'initialize')
-        .mockImplementation(async () => {
-          attempts++
-          if (attempts === 1) {
-            throw new Error('First attempt failed')
-          }
-          // Second attempt succeeds
-        })
+      const initSpy = vi.spyOn(WasmManager, 'initialize').mockImplementation(async () => {
+        attempts++
+        if (attempts === 1) {
+          throw new Error('First attempt failed')
+        }
+        // Second attempt succeeds
+      })
 
       // First attempt should fail
-      await expect(retrySdk.initialize()).rejects.toThrow(
-        'Failed to initialize SDK'
-      )
+      await expect(retrySdk.initialize()).rejects.toThrow('Failed to initialize SDK')
       expect(retrySdk.initialized).toBe(false)
 
       // Second attempt should succeed (promise was reset on error)

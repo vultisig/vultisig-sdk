@@ -8,20 +8,9 @@ type CreateVaultFormProps = {
   saveVaultImmediately?: (vault: Vault) => Promise<void>
 }
 
-type CreateStep =
-  | 'form'
-  | 'creating'
-  | 'verify'
-  | 'verifying'
-  | 'done'
-  | 'error'
+type CreateStep = 'form' | 'creating' | 'verify' | 'verifying' | 'done' | 'error'
 
-export const CreateVaultForm = ({
-  sdk,
-  onVaultCreated,
-  onInitialize,
-  saveVaultImmediately,
-}: CreateVaultFormProps) => {
+export const CreateVaultForm = ({ sdk, onVaultCreated, onInitialize, saveVaultImmediately }: CreateVaultFormProps) => {
   const [createForm, setCreateForm] = useState({
     name: import.meta.env.VITE_VAULT_NAME || 'TestVault',
     email: import.meta.env.VITE_VAULT_EMAIL || 'cryptoforlyfe@gmail.com',
@@ -50,9 +39,7 @@ export const CreateVaultForm = ({
     try {
       setError(null)
       setStep('creating')
-      addLog(
-        'Step 1: Registering vault with FastVault server (POST /vault/create)'
-      )
+      addLog('Step 1: Registering vault with FastVault server (POST /vault/create)')
 
       // Initialize WASM modules if not already done
       await onInitialize()
@@ -85,12 +72,8 @@ export const CreateVaultForm = ({
         })
 
         addLog('Step 1: FastVault create request completed (200 OK)')
-        addLog(
-          'Steps 2–4: Server joins relay and runs DKLS/Schnorr keygen on your behalf'
-        )
-        addLog(
-          'Awaiting email to confirm keygen completion and vault activation'
-        )
+        addLog('Steps 2–4: Server joins relay and runs DKLS/Schnorr keygen on your behalf')
+        addLog('Awaiting email to confirm keygen completion and vault activation')
 
         // Store vault and vault ID for verification
         setVault(result.vault)
@@ -108,9 +91,7 @@ export const CreateVaultForm = ({
           addLog('Vault keyshare saved locally')
         } catch (error) {
           console.error('Failed to save vault immediately:', error)
-          addLog(
-            'Warning: Failed to save vault locally - continue with verification'
-          )
+          addLog('Warning: Failed to save vault locally - continue with verification')
         }
       }
 
@@ -128,9 +109,7 @@ export const CreateVaultForm = ({
     try {
       setError(null)
       setStep('verifying')
-      addLog(
-        'Step 5: Verifying email code (GET /vault/verify/{vaultId}/{code})'
-      )
+      addLog('Step 5: Verifying email code (GET /vault/verify/{vaultId}/{code})')
 
       // Verify the email code
       const verified = await sdk.verifyVault(vaultId, verificationCode)
@@ -147,9 +126,7 @@ export const CreateVaultForm = ({
           setStep('done')
         } else {
           // This shouldn't happen, but as a fallback try to get the vault
-          addLog(
-            'Warning: No local vault found, attempting to retrieve from server'
-          )
+          addLog('Warning: No local vault found, attempting to retrieve from server')
           try {
             const fetched = await sdk.getVault(vaultId, createForm.password)
             addLog('Step 6: Vault retrieved from server (may lack keyshares)')
@@ -200,10 +177,7 @@ export const CreateVaultForm = ({
       <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>Create Fast Vault</h2>
 
       <div style={{ marginBottom: '16px' }}>
-        <label
-          htmlFor="vault-name"
-          style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}
-        >
+        <label htmlFor="vault-name" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
           Vault Name
         </label>
         <input
@@ -211,9 +185,7 @@ export const CreateVaultForm = ({
           type="text"
           placeholder={import.meta.env.VITE_VAULT_NAME || 'My Vault'}
           value={createForm.name}
-          onChange={e =>
-            setCreateForm(prev => ({ ...prev, name: e.target.value }))
-          }
+          onChange={e => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
           style={{
             width: '100%',
             padding: '10px',
@@ -225,10 +197,7 @@ export const CreateVaultForm = ({
       </div>
 
       <div style={{ marginBottom: '16px' }}>
-        <label
-          htmlFor="email"
-          style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}
-        >
+        <label htmlFor="email" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
           Email
         </label>
         <input
@@ -236,9 +205,7 @@ export const CreateVaultForm = ({
           type="email"
           placeholder={import.meta.env.VITE_VAULT_EMAIL || 'your@email.com'}
           value={createForm.email}
-          onChange={e =>
-            setCreateForm(prev => ({ ...prev, email: e.target.value }))
-          }
+          onChange={e => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
           style={{
             width: '100%',
             padding: '10px',
@@ -250,22 +217,15 @@ export const CreateVaultForm = ({
       </div>
 
       <div style={{ marginBottom: '16px' }}>
-        <label
-          htmlFor="password"
-          style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}
-        >
+        <label htmlFor="password" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
           Password
         </label>
         <input
           id="password"
           type="password"
-          placeholder={
-            import.meta.env.VITE_VAULT_PASSWORD || 'Enter a strong password'
-          }
+          placeholder={import.meta.env.VITE_VAULT_PASSWORD || 'Enter a strong password'}
           value={createForm.password}
-          onChange={e =>
-            setCreateForm(prev => ({ ...prev, password: e.target.value }))
-          }
+          onChange={e => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
           style={{
             width: '100%',
             padding: '10px',
@@ -301,16 +261,12 @@ export const CreateVaultForm = ({
       <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>Verify Email</h2>
 
       <p style={{ margin: '0 0 20px 0', color: '#666', lineHeight: 1.5 }}>
-        We&apos;ve sent a verification code to{' '}
-        <strong>{createForm.email}</strong>. Please enter the code below to
+        We&apos;ve sent a verification code to <strong>{createForm.email}</strong>. Please enter the code below to
         complete vault creation.
       </p>
 
       <div style={{ marginBottom: '16px' }}>
-        <label
-          htmlFor="verification-code"
-          style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}
-        >
+        <label htmlFor="verification-code" style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
           Verification Code
         </label>
         <input
@@ -318,9 +274,7 @@ export const CreateVaultForm = ({
           type="text"
           placeholder="0000"
           value={verificationCode}
-          onChange={e =>
-            setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 4))
-          }
+          onChange={e => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
           maxLength={4}
           style={{
             width: '100%',
@@ -342,8 +296,7 @@ export const CreateVaultForm = ({
           style={{
             flex: 1,
             padding: '12px',
-            backgroundColor:
-              verificationCode.length === 4 ? '#28a745' : '#6c757d',
+            backgroundColor: verificationCode.length === 4 ? '#28a745' : '#6c757d',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
@@ -391,8 +344,7 @@ export const CreateVaultForm = ({
           <div style={{ padding: '20px', textAlign: 'center' }}>
             <div style={{ marginBottom: '16px' }}>Creating vault...</div>
             <div style={{ color: '#666', fontSize: '14px' }}>
-              This may take a few moments as we initialize WASM modules and run
-              the MPC protocol.
+              This may take a few moments as we initialize WASM modules and run the MPC protocol.
             </div>
             {renderProgress()}
           </div>
@@ -401,9 +353,7 @@ export const CreateVaultForm = ({
       case 'verifying':
         return (
           <div style={{ padding: '20px', textAlign: 'center' }}>
-            <div style={{ marginBottom: '16px', color: '#666' }}>
-              Verifying code...
-            </div>
+            <div style={{ marginBottom: '16px', color: '#666' }}>Verifying code...</div>
             {renderProgress()}
           </div>
         )
@@ -420,9 +370,7 @@ export const CreateVaultForm = ({
               color: '#155724',
             }}
           >
-            <h3 style={{ margin: '0 0 10px 0' }}>
-              Vault Created Successfully!
-            </h3>
+            <h3 style={{ margin: '0 0 10px 0' }}>Vault Created Successfully!</h3>
             <p style={{ margin: 0 }}>Your fast vault is ready to use.</p>
             {renderProgress()}
           </div>
@@ -514,12 +462,7 @@ export const CreateVaultForm = ({
             step === 'error'
           )
         case 'email':
-          return (
-            step === 'verify' ||
-            step === 'verifying' ||
-            step === 'done' ||
-            step === 'error'
-          )
+          return step === 'verify' || step === 'verifying' || step === 'done' || step === 'error'
         case 'verify':
           return step === 'done'
         case 'ready':
@@ -532,10 +475,7 @@ export const CreateVaultForm = ({
     const isActive = (k: string) => {
       switch (k) {
         case 'create':
-          return (
-            step === 'creating' &&
-            (!keygenProgress || keygenProgress.phase === 'prepare')
-          )
+          return step === 'creating' && (!keygenProgress || keygenProgress.phase === 'prepare')
         case 'prepare':
           return step === 'creating' && keygenProgress?.phase === 'prepare'
         case 'ecdsa':
@@ -572,21 +512,13 @@ export const CreateVaultForm = ({
                 width: 10,
                 height: 10,
                 borderRadius: '50%',
-                backgroundColor: isDone(s.key)
-                  ? '#28a745'
-                  : isActive(s.key)
-                    ? '#ffc107'
-                    : '#e9ecef',
+                backgroundColor: isDone(s.key) ? '#28a745' : isActive(s.key) ? '#ffc107' : '#e9ecef',
                 border: '1px solid #ced4da',
               }}
             />
             <span
               style={{
-                color: isDone(s.key)
-                  ? '#155724'
-                  : isActive(s.key)
-                    ? '#856404'
-                    : '#6c757d',
+                color: isDone(s.key) ? '#155724' : isActive(s.key) ? '#856404' : '#6c757d',
               }}
             >
               {idx + 1}. {s.label}
@@ -609,16 +541,10 @@ export const CreateVaultForm = ({
     >
       {step === 'form' && renderForm()}
       {step === 'verify' && renderVerification()}
-      {(step === 'creating' ||
-        step === 'verifying' ||
-        step === 'done' ||
-        step === 'error') &&
-        renderStatus()}
+      {(step === 'creating' || step === 'verifying' || step === 'done' || step === 'error') && renderStatus()}
       {!!logs.length && (
         <div style={{ padding: '16px', borderTop: '1px solid #e9ecef' }}>
-          <div style={{ marginBottom: 8, fontWeight: 600, color: '#333' }}>
-            Debug Log
-          </div>
+          <div style={{ marginBottom: 8, fontWeight: 600, color: '#333' }}>Debug Log</div>
           <div
             style={{
               maxHeight: 200,

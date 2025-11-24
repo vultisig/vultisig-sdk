@@ -60,10 +60,7 @@ export class AddressCommand {
     }
 
     // Load vault directly for this operation
-    if (
-      shouldLoadDirectly &&
-      (vaultConfig.vaultName || vaultConfig.vaultPassword)
-    ) {
+    if (shouldLoadDirectly && (vaultConfig.vaultName || vaultConfig.vaultPassword)) {
       try {
         await daemonManager.performEphemeralOperation(
           {
@@ -79,24 +76,17 @@ export class AddressCommand {
                 console.log(`  ✅ ${chainName}: ${address}`)
               } catch (error) {
                 const chainName = this.getChainName(chain)
-                console.log(
-                  `  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`
-                )
+                console.log(`  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`)
               }
             }
 
-            console.log(
-              '\n💡 Addresses retrieved from ephemeral vault operation'
-            )
+            console.log('\n💡 Addresses retrieved from ephemeral vault operation')
             return true
           }
         )
         return
       } catch (error) {
-        console.log(
-          '⚠️  Could not perform ephemeral vault operation:',
-          error instanceof Error ? error.message : error
-        )
+        console.log('⚠️  Could not perform ephemeral vault operation:', error instanceof Error ? error.message : error)
       }
     }
 
@@ -116,9 +106,7 @@ export class AddressCommand {
             console.log(`  ✅ ${chainName}: ${address}`)
           } catch (error) {
             const chainName = this.getChainName(chain)
-            console.log(
-              `  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`
-            )
+            console.log(`  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`)
           }
         }
 
@@ -138,9 +126,7 @@ export class AddressCommand {
 
       if (vaultFiles.length === 0) {
         console.log('❌ No vault files found.')
-        console.log(
-          '   Place .vult files in the vaults/ directory or start daemon with "vultisig run"'
-        )
+        console.log('   Place .vult files in the vaults/ directory or start daemon with "vultisig run"')
         return
       }
 
@@ -179,9 +165,7 @@ export class AddressCommand {
           console.log(`  ✅ ${chainName}: ${address}`)
         } catch (error) {
           const chainName = this.getChainName(chain)
-          console.log(
-            `  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`
-          )
+          console.log(`  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
       }
 
@@ -223,8 +207,6 @@ export class AddressCommand {
     }
 
     const files = fs.readdirSync(vaultsDir)
-    return files
-      .filter(file => file.endsWith('.vult'))
-      .map(file => path.resolve(vaultsDir, file))
+    return files.filter(file => file.endsWith('.vult')).map(file => path.resolve(vaultsDir, file))
   }
 }

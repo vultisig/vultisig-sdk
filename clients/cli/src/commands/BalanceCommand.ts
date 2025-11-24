@@ -52,10 +52,7 @@ export class BalanceCommand {
               decimals: number
               symbol: string
             }
-            const amount = this.formatAmount(
-              balanceObj.amount,
-              balanceObj.decimals
-            )
+            const amount = this.formatAmount(balanceObj.amount, balanceObj.decimals)
             console.log(`  💰 ${chainName}: ${amount} ${balanceObj.symbol}`)
           } else {
             console.log(`  ❓ ${chainName}: Unknown balance format`)
@@ -71,10 +68,7 @@ export class BalanceCommand {
     }
 
     // Load vault directly for this operation
-    if (
-      shouldLoadDirectly &&
-      (vaultConfig.vaultName || vaultConfig.vaultPassword)
-    ) {
+    if (shouldLoadDirectly && (vaultConfig.vaultName || vaultConfig.vaultPassword)) {
       try {
         await daemonManager.performEphemeralOperation(
           {
@@ -90,16 +84,11 @@ export class BalanceCommand {
               try {
                 const balance = await vault.balance(chain)
                 const chainName = this.getChainName(chain)
-                const amount = this.formatAmount(
-                  balance.amount,
-                  balance.decimals
-                )
+                const amount = this.formatAmount(balance.amount, balance.decimals)
                 console.log(`  💰 ${chainName}: ${amount} ${balance.symbol}`)
               } catch (error) {
                 const chainName = this.getChainName(chain)
-                console.log(
-                  `  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`
-                )
+                console.log(`  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`)
               }
             } else {
               // Multiple chains - use balances() method
@@ -112,33 +101,21 @@ export class BalanceCommand {
                     decimals: number
                     symbol: string
                   }
-                  const amount = this.formatAmount(
-                    balanceObj.amount,
-                    balanceObj.decimals
-                  )
-                  console.log(
-                    `  💰 ${chainName}: ${amount} ${balanceObj.symbol}`
-                  )
+                  const amount = this.formatAmount(balanceObj.amount, balanceObj.decimals)
+                  console.log(`  💰 ${chainName}: ${amount} ${balanceObj.symbol}`)
                 }
               } catch (error) {
-                console.log(
-                  `  ❌ Failed to get balances: ${error instanceof Error ? error.message : 'Unknown error'}`
-                )
+                console.log(`  ❌ Failed to get balances: ${error instanceof Error ? error.message : 'Unknown error'}`)
               }
             }
 
-            console.log(
-              '\n💡 Balances retrieved from ephemeral vault operation'
-            )
+            console.log('\n💡 Balances retrieved from ephemeral vault operation')
             return true
           }
         )
         return
       } catch (error) {
-        console.log(
-          '⚠️  Could not perform ephemeral vault operation:',
-          error instanceof Error ? error.message : error
-        )
+        console.log('⚠️  Could not perform ephemeral vault operation:', error instanceof Error ? error.message : error)
       }
     }
 
@@ -160,9 +137,7 @@ export class BalanceCommand {
             console.log(`  💰 ${chainName}: ${amount} ${balance.symbol}`)
           } catch (error) {
             const chainName = this.getChainName(chain)
-            console.log(
-              `  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`
-            )
+            console.log(`  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`)
           }
         } else {
           // Multiple chains - use balances() method
@@ -175,16 +150,11 @@ export class BalanceCommand {
                 decimals: number
                 symbol: string
               }
-              const amount = this.formatAmount(
-                balanceObj.amount,
-                balanceObj.decimals
-              )
+              const amount = this.formatAmount(balanceObj.amount, balanceObj.decimals)
               console.log(`  💰 ${chainName}: ${amount} ${balanceObj.symbol}`)
             }
           } catch (error) {
-            console.log(
-              `  ❌ Failed to get balances: ${error instanceof Error ? error.message : 'Unknown error'}`
-            )
+            console.log(`  ❌ Failed to get balances: ${error instanceof Error ? error.message : 'Unknown error'}`)
           }
         }
 
@@ -204,9 +174,7 @@ export class BalanceCommand {
 
       if (vaultFiles.length === 0) {
         console.log('❌ No vault files found.')
-        console.log(
-          '   Place .vult files in the vaults/ directory or start daemon with "vultisig run"'
-        )
+        console.log('   Place .vult files in the vaults/ directory or start daemon with "vultisig run"')
         return
       }
 
@@ -247,9 +215,7 @@ export class BalanceCommand {
           console.log(`  💰 ${chainName}: ${amount} ${balance.symbol}`)
         } catch (error) {
           const chainName = this.getChainName(chain)
-          console.log(
-            `  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`
-          )
+          console.log(`  ❌ ${chainName}: Error - ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
       } else {
         // Multiple chains - use balances() method
@@ -262,16 +228,11 @@ export class BalanceCommand {
               decimals: number
               symbol: string
             }
-            const amount = this.formatAmount(
-              balanceObj.amount,
-              balanceObj.decimals
-            )
+            const amount = this.formatAmount(balanceObj.amount, balanceObj.decimals)
             console.log(`  💰 ${chainName}: ${amount} ${balanceObj.symbol}`)
           }
         } catch (error) {
-          console.log(
-            `  ❌ Failed to get balances: ${error instanceof Error ? error.message : 'Unknown error'}`
-          )
+          console.log(`  ❌ Failed to get balances: ${error instanceof Error ? error.message : 'Unknown error'}`)
         }
       }
 
@@ -334,8 +295,6 @@ export class BalanceCommand {
     }
 
     const files = fs.readdirSync(vaultsDir)
-    return files
-      .filter(file => file.endsWith('.vult'))
-      .map(file => path.resolve(vaultsDir, file))
+    return files.filter(file => file.endsWith('.vult')).map(file => path.resolve(vaultsDir, file))
   }
 }

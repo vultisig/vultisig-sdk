@@ -62,9 +62,7 @@ export class PasswordCacheService {
     }
   }
 
-  public static getInstance(
-    config?: Partial<PasswordCacheConfig>
-  ): PasswordCacheService {
+  public static getInstance(config?: Partial<PasswordCacheConfig>): PasswordCacheService {
     if (!PasswordCacheService.instance) {
       PasswordCacheService.instance = new PasswordCacheService(config)
     }

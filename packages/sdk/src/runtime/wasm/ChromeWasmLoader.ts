@@ -6,19 +6,13 @@ wasmLoaderRegistry.register({
   priority: 110, // Highest priority in Chrome extension
 
   isSupported: () => {
-    return (
-      typeof chrome !== 'undefined' &&
-      chrome.runtime !== undefined &&
-      chrome.runtime.id !== undefined
-    )
+    return typeof chrome !== 'undefined' && chrome.runtime !== undefined && chrome.runtime.id !== undefined
   },
 
   loadWasm: async (url: string) => {
     const response = await fetch(url)
     if (!response.ok) {
-      throw new Error(
-        `Failed to fetch WASM from ${url}: ${response.statusText}`
-      )
+      throw new Error(`Failed to fetch WASM from ${url}: ${response.statusText}`)
     }
     return await response.arrayBuffer()
   },

@@ -8,10 +8,7 @@ import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGc
 /**
  * Create vault backup data with optional password encryption
  */
-export const createVaultBackup = async (
-  vault: Vault,
-  password?: string
-): Promise<string> => {
+export const createVaultBackup = async (vault: Vault, password?: string): Promise<string> => {
   const commVault = toCommVault(vault)
   const vaultData = toBinary(VaultSchema, commVault)
 

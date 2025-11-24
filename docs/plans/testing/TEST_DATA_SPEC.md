@@ -46,23 +46,29 @@ tests/fixtures/
 Each chain directory MUST contain the following files with exact specifications:
 
 ### 1. addresses.json
+
 Contains valid and invalid addresses for testing address validation and derivation.
 
 ### 2. transactions.json
+
 Contains unsigned and signed transaction examples for testing transaction building and signing.
 
 ### 3. balances.json
+
 Contains balance query responses for testing balance fetching and formatting.
 
 ### 4. rpc-responses.json
+
 Contains mock RPC responses for testing blockchain interactions.
 
 ### 5. derivation.json
+
 Contains HD wallet derivation paths and expected keys.
 
 ## Detailed Chain Specifications
 
 ### Bitcoin (BTC) - UTXO Model
+
 **Chain ID**: bitcoin
 **Type**: UTXO
 **Signature**: ECDSA
@@ -240,6 +246,7 @@ Contains HD wallet derivation paths and expected keys.
 ```
 
 ### Ethereum (ETH) - EVM Chain
+
 **Chain ID**: ethereum
 **Type**: Account-based
 **Signature**: ECDSA
@@ -386,6 +393,7 @@ Contains HD wallet derivation paths and expected keys.
 ```
 
 ### Solana (SOL) - High Performance Chain
+
 **Chain ID**: solana
 **Type**: Account-based
 **Signature**: EdDSA
@@ -522,6 +530,7 @@ Contains HD wallet derivation paths and expected keys.
 ```
 
 ### THORChain (THOR) - Cosmos SDK Chain
+
 **Chain ID**: thorchain
 **Type**: Cosmos SDK
 **Signature**: ECDSA
@@ -617,6 +626,7 @@ All EVM chains (Ethereum, Polygon, BSC, Avalanche, Arbitrum, Optimism, Base, Bla
 ```
 
 ### EVM Chain IDs
+
 - Ethereum: 1
 - Polygon: 137
 - Binance Smart Chain: 56
@@ -647,6 +657,7 @@ All Cosmos SDK chains share similar structure but use different prefixes.
 ```
 
 ### Cosmos Prefixes
+
 - Cosmos: cosmos
 - THORChain: thor
 - Osmosis: osmo
@@ -657,6 +668,7 @@ All Cosmos SDK chains share similar structure but use different prefixes.
 ## Common Test Data
 
 ### common/mnemonics.json
+
 ```json
 {
   "test_mnemonics": [
@@ -670,6 +682,7 @@ All Cosmos SDK chains share similar structure but use different prefixes.
 ```
 
 ### common/derivation-paths.json
+
 ```json
 {
   "bitcoin": {
@@ -693,6 +706,7 @@ All Cosmos SDK chains share similar structure but use different prefixes.
 ```
 
 ### common/key-shares.json
+
 ```json
 {
   "ecdsa": {
@@ -713,6 +727,7 @@ All Cosmos SDK chains share similar structure but use different prefixes.
 ## Vault Fixtures
 
 ### vaults/fast-vault.vult
+
 ```json
 {
   "version": 2,
@@ -739,6 +754,7 @@ All Cosmos SDK chains share similar structure but use different prefixes.
 ## Server Response Fixtures
 
 ### server/fast-vault/create-response.json
+
 ```json
 {
   "session_id": "abc123-def456-ghi789",
@@ -750,6 +766,7 @@ All Cosmos SDK chains share similar structure but use different prefixes.
 ```
 
 ### server/message-relay/session.json
+
 ```json
 {
   "session_id": "relay_session_123",
@@ -776,19 +793,40 @@ Each fixture file MUST:
 
 ```typescript
 // tests/scripts/generate-chain-fixtures.ts
-import { generateBitcoinFixtures } from './generators/bitcoin';
-import { generateEthereumFixtures } from './generators/ethereum';
-import { generateSolanaFixtures } from './generators/solana';
+import { generateBitcoinFixtures } from "./generators/bitcoin";
+import { generateEthereumFixtures } from "./generators/ethereum";
+import { generateSolanaFixtures } from "./generators/solana";
 // ... import all chain generators
 
 async function generateAllFixtures() {
   const chains = [
-    'bitcoin', 'ethereum', 'solana', 'thorchain', 'ripple',
-    'cosmos', 'polygon', 'binance-smart-chain', 'avalanche',
-    'arbitrum', 'optimism', 'base', 'blast', 'zksync',
-    'litecoin', 'dogecoin', 'bitcoin-cash', 'dash',
-    'osmosis', 'kujira', 'dydx', 'noble',
-    'tron', 'sui', 'polkadot', 'near', 'ton'
+    "bitcoin",
+    "ethereum",
+    "solana",
+    "thorchain",
+    "ripple",
+    "cosmos",
+    "polygon",
+    "binance-smart-chain",
+    "avalanche",
+    "arbitrum",
+    "optimism",
+    "base",
+    "blast",
+    "zksync",
+    "litecoin",
+    "dogecoin",
+    "bitcoin-cash",
+    "dash",
+    "osmosis",
+    "kujira",
+    "dydx",
+    "noble",
+    "tron",
+    "sui",
+    "polkadot",
+    "near",
+    "ton",
   ];
 
   for (const chain of chains) {
@@ -802,23 +840,25 @@ async function generateAllFixtures() {
 
 ```typescript
 // tests/scripts/validate-fixtures.ts
-import Joi from 'joi';
+import Joi from "joi";
 
 const addressSchema = Joi.object({
-  valid: Joi.array().items(
-    Joi.object({
-      address: Joi.string().required(),
-      publicKey: Joi.string().required(),
-      derivationPath: Joi.string().required()
-    })
-  ).required(),
-  invalid: Joi.array().items(Joi.string()).required()
+  valid: Joi.array()
+    .items(
+      Joi.object({
+        address: Joi.string().required(),
+        publicKey: Joi.string().required(),
+        derivationPath: Joi.string().required(),
+      }),
+    )
+    .required(),
+  invalid: Joi.array().items(Joi.string()).required(),
 });
 
 const transactionSchema = Joi.object({
   unsigned: Joi.object().required(),
   signed: Joi.object().required(),
-  messageHashes: Joi.object().required()
+  messageHashes: Joi.object().required(),
 });
 
 function validateChainFixtures(chain: string) {
@@ -850,4 +890,4 @@ function validateChainFixtures(chain: string) {
 
 ---
 
-*This specification ensures comprehensive test coverage for all 30+ supported blockchains with realistic, maintainable test data.*
+_This specification ensures comprehensive test coverage for all 30+ supported blockchains with realistic, maintainable test data._

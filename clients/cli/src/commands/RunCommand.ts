@@ -23,21 +23,13 @@ if (typeof File === 'undefined') {
     arrayBuffer() {
       // Convert Buffer to ArrayBuffer
       const buffer = this.buffer || this._buffer
-      return Promise.resolve(
-        buffer.buffer.slice(
-          buffer.byteOffset,
-          buffer.byteOffset + buffer.byteLength
-        )
-      )
+      return Promise.resolve(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength))
     }
   } as any
 }
 import { DaemonManager } from '../daemon/DaemonManager'
 import { getVaultConfig } from '../utils/env'
-import {
-  promptForPasswordWithValidation,
-  stripPasswordQuotes,
-} from '../utils/password'
+import { promptForPasswordWithValidation, stripPasswordQuotes } from '../utils/password'
 import { findVultFiles, getVaultsDir } from '../utils/paths'
 
 export type RunOptions = {
@@ -74,13 +66,9 @@ export class RunCommand {
 
       // Check if encrypted from filename hint (for .vult files)
       const fileName = path.basename(vaultConfig.vaultName)
-      const isEncrypted =
-        fileName.toLowerCase().includes('password') &&
-        !fileName.toLowerCase().includes('nopassword')
+      const isEncrypted = fileName.toLowerCase().includes('password') && !fileName.toLowerCase().includes('nopassword')
 
-      let password = vaultConfig.vaultPassword
-        ? stripPasswordQuotes(vaultConfig.vaultPassword)
-        : undefined
+      let password = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
       if (isEncrypted && !password) {
         password = await promptForPasswordWithValidation(vaultConfig.vaultName)
       } else if (!isEncrypted) {
@@ -111,13 +99,9 @@ export class RunCommand {
       const file = new File([buffer], path.basename(vaultName))
 
       const fileName = path.basename(vaultName)
-      const isEncrypted =
-        fileName.toLowerCase().includes('password') &&
-        !fileName.toLowerCase().includes('nopassword')
+      const isEncrypted = fileName.toLowerCase().includes('password') && !fileName.toLowerCase().includes('nopassword')
 
-      let password = vaultConfig.vaultPassword
-        ? stripPasswordQuotes(vaultConfig.vaultPassword)
-        : undefined
+      let password = vaultConfig.vaultPassword ? stripPasswordQuotes(vaultConfig.vaultPassword) : undefined
       if (isEncrypted && !password) {
         password = await promptForPasswordWithValidation(vaultName)
       } else if (!isEncrypted) {
@@ -135,9 +119,7 @@ export class RunCommand {
     console.log('✅ Vault loaded successfully!')
     console.log(`📍 Vault: ${vaultStorage.name}`)
     console.log(`🆔 Vault ID: ${vaultStorage.publicKeys.ecdsa}`)
-    console.log(
-      `👥 Signers: ${vaultStorage.totalSigners} (threshold: ${vaultStorage.threshold})`
-    )
+    console.log(`👥 Signers: ${vaultStorage.totalSigners} (threshold: ${vaultStorage.threshold})`)
     console.log(`🏷️  Type: ${vaultStorage.type}`)
     console.log(`💰 Currency: ${vaultStorage.getChains()[0] || 'N/A'}`)
 

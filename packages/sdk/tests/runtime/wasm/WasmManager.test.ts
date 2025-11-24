@@ -20,9 +20,7 @@ describe('WasmManager (static)', () => {
       await WasmManager.getWalletCore()
       WasmManager.configure({ autoInit: true })
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('already initialized')
-      )
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('already initialized'))
 
       consoleSpy.mockRestore()
     })
@@ -154,11 +152,7 @@ describe('WasmManager (static)', () => {
 
     it('should handle concurrent full initialization', async () => {
       // Call 3 times concurrently
-      await Promise.all([
-        WasmManager.initialize(),
-        WasmManager.initialize(),
-        WasmManager.initialize(),
-      ])
+      await Promise.all([WasmManager.initialize(), WasmManager.initialize(), WasmManager.initialize()])
 
       const status = WasmManager.getStatus()
       expect(status.walletCore).toBe(true)
@@ -199,9 +193,7 @@ describe('WasmManager (static)', () => {
         },
       })
 
-      await expect(WasmManager.initializeDkls()).rejects.toThrow(
-        /Failed to initialize DKLS WASM/
-      )
+      await expect(WasmManager.initializeDkls()).rejects.toThrow(/Failed to initialize DKLS WASM/)
     })
   })
 

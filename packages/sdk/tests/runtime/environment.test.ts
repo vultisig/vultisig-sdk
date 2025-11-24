@@ -35,8 +35,7 @@ describe('Environment Detection', () => {
     originalNavigator = (globalThis as any).navigator
     originalSelf = (globalThis as any).self
     originalGlobal = (globalThis as any).global
-    originalServiceWorkerGlobalScope = (globalThis as any)
-      .ServiceWorkerGlobalScope
+    originalServiceWorkerGlobalScope = (globalThis as any).ServiceWorkerGlobalScope
     originalWorkerGlobalScope = (globalThis as any).WorkerGlobalScope
 
     // Clean slate for each test
@@ -58,8 +57,7 @@ describe('Environment Detection', () => {
     ;(globalThis as any).navigator = originalNavigator
     ;(globalThis as any).self = originalSelf
     ;(globalThis as any).global = originalGlobal
-    ;(globalThis as any).ServiceWorkerGlobalScope =
-      originalServiceWorkerGlobalScope
+    ;(globalThis as any).ServiceWorkerGlobalScope = originalServiceWorkerGlobalScope
     ;(globalThis as any).WorkerGlobalScope = originalWorkerGlobalScope
   })
 
@@ -173,8 +171,7 @@ describe('Environment Detection', () => {
       it('should detect chrome extension service worker', () => {
         // Mock ServiceWorkerGlobalScope
         class MockServiceWorkerGlobalScope {}
-        ;(globalThis as any).ServiceWorkerGlobalScope =
-          MockServiceWorkerGlobalScope
+        ;(globalThis as any).ServiceWorkerGlobalScope = MockServiceWorkerGlobalScope
         ;(globalThis as any).self = new MockServiceWorkerGlobalScope()
         ;(globalThis as any).chrome = {
           runtime: { id: 'test-extension-id' },
@@ -219,8 +216,7 @@ describe('Environment Detection', () => {
 
       it('should prioritize chrome extension SW over regular worker', () => {
         class MockServiceWorkerGlobalScope {}
-        ;(globalThis as any).ServiceWorkerGlobalScope =
-          MockServiceWorkerGlobalScope
+        ;(globalThis as any).ServiceWorkerGlobalScope = MockServiceWorkerGlobalScope
         ;(globalThis as any).self = new MockServiceWorkerGlobalScope()
         ;(globalThis as any).chrome = {
           runtime: { id: 'test-extension-id' },
@@ -404,8 +400,7 @@ describe('Environment Detection', () => {
 
       it('should return true for chrome extension service worker', () => {
         class MockServiceWorkerGlobalScope {}
-        ;(globalThis as any).ServiceWorkerGlobalScope =
-          MockServiceWorkerGlobalScope
+        ;(globalThis as any).ServiceWorkerGlobalScope = MockServiceWorkerGlobalScope
         ;(globalThis as any).self = new MockServiceWorkerGlobalScope()
         ;(globalThis as any).chrome = {
           runtime: { id: 'test' },
@@ -425,8 +420,7 @@ describe('Environment Detection', () => {
     describe('isChromeExtensionServiceWorker()', () => {
       it('should return true for chrome extension service worker', () => {
         class MockServiceWorkerGlobalScope {}
-        ;(globalThis as any).ServiceWorkerGlobalScope =
-          MockServiceWorkerGlobalScope
+        ;(globalThis as any).ServiceWorkerGlobalScope = MockServiceWorkerGlobalScope
         ;(globalThis as any).self = new MockServiceWorkerGlobalScope()
         ;(globalThis as any).chrome = {
           runtime: { id: 'test' },
@@ -455,8 +449,7 @@ describe('Environment Detection', () => {
 
       it('should return false for chrome extension service worker', () => {
         class MockServiceWorkerGlobalScope {}
-        ;(globalThis as any).ServiceWorkerGlobalScope =
-          MockServiceWorkerGlobalScope
+        ;(globalThis as any).ServiceWorkerGlobalScope = MockServiceWorkerGlobalScope
         ;(globalThis as any).self = new MockServiceWorkerGlobalScope()
         ;(globalThis as any).chrome = {
           runtime: { id: 'test' },
@@ -562,8 +555,7 @@ describe('Environment Detection', () => {
 
     it('should detect Chrome Extension SW before worker', () => {
       class MockServiceWorkerGlobalScope {}
-      ;(globalThis as any).ServiceWorkerGlobalScope =
-        MockServiceWorkerGlobalScope
+      ;(globalThis as any).ServiceWorkerGlobalScope = MockServiceWorkerGlobalScope
       ;(globalThis as any).self = new MockServiceWorkerGlobalScope()
       ;(globalThis as any).chrome = {
         runtime: { id: 'test' },

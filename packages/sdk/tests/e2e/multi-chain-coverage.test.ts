@@ -13,11 +13,7 @@
  * - Falls back to public test vault (read-only tests only - NEVER fund these addresses!)
  */
 
-import {
-  loadTestVault,
-  TEST_VAULT_CONFIG,
-  verifyTestVault,
-} from '@helpers/test-vault'
+import { loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain, VaultBase } from '@/index'
@@ -45,9 +41,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
     > = {}
 
     it('should fetch balances for all major chains', async () => {
-      console.log(
-        `\n📊 Testing ${TEST_VAULT_CONFIG.testChains.length} chains...\n`
-      )
+      console.log(`\n📊 Testing ${TEST_VAULT_CONFIG.testChains.length} chains...\n`)
 
       for (const chain of TEST_VAULT_CONFIG.testChains) {
         try {
@@ -61,9 +55,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
             decimals: balance.decimals,
           }
 
-          console.log(
-            `  ✅ ${chain}: ${balance.amount} ${balance.symbol} (${balance.decimals} decimals)`
-          )
+          console.log(`  ✅ ${chain}: ${balance.amount} ${balance.symbol} (${balance.decimals} decimals)`)
         } catch (error) {
           testResults[chain] = {
             success: false,
@@ -75,11 +67,8 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
       }
 
       // Calculate success rate
-      const successCount = Object.values(testResults).filter(
-        r => r.success
-      ).length
-      const successRate =
-        (successCount / TEST_VAULT_CONFIG.testChains.length) * 100
+      const successCount = Object.values(testResults).filter(r => r.success).length
+      const successRate = (successCount / TEST_VAULT_CONFIG.testChains.length) * 100
 
       console.log(
         `\n📈 Results: ${successCount}/${TEST_VAULT_CONFIG.testChains.length} chains (${successRate.toFixed(1)}%)`
@@ -91,9 +80,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
       // Print summary
       console.log('\n📋 Summary:')
       console.log(`  ✅ Success: ${successCount} chains`)
-      console.log(
-        `  ⚠️  Failed: ${TEST_VAULT_CONFIG.testChains.length - successCount} chains`
-      )
+      console.log(`  ⚠️  Failed: ${TEST_VAULT_CONFIG.testChains.length - successCount} chains`)
 
       if (successRate < 100) {
         console.log('\n⚠️  Failed chains:')
@@ -106,11 +93,8 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
     }, 30000)
 
     it('should verify at least 80% of chains are functional', () => {
-      const successCount = Object.values(testResults).filter(
-        r => r.success
-      ).length
-      const successRate =
-        (successCount / TEST_VAULT_CONFIG.testChains.length) * 100
+      const successCount = Object.values(testResults).filter(r => r.success).length
+      const successRate = (successCount / TEST_VAULT_CONFIG.testChains.length) * 100
 
       expect(successRate).toBeGreaterThanOrEqual(80)
     })
@@ -118,9 +102,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
 
   describe('Address Derivation Coverage', () => {
     it('should derive addresses for all test chains', async () => {
-      console.log(
-        `\n📍 Deriving addresses for ${TEST_VAULT_CONFIG.testChains.length} chains...\n`
-      )
+      console.log(`\n📍 Deriving addresses for ${TEST_VAULT_CONFIG.testChains.length} chains...\n`)
 
       const addresses: Record<string, string> = {}
 
@@ -130,10 +112,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
           addresses[chain] = address
 
           // Verify against expected address if available
-          const expectedAddress =
-            TEST_VAULT_CONFIG.addresses[
-              chain as keyof typeof TEST_VAULT_CONFIG.addresses
-            ]
+          const expectedAddress = TEST_VAULT_CONFIG.addresses[chain as keyof typeof TEST_VAULT_CONFIG.addresses]
           if (expectedAddress) {
             expect(address).toBe(expectedAddress)
             console.log(`  ✅ ${chain}: ${address} (verified)`)
@@ -146,37 +125,21 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
       }
 
       // Verify we derived addresses for all chains
-      expect(Object.keys(addresses).length).toBe(
-        TEST_VAULT_CONFIG.testChains.length
-      )
+      expect(Object.keys(addresses).length).toBe(TEST_VAULT_CONFIG.testChains.length)
     })
 
     it('should verify EVM chains share the same address', async () => {
-      const evmChains = [
-        Chain.Ethereum,
-        Chain.BSC,
-        Chain.Polygon,
-        Chain.Avalanche,
-        Chain.Arbitrum,
-        'Optimism',
-        'Base',
-      ]
-      const availableEvmChains = evmChains.filter(chain =>
-        TEST_VAULT_CONFIG.testChains.includes(chain)
-      )
+      const evmChains = [Chain.Ethereum, Chain.BSC, Chain.Polygon, Chain.Avalanche, Chain.Arbitrum, 'Optimism', 'Base']
+      const availableEvmChains = evmChains.filter(chain => TEST_VAULT_CONFIG.testChains.includes(chain))
 
       if (availableEvmChains.length < 2) {
         console.log('⏭️  Skipping: Not enough EVM chains in test suite')
         return
       }
 
-      console.log(
-        `\n🔗 Verifying ${availableEvmChains.length} EVM chains share address...`
-      )
+      console.log(`\n🔗 Verifying ${availableEvmChains.length} EVM chains share address...`)
 
-      const addresses = await Promise.all(
-        availableEvmChains.map(chain => vault.address(chain))
-      )
+      const addresses = await Promise.all(availableEvmChains.map(chain => vault.address(chain)))
 
       // All should be the same
       const uniqueAddresses = new Set(addresses)
@@ -190,22 +153,10 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
 
   describe('Gas Estimation Coverage', () => {
     it('should estimate gas for EVM chains', async () => {
-      const evmChains = [
-        Chain.Ethereum,
-        Chain.BSC,
-        Chain.Polygon,
-        Chain.Avalanche,
-        Chain.Arbitrum,
-        'Optimism',
-        'Base',
-      ]
-      const availableEvmChains = evmChains.filter(chain =>
-        TEST_VAULT_CONFIG.testChains.includes(chain)
-      )
+      const evmChains = [Chain.Ethereum, Chain.BSC, Chain.Polygon, Chain.Avalanche, Chain.Arbitrum, 'Optimism', 'Base']
+      const availableEvmChains = evmChains.filter(chain => TEST_VAULT_CONFIG.testChains.includes(chain))
 
-      console.log(
-        `\n⛽ Estimating gas for ${availableEvmChains.length} EVM chains...\n`
-      )
+      console.log(`\n⛽ Estimating gas for ${availableEvmChains.length} EVM chains...\n`)
 
       const gasEstimates: Record<string, bigint> = {}
 
@@ -230,18 +181,14 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
 
     it('should estimate fees for UTXO chains', async () => {
       const utxoChains = [Chain.Bitcoin, Chain.Litecoin, Chain.Dogecoin]
-      const availableUtxoChains = utxoChains.filter(chain =>
-        TEST_VAULT_CONFIG.testChains.includes(chain)
-      )
+      const availableUtxoChains = utxoChains.filter(chain => TEST_VAULT_CONFIG.testChains.includes(chain))
 
       if (availableUtxoChains.length === 0) {
         console.log('⏭️  Skipping: No UTXO chains in test suite')
         return
       }
 
-      console.log(
-        `\n⛽ Estimating fees for ${availableUtxoChains.length} UTXO chains...\n`
-      )
+      console.log(`\n⛽ Estimating fees for ${availableUtxoChains.length} UTXO chains...\n`)
 
       for (const chain of availableUtxoChains) {
         try {
@@ -260,9 +207,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
 
   describe('Batch Operations Performance', () => {
     it('should fetch all chain balances efficiently', async () => {
-      console.log(
-        `\n⚡ Performance test: Fetching ${TEST_VAULT_CONFIG.testChains.length} chain balances...\n`
-      )
+      console.log(`\n⚡ Performance test: Fetching ${TEST_VAULT_CONFIG.testChains.length} chain balances...\n`)
 
       const startTime = Date.now()
       const balances = await vault.balances(TEST_VAULT_CONFIG.testChains)
@@ -271,9 +216,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
       const chainCount = Object.keys(balances).length
 
       console.log(`  ✅ Fetched ${chainCount} balances in ${fetchTime}ms`)
-      console.log(
-        `  ⚡ Average: ${(fetchTime / chainCount).toFixed(1)}ms per chain`
-      )
+      console.log(`  ⚡ Average: ${(fetchTime / chainCount).toFixed(1)}ms per chain`)
 
       expect(chainCount).toBeGreaterThan(0)
       expect(fetchTime).toBeLessThan(60000) // Should complete within 60 seconds
@@ -398,9 +341,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
       console.log(`🔑 EdDSA Key: ${publicKeys.eddsa.substring(0, 20)}...`)
       console.log(`\n🌍 Chains Tested: ${TEST_VAULT_CONFIG.testChains.length}`)
       console.log(`📍 Chains: ${TEST_VAULT_CONFIG.testChains.join(', ')}`)
-      console.log(
-        `\n🔒 Safety: Read-only operations, NO transactions broadcast`
-      )
+      console.log(`\n🔒 Safety: Read-only operations, NO transactions broadcast`)
       console.log(`🌐 Environment: Production (mainnet RPCs)`)
       console.log('='.repeat(60) + '\n')
 

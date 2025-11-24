@@ -6,19 +6,13 @@ wasmLoaderRegistry.register({
   priority: 90,
 
   isSupported: () => {
-    return (
-      typeof fetch !== 'undefined' &&
-      typeof window !== 'undefined' &&
-      typeof document !== 'undefined'
-    )
+    return typeof fetch !== 'undefined' && typeof window !== 'undefined' && typeof document !== 'undefined'
   },
 
   loadWasm: async (url: string) => {
     const response = await fetch(url)
     if (!response.ok) {
-      throw new Error(
-        `Failed to fetch WASM from ${url}: ${response.statusText}`
-      )
+      throw new Error(`Failed to fetch WASM from ${url}: ${response.statusText}`)
     }
     return await response.arrayBuffer()
   },

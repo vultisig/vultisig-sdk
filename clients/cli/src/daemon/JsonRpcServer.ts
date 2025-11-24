@@ -54,11 +54,7 @@ export class JsonRpcServer {
           }
 
           // Use the new .sign() method
-          const signature = await (this.vault as any).sign(
-            signingMode,
-            signingPayload,
-            password
-          )
+          const signature = await (this.vault as any).sign(signingMode, signingPayload, password)
 
           console.log('🔍 Signature result from SDK:', signature)
           console.log('  Type:', typeof signature)
@@ -75,9 +71,7 @@ export class JsonRpcServer {
 
               // Parse DER signature to get r, s, v components
               const sig = signature.signature
-              console.log(
-                '🔧 Creating serialized transaction from DER signature...'
-              )
+              console.log('🔧 Creating serialized transaction from DER signature...')
 
               if (signature.format === 'ECDSA' && sig.length >= 140) {
                 // Parse DER signature
@@ -104,32 +98,18 @@ export class JsonRpcServer {
                   maxFeePerGas: BigInt(tx.maxFeePerGas || tx.gasPrice),
                   maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas || '0'),
                   accessList: [],
-                  r: r.startsWith('0x')
-                    ? (r as `0x${string}`)
-                    : (`0x${r}` as `0x${string}`),
-                  s: s.startsWith('0x')
-                    ? (s as `0x${string}`)
-                    : (`0x${s}` as `0x${string}`),
+                  r: r.startsWith('0x') ? (r as `0x${string}`) : (`0x${r}` as `0x${string}`),
+                  s: s.startsWith('0x') ? (s as `0x${string}`) : (`0x${s}` as `0x${string}`),
                   v: BigInt(v),
                 }
 
                 // Serialize the complete signed transaction
-                serializedTransaction =
-                  serializeTransaction(completeTransaction)
-                console.log(
-                  '✅ Complete signed transaction created for broadcast'
-                )
-                console.log(
-                  '📏 Length:',
-                  serializedTransaction.length,
-                  'characters'
-                )
+                serializedTransaction = serializeTransaction(completeTransaction)
+                console.log('✅ Complete signed transaction created for broadcast')
+                console.log('📏 Length:', serializedTransaction.length, 'characters')
               }
             } catch (error) {
-              console.log(
-                '❌ Failed to create serialized transaction:',
-                error.message
-              )
+              console.log('❌ Failed to create serialized transaction:', error.message)
               console.log('📝 Falling back to DER signature')
             }
           }

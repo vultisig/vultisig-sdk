@@ -62,10 +62,7 @@ class PolyfillProviderRegistry {
         await provider.initialize()
       } catch (error) {
         // Log warning but continue - polyfills are best-effort
-        console.warn(
-          `[Vultisig SDK] Failed to initialize ${provider.name} polyfills:`,
-          error
-        )
+        console.warn(`[Vultisig SDK] Failed to initialize ${provider.name} polyfills:`, error)
       }
     }
   }

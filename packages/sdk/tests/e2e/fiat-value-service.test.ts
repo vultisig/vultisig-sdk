@@ -247,12 +247,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should fetch values for multiple chains', async () => {
       console.log('💰 Fetching values for multiple chains...')
 
-      const chains = [
-        Chain.Bitcoin,
-        Chain.Ethereum,
-        Chain.Solana,
-        Chain.Polygon,
-      ]
+      const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.Polygon]
       const results: Record<string, any> = {}
 
       for (const chain of chains) {
@@ -270,9 +265,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
       const successCount = Object.values(results).filter(r => r.success).length
       const successRate = (successCount / chains.length) * 100
 
-      console.log(
-        `📊 Success rate: ${successCount}/${chains.length} (${successRate.toFixed(1)}%)`
-      )
+      console.log(`📊 Success rate: ${successCount}/${chains.length} (${successRate.toFixed(1)}%)`)
 
       // Expect at least 80% success rate
       expect(successRate).toBeGreaterThan(80)
@@ -305,9 +298,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
       console.log(`⚡ First fetch: ${fetchTime1.toFixed(2)}ms`)
       console.log(`⚡ Cached fetch: ${fetchTime2.toFixed(2)}ms`)
       if (fetchTime2 > 0) {
-        console.log(
-          `🚀 Speedup: ${(fetchTime1 / Math.max(fetchTime2, 0.1)).toFixed(1)}x`
-        )
+        console.log(`🚀 Speedup: ${(fetchTime1 / Math.max(fetchTime2, 0.1)).toFixed(1)}x`)
       }
     })
 
@@ -345,10 +336,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
 
       // Fetch token value on same chain (should use cached ETH price for gas estimation)
       const startTime2 = performance.now()
-      const tokenValue = await vault.getValue(
-        Chain.Ethereum,
-        TOKENS.USDC_ETHEREUM
-      )
+      const tokenValue = await vault.getValue(Chain.Ethereum, TOKENS.USDC_ETHEREUM)
       const fetchTime2 = performance.now() - startTime2
 
       expect(nativeValue).toBeDefined()
@@ -363,12 +351,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should calculate total portfolio value across chains', async () => {
       console.log('💰 Calculating total portfolio value...')
 
-      const chains = [
-        Chain.Bitcoin,
-        Chain.Ethereum,
-        Chain.Solana,
-        Chain.Polygon,
-      ]
+      const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.Polygon]
       let totalValue = 0
       const chainValues: Record<string, number> = {}
 
@@ -420,9 +403,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
     it('should handle invalid token address gracefully', async () => {
       console.log('🔍 Testing invalid token address error handling...')
 
-      await expect(
-        vault.getValue(Chain.Ethereum, 'invalid_address')
-      ).rejects.toThrow()
+      await expect(vault.getValue(Chain.Ethereum, 'invalid_address')).rejects.toThrow()
 
       console.log('✅ Correctly rejected invalid token address')
     })
@@ -448,12 +429,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
       // Clear cache
       await vault.updateValues('all')
 
-      const chains = [
-        Chain.Bitcoin,
-        Chain.Ethereum,
-        Chain.Solana,
-        Chain.Polygon,
-      ]
+      const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.Polygon]
 
       // Sequential fetching
       const startSeq = performance.now()
@@ -471,9 +447,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
 
       // Parallel fetching
       const startPar = performance.now()
-      await Promise.all(
-        chains.map(chain => vault.getValue(chain).catch(() => null))
-      )
+      await Promise.all(chains.map(chain => vault.getValue(chain).catch(() => null)))
       const parallelTime = performance.now() - startPar
 
       console.log(`⚡ Sequential: ${sequentialTime.toFixed(2)}ms`)
@@ -499,9 +473,7 @@ describe('E2E: Fiat Value Service (Production)', () => {
       const totalTime = performance.now() - startTime
       const avgTime = totalTime / iterations
 
-      console.log(
-        `⚡ Total time for ${iterations} fetches: ${totalTime.toFixed(2)}ms`
-      )
+      console.log(`⚡ Total time for ${iterations} fetches: ${totalTime.toFixed(2)}ms`)
       console.log(`⚡ Average time per fetch: ${avgTime.toFixed(2)}ms`)
 
       // With caching, should be very fast

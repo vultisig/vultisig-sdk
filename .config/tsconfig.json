@@ -21,10 +21,5 @@
   },
   "references": [],
   "exclude": ["node_modules"],
-  "include": [
-    "next-env.d.ts",
-    "packages/**/*.ts",
-    "packages/**/*.tsx",
-    "types.d.ts"
-  ]
+  "include": ["next-env.d.ts", "packages/**/*.ts", "packages/**/*.tsx", "types.d.ts"]
 }

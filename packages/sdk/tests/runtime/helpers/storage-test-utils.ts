@@ -38,10 +38,7 @@ export type CreateTestStorageOptions = {
 /**
  * Create a test storage instance of the specified type
  */
-export async function createTestStorage(
-  type: StorageType,
-  options?: CreateTestStorageOptions
-): Promise<Storage> {
+export async function createTestStorage(type: StorageType, options?: CreateTestStorageOptions): Promise<Storage> {
   switch (type) {
     case 'memory':
       return new MemoryStorage()
@@ -72,11 +69,7 @@ export const storageAssertions = {
   /**
    * Assert that a value is stored correctly
    */
-  async expectStoredValue<T>(
-    storage: Storage,
-    key: string,
-    expected: T
-  ): Promise<void> {
+  async expectStoredValue<T>(storage: Storage, key: string, expected: T): Promise<void> {
     const actual = await storage.get<T>(key)
     if (JSON.stringify(actual) !== JSON.stringify(expected)) {
       throw new Error(
@@ -106,9 +99,7 @@ export const storageAssertions = {
   async expectStorageEmpty(storage: Storage): Promise<void> {
     const keys = await storage.list()
     if (keys.length > 0) {
-      throw new Error(
-        `Expected storage to be empty, but found ${keys.length} keys: ${JSON.stringify(keys)}`
-      )
+      throw new Error(`Expected storage to be empty, but found ${keys.length} keys: ${JSON.stringify(keys)}`)
     }
   },
 
@@ -118,28 +109,20 @@ export const storageAssertions = {
   async expectKeyNotFound(storage: Storage, key: string): Promise<void> {
     const value = await storage.get(key)
     if (value !== null) {
-      throw new Error(
-        `Expected key "${key}" to not exist, but found value: ${JSON.stringify(value)}`
-      )
+      throw new Error(`Expected key "${key}" to not exist, but found value: ${JSON.stringify(value)}`)
     }
   },
 
   /**
    * Assert that storage usage is within expected range
    */
-  async expectUsageInRange(
-    storage: Storage,
-    min: number,
-    max: number
-  ): Promise<void> {
+  async expectUsageInRange(storage: Storage, min: number, max: number): Promise<void> {
     const usage = await storage.getUsage?.()
     if (usage === undefined) {
       throw new Error('Storage does not support usage tracking')
     }
     if (usage < min || usage > max) {
-      throw new Error(
-        `Expected usage to be between ${min} and ${max}, but got ${usage}`
-      )
+      throw new Error(`Expected usage to be between ${min} and ${max}, but got ${usage}`)
     }
   },
 }
@@ -217,9 +200,7 @@ export class FailingStorage implements Storage {
 /**
  * Create a failing storage instance
  */
-export function createFailingStorage(
-  errorCode: StorageErrorCode = StorageErrorCode.Unknown
-): Storage {
+export function createFailingStorage(errorCode: StorageErrorCode = StorageErrorCode.Unknown): Storage {
   return new FailingStorage(errorCode)
 }
 
@@ -280,9 +261,7 @@ export class QuotaExceededStorage implements Storage {
 /**
  * Create a quota-exceeded storage instance
  */
-export function createQuotaExceededStorage(
-  quota = 1024 * 100
-): QuotaExceededStorage {
+export function createQuotaExceededStorage(quota = 1024 * 100): QuotaExceededStorage {
   const storage = new QuotaExceededStorage()
   storage.setQuota(quota)
   return storage
@@ -332,10 +311,7 @@ export class TempDirectory {
  *   await storage.set('key', 'value')
  * })
  */
-export async function withTempDir<T>(
-  fn: (tempDir: string) => Promise<T>,
-  prefix = 'vultisig-test-'
-): Promise<T> {
+export async function withTempDir<T>(fn: (tempDir: string) => Promise<T>, prefix = 'vultisig-test-'): Promise<T> {
   const tempDir = new TempDirectory()
   try {
     const path = await tempDir.create(prefix)

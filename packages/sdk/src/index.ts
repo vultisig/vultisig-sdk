@@ -110,11 +110,7 @@ export { MemoryStorage } from './runtime/storage/MemoryStorage'
 export { NodeStorage } from './runtime/storage/NodeStorage'
 export type { StorageOptions } from './runtime/storage/StorageManager'
 export { StorageManager } from './runtime/storage/StorageManager'
-export type {
-  StorageMetadata,
-  StoredValue,
-  Storage as VaultStorage,
-} from './runtime/storage/types'
+export type { StorageMetadata, StoredValue, Storage as VaultStorage } from './runtime/storage/types'
 export { StorageError, StorageErrorCode } from './runtime/storage/types'
 
 // Event system

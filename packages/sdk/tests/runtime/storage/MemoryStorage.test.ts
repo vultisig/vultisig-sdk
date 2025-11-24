@@ -264,9 +264,7 @@ describe('MemoryStorage', () => {
 
       // Access internal store to check metadata (implementation detail test)
       const stored = (storage as any).store.get('meta-key')
-      expect(stored.metadata.createdAt).toBeLessThan(
-        stored.metadata.lastModified
-      )
+      expect(stored.metadata.createdAt).toBeLessThan(stored.metadata.lastModified)
     })
 
     it('should set lastModified timestamp on each update', async () => {
@@ -278,9 +276,7 @@ describe('MemoryStorage', () => {
       await storage.set('meta-key', 'value2')
       const stored2 = (storage as any).store.get('meta-key')
 
-      expect(stored2.metadata.lastModified).toBeGreaterThan(
-        stored1.metadata.lastModified
-      )
+      expect(stored2.metadata.lastModified).toBeGreaterThan(stored1.metadata.lastModified)
     })
 
     it('should include storage version in metadata', async () => {

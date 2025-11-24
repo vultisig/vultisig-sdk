@@ -152,12 +152,7 @@ describe('E2E: Balance Operations (Production)', () => {
     it('should fetch balances for multiple chains in parallel', async () => {
       console.log('🔍 Fetching balances for multiple chains...')
 
-      const chains = [
-        Chain.Bitcoin,
-        Chain.Ethereum,
-        Chain.Solana,
-        Chain.Polygon,
-      ]
+      const chains = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.Polygon]
       const startTime = Date.now()
 
       const balances = await vault.balances(chains)
@@ -171,9 +166,7 @@ describe('E2E: Balance Operations (Production)', () => {
         expect(balances[chain].symbol).toBeDefined()
         expect(balances[chain].amount).toBeTypeOf('string')
         expect(balances[chain].chainId).toBe(chain)
-        console.log(
-          `💰 ${chain}: ${balances[chain].amount} ${balances[chain].symbol}`
-        )
+        console.log(`💰 ${chain}: ${balances[chain].amount} ${balances[chain].symbol}`)
       }
 
       console.log(`⚡ Fetched ${chains.length} balances in ${fetchTime}ms`)
@@ -222,9 +215,7 @@ describe('E2E: Balance Operations (Production)', () => {
 
       console.log(`⚡ First fetch: ${fetchTime1.toFixed(2)}ms`)
       console.log(`⚡ Cached fetch: ${fetchTime2.toFixed(2)}ms`)
-      console.log(
-        `🚀 Speedup: ${(fetchTime1 / fetchTime2Adjusted).toFixed(1)}x`
-      )
+      console.log(`🚀 Speedup: ${(fetchTime1 / fetchTime2Adjusted).toFixed(1)}x`)
     })
 
     it('should update balance when explicitly refreshed', async () => {
@@ -277,9 +268,7 @@ describe('E2E: Balance Operations (Production)', () => {
         Chain.Base,
       ]
 
-      const addresses = await Promise.all(
-        evmChains.map(chain => vault.address(chain))
-      )
+      const addresses = await Promise.all(evmChains.map(chain => vault.address(chain)))
 
       // All EVM chains should have the same address
       const uniqueAddresses = new Set(addresses)
@@ -299,9 +288,7 @@ describe('E2E: Balance Operations (Production)', () => {
     })
 
     it('should handle invalid token address gracefully', async () => {
-      await expect(
-        vault.balance(Chain.Ethereum, 'invalid_address')
-      ).rejects.toThrow()
+      await expect(vault.balance(Chain.Ethereum, 'invalid_address')).rejects.toThrow()
     })
   })
 })

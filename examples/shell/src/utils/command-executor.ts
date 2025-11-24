@@ -12,10 +12,7 @@ export class CommandExecutor {
    * @param errorContext - Optional context string to prepend to error messages
    * @returns The result of the command function, or null if an error occurred
    */
-  async execute<T>(
-    commandFn: () => Promise<T>,
-    errorContext?: string
-  ): Promise<T | null> {
+  async execute<T>(commandFn: () => Promise<T>, errorContext?: string): Promise<T | null> {
     try {
       return await commandFn()
     } catch (error: any) {

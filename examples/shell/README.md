@@ -5,6 +5,7 @@ An interactive shell for wallet management built using Node.js's built-in `repl`
 ## Features
 
 ### ✨ Improved Over Readline Implementation
+
 - **Empty input handling** - Pressing Enter works perfectly without workarounds
 - **No complex hacks** - Built-in prompt management and command handling
 - **Better async support** - Designed for asynchronous operations
@@ -13,6 +14,7 @@ An interactive shell for wallet management built using Node.js's built-in `repl`
 - **Error recovery** - Doesn't crash on errors, maintains session state
 
 ### 🔐 Vault Management
+
 - Create new vaults with password encryption
 - Import existing vault files
 - Switch between multiple vaults
@@ -20,6 +22,7 @@ An interactive shell for wallet management built using Node.js's built-in `repl`
 - Password caching with configurable TTL
 
 ### 💰 Wallet Operations
+
 - Check balances across all chains
 - View portfolio value in multiple currencies
 - Display all wallet addresses
@@ -27,6 +30,7 @@ An interactive shell for wallet management built using Node.js's built-in `repl`
 - Lock/unlock vaults
 
 ### 📤 Transaction Support
+
 - Send native tokens and ERC-20/BEP-20 tokens
 - Transaction signing and broadcasting
 - Gas estimation and optimization
@@ -59,16 +63,19 @@ yarn dev
 Once in the shell, you can use these commands:
 
 #### Getting Help
+
 - `help` or `?` - Show all available commands
 - `.help` - Alternative way to show help (Shell dot-command)
 
 #### Vault Management
+
 - `vaults` - List all vaults
 - `vault <number>` - Switch to vault by number
 - `import <file>` - Import vault from .vult file
 - `create` - Create a new vault
 
 #### Wallet Operations
+
 - `balance [chain]` - Show balance for a specific chain or all chains
 - `portfolio` - Display total portfolio value
 - `addresses` - Show all wallet addresses
@@ -76,17 +83,20 @@ Once in the shell, you can use these commands:
 - `status` - Show vault lock status
 
 #### Transactions
+
 - `send <chain> <to> <amount>` - Send transaction
   - Example: `send ethereum 0x123... 0.1`
   - With token: `send ethereum 0x123... 100 --token USDT`
   - With memo: `send cosmos cosmos1... 10 --memo "Payment"`
 
 #### Vault Security
+
 - `lock` - Lock the vault (clear password cache)
 - `unlock` - Unlock vault (cache password for TTL)
 - `export [path]` - Export vault to file
 
 #### Shell Commands (dot-commands)
+
 - `.help` - Show help information
 - `.clear` - Clear the screen
 - `.exit` - Exit the shell
@@ -94,16 +104,19 @@ Once in the shell, you can use these commands:
 ### Empty Input Handling
 
 Unlike readline-based implementations, this shell handles empty input naturally:
+
 ```
 wallet> [Press Enter]
 wallet> [Press Enter]
 wallet> [Press Enter]
 ```
+
 Each Enter press shows a new prompt on a new line without any issues.
 
 ### Tab Completion
 
 Start typing a command and press Tab to autocomplete:
+
 ```
 wallet> bal[Tab]
 wallet> balance
@@ -112,6 +125,7 @@ wallet> balance
 ### Command History
 
 Use up/down arrows to navigate through command history:
+
 ```
 wallet> balance ethereum
 wallet> [Up Arrow]
@@ -200,6 +214,7 @@ Explorer: https://etherscan.io/tx/0xabc...123
 ### Advantages Over Readline
 
 The Node.js REPL module provides:
+
 - Built-in command parsing and evaluation
 - Automatic prompt management
 - Command history persistence
@@ -236,17 +251,21 @@ yarn typecheck
 ## Troubleshooting
 
 ### Empty Input Not Working
+
 This implementation solves the empty input issue completely. If you still experience issues, ensure you're using the shell version, not the readline version.
 
 ### Command Not Recognized
+
 The shell silently ignores unknown commands. Check spelling and use `.help` to see available commands.
 
 ### Vault Not Loading
+
 1. Check the vault file path is correct
 2. Verify the password if the vault is encrypted
 3. Ensure the vault file is a valid .vult format
 
 ### Transaction Failing
+
 1. Ensure the vault is unlocked
 2. Check sufficient balance including gas fees
 3. Verify the recipient address format

@@ -15,11 +15,7 @@ import { VaultError, VaultErrorCode } from '../VaultError'
 export class BalanceService {
   constructor(
     private cacheService: CacheService,
-    private emitBalanceUpdated: (data: {
-      chain: Chain
-      balance: Balance
-      tokenId?: string
-    }) => void,
+    private emitBalanceUpdated: (data: { chain: Chain; balance: Balance; tokenId?: string }) => void,
     private emitError: (error: Error) => void,
     private getAddress: (chain: Chain) => Promise<string>,
     private getTokens: (chain: Chain) => Token[],
@@ -85,10 +81,7 @@ export class BalanceService {
   /**
    * Get balances for multiple chains
    */
-  async getBalances(
-    chains: Chain[],
-    includeTokens = false
-  ): Promise<Record<string, Balance>> {
+  async getBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const result: Record<string, Balance> = {}
 
     for (const chain of chains) {
@@ -100,10 +93,7 @@ export class BalanceService {
         if (includeTokens) {
           const tokens = this.getTokens(chain)
           for (const token of tokens) {
-            result[`${chain}:${token.id}`] = await this.getBalance(
-              chain,
-              token.id
-            )
+            result[`${chain}:${token.id}`] = await this.getBalance(chain, token.id)
           }
         }
       } catch (error) {
@@ -127,10 +117,7 @@ export class BalanceService {
   /**
    * Force refresh multiple balances
    */
-  async updateBalances(
-    chains: Chain[],
-    includeTokens = false
-  ): Promise<Record<string, Balance>> {
+  async updateBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     // Invalidate cache for all chains
     for (const chain of chains) {
       const key = `${chain.toLowerCase()}:native`

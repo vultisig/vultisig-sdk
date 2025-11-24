@@ -168,15 +168,9 @@ export function getEnvironmentInfo(): {
     hasNavigator: typeof navigator !== 'undefined',
     isElectron: isElectron(),
     isChromeExtension: isChromeExtension(),
-    nodeVersion:
-      typeof process !== 'undefined' ? process.versions?.node : undefined,
-    electronVersion:
-      typeof process !== 'undefined' ? process.versions?.electron : undefined,
-    chromeExtensionId:
-      typeof chrome !== 'undefined' && chrome.runtime
-        ? chrome.runtime.id
-        : undefined,
-    userAgent:
-      typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+    nodeVersion: typeof process !== 'undefined' ? process.versions?.node : undefined,
+    electronVersion: typeof process !== 'undefined' ? process.versions?.electron : undefined,
+    chromeExtensionId: typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime.id : undefined,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
   }
 }

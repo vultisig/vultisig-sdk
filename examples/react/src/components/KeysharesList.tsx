@@ -22,9 +22,7 @@ export const KeysharesList = ({
     {/* Current Session Keyshares */}
     {keyshares.length > 0 && (
       <div style={{ marginBottom: 16 }}>
-        <h4 style={{ margin: '0 0 8px 0', fontSize: 14, color: '#666' }}>
-          Current Session
-        </h4>
+        <h4 style={{ margin: '0 0 8px 0', fontSize: 14, color: '#666' }}>Current Session</h4>
         <ul style={{ margin: 0, paddingLeft: 20 }}>
           {keyshares.map(k => (
             <li
@@ -41,9 +39,7 @@ export const KeysharesList = ({
                 {k.encrypted ? '[encrypted] ' : '[file] '}
                 {k.name}
               </span>
-              <span style={{ color: '#999', fontSize: 12 }}>
-                ({Math.round(k.size / 1024)} KB)
-              </span>
+              <span style={{ color: '#999', fontSize: 12 }}>({Math.round(k.size / 1024)} KB)</span>
               <button
                 onClick={() => onLoadKeyshare(k)}
                 style={{
@@ -87,12 +83,8 @@ export const KeysharesList = ({
                 {k.encrypted ? '[encrypted] ' : '[file] '}
                 {k.name}
               </span>
-              <span style={{ color: '#999', fontSize: 12 }}>
-                ({Math.round((k.size ?? 0) / 1024)} KB)
-              </span>
-              <span style={{ color: '#999', fontSize: 10 }}>
-                {new Date(k.dateAdded).toLocaleDateString()}
-              </span>
+              <span style={{ color: '#999', fontSize: 12 }}>({Math.round((k.size ?? 0) / 1024)} KB)</span>
+              <span style={{ color: '#999', fontSize: 10 }}>{new Date(k.dateAdded).toLocaleDateString()}</span>
               {k.containerBase64 && onLoadStoredKeyshare && (
                 <button
                   onClick={() => onLoadStoredKeyshare(k)}
@@ -139,17 +131,14 @@ export const KeysharesList = ({
               fontStyle: 'italic',
             }}
           >
-            Some vaults need to be re-uploaded using &quot;Add Vault&quot;
-            button to load them.
+            Some vaults need to be re-uploaded using &quot;Add Vault&quot; button to load them.
           </p>
         )}
       </div>
     )}
 
     {keyshares.length === 0 && storedKeyshares.length === 0 && (
-      <p style={{ color: '#666', margin: 0 }}>
-        No vault files found. Use &quot;Add Vault&quot; to select .vult files.
-      </p>
+      <p style={{ color: '#666', margin: 0 }}>No vault files found. Use &quot;Add Vault&quot; to select .vult files.</p>
     )}
   </div>
 )

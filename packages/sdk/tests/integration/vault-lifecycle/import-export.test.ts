@@ -100,13 +100,10 @@ describe('Integration: Vault Export', () => {
       name,
       publicKeys: {
         // Real-ish looking public keys
-        ecdsa:
-          '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
-        eddsa:
-          'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
+        ecdsa: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
+        eddsa: 'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
       },
-      hexChainCode:
-        '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+      hexChainCode: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
       localPartyId: 'test-device',
       signers: ['test-device', 'Server-1'],
       keyShares: {

@@ -31,9 +31,7 @@ export class WasmManager {
   // Race-safe memoized initialization functions
   private static memoizedInitWalletCore = memoizeAsync(async () => {
     if (this.config?.wasmPaths?.walletCore) {
-      console.warn(
-        'Custom WASM path for wallet-core is not supported. Using default path.'
-      )
+      console.warn('Custom WASM path for wallet-core is not supported. Using default path.')
     }
     const instance = await initWasm()
     this.walletCoreInstance = instance
@@ -72,9 +70,7 @@ export class WasmManager {
       await initializeSchnorr(wasmBuffer)
     } else {
       // No custom path - use registry to resolve and load
-      const defaultPath = wasmLoaderRegistry.resolvePath(
-        'schnorr/vs_schnorr_wasm_bg.wasm'
-      )
+      const defaultPath = wasmLoaderRegistry.resolvePath('schnorr/vs_schnorr_wasm_bg.wasm')
       const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
       await initializeSchnorr(wasmBuffer)
     }
@@ -87,14 +83,8 @@ export class WasmManager {
    * Must be called before any WASM modules are loaded.
    */
   static configure(config: WasmConfig): void {
-    if (
-      this.walletCoreInstance ||
-      this.dklsInitialized ||
-      this.schnorrInitialized
-    ) {
-      console.warn(
-        'WASM modules already initialized, configuration may not take effect'
-      )
+    if (this.walletCoreInstance || this.dklsInitialized || this.schnorrInitialized) {
+      console.warn('WASM modules already initialized, configuration may not take effect')
     }
     this.config = config
   }
@@ -159,11 +149,7 @@ export class WasmManager {
   static async initialize(): Promise<void> {
     try {
       // Initialize in parallel for better performance
-      await Promise.all([
-        this.getWalletCore(),
-        this.initializeDkls(),
-        this.initializeSchnorr(),
-      ])
+      await Promise.all([this.getWalletCore(), this.initializeDkls(), this.initializeSchnorr()])
     } catch (error) {
       throw new Error(`Failed to initialize WASM modules: ${error}`)
     }
@@ -193,9 +179,7 @@ export class WasmManager {
     // Recreate memoized functions to clear their caches
     this.memoizedInitWalletCore = memoizeAsync(async () => {
       if (this.config?.wasmPaths?.walletCore) {
-        console.warn(
-          'Custom WASM path for wallet-core is not supported. Using default path.'
-        )
+        console.warn('Custom WASM path for wallet-core is not supported. Using default path.')
       }
       const instance = await initWasm()
       this.walletCoreInstance = instance
@@ -211,9 +195,7 @@ export class WasmManager {
         const wasmBuffer = await wasmLoaderRegistry.loadWasm(wasmPath)
         await initializeDkls(wasmBuffer)
       } else {
-        const defaultPath = wasmLoaderRegistry.resolvePath(
-          'dkls/vs_wasm_bg.wasm'
-        )
+        const defaultPath = wasmLoaderRegistry.resolvePath('dkls/vs_wasm_bg.wasm')
         const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
         await initializeDkls(wasmBuffer)
       }
@@ -230,9 +212,7 @@ export class WasmManager {
         const wasmBuffer = await wasmLoaderRegistry.loadWasm(wasmPath)
         await initializeSchnorr(wasmBuffer)
       } else {
-        const defaultPath = wasmLoaderRegistry.resolvePath(
-          'schnorr/vs_schnorr_wasm_bg.wasm'
-        )
+        const defaultPath = wasmLoaderRegistry.resolvePath('schnorr/vs_schnorr_wasm_bg.wasm')
         const wasmBuffer = await wasmLoaderRegistry.loadWasm(defaultPath)
         await initializeSchnorr(wasmBuffer)
       }

@@ -42,8 +42,7 @@ export class CreateCommand {
           {
             type: 'input',
             name: 'email',
-            message:
-              'Enter email for vault verification (required for fast vaults):',
+            message: 'Enter email for vault verification (required for fast vaults):',
             validate: (input: string) => {
               if (!input) return 'Email is required for fast vaults'
               if (!input.includes('@')) return 'Please enter a valid email'
@@ -66,11 +65,7 @@ export class CreateCommand {
         ])
 
         if (usePassword.encrypt) {
-          password = await promptForPassword(
-            'Enter vault encryption password',
-            1,
-            1
-          )
+          password = await promptForPassword('Enter vault encryption password', 1, 1)
         }
       }
 
@@ -78,9 +73,7 @@ export class CreateCommand {
       const sdk = new Vultisig()
       await sdk.initialize()
 
-      console.log(
-        `📡 ${vaultType === 'fast' ? 'Connecting to VultiServer' : 'Starting MPC keygen'}...`
-      )
+      console.log(`📡 ${vaultType === 'fast' ? 'Connecting to VultiServer' : 'Starting MPC keygen'}...`)
 
       let vaultId: string
       let vault: any
@@ -109,9 +102,7 @@ export class CreateCommand {
         vaultId = result.vaultId
       } else {
         // Secure vault creation not yet implemented in this CLI
-        throw new Error(
-          'Secure vault creation is not yet supported in this CLI. Use fast vault mode.'
-        )
+        throw new Error('Secure vault creation is not yet supported in this CLI. Use fast vault mode.')
       }
 
       if (vaultType === 'fast') {
@@ -133,8 +124,7 @@ export class CreateCommand {
             {
               type: 'input',
               name: 'code',
-              message:
-                'Enter verification code from email (or press Enter to skip):',
+              message: 'Enter verification code from email (or press Enter to skip):',
               validate: (_input: string) => {
                 // Allow empty input to skip verification
                 return true
@@ -152,25 +142,16 @@ export class CreateCommand {
               } else {
                 console.log('❌ Verification failed - invalid code')
                 console.log('   The vault was created but not verified')
-                console.log(
-                  '💡 You can verify later using: vultisig verify --vault-id ' +
-                    vaultId
-                )
+                console.log('💡 You can verify later using: vultisig verify --vault-id ' + vaultId)
               }
             } catch (error) {
               console.error('❌ Verification failed:', (error as Error).message)
               console.error('   The vault was created but not verified')
-              console.error(
-                '💡 You can verify later using: vultisig verify --vault-id ' +
-                  vaultId
-              )
+              console.error('💡 You can verify later using: vultisig verify --vault-id ' + vaultId)
             }
           } else {
             console.log('⏭️  Skipping email verification')
-            console.log(
-              '💡 You can verify later using: vultisig verify --vault-id ' +
-                vaultId
-            )
+            console.log('💡 You can verify later using: vultisig verify --vault-id ' + vaultId)
           }
         }
       } else {
@@ -201,40 +182,25 @@ export class CreateCommand {
       ) {
         console.error('\n🔐 SSL Certificate Verification Failed')
         console.error('\n💡 This usually happens because:')
-        console.error(
-          '   - Corporate proxy/firewall intercepting HTTPS traffic'
-        )
+        console.error('   - Corporate proxy/firewall intercepting HTTPS traffic')
         console.error('   - Outdated system CA certificates')
-        console.error(
-          '   - VPN or antivirus software interfering with connections'
-        )
+        console.error('   - VPN or antivirus software interfering with connections')
         console.error('\n🔧 Solutions:')
         console.error('   1. TEMPORARY (for testing only):')
-        console.error(
-          '      NODE_TLS_REJECT_UNAUTHORIZED=0 vultisig create ...'
-        )
+        console.error('      NODE_TLS_REJECT_UNAUTHORIZED=0 vultisig create ...')
         console.error('   2. RECOMMENDED (permanent fix):')
         console.error('      - Update your system CA certificates')
         console.error('      - macOS: brew install ca-certificates')
-        console.error(
-          '      - Or contact your IT department about SSL inspection'
-        )
-      } else if (
-        error.message.includes('Method Not Allowed') ||
-        error.message.includes('Internal Server Error')
-      ) {
+        console.error('      - Or contact your IT department about SSL inspection')
+      } else if (error.message.includes('Method Not Allowed') || error.message.includes('Internal Server Error')) {
         console.error('💡 Server issue detected. This might be temporary.')
         console.error('   - Check if VultiServer is online')
         console.error('   - Try again in a few minutes')
         console.error('   - Contact support if issue persists')
       } else if (error.message.includes('Password is required')) {
-        console.error(
-          '💡 Please provide a strong password for vault encryption'
-        )
+        console.error('💡 Please provide a strong password for vault encryption')
       } else if (error.message.includes('Email is required')) {
-        console.error(
-          '💡 Email is needed for fast vault verification and recovery'
-        )
+        console.error('💡 Email is needed for fast vault verification and recovery')
       } else if (error.message.includes('User force closed')) {
         // User interrupted the prompt - this is normal, don't show error guidance
         return
@@ -247,11 +213,7 @@ export class CreateCommand {
     }
   }
 
-  private async saveVaultFile(
-    vault: any,
-    name: string,
-    password?: string
-  ): Promise<void> {
+  private async saveVaultFile(vault: any, name: string, password?: string): Promise<void> {
     try {
       const { getVaultsDir } = await import('../utils/paths')
       const path = await import('path')
@@ -264,9 +226,7 @@ export class CreateCommand {
       }
 
       // Generate safe filename
-      const safeFileName = name
-        .replace(/[^a-zA-Z0-9\s-_]/g, '')
-        .replace(/\s+/g, '_')
+      const safeFileName = name.replace(/[^a-zA-Z0-9\s-_]/g, '').replace(/\s+/g, '_')
       const fileName = `${safeFileName}.vult`
       const filePath = path.join(vaultsDir, fileName)
 

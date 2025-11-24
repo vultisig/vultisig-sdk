@@ -18,6 +18,7 @@ This document provides detailed instructions for clients to perform key generati
 **Purpose**: Initialize a new TSS session with participant list
 
 **Request**:
+
 ```http
 POST https://api.vultisig.com/router/my-keygen-session-123
 Content-Type: application/json
@@ -26,15 +27,18 @@ Content-Type: application/json
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): Unique identifier for the session
 - Body: JSON array of participant IDs (strings)
 
 **Response**:
+
 - `201 Created`: Session created successfully
 - `400 Bad Request`: Invalid session ID or participant list
 - `500 Internal Server Error`: Server error
 
 **Notes**:
+
 - Session expires after 5 minutes of inactivity
 - Each participant ID should be unique within the session
 - Session ID should be shared with all participants
@@ -48,21 +52,27 @@ Content-Type: application/json
 **Purpose**: Confirm session exists and retrieve participant list
 
 **Request**:
+
 ```http
 GET https://api.vultisig.com/router/my-keygen-session-123
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): The session identifier
 
 **Response**:
+
 - `200 OK`: Returns participant array
+
 ```json
 ["participant1", "participant2", "participant3"]
 ```
+
 - `404 Not Found`: Session doesn't exist or expired
 
 **Notes**:
+
 - All participants should verify the session before proceeding
 - Check that expected participants are in the returned list
 
@@ -75,6 +85,7 @@ GET https://api.vultisig.com/router/my-keygen-session-123
 **Purpose**: Share initial setup data for the keygen ceremony
 
 **Request**:
+
 ```http
 POST https://api.vultisig.com/router/setup-message/my-keygen-session-123
 Content-Type: application/json
@@ -84,16 +95,19 @@ message_id: setup-001
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): The session identifier
 - `message_id` (Header, optional): Message identifier for tracking
 - Body: Setup data (string or JSON)
 
 **Response**:
+
 - `201 Created`: Setup message stored
 - `400 Bad Request`: Invalid session ID or payload
 - `500 Internal Server Error`: Server error
 
 **Notes**:
+
 - Optional step for sharing initial parameters
 - Can be retrieved later using `GET /setup-message/:sessionID`
 
@@ -106,6 +120,7 @@ message_id: setup-001
 **Purpose**: Signal that TSS keygen ceremony should begin
 
 **Request**:
+
 ```http
 POST https://api.vultisig.com/router/start/my-keygen-session-123
 Content-Type: application/json
@@ -114,15 +129,18 @@ Content-Type: application/json
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): The session identifier
 - Body: JSON array of participant IDs who will participate
 
 **Response**:
+
 - `200 OK`: TSS session marked as started
 - `400 Bad Request`: Invalid session ID or participant list
 - `500 Internal Server Error`: Server error
 
 **Notes**:
+
 - Usually called by the session initiator
 - All participants should be ready to start TSS protocol
 - Participant list should match the original session participants
@@ -136,18 +154,22 @@ Content-Type: application/json
 **Purpose**: Verify that TSS session has been marked as started
 
 **Request**:
+
 ```http
 GET https://api.vultisig.com/router/start/my-keygen-session-123
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): The session identifier
 
 **Response**:
+
 - `200 OK`: Returns participant array, TSS is started
 - `404 Not Found`: TSS not started yet
 
 **Notes**:
+
 - All participants should poll this endpoint until TSS is started
 - Proceed to message exchange once this returns 200
 
@@ -162,6 +184,7 @@ GET https://api.vultisig.com/router/start/my-keygen-session-123
 **Purpose**: Send TSS protocol messages to other participants
 
 **Request**:
+
 ```http
 POST https://api.vultisig.com/router/message/my-keygen-session-123
 Content-Type: application/json
@@ -177,6 +200,7 @@ message_id: msg-round-1-001
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): The session identifier
 - `message_id` (Header, optional): Message identifier for tracking
 - Body: Message object with fields:
@@ -187,6 +211,7 @@ message_id: msg-round-1-001
   - `sequence_no` (number): Message sequence number
 
 **Response**:
+
 - `202 Accepted`: Message queued for recipients
 - `400 Bad Request`: Invalid message format
 - `500 Internal Server Error`: Server error
@@ -200,18 +225,22 @@ message_id: msg-round-1-001
 **Purpose**: Retrieve messages addressed to a specific participant
 
 **Request**:
+
 ```http
 GET https://api.vultisig.com/router/message/my-keygen-session-123/participant1
 message_id: msg-round-1
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): The session identifier
 - `participantID` (URL path): Your participant ID (URL encoded if needed)
 - `message_id` (Header, optional): Filter by message ID
 
 **Response**:
+
 - `200 OK`: Returns array of messages
+
 ```json
 [
   {
@@ -223,9 +252,11 @@ message_id: msg-round-1
   }
 ]
 ```
+
 - `200 OK` (empty): No messages available `[]`
 
 **Notes**:
+
 - Poll this endpoint regularly during TSS ceremony
 - Messages expire after 1 hour
 - Use URL encoding for participant IDs with special characters
@@ -239,18 +270,21 @@ message_id: msg-round-1
 **Purpose**: Remove a specific message after processing
 
 **Request**:
+
 ```http
 DELETE https://api.vultisig.com/router/message/my-keygen-session-123/participant1/message_hash_123
 message_id: msg-round-1
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): The session identifier
 - `participantID` (URL path): Your participant ID
 - `hash` (URL path): Hash of the message to delete
 - `message_id` (Header, optional): Message ID filter
 
 **Response**:
+
 - `200 OK`: Message deleted
 - `400 Bad Request`: Invalid parameters
 - `500 Internal Server Error`: Server error
@@ -268,6 +302,7 @@ For large TSS messages, use the payload system:
 **Purpose**: Store large payload data with hash verification
 
 **Request**:
+
 ```http
 POST https://api.vultisig.com/router/payload/sha256_hash_of_payload
 Content-Type: application/octet-stream
@@ -276,10 +311,12 @@ Content-Type: application/octet-stream
 ```
 
 **Parameters**:
+
 - `hash` (URL path): SHA-256 hash of the payload
 - Body: Raw payload data
 
 **Response**:
+
 - `200 OK`: Payload stored
 - `400 Bad Request`: Hash mismatch or invalid data
 
@@ -288,11 +325,13 @@ Content-Type: application/octet-stream
 **Endpoint**: `GET /payload/:hash`
 
 **Request**:
+
 ```http
 GET https://api.vultisig.com/router/payload/sha256_hash_of_payload
 ```
 
 **Response**:
+
 - `200 OK`: Returns payload data
 - `404 Not Found`: Payload not found
 
@@ -305,6 +344,7 @@ GET https://api.vultisig.com/router/payload/sha256_hash_of_payload
 **Purpose**: Mark the keygen ceremony as completed
 
 **Request**:
+
 ```http
 POST https://api.vultisig.com/router/complete/my-keygen-session-123
 Content-Type: application/json
@@ -313,10 +353,12 @@ Content-Type: application/json
 ```
 
 **Parameters**:
+
 - `sessionID` (URL path): The session identifier
 - Body: JSON array of participants who completed the ceremony
 
 **Response**:
+
 - `200 OK`: Session marked as complete
 - `400 Bad Request`: Invalid session ID or participant list
 
@@ -329,11 +371,13 @@ Content-Type: application/json
 **Purpose**: Check if the keygen ceremony is complete
 
 **Request**:
+
 ```http
 GET https://api.vultisig.com/router/complete/my-keygen-session-123
 ```
 
 **Response**:
+
 - `200 OK`: Returns participant array, ceremony is complete
 - `404 Not Found`: Not completed yet
 
@@ -346,15 +390,18 @@ GET https://api.vultisig.com/router/complete/my-keygen-session-123
 **Purpose**: Remove session and all associated messages
 
 **Request**:
+
 ```http
 DELETE https://api.vultisig.com/router/my-keygen-session-123
 ```
 
 **Response**:
+
 - `200 OK`: Session deleted
 - `500 Internal Server Error`: Deletion failed
 
 **Notes**:
+
 - Usually called by session initiator
 - Removes all messages and session data
 - Should be done after successful keygen completion
@@ -370,6 +417,7 @@ For key signing operations, follow similar steps but use these additional endpoi
 **Endpoint**: `POST /complete/:sessionID/keysign`
 
 **Request**:
+
 ```http
 POST https://api.vultisig.com/router/complete/my-keysign-session-123/keysign
 message_id: keysign-001
@@ -382,6 +430,7 @@ message_id: keysign-001
 **Endpoint**: `GET /complete/:sessionID/keysign`
 
 **Request**:
+
 ```http
 GET https://api.vultisig.com/router/complete/my-keysign-session-123/keysign
 message_id: keysign-001

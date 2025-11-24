@@ -32,9 +32,7 @@ export function formatSignature(
   // Base signature (always present)
   const signature: Signature = {
     signature: firstSignature.der_signature,
-    recovery: firstSignature.recovery_id
-      ? parseInt(firstSignature.recovery_id)
-      : undefined,
+    recovery: firstSignature.recovery_id ? parseInt(firstSignature.recovery_id) : undefined,
     format: signatureFormat,
   }
 
@@ -56,9 +54,7 @@ export function formatSignature(
  * @param algorithm - Core signature algorithm (ecdsa or eddsa)
  * @returns SDK signature format
  */
-function mapAlgorithmToFormat(
-  algorithm: SignatureAlgorithm
-): Signature['format'] {
+function mapAlgorithmToFormat(algorithm: SignatureAlgorithm): Signature['format'] {
   switch (algorithm) {
     case 'ecdsa':
       return 'ECDSA'

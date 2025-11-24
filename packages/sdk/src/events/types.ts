@@ -1,14 +1,6 @@
 import type { Chain } from '@core/chain/Chain'
 
-import type {
-  Balance,
-  Signature,
-  SigningPayload,
-  SigningStep,
-  Token,
-  Value,
-  VaultCreationStep,
-} from '../types'
+import type { Balance, Signature, SigningPayload, SigningStep, Token, Value, VaultCreationStep } from '../types'
 import type { VaultBase } from '../vault/VaultBase'
 
 /**

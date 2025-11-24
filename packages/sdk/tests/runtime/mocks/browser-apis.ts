@@ -139,38 +139,36 @@ export function setupChromeStorage(): ChromeStorageMock {
 
   const mock: ChromeStorageMock = {
     local: {
-      get: vi.fn(
-        (keys: string | string[] | null, callback?: (result: any) => void) => {
-          const result: Record<string, any> = {}
+      get: vi.fn((keys: string | string[] | null, callback?: (result: any) => void) => {
+        const result: Record<string, any> = {}
 
-          if (keys === null || keys === undefined) {
-            // Get all keys
-            for (const [key, value] of store.entries()) {
-              result[key] = value
-            }
-          } else if (typeof keys === 'string') {
-            // Get single key
-            if (store.has(keys)) {
-              result[keys] = store.get(keys)
-            }
-          } else if (Array.isArray(keys)) {
-            // Get multiple keys
-            for (const key of keys) {
-              if (store.has(key)) {
-                result[key] = store.get(key)
-              }
+        if (keys === null || keys === undefined) {
+          // Get all keys
+          for (const [key, value] of store.entries()) {
+            result[key] = value
+          }
+        } else if (typeof keys === 'string') {
+          // Get single key
+          if (store.has(keys)) {
+            result[keys] = store.get(keys)
+          }
+        } else if (Array.isArray(keys)) {
+          // Get multiple keys
+          for (const key of keys) {
+            if (store.has(key)) {
+              result[key] = store.get(key)
             }
           }
-
-          // Chrome API is callback-based
-          if (callback) {
-            setTimeout(() => callback(result), 0)
-          }
-
-          // Also return a promise (for modern chrome.storage API)
-          return Promise.resolve(result)
         }
-      ),
+
+        // Chrome API is callback-based
+        if (callback) {
+          setTimeout(() => callback(result), 0)
+        }
+
+        // Also return a promise (for modern chrome.storage API)
+        return Promise.resolve(result)
+      }),
 
       set: vi.fn((items: Record<string, any>, callback?: () => void) => {
         const changes: Record<string, any> = {}
@@ -251,34 +249,29 @@ export function setupChromeStorage(): ChromeStorageMock {
         return Promise.resolve()
       }),
 
-      getBytesInUse: vi.fn(
-        (
-          keys?: string | string[] | null,
-          callback?: (bytes: number) => void
-        ) => {
-          let size = 0
+      getBytesInUse: vi.fn((keys?: string | string[] | null, callback?: (bytes: number) => void) => {
+        let size = 0
 
-          if (!keys) {
-            // Calculate total size
-            for (const [key, value] of store.entries()) {
-              size += key.length + JSON.stringify(value).length
-            }
-          } else {
-            const keysArray = typeof keys === 'string' ? [keys] : keys
-            for (const key of keysArray) {
-              if (store.has(key)) {
-                size += key.length + JSON.stringify(store.get(key)).length
-              }
+        if (!keys) {
+          // Calculate total size
+          for (const [key, value] of store.entries()) {
+            size += key.length + JSON.stringify(value).length
+          }
+        } else {
+          const keysArray = typeof keys === 'string' ? [keys] : keys
+          for (const key of keysArray) {
+            if (store.has(key)) {
+              size += key.length + JSON.stringify(store.get(key)).length
             }
           }
-
-          if (callback) {
-            setTimeout(() => callback(size), 0)
-          }
-
-          return Promise.resolve(size)
         }
-      ),
+
+        if (callback) {
+          setTimeout(() => callback(size), 0)
+        }
+
+        return Promise.resolve(size)
+      }),
 
       QUOTA_BYTES: 10 * 1024 * 1024, // 10MB
     },
@@ -289,14 +282,12 @@ export function setupChromeStorage(): ChromeStorageMock {
     addListener: vi.fn((listener: (changes: any, areaName: string) => void) => {
       changeListeners.push(listener)
     }),
-    removeListener: vi.fn(
-      (listener: (changes: any, areaName: string) => void) => {
-        const index = changeListeners.indexOf(listener)
-        if (index > -1) {
-          changeListeners.splice(index, 1)
-        }
+    removeListener: vi.fn((listener: (changes: any, areaName: string) => void) => {
+      const index = changeListeners.indexOf(listener)
+      if (index > -1) {
+        changeListeners.splice(index, 1)
       }
-    ),
+    }),
   }
 
   mock.onChanged = mock.local.onChanged
@@ -331,10 +322,7 @@ export function removeChromeStorage(): void {
 /**
  * Setup navigator.storage.estimate mock
  */
-export function setupNavigatorStorage(
-  usage = 1024,
-  quota = 50 * 1024 * 1024
-): void {
+export function setupNavigatorStorage(usage = 1024, quota = 50 * 1024 * 1024): void {
   ;(globalThis as any).navigator = {
     ...(globalThis as any).navigator,
     storage: {

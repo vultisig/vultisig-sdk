@@ -32,11 +32,7 @@ export const testUtils = {
    * Wait for a condition to become true
    * Useful for async operations in tests
    */
-  waitFor: async (
-    condition: () => boolean | Promise<boolean>,
-    timeout = 5000,
-    interval = 100
-  ): Promise<void> => {
+  waitFor: async (condition: () => boolean | Promise<boolean>, timeout = 5000, interval = 100): Promise<void> => {
     const startTime = Date.now()
     while (Date.now() - startTime < timeout) {
       if (await condition()) {
@@ -50,8 +46,7 @@ export const testUtils = {
   /**
    * Sleep for a specified duration
    */
-  sleep: (ms: number): Promise<void> =>
-    new Promise(resolve => setTimeout(resolve, ms)),
+  sleep: (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms)),
 
   /**
    * Generate random hex string (useful for mock data)
@@ -181,9 +176,7 @@ export const mockFetch = vi.fn()
 /**
  * Setup mock fetch responses
  */
-export const setupMockFetch = (
-  responses: Record<string, any>
-): typeof mockFetch => {
+export const setupMockFetch = (responses: Record<string, any>): typeof mockFetch => {
   mockFetch.mockImplementation((url: string | URL | Request) => {
     const urlString = url.toString()
 
@@ -195,10 +188,7 @@ export const setupMockFetch = (
           status: 200,
           json: () => Promise.resolve(response),
           text: () => Promise.resolve(JSON.stringify(response)),
-          arrayBuffer: () =>
-            Promise.resolve(
-              new TextEncoder().encode(JSON.stringify(response)).buffer
-            ),
+          arrayBuffer: () => Promise.resolve(new TextEncoder().encode(JSON.stringify(response)).buffer),
         })
       }
     }
@@ -286,11 +276,7 @@ export const assertions = {
 
     switch (chain) {
       case 'bitcoin':
-        return (
-          address.startsWith('bc1') ||
-          address.startsWith('1') ||
-          address.startsWith('3')
-        )
+        return address.startsWith('bc1') || address.startsWith('1') || address.startsWith('3')
       case 'ethereum':
         return address.startsWith('0x') && address.length === 42
       case 'solana':
@@ -305,9 +291,7 @@ export const assertions = {
    */
   isValidTimestamp: (timestamp: number): boolean => {
     return (
-      typeof timestamp === 'number' &&
-      timestamp > 0 &&
-      timestamp <= Date.now() + 1000 * 60 * 60 * 24 // Allow up to 1 day in future
+      typeof timestamp === 'number' && timestamp > 0 && timestamp <= Date.now() + 1000 * 60 * 60 * 24 // Allow up to 1 day in future
     )
   },
 }
@@ -319,10 +303,7 @@ export const performance = {
   /**
    * Measure execution time of a function
    */
-  measure: async <T>(
-    fn: () => T | Promise<T>,
-    label?: string
-  ): Promise<{ result: T; duration: number }> => {
+  measure: async <T>(fn: () => T | Promise<T>, label?: string): Promise<{ result: T; duration: number }> => {
     const start = Date.now()
     const result = await fn()
     const duration = Date.now() - start
@@ -337,17 +318,11 @@ export const performance = {
   /**
    * Assert that a function completes within a time limit
    */
-  expectWithinTime: async <T>(
-    fn: () => T | Promise<T>,
-    maxDuration: number,
-    label?: string
-  ): Promise<T> => {
+  expectWithinTime: async <T>(fn: () => T | Promise<T>, maxDuration: number, label?: string): Promise<T> => {
     const { result, duration } = await performance.measure(fn, label)
 
     if (duration > maxDuration) {
-      throw new Error(
-        `${label || 'Operation'} took ${duration}ms, expected < ${maxDuration}ms`
-      )
+      throw new Error(`${label || 'Operation'} took ${duration}ms, expected < ${maxDuration}ms`)
     }
 
     return result
@@ -407,8 +382,7 @@ if (testEnvironment.isNode && typeof File === 'undefined') {
           }
         }
       }
-      this._buffer =
-        buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this._buffer = buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
       this.size = this._buffer.length
     }
 
@@ -445,8 +419,7 @@ if (testEnvironment.isNode && typeof Blob === 'undefined') {
           buffers.push(Buffer.from(bit))
         }
       }
-      this._buffer =
-        buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
+      this._buffer = buffers.length > 0 ? Buffer.concat(buffers) : Buffer.alloc(0)
       this.size = this._buffer.length
     }
 

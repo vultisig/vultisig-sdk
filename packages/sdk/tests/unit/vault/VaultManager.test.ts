@@ -27,10 +27,7 @@ import { GlobalStorage } from '../../../src/runtime/storage/GlobalStorage'
 import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
 import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
 import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
-import {
-  VaultImportError,
-  VaultImportErrorCode,
-} from '../../../src/vault/VaultError'
+import { VaultImportError, VaultImportErrorCode } from '../../../src/vault/VaultError'
 import { VaultManager } from '../../../src/VaultManager'
 
 // Mock modules
@@ -75,9 +72,7 @@ describe('VaultManager', () => {
     it('should reject corrupted files', async () => {
       const corruptedContent = 'corrupted data'
 
-      await expect(vaultManager.importVault(corruptedContent)).rejects.toThrow(
-        VaultImportError
-      )
+      await expect(vaultManager.importVault(corruptedContent)).rejects.toThrow(VaultImportError)
     })
 
     it('should throw VaultImportError with correct error code', async () => {
@@ -88,9 +83,7 @@ describe('VaultManager', () => {
         expect.fail('Should have thrown VaultImportError')
       } catch (error) {
         expect(error).toBeInstanceOf(VaultImportError)
-        expect((error as VaultImportError).code).toBe(
-          VaultImportErrorCode.CORRUPTED_DATA
-        )
+        expect((error as VaultImportError).code).toBe(VaultImportErrorCode.CORRUPTED_DATA)
       }
     })
   })
@@ -108,9 +101,7 @@ describe('VaultManager', () => {
 
   describe('getVaultById', () => {
     it('should return null for non-existent vault', async () => {
-      const vault = await vaultManager.getVaultById(
-        'nonexistent_public_key_string'
-      )
+      const vault = await vaultManager.getVaultById('nonexistent_public_key_string')
       expect(vault).toBeNull()
     })
   })
@@ -127,9 +118,7 @@ describe('VaultManager', () => {
   describe('deleteVault', () => {
     it('should throw error when deleting non-existent vault', async () => {
       const nonExistentId = 'nonexistent_public_key_string'
-      await expect(vaultManager.deleteVault(nonExistentId)).rejects.toThrow(
-        `Vault ${nonExistentId} not found`
-      )
+      await expect(vaultManager.deleteVault(nonExistentId)).rejects.toThrow(`Vault ${nonExistentId} not found`)
     })
   })
 
@@ -172,9 +161,7 @@ describe('VaultManager', () => {
     it('should throw VaultImportError for completely invalid content', async () => {
       const invalidContent = 'not-base64-or-valid-vault-data'
 
-      await expect(
-        vaultManager.isVaultContentEncrypted(invalidContent)
-      ).rejects.toThrow(VaultImportError)
+      await expect(vaultManager.isVaultContentEncrypted(invalidContent)).rejects.toThrow(VaultImportError)
     })
   })
 

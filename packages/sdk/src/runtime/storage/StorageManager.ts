@@ -53,9 +53,7 @@ export class StorageManager {
    * @param options - Optional storage configuration
    * @returns Storage instance appropriate for current environment
    */
-  static createDefaultStorage(
-    options?: import('./registry').StorageOptions
-  ): Storage {
+  static createDefaultStorage(options?: import('./registry').StorageOptions): Storage {
     return storageRegistry.createStorage(options)
   }
 

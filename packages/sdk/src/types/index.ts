@@ -17,12 +17,7 @@ import type { MpcLib } from '@core/mpc/mpcLib'
 export type { MpcLib }
 
 // Import and export Chain types
-import type {
-  CosmosChain,
-  EvmChain,
-  OtherChain,
-  UtxoChain,
-} from '@core/chain/Chain'
+import type { CosmosChain, EvmChain, OtherChain, UtxoChain } from '@core/chain/Chain'
 export type { Chain as ChainType } from '@core/chain/Chain'
 export { Chain } from '@core/chain/Chain'
 
@@ -52,18 +47,7 @@ export type VaultDetails = {
   securityType: 'fast' | 'secure'
   threshold: number
   participants: number
-  chains: Array<
-    | 'evm'
-    | 'utxo'
-    | 'cosmos'
-    | 'solana'
-    | 'sui'
-    | 'polkadot'
-    | 'ton'
-    | 'ripple'
-    | 'tron'
-    | 'cardano'
-  >
+  chains: Array<'evm' | 'utxo' | 'cosmos' | 'solana' | 'sui' | 'polkadot' | 'ton' | 'ripple' | 'tron' | 'cardano'>
   createdAt?: number
   isBackedUp: boolean
 }
@@ -326,13 +310,7 @@ export type VaultManagerConfig = {
 }
 
 export type VaultCreationStep = {
-  step:
-    | 'initializing'
-    | 'keygen'
-    | 'deriving_addresses'
-    | 'fetching_balances'
-    | 'applying_tokens'
-    | 'complete'
+  step: 'initializing' | 'keygen' | 'deriving_addresses' | 'fetching_balances' | 'applying_tokens' | 'complete'
   progress: number
   message: string
   chainId?: string
@@ -455,11 +433,7 @@ export type VaultData = {
  * Used internally when we need to update readonly fields
  */
 export type Mutable<T> = {
-  -readonly [P in keyof T]: T[P] extends readonly (infer U)[]
-    ? U[]
-    : T[P] extends Readonly<infer O>
-      ? O
-      : T[P]
+  -readonly [P in keyof T]: T[P] extends readonly (infer U)[] ? U[] : T[P] extends Readonly<infer O> ? O : T[P]
 }
 
 // Base properties shared by all gas info

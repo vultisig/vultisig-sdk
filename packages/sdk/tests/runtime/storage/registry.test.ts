@@ -15,9 +15,7 @@ describe('StorageProviderRegistry', () => {
 
       // Should be sorted by priority descending
       for (let i = 0; i < providers.length - 1; i++) {
-        expect(providers[i].priority).toBeGreaterThanOrEqual(
-          providers[i + 1].priority
-        )
+        expect(providers[i].priority).toBeGreaterThanOrEqual(providers[i + 1].priority)
       }
     })
 
@@ -36,9 +34,7 @@ describe('StorageProviderRegistry', () => {
       const priorityMap = new Map(providers.map(p => [p.name, p.priority]))
 
       // Chrome should have higher priority than browser
-      expect(priorityMap.get('chrome')).toBeGreaterThan(
-        priorityMap.get('browser') ?? 0
-      )
+      expect(priorityMap.get('chrome')).toBeGreaterThan(priorityMap.get('browser') ?? 0)
 
       // Memory should have lowest priority (fallback)
       expect(priorityMap.get('memory')).toBe(0)
@@ -53,9 +49,7 @@ describe('StorageProviderRegistry', () => {
     })
 
     it('should select highest priority provider that is supported', () => {
-      const supportedProviders = storageRegistry
-        .getAllProviders()
-        .filter(p => p.isSupported())
+      const supportedProviders = storageRegistry.getAllProviders().filter(p => p.isSupported())
 
       if (supportedProviders.length > 0) {
         const best = storageRegistry.findBestProvider()
@@ -67,9 +61,7 @@ describe('StorageProviderRegistry', () => {
       const provider = storageRegistry.findBestProvider()
       expect(provider).toBeTruthy()
       // Memory storage should always be supported
-      const memoryProvider = storageRegistry
-        .getAllProviders()
-        .find(p => p.name === 'memory')
+      const memoryProvider = storageRegistry.getAllProviders().find(p => p.name === 'memory')
       expect(memoryProvider?.isSupported()).toBe(true)
     })
   })
@@ -112,9 +104,7 @@ describe('StorageProviderRegistry', () => {
 
     it('should support basePath option for node storage', () => {
       // Only test if node storage is available
-      const nodeProvider = storageRegistry
-        .getAllProviders()
-        .find(p => p.name === 'node')
+      const nodeProvider = storageRegistry.getAllProviders().find(p => p.name === 'node')
 
       if (nodeProvider?.isSupported()) {
         const storage = storageRegistry.createStorage({
@@ -140,18 +130,14 @@ describe('StorageProviderRegistry', () => {
     })
 
     it('memory provider should always be supported', () => {
-      const memoryProvider = storageRegistry
-        .getAllProviders()
-        .find(p => p.name === 'memory')
+      const memoryProvider = storageRegistry.getAllProviders().find(p => p.name === 'memory')
 
       expect(memoryProvider).toBeDefined()
       expect(memoryProvider?.isSupported()).toBe(true)
     })
 
     it('should be able to create storage from each supported provider', () => {
-      const supportedProviders = storageRegistry
-        .getAllProviders()
-        .filter(p => p.isSupported())
+      const supportedProviders = storageRegistry.getAllProviders().filter(p => p.isSupported())
 
       for (const provider of supportedProviders) {
         const storage = provider.create()

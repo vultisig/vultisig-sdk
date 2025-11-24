@@ -17,6 +17,7 @@
 **Fast Signing: 64% PASSING** - MPC signing working for majority of chains!
 
 ### What's Working
+
 ✅ **All balance operations** (15/15) - Bitcoin, Ethereum, Solana, Polygon, ERC-20 tokens, multi-chain, caching
 ✅ **All gas estimation** (17/17) - EVM (7), UTXO (3), Cosmos (3), Solana (1), validation (3)
 ✅ **All multi-chain coverage** (15/15) - 12+ chains, address derivation, batch operations, chain validation
@@ -24,7 +25,9 @@
 ✅ **Fast signing** (9/14) - Bitcoin, Ethereum ERC-20, Cosmos Hub, Solana, ECDSA/EdDSA validation, error handling
 
 ### Skipped & Timeout Tests
+
 ⏸️ **8 tests with issues** - Require funding or debugging:
+
 - **TX Preparation** (6 skipped - awaiting funding):
   - Litecoin (UTXO variant)
   - THORChain (vault-based Cosmos + memo)
@@ -49,6 +52,7 @@
 #### Critical SDK Improvement: `vault.extractMessageHashes()` Method
 
 **Problem Discovered:**
+
 - FastSigningService requires `messageHashes` in SigningPayload
 - `vault.prepareSendTx()` returns KeysignPayload but does NOT include messageHashes
 - SDK error message said "Use Vault.prepareSendTx() to generate transaction payloads with message hashes" but this was misleading
@@ -62,6 +66,7 @@ async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
 ```
 
 **Benefits:**
+
 - ✅ Clean API: `prepareSendTx()` → `extractMessageHashes()` → `sign()`
 - ✅ Uses vault's internal WalletCore (no manual initialization needed)
 - ✅ Handles all chain types (UTXO, EVM, Cosmos, EdDSA)
@@ -69,18 +74,19 @@ async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
 - ✅ Proper error handling with VaultError
 
 **Example Usage:**
+
 ```typescript
 // 1. Prepare transaction
-const keysignPayload = await vault.prepareSendTx({ coin, receiver, amount })
+const keysignPayload = await vault.prepareSendTx({ coin, receiver, amount });
 
 // 2. Extract message hashes (NEW METHOD!)
-const messageHashes = await vault.extractMessageHashes(keysignPayload)
+const messageHashes = await vault.extractMessageHashes(keysignPayload);
 
 // 3. Create signing payload
-const signingPayload = { transaction: keysignPayload, chain, messageHashes }
+const signingPayload = { transaction: keysignPayload, chain, messageHashes };
 
 // 4. Sign with fast mode
-const signature = await vault.sign('fast', signingPayload, password)
+const signature = await vault.sign("fast", signingPayload, password);
 ```
 
 #### Fast Signing Test Suite Created
@@ -88,6 +94,7 @@ const signature = await vault.sign('fast', signingPayload, password)
 Created comprehensive [fast-signing.test.ts](../../packages/sdk/tests/e2e/fast-signing.test.ts) (626 lines) covering:
 
 **Test Results:**
+
 ```
 ✅ Chain Family Coverage (7/12 tests):
    ✅ Bitcoin (UTXO) - native BTC transfer
@@ -116,6 +123,7 @@ TOTAL: 9/14 passing (64%), 3 timeouts, 2 skipped
 
 **Timeout Analysis:**
 The 3 timeouts (Litecoin, Ethereum native, THORChain) suggest VultiServer coordination issues:
+
 - Bitcoin signing works (same UTXO logic as Litecoin)
 - Ethereum ERC-20 works (same EVM logic as native ETH)
 - Cosmos Hub works (same Cosmos logic as THORChain)
@@ -127,48 +135,62 @@ Created [signing-helpers.ts](../../packages/sdk/tests/helpers/signing-helpers.ts
 
 ```typescript
 // Extract message hashes (now superseded by vault.extractMessageHashes())
-export async function extractMessageHashes(keysignPayload, walletCore): Promise<string[]>
+export async function extractMessageHashes(
+  keysignPayload,
+  walletCore,
+): Promise<string[]>;
 
 // Create signing payload from keysign payload + hashes
-export function createSigningPayload(keysignPayload, messageHashes, chain): SigningPayload
+export function createSigningPayload(
+  keysignPayload,
+  messageHashes,
+  chain,
+): SigningPayload;
 
 // Validate signature format for a given chain
-export function validateSignatureFormat(signature, chain, expectFormat): void
+export function validateSignatureFormat(signature, chain, expectFormat): void;
 
 // Test amounts for each chain (~$1 USD equivalent)
-export const TEST_AMOUNTS: Partial<Record<Chain, bigint>>
+export const TEST_AMOUNTS: Partial<Record<Chain, bigint>>;
 
 // Test receiver addresses (well-known addresses, DO NOT fund!)
-export const TEST_RECEIVERS: Partial<Record<Chain, string>>
+export const TEST_RECEIVERS: Partial<Record<Chain, string>>;
 
 // Get expected signature format for a chain
-export function getExpectedSignatureFormat(chain): 'ECDSA' | 'EdDSA' | 'Ed25519'
+export function getExpectedSignatureFormat(
+  chain,
+): "ECDSA" | "EdDSA" | "Ed25519";
 ```
 
 #### Files Modified (Session 9):
 
 **1. [Vault.ts](../../packages/sdk/src/vault/Vault.ts)** (lines 610-690)
-   - Added `extractMessageHashes()` method (CRITICAL SDK IMPROVEMENT)
+
+- Added `extractMessageHashes()` method (CRITICAL SDK IMPROVEMENT)
 
 **2. [fast-signing.test.ts](../../packages/sdk/tests/e2e/fast-signing.test.ts)** (NEW FILE - 626 lines)
-   - Comprehensive fast signing test suite
-   - 14 tests covering all major chain families
-   - Signature format validation (ECDSA, EdDSA)
-   - Error handling tests
-   - Safety verification
+
+- Comprehensive fast signing test suite
+- 14 tests covering all major chain families
+- Signature format validation (ECDSA, EdDSA)
+- Error handling tests
+- Safety verification
 
 **3. [signing-helpers.ts](../../packages/sdk/tests/helpers/signing-helpers.ts)** (NEW FILE - 229 lines)
-   - Helper functions for fast signing tests
-   - Test amounts and receiver addresses
-   - Signature validation utilities
+
+- Helper functions for fast signing tests
+- Test amounts and receiver addresses
+- Signature validation utilities
 
 **4. [package.json](../../packages/sdk/package.json)** (line 46)
-   - Added `test:e2e:fast-signing` script
-   - Updated main `test:e2e` script to include fast-signing tests
+
+- Added `test:e2e:fast-signing` script
+- Updated main `test:e2e` script to include fast-signing tests
 
 **5. [prepare-send-tx.test.ts](../../packages/sdk/tests/e2e/prepare-send-tx.test.ts)** (line 114)
-   - Fixed invalid Litecoin address validation error
-   - Replaced with valid bech32 address
+
+- Fixed invalid Litecoin address validation error
+- Replaced with valid bech32 address
 
 #### Key Insights:
 
@@ -185,10 +207,12 @@ export function getExpectedSignatureFormat(chain): 'ECDSA' | 'EdDSA' | 'Ed25519'
 #### Next Steps:
 
 **To enable skipped tests:**
+
 1. Fund Polkadot test address (~$2-5)
 2. Fund Sui test address (~$2-5)
 
 **To fix timeout issues:**
+
 1. Investigate VultiServer coordination for Litecoin/ETH native/THORChain
 2. Increase timeout from 60s to 120s for signing operations
 3. Add retry logic for transient network issues
@@ -206,6 +230,7 @@ export function getExpectedSignatureFormat(chain): 'ECDSA' | 'EdDSA' | 'Ed25519'
 #### Test Suite Refactoring:
 
 **Problem:** Original test suite organized tests by chain (Ethereum, Bitcoin, Polygon, BSC, etc.) without clear rationale for which chains were tested. This led to:
+
 - Redundant tests (Polygon, BSC, Arbitrum all test identical EVM logic)
 - Unclear purpose (why test these specific chains?)
 - Difficult to extend (where to add new tests?)
@@ -230,11 +255,13 @@ export function getExpectedSignatureFormat(chain): 'ECDSA' | 'EdDSA' | 'Ed25519'
 #### Key Improvements:
 
 **1. Clear Chain Selection Rationale:**
+
 - **Test representative chains from each architecture family**
 - **Don't test redundant implementations** (Polygon = Ethereum, Dogecoin = Bitcoin)
 - Documented reasoning in file header and test comments
 
 **2. Focused Scope:**
+
 - Suite now **only** tests `prepareSendTx()` for native coin transfers
 - Clear documentation of future test suites:
   - `tx-swap.test.ts` - Swap transaction preparation
@@ -242,12 +269,14 @@ export function getExpectedSignatureFormat(chain): 'ECDSA' | 'EdDSA' | 'Ed25519'
   - `tx-broadcast.test.ts` - Broadcasting to networks
 
 **3. Better Test Organization:**
+
 - Tests grouped by **what they test** (UTXO logic, EVM logic, etc.)
 - Not by **which chain** (Bitcoin test, Ethereum test)
 - Easier to find tests by functionality
 - Clear where to add new tests
 
 **4. Descriptive Test Names:**
+
 - Old: "should prepare Polygon (MATIC) transfer"
 - New: "Bitcoin: UTXO selection and SegWit addresses"
 - Names explain **what is being tested**, not just which chain
@@ -255,17 +284,19 @@ export function getExpectedSignatureFormat(chain): 'ECDSA' | 'EdDSA' | 'Ed25519'
 #### Files Modified (Session 8):
 
 **1. [prepare-send-tx.test.ts](../../packages/sdk/tests/e2e/prepare-send-tx.test.ts)**
-   - Complete refactor: ~520 lines → 617 lines (better documented)
-   - Added comprehensive header documentation (60+ lines)
-   - Organized into 6 clear test sections
-   - Removed redundant tests (Polygon, BSC, Arbitrum, Avalanche)
-   - Added placeholder tests for unfunded chains (`.skip()`)
-   - Fixed TypeScript errors (vault.address(), FeeSettings)
+
+- Complete refactor: ~520 lines → 617 lines (better documented)
+- Added comprehensive header documentation (60+ lines)
+- Organized into 6 clear test sections
+- Removed redundant tests (Polygon, BSC, Arbitrum, Avalanche)
+- Added placeholder tests for unfunded chains (`.skip()`)
+- Fixed TypeScript errors (vault.address(), FeeSettings)
 
 **2. [CONTINUE_E2E_TESTS.md](CONTINUE_E2E_TESTS.md)**
-   - Updated current status section
-   - Added Session 8 summary
-   - Updated test counts (11/17 passing, 6 skipped)
+
+- Updated current status section
+- Added Session 8 summary
+- Updated test counts (11/17 passing, 6 skipped)
 
 #### Test Results:
 
@@ -303,6 +334,7 @@ TOTAL: 11/17 passing (65%), 6 skipped
 #### Next Steps:
 
 **To enable skipped tests, fund these chains:**
+
 1. Litecoin - ~$2-5 (UTXO variant testing)
 2. THORChain - ~$5-10 (vault-based Cosmos + memo support)
 3. Cosmos Hub - ~$5-10 (IBC-enabled Cosmos)
@@ -312,6 +344,7 @@ TOTAL: 11/17 passing (65%), 6 skipped
 **Estimated funding: $16-35 total**
 
 **Benefits of this refactor:**
+
 - ✅ Clear testing strategy documented
 - ✅ Easy to add new chains (follow architecture pattern)
 - ✅ Easy to add new test suites (clear scope separation)
@@ -329,6 +362,7 @@ TOTAL: 11/17 passing (65%), 6 skipped
 #### Security Issue Identified:
 
 **Problem:** Vault files (.vult) and passwords were hardcoded and committed to git, creating a major security vulnerability:
+
 - 5 vault files tracked in git (including test vault used for E2E tests)
 - Password "Password123!" hardcoded in 23+ locations
 - All blockchain addresses publicly exposed
@@ -339,21 +373,25 @@ TOTAL: 11/17 passing (65%), 6 skipped
 #### Security Fixes Implemented:
 
 **1. Updated .gitignore patterns** (2 files):
+
 - Root `.gitignore`: Added wildcard patterns for `*.vult`, `**/vaults/**/*.vult`, `vault-details-*.json`
 - New `packages/sdk/.gitignore`: Added vault-specific patterns and test environment files
 
 **2. Environment variable infrastructure** ([test-vault.ts](../../packages/sdk/tests/helpers/test-vault.ts)):
+
 - Converted `TEST_VAULT_CONFIG` to use environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
 - Added fallback to public default vault with prominent security warnings
 - Validates that both env vars are set together (or both unset)
 - Shows warning when using default vault (only safe for read-only tests)
 
 **3. Created security documentation:**
+
 - New [SECURITY.md](../../packages/sdk/tests/e2e/SECURITY.md) - Comprehensive security guide (400+ lines)
 - New [.env.example](../../packages/sdk/tests/e2e/.env.example) - Environment variable template
 - Updated [E2E README](../../packages/sdk/tests/e2e/README.md) - Added security section prominently at top
 
 **4. Updated all test files** (4 files):
+
 - Added security warnings to file headers
 - References to SECURITY.md for setup instructions
 - Warnings about never funding default test vault addresses
@@ -368,6 +406,7 @@ TOTAL: 11/17 passing (65%), 6 skipped
 #### Backwards Compatibility:
 
 Tests still work with default vault (backwards compatible):
+
 - Falls back to public test vault if env vars not set
 - Shows prominent warning about security
 - Read-only tests work fine (no funding needed)
@@ -386,6 +425,7 @@ Tests still work with default vault (backwards compatible):
 #### Next Steps (Phase 4.2 - Transaction Signing):
 
 **Before funding any test addresses:**
+
 1. ✅ Security infrastructure in place (Session 7 complete)
 2. 🔜 Create dedicated test vault (outside of git)
 3. 🔜 Set up environment variables locally
@@ -406,6 +446,7 @@ Tests still work with default vault (backwards compatible):
 
 **Root Cause:**
 The caching performance test was using Ethereum balance, but an earlier test "should fetch Ethereum balance" had already cached the Ethereum balance. So when the caching test ran:
+
 - First fetch: Hit the cache (fast)
 - Second fetch: Also hit the cache (fast)
 - Expected ratio: > 5x speedup
@@ -413,6 +454,7 @@ The caching performance test was using Ethereum balance, but an earlier test "sh
 
 **Solution:**
 Changed the first fetch from `vault.balance('Ethereum')` to `vault.updateBalance('Ethereum')`. The `updateBalance()` method:
+
 - Clears the cache for that chain
 - Forces a fresh network call
 - Returns the new balance
@@ -420,18 +462,20 @@ Changed the first fetch from `vault.balance('Ethereum')` to `vault.updateBalance
 This ensures the test actually measures cache performance: fresh fetch vs cached fetch.
 
 **Implementation:**
+
 ```typescript
 // Before (line 201):
-const balance1 = await vault.balance('Ethereum')
+const balance1 = await vault.balance("Ethereum");
 
 // After:
-const balance1 = await vault.updateBalance('Ethereum')
+const balance1 = await vault.updateBalance("Ethereum");
 ```
 
 **2. Multi-Chain Coverage Caching Test Failure (multi-chain-coverage.test.ts:297)**
 
 **Root Cause:**
 Same issue - the test used Bitcoin (testChains[0]), but an earlier test "should fetch balances for all major chains" had already cached all chain balances including Bitcoin.
+
 - First fetch: 0ms (cached)
 - Second fetch: 0ms (cached)
 - Expected: time2 < time1/5
@@ -441,17 +485,19 @@ Same issue - the test used Bitcoin (testChains[0]), but an earlier test "should 
 Same fix - use `updateBalance()` to force a fresh fetch for the first call. Also updated to use `performance.now()` instead of `Date.now()` for better sub-millisecond precision (consistency with balance-operations test).
 
 **Implementation:**
+
 ```typescript
 // Before (line 284):
-const balance1 = await vault.balance(testChain)
+const balance1 = await vault.balance(testChain);
 
 // After:
-const balance1 = await vault.updateBalance(testChain)
+const balance1 = await vault.updateBalance(testChain);
 ```
 
 **3. Additional Improvements:**
 
 Also improved timing precision in the multi-chain test:
+
 - Changed from `Date.now()` to `performance.now()` for microsecond precision
 - Added `time2Adjusted = Math.max(time2, 0.1)` to avoid division by zero
 - Added `.toFixed(2)` to console logs for consistent formatting
@@ -511,6 +557,7 @@ Also improved timing precision in the multi-chain test:
 #### Production Readiness:
 
 **Read-Only Operations: 100% PRODUCTION READY** ✅
+
 - Balance fetching: ✅ Works for all major chains (Bitcoin, Ethereum, Solana, 9+ others)
 - Gas estimation: ✅ Works for all major chains (EVM, UTXO, Cosmos, Solana)
 - Multi-chain: ✅ Handles 12+ chains concurrently
@@ -518,6 +565,7 @@ Also improved timing precision in the multi-chain test:
 - Error handling: ✅ Graceful failures for edge cases
 
 **Transaction Signing: Requires Phase 4.2** ⏸️
+
 - Transaction preparation structure works correctly
 - Fails when balance is insufficient (correct behavior)
 - Would work with funded test vault addresses
@@ -537,6 +585,7 @@ User's vault addresses didn't exist on-chain yet (accounts are created only afte
 Use well-known active addresses for Cosmos chain gas estimation instead of the user's address. Since gas prices are global network values, any active address works for estimation purposes.
 
 **Implementation:**
+
 ```typescript
 // Added to Vault.ts
 private static readonly COSMOS_GAS_ESTIMATION_ADDRESSES: Partial<Record<Chain, string>> = {
@@ -562,34 +611,37 @@ Fixed test assertion to expect `'string'` instead of `'bigint'`.
 
 ```typescript
 // packages/sdk/tests/e2e/gas-estimation.test.ts:282
-if (gasInfo.gasPrice) expect(typeof gasInfo.gasPrice).toBe('string'); // Not 'bigint'
+if (gasInfo.gasPrice) expect(typeof gasInfo.gasPrice).toBe("string"); // Not 'bigint'
 ```
 
 **3. WASM Bundling for Node.js Production**
 
 **Challenge:**
 Initially needed symlinks for development because:
+
 - Development path: `packages/sdk/src/wasm/` → `packages/lib/`
 - Production path: `node_modules/@vultisig/sdk/dist/wasm/` → `node_modules/@vultisig/sdk/lib/`
 
 **Solution:**
 Build process now copies WASM files to **both** locations:
+
 1. `dist/lib/` for production (published package)
 2. `lib/` for development (same relative path structure)
 
 This allows a unified `../../lib/` path that works in both dev and prod without symlinks!
 
 **Implementation:**
+
 ```javascript
 // rollup.config.js
 const wasmCopyPlugin = copy({
   targets: [
-    { src: '../lib/dkls', dest: './dist/lib' },      // Production
-    { src: '../lib/schnorr', dest: './dist/lib' },
-    { src: '../lib/dkls', dest: './lib' },           // Development
-    { src: '../lib/schnorr', dest: './lib' },
+    { src: "../lib/dkls", dest: "./dist/lib" }, // Production
+    { src: "../lib/schnorr", dest: "./dist/lib" },
+    { src: "../lib/dkls", dest: "./lib" }, // Development
+    { src: "../lib/schnorr", dest: "./lib" },
   ],
-})
+});
 ```
 
 ```json
@@ -667,22 +719,25 @@ The custom `global.fetch` polyfill in `vitest.e2e-setup.ts` was only forwarding 
 
 ```typescript
 // ❌ BEFORE (line 123):
-return originalFetch(url)  // Missing options parameter!
+return originalFetch(url); // Missing options parameter!
 
 // ✅ AFTER:
-return originalFetch(url, options)  // Now forwards all request data!
+return originalFetch(url, options); // Now forwards all request data!
 ```
 
 **Impact:**
+
 - All EVM RPC calls were failing with "Unsupported method: / on ETH_MAINNET"
 - All balance fetching was broken for EVM and other chains
 - All gas estimation was failing except UTXO chains
 
 **Fix Applied:**
+
 1. Updated function signature: `global.fetch = async (url, options?) =>`
 2. Forward options to originalFetch: `return originalFetch(url, options)`
 
 **Results After Fix:**
+
 ```
 ✅ balance-operations:    14/15 passing (93%)  - was 7/15 (47%)
 ✅ gas-estimation:        13/17 passing (76%)  - was 4/17 (23%)
@@ -693,6 +748,7 @@ return originalFetch(url, options)  // Now forwards all request data!
 ```
 
 **What's Now Working:**
+
 - ✅ All 7 EVM chains gas estimation (Ethereum, BSC, Polygon, Avalanche, Arbitrum, Optimism, Base)
 - ✅ All 3 UTXO chains gas estimation (Bitcoin, Litecoin, Dogecoin)
 - ✅ Solana gas estimation
@@ -701,6 +757,7 @@ return originalFetch(url, options)  // Now forwards all request data!
 - ✅ ERC-20 token balances (partially - needs more testing)
 
 **Remaining Issues:**
+
 - ❌ Cosmos chains gas (3 tests) - "value is required" error (different root cause)
 - ❌ Transaction preparation (14 tests) - "Insufficient balance" (expected - test vault has 0 funds)
 - ❌ 1 balance test failure
@@ -708,6 +765,7 @@ return originalFetch(url, options)  // Now forwards all request data!
 - ❌ 1 gas validation test (type assertion: gasPrice should be bigint not string)
 
 **Files Modified (Session 4):**
+
 - `vitest.e2e-setup.ts` - Fixed fetch polyfill to forward request options
 - `packages/sdk/src/vault/Vault.ts` - Enhanced error messages to include underlying error details
 
@@ -722,12 +780,14 @@ After heap dump analysis revealed the real issue wasn't WASM size but **multiple
 ```
 
 **Results:**
+
 - ✅ All 4 test files run successfully without OOM errors
 - ✅ Total execution: ~65 seconds
 - ✅ Memory usage stays within limits
 - ✅ Each test file runs in its own clean process
 
 **Test Execution Summary:**
+
 ```
 ✅ balance-operations:     6.39s  - 8 failed | 7 passed  (15 tests)
 ✅ gas-estimation:        18.83s  - 13 failed | 4 passed  (17 tests)
@@ -738,12 +798,14 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
 ```
 
 **Key Discovery:**
+
 - Heap dumps showed only 3.7MB usage (tiny!)
 - Real problem: Vitest created 4 workers simultaneously
 - Each worker loaded ~80-100MB of WASM modules
 - 4 workers × 100MB = 400MB+ combined = OOM
 
 **What Changed:**
+
 - `packages/sdk/package.json` - Lines 40-44: Sequential test scripts
 - `packages/sdk/tests/helpers/test-vault.ts` - Lines 81-219: Singleton pattern & memory utilities
 - `packages/sdk/tests/e2e/vitest.config.ts` - Lines 25-30: Fork pool configuration
@@ -751,6 +813,7 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
 ### Latest Progress Summary (Session 2)
 
 **What Works:**
+
 - ✅ **ALL balance fetching** (Bitcoin, Ethereum, Solana, Polygon, ERC-20 tokens)
 - ✅ **UTXO gas estimation** (Bitcoin, Litecoin, Dogecoin) with proper estimatedCost
 - ✅ Address derivation for all chains
@@ -759,6 +822,7 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
 - ✅ Type-safe GasInfo with template literal types
 
 **What's Fixed:**
+
 - ✅ Balance tests: Polygon symbol updated to 'POL' (September 2024 rebrand)
 - ✅ Balance tests: Caching timing assertion uses performance.now() for sub-ms precision
 - ✅ GasInfo types: Discriminated union (EvmGasInfo, UtxoGasInfo, CosmosGasInfo, OtherGasInfo)
@@ -766,11 +830,13 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
 - ✅ formatGasInfo: Implemented estimatedCost for all chain types
 
 **What's Broken:**
+
 - ❌ EVM gas estimation (Ethereum, BSC, Polygon, etc.) - underlying getChainSpecific() fails
 - ❌ Solana gas estimation - underlying getChainSpecific() fails
 - ❌ Cosmos gas estimation - underlying getChainSpecific() fails
 
 **Key Findings:**
+
 - Balance fetching was ALWAYS working! No actual bugs in balance resolvers.
 - Gas estimation works for UTXO chains but fails for EVM/Solana/Cosmos due to underlying `getChainSpecific()` implementation
 - Memory issue was NOT WASM size, but simultaneous worker processes loading WASM multiple times
@@ -782,6 +848,7 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
 **Problem**: Tests failed with "Failed to initialize WASM modules: fetch failed"
 
 **Solution**:
+
 1. Created `vitest.e2e-setup.ts` - E2E-specific WASM loader WITHOUT API mocks
 2. Updated `tests/e2e/vitest.config.ts` to include proper WASM setup files:
    - Root E2E WASM loader (vitest.e2e-setup.ts)
@@ -790,6 +857,7 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
    - Test utilities
 
 **Files Modified**:
+
 - `packages/sdk/tests/e2e/vitest.config.ts` - Added setupFiles array with 4 loaders
 - `vitest.e2e-setup.ts` (created) - WASM loader without getCoinBalance mock
 - `packages/sdk/tests/e2e/setup.ts` (created) - E2E test setup
@@ -809,6 +877,7 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
 **Root Cause**: WASM modules + multiple blockchain clients exceeded default Node.js heap (1.5GB)
 
 **Solution**: Updated `package.json` to increase Node.js heap size to 4GB:
+
 ```json
 "test:e2e": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --config tests/e2e/vitest.config.ts tests/e2e"
 ```
@@ -816,6 +885,7 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
 **Impact**: This was ESSENTIAL - tests couldn't run at all without this fix!
 
 **Files Modified**:
+
 - `packages/sdk/package.json` - Lines 40, 43 (test:e2e and test:e2e:watch scripts)
 
 ### ✅ Phase 4: Test Type Assertions - FIXED
@@ -823,19 +893,21 @@ Total: 65 test cases, NO OOM ERRORS! 🎉
 **Problem**: Tests expected `balance.rawAmount: bigint` but Balance type only has `balance.amount: string`
 
 **Solution**: Fixed all test assertions in:
+
 - `tests/e2e/balance-operations.test.ts` - All balance tests
 - `tests/e2e/multi-chain-coverage.test.ts` - Line 240 caching test
 
 **Correct Balance Type**:
+
 ```typescript
 type Balance = {
-  amount: string      // ✅ Use this (string representation)
-  decimals: number
-  symbol: string
-  chainId: string
-  tokenId?: string
-  value?: number      // USD value
-}
+  amount: string; // ✅ Use this (string representation)
+  decimals: number;
+  symbol: string;
+  chainId: string;
+  tokenId?: string;
+  value?: number; // USD value
+};
 // ❌ NO rawAmount field exists
 ```
 
@@ -844,6 +916,7 @@ type Balance = {
 **Finding**: RPC endpoints are already configured in `@vultisig/core`! No manual setup required.
 
 **Existing Configuration**:
+
 - **EVM chains**: Via Vultisig API proxy (`https://api.vultisig.com/{chain}/`)
   - Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Avalanche, etc.
 - **Cosmos chains**: Public RPC endpoints (publicnode.com)
@@ -861,6 +934,7 @@ type Balance = {
 ### Balance Operations: 7/15 passing (47%)
 
 **✅ Passing Tests:**
+
 - Bitcoin balance fetch
 - All available chain balances (multi-chain)
 - Address verification (Bitcoin, Ethereum, all EVM chains)
@@ -868,6 +942,7 @@ type Balance = {
 - Error handling for invalid token addresses
 
 **❌ Failing Tests:**
+
 - Ethereum balance fetch
 - Solana balance fetch
 - Polygon balance fetch
@@ -878,9 +953,11 @@ type Balance = {
 ### Gas Estimation: 1/17 passing (6%)
 
 **✅ Passing:**
+
 - Error handling for unsupported chains
 
 **❌ Failing:**
+
 - All EVM chains (Ethereum, BSC, Polygon, Avalanche, Arbitrum, Optimism, Base)
 - All UTXO chains (Bitcoin, Litecoin, Dogecoin) - `estimatedCost` is `undefined`
 - All other chains (Solana, THORChain, Cosmos, Osmosis)
@@ -888,26 +965,31 @@ type Balance = {
 ### Memory Issues
 
 **Problem:** Even with 8GB heap, tests hit OOM when running multiple test suites
+
 - Running all 4 E2E test files causes memory exhaustion
 - Suggests need to run test files individually or reduce concurrency
 
 ## Files Created/Modified Summary
 
 **Created (Previous Sessions)**:
+
 - `vitest.e2e-setup.ts` - E2E-specific WASM loader without API mocks
 - `packages/sdk/tests/e2e/setup.ts` - E2E test setup (Web Crypto polyfill)
 
 **Modified (Previous Sessions)**:
+
 - `packages/sdk/tests/e2e/vitest.config.ts` - Added WASM setup files, sequential execution
 - `packages/sdk/tests/e2e/balance-operations.test.ts` - Fixed Balance type assertions
 - `packages/sdk/tests/e2e/multi-chain-coverage.test.ts` - Fixed Balance type assertions
 
 **Modified (Session 1 - 2025-01-09)**:
+
 - `packages/sdk/package.json` - Increased NODE_OPTIONS to 8GB (was 4GB) - Lines 40, 43
 - `packages/sdk/src/vault/Vault.ts` - Added detailed error logging to `balance()` method (Lines 346-355)
 - `packages/sdk/src/vault/Vault.ts` - Added detailed error logging to `gas()` method (Lines 481-489)
 
 **Modified (Session 2 - 2025-01-09)**:
+
 - `packages/sdk/src/types/index.ts` - Added discriminated GasInfo union types with template literal type safety
 - `packages/sdk/src/adapters/formatGasInfo.ts` - Fixed type conversions, added missing fields, implemented estimatedCost
 - `packages/sdk/tests/e2e/balance-operations.test.ts` - Fixed Polygon symbol test (MATIC→POL) and caching timing
@@ -917,6 +999,7 @@ type Balance = {
 ### Phase 6: Debug Error Investigation - COMPLETED ✅
 
 **What We Did:**
+
 1. ✅ Added detailed `console.error()` logging to `Vault.balance()` and `Vault.gas()` methods
 2. ✅ Increased memory from 4GB to 8GB in package.json
 3. ✅ Ran E2E tests to identify failure patterns
@@ -925,18 +1008,21 @@ type Balance = {
 6. ⏳ Attempted to capture detailed error logs (not yet visible - may need rebuild)
 
 **Key Insights:**
+
 - **Bitcoin works, Ethereum fails** - This narrows the problem to EVM/Solana chain resolvers
 - **Gas estimation fails for ALL chains** - Different issue than balance fetching
 - **Memory still critical** - Even 8GB hits OOM when running all test suites together
 - **Error logs not appearing** - Console.error statements added but not showing in output (SDK may need rebuild)
 
 **Root Cause Hypothesis:**
+
 1. **EVM Balance Failures**: Likely issue with viem HTTP client in Node.js environment or Vultisig API endpoints
 2. **Solana Balance Failures**: Likely issue with Solana web3.js client or RPC configuration
 3. **Gas Estimation Failures**: Likely `getChainSpecific()` method has missing implementation or network dependencies
 4. **UTXO Gas Missing**: `estimatedCost` field is `undefined` - formatting issue in `formatGasInfo()`
 
 **Files to Investigate:**
+
 - `packages/core/chain/coin/balance/resolvers/evm.ts` - EVM balance resolver
 - `packages/core/chain/coin/balance/resolvers/solana.ts` - Solana balance resolver
 - `packages/core/chain/chains/evm/client.ts` - viem client configuration
@@ -948,6 +1034,7 @@ type Balance = {
 ### Phase 7: Type System & GasInfo Implementation - COMPLETED ✅
 
 **Investigation Results:**
+
 1. ✅ **Balance fetching was NEVER broken!** Deep investigation revealed EVM and Solana balance resolvers work correctly
    - Ethereum balance: 327ms ✅
    - Solana balance: 242ms ✅
@@ -958,6 +1045,7 @@ type Balance = {
    - Caching test timing assertion couldn't measure sub-millisecond performance
 
 **What We Did:**
+
 1. ✅ Fixed balance test issues:
    - Updated Polygon symbol test: `'MATIC'` → `'POL'`
    - Fixed caching timing: `Date.now()` → `performance.now()` for microsecond precision
@@ -978,18 +1066,21 @@ type Balance = {
      - **THORChain**: Uses fee value directly ✅
 
 **Test Results:**
+
 - ✅ **UTXO gas estimation: 3/3 PASSING** (Bitcoin, Litecoin, Dogecoin)
 - ❌ EVM gas estimation: 0/7 passing - underlying `getChainSpecific()` fails, not our adapter
 - ❌ Solana gas estimation: 0/1 passing - underlying `getChainSpecific()` fails, not our adapter
 - ❌ Cosmos gas estimation: 0/2 passing - underlying `getChainSpecific()` fails, not our adapter
 
 **Key Insights:**
+
 - **formatGasInfo adapter works perfectly** - UTXO tests prove it
 - **The problem is in getChainSpecific()** - EVM/Solana/Cosmos gas estimation fails before reaching our adapter
 - **Type system is now production-ready** - Users get perfect type safety with template literal types
 - **Balance operations are 100% functional** - No bugs found in balance resolvers
 
 **Files Modified:**
+
 - `packages/sdk/src/types/index.ts` - Lines 16, 336-403: Added discriminated GasInfo types
 - `packages/sdk/src/adapters/formatGasInfo.ts` - Lines 25-123: Fixed all type conversions and calculations
 - `packages/sdk/tests/e2e/balance-operations.test.ts` - Lines 97, 195-215: Fixed test assertions
@@ -1001,6 +1092,7 @@ type Balance = {
 **Problem**: Tests failed with "Worker terminated due to reaching memory limit: JS heap out of memory" even with 8GB heap
 
 **Investigation Approach:**
+
 1. ✅ Created heap profiling tools (heap-profile.cjs, memory-profiler.ts)
 2. ✅ Captured 6 heap snapshots during test execution
 3. ✅ Analyzed memory consumption patterns
@@ -1008,6 +1100,7 @@ type Balance = {
 5. ✅ Confirmed issue only occurs when running all 4 files together
 
 **Critical Discovery:**
+
 - Heap dumps showed only **3.7MB** memory usage in parent process (tiny!)
 - This proved the problem was NOT in the heap we were measuring
 - Real issue: Vitest workers (child processes) running out of memory
@@ -1015,6 +1108,7 @@ type Balance = {
 - Running 4 test files = 4 workers × 100MB = **400MB+ combined** = OOM
 
 **Root Cause:**
+
 ```
 Test File 1 → Vitest Worker 1 → Loads WASM (100MB)
 Test File 2 → Vitest Worker 2 → Loads WASM (100MB)  ⎫
@@ -1040,6 +1134,7 @@ Instead of running all test files in parallel workers, run them sequentially:
 Using `;` instead of `&&` ensures all test files run even if one fails.
 
 **Results:**
+
 ```
 ✅ balance-operations:     6.39s  - 8 failed | 7 passed  (15 tests)
 ✅ gas-estimation:        18.83s  - 13 failed | 4 passed  (17 tests)
@@ -1072,11 +1167,13 @@ export async function loadTestVault() {
 This pattern is ready but not currently needed since sequential execution solves the issue.
 
 **Files Modified:**
+
 - `packages/sdk/package.json` - Lines 40-44: Sequential test scripts
 - `packages/sdk/tests/helpers/test-vault.ts` - Lines 81-219: Singleton pattern + memory utilities
 - `packages/sdk/tests/e2e/vitest.config.ts` - Lines 25-30: Fork pool configuration
 
 **Key Takeaways:**
+
 1. **Heap dumps are invaluable** - Tiny 3.7MB dumps revealed we were looking in the wrong place
 2. **Profile the right process** - Worker memory ≠ parent process memory
 3. **Simple solutions work** - Sequential execution beats complex optimization attempts
@@ -1087,6 +1184,7 @@ This pattern is ready but not currently needed since sequential execution solves
 ### ✅ Memory Issue SOLVED - Now Focus on Gas Estimation
 
 **Status Update:**
+
 - ✅ Memory exhaustion completely resolved with sequential test execution
 - ✅ All test files run successfully without OOM errors
 - 🎯 **Next Priority**: Fix EVM/Solana/Cosmos gas estimation failures
@@ -1094,6 +1192,7 @@ This pattern is ready but not currently needed since sequential execution solves
 ### IMMEDIATE NEXT STEP: Fix Gas Estimation for Non-UTXO Chains
 
 **Current Status:**
+
 - ✅ UTXO chains (Bitcoin, Litecoin, Dogecoin): 100% working
 - ❌ EVM chains (Ethereum, BSC, Polygon, etc.): All failing
 - ❌ Solana: Failing
@@ -1102,6 +1201,7 @@ This pattern is ready but not currently needed since sequential execution solves
 **Problem**: `getChainSpecific()` fails for non-UTXO chains before reaching our formatGasInfo adapter
 
 **Action Required:**
+
 ```bash
 cd packages/sdk
 
@@ -1118,6 +1218,7 @@ yarn test:e2e:watch tests/e2e/balance-operations.test.ts -t "Ethereum balance"
 
 **Expected Output:**
 Once working, you should see:
+
 ```
 ❌ Balance fetch error details: {
   chain: 1,  // Ethereum enum value
@@ -1135,12 +1236,14 @@ This will tell us the REAL error (network issue, viem config, API auth, etc.)
 **Problem**: Ethereum, Polygon, and all EVM chains fail to fetch balance
 
 **Investigation needed**:
+
 1. Check the actual error from the error logs above
 2. Verify viem HTTP client works in Node.js
 3. Check if Vultisig API requires authentication
 4. Test RPC endpoint manually: `curl https://api.vultisig.com/eth/`
 
 **Likely fixes**:
+
 - Configure proper HTTP transport for viem in Node.js
 - Add fetch polyfills if needed
 - Add authentication headers if required
@@ -1151,6 +1254,7 @@ This will tell us the REAL error (network issue, viem config, API auth, etc.)
 **Problem**: Solana balance fetching fails
 
 **Investigation needed**:
+
 1. Check Solana web3.js client configuration
 2. Verify Solana RPC endpoint works: `https://api.vultisig.com/solana/`
 3. Check for Node.js compatibility issues
@@ -1160,11 +1264,13 @@ This will tell us the REAL error (network issue, viem config, API auth, etc.)
 **Problem**: All gas estimation tests fail
 
 **Investigation needed**:
+
 1. Check if `getChainSpecific()` is implemented for E2E (not just integration tests)
 2. Verify it makes actual network calls to get gas prices
 3. Check if there's missing WASM or network dependencies
 
 **Debug approach**:
+
 ```bash
 # Run a single gas test to see error logs
 yarn test:e2e tests/e2e/gas-estimation.test.ts -t "Ethereum gas"
@@ -1176,6 +1282,7 @@ yarn test:integration | grep -i gas
 ### 2. Run Transaction Preparation Tests
 
 Once gas estimation is fixed, verify transaction preparation works:
+
 ```bash
 yarn test:e2e tests/e2e/tx-preparation.test.ts
 ```
@@ -1183,6 +1290,7 @@ yarn test:e2e tests/e2e/tx-preparation.test.ts
 ### 3. Handle Network Edge Cases
 
 **Known issues to handle**:
+
 - RPC rate limiting (add retry logic)
 - Network timeouts (some chains may be slow)
 - Zero balance addresses (tests should handle gracefully)
@@ -1191,11 +1299,13 @@ yarn test:e2e tests/e2e/tx-preparation.test.ts
 ### 4. Optimize Test Execution
 
 **Current settings**:
+
 - Sequential execution (`singleThread: true`) - prevents rate limiting
 - 60 second timeout per test
 - Tests run one at a time to avoid overwhelming RPCs
 
 **Possible optimizations**:
+
 - Group tests by chain to reuse connections
 - Add caching for repeated vault initialization
 - Skip slow chains for fast iteration during development
@@ -1203,22 +1313,26 @@ yarn test:e2e tests/e2e/tx-preparation.test.ts
 ## How to Run E2E Tests
 
 **Run all E2E tests**:
+
 ```bash
 cd packages/sdk
 yarn test:e2e
 ```
 
 **Run specific test file**:
+
 ```bash
 yarn test:e2e tests/e2e/balance-operations.test.ts
 ```
 
 **Run specific test**:
+
 ```bash
 yarn test:e2e -- -t "Bitcoin balance"
 ```
 
 **Run with verbose output**:
+
 ```bash
 yarn test:e2e -- --reporter=verbose
 ```
@@ -1235,12 +1349,14 @@ yarn test:e2e -- --reporter=verbose
 ## Safety Reminders
 
 🔒 **All tests are READ-ONLY**:
+
 - No `vault.sign()` calls
 - No transaction broadcasting
 - No fund transfers
 - Only queries to blockchain RPCs
 
 ✅ **Safe to run against production**:
+
 - Tests only fetch balances and gas prices
 - Tests prepare transactions but never broadcast
 - Zero financial risk

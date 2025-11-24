@@ -19,10 +19,7 @@ import { GasInfo } from '../types'
  * @param chain Chain identifier
  * @returns Formatted GasInfo object with proper type conversions
  */
-export function formatGasInfo(
-  chainSpecific: KeysignChainSpecific,
-  chain: Chain
-): GasInfo {
+export function formatGasInfo(chainSpecific: KeysignChainSpecific, chain: Chain): GasInfo {
   // EVM chains (EIP-1559 gas structure)
   if (chainSpecific.case === 'ethereumSpecific') {
     const { maxFeePerGasWei, priorityFee, gasLimit } = chainSpecific.value

@@ -7,6 +7,7 @@ A tight, implementation-ready sequence for **server-assisted signing** with an e
 ## Architecture Overview
 
 Fast signing uses a **two-step approach** to coordinate between:
+
 1. **FastVault Server** (`/vault/sign`) - Initiates server-side MPC participation
 2. **MessageRelay Server** (`/router/*`) - Handles MPC message coordination
 
@@ -16,17 +17,17 @@ This approach **bypasses setup message exchange** since the FastVault server han
 
 ## Preconditions
 
-* You already have a Fast Vault and its **ECDSA public key** (`public_key_ecdsa`).
-* You know the **vault password** used to encrypt the server share.
-* You can derive or already have the **hex messages** to sign and a **derive path**.
-* You can generate a **UUID v4 session ID** and a **browser party id** (free-form string).
+- You already have a Fast Vault and its **ECDSA public key** (`public_key_ecdsa`).
+- You know the **vault password** used to encrypt the server share.
+- You can derive or already have the **hex messages** to sign and a **derive path**.
+- You can generate a **UUID v4 session ID** and a **browser party id** (free-form string).
 
 ---
 
 ## Endpoint Base URLs
 
-* **FastVault Server**: `https://api.vultisig.com/vault`
-* **MessageRelay Server**: `https://api.vultisig.com/router`
+- **FastVault Server**: `https://api.vultisig.com/vault`
+- **MessageRelay Server**: `https://api.vultisig.com/router`
 
 ---
 
@@ -86,14 +87,15 @@ Poll until server participant appears (e.g., `["browser-1355", "Server-1172"]`)
 **Key Difference**: Fast signing **skips setup message exchange** because the FastVault server coordinates the MPC session directly.
 
 {
-  "session_id": "<session-uuid-v4>",
-  "from": "browser-1355",
-  "to": ["Server-1172"],
-  "body": "<base64-of-encrypted-packet>",
-  "hash": "<sha256(body)>",
-  "sequence_no": 0
+"session_id": "<session-uuid-v4>",
+"from": "browser-1355",
+"to": ["Server-1172"],
+"body": "<base64-of-encrypted-packet>",
+"hash": "<sha256(body)>",
+"sequence_no": 0
 }
-```
+
+````
 
 **Poll inbound messages:**
 **GET** `/router/message/{sessionId}/{participantId}`
@@ -115,7 +117,7 @@ Keep looping until your SDK reports **signature(s) ready**.
 ### Step 5: Completion and Cleanup
 
 **Optional - Mark keysign complete:**
-**POST** `/router/complete/{sessionId}/keysign` 
+**POST** `/router/complete/{sessionId}/keysign`
 
 **⚠️ Note**: This endpoint returns 404 (not implemented yet)
 
@@ -227,18 +229,20 @@ const signature = await fastKeysign({
 
 // STEP 5: Cleanup
 await fetch(`https://api.vultisig.com/router/${sessionId}`, { method: 'DELETE' })
-```
+````
 
 ---
 
 ## Key Architectural Differences
 
 ### ❌ **Old Approach (Problematic)**
+
 1. Call `vault.sign('fast')` → immediately calls `keysign()`
 2. `keysign()` tries to upload setup message → **404 error**
 3. Fails before reaching FastVault server
 
 ### ✅ **New Approach (Extension-Compatible)**
+
 1. Call FastVault server API first (`/vault/sign`)
 2. Set up relay session and wait for server
 3. Perform MPC keysign with **no setup message exchange**
@@ -249,15 +253,18 @@ await fetch(`https://api.vultisig.com/router/${sessionId}`, { method: 'DELETE' }
 ## Current Server Status
 
 **✅ Working:**
+
 - FastVault server exists and responds
 - MessageRelay endpoints work correctly
 - Two-step approach reaches correct endpoints
 
 **⚠️ Known Issues:**
+
 - FastVault `/vault/sign` returns `405 Method Not Allowed` (server configuration issue)
 - Some MessageRelay endpoints return 404 (not implemented: `/complete/{sessionId}/keysign`, `/payload/{hash}`)
 
 **🎯 Next Steps:**
+
 - Fix FastVault server HTTP method configuration
 - Complete MessageRelay endpoint implementations
 

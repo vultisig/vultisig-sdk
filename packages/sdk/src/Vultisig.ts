@@ -12,12 +12,7 @@ import { GlobalStorage } from './runtime/storage/GlobalStorage'
 import type { Storage } from './runtime/storage/types'
 import { WasmManager } from './runtime/wasm'
 import { GlobalServerManager } from './server/GlobalServerManager'
-import {
-  AddressBook,
-  AddressBookEntry,
-  ServerStatus,
-  VultisigConfig,
-} from './types'
+import { AddressBook, AddressBookEntry, ServerStatus, VultisigConfig } from './types'
 import { VaultBase } from './vault/VaultBase'
 import { VaultManager } from './VaultManager'
 
@@ -114,9 +109,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private async loadConfigFromStorage(): Promise<void> {
     try {
       // Load default currency
-      const storedCurrency = await this.storage.get<string>(
-        'config:defaultCurrency'
-      )
+      const storedCurrency = await this.storage.get<string>('config:defaultCurrency')
       if (storedCurrency) {
         this._defaultCurrency = storedCurrency
       }
@@ -126,9 +119,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     try {
       // Load default chains
-      const storedChains = await this.storage.get<Chain[]>(
-        'config:defaultChains'
-      )
+      const storedChains = await this.storage.get<Chain[]>('config:defaultChains')
       if (storedChains) {
         this._defaultChains = storedChains
       }
@@ -212,10 +203,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * const vault = await sdk.importVault(vultContent, 'password123')
    * ```
    */
-  async importVault(
-    vultContent: string,
-    password?: string
-  ): Promise<VaultBase> {
+  async importVault(vultContent: string, password?: string): Promise<VaultBase> {
     await this.ensureInitialized()
     const vault = await this.vaultManager.importVault(vultContent, password)
 
@@ -365,20 +353,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Remove address book entries
    */
-  async removeAddressBookEntry(
-    addresses: Array<{ chain: Chain; address: string }>
-  ): Promise<void> {
+  async removeAddressBookEntry(addresses: Array<{ chain: Chain; address: string }>): Promise<void> {
     return this.addressBookManager.removeAddressBookEntry(addresses)
   }
 
   /**
    * Update address book entry name
    */
-  async updateAddressBookEntry(
-    chain: Chain,
-    address: string,
-    name: string
-  ): Promise<void> {
+  async updateAddressBookEntry(chain: Chain, address: string, name: string): Promise<void> {
     return this.addressBookManager.updateAddressBookEntry(chain, address, name)
   }
 

@@ -19,9 +19,7 @@ describe('WasmLoaderRegistry', () => {
 
       // Should be sorted by priority descending
       for (let i = 0; i < loaders.length - 1; i++) {
-        expect(loaders[i].priority).toBeGreaterThanOrEqual(
-          loaders[i + 1].priority
-        )
+        expect(loaders[i].priority).toBeGreaterThanOrEqual(loaders[i + 1].priority)
       }
     })
 
@@ -42,9 +40,7 @@ describe('WasmLoaderRegistry', () => {
       expect(priorityMap.get('chrome')).toBe(110)
 
       // Node should be higher than browser
-      expect(priorityMap.get('node') ?? 0).toBeGreaterThan(
-        priorityMap.get('browser') ?? 0
-      )
+      expect(priorityMap.get('node') ?? 0).toBeGreaterThan(priorityMap.get('browser') ?? 0)
     })
   })
 
@@ -63,9 +59,7 @@ describe('WasmLoaderRegistry', () => {
     })
 
     it('should select highest priority supported loader', () => {
-      const supportedLoaders = wasmLoaderRegistry
-        .getAllLoaders()
-        .filter(l => l.isSupported())
+      const supportedLoaders = wasmLoaderRegistry.getAllLoaders().filter(l => l.isSupported())
 
       if (supportedLoaders.length > 0) {
         const best = wasmLoaderRegistry.findBestLoader()
@@ -83,9 +77,7 @@ describe('WasmLoaderRegistry', () => {
 
     it('should resolve different filenames', () => {
       const dklsPath = wasmLoaderRegistry.resolvePath('dkls/vs_wasm_bg.wasm')
-      const schnorrPath = wasmLoaderRegistry.resolvePath(
-        'schnorr/vs_schnorr_wasm_bg.wasm'
-      )
+      const schnorrPath = wasmLoaderRegistry.resolvePath('schnorr/vs_schnorr_wasm_bg.wasm')
 
       expect(dklsPath).toBeTruthy()
       expect(schnorrPath).toBeTruthy()
@@ -108,9 +100,7 @@ describe('WasmLoaderRegistry', () => {
     })
 
     it('should have at least one supported loader', () => {
-      const supportedLoaders = wasmLoaderRegistry
-        .getAllLoaders()
-        .filter(l => l.isSupported())
+      const supportedLoaders = wasmLoaderRegistry.getAllLoaders().filter(l => l.isSupported())
 
       expect(supportedLoaders.length).toBeGreaterThan(0)
     })
@@ -128,9 +118,7 @@ describe('WasmLoaderRegistry', () => {
       // But we test the error handling
       const loaders = wasmLoaderRegistry.getAllLoaders()
       if (loaders.every(l => !l.isSupported())) {
-        expect(() => wasmLoaderRegistry.findBestLoader()).toThrow(
-          'No WASM loaders available'
-        )
+        expect(() => wasmLoaderRegistry.findBestLoader()).toThrow('No WASM loaders available')
       }
     })
   })

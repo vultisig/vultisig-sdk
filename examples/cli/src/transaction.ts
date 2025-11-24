@@ -54,9 +54,7 @@ export class TransactionManager {
       }
 
       // Convert human-readable amount to bigint
-      const amount = BigInt(
-        Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals))
-      )
+      const amount = BigInt(Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals)))
 
       // Prepare transaction
       const payload = await this.vault.prepareSendTx({
@@ -107,11 +105,7 @@ export class TransactionManager {
   /**
    * Broadcast signed transaction
    */
-  async broadcastTransaction(
-    chain: Chain,
-    payload: KeysignPayload,
-    signature: Signature
-  ): Promise<string> {
+  async broadcastTransaction(chain: Chain, payload: KeysignPayload, signature: Signature): Promise<string> {
     const spinner = ora('Broadcasting transaction...').start()
 
     try {
@@ -139,9 +133,7 @@ export class TransactionManager {
     // 2. Get gas estimate
     try {
       const gas = await this.estimateGas(params.chain)
-      console.log(
-        chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`)
-      )
+      console.log(chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`))
     } catch {
       console.log(chalk.yellow('\nGas estimation unavailable'))
     }
@@ -175,11 +167,7 @@ export class TransactionManager {
     const signature = await this.signTransaction(payload)
 
     // 6. Broadcast transaction
-    const txHash = await this.broadcastTransaction(
-      params.chain,
-      payload,
-      signature
-    )
+    const txHash = await this.broadcastTransaction(params.chain, payload, signature)
 
     // 7. Return result with explorer URL
     const explorerUrl = this.formatTxExplorerUrl(params.chain, txHash)

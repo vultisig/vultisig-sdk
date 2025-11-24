@@ -20,10 +20,7 @@ import { VersionCommand } from './commands/VersionCommand'
 
 const program = new Command()
 
-program
-  .name('vultisig')
-  .description('Vultisig CLI - Multi-Party Computation wallet')
-  .version('1.0.0')
+program.name('vultisig').description('Vultisig CLI - Multi-Party Computation wallet').version('1.0.0')
 
 // Initialize SDK globally for CLI operations
 let sdk: any
@@ -73,10 +70,7 @@ program
   .command('create')
   .description(createCommand.description)
   .requiredOption('--name <name>', 'Vault name')
-  .option(
-    '--email <email>',
-    'Email for vault verification (required for fast vaults)'
-  )
+  .option('--email <email>', 'Email for vault verification (required for fast vaults)')
   .option('--password <password>', 'Password for vault encryption')
   .option('--mode <mode>', 'Vault creation mode: fast, relay, or local', 'fast')
   .action(async options => {
@@ -105,10 +99,7 @@ program
   })
 
 // List command - needs SDK for vault checking
-program
-  .command('list')
-  .description(listCommand.description)
-  .action(wrapCommand(listCommand, true))
+program.command('list').description(listCommand.description).action(wrapCommand(listCommand, true))
 
 // Run command - handles SDK initialization internally
 program
@@ -120,24 +111,14 @@ program
   .action(wrapCommand(runCommand, false)) // RunCommand initializes SDK internally
 
 // Status command - uses daemon/SDK
-program
-  .command('status')
-  .description(statusCommand.description)
-  .action(wrapCommand(statusCommand, true))
+program.command('status').description(statusCommand.description).action(wrapCommand(statusCommand, true))
 
 // Address command - uses daemon/SDK
 program
   .command('address')
   .description(addressCommand.description)
-  .option(
-    '--network <networks>',
-    'Networks (all, or comma-separated: btc,eth,sol)',
-    'all'
-  )
-  .option(
-    '--vault <path>',
-    'Path to keyshare file (.vult) - starts daemon if not running'
-  )
+  .option('--network <networks>', 'Networks (all, or comma-separated: btc,eth,sol)', 'all')
+  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
   .option('--password <password>', 'Password for encrypted keyshares')
   .action(wrapCommand(addressCommand, true))
 
@@ -145,15 +126,8 @@ program
 program
   .command('balance')
   .description(balanceCommand.description)
-  .option(
-    '--network <network>',
-    'Network to query (all, or specific: btc,eth,sol)',
-    'all'
-  )
-  .option(
-    '--vault <path>',
-    'Path to keyshare file (.vult) - starts daemon if not running'
-  )
+  .option('--network <network>', 'Network to query (all, or specific: btc,eth,sol)', 'all')
+  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
   .option('--password <password>', 'Password for encrypted keyshares')
   .action(wrapCommand(balanceCommand, true))
 
@@ -165,10 +139,7 @@ program
   .requiredOption('--to <address>', 'Recipient address')
   .requiredOption('--amount <amount>', 'Amount to send (in ETH)')
   .option('--memo <memo>', 'Optional transaction memo')
-  .option(
-    '--vault <path>',
-    'Path to keyshare file (.vult) - starts daemon if not running'
-  )
+  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
   .option('--password <password>', 'Password for encrypted keyshares')
   .action(wrapCommand(sendCommand, true))
 
@@ -176,34 +147,19 @@ program
 program
   .command('sign')
   .description(signCommand.description)
-  .requiredOption(
-    '--network <network>',
-    'Blockchain network (ETH, BTC, SOL, etc.)'
-  )
+  .requiredOption('--network <network>', 'Blockchain network (ETH, BTC, SOL, etc.)')
   .option('--mode <mode>', 'Signing mode: local, relay, or fast', 'fast')
   .option('--session-id <id>', 'Custom session ID')
   .option('--payload-file <file>', 'Transaction payload JSON file')
-  .option(
-    '--password <password>',
-    'VultiServer decryption password (required for fast mode)'
-  )
-  .option(
-    '--vault <path>',
-    'Path to keyshare file (.vult) - starts daemon if not running'
-  )
+  .option('--password <password>', 'VultiServer decryption password (required for fast mode)')
+  .option('--vault <path>', 'Path to keyshare file (.vult) - starts daemon if not running')
   .action(wrapCommand(signCommand, true))
 
 // Quit command - daemon operation
-program
-  .command('quit')
-  .description(quitCommand.description)
-  .action(wrapCommand(quitCommand, false))
+program.command('quit').description(quitCommand.description).action(wrapCommand(quitCommand, false))
 
 // Version command - no SDK needed
-program
-  .command('version')
-  .description(versionCommand.description)
-  .action(wrapCommand(versionCommand, false))
+program.command('version').description(versionCommand.description).action(wrapCommand(versionCommand, false))
 
 // Parse command line arguments
 program.parse()

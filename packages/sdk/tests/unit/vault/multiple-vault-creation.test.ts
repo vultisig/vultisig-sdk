@@ -141,10 +141,7 @@ describe('Multiple Vault Creation', () => {
 
     // Now importing a vault with the SAME public key should update it
     // This is the correct behavior with public key IDs
-    const vault2Data = createMockVaultData(
-      'My Updated Wallet',
-      'shared-pubkey-123'
-    )
+    const vault2Data = createMockVaultData('My Updated Wallet', 'shared-pubkey-123')
     await memoryStorage.set(`vault:${vault2Data.id}`, vault2Data)
 
     // Should only have ONE vault (updated in place)

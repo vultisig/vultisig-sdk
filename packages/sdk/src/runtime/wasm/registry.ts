@@ -62,8 +62,7 @@ class WasmLoaderRegistry {
     }
 
     throw new Error(
-      'No WASM loaders available. ' +
-        'This should never happen as at least one loader should be available.'
+      'No WASM loaders available. ' + 'This should never happen as at least one loader should be available.'
     )
   }
 

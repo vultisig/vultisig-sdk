@@ -9,8 +9,7 @@ vi.mock('@bufbuild/protobuf', () => ({
   toBinary: vi.fn((schema, data) => {
     // Return a mock binary representation
     // Handle BigInt by converting to string
-    const replacer = (key: string, value: any) =>
-      typeof value === 'bigint' ? value.toString() : value
+    const replacer = (key: string, value: any) => (typeof value === 'bigint' ? value.toString() : value)
     return Buffer.from(JSON.stringify(data, replacer))
   }),
 }))

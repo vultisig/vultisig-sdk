@@ -53,14 +53,10 @@ async function runTest(testFile, testName) {
       const duration = Date.now() - startTime
 
       if (code === 0) {
-        console.log(
-          `${colorize('✅ PASSED:', 'green')} ${testName} ${colorize(`(${duration}ms)`, 'cyan')}`
-        )
+        console.log(`${colorize('✅ PASSED:', 'green')} ${testName} ${colorize(`(${duration}ms)`, 'cyan')}`)
         resolve({ name: testName, passed: true, duration, output: stdout })
       } else {
-        console.log(
-          `${colorize('❌ FAILED:', 'red')} ${testName} ${colorize(`(${duration}ms)`, 'cyan')}`
-        )
+        console.log(`${colorize('❌ FAILED:', 'red')} ${testName} ${colorize(`(${duration}ms)`, 'cyan')}`)
         console.log(`${colorize('STDOUT:', 'yellow')}\n${stdout}`)
         console.log(`${colorize('STDERR:', 'red')}\n${stderr}`)
         resolve({
@@ -89,9 +85,7 @@ async function runTest(testFile, testName) {
 async function runCLICommand(command, args = []) {
   return new Promise(resolve => {
     const fullCommand = [CLI_PATH, ...command.split(' '), ...args]
-    console.log(
-      `${colorize('🔧 Running CLI:', 'purple')} ${fullCommand.join(' ')}`
-    )
+    console.log(`${colorize('🔧 Running CLI:', 'purple')} ${fullCommand.join(' ')}`)
 
     const startTime = Date.now()
     const cliProcess = spawn(fullCommand[0], fullCommand.slice(1), {
@@ -145,9 +139,7 @@ async function validateCLIBuild() {
     return false
   }
 
-  console.log(
-    `${colorize('✅ CLI build validated:', 'green')} v${result.stdout.trim()}`
-  )
+  console.log(`${colorize('✅ CLI build validated:', 'green')} v${result.stdout.trim()}`)
   return true
 }
 
@@ -168,13 +160,9 @@ async function runBasicCLITests() {
     const passed = result.code === 0
 
     if (passed) {
-      console.log(
-        `${colorize('✅', 'green')} ${test.description} ${colorize(`(${result.duration}ms)`, 'cyan')}`
-      )
+      console.log(`${colorize('✅', 'green')} ${test.description} ${colorize(`(${result.duration}ms)`, 'cyan')}`)
     } else {
-      console.log(
-        `${colorize('❌', 'red')} ${test.description} ${colorize(`(${result.duration}ms)`, 'cyan')}`
-      )
+      console.log(`${colorize('❌', 'red')} ${test.description} ${colorize(`(${result.duration}ms)`, 'cyan')}`)
       console.log(`   Error: ${result.stderr || 'Unknown error'}`)
     }
 
@@ -185,9 +173,7 @@ async function runBasicCLITests() {
 }
 
 async function runAddressTests() {
-  console.log(
-    `\n${colorize('🔑 Running Address Derivation Tests...', 'white')}`
-  )
+  console.log(`\n${colorize('🔑 Running Address Derivation Tests...', 'white')}`)
 
   const networks = ['bitcoin', 'ethereum', 'solana', 'litecoin', 'dogecoin']
   const results = []
@@ -198,17 +184,11 @@ async function runAddressTests() {
 
     if (passed) {
       // Extract the derived address
-      const addressMatch = result.stdout.match(
-        new RegExp(`${network}: ([A-Za-z0-9]+)`, 'i')
-      )
+      const addressMatch = result.stdout.match(new RegExp(`${network}: ([A-Za-z0-9]+)`, 'i'))
       const address = addressMatch ? addressMatch[1] : 'Unknown'
-      console.log(
-        `${colorize('✅', 'green')} ${network}: ${address} ${colorize(`(${result.duration}ms)`, 'cyan')}`
-      )
+      console.log(`${colorize('✅', 'green')} ${network}: ${address} ${colorize(`(${result.duration}ms)`, 'cyan')}`)
     } else {
-      console.log(
-        `${colorize('❌', 'red')} ${network} derivation failed ${colorize(`(${result.duration}ms)`, 'cyan')}`
-      )
+      console.log(`${colorize('❌', 'red')} ${network} derivation failed ${colorize(`(${result.duration}ms)`, 'cyan')}`)
       console.log(`   Error: ${result.stderr || result.stdout}`)
     }
 
@@ -251,15 +231,11 @@ async function main() {
 
   if (passed === total) {
     console.log(`\n${colorize('🎉 All tests passed!', 'green')}`)
-    console.log(
-      `${colorize('✅ CLI is working correctly with proper SDK integration', 'green')}`
-    )
+    console.log(`${colorize('✅ CLI is working correctly with proper SDK integration', 'green')}`)
     process.exit(0)
   } else {
     console.log(`\n${colorize('❌ Some tests failed', 'red')}`)
-    console.log(
-      `${colorize('💡 Check the errors above and fix the issues', 'yellow')}`
-    )
+    console.log(`${colorize('💡 Check the errors above and fix the issues', 'yellow')}`)
     process.exit(1)
   }
 }

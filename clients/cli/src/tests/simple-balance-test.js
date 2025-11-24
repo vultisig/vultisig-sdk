@@ -57,11 +57,7 @@ async function testEthereumRPCDirect() {
               ethBalance,
             })
           } else {
-            reject(
-              new Error(
-                `RPC Error: ${response.error?.message || 'Unknown error'}`
-              )
-            )
+            reject(new Error(`RPC Error: ${response.error?.message || 'Unknown error'}`))
           }
         } catch (error) {
           reject(error)
@@ -183,12 +179,8 @@ async function runDiagnosticTests() {
     if (balanceResult.output.includes('vault.balance is not a function')) {
       console.log('\n🔍 Root Cause Analysis:')
       console.log('❌ Vault object missing balance methods')
-      console.log(
-        '💡 Likely cause: WASMManager not properly initialized in vault constructor'
-      )
-      console.log(
-        '🔧 Fix needed: Ensure VaultManagement passes wasmManager to Vault constructor'
-      )
+      console.log('💡 Likely cause: WASMManager not properly initialized in vault constructor')
+      console.log('🔧 Fix needed: Ensure VaultManagement passes wasmManager to Vault constructor')
     }
 
     if (balanceResult.output.includes('ChainManager not available')) {

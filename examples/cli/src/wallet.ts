@@ -1,13 +1,4 @@
-import {
-  Balance,
-  Chain,
-  FastVault,
-  FiatCurrency,
-  SecureVault,
-  Token,
-  VaultBase,
-  Vultisig,
-} from '@vultisig/sdk'
+import { Balance, Chain, FastVault, FiatCurrency, SecureVault, Token, VaultBase, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
 import ora from 'ora'
@@ -96,12 +87,7 @@ export class VaultManager {
   /**
    * Create new secure vault with m-of-n threshold
    */
-  async createSecureVault(
-    name: string,
-    password: string,
-    threshold: number,
-    totalShares: number
-  ): Promise<VaultBase> {
+  async createSecureVault(name: string, password: string, threshold: number, totalShares: number): Promise<VaultBase> {
     const spinner = ora('Creating secure vault...').start()
 
     try {
@@ -118,20 +104,14 @@ export class VaultManager {
 
       this.activeVault = result.vault
       this.setupVaultEvents(this.activeVault)
-      spinner.succeed(
-        `Secure vault created: ${name} (${threshold}-of-${totalShares})`
-      )
+      spinner.succeed(`Secure vault created: ${name} (${threshold}-of-${totalShares})`)
 
       return result.vault
     } catch (error: any) {
       spinner.fail('Secure vault creation failed')
       // Check if it's a "not implemented" error
       if (error.message?.includes('not implemented')) {
-        console.error(
-          chalk.yellow(
-            '\n⚠ Secure vault creation is not yet implemented in the SDK'
-          )
-        )
+        console.error(chalk.yellow('\n⚠ Secure vault creation is not yet implemented in the SDK'))
       }
       throw error
     }
@@ -214,9 +194,7 @@ export class VaultManager {
       const { data: vultContent } = await this.activeVault.export()
 
       // Determine output filename
-      const fileName =
-        outputPath ||
-        `${this.activeVault.name}-${this.activeVault.localPartyId}-vault.vult`
+      const fileName = outputPath || `${this.activeVault.name}-${this.activeVault.localPartyId}-vault.vult`
 
       // Write to file
       await fs.writeFile(fileName, vultContent, 'utf-8')
@@ -250,9 +228,7 @@ export class VaultManager {
   /**
    * Get balances for all chains
    */
-  async getAllBalances(
-    includeTokens = false
-  ): Promise<Record<string, Balance>> {
+  async getAllBalances(includeTokens = false): Promise<Record<string, Balance>> {
     if (!this.activeVault) {
       throw new Error('No active vault')
     }
@@ -263,9 +239,7 @@ export class VaultManager {
   /**
    * Get portfolio value across all chains
    */
-  async getPortfolioValue(
-    currency: FiatCurrency = 'usd'
-  ): Promise<PortfolioSummary> {
+  async getPortfolioValue(currency: FiatCurrency = 'usd'): Promise<PortfolioSummary> {
     if (!this.activeVault) {
       throw new Error('No active vault')
     }
@@ -277,11 +251,7 @@ export class VaultManager {
       chains.map(async chain => {
         const balance = await this.activeVault!.balance(chain)
         try {
-          const value = await this.activeVault!.getValue(
-            chain,
-            undefined,
-            currency
-          )
+          const value = await this.activeVault!.getValue(chain, undefined, currency)
           return { chain, balance, value }
         } catch {
           // Fiat value might not be available for all chains
@@ -366,11 +336,7 @@ export class VaultManager {
     // Balance updates
     vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
       const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-      console.log(
-        chalk.blue(
-          `ℹ Balance updated for ${chain} (${asset}): ${balance.amount}`
-        )
-      )
+      console.log(chalk.blue(`ℹ Balance updated for ${chain} (${asset}): ${balance.amount}`))
     })
 
     // Transaction broadcast

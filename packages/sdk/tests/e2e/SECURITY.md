@@ -32,6 +32,7 @@ The E2E test suite performs **real blockchain operations** against live networks
 ✅ **Blockchain addresses** - These are derived from vault public keys and are always public on the blockchain anyway. Knowing an address doesn't compromise security.
 
 Example:
+
 ```typescript
 {
   Bitcoin: 'bc1qsef7rshf0jwm53rnkttpry5rpveqcd6dyj6pn9',
@@ -58,6 +59,7 @@ Even though vault files are encrypted, **anyone with the vault file + password c
 - Compromise any crypto sent to those addresses
 
 **If a vault file is in git history:**
+
 - It's permanently public (even if deleted later)
 - Anyone who clones the repo has access
 - Attackers can monitor addresses for incoming funds
@@ -70,6 +72,7 @@ Even though vault files are encrypted, **anyone with the vault file + password c
 ### Phase 1: Read-Only Tests (No Funding Required)
 
 Most E2E tests are **read-only** and work with zero balance:
+
 - Balance fetching
 - Gas estimation
 - Address derivation
@@ -79,6 +82,7 @@ Most E2E tests are **read-only** and work with zero balance:
 **Setup Steps:**
 
 1. **Create your local .env file:**
+
    ```bash
    cd packages/sdk/tests/e2e
    cp .env.example .env
@@ -125,6 +129,7 @@ Most E2E tests are **read-only** and work with zero balance:
 ⚠️ **WARNING: Only proceed if you understand the security risks**
 
 **Prerequisites:**
+
 - Created your own test vault (Option B above)
 - Vault file stored outside of git
 - Strong password set
@@ -144,12 +149,14 @@ Most E2E tests are **read-only** and work with zero balance:
    **Total recommended maximum: $100 across all chains**
 
 2. **Enable transaction signing tests:**
+
    ```bash
    # In packages/sdk/tests/e2e/.env
    ENABLE_TX_SIGNING_TESTS=true
    ```
 
 3. **Set up safety limits:**
+
    ```bash
    # In packages/sdk/tests/e2e/.env
    MAX_TEST_VAULT_BALANCE_USD=100
@@ -176,12 +183,14 @@ Most E2E tests are **read-only** and work with zero balance:
 ### 1. Vault File Storage
 
 ✅ **DO:**
+
 - Store vault files outside of the git repository
 - Use absolute paths or paths relative to home directory
 - Keep vault files in a secure, backed-up location
 - Use file permissions to restrict access (`chmod 600`)
 
 ❌ **DON'T:**
+
 - Never store vault files inside the git repository
 - Never commit vault files to git (check with `git status`)
 - Never share vault files via email, Slack, or public channels
@@ -189,12 +198,14 @@ Most E2E tests are **read-only** and work with zero balance:
 ### 2. Password Management
 
 ✅ **DO:**
+
 - Use strong, unique passwords for test vaults
 - Store passwords in `.env` files (which are git-ignored)
 - Use a password manager for secure storage
 - Rotate passwords periodically
 
 ❌ **DON'T:**
+
 - Never hardcode passwords in source code
 - Never commit passwords to git
 - Never reuse production vault passwords for testing
@@ -203,12 +214,14 @@ Most E2E tests are **read-only** and work with zero balance:
 ### 3. Funding Limits
 
 ✅ **DO:**
+
 - Keep test vault balances minimal ($100 max total)
 - Fund only the chains you need to test
 - Monitor balances regularly
 - Withdraw excess funds immediately
 
 ❌ **DON'T:**
+
 - Never fund test vaults with large amounts
 - Never use production vaults for testing
 - Never send funds to public example addresses
@@ -217,12 +230,14 @@ Most E2E tests are **read-only** and work with zero balance:
 ### 4. Git Hygiene
 
 ✅ **DO:**
+
 - Always run `git status` before committing
 - Review diffs carefully for sensitive data
 - Use `.gitignore` patterns for vault files
 - Run tests locally before pushing
 
 ❌ **DON'T:**
+
 - Never commit `.env` files
 - Never commit `.vult` files
 - Never push without reviewing changes
@@ -231,12 +246,14 @@ Most E2E tests are **read-only** and work with zero balance:
 ### 5. Development Workflow
 
 ✅ **DO:**
+
 - Create separate test vaults for each developer
 - Use CI/CD environment variables for automated tests
 - Document your test vault setup (without sharing credentials)
 - Regularly audit for accidentally committed secrets
 
 ❌ **DON'T:**
+
 - Never share vault files between team members
 - Never run tests with production vaults
 - Never disable security checks
@@ -330,6 +347,7 @@ git push --force
 ### Q: What's the difference between the public test vault and my own?
 
 **A:**
+
 - **Public test vault**: Credentials in git, safe for read-only tests only, NEVER fund
 - **Your vault**: Credentials private, can be funded minimally, suitable for all tests
 

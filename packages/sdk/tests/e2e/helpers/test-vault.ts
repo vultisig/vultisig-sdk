@@ -23,9 +23,7 @@ import { Vultisig } from '../../../src/Vultisig'
  */
 export const TEST_VAULT_CONFIG = {
   // Vault credentials (from environment variables or defaults)
-  path:
-    process.env.TEST_VAULT_PATH ||
-    resolve(__dirname, '../fixtures/test-vault.vult'),
+  path: process.env.TEST_VAULT_PATH || resolve(__dirname, '../fixtures/test-vault.vult'),
   password: process.env.TEST_VAULT_PASSWORD || 'test-password',
 
   // Expected vault properties (for verification)
@@ -81,8 +79,7 @@ export async function loadTestVault(): Promise<{
 
   GlobalServerManager.configure({
     fastVault: process.env.VULTISIG_API_URL || 'https://api.vultisig.com/vault',
-    messageRelay:
-      process.env.VULTISIG_ROUTER_URL || 'https://api.vultisig.com/router',
+    messageRelay: process.env.VULTISIG_ROUTER_URL || 'https://api.vultisig.com/router',
   })
 
   GlobalConfig.configure({

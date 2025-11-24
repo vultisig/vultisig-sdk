@@ -25,11 +25,7 @@ async function getCryptoAsync(): Promise<Crypto> {
   }
 
   // Try globalThis.crypto first (browsers and Node.js 18+ with --experimental-global-webcrypto)
-  if (
-    typeof globalThis !== 'undefined' &&
-    globalThis.crypto &&
-    typeof globalThis.crypto.randomUUID === 'function'
-  ) {
+  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
     cachedCrypto = globalThis.crypto
     return cachedCrypto
   }
@@ -41,10 +37,7 @@ async function getCryptoAsync(): Promise<Crypto> {
       const nodeCrypto = cryptoModule.default || cryptoModule
 
       // Node.js 15+: Use webcrypto property for Web Crypto API compatibility
-      if (
-        nodeCrypto.webcrypto &&
-        typeof nodeCrypto.webcrypto.randomUUID === 'function'
-      ) {
+      if (nodeCrypto.webcrypto && typeof nodeCrypto.webcrypto.randomUUID === 'function') {
         cachedCrypto = nodeCrypto.webcrypto as Crypto
         return cachedCrypto
       }
@@ -59,9 +52,7 @@ async function getCryptoAsync(): Promise<Crypto> {
     }
   }
 
-  throw new Error(
-    'Crypto API not available. Ensure you are using Node.js 15+ or a modern browser.'
-  )
+  throw new Error('Crypto API not available. Ensure you are using Node.js 15+ or a modern browser.')
 }
 
 /**
@@ -95,9 +86,7 @@ export async function initializeCrypto(): Promise<void> {
 
       // Validate that randomUUID is available
       if (typeof crypto.randomUUID !== 'function') {
-        throw new Error(
-          'Crypto API is available but randomUUID function is missing'
-        )
+        throw new Error('Crypto API is available but randomUUID function is missing')
       }
 
       // Test that it actually works

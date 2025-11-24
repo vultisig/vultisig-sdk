@@ -51,10 +51,7 @@ export const memoizeAsync = <T extends (...args: any[]) => Promise<any>>(
 
     // Check for cached result
     const cachedResult = cache.get(key)
-    if (
-      cachedResult &&
-      (!cacheTime || cachedResult.updatedAt >= Date.now() - cacheTime)
-    ) {
+    if (cachedResult && (!cacheTime || cachedResult.updatedAt >= Date.now() - cacheTime)) {
       return cachedResult.data
     }
 

@@ -7,6 +7,7 @@ The Vultisig SDK currently has **ZERO test coverage** for ~3,645 lines of produc
 ## Current State Analysis
 
 ### Codebase Metrics
+
 - **Total Files**: 27 TypeScript files
 - **Lines of Code**: ~3,645
 - **Test Coverage**: 0%
@@ -15,6 +16,7 @@ The Vultisig SDK currently has **ZERO test coverage** for ~3,645 lines of produc
 - **WASM Modules**: 3 (WalletCore, DKLS, Schnorr)
 
 ### Critical Gaps
+
 - No unit tests for core functionality
 - No integration tests for vault operations
 - No end-to-end tests for user flows
@@ -25,6 +27,7 @@ The Vultisig SDK currently has **ZERO test coverage** for ~3,645 lines of produc
 ## Testing Strategy Overview
 
 ### Goals
+
 1. **Immediate**: Establish testing infrastructure and achieve 30% coverage
 2. **Short-term**: Test core components to reach 50% coverage
 3. **Mid-term**: Integration testing for 65% coverage
@@ -32,6 +35,7 @@ The Vultisig SDK currently has **ZERO test coverage** for ~3,645 lines of produc
 5. **Ongoing**: Maintain and expand test suite with new features
 
 ### Principles
+
 - **Test-First Development**: Write tests before new features
 - **Chain Coverage**: Every supported blockchain must have fixtures
 - **Security Focus**: Cryptographic operations require extensive validation
@@ -41,18 +45,21 @@ The Vultisig SDK currently has **ZERO test coverage** for ~3,645 lines of produc
 ## Implementation Phases
 
 ### Phase Timeline
-| Phase | Duration | Coverage Target | Focus Area |
-|-------|----------|-----------------|------------|
-| Phase 1 | Week 1-2 | 30% | Foundation & Infrastructure |
-| Phase 2 | Week 3-4 | 50% | Core Components |
-| Phase 3 | Week 5-6 | 65% | Integration Testing |
-| Phase 4 | Week 7-8 | 75% | End-to-End Testing |
-| Phase 5 | Week 9-10 | 85% | Advanced & Security |
+
+| Phase   | Duration  | Coverage Target | Focus Area                  |
+| ------- | --------- | --------------- | --------------------------- |
+| Phase 1 | Week 1-2  | 30%             | Foundation & Infrastructure |
+| Phase 2 | Week 3-4  | 50%             | Core Components             |
+| Phase 3 | Week 5-6  | 65%             | Integration Testing         |
+| Phase 4 | Week 7-8  | 75%             | End-to-End Testing          |
+| Phase 5 | Week 9-10 | 85%             | Advanced & Security         |
 
 ### Phase 1: Foundation (Week 1-2)
+
 **Objective**: Establish robust testing infrastructure
 
 Key deliverables:
+
 - Testing framework setup (Vitest, coverage tools)
 - Chain fixture framework for all 30+ blockchains
 - Mock strategies for WASM and servers
@@ -62,9 +69,11 @@ Key deliverables:
 [Detailed implementation in PHASE_1_FOUNDATION.md](PHASE_1_FOUNDATION.md)
 
 ### Phase 2: Core Components (Week 3-4)
+
 **Objective**: Test critical SDK components
 
 Key deliverables:
+
 - VultisigSDK class tests
 - Vault and VaultManager tests
 - ChainManager tests with fixtures
@@ -74,9 +83,11 @@ Key deliverables:
 [Detailed implementation in PHASE_2_CORE.md](PHASE_2_CORE.md)
 
 ### Phase 3: Integration Testing (Week 5-6)
+
 **Objective**: Validate component interactions (MOCKED - No Real Funds)
 
 Key deliverables:
+
 - Address derivation for ALL 40+ chains with REAL WASM
 - Vault import/export integration with encryption
 - Component integration (Vault → WASM → Chains)
@@ -88,11 +99,13 @@ Key deliverables:
 [Detailed implementation in PHASE_3_INTEGRATION.md](PHASE_3_INTEGRATION.md)
 
 ### Phase 4: End-to-End Testing (Week 7-8)
+
 **Objective**: Test complete user workflows (PRODUCTION - Real Funds)
 
 🔴 **CRITICAL**: This phase uses **PRODUCTION environment with REAL FUNDS** (small amounts)
 
 Key deliverables:
+
 - Fast vault creation flow with REAL MPC operations
 - Transaction signing with REAL signing ceremonies
 - REAL transaction broadcasting on mainnet (small amounts $1-5 per chain)
@@ -105,9 +118,11 @@ Key deliverables:
 [Detailed implementation in PHASE_4_E2E.md](PHASE_4_E2E.md)
 
 ### Phase 5: Advanced Testing (Week 9-10)
+
 **Objective**: Production readiness
 
 Key deliverables:
+
 - Performance benchmarks
 - Security testing suite
 - Load testing
@@ -166,6 +181,7 @@ packages/sdk/tests/
 ## Chain-Specific Testing Requirements
 
 ### Fixture Requirements per Chain
+
 Each of the 30+ supported blockchains MUST have:
 
 1. **Address Fixtures** (`addresses.json`)
@@ -194,7 +210,9 @@ Each of the 30+ supported blockchains MUST have:
 [Complete chain fixture specification in TEST_DATA_SPEC.md](TEST_DATA_SPEC.md)
 
 ### Supported Chains (30+)
+
 **Tier 1 Priority (Test First)**
+
 - Bitcoin (BTC) - UTXO model
 - Ethereum (ETH) - EVM chain
 - Solana (SOL) - EdDSA signatures
@@ -202,11 +220,13 @@ Each of the 30+ supported blockchains MUST have:
 - Ripple (XRP) - Unique architecture
 
 **Tier 2 Priority**
+
 - Polygon, Binance Smart Chain, Avalanche
 - Cosmos, Osmosis, Noble, Kujira, Dydx
 - Litecoin, Dogecoin, Bitcoin Cash, Dash
 
 **Tier 3 Priority**
+
 - Arbitrum, Optimism, Base, Blast, zkSync
 - Sui, Polkadot, Tron, Near, Ton
 
@@ -216,17 +236,17 @@ Each of the 30+ supported blockchains MUST have:
 
 The SDK supports multiple environments with different capabilities and constraints. Tests should be targeted to environments where the code actually behaves differently.
 
-| Feature | Node.js | Browser | Electron Main | Electron Renderer | Chrome Extension | React Native | Test Priority |
-|---------|---------|---------|---------------|-------------------|------------------|--------------|--------------|
-| **Vault Creation** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | LOW (same logic) |
-| **File Import** | Direct fs | FileReader API | Direct fs | IPC to main | N/A | react-native-fs | HIGH (different) |
-| **File Export** | Direct fs | Download | Direct fs | IPC to main | chrome.downloads | react-native-fs | HIGH (different) |
-| **Crypto Ops** | Node crypto | Web Crypto | Node crypto | Web Crypto | Web Crypto | Polyfill | CRITICAL (different) |
-| **Storage** | File system | IndexedDB | File system | IndexedDB | chrome.storage | AsyncStorage | HIGH (different) |
-| **WASM Load** | Direct | fetch | Direct | fetch | CSP restricted | Custom loader | MEDIUM (mostly same) |
-| **Network** | http/https | fetch/XHR | http/https | fetch/XHR | fetch (limited) | fetch | LOW (same logic) |
-| **Address Derivation** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | LOW (same logic) |
-| **Transaction Signing** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | LOW (same logic) |
+| Feature                 | Node.js     | Browser        | Electron Main | Electron Renderer | Chrome Extension | React Native    | Test Priority        |
+| ----------------------- | ----------- | -------------- | ------------- | ----------------- | ---------------- | --------------- | -------------------- |
+| **Vault Creation**      | ✓           | ✓              | ✓             | ✓                 | ✓                | ✓               | LOW (same logic)     |
+| **File Import**         | Direct fs   | FileReader API | Direct fs     | IPC to main       | N/A              | react-native-fs | HIGH (different)     |
+| **File Export**         | Direct fs   | Download       | Direct fs     | IPC to main       | chrome.downloads | react-native-fs | HIGH (different)     |
+| **Crypto Ops**          | Node crypto | Web Crypto     | Node crypto   | Web Crypto        | Web Crypto       | Polyfill        | CRITICAL (different) |
+| **Storage**             | File system | IndexedDB      | File system   | IndexedDB         | chrome.storage   | AsyncStorage    | HIGH (different)     |
+| **WASM Load**           | Direct      | fetch          | Direct        | fetch             | CSP restricted   | Custom loader   | MEDIUM (mostly same) |
+| **Network**             | http/https  | fetch/XHR      | http/https    | fetch/XHR         | fetch (limited)  | fetch           | LOW (same logic)     |
+| **Address Derivation**  | ✓           | ✓              | ✓             | ✓                 | ✓                | ✓               | LOW (same logic)     |
+| **Transaction Signing** | ✓           | ✓              | ✓             | ✓                 | ✓                | ✓               | LOW (same logic)     |
 
 ### Environment Testing Order (Simplest First)
 
@@ -266,18 +286,21 @@ The SDK supports multiple environments with different capabilities and constrain
 ### Mock Levels
 
 #### Level 1: Full Mocks (Unit Tests)
+
 - Mock all external dependencies
 - In-memory storage
 - Deterministic responses
 - Fast execution (<1ms per test)
 
 #### Level 2: Partial Mocks (Integration)
+
 - Real WASM modules
 - Mocked network calls
 - Real cryptographic operations
 - Test fixtures for blockchain data
 
 #### Level 3: Test Environment (E2E)
+
 - Test server endpoints
 - Testnet blockchains
 - Real vault operations
@@ -286,6 +309,7 @@ The SDK supports multiple environments with different capabilities and constrain
 ### Key Test Scenarios
 
 #### Vault Operations
+
 - [ ] Create fast vault (2-of-2 with server)
 - [ ] Import encrypted vault file
 - [ ] Export vault with password
@@ -295,6 +319,7 @@ The SDK supports multiple environments with different capabilities and constrain
 - [ ] Session timeout recovery
 
 #### MPC Protocols
+
 - [ ] ECDSA keygen (Bitcoin, Ethereum)
 - [ ] EdDSA keygen (Solana)
 - [ ] Fast signing coordination
@@ -303,6 +328,7 @@ The SDK supports multiple environments with different capabilities and constrain
 - [ ] Session management
 
 #### Chain Operations (Per Chain)
+
 - [ ] Derive correct address format
 - [ ] Validate address checksum
 - [ ] Query native token balance
@@ -312,6 +338,7 @@ The SDK supports multiple environments with different capabilities and constrain
 - [ ] Handle chain-specific features
 
 #### Performance Requirements
+
 - [ ] Vault creation < 30 seconds
 - [ ] Address derivation < 100ms per chain
 - [ ] Transaction signing < 10 seconds
@@ -322,6 +349,7 @@ The SDK supports multiple environments with different capabilities and constrain
 ## CI/CD Integration
 
 ### GitHub Actions Workflow
+
 ```yaml
 name: Test Suite
 
@@ -357,6 +385,7 @@ jobs:
 ```
 
 ### Pre-commit Hooks
+
 ```bash
 #!/bin/sh
 # .husky/pre-commit
@@ -377,21 +406,24 @@ npm run lint
 ## Success Metrics
 
 ### Coverage Goals
+
 - **Unit Tests**: 90% of pure functions
 - **Integration Tests**: 80% of component interactions
 - **E2E Tests**: 100% of critical user paths
 - **Overall Coverage**: 85% minimum
 
 ### Performance Benchmarks
-| Operation | Target | Acceptable | Failed |
-|-----------|--------|------------|--------|
-| Vault Creation | <30s | <45s | >60s |
-| Address Derivation (all chains) | <3s | <5s | >10s |
-| Transaction Signing | <10s | <15s | >30s |
-| Import/Export | <5s | <10s | >15s |
-| Memory Usage | <200MB | <300MB | >500MB |
+
+| Operation                       | Target | Acceptable | Failed |
+| ------------------------------- | ------ | ---------- | ------ |
+| Vault Creation                  | <30s   | <45s       | >60s   |
+| Address Derivation (all chains) | <3s    | <5s        | >10s   |
+| Transaction Signing             | <10s   | <15s       | >30s   |
+| Import/Export                   | <5s    | <10s       | >15s   |
+| Memory Usage                    | <200MB | <300MB     | >500MB |
 
 ### Quality Gates
+
 - No PR merged without tests
 - Coverage must not decrease
 - All chain fixtures must pass validation
@@ -401,6 +433,7 @@ npm run lint
 ## Risk Assessment
 
 ### High Priority Risks
+
 1. **MPC Protocol Failures**
    - Impact: Complete vault failure
    - Mitigation: Extensive protocol testing, error recovery
@@ -414,6 +447,7 @@ npm run lint
    - Mitigation: Chain-specific validation tests
 
 ### Medium Priority Risks
+
 1. **Server Unavailability**
    - Impact: Fast vault operations fail
    - Mitigation: Timeout handling, retry logic
@@ -429,21 +463,25 @@ npm run lint
 ## Maintenance Plan
 
 ### Daily
+
 - Monitor CI/CD pipeline
 - Review test failures
 - Update failing tests
 
 ### Weekly
+
 - Review coverage reports
 - Update chain fixtures
 - Performance benchmark review
 
 ### Monthly
+
 - Security audit of tests
 - Update dependencies
 - Review and update test plan
 
 ### Quarterly
+
 - Major test refactoring
 - New chain integration
 - Documentation updates
@@ -451,12 +489,14 @@ npm run lint
 ## Resources Required
 
 ### Team
+
 - **Lead Developer**: Test architecture and planning
 - **SDK Developers**: Write unit and integration tests
 - **QA Engineer**: E2E tests and test data
 - **DevOps**: CI/CD pipeline setup
 
 ### Tools
+
 - **Testing**: Vitest, Testing Library
 - **Coverage**: C8, Codecov
 - **Mocking**: MSW, Vitest mocks
@@ -464,6 +504,7 @@ npm run lint
 - **Security**: OWASP tools
 
 ### Time Estimate
+
 - **Total Duration**: 10 weeks
 - **Developer Hours**: ~400 hours
 - **QA Hours**: ~200 hours
@@ -489,4 +530,4 @@ npm run lint
 
 ---
 
-*This testing plan is a living document and will be updated as the SDK evolves. Last updated: November 2024*
+_This testing plan is a living document and will be updated as the SDK evolves. Last updated: November 2024_

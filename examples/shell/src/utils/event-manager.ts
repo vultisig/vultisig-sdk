@@ -37,10 +37,7 @@ export class EventManager {
   /**
    * Handle an event - buffer if command is running, display immediately if idle.
    */
-  private handleEvent(
-    message: string,
-    type: 'info' | 'success' | 'warning' | 'error' = 'info'
-  ): void {
+  private handleEvent(message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
     if (this.isCommandRunning) {
       this.eventBuffer.push({
         timestamp: new Date(),
@@ -55,10 +52,7 @@ export class EventManager {
   /**
    * Display a single event to the console with appropriate formatting.
    */
-  private displayEvent(
-    message: string,
-    type: 'info' | 'success' | 'warning' | 'error'
-  ): void {
+  private displayEvent(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
     switch (type) {
       case 'success':
         console.log(chalk.green(message))
@@ -101,10 +95,7 @@ export class EventManager {
     // Balance updates
     vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
       const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-      this.handleEvent(
-        `ℹ Balance updated for ${chain} (${asset}): ${balance.amount}`,
-        'info'
-      )
+      this.handleEvent(`ℹ Balance updated for ${chain} (${asset}): ${balance.amount}`, 'info')
     })
 
     // Transaction broadcast

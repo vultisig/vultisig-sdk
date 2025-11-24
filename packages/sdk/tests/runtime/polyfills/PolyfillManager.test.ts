@@ -93,9 +93,7 @@ describe('PolyfillManager', () => {
       const providers = polyfillRegistry.getAllProviders()
 
       for (let i = 0; i < providers.length - 1; i++) {
-        expect(providers[i].priority).toBeGreaterThanOrEqual(
-          providers[i + 1].priority
-        )
+        expect(providers[i].priority).toBeGreaterThanOrEqual(providers[i + 1].priority)
       }
     })
   })
@@ -131,11 +129,7 @@ describe('PolyfillManager', () => {
 
   describe('concurrent initialization', () => {
     it('should handle concurrent initialization calls', async () => {
-      await Promise.all([
-        PolyfillManager.initialize(),
-        PolyfillManager.initialize(),
-        PolyfillManager.initialize(),
-      ])
+      await Promise.all([PolyfillManager.initialize(), PolyfillManager.initialize(), PolyfillManager.initialize()])
 
       expect(PolyfillManager.isInitialized()).toBe(true)
     })

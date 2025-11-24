@@ -137,13 +137,7 @@ describe('formatGasInfo', () => {
     })
 
     it('should work for all UTXO chains (Litecoin, Dogecoin, BCH, Dash)', () => {
-      const utxoChains = [
-        'Bitcoin',
-        'Litecoin',
-        'Dogecoin',
-        'BitcoinCash',
-        'Dash',
-      ]
+      const utxoChains = ['Bitcoin', 'Litecoin', 'Dogecoin', 'BitcoinCash', 'Dash']
 
       for (const chain of utxoChains) {
         const chainSpecific = {

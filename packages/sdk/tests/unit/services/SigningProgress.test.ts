@@ -134,12 +134,7 @@ describe('SigningProgress', () => {
         messageHashes: ['0xabcd1234'], // Pre-computed hash
       }
 
-      await fastSigningService.signWithServer(
-        mockVault,
-        payload,
-        'test_password',
-        onProgress
-      )
+      await fastSigningService.signWithServer(mockVault, payload, 'test_password', onProgress)
 
       // Verify all expected steps were reported
       const reportedSteps = progressSteps.map(s => s.step)
@@ -164,12 +159,7 @@ describe('SigningProgress', () => {
         messageHashes: ['0xabcd1234'],
       }
 
-      await fastSigningService.signWithServer(
-        mockVault,
-        payload,
-        'test_password',
-        onProgress
-      )
+      await fastSigningService.signWithServer(mockVault, payload, 'test_password', onProgress)
 
       // Verify progress values are monotonically increasing
       const progressValues = progressSteps.map(s => s.progress)
@@ -195,12 +185,7 @@ describe('SigningProgress', () => {
         messageHashes: ['0xabcd1234'],
       }
 
-      await fastSigningService.signWithServer(
-        mockVault,
-        payload,
-        'test_password',
-        onProgress
-      )
+      await fastSigningService.signWithServer(mockVault, payload, 'test_password', onProgress)
 
       // Verify all steps report participant information
       progressSteps.forEach(step => {
@@ -210,13 +195,11 @@ describe('SigningProgress', () => {
       })
 
       // Verify participants ready increases over time
-      const coordinatingSteps = progressSteps.filter(
-        s => s.step === 'coordinating'
-      )
+      const coordinatingSteps = progressSteps.filter(s => s.step === 'coordinating')
       if (coordinatingSteps.length > 1) {
-        expect(
-          coordinatingSteps[coordinatingSteps.length - 1].participantsReady
-        ).toBeGreaterThanOrEqual(coordinatingSteps[0].participantsReady!)
+        expect(coordinatingSteps[coordinatingSteps.length - 1].participantsReady).toBeGreaterThanOrEqual(
+          coordinatingSteps[0].participantsReady!
+        )
       }
     })
 
@@ -232,12 +215,7 @@ describe('SigningProgress', () => {
         messageHashes: ['0xabcd1234'],
       }
 
-      await fastSigningService.signWithServer(
-        mockVault,
-        payload,
-        'test_password',
-        onProgress
-      )
+      await fastSigningService.signWithServer(mockVault, payload, 'test_password', onProgress)
 
       // Verify all steps have descriptive messages
       progressSteps.forEach(step => {
@@ -259,12 +237,7 @@ describe('SigningProgress', () => {
         messageHashes: ['0xabcd1234'],
       }
 
-      await fastSigningService.signWithServer(
-        mockVault,
-        payload,
-        'test_password',
-        onProgress
-      )
+      await fastSigningService.signWithServer(mockVault, payload, 'test_password', onProgress)
 
       // Verify all steps include mode
       progressSteps.forEach(step => {
@@ -280,9 +253,7 @@ describe('SigningProgress', () => {
       }
 
       // Should not throw when onProgress is not provided
-      await expect(
-        fastSigningService.signWithServer(mockVault, payload, 'test_password')
-      ).resolves.toBeDefined()
+      await expect(fastSigningService.signWithServer(mockVault, payload, 'test_password')).resolves.toBeDefined()
     })
 
     it('should throw error if messageHashes are missing', async () => {
@@ -295,15 +266,8 @@ describe('SigningProgress', () => {
       }
 
       await expect(
-        fastSigningService.signWithServer(
-          mockVault,
-          payload as any,
-          'test_password',
-          onProgress
-        )
-      ).rejects.toThrow(
-        'SigningPayload must include pre-computed messageHashes'
-      )
+        fastSigningService.signWithServer(mockVault, payload as any, 'test_password', onProgress)
+      ).rejects.toThrow('SigningPayload must include pre-computed messageHashes')
     })
 
     it('should report preparing step before coordinating', async () => {
@@ -318,21 +282,14 @@ describe('SigningProgress', () => {
         messageHashes: ['0xabcd1234'],
       }
 
-      await fastSigningService.signWithServer(
-        mockVault,
-        payload,
-        'test_password',
-        onProgress
-      )
+      await fastSigningService.signWithServer(mockVault, payload, 'test_password', onProgress)
 
       // Verify first step is preparing
       expect(progressSteps[0].step).toBe('preparing')
       expect(progressSteps[0].progress).toBe(0)
 
       // Find index of first coordinating step
-      const coordinatingIndex = progressSteps.findIndex(
-        s => s.step === 'coordinating'
-      )
+      const coordinatingIndex = progressSteps.findIndex(s => s.step === 'coordinating')
       expect(coordinatingIndex).toBeGreaterThan(0)
     })
   })

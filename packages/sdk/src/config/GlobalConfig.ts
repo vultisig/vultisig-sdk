@@ -37,13 +37,7 @@ export type GlobalConfigOptions = {
   onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
 }
 
-const DEFAULT_CHAINS: Chain[] = [
-  Chain.Bitcoin,
-  Chain.Ethereum,
-  Chain.Solana,
-  Chain.THORChain,
-  Chain.Ripple,
-]
+const DEFAULT_CHAINS: Chain[] = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.THORChain, Chain.Ripple]
 
 /**
  * Global configuration singleton.
@@ -108,9 +102,7 @@ export class GlobalConfig {
    * @param key - The configuration key to retrieve
    * @returns The configuration value
    */
-  static get<K extends keyof GlobalConfigOptions>(
-    key: K
-  ): GlobalConfigOptions[K] {
+  static get<K extends keyof GlobalConfigOptions>(key: K): GlobalConfigOptions[K] {
     return GlobalConfig.getInstance()[key]
   }
 

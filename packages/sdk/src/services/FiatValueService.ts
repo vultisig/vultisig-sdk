@@ -66,11 +66,7 @@ export class FiatValueService {
    * console.log(`1 USDC = $${usdcPrice}`)
    * ```
    */
-  async getPrice(
-    chain: Chain,
-    tokenId?: string,
-    fiatCurrency?: FiatCurrency
-  ): Promise<number> {
+  async getPrice(chain: Chain, tokenId?: string, fiatCurrency?: FiatCurrency): Promise<number> {
     const currency = fiatCurrency ? fiatCurrency : this.getCurrency()
     const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}:${currency}`
 
@@ -115,10 +111,7 @@ export class FiatValueService {
    * // { Ethereum: 3000, Bitcoin: 50000, Solana: 100 }
    * ```
    */
-  async getPrices(
-    chains: Chain[],
-    fiatCurrency?: FiatCurrency
-  ): Promise<Record<string, number>> {
+  async getPrices(chains: Chain[], fiatCurrency?: FiatCurrency): Promise<Record<string, number>> {
     const currency = fiatCurrency ?? this.getCurrency()
     const prices: Record<string, number> = {}
 
@@ -171,16 +164,9 @@ export class FiatValueService {
    * console.log(`$${value.toFixed(2)}`) // e.g., "$4500.00"
    * ```
    */
-  async getBalanceValue(
-    balance: Balance,
-    fiatCurrency?: FiatCurrency
-  ): Promise<number> {
+  async getBalanceValue(balance: Balance, fiatCurrency?: FiatCurrency): Promise<number> {
     // Get current price
-    const price = await this.getPrice(
-      balance.chainId as Chain,
-      balance.tokenId,
-      fiatCurrency
-    )
+    const price = await this.getPrice(balance.chainId as Chain, balance.tokenId, fiatCurrency)
 
     // Calculate value using core utility
     return getCoinValue({
@@ -208,23 +194,15 @@ export class FiatValueService {
    * console.log(`Total: $${total.toFixed(2)}`)
    * ```
    */
-  async getPortfolioValue(
-    balances: Balance[] | Record<string, Balance>,
-    fiatCurrency?: FiatCurrency
-  ): Promise<number> {
-    const balanceArray = Array.isArray(balances)
-      ? balances
-      : Object.values(balances)
+  async getPortfolioValue(balances: Balance[] | Record<string, Balance>, fiatCurrency?: FiatCurrency): Promise<number> {
+    const balanceArray = Array.isArray(balances) ? balances : Object.values(balances)
 
     // Calculate all values in parallel
     const values = await Promise.all(
       balanceArray.map(balance =>
         this.getBalanceValue(balance, fiatCurrency).catch(error => {
           // Don't fail entire portfolio on single token error
-          console.warn(
-            `Failed to get value for ${balance.symbol}:`,
-            error.message
-          )
+          console.warn(`Failed to get value for ${balance.symbol}:`, error.message)
           return 0
         })
       )
@@ -283,9 +261,7 @@ export class FiatValueService {
       const balance = await this.getBalance(chain, tokenId)
 
       // Calculate fiat value (normalize currency to lowercase)
-      const currency = (
-        fiatCurrency ?? this.getCurrency()
-      ).toLowerCase() as FiatCurrency
+      const currency = (fiatCurrency ?? this.getCurrency()).toLowerCase() as FiatCurrency
 
       const value = await this.getBalanceValue(balance, currency)
 
@@ -295,9 +271,7 @@ export class FiatValueService {
         lastUpdated: Date.now(),
       }
     } catch (error) {
-      throw new Error(
-        `Failed to get value for ${chain}${tokenId ? `:${tokenId}` : ''}: ${(error as Error).message}`
-      )
+      throw new Error(`Failed to get value for ${chain}${tokenId ? `:${tokenId}` : ''}: ${(error as Error).message}`)
     }
   }
 
@@ -318,16 +292,8 @@ export class FiatValueService {
   async getValues(
     chain: Chain,
     fiatCurrency?: FiatCurrency
-  ): Promise<
-    Record<
-      string,
-      { amount: string; currency: FiatCurrency; lastUpdated: number }
-    >
-  > {
-    const values: Record<
-      string,
-      { amount: string; currency: FiatCurrency; lastUpdated: number }
-    > = {}
+  ): Promise<Record<string, { amount: string; currency: FiatCurrency; lastUpdated: number }>> {
+    const values: Record<string, { amount: string; currency: FiatCurrency; lastUpdated: number }> = {}
 
     try {
       // Get native token value
@@ -342,16 +308,9 @@ export class FiatValueService {
 
     for (const token of tokens) {
       try {
-        values[token.contractAddress] = await this.getValue(
-          chain,
-          token.contractAddress,
-          fiatCurrency
-        )
+        values[token.contractAddress] = await this.getValue(chain, token.contractAddress, fiatCurrency)
       } catch (error) {
-        console.warn(
-          `Failed to get value for token ${token.contractAddress}:`,
-          error
-        )
+        console.warn(`Failed to get value for token ${token.contractAddress}:`, error)
         // Continue with other tokens
       }
     }
@@ -376,39 +335,33 @@ export class FiatValueService {
     fiatCurrency?: FiatCurrency
   ): Promise<{ amount: string; currency: FiatCurrency; lastUpdated: number }> {
     // Normalize currency to lowercase
-    const currency = (
-      fiatCurrency ?? this.getCurrency()
-    ).toLowerCase() as FiatCurrency
+    const currency = (fiatCurrency ?? this.getCurrency()).toLowerCase() as FiatCurrency
 
     // Use scoped cache with configured TTL
-    return this.cacheService.getOrComputeScoped(
-      currency,
-      CacheScope.PORTFOLIO,
-      async () => {
-        // Calculate fresh total
-        const chains = this.getChains()
-        let total = 0
+    return this.cacheService.getOrComputeScoped(currency, CacheScope.PORTFOLIO, async () => {
+      // Calculate fresh total
+      const chains = this.getChains()
+      let total = 0
 
-        // Sum values across all chains
-        for (const chain of chains) {
-          try {
-            const chainValues = await this.getValues(chain, currency)
-            for (const value of Object.values(chainValues)) {
-              total += parseFloat(value.amount)
-            }
-          } catch (error) {
-            console.warn(`Failed to get values for ${chain}:`, error)
-            // Continue with other chains
+      // Sum values across all chains
+      for (const chain of chains) {
+        try {
+          const chainValues = await this.getValues(chain, currency)
+          for (const value of Object.values(chainValues)) {
+            total += parseFloat(value.amount)
           }
-        }
-
-        return {
-          amount: total.toFixed(2),
-          currency,
-          lastUpdated: Date.now(),
+        } catch (error) {
+          console.warn(`Failed to get values for ${chain}:`, error)
+          // Continue with other chains
         }
       }
-    )
+
+      return {
+        amount: total.toFixed(2),
+        currency,
+        lastUpdated: Date.now(),
+      }
+    })
   }
 
   /**
@@ -457,9 +410,7 @@ export class FiatValueService {
     fiatCurrency?: FiatCurrency
   ): Promise<{ amount: string; currency: FiatCurrency; lastUpdated: number }> {
     // Normalize currency to lowercase
-    const currency = (
-      fiatCurrency ?? this.getCurrency()
-    ).toLowerCase() as FiatCurrency
+    const currency = (fiatCurrency ?? this.getCurrency()).toLowerCase() as FiatCurrency
 
     // Invalidate cache to force recalculation
     await this.cacheService.invalidateScoped(currency, CacheScope.PORTFOLIO)
@@ -474,10 +425,7 @@ export class FiatValueService {
    * Fetch native token price for a single chain
    * @private
    */
-  private async fetchNativePrice(
-    chain: Chain,
-    currency: FiatCurrency
-  ): Promise<number> {
+  private async fetchNativePrice(chain: Chain, currency: FiatCurrency): Promise<number> {
     const priceProviderId = this.getPriceProviderId(chain)
 
     const prices = await getCoinPrices({
@@ -487,9 +435,7 @@ export class FiatValueService {
 
     const price = prices[priceProviderId]
     if (price === undefined || price === 0) {
-      throw new Error(
-        `Price not found for ${chain} (priceProviderId: ${priceProviderId})`
-      )
+      throw new Error(`Price not found for ${chain} (priceProviderId: ${priceProviderId})`)
     }
 
     return price
@@ -499,10 +445,7 @@ export class FiatValueService {
    * Batch fetch native token prices for multiple chains
    * @private
    */
-  private async batchFetchNativePrices(
-    chains: Chain[],
-    currency: FiatCurrency
-  ): Promise<Record<string, number>> {
+  private async batchFetchNativePrices(chains: Chain[], currency: FiatCurrency): Promise<Record<string, number>> {
     const priceProviderIds = chains.map(chain => this.getPriceProviderId(chain))
 
     const rawPrices = await getCoinPrices({
@@ -530,18 +473,12 @@ export class FiatValueService {
    * Currently supports EVM chains (Ethereum, Polygon, BSC, etc.)
    * @private
    */
-  private async fetchTokenPrice(
-    chain: Chain,
-    tokenAddress: string,
-    currency: FiatCurrency
-  ): Promise<number> {
+  private async fetchTokenPrice(chain: Chain, tokenAddress: string, currency: FiatCurrency): Promise<number> {
     // Check if chain supports ERC-20 pricing
     const isEvmChain = this.isEvmChain(chain)
 
     if (!isEvmChain) {
-      throw new Error(
-        `Token pricing not supported for ${chain} (non-EVM chain)`
-      )
+      throw new Error(`Token pricing not supported for ${chain} (non-EVM chain)`)
     }
 
     // Fetch ERC-20 token price
