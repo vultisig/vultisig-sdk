@@ -59,7 +59,7 @@
     "_____BUILD_____": "",
     "build": "yarn build:platforms && yarn build:types",
     "build:js": "yarn build:platforms",
-    "build:types": "tsc -p tsconfig.declarations.json",
+    "build:types": "rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
     "build:platforms": "yarn build:platform:node && yarn build:platform:browser",

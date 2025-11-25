@@ -16,8 +16,13 @@ export class BrowserWasmLoader implements PlatformWasmLoader {
   }
 
   resolvePath(filename: string): string {
-    // Resolve relative to the current script/module location
-    // In production, WASM files should be served from lib/ directory
+    // Try to load from public/lib first (for examples and apps)
+    // Falls back to relative path for bundled distributions
+    if (typeof window !== 'undefined' && window.location) {
+      // In browser environment, try loading from /lib/ path (public directory)
+      return `${window.location.origin}/lib/${filename}`
+    }
+    // Fallback: resolve relative to the current script/module location
     return new URL(`./lib/${filename}`, import.meta.url).href
   }
 

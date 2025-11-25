@@ -1,10 +1,10 @@
-import { Vault } from '@vultisig/sdk'
+import { VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 /**
  * Display list of vaults
  */
-export function displayVaultList(vaults: Vault[], activeVaultId?: string | number): void {
+export function displayVaultList(vaults: VaultBase[], activeVaultId?: string | number): void {
   if (vaults.length === 0) {
     console.log(chalk.yellow('\nNo vaults found'))
     console.log(chalk.gray('Use "import <file>" or "create <name> <email>" to add a vault'))
@@ -35,7 +35,7 @@ export function displayVaultList(vaults: Vault[], activeVaultId?: string | numbe
 /**
  * Display vault imported confirmation
  */
-export function displayVaultImported(vault: Vault): void {
+export function displayVaultImported(vault: VaultBase): void {
   console.log(chalk.green('\n✓ Vault imported successfully!'))
   console.log(chalk.blue(`Vault: ${vault.name}`))
   console.log(chalk.blue('Run "npm run wallet balance" to view balances'))

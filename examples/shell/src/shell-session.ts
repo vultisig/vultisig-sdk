@@ -864,10 +864,13 @@ export class ReplSession {
       }
 
       const token = {
-        contractAddress: addAddress,
+        id: `${chainEnum}-${addAddress}`,
+        name: symbol,
         symbol,
         decimals: decimals || 18,
-        isNativeToken: false,
+        contractAddress: addAddress,
+        chainId: chainEnum,
+        isNative: false,
       }
 
       await vault.addToken(chainEnum, token)

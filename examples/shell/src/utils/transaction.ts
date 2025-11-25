@@ -1,4 +1,4 @@
-import { Chain, Vault } from '@vultisig/sdk'
+import { Chain, VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 import ora from 'ora'
@@ -24,7 +24,7 @@ type AccountCoin = {
  * - Sign and broadcast via SDK
  */
 export class TransactionManager {
-  constructor(private vault: Vault) {}
+  constructor(private vault: VaultBase) {}
 
   /**
    * Complete send flow: prepare → confirm → sign → broadcast

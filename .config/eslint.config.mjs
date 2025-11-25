@@ -33,11 +33,15 @@ export default [
       '**/*_pb.ts',
       '**/lib/**',
       'packages/core/**',
+      'packages/lib/**',
       'archived/**',
       'clients/cli/src/tests/**',
       'clients/cli/packages/**/test-*.js',
       'clients/cli/packages/**/example.js',
       'clients/cli/packages/**/verify-*.js',
+      // WASM files copied by build tools
+      '**/public/wallet-core.js',
+      '**/public/wallet-core.wasm',
     ],
   },
   ...compat.extends(

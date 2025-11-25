@@ -1,4 +1,4 @@
-import { Vault } from '@vultisig/sdk'
+import { VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 type BufferedEvent = {
@@ -91,7 +91,7 @@ export class EventManager {
    * Setup all vault event listeners in one centralized location.
    * This replaces the scattered event listener setup in VaultManager and ReplSession.
    */
-  setupVaultListeners(vault: Vault): void {
+  setupVaultListeners(vault: VaultBase): void {
     // Balance updates
     vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
       const asset = tokenId ? `${balance.symbol} token` : balance.symbol
@@ -144,7 +144,7 @@ export class EventManager {
    * Remove all event listeners from a vault.
    * Useful for cleanup when a vault is removed.
    */
-  cleanupVaultListeners(vault: Vault): void {
+  cleanupVaultListeners(vault: VaultBase): void {
     vault.removeAllListeners('balanceUpdated')
     vault.removeAllListeners('transactionBroadcast')
     vault.removeAllListeners('chainAdded')

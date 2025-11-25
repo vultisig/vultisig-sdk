@@ -1,5 +1,6 @@
 // ServerManager is internal - import directly from implementation file
 import { Chain } from '@core/chain/Chain'
+import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
 import { GlobalConfig } from './config/GlobalConfig'
@@ -185,6 +186,28 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
+   * Check if a vault file is encrypted
+   *
+   * @param vultContent - The .vult file content as a string
+   * @returns true if the vault is encrypted, false otherwise
+   *
+   * @example
+   * ```typescript
+   * const vultContent = fs.readFileSync('vault.vult', 'utf-8')
+   * if (sdk.isVaultEncrypted(vultContent)) {
+   *   const password = await promptForPassword()
+   *   const vault = await sdk.importVault(vultContent, password)
+   * } else {
+   *   const vault = await sdk.importVault(vultContent)
+   * }
+   * ```
+   */
+  isVaultEncrypted(vultContent: string): boolean {
+    const container = vaultContainerFromString(vultContent.trim())
+    return container.isEncrypted
+  }
+
+  /**
    * Import vault from .vult file content (sets as active)
    *
    * @param vultContent - The .vult file content as a string
@@ -258,6 +281,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async setActiveVault(vault: VaultBase | null): Promise<void> {
     await this.vaultManager.setActiveVault(vault?.id ?? null)
+    this.emit('vaultChanged', { vaultId: vault?.id ?? '' })
   }
 
   /**
