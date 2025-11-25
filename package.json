@@ -13,8 +13,6 @@
     "build": "yarn workspace @vultisig/example-cli build",
     "build:sdk": "yarn workspace @vultisig/sdk build",
     "build:sdk-full": "yarn sync-and-copy && yarn workspace @vultisig/sdk build",
-    "build:prod": "yarn workspace vultisig-sdk-react-example-2 build && yarn workspace vultisig-sdk-react-example-2 preview --port 5175 --strictPort --open=false",
-    "dev:react": "yarn workspace vultisig-sdk-react-example-2 dev",
     "sync-packages": "syncpack fix-mismatches",
     "sync-and-copy": "node_modules/.bin/tsx scripts/sync-and-copy.ts",
     "typecheck": "tsc --project .config/tsconfig.json --noEmit",

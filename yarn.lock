@@ -4250,13 +4250,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/events@npm:^3":
-  version: 3.0.3
-  resolution: "@types/events@npm:3.0.3"
-  checksum: 10c0/3a56f8c51eb4ebc0d05dcadca0c6636c816acc10216ce36c976fad11e54a01f4bb979a07211355686015884753b37f17d74bfdc7aaf4ebb027c1e8a501c7b21d
-  languageName: node
-  linkType: hard
-
 "@types/filesystem@npm:*":
   version: 0.0.36
   resolution: "@types/filesystem@npm:0.0.36"
@@ -4413,13 +4406,6 @@ __metadata:
   dependencies:
     undici-types: "npm:~6.21.0"
   checksum: 10c0/6edd93aea86da740cb7872626839cd6f4a67a049d3a3a6639cb592c620ec591408a30989ab7410008d1a0b2d4985ce50f1e488e79c033e4476d3bec6833b0a2f
-  languageName: node
-  linkType: hard
-
-"@types/path-browserify@npm:^1":
-  version: 1.0.3
-  resolution: "@types/path-browserify@npm:1.0.3"
-  checksum: 10c0/6ed6de375c210dbc20d171ab547be6065ce9904463ca8ca63443a3b23efc7234ff5400d62be05b9be36fc2e863b77592c2e607896988ad39a45276b8a7e42d70
   languageName: node
   linkType: hard
 
@@ -11937,17 +11923,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-dom@npm:^19.0.0":
-  version: 19.2.0
-  resolution: "react-dom@npm:19.2.0"
-  dependencies:
-    scheduler: "npm:^0.27.0"
-  peerDependencies:
-    react: ^19.2.0
-  checksum: 10c0/fa2cae05248d01288e91523b590ce4e7635b1e13f1344e225f850d722a8da037bf0782f63b1c1d46353334e0c696909b82e582f8cad607948fde6f7646cc18d9
-  languageName: node
-  linkType: hard
-
 "react-is@npm:^16.13.1":
   version: 16.13.1
   resolution: "react-is@npm:16.13.1"
@@ -11975,13 +11950,6 @@ __metadata:
   dependencies:
     loose-envify: "npm:^1.1.0"
   checksum: 10c0/283e8c5efcf37802c9d1ce767f302dd569dd97a70d9bb8c7be79a789b9902451e0d16334b05d73299b20f048cbc3c7d288bbbde10b701fa194e2089c237dbea3
-  languageName: node
-  linkType: hard
-
-"react@npm:^19.0.0":
-  version: 19.2.0
-  resolution: "react@npm:19.2.0"
-  checksum: 10c0/1b6d64eacb9324725bfe1e7860cb7a6b8a34bc89a482920765ebff5c10578eb487e6b46b2f0df263bd27a25edbdae2c45e5ea5d81ae61404301c1a7192c38330
   languageName: node
   linkType: hard
 
@@ -12531,13 +12499,6 @@ __metadata:
   dependencies:
     loose-envify: "npm:^1.1.0"
   checksum: 10c0/26383305e249651d4c58e6705d5f8425f153211aef95f15161c151f7b8de885f24751b377e4a0b3dd42cce09aad3f87a61dab7636859c0d89b7daf1a1e2a5c78
-  languageName: node
-  linkType: hard
-
-"scheduler@npm:^0.27.0":
-  version: 0.27.0
-  resolution: "scheduler@npm:0.27.0"
-  checksum: 10c0/4f03048cb05a3c8fddc45813052251eca00688f413a3cee236d984a161da28db28ba71bd11e7a3dd02f7af84ab28d39fb311431d3b3772fed557945beb00c452
   languageName: node
   linkType: hard
 
@@ -13118,7 +13079,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"string_decoder@npm:^1.0.0, string_decoder@npm:^1.1.1, string_decoder@npm:^1.3.0":
+"string_decoder@npm:^1.0.0, string_decoder@npm:^1.1.1":
   version: 1.3.0
   resolution: "string_decoder@npm:1.3.0"
   dependencies:
@@ -14336,43 +14297,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vm-browserify@npm:^1.0.1, vm-browserify@npm:^1.1.2":
+"vm-browserify@npm:^1.0.1":
   version: 1.1.2
   resolution: "vm-browserify@npm:1.1.2"
   checksum: 10c0/0cc1af6e0d880deb58bc974921320c187f9e0a94f25570fca6b1bd64e798ce454ab87dfd797551b1b0cc1849307421aae0193cedf5f06bdb5680476780ee344b
   languageName: node
   linkType: hard
 
-"vultisig-sdk-react-example-2@workspace:examples/react":
-  version: 0.0.0-use.local
-  resolution: "vultisig-sdk-react-example-2@workspace:examples/react"
-  dependencies:
-    "@types/events": "npm:^3"
-    "@types/path-browserify": "npm:^1"
-    "@types/react": "npm:^19.0.11"
-    "@types/react-dom": "npm:^19.0.4"
-    "@vitejs/plugin-react": "npm:^4.3.4"
-    buffer: "npm:^6.0.3"
-    crypto-browserify: "npm:^3.12.0"
-    events: "npm:^3.3.0"
-    isomorphic-fetch: "npm:^3.0.0"
-    path-browserify: "npm:^1.0.1"
-    process: "npm:^0.11.10"
-    react: "npm:^19.0.0"
-    react-dom: "npm:^19.0.0"
-    stream-browserify: "npm:^3.0.0"
-    string_decoder: "npm:^1.3.0"
-    typescript: "npm:^5.8.2"
-    util: "npm:^0.12.5"
-    vite: "npm:^6.2.2"
-    vite-plugin-node-polyfills: "npm:^0.24.0"
-    vite-plugin-wasm: "npm:^3.4.1"
-    vm-browserify: "npm:^1.1.2"
-    vultisig-sdk: "workspace:*"
-  languageName: unknown
-  linkType: soft
-
-"vultisig-sdk@workspace:*, vultisig-sdk@workspace:.":
+"vultisig-sdk@workspace:.":
   version: 0.0.0-use.local
   resolution: "vultisig-sdk@workspace:."
   dependencies:
