@@ -1,10 +1,7 @@
 import { create } from '@bufbuild/protobuf'
 import { UtxoChain } from '../../../../chain/Chain'
 import { getUtxoByteFee } from '../../../../chain/chains/utxo/fee/byteFee'
-import {
-  byteFeeMultiplier,
-  UtxoFeeSettings,
-} from '../../../../chain/tx/fee/utxo/UtxoFeeSettings'
+import { byteFeeMultiplier, UtxoFeeSettings } from '../../../../chain/tx/fee/utxo/UtxoFeeSettings'
 import { UTXOSpecificSchema } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { multiplyBigInt } from '../../../../../lib/utils/bigint/bigIntMultiplyByNumber'
 import { matchRecordUnion } from '../../../../../lib/utils/matchRecordUnion'
@@ -12,20 +9,18 @@ import { matchRecordUnion } from '../../../../../lib/utils/matchRecordUnion'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../resolver'
 
-export const getUtxoChainSpecific: GetChainSpecificResolver<
-  'utxoSpecific'
-> = async ({ keysignPayload, feeSettings }) => {
+export const getUtxoChainSpecific: GetChainSpecificResolver<'utxoSpecific'> = async ({
+  keysignPayload,
+  feeSettings,
+  psbt,
+}) => {
   const coin = getKeysignCoin<UtxoChain>(keysignPayload)
 
   const getByteFee = () => {
     if (feeSettings) {
       return matchRecordUnion<UtxoFeeSettings, Promise<bigint>>(feeSettings, {
         byteFee: async value => value,
-        priority: async priority =>
-          multiplyBigInt(
-            await getUtxoByteFee(coin.chain),
-            byteFeeMultiplier[priority]
-          ),
+        priority: async priority => multiplyBigInt(await getUtxoByteFee(coin.chain), byteFeeMultiplier[priority]),
       })
     }
 
@@ -33,7 +28,7 @@ export const getUtxoChainSpecific: GetChainSpecificResolver<
   }
 
   return create(UTXOSpecificSchema, {
-    psbt: undefined,
+    psbt: psbt?.toBase64(),
     sendMaxAmount: false,
     byteFee: (await getByteFee()).toString(),
   })

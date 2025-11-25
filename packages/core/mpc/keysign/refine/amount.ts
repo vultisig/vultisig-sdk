@@ -1,4 +1,4 @@
-import { UtxoBasedChain } from '../../../chain/Chain'
+import { Chain, UtxoBasedChain } from '../../../chain/Chain'
 import { isFeeCoin } from '../../../chain/coin/utils/isFeeCoin'
 import { isOneOf } from '../../../../lib/utils/array/isOneOf'
 import { minBigInt } from '../../../../lib/utils/math/minBigInt'
@@ -27,16 +27,13 @@ export const refineKeysignAmount = (input: RefineKeysignAmountInput) => {
     return input.keysignPayload
   }
 
-  if (isOneOf(coin.chain, Object.values(UtxoBasedChain))) {
+  if (isOneOf(coin.chain, Object.values(UtxoBasedChain)) || coin.chain === Chain.Ton) {
     return input.keysignPayload
   }
 
   const fee = getFeeAmount(input)
 
-  const refinedAmount = minBigInt(
-    BigInt(input.keysignPayload.toAmount),
-    input.balance - fee
-  )
+  const refinedAmount = minBigInt(BigInt(input.keysignPayload.toAmount), input.balance - fee)
 
   if (refinedAmount <= 0n) {
     throw new BuildKeysignPayloadError('not-enough-funds')

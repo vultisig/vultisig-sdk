@@ -12,8 +12,6 @@ import { toCommCoin } from '../../types/utils/commCoin'
 import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
-import { isAddress } from 'viem'
-import { BuildKeysignPayloadError } from '../error'
 
 export type BuildSendKeysignPayloadInput = {
   coin: AccountCoin
@@ -40,11 +38,6 @@ export const buildSendKeysignPayload = async ({
   libType,
   feeSettings,
 }: BuildSendKeysignPayloadInput) => {
-  // Validate Ethereum addresses
-  if (isChainOfKind(coin.chain, 'evm') && !isAddress(receiver)) {
-    throw new BuildKeysignPayloadError('invalid-address')
-  }
-
   let keysignPayload = create(KeysignPayloadSchema, {
     coin: toCommCoin({
       ...coin,

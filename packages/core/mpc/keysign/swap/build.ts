@@ -24,10 +24,7 @@ import {
   OneInchTransactionSchema,
 } from '../../types/vultisig/keysign/v1/1inch_swap_payload_pb'
 import { Erc20ApprovePayloadSchema } from '../../types/vultisig/keysign/v1/erc20_approve_payload_pb'
-import {
-  KeysignPayload,
-  KeysignPayloadSchema,
-} from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { matchRecordUnion } from '../../../../lib/utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -62,10 +59,7 @@ export const buildSwapKeysignPayload = async ({
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
   const toCoinHexPublicKey = Buffer.from(toPublicKey.data()).toString('hex')
 
-  const thirdPartyGasLimitEstimation = matchRecordUnion<
-    SwapQuote,
-    bigint | undefined
-  >(swapQuote, {
+  const thirdPartyGasLimitEstimation = matchRecordUnion<SwapQuote, bigint | undefined>(swapQuote, {
     native: () => undefined,
     general: ({ tx }) =>
       matchRecordUnion<GeneralSwapTx, bigint | undefined>(tx, {
@@ -91,38 +85,17 @@ export const buildSwapKeysignPayload = async ({
     }),
   })
 
-  keysignPayload.blockchainSpecific = await getChainSpecific({
-    keysignPayload,
-    walletCore,
-    thirdPartyGasLimitEstimation,
-    isDeposit: matchRecordUnion<SwapQuote, boolean>(swapQuote, {
-      native: ({ swapChain }) =>
-        areEqualCoins(fromCoin, chainFeeCoin[swapChain]),
-      general: () => false,
-    }),
-  })
-
-  keysignPayload.swapPayload = matchRecordUnion<
-    SwapQuote,
-    KeysignPayload['swapPayload']
-  >(swapQuote, {
+  keysignPayload.swapPayload = matchRecordUnion<SwapQuote, KeysignPayload['swapPayload']>(swapQuote, {
     general: quote => {
-      const txMsg = matchRecordUnion<
-        GeneralSwapTx,
-        Omit<OneInchTransaction, '$typeName' | 'swapFee'>
-      >(quote.tx, {
+      const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName' | 'swapFee'>>(quote.tx, {
         evm: ({ from, to, data, value }) => {
-          const { maxFeePerGasWei, gasLimit } = getBlockchainSpecificValue(
-            keysignPayload.blockchainSpecific,
-            'ethereumSpecific'
-          )
           return {
             from,
             to,
             data,
             value,
-            gasPrice: maxFeePerGasWei,
-            gas: BigInt(gasLimit),
+            gasPrice: '',
+            gas: 0n,
           }
         },
         solana: ({ data }) => ({
@@ -149,10 +122,7 @@ export const buildSwapKeysignPayload = async ({
             hexPublicKey: toCoinHexPublicKey,
           }),
           fromAmount: chainAmount.toString(),
-          toAmountDecimal: fromChainAmount(
-            quote.dstAmount,
-            toCoin.decimals
-          ).toFixed(toCoin.decimals),
+          toAmountDecimal: fromChainAmount(quote.dstAmount, toCoin.decimals).toFixed(toCoin.decimals),
           quote: create(OneInchQuoteSchema, {
             dstAmount: quote.dstAmount,
             tx,
@@ -179,7 +149,32 @@ export const buildSwapKeysignPayload = async ({
     },
   })
 
+  keysignPayload.blockchainSpecific = await getChainSpecific({
+    keysignPayload,
+    walletCore,
+    thirdPartyGasLimitEstimation,
+    isDeposit: matchRecordUnion<SwapQuote, boolean>(swapQuote, {
+      native: ({ swapChain }) => areEqualCoins(fromCoin, chainFeeCoin[swapChain]),
+      general: () => false,
+    }),
+  })
+
   const { chain } = fromCoin
+
+  if (
+    isChainOfKind(chain, 'evm') &&
+    keysignPayload.swapPayload?.case === 'oneinchSwapPayload' &&
+    keysignPayload.swapPayload.value.quote?.tx
+  ) {
+    // It doesn't make sense, as this data is already set in a chain-specific manner, and we will ignore those fields.
+    // However, other platforms still expect these fields to be populated.
+    const { maxFeePerGasWei, gasLimit } = getBlockchainSpecificValue(
+      keysignPayload.blockchainSpecific,
+      'ethereumSpecific'
+    )
+    keysignPayload.swapPayload.value.quote.tx.gasPrice = maxFeePerGasWei
+    keysignPayload.swapPayload.value.quote.tx.gas = BigInt(gasLimit)
+  }
 
   if (isChainOfKind(chain, 'evm') && fromCoin.id) {
     const spender = keysignPayload.toAddress
