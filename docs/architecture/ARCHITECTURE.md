@@ -23,7 +23,7 @@
 
 ## Overview
 
-The Vultisig SDK is a TypeScript library for creating and managing multi-chain cryptocurrency vaults using threshold signature schemes (TSS). It provides a unified interface for interacting with 34+ blockchain networks through multi-party computation (MPC), working seamlessly across browser, Node.js, Electron, and React Native environments.
+The Vultisig SDK is a TypeScript library for creating and managing multi-chain cryptocurrency vaults using threshold signature schemes (TSS). It provides a unified interface for interacting with 34+ blockchain networks through multi-party computation (MPC), working seamlessly across browser and Node.js environments.
 
 ### What It Does
 
@@ -33,7 +33,7 @@ The Vultisig SDK is a TypeScript library for creating and managing multi-chain c
 - **Balance Tracking** - Query native and token balances across all chains
 - **Address Derivation** - Generate addresses for any supported chain
 - **Gas Estimation** - Get current gas prices and fee estimates
-- **Cross-Platform** - Works in browser, Node.js, Electron, React Native
+- **Cross-Platform** - Works in browser and Node.js (Electron, React Native coming soon)
 
 ### Architecture Overview
 
@@ -45,6 +45,82 @@ The SDK follows a layered architecture:
 4. **Platform Layer** - Platform-specific implementations (storage, WASM, crypto)
 
 **Design Philosophy:** The SDK is a thin layer over the Vultisig Core library, using functional adapters to convert between Core's data formats and user-friendly SDK types. All blockchain logic lives in Core - the SDK focuses on providing excellent developer experience.
+
+### Architecture Diagram
+
+```mermaid
+flowchart TB
+    subgraph App["User Application"]
+        UserApp["React, Vue, Node.js, CLI, etc."]
+    end
+
+    subgraph PublicAPI["PUBLIC API LAYER"]
+        Vultisig["Vultisig<br/>(Facade)"]
+        VaultManager["VaultManager<br/>(Factory)"]
+        Globals["GlobalConfig<br/>GlobalStorage<br/>(Singletons)"]
+        Vultisig --> VaultManager --> Globals
+    end
+
+    subgraph VaultLayer["VAULT LAYER"]
+        VaultBase["VaultBase<br/>(Template Method)"]
+        Services["Services<br/>(Dependency Injection)"]
+        FastVault["FastVault<br/>(2-of-2)"]
+        SecureVault["SecureVault<br/>(N-of-M)"]
+        VaultBase --> Services
+        VaultBase --> FastVault
+        VaultBase --> SecureVault
+    end
+
+    subgraph ServicesLayer["SERVICES LAYER"]
+        AddressService["AddressService"]
+        BalanceService["BalanceService"]
+        TxBuilder["TransactionBuilder"]
+        Adapters["Adapters<br/>formatBalance()<br/>formatSignature()"]
+        AddressService & BalanceService & TxBuilder --> Adapters
+    end
+
+    subgraph CoreLib["CORE LIBRARY (packages/core)"]
+        Core["Chain Resolvers | MPC Protocol | Signing | TX Building"]
+    end
+
+    subgraph External["External Services"]
+        VultiServer["VultiServer"]
+        Relay["Message Relay"]
+        RPCs["Blockchain RPCs"]
+    end
+
+    App --> PublicAPI
+    PublicAPI --> VaultLayer
+    VaultLayer --> ServicesLayer
+    ServicesLayer --> CoreLib
+    VaultLayer <-.-> External
+```
+
+### Design Patterns Summary
+
+| Pattern                | Component            | Purpose                                    |
+| ---------------------- | -------------------- | ------------------------------------------ |
+| **Facade**             | `Vultisig`           | Simple entry point hiding complexity       |
+| **Factory**            | `VaultManager`       | Creates appropriate vault types            |
+| **Template Method**    | `VaultBase`          | Common vault behavior with extension points|
+| **Strategy**           | `FastVault`/`SecureVault` | Interchangeable signing strategies    |
+| **Dependency Injection** | Vault services     | Testable, configurable services            |
+| **Adapter**            | `formatBalance()` etc| Converts Core types to SDK types           |
+| **Singleton**          | Global managers      | Shared state across SDK                    |
+| **Observer**           | Event emitters       | Reactive state updates                     |
+
+### Platform Bundles
+
+The SDK supports multiple JavaScript environments through separate build-time bundles. Each bundle includes platform-specific implementations for storage, WASM loading, and crypto operations:
+
+| Bundle                      | Platform         | Storage      | Use Case                |
+| --------------------------- | ---------------- | ------------ | ----------------------- |
+| `index.node.esm.js`         | Node.js          | Filesystem   | Server-side, CLI tools  |
+| `index.browser.js`          | Browser          | IndexedDB    | Web applications        |
+
+Users import the appropriate bundle for their platform - the SDK API remains identical across all bundles.
+
+**Coming Soon:** Electron (main/renderer) and React Native platform bundles.
 
 ---
 
@@ -80,9 +156,8 @@ The SDK works seamlessly across all JavaScript environments through platform-spe
 
 - **Browser** - IndexedDB storage, browser crypto
 - **Node.js** - Filesystem storage, native crypto
-- **Electron Main** - Node.js compatible
-- **Electron Renderer** - Browser compatible
-- **React Native** - AsyncStorage, native modules
+
+*Coming soon: Electron and React Native support.*
 
 ### 3. Type-Safe Events
 
@@ -170,9 +245,9 @@ packages/sdk/src/
 │   │   ├── wasm.ts
 │   │   └── polyfills.ts
 │   ├── browser/               # Browser platform
-│   ├── electron-main/         # Electron main process
-│   ├── electron-renderer/     # Electron renderer process
-│   ├── react-native/          # React Native platform
+│   ├── electron-main/         # Electron main process (coming soon)
+│   ├── electron-renderer/     # Electron renderer (coming soon)
+│   ├── react-native/          # React Native (coming soon)
 │   └── types.ts               # Platform type definitions
 │
 ├── server/                    # Server communication
@@ -423,9 +498,8 @@ Each platform provides implementations for:
 | ------------------ | ------------ | ---------------------------------- |
 | Node.js            | Filesystem   | `dist/index.node.esm.js`           |
 | Browser            | IndexedDB    | `dist/index.browser.js`            |
-| Electron Main      | Filesystem   | `dist/index.electron-main.cjs`     |
-| Electron Renderer  | IndexedDB    | `dist/index.electron-renderer.js`  |
-| React Native       | AsyncStorage | `dist/index.react-native.js`       |
+
+*Coming soon: Electron (main/renderer) and React Native bundles.*
 
 ### Build Configuration
 
@@ -769,7 +843,7 @@ The Vultisig SDK architecture is **clean, layered, and platform-agnostic**:
 
 **Key Strengths:**
 
-- Works seamlessly across browser, Node.js, Electron, React Native
+- Works seamlessly across browser and Node.js (Electron, React Native coming soon)
 - Type-safe throughout with TypeScript generics
 - Smart caching based on data mutability
 - Direct Core integration for blockchain operations
