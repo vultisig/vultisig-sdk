@@ -39,16 +39,13 @@
   },
   "lint-staged": {
     "packages/**/*.{js,jsx,ts,tsx}": [
-      "eslint --config .config/eslint.config.mjs --fix",
-      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
+      "eslint --config .config/eslint.config.mjs --fix"
     ],
     "clients/**/*.{js,jsx,ts,tsx}": [
-      "eslint --config .config/eslint.config.mjs --fix",
-      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
+      "eslint --config .config/eslint.config.mjs --fix"
     ],
     "examples/**/*.{js,jsx,ts,tsx}": [
-      "eslint --config .config/eslint.config.mjs --fix",
-      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
+      "eslint --config .config/eslint.config.mjs --fix"
     ],
     "packages/sdk/tests/!(e2e)/**/*.test.ts": [
       "yarn workspace @vultisig/sdk test:changed"

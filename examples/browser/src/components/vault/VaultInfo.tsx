@@ -1,10 +1,10 @@
-import type { VaultBase } from '@vultisig/sdk'
+import type { VaultBase } from "@vultisig/sdk";
 
-import { shortenAddress } from '@/utils/formatting'
+import { shortenAddress } from "@/utils/formatting";
 
 type VaultInfoProps = {
-  vault: VaultBase
-}
+  vault: VaultBase;
+};
 
 export default function VaultInfo({ vault }: VaultInfoProps) {
   return (
@@ -21,7 +21,7 @@ export default function VaultInfo({ vault }: VaultInfoProps) {
         </div>
         <div>
           <div className="text-sm font-medium text-gray-500">Encrypted</div>
-          <p className="text-lg">{vault.isEncrypted ? 'Yes' : 'No'}</p>
+          <p className="text-lg">{vault.isEncrypted ? "Yes" : "No"}</p>
         </div>
         <div>
           <div className="text-sm font-medium text-gray-500">Chains</div>
@@ -29,5 +29,5 @@ export default function VaultInfo({ vault }: VaultInfoProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }

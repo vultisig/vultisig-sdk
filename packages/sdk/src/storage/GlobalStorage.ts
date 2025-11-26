@@ -1,4 +1,4 @@
-import type { Storage } from './types'
+import type { Storage } from "./types";
 
 /**
  * Global storage singleton.
@@ -19,7 +19,7 @@ import type { Storage } from './types'
  * ```
  */
 export class GlobalStorage {
-  private static instance: Storage | undefined
+  private static instance: Storage | undefined;
 
   /**
    * Configure global storage instance.
@@ -41,7 +41,7 @@ export class GlobalStorage {
    * ```
    */
   static configure(storage: Storage): void {
-    GlobalStorage.instance = storage
+    GlobalStorage.instance = storage;
   }
 
   /**
@@ -54,12 +54,12 @@ export class GlobalStorage {
   static getInstance(): Storage {
     if (!GlobalStorage.instance) {
       throw new Error(
-        'GlobalStorage not configured. ' +
-          'This should be automatic when using platform-specific bundles. ' +
-          'If using legacy builds, call GlobalStorage.configure(storage) manually.'
-      )
+        "GlobalStorage not configured. " +
+          "This should be automatic when using platform-specific bundles. " +
+          "If using legacy builds, call GlobalStorage.configure(storage) manually.",
+      );
     }
-    return GlobalStorage.instance
+    return GlobalStorage.instance;
   }
 
   /**
@@ -68,7 +68,7 @@ export class GlobalStorage {
    * @returns true if configure() was called
    */
   static isConfigured(): boolean {
-    return GlobalStorage.instance !== undefined
+    return GlobalStorage.instance !== undefined;
   }
 
   /**
@@ -77,6 +77,6 @@ export class GlobalStorage {
    * @internal
    */
   static reset(): void {
-    GlobalStorage.instance = undefined
+    GlobalStorage.instance = undefined;
   }
 }

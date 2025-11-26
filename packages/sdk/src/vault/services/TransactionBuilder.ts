@@ -1,17 +1,17 @@
-import { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import { getTwPublicKeyType } from '@core/chain/publicKey/tw/getTwPublicKeyType'
-import { getPreSigningHashes } from '@core/chain/tx/preSigningHashes'
-import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
-import { buildSendKeysignPayload } from '@core/mpc/keysign/send/build'
-import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
-import { getKeysignTwPublicKey } from '@core/mpc/keysign/tw/getKeysignTwPublicKey'
-import { getKeysignChain } from '@core/mpc/keysign/utils/getKeysignChain'
-import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { AccountCoin } from "@core/chain/coin/AccountCoin";
+import { getPublicKey } from "@core/chain/publicKey/getPublicKey";
+import { getTwPublicKeyType } from "@core/chain/publicKey/tw/getTwPublicKeyType";
+import { getPreSigningHashes } from "@core/chain/tx/preSigningHashes";
+import { FeeSettings } from "@core/mpc/keysign/chainSpecific/FeeSettings";
+import { buildSendKeysignPayload } from "@core/mpc/keysign/send/build";
+import { getEncodedSigningInputs } from "@core/mpc/keysign/signingInputs";
+import { getKeysignTwPublicKey } from "@core/mpc/keysign/tw/getKeysignTwPublicKey";
+import { getKeysignChain } from "@core/mpc/keysign/utils/getKeysignChain";
+import { KeysignPayload } from "@core/mpc/types/vultisig/keysign/v1/keysign_message_pb";
+import { Vault as CoreVault } from "@core/mpc/vault/Vault";
 
-import { WasmManager } from '../../wasm'
-import { VaultError, VaultErrorCode } from '../VaultError'
+import { WasmManager } from "../../wasm";
+import { VaultError, VaultErrorCode } from "../VaultError";
 
 /**
  * TransactionBuilder Service
@@ -53,15 +53,15 @@ export class TransactionBuilder {
    * ```
    */
   async prepareSendTx(params: {
-    coin: AccountCoin
-    receiver: string
-    amount: bigint
-    memo?: string
-    feeSettings?: FeeSettings
+    coin: AccountCoin;
+    receiver: string;
+    amount: bigint;
+    memo?: string;
+    feeSettings?: FeeSettings;
   }): Promise<KeysignPayload> {
     try {
       // Get WalletCore
-      const walletCore = await WasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore();
 
       // Get public key for the coin's chain
       const publicKey = getPublicKey({
@@ -69,7 +69,7 @@ export class TransactionBuilder {
         walletCore,
         publicKeys: this.vaultData.publicKeys,
         hexChainCode: this.vaultData.hexChainCode,
-      })
+      });
 
       // Build the keysign payload using core function
       const keysignPayload = await buildSendKeysignPayload({
@@ -83,15 +83,15 @@ export class TransactionBuilder {
         walletCore,
         libType: this.vaultData.libType,
         feeSettings: params.feeSettings,
-      })
+      });
 
-      return keysignPayload
+      return keysignPayload;
     } catch (error) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Failed to prepare send transaction: ${(error as Error).message}`,
-        error as Error
-      )
+        error as Error,
+      );
     }
   }
 
@@ -112,47 +112,54 @@ export class TransactionBuilder {
    * const signature = await vault.sign('fast', signingPayload, password)
    * ```
    */
-  async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]> {
+  async extractMessageHashes(
+    keysignPayload: KeysignPayload,
+  ): Promise<string[]> {
     try {
       // Get WalletCore instance
-      const walletCore = await WasmManager.getWalletCore()
+      const walletCore = await WasmManager.getWalletCore();
 
       // Get chain from keysign payload
-      const chain = getKeysignChain(keysignPayload)
+      const chain = getKeysignChain(keysignPayload);
 
       // Get public key data and create WalletCore PublicKey
-      const publicKeyData = getKeysignTwPublicKey(keysignPayload)
-      const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, publicKeyType)
+      const publicKeyData = getKeysignTwPublicKey(keysignPayload);
+      const publicKeyType = getTwPublicKeyType({ walletCore, chain });
+      const publicKey = walletCore.PublicKey.createWithData(
+        publicKeyData,
+        publicKeyType,
+      );
 
       // Get encoded signing inputs (compiled transaction data)
       const txInputsArray = getEncodedSigningInputs({
         keysignPayload,
         walletCore,
         publicKey,
-      })
+      });
 
       // Extract message hashes from each transaction input
-      const allMessageHashes: string[] = []
+      const allMessageHashes: string[] = [];
       for (const txInputData of txInputsArray) {
         const messageHashes = getPreSigningHashes({
           walletCore,
           txInputData,
           chain,
-        })
+        });
 
         // Convert Uint8Array hashes to hex strings
-        const hexHashes = messageHashes.map(hash => Buffer.from(hash).toString('hex'))
-        allMessageHashes.push(...hexHashes)
+        const hexHashes = messageHashes.map((hash) =>
+          Buffer.from(hash).toString("hex"),
+        );
+        allMessageHashes.push(...hexHashes);
       }
 
-      return allMessageHashes
+      return allMessageHashes;
     } catch (error) {
       throw new VaultError(
         VaultErrorCode.SigningFailed,
         `Failed to extract message hashes: ${(error as Error).message}`,
-        error as Error
-      )
+        error as Error,
+      );
     }
   }
 }

@@ -1,7 +1,7 @@
-import type { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
-import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
+import type { SignatureAlgorithm } from "@core/chain/signing/SignatureAlgorithm";
+import type { KeysignSignature } from "@core/mpc/keysign/KeysignSignature";
 
-import type { Signature } from '../types'
+import type { Signature } from "../types";
 
 /**
  * Format core keysign signature(s) into SDK Signature type
@@ -17,35 +17,37 @@ import type { Signature } from '../types'
 export function formatSignature(
   signatureResults: Record<string, KeysignSignature>,
   messages: string[],
-  signatureAlgorithm: SignatureAlgorithm
+  signatureAlgorithm: SignatureAlgorithm,
 ): Signature {
-  const firstMessage = messages[0]
-  const firstSignature = signatureResults[firstMessage]
+  const firstMessage = messages[0];
+  const firstSignature = signatureResults[firstMessage];
 
   if (!firstSignature) {
-    throw new Error('No signature result found for first message')
+    throw new Error("No signature result found for first message");
   }
 
   // Map signature algorithm to SDK signature format
-  const signatureFormat = mapAlgorithmToFormat(signatureAlgorithm)
+  const signatureFormat = mapAlgorithmToFormat(signatureAlgorithm);
 
   // Base signature (always present)
   const signature: Signature = {
     signature: firstSignature.der_signature,
-    recovery: firstSignature.recovery_id ? parseInt(firstSignature.recovery_id) : undefined,
+    recovery: firstSignature.recovery_id
+      ? parseInt(firstSignature.recovery_id)
+      : undefined,
     format: signatureFormat,
-  }
+  };
 
   // For UTXO chains with multiple inputs, include all signatures
   if (messages.length > 1) {
-    signature.signatures = messages.map(msg => ({
+    signature.signatures = messages.map((msg) => ({
       r: signatureResults[msg].r,
       s: signatureResults[msg].s,
       der: signatureResults[msg].der_signature,
-    }))
+    }));
   }
 
-  return signature
+  return signature;
 }
 
 /**
@@ -54,13 +56,15 @@ export function formatSignature(
  * @param algorithm - Core signature algorithm (ecdsa or eddsa)
  * @returns SDK signature format
  */
-function mapAlgorithmToFormat(algorithm: SignatureAlgorithm): Signature['format'] {
+function mapAlgorithmToFormat(
+  algorithm: SignatureAlgorithm,
+): Signature["format"] {
   switch (algorithm) {
-    case 'ecdsa':
-      return 'ECDSA'
-    case 'eddsa':
-      return 'EdDSA'
+    case "ecdsa":
+      return "ECDSA";
+    case "eddsa":
+      return "EdDSA";
     default:
-      throw new Error(`Unknown signature algorithm: ${algorithm}`)
+      throw new Error(`Unknown signature algorithm: ${algorithm}`);
   }
 }

@@ -14,10 +14,10 @@
 // ============================================================================
 
 // Core SDK class
-export { Vultisig } from './Vultisig'
+export { Vultisig } from "./Vultisig";
 
 // Vault management
-export type { VaultConfig } from './vault'
+export type { VaultConfig } from "./vault";
 export {
   FastVault,
   isFastVault,
@@ -28,7 +28,7 @@ export {
   VaultErrorCode,
   VaultImportError,
   VaultImportErrorCode,
-} from './vault'
+} from "./vault";
 
 // ============================================================================
 // PUBLIC API - Operations
@@ -57,58 +57,62 @@ export {
 // ============================================================================
 
 // Global server manager singleton
-export { GlobalServerManager, type ServerEndpoints } from './server'
+export { GlobalServerManager, type ServerEndpoints } from "./server";
 
 // ============================================================================
 // PUBLIC API - Configuration
 // ============================================================================
 
 // Global configuration singleton
-export { GlobalConfig, type GlobalConfigOptions } from './config'
+export { GlobalConfig, type GlobalConfigOptions } from "./config";
 
 // ============================================================================
 // PUBLIC API - Validation Utilities
 // ============================================================================
 
 // Validation helpers
-export { ValidationHelpers } from './utils/validation'
+export { ValidationHelpers } from "./utils/validation";
 
 // ============================================================================
 // PUBLIC API - Chain Configuration
 // ============================================================================
 
 // Supported chains constant
-export { SUPPORTED_CHAINS } from './Vultisig'
+export { SUPPORTED_CHAINS } from "./Vultisig";
 
 // ============================================================================
 // PUBLIC API - Storage
 // ============================================================================
 
 // Storage system - MemoryStorage is available in all platforms
-export type { StorageMetadata, StoredValue, Storage as VaultStorage } from './storage'
-export { MemoryStorage } from './storage'
-export { StorageError, StorageErrorCode } from './storage'
+export type {
+  StorageMetadata,
+  StoredValue,
+  Storage as VaultStorage,
+} from "./storage";
+export { MemoryStorage } from "./storage";
+export { StorageError, StorageErrorCode } from "./storage";
 
 // Event system
-export { UniversalEventEmitter } from './events/EventEmitter'
-export type { SdkEvents, VaultEvents } from './events/types'
+export { UniversalEventEmitter } from "./events/EventEmitter";
+export type { SdkEvents, VaultEvents } from "./events/types";
 
 // ============================================================================
 // PUBLIC API - Types (keep all types for TypeScript users)
 // ============================================================================
 
 // Chain enums and types
-export type { Chain as ChainType } from './types'
-export { Chain } from './types'
+export type { Chain as ChainType } from "./types";
+export { Chain } from "./types";
 
 // Fiat currency types
-export type { FiatCurrency } from '@core/config/FiatCurrency'
+export type { FiatCurrency } from "@core/config/FiatCurrency";
 export {
   defaultFiatCurrency,
   fiatCurrencies,
   fiatCurrencyNameRecord,
   fiatCurrencySymbolRecord,
-} from '@core/config/FiatCurrency'
+} from "@core/config/FiatCurrency";
 
 // General types
 export type {
@@ -143,4 +147,4 @@ export type {
   VaultValidationResult,
   // Extended SDK types (from refactor)
   VultisigConfig,
-} from './types'
+} from "./types";

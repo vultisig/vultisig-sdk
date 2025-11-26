@@ -1,22 +1,22 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from "@core/chain/Chain";
 
-import type { CacheConfig } from '../services/cache-types'
+import type { CacheConfig } from "../services/cache-types";
 
 export type GlobalConfigOptions = {
   /**
    * Default blockchain chains to enable for new vaults
    */
-  defaultChains?: Chain[]
+  defaultChains?: Chain[];
 
   /**
    * Default fiat currency for balance displays
    */
-  defaultCurrency?: string
+  defaultCurrency?: string;
 
   /**
    * Cache configuration for balance/price data
    */
-  cacheConfig?: CacheConfig
+  cacheConfig?: CacheConfig;
 
   /**
    * Password cache settings
@@ -25,8 +25,8 @@ export type GlobalConfigOptions = {
     /**
      * Default TTL in milliseconds (default: 5 minutes)
      */
-    defaultTTL?: number
-  }
+    defaultTTL?: number;
+  };
 
   /**
    * Callback to prompt user for vault password when needed
@@ -34,10 +34,16 @@ export type GlobalConfigOptions = {
    * @param vaultName - The vault name for display
    * @returns Promise resolving to the password
    */
-  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
-}
+  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>;
+};
 
-const DEFAULT_CHAINS: Chain[] = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.THORChain, Chain.Ripple]
+const DEFAULT_CHAINS: Chain[] = [
+  Chain.Bitcoin,
+  Chain.Ethereum,
+  Chain.Solana,
+  Chain.THORChain,
+  Chain.Ripple,
+];
 
 /**
  * Global configuration singleton.
@@ -61,7 +67,7 @@ const DEFAULT_CHAINS: Chain[] = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Ch
  * ```
  */
 export class GlobalConfig {
-  private static instance: GlobalConfigOptions | undefined
+  private static instance: GlobalConfigOptions | undefined;
 
   /**
    * Configure global SDK settings.
@@ -72,11 +78,11 @@ export class GlobalConfig {
   static configure(config?: GlobalConfigOptions): void {
     GlobalConfig.instance = {
       defaultChains: config?.defaultChains ?? DEFAULT_CHAINS,
-      defaultCurrency: config?.defaultCurrency ?? 'USD',
+      defaultCurrency: config?.defaultCurrency ?? "USD",
       cacheConfig: config?.cacheConfig,
       passwordCache: config?.passwordCache,
       onPasswordRequired: config?.onPasswordRequired,
-    }
+    };
   }
 
   /**
@@ -90,10 +96,10 @@ export class GlobalConfig {
       // Lazy initialization with defaults
       GlobalConfig.instance = {
         defaultChains: DEFAULT_CHAINS,
-        defaultCurrency: 'USD',
-      }
+        defaultCurrency: "USD",
+      };
     }
-    return GlobalConfig.instance
+    return GlobalConfig.instance;
   }
 
   /**
@@ -102,15 +108,17 @@ export class GlobalConfig {
    * @param key - The configuration key to retrieve
    * @returns The configuration value
    */
-  static get<K extends keyof GlobalConfigOptions>(key: K): GlobalConfigOptions[K] {
-    return GlobalConfig.getInstance()[key]
+  static get<K extends keyof GlobalConfigOptions>(
+    key: K,
+  ): GlobalConfigOptions[K] {
+    return GlobalConfig.getInstance()[key];
   }
 
   /**
    * Check if configuration has been explicitly set.
    */
   static isConfigured(): boolean {
-    return GlobalConfig.instance !== undefined
+    return GlobalConfig.instance !== undefined;
   }
 
   /**
@@ -118,6 +126,6 @@ export class GlobalConfig {
    * @internal
    */
   static reset(): void {
-    GlobalConfig.instance = undefined
+    GlobalConfig.instance = undefined;
   }
 }

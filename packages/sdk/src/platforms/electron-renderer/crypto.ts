@@ -3,4 +3,4 @@
  * Re-exports Browser crypto (same environment)
  */
 
-export { BrowserCrypto as ElectronRendererCrypto } from '../browser/crypto'
+export { BrowserCrypto as ElectronRendererCrypto } from "../browser/crypto";

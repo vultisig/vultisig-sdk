@@ -1,9 +1,9 @@
-import { ServerManager } from './ServerManager'
+import { ServerManager } from "./ServerManager";
 
 export type ServerEndpoints = {
-  fastVault?: string
-  messageRelay?: string
-}
+  fastVault?: string;
+  messageRelay?: string;
+};
 
 /**
  * Global ServerManager singleton.
@@ -22,7 +22,7 @@ export type ServerEndpoints = {
  * ```
  */
 export class GlobalServerManager {
-  private static instance: ServerManager | undefined
+  private static instance: ServerManager | undefined;
 
   /**
    * Configure the global ServerManager instance.
@@ -31,7 +31,7 @@ export class GlobalServerManager {
    * @param endpoints - Optional server endpoints (uses defaults if not provided)
    */
   static configure(endpoints?: ServerEndpoints): void {
-    GlobalServerManager.instance = new ServerManager(endpoints)
+    GlobalServerManager.instance = new ServerManager(endpoints);
   }
 
   /**
@@ -43,16 +43,16 @@ export class GlobalServerManager {
   static getInstance(): ServerManager {
     if (!GlobalServerManager.instance) {
       // Lazy initialization with default endpoints
-      GlobalServerManager.instance = new ServerManager()
+      GlobalServerManager.instance = new ServerManager();
     }
-    return GlobalServerManager.instance
+    return GlobalServerManager.instance;
   }
 
   /**
    * Check if ServerManager has been explicitly configured.
    */
   static isConfigured(): boolean {
-    return GlobalServerManager.instance !== undefined
+    return GlobalServerManager.instance !== undefined;
   }
 
   /**
@@ -60,6 +60,6 @@ export class GlobalServerManager {
    * @internal
    */
   static reset(): void {
-    GlobalServerManager.instance = undefined
+    GlobalServerManager.instance = undefined;
   }
 }

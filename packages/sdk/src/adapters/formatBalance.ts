@@ -1,7 +1,7 @@
-import { Chain } from '@core/chain/Chain'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { Chain } from "@core/chain/Chain";
+import { chainFeeCoin } from "@core/chain/coin/chainFeeCoin";
 
-import { Balance, Token } from '../types'
+import { Balance, Token } from "../types";
 
 /**
  * Convert raw bigint balance to SDK Balance format
@@ -19,20 +19,20 @@ export function formatBalance(
   rawBalance: bigint,
   chain: Chain,
   tokenId?: string,
-  tokens?: Record<string, Token[]>
+  tokens?: Record<string, Token[]>,
 ): Balance {
-  let decimals: number
-  let symbol: string
+  let decimals: number;
+  let symbol: string;
 
   if (tokenId) {
     // Token balance - look up metadata from token registry
-    const token = tokens?.[chain]?.find(t => t.id === tokenId)
-    decimals = token?.decimals ?? 18 // Default to 18 for ERC-20 tokens
-    symbol = token?.symbol ?? tokenId
+    const token = tokens?.[chain]?.find((t) => t.id === tokenId);
+    decimals = token?.decimals ?? 18; // Default to 18 for ERC-20 tokens
+    symbol = token?.symbol ?? tokenId;
   } else {
     // Native balance - use chainFeeCoin
-    decimals = chainFeeCoin[chain].decimals
-    symbol = chainFeeCoin[chain].ticker
+    decimals = chainFeeCoin[chain].decimals;
+    symbol = chainFeeCoin[chain].ticker;
   }
 
   return {
@@ -41,5 +41,5 @@ export function formatBalance(
     decimals,
     chainId: chain,
     tokenId,
-  }
+  };
 }

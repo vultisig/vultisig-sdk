@@ -1,8 +1,8 @@
 export type WasmConfig = {
-  autoInit?: boolean
+  autoInit?: boolean;
   wasmPaths?: {
-    walletCore?: () => Promise<ArrayBuffer>
-    dkls?: () => Promise<ArrayBuffer>
-    schnorr?: () => Promise<ArrayBuffer>
-  }
-}
+    walletCore?: () => Promise<ArrayBuffer>;
+    dkls?: () => Promise<ArrayBuffer>;
+    schnorr?: () => Promise<ArrayBuffer>;
+  };
+};

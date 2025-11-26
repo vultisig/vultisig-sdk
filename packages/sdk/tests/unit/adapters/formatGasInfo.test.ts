@@ -5,545 +5,551 @@
  * data to SDK GasInfo format. Covers all 14 different chain-specific types.
  */
 
-import { Chain } from '@core/chain/Chain'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Chain } from "@core/chain/Chain";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { formatGasInfo } from '../../../src/adapters/formatGasInfo'
+import { formatGasInfo } from "../../../src/adapters/formatGasInfo";
 
-describe('formatGasInfo', () => {
+describe("formatGasInfo", () => {
   // Mock Date.now() to return a fixed timestamp for testing
-  const mockTimestamp = 1700000000000
+  const mockTimestamp = 1700000000000;
   beforeEach(() => {
-    vi.spyOn(Date, 'now').mockReturnValue(mockTimestamp)
-  })
+    vi.spyOn(Date, "now").mockReturnValue(mockTimestamp);
+  });
 
-  describe('EVM Chains (ethereumSpecific)', () => {
-    it('should format Ethereum EIP-1559 gas info with Wei and Gwei', () => {
+  describe("EVM Chains (ethereumSpecific)", () => {
+    it("should format Ethereum EIP-1559 gas info with Wei and Gwei", () => {
       const chainSpecific = {
-        case: 'ethereumSpecific' as const,
+        case: "ethereumSpecific" as const,
         value: {
-          maxFeePerGasWei: '50000000000', // 50 Gwei
-          priorityFee: '2000000000', // 2 Gwei
+          maxFeePerGasWei: "50000000000", // 50 Gwei
+          priorityFee: "2000000000", // 2 Gwei
           nonce: BigInt(10),
-          gasLimit: '21000',
+          gasLimit: "21000",
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum);
 
       expect(result).toEqual({
         chainId: Chain.Ethereum,
-        gasPrice: '50000000000', // in Wei
-        gasPriceGwei: '50', // in Gwei (50000000000 / 1e9)
+        gasPrice: "50000000000", // in Wei
+        gasPriceGwei: "50", // in Gwei (50000000000 / 1e9)
         maxFeePerGas: 50000000000n,
         maxPriorityFeePerGas: 2000000000n,
-        priorityFee: '2000000000',
+        priorityFee: "2000000000",
         gasLimit: 21000n,
         estimatedCost: 1050000000000000n,
         lastUpdated: mockTimestamp,
-      })
-    })
+      });
+    });
 
-    it('should handle very high gas prices (100+ Gwei)', () => {
+    it("should handle very high gas prices (100+ Gwei)", () => {
       const chainSpecific = {
-        case: 'ethereumSpecific' as const,
+        case: "ethereumSpecific" as const,
         value: {
-          maxFeePerGasWei: '150000000000', // 150 Gwei
-          priorityFee: '5000000000', // 5 Gwei
+          maxFeePerGasWei: "150000000000", // 150 Gwei
+          priorityFee: "5000000000", // 5 Gwei
           nonce: BigInt(0),
-          gasLimit: '21000',
+          gasLimit: "21000",
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum);
 
-      expect(result.gasPriceGwei).toBe('150')
-      expect(result.maxFeePerGas).toBe(150000000000n)
-      expect(result.priorityFee).toBe('5000000000')
-    })
+      expect(result.gasPriceGwei).toBe("150");
+      expect(result.maxFeePerGas).toBe(150000000000n);
+      expect(result.priorityFee).toBe("5000000000");
+    });
 
-    it('should handle low gas prices (< 1 Gwei)', () => {
+    it("should handle low gas prices (< 1 Gwei)", () => {
       const chainSpecific = {
-        case: 'ethereumSpecific' as const,
+        case: "ethereumSpecific" as const,
         value: {
-          maxFeePerGasWei: '500000000', // 0.5 Gwei
-          priorityFee: '100000000', // 0.1 Gwei
+          maxFeePerGasWei: "500000000", // 0.5 Gwei
+          priorityFee: "100000000", // 0.1 Gwei
           nonce: BigInt(0),
-          gasLimit: '21000',
+          gasLimit: "21000",
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum);
 
-      expect(result.gasPriceGwei).toBe('0') // Integer division
-      expect(result.gasPrice).toBe('500000000')
-    })
+      expect(result.gasPriceGwei).toBe("0"); // Integer division
+      expect(result.gasPrice).toBe("500000000");
+    });
 
-    it('should work for all EVM chains (Polygon, BSC, Arbitrum, etc.)', () => {
-      const evmChains = ['Polygon', 'BSC', 'Arbitrum', 'Optimism', 'Base']
+    it("should work for all EVM chains (Polygon, BSC, Arbitrum, etc.)", () => {
+      const evmChains = ["Polygon", "BSC", "Arbitrum", "Optimism", "Base"];
 
       for (const chain of evmChains) {
         const chainSpecific = {
-          case: 'ethereumSpecific' as const,
+          case: "ethereumSpecific" as const,
           value: {
-            maxFeePerGasWei: '30000000000',
-            priorityFee: '1000000000',
+            maxFeePerGasWei: "30000000000",
+            priorityFee: "1000000000",
             nonce: BigInt(0),
-            gasLimit: '21000',
+            gasLimit: "21000",
           },
-        }
+        };
 
-        const result = formatGasInfo(chainSpecific, chain)
+        const result = formatGasInfo(chainSpecific, chain);
 
-        expect(result.chainId).toBe(chain)
-        expect(result.gasPriceGwei).toBe('30')
+        expect(result.chainId).toBe(chain);
+        expect(result.gasPriceGwei).toBe("30");
       }
-    })
-  })
+    });
+  });
 
-  describe('UTXO Chains (utxoSpecific)', () => {
-    it('should format Bitcoin UTXO gas info with byte fee', () => {
+  describe("UTXO Chains (utxoSpecific)", () => {
+    it("should format Bitcoin UTXO gas info with byte fee", () => {
       const chainSpecific = {
-        case: 'utxoSpecific' as const,
+        case: "utxoSpecific" as const,
         value: {
-          byteFee: '10', // 10 sats/byte
+          byteFee: "10", // 10 sats/byte
           sendMaxAmount: false,
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Bitcoin)
+      const result = formatGasInfo(chainSpecific, Chain.Bitcoin);
 
       expect(result).toEqual({
         chainId: Chain.Bitcoin,
-        gasPrice: '10',
-        byteFee: '10',
+        gasPrice: "10",
+        byteFee: "10",
         estimatedCost: 4000n,
         lastUpdated: mockTimestamp,
-      })
-    })
+      });
+    });
 
-    it('should handle high byte fees (congested network)', () => {
+    it("should handle high byte fees (congested network)", () => {
       const chainSpecific = {
-        case: 'utxoSpecific' as const,
+        case: "utxoSpecific" as const,
         value: {
-          byteFee: '150', // 150 sats/byte
+          byteFee: "150", // 150 sats/byte
           sendMaxAmount: false,
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Bitcoin)
+      const result = formatGasInfo(chainSpecific, Chain.Bitcoin);
 
-      expect(result.gasPrice).toBe('150')
-    })
+      expect(result.gasPrice).toBe("150");
+    });
 
-    it('should work for all UTXO chains (Litecoin, Dogecoin, BCH, Dash)', () => {
-      const utxoChains = ['Bitcoin', 'Litecoin', 'Dogecoin', 'BitcoinCash', 'Dash']
+    it("should work for all UTXO chains (Litecoin, Dogecoin, BCH, Dash)", () => {
+      const utxoChains = [
+        "Bitcoin",
+        "Litecoin",
+        "Dogecoin",
+        "BitcoinCash",
+        "Dash",
+      ];
 
       for (const chain of utxoChains) {
         const chainSpecific = {
-          case: 'utxoSpecific' as const,
+          case: "utxoSpecific" as const,
           value: {
-            byteFee: '5',
+            byteFee: "5",
             sendMaxAmount: false,
           },
-        }
+        };
 
-        const result = formatGasInfo(chainSpecific, chain)
+        const result = formatGasInfo(chainSpecific, chain);
 
-        expect(result.chainId).toBe(chain)
-        expect(result.gasPrice).toBe('5')
+        expect(result.chainId).toBe(chain);
+        expect(result.gasPrice).toBe("5");
       }
-    })
-  })
+    });
+  });
 
-  describe('Cosmos Chains (cosmosSpecific)', () => {
-    it('should format Cosmos gas info with gas field', () => {
+  describe("Cosmos Chains (cosmosSpecific)", () => {
+    it("should format Cosmos gas info with gas field", () => {
       const chainSpecific = {
-        case: 'cosmosSpecific' as const,
+        case: "cosmosSpecific" as const,
         value: {
           gas: BigInt(200000),
           accountNumber: BigInt(123),
           sequence: BigInt(45),
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Cosmos)
+      const result = formatGasInfo(chainSpecific, Chain.Cosmos);
 
       expect(result).toEqual({
         chainId: Chain.Cosmos,
-        gasPrice: '200000',
-        gas: '200000',
+        gasPrice: "200000",
+        gas: "200000",
         estimatedCost: 200000n,
         lastUpdated: mockTimestamp,
-      })
-    })
+      });
+    });
 
-    it('should handle zero gas (free transactions)', () => {
+    it("should handle zero gas (free transactions)", () => {
       const chainSpecific = {
-        case: 'cosmosSpecific' as const,
+        case: "cosmosSpecific" as const,
         value: {
           gas: BigInt(0),
           accountNumber: BigInt(0),
           sequence: BigInt(0),
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Cosmos)
+      const result = formatGasInfo(chainSpecific, Chain.Cosmos);
 
-      expect(result.gasPrice).toBe('0')
-    })
+      expect(result.gasPrice).toBe("0");
+    });
 
-    it('should work for all Cosmos SDK chains (Osmosis, Kujira, dYdX)', () => {
-      const cosmosChains = ['Cosmos', 'Osmosis', 'Kujira', 'dYdX', 'Noble']
+    it("should work for all Cosmos SDK chains (Osmosis, Kujira, dYdX)", () => {
+      const cosmosChains = ["Cosmos", "Osmosis", "Kujira", "dYdX", "Noble"];
 
       for (const chain of cosmosChains) {
         const chainSpecific = {
-          case: 'cosmosSpecific' as const,
+          case: "cosmosSpecific" as const,
           value: {
             gas: BigInt(150000),
             accountNumber: BigInt(0),
             sequence: BigInt(0),
           },
-        }
+        };
 
-        const result = formatGasInfo(chainSpecific, chain)
+        const result = formatGasInfo(chainSpecific, chain);
 
-        expect(result.chainId).toBe(chain)
-        expect(result.gasPrice).toBe('150000')
+        expect(result.chainId).toBe(chain);
+        expect(result.gasPrice).toBe("150000");
       }
-    })
-  })
+    });
+  });
 
-  describe('THORChain (thorchainSpecific)', () => {
-    it('should format THORChain gas info with zero gas', () => {
+  describe("THORChain (thorchainSpecific)", () => {
+    it("should format THORChain gas info with zero gas", () => {
       const chainSpecific = {
-        case: 'thorchainSpecific' as const,
+        case: "thorchainSpecific" as const,
         value: {
           accountNumber: BigInt(123),
           sequence: BigInt(45),
           fee: BigInt(0),
           isDeposit: false,
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.THORChain)
+      const result = formatGasInfo(chainSpecific, Chain.THORChain);
 
       expect(result).toEqual({
         chainId: Chain.THORChain,
-        gasPrice: '0',
+        gasPrice: "0",
         estimatedCost: 0n,
         lastUpdated: mockTimestamp,
-      })
-    })
-  })
+      });
+    });
+  });
 
-  describe('Maya (mayaSpecific)', () => {
-    it('should format Maya gas info with zero gas', () => {
+  describe("Maya (mayaSpecific)", () => {
+    it("should format Maya gas info with zero gas", () => {
       const chainSpecific = {
-        case: 'mayaSpecific' as const,
+        case: "mayaSpecific" as const,
         value: {
           accountNumber: BigInt(123),
           sequence: BigInt(45),
           isDeposit: false,
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.MayaChain)
+      const result = formatGasInfo(chainSpecific, Chain.MayaChain);
 
       expect(result).toEqual({
         chainId: Chain.MayaChain,
-        gasPrice: '0',
+        gasPrice: "0",
         lastUpdated: mockTimestamp,
-      })
-    })
-  })
+      });
+    });
+  });
 
-  describe('Solana (solanaSpecific)', () => {
-    it('should format Solana gas info with priority fee', () => {
+  describe("Solana (solanaSpecific)", () => {
+    it("should format Solana gas info with priority fee", () => {
       const chainSpecific = {
-        case: 'solanaSpecific' as const,
+        case: "solanaSpecific" as const,
         value: {
-          recentBlockHash: 'hash123',
-          priorityFee: '5000', // in lamports
+          recentBlockHash: "hash123",
+          priorityFee: "5000", // in lamports
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Solana)
+      const result = formatGasInfo(chainSpecific, Chain.Solana);
 
       expect(result).toEqual({
         chainId: Chain.Solana,
-        gasPrice: '5000',
-        priorityFee: '5000',
+        gasPrice: "5000",
+        priorityFee: "5000",
         estimatedCost: 10000n,
         lastUpdated: mockTimestamp,
-      })
-    })
+      });
+    });
 
-    it('should handle zero priority fee', () => {
+    it("should handle zero priority fee", () => {
       const chainSpecific = {
-        case: 'solanaSpecific' as const,
+        case: "solanaSpecific" as const,
         value: {
-          recentBlockHash: 'hash123',
-          priorityFee: '0',
+          recentBlockHash: "hash123",
+          priorityFee: "0",
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Solana)
+      const result = formatGasInfo(chainSpecific, Chain.Solana);
 
-      expect(result.gasPrice).toBe('0')
-      expect(result.priorityFee).toBe('0')
-    })
+      expect(result.gasPrice).toBe("0");
+      expect(result.priorityFee).toBe("0");
+    });
 
-    it('should handle high priority fees (congestion)', () => {
+    it("should handle high priority fees (congestion)", () => {
       const chainSpecific = {
-        case: 'solanaSpecific' as const,
+        case: "solanaSpecific" as const,
         value: {
-          recentBlockHash: 'hash123',
-          priorityFee: '1000000', // 1M lamports
+          recentBlockHash: "hash123",
+          priorityFee: "1000000", // 1M lamports
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Solana)
+      const result = formatGasInfo(chainSpecific, Chain.Solana);
 
-      expect(result.priorityFee).toBe('1000000')
-    })
-  })
+      expect(result.priorityFee).toBe("1000000");
+    });
+  });
 
-  describe('Sui (suicheSpecific)', () => {
-    it('should format Sui gas info with reference gas price', () => {
+  describe("Sui (suicheSpecific)", () => {
+    it("should format Sui gas info with reference gas price", () => {
       const chainSpecific = {
-        case: 'suicheSpecific' as const,
+        case: "suicheSpecific" as const,
         value: {
           referenceGasPrice: BigInt(1000),
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Sui)
+      const result = formatGasInfo(chainSpecific, Chain.Sui);
 
       expect(result).toEqual({
         chainId: Chain.Sui,
-        gasPrice: '1000',
+        gasPrice: "1000",
         lastUpdated: mockTimestamp,
-      })
-    })
+      });
+    });
 
-    it('should handle very low gas prices', () => {
+    it("should handle very low gas prices", () => {
       const chainSpecific = {
-        case: 'suicheSpecific' as const,
+        case: "suicheSpecific" as const,
         value: {
           referenceGasPrice: BigInt(1),
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Sui)
+      const result = formatGasInfo(chainSpecific, Chain.Sui);
 
-      expect(result.gasPrice).toBe('1')
-    })
-  })
+      expect(result.gasPrice).toBe("1");
+    });
+  });
 
-  describe('Polkadot (polkadotSpecific)', () => {
-    it('should format Polkadot gas info with zero gas (weight-based)', () => {
+  describe("Polkadot (polkadotSpecific)", () => {
+    it("should format Polkadot gas info with zero gas (weight-based)", () => {
       const chainSpecific = {
-        case: 'polkadotSpecific' as const,
+        case: "polkadotSpecific" as const,
         value: {
-          recentBlockHash: 'hash123',
+          recentBlockHash: "hash123",
           nonce: BigInt(10),
           currentBlockNumber: BigInt(1000000),
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Polkadot)
+      const result = formatGasInfo(chainSpecific, Chain.Polkadot);
 
       expect(result).toEqual({
         chainId: Chain.Polkadot,
-        gasPrice: '0',
+        gasPrice: "0",
         lastUpdated: mockTimestamp,
-      })
-    })
-  })
+      });
+    });
+  });
 
-  describe('TON (tonSpecific)', () => {
-    it('should format TON gas info with zero gas (dynamic calculation)', () => {
+  describe("TON (tonSpecific)", () => {
+    it("should format TON gas info with zero gas (dynamic calculation)", () => {
       const chainSpecific = {
-        case: 'tonSpecific' as const,
+        case: "tonSpecific" as const,
         value: {
           sequenceNumber: 123,
           expireAt: 1700000000,
           bounceable: true,
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Ton)
+      const result = formatGasInfo(chainSpecific, Chain.Ton);
 
       expect(result).toEqual({
         chainId: Chain.Ton,
-        gasPrice: '0',
+        gasPrice: "0",
         lastUpdated: mockTimestamp,
-      })
-    })
-  })
+      });
+    });
+  });
 
-  describe('Tron (tronSpecific)', () => {
-    it('should format Tron gas info with zero gas (energy/bandwidth)', () => {
+  describe("Tron (tronSpecific)", () => {
+    it("should format Tron gas info with zero gas (energy/bandwidth)", () => {
       const chainSpecific = {
-        case: 'tronSpecific' as const,
+        case: "tronSpecific" as const,
         value: {
-          latestBlockId: 'block123',
+          latestBlockId: "block123",
           expiration: BigInt(1700000000),
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Tron)
+      const result = formatGasInfo(chainSpecific, Chain.Tron);
 
       expect(result).toEqual({
         chainId: Chain.Tron,
-        gasPrice: '0',
+        gasPrice: "0",
         lastUpdated: mockTimestamp,
-      })
-    })
-  })
+      });
+    });
+  });
 
-  describe('Ripple (rippleSpecific)', () => {
-    it('should format Ripple gas info with gas field', () => {
+  describe("Ripple (rippleSpecific)", () => {
+    it("should format Ripple gas info with gas field", () => {
       const chainSpecific = {
-        case: 'rippleSpecific' as const,
+        case: "rippleSpecific" as const,
         value: {
           gas: BigInt(12), // 12 drops
           sequence: BigInt(100),
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Ripple)
+      const result = formatGasInfo(chainSpecific, Chain.Ripple);
 
       expect(result).toEqual({
         chainId: Chain.Ripple,
-        gasPrice: '12',
+        gasPrice: "12",
         lastUpdated: mockTimestamp,
-      })
-    })
+      });
+    });
 
-    it('should handle minimum gas (10 drops)', () => {
+    it("should handle minimum gas (10 drops)", () => {
       const chainSpecific = {
-        case: 'rippleSpecific' as const,
+        case: "rippleSpecific" as const,
         value: {
           gas: BigInt(10),
           sequence: BigInt(0),
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Ripple)
+      const result = formatGasInfo(chainSpecific, Chain.Ripple);
 
-      expect(result.gasPrice).toBe('10')
-    })
-  })
+      expect(result.gasPrice).toBe("10");
+    });
+  });
 
-  describe('Cardano (cardano)', () => {
-    it('should format Cardano gas info with zero gas (ADA-based fees)', () => {
+  describe("Cardano (cardano)", () => {
+    it("should format Cardano gas info with zero gas (ADA-based fees)", () => {
       const chainSpecific = {
-        case: 'cardano' as const,
+        case: "cardano" as const,
         value: {
-          fromAddress: 'addr_test123',
+          fromAddress: "addr_test123",
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Cardano)
+      const result = formatGasInfo(chainSpecific, Chain.Cardano);
 
       expect(result).toEqual({
         chainId: Chain.Cardano,
-        gasPrice: '0',
+        gasPrice: "0",
         lastUpdated: mockTimestamp,
-      })
-    })
-  })
+      });
+    });
+  });
 
-  describe('Fallback (unknown chain types)', () => {
-    it('should return zero gas for undefined case', () => {
+  describe("Fallback (unknown chain types)", () => {
+    it("should return zero gas for undefined case", () => {
       // Create a chainSpecific with no case set
       const chainSpecific = {
         case: undefined,
-      } as any
+      } as any;
 
-      const result = formatGasInfo(chainSpecific, 'UnknownChain' as any)
+      const result = formatGasInfo(chainSpecific, "UnknownChain" as any);
 
       expect(result).toEqual({
-        chainId: 'UnknownChain' as any,
-        gasPrice: '0',
+        chainId: "UnknownChain" as any,
+        gasPrice: "0",
         lastUpdated: mockTimestamp,
-      })
-    })
-  })
+      });
+    });
+  });
 
-  describe('Timestamp Validation', () => {
-    it('should include current timestamp in lastUpdated', () => {
+  describe("Timestamp Validation", () => {
+    it("should include current timestamp in lastUpdated", () => {
       const chainSpecific = {
-        case: 'ethereumSpecific' as const,
+        case: "ethereumSpecific" as const,
         value: {
-          maxFeePerGasWei: '50000000000',
-          priorityFee: '2000000000',
+          maxFeePerGasWei: "50000000000",
+          priorityFee: "2000000000",
           nonce: BigInt(0),
-          gasLimit: '21000',
+          gasLimit: "21000",
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum);
 
-      expect(result.lastUpdated).toBe(mockTimestamp)
-      expect(typeof result.lastUpdated).toBe('number')
-    })
-  })
+      expect(result.lastUpdated).toBe(mockTimestamp);
+      expect(typeof result.lastUpdated).toBe("number");
+    });
+  });
 
-  describe('Type Safety', () => {
-    it('should return GasInfo type with all required fields', () => {
+  describe("Type Safety", () => {
+    it("should return GasInfo type with all required fields", () => {
       const chainSpecific = {
-        case: 'utxoSpecific' as const,
+        case: "utxoSpecific" as const,
         value: {
-          byteFee: '10',
+          byteFee: "10",
           sendMaxAmount: false,
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Bitcoin)
+      const result = formatGasInfo(chainSpecific, Chain.Bitcoin);
 
       // Verify required GasInfo fields
-      expect(result).toHaveProperty('chainId')
-      expect(result).toHaveProperty('gasPrice')
-      expect(result).toHaveProperty('lastUpdated')
-      expect(typeof result.chainId).toBe('string')
-      expect(typeof result.gasPrice).toBe('string')
-      expect(typeof result.lastUpdated).toBe('number')
-    })
+      expect(result).toHaveProperty("chainId");
+      expect(result).toHaveProperty("gasPrice");
+      expect(result).toHaveProperty("lastUpdated");
+      expect(typeof result.chainId).toBe("string");
+      expect(typeof result.gasPrice).toBe("string");
+      expect(typeof result.lastUpdated).toBe("number");
+    });
 
-    it('should include optional fields for EVM chains', () => {
+    it("should include optional fields for EVM chains", () => {
       const chainSpecific = {
-        case: 'ethereumSpecific' as const,
+        case: "ethereumSpecific" as const,
         value: {
-          maxFeePerGasWei: '50000000000',
-          priorityFee: '2000000000',
+          maxFeePerGasWei: "50000000000",
+          priorityFee: "2000000000",
           nonce: BigInt(0),
-          gasLimit: '21000',
+          gasLimit: "21000",
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum);
 
-      expect(result).toHaveProperty('gasPriceGwei')
-      expect(result).toHaveProperty('maxFeePerGas')
-      expect(result).toHaveProperty('priorityFee')
-    })
+      expect(result).toHaveProperty("gasPriceGwei");
+      expect(result).toHaveProperty("maxFeePerGas");
+      expect(result).toHaveProperty("priorityFee");
+    });
 
-    it('should include priorityFee for Solana', () => {
+    it("should include priorityFee for Solana", () => {
       const chainSpecific = {
-        case: 'solanaSpecific' as const,
+        case: "solanaSpecific" as const,
         value: {
-          recentBlockHash: 'hash123',
-          priorityFee: '5000',
+          recentBlockHash: "hash123",
+          priorityFee: "5000",
         },
-      }
+      };
 
-      const result = formatGasInfo(chainSpecific, Chain.Solana)
+      const result = formatGasInfo(chainSpecific, Chain.Solana);
 
-      expect(result).toHaveProperty('priorityFee')
-      expect(result.priorityFee).toBe('5000')
-    })
-  })
-})
+      expect(result).toHaveProperty("priorityFee");
+      expect(result.priorityFee).toBe("5000");
+    });
+  });
+});

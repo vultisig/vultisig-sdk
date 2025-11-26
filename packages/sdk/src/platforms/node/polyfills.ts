@@ -2,7 +2,7 @@
  * Node.js polyfills implementation
  * Node.js has native implementations - minimal polyfills needed
  */
-import type { PlatformPolyfills } from '../types'
+import type { PlatformPolyfills } from "../types";
 
 export class NodePolyfills implements PlatformPolyfills {
   async initialize(): Promise<void> {

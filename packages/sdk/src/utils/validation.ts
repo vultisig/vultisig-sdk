@@ -1,11 +1,11 @@
-import { validateEmail } from '@lib/utils/validation/validateEmail'
+import { validateEmail } from "@lib/utils/validation/validateEmail";
 
-import { ValidationResult } from '../types'
+import { ValidationResult } from "../types";
 
 const passwordLenghtConfig = {
   min: 1,
   max: 128,
-} as const
+} as const;
 
 /**
  * Validation utilities for SDK input validation
@@ -17,11 +17,11 @@ export class ValidationHelpers {
    * @returns ValidationResult with validity and error message if invalid
    */
   static validateEmail(email: string): ValidationResult {
-    const error = validateEmail(email)
+    const error = validateEmail(email);
     return {
       valid: !error,
       error,
-    }
+    };
   }
 
   /**
@@ -33,25 +33,25 @@ export class ValidationHelpers {
     if (!password) {
       return {
         valid: false,
-        error: 'Password is required',
-      }
+        error: "Password is required",
+      };
     }
 
     if (password.length < passwordLenghtConfig.min) {
       return {
         valid: false,
-        error: `Password must be at least ${passwordLenghtConfig.min} character${passwordLenghtConfig.min === 1 ? '' : 's'} long`,
-      }
+        error: `Password must be at least ${passwordLenghtConfig.min} character${passwordLenghtConfig.min === 1 ? "" : "s"} long`,
+      };
     }
 
     if (password.length > passwordLenghtConfig.max) {
       return {
         valid: false,
         error: `Password must be no more than ${passwordLenghtConfig.max} characters long`,
-      }
+      };
     }
 
-    return { valid: true }
+    return { valid: true };
   }
 
   /**
@@ -63,33 +63,33 @@ export class ValidationHelpers {
     if (!name) {
       return {
         valid: false,
-        error: 'Vault name is required',
-      }
+        error: "Vault name is required",
+      };
     }
 
-    if (typeof name !== 'string') {
+    if (typeof name !== "string") {
       return {
         valid: false,
-        error: 'Vault name must be a string',
-      }
+        error: "Vault name must be a string",
+      };
     }
 
-    const trimmedName = name.trim()
+    const trimmedName = name.trim();
 
     if (trimmedName.length < 2) {
       return {
         valid: false,
-        error: 'Vault name must be at least 2 characters long',
-      }
+        error: "Vault name must be at least 2 characters long",
+      };
     }
 
     if (trimmedName.length > 50) {
       return {
         valid: false,
-        error: 'Vault name must be no more than 50 characters long',
-      }
+        error: "Vault name must be no more than 50 characters long",
+      };
     }
 
-    return { valid: true }
+    return { valid: true };
   }
 }

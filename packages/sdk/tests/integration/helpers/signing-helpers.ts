@@ -5,10 +5,10 @@
  * and signature validation.
  */
 
-import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { expect } from 'vitest'
+import type { KeysignPayload } from "@core/mpc/types/vultisig/keysign/v1/keysign_message_pb";
+import { expect } from "vitest";
 
-import type { Chain, Signature, SigningPayload } from '@/types'
+import type { Chain, Signature, SigningPayload } from "@/types";
 
 /**
  * Create a SigningPayload from KeysignPayload and message hashes
@@ -30,13 +30,13 @@ import type { Chain, Signature, SigningPayload } from '@/types'
 export function createSigningPayload(
   keysignPayload: KeysignPayload,
   messageHashes: string[],
-  chain: Chain
+  chain: Chain,
 ): SigningPayload {
   return {
     transaction: keysignPayload,
     chain,
     messageHashes,
-  }
+  };
 }
 
 /**
@@ -58,28 +58,28 @@ export function createSigningPayload(
 export function validateSignatureFormat(
   signature: Signature,
   chain: Chain,
-  expectFormat: 'ECDSA' | 'EdDSA' | 'Ed25519'
+  expectFormat: "ECDSA" | "EdDSA" | "Ed25519",
 ): void {
   // Basic signature validation
-  expect(signature).toBeDefined()
-  expect(signature.signature).toBeDefined()
-  expect(typeof signature.signature).toBe('string')
-  expect(signature.signature.length).toBeGreaterThan(0)
+  expect(signature).toBeDefined();
+  expect(signature.signature).toBeDefined();
+  expect(typeof signature.signature).toBe("string");
+  expect(signature.signature.length).toBeGreaterThan(0);
 
   // Validate hex encoding
-  expect(signature.signature).toMatch(/^[0-9a-f]+$/i)
+  expect(signature.signature).toMatch(/^[0-9a-f]+$/i);
 
   // Validate format
-  expect(signature.format).toBe(expectFormat)
+  expect(signature.format).toBe(expectFormat);
 
   // ECDSA signatures should have recovery ID
-  if (expectFormat === 'ECDSA') {
-    expect(signature.recovery).toBeDefined()
-    expect(typeof signature.recovery).toBe('number')
+  if (expectFormat === "ECDSA") {
+    expect(signature.recovery).toBeDefined();
+    expect(typeof signature.recovery).toBe("number");
   }
 
   // EdDSA signatures typically don't have recovery ID
-  if (expectFormat === 'EdDSA' || expectFormat === 'Ed25519') {
+  if (expectFormat === "EdDSA" || expectFormat === "Ed25519") {
     // Recovery ID is optional for EdDSA
   }
 }
@@ -99,7 +99,7 @@ export const TEST_AMOUNTS: Partial<Record<Chain, bigint>> = {
   Cosmos: 167000n, // ~0.167 ATOM (~$1 at $6/ATOM)
   Polkadot: 147000000n, // ~0.0147 DOT (~$1 at $68/DOT)
   Sui: 312500000n, // ~0.3125 SUI (~$1 at $3.20/SUI)
-}
+};
 
 /**
  * Standard test receiver addresses for each chain
@@ -109,26 +109,26 @@ export const TEST_AMOUNTS: Partial<Record<Chain, bigint>> = {
  */
 export const TEST_RECEIVERS: Partial<Record<Chain, string>> = {
   // Bitcoin: Example address (DO NOT send real funds)
-  Bitcoin: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+  Bitcoin: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
 
   // Litecoin: Example address (DO NOT send real funds)
-  Litecoin: 'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
+  Litecoin: "ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9",
 
   // Ethereum: Example address (DO NOT send real funds)
-  Ethereum: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
+  Ethereum: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8",
 
   // Solana: Example address (DO NOT send real funds)
-  Solana: 'DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK',
+  Solana: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK",
 
   // THORChain: Example address (DO NOT send real funds)
-  THORChain: 'thor1g98cy3n9mmjrpn0sxmn63lztelera37n8n67c0',
+  THORChain: "thor1g98cy3n9mmjrpn0sxmn63lztelera37n8n67c0",
 
   // Cosmos: Example address (DO NOT send real funds)
-  Cosmos: 'cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh',
+  Cosmos: "cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh",
 
   // Polkadot: Example address (DO NOT send real funds)
-  Polkadot: '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5',
+  Polkadot: "15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
 
   // Sui: Example address (DO NOT send real funds)
-  Sui: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8',
-}
+  Sui: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8",
+};

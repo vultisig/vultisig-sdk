@@ -1,6 +1,6 @@
-import { GlobalStorage } from '../storage/GlobalStorage'
-import type { Storage } from '../storage/types'
-import { type CacheConfig, type CachedItem, CacheScope } from './cache-types'
+import { GlobalStorage } from "../storage/GlobalStorage";
+import type { Storage } from "../storage/types";
+import { type CacheConfig, type CachedItem, CacheScope } from "./cache-types";
 
 /**
  * Enhanced CacheService with storage integration and scope-based caching.
@@ -27,16 +27,16 @@ import { type CacheConfig, type CachedItem, CacheScope } from './cache-types'
  * ```
  */
 export class CacheService {
-  private cache = new Map<string, CachedItem<any>>()
-  private pendingComputations = new Map<string, Promise<any>>()
+  private cache = new Map<string, CachedItem<any>>();
+  private pendingComputations = new Map<string, Promise<any>>();
 
   // Storage integration for persistent cache
-  private storage: Storage
-  private vaultId?: string
-  private config: Required<CacheConfig>
+  private storage: Storage;
+  private vaultId?: string;
+  private config: Required<CacheConfig>;
 
   // Persistent scopes (stored to disk, infinite TTL)
-  private static readonly PERSISTENT_SCOPES = new Set([CacheScope.ADDRESS])
+  private static readonly PERSISTENT_SCOPES = new Set([CacheScope.ADDRESS]);
 
   /**
    * Create a new CacheService instance
@@ -44,15 +44,15 @@ export class CacheService {
    * @param config Cache configuration (TTLs, size limits)
    */
   constructor(vaultId?: string, config?: CacheConfig) {
-    this.storage = GlobalStorage.getInstance()
-    this.vaultId = vaultId
+    this.storage = GlobalStorage.getInstance();
+    this.vaultId = vaultId;
     this.config = {
       balanceTTL: config?.balanceTTL ?? 5 * 60 * 1000,
       priceTTL: config?.priceTTL ?? 5 * 60 * 1000,
       gasTTL: config?.gasTTL ?? 2 * 60 * 1000,
       portfolioTTL: config?.portfolioTTL ?? 1 * 60 * 1000,
       maxMemoryCacheSize: config?.maxMemoryCacheSize ?? 1000,
-    }
+    };
   }
 
   /**
@@ -60,11 +60,11 @@ export class CacheService {
    * Must be called after construction if using storage
    */
   async init(): Promise<void> {
-    if (!this.storage || !this.vaultId) return
+    if (!this.storage || !this.vaultId) return;
 
     // Load all persistent scopes from storage
     for (const scope of CacheService.PERSISTENT_SCOPES) {
-      await this.loadPersistentScope(scope)
+      await this.loadPersistentScope(scope);
     }
   }
 
@@ -78,9 +78,9 @@ export class CacheService {
    * @param scope Cache scope
    */
   getScoped<T>(key: string, scope: CacheScope): T | null {
-    const ttl = this.getTTLForScope(scope)
-    const cacheKey = this.buildKey(key, scope)
-    return this.get<T>(cacheKey, ttl)
+    const ttl = this.getTTLForScope(scope);
+    const cacheKey = this.buildKey(key, scope);
+    return this.get<T>(cacheKey, ttl);
   }
 
   /**
@@ -90,18 +90,22 @@ export class CacheService {
    * @param value Value to cache
    */
   async setScoped<T>(key: string, scope: CacheScope, value: T): Promise<void> {
-    const cacheKey = this.buildKey(key, scope)
+    const cacheKey = this.buildKey(key, scope);
 
     // Set in memory
-    this.set(cacheKey, value)
+    this.set(cacheKey, value);
 
     // If persistent scope, also write to storage
-    if (CacheService.PERSISTENT_SCOPES.has(scope) && this.storage && this.vaultId) {
-      const storageKey = `cache:${this.vaultId}:${cacheKey}`
-      await this.storage.set(storageKey, value)
+    if (
+      CacheService.PERSISTENT_SCOPES.has(scope) &&
+      this.storage &&
+      this.vaultId
+    ) {
+      const storageKey = `cache:${this.vaultId}:${cacheKey}`;
+      await this.storage.set(storageKey, value);
     }
 
-    this.enforceMaxSize()
+    this.enforceMaxSize();
   }
 
   /**
@@ -111,31 +115,35 @@ export class CacheService {
    * @param scope Cache scope
    * @param compute Function to compute value if not cached
    */
-  async getOrComputeScoped<T>(key: string, scope: CacheScope, compute: () => Promise<T>): Promise<T> {
-    const ttl = this.getTTLForScope(scope)
-    const cacheKey = this.buildKey(key, scope)
+  async getOrComputeScoped<T>(
+    key: string,
+    scope: CacheScope,
+    compute: () => Promise<T>,
+  ): Promise<T> {
+    const ttl = this.getTTLForScope(scope);
+    const cacheKey = this.buildKey(key, scope);
 
     // Check cache first
-    const cached = this.get<T>(cacheKey, ttl)
-    if (cached !== null) return cached
+    const cached = this.get<T>(cacheKey, ttl);
+    if (cached !== null) return cached;
 
     // Check for in-flight computation
-    const pending = this.pendingComputations.get(cacheKey)
-    if (pending) return pending as Promise<T>
+    const pending = this.pendingComputations.get(cacheKey);
+    if (pending) return pending as Promise<T>;
 
     // Start new computation
     const promise = (async () => {
       try {
-        const value = await compute()
-        await this.setScoped(key, scope, value)
-        return value
+        const value = await compute();
+        await this.setScoped(key, scope, value);
+        return value;
       } finally {
-        this.pendingComputations.delete(cacheKey)
+        this.pendingComputations.delete(cacheKey);
       }
-    })()
+    })();
 
-    this.pendingComputations.set(cacheKey, promise)
-    return promise
+    this.pendingComputations.set(cacheKey, promise);
+    return promise;
   }
 
   /**
@@ -144,13 +152,17 @@ export class CacheService {
    * @param scope Cache scope
    */
   async invalidateScoped(key: string, scope: CacheScope): Promise<void> {
-    const cacheKey = this.buildKey(key, scope)
-    this.cache.delete(cacheKey)
+    const cacheKey = this.buildKey(key, scope);
+    this.cache.delete(cacheKey);
 
     // If persistent, also remove from storage
-    if (CacheService.PERSISTENT_SCOPES.has(scope) && this.storage && this.vaultId) {
-      const storageKey = `cache:${this.vaultId}:${cacheKey}`
-      await this.storage.remove(storageKey)
+    if (
+      CacheService.PERSISTENT_SCOPES.has(scope) &&
+      this.storage &&
+      this.vaultId
+    ) {
+      const storageKey = `cache:${this.vaultId}:${cacheKey}`;
+      await this.storage.remove(storageKey);
     }
   }
 
@@ -160,20 +172,27 @@ export class CacheService {
    * @param prefix Key prefix (e.g., "balance:ethereum" or "price:")
    */
   async invalidateByPrefix(prefix: string): Promise<void> {
-    const keys = Array.from(this.cache.keys()).filter(k => k.startsWith(prefix))
+    const keys = Array.from(this.cache.keys()).filter((k) =>
+      k.startsWith(prefix),
+    );
 
     await Promise.all(
-      keys.map(async key => {
-        this.cache.delete(key)
+      keys.map(async (key) => {
+        this.cache.delete(key);
 
         // Check if this key is from a persistent scope
-        const scope = this.parseScopeFromKey(key)
-        if (scope && CacheService.PERSISTENT_SCOPES.has(scope) && this.storage && this.vaultId) {
-          const storageKey = `cache:${this.vaultId}:${key}`
-          await this.storage.remove(storageKey)
+        const scope = this.parseScopeFromKey(key);
+        if (
+          scope &&
+          CacheService.PERSISTENT_SCOPES.has(scope) &&
+          this.storage &&
+          this.vaultId
+        ) {
+          const storageKey = `cache:${this.vaultId}:${key}`;
+          await this.storage.remove(storageKey);
         }
-      })
-    )
+      }),
+    );
   }
 
   /**
@@ -181,7 +200,7 @@ export class CacheService {
    * @param scope Cache scope to invalidate
    */
   async invalidateScope(scope: CacheScope): Promise<void> {
-    await this.invalidateByPrefix(`${scope}:`)
+    await this.invalidateByPrefix(`${scope}:`);
   }
 
   // ========================================
@@ -194,17 +213,17 @@ export class CacheService {
    * @param ttl Time-to-live in milliseconds
    */
   get<T>(key: string, ttl: number): T | null {
-    const item = this.cache.get(key)
-    if (!item) return null
+    const item = this.cache.get(key);
+    if (!item) return null;
 
-    const age = Date.now() - item.timestamp
+    const age = Date.now() - item.timestamp;
     if (age > ttl) {
       // Expired
-      this.cache.delete(key)
-      return null
+      this.cache.delete(key);
+      return null;
     }
 
-    return item.value as T
+    return item.value as T;
   }
 
   /**
@@ -216,7 +235,7 @@ export class CacheService {
     this.cache.set(key, {
       value,
       timestamp: Date.now(),
-    })
+    });
   }
 
   /**
@@ -224,14 +243,14 @@ export class CacheService {
    * @param key Cache key
    */
   clear(key: string): void {
-    this.cache.delete(key)
+    this.cache.delete(key);
   }
 
   /**
    * Clear all cache entries
    */
   clearAll(): void {
-    this.cache.clear()
+    this.cache.clear();
   }
 
   /**
@@ -239,10 +258,10 @@ export class CacheService {
    * @param ttl Time-to-live in milliseconds
    */
   clearExpired(ttl: number): void {
-    const now = Date.now()
+    const now = Date.now();
     for (const [key, item] of this.cache.entries()) {
       if (now - item.timestamp > ttl) {
-        this.cache.delete(key)
+        this.cache.delete(key);
       }
     }
   }
@@ -255,31 +274,35 @@ export class CacheService {
    * @param ttl Time-to-live in milliseconds
    * @param compute Function to compute value if not cached
    */
-  async getOrCompute<T>(key: string, ttl: number, compute: () => Promise<T>): Promise<T> {
+  async getOrCompute<T>(
+    key: string,
+    ttl: number,
+    compute: () => Promise<T>,
+  ): Promise<T> {
     // Check cache first
-    const cached = this.get<T>(key, ttl)
-    if (cached !== null) return cached
+    const cached = this.get<T>(key, ttl);
+    if (cached !== null) return cached;
 
     // Check for in-flight computation (FIX: Prevents race condition)
-    const pending = this.pendingComputations.get(key)
+    const pending = this.pendingComputations.get(key);
     if (pending) {
-      return pending as Promise<T>
+      return pending as Promise<T>;
     }
 
     // Start new computation
     const promise = (async () => {
       try {
-        const value = await compute()
-        this.set(key, value)
-        return value
+        const value = await compute();
+        this.set(key, value);
+        return value;
       } finally {
         // Clean up pending computation after completion (success or failure)
-        this.pendingComputations.delete(key)
+        this.pendingComputations.delete(key);
       }
-    })()
+    })();
 
-    this.pendingComputations.set(key, promise)
-    return promise
+    this.pendingComputations.set(key, promise);
+    return promise;
   }
 
   // ========================================
@@ -292,7 +315,7 @@ export class CacheService {
    * @param scope Cache scope
    */
   private buildKey(key: string, scope: CacheScope): string {
-    return `${scope}:${key.toLowerCase()}`
+    return `${scope}:${key.toLowerCase()}`;
   }
 
   /**
@@ -302,17 +325,17 @@ export class CacheService {
   private getTTLForScope(scope: CacheScope): number {
     switch (scope) {
       case CacheScope.ADDRESS:
-        return Number.MAX_SAFE_INTEGER // Infinite (persistent)
+        return Number.MAX_SAFE_INTEGER; // Infinite (persistent)
       case CacheScope.BALANCE:
-        return this.config.balanceTTL
+        return this.config.balanceTTL;
       case CacheScope.PRICE:
-        return this.config.priceTTL
+        return this.config.priceTTL;
       case CacheScope.GAS:
-        return this.config.gasTTL
+        return this.config.gasTTL;
       case CacheScope.PORTFOLIO:
-        return this.config.portfolioTTL
+        return this.config.portfolioTTL;
       default:
-        return 5 * 60 * 1000 // Default 5 minutes
+        return 5 * 60 * 1000; // Default 5 minutes
     }
   }
 
@@ -321,8 +344,10 @@ export class CacheService {
    * @param key Full cache key (e.g., "address:ethereum")
    */
   private parseScopeFromKey(key: string): CacheScope | null {
-    const prefix = key.split(':')[0]
-    return Object.values(CacheScope).includes(prefix as CacheScope) ? (prefix as CacheScope) : null
+    const prefix = key.split(":")[0];
+    return Object.values(CacheScope).includes(prefix as CacheScope)
+      ? (prefix as CacheScope)
+      : null;
   }
 
   /**
@@ -330,7 +355,7 @@ export class CacheService {
    * @param _scope Persistent cache scope to load
    */
   private async loadPersistentScope(_scope: CacheScope): Promise<void> {
-    if (!this.storage || !this.vaultId) return
+    if (!this.storage || !this.vaultId) return;
 
     // For now, we load addresses individually as chains are accessed
     // Future: implement storage.listKeys() for full enumeration
@@ -341,20 +366,20 @@ export class CacheService {
    * Enforce maximum cache size by evicting non-persistent entries
    */
   private enforceMaxSize(): void {
-    const max = this.config.maxMemoryCacheSize
-    if (this.cache.size <= max) return
+    const max = this.config.maxMemoryCacheSize;
+    if (this.cache.size <= max) return;
 
     // Simple FIFO: delete oldest non-persistent entries
-    const entries = Array.from(this.cache.entries())
+    const entries = Array.from(this.cache.entries());
     const nonPersistent = entries.filter(([key]) => {
-      const scope = this.parseScopeFromKey(key)
-      return !scope || !CacheService.PERSISTENT_SCOPES.has(scope)
-    })
+      const scope = this.parseScopeFromKey(key);
+      return !scope || !CacheService.PERSISTENT_SCOPES.has(scope);
+    });
 
-    const toDelete = this.cache.size - max
-    nonPersistent.slice(0, toDelete).forEach(([key]) => this.cache.delete(key))
+    const toDelete = this.cache.size - max;
+    nonPersistent.slice(0, toDelete).forEach(([key]) => this.cache.delete(key));
   }
 }
 
 // Re-export types for convenience
-export { type CacheConfig, CacheScope } from './cache-types'
+export { type CacheConfig, CacheScope } from "./cache-types";

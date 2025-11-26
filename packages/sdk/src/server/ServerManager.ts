@@ -1,30 +1,39 @@
-import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
-import { DKLS } from '@core/mpc/dkls/dkls'
-import { getVaultFromServer } from '@core/mpc/fast/api/getVaultFromServer'
-import { reshareWithServer } from '@core/mpc/fast/api/reshareWithServer'
-import { setupVaultWithServer } from '@core/mpc/fast/api/setupVaultWithServer'
-import { signWithServer } from '@core/mpc/fast/api/signWithServer'
-import { verifyVaultEmailCode } from '@core/mpc/fast/api/verifyVaultEmailCode'
-import { fastVaultServerUrl } from '@core/mpc/fast/config'
-import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
-import { keysign } from '@core/mpc/keysign'
-import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
-import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
-import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
-import { startMpcSession } from '@core/mpc/session/startMpcSession'
-import { generateHexChainCode } from '@core/mpc/utils/generateHexChainCode'
-import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
-import { Vault as CoreVault } from '@core/mpc/vault/Vault'
-import { without } from '@lib/utils/array/without'
-import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
-import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
-import { queryUrl } from '@lib/utils/query/queryUrl'
-import type { WalletCore } from '@trustwallet/wallet-core'
+import { generateLocalPartyId } from "@core/mpc/devices/localPartyId";
+import { DKLS } from "@core/mpc/dkls/dkls";
+import { getVaultFromServer } from "@core/mpc/fast/api/getVaultFromServer";
+import { reshareWithServer } from "@core/mpc/fast/api/reshareWithServer";
+import { setupVaultWithServer } from "@core/mpc/fast/api/setupVaultWithServer";
+import { signWithServer } from "@core/mpc/fast/api/signWithServer";
+import { verifyVaultEmailCode } from "@core/mpc/fast/api/verifyVaultEmailCode";
+import { fastVaultServerUrl } from "@core/mpc/fast/config";
+import {
+  setKeygenComplete,
+  waitForKeygenComplete,
+} from "@core/mpc/keygenComplete";
+import { keysign } from "@core/mpc/keysign";
+import type { KeysignSignature } from "@core/mpc/keysign/KeysignSignature";
+import { Schnorr } from "@core/mpc/schnorr/schnorrKeygen";
+import { joinMpcSession } from "@core/mpc/session/joinMpcSession";
+import { startMpcSession } from "@core/mpc/session/startMpcSession";
+import { generateHexChainCode } from "@core/mpc/utils/generateHexChainCode";
+import { generateHexEncryptionKey } from "@core/mpc/utils/generateHexEncryptionKey";
+import { Vault as CoreVault } from "@core/mpc/vault/Vault";
+import { without } from "@lib/utils/array/without";
+import { withoutDuplicates } from "@lib/utils/array/withoutDuplicates";
+import { getHexEncodedRandomBytes } from "@lib/utils/crypto/getHexEncodedRandomBytes";
+import { queryUrl } from "@lib/utils/query/queryUrl";
+import type { WalletCore } from "@trustwallet/wallet-core";
 
-import { formatSignature } from '../adapters/formatSignature'
-import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
-import { randomUUID } from '../crypto'
-import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
+import { formatSignature } from "../adapters/formatSignature";
+import { getChainSigningInfo } from "../adapters/getChainSigningInfo";
+import { randomUUID } from "../crypto";
+import {
+  KeygenProgressUpdate,
+  ReshareOptions,
+  ServerStatus,
+  Signature,
+  SigningPayload,
+} from "../types";
 
 /**
  * ServerManager coordinates all server communications
@@ -32,15 +41,16 @@ import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningP
  */
 export class ServerManager {
   private config: {
-    fastVault: string
-    messageRelay: string
-  }
+    fastVault: string;
+    messageRelay: string;
+  };
 
   constructor(endpoints?: { fastVault?: string; messageRelay?: string }) {
     this.config = {
-      fastVault: endpoints?.fastVault || 'https://api.vultisig.com/vault',
-      messageRelay: endpoints?.messageRelay || 'https://api.vultisig.com/router',
-    }
+      fastVault: endpoints?.fastVault || "https://api.vultisig.com/vault",
+      messageRelay:
+        endpoints?.messageRelay || "https://api.vultisig.com/router",
+    };
   }
 
   /**
@@ -48,10 +58,10 @@ export class ServerManager {
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
     try {
-      await verifyVaultEmailCode({ vaultId, code })
-      return true
+      await verifyVaultEmailCode({ vaultId, code });
+      return true;
     } catch {
-      return false
+      return false;
     }
   }
 
@@ -60,8 +70,8 @@ export class ServerManager {
    */
   async resendVaultVerification(vaultId: string): Promise<void> {
     await queryUrl(`${fastVaultServerUrl}/resend-verification/${vaultId}`, {
-      responseType: 'none',
-    })
+      responseType: "none",
+    });
   }
 
   /**
@@ -70,12 +80,15 @@ export class ServerManager {
    * NOTE: The core getVaultFromServer currently returns minimal data.
    * This needs to be updated to properly retrieve and decrypt the vault data.
    */
-  async getVaultFromServer(vaultId: string, password: string): Promise<CoreVault> {
-    const result = await getVaultFromServer({ vaultId, password })
+  async getVaultFromServer(
+    vaultId: string,
+    password: string,
+  ): Promise<CoreVault> {
+    const result = await getVaultFromServer({ vaultId, password });
 
     // TODO: Properly convert/decrypt the vault data from server response
     // Currently the core function returns { password } which is incomplete
-    return result as unknown as CoreVault
+    return result as unknown as CoreVault;
   }
 
   /**
@@ -91,36 +104,40 @@ export class ServerManager {
    * @returns Formatted signature
    */
   async coordinateFastSigning(options: {
-    vault: CoreVault
-    messages: string[]
-    password: string
-    payload: SigningPayload
-    walletCore: WalletCore
-    onProgress?: (step: import('../types').SigningStep) => void
+    vault: CoreVault;
+    messages: string[];
+    password: string;
+    payload: SigningPayload;
+    walletCore: WalletCore;
+    onProgress?: (step: import("../types").SigningStep) => void;
   }): Promise<Signature> {
-    const { vault, messages, password, payload, walletCore, onProgress } = options
-    const reportProgress = onProgress || (() => {})
+    const { vault, messages, password, payload, walletCore, onProgress } =
+      options;
+    const reportProgress = onProgress || (() => {});
 
     // Use SDK adapter to extract chain-specific signing information
-    const { signatureAlgorithm, derivePath, chainPath } = getChainSigningInfo(payload, walletCore)
+    const { signatureAlgorithm, derivePath, chainPath } = getChainSigningInfo(
+      payload,
+      walletCore,
+    );
 
     // Generate session parameters
-    const sessionId = randomUUID()
-    const hexEncryptionKey = getHexEncodedRandomBytes(32)
-    const signingLocalPartyId = generateLocalPartyId('extension')
+    const sessionId = randomUUID();
+    const hexEncryptionKey = getHexEncodedRandomBytes(32);
+    const signingLocalPartyId = generateLocalPartyId("extension");
 
-    console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
-    console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
+    console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`);
+    console.log(`📡 Calling FastVault API with session ID: ${sessionId}`);
 
     // Step 1: Coordinating - Call FastVault API
     reportProgress({
-      step: 'coordinating',
+      step: "coordinating",
       progress: 30,
-      message: 'Connecting to VultiServer...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Connecting to VultiServer...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 1,
-    })
+    });
 
     const serverResponse = await signWithServer({
       public_key: vault.publicKeys.ecdsa,
@@ -128,93 +145,97 @@ export class ServerManager {
       session: sessionId,
       hex_encryption_key: hexEncryptionKey,
       derive_path: derivePath,
-      is_ecdsa: signatureAlgorithm === 'ecdsa',
+      is_ecdsa: signatureAlgorithm === "ecdsa",
       vault_password: password,
-    })
-    console.log(`✅ Server acknowledged session: ${serverResponse}`)
+    });
+    console.log(`✅ Server acknowledged session: ${serverResponse}`);
 
     // Step 2: Join relay session
     reportProgress({
-      step: 'coordinating',
+      step: "coordinating",
       progress: 40,
-      message: 'Joining relay session...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Joining relay session...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 1,
-    })
+    });
 
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       localPartyId: signingLocalPartyId,
-    })
+    });
 
     // Step 2.5: Register server as participant
     try {
-      const serverSigner = vault.signers.find((signer: string) => signer.startsWith('Server-'))
+      const serverSigner = vault.signers.find((signer: string) =>
+        signer.startsWith("Server-"),
+      );
       if (serverSigner) {
         await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
           body: [serverSigner],
-          responseType: 'none',
-        })
+          responseType: "none",
+        });
       }
     } catch {
       // non-fatal
     }
 
     // Step 3: Wait for server to join
-    console.log('⏳ Waiting for server to join session...')
+    console.log("⏳ Waiting for server to join session...");
     reportProgress({
-      step: 'coordinating',
+      step: "coordinating",
       progress: 50,
-      message: 'Waiting for all participants...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Waiting for all participants...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 1,
-    })
+    });
 
-    const devices = await this.waitForPeers(sessionId, signingLocalPartyId)
-    const peers = devices.filter(device => device !== signingLocalPartyId)
-    console.log(`✅ All participants ready: [${devices.join(', ')}]`)
+    const devices = await this.waitForPeers(sessionId, signingLocalPartyId);
+    const peers = devices.filter((device) => device !== signingLocalPartyId);
+    console.log(`✅ All participants ready: [${devices.join(", ")}]`);
 
     reportProgress({
-      step: 'coordinating',
+      step: "coordinating",
       progress: 60,
-      message: 'All participants ready, starting MPC session...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "All participants ready, starting MPC session...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 2,
-    })
+    });
 
     // Step 4: Start MPC session
-    console.log('📡 Starting MPC session with devices list...')
+    console.log("📡 Starting MPC session with devices list...");
     await startMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
-    })
-    console.log('✅ MPC session started')
+    });
+    console.log("✅ MPC session started");
 
     // Step 5: Signing - Perform MPC keysign
-    console.log('🔐 Starting MPC keysign process...')
+    console.log("🔐 Starting MPC keysign process...");
     reportProgress({
-      step: 'signing',
+      step: "signing",
       progress: 70,
-      message: 'Performing cryptographic signing...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Performing cryptographic signing...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 2,
-    })
+    });
 
-    const keyShare = vault.keyShares[signatureAlgorithm]
+    const keyShare = vault.keyShares[signatureAlgorithm];
     if (!keyShare) {
-      throw new Error(`No key share found for algorithm: ${signatureAlgorithm}`)
+      throw new Error(
+        `No key share found for algorithm: ${signatureAlgorithm}`,
+      );
     }
 
     // Sign all messages (UTXO can have multiple, EVM typically has one)
-    const signatureResults: Record<string, KeysignSignature> = {}
+    const signatureResults: Record<string, KeysignSignature> = {};
     for (const msg of messages) {
-      console.log(`🔏 Signing message: ${msg}`)
+      console.log(`🔏 Signing message: ${msg}`);
       const sig = await keysign({
         keyShare,
         signatureAlgorithm,
@@ -226,34 +247,38 @@ export class ServerManager {
         sessionId,
         hexEncryptionKey,
         isInitiatingDevice: true,
-      })
-      console.log(`✅ Signature obtained for message`)
-      signatureResults[msg] = sig
+      });
+      console.log(`✅ Signature obtained for message`);
+      signatureResults[msg] = sig;
     }
 
     // Step 6: Complete - Format signature results
-    console.log(`🔄 Formatting signature results...`)
+    console.log(`🔄 Formatting signature results...`);
     reportProgress({
-      step: 'complete',
+      step: "complete",
       progress: 90,
-      message: 'Formatting signature...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Formatting signature...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 2,
-    })
+    });
 
-    const signature = formatSignature(signatureResults, messages, signatureAlgorithm)
+    const signature = formatSignature(
+      signatureResults,
+      messages,
+      signatureAlgorithm,
+    );
 
     reportProgress({
-      step: 'complete',
+      step: "complete",
       progress: 100,
-      message: 'Signature complete',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Signature complete",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 2,
-    })
+    });
 
-    return signature
+    return signature;
   }
 
   /**
@@ -261,7 +286,7 @@ export class ServerManager {
    */
   async reshareVault(
     vault: CoreVault,
-    reshareOptions: ReshareOptions & { password: string; email?: string }
+    reshareOptions: ReshareOptions & { password: string; email?: string },
   ): Promise<CoreVault> {
     await reshareWithServer({
       name: vault.name,
@@ -271,43 +296,43 @@ export class ServerManager {
       hex_chain_code: vault.hexChainCode,
       local_party_id: vault.localPartyId,
       old_parties: vault.signers,
-      old_reshare_prefix: vault.resharePrefix || '',
+      old_reshare_prefix: vault.resharePrefix || "",
       encryption_password: reshareOptions.password,
       email: reshareOptions.email,
       reshare_type: 1,
       lib_type: 1,
-    })
+    });
 
-    return vault
+    return vault;
   }
 
   /**
    * Create a Fast Vault
    */
   async createFastVault(options: {
-    name: string
-    email: string
-    password: string
-    onLog?: (msg: string) => void
-    onProgress?: (u: KeygenProgressUpdate) => void
+    name: string;
+    email: string;
+    password: string;
+    onLog?: (msg: string) => void;
+    onProgress?: (u: KeygenProgressUpdate) => void;
   }): Promise<{
-    vault: CoreVault
-    vaultId: string
-    verificationRequired: boolean
+    vault: CoreVault;
+    vaultId: string;
+    verificationRequired: boolean;
   }> {
     // Generate session parameters using core MPC utilities
-    const sessionId = randomUUID()
-    const hexEncryptionKey = generateHexEncryptionKey()
-    const hexChainCode = generateHexChainCode()
-    const localPartyId = generateLocalPartyId('extension')
+    const sessionId = randomUUID();
+    const hexEncryptionKey = generateHexEncryptionKey();
+    const hexChainCode = generateHexChainCode();
+    const localPartyId = generateLocalPartyId("extension");
 
-    const log = options.onLog || (() => {})
-    const progress = options.onProgress || (() => {})
+    const log = options.onLog || (() => {});
+    const progress = options.onProgress || (() => {});
 
-    log('Creating vault on FastVault server...')
+    log("Creating vault on FastVault server...");
 
     // The server party ID should be consistent throughout the process
-    const serverPartyId = generateLocalPartyId('server')
+    const serverPartyId = generateLocalPartyId("server");
 
     await setupVaultWithServer({
       name: options.name,
@@ -318,28 +343,28 @@ export class ServerManager {
       encryption_password: options.password,
       email: options.email,
       lib_type: 1,
-    })
+    });
 
-    log('Joining relay session...')
+    log("Joining relay session...");
 
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       localPartyId,
-    })
+    });
 
-    log('Waiting for server and starting MPC session...')
+    log("Waiting for server and starting MPC session...");
 
-    const devices = await this.waitForPeers(sessionId, localPartyId)
+    const devices = await this.waitForPeers(sessionId, localPartyId);
 
     await startMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
-    })
+    });
 
     // Real MPC keygen - ECDSA first
-    progress({ phase: 'ecdsa', message: 'Generating ECDSA keys...' })
+    progress({ phase: "ecdsa", message: "Generating ECDSA keys..." });
 
     // Create DKLS instance for ECDSA keygen
     const dkls = new DKLS(
@@ -350,17 +375,17 @@ export class ServerManager {
       localPartyId, // This should be the browser/client party ID
       devices, // keygenCommittee (includes both browser and server)
       [], // oldKeygenCommittee (empty for new vault)
-      hexEncryptionKey
-    )
+      hexEncryptionKey,
+    );
 
     // Run ECDSA keygen
-    const ecdsaResult = await dkls.startKeygenWithRetry()
-    log('ECDSA keygen completed successfully')
+    const ecdsaResult = await dkls.startKeygenWithRetry();
+    log("ECDSA keygen completed successfully");
 
     // EdDSA keygen using the same setup message
-    progress({ phase: 'eddsa', message: 'Generating EdDSA keys...' })
+    progress({ phase: "eddsa", message: "Generating EdDSA keys..." });
 
-    const setupMessage = dkls.getSetupMessage()
+    const setupMessage = dkls.getSetupMessage();
     const schnorr = new Schnorr(
       { create: true }, // KeygenOperation
       true, // isInitiateDevice
@@ -370,27 +395,27 @@ export class ServerManager {
       devices, // keygenCommittee
       [], // oldKeygenCommittee
       hexEncryptionKey,
-      setupMessage // Reuse setup message from DKLS
-    )
+      setupMessage, // Reuse setup message from DKLS
+    );
 
     // Run EdDSA keygen
-    const eddsaResult = await schnorr.startKeygenWithRetry()
-    log('EdDSA keygen completed successfully')
+    const eddsaResult = await schnorr.startKeygenWithRetry();
+    log("EdDSA keygen completed successfully");
 
     // Signal keygen completion to all participants
     await setKeygenComplete({
       serverURL: this.config.messageRelay,
       sessionId,
       localPartyId,
-    })
+    });
 
     // Wait for all participants to complete
-    const peers = devices.filter(d => d !== localPartyId)
+    const peers = devices.filter((d) => d !== localPartyId);
     await waitForKeygenComplete({
       serverURL: this.config.messageRelay,
       sessionId,
       peers,
-    })
+    });
 
     // Create real vault from keygen results
     const vault: CoreVault = {
@@ -406,19 +431,19 @@ export class ServerManager {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      libType: 'DKLS',
+      libType: "DKLS",
       isBackedUp: false,
       order: 0,
       createdAt: Date.now(),
-    }
+    };
 
-    progress({ phase: 'complete', message: 'Vault created successfully' })
+    progress({ phase: "complete", message: "Vault created successfully" });
 
     return {
       vault,
       vaultId: vault.publicKeys.ecdsa,
       verificationRequired: true,
-    }
+    };
   }
 
   /**
@@ -426,61 +451,72 @@ export class ServerManager {
    */
   async checkServerStatus(): Promise<ServerStatus> {
     const [fastVaultStatus, relayStatus] = await Promise.allSettled([
-      this.pingServer(this.config.fastVault, '/'),
-      this.pingServer(this.config.messageRelay, '/ping'),
-    ])
+      this.pingServer(this.config.fastVault, "/"),
+      this.pingServer(this.config.messageRelay, "/ping"),
+    ]);
 
     return {
       fastVault: {
-        online: fastVaultStatus.status === 'fulfilled',
-        latency: fastVaultStatus.status === 'fulfilled' ? fastVaultStatus.value : undefined,
+        online: fastVaultStatus.status === "fulfilled",
+        latency:
+          fastVaultStatus.status === "fulfilled"
+            ? fastVaultStatus.value
+            : undefined,
       },
       messageRelay: {
-        online: relayStatus.status === 'fulfilled',
-        latency: relayStatus.status === 'fulfilled' ? relayStatus.value : undefined,
+        online: relayStatus.status === "fulfilled",
+        latency:
+          relayStatus.status === "fulfilled" ? relayStatus.value : undefined,
       },
       timestamp: Date.now(),
-    }
+    };
   }
 
   // ===== Private Helper Methods =====
 
-  private async waitForPeers(sessionId: string, localPartyId: string): Promise<string[]> {
-    const maxWaitTime = 30000
-    const checkInterval = 2000
-    const startTime = Date.now()
+  private async waitForPeers(
+    sessionId: string,
+    localPartyId: string,
+  ): Promise<string[]> {
+    const maxWaitTime = 30000;
+    const checkInterval = 2000;
+    const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitTime) {
       try {
-        const url = `${this.config.messageRelay}/${sessionId}`
-        const allPeers = await queryUrl<string[]>(url)
-        const uniquePeers = withoutDuplicates(allPeers)
-        const otherPeers = without(uniquePeers, localPartyId)
+        const url = `${this.config.messageRelay}/${sessionId}`;
+        const allPeers = await queryUrl<string[]>(url);
+        const uniquePeers = withoutDuplicates(allPeers);
+        const otherPeers = without(uniquePeers, localPartyId);
 
         if (otherPeers.length > 0) {
-          return [localPartyId, ...otherPeers]
+          return [localPartyId, ...otherPeers];
         }
 
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
       } catch {
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
       }
     }
 
-    throw new Error('Timeout waiting for peers to join session')
+    throw new Error("Timeout waiting for peers to join session");
   }
 
-  private async pingServer(baseUrl: string, endpoint = '/ping', timeout = 5000): Promise<number> {
-    const start = Date.now()
+  private async pingServer(
+    baseUrl: string,
+    endpoint = "/ping",
+    timeout = 5000,
+  ): Promise<number> {
+    const start = Date.now();
 
     try {
       await fetch(`${baseUrl}${endpoint}`, {
-        method: 'GET',
+        method: "GET",
         signal: AbortSignal.timeout(timeout),
-      })
-      return Date.now() - start
+      });
+      return Date.now() - start;
     } catch (error) {
-      throw new Error(`Server ping failed: ${error}`)
+      throw new Error(`Server ping failed: ${error}`);
     }
   }
 }

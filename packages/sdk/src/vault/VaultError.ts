@@ -4,47 +4,47 @@
  */
 
 export enum VaultErrorCode {
-  InvalidConfig = 'INVALID_CONFIG',
-  SigningFailed = 'SIGNING_FAILED',
-  NotImplemented = 'NOT_IMPLEMENTED',
-  AddressDerivationFailed = 'ADDRESS_DERIVATION_FAILED',
-  WalletCoreNotInitialized = 'WALLET_CORE_NOT_INITIALIZED',
-  UnsupportedChain = 'UNSUPPORTED_CHAIN',
-  ChainNotSupported = 'CHAIN_NOT_SUPPORTED',
-  NetworkError = 'NETWORK_ERROR',
-  InvalidVault = 'INVALID_VAULT',
-  InvalidPublicKey = 'INVALID_PUBLIC_KEY',
-  InvalidChainCode = 'INVALID_CHAIN_CODE',
-  BalanceFetchFailed = 'BALANCE_FETCH_FAILED',
-  UnsupportedToken = 'UNSUPPORTED_TOKEN',
-  GasEstimationFailed = 'GAS_ESTIMATION_FAILED',
-  BroadcastFailed = 'BROADCAST_FAILED',
-  CreateFailed = 'CREATE_FAILED',
+  InvalidConfig = "INVALID_CONFIG",
+  SigningFailed = "SIGNING_FAILED",
+  NotImplemented = "NOT_IMPLEMENTED",
+  AddressDerivationFailed = "ADDRESS_DERIVATION_FAILED",
+  WalletCoreNotInitialized = "WALLET_CORE_NOT_INITIALIZED",
+  UnsupportedChain = "UNSUPPORTED_CHAIN",
+  ChainNotSupported = "CHAIN_NOT_SUPPORTED",
+  NetworkError = "NETWORK_ERROR",
+  InvalidVault = "INVALID_VAULT",
+  InvalidPublicKey = "INVALID_PUBLIC_KEY",
+  InvalidChainCode = "INVALID_CHAIN_CODE",
+  BalanceFetchFailed = "BALANCE_FETCH_FAILED",
+  UnsupportedToken = "UNSUPPORTED_TOKEN",
+  GasEstimationFailed = "GAS_ESTIMATION_FAILED",
+  BroadcastFailed = "BROADCAST_FAILED",
+  CreateFailed = "CREATE_FAILED",
 }
 
 /**
  * Vault import error codes
  */
 export enum VaultImportErrorCode {
-  INVALID_FILE_FORMAT = 'INVALID_FILE_FORMAT',
-  PASSWORD_REQUIRED = 'PASSWORD_REQUIRED',
-  INVALID_PASSWORD = 'INVALID_PASSWORD',
-  CORRUPTED_DATA = 'CORRUPTED_DATA',
-  UNSUPPORTED_FORMAT = 'UNSUPPORTED_FORMAT',
+  INVALID_FILE_FORMAT = "INVALID_FILE_FORMAT",
+  PASSWORD_REQUIRED = "PASSWORD_REQUIRED",
+  INVALID_PASSWORD = "INVALID_PASSWORD",
+  CORRUPTED_DATA = "CORRUPTED_DATA",
+  UNSUPPORTED_FORMAT = "UNSUPPORTED_FORMAT",
 }
 
 export class VaultError extends Error {
   constructor(
     public code: VaultErrorCode,
     message: string,
-    public originalError?: Error
+    public originalError?: Error,
   ) {
-    super(message)
-    this.name = 'VaultError'
+    super(message);
+    this.name = "VaultError";
 
     // Maintain proper stack trace for where our error was thrown (only available on V8)
     if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, VaultError)
+      Error.captureStackTrace(this, VaultError);
     }
   }
 
@@ -55,7 +55,7 @@ export class VaultError extends Error {
       message: this.message,
       stack: this.stack,
       originalError: this.originalError?.message,
-    }
+    };
   }
 }
 
@@ -66,10 +66,10 @@ export class VaultImportError extends Error {
   constructor(
     public code: VaultImportErrorCode,
     message: string,
-    public originalError?: Error
+    public originalError?: Error,
   ) {
-    super(message)
-    this.name = 'VaultImportError'
+    super(message);
+    this.name = "VaultImportError";
   }
 
   toJSON() {
@@ -79,6 +79,6 @@ export class VaultImportError extends Error {
       message: this.message,
       stack: this.stack,
       originalError: this.originalError?.message,
-    }
+    };
   }
 }
