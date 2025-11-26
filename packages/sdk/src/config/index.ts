@@ -1,1 +1,1 @@
-export { GlobalConfig, type GlobalConfigOptions } from "./GlobalConfig";
+export { GlobalConfig, type GlobalConfigOptions } from './GlobalConfig'

@@ -3,12 +3,12 @@
  * Configures WASM loading for Node.js environment
  */
 
-import { vi } from "vitest";
+import { vi } from 'vitest'
 
 // Mock @lifi/sdk to avoid @solana/web3.js v2/v1 conflict
 // The SDK uses v2.0 while @lifi/sdk requires v1.x (PublicKey export)
 // Swap functionality is tested via mocked dependencies
-vi.mock("@lifi/sdk", () => ({
+vi.mock('@lifi/sdk', () => ({
   ChainId: {
     ETH: 1,
     POL: 137,
@@ -21,19 +21,19 @@ vi.mock("@lifi/sdk", () => ({
   },
   getQuote: vi.fn(),
   getRoutes: vi.fn(),
-}));
+}))
 
-import { webcrypto } from "crypto";
-import { readFile } from "fs/promises";
-import { fileURLToPath } from "url";
+import { webcrypto } from 'crypto'
+import { readFile } from 'fs/promises'
+import { fileURLToPath } from 'url'
 
 /**
  * Polyfill for Web Crypto API in Node.js
  * The SDK uses crypto.randomUUID() which is available in Node.js via webcrypto
  */
-if (typeof globalThis.crypto === "undefined") {
+if (typeof globalThis.crypto === 'undefined') {
   // @ts-ignore - polyfill crypto
-  globalThis.crypto = webcrypto;
+  globalThis.crypto = webcrypto
 }
 
 /**
@@ -44,92 +44,80 @@ if (typeof globalThis.crypto === "undefined") {
  * IMPORTANT: We save a reference and wrap fetch dynamically so it works even if fetch
  * gets replaced later (e.g., by server mocks)
  */
-const wasmFetchHandler = async (
-  input: RequestInfo | URL,
-  _init?: RequestInit,
-): Promise<Response | null> => {
-  const url =
-    typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.href
-        : input.url;
+const wasmFetchHandler = async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response | null> => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
 
   // Check if this is a WASM file request with file:// protocol
-  if (url.endsWith(".wasm") && url.startsWith("file://")) {
+  if (url.endsWith('.wasm') && url.startsWith('file://')) {
     try {
       // Convert file:// URL to filesystem path
-      const filePath = fileURLToPath(url);
+      const filePath = fileURLToPath(url)
 
       // Read the WASM file from filesystem
-      const buffer = await readFile(filePath);
+      const buffer = await readFile(filePath)
 
       // Convert Node.js Buffer to ArrayBuffer properly
-      const uint8Array = new Uint8Array(buffer);
-      const arrayBuffer = uint8Array.buffer;
+      const uint8Array = new Uint8Array(buffer)
+      const arrayBuffer = uint8Array.buffer
 
       // Create a proper Response object using the Blob constructor
       // This ensures instanceof Response check works properly
-      const blob = new Blob([arrayBuffer], { type: "application/wasm" });
+      const blob = new Blob([arrayBuffer], { type: 'application/wasm' })
       return new Response(blob, {
         status: 200,
-        statusText: "OK",
-        headers: { "Content-Type": "application/wasm" },
-      });
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/wasm' },
+      })
     } catch (error) {
-      console.error(`❌ Failed to load WASM file: ${url}`, error);
-      throw error;
+      console.error(`❌ Failed to load WASM file: ${url}`, error)
+      throw error
     }
   }
 
-  return null;
-};
+  return null
+}
 
 // Store original fetch
-const originalFetch = globalThis.fetch;
+const originalFetch = globalThis.fetch
 
 // Create wrapper that handles WASM and delegates to whatever fetch is currently set
-const wrappedFetch = async function (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-): Promise<Response> {
+const wrappedFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   // Try WASM handler first
-  const wasmResponse = await wasmFetchHandler(input, undefined);
-  if (wasmResponse) return wasmResponse;
+  const wasmResponse = await wasmFetchHandler(input, undefined)
+  if (wasmResponse) return wasmResponse
 
   // Delegate to current globalThis.fetch (which might be a mock)
   // We check globalThis.fetch at call time, not setup time
-  const currentFetch =
-    globalThis.fetch === wrappedFetch ? originalFetch : globalThis.fetch;
-  return currentFetch(input as any, init);
-};
+  const currentFetch = globalThis.fetch === wrappedFetch ? originalFetch : globalThis.fetch
+  return currentFetch(input as any, init)
+}
 
 // Install the wrapper
-globalThis.fetch = wrappedFetch as any;
+globalThis.fetch = wrappedFetch as any
 
-console.log("✅ Integration test WASM polyfill loaded");
-console.log("📦 WASM files will be loaded from filesystem using fs.readFile()");
+console.log('✅ Integration test WASM polyfill loaded')
+console.log('📦 WASM files will be loaded from filesystem using fs.readFile()')
 
 /**
  * Configure GlobalStorage, GlobalCrypto, and WasmManager for integration tests
  * Uses MemoryStorage so tests don't persist data to filesystem
  * Uses Node.js WASM loader for test environment
  */
-import { configureCrypto } from "../../src/crypto";
-import { NodeCrypto } from "../../src/platforms/node/crypto";
-import { NodeWasmLoader } from "../../src/platforms/node/wasm";
-import { GlobalStorage } from "../../src/storage/GlobalStorage";
-import { MemoryStorage } from "../../src/storage/MemoryStorage";
-import { WasmManager } from "../../src/wasm";
+import { configureCrypto } from '../../src/crypto'
+import { NodeCrypto } from '../../src/platforms/node/crypto'
+import { NodeWasmLoader } from '../../src/platforms/node/wasm'
+import { GlobalStorage } from '../../src/storage/GlobalStorage'
+import { MemoryStorage } from '../../src/storage/MemoryStorage'
+import { WasmManager } from '../../src/wasm'
 
-GlobalStorage.configure(new MemoryStorage());
-configureCrypto(new NodeCrypto());
+GlobalStorage.configure(new MemoryStorage())
+configureCrypto(new NodeCrypto())
 
 // Configure WASM to use Node.js loader
-const wasmLoader = new NodeWasmLoader();
+const wasmLoader = new NodeWasmLoader()
 WasmManager.configure({
   wasmPaths: {
     dkls: () => wasmLoader.loadDkls(),
     schnorr: () => wasmLoader.loadSchnorr(),
   },
-});
+})

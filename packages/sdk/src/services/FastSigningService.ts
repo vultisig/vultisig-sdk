@@ -1,8 +1,8 @@
-import { Vault as CoreVault } from "@core/mpc/vault/Vault";
+import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
-import { ServerManager } from "../server/ServerManager";
-import { Signature, SigningMode, SigningPayload, SigningStep } from "../types";
-import { WasmManager } from "../wasm";
+import { ServerManager } from '../server/ServerManager'
+import { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
+import { WasmManager } from '../wasm'
 
 /**
  * Fast signing service for server-assisted signing (2-of-2 MPC with VultiServer)
@@ -29,50 +29,48 @@ export class FastSigningService {
     vault: CoreVault,
     payload: SigningPayload,
     vaultPassword: string,
-    onProgress?: (step: SigningStep) => void,
+    onProgress?: (step: SigningStep) => void
   ): Promise<Signature> {
-    const reportProgress = onProgress || (() => {});
+    const reportProgress = onProgress || (() => {})
 
     // Step 1: Preparing
     reportProgress({
-      step: "preparing",
+      step: 'preparing',
       progress: 0,
-      message: "Preparing transaction for signing...",
-      mode: "fast" as SigningMode,
+      message: 'Preparing transaction for signing...',
+      mode: 'fast' as SigningMode,
       participantCount: 2,
       participantsReady: 0,
-    });
+    })
 
     // Validate vault has server signer
-    this.validateFastVault(vault);
+    this.validateFastVault(vault)
 
     // Validate message hashes are provided
     if (!payload.messageHashes || payload.messageHashes.length === 0) {
       throw new Error(
-        "SigningPayload must include pre-computed messageHashes. " +
-          "Use Vault.prepareSendTx() to generate transaction payloads with message hashes.",
-      );
+        'SigningPayload must include pre-computed messageHashes. ' +
+          'Use Vault.prepareSendTx() to generate transaction payloads with message hashes.'
+      )
     }
 
     // Get WalletCore instance
-    const walletCore = await WasmManager.getWalletCore();
+    const walletCore = await WasmManager.getWalletCore()
 
-    console.log(
-      `📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`,
-    );
+    console.log(`📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`)
 
     reportProgress({
-      step: "preparing",
+      step: 'preparing',
       progress: 20,
-      message: "Transaction prepared, connecting to signing service...",
-      mode: "fast" as SigningMode,
+      message: 'Transaction prepared, connecting to signing service...',
+      mode: 'fast' as SigningMode,
       participantCount: 2,
       participantsReady: 1,
-    });
+    })
 
     // Step 2: Coordinate fast signing with server
     // ServerManager handles: API calls, relay session, MPC coordination, keysign
-    console.log(`🚀 Starting fast signing coordination with VultiServer...`);
+    console.log(`🚀 Starting fast signing coordination with VultiServer...`)
     const signature = await this.serverManager.coordinateFastSigning({
       vault,
       messages: payload.messageHashes,
@@ -80,10 +78,10 @@ export class FastSigningService {
       payload,
       walletCore,
       onProgress: reportProgress,
-    });
+    })
 
-    console.log(`✅ Fast signing completed successfully`);
-    return signature;
+    console.log(`✅ Fast signing completed successfully`)
+    return signature
   }
 
   /**
@@ -92,15 +90,13 @@ export class FastSigningService {
    * @throws Error if vault doesn't have server signer
    */
   private validateFastVault(vault: CoreVault): void {
-    const hasFastVaultServer = vault.signers.some((signer: string) =>
-      signer.startsWith("Server-"),
-    );
+    const hasFastVaultServer = vault.signers.some((signer: string) => signer.startsWith('Server-'))
 
     if (!hasFastVaultServer) {
       throw new Error(
-        "Vault does not have VultiServer - fast signing not available. " +
-          "Only fast vaults (2-of-2 with server) support this operation.",
-      );
+        'Vault does not have VultiServer - fast signing not available. ' +
+          'Only fast vaults (2-of-2 with server) support this operation.'
+      )
     }
   }
 }

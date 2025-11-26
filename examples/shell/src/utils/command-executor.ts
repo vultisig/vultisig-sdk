@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import chalk from 'chalk'
 
 /**
  * Centralized command execution wrapper with consistent error handling.
@@ -12,22 +12,19 @@ export class CommandExecutor {
    * @param errorContext - Optional context string to prepend to error messages
    * @returns The result of the command function, or null if an error occurred
    */
-  async execute<T>(
-    commandFn: () => Promise<T>,
-    errorContext?: string,
-  ): Promise<T | null> {
+  async execute<T>(commandFn: () => Promise<T>, errorContext?: string): Promise<T | null> {
     try {
-      return await commandFn();
+      return await commandFn()
     } catch (error: any) {
-      const context = errorContext ? `${errorContext}: ` : "";
-      console.error(chalk.red(`✗ ${context}${error.message}`));
+      const context = errorContext ? `${errorContext}: ` : ''
+      console.error(chalk.red(`✗ ${context}${error.message}`))
 
       // Log stack trace in verbose mode if needed
       if (process.env.DEBUG) {
-        console.error(chalk.gray(error.stack));
+        console.error(chalk.gray(error.stack))
       }
 
-      return null;
+      return null
     }
   }
 }

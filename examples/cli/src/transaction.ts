@@ -1,18 +1,18 @@
-import { Chain, GasInfo, Signature, Vault } from "@vultisig/sdk";
-import chalk from "chalk";
-import inquirer from "inquirer";
-import ora from "ora";
+import { Chain, GasInfo, Signature, VaultBase } from '@vultisig/sdk'
+import chalk from 'chalk'
+import inquirer from 'inquirer'
+import ora from 'ora'
 
-import type { KeysignPayload, SendParams, TransactionResult } from "./types";
+import type { KeysignPayload, SendParams, TransactionResult } from './types'
 
 // AccountCoin type from SDK internals
 type AccountCoin = {
-  chain: Chain;
-  address: string;
-  decimals: number;
-  ticker: string;
-  id?: string;
-};
+  chain: Chain
+  address: string
+  decimals: number
+  ticker: string
+  id?: string
+}
 
 /**
  * TransactionManager - Transaction preparation, signing, and broadcasting
@@ -24,25 +24,25 @@ type AccountCoin = {
  * - Generate explorer URLs
  */
 export class TransactionManager {
-  constructor(private vault: Vault) {}
+  constructor(private vault: VaultBase) {}
 
   /**
    * Estimate gas for a chain
    */
   async estimateGas(chain: Chain): Promise<GasInfo> {
-    return await this.vault.gas(chain);
+    return await this.vault.gas(chain)
   }
 
   /**
    * Prepare transaction payload
    */
   async prepareSend(params: SendParams): Promise<KeysignPayload> {
-    const spinner = ora("Preparing transaction...").start();
+    const spinner = ora('Preparing transaction...').start()
 
     try {
       // Get chain address and info
-      const address = await this.vault.address(params.chain);
-      const balance = await this.vault.balance(params.chain, params.tokenId);
+      const address = await this.vault.address(params.chain)
+      const balance = await this.vault.balance(params.chain, params.tokenId)
 
       // Build coin info
       const coin: AccountCoin = {
@@ -51,12 +51,10 @@ export class TransactionManager {
         decimals: balance.decimals,
         ticker: balance.symbol,
         id: params.tokenId,
-      };
+      }
 
       // Convert human-readable amount to bigint
-      const amount = BigInt(
-        Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals)),
-      );
+      const amount = BigInt(Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals)))
 
       // Prepare transaction
       const payload = await this.vault.prepareSendTx({
@@ -64,13 +62,13 @@ export class TransactionManager {
         receiver: params.to,
         amount,
         memo: params.memo,
-      });
+      })
 
-      spinner.succeed("Transaction prepared");
-      return payload;
+      spinner.succeed('Transaction prepared')
+      return payload
     } catch (error) {
-      spinner.fail("Failed to prepare transaction");
-      throw error;
+      spinner.fail('Failed to prepare transaction')
+      throw error
     }
   }
 
@@ -78,54 +76,50 @@ export class TransactionManager {
    * Sign transaction with progress tracking
    */
   async signTransaction(payload: KeysignPayload): Promise<Signature> {
-    const spinner = ora("Signing transaction...").start();
+    const spinner = ora('Signing transaction...').start()
 
     // Setup progress tracking
-    this.vault.on("signingProgress", ({ step }: any) => {
-      spinner.text = `${step.message} (${step.progress}%)`;
-    });
+    this.vault.on('signingProgress', ({ step }: any) => {
+      spinner.text = `${step.message} (${step.progress}%)`
+    })
 
     try {
-      const messageHashes = await this.vault.extractMessageHashes(payload);
+      const messageHashes = await this.vault.extractMessageHashes(payload)
 
       const signature = await this.vault.sign({
         transaction: payload,
         chain: payload.coin.chain,
         messageHashes,
-      });
+      })
 
-      spinner.succeed("Transaction signed");
-      return signature;
+      spinner.succeed('Transaction signed')
+      return signature
     } catch (error) {
-      spinner.fail("Signing failed");
-      throw error;
+      spinner.fail('Signing failed')
+      throw error
     } finally {
-      this.vault.removeAllListeners("signingProgress");
+      this.vault.removeAllListeners('signingProgress')
     }
   }
 
   /**
    * Broadcast signed transaction
    */
-  async broadcastTransaction(
-    chain: Chain,
-    payload: KeysignPayload,
-    signature: Signature,
-  ): Promise<string> {
-    const spinner = ora("Broadcasting transaction...").start();
+  async broadcastTransaction(chain: Chain, payload: KeysignPayload, signature: Signature): Promise<string> {
+    const spinner = ora('Broadcasting transaction...').start()
 
     try {
       const txHash = await this.vault.broadcastTx({
         chain,
         keysignPayload: payload,
         signature,
-      });
+      })
 
-      spinner.succeed(`Transaction broadcast: ${txHash}`);
-      return txHash;
+      spinner.succeed(`Transaction broadcast: ${txHash}`)
+      return txHash
     } catch (error) {
-      spinner.fail("Broadcast failed");
-      throw error;
+      spinner.fail('Broadcast failed')
+      throw error
     }
   }
 
@@ -134,61 +128,55 @@ export class TransactionManager {
    */
   async send(params: SendParams): Promise<TransactionResult> {
     // 1. Prepare transaction
-    const payload = await this.prepareSend(params);
+    const payload = await this.prepareSend(params)
 
     // 2. Get gas estimate
     try {
-      const gas = await this.estimateGas(params.chain);
-      console.log(
-        chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`),
-      );
+      const gas = await this.estimateGas(params.chain)
+      console.log(chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`))
     } catch {
-      console.log(chalk.yellow("\nGas estimation unavailable"));
+      console.log(chalk.yellow('\nGas estimation unavailable'))
     }
 
     // 3. Show transaction preview
-    console.log(chalk.cyan("\nTransaction Preview:"));
-    console.log(`  From:   ${payload.coin.address}`);
-    console.log(`  To:     ${params.to}`);
-    console.log(`  Amount: ${params.amount} ${payload.coin.ticker}`);
-    console.log(`  Chain:  ${params.chain}`);
+    console.log(chalk.cyan('\nTransaction Preview:'))
+    console.log(`  From:   ${payload.coin.address}`)
+    console.log(`  To:     ${params.to}`)
+    console.log(`  Amount: ${params.amount} ${payload.coin.ticker}`)
+    console.log(`  Chain:  ${params.chain}`)
     if (params.memo) {
-      console.log(`  Memo:   ${params.memo}`);
+      console.log(`  Memo:   ${params.memo}`)
     }
 
     // 4. Confirm with user
     const { confirmed } = await inquirer.prompt([
       {
-        type: "confirm",
-        name: "confirmed",
-        message: "Proceed with this transaction?",
+        type: 'confirm',
+        name: 'confirmed',
+        message: 'Proceed with this transaction?',
         default: false,
       },
-    ]);
+    ])
 
     if (!confirmed) {
-      console.log(chalk.yellow("Transaction cancelled"));
-      throw new Error("Transaction cancelled by user");
+      console.log(chalk.yellow('Transaction cancelled'))
+      throw new Error('Transaction cancelled by user')
     }
 
     // 5. Sign transaction (password resolved via GlobalConfig.onPasswordRequired)
-    const signature = await this.signTransaction(payload);
+    const signature = await this.signTransaction(payload)
 
     // 6. Broadcast transaction
-    const txHash = await this.broadcastTransaction(
-      params.chain,
-      payload,
-      signature,
-    );
+    const txHash = await this.broadcastTransaction(params.chain, payload, signature)
 
     // 7. Return result with explorer URL
-    const explorerUrl = this.formatTxExplorerUrl(params.chain, txHash);
+    const explorerUrl = this.formatTxExplorerUrl(params.chain, txHash)
 
     return {
       txHash,
       chain: params.chain,
       explorerUrl,
-    };
+    }
   }
 
   /**
@@ -210,8 +198,8 @@ export class TransactionManager {
       [Chain.Doge]: `https://blockchair.com/dogecoin/transaction/${txHash}`,
       [Chain.Litecoin]: `https://blockchair.com/litecoin/transaction/${txHash}`,
       [Chain.BitcoinCash]: `https://blockchair.com/bitcoin-cash/transaction/${txHash}`,
-    };
+    }
 
-    return explorers[chain] || `Transaction Hash: ${txHash}`;
+    return explorers[chain] || `Transaction Hash: ${txHash}`
   }
 }

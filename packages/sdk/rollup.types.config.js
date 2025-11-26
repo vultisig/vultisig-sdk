@@ -1,23 +1,23 @@
-import { defineConfig } from "rollup";
-import dts from "rollup-plugin-dts";
+import { defineConfig } from 'rollup'
+import dts from 'rollup-plugin-dts'
 
 export default defineConfig({
-  input: "src/index.ts",
+  input: 'src/index.ts',
   output: {
-    file: "dist/index.d.ts",
-    format: "es",
+    file: 'dist/index.d.ts',
+    format: 'es',
   },
   plugins: [
     dts({
       respectExternal: true,
       compilerOptions: {
-        baseUrl: ".",
+        baseUrl: '.',
         paths: {
-          "@/*": ["./src/*"],
-          "@helpers/*": ["./tests/e2e/helpers/*"],
-          "@types": ["./src/types"],
-          "@core/*": ["../core/*"],
-          "@lib/*": ["../lib/*"],
+          '@/*': ['./src/*'],
+          '@helpers/*': ['./tests/e2e/helpers/*'],
+          '@types': ['./src/types'],
+          '@core/*': ['../core/*'],
+          '@lib/*': ['../lib/*'],
         },
         skipLibCheck: true,
         strict: false,
@@ -29,4 +29,4 @@ export default defineConfig({
     /^@core\//,
     /^@lib\//,
   ],
-});
+})

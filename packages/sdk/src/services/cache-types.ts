@@ -4,14 +4,14 @@
 export enum CacheScope {
   // Persistent (infinite TTL, storage-backed)
   // These are expensive to compute but deterministic
-  ADDRESS = "address",
+  ADDRESS = 'address',
 
   // Ephemeral (TTL-based, memory only)
   // These change frequently and should not persist
-  BALANCE = "balance",
-  PRICE = "price",
-  GAS = "gas",
-  PORTFOLIO = "portfolio",
+  BALANCE = 'balance',
+  PRICE = 'price',
+  GAS = 'gas',
+  PORTFOLIO = 'portfolio',
 }
 
 /**
@@ -20,25 +20,25 @@ export enum CacheScope {
  */
 export type CacheConfig = {
   /** TTL for balance cache (default: 5 minutes) */
-  balanceTTL?: number;
+  balanceTTL?: number
 
   /** TTL for price cache (default: 5 minutes) */
-  priceTTL?: number;
+  priceTTL?: number
 
   /** TTL for gas estimate cache (default: 2 minutes) */
-  gasTTL?: number;
+  gasTTL?: number
 
   /** TTL for portfolio value cache (default: 1 minute) */
-  portfolioTTL?: number;
+  portfolioTTL?: number
 
   /** Maximum number of entries in memory cache (default: 1000) */
-  maxMemoryCacheSize?: number;
-};
+  maxMemoryCacheSize?: number
+}
 
 /**
  * Cached item with timestamp for TTL calculation
  */
 export type CachedItem<T> = {
-  value: T;
-  timestamp: number;
-};
+  value: T
+  timestamp: number
+}

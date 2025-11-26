@@ -1,9 +1,4 @@
-import {
-  Storage,
-  STORAGE_VERSION,
-  StorageMetadata,
-  StoredValue,
-} from "./types";
+import { Storage, STORAGE_VERSION, StorageMetadata, StoredValue } from './types'
 
 /**
  * In-memory storage implementation for testing and temporary vaults.
@@ -16,51 +11,49 @@ import {
  * - Usage estimation
  */
 export class MemoryStorage implements Storage {
-  private store = new Map<string, StoredValue>();
+  private store = new Map<string, StoredValue>()
 
   async get<T>(key: string): Promise<T | null> {
-    const stored = this.store.get(key);
-    if (!stored) return null;
+    const stored = this.store.get(key)
+    if (!stored) return null
 
-    return stored.value as T;
+    return stored.value as T
   }
 
   async set<T>(key: string, value: T): Promise<void> {
     const metadata: StorageMetadata = {
       version: STORAGE_VERSION,
-      createdAt: this.store.has(key)
-        ? this.store.get(key)!.metadata.createdAt
-        : Date.now(),
+      createdAt: this.store.has(key) ? this.store.get(key)!.metadata.createdAt : Date.now(),
       lastModified: Date.now(),
-    };
+    }
 
-    this.store.set(key, { value, metadata });
+    this.store.set(key, { value, metadata })
   }
 
   async remove(key: string): Promise<void> {
-    this.store.delete(key);
+    this.store.delete(key)
   }
 
   async list(): Promise<string[]> {
-    return Array.from(this.store.keys());
+    return Array.from(this.store.keys())
   }
 
   async clear(): Promise<void> {
-    this.store.clear();
+    this.store.clear()
   }
 
   async getUsage(): Promise<number> {
     // Rough estimation of memory usage
-    let size = 0;
+    let size = 0
     for (const [key, value] of this.store) {
-      size += key.length * 2; // UTF-16 encoding
-      size += JSON.stringify(value).length * 2;
+      size += key.length * 2 // UTF-16 encoding
+      size += JSON.stringify(value).length * 2
     }
-    return size;
+    return size
   }
 
   async getQuota(): Promise<number | undefined> {
     // Memory storage is only limited by available RAM
-    return undefined;
+    return undefined
   }
 }

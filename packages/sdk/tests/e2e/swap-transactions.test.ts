@@ -23,14 +23,14 @@
  * 2. Or downgrade SDK to use @solana/web3.js v1.x
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest'
 
 // Skip all swap E2E tests due to @solana/web3.js version conflict
 // The SDK uses v2.0 API while @lifi/sdk requires v1.x
 // Swap functionality is tested in unit/integration tests
-describe.skip("E2E: Swap Transactions (Production)", () => {
-  it("placeholder - tests skipped due to @solana/web3.js version conflict", () => {
+describe.skip('E2E: Swap Transactions (Production)', () => {
+  it('placeholder - tests skipped due to @solana/web3.js version conflict', () => {
     // See file header for details on why these tests are skipped
-    expect(true).toBe(true);
-  });
-});
+    expect(true).toBe(true)
+  })
+})

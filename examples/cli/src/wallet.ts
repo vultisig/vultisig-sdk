@@ -1,18 +1,9 @@
-import {
-  Balance,
-  Chain,
-  FastVault,
-  FiatCurrency,
-  SecureVault,
-  Token,
-  VaultBase,
-  Vultisig,
-} from "@vultisig/sdk";
-import chalk from "chalk";
-import { promises as fs } from "fs";
-import ora from "ora";
+import { Balance, Chain, FastVault, FiatCurrency, SecureVault, Token, VaultBase, Vultisig } from '@vultisig/sdk'
+import chalk from 'chalk'
+import { promises as fs } from 'fs'
+import ora from 'ora'
 
-import type { PortfolioSummary } from "./types";
+import type { PortfolioSummary } from './types'
 
 /**
  * VaultManager - High-level vault management and operations
@@ -24,8 +15,8 @@ import type { PortfolioSummary } from "./types";
  * - Error handling with descriptive messages
  */
 export class VaultManager {
-  private sdk!: Vultisig;
-  private activeVault: VaultBase | null = null;
+  private sdk!: Vultisig
+  private activeVault: VaultBase | null = null
 
   constructor() {}
 
@@ -33,29 +24,27 @@ export class VaultManager {
    * Initialize SDK with NodeStorage
    */
   async initialize(): Promise<void> {
-    const spinner = ora("Initializing Vultisig SDK...").start();
+    const spinner = ora('Initializing Vultisig SDK...').start()
 
     try {
       // SDK automatically defaults to Node storage at ~/.vultisig
-      this.sdk = new Vultisig();
+      this.sdk = new Vultisig()
 
-      await this.sdk.initialize();
+      await this.sdk.initialize()
 
       // Check if there's an active vault in storage (from previous import/create)
-      const existingVault = await this.sdk.getActiveVault();
+      const existingVault = await this.sdk.getActiveVault()
       if (existingVault) {
-        this.activeVault = existingVault;
-        this.setupVaultEvents(this.activeVault);
-        spinner.succeed(
-          `SDK initialized - Vault loaded: ${existingVault.name}`,
-        );
-        return;
+        this.activeVault = existingVault
+        this.setupVaultEvents(this.activeVault)
+        spinner.succeed(`SDK initialized - Vault loaded: ${existingVault.name}`)
+        return
       }
 
-      spinner.succeed("SDK initialized");
+      spinner.succeed('SDK initialized')
     } catch (error) {
-      spinner.fail("SDK initialization failed");
-      throw error;
+      spinner.fail('SDK initialization failed')
+      throw error
     }
   }
 
@@ -66,9 +55,9 @@ export class VaultManager {
   async createVault(
     name: string,
     password: string,
-    email: string,
+    email: string
   ): Promise<{ vaultId: string; verificationRequired: boolean }> {
-    const spinner = ora("Creating vault...").start();
+    const spinner = ora('Creating vault...').start()
 
     try {
       // Create fast vault (2-of-2 with VultiServer)
@@ -76,35 +65,30 @@ export class VaultManager {
         name,
         password,
         email,
-        onProgress: (step) => {
-          spinner.text = `${step.message} (${step.progress}%)`;
+        onProgress: step => {
+          spinner.text = `${step.message} (${step.progress}%)`
         },
-      });
+      })
 
-      this.activeVault = result.vault;
-      this.setupVaultEvents(this.activeVault);
-      spinner.succeed(`Vault created: ${name}`);
+      this.activeVault = result.vault
+      this.setupVaultEvents(this.activeVault)
+      spinner.succeed(`Vault created: ${name}`)
 
       return {
         vaultId: result.vaultId,
         verificationRequired: result.verificationRequired,
-      };
+      }
     } catch (error) {
-      spinner.fail("Vault creation failed");
-      throw error;
+      spinner.fail('Vault creation failed')
+      throw error
     }
   }
 
   /**
    * Create new secure vault with m-of-n threshold
    */
-  async createSecureVault(
-    name: string,
-    password: string,
-    threshold: number,
-    totalShares: number,
-  ): Promise<VaultBase> {
-    const spinner = ora("Creating secure vault...").start();
+  async createSecureVault(name: string, password: string, threshold: number, totalShares: number): Promise<VaultBase> {
+    const spinner = ora('Creating secure vault...').start()
 
     try {
       // Create secure vault (m-of-n threshold)
@@ -113,29 +97,23 @@ export class VaultManager {
         password,
         devices: totalShares,
         threshold,
-        onProgress: (step) => {
-          spinner.text = `${step.message} (${step.progress}%)`;
+        onProgress: step => {
+          spinner.text = `${step.message} (${step.progress}%)`
         },
-      });
+      })
 
-      this.activeVault = result.vault;
-      this.setupVaultEvents(this.activeVault);
-      spinner.succeed(
-        `Secure vault created: ${name} (${threshold}-of-${totalShares})`,
-      );
+      this.activeVault = result.vault
+      this.setupVaultEvents(this.activeVault)
+      spinner.succeed(`Secure vault created: ${name} (${threshold}-of-${totalShares})`)
 
-      return result.vault;
+      return result.vault
     } catch (error: any) {
-      spinner.fail("Secure vault creation failed");
+      spinner.fail('Secure vault creation failed')
       // Check if it's a "not implemented" error
-      if (error.message?.includes("not implemented")) {
-        console.error(
-          chalk.yellow(
-            "\n⚠ Secure vault creation is not yet implemented in the SDK",
-          ),
-        );
+      if (error.message?.includes('not implemented')) {
+        console.error(chalk.yellow('\n⚠ Secure vault creation is not yet implemented in the SDK'))
       }
-      throw error;
+      throw error
     }
   }
 
@@ -144,21 +122,21 @@ export class VaultManager {
    * Call this after creating a fast vault to verify email delivery
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
-    const spinner = ora("Verifying email code...").start();
+    const spinner = ora('Verifying email code...').start()
 
     try {
-      const verified = await this.sdk.verifyVault(vaultId, code);
+      const verified = await this.sdk.verifyVault(vaultId, code)
 
       if (verified) {
-        spinner.succeed("Email verified successfully!");
-        return true;
+        spinner.succeed('Email verified successfully!')
+        return true
       } else {
-        spinner.fail("Invalid verification code");
-        return false;
+        spinner.fail('Invalid verification code')
+        return false
       }
     } catch (error) {
-      spinner.fail("Verification failed");
-      throw error;
+      spinner.fail('Verification failed')
+      throw error
     }
   }
 
@@ -166,14 +144,14 @@ export class VaultManager {
    * Resend verification email
    */
   async resendVerification(vaultId: string): Promise<void> {
-    const spinner = ora("Resending verification email...").start();
+    const spinner = ora('Resending verification email...').start()
 
     try {
-      await this.sdk.serverManager.resendVaultVerification(vaultId);
-      spinner.succeed("Verification email sent!");
+      await this.sdk.serverManager.resendVaultVerification(vaultId)
+      spinner.succeed('Verification email sent!')
     } catch (error) {
-      spinner.fail("Failed to resend verification email");
-      throw error;
+      spinner.fail('Failed to resend verification email')
+      throw error
     }
   }
 
@@ -181,23 +159,23 @@ export class VaultManager {
    * Import vault from file
    */
   async importVault(filePath: string, password?: string): Promise<VaultBase> {
-    const spinner = ora("Importing vault...").start();
+    const spinner = ora('Importing vault...').start()
 
     try {
       // Read vault file content
-      const vultContent = await fs.readFile(filePath, "utf-8");
+      const vultContent = await fs.readFile(filePath, 'utf-8')
 
       // Import vault using SDK
-      const vault = await this.sdk.importVault(vultContent, password);
+      const vault = await this.sdk.importVault(vultContent, password)
 
-      this.activeVault = vault;
-      this.setupVaultEvents(this.activeVault);
-      spinner.succeed(`Vault imported: ${vault.name}`);
+      this.activeVault = vault
+      this.setupVaultEvents(this.activeVault)
+      spinner.succeed(`Vault imported: ${vault.name}`)
 
-      return vault;
+      return vault
     } catch (error: any) {
-      spinner.fail("Import failed");
-      throw error;
+      spinner.fail('Import failed')
+      throw error
     }
   }
 
@@ -206,28 +184,26 @@ export class VaultManager {
    */
   async exportVault(outputPath?: string, _password?: string): Promise<string> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    const spinner = ora("Exporting vault...").start();
+    const spinner = ora('Exporting vault...').start()
 
     try {
       // Export vault using Vault instance method
-      const { data: vultContent } = await this.activeVault.export();
+      const { data: vultContent } = await this.activeVault.export()
 
       // Determine output filename
-      const fileName =
-        outputPath ||
-        `${this.activeVault.name}-${this.activeVault.localPartyId}-vault.vult`;
+      const fileName = outputPath || `${this.activeVault.name}-${this.activeVault.localPartyId}-vault.vult`
 
       // Write to file
-      await fs.writeFile(fileName, vultContent, "utf-8");
+      await fs.writeFile(fileName, vultContent, 'utf-8')
 
-      spinner.succeed(`Vault exported: ${fileName}`);
-      return fileName;
+      spinner.succeed(`Vault exported: ${fileName}`)
+      return fileName
     } catch (error) {
-      spinner.fail("Export failed");
-      throw error;
+      spinner.fail('Export failed')
+      throw error
     }
   }
 
@@ -235,7 +211,7 @@ export class VaultManager {
    * Get active vault
    */
   getActiveVault(): VaultBase | null {
-    return this.activeVault;
+    return this.activeVault
   }
 
   /**
@@ -243,56 +219,48 @@ export class VaultManager {
    */
   async getBalance(chain: Chain, tokenId?: string): Promise<Balance> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    return await this.activeVault.balance(chain, tokenId);
+    return await this.activeVault.balance(chain, tokenId)
   }
 
   /**
    * Get balances for all chains
    */
-  async getAllBalances(
-    includeTokens = false,
-  ): Promise<Record<string, Balance>> {
+  async getAllBalances(includeTokens = false): Promise<Record<string, Balance>> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    return await this.activeVault.balances(undefined, includeTokens);
+    return await this.activeVault.balances(undefined, includeTokens)
   }
 
   /**
    * Get portfolio value across all chains
    */
-  async getPortfolioValue(
-    currency: FiatCurrency = "usd",
-  ): Promise<PortfolioSummary> {
+  async getPortfolioValue(currency: FiatCurrency = 'usd'): Promise<PortfolioSummary> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    const totalValue = await this.activeVault.getTotalValue(currency);
-    const chains = this.activeVault.getChains();
+    const totalValue = await this.activeVault.getTotalValue(currency)
+    const chains = this.activeVault.getChains()
 
     const chainBalances = await Promise.all(
-      chains.map(async (chain) => {
-        const balance = await this.activeVault!.balance(chain);
+      chains.map(async chain => {
+        const balance = await this.activeVault!.balance(chain)
         try {
-          const value = await this.activeVault!.getValue(
-            chain,
-            undefined,
-            currency,
-          );
-          return { chain, balance, value };
+          const value = await this.activeVault!.getValue(chain, undefined, currency)
+          return { chain, balance, value }
         } catch {
           // Fiat value might not be available for all chains
-          return { chain, balance };
+          return { chain, balance }
         }
-      }),
-    );
+      })
+    )
 
-    return { totalValue, chainBalances };
+    return { totalValue, chainBalances }
   }
 
   /**
@@ -300,11 +268,11 @@ export class VaultManager {
    */
   async addChain(chain: Chain): Promise<void> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    await this.activeVault.addChain(chain);
-    console.log(chalk.green(`✓ Added chain: ${chain}`));
+    await this.activeVault.addChain(chain)
+    console.log(chalk.green(`✓ Added chain: ${chain}`))
   }
 
   /**
@@ -312,11 +280,11 @@ export class VaultManager {
    */
   async removeChain(chain: Chain): Promise<void> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    await this.activeVault.removeChain(chain);
-    console.log(chalk.green(`✓ Removed chain: ${chain}`));
+    await this.activeVault.removeChain(chain)
+    console.log(chalk.green(`✓ Removed chain: ${chain}`))
   }
 
   /**
@@ -324,11 +292,11 @@ export class VaultManager {
    */
   async addToken(chain: Chain, token: Token): Promise<void> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    await this.activeVault.addToken(chain, token);
-    console.log(chalk.green(`✓ Added token: ${token.symbol} on ${chain}`));
+    await this.activeVault.addToken(chain, token)
+    console.log(chalk.green(`✓ Added token: ${token.symbol} on ${chain}`))
   }
 
   /**
@@ -336,11 +304,11 @@ export class VaultManager {
    */
   async removeToken(chain: Chain, tokenId: string): Promise<void> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    await this.activeVault.removeToken(chain, tokenId);
-    console.log(chalk.green(`✓ Removed token: ${tokenId}`));
+    await this.activeVault.removeToken(chain, tokenId)
+    console.log(chalk.green(`✓ Removed token: ${tokenId}`))
   }
 
   /**
@@ -348,17 +316,17 @@ export class VaultManager {
    */
   async getAddresses(): Promise<Record<string, string>> {
     if (!this.activeVault) {
-      throw new Error("No active vault");
+      throw new Error('No active vault')
     }
 
-    return await this.activeVault.addresses();
+    return await this.activeVault.addresses()
   }
 
   /**
    * Get SDK instance (for advanced operations)
    */
   getSDK(): Vultisig {
-    return this.sdk;
+    return this.sdk
   }
 
   /**
@@ -366,48 +334,44 @@ export class VaultManager {
    */
   private setupVaultEvents(vault: VaultBase): void {
     // Balance updates
-    vault.on("balanceUpdated", ({ chain, balance, tokenId }: any) => {
-      const asset = tokenId ? `${balance.symbol} token` : balance.symbol;
-      console.log(
-        chalk.blue(
-          `ℹ Balance updated for ${chain} (${asset}): ${balance.amount}`,
-        ),
-      );
-    });
+    vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
+      const asset = tokenId ? `${balance.symbol} token` : balance.symbol
+      console.log(chalk.blue(`ℹ Balance updated for ${chain} (${asset}): ${balance.amount}`))
+    })
 
     // Transaction broadcast
-    vault.on("transactionBroadcast", ({ chain, txHash }: any) => {
-      console.log(chalk.green(`✓ Transaction broadcast on ${chain}`));
-      console.log(chalk.blue(`  TX Hash: ${txHash}`));
-    });
+    vault.on('transactionBroadcast', ({ chain, txHash }: any) => {
+      console.log(chalk.green(`✓ Transaction broadcast on ${chain}`))
+      console.log(chalk.blue(`  TX Hash: ${txHash}`))
+    })
 
     // Chain added
-    vault.on("chainAdded", ({ chain }: any) => {
-      console.log(chalk.green(`✓ Chain added: ${chain}`));
-    });
+    vault.on('chainAdded', ({ chain }: any) => {
+      console.log(chalk.green(`✓ Chain added: ${chain}`))
+    })
 
     // Chain removed
-    vault.on("chainRemoved", ({ chain }: any) => {
-      console.log(chalk.yellow(`ℹ Chain removed: ${chain}`));
-    });
+    vault.on('chainRemoved', ({ chain }: any) => {
+      console.log(chalk.yellow(`ℹ Chain removed: ${chain}`))
+    })
 
     // Token added
-    vault.on("tokenAdded", ({ chain, token }: any) => {
-      console.log(chalk.green(`✓ Token added: ${token.symbol} on ${chain}`));
-    });
+    vault.on('tokenAdded', ({ chain, token }: any) => {
+      console.log(chalk.green(`✓ Token added: ${token.symbol} on ${chain}`))
+    })
 
     // Values updated
-    vault.on("valuesUpdated", ({ chain }: any) => {
-      if (chain === "all") {
-        console.log(chalk.blue("ℹ Portfolio values updated"));
+    vault.on('valuesUpdated', ({ chain }: any) => {
+      if (chain === 'all') {
+        console.log(chalk.blue('ℹ Portfolio values updated'))
       } else {
-        console.log(chalk.blue(`ℹ Values updated for ${chain}`));
+        console.log(chalk.blue(`ℹ Values updated for ${chain}`))
       }
-    });
+    })
 
     // Errors
-    vault.on("error", (error: any) => {
-      console.error(chalk.red(`✗ Vault error: ${error.message}`));
-    });
+    vault.on('error', (error: any) => {
+      console.error(chalk.red(`✗ Vault error: ${error.message}`))
+    })
   }
 }

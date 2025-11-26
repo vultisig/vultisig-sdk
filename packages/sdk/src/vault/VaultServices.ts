@@ -1,6 +1,6 @@
-import type { Chain } from "@core/chain/Chain";
+import type { Chain } from '@core/chain/Chain'
 
-import type { CacheConfig } from "../services/cache-types";
+import type { CacheConfig } from '../services/cache-types'
 
 /**
  * Configuration for Vault initialization
@@ -8,15 +8,15 @@ import type { CacheConfig } from "../services/cache-types";
  */
 export type VaultConfig = {
   /** Default chains for new vaults (from SDK config) */
-  defaultChains?: Chain[];
+  defaultChains?: Chain[]
   /** Default currency for balance display (from SDK config) */
-  defaultCurrency?: string;
+  defaultCurrency?: string
   /** Cache configuration (TTLs, size limits) */
-  cacheConfig?: CacheConfig;
+  cacheConfig?: CacheConfig
   /** Password cache configuration */
   passwordCache?: {
-    defaultTTL?: number;
-  };
+    defaultTTL?: number
+  }
   /** Password prompt callback */
-  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>;
-};
+  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
+}

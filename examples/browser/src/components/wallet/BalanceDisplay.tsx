@@ -1,51 +1,44 @@
-import type { VaultBase } from "@vultisig/sdk";
-import { useState } from "react";
+import type { VaultBase } from '@vultisig/sdk'
+import { useState } from 'react'
 
-import Button from "@/components/common/Button";
+import Button from '@/components/common/Button'
 
 type BalanceDisplayProps = {
-  vault: VaultBase;
-};
+  vault: VaultBase
+}
 
 export default function BalanceDisplay({ vault }: BalanceDisplayProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [balances, setBalances] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false)
+  const [balances, setBalances] = useState<any[]>([])
 
   const handleCheckBalances = async () => {
-    setIsLoading(true);
+    setIsLoading(true)
     try {
       // Check balances for all chains
-      const allBalances: any[] = [];
+      const allBalances: any[] = []
       for (const chain of vault.getChains()) {
-        const balance = await vault.balance(chain);
-        allBalances.push({ chain, balance });
+        const balance = await vault.balance(chain)
+        allBalances.push({ chain, balance })
       }
-      setBalances(allBalances);
+      setBalances(allBalances)
     } catch (error) {
-      console.error("Failed to check balances:", error);
+      console.error('Failed to check balances:', error)
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">Balances</h3>
-        <Button
-          variant="primary"
-          size="small"
-          onClick={handleCheckBalances}
-          isLoading={isLoading}
-        >
+        <Button variant="primary" size="small" onClick={handleCheckBalances} isLoading={isLoading}>
           Check Balances
         </Button>
       </div>
 
       {balances.length === 0 ? (
-        <p className="text-gray-500 text-center py-4">
-          No balances loaded. Click &quot;Check Balances&quot; to load.
-        </p>
+        <p className="text-gray-500 text-center py-4">No balances loaded. Click &quot;Check Balances&quot; to load.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -69,5 +62,5 @@ export default function BalanceDisplay({ vault }: BalanceDisplayProps) {
         </div>
       )}
     </div>
-  );
+  )
 }

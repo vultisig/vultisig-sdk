@@ -11,13 +11,13 @@
  */
 
 type Cache<T> = {
-  data: T;
-  updatedAt: number;
-};
+  data: T
+  updatedAt: number
+}
 
 type MemoizeAsyncOptions = {
-  cacheTime?: number;
-};
+  cacheTime?: number
+}
 
 /**
  * Memoize an async function with proper race condition handling
@@ -40,48 +40,45 @@ type MemoizeAsyncOptions = {
  */
 export const memoizeAsync = <T extends (...args: any[]) => Promise<any>>(
   func: T,
-  options: MemoizeAsyncOptions = {},
+  options: MemoizeAsyncOptions = {}
 ): T => {
-  const { cacheTime } = options;
-  const cache = new Map<string, Cache<ReturnType<T>>>();
-  const pendingPromises = new Map<string, Promise<any>>();
+  const { cacheTime } = options
+  const cache = new Map<string, Cache<ReturnType<T>>>()
+  const pendingPromises = new Map<string, Promise<any>>()
 
   const memoizedFunc = async (...args: Parameters<T>) => {
-    const key = JSON.stringify(args);
+    const key = JSON.stringify(args)
 
     // Check for cached result
-    const cachedResult = cache.get(key);
-    if (
-      cachedResult &&
-      (!cacheTime || cachedResult.updatedAt >= Date.now() - cacheTime)
-    ) {
-      return cachedResult.data;
+    const cachedResult = cache.get(key)
+    if (cachedResult && (!cacheTime || cachedResult.updatedAt >= Date.now() - cacheTime)) {
+      return cachedResult.data
     }
 
     // Check for in-flight request (FIX: Prevents race condition)
-    const pending = pendingPromises.get(key);
+    const pending = pendingPromises.get(key)
     if (pending) {
-      return pending;
+      return pending
     }
 
     // Start new request
     const promise = (async () => {
       try {
-        const result = await func(...args);
+        const result = await func(...args)
         cache.set(key, {
           data: result,
           updatedAt: Date.now(),
-        });
-        return result;
+        })
+        return result
       } finally {
         // Clean up pending promise after completion (success or failure)
-        pendingPromises.delete(key);
+        pendingPromises.delete(key)
       }
-    })();
+    })()
 
-    pendingPromises.set(key, promise);
-    return promise;
-  };
+    pendingPromises.set(key, promise)
+    return promise
+  }
 
-  return memoizedFunc as T;
-};
+  return memoizedFunc as T
+}

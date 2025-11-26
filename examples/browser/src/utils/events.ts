@@ -1,16 +1,11 @@
-import type { EventLogEntry, EventType } from "@/types";
+import type { EventLogEntry, EventType } from '@/types'
 
-let eventIdCounter = 0;
+let eventIdCounter = 0
 
 /**
  * Create a new event log entry
  */
-export function createEvent(
-  type: EventType,
-  source: "sdk" | "vault",
-  message: string,
-  data?: any,
-): EventLogEntry {
+export function createEvent(type: EventType, source: 'sdk' | 'vault', message: string, data?: any): EventLogEntry {
   return {
     id: `event-${++eventIdCounter}-${Date.now()}`,
     timestamp: new Date(),
@@ -18,19 +13,19 @@ export function createEvent(
     source,
     message,
     data,
-  };
+  }
 }
 
 /**
  * Format event timestamp for display
  */
 export function formatEventTime(date: Date): string {
-  return date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
     hour12: false,
-  });
+  })
 }
 
 /**
@@ -38,15 +33,15 @@ export function formatEventTime(date: Date): string {
  */
 export function getEventColor(type: EventType): string {
   const colors: Record<EventType, string> = {
-    info: "#3b82f6", // blue
-    success: "#10b981", // green
-    warning: "#f59e0b", // amber
-    error: "#ef4444", // red
-    balance: "#8b5cf6", // violet
-    transaction: "#06b6d4", // cyan
-    signing: "#ec4899", // pink
-    vault: "#6366f1", // indigo
-    chain: "#14b8a6", // teal
-  };
-  return colors[type];
+    info: '#3b82f6', // blue
+    success: '#10b981', // green
+    warning: '#f59e0b', // amber
+    error: '#ef4444', // red
+    balance: '#8b5cf6', // violet
+    transaction: '#06b6d4', // cyan
+    signing: '#ec4899', // pink
+    vault: '#6366f1', // indigo
+    chain: '#14b8a6', // teal
+  }
+  return colors[type]
 }

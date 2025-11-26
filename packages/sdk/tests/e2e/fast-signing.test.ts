@@ -25,124 +25,101 @@
  * - ✅ SAFE: No funds are transferred, all operations are signing-only
  */
 
-import {
-  createSigningPayload,
-  TEST_AMOUNTS,
-  TEST_RECEIVERS,
-  validateSignatureFormat,
-} from "@helpers/signing-helpers";
-import {
-  loadTestVault,
-  TEST_VAULT_CONFIG,
-  verifyTestVault,
-} from "@helpers/test-vault";
-import { beforeAll, describe, expect, it } from "vitest";
+import { createSigningPayload, TEST_AMOUNTS, TEST_RECEIVERS, validateSignatureFormat } from '@helpers/signing-helpers'
+import { loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
+import { beforeAll, describe, expect, it } from 'vitest'
 
-import { Chain, VaultBase } from "@/index";
+import { Chain, VaultBase } from '@/index'
 
-describe("E2E: Fast Signing - Transaction Signing", () => {
-  let vault: VaultBase;
+describe('E2E: Fast Signing - Transaction Signing', () => {
+  let vault: VaultBase
 
   beforeAll(async () => {
-    console.log("📦 Loading persistent test vault...");
-    const result = await loadTestVault();
-    vault = result.vault;
-    verifyTestVault(vault);
+    console.log('📦 Loading persistent test vault...')
+    const result = await loadTestVault()
+    vault = result.vault
+    verifyTestVault(vault)
 
     // Verify vault is fast type
-    if (vault.type !== "fast") {
+    if (vault.type !== 'fast') {
       throw new Error(
-        'Fast signing tests require a "fast" vault with Server- signer. ' +
-          "Current vault type: " +
-          vault.type,
-      );
+        'Fast signing tests require a "fast" vault with Server- signer. ' + 'Current vault type: ' + vault.type
+      )
     }
-    console.log("✅ Vault is fast type - can proceed with signing tests");
-  });
+    console.log('✅ Vault is fast type - can proceed with signing tests')
+  })
 
   // ============================================================================
   // CHAIN FAMILY COVERAGE
   // Tests that fast signing works across different blockchain architectures
   // ============================================================================
 
-  describe("Chain Family Coverage", () => {
+  describe('Chain Family Coverage', () => {
     // ==========================================================================
     // UTXO CHAINS
     // Bitcoin-style chains using Unspent Transaction Output model
     // Key features: ECDSA signatures, UTXO selection, change outputs
     // ==========================================================================
 
-    describe.concurrent("UTXO Chains", () => {
-      it("Bitcoin: Sign native BTC transfer", async () => {
-        console.log("\n🔐 Testing Bitcoin fast signing...");
+    describe.concurrent('UTXO Chains', () => {
+      it('Bitcoin: Sign native BTC transfer', async () => {
+        console.log('\n🔐 Testing Bitcoin fast signing...')
 
         // 1. Prepare transaction
         const coin = {
           chain: Chain.Bitcoin,
           address: await vault.address(Chain.Bitcoin),
           decimals: 8,
-          ticker: "BTC",
-        };
+          ticker: 'BTC',
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.Bitcoin!,
           amount: TEST_AMOUNTS.Bitcoin!,
-        });
+        })
 
         // 2. Extract message hashes
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
-        console.log(`   Extracted ${messageHashes.length} message hash(es)`);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
+        console.log(`   Extracted ${messageHashes.length} message hash(es)`)
 
         // 3. Sign transaction
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Bitcoin,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Bitcoin)
+        const signature = await vault.sign(signingPayload)
 
         // 4. Validate signature
-        validateSignatureFormat(signature, Chain.Bitcoin, "ECDSA");
-        console.log(
-          "✅ Bitcoin transaction signed successfully (NOT broadcast)",
-        );
-        console.log(`   Signature: ${signature.signature.substring(0, 60)}...`);
-      });
+        validateSignatureFormat(signature, Chain.Bitcoin, 'ECDSA')
+        console.log('✅ Bitcoin transaction signed successfully (NOT broadcast)')
+        console.log(`   Signature: ${signature.signature.substring(0, 60)}...`)
+      })
 
-      it("Litecoin: Sign native LTC transfer", async () => {
-        console.log("\n🔐 Testing Litecoin fast signing...");
+      it('Litecoin: Sign native LTC transfer', async () => {
+        console.log('\n🔐 Testing Litecoin fast signing...')
 
         const coin = {
           chain: Chain.Litecoin,
           address: await vault.address(Chain.Litecoin),
           decimals: 8,
-          ticker: "LTC",
-        };
+          ticker: 'LTC',
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.Litecoin!,
           amount: TEST_AMOUNTS.Litecoin!,
-        });
+        })
 
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Litecoin,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Litecoin)
+        const signature = await vault.sign(signingPayload)
 
-        validateSignatureFormat(signature, Chain.Litecoin, "ECDSA");
-        console.log(
-          "✅ Litecoin transaction signed successfully (NOT broadcast)",
-        );
-      });
-    });
+        validateSignatureFormat(signature, Chain.Litecoin, 'ECDSA')
+        console.log('✅ Litecoin transaction signed successfully (NOT broadcast)')
+      })
+    })
 
     // ==========================================================================
     // EVM CHAINS
@@ -150,77 +127,65 @@ describe("E2E: Fast Signing - Transaction Signing", () => {
     // Key features: ECDSA signatures, EIP-1559 gas, nonce management
     // ==========================================================================
 
-    describe.concurrent("EVM Chains", () => {
-      it("Ethereum: Sign native ETH transfer (EIP-1559)", async () => {
-        console.log("\n🔐 Testing Ethereum fast signing...");
+    describe.concurrent('EVM Chains', () => {
+      it('Ethereum: Sign native ETH transfer (EIP-1559)', async () => {
+        console.log('\n🔐 Testing Ethereum fast signing...')
 
         const coin = {
           chain: Chain.Ethereum,
           address: await vault.address(Chain.Ethereum),
           decimals: 18,
-          ticker: "ETH",
-        };
+          ticker: 'ETH',
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.Ethereum!,
           amount: TEST_AMOUNTS.Ethereum!,
-        });
+        })
 
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
-        console.log(`   Extracted ${messageHashes.length} message hash(es)`);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
+        console.log(`   Extracted ${messageHashes.length} message hash(es)`)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Ethereum,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Ethereum)
+        const signature = await vault.sign(signingPayload)
 
-        validateSignatureFormat(signature, Chain.Ethereum, "ECDSA");
-        expect(signature.recovery).toBeDefined();
-        console.log(
-          "✅ Ethereum transaction signed successfully (NOT broadcast)",
-        );
-        console.log(`   Signature: ${signature.signature.substring(0, 60)}...`);
-        console.log(`   Recovery ID: ${signature.recovery}`);
-      });
+        validateSignatureFormat(signature, Chain.Ethereum, 'ECDSA')
+        expect(signature.recovery).toBeDefined()
+        console.log('✅ Ethereum transaction signed successfully (NOT broadcast)')
+        console.log(`   Signature: ${signature.signature.substring(0, 60)}...`)
+        console.log(`   Recovery ID: ${signature.recovery}`)
+      })
 
-      it("Ethereum: Sign ERC-20 token transfer (USDC)", async () => {
-        console.log("\n🔐 Testing ERC-20 token fast signing...");
+      it('Ethereum: Sign ERC-20 token transfer (USDC)', async () => {
+        console.log('\n🔐 Testing ERC-20 token fast signing...')
 
         const coin = {
           chain: Chain.Ethereum,
           address: await vault.address(Chain.Ethereum),
           decimals: 6,
-          ticker: "USDC",
-          id: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC contract
-        };
+          ticker: 'USDC',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC contract
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.Ethereum!,
           amount: 1000000n, // 1 USDC
-        });
+        })
 
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Ethereum,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Ethereum)
+        const signature = await vault.sign(signingPayload)
 
-        validateSignatureFormat(signature, Chain.Ethereum, "ECDSA");
-        console.log(
-          "✅ ERC-20 token transaction signed successfully (NOT broadcast)",
-        );
-        console.log(`   Token: USDC (contract call signature)`);
-      });
-    });
+        validateSignatureFormat(signature, Chain.Ethereum, 'ECDSA')
+        console.log('✅ ERC-20 token transaction signed successfully (NOT broadcast)')
+        console.log(`   Token: USDC (contract call signature)`)
+      })
+    })
 
     // ==========================================================================
     // COSMOS CHAINS
@@ -228,366 +193,320 @@ describe("E2E: Fast Signing - Transaction Signing", () => {
     // Two types: IBC-enabled (Cosmos Hub) and vault-based (THORChain)
     // ==========================================================================
 
-    describe.concurrent("Cosmos Chains", () => {
-      it("THORChain: Sign native RUNE transfer with memo", async () => {
-        console.log("\n🔐 Testing THORChain fast signing...");
+    describe.concurrent('Cosmos Chains', () => {
+      it('THORChain: Sign native RUNE transfer with memo', async () => {
+        console.log('\n🔐 Testing THORChain fast signing...')
 
         const coin = {
           chain: Chain.THORChain,
           address: await vault.address(Chain.THORChain),
           decimals: 8,
-          ticker: "RUNE",
-        };
+          ticker: 'RUNE',
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.THORChain!,
           amount: TEST_AMOUNTS.THORChain!,
-          memo: "SWAP:ETH.ETH:0x742D35cC6634C0532925A3b844bc9E7595f0BEb8",
-        });
+          memo: 'SWAP:ETH.ETH:0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
+        })
 
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.THORChain,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.THORChain)
+        const signature = await vault.sign(signingPayload)
 
-        validateSignatureFormat(signature, Chain.THORChain, "ECDSA");
-        console.log(
-          "✅ THORChain transaction signed successfully (NOT broadcast)",
-        );
-        console.log(`   Memo included: ${keysignPayload.memo}`);
-      });
+        validateSignatureFormat(signature, Chain.THORChain, 'ECDSA')
+        console.log('✅ THORChain transaction signed successfully (NOT broadcast)')
+        console.log(`   Memo included: ${keysignPayload.memo}`)
+      })
 
-      it("Cosmos Hub: Sign native ATOM transfer", async () => {
-        console.log("\n🔐 Testing Cosmos Hub fast signing...");
+      it('Cosmos Hub: Sign native ATOM transfer', async () => {
+        console.log('\n🔐 Testing Cosmos Hub fast signing...')
 
         const coin = {
           chain: Chain.Cosmos,
           address: await vault.address(Chain.Cosmos),
           decimals: 6,
-          ticker: "ATOM",
-        };
+          ticker: 'ATOM',
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.Cosmos!,
           amount: TEST_AMOUNTS.Cosmos!,
-          memo: "Test IBC transfer",
-        });
+          memo: 'Test IBC transfer',
+        })
 
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Cosmos,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Cosmos)
+        const signature = await vault.sign(signingPayload)
 
-        validateSignatureFormat(signature, Chain.Cosmos, "ECDSA");
-        console.log(
-          "✅ Cosmos Hub transaction signed successfully (NOT broadcast)",
-        );
-      });
-    });
+        validateSignatureFormat(signature, Chain.Cosmos, 'ECDSA')
+        console.log('✅ Cosmos Hub transaction signed successfully (NOT broadcast)')
+      })
+    })
 
     // ==========================================================================
     // OTHER CHAIN ARCHITECTURES
     // Chains with unique architectures: Solana (EdDSA), Polkadot, Sui
     // ==========================================================================
 
-    describe.concurrent("Other Chain Architectures", () => {
-      it("Solana: Sign native SOL transfer (EdDSA)", async () => {
-        console.log("\n🔐 Testing Solana fast signing...");
+    describe.concurrent('Other Chain Architectures', () => {
+      it('Solana: Sign native SOL transfer (EdDSA)', async () => {
+        console.log('\n🔐 Testing Solana fast signing...')
 
         const coin = {
           chain: Chain.Solana,
           address: await vault.address(Chain.Solana),
           decimals: 9,
-          ticker: "SOL",
-        };
+          ticker: 'SOL',
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.Solana!,
           amount: TEST_AMOUNTS.Solana!,
-        });
+        })
 
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Solana,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Solana)
+        const signature = await vault.sign(signingPayload)
 
-        validateSignatureFormat(signature, Chain.Solana, "EdDSA");
-        console.log(
-          "✅ Solana transaction signed successfully (NOT broadcast)",
-        );
-        console.log(`   EdDSA signature (Solana-specific)`);
-      });
+        validateSignatureFormat(signature, Chain.Solana, 'EdDSA')
+        console.log('✅ Solana transaction signed successfully (NOT broadcast)')
+        console.log(`   EdDSA signature (Solana-specific)`)
+      })
 
-      it("Polkadot: Sign native DOT transfer (EdDSA)", async () => {
-        console.log("\n🔐 Testing Polkadot fast signing...");
+      it('Polkadot: Sign native DOT transfer (EdDSA)', async () => {
+        console.log('\n🔐 Testing Polkadot fast signing...')
 
         const coin = {
           chain: Chain.Polkadot,
           address: await vault.address(Chain.Polkadot),
           decimals: 10,
-          ticker: "DOT",
-        };
+          ticker: 'DOT',
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.Polkadot!,
           amount: TEST_AMOUNTS.Polkadot!,
-        });
+        })
 
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Polkadot,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Polkadot)
+        const signature = await vault.sign(signingPayload)
 
-        validateSignatureFormat(signature, Chain.Polkadot, "EdDSA");
-        console.log(
-          "✅ Polkadot transaction signed successfully (NOT broadcast)",
-        );
-      });
+        validateSignatureFormat(signature, Chain.Polkadot, 'EdDSA')
+        console.log('✅ Polkadot transaction signed successfully (NOT broadcast)')
+      })
 
-      it("Sui: Sign native SUI transfer (EdDSA)", async () => {
-        console.log("\n🔐 Testing Sui fast signing...");
+      it('Sui: Sign native SUI transfer (EdDSA)', async () => {
+        console.log('\n🔐 Testing Sui fast signing...')
 
         const coin = {
           chain: Chain.Sui,
           address: await vault.address(Chain.Sui),
           decimals: 9,
-          ticker: "SUI",
-        };
+          ticker: 'SUI',
+        }
 
         const keysignPayload = await vault.prepareSendTx({
           coin,
           receiver: TEST_RECEIVERS.Sui!,
           amount: TEST_AMOUNTS.Sui!,
-        });
+        })
 
-        const messageHashes = await vault.extractMessageHashes(keysignPayload);
-        expect(messageHashes.length).toBeGreaterThan(0);
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
 
-        const signingPayload = createSigningPayload(
-          keysignPayload,
-          messageHashes,
-          Chain.Sui,
-        );
-        const signature = await vault.sign(signingPayload);
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Sui)
+        const signature = await vault.sign(signingPayload)
 
-        validateSignatureFormat(signature, Chain.Sui, "EdDSA");
-        console.log("✅ Sui transaction signed successfully (NOT broadcast)");
-      });
-    });
-  });
+        validateSignatureFormat(signature, Chain.Sui, 'EdDSA')
+        console.log('✅ Sui transaction signed successfully (NOT broadcast)')
+      })
+    })
+  })
 
   // ============================================================================
   // SIGNATURE FORMAT VALIDATION
   // Tests that signatures have correct format for each signature algorithm
   // ============================================================================
 
-  describe.concurrent("Signature Format Validation", () => {
-    it("ECDSA signatures: correct format and structure", async () => {
-      console.log("\n📝 Validating ECDSA signature format...");
+  describe.concurrent('Signature Format Validation', () => {
+    it('ECDSA signatures: correct format and structure', async () => {
+      console.log('\n📝 Validating ECDSA signature format...')
 
       // Test with Bitcoin (ECDSA chain)
       const coin = {
         chain: Chain.Bitcoin,
         address: await vault.address(Chain.Bitcoin),
         decimals: 8,
-        ticker: "BTC",
-      };
+        ticker: 'BTC',
+      }
 
       const keysignPayload = await vault.prepareSendTx({
         coin,
         receiver: TEST_RECEIVERS.Bitcoin!,
         amount: TEST_AMOUNTS.Bitcoin!,
-      });
+      })
 
-      const messageHashes = await vault.extractMessageHashes(keysignPayload);
-      const signingPayload = createSigningPayload(
-        keysignPayload,
-        messageHashes,
-        Chain.Bitcoin,
-      );
-      const signature = await vault.sign(signingPayload);
+      const messageHashes = await vault.extractMessageHashes(keysignPayload)
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Bitcoin)
+      const signature = await vault.sign(signingPayload)
 
       // ECDSA-specific validations
-      expect(signature.format).toBe("ECDSA");
-      expect(signature.signature).toBeDefined();
-      expect(signature.signature).toMatch(/^[0-9a-f]+$/i); // Hex format
-      expect(signature.signature.length).toBeGreaterThan(100);
+      expect(signature.format).toBe('ECDSA')
+      expect(signature.signature).toBeDefined()
+      expect(signature.signature).toMatch(/^[0-9a-f]+$/i) // Hex format
+      expect(signature.signature.length).toBeGreaterThan(100)
 
       // ECDSA should have recovery ID
-      expect(signature.recovery).toBeDefined();
-      expect(typeof signature.recovery).toBe("number");
-      expect(signature.recovery).toBeGreaterThanOrEqual(0);
-      expect(signature.recovery).toBeLessThanOrEqual(3);
+      expect(signature.recovery).toBeDefined()
+      expect(typeof signature.recovery).toBe('number')
+      expect(signature.recovery).toBeGreaterThanOrEqual(0)
+      expect(signature.recovery).toBeLessThanOrEqual(3)
 
-      console.log("✅ ECDSA signature format validation passed");
-    });
+      console.log('✅ ECDSA signature format validation passed')
+    })
 
-    it("EdDSA signatures: correct format and structure", async () => {
-      console.log("\n📝 Validating EdDSA signature format...");
+    it('EdDSA signatures: correct format and structure', async () => {
+      console.log('\n📝 Validating EdDSA signature format...')
 
       // Test with Solana (EdDSA chain)
       const coin = {
         chain: Chain.Solana,
         address: await vault.address(Chain.Solana),
         decimals: 9,
-        ticker: "SOL",
-      };
+        ticker: 'SOL',
+      }
 
       const keysignPayload = await vault.prepareSendTx({
         coin,
         receiver: TEST_RECEIVERS.Solana!,
         amount: TEST_AMOUNTS.Solana!,
-      });
+      })
 
-      const messageHashes = await vault.extractMessageHashes(keysignPayload);
-      const signingPayload = createSigningPayload(
-        keysignPayload,
-        messageHashes,
-        Chain.Solana,
-      );
-      const signature = await vault.sign(signingPayload);
+      const messageHashes = await vault.extractMessageHashes(keysignPayload)
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Solana)
+      const signature = await vault.sign(signingPayload)
 
       // EdDSA-specific validations
-      expect(signature.format).toBe("EdDSA");
-      expect(signature.signature).toBeDefined();
-      expect(signature.signature).toMatch(/^[0-9a-f]+$/i); // Hex format
-      expect(signature.signature.length).toBeGreaterThan(100);
+      expect(signature.format).toBe('EdDSA')
+      expect(signature.signature).toBeDefined()
+      expect(signature.signature).toMatch(/^[0-9a-f]+$/i) // Hex format
+      expect(signature.signature.length).toBeGreaterThan(100)
 
-      console.log("✅ EdDSA signature format validation passed");
-    });
-  });
+      console.log('✅ EdDSA signature format validation passed')
+    })
+  })
 
   // ============================================================================
   // ERROR HANDLING
   // Tests that signing properly validates inputs and handles errors
   // ============================================================================
 
-  describe.concurrent("Error Handling", () => {
-    it("Rejects signing with locked vault (no cached password)", async () => {
+  describe.concurrent('Error Handling', () => {
+    it('Rejects signing with locked vault (no cached password)', async () => {
       const coin = {
         chain: Chain.Ethereum,
         address: await vault.address(Chain.Ethereum),
         decimals: 18,
-        ticker: "ETH",
-      };
+        ticker: 'ETH',
+      }
 
       const keysignPayload = await vault.prepareSendTx({
         coin,
         receiver: TEST_RECEIVERS.Ethereum!,
         amount: TEST_AMOUNTS.Ethereum!,
-      });
+      })
 
-      const messageHashes = await vault.extractMessageHashes(keysignPayload);
-      const signingPayload = createSigningPayload(
-        keysignPayload,
-        messageHashes,
-        Chain.Ethereum,
-      );
+      const messageHashes = await vault.extractMessageHashes(keysignPayload)
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Ethereum)
 
       // Lock the vault to clear the password cache
-      vault.lock();
+      vault.lock()
 
-      await expect(vault.sign(signingPayload)).rejects.toThrow();
+      await expect(vault.sign(signingPayload)).rejects.toThrow()
 
-      console.log("✅ Correctly rejected signing with locked vault");
+      console.log('✅ Correctly rejected signing with locked vault')
 
       // Unlock vault again for subsequent tests
-      await vault.unlock(TEST_VAULT_CONFIG.password);
-    });
+      await vault.unlock(TEST_VAULT_CONFIG.password)
+    })
 
-    it("Rejects signing without messageHashes", async () => {
+    it('Rejects signing without messageHashes', async () => {
       const coin = {
         chain: Chain.Ethereum,
         address: await vault.address(Chain.Ethereum),
         decimals: 18,
-        ticker: "ETH",
-      };
+        ticker: 'ETH',
+      }
 
       const keysignPayload = await vault.prepareSendTx({
         coin,
         receiver: TEST_RECEIVERS.Ethereum!,
         amount: TEST_AMOUNTS.Ethereum!,
-      });
+      })
 
       // Create signing payload WITHOUT messageHashes
       const signingPayload = {
         transaction: keysignPayload,
         chain: Chain.Ethereum,
         messageHashes: [], // Empty array - should fail
-      };
+      }
 
-      await expect(vault.sign(signingPayload)).rejects.toThrow();
+      await expect(vault.sign(signingPayload)).rejects.toThrow()
 
-      console.log("✅ Correctly rejected missing messageHashes");
-    });
-  });
+      console.log('✅ Correctly rejected missing messageHashes')
+    })
+  })
 
   // ============================================================================
   // SAFETY VERIFICATION
   // Confirms that NO transactions were actually broadcast to networks
   // ============================================================================
 
-  describe("Safety Verification", () => {
-    it("Confirms NO transactions were broadcast to blockchain", async () => {
-      console.log(
-        "\n🔒 Safety Check: Verifying NO transactions were broadcast...",
-      );
+  describe('Safety Verification', () => {
+    it('Confirms NO transactions were broadcast to blockchain', async () => {
+      console.log('\n🔒 Safety Check: Verifying NO transactions were broadcast...')
 
       // Sign one transaction to verify safety (no broadcast)
-      const chain = Chain.Ethereum;
+      const chain = Chain.Ethereum
       const coin = {
         chain,
         address: await vault.address(chain),
         decimals: 18,
         ticker: chain,
-      };
+      }
 
       const keysignPayload = await vault.prepareSendTx({
         coin,
         receiver: TEST_RECEIVERS[chain]!,
         amount: TEST_AMOUNTS.Ethereum!,
-      });
+      })
 
-      const messageHashes = await vault.extractMessageHashes(keysignPayload);
-      const signingPayload = createSigningPayload(
-        keysignPayload,
-        messageHashes,
-        chain,
-      );
+      const messageHashes = await vault.extractMessageHashes(keysignPayload)
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, chain)
 
-      const signature = await vault.sign(signingPayload);
+      const signature = await vault.sign(signingPayload)
 
-      expect(signature).toBeDefined();
+      expect(signature).toBeDefined()
 
-      console.log("✅ Signature generated successfully");
-      console.log("✅ ZERO transactions were broadcast to the blockchain");
-      console.log("✅ All operations were signing-only (vault.sign)");
-      console.log("✅ No funds were transferred");
-      console.log("✅ Signature generated but never submitted to network");
-    });
-  });
-});
+      console.log('✅ Signature generated successfully')
+      console.log('✅ ZERO transactions were broadcast to the blockchain')
+      console.log('✅ All operations were signing-only (vault.sign)')
+      console.log('✅ No funds were transferred')
+      console.log('✅ Signature generated but never submitted to network')
+    })
+  })
+})
