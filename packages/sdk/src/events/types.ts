@@ -9,6 +9,7 @@ import type {
   Value,
   VaultCreationStep,
 } from "../types";
+import type { SwapQuoteResult } from "../vault/swap-types";
 import type { VaultBase } from "../vault/VaultBase";
 
 /**
@@ -132,4 +133,43 @@ export type VaultEvents = {
 
   /** Emitted when vault is locked (keyshares cleared) */
   locked: Record<string, never>;
+
+  // ===== SWAP EVENTS =====
+
+  /** Emitted when a swap quote is received */
+  swapQuoteReceived: {
+    quote: SwapQuoteResult;
+  };
+
+  /** Emitted when ERC-20 approval is required before swap */
+  swapApprovalRequired: {
+    /** Token symbol or contract address */
+    token: string;
+    /** Spender contract address (DEX router) */
+    spender: string;
+    /** Required approval amount */
+    amount: string;
+    /** Current allowance */
+    currentAllowance: string;
+  };
+
+  /** Emitted when ERC-20 approval is granted */
+  swapApprovalGranted: {
+    /** Token symbol or contract address */
+    token: string;
+    /** Transaction hash of approval */
+    txHash: string;
+  };
+
+  /** Emitted when swap transaction is prepared for signing */
+  swapPrepared: {
+    /** Swap provider used */
+    provider: string;
+    /** Amount being swapped */
+    fromAmount: string;
+    /** Expected output amount */
+    toAmountExpected: string;
+    /** Whether approval is required */
+    requiresApproval: boolean;
+  };
 };

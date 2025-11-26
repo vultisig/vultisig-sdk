@@ -39,7 +39,15 @@ import { BalanceService } from "./services/BalanceService";
 import { BroadcastService } from "./services/BroadcastService";
 import { GasEstimationService } from "./services/GasEstimationService";
 import { PreferencesService } from "./services/PreferencesService";
+import { SwapService } from "./services/SwapService";
 import { TransactionBuilder } from "./services/TransactionBuilder";
+// Swap types
+import type {
+  SwapPrepareResult,
+  SwapQuoteParams,
+  SwapQuoteResult,
+  SwapTxParams,
+} from "./swap-types";
 import { VaultError, VaultErrorCode } from "./VaultError";
 import { VaultConfig } from "./VaultServices";
 
@@ -84,6 +92,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   protected gasEstimationService: GasEstimationService;
   protected broadcastService: BroadcastService;
   protected preferencesService: PreferencesService;
+  protected swapService: SwapService;
 
   // Runtime state (persisted via storage)
   protected _userChains: Chain[] = [];
@@ -297,6 +306,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       () => this.save(),
       (data) => this.emit("chainAdded", data),
       (data) => this.emit("chainRemoved", data),
+    );
+    this.swapService = new SwapService(
+      this.coreVault,
+      (chain) => this.address(chain),
+      (event, data) => this.emit(event, data),
     );
 
     // Setup event-driven cache invalidation
@@ -888,6 +902,107 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       this.emit("error", error as Error);
       throw error;
     }
+  }
+
+  // ===== SWAP OPERATIONS =====
+
+  /**
+   * Get a swap quote for exchanging tokens
+   *
+   * Fetches quotes from the best available provider (1inch, KyberSwap, LiFi,
+   * THORChain, or MayaChain) based on the token pair and chains.
+   *
+   * @param params - Swap quote parameters
+   * @param params.fromCoin - Source coin (AccountCoin or SimpleCoinInput)
+   * @param params.toCoin - Destination coin
+   * @param params.amount - Amount to swap (human-readable, e.g., 1.5 for 1.5 ETH)
+   * @param params.referral - Optional referral address for affiliate fees
+   * @param params.affiliateBps - Affiliate fee in basis points (e.g., 50 = 0.5%)
+   *
+   * @returns SwapQuoteResult with estimated output, provider, and approval status
+   *
+   * @example
+   * ```typescript
+   * const quote = await vault.getSwapQuote({
+   *   fromCoin: { chain: Chain.Ethereum, address, decimals: 18, ticker: 'ETH' },
+   *   toCoin: { chain: Chain.Ethereum, address, decimals: 6, ticker: 'USDC', id: '0xa0b...' },
+   *   amount: 1.5,
+   * });
+   * console.log(`You'll receive ~${quote.estimatedOutput} USDC via ${quote.provider}`);
+   * ```
+   */
+  async getSwapQuote(params: SwapQuoteParams): Promise<SwapQuoteResult> {
+    return this.swapService.getQuote(params);
+  }
+
+  /**
+   * Prepare a swap transaction for signing
+   *
+   * Builds a KeysignPayload ready to be signed. If the source token is an ERC-20
+   * and approval is needed, the payload will include approval information.
+   *
+   * @param params - Swap transaction parameters
+   * @param params.fromCoin - Source coin
+   * @param params.toCoin - Destination coin
+   * @param params.amount - Amount to swap
+   * @param params.swapQuote - Quote from getSwapQuote()
+   * @param params.autoApprove - If true, approval is handled internally (default: false)
+   *
+   * @returns SwapPrepareResult with keysignPayload and optional approvalPayload
+   *
+   * @example
+   * ```typescript
+   * const { keysignPayload, approvalPayload } = await vault.prepareSwapTx({
+   *   fromCoin,
+   *   toCoin,
+   *   amount: 1.5,
+   *   swapQuote: quote,
+   * });
+   *
+   * // Handle approval if needed
+   * if (approvalPayload) {
+   *   const sig = await vault.sign({ transaction: approvalPayload, chain });
+   *   await vault.broadcastTx({ chain, keysignPayload: approvalPayload, signature: sig });
+   * }
+   *
+   * // Sign and broadcast swap
+   * const signature = await vault.sign({ transaction: keysignPayload, chain });
+   * const txHash = await vault.broadcastTx({ chain, keysignPayload, signature });
+   * ```
+   */
+  async prepareSwapTx(params: SwapTxParams): Promise<SwapPrepareResult> {
+    return this.swapService.prepareSwapTx(params);
+  }
+
+  /**
+   * Check if swap is supported between two chains
+   *
+   * @param fromChain - Source chain
+   * @param toChain - Destination chain
+   * @returns true if swapping is supported between these chains
+   */
+  isSwapSupported(fromChain: Chain, toChain: Chain): boolean {
+    return this.swapService.isSwapSupported(fromChain, toChain);
+  }
+
+  /**
+   * Get list of chains that support swapping
+   *
+   * @returns Array of chains that can be used for swaps
+   */
+  getSupportedSwapChains(): readonly Chain[] {
+    return this.swapService.getSupportedChains();
+  }
+
+  /**
+   * Get ERC-20 token allowance for a spender
+   *
+   * @param coin - The token to check allowance for
+   * @param spender - The spender address (usually DEX router)
+   * @returns Current allowance amount
+   */
+  async getTokenAllowance(coin: AccountCoin, spender: string): Promise<bigint> {
+    return this.swapService.getAllowance(coin, spender);
   }
 
   // ===== TOKEN MANAGEMENT =====

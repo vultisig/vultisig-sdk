@@ -125,7 +125,7 @@
   "dependencies": {
     "7z-wasm": "^1.2.0",
     "@bufbuild/protobuf": "^2.7.0",
-    "@coral-xyz/anchor": "^0.28.0",
+    "@coral-xyz/anchor": "^0.31.1",
     "@cosmjs/stargate": "^0.36.0",
     "@lifi/sdk": "^3.12.2",
     "@mysten/sui": "^1.37.6",
@@ -133,23 +133,24 @@
     "@polkadot/api": "^16.4.6",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^2.0.0",
-    "@trustwallet/wallet-core": "^4.3.6",
+    "@solana/web3.js-v1": "npm:@solana/web3.js@^1.98.4",
+    "@trustwallet/wallet-core": "^4.3.22",
     "axios": "^1.8.3",
     "bip32": "^5.0.0-rc.0",
     "bitcoinjs-lib": "^6.1.7",
     "bs58": "^6.0.0",
     "cbor-x": "^1.6.0",
     "date-fns": "^4.1.0",
-    "ethers": "^6.13.5",
+    "ethers": "^6.15.0",
     "i18next": "^25.5.2",
     "i18next-http-backend": "^3.0.2",
     "node-fetch": "^3.3.2",
     "tiny-secp256k1": "^2.2.4",
-    "uuid": "^11.1.0",
-    "viem": "2.21.0",
+    "uuid": "^13.0.0",
+    "viem": "^2.37.4",
     "ws": "^8.18.0",
     "xrpl": "^4.4.1",
-    "zod": "^3.24.2"
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "@rollup/plugin-alias": "^6.0.0",
@@ -171,8 +172,8 @@
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-dts": "^6.1.1",
     "tsx": "^4.19.5",
-    "typescript": "^5.8.2",
-    "vitest": "^3.0.9"
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   },
   "sideEffects": false,
   "publishConfig": {

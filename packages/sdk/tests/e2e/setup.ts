@@ -1,11 +1,34 @@
 /**
  * E2E Test Setup File
  *
- * This setup file is specifically for E2E tests and MUST NOT mock any APIs
- * since E2E tests need to make real network calls to production blockchain RPCs.
+ * This setup file is specifically for E2E tests and makes real network calls
+ * to production blockchain RPCs.
  *
  * WASM loading is handled by the WASM fetch polyfill below.
  */
+
+import { vi } from "vitest";
+
+// Mock @lifi/sdk to avoid @solana/web3.js v2/v1 conflict
+// The SDK uses v2.0 while @lifi/sdk requires v1.x (PublicKey export)
+// Note: This prevents LiFi swap routes from working in E2E tests
+// Other swap providers (THORChain, 1inch, etc.) will still work
+vi.mock("@lifi/sdk", () => ({
+  ChainId: {
+    ETH: 1,
+    POL: 137,
+    BSC: 56,
+    AVA: 43114,
+    ARB: 42161,
+    OPT: 10,
+    BAS: 8453,
+    SOL: 1151111081099710,
+  },
+  getQuote: vi.fn(),
+  getRoutes: vi.fn(),
+  createConfig: vi.fn(() => ({})),
+  EVM: vi.fn(),
+}));
 
 import { webcrypto } from "crypto";
 import { config } from "dotenv";

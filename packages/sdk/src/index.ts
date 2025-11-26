@@ -122,12 +122,16 @@ export type {
   Balance,
   CachedBalance,
   ChainConfig,
+  CoinInput,
   ExportOptions,
   FastSigningInput,
   GasEstimate,
   GasInfo,
+  GeneralSwapProvider,
+  GeneralSwapQuote,
   KeygenMode,
   KeygenProgressUpdate,
+  NativeSwapQuote,
   ReshareOptions,
   SDKConfig,
   ServerStatus,
@@ -135,6 +139,15 @@ export type {
   SigningMode,
   SigningPayload,
   SigningStep,
+  SimpleCoinInput,
+  SwapApprovalInfo,
+  SwapFees,
+  SwapPrepareResult,
+  // Swap types
+  SwapQuote,
+  SwapQuoteParams,
+  SwapQuoteResult,
+  SwapTxParams,
   Token,
   ValidationResult,
   Value,
@@ -148,3 +161,5 @@ export type {
   // Extended SDK types (from refactor)
   VultisigConfig,
 } from "./types";
+// Swap type guards
+export { isAccountCoin, isSimpleCoinInput } from "./types";

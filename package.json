@@ -92,6 +92,7 @@
   },
   "resolutions": {
     "readable-stream": "3.6.2",
-    "@noble/hashes": "1.8.0"
+    "@noble/hashes": "1.8.0",
+    "@lifi/sdk/@solana/web3.js": "1.98.4"
   }
 }

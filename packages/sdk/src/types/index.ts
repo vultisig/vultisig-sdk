@@ -545,3 +545,20 @@ export type GasEstimate = {
 
 // Solana-specific types (now handled by core)
 // Removed - using core types directly instead of SDK wrappers
+
+// Swap types
+export type {
+  CoinInput,
+  GeneralSwapProvider,
+  GeneralSwapQuote,
+  NativeSwapQuote,
+  SimpleCoinInput,
+  SwapApprovalInfo,
+  SwapFees,
+  SwapPrepareResult,
+  SwapQuote,
+  SwapQuoteParams,
+  SwapQuoteResult,
+  SwapTxParams,
+} from "../vault/swap-types";
+export { isAccountCoin, isSimpleCoinInput } from "../vault/swap-types";
