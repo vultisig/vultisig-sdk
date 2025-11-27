@@ -9,11 +9,9 @@ import { getKeysignSwapPayload } from '../../swap/getKeysignSwapPayload'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../resolver'
 
-export const getEvmChainSpecific: GetChainSpecificResolver<'ethereumSpecific'> = async ({
-  keysignPayload,
-  feeSettings,
-  thirdPartyGasLimitEstimation,
-}) => {
+export const getEvmChainSpecific: GetChainSpecificResolver<
+  'ethereumSpecific'
+> = async ({ keysignPayload, feeSettings, thirdPartyGasLimitEstimation }) => {
   const coin = getKeysignCoin<EvmChain>(keysignPayload)
   const { chain, address } = coin
   const client = getEvmClient(chain)
@@ -36,15 +34,16 @@ export const getEvmChainSpecific: GetChainSpecificResolver<'ethereumSpecific'> =
     return keysignPayload.memo
   }
 
-  const { gasLimit, baseFeePerGas, maxPriorityFeePerGas } = await getEvmFeeQuote({
-    keysignPayload,
-    feeSettings,
-    thirdPartyGasLimitEstimation,
-    minimumGasLimit: deriveEvmGasLimit({
-      coin,
-      data: getData(),
-    }),
-  })
+  const { gasLimit, baseFeePerGas, maxPriorityFeePerGas } =
+    await getEvmFeeQuote({
+      keysignPayload,
+      feeSettings,
+      thirdPartyGasLimitEstimation,
+      minimumGasLimit: deriveEvmGasLimit({
+        coin,
+        data: getData(),
+      }),
+    })
 
   const maxFeePerGas = baseFeePerGas + maxPriorityFeePerGas
 

@@ -1,4 +1,10 @@
-import { address, networks, opcodes, Psbt, script as bscript } from 'bitcoinjs-lib'
+import {
+  address,
+  networks,
+  opcodes,
+  Psbt,
+  script as bscript,
+} from 'bitcoinjs-lib'
 
 const isOpReturn = (script: Buffer): boolean => {
   const chunks = bscript.decompile(script)
@@ -11,7 +17,9 @@ const isOpReturn = (script: Buffer): boolean => {
 const getOpReturnData = (script: Buffer): string | null => {
   const chunks = bscript.decompile(script)
   if (!chunks || chunks[0] !== opcodes.OP_RETURN) return null
-  const dataChunks = chunks.slice(1).filter((chunk): chunk is Buffer => Buffer.isBuffer(chunk))
+  const dataChunks = chunks
+    .slice(1)
+    .filter((chunk): chunk is Buffer => Buffer.isBuffer(chunk))
   if (dataChunks.length === 0) return null
 
   return Buffer.concat(dataChunks).toString('hex')
@@ -62,7 +70,8 @@ export const getPsbtTransferInfo = (psbt: Psbt, senderAddress: string) => {
   // However, for self-sends (all outputs to sender address), we need to include
   // them as recipients since there are no "external" recipients in that case.
   const nonSenderOutputs = validOutputs.filter(o => o.addr !== senderAddress)
-  const recipients = nonSenderOutputs.length > 0 ? nonSenderOutputs : validOutputs
+  const recipients =
+    nonSenderOutputs.length > 0 ? nonSenderOutputs : validOutputs
 
   const outputsTotal = recipients.reduce((s, o) => s + o.value, 0n)
 

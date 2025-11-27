@@ -13,25 +13,33 @@ import { GetChainSpecificResolver } from '../resolver'
 const minProtocolFee = 15n
 const baseFeeMultiplier = 2n
 
-export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({ keysignPayload }) => {
+export const getRippleChainSpecific: GetChainSpecificResolver<
+  'rippleSpecific'
+> = async ({ keysignPayload }) => {
   const { address } = getKeysignCoin(keysignPayload)
   const toAddress = shouldBePresent(keysignPayload.toAddress)
 
-  const [senderAccount, networkInfo, destinationAccountResult] = await Promise.all([
-    getRippleAccountInfo(address),
-    getRippleNetworkInfo(),
-    attempt(getRippleAccountInfo(toAddress)),
-  ])
+  const [senderAccount, networkInfo, destinationAccountResult] =
+    await Promise.all([
+      getRippleAccountInfo(address),
+      getRippleNetworkInfo(),
+      attempt(getRippleAccountInfo(toAddress)),
+    ])
 
   const { validated_ledger, load_factor, load_base } = networkInfo
   const { base_fee, reserve_base } = shouldBePresent(validated_ledger)
 
-  const computedFee = ((BigInt(base_fee) * BigInt(load_factor)) / BigInt(load_base)) * baseFeeMultiplier
+  const computedFee =
+    ((BigInt(base_fee) * BigInt(load_factor)) / BigInt(load_base)) *
+    baseFeeMultiplier
 
   const networkFee = maxBigInt(computedFee, minProtocolFee)
 
   const getAccountActivationFee = () => {
-    if ('error' in destinationAccountResult && isInError(destinationAccountResult.error, 'Account not found')) {
+    if (
+      'error' in destinationAccountResult &&
+      isInError(destinationAccountResult.error, 'Account not found')
+    ) {
       return BigInt(reserve_base)
     }
 

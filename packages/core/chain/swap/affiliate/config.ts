@@ -1,6 +1,13 @@
 export const baseAffiliateBps = 50
 
-export const vultDiscountTiers = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'ultimate'] as const
+export const vultDiscountTiers = [
+  'bronze',
+  'silver',
+  'gold',
+  'platinum',
+  'diamond',
+  'ultimate',
+] as const
 export type VultDiscountTier = (typeof vultDiscountTiers)[number]
 
 export const vultDiscountTierMinBalances: Record<VultDiscountTier, number> = {

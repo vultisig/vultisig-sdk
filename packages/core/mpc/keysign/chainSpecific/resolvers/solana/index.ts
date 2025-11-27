@@ -11,15 +11,14 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 import { refineSolanaChainSpecific } from './refine'
 
-export const getSolanaChainSpecific: GetChainSpecificResolver<'solanaSpecific'> = async ({
-  keysignPayload,
-  walletCore,
-}) => {
+export const getSolanaChainSpecific: GetChainSpecificResolver<
+  'solanaSpecific'
+> = async ({ keysignPayload, walletCore }) => {
   const coin = getKeysignCoin<OtherChain.Solana>(keysignPayload)
   const receiver = shouldBePresent(keysignPayload.toAddress)
   const client = getSolanaClient()
 
-  const recentBlockHash = (await client.getLatestBlockhash().send()).value.blockhash.toString()
+  const recentBlockHash = (await client.getLatestBlockhash()).blockhash
 
   const chainSpecific = create(SolanaSpecificSchema, {
     recentBlockHash,

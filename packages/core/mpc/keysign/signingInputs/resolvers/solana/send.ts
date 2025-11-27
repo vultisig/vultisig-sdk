@@ -17,61 +17,72 @@ export const getSolanaSendSigningInput = ({
 }: GetSolanaSendSigningInputInput): TW.Solana.Proto.SigningInput => {
   const coin = getKeysignCoin(keysignPayload)
 
-  const { recentBlockHash, fromTokenAssociatedAddress, toTokenAssociatedAddress, programId, computeLimit } =
-    getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'solanaSpecific')
+  const {
+    recentBlockHash,
+    fromTokenAssociatedAddress,
+    toTokenAssociatedAddress,
+    programId,
+    computeLimit,
+  } = getBlockchainSpecificValue(
+    keysignPayload.blockchainSpecific,
+    'solanaSpecific'
+  )
 
   const amount = BigInt(keysignPayload.toAmount)
   const sender = coin.address
   const recipient = keysignPayload.toAddress
 
-  const getSigningInputCoinSpecificFields = (): Partial<TW.Solana.Proto.SigningInput> => {
-    if (!coin.id) {
+  const getSigningInputCoinSpecificFields =
+    (): Partial<TW.Solana.Proto.SigningInput> => {
+      if (!coin.id) {
+        return {
+          transferTransaction: TW.Solana.Proto.Transfer.create({
+            recipient,
+            value: Long.fromString(amount.toString()),
+            memo: keysignPayload.memo,
+          }),
+        }
+      }
+
+      const tokenProgramId = programId
+        ? TW.Solana.Proto.TokenProgramId.Token2022Program
+        : TW.Solana.Proto.TokenProgramId.TokenProgram
+
+      const tokenTransferSharedFields = {
+        tokenMintAddress: coin.id,
+        senderTokenAddress: fromTokenAssociatedAddress,
+        amount: Long.fromString(amount.toString()),
+        decimals: coin.decimals,
+        tokenProgramId,
+      }
+
+      if (!toTokenAssociatedAddress) {
+        const receiverSolanaAddress =
+          walletCore.SolanaAddress.createWithString(recipient)
+
+        const recipientTokenAddress = programId
+          ? receiverSolanaAddress.token2022Address(coin.id)
+          : receiverSolanaAddress.defaultTokenAddress(coin.id)
+
+        const tokenTransferMessage =
+          TW.Solana.Proto.CreateAndTransferToken.create({
+            ...tokenTransferSharedFields,
+            recipientMainAddress: recipient,
+            recipientTokenAddress,
+          })
+
+        return {
+          createAndTransferTokenTransaction: tokenTransferMessage,
+        }
+      }
+
       return {
-        transferTransaction: TW.Solana.Proto.Transfer.create({
-          recipient,
-          value: Long.fromString(amount.toString()),
-          memo: keysignPayload.memo,
+        tokenTransferTransaction: TW.Solana.Proto.TokenTransfer.create({
+          ...tokenTransferSharedFields,
+          recipientTokenAddress: toTokenAssociatedAddress,
         }),
       }
     }
-
-    const tokenProgramId = programId
-      ? TW.Solana.Proto.TokenProgramId.Token2022Program
-      : TW.Solana.Proto.TokenProgramId.TokenProgram
-
-    const tokenTransferSharedFields = {
-      tokenMintAddress: coin.id,
-      senderTokenAddress: fromTokenAssociatedAddress,
-      amount: Long.fromString(amount.toString()),
-      decimals: coin.decimals,
-      tokenProgramId,
-    }
-
-    if (!toTokenAssociatedAddress) {
-      const receiverSolanaAddress = walletCore.SolanaAddress.createWithString(recipient)
-
-      const recipientTokenAddress = programId
-        ? receiverSolanaAddress.token2022Address(coin.id)
-        : receiverSolanaAddress.defaultTokenAddress(coin.id)
-
-      const tokenTransferMessage = TW.Solana.Proto.CreateAndTransferToken.create({
-        ...tokenTransferSharedFields,
-        recipientMainAddress: recipient,
-        recipientTokenAddress,
-      })
-
-      return {
-        createAndTransferTokenTransaction: tokenTransferMessage,
-      }
-    }
-
-    return {
-      tokenTransferTransaction: TW.Solana.Proto.TokenTransfer.create({
-        ...tokenTransferSharedFields,
-        recipientTokenAddress: toTokenAssociatedAddress,
-      }),
-    }
-  }
 
   const signingInput = TW.Solana.Proto.SigningInput.create({
     v0Msg: true,
@@ -81,7 +92,9 @@ export const getSolanaSendSigningInput = ({
       price: Long.fromString(solanaConfig.priorityFeePrice.toString()),
     }),
     priorityFeeLimit: TW.Solana.Proto.PriorityFeeLimit.create({
-      limit: computeLimit ? Number(computeLimit) : solanaConfig.priorityFeeLimit,
+      limit: computeLimit
+        ? Number(computeLimit)
+        : solanaConfig.priorityFeeLimit,
     }),
     ...getSigningInputCoinSpecificFields(),
   })

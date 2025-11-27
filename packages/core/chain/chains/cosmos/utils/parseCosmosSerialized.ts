@@ -10,12 +10,18 @@ type CosmosAminoJson = {
   tx: StdTx
 }
 
-export const parseCosmosSerialized = (serialized: string | CosmosSerializedData | undefined): CosmosSerializedData => {
+export const parseCosmosSerialized = (
+  serialized: string | CosmosSerializedData | undefined
+): CosmosSerializedData => {
   if (!serialized) {
     throw new Error('Serialized Cosmos transaction data is missing')
   }
 
-  if (typeof serialized === 'object' && serialized !== null && 'tx_bytes' in serialized) {
+  if (
+    typeof serialized === 'object' &&
+    serialized !== null &&
+    'tx_bytes' in serialized
+  ) {
     const result = serialized as CosmosSerializedData
 
     if (!result.tx_bytes) {
@@ -25,7 +31,9 @@ export const parseCosmosSerialized = (serialized: string | CosmosSerializedData 
   }
 
   if (typeof serialized !== 'string') {
-    throw new Error(`Invalid serialized format: expected string or object with tx_bytes, got ${typeof serialized}`)
+    throw new Error(
+      `Invalid serialized format: expected string or object with tx_bytes, got ${typeof serialized}`
+    )
   }
 
   if (serialized.trim() === '') {
@@ -60,9 +68,14 @@ export const parseCosmosSerialized = (serialized: string | CosmosSerializedData 
       }
     }
 
-    throw new Error('Parsed JSON does not contain tx_bytes (protobuf) or tx (Amino JSON) field')
+    throw new Error(
+      'Parsed JSON does not contain tx_bytes (protobuf) or tx (Amino JSON) field'
+    )
   } catch (error) {
-    if (error instanceof Error && (error.message.includes('tx_bytes') || error.message.includes('tx'))) {
+    if (
+      error instanceof Error &&
+      (error.message.includes('tx_bytes') || error.message.includes('tx'))
+    ) {
       throw error
     }
     throw new Error(

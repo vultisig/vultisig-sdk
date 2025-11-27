@@ -4,7 +4,10 @@ import { getCosmosGasLimit } from '../../../../../chain/chains/cosmos/cosmosGasL
 import { getCosmosChainKind } from '../../../../../chain/chains/cosmos/utils/getCosmosChainKind'
 import { areEqualCoins } from '../../../../../chain/coin/Coin'
 import { nativeSwapChainIds } from '../../../../../chain/swap/native/NativeSwapChain'
-import { THORChainSpecific, TransactionType } from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
+import {
+  THORChainSpecific,
+  TransactionType,
+} from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { shouldBePresent } from '../../../../../../lib/utils/assert/shouldBePresent'
 import { matchRecordUnion } from '../../../../../../lib/utils/matchRecordUnion'
 import { getRecordUnionValue } from '../../../../../../lib/utils/record/union/getRecordUnionValue'
@@ -21,13 +24,19 @@ import { SigningInputsResolver } from '../../resolver'
 import { CosmosChainSpecific, getCosmosChainSpecific } from './chainSpecific'
 import { getCosmosCoinAmount } from './coinAmount'
 
-export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysignPayload, walletCore }) => {
+export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
+  keysignPayload,
+  walletCore,
+}) => {
   const chain = getKeysignChain<'cosmos'>(keysignPayload)
   const coin = getKeysignCoin<CosmosChain>(keysignPayload)
 
   const chainKind = getCosmosChainKind(chain)
 
-  const chainSpecific = getCosmosChainSpecific(chain, keysignPayload.blockchainSpecific)
+  const chainSpecific = getCosmosChainSpecific(
+    chain,
+    keysignPayload.blockchainSpecific
+  )
 
   const { memo, toAddress, signAmino } = keysignPayload
 
@@ -43,7 +52,9 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         const memo = shouldBePresent(keysignPayload.memo)
         const [, channel] = memo.split(':')
 
-        const timeoutTimestamp = Long.fromString(ibcDenomTraces?.latestBlock?.split('_')?.[1] || '0')
+        const timeoutTimestamp = Long.fromString(
+          ibcDenomTraces?.latestBlock?.split('_')?.[1] || '0'
+        )
 
         return {
           messages: [
@@ -72,7 +83,11 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
             sendCoinsMessage: TW.Cosmos.Proto.Message.Send.create({
               fromAddress: coin.address,
               toAddress,
-              amounts: [TW.Cosmos.Proto.Amount.create(getCosmosCoinAmount(keysignPayload))],
+              amounts: [
+                TW.Cosmos.Proto.Amount.create(
+                  getCosmosCoinAmount(keysignPayload)
+                ),
+              ],
             }),
           }),
         ],
@@ -99,7 +114,9 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
           txMemo: memo,
         }
       }
-      const txType = (rest as Partial<THORChainSpecific>).transactionType ?? TransactionType.UNSPECIFIED
+      const txType =
+        (rest as Partial<THORChainSpecific>).transactionType ??
+        TransactionType.UNSPECIFIED
 
       const fromAddress = toTwAddress({
         address: coin.address,
@@ -124,12 +141,13 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         return {
           messages: [
             TW.Cosmos.Proto.Message.create({
-              wasmExecuteContractGeneric: TW.Cosmos.Proto.Message.WasmExecuteContractGeneric.create({
-                senderAddress: potentialContractPayload!.senderAddress,
-                contractAddress: potentialContractPayload!.contractAddress,
-                executeMsg: potentialContractPayload!.executeMsg,
-                coins: potentialContractPayload!.coins ?? [],
-              }),
+              wasmExecuteContractGeneric:
+                TW.Cosmos.Proto.Message.WasmExecuteContractGeneric.create({
+                  senderAddress: potentialContractPayload!.senderAddress,
+                  contractAddress: potentialContractPayload!.contractAddress,
+                  executeMsg: potentialContractPayload!.executeMsg,
+                  coins: potentialContractPayload!.coins ?? [],
+                }),
             }),
           ],
           txMemo: memo,
@@ -140,17 +158,18 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         return {
           messages: [
             TW.Cosmos.Proto.Message.create({
-              wasmExecuteContractGeneric: TW.Cosmos.Proto.Message.WasmExecuteContractGeneric.create({
-                senderAddress: coin.address,
-                contractAddress: toAddress,
-                executeMsg: '{ "deposit": {} }',
-                coins: [
-                  TW.Cosmos.Proto.Amount.create({
-                    denom: fullDenom,
-                    amount: keysignPayload.toAmount,
-                  }),
-                ],
-              }),
+              wasmExecuteContractGeneric:
+                TW.Cosmos.Proto.Message.WasmExecuteContractGeneric.create({
+                  senderAddress: coin.address,
+                  contractAddress: toAddress,
+                  executeMsg: '{ "deposit": {} }',
+                  coins: [
+                    TW.Cosmos.Proto.Amount.create({
+                      denom: fullDenom,
+                      amount: keysignPayload.toAmount,
+                    }),
+                  ],
+                }),
             }),
           ],
           txMemo: memo,
@@ -158,7 +177,9 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       } else if (memo?.startsWith('unmerge:')) {
         const memoParts = memo.toLowerCase().split(':')
         if (memoParts.length !== 3 || !memoParts[2]) {
-          throw new Error('Invalid unmerge memo format. Expected: unmerge:<denom>:<rawShares>')
+          throw new Error(
+            'Invalid unmerge memo format. Expected: unmerge:<denom>:<rawShares>'
+          )
         }
 
         const [, , rawShares] = memoParts
@@ -166,12 +187,13 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         return {
           messages: [
             TW.Cosmos.Proto.Message.create({
-              wasmExecuteContractGeneric: TW.Cosmos.Proto.Message.WasmExecuteContractGeneric.create({
-                senderAddress: coin.address,
-                contractAddress: toAddress,
-                executeMsg: `{ "withdraw": { "share_amount": "${rawShares}" } }`,
-                coins: [],
-              }),
+              wasmExecuteContractGeneric:
+                TW.Cosmos.Proto.Message.WasmExecuteContractGeneric.create({
+                  senderAddress: coin.address,
+                  contractAddress: toAddress,
+                  executeMsg: `{ "withdraw": { "share_amount": "${rawShares}" } }`,
+                  coins: [],
+                }),
             }),
           ],
           txMemo: memo,
@@ -190,7 +212,9 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       const swapPayload = getSwapPayload()
 
       if (isDeposit || (swapPayload && coin.chain === chain)) {
-        const amountStr = isDeposit ? (keysignPayload.toAmount ?? '0') : swapPayload!.fromAmount
+        const amountStr = isDeposit
+          ? (keysignPayload.toAmount ?? '0')
+          : swapPayload!.fromAmount
 
         const isPositive = +/^[0-9]+$/.test(amountStr) && BigInt(amountStr) > 0n
 
@@ -201,17 +225,20 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
             ticker: coin.ticker,
             synth: false,
           }),
-          ...(isPositive ? { amount: amountStr, decimals: new Long(coin.decimals) } : {}),
+          ...(isPositive
+            ? { amount: amountStr, decimals: new Long(coin.decimals) }
+            : {}),
         })
 
         return {
           messages: [
             TW.Cosmos.Proto.Message.create({
-              thorchainDepositMessage: TW.Cosmos.Proto.Message.THORChainDeposit.create({
-                signer: fromAddress,
-                memo,
-                coins: [depositCoin],
-              }),
+              thorchainDepositMessage:
+                TW.Cosmos.Proto.Message.THORChainDeposit.create({
+                  signer: fromAddress,
+                  memo,
+                  coins: [depositCoin],
+                }),
             }),
           ],
           // That doesn't make sense, but iOS and Android have this logic.
@@ -224,7 +251,11 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
           TW.Cosmos.Proto.Message.create({
             thorchainSendMessage: TW.Cosmos.Proto.Message.THORChainSend.create({
               fromAddress,
-              amounts: [TW.Cosmos.Proto.Amount.create(getCosmosCoinAmount(keysignPayload))],
+              amounts: [
+                TW.Cosmos.Proto.Amount.create(
+                  getCosmosCoinAmount(keysignPayload)
+                ),
+              ],
               toAddress: toTwAddress({
                 address: toAddress,
                 walletCore,
@@ -242,7 +273,10 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
     if (signAmino) {
       const fee = TW.Cosmos.Proto.Fee.create({
         gas: Long.fromString(signAmino.fee?.gas ?? '0'),
-        amounts: signAmino.fee?.amount?.map(coin => TW.Cosmos.Proto.Amount.create(coin)) ?? [],
+        amounts:
+          signAmino.fee?.amount?.map(coin =>
+            TW.Cosmos.Proto.Amount.create(coin)
+          ) ?? [],
       })
 
       return fee
@@ -285,7 +319,9 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
   const publicKey = getKeysignTwPublicKey(keysignPayload)
   const chainId = getTwChainId({ walletCore, chain })
 
-  const signingMode = signAmino ? TW.Cosmos.Proto.SigningMode.JSON : TW.Cosmos.Proto.SigningMode.Protobuf
+  const signingMode = signAmino
+    ? TW.Cosmos.Proto.SigningMode.JSON
+    : TW.Cosmos.Proto.SigningMode.Protobuf
 
   const input = TW.Cosmos.Proto.SigningInput.create({
     publicKey,

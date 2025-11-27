@@ -24,7 +24,10 @@ import {
   OneInchTransactionSchema,
 } from '../../types/vultisig/keysign/v1/1inch_swap_payload_pb'
 import { Erc20ApprovePayloadSchema } from '../../types/vultisig/keysign/v1/erc20_approve_payload_pb'
-import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import {
+  KeysignPayload,
+  KeysignPayloadSchema,
+} from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { matchRecordUnion } from '../../../../lib/utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -59,7 +62,10 @@ export const buildSwapKeysignPayload = async ({
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
   const toCoinHexPublicKey = Buffer.from(toPublicKey.data()).toString('hex')
 
-  const thirdPartyGasLimitEstimation = matchRecordUnion<SwapQuote, bigint | undefined>(swapQuote, {
+  const thirdPartyGasLimitEstimation = matchRecordUnion<
+    SwapQuote,
+    bigint | undefined
+  >(swapQuote, {
     native: () => undefined,
     general: ({ tx }) =>
       matchRecordUnion<GeneralSwapTx, bigint | undefined>(tx, {
@@ -85,9 +91,15 @@ export const buildSwapKeysignPayload = async ({
     }),
   })
 
-  keysignPayload.swapPayload = matchRecordUnion<SwapQuote, KeysignPayload['swapPayload']>(swapQuote, {
+  keysignPayload.swapPayload = matchRecordUnion<
+    SwapQuote,
+    KeysignPayload['swapPayload']
+  >(swapQuote, {
     general: quote => {
-      const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName' | 'swapFee'>>(quote.tx, {
+      const txMsg = matchRecordUnion<
+        GeneralSwapTx,
+        Omit<OneInchTransaction, '$typeName' | 'swapFee'>
+      >(quote.tx, {
         evm: ({ from, to, data, value }) => {
           return {
             from,
@@ -122,7 +134,10 @@ export const buildSwapKeysignPayload = async ({
             hexPublicKey: toCoinHexPublicKey,
           }),
           fromAmount: chainAmount.toString(),
-          toAmountDecimal: fromChainAmount(quote.dstAmount, toCoin.decimals).toFixed(toCoin.decimals),
+          toAmountDecimal: fromChainAmount(
+            quote.dstAmount,
+            toCoin.decimals
+          ).toFixed(toCoin.decimals),
           quote: create(OneInchQuoteSchema, {
             dstAmount: quote.dstAmount,
             tx,
@@ -154,7 +169,8 @@ export const buildSwapKeysignPayload = async ({
     walletCore,
     thirdPartyGasLimitEstimation,
     isDeposit: matchRecordUnion<SwapQuote, boolean>(swapQuote, {
-      native: ({ swapChain }) => areEqualCoins(fromCoin, chainFeeCoin[swapChain]),
+      native: ({ swapChain }) =>
+        areEqualCoins(fromCoin, chainFeeCoin[swapChain]),
       general: () => false,
     }),
   })

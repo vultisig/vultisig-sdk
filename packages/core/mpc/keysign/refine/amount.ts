@@ -27,13 +27,19 @@ export const refineKeysignAmount = (input: RefineKeysignAmountInput) => {
     return input.keysignPayload
   }
 
-  if (isOneOf(coin.chain, Object.values(UtxoBasedChain)) || coin.chain === Chain.Ton) {
+  if (
+    isOneOf(coin.chain, Object.values(UtxoBasedChain)) ||
+    coin.chain === Chain.Ton
+  ) {
     return input.keysignPayload
   }
 
   const fee = getFeeAmount(input)
 
-  const refinedAmount = minBigInt(BigInt(input.keysignPayload.toAmount), input.balance - fee)
+  const refinedAmount = minBigInt(
+    BigInt(input.keysignPayload.toAmount),
+    input.balance - fee
+  )
 
   if (refinedAmount <= 0n) {
     throw new BuildKeysignPayloadError('not-enough-funds')

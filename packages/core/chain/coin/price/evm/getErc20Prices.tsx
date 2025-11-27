@@ -29,7 +29,11 @@ const coinGeckoNetwork: Record<EvmChain, string> = {
   [EvmChain.Sei]: 'sei-network',
 }
 
-export const getErc20Prices = async ({ ids, fiatCurrency = defaultFiatCurrency, chain }: Input) => {
+export const getErc20Prices = async ({
+  ids,
+  fiatCurrency = defaultFiatCurrency,
+  chain,
+}: Input) => {
   const url = addQueryParams(`${baseUrl}/${coinGeckoNetwork[chain]}`, {
     contract_addresses: ids.join(','),
     vs_currencies: fiatCurrency,

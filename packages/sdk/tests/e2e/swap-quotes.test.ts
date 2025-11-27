@@ -11,11 +11,8 @@
  * - Vault credentials MUST be loaded from environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
  * - See tests/e2e/SECURITY.md and .env.example for setup instructions
  *
- * NOTE: These tests hit real swap aggregator APIs (1inch, THORChain, etc.)
+ * NOTE: These tests hit real swap aggregator APIs (1inch, THORChain, LiFi, etc.)
  * and may fail if APIs are unavailable or rate-limited.
- *
- * NOTE: LiFi swap routes are not available in E2E tests due to @solana/web3.js
- * version conflict. THORChain and other providers should still work.
  */
 
 import { Chain } from '@core/chain/Chain'

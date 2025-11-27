@@ -25,7 +25,10 @@ type ConvertPlanUtxosToUtxoInfoInput = {
   walletCore: WalletCore
 }
 
-const convertPlanUtxosToUtxoInfo = ({ utxos, walletCore }: ConvertPlanUtxosToUtxoInfoInput) =>
+const convertPlanUtxosToUtxoInfo = ({
+  utxos,
+  walletCore,
+}: ConvertPlanUtxosToUtxoInfoInput) =>
   utxos.map(({ outPoint, amount }) => {
     const hash = shouldBePresent(outPoint?.hash, 'UTXO outPoint hash')
     const index = shouldBePresent(outPoint?.index, 'UTXO outPoint index')
@@ -37,8 +40,13 @@ const convertPlanUtxosToUtxoInfo = ({ utxos, walletCore }: ConvertPlanUtxosToUtx
     })
   })
 
-export const refineKeysignUtxo = (input: RefineKeysignUtxoInput): KeysignPayload => {
-  const utxoSpecific = getBlockchainSpecificValue(input.keysignPayload.blockchainSpecific, 'utxoSpecific')
+export const refineKeysignUtxo = (
+  input: RefineKeysignUtxoInput
+): KeysignPayload => {
+  const utxoSpecific = getBlockchainSpecificValue(
+    input.keysignPayload.blockchainSpecific,
+    'utxoSpecific'
+  )
 
   // PSBTs already have UTXOs defined - skip refinement logic
   // The PSBT contains all necessary UTXO selection and transaction structure
@@ -55,7 +63,9 @@ export const refineKeysignUtxo = (input: RefineKeysignUtxoInput): KeysignPayload
 
   if (!planUtxos || planUtxos.length === 0) {
     if (utxoSpecific.sendMaxAmount) {
-      throw new Error('Failed to build transaction: insufficient balance or invalid UTXO selection')
+      throw new Error(
+        'Failed to build transaction: insufficient balance or invalid UTXO selection'
+      )
     }
 
     if (amount) {
@@ -77,10 +87,14 @@ export const refineKeysignUtxo = (input: RefineKeysignUtxoInput): KeysignPayload
     return input.keysignPayload
   }
 
-  const actualFee = BigInt(shouldBePresent(plan.fee, 'UTXO signing input plan fee').toString())
+  const actualFee = BigInt(
+    shouldBePresent(plan.fee, 'UTXO signing input plan fee').toString()
+  )
 
   if (amount && !utxoSpecific.sendMaxAmount) {
-    const balance = bigIntSum(input.keysignPayload.utxoInfo.map(({ amount }) => amount))
+    const balance = bigIntSum(
+      input.keysignPayload.utxoInfo.map(({ amount }) => amount)
+    )
     const remainingBalance = balance - amount
 
     if (remainingBalance <= actualFee + dustStats) {

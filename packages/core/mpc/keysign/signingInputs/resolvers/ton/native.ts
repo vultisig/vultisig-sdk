@@ -20,7 +20,9 @@ export const buildNativeTonTransfer = ({
       : TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY) |
     TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
 
-  const amount = sendMaxAmount ? new Long(0) : new Long(Number(keysignPayload.toAmount))
+  const amount = sendMaxAmount
+    ? new Long(0)
+    : new Long(Number(keysignPayload.toAmount))
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: keysignPayload.toAddress,

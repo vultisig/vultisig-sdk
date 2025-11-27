@@ -23,19 +23,27 @@ export const buildJettonTransfer = ({
 }: BuildJettonTransferInput): TW.TheOpenNetwork.Proto.Transfer => {
   const coin = getKeysignCoin(keysignPayload)
 
-  const destinationAddress = walletCore.TONAddressConverter.toUserFriendly(keysignPayload.toAddress, true, false)
+  const destinationAddress = walletCore.TONAddressConverter.toUserFriendly(
+    keysignPayload.toAddress,
+    true,
+    false
+  )
 
   const forwardAmount = isActiveDestination ? 1n : 0n
 
   const jettonTransfer = TW.TheOpenNetwork.Proto.JettonTransfer.create({
-    jettonAmount: Buffer.from(numberToEvenHex(shouldBePresent(getKeysignAmount(keysignPayload))), 'hex'),
+    jettonAmount: Buffer.from(
+      numberToEvenHex(shouldBePresent(getKeysignAmount(keysignPayload))),
+      'hex'
+    ),
     toOwner: destinationAddress,
     responseAddress: coin.address,
     forwardAmount: Buffer.from(numberToEvenHex(forwardAmount), 'hex'),
   })
 
   const mode =
-    TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
+    TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY |
+    TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: jettonAddress,
