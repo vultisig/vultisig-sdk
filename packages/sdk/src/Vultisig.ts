@@ -1,5 +1,6 @@
 // ServerManager is internal - import directly from implementation file
 import { Chain } from '@core/chain/Chain'
+import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
@@ -396,5 +397,27 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   get config() {
     return GlobalConfig.getInstance()
+  }
+
+  // === STATIC UTILITY METHODS ===
+
+  /**
+   * Get the block explorer URL for a transaction
+   * @param chain - The blockchain chain
+   * @param txHash - The transaction hash
+   * @returns The block explorer URL for the transaction
+   */
+  static getTxExplorerUrl(chain: Chain, txHash: string): string {
+    return getBlockExplorerUrl({ chain, entity: 'tx', value: txHash })
+  }
+
+  /**
+   * Get the block explorer URL for an address
+   * @param chain - The blockchain chain
+   * @param address - The wallet address
+   * @returns The block explorer URL for the address
+   */
+  static getAddressExplorerUrl(chain: Chain, address: string): string {
+    return getBlockExplorerUrl({ chain, entity: 'address', value: address })
   }
 }

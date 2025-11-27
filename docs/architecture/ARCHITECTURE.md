@@ -478,6 +478,7 @@ Each vault contains specialized services:
 | `TransactionBuilder`     | Transaction preparation              |
 | `BroadcastService`       | Transaction broadcasting             |
 | `PreferencesService`     | User chain/token preferences         |
+| `SwapService`            | Cross-chain and DEX swap operations  |
 
 ---
 
@@ -576,6 +577,79 @@ Fetches fiat values for tokens/coins.
 
 Caches vault passwords with configurable TTL.
 
+### SwapService
+
+**File:** `src/vault/services/SwapService.ts`
+
+Coordinates swap operations across multiple providers (DEXes and cross-chain bridges).
+
+```typescript
+class SwapService {
+  async getQuote(params: SwapQuoteParams): Promise<SwapQuoteResult>;
+  async prepareSwapTx(params: SwapTxParams): Promise<SwapPrepareResult>;
+  async getAllowance(coin: AccountCoin, spender: string): Promise<bigint>;
+  isSwapSupported(fromChain: Chain, toChain: Chain): boolean;
+  getSupportedChains(): readonly Chain[];
+}
+```
+
+**Swap Providers:**
+
+| Provider   | Type        | Use Case                                      |
+| ---------- | ----------- | --------------------------------------------- |
+| THORChain  | Native      | Cross-chain swaps (BTC↔ETH, etc.)             |
+| MayaChain  | Native      | Cross-chain swaps with CACAO                  |
+| 1inch      | General     | Same-chain DEX aggregation (EVM)              |
+| LiFi       | General     | Cross-chain EVM bridges (Polygon↔Arbitrum)    |
+
+**Architecture:**
+
+```
+vault.getSwapQuote()
+  │
+  └── SwapService.getQuote()
+        │
+        ├── Determine provider (native vs general)
+        │     ├── Cross-chain BTC/ETH → Native (THORChain)
+        │     ├── Same-chain EVM → General (1inch)
+        │     └── Cross-chain EVM → General (LiFi)
+        │
+        ├── Core: getSwapQuote({ provider, params })
+        │
+        ├── Format quote → SwapQuoteResult
+        │
+        ├── Emit 'swapQuoteReceived' event
+        │
+        └── Return SwapQuoteResult
+
+vault.prepareSwapTx()
+  │
+  └── SwapService.prepareSwapTx()
+        │
+        ├── Check ERC-20 approval requirements
+        │     └── getAllowance() → Check current allowance
+        │
+        ├── Core: buildSwapKeysignPayload()
+        │     └── Returns KeysignPayload(s)
+        │
+        └── Return SwapPrepareResult
+              ├── keysignPayload (main swap tx)
+              └── approvalPayload? (ERC-20 approval if needed)
+```
+
+**Provider Selection Logic:**
+
+```typescript
+// Native swaps (THORChain/MayaChain) handle:
+// - BTC, LTC, DOGE, BCH ↔ Any chain
+// - Cosmos chains ↔ Any chain
+// - Any chain → Any chain (if both supported by THORChain)
+
+// General swaps (1inch/LiFi) handle:
+// - Same-chain EVM (ETH→USDC on Ethereum)
+// - Cross-chain EVM (Polygon→Arbitrum)
+```
+
 ---
 
 ## Events System
@@ -617,6 +691,7 @@ interface VaultEvents {
   tokenAdded: { chain: string; token: Token };
   tokenRemoved: { chain: string; tokenId: string };
   renamed: { oldName: string; newName: string };
+  swapQuoteReceived: { quote: SwapQuoteResult };
   saved: void;
   deleted: void;
   loaded: void;
@@ -686,6 +761,25 @@ interface SigningPayload {
   transaction: any;
   derivePath?: string;
   messageHashes?: string[];
+}
+
+// Swap quote result
+interface SwapQuoteResult {
+  quote: SwapQuote;
+  estimatedOutput: string;
+  provider: string;
+  expiresAt: number;
+  requiresApproval: boolean;
+  approvalInfo?: SwapApprovalInfo;
+  fees: SwapFees;
+  warnings: string[];
+}
+
+// Swap transaction result
+interface SwapPrepareResult {
+  keysignPayload: KeysignPayload;
+  approvalPayload?: KeysignPayload;
+  quote: SwapQuoteResult;
 }
 ```
 
@@ -779,6 +873,67 @@ vault.broadcast(chain, payload, signature)
         ├── Core: broadcastTx({ chain, tx })
         │
         └── Return txHash
+```
+
+### Swap Flow
+
+```
+// Step 1: Get swap quote
+vault.getSwapQuote({ fromCoin, toCoin, amount })
+  │
+  └── SwapService.getQuote()
+        │
+        ├── Resolve simplified coin inputs to AccountCoin
+        │
+        ├── Determine provider (native vs general)
+        │     ├── THORChain: Cross-chain (BTC, ETH, Cosmos)
+        │     ├── 1inch: Same-chain EVM
+        │     └── LiFi: Cross-chain EVM
+        │
+        ├── Core: getSwapQuote({ provider, params })
+        │
+        ├── Check ERC-20 approval requirements
+        │
+        ├── Format quote → SwapQuoteResult
+        │
+        ├── Emit 'swapQuoteReceived' event
+        │
+        └── Return SwapQuoteResult
+
+// Step 2: Prepare swap transaction
+vault.prepareSwapTx({ fromCoin, toCoin, amount, swapQuote })
+  │
+  └── SwapService.prepareSwapTx()
+        │
+        ├── Core: buildSwapKeysignPayload()
+        │
+        └── Return SwapPrepareResult
+              ├── keysignPayload (main swap tx)
+              └── approvalPayload? (ERC-20 approval if needed)
+
+// Step 3: Sign approval (if required)
+if (result.approvalPayload) {
+  vault.sign(result.approvalPayload, password)
+    │
+    └── FastSigningService.signWithServer()
+          │
+          └── Return Signature
+
+  vault.broadcast(chain, approvalPayload, approvalSignature)
+    │
+    └── Wait for approval tx confirmation
+}
+
+// Step 4: Sign and broadcast swap
+vault.sign(result.keysignPayload, password)
+  │
+  └── FastSigningService.signWithServer()
+        │
+        └── Return Signature
+
+vault.broadcast(chain, keysignPayload, signature)
+  │
+  └── Return txHash
 ```
 
 ---

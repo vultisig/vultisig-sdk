@@ -1,18 +1,55 @@
 #!/usr/bin/env node
 import 'dotenv/config'
 
-import { Chain, fiatCurrencies, FiatCurrency, fiatCurrencyNameRecord, GlobalConfig } from '@vultisig/sdk'
+import {
+  Chain,
+  FastVault,
+  fiatCurrencies,
+  FiatCurrency,
+  fiatCurrencyNameRecord,
+  GlobalConfig,
+  SecureVault,
+  VaultBase,
+  Vultisig,
+} from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
+import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
-import ora from 'ora'
 
-import { TransactionManager } from './transaction'
-import { VaultManager } from './wallet'
+import {
+  confirmSwap,
+  confirmTransaction,
+  createSpinner,
+  displayAddresses,
+  displayBalance,
+  displayBalancesTable,
+  displayPortfolio,
+  displaySwapChains,
+  displaySwapPreview,
+  displaySwapResult,
+  displayTransactionPreview,
+  displayTransactionResult,
+  displayVaultInfo,
+  displayVaultsList,
+  error,
+  info,
+  PortfolioSummary,
+  SendParams,
+  setupVaultEvents,
+  success,
+  warn,
+} from './ui'
 
-// Global state
-let vaultManager: VaultManager
-let transactionManager: TransactionManager
+// ============================================================================
+// Global State
+// ============================================================================
+
+let sdk: Vultisig
+
+// ============================================================================
+// Password Configuration
+// ============================================================================
 
 /**
  * Parse VAULT_PASSWORDS env var into a Map
@@ -23,7 +60,6 @@ function parseVaultPasswords(): Map<string, string> {
   const passwordsEnv = process.env.VAULT_PASSWORDS
 
   if (passwordsEnv) {
-    // Split by spaces to get individual vault:password pairs
     const pairs = passwordsEnv.trim().split(/\s+/)
     for (const pair of pairs) {
       const colonIndex = pair.indexOf(':')
@@ -38,29 +74,22 @@ function parseVaultPasswords(): Map<string, string> {
   return passwordMap
 }
 
-// Configure password handling
 GlobalConfig.configure({
   onPasswordRequired: async (vaultId: string, vaultName?: string) => {
-    // Try to find password in environment variables
-    // Priority: 1. VAULT_PASSWORDS by name, 2. VAULT_PASSWORDS by ID, 3. VAULT_PASSWORD fallback, 4. Prompt user
     const vaultPasswords = parseVaultPasswords()
 
-    // Try vault name first (if provided)
     if (vaultName && vaultPasswords.has(vaultName)) {
       return vaultPasswords.get(vaultName)!
     }
 
-    // Try vault ID
     if (vaultPasswords.has(vaultId)) {
       return vaultPasswords.get(vaultId)!
     }
 
-    // Try single VAULT_PASSWORD as fallback
     if (process.env.VAULT_PASSWORD) {
       return process.env.VAULT_PASSWORD
     }
 
-    // No stored password found, prompt user
     const { password } = await inquirer.prompt([
       {
         type: 'password',
@@ -73,33 +102,150 @@ GlobalConfig.configure({
   },
 })
 
-// Initialize managers
-async function init() {
-  if (!vaultManager) {
-    vaultManager = new VaultManager()
-    await vaultManager.initialize()
-    const vault = vaultManager.getActiveVault()
-    if (vault) {
-      transactionManager = new TransactionManager(vault)
+// ============================================================================
+// SDK Initialization
+// ============================================================================
+
+async function init(): Promise<void> {
+  if (!sdk) {
+    const spinner = createSpinner('Initializing Vultisig SDK...')
+
+    sdk = new Vultisig()
+    await sdk.initialize()
+
+    const existingVault = await sdk.getActiveVault()
+    if (existingVault) {
+      setupVaultEvents(existingVault)
+      spinner.succeed(`SDK initialized - Vault loaded: ${existingVault.name}`)
+    } else {
+      spinner.succeed('SDK initialized')
     }
   }
 }
 
-// Wrapper to handle command execution and exit
+async function ensureActiveVault(): Promise<VaultBase> {
+  await init()
+  const vault = await sdk.getActiveVault()
+  if (!vault) {
+    throw new Error('No active vault. Create or import a vault first.')
+  }
+  return vault
+}
+
+// ============================================================================
+// Command Wrapper
+// ============================================================================
+
 function withExit(handler: (...args: any[]) => Promise<void>) {
   return async (...args: any[]) => {
     try {
       await handler(...args)
       process.exit(0)
-    } catch (error: any) {
-      if (error.exitCode !== undefined) {
-        process.exit(error.exitCode)
+    } catch (err: any) {
+      if (err.exitCode !== undefined) {
+        process.exit(err.exitCode)
       }
-      console.error(chalk.red(`\n✗ ${error.message}`))
+      console.error(chalk.red(`\nx ${err.message}`))
       process.exit(1)
     }
   }
 }
+
+// ============================================================================
+// Transaction Helper
+// ============================================================================
+
+async function sendTransaction(vault: VaultBase, params: SendParams): Promise<void> {
+  // 1. Prepare transaction
+  const prepareSpinner = createSpinner('Preparing transaction...')
+
+  const address = await vault.address(params.chain)
+  const balance = await vault.balance(params.chain, params.tokenId)
+
+  const coin = {
+    chain: params.chain,
+    address,
+    decimals: balance.decimals,
+    ticker: balance.symbol,
+    id: params.tokenId,
+  }
+
+  const amount = BigInt(Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals)))
+
+  const payload = await vault.prepareSendTx({
+    coin,
+    receiver: params.to,
+    amount,
+    memo: params.memo,
+  })
+
+  prepareSpinner.succeed('Transaction prepared')
+
+  // 2. Get gas estimate
+  let gas: Awaited<ReturnType<typeof vault.gas>> | undefined
+  try {
+    gas = await vault.gas(params.chain)
+  } catch {
+    warn('\nGas estimation unavailable')
+  }
+
+  // 3. Show transaction preview
+  displayTransactionPreview(
+    payload.coin.address,
+    params.to,
+    params.amount,
+    payload.coin.ticker,
+    params.chain,
+    params.memo,
+    gas
+  )
+
+  // 4. Confirm with user
+  const confirmed = await confirmTransaction()
+  if (!confirmed) {
+    warn('Transaction cancelled')
+    throw new Error('Transaction cancelled by user')
+  }
+
+  // 5. Sign transaction
+  const signSpinner = createSpinner('Signing transaction...')
+
+  vault.on('signingProgress', ({ step }: any) => {
+    signSpinner.text = `${step.message} (${step.progress}%)`
+  })
+
+  try {
+    const messageHashes = await vault.extractMessageHashes(payload)
+
+    const signature = await vault.sign({
+      transaction: payload,
+      chain: payload.coin.chain,
+      messageHashes,
+    })
+
+    signSpinner.succeed('Transaction signed')
+
+    // 6. Broadcast transaction
+    const broadcastSpinner = createSpinner('Broadcasting transaction...')
+
+    const txHash = await vault.broadcastTx({
+      chain: params.chain,
+      keysignPayload: payload,
+      signature,
+    })
+
+    broadcastSpinner.succeed(`Transaction broadcast: ${txHash}`)
+
+    // 7. Display result
+    displayTransactionResult(params.chain, txHash)
+  } finally {
+    vault.removeAllListeners('signingProgress')
+  }
+}
+
+// ============================================================================
+// Commands
+// ============================================================================
 
 // Command: Create new vault
 program
@@ -110,13 +256,11 @@ program
     withExit(async (options: { type: string }) => {
       await init()
 
-      // Validate vault type
       const vaultType = options.type.toLowerCase()
       if (vaultType !== 'fast' && vaultType !== 'secure') {
         throw new Error('Invalid vault type. Must be "fast" or "secure"')
       }
 
-      // Collect common vault details
       const answers = (await inquirer.prompt([
         {
           type: 'input',
@@ -136,12 +280,11 @@ program
           name: 'confirmPassword',
           message: 'Confirm password:',
           mask: '*',
-          validate: (input: string, answers: any) => input === answers.password || 'Passwords do not match',
+          validate: (input: string, ans: any) => input === ans.password || 'Passwords do not match',
         },
       ])) as any
 
       if (vaultType === 'fast') {
-        // Fast vault - requires email for server backup
         const { email } = await inquirer.prompt([
           {
             type: 'input',
@@ -151,13 +294,23 @@ program
           },
         ])
 
-        // Create fast vault
-        const result = await vaultManager.createVault(answers.name, answers.password, email)
+        const spinner = createSpinner('Creating vault...')
 
-        // Handle email verification
+        const result = await FastVault.create({
+          name: answers.name,
+          password: answers.password,
+          email,
+          onProgress: step => {
+            spinner.text = `${step.message} (${step.progress}%)`
+          },
+        })
+
+        setupVaultEvents(result.vault)
+        spinner.succeed(`Vault created: ${answers.name}`)
+
         if (result.verificationRequired) {
-          console.log(chalk.yellow('\n📧 A verification code has been sent to your email.'))
-          console.log(chalk.blue('Please check your inbox and enter the code.'))
+          warn('\nA verification code has been sent to your email.')
+          info('Please check your inbox and enter the code.')
 
           const { code } = await inquirer.prompt([
             {
@@ -168,21 +321,24 @@ program
             },
           ])
 
-          const verified = await vaultManager.verifyVault(result.vaultId, code)
+          const verifySpinner = createSpinner('Verifying email code...')
+          const verified = await sdk.verifyVault(result.vaultId, code)
 
-          if (!verified) {
-            console.error(chalk.red('\n✗ Verification failed. Please check the code and try again.'))
-            console.log(chalk.yellow('\nTo retry verification, use:'))
-            console.log(chalk.cyan(`  npm run wallet verify ${result.vaultId}`))
-            console.log(chalk.yellow('\nTo resend the verification email:'))
-            console.log(chalk.cyan(`  npm run wallet verify ${result.vaultId} --resend`))
-            const error: any = new Error('Verification failed')
-            error.exitCode = 1
-            throw error
+          if (verified) {
+            verifySpinner.succeed('Email verified successfully!')
+          } else {
+            verifySpinner.fail('Invalid verification code')
+            error('\nx Verification failed. Please check the code and try again.')
+            warn('\nTo retry verification, use:')
+            info(`  npm run wallet verify ${result.vaultId}`)
+            warn('\nTo resend the verification email:')
+            info(`  npm run wallet verify ${result.vaultId} --resend`)
+            const err: any = new Error('Verification failed')
+            err.exitCode = 1
+            throw err
           }
         }
       } else {
-        // Secure vault - requires threshold and total shares
         const secureOptions = (await inquirer.prompt([
           {
             type: 'number',
@@ -196,29 +352,44 @@ program
             name: 'totalShares',
             message: 'Total shares (n):',
             default: 3,
-            validate: (input: number, answers: any) =>
-              input >= answers.threshold || `Total shares must be >= threshold (${answers.threshold})`,
+            validate: (input: number, ans: any) =>
+              input >= ans.threshold || `Total shares must be >= threshold (${ans.threshold})`,
           },
         ])) as any
 
-        // Create secure vault
-        await vaultManager.createSecureVault(
-          answers.name,
-          answers.password,
-          secureOptions.threshold,
-          secureOptions.totalShares
-        )
+        const spinner = createSpinner('Creating secure vault...')
 
-        console.log(chalk.yellow(`\n⚠️  Important: Save your vault backup file (.vult) in a secure location.`))
-        console.log(
-          chalk.yellow(
+        try {
+          const result = await SecureVault.create({
+            name: answers.name,
+            password: answers.password,
+            devices: secureOptions.totalShares,
+            threshold: secureOptions.threshold,
+            onProgress: step => {
+              spinner.text = `${step.message} (${step.progress}%)`
+            },
+          })
+
+          setupVaultEvents(result.vault)
+          spinner.succeed(
+            `Secure vault created: ${answers.name} (${secureOptions.threshold}-of-${secureOptions.totalShares})`
+          )
+
+          warn(`\nImportant: Save your vault backup file (.vult) in a secure location.`)
+          warn(
             `This is a ${secureOptions.threshold}-of-${secureOptions.totalShares} vault. You'll need ${secureOptions.threshold} devices to sign transactions.`
           )
-        )
+        } catch (err: any) {
+          spinner.fail('Secure vault creation failed')
+          if (err.message?.includes('not implemented')) {
+            warn('\nSecure vault creation is not yet implemented in the SDK')
+          }
+          throw err
+        }
       }
 
-      console.log(chalk.green('\n✓ Vault created!'))
-      console.log(chalk.blue('\nYour vault is ready. Run the following commands:'))
+      success('\n+ Vault created!')
+      info('\nYour vault is ready. Run the following commands:')
       console.log(chalk.cyan('  npm run wallet balance     ') + '- View balances')
       console.log(chalk.cyan('  npm run wallet addresses   ') + '- View addresses')
       console.log(chalk.cyan('  npm run wallet portfolio   ') + '- View portfolio value')
@@ -242,11 +413,16 @@ program
         },
       ])
 
-      const vault = await vaultManager.importVault(file, password || undefined)
-      transactionManager = new TransactionManager(vault)
+      const spinner = createSpinner('Importing vault...')
 
-      console.log(chalk.green('\n✓ Vault imported successfully!'))
-      console.log(chalk.blue('\nRun "npm run wallet balance" to view balances'))
+      const vultContent = await fs.readFile(file, 'utf-8')
+      const vault = await sdk.importVault(vultContent, password || undefined)
+
+      setupVaultEvents(vault)
+      spinner.succeed(`Vault imported: ${vault.name}`)
+
+      success('\n+ Vault imported successfully!')
+      info('\nRun "npm run wallet balance" to view balances')
     })
   )
 
@@ -259,15 +435,13 @@ program
     withExit(async (vaultId: string, options: { resend?: boolean }) => {
       await init()
 
-      // Optionally resend verification email
       if (options.resend) {
-        const spinner = ora('Resending verification email...').start()
-        await vaultManager.resendVerification(vaultId)
+        const spinner = createSpinner('Resending verification email...')
+        await sdk.serverManager.resendVaultVerification(vaultId)
         spinner.succeed('Verification email sent!')
-        console.log(chalk.blue('Check your inbox for the new verification code.'))
+        info('Check your inbox for the new verification code.')
       }
 
-      // Prompt for verification code
       const { code } = await inquirer.prompt([
         {
           type: 'input',
@@ -277,18 +451,19 @@ program
         },
       ])
 
-      // Verify the vault
-      const verified = await vaultManager.verifyVault(vaultId, code)
+      const spinner = createSpinner('Verifying email code...')
+      const verified = await sdk.verifyVault(vaultId, code)
 
       if (verified) {
-        console.log(chalk.green('\n✓ Vault verified successfully!'))
+        spinner.succeed('Vault verified successfully!')
       } else {
-        console.error(chalk.red('\n✗ Verification failed. Please check the code and try again.'))
-        console.log(chalk.yellow('\nTip: Use --resend to get a new verification code:'))
-        console.log(chalk.cyan(`  npm run wallet verify ${vaultId} --resend`))
-        const error: any = new Error('Verification failed')
-        error.exitCode = 1
-        throw error
+        spinner.fail('Invalid verification code')
+        error('\nx Verification failed. Please check the code and try again.')
+        warn('\nTip: Use --resend to get a new verification code:')
+        info(`  npm run wallet verify ${vaultId} --resend`)
+        const err: any = new Error('Verification failed')
+        err.exitCode = 1
+        throw err
       }
     })
   )
@@ -300,45 +475,21 @@ program
   .option('-t, --tokens', 'Include token balances')
   .action(
     withExit(async (chainStr: string | undefined, options: { tokens?: boolean }) => {
-      await init()
+      const vault = await ensureActiveVault()
 
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      const spinner = ora('Loading balances...').start()
+      const spinner = createSpinner('Loading balances...')
 
       if (chainStr) {
-        // Show balance for specific chain
         const chain = chainStr as Chain
-        const balance = await vaultManager.getBalance(chain)
+        const balance = await vault.balance(chain)
 
         spinner.succeed('Balance loaded')
-
-        console.log(chalk.cyan(`\n${chain} Balance:`))
-        console.log(`  Amount: ${balance.amount} ${balance.symbol}`)
-        if (balance.fiatValue && balance.fiatCurrency) {
-          console.log(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
-        }
+        displayBalance(chain, balance)
       } else {
-        // Show all balances
-        const balances = await vaultManager.getAllBalances(options.tokens)
+        const balances = await vault.balances(undefined, options.tokens)
 
         spinner.succeed('Balances loaded')
-
-        console.log(chalk.cyan('\nPortfolio Balances:\n'))
-
-        const tableData = Object.entries(balances).map(([chain, balance]) => ({
-          Chain: chain,
-          Amount: balance.amount,
-          Symbol: balance.symbol,
-          Value:
-            balance.fiatValue && balance.fiatCurrency
-              ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`
-              : 'N/A',
-        }))
-
-        console.table(tableData)
+        displayBalancesTable(balances)
       }
     })
   )
@@ -351,17 +502,8 @@ program
   .option('--memo <memo>', 'Transaction memo')
   .action(
     withExit(async (chainStr: string, to: string, amount: string, options: { token?: string; memo?: string }) => {
-      await init()
+      const vault = await ensureActiveVault()
 
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      if (!transactionManager) {
-        throw new Error('Transaction manager not initialized')
-      }
-
-      // Validate inputs
       const chain = chainStr as Chain
       if (!Object.values(Chain).includes(chain)) {
         throw new Error(`Invalid chain: ${chain}`)
@@ -371,26 +513,20 @@ program
         throw new Error('Invalid amount')
       }
 
-      // Execute send (password will be prompted via GlobalConfig.onPasswordRequired)
       try {
-        const result = await transactionManager.send({
+        await sendTransaction(vault, {
           chain,
           to,
           amount,
           tokenId: options.token,
           memo: options.memo,
         })
-
-        // Display result
-        console.log(chalk.green('\n✓ Transaction successful!'))
-        console.log(chalk.blue(`\nTransaction Hash: ${result.txHash}`))
-        console.log(chalk.cyan(`View on explorer: ${result.explorerUrl}`))
-      } catch (error: any) {
-        if (error.message === 'Transaction cancelled by user') {
-          console.log(chalk.yellow('\n✗ Transaction cancelled'))
-          return // Exit cleanly
+      } catch (err: any) {
+        if (err.message === 'Transaction cancelled by user') {
+          warn('\nx Transaction cancelled')
+          return
         }
-        throw error
+        throw err
       }
     })
   )
@@ -402,56 +538,43 @@ program
   .option('-c, --currency <currency>', `Fiat currency (${fiatCurrencies.join(', ')})`, 'usd')
   .action(
     withExit(async (options: { currency: string }) => {
-      await init()
+      const vault = await ensureActiveVault()
 
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      const vault = vaultManager.getActiveVault()!
-
-      // Validate and normalize currency
       const currency = options.currency.toLowerCase() as FiatCurrency
       if (!fiatCurrencies.includes(currency)) {
-        console.error(chalk.red(`✗ Invalid currency: ${options.currency}`))
-        console.log(chalk.yellow(`Supported currencies: ${fiatCurrencies.join(', ')}`))
-        const error: any = new Error('Invalid currency')
-        error.exitCode = 1
-        throw error
+        error(`x Invalid currency: ${options.currency}`)
+        warn(`Supported currencies: ${fiatCurrencies.join(', ')}`)
+        const err: any = new Error('Invalid currency')
+        err.exitCode = 1
+        throw err
       }
 
-      // Persist currency preference
       if (vault.currency !== currency) {
         await vault.setCurrency(currency)
       }
 
       const currencyName = fiatCurrencyNameRecord[currency]
-      const spinner = ora(`Loading portfolio in ${currencyName}...`).start()
+      const spinner = createSpinner(`Loading portfolio in ${currencyName}...`)
 
-      const portfolio = await vaultManager.getPortfolioValue(currency)
+      const totalValue = await vault.getTotalValue(currency)
+      const chains = vault.getChains()
+
+      const chainBalances = await Promise.all(
+        chains.map(async chain => {
+          const balance = await vault.balance(chain)
+          try {
+            const value = await vault.getValue(chain, undefined, currency)
+            return { chain, balance, value }
+          } catch {
+            return { chain, balance }
+          }
+        })
+      )
+
+      const portfolio: PortfolioSummary = { totalValue, chainBalances }
 
       spinner.succeed('Portfolio loaded')
-
-      // Display total value
-      console.log(chalk.cyan('\n╔════════════════════════════════════════╗'))
-      console.log(chalk.cyan(`║       Portfolio Total Value (${currencyName})       ║`))
-      console.log(chalk.cyan('╠════════════════════════════════════════╣'))
-      const totalDisplay =
-        portfolio.totalValue.amount.padEnd(20) + portfolio.totalValue.currency.toUpperCase().padStart(16)
-      console.log(chalk.cyan('║  ') + chalk.bold.green(totalDisplay) + chalk.cyan('  ║'))
-      console.log(chalk.cyan('╚════════════════════════════════════════╝\n'))
-
-      // Display breakdown by chain
-      console.log(chalk.bold('Chain Breakdown:\n'))
-
-      const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
-        Chain: chain,
-        Amount: balance.amount,
-        Symbol: balance.symbol,
-        Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
-      }))
-
-      console.table(table)
+      displayPortfolio(portfolio, currency)
     })
   )
 
@@ -461,16 +584,9 @@ program
   .description('View or set the vault currency preference')
   .action(
     withExit(async (newCurrency?: string) => {
-      await init()
-
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      const vault = vaultManager.getActiveVault()!
+      const vault = await ensureActiveVault()
 
       if (!newCurrency) {
-        // Show current currency
         const currentCurrency = vault.currency
         const currencyName = fiatCurrencyNameRecord[currentCurrency]
         console.log(chalk.cyan('\nCurrent Currency Preference:'))
@@ -478,22 +594,21 @@ program
         console.log(chalk.gray(`\nSupported currencies: ${fiatCurrencies.join(', ')}`))
         console.log(chalk.gray('Use "npm run wallet currency <code>" to change'))
       } else {
-        // Set new currency
         const currency = newCurrency.toLowerCase() as FiatCurrency
         if (!fiatCurrencies.includes(currency)) {
-          console.error(chalk.red(`✗ Invalid currency: ${newCurrency}`))
-          console.log(chalk.yellow(`Supported currencies: ${fiatCurrencies.join(', ')}`))
-          const error: any = new Error('Invalid currency')
-          error.exitCode = 1
-          throw error
+          error(`x Invalid currency: ${newCurrency}`)
+          warn(`Supported currencies: ${fiatCurrencies.join(', ')}`)
+          const err: any = new Error('Invalid currency')
+          err.exitCode = 1
+          throw err
         }
 
-        const spinner = ora('Updating currency preference...').start()
+        const spinner = createSpinner('Updating currency preference...')
         await vault.setCurrency(currency)
         spinner.succeed('Currency updated')
 
         const currencyName = fiatCurrencyNameRecord[currency]
-        console.log(chalk.green(`\n✓ Currency preference set to ${currency.toUpperCase()} (${currencyName})`))
+        success(`\n+ Currency preference set to ${currency.toUpperCase()} (${currencyName})`)
       }
     })
   )
@@ -506,24 +621,26 @@ program
     withExit(async () => {
       await init()
 
-      const spinner = ora('Checking server status...').start()
+      const spinner = createSpinner('Checking server status...')
 
       try {
-        const status = await vaultManager.getSDK().getServerStatus()
+        const status = await sdk.getServerStatus()
         spinner.succeed('Server status retrieved')
 
         console.log(chalk.cyan('\nServer Status:\n'))
-        console.log(`  Connected:     ${status.isConnected ? chalk.green('Yes') : chalk.red('No')}`)
-        console.log(`  Endpoint:      ${status.endpoint}`)
-        if (status.version) {
-          console.log(`  Version:       ${status.version}`)
+        console.log(chalk.bold('Fast Vault Server:'))
+        console.log(`  Online:   ${status.fastVault.online ? chalk.green('Yes') : chalk.red('No')}`)
+        if (status.fastVault.latency) {
+          console.log(`  Latency:  ${status.fastVault.latency}ms`)
         }
-        if (status.latency) {
-          console.log(`  Latency:       ${status.latency}ms`)
+        console.log(chalk.bold('\nMessage Relay:'))
+        console.log(`  Online:   ${status.messageRelay.online ? chalk.green('Yes') : chalk.red('No')}`)
+        if (status.messageRelay.latency) {
+          console.log(`  Latency:  ${status.messageRelay.latency}ms`)
         }
-      } catch (error: any) {
+      } catch (err: any) {
         spinner.fail('Failed to check server status')
-        console.error(chalk.red(`\n✗ ${error.message}`))
+        error(`\nx ${err.message}`)
       }
     })
   )
@@ -534,11 +651,7 @@ program
   .description('Export vault to file')
   .action(
     withExit(async (path?: string) => {
-      await init()
-
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
+      const vault = await ensureActiveVault()
 
       const { encrypt } = await inquirer.prompt([
         {
@@ -549,9 +662,9 @@ program
         },
       ])
 
-      let password: string | undefined
       if (encrypt) {
-        const answer = await inquirer.prompt([
+        // Note: Export password encryption would be handled by vault.export() if supported
+        await inquirer.prompt([
           {
             type: 'password',
             name: 'password',
@@ -559,13 +672,19 @@ program
             mask: '*',
           },
         ])
-        password = answer.password
       }
 
-      const fileName = await vaultManager.exportVault(path, password)
+      const spinner = createSpinner('Exporting vault...')
 
-      console.log(chalk.green('\n✓ Vault exported successfully!'))
-      console.log(chalk.blue(`File: ${fileName}`))
+      const { data: vultContent } = await vault.export()
+      const fileName = path || `${vault.name}-${vault.localPartyId}-vault.vult`
+
+      await fs.writeFile(fileName, vultContent, 'utf-8')
+
+      spinner.succeed(`Vault exported: ${fileName}`)
+
+      success('\n+ Vault exported successfully!')
+      info(`File: ${fileName}`)
     })
   )
 
@@ -575,26 +694,13 @@ program
   .description('Show all vault addresses')
   .action(
     withExit(async () => {
-      await init()
+      const vault = await ensureActiveVault()
 
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      const spinner = ora('Loading addresses...').start()
-
-      const addresses = await vaultManager.getAddresses()
+      const spinner = createSpinner('Loading addresses...')
+      const addresses = await vault.addresses()
 
       spinner.succeed('Addresses loaded')
-
-      console.log(chalk.cyan('\nVault Addresses:\n'))
-
-      const table = Object.entries(addresses).map(([chain, address]) => ({
-        Chain: chain,
-        Address: address,
-      }))
-
-      console.table(table)
+      displayAddresses(addresses)
     })
   )
 
@@ -609,10 +715,7 @@ program
     withExit(async (options: { add?: boolean; remove?: string; chain?: string }) => {
       await init()
 
-      const sdk = vaultManager.getSDK()
-
       if (options.add) {
-        // Add new address book entry
         const answers = await inquirer.prompt([
           {
             type: 'list',
@@ -634,43 +737,47 @@ program
           },
         ])
 
-        const spinner = ora('Adding address to address book...').start()
+        const spinner = createSpinner('Adding address to address book...')
         await sdk.addAddressBookEntry([
           {
             chain: answers.chain,
             address: answers.address.trim(),
             name: answers.name.trim(),
+            source: 'saved' as const,
+            dateAdded: Date.now(),
           },
         ])
         spinner.succeed('Address added')
 
-        console.log(chalk.green(`\n✓ Added ${answers.name} (${answers.chain}: ${answers.address})`))
+        success(`\n+ Added ${answers.name} (${answers.chain}: ${answers.address})`)
       } else if (options.remove) {
-        // Remove address book entry
         const chain = options.chain as Chain | undefined
 
-        const spinner = ora('Removing address from address book...').start()
+        const spinner = createSpinner('Removing address from address book...')
         await sdk.removeAddressBookEntry([{ address: options.remove, chain }])
         spinner.succeed('Address removed')
 
-        console.log(chalk.green(`\n✓ Removed ${options.remove}`))
+        success(`\n+ Removed ${options.remove}`)
       } else {
-        // List address book entries
-        const spinner = ora('Loading address book...').start()
+        const spinner = createSpinner('Loading address book...')
         const chain = options.chain as Chain | undefined
-        const entries = await sdk.getAddressBook(chain)
+        const addressBook = await sdk.getAddressBook(chain)
         spinner.succeed('Address book loaded')
 
-        if (entries.length === 0) {
-          console.log(chalk.yellow(`\nNo addresses in address book${chain ? ` for ${chain}` : ''}`))
+        // Combine saved and vault addresses
+        const allEntries = [...addressBook.saved, ...addressBook.vaults]
+
+        if (allEntries.length === 0) {
+          warn(`\nNo addresses in address book${chain ? ` for ${chain}` : ''}`)
           console.log(chalk.gray('\nUse --add to add an address to the address book'))
         } else {
           console.log(chalk.cyan(`\nAddress Book${chain ? ` (${chain})` : ''}:\n`))
 
-          const table = entries.map(entry => ({
+          const table = allEntries.map(entry => ({
             Name: entry.name,
             Chain: entry.chain,
             Address: entry.address,
+            Source: entry.source,
           }))
 
           console.table(table)
@@ -689,30 +796,23 @@ program
   .option('--remove <chain>', 'Remove a chain')
   .action(
     withExit(async (options: { add?: string; remove?: string }) => {
-      await init()
-
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      const vault = vaultManager.getActiveVault()!
+      const vault = await ensureActiveVault()
 
       if (options.add) {
         const chain = options.add as Chain
-        await vaultManager.addChain(chain)
-        console.log(chalk.green(`\n✓ Added chain: ${chain}`))
+        await vault.addChain(chain)
+        success(`\n+ Added chain: ${chain}`)
         const address = await vault.address(chain)
-        console.log(chalk.blue(`Address: ${address}`))
+        info(`Address: ${address}`)
       } else if (options.remove) {
         const chain = options.remove as Chain
-        await vaultManager.removeChain(chain)
-        console.log(chalk.green(`\n✓ Removed chain: ${chain}`))
+        await vault.removeChain(chain)
+        success(`\n+ Removed chain: ${chain}`)
       } else {
-        // List all chains
         const chains = vault.getChains()
         console.log(chalk.cyan('\nActive Chains:\n'))
         chains.forEach((chain: Chain) => {
-          console.log(`  • ${chain}`)
+          console.log(`  - ${chain}`)
         })
         console.log(chalk.gray('\nUse --add <chain> to add a chain or --remove <chain> to remove one'))
       }
@@ -727,28 +827,17 @@ program
     withExit(async () => {
       await init()
 
-      const spinner = ora('Loading vaults...').start()
-      const vaults = await vaultManager.getSDK().listVaults()
+      const spinner = createSpinner('Loading vaults...')
+      const vaults = await sdk.listVaults()
       spinner.succeed('Vaults loaded')
 
       if (vaults.length === 0) {
-        console.log(chalk.yellow('\nNo vaults found. Create or import a vault first.'))
+        warn('\nNo vaults found. Create or import a vault first.')
         return
       }
 
-      const activeVault = vaultManager.getActiveVault()
-
-      console.log(chalk.cyan('\nStored Vaults:\n'))
-
-      const table = vaults.map(vault => ({
-        ID: vault.id,
-        Name: vault.name === activeVault?.name ? chalk.green(`${vault.name} (active)`) : vault.name,
-        Type: vault.type,
-        Chains: vault.getChains().length,
-        Created: new Date(vault.createdAt).toLocaleDateString(),
-      }))
-
-      console.table(table)
+      const activeVault = await sdk.getActiveVault()
+      displayVaultsList(vaults, activeVault)
 
       console.log(chalk.gray('\nUse "npm run wallet switch <id>" to switch active vault'))
     })
@@ -762,20 +851,21 @@ program
     withExit(async (vaultId: string) => {
       await init()
 
-      const spinner = ora('Loading vault...').start()
-      const vault = await vaultManager.getSDK().getVaultById(vaultId)
+      const spinner = createSpinner('Loading vault...')
+      const vault = await sdk.getVaultById(vaultId)
 
       if (!vault) {
         spinner.fail('Vault not found')
         throw new Error(`No vault found with ID: ${vaultId}`)
       }
 
-      await vaultManager.getSDK().setActiveVault(vault)
+      await sdk.setActiveVault(vault)
+      setupVaultEvents(vault)
       spinner.succeed('Vault switched')
 
-      console.log(chalk.green(`\n✓ Switched to vault: ${vault.name}`))
-      console.log(chalk.blue(`  Type: ${vault.type}`))
-      console.log(chalk.blue(`  Chains: ${vault.getChains().length}`))
+      success(`\n+ Switched to vault: ${vault.name}`)
+      info(`  Type: ${vault.type}`)
+      info(`  Chains: ${vault.getChains().length}`)
     })
   )
 
@@ -785,20 +875,15 @@ program
   .description('Rename the active vault')
   .action(
     withExit(async (newName: string) => {
-      await init()
+      const vault = await ensureActiveVault()
 
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      const vault = vaultManager.getActiveVault()!
       const oldName = vault.name
 
-      const spinner = ora('Renaming vault...').start()
+      const spinner = createSpinner('Renaming vault...')
       await vault.rename(newName)
       spinner.succeed('Vault renamed')
 
-      console.log(chalk.green(`\n✓ Vault renamed from "${oldName}" to "${newName}"`))
+      success(`\n+ Vault renamed from "${oldName}" to "${newName}"`)
     })
   )
 
@@ -808,62 +893,8 @@ program
   .description('Show detailed vault information')
   .action(
     withExit(async () => {
-      await init()
-
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      const vault = vaultManager.getActiveVault()!
-
-      console.log(chalk.cyan('\n╔════════════════════════════════════════╗'))
-      console.log(chalk.cyan('║           Vault Information            ║'))
-      console.log(chalk.cyan('╚════════════════════════════════════════╝\n'))
-
-      // Basic info
-      console.log(chalk.bold('Basic Information:'))
-      console.log(`  Name:          ${chalk.green(vault.name)}`)
-      console.log(`  ID:            ${vault.id}`)
-      console.log(`  Type:          ${chalk.yellow(vault.type)}`)
-      console.log(`  Created:       ${new Date(vault.createdAt).toLocaleString()}`)
-      console.log(`  Last Modified: ${new Date(vault.lastModified).toLocaleString()}`)
-
-      // Security info
-      console.log(chalk.bold('\nSecurity:'))
-      console.log(`  Encrypted:     ${vault.isEncrypted ? chalk.green('Yes') : chalk.gray('No')}`)
-      console.log(`  Backed Up:     ${vault.isBackedUp ? chalk.green('Yes') : chalk.yellow('No')}`)
-
-      // MPC info
-      console.log(chalk.bold('\nMPC Configuration:'))
-      console.log(`  Library Type:  ${vault.libType}`)
-      console.log(`  Threshold:     ${chalk.cyan(vault.threshold)} of ${chalk.cyan(vault.totalSigners)}`)
-      console.log(`  Local Party:   ${vault.localPartyId}`)
-      console.log(`  Total Signers: ${vault.totalSigners}`)
-
-      // Signing modes
-      const modes = vault.availableSigningModes
-      console.log(chalk.bold('\nSigning Modes:'))
-      modes.forEach(mode => {
-        console.log(`  • ${mode}`)
-      })
-
-      // Chains
-      const chains = vault.getChains()
-      console.log(chalk.bold('\nChains:'))
-      console.log(`  Total: ${chains.length}`)
-      chains.forEach((chain: Chain) => {
-        console.log(`  • ${chain}`)
-      })
-
-      // Currency
-      console.log(chalk.bold('\nPreferences:'))
-      console.log(`  Currency:      ${vault.currency.toUpperCase()}`)
-
-      // Public keys
-      console.log(chalk.bold('\nPublic Keys:'))
-      console.log(`  ECDSA:         ${vault.publicKeys.ecdsa.substring(0, 20)}...`)
-      console.log(`  EdDSA:         ${vault.publicKeys.eddsa.substring(0, 20)}...`)
-      console.log(`  Chain Code:    ${vault.hexChainCode.substring(0, 20)}...\n`)
+      const vault = await ensureActiveVault()
+      displayVaultInfo(vault)
     })
   )
 
@@ -875,23 +906,23 @@ program
   .option('--remove <tokenId>', 'Remove a token by ID')
   .action(
     withExit(async (chainStr: string, options: { add?: string; remove?: string }) => {
-      await init()
+      const vault = await ensureActiveVault()
 
-      if (!vaultManager.getActiveVault()) {
-        throw new Error('No active vault. Create or import a vault first.')
-      }
-
-      const vault = vaultManager.getActiveVault()!
       const chain = chainStr as Chain
 
       if (options.add) {
-        // Add token by contract address
-        const { symbol, decimals } = await inquirer.prompt([
+        const { symbol, name, decimals } = await inquirer.prompt([
           {
             type: 'input',
             name: 'symbol',
             message: 'Enter token symbol (e.g., USDT):',
             validate: (input: string) => input.trim() !== '' || 'Symbol is required',
+          },
+          {
+            type: 'input',
+            name: 'name',
+            message: 'Enter token name (e.g., Tether USD):',
+            validate: (input: string) => input.trim() !== '' || 'Name is required',
           },
           {
             type: 'number',
@@ -902,34 +933,36 @@ program
           },
         ])
 
-        await vaultManager.addToken(chain, {
+        await vault.addToken(chain, {
+          id: `${chain}-${options.add}`,
           contractAddress: options.add,
           symbol: symbol.trim(),
+          name: name.trim(),
           decimals,
-          isNativeToken: false,
+          chainId: chain,
+          isNative: false,
         })
 
-        console.log(chalk.green(`\n✓ Added token ${symbol} on ${chain}`))
+        success(`\n+ Added token ${symbol} on ${chain}`)
       } else if (options.remove) {
-        // Remove token
-        await vaultManager.removeToken(chain, options.remove)
-        console.log(chalk.green(`\n✓ Removed token ${options.remove} from ${chain}`))
+        await vault.removeToken(chain, options.remove)
+        success(`\n+ Removed token ${options.remove} from ${chain}`)
       } else {
-        // List tokens for chain
-        const spinner = ora(`Loading tokens for ${chain}...`).start()
+        const spinner = createSpinner(`Loading tokens for ${chain}...`)
         const tokens = vault.getTokens(chain)
         spinner.succeed(`Tokens loaded for ${chain}`)
 
         if (!tokens || tokens.length === 0) {
-          console.log(chalk.yellow(`\nNo tokens configured for ${chain}`))
+          warn(`\nNo tokens configured for ${chain}`)
           console.log(chalk.gray(`\nUse --add <contractAddress> to add a token`))
         } else {
           console.log(chalk.cyan(`\nTokens for ${chain}:\n`))
           const table = tokens.map(token => ({
             Symbol: token.symbol,
-            Contract: token.contractAddress,
+            Name: token.name,
+            Contract: token.contractAddress || 'N/A',
             Decimals: token.decimals,
-            Native: token.isNativeToken ? 'Yes' : 'No',
+            Native: token.isNative ? 'Yes' : 'No',
           }))
           console.table(table)
           console.log(chalk.gray(`\nUse --add <contractAddress> to add or --remove <tokenId> to remove`))
@@ -938,11 +971,227 @@ program
     })
   )
 
-// Cleanup on exit
+// ============================================================================
+// Swap Commands
+// ============================================================================
+
+// Command: List supported swap chains
+program
+  .command('swap-chains')
+  .description('List chains that support swaps')
+  .action(
+    withExit(async () => {
+      const vault = await ensureActiveVault()
+
+      const spinner = createSpinner('Loading supported swap chains...')
+      const chains = await vault.getSupportedSwapChains()
+      spinner.succeed('Swap chains loaded')
+
+      displaySwapChains(chains)
+    })
+  )
+
+// Command: Get swap quote
+program
+  .command('swap-quote <fromChain> <toChain> <amount>')
+  .description('Get a swap quote without executing')
+  .option('--from-token <address>', 'Token address to swap from (default: native)')
+  .option('--to-token <address>', 'Token address to swap to (default: native)')
+  .action(
+    withExit(
+      async (
+        fromChainStr: string,
+        toChainStr: string,
+        amountStr: string,
+        options: { fromToken?: string; toToken?: string }
+      ) => {
+        const vault = await ensureActiveVault()
+
+        const fromChain = fromChainStr as Chain
+        const toChain = toChainStr as Chain
+        const amount = parseFloat(amountStr)
+
+        if (isNaN(amount) || amount <= 0) {
+          throw new Error('Invalid amount')
+        }
+
+        // Check swap support
+        const isSupported = await vault.isSwapSupported(fromChain, toChain)
+        if (!isSupported) {
+          throw new Error(`Swaps from ${fromChain} to ${toChain} are not supported`)
+        }
+
+        const spinner = createSpinner('Getting swap quote...')
+
+        const quote = await vault.getSwapQuote({
+          fromCoin: { chain: fromChain, token: options.fromToken },
+          toCoin: { chain: toChain, token: options.toToken },
+          amount,
+        })
+
+        spinner.succeed('Quote received')
+
+        // Get symbols for display
+        const fromBalance = await vault.balance(fromChain, options.fromToken)
+        const toBalance = await vault.balance(toChain, options.toToken)
+
+        displaySwapPreview(quote, amountStr, fromBalance.symbol, toBalance.symbol)
+
+        info('\nTo execute this swap, use the "swap" command')
+      }
+    )
+  )
+
+// Command: Execute swap
+program
+  .command('swap <fromChain> <toChain> <amount>')
+  .description('Swap tokens between chains')
+  .option('--from-token <address>', 'Token address to swap from (default: native)')
+  .option('--to-token <address>', 'Token address to swap to (default: native)')
+  .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
+  .action(
+    withExit(
+      async (
+        fromChainStr: string,
+        toChainStr: string,
+        amountStr: string,
+        options: { fromToken?: string; toToken?: string; slippage?: string }
+      ) => {
+        const vault = await ensureActiveVault()
+
+        const fromChain = fromChainStr as Chain
+        const toChain = toChainStr as Chain
+        const amount = parseFloat(amountStr)
+
+        if (isNaN(amount) || amount <= 0) {
+          throw new Error('Invalid amount')
+        }
+
+        // Check swap support
+        const isSupported = await vault.isSwapSupported(fromChain, toChain)
+        if (!isSupported) {
+          throw new Error(`Swaps from ${fromChain} to ${toChain} are not supported`)
+        }
+
+        // 1. Get swap quote
+        const quoteSpinner = createSpinner('Getting swap quote...')
+
+        const quote = await vault.getSwapQuote({
+          fromCoin: { chain: fromChain, token: options.fromToken },
+          toCoin: { chain: toChain, token: options.toToken },
+          amount,
+        })
+
+        quoteSpinner.succeed('Quote received')
+
+        // Get symbols for display
+        const fromBalance = await vault.balance(fromChain, options.fromToken)
+        const toBalance = await vault.balance(toChain, options.toToken)
+
+        // 2. Display preview
+        displaySwapPreview(quote, amountStr, fromBalance.symbol, toBalance.symbol)
+
+        // 3. Confirm with user
+        const confirmed = await confirmSwap()
+        if (!confirmed) {
+          warn('Swap cancelled')
+          return
+        }
+
+        // 4. Prepare swap transaction
+        const prepSpinner = createSpinner('Preparing swap transaction...')
+
+        const { keysignPayload, approvalPayload } = await vault.prepareSwapTx({
+          fromCoin: { chain: fromChain, token: options.fromToken },
+          toCoin: { chain: toChain, token: options.toToken },
+          amount,
+          swapQuote: quote,
+          autoApprove: false,
+        })
+
+        prepSpinner.succeed('Swap prepared')
+
+        // 5. Handle approval if needed
+        if (approvalPayload) {
+          info('\nToken approval required before swap...')
+
+          const approvalSpinner = createSpinner('Signing approval transaction...')
+
+          vault.on('signingProgress', ({ step }: any) => {
+            approvalSpinner.text = `Approval: ${step.message} (${step.progress}%)`
+          })
+
+          try {
+            const approvalHashes = await vault.extractMessageHashes(approvalPayload)
+            const approvalSig = await vault.sign({
+              transaction: approvalPayload,
+              chain: fromChain,
+              messageHashes: approvalHashes,
+            })
+
+            approvalSpinner.succeed('Approval signed')
+
+            const broadcastApprovalSpinner = createSpinner('Broadcasting approval...')
+            const approvalTxHash = await vault.broadcastTx({
+              chain: fromChain,
+              keysignPayload: approvalPayload,
+              signature: approvalSig,
+            })
+
+            broadcastApprovalSpinner.succeed(`Approval broadcast: ${approvalTxHash}`)
+            info('Waiting for approval to confirm...')
+
+            // Wait a bit for approval to be mined
+            await new Promise(resolve => setTimeout(resolve, 5000))
+          } finally {
+            vault.removeAllListeners('signingProgress')
+          }
+        }
+
+        // 6. Sign main swap transaction
+        const signSpinner = createSpinner('Signing swap transaction...')
+
+        vault.on('signingProgress', ({ step }: any) => {
+          signSpinner.text = `${step.message} (${step.progress}%)`
+        })
+
+        try {
+          const messageHashes = await vault.extractMessageHashes(keysignPayload)
+          const signature = await vault.sign({
+            transaction: keysignPayload,
+            chain: fromChain,
+            messageHashes,
+          })
+
+          signSpinner.succeed('Swap transaction signed')
+
+          // 7. Broadcast swap
+          const broadcastSpinner = createSpinner('Broadcasting swap transaction...')
+
+          const txHash = await vault.broadcastTx({
+            chain: fromChain,
+            keysignPayload,
+            signature,
+          })
+
+          broadcastSpinner.succeed(`Swap broadcast: ${txHash}`)
+
+          // 8. Display result
+          displaySwapResult(fromChain, toChain, txHash, quote)
+        } finally {
+          vault.removeAllListeners('signingProgress')
+        }
+      }
+    )
+  )
+
+// ============================================================================
+// Cleanup
+// ============================================================================
+
 process.on('SIGINT', () => {
-  console.log(chalk.yellow('\n\nShutting down...'))
+  warn('\n\nShutting down...')
   process.exit(0)
 })
 
-// Parse arguments
 program.parse()

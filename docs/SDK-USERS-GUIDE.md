@@ -10,6 +10,7 @@
 - [Password Management](#password-management)
 - [Vault Management](#vault-management)
 - [Essential Operations](#essential-operations)
+- [Token Swaps](#token-swaps)
 - [Configuration](#configuration)
 - [Caching System](#caching-system)
 - [Event System](#event-system)
@@ -645,6 +646,196 @@ console.log(`Total portfolio value: €${totalEur}`)
 
 ---
 
+## Token Swaps
+
+The SDK supports token swaps across multiple chains and protocols, including cross-chain swaps via THORChain and same-chain DEX aggregation via 1inch.
+
+### Supported Swap Routes
+
+| Route Type | Provider | Example |
+| ---------- | -------- | ------- |
+| Cross-chain (BTC, ETH, Cosmos) | THORChain | BTC → ETH, ETH → ATOM |
+| Same-chain EVM | 1inch | ETH → USDC on Ethereum |
+| Cross-chain EVM | LiFi | Polygon → Arbitrum |
+
+### Checking Swap Support
+
+```typescript
+// Get list of chains that support swaps
+const supportedChains = vault.getSupportedSwapChains()
+console.log('Swap-enabled chains:', supportedChains)
+
+// Check if specific swap route is available
+const canSwap = vault.isSwapSupported(Chain.Ethereum, Chain.Bitcoin)
+console.log('ETH → BTC supported:', canSwap) // true
+```
+
+### Getting a Swap Quote
+
+Get a quote before executing a swap:
+
+```typescript
+// Simple format - just specify chains (native tokens)
+const quote = await vault.getSwapQuote({
+  fromCoin: { chain: Chain.Ethereum },
+  toCoin: { chain: Chain.Bitcoin },
+  amount: 0.1  // 0.1 ETH
+})
+
+console.log(`Provider: ${quote.provider}`)           // e.g., 'thorchain'
+console.log(`Output: ${quote.estimatedOutput} BTC`)  // e.g., '0.00234 BTC'
+console.log(`Expires: ${new Date(quote.expiresAt)}`)
+console.log(`Fees: ${quote.fees.total}`)
+
+// Check if approval is needed (ERC-20 tokens)
+if (quote.requiresApproval) {
+  console.log(`Approval needed for: ${quote.approvalInfo?.spender}`)
+}
+```
+
+### Swapping with ERC-20 Tokens
+
+For ERC-20 tokens, specify the token contract address:
+
+```typescript
+// Swap USDC to ETH
+const quote = await vault.getSwapQuote({
+  fromCoin: {
+    chain: Chain.Ethereum,
+    token: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'  // USDC
+  },
+  toCoin: { chain: Chain.Ethereum },  // Native ETH
+  amount: 100  // 100 USDC
+})
+
+// Or use full AccountCoin format
+const ethAddress = await vault.address(Chain.Ethereum)
+const quote = await vault.getSwapQuote({
+  fromCoin: {
+    chain: Chain.Ethereum,
+    address: ethAddress,
+    id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    ticker: 'USDC',
+    decimals: 6
+  },
+  toCoin: {
+    chain: Chain.Ethereum,
+    address: ethAddress,
+    ticker: 'ETH',
+    decimals: 18
+  },
+  amount: 100
+})
+```
+
+### Executing a Swap
+
+Complete swap flow with signing and broadcasting:
+
+```typescript
+// Step 1: Get quote
+const quote = await vault.getSwapQuote({
+  fromCoin: { chain: Chain.Ethereum },
+  toCoin: { chain: Chain.Bitcoin },
+  amount: 0.1
+})
+
+// Step 2: Prepare transaction
+const { keysignPayload, approvalPayload } = await vault.prepareSwapTx({
+  fromCoin: { chain: Chain.Ethereum },
+  toCoin: { chain: Chain.Bitcoin },
+  amount: 0.1,
+  swapQuote: quote
+})
+
+// Step 3: Handle approval if needed (ERC-20 tokens only)
+if (approvalPayload) {
+  const approvalSignature = await vault.sign(approvalPayload)
+  const approvalTxHash = await vault.broadcastTx({
+    chain: Chain.Ethereum,
+    keysignPayload: approvalPayload,
+    signature: approvalSignature
+  })
+  console.log('Approval tx:', approvalTxHash)
+  // Wait for approval confirmation before proceeding
+}
+
+// Step 4: Sign and broadcast swap
+const signature = await vault.sign(keysignPayload)
+const txHash = await vault.broadcastTx({
+  chain: Chain.Ethereum,
+  keysignPayload,
+  signature
+})
+
+console.log('Swap tx:', txHash)
+```
+
+### Checking Token Allowance
+
+Check if ERC-20 approval is needed before swapping:
+
+```typescript
+const ethAddress = await vault.address(Chain.Ethereum)
+
+// Check current allowance for a DEX router
+const allowance = await vault.getTokenAllowance(
+  {
+    chain: Chain.Ethereum,
+    address: ethAddress,
+    id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',  // USDC
+    ticker: 'USDC',
+    decimals: 6
+  },
+  '0x1111111254fb6c44bAC0beD2854e76F90643097d'  // 1inch router
+)
+
+console.log(`Current USDC allowance: ${allowance}`)
+```
+
+### Swap Events
+
+Subscribe to swap-related events:
+
+```typescript
+// Listen for swap quotes
+vault.on('swapQuoteReceived', ({ quote }) => {
+  console.log(`Quote received from ${quote.provider}`)
+  console.log(`Output: ${quote.estimatedOutput}`)
+})
+
+// Get quote - event will fire automatically
+const quote = await vault.getSwapQuote({
+  fromCoin: { chain: Chain.Ethereum },
+  toCoin: { chain: Chain.Bitcoin },
+  amount: 0.1
+})
+```
+
+### Error Handling
+
+Handle common swap errors gracefully:
+
+```typescript
+try {
+  const quote = await vault.getSwapQuote({
+    fromCoin: { chain: Chain.Ethereum },
+    toCoin: { chain: Chain.Bitcoin },
+    amount: 0.001  // Very small amount
+  })
+} catch (error) {
+  if (error.message.includes('No swap route')) {
+    console.log('No swap route available for this pair/amount')
+  } else if (error.message.includes('pool')) {
+    console.log('Liquidity pool not available')
+  } else {
+    throw error
+  }
+}
+```
+
+---
+
 ## Configuration
 
 ### Global Configuration
@@ -913,6 +1104,11 @@ vault.on('renamed', ({ oldName, newName }) => {
   console.log(`Vault renamed: ${oldName} -> ${newName}`)
 })
 
+// Swap quote received
+vault.on('swapQuoteReceived', ({ quote }) => {
+  console.log(`Swap quote: ${quote.estimatedOutput} via ${quote.provider}`)
+})
+
 // Error events
 vault.on('error', (error) => {
   console.error('Vault error:', error.message)
@@ -1027,6 +1223,13 @@ class VaultBase {
   sign(payload: SigningPayload): Promise<Signature>
   broadcastTx(params: BroadcastParams): Promise<string>
   gas(chain: Chain): Promise<GasInfo>
+
+  // Swaps
+  getSwapQuote(params: SwapQuoteParams): Promise<SwapQuoteResult>
+  prepareSwapTx(params: SwapTxParams): Promise<SwapPrepareResult>
+  getTokenAllowance(coin: AccountCoin, spender: string): Promise<bigint>
+  getSupportedSwapChains(): readonly Chain[]
+  isSwapSupported(fromChain: Chain, toChain: Chain): boolean
 
   // Chains & Tokens
   setChains(chains: Chain[]): Promise<void>
