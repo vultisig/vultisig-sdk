@@ -5,12 +5,8 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
-import { GlobalConfig } from './config/GlobalConfig'
-import { GlobalServerManager } from './server/GlobalServerManager'
+import type { SdkContext, VaultContext } from './context/SdkContext'
 import { FastSigningService } from './services/FastSigningService'
-import { PasswordCacheService } from './services/PasswordCacheService'
-import { GlobalStorage } from './storage/GlobalStorage'
-import type { Storage } from './storage/types'
 import { VaultData } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
@@ -21,13 +17,20 @@ import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
  * VaultManager handles vault lifecycle operations
  * Manages vault storage, import/export, and active vault state
  *
- * Uses global singletons for dependencies (no constructor parameters needed)
+ * Requires SdkContext for all dependencies (storage, config, etc.)
  */
 export class VaultManager {
-  private storage: Storage
+  private readonly context: SdkContext
 
-  constructor() {
-    this.storage = GlobalStorage.getInstance()
+  constructor(context: SdkContext) {
+    this.context = context
+  }
+
+  /**
+   * Get storage from context
+   */
+  private get storage() {
+    return this.context.storage
   }
 
   /**
@@ -40,22 +43,33 @@ export class VaultManager {
   }
 
   /**
+   * Create VaultContext from SdkContext
+   * Used when creating vault instances
+   */
+  private createVaultContext(): VaultContext {
+    return {
+      storage: this.context.storage,
+      config: this.context.config,
+      serverManager: this.context.serverManager,
+      passwordCache: this.context.passwordCache,
+      wasmProvider: this.context.wasmProvider,
+    }
+  }
+
+  /**
    * Create Vault instance with proper service injection
    * Internal helper for consistent vault instantiation
    * Returns appropriate subclass based on vault type
-   *
-   * Uses global singletons for dependencies
    */
   createVaultInstance(vaultData: VaultData): VaultBase {
-    const config = GlobalConfig.getInstance()
+    const vaultContext = this.createVaultContext()
 
     // Factory pattern - return appropriate subclass based on vault type
     if (vaultData.type === 'fast') {
-      const serverManager = GlobalServerManager.getInstance()
-      const fastSigningService = new FastSigningService(serverManager)
-      return FastVault.fromStorage(vaultData, fastSigningService, config)
+      const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
+      return FastVault.fromStorage(vaultData, fastSigningService, vaultContext)
     } else {
-      return SecureVault.fromStorage(vaultData, config)
+      return SecureVault.fromStorage(vaultData, vaultContext)
     }
   }
 
@@ -104,37 +118,22 @@ export class VaultManager {
       // Determine vault type from parsed vault
       const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
 
-      // Get global dependencies
-      const config = GlobalConfig.getInstance()
+      // Create vault context from SDK context
+      const vaultContext = this.createVaultContext()
 
-      // Create vault instance using appropriate constructor
+      // Create vault instance using static factory methods
       // Pass parsedVault to avoid parsing encrypted content synchronously
       let vaultInstance: VaultBase
       if (vaultType === 'fast') {
-        const serverManager = GlobalServerManager.getInstance()
-        const fastSigningService = new FastSigningService(serverManager)
-        vaultInstance = new FastVault(
-          vaultId,
-          parsedVault.name,
-          vultContent.trim(),
-          fastSigningService,
-          config,
-          parsedVault // Pre-parsed vault data
-        )
+        const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
+        vaultInstance = FastVault.fromImport(vaultId, vultContent.trim(), parsedVault, fastSigningService, vaultContext)
       } else {
-        vaultInstance = new SecureVault(
-          vaultId,
-          parsedVault.name,
-          vultContent.trim(),
-          config,
-          parsedVault // Pre-parsed vault data
-        )
+        vaultInstance = SecureVault.fromImport(vaultId, vultContent.trim(), parsedVault, vaultContext)
       }
 
       // Cache password if provided (for encrypted vaults)
       if (password && container.isEncrypted) {
-        const passwordCache = PasswordCacheService.getInstance()
-        passwordCache.set(vaultId, password)
+        this.context.passwordCache.set(vaultId, password)
       }
 
       // Save to storage

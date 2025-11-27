@@ -27,6 +27,9 @@ export type SdkEvents = {
   vaultCreationComplete: {
     vault: VaultBase
   }
+
+  /** Emitted when SDK instance is disposed */
+  disposed: Record<string, never>
 }
 
 /**

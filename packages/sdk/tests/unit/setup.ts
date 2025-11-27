@@ -1,6 +1,9 @@
 /**
  * Unit test setup
- * Configures GlobalStorage and GlobalCrypto for tests
+ * Configures crypto for Node.js test environment
+ *
+ * NOTE: Tests use instance-scoped patterns via createSdkContext()
+ * No global singletons are configured here.
  */
 import { vi } from 'vitest'
 
@@ -24,11 +27,6 @@ vi.mock('@lifi/sdk', () => ({
 
 import { configureCrypto } from '../../src/crypto'
 import { NodeCrypto } from '../../src/platforms/node/crypto'
-import { GlobalStorage } from '../../src/storage/GlobalStorage'
-import { MemoryStorage } from '../../src/storage/MemoryStorage'
 
-// Configure GlobalStorage with MemoryStorage for all unit tests
-GlobalStorage.configure(new MemoryStorage())
-
-// Configure GlobalCrypto with NodeCrypto for all unit tests (tests run in Node.js)
+// Configure crypto for Node.js test environment
 configureCrypto(new NodeCrypto())

@@ -8,8 +8,8 @@ import { KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysig
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 import { formatGasInfo } from '../../adapters/formatGasInfo'
+import type { WasmProvider } from '../../context/SdkContext'
 import type { GasInfo } from '../../types'
-import { WasmManager } from '../../wasm'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -35,7 +35,8 @@ export class GasEstimationService {
 
   constructor(
     private vaultData: CoreVault,
-    private getAddress: (chain: Chain) => Promise<string>
+    private getAddress: (chain: Chain) => Promise<string>,
+    private wasmProvider: WasmProvider
   ) {}
 
   /**
@@ -59,8 +60,8 @@ export class GasEstimationService {
         console.log(`  📍 Address: ${address}`)
       }
 
-      // Get WalletCore
-      const walletCore = await WasmManager.getWalletCore()
+      // Get WalletCore via WasmProvider
+      const walletCore = await this.wasmProvider.getWalletCore()
 
       // Get public key
       const publicKey = getPublicKey({

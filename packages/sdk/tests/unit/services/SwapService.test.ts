@@ -66,19 +66,9 @@ vi.mock('@core/chain/publicKey/getPublicKey', () => ({
   })),
 }))
 
-// Mock WasmManager
-vi.mock('../../../src/wasm', () => ({
-  WasmManager: {
-    getWalletCore: vi.fn().mockResolvedValue({
-      PublicKey: {
-        createWithData: vi.fn(),
-      },
-    }),
-  },
-}))
-
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
+import type { WasmProvider } from '../../../src/context/SdkContext'
 import type { VaultEvents } from '../../../src/events/types'
 import { SwapService } from '../../../src/vault/services/SwapService'
 import type { SwapQuoteResult } from '../../../src/vault/swap-types'
@@ -88,6 +78,7 @@ describe('SwapService', () => {
   let mockVaultData: CoreVault
   let mockGetAddress: (chain: Chain) => Promise<string>
   let mockEmitEvent: <K extends keyof VaultEvents>(event: K, data: VaultEvents[K]) => void
+  let mockWasmProvider: WasmProvider
   let emittedEvents: Array<{ event: string; data: unknown }>
 
   beforeEach(() => {
@@ -121,7 +112,20 @@ describe('SwapService', () => {
       emittedEvents.push({ event, data })
     })
 
-    service = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent)
+    // Create mock WasmProvider
+    mockWasmProvider = {
+      getWalletCore: vi.fn().mockResolvedValue({
+        PublicKey: {
+          createWithData: vi.fn(),
+        },
+      }),
+      initializeDkls: vi.fn().mockResolvedValue(undefined),
+      initializeSchnorr: vi.fn().mockResolvedValue(undefined),
+      initialize: vi.fn().mockResolvedValue(undefined),
+      getStatus: vi.fn().mockReturnValue({ walletCore: true, dkls: true, schnorr: true }),
+    }
+
+    service = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent, mockWasmProvider)
   })
 
   describe('getQuote', () => {

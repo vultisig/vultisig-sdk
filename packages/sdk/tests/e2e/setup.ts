@@ -115,23 +115,19 @@ const wrappedFetch = async function (input: RequestInfo | URL, init?: RequestIni
 globalThis.fetch = wrappedFetch as any
 
 /**
- * Configure GlobalStorage, GlobalCrypto, and WasmManager for e2e tests
- * Uses MemoryStorage so tests don't persist data to filesystem
+ * Configure SharedWasmRuntime for E2E tests
  * Uses Node.js WASM loader for test environment
  */
+import { SharedWasmRuntime } from '../../src/context/SharedWasmRuntime'
 import { configureCrypto } from '../../src/crypto'
 import { NodeCrypto } from '../../src/platforms/node/crypto'
 import { NodeWasmLoader } from '../../src/platforms/node/wasm'
-import { GlobalStorage } from '../../src/storage/GlobalStorage'
-import { MemoryStorage } from '../../src/storage/MemoryStorage'
-import { WasmManager } from '../../src/wasm'
 
-GlobalStorage.configure(new MemoryStorage())
 configureCrypto(new NodeCrypto())
 
-// Configure WASM to use Node.js loader
+// Configure SharedWasmRuntime to use Node.js loader
 const wasmLoader = new NodeWasmLoader()
-WasmManager.configure({
+SharedWasmRuntime.configure({
   wasmPaths: {
     dkls: () => wasmLoader.loadDkls(),
     schnorr: () => wasmLoader.loadSchnorr(),

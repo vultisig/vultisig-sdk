@@ -17,11 +17,8 @@ import { Chain } from '@core/chain/Chain'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import { GlobalConfig } from '../../../src/config/GlobalConfig'
-import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
+import { createSdkContext, type SdkContext } from '../../../src/context/SdkContextBuilder'
 import { FastSigningService } from '../../../src/services/FastSigningService'
-import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
-import { GlobalStorage } from '../../../src/storage/GlobalStorage'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import { FastVault } from '../../../src/vault/FastVault'
 import type { SwapQuoteResult } from '../../../src/vault/swap-types'
@@ -52,25 +49,20 @@ vi.mock('@core/chain/swap/swapEnabledChains', () => ({
 describe('Integration: Swap Quote', () => {
   let vault: FastVault
   let memoryStorage: MemoryStorage
+  let context: SdkContext
   let receivedEvents: Array<{ event: string; data: unknown }>
 
   beforeAll(async () => {
-    // Reset all global singletons
-    GlobalStorage.reset()
-    GlobalServerManager.reset()
-    GlobalConfig.reset()
-    PasswordCacheService.resetInstance()
-
-    // Configure global singletons
+    // Create fresh storage
     memoryStorage = new MemoryStorage()
-    GlobalStorage.configure(memoryStorage)
 
-    GlobalServerManager.configure({
-      fastVault: 'https://api.vultisig.com/vault',
-      messageRelay: 'https://api.vultisig.com/router',
-    })
-
-    GlobalConfig.configure({
+    // Create SDK context with all dependencies
+    context = createSdkContext({
+      storage: memoryStorage,
+      serverEndpoints: {
+        fastVault: 'https://api.vultisig.com/vault',
+        messageRelay: 'https://api.vultisig.com/router',
+      },
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
     })
@@ -91,6 +83,7 @@ describe('Integration: Swap Quote', () => {
   }, 60000)
 
   afterAll(() => {
+    context.passwordCache.destroy()
     vi.restoreAllMocks()
   })
 
@@ -139,10 +132,19 @@ describe('Integration: Swap Quote', () => {
       vultFileContent: '',
     }
 
-    const mockFastSigningService = {} as FastSigningService
-    const config = GlobalConfig.getInstance()
+    // Create FastSigningService with context dependencies
+    const fastSigningService = new FastSigningService(context.serverManager, context.wasmProvider)
 
-    return FastVault.fromStorage(vaultData, mockFastSigningService, config)
+    // Create VaultContext from SdkContext
+    const vaultContext = {
+      storage: context.storage,
+      config: context.config,
+      serverManager: context.serverManager,
+      passwordCache: context.passwordCache,
+      wasmProvider: context.wasmProvider,
+    }
+
+    return FastVault.fromStorage(vaultData, fastSigningService, vaultContext)
   }
 
   describe('Chain Support Queries', () => {

@@ -6,10 +6,10 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
+import type { SdkContext, VaultContext } from '../context/SdkContext'
 import type { Signature, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
-import type { VaultConfig } from './VaultServices'
 
 /**
  * SecureVault - Multi-device MPC vault
@@ -24,14 +24,21 @@ import type { VaultConfig } from './VaultServices'
  * - Does NOT support 'fast' signing mode
  */
 export class SecureVault extends VaultBase {
-  constructor(
+  private readonly context: VaultContext
+
+  /**
+   * Private constructor - use SecureVault.create() or SecureVault.fromStorage() instead.
+   * @internal
+   */
+  private constructor(
     vaultId: string,
     name: string,
     vultFileContent: string,
-    config?: VaultConfig,
+    context: VaultContext,
     parsedVaultData?: CoreVault
   ) {
-    super(vaultId, name, vultFileContent, config, parsedVaultData)
+    super(vaultId, name, vultFileContent, context, parsedVaultData)
+    this.context = context
   }
 
   /**
@@ -173,17 +180,21 @@ export class SecureVault extends VaultBase {
   /**
    * Create a new secure vault (multi-device MPC).
    *
+   * @param _context - SDK context with all dependencies
    * @param options - Vault creation options
    * @throws Not yet implemented
    * @todo Implement secure vault creation
    */
-  static async create(options: {
-    name: string
-    password: string
-    devices: number
-    threshold?: number
-    onProgress?: (step: VaultCreationStep) => void
-  }): Promise<{
+  static async create(
+    _context: SdkContext,
+    options: {
+      name: string
+      password: string
+      devices: number
+      threshold?: number
+      onProgress?: (step: VaultCreationStep) => void
+    }
+  ): Promise<{
     vault: SecureVault
     vaultId: string
     sessionId: string
@@ -198,16 +209,32 @@ export class SecureVault extends VaultBase {
   }
 
   /**
-   * Reconstruct a SecureVault instance from stored VaultData
+   * Create a SecureVault instance from imported .vult file content
+   *
+   * @param vaultId - Vault ID (ECDSA public key)
+   * @param vultContent - The .vult file content
+   * @param parsedVault - Pre-parsed CoreVault data
+   * @param context - Vault context with dependencies
+   * @internal Used by VaultManager.importVault()
    */
-  static fromStorage(vaultData: VaultData, config?: VaultConfig): SecureVault {
+  static fromImport(vaultId: string, vultContent: string, parsedVault: CoreVault, context: VaultContext): SecureVault {
+    return new SecureVault(vaultId, parsedVault.name, vultContent, context, parsedVault)
+  }
+
+  /**
+   * Reconstruct a SecureVault instance from stored VaultData
+   *
+   * @param vaultData - Stored vault data
+   * @param context - Vault context with dependencies
+   */
+  static fromStorage(vaultData: VaultData, context: VaultContext): SecureVault {
     // Validate vault type
     if (vaultData.type !== 'secure') {
       throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create SecureVault from ${vaultData.type} vault data`)
     }
 
     // Use the constructor with stored vult file content
-    const vault = new SecureVault(vaultData.id, vaultData.name, vaultData.vultFileContent || '', config)
+    const vault = new SecureVault(vaultData.id, vaultData.name, vaultData.vultFileContent || '', context)
 
     // Override constructor defaults with stored preferences from VaultData
     if (vaultData.chains && vaultData.chains.length > 0) {

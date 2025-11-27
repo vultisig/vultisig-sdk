@@ -20,8 +20,6 @@ export { Vultisig } from './Vultisig'
 export type { VaultConfig } from './vault'
 export {
   FastVault,
-  isFastVault,
-  isSecureVault,
   SecureVault,
   VaultBase,
   VaultError,
@@ -51,20 +49,6 @@ export {
 // NOTE: WasmManager is internal-only
 // Platform bundles automatically configure WASM at module load time
 // Users don't need direct access to WASM management
-
-// ============================================================================
-// PUBLIC API - Server Management
-// ============================================================================
-
-// Global server manager singleton
-export { GlobalServerManager, type ServerEndpoints } from './server'
-
-// ============================================================================
-// PUBLIC API - Configuration
-// ============================================================================
-
-// Global configuration singleton
-export { GlobalConfig, type GlobalConfigOptions } from './config'
 
 // ============================================================================
 // PUBLIC API - Validation Utilities

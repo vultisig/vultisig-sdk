@@ -8,25 +8,30 @@
  * - ElectronMainPolyfills (none needed)
  *
  * All browser/renderer code is excluded at build time.
+ *
+ * Usage:
+ * ```typescript
+ * import { Vultisig, ElectronMainStorage } from '@vultisig/sdk/electron-main'
+ *
+ * const sdk = new Vultisig({
+ *   storage: new ElectronMainStorage()
+ * })
+ * ```
  */
 
 // Platform-specific implementations
-// Configure global storage to use Electron Main implementation
-import { GlobalStorage } from '../../storage/GlobalStorage'
+// Configure global crypto to use Electron Main implementation
+import { configureCrypto } from '../../crypto'
 import { ElectronMainCrypto } from './crypto'
 import { ElectronMainPolyfills } from './polyfills'
 import { ElectronMainStorage } from './storage'
 import { ElectronMainWasmLoader } from './wasm'
-GlobalStorage.configure(new ElectronMainStorage())
-
-// Configure global crypto to use Electron Main implementation
-import { configureCrypto } from '../../crypto'
 configureCrypto(new ElectronMainCrypto())
 
-// Configure WASM to use Electron Main loader
-import { WasmManager } from '../../wasm'
+// Configure SharedWasmRuntime to use Electron Main loader (process-wide singleton)
+import { SharedWasmRuntime } from '../../context/SharedWasmRuntime'
 const wasmLoader = new ElectronMainWasmLoader()
-WasmManager.configure({
+SharedWasmRuntime.configure({
   wasmPaths: {
     dkls: () => wasmLoader.loadDkls(),
     schnorr: () => wasmLoader.loadSchnorr(),
@@ -36,5 +41,5 @@ WasmManager.configure({
 // Re-export entire public API
 export * from '../../index'
 
-// Export platform-specific implementations for advanced users
+// Export platform-specific implementations for users to pass to Vultisig
 export { ElectronMainCrypto, ElectronMainPolyfills, ElectronMainStorage, ElectronMainWasmLoader }

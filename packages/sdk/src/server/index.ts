@@ -40,5 +40,5 @@ export { fromMpcServerMessage, toMpcServerMessage } from '@core/mpc/message/serv
 // Re-export types
 export type { MpcRelayMessage } from '@core/mpc/message/relay'
 
-// Global ServerManager singleton
-export { GlobalServerManager, type ServerEndpoints } from './GlobalServerManager'
+// NOTE: ServerManager is internal-only
+// Users access it via sdk.serverManager, not by importing directly

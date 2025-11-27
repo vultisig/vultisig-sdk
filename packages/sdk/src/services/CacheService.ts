@@ -1,4 +1,3 @@
-import { GlobalStorage } from '../storage/GlobalStorage'
 import type { Storage } from '../storage/types'
 import { type CacheConfig, type CachedItem, CacheScope } from './cache-types'
 
@@ -40,11 +39,12 @@ export class CacheService {
 
   /**
    * Create a new CacheService instance
+   * @param storage Storage instance for persistence
    * @param vaultId Vault ID for storage keys
    * @param config Cache configuration (TTLs, size limits)
    */
-  constructor(vaultId?: string, config?: CacheConfig) {
-    this.storage = GlobalStorage.getInstance()
+  constructor(storage: Storage, vaultId?: string, config?: CacheConfig) {
+    this.storage = storage
     this.vaultId = vaultId
     this.config = {
       balanceTTL: config?.balanceTTL ?? 5 * 60 * 1000,

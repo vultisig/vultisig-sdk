@@ -21,8 +21,8 @@ import { buildSwapKeysignPayload } from '@core/mpc/keysign/swap/build'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
+import type { WasmProvider } from '../../context/SdkContext'
 import { VaultEvents } from '../../events/types'
-import { WasmManager } from '../../wasm'
 import {
   CoinInput,
   isAccountCoin,
@@ -45,7 +45,8 @@ export class SwapService {
   constructor(
     private vaultData: CoreVault,
     private getAddress: (chain: Chain) => Promise<string>,
-    private emitEvent: <K extends keyof VaultEvents>(event: K, data: VaultEvents[K]) => void
+    private emitEvent: <K extends keyof VaultEvents>(event: K, data: VaultEvents[K]) => void,
+    private wasmProvider: WasmProvider
   ) {}
 
   /**
@@ -99,8 +100,8 @@ export class SwapService {
       const fromCoin = await this.resolveCoinInput(params.fromCoin)
       const toCoin = await this.resolveCoinInput(params.toCoin)
 
-      // Get wallet core
-      const walletCore = await WasmManager.getWalletCore()
+      // Get wallet core via WasmProvider
+      const walletCore = await this.wasmProvider.getWalletCore()
 
       // Get public keys for both chains
       const fromPublicKey = getPublicKey({

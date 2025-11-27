@@ -8,10 +8,7 @@
 import { Chain } from '@core/chain/Chain'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { GlobalConfig } from '../../../src/config/GlobalConfig'
-import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
-import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
-import { GlobalStorage } from '../../../src/storage/GlobalStorage'
+import { createSdkContext } from '../../../src/context/SdkContextBuilder'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import { VaultManager } from '../../../src/VaultManager'
 
@@ -20,27 +17,22 @@ describe('Multiple Vault Creation', () => {
   let memoryStorage: MemoryStorage
 
   beforeEach(() => {
-    // Reset all global singletons before each test
-    GlobalStorage.reset()
-    GlobalServerManager.reset()
-    GlobalConfig.reset()
-    PasswordCacheService.resetInstance()
-
-    // Configure global singletons
+    // Create fresh storage for each test
     memoryStorage = new MemoryStorage()
-    GlobalStorage.configure(memoryStorage)
 
-    GlobalServerManager.configure({
-      fastVault: 'https://test-api.vultisig.com/vault',
-      messageRelay: 'https://test-api.vultisig.com/router',
-    })
-
-    GlobalConfig.configure({
+    // Create SDK context with all dependencies
+    const context = createSdkContext({
+      storage: memoryStorage,
+      serverEndpoints: {
+        fastVault: 'https://test-api.vultisig.com/vault',
+        messageRelay: 'https://test-api.vultisig.com/router',
+      },
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
     })
 
-    vaultManager = new VaultManager()
+    // Create VaultManager with context
+    vaultManager = new VaultManager(context)
   })
 
   it('should create two separate vaults without overwriting', async () => {

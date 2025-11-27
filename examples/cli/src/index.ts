@@ -437,7 +437,7 @@ program
 
       if (options.resend) {
         const spinner = createSpinner('Resending verification email...')
-        await sdk.serverManager.resendVaultVerification(vaultId)
+        await sdk.resendVaultVerification(vaultId)
         spinner.succeed('Verification email sent!')
         info('Check your inbox for the new verification code.')
       }

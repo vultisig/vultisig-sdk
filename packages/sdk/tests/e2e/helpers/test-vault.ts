@@ -2,7 +2,7 @@
  * Test Vault Helper Functions
  *
  * Utilities for loading and verifying test vaults in E2E tests.
- * Uses global singletons for configuration.
+ * Uses instance-scoped Vultisig with explicit dependencies.
  */
 
 import { Chain } from '@core/chain/Chain'
@@ -10,10 +10,6 @@ import fs from 'fs/promises'
 import { resolve } from 'path'
 import { expect } from 'vitest'
 
-import { GlobalConfig } from '../../../src/config/GlobalConfig'
-import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
-import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
-import { GlobalStorage } from '../../../src/storage/GlobalStorage'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import { VaultBase } from '../../../src/vault/VaultBase'
 import { Vultisig } from '../../../src/Vultisig'
@@ -50,9 +46,9 @@ export const TEST_VAULT_CONFIG = {
 }
 
 /**
- * Load test vault with global singleton configuration
+ * Load test vault with instance-scoped configuration
  *
- * Initializes the SDK with global singletons and loads a test vault.
+ * Creates an SDK instance with explicit dependencies and loads a test vault.
  * Uses environment variables for vault path and password if available.
  *
  * @returns Promise resolving to SDK instance and loaded vault
@@ -67,30 +63,13 @@ export async function loadTestVault(): Promise<{
   sdk: Vultisig
   vault: VaultBase
 }> {
-  // Reset all global singletons
-  GlobalStorage.reset()
-  GlobalServerManager.reset()
-  GlobalConfig.reset()
-  PasswordCacheService.resetInstance()
-
-  // Configure global singletons
-  const memoryStorage = new MemoryStorage()
-  GlobalStorage.configure(memoryStorage)
-
-  GlobalServerManager.configure({
-    fastVault: process.env.VULTISIG_API_URL || 'https://api.vultisig.com/vault',
-    messageRelay: process.env.VULTISIG_ROUTER_URL || 'https://api.vultisig.com/router',
-  })
-
-  GlobalConfig.configure({
-    defaultChains: TEST_VAULT_CONFIG.testChains,
-    defaultCurrency: 'usd',
-  })
-
-  // Initialize SDK with WASM
+  // Create SDK with explicit storage (instance-scoped, not global)
   const sdk = new Vultisig({
-    autoInit: true,
-    storage: memoryStorage,
+    storage: new MemoryStorage(),
+    serverEndpoints: {
+      fastVault: process.env.VULTISIG_API_URL || 'https://api.vultisig.com/vault',
+      messageRelay: process.env.VULTISIG_ROUTER_URL || 'https://api.vultisig.com/router',
+    },
     defaultChains: TEST_VAULT_CONFIG.testChains,
     defaultCurrency: 'usd',
   })

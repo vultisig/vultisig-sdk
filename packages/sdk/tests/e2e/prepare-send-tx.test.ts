@@ -325,7 +325,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
         const payload = await vault.prepareSendTx({
           coin,
-          receiver: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8', // Example Sui address
+          receiver: '0x742d35cc6634c0532925a3b844bc9e7595f0beb8000000000000000000000001', // Valid Sui address (64 hex chars)
           amount: 312500000n, // ~0.3125 SUI (~$1 at $3.20/SUI)
         })
 

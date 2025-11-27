@@ -2,6 +2,7 @@ import { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { getTwPublicKeyType } from '@core/chain/publicKey/tw/getTwPublicKeyType'
 import { getPreSigningHashes } from '@core/chain/tx/preSigningHashes'
+import { isValidAddress } from '@core/chain/utils/isValidAddress'
 import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
 import { buildSendKeysignPayload } from '@core/mpc/keysign/send/build'
 import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
@@ -10,7 +11,7 @@ import { getKeysignChain } from '@core/mpc/keysign/utils/getKeysignChain'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
-import { WasmManager } from '../../wasm'
+import type { WasmProvider } from '../../context/SdkContext'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -20,7 +21,10 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * Extracted from Vault.ts to reduce file size and improve maintainability.
  */
 export class TransactionBuilder {
-  constructor(private vaultData: CoreVault) {}
+  constructor(
+    private vaultData: CoreVault,
+    private wasmProvider: WasmProvider
+  ) {}
 
   /**
    * Prepare a send transaction keysign payload
@@ -60,8 +64,21 @@ export class TransactionBuilder {
     feeSettings?: FeeSettings
   }): Promise<KeysignPayload> {
     try {
-      // Get WalletCore
-      const walletCore = await WasmManager.getWalletCore()
+      // Get WalletCore via WasmProvider
+      const walletCore = await this.wasmProvider.getWalletCore()
+
+      // Validate receiver address format
+      const isValid = isValidAddress({
+        chain: params.coin.chain,
+        address: params.receiver,
+        walletCore,
+      })
+      if (!isValid) {
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          `Invalid receiver address format for chain ${params.coin.chain}: ${params.receiver}`
+        )
+      }
 
       // Get public key for the coin's chain
       const publicKey = getPublicKey({
@@ -114,8 +131,8 @@ export class TransactionBuilder {
    */
   async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]> {
     try {
-      // Get WalletCore instance
-      const walletCore = await WasmManager.getWalletCore()
+      // Get WalletCore instance via WasmProvider
+      const walletCore = await this.wasmProvider.getWalletCore()
 
       // Get chain from keysign payload
       const chain = getKeysignChain(keysignPayload)

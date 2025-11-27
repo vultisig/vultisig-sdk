@@ -10,15 +10,14 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
-// SDK utilities
-import { GlobalConfig } from '../config/GlobalConfig'
 import { DEFAULT_CHAINS } from '../constants'
+// SDK utilities
+import type { VaultContext } from '../context/SdkContext'
 import { UniversalEventEmitter } from '../events/EventEmitter'
-import { VaultEvents } from '../events/types'
+import type { VaultEvents } from '../events/types'
 import { CacheScope, CacheService } from '../services/CacheService'
 import { FiatValueService } from '../services/FiatValueService'
-import { PasswordCacheService } from '../services/PasswordCacheService'
-import { GlobalStorage } from '../storage/GlobalStorage'
+import type { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
 // Types
 import {
@@ -95,6 +94,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // Storage for persistence (required)
   protected storage: Storage
 
+  // WASM provider for wallet operations
+  protected wasmProvider: VaultContext['wasmProvider']
+
   // Vault configuration for password callback
   protected config?: VaultConfig
 
@@ -102,34 +104,36 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   protected vaultData: VaultData // Single source of truth
   protected coreVault: CoreVault // Built from vaultData
 
-  constructor(
+  /**
+   * Protected constructor - use subclass factory methods instead.
+   * @internal
+   */
+  protected constructor(
     vaultId: string,
     name: string,
     vultFileContent: string,
-    config?: VaultConfig,
+    context: VaultContext,
     parsedVaultData?: CoreVault
   ) {
     // Initialize EventEmitter
     super()
 
-    // Merge passed config with global config (passed config takes precedence)
-    const globalConfig = GlobalConfig.getInstance()
+    // Use context-provided dependencies
+    this.storage = context.storage
+    this.passwordCache = context.passwordCache
+    this.wasmProvider = context.wasmProvider
+
+    // Build VaultConfig from context
     this.config = {
-      defaultChains: config?.defaultChains ?? globalConfig.defaultChains,
-      defaultCurrency: config?.defaultCurrency ?? globalConfig.defaultCurrency,
-      cacheConfig: config?.cacheConfig ?? globalConfig.cacheConfig,
-      passwordCache: config?.passwordCache ?? globalConfig.passwordCache,
-      onPasswordRequired: config?.onPasswordRequired ?? globalConfig.onPasswordRequired,
+      defaultChains: context.config.defaultChains,
+      defaultCurrency: context.config.defaultCurrency,
+      cacheConfig: context.config.cacheConfig,
+      passwordCache: context.config.passwordCache,
+      onPasswordRequired: context.config.onPasswordRequired,
     }
 
-    // Use global storage
-    this.storage = GlobalStorage.getInstance()
-
-    // Initialize cache service
-    this.cacheService = new CacheService(vaultId, this.config.cacheConfig)
-
-    // Initialize password cache service
-    this.passwordCache = PasswordCacheService.getInstance(this.config.passwordCache)
+    // Initialize cache service with storage from context
+    this.cacheService = new CacheService(this.storage, vaultId, this.config.cacheConfig)
 
     // Parse vault container (synchronous) - or use provided parsed data
     let container: { isEncrypted: boolean; vault: string }
@@ -229,8 +233,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       lastModified: Date.now(),
 
       // User Preferences
-      currency: config?.defaultCurrency?.toLowerCase() || 'usd',
-      chains: config?.defaultChains?.map(c => c.toString()) || [],
+      currency: this.config?.defaultCurrency?.toLowerCase() || 'usd',
+      chains: this.config?.defaultChains?.map(c => c.toString()) || [],
       tokens: {},
 
       // Vault file
@@ -241,7 +245,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     this._userChains =
       this.vaultData.chains.length > 0
         ? this.vaultData.chains.map(c => c as Chain)
-        : (config?.defaultChains ?? DEFAULT_CHAINS)
+        : (this.config?.defaultChains ?? DEFAULT_CHAINS)
     this._currency = this.vaultData.currency
     this._tokens = this.vaultData.tokens
 
@@ -254,9 +258,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       (chain, tokenId) => this.balance(chain, tokenId)
     )
 
-    // Initialize extracted services
-    this.addressService = new AddressService(this.coreVault, this.cacheService)
-    this.transactionBuilder = new TransactionBuilder(this.coreVault)
+    // Initialize extracted services (pass wasmProvider to those that need WASM)
+    this.addressService = new AddressService(this.coreVault, this.cacheService, this.wasmProvider)
+    this.transactionBuilder = new TransactionBuilder(this.coreVault, this.wasmProvider)
     this.balanceService = new BalanceService(
       this.cacheService,
       data => this.emit('balanceUpdated', data),
@@ -271,8 +275,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       data => this.emit('tokenAdded', data),
       data => this.emit('tokenRemoved', data)
     )
-    this.gasEstimationService = new GasEstimationService(this.coreVault, chain => this.address(chain))
-    this.broadcastService = new BroadcastService(keysignPayload => this.extractMessageHashes(keysignPayload))
+    this.gasEstimationService = new GasEstimationService(
+      this.coreVault,
+      chain => this.address(chain),
+      this.wasmProvider
+    )
+    this.broadcastService = new BroadcastService(
+      keysignPayload => this.extractMessageHashes(keysignPayload),
+      this.wasmProvider
+    )
     this.preferencesService = new PreferencesService(
       this.cacheService,
       () => this._userChains,
@@ -293,7 +304,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     this.swapService = new SwapService(
       this.coreVault,
       chain => this.address(chain),
-      (event, data) => this.emit(event, data)
+      (event, data) => this.emit(event, data),
+      this.wasmProvider
     )
 
     // Setup event-driven cache invalidation

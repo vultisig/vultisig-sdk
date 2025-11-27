@@ -77,7 +77,7 @@
     "_____TEST_BY_TYPE_____": "",
     "test:unit": "vitest run --config tests/unit/vitest.config.ts tests/unit",
     "test:integration": "vitest run --config tests/integration/vitest.config.ts tests/integration",
-    "test:e2e": "yarn test:e2e:balance; yarn test:e2e:gas; yarn test:e2e:multi-chain; yarn test:e2e:prepare-send; yarn test:e2e:fast-signing; yarn test:e2e:fiat-value; yarn test:e2e:swap-quotes; yarn test:e2e:swap-transactions",
+    "test:e2e": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/",
     "_____TEST_E2E_INDIVIDUAL_____": "",
     "test:e2e:balance": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/balance-operations.test.ts",
     "test:e2e:gas": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/gas-estimation.test.ts",

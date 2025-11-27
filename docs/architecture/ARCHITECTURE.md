@@ -57,16 +57,16 @@ flowchart TB
     subgraph PublicAPI["PUBLIC API LAYER"]
         Vultisig["Vultisig<br/>(Facade)"]
         VaultManager["VaultManager<br/>(Factory)"]
-        Globals["GlobalConfig<br/>GlobalStorage<br/>(Singletons)"]
-        Vultisig --> VaultManager --> Globals
+        SdkContext["SdkContext<br/>(Dependency Container)"]
+        Vultisig --> VaultManager --> SdkContext
     end
 
     subgraph VaultLayer["VAULT LAYER"]
         VaultBase["VaultBase<br/>(Template Method)"]
-        Services["Services<br/>(Dependency Injection)"]
+        VaultContext["VaultContext<br/>(Injected Dependencies)"]
         FastVault["FastVault<br/>(2-of-2)"]
         SecureVault["SecureVault<br/>(N-of-M)"]
-        VaultBase --> Services
+        VaultBase --> VaultContext
         VaultBase --> FastVault
         VaultBase --> SecureVault
     end
@@ -77,6 +77,10 @@ flowchart TB
         TxBuilder["TransactionBuilder"]
         Adapters["Adapters<br/>formatBalance()<br/>formatSignature()"]
         AddressService & BalanceService & TxBuilder --> Adapters
+    end
+
+    subgraph SharedRuntime["SHARED RUNTIME (Process-wide)"]
+        WasmRuntime["SharedWasmRuntime<br/>(WASM Singleton)"]
     end
 
     subgraph CoreLib["CORE LIBRARY (packages/core)"]
@@ -93,6 +97,7 @@ flowchart TB
     PublicAPI --> VaultLayer
     VaultLayer --> ServicesLayer
     ServicesLayer --> CoreLib
+    ServicesLayer --> SharedRuntime
     VaultLayer <-.-> External
 ```
 
@@ -104,9 +109,9 @@ flowchart TB
 | **Factory**            | `VaultManager`       | Creates appropriate vault types            |
 | **Template Method**    | `VaultBase`          | Common vault behavior with extension points|
 | **Strategy**           | `FastVault`/`SecureVault` | Interchangeable signing strategies    |
-| **Dependency Injection** | Vault services     | Testable, configurable services            |
+| **Dependency Injection** | `SdkContext`/`VaultContext` | Instance-scoped, testable services |
 | **Adapter**            | `formatBalance()` etc| Converts Core types to SDK types           |
-| **Singleton**          | Global managers      | Shared state across SDK                    |
+| **Singleton**          | `SharedWasmRuntime`  | Process-wide WASM modules (intentional)    |
 | **Observer**           | Event emitters       | Reactive state updates                     |
 
 ### Platform Bundles
@@ -221,12 +226,18 @@ packages/sdk/src/
 ├── AddressBookManager.ts       # Address book functionality
 ├── constants.ts                # SDK constants
 │
+├── context/                    # Dependency injection
+│   ├── SdkContext.ts          # SDK-level context interface
+│   ├── SdkContextBuilder.ts   # Context factory function
+│   ├── SharedWasmRuntime.ts   # Process-wide WASM singleton
+│   └── index.ts
+│
 ├── vault/                      # Vault implementation
 │   ├── VaultBase.ts           # Abstract base vault class
 │   ├── FastVault.ts           # 2-of-2 server-assisted vault
 │   ├── SecureVault.ts         # Multi-device MPC vault
 │   ├── VaultError.ts          # Error types
-│   ├── VaultServices.ts       # Service injection interface
+│   ├── VaultContext.ts        # Vault-level context interface
 │   ├── services/              # Vault-specific services
 │   │   ├── AddressService.ts      # Address derivation
 │   │   ├── BalanceService.ts      # Balance fetching & caching
@@ -251,20 +262,18 @@ packages/sdk/src/
 │   └── types.ts               # Platform type definitions
 │
 ├── server/                    # Server communication
-│   ├── GlobalServerManager.ts # Server manager singleton
 │   ├── ServerManager.ts       # Server coordination logic
 │   └── index.ts
 │
 ├── services/                  # SDK-wide services
-│   ├── CacheService.ts        # TTL-based caching
+│   ├── CacheService.ts        # TTL-based caching (instance-scoped)
 │   ├── FastSigningService.ts  # Server-assisted signing
 │   ├── FiatValueService.ts    # Fiat value lookups
-│   ├── PasswordCacheService.ts # Password caching
+│   ├── PasswordCacheService.ts # Password caching (instance-scoped)
 │   ├── cache-types.ts
 │   └── index.ts
 │
 ├── storage/                   # Storage abstraction
-│   ├── GlobalStorage.ts       # Storage singleton
 │   ├── MemoryStorage.ts       # In-memory implementation
 │   ├── types.ts               # Storage interfaces
 │   └── index.ts
@@ -275,8 +284,7 @@ packages/sdk/src/
 │   └── index.ts
 │
 ├── config/                    # Configuration
-│   ├── GlobalConfig.ts        # Global config singleton
-│   └── index.ts
+│   └── index.ts               # SdkConfig type definitions
 │
 ├── adapters/                  # Data format conversion
 │   ├── formatBalance.ts       # bigint → Balance
@@ -285,9 +293,8 @@ packages/sdk/src/
 │   ├── getChainSigningInfo.ts # Chain signing metadata
 │   └── index.ts
 │
-├── wasm/                      # WebAssembly management
-│   ├── WasmManager.ts         # WASM module loading
-│   ├── types.ts
+├── wasm/                      # WebAssembly types
+│   ├── types.ts               # WasmConfig, WasmProvider interfaces
 │   └── index.ts
 │
 ├── crypto/                    # Cryptographic utilities
@@ -313,16 +320,24 @@ packages/sdk/src/
 The main SDK class that orchestrates all functionality using the facade pattern.
 
 ```typescript
-import { Vultisig } from "@vultisig/sdk";
+import { Vultisig, MemoryStorage } from "@vultisig/sdk";
 
-const sdk = new Vultisig();
-await sdk.init();
+// Storage is required
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),  // Or your custom Storage implementation
+  defaultChains: [Chain.Bitcoin, Chain.Ethereum],
+});
+
+await sdk.initialize();
 
 // Create a fast vault
 const vault = await sdk.createVault("My Vault", password);
 
 // Get vault address
 const address = await vault.address("Ethereum");
+
+// Clean up when done
+sdk.dispose();
 ```
 
 **Responsibilities:**
@@ -332,14 +347,17 @@ const address = await vault.address("Ethereum");
 - Storage integration and persistence
 - Event emission for SDK-level state changes
 - Address book operations
+- Resource cleanup via `dispose()`
 
-**Key Dependencies:**
+**Key Dependencies (via SdkContext):**
 
 - `VaultManager` - Vault operations
 - `AddressBookManager` - Address book
-- `GlobalServerManager` - Server communication
-- `GlobalConfig` - Configuration
-- `GlobalStorage` - Data persistence
+- `ServerManager` - Server communication (instance-scoped)
+- `SdkConfig` - Configuration (instance-scoped)
+- `Storage` - Data persistence (injected)
+- `PasswordCacheService` - Password caching (instance-scoped)
+- `WasmProvider` - WASM module access
 
 ### VaultManager Class
 
@@ -366,13 +384,43 @@ const encrypted = await vaultManager.exportVault(vaultId, password);
 - Active vault tracking
 - Vault type detection
 
-### Global Singletons
+### Context-Based Architecture
 
-The SDK uses global singletons for cross-cutting concerns:
+The SDK uses **instance-scoped dependency injection** for clean separation and testability. Each SDK instance has its own isolated context:
 
-- **`GlobalServerManager`** - VultiServer and relay communication
-- **`GlobalConfig`** - SDK configuration (chains, currency, callbacks)
-- **`GlobalStorage`** - Platform-aware storage
+**SdkContext** - Container for SDK-level dependencies:
+- `storage` - Data persistence (required, injected)
+- `config` - SDK configuration (instance-scoped)
+- `serverManager` - VultiServer and relay communication (instance-scoped)
+- `passwordCache` - Password caching service (instance-scoped)
+- `wasmProvider` - Interface to WASM modules
+
+**VaultContext** - Container for vault-level dependencies:
+- `storage` - Inherited from SdkContext
+- `config` - Inherited from SdkContext
+- `serverManager` - Inherited from SdkContext
+- `passwordCache` - Inherited from SdkContext
+- `wasmProvider` - Inherited from SdkContext
+
+**SharedWasmRuntime** - The only intentional process-wide singleton:
+- WASM modules are expensive to load (~10MB total)
+- Stateless after initialization
+- Safe to share across SDK instances
+- Configured automatically by platform bundles
+
+```typescript
+// Creating isolated SDK instances
+const sdk1 = new Vultisig({ storage: storage1 });
+const sdk2 = new Vultisig({ storage: storage2 });
+
+// Each has isolated state - no shared globals
+await sdk1.initialize();
+await sdk2.initialize();
+
+// Clean up releases instance resources
+sdk1.dispose();
+sdk2.dispose();
+```
 
 ---
 
@@ -712,10 +760,10 @@ From `src/index.ts`:
 - `Vultisig` - Main SDK class
 - `VaultBase`, `FastVault`, `SecureVault` - Vault classes
 - `VaultError`, `VaultImportError` - Error classes
-- `GlobalServerManager`, `GlobalConfig` - Singletons
 - `MemoryStorage` - Storage implementation
 - `UniversalEventEmitter` - Event system
 - `ValidationHelpers` - Validation utilities
+- `SharedWasmRuntime` - WASM singleton (advanced usage)
 
 **Type Guards:**
 
@@ -991,6 +1039,7 @@ Each chain kind has specific:
 The Vultisig SDK architecture is **clean, layered, and platform-agnostic**:
 
 - **Entry Point:** `Vultisig` class provides facade over all functionality
+- **Context System:** `SdkContext` and `VaultContext` provide instance-scoped dependencies
 - **Vault System:** `VaultBase` → `FastVault`/`SecureVault` hierarchy
 - **Services:** Specialized services for each vault operation
 - **Platforms:** Platform-specific bundles for each environment
@@ -1003,6 +1052,8 @@ The Vultisig SDK architecture is **clean, layered, and platform-agnostic**:
 - Smart caching based on data mutability
 - Direct Core integration for blockchain operations
 - Event-driven architecture for reactive UIs
+- **Instance-scoped dependencies** - No global state pollution, fully testable
+- **Proper resource cleanup** - `dispose()` method releases all resources
 
 **Design Patterns Used:**
 
@@ -1010,5 +1061,6 @@ The Vultisig SDK architecture is **clean, layered, and platform-agnostic**:
 2. **Factory Pattern** - VaultManager creates appropriate vault types
 3. **Strategy Pattern** - Platform-specific implementations
 4. **Observer Pattern** - Type-safe event emission
-5. **Dependency Injection** - Services injected into vaults
+5. **Dependency Injection** - Context-based dependency injection for all services
 6. **Adapter Pattern** - Format conversion between Core and SDK types
+7. **Singleton** - SharedWasmRuntime for expensive WASM modules (intentionally global)

@@ -49,10 +49,17 @@ For browser environments, you need to serve the WASM files from your public dire
 ### Basic Initialization
 
 ```typescript
-import { Vultisig } from 'vultisig-sdk'
+import { Vultisig, MemoryStorage } from 'vultisig-sdk'
 
-const sdk = new Vultisig()
+// Storage is required
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),  // Or your custom Storage implementation
+})
+
 await sdk.initialize()
+
+// When done, clean up resources
+sdk.dispose()
 ```
 
 ---
@@ -62,24 +69,26 @@ await sdk.initialize()
 Here's a complete example showing vault creation, address derivation, and balance checking with password management:
 
 ```typescript
-import { Vultisig, FastVault, Chain, GlobalConfig } from 'vultisig-sdk'
+import { Vultisig, FastVault, Chain, MemoryStorage } from 'vultisig-sdk'
 
-// Step 1: Configure password handling (recommended)
-GlobalConfig.configure({
+// Step 1: Initialize SDK with configuration
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),  // Required: provide storage implementation
+
+  // Password handling (recommended for production)
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     // Prompt user for password - implementation depends on platform
     return await promptUserForPassword(`Enter password for ${vaultName}`)
   },
+
   passwordCache: {
     defaultTTL: 300000  // Cache password for 5 minutes
   }
 })
 
-// Step 2: Initialize SDK
-const sdk = new Vultisig()
 await sdk.initialize()
 
-// Step 3: Create a fast vault (server-assisted, always encrypted)
+// Step 2: Create a fast vault (server-assisted, always encrypted)
 const { vault, verificationRequired } = await FastVault.create({
   name: "My Wallet",
   email: "user@example.com",
@@ -89,25 +98,28 @@ const { vault, verificationRequired } = await FastVault.create({
   }
 })
 
-// Step 4: Handle email verification if required
+// Step 3: Handle email verification if required
 if (verificationRequired) {
   const code = await getVerificationCode() // Get code from user
-  await sdk.serverManager.verifyVault(vault.id, code)
+  await sdk.verifyVault(vault.id, code)
 }
 
-// Step 5: Get an address
+// Step 4: Get an address
 const btcAddress = await vault.address(Chain.Bitcoin)
 console.log('Bitcoin address:', btcAddress)
 
-// Step 6: Check balance
+// Step 5: Check balance
 const balance = await vault.balance(Chain.Bitcoin)
 console.log(`Balance: ${balance.amount} ${balance.symbol}`)
 
-// Step 7: Get balances across multiple chains
+// Step 6: Get balances across multiple chains
 const balances = await vault.balances([Chain.Bitcoin, Chain.Ethereum])
 for (const [chain, balance] of Object.entries(balances)) {
   console.log(`${chain}: ${balance.amount} ${balance.symbol}`)
 }
+
+// Step 7: Clean up when done
+sdk.dispose()
 ```
 
 ---
@@ -165,14 +177,15 @@ Password management is a critical aspect of the SDK. FastVaults are always encry
 
 ### Setting Up Password Callback
 
-Configure a global password callback to automatically prompt users when needed:
+Configure a password callback when creating your SDK instance to automatically prompt users when needed:
 
 #### Browser Example (with Modal)
 
 ```typescript
-import { GlobalConfig } from 'vultisig-sdk'
+import { Vultisig, MemoryStorage } from 'vultisig-sdk'
 
-GlobalConfig.configure({
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     return new Promise((resolve) => {
       // Show modal to user
@@ -192,10 +205,11 @@ GlobalConfig.configure({
 #### Node.js Example (Command Line)
 
 ```typescript
-import { GlobalConfig } from 'vultisig-sdk'
+import { Vultisig, MemoryStorage } from 'vultisig-sdk'
 import * as readline from 'readline'
 
-GlobalConfig.configure({
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -215,7 +229,8 @@ GlobalConfig.configure({
 #### Retrieve from Secure Storage
 
 ```typescript
-GlobalConfig.configure({
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     // Retrieve from OS keychain, secure enclave, etc.
     return await secureStorage.getPassword(vaultId)
@@ -228,7 +243,8 @@ GlobalConfig.configure({
 Cache passwords to avoid repeated prompts during a session:
 
 ```typescript
-GlobalConfig.configure({
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),
   passwordCache: {
     defaultTTL: 300000  // Cache for 5 minutes (in milliseconds)
   }
@@ -239,16 +255,16 @@ Common TTL configurations:
 
 ```typescript
 // 5 minutes (recommended for balance of security and UX)
-defaultTTL: 300000
+passwordCache: { defaultTTL: 300000 }
 
 // 15 minutes
-defaultTTL: 900000
+passwordCache: { defaultTTL: 900000 }
 
 // 1 hour
-defaultTTL: 3600000
+passwordCache: { defaultTTL: 3600000 }
 
 // Session only (no expiry, cleared on app close)
-defaultTTL: Infinity
+passwordCache: { defaultTTL: Infinity }
 ```
 
 ### Manual Lock/Unlock
@@ -361,7 +377,7 @@ const { vault, vaultId, verificationRequired } = await FastVault.create({
 // Handle email verification if required
 if (verificationRequired) {
   const code = await promptUserForVerificationCode()
-  await sdk.serverManager.verifyVault(vaultId, code)
+  await sdk.verifyVault(vaultId, code)
 }
 
 console.log('Vault created:', vault.name)
@@ -838,30 +854,34 @@ try {
 
 ## Configuration
 
-### Global Configuration
+### SDK Instance Configuration
 
-Configure the SDK with global settings:
+All configuration is passed to the `Vultisig` constructor. The SDK uses instance-scoped configuration (no global state):
 
 ```typescript
-import { GlobalConfig } from 'vultisig-sdk'
+import { Vultisig, MemoryStorage, Chain } from 'vultisig-sdk'
 
-GlobalConfig.configure({
-  // Default chains for new vaults
+const sdk = new Vultisig({
+  // Required: Storage implementation
+  storage: new MemoryStorage(),  // Or your custom Storage implementation
+
+  // Optional: Default chains for new vaults
   defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
 
-  // Default fiat currency
+  // Optional: Default fiat currency
   defaultCurrency: 'USD',
 
-  // Password management
+  // Optional: Password management
   onPasswordRequired: async (vaultId, vaultName) => {
     return await promptUserForPassword(vaultName)
   },
 
+  // Optional: Password cache settings
   passwordCache: {
     defaultTTL: 300000  // 5 minutes
   },
 
-  // Cache configuration
+  // Optional: Cache configuration
   cacheConfig: {
     address: {
       ttl: 3600000  // 1 hour
@@ -871,28 +891,45 @@ GlobalConfig.configure({
     }
   },
 
-  // Custom server endpoints (advanced)
+  // Optional: Custom server endpoints (advanced)
   serverEndpoints: {
     fastVault: 'https://custom-api.example.com',
     messageRelay: 'https://custom-relay.example.com'
   }
 })
+
+await sdk.initialize()
+
+// ... use the SDK ...
+
+// Clean up when done (releases resources)
+sdk.dispose()
 ```
 
-### SDK Instance Configuration
+### Multiple SDK Instances
 
-Configure individual SDK instances:
+You can create multiple isolated SDK instances, each with its own storage and configuration:
 
 ```typescript
-const sdk = new Vultisig({
-  storage: customStorage,     // Custom storage implementation
-  autoInit: true,             // Auto-initialize on creation (default: false)
-  defaultChains: [Chain.Bitcoin, Chain.Ethereum],
-  defaultCurrency: 'EUR',
-  cacheConfig: {
-    balance: { ttl: 60000 }   // 1 minute
-  }
+// Instance for user 1
+const sdk1 = new Vultisig({
+  storage: new FileStorage('./user1/vaults'),
+  defaultCurrency: 'USD',
 })
+
+// Instance for user 2
+const sdk2 = new Vultisig({
+  storage: new FileStorage('./user2/vaults'),
+  defaultCurrency: 'EUR',
+})
+
+// Each instance is completely isolated
+await sdk1.initialize()
+await sdk2.initialize()
+
+// Clean up both when done
+sdk1.dispose()
+sdk2.dispose()
 ```
 
 ### Custom Storage Implementation
@@ -936,6 +973,10 @@ class FileStorage implements Storage {
 const sdk = new Vultisig({
   storage: new FileStorage('./vaults')
 })
+
+await sdk.initialize()
+// ... use the SDK ...
+sdk.dispose()  // Clean up when done
 ```
 
 ---
@@ -959,7 +1000,8 @@ const cachedAddress = await vault.address(Chain.Ethereum) // <1ms
 Configure address cache TTL:
 
 ```typescript
-GlobalConfig.configure({
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),
   cacheConfig: {
     address: {
       ttl: 3600000  // 1 hour (or Infinity for no expiry)
@@ -989,7 +1031,8 @@ await vault.updateBalances() // Bypasses cache for all chains
 Configure balance cache TTL:
 
 ```typescript
-GlobalConfig.configure({
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),
   cacheConfig: {
     balance: {
       ttl: 30000  // 30 seconds (default)
@@ -1003,7 +1046,8 @@ GlobalConfig.configure({
 Passwords are cached to avoid repeated prompts (see [Password Management](#password-management)):
 
 ```typescript
-GlobalConfig.configure({
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),
   passwordCache: {
     defaultTTL: 300000  // 5 minutes
   }
@@ -1165,8 +1209,22 @@ vault.off('balanceUpdated', handler)
 
 ```typescript
 class Vultisig {
+  // Constructor - storage is required
+  constructor(config: {
+    storage: Storage               // Required
+    defaultChains?: Chain[]
+    defaultCurrency?: string
+    onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
+    passwordCache?: { defaultTTL: number }
+    cacheConfig?: CacheConfig
+    serverEndpoints?: { fastVault?: string, messageRelay?: string }
+  })
+
   // Initialization
   initialize(): Promise<void>
+
+  // Cleanup (releases all resources)
+  dispose(): void
 
   // Vault management
   importVault(vultContent: string, password?: string): Promise<VaultBase>
@@ -1184,8 +1242,9 @@ class Vultisig {
   getAddressBook(chain?: Chain): Promise<AddressBookEntry[]>
   addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
 
-  // Server manager
-  serverManager: GlobalServerManager
+  // Vault verification
+  verifyVault(vaultId: string, code: string): Promise<boolean>
+  resendVaultVerification(vaultId: string): Promise<void>
 }
 ```
 
@@ -1317,34 +1376,26 @@ enum Chain {
 ### Common Configuration Options
 
 ```typescript
-// GlobalConfig
-GlobalConfig.configure({
-  defaultChains: Chain[],
-  defaultCurrency: string,
-  onPasswordRequired: (vaultId: string, vaultName: string) => Promise<string>,
-  passwordCache: {
-    defaultTTL: number  // milliseconds
-  },
-  cacheConfig: {
-    address: { ttl: number },
-    balance: { ttl: number }
-  },
-  serverEndpoints: {
-    fastVault: string,
-    messageRelay: string
-  }
-})
-
 // Vultisig constructor options
 new Vultisig({
-  storage: Storage,
-  autoInit: boolean,
-  defaultChains: Chain[],
-  defaultCurrency: string,
-  cacheConfig: CacheConfig,
-  passwordCache: { defaultTTL: number },
+  // Required
+  storage: Storage,                // Storage implementation (MemoryStorage, custom, etc.)
+
+  // Optional
+  defaultChains: Chain[],          // Default chains for new vaults
+  defaultCurrency: string,         // Default fiat currency ('USD', 'EUR', etc.)
+  cacheConfig: {
+    address: { ttl: number },      // Address cache TTL (default: Infinity)
+    balance: { ttl: number }       // Balance cache TTL (default: 30000)
+  },
+  passwordCache: {
+    defaultTTL: number             // Password cache TTL in milliseconds
+  },
   onPasswordRequired: (vaultId: string, vaultName: string) => Promise<string>,
-  serverEndpoints: { fastVault: string, messageRelay: string }
+  serverEndpoints: {
+    fastVault: string,             // Custom VultiServer URL
+    messageRelay: string           // Custom relay server URL
+  }
 })
 ```
 

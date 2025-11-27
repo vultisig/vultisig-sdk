@@ -1,102 +1,168 @@
-// ServerManager is internal - import directly from implementation file
 import { Chain } from '@core/chain/Chain'
 import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
-import { GlobalConfig } from './config/GlobalConfig'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
+import type { SdkConfigOptions,SdkContext } from './context/SdkContext'
+import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
-import { GlobalServerManager } from './server/GlobalServerManager'
-import { GlobalStorage } from './storage/GlobalStorage'
 import type { Storage } from './storage/types'
-import { AddressBook, AddressBookEntry, ServerStatus, VultisigConfig } from './types'
+import { AddressBook, AddressBookEntry, ServerStatus } from './types'
+import { FastVault } from './vault/FastVault'
+import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
 import { VaultManager } from './VaultManager'
-import { WasmManager } from './wasm'
 
 // Re-export constants
 export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
 
 /**
+ * Configuration options for Vultisig SDK
+ */
+export type VultisigConfig = {
+  /** Required: Storage implementation */
+  storage: Storage
+  /** Optional server endpoints override */
+  serverEndpoints?: SdkContextBuilderOptions['serverEndpoints']
+  /** Default chains for new vaults */
+  defaultChains?: Chain[]
+  /** Default fiat currency */
+  defaultCurrency?: string
+  /** Cache configuration */
+  cacheConfig?: SdkConfigOptions['cacheConfig']
+  /** Password cache configuration */
+  passwordCache?: SdkConfigOptions['passwordCache']
+  /** Callback for password requests */
+  onPasswordRequired?: SdkConfigOptions['onPasswordRequired']
+  /** Auto-initialize on construction */
+  autoInit?: boolean
+}
+
+/**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
- * Now with integrated storage, events, and connection management
  *
- * Uses global singletons for ServerManager and VaultConfig
+ * Instance-scoped: Each Vultisig instance manages its own dependencies via SdkContext.
+ * This design allows multiple independent SDK instances in the same process.
+ *
+ * @example
+ * ```typescript
+ * const sdk = new Vultisig({
+ *   storage: new MemoryStorage(),
+ *   defaultChains: [Chain.Bitcoin, Chain.Ethereum],
+ *   onPasswordRequired: async (vaultId, vaultName) => {
+ *     return promptUser(`Enter password for ${vaultName}`)
+ *   }
+ * })
+ *
+ * await sdk.initialize()
+ * const vault = await sdk.importVault(vultContent, password)
+ *
+ * // When done, dispose to clean up resources
+ * sdk.dispose()
+ * ```
  */
 export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private _initialized = false
+  private _disposed = false
   private initializationPromise?: Promise<void>
 
+  // Instance-scoped context with all dependencies
+  private readonly context: SdkContext
+
   // Module managers
-  private addressBookManager: AddressBookManager
-  private vaultManager: VaultManager
+  private readonly addressBookManager: AddressBookManager
+  private readonly vaultManager: VaultManager
 
   // Chain and currency configuration
   private _defaultChains: Chain[]
   private _defaultCurrency: string
 
-  // Storage state (kept for backward compatibility)
+  /**
+   * Get the storage instance for this SDK
+   */
   public get storage(): Storage {
-    return GlobalStorage.getInstance()
+    return this.context.storage
   }
 
-  // Public readonly properties (exposed via getters)
+  /**
+   * Check if SDK is initialized
+   */
   get initialized(): boolean {
     return this._initialized
   }
 
+  /**
+   * Check if SDK has been disposed
+   */
+  get disposed(): boolean {
+    return this._disposed
+  }
+
+  /**
+   * Get default chains configuration
+   */
   get defaultChains(): Chain[] {
     return [...this._defaultChains]
   }
 
+  /**
+   * Get default currency
+   */
   get defaultCurrency(): string {
     return this._defaultCurrency
   }
 
-  constructor(config?: VultisigConfig) {
-    // Initialize EventEmitter
+  /**
+   * Create a new Vultisig SDK instance
+   *
+   * @param config - Required configuration including storage
+   * @throws Error if storage is not provided
+   */
+  constructor(config: VultisigConfig) {
     super()
 
-    // Configure global storage if provided
-    if (config?.storage) {
-      GlobalStorage.configure(config.storage)
+    // Validate required config
+    if (!config || !config.storage) {
+      throw new Error('Vultisig requires a storage implementation. Pass storage in config.')
     }
 
-    // Configure global server manager
-    if (config?.serverEndpoints) {
-      GlobalServerManager.configure(config.serverEndpoints)
-    }
-
-    // Configure global config
-    GlobalConfig.configure({
-      defaultChains: config?.defaultChains,
-      defaultCurrency: config?.defaultCurrency,
-      cacheConfig: config?.cacheConfig,
-      passwordCache: config?.passwordCache,
-      onPasswordRequired: config?.onPasswordRequired,
+    // Build SdkContext from config
+    const builder = new SdkContextBuilder().withStorage(config.storage).withConfig({
+      defaultChains: config.defaultChains,
+      defaultCurrency: config.defaultCurrency,
+      cacheConfig: config.cacheConfig,
+      passwordCache: config.passwordCache,
+      onPasswordRequired: config.onPasswordRequired,
     })
 
-    // Note: WASM is configured automatically by platform bundles at module load time
-    // Users should not configure WASM directly
-
-    // Initialize chain and currency configuration
-    this._defaultChains = config?.defaultChains ?? DEFAULT_CHAINS
-    this._defaultCurrency = config?.defaultCurrency ?? 'USD'
-
-    // Initialize module managers (no parameters needed)
-    this.addressBookManager = new AddressBookManager()
-    this.vaultManager = new VaultManager()
-
-    // Auto-initialization
-    if (config?.autoInit) {
-      this.initialize().catch(err => this.emit('error', err))
+    if (config.serverEndpoints) {
+      builder.withServerEndpoints(config.serverEndpoints)
     }
 
-    // Auto-connection (deprecated, now same as autoInit)
-    if (config?.autoConnect) {
+    this.context = builder.build()
+
+    // Initialize chain and currency configuration
+    this._defaultChains = config.defaultChains ?? DEFAULT_CHAINS
+    this._defaultCurrency = config.defaultCurrency ?? 'USD'
+
+    // Initialize module managers with context dependencies
+    this.addressBookManager = new AddressBookManager(this.context.storage)
+    this.vaultManager = new VaultManager(this.context)
+
+    // Auto-initialization
+    if (config.autoInit) {
       this.initialize().catch(err => this.emit('error', err))
+    }
+  }
+
+  /**
+   * Throw if SDK has been disposed
+   */
+  private ensureNotDisposed(): void {
+    if (this._disposed) {
+      throw new Error('Vultisig instance has been disposed. Create a new instance.')
     }
   }
 
@@ -107,7 +173,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private async loadConfigFromStorage(): Promise<void> {
     try {
       // Load default currency
-      const storedCurrency = await this.storage.get<string>('config:defaultCurrency')
+      const storedCurrency = await this.context.storage.get<string>('config:defaultCurrency')
       if (storedCurrency) {
         this._defaultCurrency = storedCurrency
       }
@@ -117,7 +183,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     try {
       // Load default chains
-      const storedChains = await this.storage.get<Chain[]>('config:defaultChains')
+      const storedChains = await this.context.storage.get<Chain[]>('config:defaultChains')
       if (storedChains) {
         this._defaultChains = storedChains
       }
@@ -130,6 +196,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Internal auto-initialization helper
    */
   private async ensureInitialized(): Promise<void> {
+    this.ensureNotDisposed()
     if (!this.initialized) {
       await this.initialize()
     }
@@ -143,6 +210,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Thread-safe: Multiple concurrent calls will share the same initialization promise
    */
   async initialize(): Promise<void> {
+    this.ensureNotDisposed()
+
     // Already initialized
     if (this.initialized) return
 
@@ -154,8 +223,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Start new initialization
     this.initializationPromise = (async () => {
       try {
-        // Initialize platform-specific items
-        await WasmManager.initialize()
+        // Initialize WASM via context's WasmProvider
+        await this.context.wasmProvider.initialize()
 
         // Load configuration from storage
         await this.loadConfigFromStorage()
@@ -175,6 +244,31 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return this.initializationPromise
   }
 
+  /**
+   * Dispose this SDK instance and release resources
+   *
+   * After calling dispose():
+   * - Password cache is destroyed (passwords zeroed in memory)
+   * - All method calls will throw
+   * - A new Vultisig instance must be created to continue
+   *
+   * Note: WASM modules are shared process-wide and are NOT unloaded
+   */
+  dispose(): void {
+    if (this._disposed) {
+      return // Already disposed
+    }
+
+    // Destroy password cache (zeros passwords in memory)
+    this.context.passwordCache.destroy()
+
+    // Mark as disposed
+    this._disposed = true
+
+    // Emit disposed event
+    this.emit('disposed', {})
+  }
+
   // === VAULT LIFECYCLE ===
 
   /**
@@ -182,8 +276,15 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
     await this.ensureInitialized()
-    const serverManager = GlobalServerManager.getInstance()
-    return serverManager.verifyVault(vaultId, code)
+    return this.context.serverManager.verifyVault(vaultId, code)
+  }
+
+  /**
+   * Resend vault verification email
+   */
+  async resendVaultVerification(vaultId: string): Promise<void> {
+    await this.ensureInitialized()
+    return this.context.serverManager.resendVaultVerification(vaultId)
   }
 
   /**
@@ -349,8 +450,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Check server connectivity
    */
   async getServerStatus(): Promise<ServerStatus> {
-    const serverManager = GlobalServerManager.getInstance()
-    return serverManager.checkServerStatus()
+    return this.context.serverManager.checkServerStatus()
   }
 
   // === ADDRESS BOOK (GLOBAL) ===
@@ -383,20 +483,20 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return this.addressBookManager.updateAddressBookEntry(chain, address, name)
   }
 
-  // === CONVENIENCE GETTERS FOR GLOBAL SINGLETONS ===
+  // === CONVENIENCE GETTERS ===
 
   /**
-   * Get the global storage instance
+   * Get the configuration for this SDK instance
    */
-  get serverManager() {
-    return GlobalServerManager.getInstance()
+  get config() {
+    return this.context.config
   }
 
   /**
-   * Get the global configuration
+   * Get the WASM provider for this SDK instance
    */
-  get config() {
-    return GlobalConfig.getInstance()
+  get wasmProvider() {
+    return this.context.wasmProvider
   }
 
   // === STATIC UTILITY METHODS ===
@@ -419,5 +519,23 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   static getAddressExplorerUrl(chain: Chain, address: string): string {
     return getBlockExplorerUrl({ chain, entity: 'address', value: address })
+  }
+
+  /**
+   * Type guard to check if a vault is a FastVault
+   * @param vault - The vault to check
+   * @returns true if the vault is a FastVault
+   */
+  static isFastVault(vault: VaultBase): vault is FastVault {
+    return vault.type === 'fast'
+  }
+
+  /**
+   * Type guard to check if a vault is a SecureVault
+   * @param vault - The vault to check
+   * @returns true if the vault is a SecureVault
+   */
+  static isSecureVault(vault: VaultBase): vault is SecureVault {
+    return vault.type === 'secure'
   }
 }
