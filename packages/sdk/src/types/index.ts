@@ -75,7 +75,7 @@ export type Balance = {
   symbol: string
   chainId: string
   tokenId?: string
-  value?: number // USD value (deprecated - use fiatValue instead)
+  value?: number
   fiatValue?: number // Current fiat value in vault's currency
   fiatCurrency?: string // Currency code (e.g., 'USD', 'EUR')
 }

@@ -557,7 +557,7 @@ program
       const spinner = createSpinner(`Loading portfolio in ${currencyName}...`)
 
       const totalValue = await vault.getTotalValue(currency)
-      const chains = vault.getChains()
+      const chains = vault.chains
 
       const chainBalances = await Promise.all(
         chains.map(async chain => {
@@ -809,7 +809,7 @@ program
         await vault.removeChain(chain)
         success(`\n+ Removed chain: ${chain}`)
       } else {
-        const chains = vault.getChains()
+        const chains = vault.chains
         console.log(chalk.cyan('\nActive Chains:\n'))
         chains.forEach((chain: Chain) => {
           console.log(`  - ${chain}`)
@@ -865,7 +865,7 @@ program
 
       success(`\n+ Switched to vault: ${vault.name}`)
       info(`  Type: ${vault.type}`)
-      info(`  Chains: ${vault.getChains().length}`)
+      info(`  Chains: ${vault.chains.length}`)
     })
   )
 

@@ -21,7 +21,7 @@ export function displayVaultList(vaults: VaultBase[], activeVaultId?: string | n
     console.log(`${prefix} ${vault.name} ${status}`)
     console.log(chalk.gray(`     Type: Fast Vault`))
 
-    const chains = vault.getChains()
+    const chains = vault.chains
     if (chains.length > 0) {
       console.log(chalk.gray(`     Chains: ${chains.join(', ')} (${chains.length})`))
     } else {

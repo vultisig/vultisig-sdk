@@ -25,7 +25,7 @@ export default function VaultInfo({ vault }: VaultInfoProps) {
         </div>
         <div>
           <div className="text-sm font-medium text-gray-500">Chains</div>
-          <p className="text-lg">{vault.getChains().length}</p>
+          <p className="text-lg">{vault.chains.length}</p>
         </div>
       </div>
     </div>

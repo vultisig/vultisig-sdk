@@ -29,28 +29,6 @@ export {
 } from './vault'
 
 // ============================================================================
-// PUBLIC API - Operations
-// ============================================================================
-
-// NOTE: MPC implementation is internal-only
-// Users interact via: sdk.createVault() and vault.sign()
-// MPC types are exported from './types' section below
-
-// NOTE: ChainManager and AddressDeriver are internal implementation details
-// Users should interact via Vultisig and Vault classes only
-
-// NOTE: ServerManager is internal-only
-// Users access server-assisted signing via: vault.sign('fast', payload)
-// Server types (ServerStatus, ReshareOptions, FastSigningInput) are exported from './types' section below
-
-// NOTE: Cryptographic utilities are internal-only
-// Users don't need direct access to crypto primitives
-
-// NOTE: WasmManager is internal-only
-// Platform bundles automatically configure WASM at module load time
-// Users don't need direct access to WASM management
-
-// ============================================================================
 // PUBLIC API - Validation Utilities
 // ============================================================================
 

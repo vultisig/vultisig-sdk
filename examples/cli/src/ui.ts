@@ -156,7 +156,7 @@ export function displayVaultInfo(vault: VaultBase): void {
   })
 
   // Chains
-  const chains = vault.getChains()
+  const chains = vault.chains
   console.log(chalk.bold('\nChains:'))
   console.log(`  Total: ${chains.length}`)
   chains.forEach((chain: Chain) => {
@@ -212,7 +212,7 @@ export function displayVaultsList(vaults: VaultBase[], activeVault: VaultBase | 
     ID: vault.id,
     Name: vault.name === activeVault?.name ? chalk.green(`${vault.name} (active)`) : vault.name,
     Type: vault.type,
-    Chains: vault.getChains().length,
+    Chains: vault.chains.length,
     Created: new Date(vault.createdAt).toLocaleDateString(),
   }))
 

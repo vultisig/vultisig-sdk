@@ -174,7 +174,10 @@ export class SwapService {
   }
 
   /**
-   * Check if swap is supported between two chains
+   * Check if swap is supported between two chains.
+   * @param fromChain - Source chain
+   * @param toChain - Destination chain
+   * @returns true if swapping is supported between these chains
    */
   isSwapSupported(fromChain: Chain, toChain: Chain): boolean {
     const enabledChains = swapEnabledChains as readonly Chain[]
@@ -182,14 +185,18 @@ export class SwapService {
   }
 
   /**
-   * Get list of chains that support swapping
+   * Get list of chains that support swapping.
+   * @returns Array of chains that can be used for swaps
    */
   getSupportedChains(): readonly Chain[] {
     return swapEnabledChains as readonly Chain[]
   }
 
   /**
-   * Get ERC-20 token allowance
+   * Get ERC-20 token allowance for a spender.
+   * @param coin - The token to check allowance for
+   * @param spender - The spender address (usually DEX router)
+   * @returns Current allowance amount (0 for non-ERC20 tokens)
    */
   async getAllowance(coin: AccountCoin, spender: string): Promise<bigint> {
     // Only ERC-20 tokens have allowance

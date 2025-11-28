@@ -449,26 +449,32 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   // ===== PUBLIC GETTERS =====
 
+  /** Unique vault identifier (ECDSA public key). */
   get id(): string {
     return this.vaultData.id
   }
 
+  /** Raw vault data object. */
   get data(): VaultData {
     return this.vaultData
   }
 
+  /** Vault display name. */
   get name(): string {
     return this.vaultData.name
   }
 
+  /** Vault public keys for ECDSA and EdDSA signing. */
   get publicKeys(): Readonly<{ ecdsa: string; eddsa: string }> {
     return this.vaultData.publicKeys
   }
 
+  /** Vault chain code in hexadecimal format. */
   get hexChainCode(): string {
     return this.vaultData.hexChainCode
   }
 
+  /** List of signers participating in this vault's MPC. */
   get signers(): Array<{ id: string; publicKey: string; name: string }> {
     return this.vaultData.signers.map((signerId, index) => ({
       id: signerId,
@@ -477,54 +483,72 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }))
   }
 
+  /** This device's party ID in the MPC protocol. */
   get localPartyId(): string {
     return this.vaultData.localPartyId
   }
 
+  /** Vault creation timestamp (Unix milliseconds). */
   get createdAt(): number {
     return this.vaultData.createdAt
   }
 
+  /** MPC library type (GG20 or DKLS). */
   get libType(): string {
     return this.vaultData.libType
   }
 
+  /** Whether the vault is password-protected. */
   get isEncrypted(): boolean {
     return this.vaultData.isEncrypted
   }
 
+  /** Vault type: 'fast' (2-of-2 with server) or 'secure' (multi-device). */
   get type(): 'fast' | 'secure' {
     return this.vaultData.type
   }
 
+  /** Whether the vault has been backed up. */
   get isBackedUp(): boolean {
     return this.vaultData.isBackedUp
   }
 
+  /** Vault display order. */
   get order(): number {
     return this.vaultData.order
   }
 
+  /** Folder ID if vault is organized in a folder. */
   get folderId(): string | undefined {
     return this.vaultData.folderId
   }
 
+  /** Last modification timestamp (Unix milliseconds). */
   get lastModified(): number {
     return this.vaultData.lastModified
   }
 
+  /** Total number of signers in this vault. */
   get totalSigners(): number {
     return this.vaultData.signers.length
   }
 
+  /** Vault's preferred fiat currency (e.g., 'usd', 'eur'). */
   get currency(): string {
     return this._currency
   }
 
+  /** Custom tokens added to this vault, grouped by chain. */
   get tokens(): Record<string, Token[]> {
     return this._tokens
   }
 
+  /** Active blockchain chains for this vault. */
+  get chains(): Chain[] {
+    return this._userChains
+  }
+
+  /** Vault cryptographic keys. */
   get keys(): {
     ecdsa: string
     eddsa: string
@@ -961,28 +985,36 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== TOKEN MANAGEMENT =====
 
   /**
-   * Set tokens for a chain
+   * Set tokens for a specific chain.
+   * @param chain - The blockchain chain
+   * @param tokens - Array of tokens to set
    */
   async setTokens(chain: Chain, tokens: Token[]): Promise<void> {
     return this.balanceService.setTokens(chain, tokens)
   }
 
   /**
-   * Add single token to chain
+   * Add a single token to a chain.
+   * @param chain - The blockchain chain
+   * @param token - Token to add
    */
   async addToken(chain: Chain, token: Token): Promise<void> {
     return this.balanceService.addToken(chain, token)
   }
 
   /**
-   * Remove token from chain
+   * Remove a token from a chain.
+   * @param chain - The blockchain chain
+   * @param tokenId - Token contract address or identifier
    */
   async removeToken(chain: Chain, tokenId: string): Promise<void> {
     return this.balanceService.removeToken(chain, tokenId)
   }
 
   /**
-   * Get tokens for chain
+   * Get tokens for a specific chain.
+   * @param chain - The blockchain chain
+   * @returns Array of tokens on the chain
    */
   getTokens(chain: Chain): Token[] {
     return this._tokens[chain] || []
@@ -991,35 +1023,31 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== CHAIN MANAGEMENT =====
 
   /**
-   * Set user chains
+   * Set the active chains for this vault.
+   * @param chains - Array of chains to enable
    */
   async setChains(chains: Chain[]): Promise<void> {
     return this.preferencesService.setChains(chains)
   }
 
   /**
-   * Add single chain
+   * Add a single chain to this vault.
+   * @param chain - Chain to add
    */
   async addChain(chain: Chain): Promise<void> {
     return this.preferencesService.addChain(chain)
   }
 
   /**
-   * Remove single chain
+   * Remove a chain from this vault.
+   * @param chain - Chain to remove
    */
   async removeChain(chain: Chain): Promise<void> {
     return this.preferencesService.removeChain(chain)
   }
 
   /**
-   * Get current user chains
-   */
-  getChains(): Chain[] {
-    return this.preferencesService.getChains()
-  }
-
-  /**
-   * Reset to default chains
+   * Reset chains to SDK default configuration.
    */
   async resetToDefaultChains(): Promise<void> {
     return this.preferencesService.resetToDefaultChains()
@@ -1028,23 +1056,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== CURRENCY MANAGEMENT =====
 
   /**
-   * Set vault currency
+   * Set the vault's preferred fiat currency.
+   * @param currency - Currency code (e.g., 'usd', 'eur')
    */
   async setCurrency(currency: string): Promise<void> {
     return this.preferencesService.setCurrency(currency)
   }
 
-  /**
-   * Get vault currency
-   */
-  getCurrency(): string {
-    return this.preferencesService.getCurrencyPreference()
-  }
-
   // ===== FIAT VALUE OPERATIONS =====
 
   /**
-   * Get fiat value for a specific asset
+   * Get fiat value for a specific asset.
+   * @param chain - The blockchain chain
+   * @param tokenId - Optional token identifier (omit for native asset)
+   * @param fiatCurrency - Optional currency override (defaults to vault currency)
+   * @returns Fiat value information
    */
   async getValue(chain: Chain, tokenId?: string, fiatCurrency?: FiatCurrency): Promise<Value> {
     const value = await this.fiatValueService.getValue(chain, tokenId, fiatCurrency)
@@ -1052,14 +1078,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Get fiat values for all assets on a chain (native + tokens)
+   * Get fiat values for all assets on a chain (native + tokens).
+   * @param chain - The blockchain chain
+   * @param fiatCurrency - Optional currency override
+   * @returns Map of asset identifiers to fiat values
    */
   async getValues(chain: Chain, fiatCurrency?: FiatCurrency): Promise<Record<string, Value>> {
     return this.fiatValueService.getValues(chain, fiatCurrency)
   }
 
   /**
-   * Refresh price data for specified chain or all chains
+   * Refresh price data for specified chain or all chains.
+   * @param chain - Chain to update, or 'all' for all chains
    */
   async updateValues(chain: Chain | 'all'): Promise<void> {
     await this.fiatValueService.updateValues(chain)
@@ -1068,14 +1098,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Get total portfolio value across all chains and tokens
+   * Get total portfolio value across all chains and tokens.
+   * @param fiatCurrency - Optional currency override
+   * @returns Total portfolio value
    */
   async getTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
     return this.fiatValueService.getTotalValue(fiatCurrency)
   }
 
   /**
-   * Force recalculation of total portfolio value (invalidates cache)
+   * Force recalculation of total portfolio value (invalidates cache).
+   * @param fiatCurrency - Optional currency override
+   * @returns Updated total portfolio value
    */
   async updateTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
     const totalValue = await this.fiatValueService.updateTotalValue(fiatCurrency)

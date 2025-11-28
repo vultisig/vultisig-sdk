@@ -16,7 +16,7 @@ export default function BalanceDisplay({ vault }: BalanceDisplayProps) {
     try {
       // Check balances for all chains
       const allBalances: any[] = []
-      for (const chain of vault.getChains()) {
+      for (const chain of vault.chains) {
         const balance = await vault.balance(chain)
         allBalances.push({ chain, balance })
       }

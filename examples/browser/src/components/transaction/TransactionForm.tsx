@@ -10,7 +10,7 @@ type TransactionFormProps = {
 }
 
 export default function TransactionForm({ vault }: TransactionFormProps) {
-  const chains = vault.getChains()
+  const chains = vault.chains
 
   const [formData, setFormData] = useState({
     chain: chains[0] || '',

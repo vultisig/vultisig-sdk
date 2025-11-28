@@ -162,6 +162,54 @@ interface Storage {
 }
 ```
 
+### Stateless Usage
+
+For scenarios where you don't need persistent storage—such as one-off operations, testing, or serverless functions—use `MemoryStorage` to create ephemeral vault instances:
+
+```typescript
+import { Vultisig, MemoryStorage, Chain } from 'vultisig-sdk'
+import * as fs from 'fs'
+
+// Create SDK with in-memory storage (no persistence)
+const sdk = new Vultisig({
+  storage: new MemoryStorage()
+})
+
+// Load vault from file
+const vultContent = fs.readFileSync('my-wallet.vult', 'utf-8')
+const vault = await sdk.importVault(vultContent, 'password123')
+
+// Use vault normally - all operations work
+const address = await vault.address(Chain.Bitcoin)
+const balance = await vault.balance(Chain.Ethereum)
+const signature = await vault.sign(payload)
+
+// When the process ends, all state is lost (by design)
+sdk.dispose()
+```
+
+**Use cases for stateless usage:**
+- **One-off signing**: Sign a transaction without persisting vault state
+- **Address derivation**: Generate addresses without storing vault data
+- **Testing**: Unit and integration tests without filesystem side effects
+- **Serverless functions**: Lambda/Cloud Functions that load vault per-request
+- **CLI tools**: Command-line utilities that operate on vault files
+
+**What works in stateless mode:**
+- ✅ Address derivation
+- ✅ Balance checking
+- ✅ Transaction signing (FastVault)
+- ✅ Gas estimation
+- ✅ Swap quotes and execution
+- ✅ Token/chain management (in-memory only)
+
+**What doesn't persist:**
+- ❌ Vault preferences (chains, tokens, currency)
+- ❌ Cached balances/addresses (recreated each session)
+- ❌ Password cache (must provide password each time)
+
+**Note**: The vault file (`.vult`) itself is never modified by the SDK—it's read-only. Persistence is about SDK metadata and cached data, not the vault file contents.
+
 ---
 
 ## Password Management

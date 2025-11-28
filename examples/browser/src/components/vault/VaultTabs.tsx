@@ -180,7 +180,7 @@ export default function VaultTabs({ sdk, openVaults, onTabSwitch, onTabClose, on
                     </div>
                     <div className="flex items-center gap-3 text-sm text-gray-500">
                       <span className="font-mono">{shortenAddress(vault.id, 6)}</span>
-                      <span>{vault.getChains().length} chains</span>
+                      <span>{vault.chains.length} chains</span>
                     </div>
                   </div>
                   <Button variant="secondary" size="small">
