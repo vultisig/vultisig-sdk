@@ -583,11 +583,9 @@ class CacheService {
 
 **Cache Scopes:**
 
-- `ADDRESS` - Permanent (addresses never change)
-- `BALANCE` - 5 minutes
-- `GAS` - No cache
-- `PORTFOLIO` - 5 minutes
-- `FIAT_VALUE` - 1 minute
+- `ADDRESS` - Permanent (addresses never change, persisted to storage)
+- `BALANCE` - 5 minutes (account balances)
+- `PRICE` - 5 minutes (fiat prices)
 
 ### FastSigningService
 

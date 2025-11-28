@@ -49,8 +49,6 @@ export class CacheService {
     this.config = {
       balanceTTL: config?.balanceTTL ?? 5 * 60 * 1000,
       priceTTL: config?.priceTTL ?? 5 * 60 * 1000,
-      gasTTL: config?.gasTTL ?? 2 * 60 * 1000,
-      portfolioTTL: config?.portfolioTTL ?? 1 * 60 * 1000,
       maxMemoryCacheSize: config?.maxMemoryCacheSize ?? 1000,
     }
   }
@@ -307,10 +305,6 @@ export class CacheService {
         return this.config.balanceTTL
       case CacheScope.PRICE:
         return this.config.priceTTL
-      case CacheScope.GAS:
-        return this.config.gasTTL
-      case CacheScope.PORTFOLIO:
-        return this.config.portfolioTTL
       default:
         return 5 * 60 * 1000 // Default 5 minutes
     }

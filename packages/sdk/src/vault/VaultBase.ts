@@ -349,15 +349,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Automatically invalidates relevant caches when vault state changes
    */
   private setupCacheInvalidation(): void {
-    // When tokens are added/removed, invalidate balances and portfolio for that chain
+    // When tokens are added/removed, invalidate balances for that chain
     this.on('tokenAdded', async ({ chain }) => {
       await this.cacheService.invalidateByPrefix(`${CacheScope.BALANCE}:${chain.toLowerCase()}`)
-      await this.cacheService.invalidateScope(CacheScope.PORTFOLIO)
     })
 
     this.on('tokenRemoved', async ({ chain }) => {
       await this.cacheService.invalidateByPrefix(`${CacheScope.BALANCE}:${chain.toLowerCase()}`)
-      await this.cacheService.invalidateScope(CacheScope.PORTFOLIO)
     })
   }
 

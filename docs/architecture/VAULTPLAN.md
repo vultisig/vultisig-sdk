@@ -142,10 +142,9 @@ interface VultisigConfig {
 
   // Cache configuration
   cacheConfig?: {
-    addressTTL?: number; // Address cache TTL in ms (permanent by default)
     balanceTTL?: number; // Balance cache TTL in ms (default: 300000 = 5min)
-    gasTTL?: number; // Gas price cache TTL in ms (default: 30000 = 30sec)
-    priceTTL?: number; // Price data cache TTL in ms (default: 60000 = 1min)
+    priceTTL?: number; // Price data cache TTL in ms (default: 300000 = 5min)
+    maxMemoryCacheSize?: number; // Max cache entries (default: 1000)
   };
 
   // WASM configuration

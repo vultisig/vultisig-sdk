@@ -931,12 +931,8 @@ const sdk = new Vultisig({
 
   // Optional: Cache configuration
   cacheConfig: {
-    address: {
-      ttl: 3600000  // 1 hour
-    },
-    balance: {
-      ttl: 30000    // 30 seconds
-    }
+    balanceTTL: 300000,  // 5 minutes (default)
+    priceTTL: 300000,    // 5 minutes (default)
   },
 
   // Optional: Custom server endpoints (advanced)
@@ -1045,18 +1041,7 @@ const address = await vault.address(Chain.Ethereum) // ~100ms
 const cachedAddress = await vault.address(Chain.Ethereum) // <1ms
 ```
 
-Configure address cache TTL:
-
-```typescript
-const sdk = new Vultisig({
-  storage: new MemoryStorage(),
-  cacheConfig: {
-    address: {
-      ttl: 3600000  // 1 hour (or Infinity for no expiry)
-    }
-  }
-})
-```
+Addresses are cached permanently (they never change for a vault) and persisted to storage.
 
 ### Balance Caching
 
@@ -1076,15 +1061,14 @@ await vault.updateBalance(Chain.Ethereum) // Bypasses cache
 await vault.updateBalances() // Bypasses cache for all chains
 ```
 
-Configure balance cache TTL:
+Configure cache TTLs:
 
 ```typescript
 const sdk = new Vultisig({
   storage: new MemoryStorage(),
   cacheConfig: {
-    balance: {
-      ttl: 30000  // 30 seconds (default)
-    }
+    balanceTTL: 300000,  // 5 minutes (default)
+    priceTTL: 300000,    // 5 minutes (default)
   }
 })
 ```
@@ -1110,19 +1094,17 @@ if (vault.isUnlocked()) {
 }
 ```
 
-### Portfolio Value Caching
+### Portfolio Value
 
-Total portfolio value is cached:
+Total portfolio value is calculated from cached balances and prices:
 
 ```typescript
-// First call - calculates from all balances
-const value = await vault.getTotalValue() // ~1000ms
+// Calculates from all balances × prices (uses cached values)
+const value = await vault.getTotalValue()
 
-// Cached call
-const cachedValue = await vault.getTotalValue() // <1ms
-
-// Force refresh
-await vault.updateTotalValue() // Recalculates
+// Force refresh prices first, then get total
+await vault.updateValues('all')
+const freshValue = await vault.getTotalValue()
 ```
 
 ### Cache Invalidation
@@ -1433,8 +1415,9 @@ new Vultisig({
   defaultChains: Chain[],          // Default chains for new vaults
   defaultCurrency: string,         // Default fiat currency ('USD', 'EUR', etc.)
   cacheConfig: {
-    address: { ttl: number },      // Address cache TTL (default: Infinity)
-    balance: { ttl: number }       // Balance cache TTL (default: 30000)
+    balanceTTL: number,            // Balance cache TTL in ms (default: 300000 = 5min)
+    priceTTL: number,              // Price cache TTL in ms (default: 300000 = 5min)
+    maxMemoryCacheSize: number     // Max cache entries (default: 1000)
   },
   passwordCache: {
     defaultTTL: number             // Password cache TTL in milliseconds
