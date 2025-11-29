@@ -1,19 +1,25 @@
 import type { Chain } from '@core/chain/Chain'
 
-import { GlobalStorage } from './runtime/storage/GlobalStorage'
-import type { Storage } from './runtime/storage/types'
+import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry } from './types'
 
 /**
- * AddressBook manager for global address book operations
+ * AddressBook manager for address book operations
  * Handles saved addresses and addresses from user's other vaults
+ *
+ * Instance-scoped: Each Vultisig instance has its own AddressBookManager
  */
 export class AddressBookManager {
   private addressBookData: AddressBook = { saved: [], vaults: [] }
-  private storage: Storage
+  private readonly storage: Storage
 
-  constructor() {
-    this.storage = GlobalStorage.getInstance()
+  /**
+   * Create an AddressBookManager with the provided storage
+   *
+   * @param storage - Storage implementation to use
+   */
+  constructor(storage: Storage) {
+    this.storage = storage
   }
 
   /**

@@ -1,9 +1,0 @@
-/* 
-  The GlobalStyle component from the UI library handles all base styles.
-  This file is kept minimal to avoid conflicts with the design system.
-*/
-
-#root {
-  width: 100%;
-  height: 100%;
-}

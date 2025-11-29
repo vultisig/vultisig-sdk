@@ -20,8 +20,6 @@ export { Vultisig } from './Vultisig'
 export type { VaultConfig } from './vault'
 export {
   FastVault,
-  isFastVault,
-  isSecureVault,
   SecureVault,
   VaultBase,
   VaultError,
@@ -29,45 +27,6 @@ export {
   VaultImportError,
   VaultImportErrorCode,
 } from './vault'
-
-// ============================================================================
-// PUBLIC API - Operations
-// ============================================================================
-
-// NOTE: MPC implementation is internal-only
-// Users interact via: sdk.createVault() and vault.sign()
-// MPC types are exported from './types' section below
-
-// NOTE: ChainManager and AddressDeriver are internal implementation details
-// Users should interact via Vultisig and Vault classes only
-
-// NOTE: ServerManager is internal-only
-// Users access server-assisted signing via: vault.sign('fast', payload)
-// Server types (ServerStatus, ReshareOptions, FastSigningInput) are exported from './types' section below
-
-// NOTE: Cryptographic utilities are internal-only
-// Users don't need direct access to crypto primitives
-
-// WASM Management (now static - no instance needed)
-export type { WasmConfig } from './runtime/wasm'
-export { WasmManager } from './runtime/wasm'
-
-// Crypto initialization
-export { initializeCrypto } from './runtime/crypto'
-
-// ============================================================================
-// PUBLIC API - Server Management
-// ============================================================================
-
-// Global server manager singleton
-export { GlobalServerManager, type ServerEndpoints } from './server'
-
-// ============================================================================
-// PUBLIC API - Configuration
-// ============================================================================
-
-// Global configuration singleton
-export { GlobalConfig, type GlobalConfigOptions } from './config'
 
 // ============================================================================
 // PUBLIC API - Validation Utilities
@@ -84,34 +43,13 @@ export { ValidationHelpers } from './utils/validation'
 export { SUPPORTED_CHAINS } from './Vultisig'
 
 // ============================================================================
-// PUBLIC API - Environment Utilities
+// PUBLIC API - Storage
 // ============================================================================
 
-// Environment detection
-export type { Environment } from './runtime/environment'
-export {
-  detectEnvironment,
-  getEnvironmentInfo,
-  isBrowser,
-  isChromeExtension,
-  isChromeExtensionPage,
-  isChromeExtensionServiceWorker,
-  isElectron,
-  isElectronMain,
-  isElectronRenderer,
-  isNode,
-  isWorker,
-} from './runtime/environment'
-
-// Storage implementations
-export { BrowserStorage } from './runtime/storage/BrowserStorage'
-export { ChromeStorage } from './runtime/storage/ChromeStorage'
-export { MemoryStorage } from './runtime/storage/MemoryStorage'
-export { NodeStorage } from './runtime/storage/NodeStorage'
-export type { StorageOptions } from './runtime/storage/StorageManager'
-export { StorageManager } from './runtime/storage/StorageManager'
-export type { StorageMetadata, StoredValue, Storage as VaultStorage } from './runtime/storage/types'
-export { StorageError, StorageErrorCode } from './runtime/storage/types'
+// Storage system - MemoryStorage is available in all platforms
+export type { StorageMetadata, StoredValue, Storage as VaultStorage } from './storage'
+export { MemoryStorage } from './storage'
+export { StorageError, StorageErrorCode } from './storage'
 
 // Event system
 export { UniversalEventEmitter } from './events/EventEmitter'
@@ -142,12 +80,16 @@ export type {
   Balance,
   CachedBalance,
   ChainConfig,
+  CoinInput,
   ExportOptions,
   FastSigningInput,
   GasEstimate,
   GasInfo,
+  GeneralSwapProvider,
+  GeneralSwapQuote,
   KeygenMode,
   KeygenProgressUpdate,
+  NativeSwapQuote,
   ReshareOptions,
   SDKConfig,
   ServerStatus,
@@ -155,6 +97,15 @@ export type {
   SigningMode,
   SigningPayload,
   SigningStep,
+  SimpleCoinInput,
+  SwapApprovalInfo,
+  SwapFees,
+  SwapPrepareResult,
+  // Swap types
+  SwapQuote,
+  SwapQuoteParams,
+  SwapQuoteResult,
+  SwapTxParams,
   Token,
   ValidationResult,
   Value,
@@ -168,3 +119,5 @@ export type {
   // Extended SDK types (from refactor)
   VultisigConfig,
 } from './types'
+// Swap type guards
+export { isAccountCoin, isSimpleCoinInput } from './types'

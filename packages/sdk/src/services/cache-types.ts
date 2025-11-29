@@ -10,8 +10,6 @@ export enum CacheScope {
   // These change frequently and should not persist
   BALANCE = 'balance',
   PRICE = 'price',
-  GAS = 'gas',
-  PORTFOLIO = 'portfolio',
 }
 
 /**
@@ -24,12 +22,6 @@ export type CacheConfig = {
 
   /** TTL for price cache (default: 5 minutes) */
   priceTTL?: number
-
-  /** TTL for gas estimate cache (default: 2 minutes) */
-  gasTTL?: number
-
-  /** TTL for portfolio value cache (default: 1 minute) */
-  portfolioTTL?: number
 
   /** Maximum number of entries in memory cache (default: 1000) */
   maxMemoryCacheSize?: number

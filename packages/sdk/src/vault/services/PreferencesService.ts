@@ -103,7 +103,8 @@ export class PreferencesService {
   }
 
   /**
-   * Get current user chains
+   * Get current user chains.
+   * @returns Array of enabled chains for this vault
    */
   getChains(): Chain[] {
     return [...this.getUserChains()]

@@ -1,10 +1,13 @@
 /**
  * PasswordCacheService - Secure in-memory password caching
  *
+ * Instance-scoped: Each Vultisig instance has its own PasswordCacheService
+ * for security isolation between SDK instances.
+ *
  * Security Features:
  * - Passwords stored as Uint8Array for effective memory zeroing
  * - Automatic expiry with configurable TTL
- * - Process exit hooks to ensure cleanup
+ * - destroy() method for explicit cleanup (call from Vultisig.dispose())
  * - Old password bytes zeroed when updating entries
  *
  * Why Uint8Array instead of string:
@@ -20,7 +23,7 @@ type CacheEntry = {
 }
 
 export type PasswordCacheConfig = {
-  defaultTTL: number // milliseconds (0 = disabled)
+  defaultTTL?: number // milliseconds (0 = disabled, default: 5 minutes)
 }
 
 // Helper functions for string <-> Uint8Array conversion
@@ -33,50 +36,22 @@ function bytesToString(bytes: Uint8Array): string {
 }
 
 export class PasswordCacheService {
-  private static instance: PasswordCacheService
   private cache: Map<string, CacheEntry> = new Map()
-  private config: PasswordCacheConfig
-
-  private constructor(config?: Partial<PasswordCacheConfig>) {
-    this.config = {
-      defaultTTL: config?.defaultTTL ?? 300000, // 5 minutes (set to 0 to disable)
-    }
-
-    // Setup cleanup on process exit (Node.js)
-    if (typeof process !== 'undefined') {
-      process.on('exit', () => this.clear())
-      process.on('SIGINT', () => {
-        this.clear()
-        process.exit(0)
-      })
-      process.on('SIGTERM', () => {
-        this.clear()
-        process.exit(0)
-      })
-    }
-
-    // Setup cleanup on browser unload
-    if (typeof window !== 'undefined') {
-      window.addEventListener('beforeunload', () => this.clear())
-      window.addEventListener('unload', () => this.clear())
-    }
-  }
-
-  public static getInstance(config?: Partial<PasswordCacheConfig>): PasswordCacheService {
-    if (!PasswordCacheService.instance) {
-      PasswordCacheService.instance = new PasswordCacheService(config)
-    }
-    return PasswordCacheService.instance
-  }
+  private config: { defaultTTL: number }
+  private destroyed = false
 
   /**
-   * Reset singleton instance (for testing only)
-   * @internal
+   * Create a new PasswordCacheService instance.
+   *
+   * Each Vultisig instance should have its own PasswordCacheService
+   * for security isolation.
+   *
+   * @param config - Optional configuration
+   * @param config.defaultTTL - Time to live in milliseconds (default: 5 minutes, 0 = disabled)
    */
-  public static resetInstance(): void {
-    if (PasswordCacheService.instance) {
-      PasswordCacheService.instance.clear()
-      PasswordCacheService.instance = undefined as any
+  constructor(config?: PasswordCacheConfig) {
+    this.config = {
+      defaultTTL: config?.defaultTTL ?? 300000, // 5 minutes (set to 0 to disable)
     }
   }
 
@@ -87,6 +62,10 @@ export class PasswordCacheService {
    * @param ttl - Time to live in milliseconds (optional, uses config default)
    */
   public set(vaultId: string, password: string, ttl?: number): void {
+    if (this.destroyed) {
+      throw new Error('PasswordCacheService has been destroyed')
+    }
+
     const effectiveTTL = ttl ?? this.config.defaultTTL
 
     // TTL of 0 means caching is disabled
@@ -125,6 +104,10 @@ export class PasswordCacheService {
    * @returns Password if cached and not expired, undefined otherwise
    */
   public get(vaultId: string): string | undefined {
+    if (this.destroyed) {
+      return undefined
+    }
+
     const entry = this.cache.get(vaultId)
 
     if (!entry) {
@@ -238,5 +221,36 @@ export class PasswordCacheService {
       total: this.cache.size,
       expired,
     }
+  }
+
+  /**
+   * Destroy this cache instance.
+   *
+   * Zeros all password memory and marks the instance as destroyed.
+   * Should be called from Vultisig.dispose() to ensure proper cleanup.
+   *
+   * After calling destroy():
+   * - All cached passwords are zeroed in memory
+   * - All timers are cleared
+   * - set() will throw an error
+   * - get() will return undefined
+   */
+  public destroy(): void {
+    if (this.destroyed) {
+      return // Already destroyed
+    }
+
+    // Clear all passwords (includes memory zeroing)
+    this.clear()
+
+    // Mark as destroyed
+    this.destroyed = true
+  }
+
+  /**
+   * Check if this instance has been destroyed.
+   */
+  public isDestroyed(): boolean {
+    return this.destroyed
   }
 }

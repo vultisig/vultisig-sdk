@@ -337,31 +337,28 @@ export class FiatValueService {
     // Normalize currency to lowercase
     const currency = (fiatCurrency ?? this.getCurrency()).toLowerCase() as FiatCurrency
 
-    // Use scoped cache with configured TTL
-    return this.cacheService.getOrComputeScoped(currency, CacheScope.PORTFOLIO, async () => {
-      // Calculate fresh total
-      const chains = this.getChains()
-      let total = 0
+    // Calculate total - no separate cache needed since getValues() uses cached prices/balances
+    const chains = this.getChains()
+    let total = 0
 
-      // Sum values across all chains
-      for (const chain of chains) {
-        try {
-          const chainValues = await this.getValues(chain, currency)
-          for (const value of Object.values(chainValues)) {
-            total += parseFloat(value.amount)
-          }
-        } catch (error) {
-          console.warn(`Failed to get values for ${chain}:`, error)
-          // Continue with other chains
+    // Sum values across all chains
+    for (const chain of chains) {
+      try {
+        const chainValues = await this.getValues(chain, currency)
+        for (const value of Object.values(chainValues)) {
+          total += parseFloat(value.amount)
         }
+      } catch (error) {
+        console.warn(`Failed to get values for ${chain}:`, error)
+        // Continue with other chains
       }
+    }
 
-      return {
-        amount: total.toFixed(2),
-        currency,
-        lastUpdated: Date.now(),
-      }
-    })
+    return {
+      amount: total.toFixed(2),
+      currency,
+      lastUpdated: Date.now(),
+    }
   }
 
   /**
@@ -394,7 +391,7 @@ export class FiatValueService {
   }
 
   /**
-   * Force recalculation of total portfolio value (invalidates cache)
+   * Force recalculation of total portfolio value
    *
    * @param fiatCurrency Optional currency override
    * @returns Updated total portfolio value
@@ -409,14 +406,8 @@ export class FiatValueService {
   async updateTotalValue(
     fiatCurrency?: FiatCurrency
   ): Promise<{ amount: string; currency: FiatCurrency; lastUpdated: number }> {
-    // Normalize currency to lowercase
-    const currency = (fiatCurrency ?? this.getCurrency()).toLowerCase() as FiatCurrency
-
-    // Invalidate cache to force recalculation
-    await this.cacheService.invalidateScoped(currency, CacheScope.PORTFOLIO)
-
-    // Get fresh value (will recompute)
-    return this.getTotalValue(currency)
+    // getTotalValue() already calculates fresh each time (uses cached prices/balances)
+    return this.getTotalValue(fiatCurrency)
   }
 
   // ========== PRIVATE METHODS ==========

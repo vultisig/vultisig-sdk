@@ -10,16 +10,15 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
-// SDK utilities
-import { GlobalConfig } from '../config/GlobalConfig'
 import { DEFAULT_CHAINS } from '../constants'
+// SDK utilities
+import type { VaultContext } from '../context/SdkContext'
 import { UniversalEventEmitter } from '../events/EventEmitter'
-import { VaultEvents } from '../events/types'
-import { GlobalStorage } from '../runtime/storage/GlobalStorage'
-import type { Storage } from '../runtime/storage/types'
+import type { VaultEvents } from '../events/types'
 import { CacheScope, CacheService } from '../services/CacheService'
 import { FiatValueService } from '../services/FiatValueService'
-import { PasswordCacheService } from '../services/PasswordCacheService'
+import type { PasswordCacheService } from '../services/PasswordCacheService'
+import type { Storage } from '../storage/types'
 // Types
 import {
   Balance,
@@ -39,7 +38,10 @@ import { BalanceService } from './services/BalanceService'
 import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
 import { PreferencesService } from './services/PreferencesService'
+import { SwapService } from './services/SwapService'
 import { TransactionBuilder } from './services/TransactionBuilder'
+// Swap types
+import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
 import { VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
 
@@ -82,6 +84,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   protected gasEstimationService: GasEstimationService
   protected broadcastService: BroadcastService
   protected preferencesService: PreferencesService
+  protected swapService: SwapService
 
   // Runtime state (persisted via storage)
   protected _userChains: Chain[] = []
@@ -91,6 +94,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // Storage for persistence (required)
   protected storage: Storage
 
+  // WASM provider for wallet operations
+  protected wasmProvider: VaultContext['wasmProvider']
+
   // Vault configuration for password callback
   protected config?: VaultConfig
 
@@ -98,34 +104,36 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   protected vaultData: VaultData // Single source of truth
   protected coreVault: CoreVault // Built from vaultData
 
-  constructor(
+  /**
+   * Protected constructor - use subclass factory methods instead.
+   * @internal
+   */
+  protected constructor(
     vaultId: string,
     name: string,
     vultFileContent: string,
-    config?: VaultConfig,
+    context: VaultContext,
     parsedVaultData?: CoreVault
   ) {
     // Initialize EventEmitter
     super()
 
-    // Merge passed config with global config (passed config takes precedence)
-    const globalConfig = GlobalConfig.getInstance()
+    // Use context-provided dependencies
+    this.storage = context.storage
+    this.passwordCache = context.passwordCache
+    this.wasmProvider = context.wasmProvider
+
+    // Build VaultConfig from context
     this.config = {
-      defaultChains: config?.defaultChains ?? globalConfig.defaultChains,
-      defaultCurrency: config?.defaultCurrency ?? globalConfig.defaultCurrency,
-      cacheConfig: config?.cacheConfig ?? globalConfig.cacheConfig,
-      passwordCache: config?.passwordCache ?? globalConfig.passwordCache,
-      onPasswordRequired: config?.onPasswordRequired ?? globalConfig.onPasswordRequired,
+      defaultChains: context.config.defaultChains,
+      defaultCurrency: context.config.defaultCurrency,
+      cacheConfig: context.config.cacheConfig,
+      passwordCache: context.config.passwordCache,
+      onPasswordRequired: context.config.onPasswordRequired,
     }
 
-    // Use global storage
-    this.storage = GlobalStorage.getInstance()
-
-    // Initialize cache service
-    this.cacheService = new CacheService(vaultId, this.config.cacheConfig)
-
-    // Initialize password cache service
-    this.passwordCache = PasswordCacheService.getInstance(this.config.passwordCache)
+    // Initialize cache service with storage from context
+    this.cacheService = new CacheService(this.storage, vaultId, this.config.cacheConfig)
 
     // Parse vault container (synchronous) - or use provided parsed data
     let container: { isEncrypted: boolean; vault: string }
@@ -225,8 +233,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       lastModified: Date.now(),
 
       // User Preferences
-      currency: config?.defaultCurrency?.toLowerCase() || 'usd',
-      chains: config?.defaultChains?.map(c => c.toString()) || [],
+      currency: this.config?.defaultCurrency?.toLowerCase() || 'usd',
+      chains: this.config?.defaultChains?.map(c => c.toString()) || [],
       tokens: {},
 
       // Vault file
@@ -237,7 +245,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     this._userChains =
       this.vaultData.chains.length > 0
         ? this.vaultData.chains.map(c => c as Chain)
-        : (config?.defaultChains ?? DEFAULT_CHAINS)
+        : (this.config?.defaultChains ?? DEFAULT_CHAINS)
     this._currency = this.vaultData.currency
     this._tokens = this.vaultData.tokens
 
@@ -250,9 +258,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       (chain, tokenId) => this.balance(chain, tokenId)
     )
 
-    // Initialize extracted services
-    this.addressService = new AddressService(this.coreVault, this.cacheService)
-    this.transactionBuilder = new TransactionBuilder(this.coreVault)
+    // Initialize extracted services (pass wasmProvider to those that need WASM)
+    this.addressService = new AddressService(this.coreVault, this.cacheService, this.wasmProvider)
+    this.transactionBuilder = new TransactionBuilder(this.coreVault, this.wasmProvider)
     this.balanceService = new BalanceService(
       this.cacheService,
       data => this.emit('balanceUpdated', data),
@@ -267,8 +275,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       data => this.emit('tokenAdded', data),
       data => this.emit('tokenRemoved', data)
     )
-    this.gasEstimationService = new GasEstimationService(this.coreVault, chain => this.address(chain))
-    this.broadcastService = new BroadcastService(keysignPayload => this.extractMessageHashes(keysignPayload))
+    this.gasEstimationService = new GasEstimationService(
+      this.coreVault,
+      chain => this.address(chain),
+      this.wasmProvider
+    )
+    this.broadcastService = new BroadcastService(
+      keysignPayload => this.extractMessageHashes(keysignPayload),
+      this.wasmProvider
+    )
     this.preferencesService = new PreferencesService(
       this.cacheService,
       () => this._userChains,
@@ -285,6 +300,12 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       () => this.save(),
       data => this.emit('chainAdded', data),
       data => this.emit('chainRemoved', data)
+    )
+    this.swapService = new SwapService(
+      this.coreVault,
+      chain => this.address(chain),
+      (event, data) => this.emit(event, data),
+      this.wasmProvider
     )
 
     // Setup event-driven cache invalidation
@@ -328,15 +349,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Automatically invalidates relevant caches when vault state changes
    */
   private setupCacheInvalidation(): void {
-    // When tokens are added/removed, invalidate balances and portfolio for that chain
+    // When tokens are added/removed, invalidate balances for that chain
     this.on('tokenAdded', async ({ chain }) => {
       await this.cacheService.invalidateByPrefix(`${CacheScope.BALANCE}:${chain.toLowerCase()}`)
-      await this.cacheService.invalidateScope(CacheScope.PORTFOLIO)
     })
 
     this.on('tokenRemoved', async ({ chain }) => {
       await this.cacheService.invalidateByPrefix(`${CacheScope.BALANCE}:${chain.toLowerCase()}`)
-      await this.cacheService.invalidateScope(CacheScope.PORTFOLIO)
     })
   }
 
@@ -428,26 +447,32 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   // ===== PUBLIC GETTERS =====
 
+  /** Unique vault identifier (ECDSA public key). */
   get id(): string {
     return this.vaultData.id
   }
 
+  /** Raw vault data object. */
   get data(): VaultData {
     return this.vaultData
   }
 
+  /** Vault display name. */
   get name(): string {
     return this.vaultData.name
   }
 
+  /** Vault public keys for ECDSA and EdDSA signing. */
   get publicKeys(): Readonly<{ ecdsa: string; eddsa: string }> {
     return this.vaultData.publicKeys
   }
 
+  /** Vault chain code in hexadecimal format. */
   get hexChainCode(): string {
     return this.vaultData.hexChainCode
   }
 
+  /** List of signers participating in this vault's MPC. */
   get signers(): Array<{ id: string; publicKey: string; name: string }> {
     return this.vaultData.signers.map((signerId, index) => ({
       id: signerId,
@@ -456,54 +481,72 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }))
   }
 
+  /** This device's party ID in the MPC protocol. */
   get localPartyId(): string {
     return this.vaultData.localPartyId
   }
 
+  /** Vault creation timestamp (Unix milliseconds). */
   get createdAt(): number {
     return this.vaultData.createdAt
   }
 
+  /** MPC library type (GG20 or DKLS). */
   get libType(): string {
     return this.vaultData.libType
   }
 
+  /** Whether the vault is password-protected. */
   get isEncrypted(): boolean {
     return this.vaultData.isEncrypted
   }
 
+  /** Vault type: 'fast' (2-of-2 with server) or 'secure' (multi-device). */
   get type(): 'fast' | 'secure' {
     return this.vaultData.type
   }
 
+  /** Whether the vault has been backed up. */
   get isBackedUp(): boolean {
     return this.vaultData.isBackedUp
   }
 
+  /** Vault display order. */
   get order(): number {
     return this.vaultData.order
   }
 
+  /** Folder ID if vault is organized in a folder. */
   get folderId(): string | undefined {
     return this.vaultData.folderId
   }
 
+  /** Last modification timestamp (Unix milliseconds). */
   get lastModified(): number {
     return this.vaultData.lastModified
   }
 
+  /** Total number of signers in this vault. */
   get totalSigners(): number {
     return this.vaultData.signers.length
   }
 
+  /** Vault's preferred fiat currency (e.g., 'usd', 'eur'). */
   get currency(): string {
     return this._currency
   }
 
+  /** Custom tokens added to this vault, grouped by chain. */
   get tokens(): Record<string, Token[]> {
     return this._tokens
   }
 
+  /** Active blockchain chains for this vault. */
+  get chains(): Chain[] {
+    return this._userChains
+  }
+
+  /** Vault cryptographic keys. */
   get keys(): {
     ecdsa: string
     eddsa: string
@@ -836,31 +879,140 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
   }
 
+  // ===== SWAP OPERATIONS =====
+
+  /**
+   * Get a swap quote for exchanging tokens
+   *
+   * Fetches quotes from the best available provider (1inch, KyberSwap, LiFi,
+   * THORChain, or MayaChain) based on the token pair and chains.
+   *
+   * @param params - Swap quote parameters
+   * @param params.fromCoin - Source coin (AccountCoin or SimpleCoinInput)
+   * @param params.toCoin - Destination coin
+   * @param params.amount - Amount to swap (human-readable, e.g., 1.5 for 1.5 ETH)
+   * @param params.referral - Optional referral address for affiliate fees
+   * @param params.affiliateBps - Affiliate fee in basis points (e.g., 50 = 0.5%)
+   *
+   * @returns SwapQuoteResult with estimated output, provider, and approval status
+   *
+   * @example
+   * ```typescript
+   * const quote = await vault.getSwapQuote({
+   *   fromCoin: { chain: Chain.Ethereum, address, decimals: 18, ticker: 'ETH' },
+   *   toCoin: { chain: Chain.Ethereum, address, decimals: 6, ticker: 'USDC', id: '0xa0b...' },
+   *   amount: 1.5,
+   * });
+   * console.log(`You'll receive ~${quote.estimatedOutput} USDC via ${quote.provider}`);
+   * ```
+   */
+  async getSwapQuote(params: SwapQuoteParams): Promise<SwapQuoteResult> {
+    return this.swapService.getQuote(params)
+  }
+
+  /**
+   * Prepare a swap transaction for signing
+   *
+   * Builds a KeysignPayload ready to be signed. If the source token is an ERC-20
+   * and approval is needed, the payload will include approval information.
+   *
+   * @param params - Swap transaction parameters
+   * @param params.fromCoin - Source coin
+   * @param params.toCoin - Destination coin
+   * @param params.amount - Amount to swap
+   * @param params.swapQuote - Quote from getSwapQuote()
+   * @param params.autoApprove - If true, approval is handled internally (default: false)
+   *
+   * @returns SwapPrepareResult with keysignPayload and optional approvalPayload
+   *
+   * @example
+   * ```typescript
+   * const { keysignPayload, approvalPayload } = await vault.prepareSwapTx({
+   *   fromCoin,
+   *   toCoin,
+   *   amount: 1.5,
+   *   swapQuote: quote,
+   * });
+   *
+   * // Handle approval if needed
+   * if (approvalPayload) {
+   *   const sig = await vault.sign({ transaction: approvalPayload, chain });
+   *   await vault.broadcastTx({ chain, keysignPayload: approvalPayload, signature: sig });
+   * }
+   *
+   * // Sign and broadcast swap
+   * const signature = await vault.sign({ transaction: keysignPayload, chain });
+   * const txHash = await vault.broadcastTx({ chain, keysignPayload, signature });
+   * ```
+   */
+  async prepareSwapTx(params: SwapTxParams): Promise<SwapPrepareResult> {
+    return this.swapService.prepareSwapTx(params)
+  }
+
+  /**
+   * Check if swap is supported between two chains
+   *
+   * @param fromChain - Source chain
+   * @param toChain - Destination chain
+   * @returns true if swapping is supported between these chains
+   */
+  isSwapSupported(fromChain: Chain, toChain: Chain): boolean {
+    return this.swapService.isSwapSupported(fromChain, toChain)
+  }
+
+  /**
+   * Get list of chains that support swapping
+   *
+   * @returns Array of chains that can be used for swaps
+   */
+  getSupportedSwapChains(): readonly Chain[] {
+    return this.swapService.getSupportedChains()
+  }
+
+  /**
+   * Get ERC-20 token allowance for a spender
+   *
+   * @param coin - The token to check allowance for
+   * @param spender - The spender address (usually DEX router)
+   * @returns Current allowance amount
+   */
+  async getTokenAllowance(coin: AccountCoin, spender: string): Promise<bigint> {
+    return this.swapService.getAllowance(coin, spender)
+  }
+
   // ===== TOKEN MANAGEMENT =====
 
   /**
-   * Set tokens for a chain
+   * Set tokens for a specific chain.
+   * @param chain - The blockchain chain
+   * @param tokens - Array of tokens to set
    */
   async setTokens(chain: Chain, tokens: Token[]): Promise<void> {
     return this.balanceService.setTokens(chain, tokens)
   }
 
   /**
-   * Add single token to chain
+   * Add a single token to a chain.
+   * @param chain - The blockchain chain
+   * @param token - Token to add
    */
   async addToken(chain: Chain, token: Token): Promise<void> {
     return this.balanceService.addToken(chain, token)
   }
 
   /**
-   * Remove token from chain
+   * Remove a token from a chain.
+   * @param chain - The blockchain chain
+   * @param tokenId - Token contract address or identifier
    */
   async removeToken(chain: Chain, tokenId: string): Promise<void> {
     return this.balanceService.removeToken(chain, tokenId)
   }
 
   /**
-   * Get tokens for chain
+   * Get tokens for a specific chain.
+   * @param chain - The blockchain chain
+   * @returns Array of tokens on the chain
    */
   getTokens(chain: Chain): Token[] {
     return this._tokens[chain] || []
@@ -869,35 +1021,31 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== CHAIN MANAGEMENT =====
 
   /**
-   * Set user chains
+   * Set the active chains for this vault.
+   * @param chains - Array of chains to enable
    */
   async setChains(chains: Chain[]): Promise<void> {
     return this.preferencesService.setChains(chains)
   }
 
   /**
-   * Add single chain
+   * Add a single chain to this vault.
+   * @param chain - Chain to add
    */
   async addChain(chain: Chain): Promise<void> {
     return this.preferencesService.addChain(chain)
   }
 
   /**
-   * Remove single chain
+   * Remove a chain from this vault.
+   * @param chain - Chain to remove
    */
   async removeChain(chain: Chain): Promise<void> {
     return this.preferencesService.removeChain(chain)
   }
 
   /**
-   * Get current user chains
-   */
-  getChains(): Chain[] {
-    return this.preferencesService.getChains()
-  }
-
-  /**
-   * Reset to default chains
+   * Reset chains to SDK default configuration.
    */
   async resetToDefaultChains(): Promise<void> {
     return this.preferencesService.resetToDefaultChains()
@@ -906,23 +1054,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== CURRENCY MANAGEMENT =====
 
   /**
-   * Set vault currency
+   * Set the vault's preferred fiat currency.
+   * @param currency - Currency code (e.g., 'usd', 'eur')
    */
   async setCurrency(currency: string): Promise<void> {
     return this.preferencesService.setCurrency(currency)
   }
 
-  /**
-   * Get vault currency
-   */
-  getCurrency(): string {
-    return this.preferencesService.getCurrencyPreference()
-  }
-
   // ===== FIAT VALUE OPERATIONS =====
 
   /**
-   * Get fiat value for a specific asset
+   * Get fiat value for a specific asset.
+   * @param chain - The blockchain chain
+   * @param tokenId - Optional token identifier (omit for native asset)
+   * @param fiatCurrency - Optional currency override (defaults to vault currency)
+   * @returns Fiat value information
    */
   async getValue(chain: Chain, tokenId?: string, fiatCurrency?: FiatCurrency): Promise<Value> {
     const value = await this.fiatValueService.getValue(chain, tokenId, fiatCurrency)
@@ -930,14 +1076,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Get fiat values for all assets on a chain (native + tokens)
+   * Get fiat values for all assets on a chain (native + tokens).
+   * @param chain - The blockchain chain
+   * @param fiatCurrency - Optional currency override
+   * @returns Map of asset identifiers to fiat values
    */
   async getValues(chain: Chain, fiatCurrency?: FiatCurrency): Promise<Record<string, Value>> {
     return this.fiatValueService.getValues(chain, fiatCurrency)
   }
 
   /**
-   * Refresh price data for specified chain or all chains
+   * Refresh price data for specified chain or all chains.
+   * @param chain - Chain to update, or 'all' for all chains
    */
   async updateValues(chain: Chain | 'all'): Promise<void> {
     await this.fiatValueService.updateValues(chain)
@@ -946,14 +1096,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Get total portfolio value across all chains and tokens
+   * Get total portfolio value across all chains and tokens.
+   * @param fiatCurrency - Optional currency override
+   * @returns Total portfolio value
    */
   async getTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
     return this.fiatValueService.getTotalValue(fiatCurrency)
   }
 
   /**
-   * Force recalculation of total portfolio value (invalidates cache)
+   * Force recalculation of total portfolio value (invalidates cache).
+   * @param fiatCurrency - Optional currency override
+   * @returns Updated total portfolio value
    */
   async updateTotalValue(fiatCurrency?: FiatCurrency): Promise<Value> {
     const totalValue = await this.fiatValueService.updateTotalValue(fiatCurrency)

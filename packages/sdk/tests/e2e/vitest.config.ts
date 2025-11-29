@@ -22,13 +22,14 @@ export default defineConfig({
     // Globals for test utilities
     globals: true,
 
-    // Run tests sequentially to avoid rate limiting AND memory issues
-    // CRITICAL: Use forks pool with singleFork to share singleton state across test files
-    //          This allows the shared Vultisig instance to be reused, preventing multiple WASM loads
-    pool: 'forks',
+    // Run tests in parallel using threads pool
+    // Each test file gets its own thread with isolated module state
+    // Note: Each thread will load its own WASM instance
+    pool: 'threads',
     poolOptions: {
-      forks: {
-        singleFork: true, // Single fork - all tests run in same process, share module state
+      threads: {
+        singleThread: false, // Enable parallel threads
+        maxThreads: 6, // Limit parallelism to avoid rate limiting
       },
     },
 

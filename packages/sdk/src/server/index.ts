@@ -10,15 +10,6 @@
  * - Relay functions (sendMpcRelayMessage, getMpcRelayMessages, etc.)
  */
 
-// ServerManager is internal-only - not exported
-// import { ServerManager } from './ServerManager'
-
-// Server utilities removed - replaced by core/lib utilities
-// Users should use core utilities directly:
-// - generateLocalPartyId from '@core/mpc/devices/localPartyId'
-// - getHexEncodedRandomBytes from '@lib/utils/crypto/getHexEncodedRandomBytes'
-// - crypto.randomUUID() for session IDs
-
 // Re-export core fast vault API functions directly
 export { getVaultFromServer } from '@core/mpc/fast/api/getVaultFromServer'
 export { reshareWithServer } from '@core/mpc/fast/api/reshareWithServer'
@@ -39,6 +30,3 @@ export { fromMpcServerMessage, toMpcServerMessage } from '@core/mpc/message/serv
 
 // Re-export types
 export type { MpcRelayMessage } from '@core/mpc/message/relay'
-
-// Global ServerManager singleton
-export { GlobalServerManager, type ServerEndpoints } from './GlobalServerManager'

@@ -1,5 +1,5 @@
 /**
- * VaultManager Tests - Updated for Global Singletons Architecture
+ * VaultManager Tests - Updated for Instance-Scoped Architecture
  * Comprehensive unit tests for the VaultManager class
  *
  * TESTING STRATEGY: Tests vault lifecycle management
@@ -22,11 +22,8 @@
 import { Chain } from '@core/chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { GlobalConfig } from '../../../src/config/GlobalConfig'
-import { GlobalStorage } from '../../../src/runtime/storage/GlobalStorage'
-import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
-import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
-import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
+import { createSdkContext } from '../../../src/context/SdkContextBuilder'
+import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import { VaultImportError, VaultImportErrorCode } from '../../../src/vault/VaultError'
 import { VaultManager } from '../../../src/VaultManager'
 
@@ -40,28 +37,22 @@ describe('VaultManager', () => {
   let memoryStorage: MemoryStorage
 
   beforeEach(() => {
-    // Reset all global singletons before each test
-    GlobalStorage.reset()
-    GlobalServerManager.reset()
-    GlobalConfig.reset()
-    PasswordCacheService.resetInstance()
-
-    // Configure global singletons
+    // Create fresh storage for each test
     memoryStorage = new MemoryStorage()
-    GlobalStorage.configure({ customStorage: memoryStorage })
 
-    GlobalServerManager.configure({
-      fastVault: 'https://test-api.vultisig.com/vault',
-      messageRelay: 'https://test-api.vultisig.com/router',
-    })
-
-    GlobalConfig.configure({
+    // Create SDK context with all dependencies
+    const context = createSdkContext({
+      storage: memoryStorage,
+      serverEndpoints: {
+        fastVault: 'https://test-api.vultisig.com/vault',
+        messageRelay: 'https://test-api.vultisig.com/router',
+      },
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
     })
 
-    // Create VaultManager (no parameters needed)
-    vaultManager = new VaultManager()
+    // Create VaultManager with context
+    vaultManager = new VaultManager(context)
   })
 
   // ===== VAULT IMPORT =====

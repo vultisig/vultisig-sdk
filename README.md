@@ -71,9 +71,6 @@ yarn workspace @vultisig/sdk build
 
 # Run tests
 yarn workspace @vultisig/sdk test
-
-# Build and run the React example
-yarn build:prod
 ```
 
 ### Project Structure
@@ -101,7 +98,6 @@ vultisig-sdk/
 │       └── dkls/         # DKLS WASM bindings
 ├── clients/cli/          # CLI workspace
 ├── examples/             # Example workspaces
-│   └── react/            # React example application
 └── package.json          # Root workspace
 ```
 
@@ -154,7 +150,6 @@ This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisi
 - `yarn workspace @vultisig/sdk build` - Build the SDK with all workspace dependencies
 - `yarn workspace @vultisig/sdk test` - Run SDK tests
 - `yarn sync-and-copy` - Sync latest code from vultisig-windows
-- `yarn build:prod` - Build and serve the React example app
 - `yarn lint` - Run ESLint across all packages
 - `yarn typecheck` - Run TypeScript type checking
 

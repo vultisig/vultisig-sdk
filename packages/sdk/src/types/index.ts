@@ -75,7 +75,7 @@ export type Balance = {
   symbol: string
   chainId: string
   tokenId?: string
-  value?: number // USD value (deprecated - use fiatValue instead)
+  value?: number
   fiatValue?: number // Current fiat value in vault's currency
   fiatCurrency?: string // Currency code (e.g., 'USD', 'EUR')
 }
@@ -162,14 +162,6 @@ export type SDKConfig = {
     fastVault?: string
     messageRelay?: string
   }
-  wasmConfig?: {
-    autoInit?: boolean
-    wasmPaths?: {
-      walletCore?: string
-      dkls?: string
-      schnorr?: string
-    }
-  }
 }
 
 import type { Chain } from '@core/chain/Chain'
@@ -184,7 +176,7 @@ export type VultisigConfig = SDKConfig & {
    * Configures the global storage used by all vaults and managers
    * @see GlobalStorage.configure()
    */
-  storage?: import('../runtime/storage/registry').StorageOptions
+  storage?: import('../storage/types').Storage
   autoInit?: boolean
   autoConnect?: boolean
   defaultChains?: Chain[]
@@ -527,3 +519,20 @@ export type GasEstimate = {
 
 // Solana-specific types (now handled by core)
 // Removed - using core types directly instead of SDK wrappers
+
+// Swap types
+export type {
+  CoinInput,
+  GeneralSwapProvider,
+  GeneralSwapQuote,
+  NativeSwapQuote,
+  SimpleCoinInput,
+  SwapApprovalInfo,
+  SwapFees,
+  SwapPrepareResult,
+  SwapQuote,
+  SwapQuoteParams,
+  SwapQuoteResult,
+  SwapTxParams,
+} from '../vault/swap-types'
+export { isAccountCoin, isSimpleCoinInput } from '../vault/swap-types'
