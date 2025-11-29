@@ -7,19 +7,20 @@ A complete command-line wallet application demonstrating the Vultisig SDK.
 This example has been updated to showcase the latest Vultisig SDK features:
 
 - **🔑 Optional Password Storage**: Configure passwords in .env for automation or get prompted interactively
-- **⚙️ Global Configuration**: Simplified SDK initialization with global singletons for storage, server endpoints, and config
+- **⚙️ Instance-Scoped Configuration**: SDK initialization with explicit dependency injection (no global singletons)
 - **🎯 Smart Password Resolution**: Automatic password lookup from environment or prompt user
 - **🏗️ Polymorphic Vaults**: Type-safe vault operations with FastVault and SecureVault classes
 - **🚀 CLI-Optimized**: No unnecessary caching - each command runs independently
 
 ### Migration from Previous Versions
 
-The SDK has simplified its API:
+The SDK uses instance-scoped configuration:
 
-- Storage is now configured with `StorageOptions` instead of instantiating `NodeStorage`
-- Password management is handled globally via `GlobalConfig.onPasswordRequired` callback
+- Import from `@vultisig/sdk/node` for Node.js applications
+- Pass `storage: new FileStorage()` to the Vultisig constructor
+- Pass `onPasswordRequired` callback directly to the Vultisig constructor
 - Sign operations no longer require password parameter (resolved automatically)
-- Vault verification uses `sdk.verifyVault()` instead of `sdk.serverManager.verifyVault()`
+- Call `sdk.dispose()` for cleanup when done
 
 ## Features
 

@@ -3,15 +3,13 @@ import 'dotenv/config'
 
 import {
   Chain,
-  FastVault,
   fiatCurrencies,
   FiatCurrency,
   fiatCurrencyNameRecord,
-  GlobalConfig,
-  SecureVault,
+  FileStorage,
   VaultBase,
   Vultisig,
-} from '@vultisig/sdk'
+} from '@vultisig/sdk/node'
 import chalk from 'chalk'
 import { program } from 'commander'
 import { promises as fs } from 'fs'
@@ -74,34 +72,6 @@ function parseVaultPasswords(): Map<string, string> {
   return passwordMap
 }
 
-GlobalConfig.configure({
-  onPasswordRequired: async (vaultId: string, vaultName?: string) => {
-    const vaultPasswords = parseVaultPasswords()
-
-    if (vaultName && vaultPasswords.has(vaultName)) {
-      return vaultPasswords.get(vaultName)!
-    }
-
-    if (vaultPasswords.has(vaultId)) {
-      return vaultPasswords.get(vaultId)!
-    }
-
-    if (process.env.VAULT_PASSWORD) {
-      return process.env.VAULT_PASSWORD
-    }
-
-    const { password } = await inquirer.prompt([
-      {
-        type: 'password',
-        name: 'password',
-        message: `Enter password for vault "${vaultName || vaultId}":`,
-        mask: '*',
-      },
-    ])
-    return password
-  },
-})
-
 // ============================================================================
 // SDK Initialization
 // ============================================================================
@@ -110,7 +80,34 @@ async function init(): Promise<void> {
   if (!sdk) {
     const spinner = createSpinner('Initializing Vultisig SDK...')
 
-    sdk = new Vultisig()
+    sdk = new Vultisig({
+      storage: new FileStorage(),
+      onPasswordRequired: async (vaultId: string, vaultName?: string) => {
+        const vaultPasswords = parseVaultPasswords()
+
+        if (vaultName && vaultPasswords.has(vaultName)) {
+          return vaultPasswords.get(vaultName)!
+        }
+
+        if (vaultPasswords.has(vaultId)) {
+          return vaultPasswords.get(vaultId)!
+        }
+
+        if (process.env.VAULT_PASSWORD) {
+          return process.env.VAULT_PASSWORD
+        }
+
+        const { password } = await inquirer.prompt([
+          {
+            type: 'password',
+            name: 'password',
+            message: `Enter password for vault "${vaultName || vaultId}":`,
+            mask: '*',
+          },
+        ])
+        return password
+      },
+    })
     await sdk.initialize()
 
     const existingVault = await sdk.getActiveVault()
@@ -296,7 +293,7 @@ program
 
         const spinner = createSpinner('Creating vault...')
 
-        const result = await FastVault.create({
+        const result = await sdk.createFastVault({
           name: answers.name,
           password: answers.password,
           email,
@@ -360,7 +357,7 @@ program
         const spinner = createSpinner('Creating secure vault...')
 
         try {
-          const result = await SecureVault.create({
+          const result = await sdk.createSecureVault({
             name: answers.name,
             password: answers.password,
             devices: secureOptions.totalShares,
@@ -1191,6 +1188,7 @@ program
 
 process.on('SIGINT', () => {
   warn('\n\nShutting down...')
+  sdk?.dispose()
   process.exit(0)
 })
 

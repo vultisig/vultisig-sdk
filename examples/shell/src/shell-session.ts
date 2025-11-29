@@ -1,4 +1,4 @@
-import { Chain, FastVault, fiatCurrencies, FiatCurrency, VaultBase, Vultisig } from '@vultisig/sdk'
+import { Chain, fiatCurrencies, FiatCurrency, VaultBase, Vultisig } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 import fs from 'fs'
 import { promises as fsPromises } from 'fs'
@@ -590,7 +590,7 @@ export class ReplSession {
       },
     ])) as any
 
-    const result = await FastVault.create({
+    const result = await this.sdk.createFastVault({
       name: answers.name,
       password: answers.password,
       email: answers.email,

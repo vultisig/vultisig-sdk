@@ -1,4 +1,4 @@
-import { Chain, Token } from '@vultisig/sdk'
+import { Chain, Token } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 
 /**

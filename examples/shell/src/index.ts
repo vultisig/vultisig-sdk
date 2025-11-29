@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'dotenv/config'
 
-import { GlobalConfig, Vultisig } from '@vultisig/sdk'
+import { FileStorage, Vultisig } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 
@@ -28,28 +28,29 @@ process.on('uncaughtException', (error: Error) => {
 // Configure password cache
 const PASSWORD_CACHE_TTL = process.env.PASSWORD_CACHE_TTL ? parseInt(process.env.PASSWORD_CACHE_TTL) : 5 * 60 * 1000 // 5 minutes default
 
-GlobalConfig.configure({
-  passwordCache: {
-    defaultTTL: PASSWORD_CACHE_TTL,
-  },
-  onPasswordRequired: async (vaultId: string, vaultName?: string) => {
-    const { password } = await inquirer.prompt([
-      {
-        type: 'password',
-        name: 'password',
-        message: `Enter password for vault "${vaultName || vaultId}":`,
-        mask: '*',
-      },
-    ])
-    return password
-  },
-})
-
 // Initialize and start shell
 async function main() {
+  let sdk: Vultisig | undefined
+
   try {
-    // Initialize SDK
-    const sdk = new Vultisig()
+    // Initialize SDK with instance-scoped configuration
+    sdk = new Vultisig({
+      storage: new FileStorage(),
+      passwordCache: {
+        defaultTTL: PASSWORD_CACHE_TTL,
+      },
+      onPasswordRequired: async (vaultId: string, vaultName?: string) => {
+        const { password } = await inquirer.prompt([
+          {
+            type: 'password',
+            name: 'password',
+            message: `Enter password for vault "${vaultName || vaultId}":`,
+            mask: '*',
+          },
+        ])
+        return password
+      },
+    })
     await sdk.initialize()
 
     // Start shell session
@@ -58,6 +59,8 @@ async function main() {
   } catch (error: any) {
     console.error(chalk.red(`\n✗ Failed to start shell: ${error.message}`))
     process.exit(1)
+  } finally {
+    sdk?.dispose()
   }
 }
 

@@ -1,4 +1,4 @@
-import { Chain } from '@vultisig/sdk'
+import { Chain } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 
 /**

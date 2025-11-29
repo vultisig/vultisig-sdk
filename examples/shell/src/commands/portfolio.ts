@@ -1,4 +1,4 @@
-import { FiatCurrency, fiatCurrencyNameRecord } from '@vultisig/sdk'
+import { FiatCurrency, fiatCurrencyNameRecord } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 
 import type { PortfolioSummary } from '../utils/types'

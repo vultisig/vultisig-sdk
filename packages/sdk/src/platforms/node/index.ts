@@ -2,7 +2,7 @@
  * Node.js platform entry point
  *
  * This bundle includes only Node.js-specific implementations:
- * - NodeStorage (filesystem)
+ * - FileStorage (filesystem)
  * - NodeWasmLoader (fs.readFile)
  * - NodeCrypto (native crypto)
  * - NodePolyfills (minimal)
@@ -11,10 +11,10 @@
  *
  * Usage:
  * ```typescript
- * import { Vultisig, NodeStorage } from '@vultisig/sdk/node'
+ * import { Vultisig, FileStorage } from '@vultisig/sdk/node'
  *
  * const sdk = new Vultisig({
- *   storage: new NodeStorage({ basePath: '~/.myapp' })
+ *   storage: new FileStorage({ basePath: '~/.myapp' })
  * })
  * ```
  */
@@ -24,7 +24,7 @@
 import { configureCrypto } from '../../crypto'
 import { NodeCrypto } from './crypto'
 import { NodePolyfills } from './polyfills'
-import { NodeStorage } from './storage'
+import { FileStorage } from './storage'
 import { NodeWasmLoader } from './wasm'
 configureCrypto(new NodeCrypto())
 
@@ -42,4 +42,7 @@ SharedWasmRuntime.configure({
 export * from '../../index'
 
 // Export platform-specific implementations for users to pass to Vultisig
-export { NodeCrypto, NodePolyfills, NodeStorage, NodeWasmLoader }
+export { FileStorage, NodeCrypto, NodePolyfills, NodeWasmLoader }
+
+// Backwards-compatible alias (deprecated)
+export { FileStorage as NodeStorage }

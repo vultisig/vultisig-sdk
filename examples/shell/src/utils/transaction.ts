@@ -1,4 +1,4 @@
-import { Chain, VaultBase } from '@vultisig/sdk'
+import { Chain, VaultBase } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 import ora from 'ora'

@@ -24,9 +24,9 @@
 ### Install the Package
 
 ```bash
-npm install vultisig-sdk
+npm install @vultisig/sdk
 # or
-yarn add vultisig-sdk
+yarn add @vultisig/sdk
 ```
 
 ### Platform Requirements
@@ -48,17 +48,31 @@ For browser environments, you need to serve the WASM files from your public dire
 
 ### Basic Initialization
 
-```typescript
-import { Vultisig, MemoryStorage } from 'vultisig-sdk'
+**Node.js:**
 
-// Storage is required
+```typescript
+import { Vultisig, FileStorage } from '@vultisig/sdk/node'
+
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),  // Or your custom Storage implementation
+  storage: new FileStorage(),  // Stores in ~/.vultisig by default
 })
 
 await sdk.initialize()
 
 // When done, clean up resources
+sdk.dispose()
+```
+
+**Browser:**
+
+```typescript
+import { Vultisig, MemoryStorage } from '@vultisig/sdk/browser'
+
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),  // Or IndexedDB implementation
+})
+
+await sdk.initialize()
 sdk.dispose()
 ```
 
@@ -69,11 +83,11 @@ sdk.dispose()
 Here's a complete example showing vault creation, address derivation, and balance checking with password management:
 
 ```typescript
-import { Vultisig, FastVault, Chain, MemoryStorage } from 'vultisig-sdk'
+import { Vultisig, FileStorage, Chain } from '@vultisig/sdk/node'
 
 // Step 1: Initialize SDK with configuration
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),  // Required: provide storage implementation
+  storage: new FileStorage(),  // Required: provide storage implementation
 
   // Password handling (recommended for production)
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
@@ -89,12 +103,12 @@ const sdk = new Vultisig({
 await sdk.initialize()
 
 // Step 2: Create a fast vault (server-assisted, always encrypted)
-const { vault, verificationRequired } = await FastVault.create({
+const { vault, verificationRequired } = await sdk.createFastVault({
   name: "My Wallet",
   email: "user@example.com",
   password: "SecurePassword123!",
-  onProgress: (update) => {
-    console.log(`${update.phase}: ${update.message}`)
+  onProgress: (step) => {
+    console.log(`${step.message} (${step.progress}%)`)
   }
 })
 
@@ -167,13 +181,14 @@ interface Storage {
 For scenarios where you don't need persistent storage—such as one-off operations, testing, or serverless functions—use `MemoryStorage` to create ephemeral vault instances:
 
 ```typescript
-import { Vultisig, MemoryStorage, Chain } from 'vultisig-sdk'
+import { Vultisig, MemoryStorage, Chain } from '@vultisig/sdk/node'
 import * as fs from 'fs'
 
 // Create SDK with in-memory storage (no persistence)
 const sdk = new Vultisig({
   storage: new MemoryStorage()
 })
+await sdk.initialize()
 
 // Load vault from file
 const vultContent = fs.readFileSync('my-wallet.vult', 'utf-8')
@@ -230,7 +245,7 @@ Configure a password callback when creating your SDK instance to automatically p
 #### Browser Example (with Modal)
 
 ```typescript
-import { Vultisig, MemoryStorage } from 'vultisig-sdk'
+import { Vultisig, MemoryStorage } from '@vultisig/sdk/browser'
 
 const sdk = new Vultisig({
   storage: new MemoryStorage(),
@@ -253,11 +268,11 @@ const sdk = new Vultisig({
 #### Node.js Example (Command Line)
 
 ```typescript
-import { Vultisig, MemoryStorage } from 'vultisig-sdk'
+import { Vultisig, FileStorage } from '@vultisig/sdk/node'
 import * as readline from 'readline'
 
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),
+  storage: new FileStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -278,7 +293,7 @@ const sdk = new Vultisig({
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),
+  storage: new FileStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     // Retrieve from OS keychain, secure enclave, etc.
     return await secureStorage.getPassword(vaultId)
@@ -361,11 +376,10 @@ document.addEventListener('keypress', () => resetInactivityTimer(vault))
 Before importing a vault, check if it requires a password:
 
 ```typescript
-import { Vultisig } from 'vultisig-sdk'
 import * as fs from 'fs'
 
 const vultContent = fs.readFileSync('backup.vult', 'utf-8')
-const isEncrypted = Vultisig.isVaultEncrypted(vultContent)
+const isEncrypted = sdk.isVaultEncrypted(vultContent)
 
 let vault
 if (isEncrypted) {
@@ -411,14 +425,12 @@ const { filename, data } = await vault.export()
 Create a new vault with server assistance:
 
 ```typescript
-import { FastVault } from 'vultisig-sdk'
-
-const { vault, vaultId, verificationRequired } = await FastVault.create({
+const { vault, vaultId, verificationRequired } = await sdk.createFastVault({
   name: "My Wallet",
   email: "user@example.com",
   password: "SecurePassword123!",
-  onProgress: (update) => {
-    console.log(`Progress: ${update.phase} - ${update.message}`)
+  onProgress: (step) => {
+    console.log(`Progress: ${step.message} (${step.progress}%)`)
   }
 })
 
@@ -907,11 +919,11 @@ try {
 All configuration is passed to the `Vultisig` constructor. The SDK uses instance-scoped configuration (no global state):
 
 ```typescript
-import { Vultisig, MemoryStorage, Chain } from 'vultisig-sdk'
+import { Vultisig, FileStorage, Chain } from '@vultisig/sdk/node'
 
 const sdk = new Vultisig({
   // Required: Storage implementation
-  storage: new MemoryStorage(),  // Or your custom Storage implementation
+  storage: new FileStorage(),  // Or MemoryStorage, or custom implementation
 
   // Optional: Default chains for new vaults
   defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
@@ -981,9 +993,11 @@ sdk2.dispose()
 Implement the `Storage` interface for custom persistence:
 
 ```typescript
-import { Storage } from 'vultisig-sdk'
+import { Storage, Vultisig } from '@vultisig/sdk/node'
+import * as fs from 'fs'
+import * as path from 'path'
 
-class FileStorage implements Storage {
+class CustomStorage implements Storage {
   constructor(private basePath: string) {}
 
   async get(key: string): Promise<string | null> {
@@ -1015,12 +1029,12 @@ class FileStorage implements Storage {
 
 // Use custom storage
 const sdk = new Vultisig({
-  storage: new FileStorage('./vaults')
+  storage: new CustomStorage('./vaults')
 })
 
 await sdk.initialize()
 // ... use the SDK ...
-sdk.dispose()  // Clean up when done
+sdk.dispose()
 ```
 
 ---
@@ -1065,7 +1079,7 @@ Configure cache TTLs:
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),
+  storage: new FileStorage(),
   cacheConfig: {
     balanceTTL: 300000,  // 5 minutes (default)
     priceTTL: 300000,    // 5 minutes (default)
@@ -1079,7 +1093,7 @@ Passwords are cached to avoid repeated prompts (see [Password Management](#passw
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),
+  storage: new FileStorage(),
   passwordCache: {
     defaultTTL: 300000  // 5 minutes
   }
@@ -1256,12 +1270,28 @@ class Vultisig {
   // Cleanup (releases all resources)
   dispose(): void
 
+  // Vault creation
+  createFastVault(options: {
+    name: string
+    password: string
+    email: string
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{ vault: FastVault, vaultId: string, verificationRequired: true }>
+
+  createSecureVault(options: {
+    name: string
+    password: string
+    devices: number
+    threshold?: number
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{ vault: SecureVault, vaultId: string, sessionId: string }>
+
   // Vault management
   importVault(vultContent: string, password?: string): Promise<VaultBase>
   listVaults(): Promise<VaultBase[]>
   getVaultById(id: string): Promise<VaultBase | null>
-  getActiveVault(): VaultBase | null
-  setActiveVault(vault: VaultBase): Promise<void>
+  getActiveVault(): Promise<VaultBase | null>
+  setActiveVault(vault: VaultBase | null): Promise<void>
   deleteVault(vault: VaultBase): Promise<void>
 
   // Utilities
@@ -1341,22 +1371,27 @@ class VaultBase {
 }
 ```
 
-### FastVault Class
+### Vault Creation Methods
+
+Fast vaults and secure vaults are created through the Vultisig class:
 
 ```typescript
-class FastVault extends VaultBase {
-  // Static factory method
-  static create(options: {
-    name: string
-    email: string
-    password: string
-    onProgress?: (update: VaultCreationStep) => void
-  }): Promise<{
-    vault: FastVault
-    vaultId: string
-    verificationRequired: boolean
-  }>
-}
+// Create fast vault (2-of-2 with server)
+const { vault, vaultId, verificationRequired } = await sdk.createFastVault({
+  name: string
+  email: string
+  password: string
+  onProgress?: (step: VaultCreationStep) => void
+})
+
+// Create secure vault (multi-device MPC) - not yet implemented
+const { vault, vaultId, sessionId } = await sdk.createSecureVault({
+  name: string
+  password: string
+  devices: number
+  threshold?: number
+  onProgress?: (step: VaultCreationStep) => void
+})
 ```
 
 ### Supported Chains
@@ -1453,11 +1488,8 @@ cp node_modules/vultisig-sdk/dist/*.wasm public/
 **Platform Import**:
 
 ```typescript
-// Automatic platform detection
-import { Vultisig } from 'vultisig-sdk'
-
-// Or explicit browser import
-import { Vultisig } from 'vultisig-sdk/browser'
+// Explicit browser import (recommended)
+import { Vultisig, MemoryStorage, Chain } from '@vultisig/sdk/browser'
 ```
 
 **Security Considerations**:
@@ -1470,60 +1502,25 @@ import { Vultisig } from 'vultisig-sdk/browser'
 **Platform Import**:
 
 ```typescript
-// Automatic platform detection
-import { Vultisig } from 'vultisig-sdk'
-
-// Or explicit Node.js import
-const { Vultisig } = require('vultisig-sdk/node')
+// Explicit Node.js import (recommended)
+import { Vultisig, FileStorage, Chain } from '@vultisig/sdk/node'
 ```
 
-**File Storage**: Implement file-based storage for persistence:
+**File Storage**: Use the built-in `FileStorage` class for persistence:
 
 ```typescript
-import { Storage } from 'vultisig-sdk'
-import * as fs from 'fs'
-import * as path from 'path'
-
-class FileStorage implements Storage {
-  constructor(private basePath: string) {
-    if (!fs.existsSync(basePath)) {
-      fs.mkdirSync(basePath, { recursive: true })
-    }
-  }
-
-  async get(key: string): Promise<string | null> {
-    try {
-      return fs.readFileSync(path.join(this.basePath, key), 'utf-8')
-    } catch {
-      return null
-    }
-  }
-
-  async set(key: string, value: string): Promise<void> {
-    fs.writeFileSync(path.join(this.basePath, key), value, 'utf-8')
-  }
-
-  async remove(key: string): Promise<void> {
-    try {
-      fs.unlinkSync(path.join(this.basePath, key))
-    } catch {}
-  }
-
-  async clear(): Promise<void> {
-    const files = fs.readdirSync(this.basePath)
-    files.forEach(f => fs.unlinkSync(path.join(this.basePath, f)))
-  }
-
-  async list(prefix?: string): Promise<string[]> {
-    const files = fs.readdirSync(this.basePath)
-    return prefix ? files.filter(f => f.startsWith(prefix)) : files
-  }
-}
+import { Vultisig, FileStorage } from '@vultisig/sdk/node'
 
 const sdk = new Vultisig({
-  storage: new FileStorage('./data/vaults')
+  storage: new FileStorage()  // Stores data in ~/.vultisig by default
 })
+
+await sdk.initialize()
+// ... use the SDK ...
+sdk.dispose()
 ```
+
+**Custom Storage**: For custom persistence needs, implement the `Storage` interface (see [Custom Storage Implementation](#custom-storage-implementation) for a full example).
 
 **Password Input**: Use libraries like `inquirer` or `prompts` for CLI password input.
 
@@ -1534,21 +1531,23 @@ const sdk = new Vultisig({
 **Platform Import** (when available):
 
 ```typescript
-import { Vultisig } from 'vultisig-sdk/react-native'
+import { Vultisig } from '@vultisig/sdk/react-native'
 ```
 
 ### Electron
 
-**Main Process**:
+**Status**: Coming soon
+
+**Main Process** (when available):
 
 ```typescript
-import { Vultisig } from 'vultisig-sdk/electron-main'
+import { Vultisig } from '@vultisig/sdk/electron-main'
 ```
 
-**Renderer Process**:
+**Renderer Process** (when available):
 
 ```typescript
-import { Vultisig } from 'vultisig-sdk/electron-renderer'
+import { Vultisig } from '@vultisig/sdk/electron-renderer'
 ```
 
 ---

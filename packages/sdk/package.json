@@ -29,7 +29,7 @@
       "default": "./dist/index.node.cjs"
     },
     "./node": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.node.d.ts",
       "import": "./dist/index.node.esm.js",
       "require": "./dist/index.node.cjs"
     },

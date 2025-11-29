@@ -1,4 +1,4 @@
-import { Balance } from '@vultisig/sdk'
+import { Balance } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 
 /**

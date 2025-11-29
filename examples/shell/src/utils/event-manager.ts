@@ -1,4 +1,4 @@
-import { VaultBase } from '@vultisig/sdk'
+import { VaultBase } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 
 type BufferedEvent = {

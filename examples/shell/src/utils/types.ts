@@ -1,4 +1,4 @@
-import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk'
+import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk/node'
 
 /**
  * Keysign payload type (internal SDK type)

@@ -7,8 +7,8 @@
  * - Display formatters for balances, addresses, portfolios
  * - User prompts and confirmations
  */
-import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, Value, VaultBase } from '@vultisig/sdk'
-import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk'
+import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, Value, VaultBase } from '@vultisig/sdk/node'
+import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 import ora, { type Ora } from 'ora'

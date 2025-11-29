@@ -61,7 +61,7 @@ export type SdkContextBuilderOptions = {
  * @example
  * ```typescript
  * const context = new SdkContextBuilder()
- *   .withStorage(new NodeStorage({ basePath: '~/.myapp' }))
+ *   .withStorage(new FileStorage({ basePath: '~/.myapp' }))
  *   .withServerEndpoints({ fastVault: 'https://custom.api.com' })
  *   .withConfig({ defaultChains: [Chain.Bitcoin] })
  *   .build()
@@ -137,7 +137,7 @@ export class SdkContextBuilder {
     if (!this.storage) {
       throw new Error(
         'Storage is required. Call withStorage() before build(). ' +
-          'Example: new SdkContextBuilder().withStorage(new NodeStorage()).build()'
+          'Example: new SdkContextBuilder().withStorage(new FileStorage()).build()'
       )
     }
 

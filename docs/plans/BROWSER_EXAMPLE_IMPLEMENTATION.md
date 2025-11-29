@@ -1349,11 +1349,11 @@ Create `src/components/vault/VaultCreator.tsx`:
 
 ```typescript
 import { useState } from 'react'
-import { FastVault } from '@vultisig/sdk'
 import type { Vault } from '@vultisig/sdk'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import Modal from '@/components/common/Modal'
+import { getSDK } from '@/utils/sdk'
 
 interface VaultCreatorProps {
   onVaultCreated: (vault: Vault) => void
@@ -1396,7 +1396,8 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
     setIsLoading(true)
 
     try {
-      const result = await FastVault.create({
+      const sdk = getSDK()
+      const result = await sdk.createFastVault({
         name: formData.name,
         password: formData.password,
         email: formData.email,
@@ -1406,8 +1407,7 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
         setVaultId(result.vaultId)
         setStep('verify')
       } else {
-        const vault = await result.vault
-        onVaultCreated(vault)
+        onVaultCreated(result.vault)
         handleClose()
       }
     } catch (err) {

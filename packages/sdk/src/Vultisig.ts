@@ -4,12 +4,12 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 
 import { AddressBookManager } from './AddressBookManager'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
-import type { SdkConfigOptions,SdkContext } from './context/SdkContext'
+import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
 import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import type { Storage } from './storage/types'
-import { AddressBook, AddressBookEntry, ServerStatus } from './types'
+import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
@@ -285,6 +285,87 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async resendVaultVerification(vaultId: string): Promise<void> {
     await this.ensureInitialized()
     return this.context.serverManager.resendVaultVerification(vaultId)
+  }
+
+  /**
+   * Create a new fast vault (2-of-2 with VultiServer)
+   *
+   * @param options - Vault creation options
+   * @returns Created vault and verification info
+   *
+   * @example
+   * ```typescript
+   * const result = await sdk.createFastVault({
+   *   name: 'My Fast Vault',
+   *   password: 'securePassword123',
+   *   email: 'user@example.com',
+   *   onProgress: (step) => console.log(step.message)
+   * })
+   *
+   * if (result.verificationRequired) {
+   *   const code = await promptUser('Enter verification code:')
+   *   await sdk.verifyVault(result.vaultId, code)
+   * }
+   * ```
+   */
+  async createFastVault(options: {
+    name: string
+    password: string
+    email: string
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{
+    vault: FastVault
+    vaultId: string
+    verificationRequired: true
+  }> {
+    await this.ensureInitialized()
+    const result = await FastVault.create(this.context, options)
+
+    // Store the vault and set as active
+    await result.vault.save()
+    await this.vaultManager.setActiveVault(result.vaultId)
+
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+    return result
+  }
+
+  /**
+   * Create a new secure vault (multi-device MPC)
+   *
+   * @param options - Vault creation options
+   * @returns Created vault and session info
+   *
+   * @example
+   * ```typescript
+   * const result = await sdk.createSecureVault({
+   *   name: 'My Secure Vault',
+   *   password: 'securePassword123',
+   *   devices: 3,
+   *   threshold: 2,
+   *   onProgress: (step) => console.log(step.message)
+   * })
+   * ```
+   */
+  async createSecureVault(options: {
+    name: string
+    password: string
+    devices: number
+    threshold?: number
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{
+    vault: SecureVault
+    vaultId: string
+    sessionId: string
+  }> {
+    await this.ensureInitialized()
+    const result = await SecureVault.create(this.context, options)
+
+    // Store the vault and set as active
+    await result.vault.save()
+    await this.vaultManager.setActiveVault(result.vaultId)
+
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+    return result
   }
 
   /**
