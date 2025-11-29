@@ -1,5 +1,4 @@
-import { GlobalStorage } from '../runtime/storage/GlobalStorage'
-import type { Storage } from '../runtime/storage/types'
+import type { Storage } from '../storage/types'
 import { type CacheConfig, type CachedItem, CacheScope } from './cache-types'
 
 /**
@@ -40,17 +39,16 @@ export class CacheService {
 
   /**
    * Create a new CacheService instance
+   * @param storage Storage instance for persistence
    * @param vaultId Vault ID for storage keys
    * @param config Cache configuration (TTLs, size limits)
    */
-  constructor(vaultId?: string, config?: CacheConfig) {
-    this.storage = GlobalStorage.getInstance()
+  constructor(storage: Storage, vaultId?: string, config?: CacheConfig) {
+    this.storage = storage
     this.vaultId = vaultId
     this.config = {
       balanceTTL: config?.balanceTTL ?? 5 * 60 * 1000,
       priceTTL: config?.priceTTL ?? 5 * 60 * 1000,
-      gasTTL: config?.gasTTL ?? 2 * 60 * 1000,
-      portfolioTTL: config?.portfolioTTL ?? 1 * 60 * 1000,
       maxMemoryCacheSize: config?.maxMemoryCacheSize ?? 1000,
     }
   }
@@ -307,10 +305,6 @@ export class CacheService {
         return this.config.balanceTTL
       case CacheScope.PRICE:
         return this.config.priceTTL
-      case CacheScope.GAS:
-        return this.config.gasTTL
-      case CacheScope.PORTFOLIO:
-        return this.config.portfolioTTL
       default:
         return 5 * 60 * 1000 // Default 5 minutes
     }

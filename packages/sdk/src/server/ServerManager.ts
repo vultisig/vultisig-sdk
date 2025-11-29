@@ -23,8 +23,16 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 
 import { formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
-import { randomUUID } from '../runtime/crypto'
+import { randomUUID } from '../crypto'
 import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
+
+/**
+ * Server endpoint configuration
+ */
+export type ServerEndpoints = {
+  fastVault?: string
+  messageRelay?: string
+}
 
 /**
  * ServerManager coordinates all server communications
@@ -36,7 +44,7 @@ export class ServerManager {
     messageRelay: string
   }
 
-  constructor(endpoints?: { fastVault?: string; messageRelay?: string }) {
+  constructor(endpoints?: ServerEndpoints) {
     this.config = {
       fastVault: endpoints?.fastVault || 'https://api.vultisig.com/vault',
       messageRelay: endpoints?.messageRelay || 'https://api.vultisig.com/router',

@@ -14,7 +14,7 @@ export function displayTokens(chain: Chain, tokens: Token[]): void {
       Symbol: token.symbol,
       Contract: token.contractAddress,
       Decimals: token.decimals,
-      Native: token.isNativeToken ? 'Yes' : 'No',
+      Native: token.isNative ? 'Yes' : 'No',
     }))
     console.table(table)
     console.log(chalk.gray('\nUse "token add <chain> <address>" to add or "token remove <chain> <tokenId>" to remove'))

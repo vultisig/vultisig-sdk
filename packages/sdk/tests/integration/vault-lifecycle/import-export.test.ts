@@ -27,12 +27,9 @@ import os from 'os'
 import path from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { GlobalConfig } from '../../../src/config/GlobalConfig'
-import { GlobalStorage } from '../../../src/runtime/storage/GlobalStorage'
-import { MemoryStorage } from '../../../src/runtime/storage/MemoryStorage'
-import { GlobalServerManager } from '../../../src/server/GlobalServerManager'
+import { createSdkContext, type SdkContext } from '../../../src/context/SdkContextBuilder'
 import { FastSigningService } from '../../../src/services/FastSigningService'
-import { PasswordCacheService } from '../../../src/services/PasswordCacheService'
+import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import { FastVault } from '../../../src/vault/FastVault'
 import { Vultisig } from '../../../src/Vultisig'
 
@@ -40,32 +37,26 @@ describe('Integration: Vault Export', () => {
   let sdk: Vultisig
   let testDir: string
   let memoryStorage: MemoryStorage
+  let context: SdkContext
 
   beforeAll(async () => {
-    // Reset all global singletons before test
-    GlobalStorage.reset()
-    GlobalServerManager.reset()
-    GlobalConfig.reset()
-    PasswordCacheService.resetInstance()
-
-    // Configure global singletons
+    // Create fresh storage
     memoryStorage = new MemoryStorage()
-    GlobalStorage.configure({ customStorage: memoryStorage })
 
-    GlobalServerManager.configure({
-      fastVault: 'https://api.vultisig.com/vault',
-      messageRelay: 'https://api.vultisig.com/router',
-    })
-
-    GlobalConfig.configure({
+    // Create SDK context with all dependencies
+    context = createSdkContext({
+      storage: memoryStorage,
+      serverEndpoints: {
+        fastVault: 'https://api.vultisig.com/vault',
+        messageRelay: 'https://api.vultisig.com/router',
+      },
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
     })
 
     // Initialize SDK with WASM
     sdk = new Vultisig({
-      autoInit: true,
-      storage: { customStorage: memoryStorage },
+      storage: memoryStorage,
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
     })
 
@@ -80,6 +71,9 @@ describe('Integration: Vault Export', () => {
   }, 60000) // Allow 60 seconds for WASM initialization
 
   afterAll(async () => {
+    // Dispose SDK
+    sdk?.dispose()
+
     // Clean up test directory
     if (testDir) {
       try {
@@ -143,10 +137,18 @@ describe('Integration: Vault Export', () => {
     }
 
     // Create a mock FastSigningService for testing
-    const mockFastSigningService = {} as FastSigningService
-    const config = GlobalConfig.getInstance()
+    const mockFastSigningService = new FastSigningService(context.serverManager, context.wasmProvider)
 
-    return FastVault.fromStorage(vaultData, mockFastSigningService, config)
+    // Create VaultContext from SdkContext
+    const vaultContext = {
+      storage: context.storage,
+      config: context.config,
+      serverManager: context.serverManager,
+      passwordCache: context.passwordCache,
+      wasmProvider: context.wasmProvider,
+    }
+
+    return FastVault.fromStorage(vaultData, mockFastSigningService, vaultContext)
   }
 
   describe('Unencrypted Export', () => {

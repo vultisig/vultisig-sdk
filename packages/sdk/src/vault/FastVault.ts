@@ -6,16 +6,12 @@ import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
 import { fromBase64 } from '@lib/utils/fromBase64'
 
-import { GlobalConfig } from '../config/GlobalConfig'
-import { GlobalStorage } from '../runtime/storage/GlobalStorage'
-import { GlobalServerManager } from '../server/GlobalServerManager'
+import type { SdkContext, VaultContext } from '../context/SdkContext'
 import { FastSigningService } from '../services/FastSigningService'
-import { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Signature, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
-import type { VaultConfig } from './VaultServices'
 
 /**
  * FastVault - 2-of-2 MPC with VultiServer
@@ -31,18 +27,24 @@ import type { VaultConfig } from './VaultServices'
  */
 export class FastVault extends VaultBase {
   private readonly fastSigningService: FastSigningService
+  private readonly context: VaultContext
 
-  constructor(
+  /**
+   * Private constructor - use FastVault.create() or FastVault.fromStorage() instead.
+   * @internal
+   */
+  private constructor(
     vaultId: string,
     name: string,
     vultFileContent: string,
     fastSigningService: FastSigningService,
-    config?: VaultConfig,
+    context: VaultContext,
     parsedVaultData?: CoreVault
   ) {
-    super(vaultId, name, vultFileContent, config, parsedVaultData)
+    super(vaultId, name, vultFileContent, context, parsedVaultData)
 
     this.fastSigningService = fastSigningService
+    this.context = context
   }
 
   /**
@@ -156,43 +158,38 @@ export class FastVault extends VaultBase {
   /**
    * Create a new fast vault (2-of-2 with VultiServer).
    *
-   * Uses global singletons for dependencies:
-   * - GlobalStorage for vault persistence
-   * - GlobalServerManager for server communication
-   * - GlobalConfig for default settings
-   * - PasswordCacheService for password caching
-   *
+   * @param context - SDK context with all dependencies
    * @param options - Vault creation options
    * @returns Promise resolving to vault instance, ID, and verification status
    *
    * @example
    * ```typescript
-   * const { vault, vaultId, verificationRequired } = await FastVault.create({
-   *   name: 'My Wallet',
-   *   password: 'secure-password',
-   *   email: 'user@example.com',
-   *   onProgress: (step) => {
-   *     console.log(`Step: ${step.step}, Progress: ${step.progress}%`)
+   * const { vault, vaultId, verificationRequired } = await FastVault.create(
+   *   sdkContext,
+   *   {
+   *     name: 'My Wallet',
+   *     password: 'secure-password',
+   *     email: 'user@example.com',
+   *     onProgress: (step) => {
+   *       console.log(`Step: ${step.step}, Progress: ${step.progress}%`)
+   *     }
    *   }
-   * })
+   * )
    * ```
    */
-  static async create(options: {
-    name: string
-    password: string
-    email: string
-    onProgress?: (step: VaultCreationStep) => void
-  }): Promise<{
+  static async create(
+    context: SdkContext,
+    options: {
+      name: string
+      password: string
+      email: string
+      onProgress?: (step: VaultCreationStep) => void
+    }
+  ): Promise<{
     vault: FastVault
     vaultId: string
     verificationRequired: true
   }> {
-    // Get global dependencies
-    const storage = GlobalStorage.getInstance()
-    const serverManager = GlobalServerManager.getInstance()
-    const config = GlobalConfig.getInstance()
-    const passwordCache = PasswordCacheService.getInstance()
-
     const reportProgress = options.onProgress || (() => {})
 
     try {
@@ -203,7 +200,7 @@ export class FastVault extends VaultBase {
         message: 'Starting key generation',
       })
 
-      const result = await serverManager.createFastVault({
+      const result = await context.serverManager.createFastVault({
         name: options.name,
         email: options.email,
         password: options.password,
@@ -237,9 +234,18 @@ export class FastVault extends VaultBase {
       const vultContent = await createVaultBackup(result.vault, options.password)
 
       // Step 4: Create FastSigningService
-      const fastSigningService = new FastSigningService(serverManager)
+      const fastSigningService = new FastSigningService(context.serverManager, context.wasmProvider)
 
-      // Step 5: Instantiate vault
+      // Step 5: Build VaultContext from SdkContext
+      const vaultContext: VaultContext = {
+        storage: context.storage,
+        config: context.config,
+        serverManager: context.serverManager,
+        passwordCache: context.passwordCache,
+        wasmProvider: context.wasmProvider,
+      }
+
+      // Step 6: Instantiate vault
       reportProgress({
         step: 'complete',
         progress: 90,
@@ -251,14 +257,14 @@ export class FastVault extends VaultBase {
         result.vault.name,
         vultContent,
         fastSigningService,
-        config, // Pass global config
+        vaultContext,
         result.vault // Pre-parsed vault data
       )
 
-      // Step 6: Cache password
-      passwordCache.set(vaultId, options.password)
+      // Step 7: Cache password
+      context.passwordCache.set(vaultId, options.password)
 
-      // Step 7: Save to storage
+      // Step 8: Save to storage
       reportProgress({
         step: 'complete',
         progress: 95,
@@ -267,10 +273,10 @@ export class FastVault extends VaultBase {
 
       await vaultInstance.save()
 
-      // Step 8: Set as active vault
-      await storage.set('activeVaultId', vaultId)
+      // Step 9: Set as active vault
+      await context.storage.set('activeVaultId', vaultId)
 
-      // Step 9: Complete
+      // Step 10: Complete
       reportProgress({
         step: 'complete',
         progress: 100,
@@ -292,9 +298,33 @@ export class FastVault extends VaultBase {
   }
 
   /**
-   * Reconstruct a FastVault instance from stored VaultData
+   * Create a FastVault instance from imported .vult file content
+   *
+   * @param vaultId - Vault ID (ECDSA public key)
+   * @param vultContent - The .vult file content
+   * @param parsedVault - Pre-parsed CoreVault data
+   * @param fastSigningService - Fast signing service instance
+   * @param context - Vault context with dependencies
+   * @internal Used by VaultManager.importVault()
    */
-  static fromStorage(vaultData: VaultData, fastSigningService: FastSigningService, config?: VaultConfig): FastVault {
+  static fromImport(
+    vaultId: string,
+    vultContent: string,
+    parsedVault: CoreVault,
+    fastSigningService: FastSigningService,
+    context: VaultContext
+  ): FastVault {
+    return new FastVault(vaultId, parsedVault.name, vultContent, fastSigningService, context, parsedVault)
+  }
+
+  /**
+   * Reconstruct a FastVault instance from stored VaultData
+   *
+   * @param vaultData - Stored vault data
+   * @param fastSigningService - Fast signing service instance
+   * @param context - Vault context with dependencies
+   */
+  static fromStorage(vaultData: VaultData, fastSigningService: FastSigningService, context: VaultContext): FastVault {
     // Validate vault type
     if (vaultData.type !== 'fast') {
       throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create FastVault from ${vaultData.type} vault data`)
@@ -306,7 +336,7 @@ export class FastVault extends VaultBase {
       vaultData.name,
       vaultData.vultFileContent || '',
       fastSigningService,
-      config
+      context
     )
 
     // Override constructor defaults with stored preferences from VaultData

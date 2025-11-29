@@ -16,14 +16,8 @@ export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } fr
 // Export vault configuration
 export type { VaultConfig } from './VaultServices'
 
-// Type guards for vault types
-export function isFastVault(vault: VaultBase): vault is FastVault {
-  return vault.type === 'fast'
-}
-
-export function isSecureVault(vault: VaultBase): vault is SecureVault {
-  return vault.type === 'secure'
-}
+// NOTE: Type guards (isFastVault, isSecureVault) are static methods on Vultisig class
+// Use: Vultisig.isFastVault(vault) and Vultisig.isSecureVault(vault)
 
 // Re-export core vault type with alias to avoid conflict
 export type { Vault as CoreVault } from '@core/mpc/vault/Vault'

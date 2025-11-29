@@ -33,11 +33,11 @@ export default [
       '**/*_pb.ts',
       '**/lib/**',
       'packages/core/**',
+      'packages/lib/**',
       'archived/**',
-      'clients/cli/src/tests/**',
-      'clients/cli/packages/**/test-*.js',
-      'clients/cli/packages/**/example.js',
-      'clients/cli/packages/**/verify-*.js',
+      // WASM files copied by build tools
+      '**/public/wallet-core.js',
+      '**/public/wallet-core.wasm',
     ],
   },
   ...compat.extends(
@@ -45,8 +45,7 @@ export default [
     'plugin:react/recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:jsx-a11y/recommended',
-    'prettier',
-    'plugin:prettier/recommended'
+    'prettier' // eslint-config-prettier: disables ESLint rules that conflict with Prettier
   ),
   {
     plugins: {
@@ -87,13 +86,6 @@ export default [
         'error',
         {
           argsIgnorePattern: '^_',
-        },
-      ],
-
-      'prettier/prettier': [
-        'error',
-        {
-          endOfLine: 'auto',
         },
       ],
 

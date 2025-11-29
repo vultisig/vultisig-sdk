@@ -31,8 +31,6 @@ const PASSWORD_CACHE_TTL = process.env.PASSWORD_CACHE_TTL ? parseInt(process.env
 GlobalConfig.configure({
   passwordCache: {
     defaultTTL: PASSWORD_CACHE_TTL,
-    // Disable exit handlers in REPL mode to prevent process.exit() interference
-    registerExitHandlers: false,
   },
   onPasswordRequired: async (vaultId: string, vaultName?: string) => {
     const { password } = await inquirer.prompt([

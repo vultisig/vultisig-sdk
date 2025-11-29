@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CacheService } from '../../../src/services/CacheService'
+import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 
 describe('CacheService', () => {
   let cache: CacheService
+  let storage: MemoryStorage
 
   beforeEach(() => {
-    cache = new CacheService()
+    storage = new MemoryStorage()
+    cache = new CacheService(storage)
     vi.clearAllMocks()
   })
 

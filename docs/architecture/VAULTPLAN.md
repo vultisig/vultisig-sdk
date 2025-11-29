@@ -142,10 +142,9 @@ interface VultisigConfig {
 
   // Cache configuration
   cacheConfig?: {
-    addressTTL?: number; // Address cache TTL in ms (permanent by default)
     balanceTTL?: number; // Balance cache TTL in ms (default: 300000 = 5min)
-    gasTTL?: number; // Gas price cache TTL in ms (default: 30000 = 30sec)
-    priceTTL?: number; // Price data cache TTL in ms (default: 60000 = 1min)
+    priceTTL?: number; // Price data cache TTL in ms (default: 300000 = 5min)
+    maxMemoryCacheSize?: number; // Max cache entries (default: 1000)
   };
 
   // WASM configuration
@@ -248,7 +247,7 @@ class Vault {
   setChains(chains: string[]): Promise<void>; // Set user chains (triggers address/balance updates)
   addChain(chain: string): Promise<void>; // Add single chain (triggers address/balance updates)
   removeChain(chain: string): Promise<void>; // Remove single chain
-  getChains(): string[]; // Get current user chains
+  readonly chains: string[]; // Get current user chains
   resetToDefaultChains(): Promise<void>; // Reset to Vultisig default chains
 
   // === ADDRESS MANAGEMENT ===
@@ -275,7 +274,7 @@ class Vault {
 
   // === FIAT VALUE OPERATIONS (AUTO-CONVERTED) ===
   setCurrency(currency: string): Promise<void>; // Set vault currency
-  getCurrency(): string; // Get vault currency
+  readonly currency: string; // Get vault currency
   async getValue(chain: string, tokenId?: string): Promise<Value>; // Get fiat value for chain/token
   async getValues(chain: string): Promise<Record<string, Value>>; // Get all fiat values for chain
   async updateValues(chain: string | "all"): Promise<void>; // Refresh price data from API
@@ -556,7 +555,7 @@ All transaction signing is performed via VultiServer:
 
 - **Purpose**: Chains actively used by a specific vault
 - **Scope**: Set when vault is created/imported, can be updated anytime
-- **Access**: `vault.setChains()` / `vault.getChains()`
+- **Access**: `vault.setChains()` / `vault.chains`
 - **Triggers**: Address derivation, balance fetching, gas estimation
 
 ### Auto-Population Behavior
@@ -603,24 +602,24 @@ vultisig.setDefaultChains([
 
 // 3. Create vault - inherits default chains (automatically set as active)
 const vault = await vultisig.createVault("My Wallet");
-console.log(vault.getChains()); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
+console.log(vault.chains); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
 console.log(vultisig.getActiveVault() === vault); // true
 
 // 4. Add a chain to specific vault (triggers address/balance updates)
 await vault.addChain("avalanche");
-console.log(vault.getChains()); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon', 'avalanche']
+console.log(vault.chains); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon', 'avalanche']
 
 // 5. Set completely different chains for vault
 await vault.setChains(["bitcoin", "litecoin", "dogecoin"]);
-console.log(vault.getChains()); // ['bitcoin', 'litecoin', 'dogecoin']
+console.log(vault.chains); // ['bitcoin', 'litecoin', 'dogecoin']
 
 // 6. Reset vault to SDK defaults
 await vault.resetToDefaultChains();
-console.log(vault.getChains()); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
+console.log(vault.chains); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
 
 // 7. Import vault inherits SDK default chains (automatically set as active)
 const importedVault = await vultisig.addVault(file, password);
-console.log(importedVault.getChains()); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
+console.log(importedVault.chains); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
 console.log(vultisig.getActiveVault() === importedVault); // true
 
 // 8. Switch between multiple vaults

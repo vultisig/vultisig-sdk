@@ -6,13 +6,12 @@ describe('PasswordCacheService', () => {
   let service: PasswordCacheService
 
   beforeEach(() => {
-    // Reset singleton for each test
-    PasswordCacheService.resetInstance()
-    service = PasswordCacheService.getInstance()
+    // Create fresh instance for each test
+    service = new PasswordCacheService()
   })
 
   afterEach(() => {
-    service.clear()
+    service.destroy()
   })
 
   describe('Basic Operations', () => {
@@ -82,15 +81,17 @@ describe('PasswordCacheService', () => {
     })
 
     it('should use default TTL if not specified', () => {
-      PasswordCacheService.resetInstance()
-      service = PasswordCacheService.getInstance({ defaultTTL: 10000 })
-      service.set('vault1', 'password123')
+      // Create new service with custom default TTL
+      const customService = new PasswordCacheService({ defaultTTL: 10000 })
+      customService.set('vault1', 'password123')
 
       vi.advanceTimersByTime(9999)
-      expect(service.get('vault1')).toBe('password123')
+      expect(customService.get('vault1')).toBe('password123')
 
       vi.advanceTimersByTime(2)
-      expect(service.get('vault1')).toBeUndefined()
+      expect(customService.get('vault1')).toBeUndefined()
+
+      customService.destroy()
     })
 
     it('should return remaining TTL', () => {
@@ -135,13 +136,14 @@ describe('PasswordCacheService', () => {
 
   describe('Disabled Mode', () => {
     it('should not cache when TTL is 0', () => {
-      PasswordCacheService.resetInstance()
-      service = PasswordCacheService.getInstance({ defaultTTL: 0 })
+      const disabledService = new PasswordCacheService({ defaultTTL: 0 })
 
-      service.set('vault1', 'password123')
+      disabledService.set('vault1', 'password123')
 
-      expect(service.get('vault1')).toBeUndefined()
-      expect(service.has('vault1')).toBe(false)
+      expect(disabledService.get('vault1')).toBeUndefined()
+      expect(disabledService.has('vault1')).toBe(false)
+
+      disabledService.destroy()
     })
 
     it('should clear cache when TTL set to 0 at runtime', () => {
@@ -154,40 +156,45 @@ describe('PasswordCacheService', () => {
     })
 
     it('should respect explicit TTL of 0', () => {
-      PasswordCacheService.resetInstance()
-      service = PasswordCacheService.getInstance({ defaultTTL: 300000 })
+      const customService = new PasswordCacheService({ defaultTTL: 300000 })
 
-      service.set('vault1', 'password123', 0)
+      customService.set('vault1', 'password123', 0)
 
-      expect(service.get('vault1')).toBeUndefined()
+      expect(customService.get('vault1')).toBeUndefined()
+
+      customService.destroy()
     })
   })
 
-  describe('Singleton Pattern', () => {
-    it('should return same instance', () => {
-      const instance1 = PasswordCacheService.getInstance()
-      const instance2 = PasswordCacheService.getInstance()
+  describe('Instance Isolation', () => {
+    it('should isolate caches between instances', () => {
+      const instance1 = new PasswordCacheService()
+      const instance2 = new PasswordCacheService()
 
-      expect(instance1).toBe(instance2)
+      instance1.set('vault1', 'password1')
+      instance2.set('vault1', 'password2')
+
+      // Each instance has its own cache
+      expect(instance1.get('vault1')).toBe('password1')
+      expect(instance2.get('vault1')).toBe('password2')
+
+      instance1.destroy()
+      instance2.destroy()
     })
 
-    it('should share cache across instances', () => {
-      const instance1 = PasswordCacheService.getInstance()
-      instance1.set('vault1', 'password123')
+    it('should not affect other instances when destroyed', () => {
+      const instance1 = new PasswordCacheService()
+      const instance2 = new PasswordCacheService()
 
-      const instance2 = PasswordCacheService.getInstance()
+      instance1.set('vault1', 'password1')
+      instance2.set('vault1', 'password2')
 
-      expect(instance2.get('vault1')).toBe('password123')
-    })
+      instance1.destroy()
 
-    it('should reset instance for testing', () => {
-      const instance1 = PasswordCacheService.getInstance()
-      instance1.set('vault1', 'password123')
+      // instance2 should still work
+      expect(instance2.get('vault1')).toBe('password2')
 
-      PasswordCacheService.resetInstance()
-
-      const instance2 = PasswordCacheService.getInstance()
-      expect(instance2.get('vault1')).toBeUndefined()
+      instance2.destroy()
     })
   })
 

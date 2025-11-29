@@ -8,20 +8,18 @@
     "packages/sdk"
   ],
   "scripts": {
-    "lint": "eslint --config .config/eslint.config.mjs 'packages/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}'",
-    "lint:fix": "eslint --config .config/eslint.config.mjs 'packages/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' 'clients/cli/**/*.{js,jsx,ts,tsx}' --fix",
-    "build": "yarn workspace @vultisig/example-cli build",
+    "format": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
+    "format:check": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --check 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
+    "lint": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
+    "lint:fix": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' --fix",
     "build:sdk": "yarn workspace @vultisig/sdk build",
     "build:sdk-full": "yarn sync-and-copy && yarn workspace @vultisig/sdk build",
-    "build:prod": "yarn workspace vultisig-sdk-react-example-2 build && yarn workspace vultisig-sdk-react-example-2 preview --port 5175 --strictPort --open=false",
-    "dev:react": "yarn workspace vultisig-sdk-react-example-2 dev",
     "sync-packages": "syncpack fix-mismatches",
     "sync-and-copy": "node_modules/.bin/tsx scripts/sync-and-copy.ts",
     "typecheck": "tsc --project .config/tsconfig.json --noEmit",
     "test": "yarn workspace @vultisig/sdk test",
     "test:all": "yarn test:unit; yarn test:integration; yarn test:e2e",
     "test:unit": "yarn workspace @vultisig/sdk test:unit",
-    "test:runtime": "yarn workspace @vultisig/sdk test:runtime",
     "test:integration": "yarn workspace @vultisig/sdk test:integration",
     "test:e2e": "yarn workspace @vultisig/sdk test:e2e",
     "test:e2e:balance": "yarn workspace @vultisig/sdk test:e2e:balance",
@@ -32,7 +30,6 @@
     "test:e2e:fiat-value": "yarn workspace @vultisig/sdk test:e2e:fiat-value",
     "test:watch": "yarn workspace @vultisig/sdk test:watch",
     "test:unit:watch": "yarn workspace @vultisig/sdk test:unit:watch",
-    "test:runtime:watch": "yarn workspace @vultisig/sdk test:runtime:watch",
     "test:integration:watch": "yarn workspace @vultisig/sdk test:integration:watch",
     "test:e2e:watch": "yarn workspace @vultisig/sdk test:e2e:watch",
     "test:changed": "yarn workspace @vultisig/sdk test:changed",
@@ -43,17 +40,13 @@
     "wallet": "yarn workspace @vultisig/example-cli wallet"
   },
   "lint-staged": {
-    "packages/**/*.{js,jsx,ts,tsx}": [
-      "eslint --config .config/eslint.config.mjs --fix",
-      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
-    ],
-    "clients/**/*.{js,jsx,ts,tsx}": [
-      "eslint --config .config/eslint.config.mjs --fix",
-      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
+    "packages/sdk/**/*.{js,jsx,ts,tsx}": [
+      "prettier --config .config/.prettierrc --write",
+      "eslint --config .config/eslint.config.mjs --fix"
     ],
     "examples/**/*.{js,jsx,ts,tsx}": [
-      "eslint --config .config/eslint.config.mjs --fix",
-      "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write"
+      "prettier --config .config/.prettierrc --write",
+      "eslint --config .config/eslint.config.mjs --fix"
     ],
     "packages/sdk/tests/!(e2e)/**/*.test.ts": [
       "yarn workspace @vultisig/sdk test:changed"
@@ -64,6 +57,7 @@
     "@eslint/eslintrc": "^3.3.0",
     "@eslint/js": "^9.22.0",
     "@google-cloud/translate": "^9.0.0",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@rollup/plugin-commonjs": "^28.0.6",
     "@rollup/plugin-node-resolve": "^16.0.1",
     "@rollup/plugin-terser": "^0.4.4",
@@ -99,6 +93,7 @@
   },
   "resolutions": {
     "readable-stream": "3.6.2",
-    "@noble/hashes": "1.8.0"
+    "@noble/hashes": "1.8.0",
+    "@lifi/sdk/@solana/web3.js": "1.98.4"
   }
 }

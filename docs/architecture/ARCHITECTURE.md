@@ -1,7 +1,6 @@
 # Vultisig SDK Architecture
 
-**Last Updated:** November 2025
-**Status:** Alpha
+**Status:** Pre-Alpha
 
 ---
 
@@ -9,24 +8,22 @@
 
 1. [Overview](#overview)
 2. [Architecture Principles](#architecture-principles)
-3. [System Architecture](#system-architecture)
-4. [Directory Structure](#directory-structure)
+3. [Monorepo Structure](#monorepo-structure)
+4. [SDK Package Structure](#sdk-package-structure)
 5. [Core Components](#core-components)
-6. [Runtime Layer](#runtime-layer)
-7. [Services Layer](#services-layer)
-8. [Adapters Layer](#adapters-layer)
+6. [Vault System](#vault-system)
+7. [Platform Support](#platform-support)
+8. [Services](#services)
 9. [Events System](#events-system)
 10. [Type System](#type-system)
-11. [Design Patterns](#design-patterns)
-12. [Data Flow](#data-flow)
-13. [Chain Support](#chain-support)
-14. [Development Guide](#development-guide)
+11. [Data Flow](#data-flow)
+12. [Chain Support](#chain-support)
 
 ---
 
 ## Overview
 
-The Vultisig SDK is a TypeScript library for creating and managing multi-chain cryptocurrency vaults using threshold signature schemes (TSS). It provides a unified interface for interacting with 34+ blockchain networks through multi-party computation (MPC), working seamlessly across browser, Node.js, Electron, and Chrome extension environments.
+The Vultisig SDK is a TypeScript library for creating and managing multi-chain cryptocurrency vaults using threshold signature schemes (TSS). It provides a unified interface for interacting with 34+ blockchain networks through multi-party computation (MPC), working seamlessly across browser and Node.js environments.
 
 ### What It Does
 
@@ -36,17 +33,99 @@ The Vultisig SDK is a TypeScript library for creating and managing multi-chain c
 - **Balance Tracking** - Query native and token balances across all chains
 - **Address Derivation** - Generate addresses for any supported chain
 - **Gas Estimation** - Get current gas prices and fee estimates
-- **Cross-Platform** - Works in browser, Node.js, Electron, Chrome extensions
+- **Cross-Platform** - Works in browser and Node.js (Electron, React Native coming soon)
 
 ### Architecture Overview
 
-The SDK follows a clean 3-layer architecture:
+The SDK follows a layered architecture:
 
 1. **Public API Layer** - User-facing interfaces (`Vultisig`, `index.ts`)
-2. **Core Management Layer** - Business logic (`VaultManager`, `ChainManager`, `AddressBookManager`)
-3. **Infrastructure Layer** - Runtime support (`storage`, `events`, `adapters`, `services`)
+2. **Vault Layer** - Vault hierarchy (`VaultBase`, `FastVault`, `SecureVault`)
+3. **Services Layer** - Business logic services (signing, caching, balances)
+4. **Platform Layer** - Platform-specific implementations (storage, WASM, crypto)
 
 **Design Philosophy:** The SDK is a thin layer over the Vultisig Core library, using functional adapters to convert between Core's data formats and user-friendly SDK types. All blockchain logic lives in Core - the SDK focuses on providing excellent developer experience.
+
+### Architecture Diagram
+
+```mermaid
+flowchart TB
+    subgraph App["User Application"]
+        UserApp["React, Vue, Node.js, CLI, etc."]
+    end
+
+    subgraph PublicAPI["PUBLIC API LAYER"]
+        Vultisig["Vultisig<br/>(Facade)"]
+        VaultManager["VaultManager<br/>(Factory)"]
+        SdkContext["SdkContext<br/>(Dependency Container)"]
+        Vultisig --> VaultManager --> SdkContext
+    end
+
+    subgraph VaultLayer["VAULT LAYER"]
+        VaultBase["VaultBase<br/>(Template Method)"]
+        VaultContext["VaultContext<br/>(Injected Dependencies)"]
+        FastVault["FastVault<br/>(2-of-2)"]
+        SecureVault["SecureVault<br/>(N-of-M)"]
+        VaultBase --> VaultContext
+        VaultBase --> FastVault
+        VaultBase --> SecureVault
+    end
+
+    subgraph ServicesLayer["SERVICES LAYER"]
+        AddressService["AddressService"]
+        BalanceService["BalanceService"]
+        TxBuilder["TransactionBuilder"]
+        Adapters["Adapters<br/>formatBalance()<br/>formatSignature()"]
+        AddressService & BalanceService & TxBuilder --> Adapters
+    end
+
+    subgraph SharedRuntime["SHARED RUNTIME (Process-wide)"]
+        WasmRuntime["SharedWasmRuntime<br/>(WASM Singleton)"]
+    end
+
+    subgraph CoreLib["CORE LIBRARY (packages/core)"]
+        Core["Chain Resolvers | MPC Protocol | Signing | TX Building"]
+    end
+
+    subgraph External["External Services"]
+        VultiServer["VultiServer"]
+        Relay["Message Relay"]
+        RPCs["Blockchain RPCs"]
+    end
+
+    App --> PublicAPI
+    PublicAPI --> VaultLayer
+    VaultLayer --> ServicesLayer
+    ServicesLayer --> CoreLib
+    ServicesLayer --> SharedRuntime
+    VaultLayer <-.-> External
+```
+
+### Design Patterns Summary
+
+| Pattern                | Component            | Purpose                                    |
+| ---------------------- | -------------------- | ------------------------------------------ |
+| **Facade**             | `Vultisig`           | Simple entry point hiding complexity       |
+| **Factory**            | `VaultManager`       | Creates appropriate vault types            |
+| **Template Method**    | `VaultBase`          | Common vault behavior with extension points|
+| **Strategy**           | `FastVault`/`SecureVault` | Interchangeable signing strategies    |
+| **Dependency Injection** | `SdkContext`/`VaultContext` | Instance-scoped, testable services |
+| **Adapter**            | `formatBalance()` etc| Converts Core types to SDK types           |
+| **Singleton**          | `SharedWasmRuntime`  | Process-wide WASM modules (intentional)    |
+| **Observer**           | Event emitters       | Reactive state updates                     |
+
+### Platform Bundles
+
+The SDK supports multiple JavaScript environments through separate build-time bundles. Each bundle includes platform-specific implementations for storage, WASM loading, and crypto operations:
+
+| Bundle                      | Platform         | Storage      | Use Case                |
+| --------------------------- | ---------------- | ------------ | ----------------------- |
+| `index.node.esm.js`         | Node.js          | Filesystem   | Server-side, CLI tools  |
+| `index.browser.js`          | Browser          | IndexedDB    | Web applications        |
+
+Users import the appropriate bundle for their platform - the SDK API remains identical across all bundles.
+
+**Coming Soon:** Electron (main/renderer) and React Native platform bundles.
 
 ---
 
@@ -58,7 +137,7 @@ The SDK uses functional adapters to convert between Core's data formats and user
 
 ```typescript
 // Vault calls Core functions directly
-class Vault {
+class VaultBase {
   async balance(chain: string): Promise<Balance> {
     // 1. Call Core directly
     const rawBalance = await getCoinBalance({ chain, address });
@@ -76,15 +155,14 @@ class Vault {
 - All blockchain logic delegated to Core
 - SDK focuses on caching, events, and coordination
 
-### 2. Environment Agnostic
+### 2. Platform Agnostic
 
-The SDK works seamlessly across all JavaScript environments through runtime detection and appropriate storage/utility selection:
+The SDK works seamlessly across all JavaScript environments through platform-specific bundles:
 
-- Browser (IndexedDB storage)
-- Node.js (filesystem storage)
-- Electron (main/renderer process aware)
-- Chrome Extensions (chrome.storage API)
-- Web Workers (memory storage fallback)
+- **Browser** - IndexedDB storage, browser crypto
+- **Node.js** - Filesystem storage, native crypto
+
+*Coming soon: Electron and React Native support.*
 
 ### 3. Type-Safe Events
 
@@ -111,176 +189,188 @@ Intelligent caching based on data mutability:
 
 ---
 
-## System Architecture
-
-### Component Diagram
+## Monorepo Structure
 
 ```
-┌──────────────────────────────────────┐
-│        User Application              │
-│    (React, Vue, Node.js, etc.)      │
-└─────────────────┬────────────────────┘
-                  │
-             ┌────▼────┐
-             │Vultisig │ ← Main SDK class (facade pattern)
-             └────┬────┘
-      ┌───────────┼────────────┬──────────────┐
-      │           │            │              │
- ┌────▼────┐ ┌───▼────┐ ┌────▼────┐ ┌───────▼───────┐
- │  Vault  │ │ Chain  │ │Address  │ │Storage        │
- │ Manager │ │Manager │ │Book Mgr │ │Manager        │
- └────┬────┘ └────────┘ └─────────┘ └───────┬───────┘
-      │                                      │
- ┌────▼──────────────────────────────┐     │
- │         Vault Instance            │     │
- │         (Facade Pattern)          │     │
- │  ┌──────────────────────────────┐│     │
- │  │  Delegates to Services:      ││     │
- │  │  • AddressService            ││     │
- │  │  • BalanceService            ││     │
- │  │  • GasEstimationService      ││     │
- │  │  • TransactionBuilder        ││     │
- │  └──────────────────────────────┘│     │
- └────┬──────────────┬───────────────┘     │
-      │              │                      │
- ┌────▼─────┐   ┌───▼──────┐              │
- │ Services │   │ Adapters │              │
- │ (vault/  │   │ (format) │              │
- │ services)│   │          │              │
- └────┬─────┘   └───┬──────┘              │
-      │             │                       │
- ┌────▼─────────────▼────────────┐   ┌────▼─────┐
- │    Vultisig Core Library      │   │ Runtime  │
- │ • deriveAddress()             │   │ Storage  │
- │ • getCoinBalance()            │   │ • Browser│
- │ • getChainSpecific()          │   │ • Node   │
- │ • buildSendKeysignPayload()   │   │ • Chrome │
- │ • 34+ chain resolvers         │   │ • Memory │
- └────────────────────────────────┘   └──────────┘
+vultisig-sdk/
+├── packages/
+│   ├── sdk/                    # Main SDK (@vultisig/sdk)
+│   ├── core/                   # Upstream core library (read-only)
+│   └── lib/                    # Upstream utilities (read-only)
+├── clients/
+│   └── cli/                    # CLI client
+├── examples/
+│   ├── browser/               # Browser example
+│   ├── cli/                   # CLI examples
+│   └── shell/                 # Shell/integration examples
+├── .config/                   # Shared configuration
+├── scripts/                   # Build and utility scripts
+└── docs/                      # Documentation
 ```
 
-### Layer Responsibilities
+### Package Relationships
 
-| Layer              | Components                                           | Purpose                                    |
-| ------------------ | ---------------------------------------------------- | ------------------------------------------ |
-| **Public API**     | `Vultisig`, `index.ts`                               | User-facing interfaces, SDK initialization |
-| **Management**     | `VaultManager`, `ChainManager`, `AddressBookManager` | Business logic, state management           |
-| **Vault**          | `Vault` class                                        | Per-vault operations, Core function calls  |
-| **Infrastructure** | Runtime, Services, Adapters, Events                  | Platform abstraction, data conversion      |
+- **`@vultisig/sdk`** - The main SDK package users install
+- **`packages/core`** - Chain implementations, MPC protocol, signing logic (synced from upstream)
+- **`packages/lib`** - WASM binaries, crypto utilities (synced from upstream)
 
 ---
 
-## Directory Structure
+## SDK Package Structure
 
 ```
 packages/sdk/src/
 ├── index.ts                    # Public API exports
 ├── Vultisig.ts                 # Main SDK class
 ├── VaultManager.ts             # Vault lifecycle management
-├── ChainManager.ts             # Chain configuration
-├── AddressBookManager.ts       # Global address book
+├── AddressBookManager.ts       # Address book functionality
+├── constants.ts                # SDK constants
 │
-├── vault/                      # Vault functionality
-│   ├── Vault.ts               # Main vault class (facade pattern)
-│   ├── VaultServices.ts       # Service injection interface
-│   ├── VaultError.ts          # Vault error types
-│   ├── services/              # Extracted vault services
-│   │   ├── AddressService.ts # Address derivation
-│   │   ├── BalanceService.ts # Balance fetching & caching
+├── context/                    # Dependency injection
+│   ├── SdkContext.ts          # SDK-level context interface
+│   ├── SdkContextBuilder.ts   # Context factory function
+│   ├── SharedWasmRuntime.ts   # Process-wide WASM singleton
+│   └── index.ts
+│
+├── vault/                      # Vault implementation
+│   ├── VaultBase.ts           # Abstract base vault class
+│   ├── FastVault.ts           # 2-of-2 server-assisted vault
+│   ├── SecureVault.ts         # Multi-device MPC vault
+│   ├── VaultError.ts          # Error types
+│   ├── VaultContext.ts        # Vault-level context interface
+│   ├── services/              # Vault-specific services
+│   │   ├── AddressService.ts      # Address derivation
+│   │   ├── BalanceService.ts      # Balance fetching & caching
 │   │   ├── GasEstimationService.ts # Gas/fee estimation
-│   │   └── TransactionBuilder.ts # TX preparation & hash extraction
-│   └── index.ts               # Vault exports
+│   │   ├── TransactionBuilder.ts   # TX preparation
+│   │   ├── BroadcastService.ts     # TX broadcasting
+│   │   └── PreferencesService.ts   # User preferences
+│   └── utils/
+│       └── convertSignature.ts # Signature conversion
 │
-├── runtime/                   # Runtime environment handling
-│   ├── environment.ts         # Environment detection
-│   ├── storage/              # Storage implementations
-│   │   ├── StorageManager.ts # Storage factory
-│   │   ├── BrowserStorage.ts # IndexedDB for browser
-│   │   ├── NodeStorage.ts    # Filesystem for Node.js
-│   │   ├── ChromeStorage.ts  # chrome.storage API
-│   │   ├── MemoryStorage.ts  # In-memory fallback
-│   │   └── types.ts          # Storage interfaces
-│   └── utils/                # Platform-specific utilities
-│       ├── browser.ts        # Browser utilities
-│       ├── node.ts           # Node.js utilities
-│       ├── electron.ts       # Electron utilities
-│       └── chrome.ts         # Chrome extension utilities
+├── platforms/                  # Platform-specific implementations
+│   ├── node/                  # Node.js platform
+│   │   ├── index.ts
+│   │   ├── storage.ts
+│   │   ├── crypto.ts
+│   │   ├── wasm.ts
+│   │   └── polyfills.ts
+│   ├── browser/               # Browser platform
+│   ├── electron-main/         # Electron main process (coming soon)
+│   ├── electron-renderer/     # Electron renderer (coming soon)
+│   ├── react-native/          # React Native (coming soon)
+│   └── types.ts               # Platform type definitions
 │
-├── events/                   # Event system
-│   ├── EventEmitter.ts       # UniversalEventEmitter class
-│   └── types.ts             # Event type definitions
-│
-├── services/                # Essential services
-│   ├── CacheService.ts      # TTL-based caching
-│   ├── FastSigningService.ts # Server-assisted MPC signing
+├── server/                    # Server communication
+│   ├── ServerManager.ts       # Server coordination logic
 │   └── index.ts
 │
-├── adapters/                # Data format conversion
-│   ├── formatBalance.ts     # bigint → Balance
-│   ├── formatGasInfo.ts     # FeeQuote → GasInfo
-│   ├── formatSignature.ts   # KeysignSignature → Signature
-│   ├── getChainSigningInfo.ts # Extract chain signing metadata
+├── services/                  # SDK-wide services
+│   ├── CacheService.ts        # TTL-based caching (instance-scoped)
+│   ├── FastSigningService.ts  # Server-assisted signing
+│   ├── FiatValueService.ts    # Fiat value lookups
+│   ├── PasswordCacheService.ts # Password caching (instance-scoped)
+│   ├── cache-types.ts
 │   └── index.ts
 │
-├── utils/                   # General utilities
-│   ├── validation.ts        # Input validation
-│   └── export.ts           # Vault export/import
+├── storage/                   # Storage abstraction
+│   ├── MemoryStorage.ts       # In-memory implementation
+│   ├── types.ts               # Storage interfaces
+│   └── index.ts
 │
-└── types/                  # Type definitions
-    └── index.ts           # SDK types and Core re-exports
+├── events/                    # Event system
+│   ├── EventEmitter.ts        # UniversalEventEmitter class
+│   ├── types.ts               # Event type definitions
+│   └── index.ts
+│
+├── config/                    # Configuration
+│   └── index.ts               # SdkConfig type definitions
+│
+├── adapters/                  # Data format conversion
+│   ├── formatBalance.ts       # bigint → Balance
+│   ├── formatGasInfo.ts       # FeeQuote → GasInfo
+│   ├── formatSignature.ts     # KeysignSignature → Signature
+│   ├── getChainSigningInfo.ts # Chain signing metadata
+│   └── index.ts
+│
+├── wasm/                      # WebAssembly types
+│   ├── types.ts               # WasmConfig, WasmProvider interfaces
+│   └── index.ts
+│
+├── crypto/                    # Cryptographic utilities
+│   └── index.ts
+│
+├── utils/                     # General utilities
+│   ├── validation.ts          # Input validation
+│   ├── export.ts              # Vault export/import
+│   └── memoizeAsync.ts        # Async memoization
+│
+└── types/                     # Type definitions
+    └── index.ts               # SDK types and Core re-exports
 ```
 
 ---
 
 ## Core Components
 
-### 1. Vultisig Class
+### Vultisig Class
 
 **File:** `src/Vultisig.ts`
 
 The main SDK class that orchestrates all functionality using the facade pattern.
 
 ```typescript
-const vultisig = new Vultisig({
-  defaultChains: ["Bitcoin", "Ethereum"],
-  defaultCurrency: "USD",
+import { Vultisig, MemoryStorage } from "@vultisig/sdk";
+
+// Storage is required
+const sdk = new Vultisig({
+  storage: new MemoryStorage(),  // Or your custom Storage implementation
+  defaultChains: [Chain.Bitcoin, Chain.Ethereum],
 });
 
-await vultisig.connect();
+await sdk.initialize();
+
+// Create a fast vault
+const vault = await sdk.createVault("My Vault", password);
+
+// Get vault address
+const address = await vault.address("Ethereum");
+
+// Clean up when done
+sdk.dispose();
 ```
 
 **Responsibilities:**
 
 - SDK initialization and lifecycle management
-- Connection state management (connect/disconnect)
 - Vault creation and management delegation
 - Storage integration and persistence
 - Event emission for SDK-level state changes
-- Global configuration (default chains, currency)
 - Address book operations
-- Transaction signing convenience methods
+- Resource cleanup via `dispose()`
 
-**Key Dependencies:**
+**Key Dependencies (via SdkContext):**
 
-- `ServerManager` - Server communication
-- `WASMManager` - WASM module loading
 - `VaultManager` - Vault operations
 - `AddressBookManager` - Address book
-- `StorageManager` - Data persistence
-- `UniversalEventEmitter` - Event system
+- `ServerManager` - Server communication (instance-scoped)
+- `SdkConfig` - Configuration (instance-scoped)
+- `Storage` - Data persistence (injected)
+- `PasswordCacheService` - Password caching (instance-scoped)
+- `WasmProvider` - WASM module access
 
-### 2. VaultManager Class
+### VaultManager Class
 
 **File:** `src/VaultManager.ts`
 
 Manages vault lifecycle and vault collection using the factory pattern.
 
 ```typescript
-// Create fast vault
+// Create fast vault (2-of-2 with server)
 const vault = await vaultManager.createFastVault(name, password);
 
-// Import vault
-const vault = await vaultManager.addVault(vultFile, password);
+// Import existing vault
+const vault = await vaultManager.importVault(vultFile, password);
 
 // Export vault
 const encrypted = await vaultManager.exportVault(vaultId, password);
@@ -289,586 +379,321 @@ const encrypted = await vaultManager.exportVault(vaultId, password);
 **Responsibilities:**
 
 - Vault creation (fast and secure vaults)
-- Vault import from .vult files (with encryption support)
-- Vault export with password protection
+- Vault import from .vult files
+- Vault export with encryption
 - Active vault tracking
-- Vault validation and normalization
-- Service injection for Vault instances
+- Vault type detection
 
-**Key Features:**
+### Context-Based Architecture
 
-- Automatic vault type detection (fast vs secure based on signer names)
-- Encryption status caching to avoid repeated decoding
-- Threshold calculation based on signer count
-- Global settings application to imported vaults
+The SDK uses **instance-scoped dependency injection** for clean separation and testability. Each SDK instance has its own isolated context:
 
-### 3. Vault Class
+**SdkContext** - Container for SDK-level dependencies:
+- `storage` - Data persistence (required, injected)
+- `config` - SDK configuration (instance-scoped)
+- `serverManager` - VultiServer and relay communication (instance-scoped)
+- `passwordCache` - Password caching service (instance-scoped)
+- `wasmProvider` - Interface to WASM modules
 
-**File:** `src/vault/Vault.ts` (658 lines, 30% smaller after refactoring)
+**VaultContext** - Container for vault-level dependencies:
+- `storage` - Inherited from SdkContext
+- `config` - Inherited from SdkContext
+- `serverManager` - Inherited from SdkContext
+- `passwordCache` - Inherited from SdkContext
+- `wasmProvider` - Inherited from SdkContext
 
-Individual vault instance using **facade pattern** with **service delegation**.
-
-```typescript
-// Address derivation
-const address = await vault.address("Ethereum");
-
-// Balance fetching
-const balance = await vault.balance("Ethereum");
-const tokenBalance = await vault.balance("Ethereum", tokenContractAddress);
-
-// Gas estimation
-const gas = await vault.gas(Chain.Ethereum);
-
-// Transaction preparation
-const keysignPayload = await vault.prepareSendTx({ coin, receiver, amount });
-const messageHashes = await vault.extractMessageHashes(keysignPayload);
-
-// Transaction signing
-const signature = await vault.sign("fast", payload, password);
-```
-
-**Architecture Approach (Refactored):**
-
-- **Facade Pattern** - Clean interface that delegates to specialized services
-- **Service Extraction** - Core responsibilities extracted into 4 focused services:
-  - `AddressService` - Address derivation with permanent caching
-  - `BalanceService` - Balance fetching with 5-minute TTL caching
-  - `GasEstimationService` - Gas/fee estimation for all chains
-  - `TransactionBuilder` - TX preparation and message hash extraction
-- **Minimal Business Logic** - Vault coordinates services, delegates implementation
-- **Backward Compatible** - All public APIs unchanged
-
-**Service Architecture:**
+**SharedWasmRuntime** - The only intentional process-wide singleton:
+- WASM modules are expensive to load (~10MB total)
+- Stateless after initialization
+- Safe to share across SDK instances
+- Configured automatically by platform bundles
 
 ```typescript
-class Vault extends UniversalEventEmitter<VaultEvents> {
-  // Extracted services
-  private addressService: AddressService;
-  private balanceService: BalanceService;
-  private gasEstimationService: GasEstimationService;
-  private transactionBuilder: TransactionBuilder;
-
-  // Public API delegates to services
-  async address(chain: Chain): Promise<string> {
-    return this.addressService.getAddress(chain);
-  }
-
-  async balance(chain: Chain, tokenId?: string): Promise<Balance> {
-    return this.balanceService.getBalance(chain, tokenId);
-  }
-
-  async gas(chain: Chain): Promise<GasInfo> {
-    return this.gasEstimationService.getGasInfo(chain);
-  }
-
-  async prepareSendTx(params): Promise<KeysignPayload> {
-    return this.transactionBuilder.prepareSendTx(params);
-  }
-}
-```
-
-**Refactoring Benefits:**
-
-- **Maintainability** - Each service has single responsibility (285 lines extracted)
-- **Testability** - Services can be unit tested independently
-- **Code Organization** - Vault.ts reduced from 943 to 658 lines
-- **Performance** - No impact, all tests passing at same speed
-
-**Caching Strategy:**
-
-- Addresses: Permanent cache (AddressService)
-- Balances: 5-minute TTL (BalanceService)
-- Gas: No cache (GasEstimationService)
-- CacheService injected via dependency injection
-
-**Event Emission:**
-
-- Extends `UniversalEventEmitter`
-- Emits events for: balance updates, transactions signed, chain/token changes, rename operations
-- Services use callbacks to emit events through Vault
-
-### 4. ChainManager
-
-**File:** `src/ChainManager.ts`
-
-Chain configuration and validation utilities.
-
-```typescript
-// Validate chain
-ChainManager.validateChain("Ethereum");
-
-// Get default chains
-const chains = ChainManager.getDefaultChains();
-
-// Convert string to Chain enum
-const chainEnum = ChainManager.getChainEnum("Bitcoin");
-```
-
-**Responsibilities:**
-
-- Chain validation against supported chains
-- String to Chain enum conversion
-- Default chains configuration
-- Supported chains listing
-
-**Key Features:**
-
-- Exports `DEFAULT_CHAINS` constant
-- Provides validation functions with detailed error messages
-- Stateless utility functions
-
-### 5. AddressBookManager
-
-**File:** `src/AddressBookManager.ts`
-
-Global address book management.
-
-```typescript
-// Add entry
-addressBook.addEntry({
-  chain: "Ethereum",
-  address: "0x...",
-  label: "My Wallet",
-});
-
-// Get entries for chain
-const entries = addressBook.getEntriesForChain("Ethereum");
-```
-
-**Responsibilities:**
-
-- Maintain two address books: saved and vault-derived
-- Add/remove/update address entries
-- Chain-specific filtering
-
-### 6. Vault Services
-
-**Location:** `src/vault/services/`
-
-Extracted services that implement vault operations with single responsibilities.
-
-#### AddressService
-
-**File:** `src/vault/services/AddressService.ts` (88 lines)
-
-Handles address derivation with permanent caching.
-
-```typescript
-class AddressService {
-  async getAddress(chain: Chain): Promise<string>;
-  async getAddresses(chains?: Chain[]): Promise<Record<string, string>>;
-}
-```
-
-**Responsibilities:**
-
-- Derive addresses for any chain using Core's `deriveAddress()`
-- Permanent caching (addresses never change)
-- Parallel address derivation for multiple chains
-- Error handling with VaultError
-
-**Key Features:**
-
-- Uses WalletCore's `getPublicKey()` and `deriveAddress()`
-- Cache key: `address:${chain.toLowerCase()}`
-- TTL: `Number.MAX_SAFE_INTEGER` (permanent)
-
-#### BalanceService
-
-**File:** `src/vault/services/BalanceService.ts` (146 lines)
-
-Handles balance fetching, caching, and updates for vault accounts.
-
-```typescript
-class BalanceService {
-  async getBalance(chain: Chain, tokenId?: string): Promise<Balance>;
-  async getBalances(
-    chains: Chain[],
-    includeTokens = false,
-  ): Promise<Record<string, Balance>>;
-  async updateBalance(chain: Chain, tokenId?: string): Promise<Balance>;
-  async updateBalances(
-    chains: Chain[],
-    includeTokens = false,
-  ): Promise<Record<string, Balance>>;
-}
-```
-
-**Responsibilities:**
-
-- Fetch native and token balances using Core's `getCoinBalance()`
-- 5-minute TTL caching
-- Event emission via callbacks
-- Format raw balances to SDK Balance type
-
-**Key Features:**
-
-- Cache key: `balance:${chain}:${tokenId ?? 'native'}`
-- TTL: 5 minutes (`5 * 60 * 1000`)
-- Emits `balanceUpdated` event through Vault
-- Handles both native and ERC-20/SPL token balances
-
-#### GasEstimationService
-
-**File:** `src/vault/services/GasEstimationService.ts` (117 lines)
-
-Handles gas and fee estimation for all chains.
-
-```typescript
-class GasEstimationService {
-  async getGasInfo(chain: Chain): Promise<GasInfo>;
-}
-```
-
-**Responsibilities:**
-
-- Estimate gas/fees using Core's `getChainSpecific()`
-- Cosmos well-known address mapping for gas estimation
-- Chain-specific gas handling (EIP-1559 vs simple)
-- No caching (gas prices are volatile)
-
-**Key Features:**
-
-- Static well-known addresses for Cosmos chains (avoids account-doesn't-exist errors)
-- Creates minimal keysign payload for fee estimation
-- Formats chain-specific data to unified GasInfo type
-- Maps to chain families: EVM (EIP-1559), UTXO (byte fee), Cosmos (gas), etc.
-
-**Cosmos Address Mapping:**
-
-```typescript
-private static readonly COSMOS_GAS_ESTIMATION_ADDRESSES = {
-  [Chain.THORChain]: 'thor1dheycdevq39qlkxs2a6wuuzyn4aqxhve4qxtxt',
-  [Chain.Cosmos]: 'cosmos1fl48vsnmsdzcv85q5d2q4z5ajdha8yu34mf0eh',
-  [Chain.Osmosis]: 'osmo1clpqr4nrk4khgkxj78fcwwh6dl3uw4epasmvnj',
-  [Chain.MayaChain]: 'maya1dheycdevq39qlkxs2a6wuuzyn4aqxhveshhay9',
-  [Chain.Kujira]: 'kujira1nynns8ex9fq6sjjfj8k79ymkdz4sqth0hdz2q8',
-  [Chain.Dydx]: 'dydx1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3l3qwf0',
-}
-```
-
-#### TransactionBuilder
-
-**File:** `src/vault/services/TransactionBuilder.ts` (178 lines)
-
-Handles transaction preparation and message hash extraction.
-
-```typescript
-class TransactionBuilder {
-  async prepareSendTx(params: {
-    coin: AccountCoin;
-    receiver: string;
-    amount: bigint;
-    memo?: string;
-    feeSettings?: FeeSettings;
-  }): Promise<KeysignPayload>;
-
-  async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>;
-}
-```
-
-**Responsibilities:**
-
-- Build complete keysign payloads using Core's `buildSendKeysignPayload()`
-- Extract pre-signing message hashes from payloads
-- Support custom fee settings
-- Handle all chain types (UTXO, EVM, Cosmos, EdDSA)
-
-**Key Features:**
-
-- `prepareSendTx()` - Creates transaction payloads for signing
-- `extractMessageHashes()` - Critical SDK improvement (Nov 2025)
-- Dynamic imports for hash extraction (tree-shaking optimization)
-- Supports memo fields (THORChain, Cosmos)
-- Custom fee parameters (EVM gas, UTXO byte fees)
-
-**Message Hash Extraction Flow:**
-
-```typescript
-// 1. Get chain from keysign payload
-// 2. Create WalletCore PublicKey from payload data
-// 3. Get encoded signing inputs (compiled TX data)
-// 4. Extract pre-signing hashes for each input
-// 5. Convert Uint8Array to hex strings
+// Creating isolated SDK instances
+const sdk1 = new Vultisig({ storage: storage1 });
+const sdk2 = new Vultisig({ storage: storage2 });
+
+// Each has isolated state - no shared globals
+await sdk1.initialize();
+await sdk2.initialize();
+
+// Clean up releases instance resources
+sdk1.dispose();
+sdk2.dispose();
 ```
 
 ---
 
-## Runtime Layer
+## Vault System
 
-### Environment Detection
+### Vault Hierarchy
 
-**File:** `src/runtime/environment.ts`
+```
+VaultBase (abstract)
+├── FastVault    # 2-of-2 server-assisted signing
+└── SecureVault  # Multi-device MPC signing
+```
 
-Detects and manages different JavaScript runtime environments.
+### VaultBase
 
-**Supported Environments:**
+**File:** `src/vault/VaultBase.ts`
 
-- `browser` - Standard browser
-- `node` - Node.js
-- `electron-main` - Electron main process
-- `electron-renderer` - Electron renderer process
-- `chrome-extension` - Chrome extension pages
-- `chrome-extension-sw` - Chrome extension service worker
-- `worker` - Web Worker / Service Worker
-
-**Detection Order (critical for correctness):**
-
-1. Electron (checks `process.versions.electron`)
-2. Chrome Extension (checks `chrome.runtime` API)
-3. Web Worker / Service Worker
-4. Browser (checks `window` and `document`)
-5. Node.js (checks `process.versions.node`)
-
-### Storage System
-
-**Location:** `src/runtime/storage/`
-
-Platform-specific storage implementations with a unified interface.
-
-**Storage Interface:**
+Abstract base class providing common vault functionality.
 
 ```typescript
-interface VaultStorage {
-  get<T>(key: string): Promise<T | null>;
-  set<T>(key: string, value: T): Promise<void>;
-  remove(key: string): Promise<void>;
-  list(): Promise<string[]>;
-  clear(): Promise<void>;
-  getUsage?(): Promise<number>;
-  getQuota?(): Promise<number | undefined>;
+abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
+  // Services
+  protected addressService: AddressService;
+  protected balanceService: BalanceService;
+  protected gasEstimationService: GasEstimationService;
+  protected transactionBuilder: TransactionBuilder;
+  protected broadcastService: BroadcastService;
+  protected preferencesService: PreferencesService;
+
+  // Public API
+  async address(chain: Chain): Promise<string>;
+  async balance(chain: Chain, tokenId?: string): Promise<Balance>;
+  async gas(chain: Chain): Promise<GasEstimate>;
+  async prepareSendTx(params): Promise<KeysignPayload>;
+  async extractMessageHashes(payload): Promise<string[]>;
+  async broadcast(chain, payload, signature): Promise<string>;
+
+  // Abstract methods
+  abstract sign(payload: SigningPayload, password?: string): Promise<Signature>;
+  abstract get availableSigningModes(): SigningMode[];
 }
 ```
 
-**Storage Implementations:**
+### FastVault
 
-| Environment               | Implementation   | Storage Type               |
-| ------------------------- | ---------------- | -------------------------- |
-| Browser/Electron Renderer | `BrowserStorage` | IndexedDB                  |
-| Node.js                   | `NodeStorage`    | Filesystem (~/.vultisig)   |
-| Chrome Extension          | `ChromeStorage`  | chrome.storage.local       |
-| Web Worker                | `MemoryStorage`  | In-memory (non-persistent) |
+**File:** `src/vault/FastVault.ts`
 
-**StorageManager:**
+Server-assisted 2-of-2 MPC vault for quick signing.
 
-- Factory for creating appropriate storage based on environment
-- Auto-detection with fallback logic
-- Handles Electron userData directory configuration
-- Provides storage info for debugging
+```typescript
+class FastVault extends VaultBase {
+  // Always encrypted, requires password
+  // Uses VultiServer for server-side MPC participation
+  // Only supports 'fast' signing mode
 
-### Runtime Utilities
+  async sign(payload: SigningPayload, password: string): Promise<Signature> {
+    // Coordinates with server via FastSigningService
+  }
+}
+```
 
-**Location:** `src/runtime/utils/`
+**Characteristics:**
 
-Environment-specific utility functions.
+- Always encrypted (requires password for operations)
+- 2-of-2 threshold (user device + server)
+- Quick signing (~2-3 seconds)
+- Requires network connectivity
 
-**Browser Utilities** (`browser.ts`):
+### SecureVault
 
-- Vault download functionality
-- Storage info retrieval
-- Persistent storage requests
+**File:** `src/vault/SecureVault.ts`
 
-**Node.js Utilities** (`node.ts`):
+Multi-device MPC vault for maximum security.
 
-- File export/import
-- Storage path management
-- Directory creation
+```typescript
+class SecureVault extends VaultBase {
+  // Can be encrypted or unencrypted
+  // Multiple devices participate in signing
+  // Supports 'relay' and 'local' signing modes (planned)
 
-**Electron Utilities** (`electron.ts`):
+  async sign(payload: SigningPayload, password?: string): Promise<Signature> {
+    // Coordinates with other devices
+  }
+}
+```
 
-- IPC communication setup
-- File operations
-- Process type detection
+**Characteristics:**
 
-**Chrome Extension Utilities** (`chrome.ts`):
+- Configurable encryption
+- N-of-M threshold (multiple devices)
+- Higher security (no single point of compromise)
+- Requires device coordination
 
-- Message handlers
-- Service worker keep-alive
-- Storage change listeners
+### Vault Services
+
+Each vault contains specialized services:
+
+| Service                  | Purpose                              |
+| ------------------------ | ------------------------------------ |
+| `AddressService`         | Address derivation with caching      |
+| `BalanceService`         | Balance fetching with TTL cache      |
+| `GasEstimationService`   | Gas/fee estimation                   |
+| `TransactionBuilder`     | Transaction preparation              |
+| `BroadcastService`       | Transaction broadcasting             |
+| `PreferencesService`     | User chain/token preferences         |
+| `SwapService`            | Cross-chain and DEX swap operations  |
 
 ---
 
-## Services Layer
+## Platform Support
+
+### Platform Architecture
+
+Each platform provides implementations for:
+
+- **Storage** - Persistent data storage
+- **Crypto** - Cryptographic operations
+- **WASM** - WebAssembly module loading
+- **Polyfills** - Missing APIs
+
+### Platform Implementations
+
+| Platform           | Storage      | Entry Point                        |
+| ------------------ | ------------ | ---------------------------------- |
+| Node.js            | Filesystem   | `dist/index.node.esm.js`           |
+| Browser            | IndexedDB    | `dist/index.browser.js`            |
+
+*Coming soon: Electron (main/renderer) and React Native bundles.*
+
+### Build Configuration
+
+The SDK builds platform-specific bundles using Rollup:
+
+```javascript
+// rollup.platforms.config.js
+export default [
+  { input: "src/platforms/node/index.ts", output: "dist/index.node.esm.js" },
+  { input: "src/platforms/browser/index.ts", output: "dist/index.browser.js" },
+  // ... other platforms
+];
+```
+
+---
+
+## Services
 
 ### CacheService
 
 **File:** `src/services/CacheService.ts`
 
-Centralized caching logic with TTL support.
+Scoped caching with TTL support.
 
 ```typescript
 class CacheService {
-  get<T>(key: string, ttl: number): T | null;
-  set<T>(key: string, value: T): void;
-  delete(key: string): void;
-  clear(): void;
-  getOrCompute<T>(key: string, ttl: number, compute: () => T): T;
+  get<T>(scope: CacheScope, key: string): T | null;
+  set<T>(scope: CacheScope, key: string, value: T, ttl?: number): void;
+  invalidate(scope: CacheScope, key?: string): void;
 }
 ```
 
-**Features:**
+**Cache Scopes:**
 
-- TTL-based expiration
-- Timestamp tracking
-- Batch operations (clear expired)
-- `getOrCompute()` pattern for lazy evaluation
-
-**Usage:**
-
-- Addresses: Permanent cache (`ttl = Infinity`)
-- Balances: 5-minute TTL (`ttl = 5 * 60 * 1000`)
+- `ADDRESS` - Permanent (addresses never change, persisted to storage)
+- `BALANCE` - 5 minutes (account balances)
+- `PRICE` - 5 minutes (fiat prices)
 
 ### FastSigningService
 
 **File:** `src/services/FastSigningService.ts`
 
-Server-assisted signing for 2-of-2 fast vaults using proper type safety and delegation.
+Coordinates server-assisted MPC signing.
 
 ```typescript
-async signWithServer(
-  vault: Vault,
-  payload: SigningPayload,
-  password: string
-): Promise<Signature>
+class FastSigningService {
+  async signWithServer(
+    vault: FastVault,
+    payload: SigningPayload,
+    password: string,
+  ): Promise<Signature>;
+}
 ```
 
 **Signing Flow:**
 
-1. Validate vault has server signer (`Server-*` in signers array)
-2. Validate payload contains pre-computed `messageHashes`
-3. Get WalletCore instance
-4. Delegate to ServerManager for MPC coordination
-5. Return properly typed `Signature` object
+1. Validate vault has server signer
+2. Extract message hashes from payload
+3. Initiate server-side MPC participation
+4. Coordinate MPC protocol via message relay
+5. Combine signatures and return
+
+### FiatValueService
+
+**File:** `src/services/FiatValueService.ts`
+
+Fetches fiat values for tokens/coins.
+
+### PasswordCacheService
+
+**File:** `src/services/PasswordCacheService.ts`
+
+Caches vault passwords with configurable TTL.
+
+### SwapService
+
+**File:** `src/vault/services/SwapService.ts`
+
+Coordinates swap operations across multiple providers (DEXes and cross-chain bridges).
+
+```typescript
+class SwapService {
+  async getQuote(params: SwapQuoteParams): Promise<SwapQuoteResult>;
+  async prepareSwapTx(params: SwapTxParams): Promise<SwapPrepareResult>;
+  async getAllowance(coin: AccountCoin, spender: string): Promise<bigint>;
+  isSwapSupported(fromChain: Chain, toChain: Chain): boolean;
+  getSupportedChains(): readonly Chain[];
+}
+```
+
+**Swap Providers:**
+
+| Provider   | Type        | Use Case                                      |
+| ---------- | ----------- | --------------------------------------------- |
+| THORChain  | Native      | Cross-chain swaps (BTC↔ETH, etc.)             |
+| MayaChain  | Native      | Cross-chain swaps with CACAO                  |
+| 1inch      | General     | Same-chain DEX aggregation (EVM)              |
+| LiFi       | General     | Cross-chain EVM bridges (Polygon↔Arbitrum)    |
 
 **Architecture:**
 
-- **Type Safety:** All parameters fully typed (no `any`)
-- **Delegation Pattern:** Coordinates signing but delegates chain logic to adapters
-- **Validation:** Ensures payload comes from `Vault.prepareSendTx()` which uses Core's `buildSendKeysignPayload()`
+```
+vault.getSwapQuote()
+  │
+  └── SwapService.getQuote()
+        │
+        ├── Determine provider (native vs general)
+        │     ├── Cross-chain BTC/ETH → Native (THORChain)
+        │     ├── Same-chain EVM → General (1inch)
+        │     └── Cross-chain EVM → General (LiFi)
+        │
+        ├── Core: getSwapQuote({ provider, params })
+        │
+        ├── Format quote → SwapQuoteResult
+        │
+        ├── Emit 'swapQuoteReceived' event
+        │
+        └── Return SwapQuoteResult
 
-### ServerManager
-
-**File:** `src/server/ServerManager.ts`
-
-Coordinates all server communications for fast vaults with clean separation of concerns.
-
-```typescript
-async coordinateFastSigning(options: {
-  vault: Vault
-  messages: string[]
-  password: string
-  payload: SigningPayload
-  walletCore: WalletCore
-}): Promise<Signature>
+vault.prepareSwapTx()
+  │
+  └── SwapService.prepareSwapTx()
+        │
+        ├── Check ERC-20 approval requirements
+        │     └── getAllowance() → Check current allowance
+        │
+        ├── Core: buildSwapKeysignPayload()
+        │     └── Returns KeysignPayload(s)
+        │
+        └── Return SwapPrepareResult
+              ├── keysignPayload (main swap tx)
+              └── approvalPayload? (ERC-20 approval if needed)
 ```
 
-**Server Coordination Flow:**
-
-1. Extract chain signing info using `getChainSigningInfo()` adapter
-2. Generate MPC session parameters (sessionId, encryption key, party ID)
-3. Call FastVault API to initiate server participation
-4. Join relay session for message coordination
-5. Wait for all participants (server + device)
-6. Start MPC session with all devices
-7. Perform MPC keysign for all messages (UTXO can have multiple)
-8. Format signatures using `formatSignature()` adapter
-9. Return properly typed `Signature` with optional multi-signature support
-
-**Architecture Principles:**
-
-- **Pure Coordination:** Handles ONLY server/MPC session coordination
-- **Zero Chain Logic:** All chain-specific logic delegated to SDK adapters
-- **Type Safety:** Fully typed parameters and return values
-- **Adapter Pattern:** Uses `getChainSigningInfo()` for chain metadata, `formatSignature()` for output formatting
-
----
-
-## Adapters Layer
-
-**Location:** `src/adapters/`
-
-Pure functions that bridge between Core's functional API and SDK's structured types.
-
-### formatBalance.ts
-
-Converts Core's `bigint` to SDK's `Balance` object.
+**Provider Selection Logic:**
 
 ```typescript
-export function formatBalance(
-  rawBalance: bigint,
-  chain: string,
-  tokenId?: string,
-  tokens?: Record<string, Token[]>,
-): Balance {
-  // Token: lookup metadata from registry
-  // Native: use chain metadata
-  return {
-    amount: rawBalance.toString(),
-    symbol,
-    decimals,
-    chainId: chain,
-    tokenId,
-  };
-}
-```
+// Native swaps (THORChain/MayaChain) handle:
+// - BTC, LTC, DOGE, BCH ↔ Any chain
+// - Cosmos chains ↔ Any chain
+// - Any chain → Any chain (if both supported by THORChain)
 
-### formatGasInfo.ts
-
-Converts Core's `FeeQuote` to SDK's `GasInfo` object.
-
-```typescript
-export function formatGasInfo(feeQuote: any, chain: string): GasInfo {
-  // EVM: complex structure (EIP-1559)
-  // Others: simple gas price
-  return {
-    chainId: chain,
-    gasPrice: feeQuote.gasPrice?.toString(),
-    maxFeePerGas: feeQuote.maxFeePerGas?.toString(),
-    priorityFee: feeQuote.priorityFee?.toString(),
-  };
-}
-```
-
-### formatSignature.ts
-
-Converts Core's `KeysignSignature` to SDK's `Signature` object with support for UTXO multi-signatures.
-
-```typescript
-export function formatSignature(
-  signatureResults: Record<string, KeysignSignature>,
-  messages: string[],
-  signatureAlgorithm: SignatureAlgorithm
-): Signature {
-  // Maps signature algorithm to format
-  // Handles single-signature (EVM, Cosmos) and multi-signature (UTXO) cases
-  return {
-    signature: firstSignature.der_signature,
-    recovery: parseInt(firstSignature.recovery_id),
-    format: 'ECDSA' | 'EdDSA',
-    signatures: [...] // Optional for UTXO chains
-  }
-}
-```
-
-### getChainSigningInfo.ts
-
-Extracts chain-specific signing metadata (algorithm, derivation path).
-
-```typescript
-export async function getChainSigningInfo(
-  payload: { chain: Chain | string; derivePath?: string },
-  walletCore: WalletCore,
-  stringToChain: (chain: string) => Chain,
-): Promise<ChainSigningInfo> {
-  // Determines signature algorithm (ECDSA vs EdDSA)
-  // Gets derivation path from chain config
-  // Normalizes path for MPC library
-  return {
-    signatureAlgorithm: "ecdsa" | "eddsa",
-    derivePath: "m/44'/60'/0'/0/0",
-    chainPath: "m/44/60/0/0/0", // normalized
-  };
-}
+// General swaps (1inch/LiFi) handle:
+// - Same-chain EVM (ETH→USDC on Ethereum)
+// - Cross-chain EVM (Polygon→Arbitrum)
 ```
 
 ---
@@ -885,30 +710,17 @@ Zero-dependency, type-safe event emitter.
 class UniversalEventEmitter<T extends Record<string, any>> {
   on<K extends keyof T>(event: K, listener: (data: T[K]) => void): () => void;
   once<K extends keyof T>(event: K, listener: (data: T[K]) => void): () => void;
-  protected emit<K extends keyof T>(event: K, data: T[K]): void;
   off<K extends keyof T>(event: K, listener: (data: T[K]) => void): void;
+  protected emit<K extends keyof T>(event: K, data: T[K]): void;
 }
 ```
 
-**Features:**
-
-- Type-safe event names and payloads via generics
-- Memory leak detection (warns at 10 listeners)
-- Error isolation (handler errors don't break emission)
-- `once()` listener support
-- Unsubscribe function returns
-
 ### Event Types
-
-**File:** `src/events/types.ts`
 
 **SdkEvents:**
 
 ```typescript
 interface SdkEvents {
-  connect: void;
-  disconnect: void;
-  chainChanged: { chain: string };
   vaultChanged: { vaultId: string };
   error: { error: Error };
 }
@@ -925,6 +737,10 @@ interface VaultEvents {
   tokenAdded: { chain: string; token: Token };
   tokenRemoved: { chain: string; tokenId: string };
   renamed: { oldName: string; newName: string };
+  swapQuoteReceived: { quote: SwapQuoteResult };
+  saved: void;
+  deleted: void;
+  loaded: void;
   error: { error: Error };
 }
 ```
@@ -933,19 +749,31 @@ interface VaultEvents {
 
 ## Type System
 
-**Location:** `src/types/index.ts`
+### Public API Exports
 
-### Core Type Re-exports
+From `src/index.ts`:
 
-Types imported from `@vultisig/core`:
+**Classes:**
 
-- `ChainKind` - Chain categories (EVM, UTXO, Cosmos, etc.)
-- `AccountCoin` - Coin with account information
-- `Coin` - Basic coin structure
-- `PublicKeys` - Vault public keys
-- `Vault` - Core vault type (extended with threshold)
+- `Vultisig` - Main SDK class
+- `VaultBase`, `FastVault`, `SecureVault` - Vault classes
+- `VaultError`, `VaultImportError` - Error classes
+- `MemoryStorage` - Storage implementation
+- `UniversalEventEmitter` - Event system
+- `ValidationHelpers` - Validation utilities
+- `SharedWasmRuntime` - WASM singleton (advanced usage)
 
-### SDK-Specific Types
+**Type Guards:**
+
+- `isFastVault(vault)` - Check if vault is FastVault
+- `isSecureVault(vault)` - Check if vault is SecureVault
+
+**Constants:**
+
+- `SUPPORTED_CHAINS` - All supported blockchain chains
+- `Chain` - Chain enum
+
+**Types:**
 
 ```typescript
 // Balance information
@@ -955,144 +783,49 @@ interface Balance {
   symbol: string;
   chainId: string;
   tokenId?: string;
-  usdValue?: number;
 }
 
-// Gas pricing information
-interface GasInfo {
+// Gas estimation
+interface GasEstimate {
   chainId: string;
   gasPrice: string;
-  gasPriceGwei?: string;
   maxFeePerGas?: string;
   priorityFee?: string;
-  lastUpdated: number;
 }
 
-// Signature data
+// Signature result
 interface Signature {
   signature: string;
   recovery?: number;
-  format: "DER" | "ECDSA" | "EdDSA" | "Ed25519";
-  // For UTXO chains with multiple inputs
-  signatures?: Array<{
-    r: string;
-    s: string;
-    der: string;
-  }>;
+  format: "DER" | "ECDSA" | "EdDSA";
+  signatures?: Array<{ r: string; s: string; der: string }>;
 }
 
-// Transaction payload
+// Signing payload
 interface SigningPayload {
   chain: string;
-  transaction: {
-    to: string;
-    value: string;
-    data?: string;
-    memo?: string;
-    gasLimit?: string;
-  };
+  transaction: any;
+  derivePath?: string;
+  messageHashes?: string[];
 }
 
-// Token metadata
-interface Token {
-  id: string;
-  symbol: string;
-  name: string;
-  decimals: number;
-  chainId: string;
-  contractAddress?: string;
+// Swap quote result
+interface SwapQuoteResult {
+  quote: SwapQuote;
+  estimatedOutput: string;
+  provider: string;
+  expiresAt: number;
+  requiresApproval: boolean;
+  approvalInfo?: SwapApprovalInfo;
+  fees: SwapFees;
+  warnings: string[];
 }
-```
 
-### Configuration Types
-
-```typescript
-interface VultisigConfig {
-  defaultChains?: string[];
-  defaultCurrency?: string;
-  serverEndpoints?: {
-    fastVault?: string;
-    relay?: string;
-  };
-  wasmPaths?: {
-    walletCore?: string;
-    dkls?: string;
-    schnorr?: string;
-  };
-  storage?: StorageOptions;
-}
-```
-
----
-
-## Design Patterns
-
-### 1. Facade Pattern (Vultisig)
-
-The `Vultisig` class provides a simplified interface over complex subsystems.
-
-```typescript
-// Complex operations hidden behind simple API
-const vault = await vultisig.createVault("My Vault");
-// Internally coordinates: VaultManager, WASMManager, ServerManager, Storage
-```
-
-### 2. Factory Pattern (VaultManager)
-
-Creates and configures `Vault` instances with consistent service injection.
-
-```typescript
-// Factory creates properly configured instances
-const vault = vaultManager.createVault(name, {
-  services: { wasmManager, fastSigningService },
-});
-```
-
-### 3. Functional Adapter Pattern (Vault)
-
-Vault is a thin wrapper that calls Core functions directly and uses adapters for formatting.
-
-```typescript
-// Direct core call + adapter formatting
-async balance(chain: string): Promise<Balance> {
-  const raw = await getCoinBalance({ chain, address })
-  return formatBalance(raw, chain)
-}
-```
-
-### 4. Strategy Pattern (Storage)
-
-Storage implementation selected based on environment.
-
-```typescript
-// Different strategies for different environments
-const storage =
-  environment === "browser"
-    ? new BrowserStorage()
-    : environment === "node"
-      ? new NodeStorage()
-      : new MemoryStorage();
-```
-
-### 5. Observer Pattern (Events)
-
-Components emit events for state changes using type-safe emitters.
-
-```typescript
-// Type-safe event emission
-vault.on("balanceUpdated", ({ chain, balance }) => {
-  // React to balance changes
-});
-```
-
-### 6. Dependency Injection (VaultServices)
-
-Services injected into Vault instances for flexibility and testability.
-
-```typescript
-interface VaultServices {
-  wasmManager: WASMManager;
-  fastSigningService?: FastSigningService;
+// Swap transaction result
+interface SwapPrepareResult {
+  keysignPayload: KeysignPayload;
+  approvalPayload?: KeysignPayload;
+  quote: SwapQuoteResult;
 }
 ```
 
@@ -1100,56 +833,46 @@ interface VaultServices {
 
 ## Data Flow
 
-### Address Derivation Flow
+### Address Derivation
 
 ```
 vault.address('Ethereum')
   │
-  ├─→ Delegate to AddressService.getAddress()
+  ├── AddressService.getAddress()
   │     │
-  │     ├─→ Check cache ────→ [HIT] Return cached
+  │     ├── Check cache → [HIT] Return cached
   │     │
-  │     ├─→ [MISS] Get WalletCore
+  │     ├── [MISS] Get WalletCore
   │     │
-  │     ├─→ Core: getPublicKey({ chain, hexChainCode, publicKeys })
-  │     │     Output: PublicKey
+  │     ├── Core: getPublicKey({ chain, publicKeys, hexChainCode })
   │     │
-  │     ├─→ Core: deriveAddress({ chain, publicKey, walletCore })
-  │     │     Output: address (string)
+  │     ├── Core: deriveAddress({ chain, publicKey, walletCore })
   │     │
-  │     ├─→ Cache address (permanent - Number.MAX_SAFE_INTEGER)
+  │     ├── Cache address (permanent)
   │     │
-  │     └─→ Return address
-  │
-  └─→ Return address
+  │     └── Return address
 ```
 
-### Balance Fetching Flow
+### Balance Fetching
 
 ```
-vault.balance('Ethereum', tokenId?)
+vault.balance('Ethereum')
   │
-  ├─→ Delegate to BalanceService.getBalance()
+  ├── BalanceService.getBalance()
   │     │
-  │     ├─→ Check cache (5-min) ────→ [HIT] Return cached
+  │     ├── Check cache (5-min TTL) → [HIT] Return cached
   │     │
-  │     ├─→ [MISS] Get address via callback
-  │     │     (Calls vault.address() → AddressService)
+  │     ├── [MISS] Get address
   │     │
-  │     ├─→ Core: getCoinBalance({ chain, address, id: tokenId })
-  │     │     Output: rawBalance (bigint)
+  │     ├── Core: getCoinBalance({ chain, address })
   │     │
-  │     ├─→ Adapter: formatBalance(rawBalance, chain, tokenId, tokens)
-  │     │     Output: Balance { amount, symbol, decimals }
+  │     ├── Adapter: formatBalance(rawBalance, chain)
   │     │
-  │     ├─→ Cache balance (5-min TTL)
+  │     ├── Cache balance
   │     │
-  │     ├─→ Emit 'balanceUpdated' via callback
-  │     │     (Vault emits the event)
+  │     ├── Emit 'balanceUpdated' event
   │     │
-  │     └─→ Return Balance
-  │
-  └─→ Return Balance
+  │     └── Return Balance
 ```
 
 ### Fast Signing Flow
@@ -1158,62 +881,105 @@ vault.balance('Ethereum', tokenId?)
 // Step 1: Prepare transaction
 vault.prepareSendTx({ coin, receiver, amount })
   │
-  ├─→ Delegate to TransactionBuilder.prepareSendTx()
-  │     │
-  │     ├─→ Get WalletCore
-  │     │
-  │     ├─→ Core: getPublicKey({ chain, publicKeys, hexChainCode })
-  │     │
-  │     ├─→ Core: buildSendKeysignPayload({
-  │     │     coin, receiver, amount, memo, feeSettings,
-  │     │     vaultId, localPartyId, publicKey, walletCore
-  │     │   })
-  │     │     Output: KeysignPayload
-  │     │
-  │     └─→ Return KeysignPayload
-  │
-  └─→ Return KeysignPayload
+  └── TransactionBuilder.prepareSendTx()
+        │
+        └── Core: buildSendKeysignPayload(...)
+              │
+              └── Return KeysignPayload
 
-// Step 2: Extract message hashes (Critical SDK Improvement - Nov 2025)
+// Step 2: Extract message hashes
 vault.extractMessageHashes(keysignPayload)
   │
-  ├─→ Delegate to TransactionBuilder.extractMessageHashes()
-  │     │
-  │     ├─→ Get chain from keysign payload
-  │     │
-  │     ├─→ Create WalletCore PublicKey from payload data
-  │     │
-  │     ├─→ Core: getEncodedSigningInputs({ keysignPayload, walletCore, publicKey })
-  │     │     Output: txInputsArray (compiled transaction data)
-  │     │
-  │     ├─→ For each txInput:
-  │     │     Core: getPreSigningHashes({ walletCore, txInputData, chain })
-  │     │     Output: messageHashes (Uint8Array[])
-  │     │
-  │     ├─→ Convert Uint8Array to hex strings
-  │     │
-  │     └─→ Return string[]
-  │
-  └─→ Return messageHashes
+  └── TransactionBuilder.extractMessageHashes()
+        │
+        └── Core: getPreSigningHashes(...)
+              │
+              └── Return string[]
 
-// Step 3: Sign with fast mode
-vault.sign('fast', signingPayload, password)
+// Step 3: Sign
+vault.sign(payload, password)
   │
-  ├─→ Validate vault type (must have Server-* signer)
+  └── FastSigningService.signWithServer()
+        │
+        ├── POST /vault/sign (VultiServer)
+        │
+        ├── WebSocket MPC coordination (Relay)
+        │
+        ├── Core: keysign() (MPC protocol)
+        │
+        └── Return Signature
+
+// Step 4: Broadcast
+vault.broadcast(chain, payload, signature)
   │
-  ├─→ Get WalletCore
+  └── BroadcastService.broadcast()
+        │
+        ├── Core: compileTx({ signature, payload })
+        │
+        ├── Core: broadcastTx({ chain, tx })
+        │
+        └── Return txHash
+```
+
+### Swap Flow
+
+```
+// Step 1: Get swap quote
+vault.getSwapQuote({ fromCoin, toCoin, amount })
   │
-  ├─→ Validate payload has pre-computed messageHashes
+  └── SwapService.getQuote()
+        │
+        ├── Resolve simplified coin inputs to AccountCoin
+        │
+        ├── Determine provider (native vs general)
+        │     ├── THORChain: Cross-chain (BTC, ETH, Cosmos)
+        │     ├── 1inch: Same-chain EVM
+        │     └── LiFi: Cross-chain EVM
+        │
+        ├── Core: getSwapQuote({ provider, params })
+        │
+        ├── Check ERC-20 approval requirements
+        │
+        ├── Format quote → SwapQuoteResult
+        │
+        ├── Emit 'swapQuoteReceived' event
+        │
+        └── Return SwapQuoteResult
+
+// Step 2: Prepare swap transaction
+vault.prepareSwapTx({ fromCoin, toCoin, amount, swapQuote })
   │
-  ├─→ FastSigningService.signWithServer()
-  │     ├─→ POST /fast-sign/start
-  │     ├─→ WebSocket MPC coordination
-  │     ├─→ Core: combineSignatures()
-  │     └─→ POST /fast-sign/complete
+  └── SwapService.prepareSwapTx()
+        │
+        ├── Core: buildSwapKeysignPayload()
+        │
+        └── Return SwapPrepareResult
+              ├── keysignPayload (main swap tx)
+              └── approvalPayload? (ERC-20 approval if needed)
+
+// Step 3: Sign approval (if required)
+if (result.approvalPayload) {
+  vault.sign(result.approvalPayload, password)
+    │
+    └── FastSigningService.signWithServer()
+          │
+          └── Return Signature
+
+  vault.broadcast(chain, approvalPayload, approvalSignature)
+    │
+    └── Wait for approval tx confirmation
+}
+
+// Step 4: Sign and broadcast swap
+vault.sign(result.keysignPayload, password)
   │
-  ├─→ Emit 'transactionSigned' event
+  └── FastSigningService.signWithServer()
+        │
+        └── Return Signature
+
+vault.broadcast(chain, keysignPayload, signature)
   │
-  └─→ Return Signature { signature, recovery, format }
+  └── Return txHash
 ```
 
 ---
@@ -1224,232 +990,75 @@ vault.sign('fast', signingPayload, password)
 
 All chains supported through Core's functional resolvers. The SDK has no chain-specific code.
 
-| Category   | Chains                                                                                     | Count |
-| ---------- | ------------------------------------------------------------------------------------------ | ----- |
-| **EVM**    | Ethereum, Polygon, Arbitrum, Optimism, BSC, Avalanche, Base, Blast, Zksync, Mantle, Cronos | 11    |
-| **UTXO**   | Bitcoin, Litecoin, Dogecoin, BitcoinCash, Dash, Zcash                                      | 6     |
-| **Cosmos** | Cosmos, THORChain, MayaChain, Osmosis, Dydx, Kujira, Terra, TerraClassic, Noble, Akash     | 10    |
-| **Other**  | Solana, Sui, Polkadot, Ton, Ripple, Tron, Cardano                                          | 7     |
+| Category   | Chains                                                                                  |
+| ---------- | --------------------------------------------------------------------------------------- |
+| **EVM**    | Ethereum, Polygon, Arbitrum, Optimism, BSC, Avalanche, Base, Blast, Zksync, Cronos, Mantle, Sei, Hyperliquid |
+| **UTXO**   | Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash                                  |
+| **Cosmos** | Cosmos, THORChain, MayaChain, Osmosis, Dydx, Kujira, Terra, TerraClassic, Noble, Akash  |
+| **Other**  | Solana, Sui, Polkadot, Ton, Ripple, Tron, Cardano                                       |
 
-### Default Chains
+### Chain Architecture
 
-When creating a new vault without specifying chains:
+Chains are organized by "kind" in the Core library:
 
-1. Bitcoin
-2. Ethereum
-3. Solana
-4. THORChain
-5. Ripple
+```typescript
+type ChainKind =
+  | "evm"
+  | "utxo"
+  | "cosmos"
+  | "solana"
+  | "sui"
+  | "polkadot"
+  | "ton"
+  | "ripple"
+  | "tron"
+  | "cardano";
+```
+
+Each chain kind has specific:
+
+- **Signature algorithm** - ECDSA or EdDSA
+- **Signature format** - DER, raw, rawWithRecoveryId
+- **RPC endpoints** - Chain-specific API URLs
+- **Transaction format** - Chain-specific encoding
 
 ### Token Support
 
 | Chain Type | Token Standard | Example         |
 | ---------- | -------------- | --------------- |
 | EVM        | ERC-20         | USDC, USDT, DAI |
-| Solana     | SPL            | USDC (SPL), RAY |
-| Cosmos     | Wasm, IBC      | ATOM, OSMO      |
-
----
-
-## Development Guide
-
-### Adding a New Feature
-
-1. **Check Core Support**
-
-   ```bash
-   # Browse Core for functionality
-   ls packages/core/src/
-   ```
-
-2. **Add Types** (if needed)
-
-   ```typescript
-   // src/types/NewFeature.ts
-   export interface NewFeature {
-     // ...
-   }
-   ```
-
-3. **Create Adapter** (if needed)
-
-   ```typescript
-   // src/adapters/formatNewFeature.ts
-   export function formatNewFeature(coreData: any): NewFeature {
-     // Pure formatting, no logic
-   }
-   ```
-
-4. **Add to Vault**
-
-   ```typescript
-   async newFeature(): Promise<NewFeature> {
-     // Call Core
-     const result = await coreFunction()
-     // Format
-     return formatNewFeature(result)
-   }
-   ```
-
-5. **Add Caching** (if appropriate)
-
-   ```typescript
-   const cached = this.cacheService.get(key, ttl);
-   if (cached) return cached;
-   // ... fetch and cache
-   ```
-
-6. **Write Tests**
-   ```typescript
-   describe("newFeature", () => {
-     it("should work for all chains", async () => {
-       // Test implementation
-     });
-   });
-   ```
-
-### Common Patterns
-
-#### Caching Strategy
-
-```typescript
-// Permanent (addresses)
-this.cacheService.get(key, Infinity);
-
-// TTL (balances)
-this.cacheService.get(key, 5 * 60 * 1000);
-
-// No cache (volatile data)
-// Direct Core call
-```
-
-#### Error Handling
-
-```typescript
-try {
-  const result = await coreFunction();
-  return formatResult(result);
-} catch (error) {
-  this.emit("error", { error });
-  throw new VaultError(
-    VaultErrorCode.OperationFailed,
-    `Failed to ${operation}`,
-    error as Error,
-  );
-}
-```
-
-#### Parallel Operations
-
-```typescript
-// ✅ Good: Parallel
-const results = await Promise.all(chains.map((chain) => vault.address(chain)));
-
-// ❌ Bad: Sequential
-for (const chain of chains) {
-  await vault.address(chain);
-}
-```
-
-### Performance Considerations
-
-**Caching Strategy:**
-
-- Addresses: Never expire (immutable)
-- Balances: 5-minute TTL (changes frequently)
-- Gas: Not cached (highly volatile)
-
-**WASM Loading:**
-
-- WalletCore: Loaded on first use (~500ms)
-- DKLS/Schnorr: Loaded on signing (~800ms)
-- Subsequent calls instant (memoized)
-
-**Storage Performance:**
-
-- IndexedDB (browser): Async, good for large data
-- Filesystem (Node): Fast, synchronous available
-- Chrome Storage: Limited quota, async only
-- Memory: Fastest but non-persistent
-
-### Debugging Tips
-
-**Enable Logging:**
-
-```typescript
-// Set DEBUG environment variable
-DEBUG=vultisig:* npm start
-```
-
-**Check Storage:**
-
-```typescript
-const storage = vultisig.storage;
-const keys = await storage.list();
-console.log("Stored keys:", keys);
-```
-
-**Monitor Events:**
-
-```typescript
-vault.on("balanceUpdated", console.log);
-vault.on("error", console.error);
-```
-
-**Test Core Directly:**
-
-```typescript
-import { getCoinBalance } from "@vultisig/core";
-
-const balance = await getCoinBalance({
-  chain: Chain.Ethereum,
-  address: "0x...",
-});
-```
+| Solana     | SPL            | USDC (SPL)      |
+| Cosmos     | IBC, CW20      | Various         |
 
 ---
 
 ## Summary
 
-The Vultisig SDK architecture is **clean, layered, and environment-agnostic**:
+The Vultisig SDK architecture is **clean, layered, and platform-agnostic**:
 
 - **Entry Point:** `Vultisig` class provides facade over all functionality
-- **Management:** `VaultManager`, `ChainManager`, `AddressBookManager` handle business logic
-- **Vault:** Functional adapter pattern calling Core directly
-- **Infrastructure:** Runtime (environment + storage), Services (caching + signing), Adapters (formatting), Events (type-safe)
-- **Type System:** Comprehensive types extending Core with SDK-specific structures
+- **Context System:** `SdkContext` and `VaultContext` provide instance-scoped dependencies
+- **Vault System:** `VaultBase` → `FastVault`/`SecureVault` hierarchy
+- **Services:** Specialized services for each vault operation
+- **Platforms:** Platform-specific bundles for each environment
+- **Core Integration:** Direct delegation to Core for blockchain logic
 
 **Key Strengths:**
 
-- Works seamlessly across browser, Node.js, Electron, Chrome extensions
-- Clean separation of concerns with 3-layer architecture
+- Works seamlessly across browser and Node.js (Electron, React Native coming soon)
 - Type-safe throughout with TypeScript generics
-- Minimal abstraction (functional approach)
-- Reactive programming via events
 - Smart caching based on data mutability
 - Direct Core integration for blockchain operations
+- Event-driven architecture for reactive UIs
+- **Instance-scoped dependencies** - No global state pollution, fully testable
+- **Proper resource cleanup** - `dispose()` method releases all resources
 
-**Architecture Decisions:**
+**Design Patterns Used:**
 
-1. **Service Extraction (Nov 2025)** - Vault refactored into 4 specialized services
-   - AddressService (88 lines) - Address derivation
-   - BalanceService (146 lines) - Balance fetching & caching
-   - GasEstimationService (117 lines) - Gas/fee estimation
-   - TransactionBuilder (178 lines) - TX preparation & hash extraction
-   - Result: Vault.ts reduced from 943 to 658 lines (30% reduction)
-2. **Facade Pattern** - Vault delegates to services, maintains backward compatibility
-3. **Callback Pattern** - Services use callbacks to emit events through Vault
-4. **Single Responsibility** - Each service has one clear purpose
-5. **Functional Core Calls** - Services call Core functions directly
-6. **Adapter Pattern** - Format conversion isolated to pure functions
-7. **Permanent Address Caching** - Addresses cached forever (AddressService)
-8. **5-Minute Balance TTL** - Balance freshness vs API efficiency (BalanceService)
-9. **Type-Safe Events** - Compile-time safety for events
-10. **Environment Detection Order** - Prevents false positives
-11. **Storage Abstraction** - Single interface, multiple implementations
-12. **Dependency Injection** - Flexibility and testability
-
----
-
-**Last Updated:** November 2025 (Vault Refactoring)
-**Status:** Alpha
+1. **Facade Pattern** - Vultisig and VaultBase provide simple interfaces
+2. **Factory Pattern** - VaultManager creates appropriate vault types
+3. **Strategy Pattern** - Platform-specific implementations
+4. **Observer Pattern** - Type-safe event emission
+5. **Dependency Injection** - Context-based dependency injection for all services
+6. **Adapter Pattern** - Format conversion between Core and SDK types
+7. **Singleton** - SharedWasmRuntime for expensive WASM modules (intentionally global)

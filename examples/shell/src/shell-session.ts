@@ -714,7 +714,7 @@ export class ReplSession {
       return
     }
 
-    const chains = vault.getChains()
+    const chains = vault.chains
     if (chains.length === 0) {
       console.log(chalk.yellow('\nNo chains added to this vault yet.'))
       console.log(chalk.gray('Use "chains --add <chain>" to add a chain first.'))
@@ -798,7 +798,7 @@ export class ReplSession {
       await vault.removeChain(chain)
       displayChainRemoved(chain)
     } else {
-      const chains = vault.getChains()
+      const chains = vault.chains
       displayChains(chains)
     }
   }
@@ -864,10 +864,13 @@ export class ReplSession {
       }
 
       const token = {
-        contractAddress: addAddress,
+        id: `${chainEnum}-${addAddress}`,
+        name: symbol,
         symbol,
         decimals: decimals || 18,
-        isNativeToken: false,
+        contractAddress: addAddress,
+        chainId: chainEnum,
+        isNative: false,
       }
 
       await vault.addToken(chainEnum, token)
@@ -953,7 +956,7 @@ export class ReplSession {
       libType: vault.libType,
       isEncrypted: vault.isEncrypted,
       isBackedUp: vault.isBackedUp,
-      chains: vault.getChains().length,
+      chains: vault.chains.length,
       currency: vault.currency,
       availableSigningModes: vault.availableSigningModes,
     }

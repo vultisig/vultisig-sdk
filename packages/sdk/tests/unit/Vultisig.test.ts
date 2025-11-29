@@ -1,8 +1,8 @@
 import { Chain } from '@core/chain/Chain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { MemoryStorage } from '../../src/runtime/storage/MemoryStorage'
-import { WasmManager } from '../../src/runtime/wasm'
+import { SharedWasmRuntime } from '../../src/context/SharedWasmRuntime'
+import { MemoryStorage } from '../../src/storage/MemoryStorage'
 import { ValidationHelpers } from '../../src/utils/validation'
 import { VaultBase } from '../../src/vault/VaultBase'
 import { SUPPORTED_CHAINS, Vultisig } from '../../src/Vultisig'
@@ -20,7 +20,7 @@ describe('Vultisig', () => {
       autoConnect: false, // Don't auto-connect
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
-      storage: { customStorage: new MemoryStorage() }, // Use memory storage for tests
+      storage: new MemoryStorage(), // Use memory storage for tests
     })
   })
 
@@ -31,8 +31,13 @@ describe('Vultisig', () => {
   })
 
   describe('initialization', () => {
-    it('should create instance with default configuration', async () => {
-      const defaultSdk = new Vultisig()
+    it('should require storage configuration', async () => {
+      // Storage is now required
+      expect(() => new Vultisig({} as any)).toThrow('Vultisig requires a storage implementation')
+    })
+
+    it('should create instance with storage configuration', async () => {
+      const defaultSdk = new Vultisig({ storage: new MemoryStorage() })
 
       expect(defaultSdk).toBeDefined()
       expect(defaultSdk).toBeInstanceOf(Vultisig)
@@ -41,6 +46,7 @@ describe('Vultisig', () => {
 
     it('should create instance with custom configuration', () => {
       const customSdk = new Vultisig({
+        storage: new MemoryStorage(),
         defaultChains: [Chain.Bitcoin, Chain.Ethereum],
         defaultCurrency: 'EUR',
         autoInit: false,
@@ -56,6 +62,7 @@ describe('Vultisig', () => {
       // This test verifies that valid Chain enums are accepted
       expect(() => {
         new Vultisig({
+          storage: new MemoryStorage(),
           defaultChains: [Chain.Bitcoin, Chain.Ethereum],
           autoInit: false,
         })
@@ -65,8 +72,8 @@ describe('Vultisig', () => {
     it('should initialize SDK', async () => {
       expect(sdk.initialized).toBe(false)
 
-      // Mock wasmManager.initialize to avoid actual WASM loading
-      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
+      // Mock SharedWasmRuntime.initialize to avoid actual WASM loading
+      vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
 
       await sdk.initialize()
 
@@ -74,14 +81,14 @@ describe('Vultisig', () => {
     })
 
     it('should handle initialization failure', async () => {
-      // Mock wasmManager.initialize to throw error
-      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(new Error('WASM load failed'))
+      // Mock SharedWasmRuntime.initialize to throw error
+      vi.spyOn(SharedWasmRuntime, 'initialize').mockRejectedValue(new Error('WASM load failed'))
 
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
 
     it('should not initialize twice', async () => {
-      const initializeSpy = vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
+      const initializeSpy = vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
 
       await sdk.initialize()
       await sdk.initialize() // Second call should be no-op
@@ -259,7 +266,7 @@ describe('Vultisig', () => {
 
   describe('server status', () => {
     it('should check server status', async () => {
-      // Mock serverManager.checkServerStatus
+      // Mock serverManager.checkServerStatus (access via internal context for testing)
       const mockStatus = {
         fastVault: {
           online: true,
@@ -272,7 +279,9 @@ describe('Vultisig', () => {
         timestamp: Date.now(),
       }
 
-      vi.spyOn(sdk.serverManager, 'checkServerStatus').mockResolvedValue(mockStatus)
+      // Access internal context for mocking (serverManager is not public)
+      const serverManager = (sdk as any).context.serverManager
+      vi.spyOn(serverManager, 'checkServerStatus').mockResolvedValue(mockStatus)
 
       const status = await sdk.getServerStatus()
 
@@ -308,7 +317,7 @@ describe('Vultisig', () => {
   describe('vault lifecycle operations', () => {
     beforeEach(() => {
       // Mock initialization for vault operations
-      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
+      vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
     })
 
     it('should list vaults when empty', async () => {
@@ -332,7 +341,7 @@ describe('Vultisig', () => {
 
   describe('error handling', () => {
     it('should handle initialization errors', async () => {
-      vi.spyOn(WasmManager, 'initialize').mockRejectedValue(new Error('Init failed'))
+      vi.spyOn(SharedWasmRuntime, 'initialize').mockRejectedValue(new Error('Init failed'))
 
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
@@ -343,10 +352,9 @@ describe('Vultisig', () => {
   })
 
   describe('storage integration', () => {
-    it('should create default storage', () => {
-      // The SDK should create storage automatically
-      const sdkInstance = new Vultisig({ autoInit: false })
-      expect(sdkInstance).toBeDefined()
+    it('should require storage', () => {
+      // Storage is now required - no default storage is created
+      expect(() => new Vultisig({ autoInit: false } as any)).toThrow('Vultisig requires a storage implementation')
     })
 
     it('should accept custom storage', () => {
@@ -368,14 +376,14 @@ describe('Vultisig', () => {
   })
 
   describe('edge cases', () => {
-    it('should handle undefined config', () => {
-      const sdkNoConfig = new Vultisig()
-      expect(sdkNoConfig).toBeDefined()
-      expect(sdkNoConfig.initialized).toBe(false)
+    it('should require storage in config', () => {
+      // Storage is now required, undefined config throws
+      expect(() => new Vultisig()).toThrow('Vultisig requires a storage implementation')
     })
 
-    it('should handle partial config', () => {
+    it('should handle partial config with storage', () => {
       const sdkPartialConfig = new Vultisig({
+        storage: new MemoryStorage(),
         defaultCurrency: 'EUR',
       })
 
@@ -387,20 +395,19 @@ describe('Vultisig', () => {
     it('should handle calling operations before initialization', async () => {
       // Operations that require initialization should auto-initialize
       // Need to provide storage configuration for global singleton
+      const mockStorage = {
+        get: vi.fn(),
+        set: vi.fn(),
+        remove: vi.fn(),
+        clear: vi.fn(),
+        list: vi.fn().mockResolvedValue([]),
+      }
       const uninitializedSdk = new Vultisig({
         autoInit: false,
-        storage: {
-          customStorage: {
-            get: vi.fn(),
-            set: vi.fn(),
-            remove: vi.fn(),
-            clear: vi.fn(),
-            list: vi.fn().mockResolvedValue([]),
-          },
-        },
+        storage: mockStorage as any,
       })
 
-      vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
+      vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
 
       expect(uninitializedSdk.initialized).toBe(false)
 
@@ -413,9 +420,9 @@ describe('Vultisig', () => {
   describe('concurrent operations', () => {
     it('should handle concurrent initialization calls without race condition', async () => {
       // Create a fresh SDK for this test
-      const concurrentSdk = new Vultisig({ autoInit: false })
+      const concurrentSdk = new Vultisig({ storage: new MemoryStorage(), autoInit: false })
 
-      const initSpy = vi.spyOn(WasmManager, 'initialize').mockResolvedValue()
+      const initSpy = vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
 
       // Call initialize multiple times concurrently
       const promises = await Promise.all([
@@ -434,10 +441,10 @@ describe('Vultisig', () => {
     })
 
     it('should retry initialization on failure', async () => {
-      const retrySdk = new Vultisig({ autoInit: false })
+      const retrySdk = new Vultisig({ storage: new MemoryStorage(), autoInit: false })
 
       let attempts = 0
-      const initSpy = vi.spyOn(WasmManager, 'initialize').mockImplementation(async () => {
+      const initSpy = vi.spyOn(SharedWasmRuntime, 'initialize').mockImplementation(async () => {
         attempts++
         if (attempts === 1) {
           throw new Error('First attempt failed')
