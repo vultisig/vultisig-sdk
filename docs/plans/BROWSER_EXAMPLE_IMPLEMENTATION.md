@@ -2474,7 +2474,7 @@ MIT
 For questions or issues:
 - GitHub Issues: [vultisig-sdk/issues](https://github.com/vultisig/vultisig-sdk/issues)
 - Documentation: [SDK Docs](../../README.md)
-- Examples: Check `examples/shell` for CLI reference
+- Examples: Check `clients/cli` for CLI reference
 
 ---
 
@@ -2563,6 +2563,6 @@ The use of **Tailwind CSS** significantly streamlines development by:
 The resulting application will serve as both a functional demo and a reference implementation for developers integrating the Vultisig SDK into browser-based applications, showcasing advanced features like multi-vault management, real-time event logging, and modern UI development practices.
 
 For questions or clarifications during implementation, refer to:
-- Shell example: `examples/shell/` (feature reference)
+- CLI: `clients/cli/` (feature reference)
 - SDK source: `packages/sdk/` (API details)
 - Documentation: `docs/` (guides and architecture)

@@ -1556,7 +1556,7 @@ import { Vultisig } from '@vultisig/sdk/electron-renderer'
 
 - **Examples**:
   - [Browser Example](../examples/browser) - Full React app with UI
-  - [Shell Example](../examples/shell) - Interactive CLI REPL
+  - [CLI](../clients/cli) - Command-line wallet with interactive shell mode
 
 - **GitHub**: [vultisig-sdk](https://github.com/vultisig/vultisig-sdk)
 - **Issues**: Report bugs and request features on GitHub

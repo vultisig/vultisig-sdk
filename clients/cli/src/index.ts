@@ -3,6 +3,7 @@ import 'dotenv/config'
 
 import type { FiatCurrency } from '@vultisig/sdk/node'
 import { Chain, FileStorage, Vultisig } from '@vultisig/sdk/node'
+import chalk from 'chalk'
 import { program } from 'commander'
 
 import { CLIContext, withExit } from './adapters'
@@ -30,13 +31,42 @@ import {
 } from './commands'
 import { createPasswordCallback } from './core'
 import { ShellSession } from './interactive'
+import {
+  checkForUpdates,
+  formatVersionDetailed,
+  formatVersionShort,
+  getUpdateCommand,
+  handleCompletion,
+  setupCompletionCommand,
+} from './lib'
 import { setupVaultEvents, warn } from './ui'
+
+// ============================================================================
+// Handle Shell Completion (must be checked first)
+// ============================================================================
+
+// Check if this is a completion request from the shell
+;(async () => {
+  const handled = await handleCompletion()
+  if (handled) process.exit(0)
+})()
 
 // ============================================================================
 // Global State
 // ============================================================================
 
 let ctx: CLIContext
+
+// ============================================================================
+// Program Configuration
+// ============================================================================
+
+program
+  .name('vultisig')
+  .description('Vultisig CLI - Secure multi-party crypto wallet')
+  .version(formatVersionShort(), '-v, --version', 'Show version')
+  .option('--debug', 'Enable debug output')
+  .option('-i, --interactive', 'Start interactive shell mode')
 
 // ============================================================================
 // SDK Initialization
@@ -374,6 +404,64 @@ program
       }
     )
   )
+
+// ============================================================================
+// CLI Management Commands
+// ============================================================================
+
+// Command: Show detailed version
+program
+  .command('version')
+  .description('Show detailed version information')
+  .action(
+    withExit(async () => {
+      console.log(formatVersionDetailed())
+
+      // Check for updates
+      const result = await checkForUpdates()
+      if (result?.updateAvailable && result.latestVersion) {
+        console.log()
+        console.log(chalk.yellow(`Update available: ${result.currentVersion} -> ${result.latestVersion}`))
+        console.log(chalk.gray(`Run "${getUpdateCommand()}" to update`))
+      }
+    })
+  )
+
+// Command: Check for updates
+program
+  .command('update')
+  .description('Check for updates and show update command')
+  .option('--check', 'Just check for updates, do not update')
+  .action(
+    withExit(async (options: { check?: boolean }) => {
+      console.log('Checking for updates...')
+      const result = await checkForUpdates()
+
+      if (!result) {
+        console.log(chalk.gray('Update checking is disabled'))
+        return
+      }
+
+      if (result.updateAvailable && result.latestVersion) {
+        console.log()
+        console.log(chalk.green(`Update available: ${result.currentVersion} -> ${result.latestVersion}`))
+        console.log()
+
+        if (options.check) {
+          console.log(`Run "${getUpdateCommand()}" to update`)
+        } else {
+          const updateCmd = getUpdateCommand()
+          console.log(`To update, run:`)
+          console.log(chalk.cyan(`  ${updateCmd}`))
+        }
+      } else {
+        console.log(chalk.green(`You're on the latest version (${result.currentVersion})`))
+      }
+    })
+  )
+
+// Setup completion command
+setupCompletionCommand(program)
 
 // ============================================================================
 // Interactive Mode

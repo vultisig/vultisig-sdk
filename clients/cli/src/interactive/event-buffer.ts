@@ -101,10 +101,20 @@ export class EventBuffer {
       this.handleEvent(`i Balance updated for ${chain} (${asset}): ${balance.amount}`, 'info')
     })
 
+    // Transaction signed
+    vault.on('transactionSigned', () => {
+      this.handleEvent(`+ Transaction signed successfully`, 'success')
+    })
+
     // Transaction broadcast
     vault.on('transactionBroadcast', ({ chain, txHash }: any) => {
       this.handleEvent(`+ Transaction broadcast on ${chain}`, 'success')
       this.handleEvent(`  TX Hash: ${txHash}`, 'info')
+    })
+
+    // Signing progress
+    vault.on('signingProgress', ({ step }: any) => {
+      this.handleEvent(`i Signing: ${step}`, 'info')
     })
 
     // Chain added
@@ -122,6 +132,16 @@ export class EventBuffer {
       this.handleEvent(`+ Token added: ${token.symbol} on ${chain}`, 'success')
     })
 
+    // Token removed
+    vault.on('tokenRemoved', ({ chain, tokenId }: any) => {
+      this.handleEvent(`i Token removed: ${tokenId} from ${chain}`, 'warning')
+    })
+
+    // Vault renamed
+    vault.on('renamed', ({ oldName, newName }: any) => {
+      this.handleEvent(`i Vault renamed: ${oldName} -> ${newName}`, 'info')
+    })
+
     // Values updated
     vault.on('valuesUpdated', ({ chain }: any) => {
       if (chain === 'all') {
@@ -129,6 +149,45 @@ export class EventBuffer {
       } else {
         this.handleEvent(`i Values updated for ${chain}`, 'info')
       }
+    })
+
+    // Total value updated
+    vault.on('totalValueUpdated', ({ value }: any) => {
+      this.handleEvent(`i Portfolio total: ${value.formatted}`, 'info')
+    })
+
+    // Vault lifecycle events
+    vault.on('saved', () => {
+      this.handleEvent(`+ Vault saved`, 'success')
+    })
+
+    vault.on('loaded', () => {
+      this.handleEvent(`i Vault loaded`, 'info')
+    })
+
+    vault.on('unlocked', () => {
+      this.handleEvent(`+ Vault unlocked`, 'success')
+    })
+
+    vault.on('locked', () => {
+      this.handleEvent(`i Vault locked`, 'info')
+    })
+
+    // Swap events
+    vault.on('swapQuoteReceived', ({ quote }: any) => {
+      this.handleEvent(`i Swap quote received: ${quote.fromAmount} -> ${quote.toAmount}`, 'info')
+    })
+
+    vault.on('swapApprovalRequired', ({ token, amount }: any) => {
+      this.handleEvent(`! Approval required for ${token}: ${amount}`, 'warning')
+    })
+
+    vault.on('swapApprovalGranted', ({ token }: any) => {
+      this.handleEvent(`+ Approval granted for ${token}`, 'success')
+    })
+
+    vault.on('swapPrepared', ({ provider, fromAmount, toAmountExpected }: any) => {
+      this.handleEvent(`i Swap prepared via ${provider}: ${fromAmount} -> ${toAmountExpected}`, 'info')
     })
 
     // Errors
@@ -142,11 +201,24 @@ export class EventBuffer {
    */
   cleanupVaultListeners(vault: VaultBase): void {
     vault.removeAllListeners('balanceUpdated')
+    vault.removeAllListeners('transactionSigned')
     vault.removeAllListeners('transactionBroadcast')
+    vault.removeAllListeners('signingProgress')
     vault.removeAllListeners('chainAdded')
     vault.removeAllListeners('chainRemoved')
     vault.removeAllListeners('tokenAdded')
+    vault.removeAllListeners('tokenRemoved')
+    vault.removeAllListeners('renamed')
     vault.removeAllListeners('valuesUpdated')
+    vault.removeAllListeners('totalValueUpdated')
+    vault.removeAllListeners('saved')
+    vault.removeAllListeners('loaded')
+    vault.removeAllListeners('unlocked')
+    vault.removeAllListeners('locked')
+    vault.removeAllListeners('swapQuoteReceived')
+    vault.removeAllListeners('swapApprovalRequired')
+    vault.removeAllListeners('swapApprovalGranted')
+    vault.removeAllListeners('swapPrepared')
     vault.removeAllListeners('error')
   }
 }

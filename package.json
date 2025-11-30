@@ -8,10 +8,10 @@
     "packages/sdk"
   ],
   "scripts": {
-    "format": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
-    "format:check": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --check 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
-    "lint": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
-    "lint:fix": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' --fix",
+    "format": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
+    "format:check": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --check 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
+    "lint": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
+    "lint:fix": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' --fix",
     "build:sdk": "yarn workspace @vultisig/sdk build",
     "build:sdk-full": "yarn sync-and-copy && yarn workspace @vultisig/sdk build",
     "sync-packages": "syncpack fix-mismatches",
@@ -37,10 +37,16 @@
     "knip:fix": "knip --config .config/knip.json --fix --allow-remove-files",
     "check:all": "yarn lint && yarn typecheck && yarn test && yarn knip",
     "prepare": "husky",
-    "wallet": "yarn workspace @vultisig/example-cli wallet"
+    "cli": "yarn workspace @vultisig/cli dev",
+    "cli:build": "yarn workspace @vultisig/cli build",
+    "cli:interactive": "yarn workspace @vultisig/cli repl"
   },
   "lint-staged": {
     "packages/sdk/**/*.{js,jsx,ts,tsx}": [
+      "prettier --config .config/.prettierrc --write",
+      "eslint --config .config/eslint.config.mjs --fix"
+    ],
+    "clients/**/*.{js,jsx,ts,tsx}": [
       "prettier --config .config/.prettierrc --write",
       "eslint --config .config/eslint.config.mjs --fix"
     ],
