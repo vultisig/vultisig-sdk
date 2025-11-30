@@ -3441,6 +3441,7 @@ __metadata:
     typescript: "npm:^5.8.2"
     ws: "npm:^8.18.3"
   bin:
+    vsig: ./dist/index.js
     vultisig: ./dist/index.js
   languageName: unknown
   linkType: soft

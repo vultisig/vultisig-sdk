@@ -4,8 +4,8 @@
   "description": "Command-line wallet for Vultisig - multi-chain MPC wallet management",
   "type": "module",
   "bin": {
-    "vultisig": "./dist/index.js",
-    "vsig": "./dist/index.js"
+    "vsig": "./dist/index.js",
+    "vultisig": "./dist/index.js"
   },
   "main": "dist/index.js",
   "files": [

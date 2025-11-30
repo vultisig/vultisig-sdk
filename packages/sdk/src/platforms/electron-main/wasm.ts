@@ -4,8 +4,13 @@
  */
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { dirname } from 'path'
+import { fileURLToPath } from 'url'
 
 import type { PlatformWasmLoader } from '../types'
+
+// ESM-compatible __dirname equivalent
+const currentDir = dirname(fileURLToPath(import.meta.url))
 
 export class ElectronMainWasmLoader implements PlatformWasmLoader {
   async loadDkls(): Promise<ArrayBuffer> {
@@ -20,7 +25,7 @@ export class ElectronMainWasmLoader implements PlatformWasmLoader {
 
   resolvePath(filename: string): string {
     // In Electron main process, __dirname points to the bundled location
-    return path.join(__dirname, 'lib', filename)
+    return path.join(currentDir, 'lib', filename)
   }
 
   private async loadWasmFile(filePath: string): Promise<ArrayBuffer> {
@@ -31,7 +36,7 @@ export class ElectronMainWasmLoader implements PlatformWasmLoader {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         const libMatch = filePath.match(/lib\/(.+)$/)
         const relativeLibPath = libMatch ? libMatch[1] : ''
-        const altPath = path.join(__dirname, '../../../lib', relativeLibPath)
+        const altPath = path.join(currentDir, '../../../lib', relativeLibPath)
         const buffer = await fs.readFile(altPath)
         return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
       }
