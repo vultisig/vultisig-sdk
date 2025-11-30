@@ -12,6 +12,7 @@ export type SendParams = {
   amount: string // Human-readable amount (e.g., "1.5")
   tokenId?: string
   memo?: string
+  yes?: boolean // Skip confirmation prompt
 }
 
 /**

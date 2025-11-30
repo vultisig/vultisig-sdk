@@ -100,11 +100,35 @@ program
   .command('create')
   .description('Create a new vault')
   .option('--type <type>', 'Vault type: fast or secure', 'fast')
+  .option('--name <name>', 'Vault name')
+  .option('--password <password>', 'Vault password')
+  .option('--email <email>', 'Email for verification (fast vault)')
+  .option('--code <code>', 'Verification code (if already received)')
+  .option('--threshold <m>', 'Signing threshold (secure vault)')
+  .option('--shares <n>', 'Total shares (secure vault)')
   .action(
-    withExit(async (options: { type: string }) => {
-      const context = await init()
-      await executeCreate(context, { type: options.type as 'fast' | 'secure' })
-    })
+    withExit(
+      async (options: {
+        type: string
+        name?: string
+        password?: string
+        email?: string
+        code?: string
+        threshold?: string
+        shares?: string
+      }) => {
+        const context = await init()
+        await executeCreate(context, {
+          type: options.type as 'fast' | 'secure',
+          name: options.name,
+          password: options.password,
+          email: options.email,
+          code: options.code,
+          threshold: options.threshold ? parseInt(options.threshold, 10) : undefined,
+          shares: options.shares ? parseInt(options.shares, 10) : undefined,
+        })
+      }
+    )
   )
 
 // Command: Import vault from file
@@ -123,8 +147,9 @@ program
   .command('verify <vaultId>')
   .description('Verify vault with email verification code')
   .option('-r, --resend', 'Resend verification email')
+  .option('--code <code>', 'Verification code')
   .action(
-    withExit(async (vaultId: string, options: { resend?: boolean }) => {
+    withExit(async (vaultId: string, options: { resend?: boolean; code?: string }) => {
       const context = await init()
       const verified = await executeVerify(context, vaultId, options)
       if (!verified) {
@@ -156,25 +181,34 @@ program
   .description('Send tokens to an address')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
+  .option('-y, --yes', 'Skip confirmation prompt')
   .action(
-    withExit(async (chainStr: string, to: string, amount: string, options: { token?: string; memo?: string }) => {
-      const context = await init()
-      try {
-        await executeSend(context, {
-          chain: chainStr as Chain,
-          to,
-          amount,
-          tokenId: options.token,
-          memo: options.memo,
-        })
-      } catch (err: any) {
-        if (err.message === 'Transaction cancelled by user') {
-          warn('\nx Transaction cancelled')
-          return
+    withExit(
+      async (
+        chainStr: string,
+        to: string,
+        amount: string,
+        options: { token?: string; memo?: string; yes?: boolean }
+      ) => {
+        const context = await init()
+        try {
+          await executeSend(context, {
+            chain: chainStr as Chain,
+            to,
+            amount,
+            tokenId: options.token,
+            memo: options.memo,
+            yes: options.yes,
+          })
+        } catch (err: any) {
+          if (err.message === 'Transaction cancelled by user') {
+            warn('\nx Transaction cancelled')
+            return
+          }
+          throw err
         }
-        throw err
       }
-    })
+    )
   )
 
 // Command: Show portfolio value
@@ -215,10 +249,17 @@ program
 program
   .command('export [path]')
   .description('Export vault to file')
+  .option('--encrypt', 'Encrypt the export with a password')
+  .option('--no-encrypt', 'Export without encryption')
+  .option('--password <password>', 'Password for encryption')
   .action(
-    withExit(async (path?: string) => {
+    withExit(async (path: string | undefined, options: { encrypt?: boolean; password?: string }) => {
       const context = await init()
-      await executeExport(context, path)
+      await executeExport(context, {
+        outputPath: path,
+        encrypt: options.encrypt,
+        password: options.password,
+      })
     })
   )
 
@@ -239,14 +280,18 @@ program
   .description('Manage address book entries')
   .option('--add', 'Add a new address book entry')
   .option('--remove <address>', 'Remove an address from the address book')
-  .option('--chain <chain>', 'Filter by chain')
+  .option('--chain <chain>', 'Chain for the address (for --add or --remove)')
+  .option('--address <address>', 'Address to add (for --add)')
+  .option('--name <name>', 'Name/label for the address (for --add)')
   .action(
-    withExit(async (options: { add?: boolean; remove?: string; chain?: string }) => {
+    withExit(async (options: { add?: boolean; remove?: string; chain?: string; address?: string; name?: string }) => {
       const context = await init()
       await executeAddressBook(context, {
         add: options.add,
         remove: options.remove,
         chain: options.chain as Chain | undefined,
+        address: options.address,
+        name: options.name,
       })
     })
   )
@@ -317,15 +362,26 @@ program
   .description('List and manage tokens for a chain')
   .option('--add <contractAddress>', 'Add a token by contract address')
   .option('--remove <tokenId>', 'Remove a token by ID')
+  .option('--symbol <symbol>', 'Token symbol (for --add)')
+  .option('--name <name>', 'Token name (for --add)')
+  .option('--decimals <decimals>', 'Token decimals (for --add)', '18')
   .action(
-    withExit(async (chainStr: string, options: { add?: string; remove?: string }) => {
-      const context = await init()
-      await executeTokens(context, {
-        chain: chainStr as Chain,
-        add: options.add,
-        remove: options.remove,
-      })
-    })
+    withExit(
+      async (
+        chainStr: string,
+        options: { add?: string; remove?: string; symbol?: string; name?: string; decimals?: string }
+      ) => {
+        const context = await init()
+        await executeTokens(context, {
+          chain: chainStr as Chain,
+          add: options.add,
+          remove: options.remove,
+          symbol: options.symbol,
+          name: options.name,
+          decimals: options.decimals ? parseInt(options.decimals, 10) : undefined,
+        })
+      }
+    )
   )
 
 // ============================================================================
@@ -376,13 +432,14 @@ program
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
+  .option('-y, --yes', 'Skip confirmation prompt')
   .action(
     withExit(
       async (
         fromChainStr: string,
         toChainStr: string,
         amountStr: string,
-        options: { fromToken?: string; toToken?: string; slippage?: string }
+        options: { fromToken?: string; toToken?: string; slippage?: string; yes?: boolean }
       ) => {
         const context = await init()
         try {
@@ -393,6 +450,7 @@ program
             fromToken: options.fromToken,
             toToken: options.toToken,
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,
+            yes: options.yes,
           })
         } catch (err: any) {
           if (err.message === 'Swap cancelled by user') {

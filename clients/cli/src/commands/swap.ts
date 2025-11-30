@@ -67,6 +67,7 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
 
 export type SwapOptions = {
   slippage?: number
+  yes?: boolean // Skip confirmation prompt
 } & SwapQuoteOptions
 
 /**
@@ -106,11 +107,13 @@ export async function executeSwap(
   // 2. Display preview
   displaySwapPreview(quote, String(options.amount), fromBalance.symbol, toBalance.symbol)
 
-  // 3. Confirm with user
-  const confirmed = await confirmSwap()
-  if (!confirmed) {
-    warn('Swap cancelled')
-    throw new Error('Swap cancelled by user')
+  // 3. Confirm with user (skip if --yes flag is set)
+  if (!options.yes) {
+    const confirmed = await confirmSwap()
+    if (!confirmed) {
+      warn('Swap cancelled')
+      throw new Error('Swap cancelled by user')
+    }
   }
 
   // 4. Prepare swap transaction

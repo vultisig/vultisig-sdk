@@ -200,7 +200,7 @@ export class ShellSession {
         break
 
       case 'export':
-        await executeExport(this.ctx, args.join(' ') || undefined)
+        await executeExport(this.ctx, { outputPath: args.join(' ') || undefined })
         break
 
       case 'rename':

@@ -79,6 +79,9 @@ export type AddressBookOptions = {
   add?: boolean
   remove?: string
   chain?: Chain
+  // Non-interactive options for --add
+  address?: string
+  name?: string
 }
 
 export type AddressBookEntry = {
@@ -97,40 +100,57 @@ export async function executeAddressBook(
   options: AddressBookOptions = {}
 ): Promise<AddressBookEntry[]> {
   if (options.add) {
-    const answers = await inquirer.prompt([
-      {
+    // Use CLI options if provided, otherwise prompt
+    let chain = options.chain
+    let address = options.address
+    let name = options.name
+
+    const prompts = []
+    if (!chain) {
+      prompts.push({
         type: 'list',
         name: 'chain',
         message: 'Select chain:',
         choices: Object.values(Chain),
-      },
-      {
+      })
+    }
+    if (!address) {
+      prompts.push({
         type: 'input',
         name: 'address',
         message: 'Enter address:',
         validate: (input: string) => input.trim() !== '' || 'Address is required',
-      },
-      {
+      })
+    }
+    if (!name) {
+      prompts.push({
         type: 'input',
         name: 'name',
         message: 'Enter name/label:',
         validate: (input: string) => input.trim() !== '' || 'Name is required',
-      },
-    ])
+      })
+    }
+
+    if (prompts.length > 0) {
+      const answers = await inquirer.prompt(prompts)
+      chain = chain || answers.chain
+      address = address || answers.address?.trim()
+      name = name || answers.name?.trim()
+    }
 
     const spinner = createSpinner('Adding address to address book...')
     await ctx.sdk.addAddressBookEntry([
       {
-        chain: answers.chain,
-        address: answers.address.trim(),
-        name: answers.name.trim(),
+        chain: chain!,
+        address: address!,
+        name: name!,
         source: 'saved' as const,
         dateAdded: Date.now(),
       },
     ])
     spinner.succeed('Address added')
 
-    success(`\n+ Added ${answers.name} (${answers.chain}: ${answers.address})`)
+    success(`\n+ Added ${name} (${chain}: ${address})`)
     return []
   }
 

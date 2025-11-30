@@ -12,6 +12,10 @@ export type TokensOptions = {
   chain: Chain
   add?: string // contract address
   remove?: string // token ID
+  // Options for non-interactive token addition
+  symbol?: string
+  name?: string
+  decimals?: number
 }
 
 export type AddTokenOptions = {
@@ -30,35 +34,52 @@ export async function executeTokens(ctx: CommandContext, options: TokensOptions)
   await ctx.ensureActiveVault()
 
   if (options.add) {
-    // Need additional info for adding tokens - prompt in CLI mode
-    const { symbol, name, decimals } = await inquirer.prompt([
-      {
+    // Use CLI options if provided, otherwise prompt
+    let symbol = options.symbol
+    let name = options.name
+    let decimals = options.decimals
+
+    // Only prompt for missing values
+    const prompts = []
+    if (!symbol) {
+      prompts.push({
         type: 'input',
         name: 'symbol',
         message: 'Enter token symbol (e.g., USDT):',
         validate: (input: string) => input.trim() !== '' || 'Symbol is required',
-      },
-      {
+      })
+    }
+    if (!name) {
+      prompts.push({
         type: 'input',
         name: 'name',
         message: 'Enter token name (e.g., Tether USD):',
         validate: (input: string) => input.trim() !== '' || 'Name is required',
-      },
-      {
+      })
+    }
+    if (decimals === undefined) {
+      prompts.push({
         type: 'number',
         name: 'decimals',
         message: 'Enter token decimals:',
         default: 18,
         validate: (input: number) => input >= 0 || 'Decimals must be non-negative',
-      },
-    ])
+      })
+    }
+
+    if (prompts.length > 0) {
+      const answers = await inquirer.prompt(prompts)
+      symbol = symbol || answers.symbol?.trim()
+      name = name || answers.name?.trim()
+      decimals = decimals ?? answers.decimals
+    }
 
     await addToken(ctx, {
       chain: options.chain,
       contractAddress: options.add,
-      symbol: symbol.trim(),
-      name: name.trim(),
-      decimals,
+      symbol: symbol!,
+      name: name!,
+      decimals: decimals!,
     })
   } else if (options.remove) {
     await removeToken(ctx, options.chain, options.remove)

@@ -81,11 +81,13 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     gas
   )
 
-  // 4. Confirm with user
-  const confirmed = await confirmTransaction()
-  if (!confirmed) {
-    warn('Transaction cancelled')
-    throw new Error('Transaction cancelled by user')
+  // 4. Confirm with user (skip if --yes flag is set)
+  if (!params.yes) {
+    const confirmed = await confirmTransaction()
+    if (!confirmed) {
+      warn('Transaction cancelled')
+      throw new Error('Transaction cancelled by user')
+    }
   }
 
   // 5. Sign transaction

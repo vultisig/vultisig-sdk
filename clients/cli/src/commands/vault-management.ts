@@ -11,6 +11,13 @@ import { createSpinner, displayVaultInfo, displayVaultsList, error, info, setupV
 
 export type CreateVaultOptions = {
   type: 'fast' | 'secure'
+  // Non-interactive options
+  name?: string
+  password?: string
+  email?: string // for fast vault
+  code?: string // verification code
+  threshold?: number // for secure vault
+  shares?: number // for secure vault
 }
 
 /**
@@ -25,45 +32,63 @@ export async function executeCreate(
     throw new Error('Invalid vault type. Must be "fast" or "secure"')
   }
 
-  const answers = (await inquirer.prompt([
-    {
+  // Use provided options or prompt for missing values
+  let name = options.name
+  let password = options.password
+
+  const prompts = []
+  if (!name) {
+    prompts.push({
       type: 'input',
       name: 'name',
       message: 'Enter vault name:',
       validate: (input: string) => input.trim() !== '' || 'Name is required',
-    },
-    {
+    })
+  }
+  if (!password) {
+    prompts.push({
       type: 'password',
       name: 'password',
       message: 'Enter password:',
       mask: '*',
       validate: (input: string) => input.length >= 8 || 'Password must be at least 8 characters',
-    },
-    {
+    })
+    prompts.push({
       type: 'password',
       name: 'confirmPassword',
       message: 'Confirm password:',
       mask: '*',
       validate: (input: string, ans: any) => input === ans.password || 'Passwords do not match',
-    },
-  ])) as any
+    })
+  }
+
+  if (prompts.length > 0) {
+    const answers = (await inquirer.prompt(prompts)) as any
+    name = name || answers.name
+    password = password || answers.password
+  }
 
   if (vaultType === 'fast') {
-    const { email } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'email',
-        message: 'Enter email for verification:',
-        validate: (input: string) => /\S+@\S+\.\S+/.test(input) || 'Invalid email format',
-      },
-    ])
+    let email = options.email
+
+    if (!email) {
+      const emailAnswer = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'email',
+          message: 'Enter email for verification:',
+          validate: (input: string) => /\S+@\S+\.\S+/.test(input) || 'Invalid email format',
+        },
+      ])
+      email = emailAnswer.email
+    }
 
     const spinner = createSpinner('Creating vault...')
 
     const result = await ctx.sdk.createFastVault({
-      name: answers.name,
-      password: answers.password,
-      email,
+      name: name!,
+      password: password!,
+      email: email!,
       onProgress: step => {
         spinner.text = `${step.message} (${step.progress}%)`
       },
@@ -71,23 +96,28 @@ export async function executeCreate(
 
     setupVaultEvents(result.vault)
     await ctx.setActiveVault(result.vault)
-    spinner.succeed(`Vault created: ${answers.name}`)
+    spinner.succeed(`Vault created: ${name}`)
 
     if (result.verificationRequired) {
-      warn('\nA verification code has been sent to your email.')
-      info('Please check your inbox and enter the code.')
+      let code = options.code
 
-      const { code } = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'code',
-          message: `Verification code sent to ${email}. Enter code:`,
-          validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
-        },
-      ])
+      if (!code) {
+        warn('\nA verification code has been sent to your email.')
+        info('Please check your inbox and enter the code.')
+
+        const codeAnswer = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'code',
+            message: `Verification code sent to ${email}. Enter code:`,
+            validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+          },
+        ])
+        code = codeAnswer.code
+      }
 
       const verifySpinner = createSpinner('Verifying email code...')
-      const verified = await ctx.sdk.verifyVault(result.vaultId, code)
+      const verified = await ctx.sdk.verifyVault(result.vaultId, code!)
 
       if (verified) {
         verifySpinner.succeed('Email verified successfully!')
@@ -113,32 +143,46 @@ export async function executeCreate(
     return result.vault
   } else {
     // Secure vault
-    const secureOptions = (await inquirer.prompt([
-      {
+    let threshold = options.threshold
+    let totalShares = options.shares
+
+    const securePrompts = []
+    if (threshold === undefined) {
+      securePrompts.push({
         type: 'number',
         name: 'threshold',
         message: 'Signing threshold (m):',
         default: 2,
         validate: (input: number) => input > 0 || 'Threshold must be greater than 0',
-      },
-      {
+      })
+    }
+    if (totalShares === undefined) {
+      securePrompts.push({
         type: 'number',
         name: 'totalShares',
         message: 'Total shares (n):',
         default: 3,
-        validate: (input: number, ans: any) =>
-          input >= ans.threshold || `Total shares must be >= threshold (${ans.threshold})`,
-      },
-    ])) as any
+        validate: (input: number, ans: any) => {
+          const t = threshold ?? ans.threshold
+          return input >= t || `Total shares must be >= threshold (${t})`
+        },
+      })
+    }
+
+    if (securePrompts.length > 0) {
+      const secureAnswers = (await inquirer.prompt(securePrompts)) as any
+      threshold = threshold ?? secureAnswers.threshold
+      totalShares = totalShares ?? secureAnswers.totalShares
+    }
 
     const spinner = createSpinner('Creating secure vault...')
 
     try {
       const result = await ctx.sdk.createSecureVault({
-        name: answers.name,
-        password: answers.password,
-        devices: secureOptions.totalShares,
-        threshold: secureOptions.threshold,
+        name: name!,
+        password: password!,
+        devices: totalShares!,
+        threshold: threshold!,
         onProgress: step => {
           spinner.text = `${step.message} (${step.progress}%)`
         },
@@ -146,14 +190,10 @@ export async function executeCreate(
 
       setupVaultEvents(result.vault)
       await ctx.setActiveVault(result.vault)
-      spinner.succeed(
-        `Secure vault created: ${answers.name} (${secureOptions.threshold}-of-${secureOptions.totalShares})`
-      )
+      spinner.succeed(`Secure vault created: ${name} (${threshold}-of-${totalShares})`)
 
       warn(`\nImportant: Save your vault backup file (.vult) in a secure location.`)
-      warn(
-        `This is a ${secureOptions.threshold}-of-${secureOptions.totalShares} vault. You'll need ${secureOptions.threshold} devices to sign transactions.`
-      )
+      warn(`This is a ${threshold}-of-${totalShares} vault. You'll need ${threshold} devices to sign transactions.`)
 
       success('\n+ Vault created!')
 
@@ -202,7 +242,7 @@ export async function executeImport(ctx: CommandContext, file: string): Promise<
 export async function executeVerify(
   ctx: CommandContext,
   vaultId: string,
-  options: { resend?: boolean } = {}
+  options: { resend?: boolean; code?: string } = {}
 ): Promise<boolean> {
   if (options.resend) {
     const spinner = createSpinner('Resending verification email...')
@@ -211,17 +251,22 @@ export async function executeVerify(
     info('Check your inbox for the new verification code.')
   }
 
-  const { code } = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'code',
-      message: 'Enter verification code:',
-      validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
-    },
-  ])
+  let code = options.code
+
+  if (!code) {
+    const codeAnswer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'code',
+        message: 'Enter verification code:',
+        validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+      },
+    ])
+    code = codeAnswer.code
+  }
 
   const spinner = createSpinner('Verifying email code...')
-  const verified = await ctx.sdk.verifyVault(vaultId, code)
+  const verified = await ctx.sdk.verifyVault(vaultId, code!)
 
   if (verified) {
     spinner.succeed('Vault verified successfully!')
@@ -235,24 +280,36 @@ export async function executeVerify(
   }
 }
 
+export type ExportVaultOptions = {
+  outputPath?: string
+  encrypt?: boolean
+  password?: string
+}
+
 /**
  * Execute export vault command
  */
-export async function executeExport(ctx: CommandContext, outputPath?: string): Promise<string> {
+export async function executeExport(ctx: CommandContext, options: ExportVaultOptions = {}): Promise<string> {
   const vault = await ctx.ensureActiveVault()
 
-  const { encrypt } = await inquirer.prompt([
-    {
-      type: 'confirm',
-      name: 'encrypt',
-      message: 'Encrypt export with password?',
-      default: true,
-    },
-  ])
+  let encrypt = options.encrypt
+  let password = options.password
 
-  if (encrypt) {
-    // Note: Export password encryption would be handled by vault.export() if supported
-    await inquirer.prompt([
+  // Only prompt if --encrypt/--no-encrypt not specified
+  if (encrypt === undefined) {
+    const encryptAnswer = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'encrypt',
+        message: 'Encrypt export with password?',
+        default: true,
+      },
+    ])
+    encrypt = encryptAnswer.encrypt
+  }
+
+  if (encrypt && !password) {
+    const passwordAnswer = await inquirer.prompt([
       {
         type: 'password',
         name: 'password',
@@ -260,12 +317,14 @@ export async function executeExport(ctx: CommandContext, outputPath?: string): P
         mask: '*',
       },
     ])
+    password = passwordAnswer.password
   }
 
   const spinner = createSpinner('Exporting vault...')
 
-  const { data: vultContent } = await vault.export()
-  const fileName = outputPath || `${vault.name}-${vault.localPartyId}-vault.vult`
+  // Pass password to export if encrypting
+  const { data: vultContent } = await vault.export(encrypt ? password : undefined)
+  const fileName = options.outputPath || `${vault.name}-${vault.localPartyId}-vault.vult`
 
   await fs.writeFile(fileName, vultContent, 'utf-8')
 
