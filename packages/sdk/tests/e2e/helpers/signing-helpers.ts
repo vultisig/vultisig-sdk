@@ -130,5 +130,5 @@ export const TEST_RECEIVERS: Partial<Record<Chain, string>> = {
   Polkadot: '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5',
 
   // Sui: Example address (DO NOT send real funds)
-  Sui: '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8',
+  Sui: '0x2b93c2c27e68e9bedb01fa44b0dc5a3afa0e67f38a54fee999f24b7d88ac7f1e',
 }
