@@ -1,9 +1,7 @@
-import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk/node'
-
 /**
- * Keysign payload type (internal SDK type)
+ * Shared type definitions for CLI and Interactive Shell
  */
-export type KeysignPayload = any
+import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk/node'
 
 /**
  * Parameters for sending a transaction
@@ -44,4 +42,26 @@ export type WalletConfig = {
   serverUrl?: string
   relayUrl?: string
   defaultCurrency?: FiatCurrency
+}
+
+/**
+ * Vault status information for display
+ */
+export type VaultStatus = {
+  name: string
+  id: string
+  type: string
+  isUnlocked: boolean
+  timeRemaining?: number
+  timeRemainingFormatted?: string
+  createdAt: number
+  lastModified: number
+  threshold: number
+  totalSigners: number
+  libType: string
+  isEncrypted: boolean
+  isBackedUp: boolean
+  chains: number
+  currency: FiatCurrency
+  availableSigningModes: string[]
 }

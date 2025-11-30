@@ -1,0 +1,173 @@
+/**
+ * Settings Commands - currency, server, address-book
+ */
+import type { FiatCurrency } from '@vultisig/sdk/node'
+import { Chain, fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk/node'
+import chalk from 'chalk'
+import inquirer from 'inquirer'
+
+import type { CommandContext } from '../core'
+import { createSpinner, error, success, warn } from '../ui'
+
+/**
+ * Execute currency command - view or set currency preference
+ */
+export async function executeCurrency(ctx: CommandContext, newCurrency?: string): Promise<FiatCurrency> {
+  const vault = await ctx.ensureActiveVault()
+
+  if (!newCurrency) {
+    const currentCurrency = vault.currency
+    const currencyName = fiatCurrencyNameRecord[currentCurrency]
+    console.log(chalk.cyan('\nCurrent Currency Preference:'))
+    console.log(`  ${chalk.green(currentCurrency.toUpperCase())} - ${currencyName}`)
+    console.log(chalk.gray(`\nSupported currencies: ${fiatCurrencies.join(', ')}`))
+    console.log(chalk.gray('Use "npm run wallet currency <code>" to change'))
+    return currentCurrency
+  }
+
+  const currency = newCurrency.toLowerCase() as FiatCurrency
+  if (!fiatCurrencies.includes(currency)) {
+    error(`x Invalid currency: ${newCurrency}`)
+    warn(`Supported currencies: ${fiatCurrencies.join(', ')}`)
+    throw new Error('Invalid currency')
+  }
+
+  const spinner = createSpinner('Updating currency preference...')
+  await vault.setCurrency(currency)
+  spinner.succeed('Currency updated')
+
+  const currencyName = fiatCurrencyNameRecord[currency]
+  success(`\n+ Currency preference set to ${currency.toUpperCase()} (${currencyName})`)
+
+  return currency
+}
+
+/**
+ * Execute server status command
+ */
+export async function executeServer(ctx: CommandContext): Promise<{
+  fastVault: { online: boolean; latency?: number }
+  messageRelay: { online: boolean; latency?: number }
+}> {
+  const spinner = createSpinner('Checking server status...')
+
+  try {
+    const status = await ctx.sdk.getServerStatus()
+    spinner.succeed('Server status retrieved')
+
+    console.log(chalk.cyan('\nServer Status:\n'))
+    console.log(chalk.bold('Fast Vault Server:'))
+    console.log(`  Online:   ${status.fastVault.online ? chalk.green('Yes') : chalk.red('No')}`)
+    if (status.fastVault.latency) {
+      console.log(`  Latency:  ${status.fastVault.latency}ms`)
+    }
+    console.log(chalk.bold('\nMessage Relay:'))
+    console.log(`  Online:   ${status.messageRelay.online ? chalk.green('Yes') : chalk.red('No')}`)
+    if (status.messageRelay.latency) {
+      console.log(`  Latency:  ${status.messageRelay.latency}ms`)
+    }
+
+    return status
+  } catch (err: any) {
+    spinner.fail('Failed to check server status')
+    error(`\nx ${err.message}`)
+    throw err
+  }
+}
+
+export type AddressBookOptions = {
+  add?: boolean
+  remove?: string
+  chain?: Chain
+}
+
+export type AddressBookEntry = {
+  chain: Chain
+  address: string
+  name: string
+  source: 'saved' | 'vault'
+  dateAdded: number
+}
+
+/**
+ * Execute address-book command - manage address book
+ */
+export async function executeAddressBook(
+  ctx: CommandContext,
+  options: AddressBookOptions = {}
+): Promise<AddressBookEntry[]> {
+  if (options.add) {
+    const answers = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'chain',
+        message: 'Select chain:',
+        choices: Object.values(Chain),
+      },
+      {
+        type: 'input',
+        name: 'address',
+        message: 'Enter address:',
+        validate: (input: string) => input.trim() !== '' || 'Address is required',
+      },
+      {
+        type: 'input',
+        name: 'name',
+        message: 'Enter name/label:',
+        validate: (input: string) => input.trim() !== '' || 'Name is required',
+      },
+    ])
+
+    const spinner = createSpinner('Adding address to address book...')
+    await ctx.sdk.addAddressBookEntry([
+      {
+        chain: answers.chain,
+        address: answers.address.trim(),
+        name: answers.name.trim(),
+        source: 'saved' as const,
+        dateAdded: Date.now(),
+      },
+    ])
+    spinner.succeed('Address added')
+
+    success(`\n+ Added ${answers.name} (${answers.chain}: ${answers.address})`)
+    return []
+  }
+
+  if (options.remove) {
+    const spinner = createSpinner('Removing address from address book...')
+    await ctx.sdk.removeAddressBookEntry([{ address: options.remove, chain: options.chain }])
+    spinner.succeed('Address removed')
+
+    success(`\n+ Removed ${options.remove}`)
+    return []
+  }
+
+  // List address book
+  const spinner = createSpinner('Loading address book...')
+  const addressBook = await ctx.sdk.getAddressBook(options.chain)
+  spinner.succeed('Address book loaded')
+
+  // Combine saved and vault addresses
+  const allEntries = [...addressBook.saved, ...addressBook.vaults]
+
+  if (allEntries.length === 0) {
+    warn(`\nNo addresses in address book${options.chain ? ` for ${options.chain}` : ''}`)
+    console.log(chalk.gray('\nUse --add to add an address to the address book'))
+  } else {
+    console.log(chalk.cyan(`\nAddress Book${options.chain ? ` (${options.chain})` : ''}:\n`))
+
+    const table = allEntries.map(entry => ({
+      Name: entry.name,
+      Chain: entry.chain,
+      Address: entry.address,
+      Source: entry.source,
+    }))
+
+    console.table(table)
+
+    console.log(chalk.gray('\nUse --add to add or --remove <address> to remove an address'))
+  }
+
+  return allEntries as AddressBookEntry[]
+}

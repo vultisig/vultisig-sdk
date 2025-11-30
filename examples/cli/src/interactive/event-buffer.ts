@@ -1,4 +1,10 @@
-import { VaultBase } from '@vultisig/sdk/node'
+/**
+ * Event Buffer - Buffers vault events during command execution
+ *
+ * Prevents vault events from interfering with the REPL prompt.
+ * Events are collected during command execution and displayed after completion.
+ */
+import type { VaultBase } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 
 type BufferedEvent = {
@@ -8,11 +14,9 @@ type BufferedEvent = {
 }
 
 /**
- * Centralized event management for vault events with smart buffering.
- * Events are buffered during command execution to prevent REPL interference,
- * then displayed after the command completes.
+ * EventBuffer - Manages vault event buffering for clean REPL output
  */
-export class EventManager {
+export class EventBuffer {
   private eventBuffer: BufferedEvent[] = []
   private isCommandRunning = false
 
@@ -78,71 +82,63 @@ export class EventManager {
       return
     }
 
-    console.log(chalk.gray('\n─── Background Events ───'))
+    console.log(chalk.gray('\n--- Background Events ---'))
     this.eventBuffer.forEach(event => {
       const timeStr = event.timestamp.toLocaleTimeString()
       const message = `[${timeStr}] ${event.message}`
       this.displayEvent(message, event.type)
     })
-    console.log(chalk.gray('─── End Events ───\n'))
+    console.log(chalk.gray('--- End Events ---\n'))
   }
 
   /**
-   * Setup all vault event listeners in one centralized location.
-   * This replaces the scattered event listener setup in VaultManager and ReplSession.
+   * Setup all vault event listeners
    */
   setupVaultListeners(vault: VaultBase): void {
     // Balance updates
     vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
       const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-      this.handleEvent(`ℹ Balance updated for ${chain} (${asset}): ${balance.amount}`, 'info')
+      this.handleEvent(`i Balance updated for ${chain} (${asset}): ${balance.amount}`, 'info')
     })
 
     // Transaction broadcast
     vault.on('transactionBroadcast', ({ chain, txHash }: any) => {
-      this.handleEvent(`✓ Transaction broadcast on ${chain}`, 'success')
+      this.handleEvent(`+ Transaction broadcast on ${chain}`, 'success')
       this.handleEvent(`  TX Hash: ${txHash}`, 'info')
     })
 
     // Chain added
     vault.on('chainAdded', ({ chain }: any) => {
-      this.handleEvent(`✓ Chain added: ${chain}`, 'success')
+      this.handleEvent(`+ Chain added: ${chain}`, 'success')
     })
 
     // Chain removed
     vault.on('chainRemoved', ({ chain }: any) => {
-      this.handleEvent(`ℹ Chain removed: ${chain}`, 'warning')
+      this.handleEvent(`i Chain removed: ${chain}`, 'warning')
     })
 
     // Token added
     vault.on('tokenAdded', ({ chain, token }: any) => {
-      this.handleEvent(`✓ Token added: ${token.symbol} on ${chain}`, 'success')
+      this.handleEvent(`+ Token added: ${token.symbol} on ${chain}`, 'success')
     })
 
     // Values updated
     vault.on('valuesUpdated', ({ chain }: any) => {
       if (chain === 'all') {
-        this.handleEvent('ℹ Portfolio values updated', 'info')
+        this.handleEvent('i Portfolio values updated', 'info')
       } else {
-        this.handleEvent(`ℹ Values updated for ${chain}`, 'info')
+        this.handleEvent(`i Values updated for ${chain}`, 'info')
       }
     })
 
     // Errors
     vault.on('error', (error: any) => {
-      this.handleEvent(`✗ Vault error: ${error.message}`, 'error')
-    })
-
-    // Vault unlocked (important for prompt update)
-    vault.on('unlocked', () => {
-      // This event is handled separately in ReplSession for prompt updates
-      // We don't need to display it here
+      this.handleEvent(`x Vault error: ${error.message}`, 'error')
     })
   }
 
   /**
    * Remove all event listeners from a vault.
-   * Useful for cleanup when a vault is removed.
    */
   cleanupVaultListeners(vault: VaultBase): void {
     vault.removeAllListeners('balanceUpdated')

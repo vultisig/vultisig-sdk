@@ -1,5 +1,6 @@
 import { Chain } from '@core/chain/Chain'
 import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
+import { isValidAddress } from '@core/chain/utils/isValidAddress'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
@@ -545,8 +546,26 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   /**
    * Add address book entries
+   *
+   * @param entries - Address book entries to add
+   * @throws Error if any address is invalid for its chain
    */
   async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> {
+    // Validate all addresses before adding
+    const walletCore = await this.context.wasmProvider.getWalletCore()
+
+    for (const entry of entries) {
+      const isValid = isValidAddress({
+        chain: entry.chain,
+        address: entry.address,
+        walletCore,
+      })
+
+      if (!isValid) {
+        throw new Error(`Invalid address for ${entry.chain}: ${entry.address}`)
+      }
+    }
+
     return this.addressBookManager.addAddressBookEntry(entries)
   }
 

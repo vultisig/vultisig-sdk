@@ -8,6 +8,8 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "wallet": "tsx src/index.ts",
+    "wallet:interactive": "tsx src/index.ts --interactive",
+    "repl": "tsx src/index.ts --interactive",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

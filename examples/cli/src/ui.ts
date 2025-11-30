@@ -7,32 +7,15 @@
  * - Display formatters for balances, addresses, portfolios
  * - User prompts and confirmations
  */
-import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, Value, VaultBase } from '@vultisig/sdk/node'
+import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk/node'
 import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 import ora, { type Ora } from 'ora'
 
-// ============================================================================
-// Types
-// ============================================================================
-
-export type SendParams = {
-  chain: Chain
-  to: string
-  amount: string // Human-readable amount (e.g., "1.5")
-  tokenId?: string
-  memo?: string
-}
-
-export type PortfolioSummary = {
-  totalValue: Value
-  chainBalances: Array<{
-    chain: Chain
-    balance: Balance
-    value?: Value
-  }>
-}
+// Re-export types from core for backwards compatibility
+export type { PortfolioSummary, SendParams } from './core/types'
+import type { PortfolioSummary } from './core/types'
 
 // ============================================================================
 // Spinner Helpers

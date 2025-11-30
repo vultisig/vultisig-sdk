@@ -32,6 +32,7 @@ The SDK uses instance-scoped configuration:
 - 🎯 Event-driven architecture
 - 🛡️ Production-ready error handling
 - 🔑 Optional password storage for automation
+- 🖥️ **Interactive Shell Mode** - REPL with tab completion and session management
 
 ## Quick Start
 
@@ -57,6 +58,25 @@ You'll be prompted to:
 2. Set a password (min 8 characters)
 3. Provide an email for verification
 4. Enter the verification code sent to your email
+
+### Interactive Shell Mode
+
+Start an interactive REPL session with tab completion and session management:
+
+```bash
+# Start interactive shell
+npm run wallet -- --interactive
+
+# Or use the shorthand
+yarn wallet:interactive
+yarn repl
+```
+
+In interactive mode you get:
+- Tab completion for commands, chains, and vault names
+- Session-based password caching (no repeated prompts)
+- Lock/unlock commands to manage vault security
+- Dynamic prompt showing vault name and lock status
 
 ### Check Balances
 
@@ -103,6 +123,21 @@ npm run wallet send Cosmos cosmos1recipient... 10 --memo "Payment for services"
 | `export [path]`              | Export vault to file                                  |
 | `addresses`                  | Show all vault addresses                              |
 | `chains`                     | List chains (use --add or --remove to manage)         |
+| `tokens <chain>`             | List and manage tokens for a chain                    |
+| `swap <from> <to> <amount>`  | Swap tokens between chains                            |
+| `vaults`                     | List all stored vaults                                |
+| `switch <vaultId>`           | Switch to a different vault                           |
+| `--interactive` / `-i`       | Start interactive shell mode                          |
+
+### Interactive Shell Only Commands
+
+| Command   | Description                           |
+| --------- | ------------------------------------- |
+| `lock`    | Lock vault (clear cached password)    |
+| `unlock`  | Unlock vault (cache password)         |
+| `status`  | Show vault status                     |
+| `help`    | Show available commands               |
+| `.exit`   | Exit the shell                        |
 
 ## Configuration
 
@@ -240,10 +275,29 @@ examples/cli/
 ├── .env.example           # Environment variable template
 ├── .gitignore             # Git ignore rules
 └── src/
-    ├── index.ts           # Main CLI interface
-    ├── wallet.ts          # Vault operations wrapper (VaultManager)
-    ├── transaction.ts     # Transaction helpers (TransactionManager)
-    └── types.ts           # Shared types and interfaces
+    ├── index.ts           # Main CLI entry point
+    ├── ui.ts              # Display utilities and prompts
+    ├── core/              # Shared infrastructure
+    │   ├── types.ts       # Shared type definitions
+    │   ├── command-context.ts # CommandContext interface
+    │   └── password-manager.ts # Password handling
+    ├── commands/          # Extracted command logic
+    │   ├── balance.ts     # Balance and portfolio commands
+    │   ├── chains.ts      # Chain management commands
+    │   ├── tokens.ts      # Token management commands
+    │   ├── transaction.ts # Send transaction command
+    │   ├── vault-management.ts # Vault CRUD commands
+    │   ├── swap.ts        # Swap commands
+    │   └── settings.ts    # Settings commands
+    ├── adapters/          # Mode-specific wiring
+    │   ├── cli-context.ts # CLI implementation of CommandContext
+    │   └── cli-runner.ts  # CLI command wrapper
+    └── interactive/       # Interactive shell module
+        ├── session.ts     # REPL session
+        ├── shell-context.ts # Shell CommandContext with caching
+        ├── shell-commands.ts # Shell-only commands (lock/unlock)
+        ├── event-buffer.ts # Event buffering for clean prompts
+        └── completer.ts   # Tab completion
 ```
 
 ## Testing
