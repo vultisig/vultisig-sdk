@@ -51,15 +51,21 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
     fromCoin: { chain: options.fromChain, token: options.fromToken },
     toCoin: { chain: options.toChain, token: options.toToken },
     amount: options.amount,
+    fiatCurrency: 'usd', // Request fiat conversion
   })
 
   spinner.succeed('Quote received')
 
-  // Get symbols for display
-  const fromBalance = await vault.balance(options.fromChain, options.fromToken)
-  const toBalance = await vault.balance(options.toChain, options.toToken)
+  // Get native token for fee display (fees are paid in native token)
+  const feeBalance = await vault.balance(options.fromChain)
 
-  displaySwapPreview(quote, String(options.amount), fromBalance.symbol, toBalance.symbol)
+  // Use coin info from quote for accurate decimals and symbols
+  displaySwapPreview(quote, String(options.amount), quote.fromCoin.ticker, quote.toCoin.ticker, {
+    fromDecimals: quote.fromCoin.decimals,
+    toDecimals: quote.toCoin.decimals,
+    feeDecimals: feeBalance.decimals,
+    feeSymbol: feeBalance.symbol,
+  })
 
   info('\nTo execute this swap, use the "swap" command')
 
@@ -97,16 +103,21 @@ export async function executeSwap(
     fromCoin: { chain: options.fromChain, token: options.fromToken },
     toCoin: { chain: options.toChain, token: options.toToken },
     amount: options.amount,
+    fiatCurrency: 'usd', // Request fiat conversion
   })
 
   quoteSpinner.succeed('Quote received')
 
-  // Get symbols for display
-  const fromBalance = await vault.balance(options.fromChain, options.fromToken)
-  const toBalance = await vault.balance(options.toChain, options.toToken)
+  // Get native token for fee display (fees are paid in native token)
+  const feeBalance = await vault.balance(options.fromChain)
 
-  // 2. Display preview
-  displaySwapPreview(quote, String(options.amount), fromBalance.symbol, toBalance.symbol)
+  // 2. Display preview using coin info from quote for accurate decimals
+  displaySwapPreview(quote, String(options.amount), quote.fromCoin.ticker, quote.toCoin.ticker, {
+    fromDecimals: quote.fromCoin.decimals,
+    toDecimals: quote.toCoin.decimals,
+    feeDecimals: feeBalance.decimals,
+    feeSymbol: feeBalance.symbol,
+  })
 
   // 3. Confirm with user (skip if --yes flag is set)
   if (!options.yes) {
@@ -196,7 +207,7 @@ export async function executeSwap(
     broadcastSpinner.succeed(`Swap broadcast: ${txHash}`)
 
     // 8. Display result
-    displaySwapResult(options.fromChain, options.toChain, txHash, quote)
+    displaySwapResult(options.fromChain, options.toChain, txHash, quote, quote.toCoin.decimals)
 
     return { txHash, quote }
   } finally {

@@ -56,6 +56,8 @@ vi.mock('@core/chain/coin/chainFeeCoin', () => ({
     Arbitrum: { ticker: 'ETH', decimals: 18 },
     Solana: { ticker: 'SOL', decimals: 9 },
     Cosmos: { ticker: 'ATOM', decimals: 6 },
+    Hyperliquid: { ticker: 'HYPE', decimals: 18 },
+    Optimism: { ticker: 'ETH', decimals: 18 },
   },
 }))
 
@@ -378,12 +380,19 @@ describe('SwapService', () => {
             },
           },
         },
-        estimatedOutput: '1.0',
+        estimatedOutput: 1000000000n,
         provider: '1inch',
         expiresAt: Date.now() + 60000,
         requiresApproval: false,
-        fees: { network: '0', total: '0' },
+        fees: { network: 0n, total: 0n },
         warnings: [],
+        fromCoin: { chain: Chain.Ethereum, ticker: 'ETH', decimals: 18 },
+        toCoin: {
+          chain: Chain.Ethereum,
+          ticker: 'USDC',
+          decimals: 6,
+          tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        },
       }
 
       const result = await service.prepareSwapTx({
@@ -412,7 +421,7 @@ describe('SwapService', () => {
       expect(mockEmitEvent).toHaveBeenCalledWith('swapPrepared', {
         provider: '1inch',
         fromAmount: '1',
-        toAmountExpected: '1.0',
+        toAmountExpected: '1000000000',
         requiresApproval: false,
       })
     })
@@ -433,12 +442,14 @@ describe('SwapService', () => {
             warning: '',
           },
         },
-        estimatedOutput: '1.0',
+        estimatedOutput: 1000000000n,
         provider: 'thorchain',
         expiresAt: Date.now() - 10000, // Expired
         requiresApproval: false,
-        fees: { network: '0', total: '0' },
+        fees: { network: 0n, total: 0n },
         warnings: [],
+        fromCoin: { chain: Chain.Ethereum, ticker: 'ETH', decimals: 18 },
+        toCoin: { chain: Chain.Bitcoin, ticker: 'BTC', decimals: 8 },
       }
 
       await expect(
@@ -491,7 +502,7 @@ describe('SwapService', () => {
             },
           },
         },
-        estimatedOutput: '1.0',
+        estimatedOutput: 1000000000000000000n,
         provider: '1inch',
         expiresAt: Date.now() + 60000,
         requiresApproval: true,
@@ -500,8 +511,15 @@ describe('SwapService', () => {
           currentAllowance: 0n,
           requiredAmount: 100000000n,
         },
-        fees: { network: '0', total: '0' },
+        fees: { network: 0n, total: 0n },
         warnings: [],
+        fromCoin: {
+          chain: Chain.Ethereum,
+          ticker: 'USDC',
+          decimals: 6,
+          tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        },
+        toCoin: { chain: Chain.Ethereum, ticker: 'ETH', decimals: 18 },
       }
 
       await service.prepareSwapTx({

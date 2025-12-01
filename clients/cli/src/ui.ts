@@ -254,24 +254,77 @@ export function setupVaultEvents(vault: VaultBase): void {
 // Swap Display Helpers
 // ============================================================================
 
+/**
+ * Format bigint amount to human-readable string
+ */
+function formatBigintAmount(amount: bigint, decimals: number): string {
+  if (amount === 0n) return '0'
+
+  const divisor = BigInt(10 ** decimals)
+  const whole = amount / divisor
+  const fraction = amount % divisor
+
+  if (fraction === 0n) {
+    return whole.toString()
+  }
+
+  const fractionStr = fraction.toString().padStart(decimals, '0')
+  // Trim trailing zeros
+  const trimmed = fractionStr.replace(/0+$/, '')
+  return `${whole}.${trimmed}`
+}
+
+export type SwapPreviewOptions = {
+  fromDecimals: number
+  toDecimals: number
+  feeDecimals: number
+  feeSymbol: string
+}
+
 export function displaySwapPreview(
   quote: SwapQuoteResult,
   fromAmount: string,
   fromSymbol: string,
-  toSymbol: string
+  toSymbol: string,
+  options: SwapPreviewOptions
 ): void {
+  const estimatedOutputFormatted = formatBigintAmount(quote.estimatedOutput, options.toDecimals)
+
   printResult(chalk.cyan('\nSwap Preview:'))
   printResult(`  From:     ${fromAmount} ${fromSymbol}`)
-  printResult(`  To:       ${quote.estimatedOutput} ${toSymbol}`)
+  printResult(`  To:       ${estimatedOutputFormatted} ${toSymbol}`)
+
+  // Show fiat value if available
+  if (quote.estimatedOutputFiat !== undefined) {
+    printResult(`            (~$${quote.estimatedOutputFiat.toFixed(2)})`)
+  }
+
   printResult(`  Provider: ${quote.provider}`)
 
   if (quote.fees) {
+    const networkFeeFormatted = formatBigintAmount(quote.fees.network, options.feeDecimals)
+    const totalFeeFormatted = formatBigintAmount(quote.fees.total, options.feeDecimals)
+
     printResult(chalk.bold('\n  Fees:'))
-    printResult(`    Network:  ${quote.fees.network}`)
-    if (quote.fees.affiliate) {
-      printResult(`    Affiliate: ${quote.fees.affiliate}`)
+    printResult(`    Network:  ${networkFeeFormatted} ${options.feeSymbol}`)
+
+    // Show fiat fee if available
+    if (quote.feesFiat) {
+      printResult(`              (~$${quote.feesFiat.network.toFixed(2)})`)
     }
-    printResult(`    Total:    ${quote.fees.total}`)
+
+    if (quote.fees.affiliate && quote.fees.affiliate > 0n) {
+      const affiliateFeeFormatted = formatBigintAmount(quote.fees.affiliate, options.feeDecimals)
+      printResult(`    Affiliate: ${affiliateFeeFormatted} ${options.feeSymbol}`)
+      if (quote.feesFiat?.affiliate) {
+        printResult(`               (~$${quote.feesFiat.affiliate.toFixed(2)})`)
+      }
+    }
+
+    printResult(`    Total:    ${totalFeeFormatted} ${options.feeSymbol}`)
+    if (quote.feesFiat) {
+      printResult(`              (~$${quote.feesFiat.total.toFixed(2)})`)
+    }
   }
 
   if (quote.warnings && quote.warnings.length > 0) {
@@ -293,12 +346,19 @@ export function displaySwapPreview(
   info(chalk.gray(`\n  Quote expires in ${expiresIn}s`))
 }
 
-export function displaySwapResult(fromChain: Chain, _toChain: Chain, txHash: string, quote: SwapQuoteResult): void {
+export function displaySwapResult(
+  fromChain: Chain,
+  _toChain: Chain,
+  txHash: string,
+  quote: SwapQuoteResult,
+  toDecimals: number
+): void {
   const explorerUrl = Vultisig.getTxExplorerUrl(fromChain, txHash)
+  const estimatedOutputFormatted = formatBigintAmount(quote.estimatedOutput, toDecimals)
 
   printResult(txHash)
   printResult(explorerUrl)
-  printResult(quote.estimatedOutput)
+  printResult(estimatedOutputFormatted)
 }
 
 export function displaySwapChains(chains: readonly Chain[]): void {

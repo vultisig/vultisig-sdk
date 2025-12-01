@@ -305,7 +305,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       this.coreVault,
       chain => this.address(chain),
       (event, data) => this.emit(event, data),
-      this.wasmProvider
+      this.wasmProvider,
+      this.fiatValueService
     )
 
     // Setup event-driven cache invalidation

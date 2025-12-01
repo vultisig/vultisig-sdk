@@ -50,7 +50,7 @@ export class SharedWasmRuntime {
 
     const arrayBuffer = await wasmLoader()
     const { default: initializeDkls } = await import('../../../lib/dkls/vs_wasm.js')
-    await initializeDkls(arrayBuffer)
+    await initializeDkls({ module_or_path: arrayBuffer })
 
     SharedWasmRuntime.dklsInitialized = true
   })
@@ -68,7 +68,7 @@ export class SharedWasmRuntime {
 
     const arrayBuffer = await wasmLoader()
     const { default: initializeSchnorr } = await import('../../../lib/schnorr/vs_schnorr_wasm.js')
-    await initializeSchnorr(arrayBuffer)
+    await initializeSchnorr({ module_or_path: arrayBuffer })
 
     SharedWasmRuntime.schnorrInitialized = true
   })
@@ -213,7 +213,7 @@ export class SharedWasmRuntime {
 
       const arrayBuffer = await wasmLoader()
       const { default: initializeDkls } = await import('../../../lib/dkls/vs_wasm.js')
-      await initializeDkls(arrayBuffer)
+      await initializeDkls({ module_or_path: arrayBuffer })
 
       SharedWasmRuntime.dklsInitialized = true
     })
@@ -231,7 +231,7 @@ export class SharedWasmRuntime {
 
       const arrayBuffer = await wasmLoader()
       const { default: initializeSchnorr } = await import('../../../lib/schnorr/vs_schnorr_wasm.js')
-      await initializeSchnorr(arrayBuffer)
+      await initializeSchnorr({ module_or_path: arrayBuffer })
 
       SharedWasmRuntime.schnorrInitialized = true
     })

@@ -8,23 +8,28 @@
  * - Chain support queries
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain, EvmChain } from '@core/chain/Chain'
 import { isChainOfKind } from '@core/chain/ChainKind'
 import { getErc20Allowance } from '@core/chain/chains/evm/erc20/getErc20Allowance'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { getTokenMetadata } from '@core/chain/coin/token/metadata'
 import { chainsWithTokenMetadataDiscovery } from '@core/chain/coin/token/metadata/chains'
+import { getCoinValue } from '@core/chain/coin/utils/getCoinValue'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { findSwapQuote, FindSwapQuoteInput } from '@core/chain/swap/quote/findSwapQuote'
 import { SwapQuote } from '@core/chain/swap/quote/SwapQuote'
 import { swapEnabledChains } from '@core/chain/swap/swapEnabledChains'
+import { getEvmBaseFee } from '@core/chain/tx/fee/evm/baseFee'
+import { getEvmMaxPriorityFeePerGas } from '@core/chain/tx/fee/evm/maxPriorityFeePerGas'
+import { FiatCurrency } from '@core/config/FiatCurrency'
 import { buildSwapKeysignPayload } from '@core/mpc/keysign/swap/build'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 import type { WasmProvider } from '../../context/SdkContext'
 import { VaultEvents } from '../../events/types'
+import type { FiatValueService } from '../../services/FiatValueService'
 import {
   CoinInput,
   isAccountCoin,
@@ -48,7 +53,8 @@ export class SwapService {
     private vaultData: CoreVault,
     private getAddress: (chain: Chain) => Promise<string>,
     private emitEvent: <K extends keyof VaultEvents>(event: K, data: VaultEvents[K]) => void,
-    private wasmProvider: WasmProvider
+    private wasmProvider: WasmProvider,
+    private fiatValueService?: FiatValueService
   ) {}
 
   /**
@@ -74,8 +80,8 @@ export class SwapService {
       // Check if approval is required (for ERC-20 tokens)
       const approvalInfo = await this.checkApprovalRequired(fromCoin, params.amount, quote)
 
-      // Format the result
-      const result = this.formatQuoteResult(quote, fromCoin, toCoin, approvalInfo)
+      // Format the result (with optional fiat conversion)
+      const result = await this.formatQuoteResult(quote, fromCoin, toCoin, approvalInfo, params.fiatCurrency)
 
       // Emit event
       this.emitEvent('swapQuoteReceived', { quote: result })
@@ -156,7 +162,7 @@ export class SwapService {
       this.emitEvent('swapPrepared', {
         provider: params.swapQuote.provider,
         fromAmount: params.amount.toString(),
-        toAmountExpected: params.swapQuote.estimatedOutput,
+        toAmountExpected: params.swapQuote.estimatedOutput.toString(),
         requiresApproval: !!keysignPayload.erc20ApprovePayload,
       })
 
@@ -328,28 +334,27 @@ export class SwapService {
   /**
    * Format quote into SwapQuoteResult
    */
-  private formatQuoteResult(
+  private async formatQuoteResult(
     quote: SwapQuote,
     fromCoin: AccountCoin,
     toCoin: AccountCoin,
-    approvalInfo?: SwapApprovalInfo
-  ): SwapQuoteResult {
+    approvalInfo?: SwapApprovalInfo,
+    fiatCurrency?: FiatCurrency
+  ): Promise<SwapQuoteResult> {
     const isNative = 'native' in quote
 
     // Calculate expiry
     const expiresIn = isNative ? quote.native.expiry * 1000 - Date.now() : DEFAULT_QUOTE_EXPIRY_MS
     const expiresAt = Date.now() + Math.min(expiresIn, DEFAULT_QUOTE_EXPIRY_MS)
 
-    // Extract estimated output
-    const estimatedOutput = isNative
-      ? this.formatAmount(quote.native.expected_amount_out, toCoin.decimals)
-      : this.formatAmount(quote.general.dstAmount, toCoin.decimals)
+    // Extract estimated output as bigint
+    const estimatedOutput = isNative ? BigInt(quote.native.expected_amount_out) : BigInt(quote.general.dstAmount)
 
     // Extract provider name
     const provider = isNative ? quote.native.swapChain.toLowerCase() : quote.general.provider
 
     // Extract fees
-    const fees = this.extractFees(quote)
+    const fees = await this.extractFees(quote, fromCoin.chain)
 
     // Extract warnings
     const warnings: string[] = []
@@ -357,7 +362,8 @@ export class SwapService {
       warnings.push(quote.native.warning)
     }
 
-    return {
+    // Build base result
+    const result: SwapQuoteResult = {
       quote,
       estimatedOutput,
       provider,
@@ -366,44 +372,96 @@ export class SwapService {
       approvalInfo,
       fees,
       warnings,
-    }
-  }
-
-  /**
-   * Format raw amount to human-readable string
-   */
-  private formatAmount(rawAmount: string, decimals: number): string {
-    const value = BigInt(rawAmount)
-    const divisor = BigInt(10 ** decimals)
-    const whole = value / divisor
-    const fraction = value % divisor
-
-    if (fraction === BigInt(0)) {
-      return whole.toString()
+      fromCoin: {
+        chain: fromCoin.chain,
+        ticker: fromCoin.ticker,
+        decimals: fromCoin.decimals,
+        tokenId: fromCoin.id,
+      },
+      toCoin: {
+        chain: toCoin.chain,
+        ticker: toCoin.ticker,
+        decimals: toCoin.decimals,
+        tokenId: toCoin.id,
+      },
     }
 
-    const fractionStr = fraction.toString().padStart(decimals, '0')
-    // Trim trailing zeros
-    const trimmed = fractionStr.replace(/0+$/, '')
-    return `${whole}.${trimmed}`
+    // Calculate fiat values if fiatValueService is available and fiatCurrency requested
+    if (fiatCurrency && this.fiatValueService) {
+      try {
+        // Get price for fee token (native token of from chain)
+        const feeTokenDecimals = chainFeeCoin[fromCoin.chain].decimals
+        const feePrice = await this.fiatValueService.getPrice(fromCoin.chain, undefined, fiatCurrency)
+
+        result.feesFiat = {
+          network: getCoinValue({ amount: fees.network, decimals: feeTokenDecimals, price: feePrice }),
+          affiliate: fees.affiliate
+            ? getCoinValue({ amount: fees.affiliate, decimals: feeTokenDecimals, price: feePrice })
+            : undefined,
+          total: getCoinValue({ amount: fees.total, decimals: feeTokenDecimals, price: feePrice }),
+          currency: fiatCurrency,
+        }
+
+        // Get price for output token
+        const toPrice = await this.fiatValueService.getPrice(toCoin.chain, toCoin.id, fiatCurrency)
+        result.estimatedOutputFiat = getCoinValue({
+          amount: estimatedOutput,
+          decimals: toCoin.decimals,
+          price: toPrice,
+        })
+      } catch {
+        // Silently skip fiat calculation if price fetch fails
+      }
+    }
+
+    return result
   }
 
   /**
    * Extract fees from quote
    */
-  private extractFees(quote: SwapQuote): SwapFees {
+  private async extractFees(quote: SwapQuote, fromChain: Chain): Promise<SwapFees> {
     if ('native' in quote) {
       return {
-        network: quote.native.fees.outbound,
-        affiliate: quote.native.fees.affiliate,
-        total: quote.native.fees.total,
+        network: BigInt(quote.native.fees.outbound),
+        affiliate: quote.native.fees.affiliate ? BigInt(quote.native.fees.affiliate) : undefined,
+        total: BigInt(quote.native.fees.total),
       }
     }
 
-    // General swaps - fees are embedded in the output amount
+    // General swaps
+    const { tx } = quote.general
+
+    // Solana has explicit fees in the quote
+    if ('solana' in tx) {
+      const networkFee = tx.solana.networkFee
+      const swapFee = tx.solana.swapFee.amount
+      return {
+        network: networkFee,
+        total: networkFee + swapFee,
+      }
+    }
+
+    // EVM - estimate from gasLimit × gas price
+    if ('evm' in tx && tx.evm.gasLimit) {
+      try {
+        const evmChain = fromChain as EvmChain
+        const baseFee = await getEvmBaseFee(evmChain)
+        const priorityFee = await getEvmMaxPriorityFeePerGas(evmChain)
+        const networkFee = tx.evm.gasLimit * (baseFee + priorityFee)
+        return {
+          network: networkFee,
+          total: networkFee,
+        }
+      } catch {
+        // Fall through to default if gas price fetch fails
+      }
+    }
+
+    // Fallback for unknown swap types
     return {
-      network: '0',
-      total: '0',
+      network: 0n,
+      total: 0n,
     }
   }
 
