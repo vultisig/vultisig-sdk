@@ -13,6 +13,8 @@ import { isChainOfKind } from '@core/chain/ChainKind'
 import { getErc20Allowance } from '@core/chain/chains/evm/erc20/getErc20Allowance'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { getTokenMetadata } from '@core/chain/coin/token/metadata'
+import { chainsWithTokenMetadataDiscovery } from '@core/chain/coin/token/metadata/chains'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { findSwapQuote, FindSwapQuoteInput } from '@core/chain/swap/quote/findSwapQuote'
 import { SwapQuote } from '@core/chain/swap/quote/SwapQuote'
@@ -232,16 +234,38 @@ export class SwapService {
     // Get native token info from chainFeeCoin
     const nativeCoin = chainFeeCoin[input.chain]
 
-    // If token is specified, it's the contract address
-    // If not specified, use native token
+    // If token is specified, fetch real metadata from chain
     if (input.token) {
-      return {
-        chain: input.chain,
-        address,
-        id: input.token, // Token contract address
-        ticker: input.token.substring(0, 6), // Placeholder ticker
-        decimals: 18, // Default to 18 for ERC-20 tokens
+      // Check if chain supports token metadata discovery
+      const supportsMetadata = (chainsWithTokenMetadataDiscovery as readonly Chain[]).includes(input.chain)
+
+      if (supportsMetadata) {
+        try {
+          const metadata = await getTokenMetadata({
+            chain: input.chain as any,
+            id: input.token,
+          })
+
+          return {
+            chain: input.chain,
+            address,
+            id: input.token,
+            ticker: metadata.ticker,
+            decimals: metadata.decimals,
+          }
+        } catch (error) {
+          throw new VaultError(
+            VaultErrorCode.UnsupportedToken,
+            `Failed to fetch metadata for token ${input.token} on ${input.chain}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        }
       }
+
+      // Fallback for chains without metadata discovery (shouldn't happen for swap-enabled chains)
+      throw new VaultError(
+        VaultErrorCode.UnsupportedToken,
+        `Token metadata discovery not supported for chain ${input.chain}`
+      )
     }
 
     return {
