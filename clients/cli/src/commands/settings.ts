@@ -7,7 +7,7 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
-import { createSpinner, error, success, warn } from '../ui'
+import { createSpinner, error, info, printResult, printTable, success, warn } from '../lib/output'
 
 /**
  * Execute currency command - view or set currency preference
@@ -18,10 +18,10 @@ export async function executeCurrency(ctx: CommandContext, newCurrency?: string)
   if (!newCurrency) {
     const currentCurrency = vault.currency
     const currencyName = fiatCurrencyNameRecord[currentCurrency]
-    console.log(chalk.cyan('\nCurrent Currency Preference:'))
-    console.log(`  ${chalk.green(currentCurrency.toUpperCase())} - ${currencyName}`)
-    console.log(chalk.gray(`\nSupported currencies: ${fiatCurrencies.join(', ')}`))
-    console.log(chalk.gray('Use "npm run wallet currency <code>" to change'))
+    printResult(chalk.cyan('\nCurrent Currency Preference:'))
+    printResult(`  ${chalk.green(currentCurrency.toUpperCase())} - ${currencyName}`)
+    info(chalk.gray(`\nSupported currencies: ${fiatCurrencies.join(', ')}`))
+    info(chalk.gray('Use "npm run wallet currency <code>" to change'))
     return currentCurrency
   }
 
@@ -55,16 +55,16 @@ export async function executeServer(ctx: CommandContext): Promise<{
     const status = await ctx.sdk.getServerStatus()
     spinner.succeed('Server status retrieved')
 
-    console.log(chalk.cyan('\nServer Status:\n'))
-    console.log(chalk.bold('Fast Vault Server:'))
-    console.log(`  Online:   ${status.fastVault.online ? chalk.green('Yes') : chalk.red('No')}`)
+    printResult(chalk.cyan('\nServer Status:\n'))
+    printResult(chalk.bold('Fast Vault Server:'))
+    printResult(`  Online:   ${status.fastVault.online ? chalk.green('Yes') : chalk.red('No')}`)
     if (status.fastVault.latency) {
-      console.log(`  Latency:  ${status.fastVault.latency}ms`)
+      printResult(`  Latency:  ${status.fastVault.latency}ms`)
     }
-    console.log(chalk.bold('\nMessage Relay:'))
-    console.log(`  Online:   ${status.messageRelay.online ? chalk.green('Yes') : chalk.red('No')}`)
+    printResult(chalk.bold('\nMessage Relay:'))
+    printResult(`  Online:   ${status.messageRelay.online ? chalk.green('Yes') : chalk.red('No')}`)
     if (status.messageRelay.latency) {
-      console.log(`  Latency:  ${status.messageRelay.latency}ms`)
+      printResult(`  Latency:  ${status.messageRelay.latency}ms`)
     }
 
     return status
@@ -173,9 +173,9 @@ export async function executeAddressBook(
 
   if (allEntries.length === 0) {
     warn(`\nNo addresses in address book${options.chain ? ` for ${options.chain}` : ''}`)
-    console.log(chalk.gray('\nUse --add to add an address to the address book'))
+    info(chalk.gray('\nUse --add to add an address to the address book'))
   } else {
-    console.log(chalk.cyan(`\nAddress Book${options.chain ? ` (${options.chain})` : ''}:\n`))
+    printResult(chalk.cyan(`\nAddress Book${options.chain ? ` (${options.chain})` : ''}:\n`))
 
     const table = allEntries.map(entry => ({
       Name: entry.name,
@@ -184,9 +184,9 @@ export async function executeAddressBook(
       Source: entry.source,
     }))
 
-    console.table(table)
+    printTable(table)
 
-    console.log(chalk.gray('\nUse --add to add or --remove <address> to remove an address'))
+    info(chalk.gray('\nUse --add to add or --remove <address> to remove an address'))
   }
 
   return allEntries as AddressBookEntry[]

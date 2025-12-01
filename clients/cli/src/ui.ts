@@ -2,63 +2,37 @@
  * UI Helper Module - Presentation layer utilities for CLI
  *
  * Contains all UI-related functionality:
- * - Spinners for async operations
- * - Colored console output
  * - Display formatters for balances, addresses, portfolios
  * - User prompts and confirmations
+ *
+ * Note: For output helpers (info, success, warn, error, createSpinner),
+ * import directly from './lib/output' which respects silent mode.
  */
 import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk/node'
 import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
-import ora, { type Ora } from 'ora'
 
 // Re-export types from core for backwards compatibility
 export type { PortfolioSummary, SendParams } from './core/types'
 import type { PortfolioSummary } from './core/types'
-
-// ============================================================================
-// Spinner Helpers
-// ============================================================================
-
-export function createSpinner(text: string): Ora {
-  return ora(text).start()
-}
-
-// ============================================================================
-// Console Output Helpers
-// ============================================================================
-
-export function success(message: string): void {
-  console.log(chalk.green(`\n${message}`))
-}
-
-export function error(message: string): void {
-  console.error(chalk.red(`\n${message}`))
-}
-
-export function info(message: string): void {
-  console.log(chalk.blue(message))
-}
-
-export function warn(message: string): void {
-  console.log(chalk.yellow(message))
-}
+// Import output helpers
+import { info, printError, printResult, printTable, warn } from './lib/output'
 
 // ============================================================================
 // Display Formatters
 // ============================================================================
 
 export function displayBalance(chain: string, balance: Balance): void {
-  console.log(chalk.cyan(`\n${chain} Balance:`))
-  console.log(`  Amount: ${balance.amount} ${balance.symbol}`)
+  printResult(chalk.cyan(`\n${chain} Balance:`))
+  printResult(`  Amount: ${balance.amount} ${balance.symbol}`)
   if (balance.fiatValue && balance.fiatCurrency) {
-    console.log(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
+    printResult(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
   }
 }
 
 export function displayBalancesTable(balances: Record<string, Balance>): void {
-  console.log(chalk.cyan('\nPortfolio Balances:\n'))
+  printResult(chalk.cyan('\nPortfolio Balances:\n'))
 
   const tableData = Object.entries(balances).map(([chain, balance]) => ({
     Chain: chain,
@@ -68,22 +42,22 @@ export function displayBalancesTable(balances: Record<string, Balance>): void {
       balance.fiatValue && balance.fiatCurrency ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}` : 'N/A',
   }))
 
-  console.table(tableData)
+  printTable(tableData)
 }
 
 export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurrency): void {
   const currencyName = fiatCurrencyNameRecord[currency]
 
   // Display total value
-  console.log(chalk.cyan('\n+----------------------------------------+'))
-  console.log(chalk.cyan(`|       Portfolio Total Value (${currencyName})       |`))
-  console.log(chalk.cyan('+----------------------------------------+'))
+  printResult(chalk.cyan('\n+----------------------------------------+'))
+  printResult(chalk.cyan(`|       Portfolio Total Value (${currencyName})       |`))
+  printResult(chalk.cyan('+----------------------------------------+'))
   const totalDisplay = portfolio.totalValue.amount.padEnd(20) + portfolio.totalValue.currency.toUpperCase().padStart(16)
-  console.log(chalk.cyan('|  ') + chalk.bold.green(totalDisplay) + chalk.cyan('  |'))
-  console.log(chalk.cyan('+----------------------------------------+\n'))
+  printResult(chalk.cyan('|  ') + chalk.bold.green(totalDisplay) + chalk.cyan('  |'))
+  printResult(chalk.cyan('+----------------------------------------+\n'))
 
   // Display breakdown by chain
-  console.log(chalk.bold('Chain Breakdown:\n'))
+  printResult(chalk.bold('Chain Breakdown:\n'))
 
   const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
     Chain: chain,
@@ -92,69 +66,69 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
     Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
   }))
 
-  console.table(table)
+  printTable(table)
 }
 
 export function displayAddresses(addresses: Record<string, string>): void {
-  console.log(chalk.cyan('\nVault Addresses:\n'))
+  printResult(chalk.cyan('\nVault Addresses:\n'))
 
   const table = Object.entries(addresses).map(([chain, address]) => ({
     Chain: chain,
     Address: address,
   }))
 
-  console.table(table)
+  printTable(table)
 }
 
 export function displayVaultInfo(vault: VaultBase): void {
-  console.log(chalk.cyan('\n+----------------------------------------+'))
-  console.log(chalk.cyan('|           Vault Information            |'))
-  console.log(chalk.cyan('+----------------------------------------+\n'))
+  printResult(chalk.cyan('\n+----------------------------------------+'))
+  printResult(chalk.cyan('|           Vault Information            |'))
+  printResult(chalk.cyan('+----------------------------------------+\n'))
 
   // Basic info
-  console.log(chalk.bold('Basic Information:'))
-  console.log(`  Name:          ${chalk.green(vault.name)}`)
-  console.log(`  ID:            ${vault.id}`)
-  console.log(`  Type:          ${chalk.yellow(vault.type)}`)
-  console.log(`  Created:       ${new Date(vault.createdAt).toLocaleString()}`)
-  console.log(`  Last Modified: ${new Date(vault.lastModified).toLocaleString()}`)
+  printResult(chalk.bold('Basic Information:'))
+  printResult(`  Name:          ${chalk.green(vault.name)}`)
+  printResult(`  ID:            ${vault.id}`)
+  printResult(`  Type:          ${chalk.yellow(vault.type)}`)
+  printResult(`  Created:       ${new Date(vault.createdAt).toLocaleString()}`)
+  printResult(`  Last Modified: ${new Date(vault.lastModified).toLocaleString()}`)
 
   // Security info
-  console.log(chalk.bold('\nSecurity:'))
-  console.log(`  Encrypted:     ${vault.isEncrypted ? chalk.green('Yes') : chalk.gray('No')}`)
-  console.log(`  Backed Up:     ${vault.isBackedUp ? chalk.green('Yes') : chalk.yellow('No')}`)
+  printResult(chalk.bold('\nSecurity:'))
+  printResult(`  Encrypted:     ${vault.isEncrypted ? chalk.green('Yes') : chalk.gray('No')}`)
+  printResult(`  Backed Up:     ${vault.isBackedUp ? chalk.green('Yes') : chalk.yellow('No')}`)
 
   // MPC info
-  console.log(chalk.bold('\nMPC Configuration:'))
-  console.log(`  Library Type:  ${vault.libType}`)
-  console.log(`  Threshold:     ${chalk.cyan(vault.threshold)} of ${chalk.cyan(vault.totalSigners)}`)
-  console.log(`  Local Party:   ${vault.localPartyId}`)
-  console.log(`  Total Signers: ${vault.totalSigners}`)
+  printResult(chalk.bold('\nMPC Configuration:'))
+  printResult(`  Library Type:  ${vault.libType}`)
+  printResult(`  Threshold:     ${chalk.cyan(vault.threshold)} of ${chalk.cyan(vault.totalSigners)}`)
+  printResult(`  Local Party:   ${vault.localPartyId}`)
+  printResult(`  Total Signers: ${vault.totalSigners}`)
 
   // Signing modes
   const modes = vault.availableSigningModes
-  console.log(chalk.bold('\nSigning Modes:'))
+  printResult(chalk.bold('\nSigning Modes:'))
   modes.forEach(mode => {
-    console.log(`  - ${mode}`)
+    printResult(`  - ${mode}`)
   })
 
   // Chains
   const chains = vault.chains
-  console.log(chalk.bold('\nChains:'))
-  console.log(`  Total: ${chains.length}`)
+  printResult(chalk.bold('\nChains:'))
+  printResult(`  Total: ${chains.length}`)
   chains.forEach((chain: Chain) => {
-    console.log(`  - ${chain}`)
+    printResult(`  - ${chain}`)
   })
 
   // Currency
-  console.log(chalk.bold('\nPreferences:'))
-  console.log(`  Currency:      ${vault.currency.toUpperCase()}`)
+  printResult(chalk.bold('\nPreferences:'))
+  printResult(`  Currency:      ${vault.currency.toUpperCase()}`)
 
   // Public keys
-  console.log(chalk.bold('\nPublic Keys:'))
-  console.log(`  ECDSA:         ${vault.publicKeys.ecdsa.substring(0, 20)}...`)
-  console.log(`  EdDSA:         ${vault.publicKeys.eddsa.substring(0, 20)}...`)
-  console.log(`  Chain Code:    ${vault.hexChainCode.substring(0, 20)}...\n`)
+  printResult(chalk.bold('\nPublic Keys:'))
+  printResult(`  ECDSA:         ${vault.publicKeys.ecdsa.substring(0, 20)}...`)
+  printResult(`  EdDSA:         ${vault.publicKeys.eddsa.substring(0, 20)}...`)
+  printResult(`  Chain Code:    ${vault.hexChainCode.substring(0, 20)}...\n`)
 }
 
 export function displayTransactionPreview(
@@ -167,29 +141,28 @@ export function displayTransactionPreview(
   gas?: GasInfo
 ): void {
   if (gas) {
-    console.log(chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`))
+    info(chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`))
   }
 
-  console.log(chalk.cyan('\nTransaction Preview:'))
-  console.log(`  From:   ${fromAddress}`)
-  console.log(`  To:     ${toAddress}`)
-  console.log(`  Amount: ${amount} ${symbol}`)
-  console.log(`  Chain:  ${chain}`)
+  printResult(chalk.cyan('\nTransaction Preview:'))
+  printResult(`  From:   ${fromAddress}`)
+  printResult(`  To:     ${toAddress}`)
+  printResult(`  Amount: ${amount} ${symbol}`)
+  printResult(`  Chain:  ${chain}`)
   if (memo) {
-    console.log(`  Memo:   ${memo}`)
+    printResult(`  Memo:   ${memo}`)
   }
 }
 
 export function displayTransactionResult(chain: Chain, txHash: string): void {
   const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
 
-  console.log(chalk.green('\n+ Transaction successful!'))
-  console.log(chalk.blue(`\nTransaction Hash: ${txHash}`))
-  console.log(chalk.cyan(`View on explorer: ${explorerUrl}`))
+  printResult(txHash)
+  printResult(explorerUrl)
 }
 
 export function displayVaultsList(vaults: VaultBase[], activeVault: VaultBase | null): void {
-  console.log(chalk.cyan('\nStored Vaults:\n'))
+  printResult(chalk.cyan('\nStored Vaults:\n'))
 
   const table = vaults.map(vault => ({
     ID: vault.id,
@@ -199,7 +172,7 @@ export function displayVaultsList(vaults: VaultBase[], activeVault: VaultBase | 
     Created: new Date(vault.createdAt).toLocaleDateString(),
   }))
 
-  console.table(table)
+  printTable(table)
 }
 
 // ============================================================================
@@ -238,42 +211,42 @@ export function setupVaultEvents(vault: VaultBase): void {
   // Balance updates
   vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
     const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-    console.log(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.amount}`))
+    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.amount}`))
   })
 
   // Transaction broadcast
   vault.on('transactionBroadcast', ({ chain, txHash }: any) => {
-    console.log(chalk.green(`+ Transaction broadcast on ${chain}`))
-    console.log(chalk.blue(`  TX Hash: ${txHash}`))
+    info(chalk.green(`+ Transaction broadcast on ${chain}`))
+    info(chalk.blue(`  TX Hash: ${txHash}`))
   })
 
   // Chain added
   vault.on('chainAdded', ({ chain }: any) => {
-    console.log(chalk.green(`+ Chain added: ${chain}`))
+    info(chalk.green(`+ Chain added: ${chain}`))
   })
 
   // Chain removed
   vault.on('chainRemoved', ({ chain }: any) => {
-    console.log(chalk.yellow(`i Chain removed: ${chain}`))
+    warn(chalk.yellow(`i Chain removed: ${chain}`))
   })
 
   // Token added
   vault.on('tokenAdded', ({ chain, token }: any) => {
-    console.log(chalk.green(`+ Token added: ${token.symbol} on ${chain}`))
+    info(chalk.green(`+ Token added: ${token.symbol} on ${chain}`))
   })
 
   // Values updated
   vault.on('valuesUpdated', ({ chain }: any) => {
     if (chain === 'all') {
-      console.log(chalk.blue('i Portfolio values updated'))
+      info(chalk.blue('i Portfolio values updated'))
     } else {
-      console.log(chalk.blue(`i Values updated for ${chain}`))
+      info(chalk.blue(`i Values updated for ${chain}`))
     }
   })
 
   // Errors
-  vault.on('error', (error: any) => {
-    console.error(chalk.red(`x Vault error: ${error.message}`))
+  vault.on('error', (err: any) => {
+    printError(chalk.red(`x Vault error: ${err.message}`))
   })
 }
 
@@ -287,63 +260,56 @@ export function displaySwapPreview(
   fromSymbol: string,
   toSymbol: string
 ): void {
-  console.log(chalk.cyan('\nSwap Preview:'))
-  console.log(`  From:     ${fromAmount} ${fromSymbol}`)
-  console.log(`  To:       ${quote.estimatedOutput} ${toSymbol}`)
-  console.log(`  Provider: ${quote.provider}`)
+  printResult(chalk.cyan('\nSwap Preview:'))
+  printResult(`  From:     ${fromAmount} ${fromSymbol}`)
+  printResult(`  To:       ${quote.estimatedOutput} ${toSymbol}`)
+  printResult(`  Provider: ${quote.provider}`)
 
   if (quote.fees) {
-    console.log(chalk.bold('\n  Fees:'))
-    console.log(`    Network:  ${quote.fees.network}`)
+    printResult(chalk.bold('\n  Fees:'))
+    printResult(`    Network:  ${quote.fees.network}`)
     if (quote.fees.affiliate) {
-      console.log(`    Affiliate: ${quote.fees.affiliate}`)
+      printResult(`    Affiliate: ${quote.fees.affiliate}`)
     }
-    console.log(`    Total:    ${quote.fees.total}`)
+    printResult(`    Total:    ${quote.fees.total}`)
   }
 
   if (quote.warnings && quote.warnings.length > 0) {
-    console.log(chalk.yellow('\n  Warnings:'))
+    printResult(chalk.yellow('\n  Warnings:'))
     quote.warnings.forEach(warning => {
-      console.log(chalk.yellow(`    - ${warning}`))
+      printResult(chalk.yellow(`    - ${warning}`))
     })
   }
 
   if (quote.requiresApproval) {
-    console.log(chalk.yellow('\n  ⚠ Token approval required before swap'))
+    printResult(chalk.yellow('\n  Token approval required before swap'))
     if (quote.approvalInfo) {
-      console.log(`    Spender: ${quote.approvalInfo.spender}`)
+      printResult(`    Spender: ${quote.approvalInfo.spender}`)
     }
   }
 
   // Show expiry
   const expiresIn = Math.max(0, Math.floor((quote.expiresAt - Date.now()) / 1000))
-  console.log(chalk.gray(`\n  Quote expires in ${expiresIn}s`))
+  info(chalk.gray(`\n  Quote expires in ${expiresIn}s`))
 }
 
-export function displaySwapResult(fromChain: Chain, toChain: Chain, txHash: string, quote: SwapQuoteResult): void {
+export function displaySwapResult(fromChain: Chain, _toChain: Chain, txHash: string, quote: SwapQuoteResult): void {
   const explorerUrl = Vultisig.getTxExplorerUrl(fromChain, txHash)
 
-  console.log(chalk.green('\n✓ Swap transaction broadcast!'))
-  console.log(chalk.blue(`\nTransaction Hash: ${txHash}`))
-  console.log(chalk.cyan(`View on explorer: ${explorerUrl}`))
-
-  if (fromChain !== toChain) {
-    console.log(chalk.yellow(`\nNote: Cross-chain swap from ${fromChain} to ${toChain}`))
-    console.log(chalk.yellow('The destination tokens will arrive after the swap completes.'))
-  }
-
-  console.log(`\nEstimated output: ${quote.estimatedOutput}`)
+  printResult(txHash)
+  printResult(explorerUrl)
+  printResult(quote.estimatedOutput)
 }
 
 export function displaySwapChains(chains: readonly Chain[]): void {
-  console.log(chalk.cyan('\nSupported Swap Chains:\n'))
+  printResult(chalk.cyan('\nSupported Swap Chains:\n'))
 
   const table = chains.map(chain => ({
     Chain: chain,
   }))
 
-  console.table(table)
-  console.log(`\nTotal: ${chains.length} chains`)
+  printTable(table)
+  printResult(`\nTotal: ${chains.length} chains`)
 }
 
 export async function confirmSwap(): Promise<boolean> {

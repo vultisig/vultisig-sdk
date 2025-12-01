@@ -17,8 +17,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "wallet": "tsx src/index.ts",
-    "wallet:interactive": "tsx src/index.ts --interactive",
+    "cli": "tsx src/index.ts",
+    "cli:interactive": "tsx src/index.ts --interactive",
     "repl": "tsx src/index.ts --interactive",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"

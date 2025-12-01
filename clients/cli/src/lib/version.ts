@@ -8,6 +8,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 
+import { info } from './output'
+
 // Package version (will be replaced during build or read from package.json)
 let cachedVersion: string | null = null
 
@@ -170,10 +172,10 @@ export async function printUpdateNotification(): Promise<void> {
   try {
     const result = await checkForUpdates()
     if (result?.updateAvailable && result.latestVersion) {
-      console.log()
-      console.log(chalk.yellow(`Update available: ${result.currentVersion} -> ${result.latestVersion}`))
-      console.log(chalk.gray(`Run "vultisig update" or "npm update -g @vultisig/cli" to update`))
-      console.log()
+      info('')
+      info(chalk.yellow(`Update available: ${result.currentVersion} -> ${result.latestVersion}`))
+      info(chalk.gray(`Run "vultisig update" or "npm update -g @vultisig/cli" to update`))
+      info('')
     }
   } catch {
     // Silently ignore update check failures

@@ -6,8 +6,7 @@
  * - Consistent exit codes
  * - Cleanup on completion
  */
-import chalk from 'chalk'
-
+import { printError } from '../lib/output'
 import type { CLIContext } from './cli-context'
 
 /**
@@ -24,7 +23,7 @@ export function withExit<T extends any[]>(handler: (...args: T) => Promise<void>
       if (err.exitCode !== undefined) {
         process.exit(err.exitCode)
       }
-      console.error(chalk.red(`\nx ${err.message}`))
+      printError(`\nx ${err.message}`)
       process.exit(1)
     }
   }

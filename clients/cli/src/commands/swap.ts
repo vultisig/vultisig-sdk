@@ -4,7 +4,8 @@
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk/node'
 
 import type { CommandContext } from '../core'
-import { confirmSwap, createSpinner, displaySwapChains, displaySwapPreview, displaySwapResult, info, warn } from '../ui'
+import { createSpinner, info, warn } from '../lib/output'
+import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult } from '../ui'
 
 /**
  * Execute swap-chains command - list supported swap chains

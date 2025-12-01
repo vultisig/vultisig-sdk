@@ -7,7 +7,8 @@ import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
-import { createSpinner, displayVaultInfo, displayVaultsList, error, info, setupVaultEvents, success, warn } from '../ui'
+import { createSpinner, error, info, printResult, success, warn } from '../lib/output'
+import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
 export type CreateVaultOptions = {
   type: 'fast' | 'secure'
@@ -136,9 +137,9 @@ export async function executeCreate(
 
     success('\n+ Vault created!')
     info('\nYour vault is ready. Run the following commands:')
-    console.log(chalk.cyan('  npm run wallet balance     ') + '- View balances')
-    console.log(chalk.cyan('  npm run wallet addresses   ') + '- View addresses')
-    console.log(chalk.cyan('  npm run wallet portfolio   ') + '- View portfolio value')
+    printResult(chalk.cyan('  npm run wallet balance     ') + '- View balances')
+    printResult(chalk.cyan('  npm run wallet addresses   ') + '- View addresses')
+    printResult(chalk.cyan('  npm run wallet portfolio   ') + '- View portfolio value')
 
     return result.vault
   } else {
@@ -352,7 +353,7 @@ export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
   const activeVault = ctx.getActiveVault()
   displayVaultsList(vaults, activeVault)
 
-  console.log(chalk.gray('\nUse "npm run wallet switch <id>" to switch active vault'))
+  info(chalk.gray('\nUse "npm run wallet switch <id>" to switch active vault'))
 
   return vaults
 }

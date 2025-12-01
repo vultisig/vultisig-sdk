@@ -5,7 +5,8 @@ import type { VaultBase } from '@vultisig/sdk/node'
 import { Chain, Vultisig } from '@vultisig/sdk/node'
 
 import type { CommandContext, SendParams, TransactionResult } from '../core'
-import { confirmTransaction, createSpinner, displayTransactionPreview, displayTransactionResult, warn } from '../ui'
+import { createSpinner, warn } from '../lib/output'
+import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
 
 // AccountCoin type from SDK internals
 type AccountCoin = {

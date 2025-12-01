@@ -6,7 +6,7 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
-import { createSpinner, success, warn } from '../ui'
+import { createSpinner, info, printResult, printTable, success, warn } from '../lib/output'
 
 export type TokensOptions = {
   chain: Chain
@@ -129,9 +129,9 @@ export async function listTokens(ctx: CommandContext, chain: Chain): Promise<voi
 
   if (!tokens || tokens.length === 0) {
     warn(`\nNo tokens configured for ${chain}`)
-    console.log(chalk.gray(`\nUse --add <contractAddress> to add a token`))
+    info(chalk.gray(`\nUse --add <contractAddress> to add a token`))
   } else {
-    console.log(chalk.cyan(`\nTokens for ${chain}:\n`))
+    printResult(chalk.cyan(`\nTokens for ${chain}:\n`))
     const table = tokens.map(token => ({
       Symbol: token.symbol,
       Name: token.name,
@@ -139,7 +139,7 @@ export async function listTokens(ctx: CommandContext, chain: Chain): Promise<voi
       Decimals: token.decimals,
       Native: token.isNative ? 'Yes' : 'No',
     }))
-    console.table(table)
-    console.log(chalk.gray(`\nUse --add <contractAddress> to add or --remove <tokenId> to remove`))
+    printTable(table)
+    info(chalk.gray(`\nUse --add <contractAddress> to add or --remove <tokenId> to remove`))
   }
 }

@@ -5,7 +5,8 @@ import type { Chain } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
-import { createSpinner, displayAddresses, info, success } from '../ui'
+import { createSpinner, info, printResult, success } from '../lib/output'
+import { displayAddresses } from '../ui'
 
 export type ChainsOptions = {
   add?: Chain
@@ -28,11 +29,11 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
     success(`\n+ Removed chain: ${options.remove}`)
   } else {
     const chains = vault.chains
-    console.log(chalk.cyan('\nActive Chains:\n'))
+    printResult(chalk.cyan('\nActive Chains:\n'))
     chains.forEach((chain: Chain) => {
-      console.log(`  - ${chain}`)
+      printResult(`  - ${chain}`)
     })
-    console.log(chalk.gray('\nUse --add <chain> to add a chain or --remove <chain> to remove one'))
+    info(chalk.gray('\nUse --add <chain> to add a chain or --remove <chain> to remove one'))
   }
 }
 

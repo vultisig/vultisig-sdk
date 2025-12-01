@@ -33,13 +33,18 @@ import { createPasswordCallback } from './core'
 import { ShellSession } from './interactive'
 import {
   checkForUpdates,
+  error,
   formatVersionDetailed,
   formatVersionShort,
   getUpdateCommand,
   handleCompletion,
+  info,
+  initOutputMode,
+  printResult,
   setupCompletionCommand,
+  warn,
 } from './lib'
-import { setupVaultEvents, warn } from './ui'
+import { setupVaultEvents } from './ui'
 
 // ============================================================================
 // Handle Shell Completion (must be checked first)
@@ -66,7 +71,12 @@ program
   .description('Vultisig CLI - Secure multi-party crypto wallet')
   .version(formatVersionShort(), '-v, --version', 'Show version')
   .option('--debug', 'Enable debug output')
+  .option('--silent', 'Suppress informational output, show only results')
   .option('-i, --interactive', 'Start interactive shell mode')
+  .hook('preAction', thisCommand => {
+    const opts = thisCommand.opts()
+    initOutputMode({ silent: opts.silent })
+  })
 
 // ============================================================================
 // SDK Initialization
@@ -473,14 +483,14 @@ program
   .description('Show detailed version information')
   .action(
     withExit(async () => {
-      console.log(formatVersionDetailed())
+      printResult(formatVersionDetailed())
 
       // Check for updates
       const result = await checkForUpdates()
       if (result?.updateAvailable && result.latestVersion) {
-        console.log()
-        console.log(chalk.yellow(`Update available: ${result.currentVersion} -> ${result.latestVersion}`))
-        console.log(chalk.gray(`Run "${getUpdateCommand()}" to update`))
+        info('')
+        info(chalk.yellow(`Update available: ${result.currentVersion} -> ${result.latestVersion}`))
+        info(chalk.gray(`Run "${getUpdateCommand()}" to update`))
       }
     })
   )
@@ -492,28 +502,28 @@ program
   .option('--check', 'Just check for updates, do not update')
   .action(
     withExit(async (options: { check?: boolean }) => {
-      console.log('Checking for updates...')
+      info('Checking for updates...')
       const result = await checkForUpdates()
 
       if (!result) {
-        console.log(chalk.gray('Update checking is disabled'))
+        printResult(chalk.gray('Update checking is disabled'))
         return
       }
 
       if (result.updateAvailable && result.latestVersion) {
-        console.log()
-        console.log(chalk.green(`Update available: ${result.currentVersion} -> ${result.latestVersion}`))
-        console.log()
+        printResult('')
+        printResult(chalk.green(`Update available: ${result.currentVersion} -> ${result.latestVersion}`))
+        printResult('')
 
         if (options.check) {
-          console.log(`Run "${getUpdateCommand()}" to update`)
+          printResult(`Run "${getUpdateCommand()}" to update`)
         } else {
           const updateCmd = getUpdateCommand()
-          console.log(`To update, run:`)
-          console.log(chalk.cyan(`  ${updateCmd}`))
+          printResult(`To update, run:`)
+          printResult(chalk.cyan(`  ${updateCmd}`))
         }
       } else {
-        console.log(chalk.green(`You're on the latest version (${result.currentVersion})`))
+        printResult(chalk.green(`You're on the latest version (${result.currentVersion})`))
       }
     })
   )
@@ -549,7 +559,7 @@ process.on('SIGINT', () => {
 // Check for interactive mode before parsing commands
 if (process.argv.includes('-i') || process.argv.includes('--interactive')) {
   startInteractiveMode().catch(err => {
-    console.error(`\nFailed to start interactive mode: ${err.message}`)
+    error(`Failed to start interactive mode: ${err.message}`)
     process.exit(1)
   })
 } else {

@@ -162,6 +162,13 @@ export const EnvVars = {
   },
 
   /**
+   * Check if silent mode is enabled via environment
+   */
+  isSilent(): boolean {
+    return process.env.VULTISIG_SILENT === '1'
+  },
+
+  /**
    * Check if color output is disabled
    */
   isNoColor(): boolean {

@@ -5,7 +5,8 @@ import type { Chain, FiatCurrency } from '@vultisig/sdk/node'
 import { fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk/node'
 
 import type { CommandContext, PortfolioSummary } from '../core'
-import { createSpinner, displayBalance, displayBalancesTable, displayPortfolio, error, warn } from '../ui'
+import { createSpinner, error, warn } from '../lib/output'
+import { displayBalance, displayBalancesTable, displayPortfolio } from '../ui'
 
 export type BalanceOptions = {
   chain?: Chain
