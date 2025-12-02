@@ -7,6 +7,7 @@
  */
 import type { FiatCurrency } from '@vultisig/sdk/node'
 import chalk from 'chalk'
+import Table from 'cli-table3'
 import inquirer from 'inquirer'
 import ora from 'ora'
 
@@ -175,49 +176,58 @@ function displayStatus(status: VaultStatus): void {
  * Show help for shell commands
  */
 export function showHelp(): void {
-  console.log(chalk.cyan('\n+================================================+'))
-  console.log(chalk.cyan('|              Available Commands                |'))
-  console.log(chalk.cyan('+================================================+'))
+  const table = new Table({
+    head: [chalk.bold('Available Commands')],
+    colWidths: [50],
+    chars: {
+      mid: '',
+      'left-mid': '',
+      'mid-mid': '',
+      'right-mid': '',
+    },
+    style: {
+      head: ['cyan'],
+      border: ['cyan'],
+    },
+  })
 
-  console.log(chalk.cyan('|') + chalk.bold(' Vault Management:') + '                             ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  vaults              - List all vaults          ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  vault <name>        - Switch to vault          ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  import <file>       - Import vault from file   ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  create              - Create new vault         ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  info                - Show vault details       ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  export [path]       - Export vault to file     ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '                                                  ' + chalk.cyan('|'))
+  table.push(
+    [chalk.bold('Vault Management:')],
+    ['  vaults              - List all vaults'],
+    ['  vault <name>        - Switch to vault'],
+    ['  import <file>       - Import vault from file'],
+    ['  create              - Create new vault'],
+    ['  info                - Show vault details'],
+    ['  export [path]       - Export vault to file'],
+    [''],
+    [chalk.bold('Wallet Operations:')],
+    ['  balance [chain]     - Show balances'],
+    ['  send <chain> <to> <amount> - Send transaction'],
+    ['  portfolio [-c usd]  - Show portfolio value'],
+    ['  addresses           - Show all addresses'],
+    ['  chains [--add/--remove] - Manage chains'],
+    ['  tokens <chain>      - Manage tokens'],
+    [''],
+    [chalk.bold('Swap Operations:')],
+    ['  swap-chains         - List swap-enabled chains'],
+    ['  swap-quote <from> <to> <amount> - Get quote'],
+    ['  swap <from> <to> <amount> - Execute swap'],
+    [''],
+    [chalk.bold('Session Commands (shell only):')],
+    ['  lock                - Lock vault'],
+    ['  unlock              - Unlock vault'],
+    ['  status              - Show vault status'],
+    [''],
+    [chalk.bold('Settings:')],
+    ['  currency [code]     - View/set currency'],
+    ['  server              - Check server status'],
+    ['  address-book        - Manage saved addresses'],
+    [''],
+    [chalk.bold('Help & Navigation:')],
+    ['  help, ?             - Show this help'],
+    ['  .clear              - Clear screen'],
+    ['  .exit               - Exit shell']
+  )
 
-  console.log(chalk.cyan('|') + chalk.bold(' Wallet Operations:') + '                            ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  balance [chain]     - Show balances            ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  send <chain> <to> <amount> - Send transaction  ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  portfolio [-c usd]  - Show portfolio value     ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  addresses           - Show all addresses       ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  chains [--add/--remove] - Manage chains        ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  tokens <chain>      - Manage tokens            ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '                                                  ' + chalk.cyan('|'))
-
-  console.log(chalk.cyan('|') + chalk.bold(' Swap Operations:') + '                              ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  swap-chains         - List swap-enabled chains ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  swap-quote <from> <to> <amount> - Get quote    ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  swap <from> <to> <amount> - Execute swap       ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '                                                  ' + chalk.cyan('|'))
-
-  console.log(chalk.cyan('|') + chalk.bold(' Session Commands (shell only):') + '               ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  lock                - Lock vault               ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  unlock              - Unlock vault             ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  status              - Show vault status        ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '                                                  ' + chalk.cyan('|'))
-
-  console.log(chalk.cyan('|') + chalk.bold(' Settings:') + '                                     ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  currency [code]     - View/set currency        ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  server              - Check server status      ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  address-book        - Manage saved addresses   ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '                                                  ' + chalk.cyan('|'))
-
-  console.log(chalk.cyan('|') + chalk.bold(' Help & Navigation:') + '                            ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  help, ?             - Show this help           ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  .clear              - Clear screen             ' + chalk.cyan('|'))
-  console.log(chalk.cyan('|') + '  .exit               - Exit shell               ' + chalk.cyan('|'))
-  console.log(chalk.cyan('+================================================+\n'))
+  console.log('\n' + table.toString() + '\n')
 }

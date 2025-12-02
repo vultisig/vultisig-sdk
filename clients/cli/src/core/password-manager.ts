@@ -4,9 +4,11 @@
  * Priority order:
  * 1. VAULT_PASSWORDS env var (format: "VaultName:password VaultId:password")
  * 2. VAULT_PASSWORD env var (single fallback password)
- * 3. Interactive prompt (if no env password found)
+ * 3. Interactive prompt (if no env password found and not in silent/JSON mode)
  */
 import inquirer from 'inquirer'
+
+import { isJsonOutput, isSilent } from '../lib/output'
 
 /**
  * Parse VAULT_PASSWORDS env var into a Map
@@ -75,13 +77,18 @@ export async function promptForPassword(vaultName?: string, vaultId?: string): P
 /**
  * Get password using the standard resolution order:
  * 1. Environment variables
- * 2. Interactive prompt
+ * 2. Interactive prompt (only if not in silent/JSON mode)
  */
 export async function getPassword(vaultId: string, vaultName?: string): Promise<string> {
   // Try environment first
   const envPassword = getPasswordFromEnv(vaultId, vaultName)
   if (envPassword) {
     return envPassword
+  }
+
+  // In silent/JSON mode, we can't prompt - throw an error
+  if (isSilent() || isJsonOutput()) {
+    throw new Error('Password required but not provided. Set VAULT_PASSWORD or VAULT_PASSWORDS environment variable.')
   }
 
   // Fall back to interactive prompt

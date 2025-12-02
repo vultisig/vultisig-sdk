@@ -126,16 +126,18 @@ export async function executeSwap(
   // Get native token for fee display (fees are paid in native token)
   const feeBalance = await vault.balance(options.fromChain)
 
-  // 2. Display preview using coin info from quote for accurate decimals
-  displaySwapPreview(quote, String(options.amount), quote.fromCoin.ticker, quote.toCoin.ticker, {
-    fromDecimals: quote.fromCoin.decimals,
-    toDecimals: quote.toCoin.decimals,
-    feeDecimals: feeBalance.decimals,
-    feeSymbol: feeBalance.symbol,
-  })
+  // 2. Display preview using coin info from quote for accurate decimals (skip in JSON mode)
+  if (!isJsonOutput()) {
+    displaySwapPreview(quote, String(options.amount), quote.fromCoin.ticker, quote.toCoin.ticker, {
+      fromDecimals: quote.fromCoin.decimals,
+      toDecimals: quote.toCoin.decimals,
+      feeDecimals: feeBalance.decimals,
+      feeSymbol: feeBalance.symbol,
+    })
+  }
 
-  // 3. Confirm with user (skip if --yes flag is set)
-  if (!options.yes) {
+  // 3. Confirm with user (skip if --yes flag is set or JSON mode)
+  if (!options.yes && !isJsonOutput()) {
     const confirmed = await confirmSwap()
     if (!confirmed) {
       warn('Swap cancelled')
@@ -222,7 +224,16 @@ export async function executeSwap(
     broadcastSpinner.succeed(`Swap broadcast: ${txHash}`)
 
     // 8. Display result
-    displaySwapResult(options.fromChain, options.toChain, txHash, quote, quote.toCoin.decimals)
+    if (isJsonOutput()) {
+      outputJson({
+        txHash,
+        fromChain: options.fromChain,
+        toChain: options.toChain,
+        quote,
+      })
+    } else {
+      displaySwapResult(options.fromChain, options.toChain, txHash, quote, quote.toCoin.decimals)
+    }
 
     return { txHash, quote }
   } finally {

@@ -166,10 +166,118 @@ vultisig -i
 ## Global Options
 
 ```
--v, --version      Show version
--i, --interactive  Start interactive shell mode
---debug            Enable debug output
--h, --help         Show help
+-v, --version            Show version
+-i, --interactive        Start interactive shell mode
+-o, --output <format>    Output format: table, json (default: table)
+--silent                 Suppress informational output, show only results
+--debug                  Enable debug output
+-h, --help               Show help
+```
+
+### Silent Mode
+
+Use `--silent` to suppress spinners, progress messages, and informational output. Only results and errors are shown:
+
+```bash
+# Normal output shows spinners and status messages
+vultisig balance ethereum
+# ✓ Loading vault...
+# ✓ Fetching balance...
+# ETH: 1.5
+
+# Silent mode shows only the result
+vultisig balance ethereum --silent
+# ETH: 1.5
+```
+
+Silent mode is useful for scripts where you only want the final output.
+
+### JSON Output
+
+Use `-o json` or `--output json` to get structured JSON output. JSON mode automatically enables silent mode:
+
+```bash
+# Get balance as JSON
+vultisig balance ethereum -o json
+```
+```json
+{
+  "chain": "ethereum",
+  "balance": {
+    "native": "1.5",
+    "symbol": "ETH",
+    "usdValue": "3750.00"
+  }
+}
+```
+
+```bash
+# Get all balances as JSON
+vultisig balance -o json
+```
+```json
+{
+  "balances": [
+    { "chain": "ethereum", "native": "1.5", "symbol": "ETH", "usdValue": "3750.00" },
+    { "chain": "bitcoin", "native": "0.1", "symbol": "BTC", "usdValue": "6500.00" }
+  ]
+}
+```
+
+```bash
+# Get portfolio as JSON
+vultisig portfolio -o json
+```
+```json
+{
+  "portfolio": {
+    "totalUsdValue": "10250.00",
+    "chains": [...]
+  },
+  "currency": "USD"
+}
+```
+
+```bash
+# List vaults as JSON
+vultisig vaults -o json
+```
+```json
+{
+  "vaults": [
+    { "id": "abc123", "name": "Main Wallet", "isActive": true }
+  ],
+  "activeVaultId": "abc123"
+}
+```
+
+```bash
+# Get swap quote as JSON
+vultisig swap-quote ethereum thorchain 0.1 -o json
+```
+```json
+{
+  "quote": {
+    "fromChain": "ethereum",
+    "toChain": "thorchain",
+    "fromAmount": "0.1",
+    "expectedOutput": "125.5",
+    "route": "..."
+  }
+}
+```
+
+JSON output is ideal for:
+- Scripting and automation
+- Parsing output programmatically
+- Integration with other tools (e.g., `jq`):
+
+```bash
+# Extract just the ETH balance using jq
+vultisig balance ethereum -o json | jq -r '.balance.native'
+
+# Get total portfolio value
+vultisig portfolio -o json | jq -r '.portfolio.totalUsdValue'
 ```
 
 ## Configuration
@@ -182,6 +290,9 @@ VULTISIG_CONFIG_DIR=/custom/path
 
 # Disable colored output
 VULTISIG_NO_COLOR=1
+
+# Enable silent mode (suppress spinners and info messages)
+VULTISIG_SILENT=1
 
 # Enable debug output
 VULTISIG_DEBUG=1

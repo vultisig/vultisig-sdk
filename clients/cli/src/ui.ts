@@ -17,7 +17,7 @@ import inquirer from 'inquirer'
 export type { PortfolioSummary, SendParams } from './core/types'
 import type { PortfolioSummary } from './core/types'
 // Import output helpers
-import { info, printError, printResult, printTable, warn } from './lib/output'
+import { info, isJsonOutput, printError, printResult, printTable, warn } from './lib/output'
 
 // ============================================================================
 // Display Formatters
@@ -141,7 +141,8 @@ export function displayTransactionPreview(
   gas?: GasInfo
 ): void {
   if (gas) {
-    info(chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, null, 2)}`))
+    const bigIntReplacer = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)
+    info(chalk.blue(`\nEstimated gas: ${JSON.stringify(gas, bigIntReplacer, 2)}`))
   }
 
   printResult(chalk.cyan('\nTransaction Preview:'))
@@ -244,10 +245,12 @@ export function setupVaultEvents(vault: VaultBase): void {
     }
   })
 
-  // Errors
-  vault.on('error', (err: any) => {
-    printError(chalk.red(`x Vault error: ${err.message}`))
-  })
+  // Errors - skip in JSON mode (errors are reported via JSON response)
+  if (!isJsonOutput()) {
+    vault.on('error', (err: any) => {
+      printError(chalk.red(`x Vault error: ${err.message}`))
+    })
+  }
 }
 
 // ============================================================================

@@ -5,7 +5,7 @@ import type { VaultBase } from '@vultisig/sdk/node'
 import { Chain, Vultisig } from '@vultisig/sdk/node'
 
 import type { CommandContext, SendParams, TransactionResult } from '../core'
-import { createSpinner, warn } from '../lib/output'
+import { createSpinner, isJsonOutput, outputJson, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
 
 // AccountCoin type from SDK internals
@@ -71,19 +71,21 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     warn('\nGas estimation unavailable')
   }
 
-  // 3. Show transaction preview
-  displayTransactionPreview(
-    payload.coin.address,
-    params.to,
-    params.amount,
-    payload.coin.ticker,
-    params.chain,
-    params.memo,
-    gas
-  )
+  // 3. Show transaction preview (skip in JSON mode)
+  if (!isJsonOutput()) {
+    displayTransactionPreview(
+      payload.coin.address,
+      params.to,
+      params.amount,
+      payload.coin.ticker,
+      params.chain,
+      params.memo,
+      gas
+    )
+  }
 
-  // 4. Confirm with user (skip if --yes flag is set)
-  if (!params.yes) {
+  // 4. Confirm with user (skip if --yes flag is set or JSON mode)
+  if (!params.yes && !isJsonOutput()) {
     const confirmed = await confirmTransaction()
     if (!confirmed) {
       warn('Transaction cancelled')
@@ -120,14 +122,20 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
 
     broadcastSpinner.succeed(`Transaction broadcast: ${txHash}`)
 
-    // 7. Display result
-    displayTransactionResult(params.chain, txHash)
-
-    return {
+    const result: TransactionResult = {
       txHash,
       chain: params.chain,
       explorerUrl: Vultisig.getTxExplorerUrl(params.chain, txHash),
     }
+
+    // 7. Display result
+    if (isJsonOutput()) {
+      outputJson(result)
+    } else {
+      displayTransactionResult(params.chain, txHash)
+    }
+
+    return result
   } finally {
     vault.removeAllListeners('signingProgress')
   }

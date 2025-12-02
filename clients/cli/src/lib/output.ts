@@ -60,17 +60,24 @@ export function getOutputFormat(): OutputFormat {
 }
 
 /**
- * Output structured data as JSON
+ * JSON replacer that converts BigInt to string
+ */
+function bigIntReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? value.toString() : value
+}
+
+/**
+ * Output structured data as JSON (handles BigInt serialization)
  */
 export function outputJson(data: unknown): void {
-  console.log(JSON.stringify({ success: true, data }, null, 2))
+  console.log(JSON.stringify({ success: true, data }, bigIntReplacer, 2))
 }
 
 /**
  * Output JSON error (for withExit handler)
  */
 export function outputJsonError(message: string, code: string): void {
-  console.log(JSON.stringify({ success: false, error: { message, code } }, null, 2))
+  console.log(JSON.stringify({ success: false, error: { message, code } }, bigIntReplacer, 2))
 }
 
 // ============================================================================

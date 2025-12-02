@@ -44,20 +44,15 @@ export class GasEstimationService {
    * Uses core's getChainSpecific() to estimate fees
    */
   async getGasInfo(chain: Chain): Promise<GasInfo> {
-    console.log(`🔍 Starting gas estimation for chain: ${chain}`)
     let address: string | undefined
     try {
-      console.log(`  📍 Getting address...`)
-
       // For Cosmos chains, use well-known addresses to avoid account-doesn't-exist errors
       // Gas prices are global, so any active address works for estimation
       const cosmosAddress = GasEstimationService.COSMOS_GAS_ESTIMATION_ADDRESSES[chain]
       if (cosmosAddress) {
         address = cosmosAddress
-        console.log(`  📍 Using well-known address for Cosmos gas estimation: ${address}`)
       } else {
         address = await this.getAddress(chain)
-        console.log(`  📍 Address: ${address}`)
       }
 
       // Get WalletCore via WasmProvider
@@ -88,17 +83,13 @@ export class GasEstimationService {
       })
 
       // Get chain-specific data with fee information
-      console.log(`  ⛓️ Calling getChainSpecific()...`)
       const chainSpecific = await getChainSpecific({
         keysignPayload: minimalPayload,
         walletCore,
       })
-      console.log(`  ✅ getChainSpecific() succeeded, formatting...`)
 
       // Format using adapter
-      const result = formatGasInfo(chainSpecific, chain)
-      console.log(`  ✅ formatGasInfo() succeeded`)
-      return result
+      return formatGasInfo(chainSpecific, chain)
     } catch (error) {
       // Enhanced error logging for E2E test debugging
       const errorMessage = (error as Error)?.message || 'Unknown error'
