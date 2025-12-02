@@ -6,7 +6,7 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
-import { createSpinner, info, printResult, printTable, success, warn } from '../lib/output'
+import { createSpinner, info, isJsonOutput, outputJson, printResult, printTable, success, warn } from '../lib/output'
 
 export type TokensOptions = {
   chain: Chain
@@ -126,6 +126,11 @@ export async function listTokens(ctx: CommandContext, chain: Chain): Promise<voi
   const spinner = createSpinner(`Loading tokens for ${chain}...`)
   const tokens = vault.getTokens(chain)
   spinner.succeed(`Tokens loaded for ${chain}`)
+
+  if (isJsonOutput()) {
+    outputJson({ chain, tokens: tokens || [] })
+    return
+  }
 
   if (!tokens || tokens.length === 0) {
     warn(`\nNo tokens configured for ${chain}`)

@@ -5,7 +5,7 @@ import type { Chain, FiatCurrency } from '@vultisig/sdk/node'
 import { fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk/node'
 
 import type { CommandContext, PortfolioSummary } from '../core'
-import { createSpinner, error, warn } from '../lib/output'
+import { createSpinner, error, isJsonOutput, outputJson, warn } from '../lib/output'
 import { displayBalance, displayBalancesTable, displayPortfolio } from '../ui'
 
 export type BalanceOptions = {
@@ -24,10 +24,20 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
   if (options.chain) {
     const balance = await vault.balance(options.chain)
     spinner.succeed('Balance loaded')
+
+    if (isJsonOutput()) {
+      outputJson({ chain: options.chain, balance })
+      return
+    }
     displayBalance(options.chain, balance)
   } else {
     const balances = await vault.balances(undefined, options.includeTokens)
     spinner.succeed('Balances loaded')
+
+    if (isJsonOutput()) {
+      outputJson({ balances })
+      return
+    }
     displayBalancesTable(balances)
   }
 }
@@ -75,5 +85,10 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
   const portfolio: PortfolioSummary = { totalValue, chainBalances }
 
   spinner.succeed('Portfolio loaded')
+
+  if (isJsonOutput()) {
+    outputJson({ portfolio, currency })
+    return
+  }
   displayPortfolio(portfolio, currency)
 }

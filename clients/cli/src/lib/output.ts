@@ -8,10 +8,17 @@ import chalk from 'chalk'
 import ora, { type Ora } from 'ora'
 
 // ============================================================================
+// Types
+// ============================================================================
+
+export type OutputFormat = 'table' | 'json'
+
+// ============================================================================
 // State
 // ============================================================================
 
 let silentMode = false
+let outputFormat: OutputFormat = 'table'
 
 // ============================================================================
 // Configuration
@@ -28,8 +35,42 @@ export function isSilent(): boolean {
 /**
  * Initialize output mode from CLI flags and environment variables
  */
-export function initOutputMode(options: { silent?: boolean }): void {
+export function initOutputMode(options: { silent?: boolean; output?: string }): void {
+  outputFormat = (options.output as OutputFormat) ?? 'table'
   silentMode = options.silent ?? process.env.VULTISIG_SILENT === '1'
+
+  // JSON mode implies silent (no spinners, colors)
+  if (outputFormat === 'json') {
+    silentMode = true
+  }
+}
+
+/**
+ * Check if output format is JSON
+ */
+export function isJsonOutput(): boolean {
+  return outputFormat === 'json'
+}
+
+/**
+ * Get current output format
+ */
+export function getOutputFormat(): OutputFormat {
+  return outputFormat
+}
+
+/**
+ * Output structured data as JSON
+ */
+export function outputJson(data: unknown): void {
+  console.log(JSON.stringify({ success: true, data }, null, 2))
+}
+
+/**
+ * Output JSON error (for withExit handler)
+ */
+export function outputJsonError(message: string, code: string): void {
+  console.log(JSON.stringify({ success: false, error: { message, code } }, null, 2))
 }
 
 // ============================================================================

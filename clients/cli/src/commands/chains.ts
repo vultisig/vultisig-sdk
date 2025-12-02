@@ -5,7 +5,7 @@ import type { Chain } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
-import { createSpinner, info, printResult, success } from '../lib/output'
+import { createSpinner, info, isJsonOutput, outputJson, printResult, success } from '../lib/output'
 import { displayAddresses } from '../ui'
 
 export type ChainsOptions = {
@@ -29,6 +29,12 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
     success(`\n+ Removed chain: ${options.remove}`)
   } else {
     const chains = vault.chains
+
+    if (isJsonOutput()) {
+      outputJson({ chains: [...chains] })
+      return
+    }
+
     printResult(chalk.cyan('\nActive Chains:\n'))
     chains.forEach((chain: Chain) => {
       printResult(`  - ${chain}`)
@@ -47,5 +53,11 @@ export async function executeAddresses(ctx: CommandContext): Promise<void> {
   const addresses = await vault.addresses()
 
   spinner.succeed('Addresses loaded')
+
+  if (isJsonOutput()) {
+    outputJson({ addresses })
+    return
+  }
+
   displayAddresses(addresses)
 }

@@ -73,11 +73,12 @@ program
   .version(formatVersionShort(), '-v, --version', 'Show version')
   .option('--debug', 'Enable debug output')
   .option('--silent', 'Suppress informational output, show only results')
+  .option('-o, --output <format>', 'Output format: table, json (default: table)', 'table')
   .option('-i, --interactive', 'Start interactive shell mode')
   .option('--vault <nameOrId>', 'Specify vault by name or ID')
   .hook('preAction', thisCommand => {
     const opts = thisCommand.opts()
-    initOutputMode({ silent: opts.silent })
+    initOutputMode({ silent: opts.silent, output: opts.output })
   })
 
 // ============================================================================

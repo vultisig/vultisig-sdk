@@ -7,7 +7,17 @@ import chalk from 'chalk'
 import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
-import { createSpinner, error, info, printResult, printTable, success, warn } from '../lib/output'
+import {
+  createSpinner,
+  error,
+  info,
+  isJsonOutput,
+  outputJson,
+  printResult,
+  printTable,
+  success,
+  warn,
+} from '../lib/output'
 
 /**
  * Execute currency command - view or set currency preference
@@ -54,6 +64,11 @@ export async function executeServer(ctx: CommandContext): Promise<{
   try {
     const status = await ctx.sdk.getServerStatus()
     spinner.succeed('Server status retrieved')
+
+    if (isJsonOutput()) {
+      outputJson({ server: status })
+      return status
+    }
 
     printResult(chalk.cyan('\nServer Status:\n'))
     printResult(chalk.bold('Fast Vault Server:'))
@@ -170,6 +185,11 @@ export async function executeAddressBook(
 
   // Combine saved and vault addresses
   const allEntries = [...addressBook.saved, ...addressBook.vaults]
+
+  if (isJsonOutput()) {
+    outputJson({ addressBook: allEntries, chain: options.chain })
+    return allEntries as AddressBookEntry[]
+  }
 
   if (allEntries.length === 0) {
     warn(`\nNo addresses in address book${options.chain ? ` for ${options.chain}` : ''}`)

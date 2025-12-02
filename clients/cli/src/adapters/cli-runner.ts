@@ -6,7 +6,7 @@
  * - Consistent exit codes
  * - Cleanup on completion
  */
-import { printError } from '../lib/output'
+import { isJsonOutput, outputJsonError, printError } from '../lib/output'
 import type { CLIContext } from './cli-context'
 
 /**
@@ -20,6 +20,14 @@ export function withExit<T extends any[]>(handler: (...args: T) => Promise<void>
       await handler(...args)
       process.exit(0)
     } catch (err: any) {
+      const exitCode = err.exitCode ?? 1
+
+      // In JSON mode, output structured error
+      if (isJsonOutput()) {
+        outputJsonError(err.message, err.code ?? 'GENERAL_ERROR')
+        process.exit(exitCode)
+      }
+
       if (err.exitCode !== undefined) {
         process.exit(err.exitCode)
       }

@@ -4,7 +4,7 @@
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk/node'
 
 import type { CommandContext } from '../core'
-import { createSpinner, info, warn } from '../lib/output'
+import { createSpinner, info, isJsonOutput, outputJson, warn } from '../lib/output'
 import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult } from '../ui'
 
 /**
@@ -16,6 +16,11 @@ export async function executeSwapChains(ctx: CommandContext): Promise<readonly C
   const spinner = createSpinner('Loading supported swap chains...')
   const chains = await vault.getSupportedSwapChains()
   spinner.succeed('Swap chains loaded')
+
+  if (isJsonOutput()) {
+    outputJson({ swapChains: [...chains] })
+    return chains
+  }
 
   displaySwapChains(chains)
   return chains
@@ -55,6 +60,16 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
   })
 
   spinner.succeed('Quote received')
+
+  if (isJsonOutput()) {
+    outputJson({
+      fromChain: options.fromChain,
+      toChain: options.toChain,
+      amount: options.amount,
+      quote,
+    })
+    return quote
+  }
 
   // Get native token for fee display (fees are paid in native token)
   const feeBalance = await vault.balance(options.fromChain)

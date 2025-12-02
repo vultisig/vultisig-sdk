@@ -7,7 +7,7 @@ import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
-import { createSpinner, error, info, printResult, success, warn } from '../lib/output'
+import { createSpinner, error, info, isJsonOutput, outputJson, printResult, success, warn } from '../lib/output'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
 export type CreateVaultOptions = {
@@ -345,6 +345,21 @@ export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
   const vaults = await ctx.sdk.listVaults()
   spinner.succeed('Vaults loaded')
 
+  if (isJsonOutput()) {
+    const activeVault = ctx.getActiveVault()
+    outputJson({
+      vaults: vaults.map(v => ({
+        id: v.id,
+        name: v.name,
+        type: v.type,
+        chains: v.chains.length,
+        createdAt: v.createdAt,
+        isActive: activeVault?.id === v.id,
+      })),
+    })
+    return vaults
+  }
+
   if (vaults.length === 0) {
     warn('\nNo vaults found. Create or import a vault first.')
     return []
@@ -401,5 +416,33 @@ export async function executeRename(ctx: CommandContext, newName: string): Promi
  */
 export async function executeInfo(ctx: CommandContext): Promise<void> {
   const vault = await ctx.ensureActiveVault()
+
+  if (isJsonOutput()) {
+    outputJson({
+      vault: {
+        id: vault.id,
+        name: vault.name,
+        type: vault.type,
+        createdAt: vault.createdAt,
+        lastModified: vault.lastModified,
+        isEncrypted: vault.isEncrypted,
+        isBackedUp: vault.isBackedUp,
+        libType: vault.libType,
+        threshold: vault.threshold,
+        totalSigners: vault.totalSigners,
+        localPartyId: vault.localPartyId,
+        availableSigningModes: [...vault.availableSigningModes],
+        chains: [...vault.chains],
+        currency: vault.currency,
+        publicKeys: {
+          ecdsa: vault.publicKeys.ecdsa,
+          eddsa: vault.publicKeys.eddsa,
+          chainCode: vault.hexChainCode,
+        },
+      },
+    })
+    return
+  }
+
   displayVaultInfo(vault)
 }
