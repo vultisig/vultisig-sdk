@@ -22,6 +22,9 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+# Test scripts (local testing only)
+vault-test.sh
+
 # IDE
 .vscode/
 .idea/
