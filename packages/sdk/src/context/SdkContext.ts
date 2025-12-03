@@ -17,6 +17,9 @@ import type { Storage } from '../storage/types'
  *
  * Wraps the shared WASM runtime to provide a consistent interface
  * for services that need WASM functionality.
+ *
+ * Note: DKLS and Schnorr WASM modules are handled internally by core's
+ * initializeMpcLib() - they don't need SDK-level management.
  */
 export type WasmProvider = {
   /**
@@ -26,27 +29,14 @@ export type WasmProvider = {
   getWalletCore(): Promise<any>
 
   /**
-   * Initialize DKLS WASM module (ECDSA).
-   * Thread-safe: Concurrent calls wait for same initialization promise.
-   */
-  initializeDkls(): Promise<void>
-
-  /**
-   * Initialize Schnorr WASM module (EdDSA).
-   * Thread-safe: Concurrent calls wait for same initialization promise.
-   */
-  initializeSchnorr(): Promise<void>
-
-  /**
-   * Pre-load all WASM modules.
-   * Initializes in parallel for better performance.
+   * Pre-load WalletCore WASM module.
    */
   initialize(): Promise<void>
 
   /**
-   * Get initialization status for all modules.
+   * Get initialization status.
    */
-  getStatus(): { walletCore: boolean; dkls: boolean; schnorr: boolean }
+  getStatus(): { walletCore: boolean }
 }
 
 /**

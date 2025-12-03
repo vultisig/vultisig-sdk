@@ -1,6 +1,7 @@
 import { Chain } from '@core/chain/Chain'
 import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@core/chain/utils/isValidAddress'
+import { configureWasmBytes } from '@core/mpc/lib/initialize'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
@@ -18,6 +19,17 @@ import { VaultManager } from './VaultManager'
 
 // Re-export constants
 export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
+
+/**
+ * Pre-loaded WASM module bytes for MPC operations.
+ * When provided, bypasses automatic WASM loading (fetch/import.meta.url).
+ */
+export type WasmModules = {
+  /** DKLS WASM module bytes (for ECDSA signing) */
+  dkls?: BufferSource
+  /** Schnorr WASM module bytes (for EdDSA signing) */
+  schnorr?: BufferSource
+}
 
 /**
  * Configuration options for Vultisig SDK
@@ -39,6 +51,12 @@ export type VultisigConfig = {
   onPasswordRequired?: SdkConfigOptions['onPasswordRequired']
   /** Auto-initialize on construction */
   autoInit?: boolean
+  /**
+   * Pre-loaded WASM modules for MPC operations.
+   * Required for Node.js/Electron where automatic WASM loading fails.
+   * Use platform-specific `loadWasmModules()` helper to load these.
+   */
+  wasmModules?: WasmModules
 }
 
 /**
@@ -127,6 +145,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Validate required config
     if (!config || !config.storage) {
       throw new Error('Vultisig requires a storage implementation. Pass storage in config.')
+    }
+
+    // Configure WASM bytes if provided (must be done before any MPC operations)
+    if (config.wasmModules) {
+      configureWasmBytes(config.wasmModules)
     }
 
     // Build SdkContext from config
