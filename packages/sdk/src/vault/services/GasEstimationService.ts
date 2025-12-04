@@ -9,7 +9,7 @@ import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 import { formatGasInfo } from '../../adapters/formatGasInfo'
 import type { WasmProvider } from '../../context/SdkContext'
-import type { GasInfo } from '../../types'
+import type { GasInfoForChain } from '../../types'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -43,7 +43,7 @@ export class GasEstimationService {
    * Get gas info for chain
    * Uses core's getChainSpecific() to estimate fees
    */
-  async getGasInfo(chain: Chain): Promise<GasInfo> {
+  async getGasInfo<C extends Chain>(chain: C): Promise<GasInfoForChain<C>> {
     let address: string | undefined
     try {
       // For Cosmos chains, use well-known addresses to avoid account-doesn't-exist errors
@@ -88,8 +88,8 @@ export class GasEstimationService {
         walletCore,
       })
 
-      // Format using adapter
-      return formatGasInfo(chainSpecific, chain)
+      // Format using adapter - cast is safe as formatGasInfo returns the correct subtype based on chain
+      return formatGasInfo(chainSpecific, chain) as GasInfoForChain<C>
     } catch (error) {
       // Enhanced error logging for E2E test debugging
       const errorMessage = (error as Error)?.message || 'Unknown error'

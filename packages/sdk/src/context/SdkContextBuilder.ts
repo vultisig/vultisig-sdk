@@ -11,6 +11,9 @@ import { ServerManager } from '../server/ServerManager'
 import { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
 import type { SdkConfigOptions, SdkContext } from './SdkContext'
+
+// Re-export SdkContext type for consumers
+export type { SdkContext } from './SdkContext'
 import { SharedWasmRuntime } from './SharedWasmRuntime'
 
 /**

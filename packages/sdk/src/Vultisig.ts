@@ -1,7 +1,6 @@
 import { Chain } from '@core/chain/Chain'
 import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@core/chain/utils/isValidAddress'
-import { configureWasmBytes } from '@core/mpc/lib/initialize'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
@@ -145,11 +144,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Validate required config
     if (!config || !config.storage) {
       throw new Error('Vultisig requires a storage implementation. Pass storage in config.')
-    }
-
-    // Configure WASM bytes if provided (must be done before any MPC operations)
-    if (config.wasmModules) {
-      configureWasmBytes(config.wasmModules)
     }
 
     // Build SdkContext from config

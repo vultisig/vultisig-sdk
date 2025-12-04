@@ -3,8 +3,12 @@
  *
  * Tests the formatGasInfo function which converts core KeysignChainSpecific
  * data to SDK GasInfo format. Covers all 14 different chain-specific types.
+ *
+ * Note: @ts-nocheck is used because test mocks don't match complex protobuf types.
+ * The tests verify runtime behavior, not type compatibility.
  */
 
+// @ts-nocheck - Test mocks don't need to match protobuf types exactly
 import { Chain } from '@core/chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -27,9 +31,9 @@ describe('formatGasInfo', () => {
           nonce: BigInt(10),
           gasLimit: '21000',
         },
-      }
+      } as KeysignChainSpecific
 
-      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum) as EvmGasInfo
 
       expect(result).toEqual({
         chainId: Chain.Ethereum,
@@ -53,9 +57,9 @@ describe('formatGasInfo', () => {
           nonce: BigInt(0),
           gasLimit: '21000',
         },
-      }
+      } as KeysignChainSpecific
 
-      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum) as EvmGasInfo
 
       expect(result.gasPriceGwei).toBe('150')
       expect(result.maxFeePerGas).toBe(150000000000n)
@@ -71,9 +75,9 @@ describe('formatGasInfo', () => {
           nonce: BigInt(0),
           gasLimit: '21000',
         },
-      }
+      } as KeysignChainSpecific
 
-      const result = formatGasInfo(chainSpecific, Chain.Ethereum)
+      const result = formatGasInfo(chainSpecific, Chain.Ethereum) as EvmGasInfo
 
       expect(result.gasPriceGwei).toBe('0') // Integer division
       expect(result.gasPrice).toBe('500000000')
@@ -91,9 +95,9 @@ describe('formatGasInfo', () => {
             nonce: BigInt(0),
             gasLimit: '21000',
           },
-        }
+        } as KeysignChainSpecific
 
-        const result = formatGasInfo(chainSpecific, chain)
+        const result = formatGasInfo(chainSpecific, chain) as EvmGasInfo
 
         expect(result.chainId).toBe(chain)
         expect(result.gasPriceGwei).toBe('30')
@@ -109,9 +113,9 @@ describe('formatGasInfo', () => {
           byteFee: '10', // 10 sats/byte
           sendMaxAmount: false,
         },
-      }
+      } as KeysignChainSpecific
 
-      const result = formatGasInfo(chainSpecific, Chain.Bitcoin)
+      const result = formatGasInfo(chainSpecific, Chain.Bitcoin) as UtxoGasInfo
 
       expect(result).toEqual({
         chainId: Chain.Bitcoin,
@@ -129,9 +133,9 @@ describe('formatGasInfo', () => {
           byteFee: '150', // 150 sats/byte
           sendMaxAmount: false,
         },
-      }
+      } as KeysignChainSpecific
 
-      const result = formatGasInfo(chainSpecific, Chain.Bitcoin)
+      const result = formatGasInfo(chainSpecific, Chain.Bitcoin) as UtxoGasInfo
 
       expect(result.gasPrice).toBe('150')
     })

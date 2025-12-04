@@ -8,6 +8,7 @@
  * - Chain support queries
  */
 
+import { toChainAmount } from '@core/chain/amount/toChainAmount'
 import { Chain, EvmChain } from '@core/chain/Chain'
 import { isChainOfKind } from '@core/chain/ChainKind'
 import { getErc20Allowance } from '@core/chain/chains/evm/erc20/getErc20Allowance'
@@ -70,7 +71,7 @@ export class SwapService {
       const quoteInput: FindSwapQuoteInput = {
         from: fromCoin,
         to: toCoin,
-        amount: params.amount,
+        amount: toChainAmount(params.amount, fromCoin.decimals),
         referral: params.referral,
         affiliateBps: params.affiliateBps,
       }

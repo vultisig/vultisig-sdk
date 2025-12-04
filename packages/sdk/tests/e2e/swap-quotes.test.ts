@@ -112,7 +112,7 @@ describe('E2E: Swap Quotes (Production)', () => {
       expect(quote).toBeDefined()
       expect(quote.provider).toBeDefined()
       expect(quote.estimatedOutput).toBeDefined()
-      expect(parseFloat(quote.estimatedOutput)).toBeGreaterThan(0)
+      expect(Number(quote.estimatedOutput)).toBeGreaterThan(0)
       expect(quote.expiresAt).toBeGreaterThan(Date.now())
       expect(quote.requiresApproval).toBe(false)
       expect(quote.fees).toBeDefined()
@@ -161,7 +161,7 @@ describe('E2E: Swap Quotes (Production)', () => {
       expect(quote).toBeDefined()
       expect(quote.provider).toBeDefined()
       expect(quote.estimatedOutput).toBeDefined()
-      expect(parseFloat(quote.estimatedOutput)).toBeGreaterThan(0)
+      expect(Number(quote.estimatedOutput)).toBeGreaterThan(0)
       expect(quote.requiresApproval).toBe(false)
 
       console.log(`✅ Quote received via ${quote.provider}`)
@@ -252,7 +252,7 @@ describe('E2E: Swap Quotes (Production)', () => {
       expect(quote).toBeDefined()
       expect(quote.provider).toBeDefined()
       expect(quote.estimatedOutput).toBeDefined()
-      expect(parseFloat(quote.estimatedOutput)).toBeGreaterThan(0)
+      expect(Number(quote.estimatedOutput)).toBeGreaterThan(0)
 
       if (quote.requiresApproval) {
         expect(quote.approvalInfo).toBeDefined()
