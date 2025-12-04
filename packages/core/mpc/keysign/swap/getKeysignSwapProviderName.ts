@@ -1,9 +1,9 @@
 import {
   generalSwapProviderName,
   generalSwapProviders,
-} from '../../../chain/swap/general/GeneralSwapProvider'
-import { isOneOf } from '../../../../lib/utils/array/isOneOf'
-import { matchRecordUnion } from '../../../../lib/utils/matchRecordUnion'
+} from '@core/chain/swap/general/GeneralSwapProvider'
+import { isOneOf } from '@lib/utils/array/isOneOf'
+import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
 
 import { KeysignSwapPayload } from './KeysignSwapPayload'
 

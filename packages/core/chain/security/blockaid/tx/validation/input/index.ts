@@ -1,10 +1,10 @@
-import { getChainKind } from '../../../../../ChainKind'
+import { getChainKind } from '@core/chain/ChainKind'
 import {
   BlockaidValidationSupportedChainKind,
   blockaidValidationSupportedChains,
-} from '../../../validationChains'
-import { getKeysignChain } from '../../../../../../mpc/keysign/utils/getKeysignChain'
-import { isOneOf } from '../../../../../../../lib/utils/array/isOneOf'
+} from '@core/chain/security/blockaid/validationChains'
+import { getKeysignChain } from '@core/mpc/keysign/utils/getKeysignChain'
+import { isOneOf } from '@lib/utils/array/isOneOf'
 
 import { BlockaidTxValidationInput } from '../resolver'
 import {

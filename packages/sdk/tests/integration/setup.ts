@@ -99,21 +99,13 @@ console.log('✅ Integration test WASM polyfill loaded')
 console.log('📦 WASM files will be loaded from filesystem using fs.readFile()')
 
 /**
- * Configure SharedWasmRuntime for integration tests
- * Uses Node.js WASM loader for test environment
+ * Configure crypto for integration tests
  */
-import { SharedWasmRuntime } from '../../src/context/SharedWasmRuntime'
 import { configureCrypto } from '../../src/crypto'
 import { NodeCrypto } from '../../src/platforms/node/crypto'
-import { NodeWasmLoader } from '../../src/platforms/node/wasm'
 
 configureCrypto(new NodeCrypto())
 
-// Configure SharedWasmRuntime to use Node.js loader
-const wasmLoader = new NodeWasmLoader()
-SharedWasmRuntime.configure({
-  wasmPaths: {
-    dkls: () => wasmLoader.loadDkls(),
-    schnorr: () => wasmLoader.loadSchnorr(),
-  },
-})
+// Note: DKLS and Schnorr WASM modules are handled automatically by core's
+// initializeMpcLib() using wasm-bindgen's import.meta.url. The fetch polyfill
+// above allows wasm-bindgen to load .wasm files from the filesystem.

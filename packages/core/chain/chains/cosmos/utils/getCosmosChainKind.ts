@@ -2,8 +2,8 @@ import {
   CosmosChain,
   CosmosChainKind,
   cosmosChainsByKind,
-} from '../../../Chain'
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
+} from '@core/chain/Chain'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 
 export function getCosmosChainKind(chain: CosmosChain): CosmosChainKind {
   const [key] = shouldBePresent(

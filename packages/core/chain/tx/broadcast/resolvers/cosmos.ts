@@ -1,7 +1,7 @@
-import { CosmosChain } from '../../../Chain'
-import { getCosmosClient } from '../../../chains/cosmos/client'
-import { attempt } from '../../../../../lib/utils/attempt'
-import { isInError } from '../../../../../lib/utils/error/isInError'
+import { CosmosChain } from '@core/chain/Chain'
+import { getCosmosClient } from '@core/chain/chains/cosmos/client'
+import { attempt } from '@lib/utils/attempt'
+import { isInError } from '@lib/utils/error/isInError'
 
 import { BroadcastTxResolver } from '../resolver'
 

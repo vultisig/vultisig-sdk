@@ -1,15 +1,15 @@
-import { DeriveChainKind, getChainKind } from '../../../../ChainKind'
-import { chainFeeCoin } from '../../../../coin/chainFeeCoin'
-import { lifiConfig } from '../config'
+import { DeriveChainKind, getChainKind } from '@core/chain/ChainKind'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { lifiConfig } from '@core/chain/swap/general/lifi/config'
 import {
   lifiSwapChainId,
   LifiSwapEnabledChain,
-} from '../LifiSwapEnabledChains'
-import { shouldBePresent } from '../../../../../../lib/utils/assert/shouldBePresent'
-import { match } from '../../../../../../lib/utils/match'
-import { memoize } from '../../../../../../lib/utils/memoize'
-import { mirrorRecord } from '../../../../../../lib/utils/record/mirrorRecord'
-import { TransferDirection } from '../../../../../../lib/utils/TransferDirection'
+} from '@core/chain/swap/general/lifi/LifiSwapEnabledChains'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { match } from '@lib/utils/match'
+import { memoize } from '@lib/utils/memoize'
+import { mirrorRecord } from '@lib/utils/record/mirrorRecord'
+import { TransferDirection } from '@lib/utils/TransferDirection'
 import { createConfig, getQuote } from '@lifi/sdk'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'

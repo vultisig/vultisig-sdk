@@ -115,24 +115,16 @@ const wrappedFetch = async function (input: RequestInfo | URL, init?: RequestIni
 globalThis.fetch = wrappedFetch as any
 
 /**
- * Configure SharedWasmRuntime for E2E tests
- * Uses Node.js WASM loader for test environment
+ * Configure crypto for E2E tests
  */
-import { SharedWasmRuntime } from '../../src/context/SharedWasmRuntime'
 import { configureCrypto } from '../../src/crypto'
 import { NodeCrypto } from '../../src/platforms/node/crypto'
-import { NodeWasmLoader } from '../../src/platforms/node/wasm'
 
 configureCrypto(new NodeCrypto())
 
-// Configure SharedWasmRuntime to use Node.js loader
-const wasmLoader = new NodeWasmLoader()
-SharedWasmRuntime.configure({
-  wasmPaths: {
-    dkls: () => wasmLoader.loadDkls(),
-    schnorr: () => wasmLoader.loadSchnorr(),
-  },
-})
+// Note: DKLS and Schnorr WASM modules are handled automatically by core's
+// initializeMpcLib() using wasm-bindgen's import.meta.url. The fetch polyfill
+// above allows wasm-bindgen to load .wasm files from the filesystem.
 
 console.log('✅ E2E test setup loaded')
 console.log('🌐 Real network calls ENABLED (no API mocks)')

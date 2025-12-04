@@ -1,6 +1,6 @@
-import { getCoinType } from '../../../../chain/coin/coinType'
-import { bigIntToHex } from '../../../../../lib/utils/bigint/bigIntToHex'
-import { stripHexPrefix } from '../../../../../lib/utils/hex/stripHexPrefix'
+import { getCoinType } from '@core/chain/coin/coinType'
+import { bigIntToHex } from '@lib/utils/bigint/bigIntToHex'
+import { stripHexPrefix } from '@lib/utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 

@@ -1,7 +1,7 @@
-import { Chain, EvmChain } from '../../../Chain'
-import { getEvmChainId } from '../../../chains/evm/chainInfo'
-import { hexToNumber } from '../../../../../lib/utils/hex/hexToNumber'
-import { makeRecord } from '../../../../../lib/utils/record/makeRecord'
+import { Chain, EvmChain } from '@core/chain/Chain'
+import { getEvmChainId } from '@core/chain/chains/evm/chainInfo'
+import { hexToNumber } from '@lib/utils/hex/hexToNumber'
+import { makeRecord } from '@lib/utils/record/makeRecord'
 import { ChainId } from '@lifi/sdk'
 
 export const lifiSwapEnabledChains = [

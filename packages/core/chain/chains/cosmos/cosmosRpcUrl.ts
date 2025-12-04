@@ -1,6 +1,6 @@
-import { CosmosChain } from '../../Chain'
-import { AccountCoinKey } from '../../coin/AccountCoin'
-import { base64Encode } from '../../../../lib/utils/base64Encode'
+import { CosmosChain } from '@core/chain/Chain'
+import { AccountCoinKey } from '@core/chain/coin/AccountCoin'
+import { base64Encode } from '@lib/utils/base64Encode'
 
 export const cosmosRpcUrl: Record<CosmosChain, string> = {
   Cosmos: 'https://cosmos-rest.publicnode.com',

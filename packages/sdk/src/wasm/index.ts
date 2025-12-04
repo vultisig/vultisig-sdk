@@ -1,8 +1,11 @@
 /**
  * WASM management exports
  *
- * WASM modules are managed by SharedWasmRuntime (process-wide singleton)
- * configured automatically by platform bundles.
+ * WASM modules are managed automatically:
+ * - WalletCore: SharedWasmRuntime (lazy loaded on first use)
+ * - DKLS/Schnorr: core's initializeMpcLib() (lazy loaded on first MPC operation)
+ *
+ * No configuration needed - just import from the platform entry point.
  */
 
-export type { WasmConfig } from './types'
+// No exports needed - WASM is managed automatically

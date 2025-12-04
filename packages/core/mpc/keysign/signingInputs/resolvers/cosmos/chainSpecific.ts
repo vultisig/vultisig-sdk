@@ -1,11 +1,11 @@
-import { CosmosChain } from '../../../../../chain/Chain'
-import { getCosmosChainKind } from '../../../../../chain/chains/cosmos/utils/getCosmosChainKind'
+import { CosmosChain } from '@core/chain/Chain'
+import { getCosmosChainKind } from '@core/chain/chains/cosmos/utils/getCosmosChainKind'
 import {
   CosmosSpecific,
   MAYAChainSpecific,
   THORChainSpecific,
-} from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
-import { KeysignPayload } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
+} from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import {
   chainSpecificRecord,

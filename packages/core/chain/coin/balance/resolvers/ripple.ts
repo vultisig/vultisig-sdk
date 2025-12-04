@@ -1,8 +1,8 @@
-import { getRippleAccountInfo } from '../../../chains/ripple/account/info'
-import { getRippleNetworkInfo } from '../../../chains/ripple/network/info'
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
-import { attempt } from '../../../../../lib/utils/attempt'
-import { isInError } from '../../../../../lib/utils/error/isInError'
+import { getRippleAccountInfo } from '@core/chain/chains/ripple/account/info'
+import { getRippleNetworkInfo } from '@core/chain/chains/ripple/network/info'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { attempt } from '@lib/utils/attempt'
+import { isInError } from '@lib/utils/error/isInError'
 
 import { CoinBalanceResolver } from '../resolver'
 

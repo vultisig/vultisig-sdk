@@ -1,6 +1,6 @@
-import { CosmosChain } from '../../../Chain'
-import { parseCosmosSerialized } from '../../../chains/cosmos/utils/parseCosmosSerialized'
-import { stripHexPrefix } from '../../../../../lib/utils/hex/stripHexPrefix'
+import { CosmosChain } from '@core/chain/Chain'
+import { parseCosmosSerialized } from '@core/chain/chains/cosmos/utils/parseCosmosSerialized'
+import { stripHexPrefix } from '@lib/utils/hex/stripHexPrefix'
 import { sha256 } from 'viem'
 
 import { TxHashResolver } from '../resolver'

@@ -1,7 +1,7 @@
-import { tonConfig } from '../../../../../chain/chains/ton/config'
-import { KeysignPayload } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
-import { shouldBePresent } from '../../../../../../lib/utils/assert/shouldBePresent'
-import { numberToEvenHex } from '../../../../../../lib/utils/hex/numberToHex'
+import { tonConfig } from '@core/chain/chains/ton/config'
+import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { numberToEvenHex } from '@lib/utils/hex/numberToHex'
 import { TW } from '@trustwallet/wallet-core'
 import { WalletCore } from '@trustwallet/wallet-core'
 

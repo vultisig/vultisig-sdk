@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf'
-import { shouldBePresent } from '../../../../lib/utils/assert/shouldBePresent'
-import { bigIntSum } from '../../../../lib/utils/bigint/bigIntSum'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { bigIntSum } from '@lib/utils/bigint/bigIntSum'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { TW } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'

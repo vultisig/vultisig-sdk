@@ -6,8 +6,8 @@ import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
-import type { LibType } from '../../keygen/v1/lib_type_message_pb';
-import { file_vultisig_keygen_v1_lib_type_message } from '../../keygen/v1/lib_type_message_pb';
+import type { LibType } from "../../keygen/v1/lib_type_message_pb";
+import { file_vultisig_keygen_v1_lib_type_message } from "../../keygen/v1/lib_type_message_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**

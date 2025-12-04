@@ -1,6 +1,6 @@
-import { chainFeeCoin } from '../../../coin/chainFeeCoin'
-import { CoinKey } from '../../../coin/Coin'
-import { isFeeCoin } from '../../../coin/utils/isFeeCoin'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { CoinKey } from '@core/chain/coin/Coin'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
 
 import { Chain } from '../../../Chain'
 

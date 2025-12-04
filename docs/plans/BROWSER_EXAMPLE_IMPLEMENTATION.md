@@ -1349,11 +1349,11 @@ Create `src/components/vault/VaultCreator.tsx`:
 
 ```typescript
 import { useState } from 'react'
-import { FastVault } from '@vultisig/sdk'
 import type { Vault } from '@vultisig/sdk'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import Modal from '@/components/common/Modal'
+import { getSDK } from '@/utils/sdk'
 
 interface VaultCreatorProps {
   onVaultCreated: (vault: Vault) => void
@@ -1396,7 +1396,8 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
     setIsLoading(true)
 
     try {
-      const result = await FastVault.create({
+      const sdk = getSDK()
+      const result = await sdk.createFastVault({
         name: formData.name,
         password: formData.password,
         email: formData.email,
@@ -1406,8 +1407,7 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
         setVaultId(result.vaultId)
         setStep('verify')
       } else {
-        const vault = await result.vault
-        onVaultCreated(vault)
+        onVaultCreated(result.vault)
         handleClose()
       }
     } catch (err) {
@@ -2474,7 +2474,7 @@ MIT
 For questions or issues:
 - GitHub Issues: [vultisig-sdk/issues](https://github.com/vultisig/vultisig-sdk/issues)
 - Documentation: [SDK Docs](../../README.md)
-- Examples: Check `examples/shell` for CLI reference
+- Examples: Check `clients/cli` for CLI reference
 
 ---
 
@@ -2563,6 +2563,6 @@ The use of **Tailwind CSS** significantly streamlines development by:
 The resulting application will serve as both a functional demo and a reference implementation for developers integrating the Vultisig SDK into browser-based applications, showcasing advanced features like multi-vault management, real-time event logging, and modern UI development practices.
 
 For questions or clarifications during implementation, refer to:
-- Shell example: `examples/shell/` (feature reference)
+- CLI: `clients/cli/` (feature reference)
 - SDK source: `packages/sdk/` (API details)
 - Documentation: `docs/` (guides and architecture)

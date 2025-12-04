@@ -1,4 +1,4 @@
-import { Chain } from './Chain'
+import { Chain } from '@core/chain/Chain'
 
 import { ChainEntity } from './ChainEntity'
 

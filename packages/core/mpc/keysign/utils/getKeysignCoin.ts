@@ -1,7 +1,7 @@
-import { Chain } from '../../../chain/Chain'
-import { AccountCoin } from '../../../chain/coin/AccountCoin'
-import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_pb'
-import { shouldBePresent } from '../../../../lib/utils/assert/shouldBePresent'
+import { Chain } from '@core/chain/Chain'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 
 import { fromCommCoin } from '../../types/utils/commCoin'
 

@@ -1,4 +1,4 @@
-import { attempt } from '../../../../lib/utils/attempt'
+import { attempt } from '@lib/utils/attempt'
 import { SevenZipModule } from '7z-wasm'
 
 type ToCompressedStringInput = {

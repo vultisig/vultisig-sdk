@@ -320,18 +320,22 @@ packages/sdk/src/
 The main SDK class that orchestrates all functionality using the facade pattern.
 
 ```typescript
-import { Vultisig, MemoryStorage } from "@vultisig/sdk";
+import { Vultisig, FileStorage } from "@vultisig/sdk/node";
 
 // Storage is required
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),  // Or your custom Storage implementation
+  storage: new FileStorage(),  // Or MemoryStorage, or custom implementation
   defaultChains: [Chain.Bitcoin, Chain.Ethereum],
 });
 
 await sdk.initialize();
 
 // Create a fast vault
-const vault = await sdk.createVault("My Vault", password);
+const { vault } = await sdk.createFastVault({
+  name: "My Vault",
+  password: "secure-password",
+  email: "user@example.com"
+});
 
 // Get vault address
 const address = await vault.address("Ethereum");
@@ -363,24 +367,27 @@ sdk.dispose();
 
 **File:** `src/VaultManager.ts`
 
-Manages vault lifecycle and vault collection using the factory pattern.
+Internal class that manages vault lifecycle and vault collection. Users interact with vaults through the `Vultisig` facade.
 
 ```typescript
-// Create fast vault (2-of-2 with server)
-const vault = await vaultManager.createFastVault(name, password);
+// Create fast vault (2-of-2 with server) - via Vultisig facade
+const { vault } = await sdk.createFastVault({
+  name: "My Vault",
+  password: "secure-password",
+  email: "user@example.com"
+});
 
 // Import existing vault
-const vault = await vaultManager.importVault(vultFile, password);
+const vault = await sdk.importVault(vultFile, password);
 
 // Export vault
-const encrypted = await vaultManager.exportVault(vaultId, password);
+const { filename, data } = await vault.export(password);
 ```
 
 **Responsibilities:**
 
-- Vault creation (fast and secure vaults)
 - Vault import from .vult files
-- Vault export with encryption
+- Vault storage and retrieval
 - Active vault tracking
 - Vault type detection
 

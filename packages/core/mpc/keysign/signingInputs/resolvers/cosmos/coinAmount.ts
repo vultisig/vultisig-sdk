@@ -1,7 +1,7 @@
-import { CosmosChain } from '../../../../../chain/Chain'
-import { cosmosFeeCoinDenom } from '../../../../../chain/chains/cosmos/cosmosFeeCoinDenom'
-import { isFeeCoin } from '../../../../../chain/coin/utils/isFeeCoin'
-import { KeysignPayload } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
+import { CosmosChain } from '@core/chain/Chain'
+import { cosmosFeeCoinDenom } from '@core/chain/chains/cosmos/cosmosFeeCoinDenom'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 

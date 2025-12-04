@@ -1,4 +1,4 @@
-import { ChainKind } from '../../../chain/ChainKind'
+import { ChainKind } from '@core/chain/ChainKind'
 import { TW } from '@trustwallet/wallet-core'
 
 export const signingInputClasses = {

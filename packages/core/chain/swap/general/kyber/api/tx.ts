@@ -1,7 +1,7 @@
-import { extractErrorMsg } from '../../../../../../lib/utils/error/extractErrorMsg'
-import { isInError } from '../../../../../../lib/utils/error/isInError'
-import { queryUrl } from '../../../../../../lib/utils/query/queryUrl'
-import { convertDuration } from '../../../../../../lib/utils/time/convertDuration'
+import { extractErrorMsg } from '@lib/utils/error/extractErrorMsg'
+import { isInError } from '@lib/utils/error/isInError'
+import { queryUrl } from '@lib/utils/query/queryUrl'
+import { convertDuration } from '@lib/utils/time/convertDuration'
 
 import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'

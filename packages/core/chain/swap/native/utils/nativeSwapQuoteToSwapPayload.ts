@@ -1,10 +1,10 @@
 import { create } from '@bufbuild/protobuf'
-import { fromChainAmount } from '../../../amount/fromChainAmount'
-import { AccountCoin } from '../../../coin/AccountCoin'
-import { CommKeysignSwapPayload } from '../../../../mpc/keysign/swap/KeysignSwapPayload'
-import { toCommCoin } from '../../../../mpc/types/utils/commCoin'
-import { THORChainSwapPayloadSchema } from '../../../../mpc/types/vultisig/keysign/v1/thorchain_swap_payload_pb'
-import { convertDuration } from '../../../../../lib/utils/time/convertDuration'
+import { fromChainAmount } from '@core/chain/amount/fromChainAmount'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { CommKeysignSwapPayload } from '@core/mpc/keysign/swap/KeysignSwapPayload'
+import { toCommCoin } from '@core/mpc/types/utils/commCoin'
+import { THORChainSwapPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/thorchain_swap_payload_pb'
+import { convertDuration } from '@lib/utils/time/convertDuration'
 import { addMinutes } from 'date-fns'
 
 import {

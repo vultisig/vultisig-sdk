@@ -1,15 +1,16 @@
 import { Chain } from '@core/chain/Chain'
 import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
+import { isValidAddress } from '@core/chain/utils/isValidAddress'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
-import type { SdkConfigOptions,SdkContext } from './context/SdkContext'
+import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
 import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import type { Storage } from './storage/types'
-import { AddressBook, AddressBookEntry, ServerStatus } from './types'
+import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
@@ -17,6 +18,17 @@ import { VaultManager } from './VaultManager'
 
 // Re-export constants
 export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
+
+/**
+ * Pre-loaded WASM module bytes for MPC operations.
+ * When provided, bypasses automatic WASM loading (fetch/import.meta.url).
+ */
+export type WasmModules = {
+  /** DKLS WASM module bytes (for ECDSA signing) */
+  dkls?: BufferSource
+  /** Schnorr WASM module bytes (for EdDSA signing) */
+  schnorr?: BufferSource
+}
 
 /**
  * Configuration options for Vultisig SDK
@@ -38,6 +50,12 @@ export type VultisigConfig = {
   onPasswordRequired?: SdkConfigOptions['onPasswordRequired']
   /** Auto-initialize on construction */
   autoInit?: boolean
+  /**
+   * Pre-loaded WASM modules for MPC operations.
+   * Required for Node.js/Electron where automatic WASM loading fails.
+   * Use platform-specific `loadWasmModules()` helper to load these.
+   */
+  wasmModules?: WasmModules
 }
 
 /**
@@ -288,6 +306,87 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
+   * Create a new fast vault (2-of-2 with VultiServer)
+   *
+   * @param options - Vault creation options
+   * @returns Created vault and verification info
+   *
+   * @example
+   * ```typescript
+   * const result = await sdk.createFastVault({
+   *   name: 'My Fast Vault',
+   *   password: 'securePassword123',
+   *   email: 'user@example.com',
+   *   onProgress: (step) => console.log(step.message)
+   * })
+   *
+   * if (result.verificationRequired) {
+   *   const code = await promptUser('Enter verification code:')
+   *   await sdk.verifyVault(result.vaultId, code)
+   * }
+   * ```
+   */
+  async createFastVault(options: {
+    name: string
+    password: string
+    email: string
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{
+    vault: FastVault
+    vaultId: string
+    verificationRequired: true
+  }> {
+    await this.ensureInitialized()
+    const result = await FastVault.create(this.context, options)
+
+    // Store the vault and set as active
+    await result.vault.save()
+    await this.vaultManager.setActiveVault(result.vaultId)
+
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+    return result
+  }
+
+  /**
+   * Create a new secure vault (multi-device MPC)
+   *
+   * @param options - Vault creation options
+   * @returns Created vault and session info
+   *
+   * @example
+   * ```typescript
+   * const result = await sdk.createSecureVault({
+   *   name: 'My Secure Vault',
+   *   password: 'securePassword123',
+   *   devices: 3,
+   *   threshold: 2,
+   *   onProgress: (step) => console.log(step.message)
+   * })
+   * ```
+   */
+  async createSecureVault(options: {
+    name: string
+    password: string
+    devices: number
+    threshold?: number
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{
+    vault: SecureVault
+    vaultId: string
+    sessionId: string
+  }> {
+    await this.ensureInitialized()
+    const result = await SecureVault.create(this.context, options)
+
+    // Store the vault and set as active
+    await result.vault.save()
+    await this.vaultManager.setActiveVault(result.vaultId)
+
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+    return result
+  }
+
+  /**
    * Check if a vault file is encrypted
    *
    * @param vultContent - The .vult file content as a string
@@ -464,8 +563,26 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   /**
    * Add address book entries
+   *
+   * @param entries - Address book entries to add
+   * @throws Error if any address is invalid for its chain
    */
   async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> {
+    // Validate all addresses before adding
+    const walletCore = await this.context.wasmProvider.getWalletCore()
+
+    for (const entry of entries) {
+      const isValid = isValidAddress({
+        chain: entry.chain,
+        address: entry.address,
+        walletCore,
+      })
+
+      if (!isValid) {
+        throw new Error(`Invalid address for ${entry.chain}: ${entry.address}`)
+      }
+    }
+
     return this.addressBookManager.addAddressBookEntry(entries)
   }
 

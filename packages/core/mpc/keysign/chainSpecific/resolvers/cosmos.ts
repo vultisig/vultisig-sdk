@@ -1,11 +1,11 @@
 import { create } from '@bufbuild/protobuf'
-import { IbcEnabledCosmosChain } from '../../../../chain/Chain'
-import { getCosmosAccountInfo } from '../../../../chain/chains/cosmos/account/getCosmosAccountInfo'
-import { cosmosGasRecord } from '../../../../chain/chains/cosmos/gas'
+import { IbcEnabledCosmosChain } from '@core/chain/Chain'
+import { getCosmosAccountInfo } from '@core/chain/chains/cosmos/account/getCosmosAccountInfo'
+import { cosmosGasRecord } from '@core/chain/chains/cosmos/gas'
 import {
   CosmosSpecificSchema,
   TransactionType,
-} from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
+} from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../resolver'

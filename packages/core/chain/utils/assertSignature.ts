@@ -1,5 +1,5 @@
-import { SignatureFormat } from '../signing/SignatureFormat'
-import { match } from '../../../lib/utils/match'
+import { SignatureFormat } from '@core/chain/signing/SignatureFormat'
+import { match } from '@lib/utils/match'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 type Input = {

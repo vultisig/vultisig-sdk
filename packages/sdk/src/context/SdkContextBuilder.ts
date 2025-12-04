@@ -11,6 +11,9 @@ import { ServerManager } from '../server/ServerManager'
 import { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
 import type { SdkConfigOptions, SdkContext } from './SdkContext'
+
+// Re-export SdkContext type for consumers
+export type { SdkContext } from './SdkContext'
 import { SharedWasmRuntime } from './SharedWasmRuntime'
 
 /**
@@ -61,7 +64,7 @@ export type SdkContextBuilderOptions = {
  * @example
  * ```typescript
  * const context = new SdkContextBuilder()
- *   .withStorage(new NodeStorage({ basePath: '~/.myapp' }))
+ *   .withStorage(new FileStorage({ basePath: '~/.myapp' }))
  *   .withServerEndpoints({ fastVault: 'https://custom.api.com' })
  *   .withConfig({ defaultChains: [Chain.Bitcoin] })
  *   .build()
@@ -137,7 +140,7 @@ export class SdkContextBuilder {
     if (!this.storage) {
       throw new Error(
         'Storage is required. Call withStorage() before build(). ' +
-          'Example: new SdkContextBuilder().withStorage(new NodeStorage()).build()'
+          'Example: new SdkContextBuilder().withStorage(new FileStorage()).build()'
       )
     }
 

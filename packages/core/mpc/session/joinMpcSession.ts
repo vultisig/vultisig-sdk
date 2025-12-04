@@ -1,4 +1,4 @@
-import { queryUrl } from '../../../lib/utils/query/queryUrl'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 type JoinMpcSessionInput = {
   serverUrl: string

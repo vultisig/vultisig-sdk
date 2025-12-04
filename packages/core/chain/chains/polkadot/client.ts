@@ -1,5 +1,5 @@
-import { rootApiUrl } from '../../../config'
-import { memoizeAsync } from '../../../../lib/utils/memoizeAsync'
+import { rootApiUrl } from '@core/config'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { ApiPromise, HttpProvider } from '@polkadot/api'
 
 export const polkadotRpcUrl = `${rootApiUrl}/dot/`

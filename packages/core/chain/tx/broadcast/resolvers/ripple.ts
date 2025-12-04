@@ -1,5 +1,5 @@
-import { OtherChain } from '../../../Chain'
-import { getRippleClient } from '../../../chains/ripple/client'
+import { OtherChain } from '@core/chain/Chain'
+import { getRippleClient } from '@core/chain/chains/ripple/client'
 
 import { BroadcastTxResolver } from '../resolver'
 

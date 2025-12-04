@@ -1,7 +1,7 @@
-import { tronRpcUrl } from '../../../chains/tron/config'
-import { isFeeCoin } from '../../utils/isFeeCoin'
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
-import { queryUrl } from '../../../../../lib/utils/query/queryUrl'
+import { tronRpcUrl } from '@core/chain/chains/tron/config'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 import base58 from 'bs58'
 
 import { CoinBalanceResolver } from '../resolver'

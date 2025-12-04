@@ -113,9 +113,20 @@ export class CacheService {
     const ttl = this.getTTLForScope(scope)
     const cacheKey = this.buildKey(key, scope)
 
-    // Check cache first
+    // Check in-memory cache first
     const cached = this.get<T>(cacheKey, ttl)
     if (cached !== null) return cached
+
+    // For persistent scopes, try loading from storage before compute
+    if (CacheService.PERSISTENT_SCOPES.has(scope) && this.storage && this.vaultId) {
+      const storageKey = `cache:${this.vaultId}:${cacheKey}`
+      const storedValue = await this.storage.get<T>(storageKey)
+      if (storedValue !== null) {
+        // Store in memory cache for future access
+        this.set(cacheKey, storedValue)
+        return storedValue
+      }
+    }
 
     // Check for in-flight computation
     const pending = this.pendingComputations.get(cacheKey)

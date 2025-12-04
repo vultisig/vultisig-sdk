@@ -1,6 +1,6 @@
-import { fromChainAmount } from '../../amount/fromChainAmount'
-import { CoinAmount } from '../Coin'
-import { EntityWithPrice } from '../../../../lib/utils/entities/EntityWithPrice'
+import { fromChainAmount } from '@core/chain/amount/fromChainAmount'
+import { CoinAmount } from '@core/chain/coin/Coin'
+import { EntityWithPrice } from '@lib/utils/entities/EntityWithPrice'
 
 export const getCoinValue = ({
   amount,

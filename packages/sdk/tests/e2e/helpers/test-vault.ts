@@ -38,6 +38,8 @@ export const TEST_VAULT_CONFIG = {
     Chain.BSC,
     Chain.Avalanche,
     Chain.Arbitrum,
+    Chain.Optimism,
+    Chain.Base,
     Chain.Litecoin,
     Chain.Dogecoin,
     Chain.THORChain,
