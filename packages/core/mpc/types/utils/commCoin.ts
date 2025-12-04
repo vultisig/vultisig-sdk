@@ -1,11 +1,11 @@
 import { create } from '@bufbuild/protobuf'
-import { Chain } from '../../../chain/Chain'
-import { AccountCoin } from '../../../chain/coin/AccountCoin'
-import { isFeeCoin } from '../../../chain/coin/utils/isFeeCoin'
+import { Chain } from '@core/chain/Chain'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
 import {
   Coin as CommCoin,
   CoinSchema,
-} from '../vultisig/keysign/v1/coin_pb'
+} from '@core/mpc/types/vultisig/keysign/v1/coin_pb'
 
 export const fromCommCoin = <T extends Chain = Chain>(
   coin: CommCoin

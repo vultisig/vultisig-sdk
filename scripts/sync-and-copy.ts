@@ -4,7 +4,7 @@
  * Sync and Copy Script
  *
  * 1. Syncs core/ and lib/ directories from vultisig-windows repository
- * 2. Copies needed files to src/core and src/lib with import transformations
+ * 2. Copies needed files to packages/core and packages/lib as workspace packages
  */
 
 import { execSync } from "child_process";
@@ -276,6 +276,11 @@ class SyncAndCopier {
       } else if (entry.name.endsWith(".wasm")) {
         // Copy WASM files directly without transformation
         fs.copyFileSync(srcPath, destPath);
+      } else if (entry.name === "package.json") {
+        // Copy package.json and transform for workspace use
+        const content = fs.readFileSync(srcPath, "utf-8");
+        const transformedContent = this.transformPackageJson(content);
+        fs.writeFileSync(destPath, transformedContent);
       } else if (
         entry.name.endsWith(".ts") ||
         entry.name.endsWith(".tsx") ||
@@ -283,8 +288,7 @@ class SyncAndCopier {
         entry.name.endsWith(".d.ts")
       ) {
         const content = fs.readFileSync(srcPath, "utf-8");
-        const transformedContent = this.transformImports(content, destPath);
-        fs.writeFileSync(destPath, transformedContent);
+        fs.writeFileSync(destPath, content);
       }
     }
   }
@@ -304,8 +308,7 @@ class SyncAndCopier {
       fs.mkdirSync(path.dirname(destPath), { recursive: true });
 
       const content = fs.readFileSync(sourcePath, "utf-8");
-      const transformedContent = this.transformImports(content, destPath);
-      fs.writeFileSync(destPath, transformedContent);
+      fs.writeFileSync(destPath, content);
 
       this.copied.push(filePath);
       console.log(`✅ ${filePath}`);
@@ -314,67 +317,22 @@ class SyncAndCopier {
     }
   }
 
-  private transformImports(content: string, destinationPath: string): string {
-    let transformed = content;
+  private transformPackageJson(content: string): string {
+    const pkg = JSON.parse(content);
 
-    // Transform @core/ imports
-    transformed = transformed.replace(
-      /@core\/([^'"]*)/g,
-      (_match, corePath) => {
-        const destDir = path.dirname(destinationPath);
-        const targetPath = path.join(
-          this.projectRoot,
-          "packages/core",
-          corePath,
-        );
-        const relativePath = path.relative(destDir, targetPath);
-        return relativePath.startsWith(".")
-          ? relativePath
-          : "./" + relativePath;
-      },
-    );
+    // Keep workspace dependencies as-is (workspace:^) from upstream
 
-    // Transform @lib/ imports
-    transformed = transformed.replace(/@lib\/([^'"]*)/g, (_match, libPath) => {
-      const destDir = path.dirname(destinationPath);
-      const targetPath = path.join(this.projectRoot, "packages/lib", libPath);
-      const relativePath = path.relative(destDir, targetPath);
-      return relativePath.startsWith(".") ? relativePath : "./" + relativePath;
-    });
+    // Remove devDependencies (inherited from root or not needed)
+    delete pkg.devDependencies;
 
-    // Fix relative imports that reference core or lib directories
-    // Match import statements with relative paths
-    transformed = transformed.replace(
-      /from ['"](\.\.[^'"]+)['"]/g,
-      (match, importPath) => {
-        const destDir = path.dirname(destinationPath);
+    // Remove scripts (not needed for internal packages)
+    delete pkg.scripts;
 
-        // Resolve the import path relative to destination
-        const resolvedPath = path.resolve(destDir, importPath);
-        const packagesDir = path.join(this.projectRoot, "packages");
+    // Ensure private and type
+    pkg.private = true;
+    pkg.type = "module";
 
-        // Check if this resolves to something in packages/core or packages/lib
-        if (resolvedPath.startsWith(packagesDir)) {
-          const relativeToPackages = path.relative(packagesDir, resolvedPath);
-
-          // If it starts with 'core/' or 'lib/', recalculate the correct relative path
-          if (
-            relativeToPackages.startsWith("core/") ||
-            relativeToPackages.startsWith("lib/")
-          ) {
-            const correctRelativePath = path.relative(destDir, resolvedPath);
-            const fixedPath = correctRelativePath.startsWith(".")
-              ? correctRelativePath
-              : "./" + correctRelativePath;
-            return `from '${fixedPath}'`;
-          }
-        }
-
-        return match;
-      },
-    );
-
-    return transformed;
+    return JSON.stringify(pkg, null, 2) + "\n";
   }
 
   private countFiles(dir: string): number {

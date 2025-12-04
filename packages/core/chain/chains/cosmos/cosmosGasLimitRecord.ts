@@ -1,4 +1,4 @@
-import { Chain, CosmosChain } from '../../Chain'
+import { Chain, CosmosChain } from '@core/chain/Chain'
 
 import { areEqualCoins, CoinKey } from '../../coin/Coin'
 

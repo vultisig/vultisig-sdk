@@ -1,4 +1,4 @@
-import { assertField } from '../../../../../../../../lib/utils/record/assertField'
+import { assertField } from '@lib/utils/record/assertField'
 
 import { OtherChain } from '../../../../../../Chain'
 import { decodeSigningOutput } from '../../../../../../tw/signingOutput'

@@ -1,4 +1,4 @@
-import { OtherChain } from '../../../Chain'
+import { OtherChain } from '@core/chain/Chain'
 
 import { TxHashResolver } from '../resolver'
 

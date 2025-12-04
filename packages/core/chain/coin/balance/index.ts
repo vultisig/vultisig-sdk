@@ -1,4 +1,4 @@
-import { ChainKind, getChainKind } from '../../ChainKind'
+import { ChainKind, getChainKind } from '@core/chain/ChainKind'
 
 import { CoinBalanceResolver } from './resolver'
 import { getCardanoCoinBalance } from './resolvers/cardano'

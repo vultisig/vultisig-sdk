@@ -1,6 +1,6 @@
-import { OtherChain } from '../../../Chain'
-import { cardanoApiUrl } from '../../../chains/cardano/client/config'
-import { queryUrl } from '../../../../../lib/utils/query/queryUrl'
+import { OtherChain } from '@core/chain/Chain'
+import { cardanoApiUrl } from '@core/chain/chains/cardano/client/config'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { CoinBalanceResolver } from '../resolver'
 

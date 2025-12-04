@@ -1,9 +1,9 @@
-import { EvmChain } from '../../Chain'
-import { chainFeeCoin } from '../../coin/chainFeeCoin'
-import { rootApiUrl } from '../../../config'
-import { numberToHex } from '../../../../lib/utils/hex/numberToHex'
-import { mirrorRecord } from '../../../../lib/utils/record/mirrorRecord'
-import { recordMap } from '../../../../lib/utils/record/recordMap'
+import { EvmChain } from '@core/chain/Chain'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { rootApiUrl } from '@core/config'
+import { numberToHex } from '@lib/utils/hex/numberToHex'
+import { mirrorRecord } from '@lib/utils/record/mirrorRecord'
+import { recordMap } from '@lib/utils/record/recordMap'
 import { Chain as ViemChain, defineChain } from 'viem'
 import {
   arbitrum,

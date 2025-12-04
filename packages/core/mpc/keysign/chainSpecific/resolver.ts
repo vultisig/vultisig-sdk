@@ -1,5 +1,5 @@
-import type { TransactionType } from '../../types/vultisig/keysign/v1/blockchain_specific_pb'
-import { Resolver } from '../../../../lib/utils/types/Resolver'
+import type { TransactionType } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { Resolver } from '@lib/utils/types/Resolver'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { Psbt } from 'bitcoinjs-lib'
 

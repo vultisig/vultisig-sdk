@@ -1,4 +1,4 @@
-import { memoize } from '../../../../lib/utils/memoize'
+import { memoize } from '@lib/utils/memoize'
 import { SuiClient } from '@mysten/sui/client'
 
 export const getSuiClient = memoize(

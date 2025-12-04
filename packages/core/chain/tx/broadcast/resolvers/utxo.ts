@@ -1,8 +1,8 @@
-import { OtherChain, UtxoBasedChain, UtxoChain } from '../../../Chain'
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
-import { extractErrorMsg } from '../../../../../lib/utils/error/extractErrorMsg'
-import { isInError } from '../../../../../lib/utils/error/isInError'
-import { queryUrl } from '../../../../../lib/utils/query/queryUrl'
+import { OtherChain, UtxoBasedChain, UtxoChain } from '@core/chain/Chain'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { extractErrorMsg } from '@lib/utils/error/extractErrorMsg'
+import { isInError } from '@lib/utils/error/isInError'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { getChainKind } from '../../../ChainKind'
 import { getBlockchairBaseUrl } from '../../../chains/utxo/client/getBlockchairBaseUrl'

@@ -1,4 +1,4 @@
-import { ChainKind, getChainKind } from '../../ChainKind'
+import { ChainKind, getChainKind } from '@core/chain/ChainKind'
 
 import { BroadcastTxResolver } from './resolver'
 import { broadcastCardanoTx } from './resolvers/cardano'

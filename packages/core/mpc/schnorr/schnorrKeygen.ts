@@ -1,4 +1,4 @@
-import { base64Encode } from '../../../lib/utils/base64Encode'
+import { base64Encode } from '@lib/utils/base64Encode'
 
 import {
   KeygenSession,

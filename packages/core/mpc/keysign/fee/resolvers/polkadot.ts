@@ -1,4 +1,4 @@
-import { polkadotConfig } from '../../../../chain/chains/polkadot/config'
+import { polkadotConfig } from '@core/chain/chains/polkadot/config'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { FeeAmountResolver } from '../resolver'

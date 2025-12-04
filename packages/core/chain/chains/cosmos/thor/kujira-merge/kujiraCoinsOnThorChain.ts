@@ -1,5 +1,5 @@
-import { mirrorRecord } from '../../../../../../lib/utils/record/mirrorRecord'
-import { recordMap } from '../../../../../../lib/utils/record/recordMap'
+import { mirrorRecord } from '@lib/utils/record/mirrorRecord'
+import { recordMap } from '@lib/utils/record/recordMap'
 
 import { Chain } from '../../../../Chain'
 import { chainFeeCoin } from '../../../../coin/chainFeeCoin'

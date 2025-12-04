@@ -1,4 +1,4 @@
-import { SwapFee } from '../SwapFee'
+import { SwapFee } from '@core/chain/swap/SwapFee'
 
 import { GeneralSwapProvider } from './GeneralSwapProvider'
 

@@ -1,5 +1,5 @@
-import { SolanaJupiterToken } from '../../../jupiter/token'
-import { queryUrl } from '../../../../../../lib/utils/query/queryUrl'
+import { SolanaJupiterToken } from '@core/chain/coin/jupiter/token'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { getSolanaCoingeckoId } from '../../../coingecko/getCoingeckoId'
 import { TokenMetadataResolver } from '../resolver'

@@ -1,6 +1,6 @@
-import { queryUrl } from '../../../../lib/utils/query/queryUrl'
-import { retry } from '../../../../lib/utils/query/retry'
-import { withoutUndefinedFields } from '../../../../lib/utils/record/withoutUndefinedFields'
+import { queryUrl } from '@lib/utils/query/queryUrl'
+import { retry } from '@lib/utils/query/retry'
+import { withoutUndefinedFields } from '@lib/utils/record/withoutUndefinedFields'
 
 type GetMpcSetupMessageInput = {
   serverUrl: string

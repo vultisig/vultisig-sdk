@@ -1,4 +1,4 @@
-import { OtherChain } from '../../../Chain'
+import { OtherChain } from '@core/chain/Chain'
 import { blake2b } from '@noble/hashes/blake2'
 import { decode, encode } from 'cbor-x'
 import { toHex } from 'viem'

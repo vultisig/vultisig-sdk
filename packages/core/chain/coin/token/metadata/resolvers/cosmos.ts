@@ -1,10 +1,10 @@
-import { CosmosChain } from '../../../../Chain'
-import { cosmosRpcUrl } from '../../../../chains/cosmos/cosmosRpcUrl'
-import { TokenMetadataResolver } from '../resolver'
-import { getLastItem } from '../../../../../../lib/utils/array/getLastItem'
-import { attempt } from '../../../../../../lib/utils/attempt'
-import { asyncFallbackChain } from '../../../../../../lib/utils/promise/asyncFallbackChain'
-import { queryUrl } from '../../../../../../lib/utils/query/queryUrl'
+import { CosmosChain } from '@core/chain/Chain'
+import { cosmosRpcUrl } from '@core/chain/chains/cosmos/cosmosRpcUrl'
+import { TokenMetadataResolver } from '@core/chain/coin/token/metadata/resolver'
+import { getLastItem } from '@lib/utils/array/getLastItem'
+import { attempt } from '@lib/utils/attempt'
+import { asyncFallbackChain } from '@lib/utils/promise/asyncFallbackChain'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 type DenomUnits = { denom: string; exponent: number }
 type DenomMetadata = {

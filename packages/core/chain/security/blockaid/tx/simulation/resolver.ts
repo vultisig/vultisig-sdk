@@ -1,4 +1,4 @@
-import { Resolver } from '../../../../../../lib/utils/types/Resolver'
+import { Resolver } from '@lib/utils/types/Resolver'
 
 import {
   BlockaidSimulationSupportedChain,

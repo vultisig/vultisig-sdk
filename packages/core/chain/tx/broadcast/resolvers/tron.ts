@@ -1,5 +1,5 @@
-import { OtherChain } from '../../../Chain'
-import { queryUrl } from '../../../../../lib/utils/query/queryUrl'
+import { OtherChain } from '@core/chain/Chain'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { tronRpcUrl } from '../../../chains/tron/config'
 import { BroadcastTxResolver } from '../resolver'

@@ -1,6 +1,6 @@
-import { CoinKey } from '../../../coin/Coin'
-import { isOneOf } from '../../../../../lib/utils/array/isOneOf'
-import { EntityWithTicker } from '../../../../../lib/utils/entities/EntityWithTicker'
+import { CoinKey } from '@core/chain/coin/Coin'
+import { isOneOf } from '@lib/utils/array/isOneOf'
+import { EntityWithTicker } from '@lib/utils/entities/EntityWithTicker'
 
 import { isFeeCoin } from '../../../coin/utils/isFeeCoin'
 import { nativeSwapChainIds, nativeSwapEnabledChains } from '../NativeSwapChain'

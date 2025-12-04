@@ -1,8 +1,8 @@
-import { Chain } from '../Chain'
-import { getChainKind } from '../ChainKind'
-import { getCoinType } from '../coin/coinType'
-import { signatureAlgorithms } from '../signing/SignatureAlgorithm'
-import { match } from '../../../lib/utils/match'
+import { Chain } from '@core/chain/Chain'
+import { getChainKind } from '@core/chain/ChainKind'
+import { getCoinType } from '@core/chain/coin/coinType'
+import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
+import { match } from '@lib/utils/match'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getCardanoPublicKeyData } from './cardano'

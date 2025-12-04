@@ -1,4 +1,4 @@
-import { Coin } from '../Coin'
+import { Coin } from '@core/chain/coin/Coin'
 
 export const sortCoinsAlphabetically = <T extends Pick<Coin, 'ticker'>>(
   coins: T[]

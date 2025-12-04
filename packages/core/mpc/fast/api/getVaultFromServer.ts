@@ -1,5 +1,5 @@
-import { base64Encode } from '../../../../lib/utils/base64Encode'
-import { queryUrl } from '../../../../lib/utils/query/queryUrl'
+import { base64Encode } from '@lib/utils/base64Encode'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { fastVaultServerUrl } from '../config'
 

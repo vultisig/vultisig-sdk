@@ -1,6 +1,6 @@
-import { Chain } from '../../Chain'
-import { hyperliquidBlockExplorerUrl } from '../../chains/evm/chainInfo'
-import { match } from '../../../../lib/utils/match'
+import { Chain } from '@core/chain/Chain'
+import { hyperliquidBlockExplorerUrl } from '@core/chain/chains/evm/chainInfo'
+import { match } from '@lib/utils/match'
 
 type ChainEntity = 'address' | 'tx'
 

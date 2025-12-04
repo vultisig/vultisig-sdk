@@ -26,7 +26,7 @@ export async function executeCurrency(ctx: CommandContext, newCurrency?: string)
   const vault = await ctx.ensureActiveVault()
 
   if (!newCurrency) {
-    const currentCurrency = vault.currency
+    const currentCurrency = vault.currency as FiatCurrency
     const currencyName = fiatCurrencyNameRecord[currentCurrency]
     printResult(chalk.cyan('\nCurrent Currency Preference:'))
     printResult(`  ${chalk.green(currentCurrency.toUpperCase())} - ${currencyName}`)

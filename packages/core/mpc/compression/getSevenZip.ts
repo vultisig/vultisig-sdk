@@ -1,4 +1,4 @@
-import { memoizeAsync } from '../../../lib/utils/memoizeAsync'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import SevenZip from '7z-wasm'
 
 export const getSevenZip = memoizeAsync(() => {

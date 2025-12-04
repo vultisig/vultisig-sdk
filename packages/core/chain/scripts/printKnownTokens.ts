@@ -1,5 +1,5 @@
-import { recordMap } from '../../../lib/utils/record/recordMap'
-import { sortRecordKeysAlphabetically } from '../../../lib/utils/record/sortRecordKeysAlphabetically'
+import { recordMap } from '@lib/utils/record/recordMap'
+import { sortRecordKeysAlphabetically } from '@lib/utils/record/sortRecordKeysAlphabetically'
 import { execSync } from 'child_process'
 
 import { knownTokens } from '../coin/knownTokens'

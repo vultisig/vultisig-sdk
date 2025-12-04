@@ -1,5 +1,5 @@
-import { CoinKey, CoinMetadata, Token } from '../../Coin'
-import { Resolver } from '../../../../../lib/utils/types/Resolver'
+import { CoinKey, CoinMetadata, Token } from '@core/chain/coin/Coin'
+import { Resolver } from '@lib/utils/types/Resolver'
 
 import { ChainWithTokenMetadataDiscovery } from './chains'
 

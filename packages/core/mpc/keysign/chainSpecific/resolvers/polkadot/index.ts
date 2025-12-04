@@ -1,8 +1,8 @@
 import { create } from '@bufbuild/protobuf'
-import { getPolkadotClient } from '../../../../../chain/chains/polkadot/client'
-import { polkadotConfig } from '../../../../../chain/chains/polkadot/config'
-import { PolkadotSpecificSchema } from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
-import { attempt, withFallback } from '../../../../../../lib/utils/attempt'
+import { getPolkadotClient } from '@core/chain/chains/polkadot/client'
+import { polkadotConfig } from '@core/chain/chains/polkadot/config'
+import { PolkadotSpecificSchema } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { attempt, withFallback } from '@lib/utils/attempt'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'

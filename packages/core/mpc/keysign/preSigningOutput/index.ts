@@ -1,7 +1,7 @@
-import { Chain } from '../../../chain/Chain'
-import { ChainKind, DeriveChainKind, getChainKind } from '../../../chain/ChainKind'
-import { getCoinType } from '../../../chain/coin/coinType'
-import { assertErrorMessage } from '../../../../lib/utils/error/assertErrorMessage'
+import { Chain } from '@core/chain/Chain'
+import { ChainKind, DeriveChainKind, getChainKind } from '@core/chain/ChainKind'
+import { getCoinType } from '@core/chain/coin/coinType'
+import { assertErrorMessage } from '@lib/utils/error/assertErrorMessage'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 
 type Input<T extends Chain = Chain> = {

@@ -1,13 +1,13 @@
 import { create } from '@bufbuild/protobuf'
-import { Chain } from '../../../../../chain/Chain'
-import { getSuiClient } from '../../../../../chain/chains/sui/client'
-import { suiMinGasBudget } from '../../../../../chain/chains/sui/config'
-import { SuiSpecific } from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
+import { Chain } from '@core/chain/Chain'
+import { getSuiClient } from '@core/chain/chains/sui/client'
+import { suiMinGasBudget } from '@core/chain/chains/sui/config'
+import { SuiSpecific } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import {
   KeysignPayload,
   KeysignPayloadSchema,
-} from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
-import { maxBigInt } from '../../../../../../lib/utils/math/maxBigInt'
+} from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { maxBigInt } from '@lib/utils/math/maxBigInt'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getPreSigningOutput } from '../../../preSigningOutput'

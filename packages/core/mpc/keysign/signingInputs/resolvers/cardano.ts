@@ -1,5 +1,5 @@
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
-import { stripHexPrefix } from '../../../../../lib/utils/hex/stripHexPrefix'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { stripHexPrefix } from '@lib/utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 

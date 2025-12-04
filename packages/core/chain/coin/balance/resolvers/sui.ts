@@ -1,4 +1,4 @@
-import { getSuiClient } from '../../../chains/sui/client'
+import { getSuiClient } from '@core/chain/chains/sui/client'
 
 import { CoinBalanceResolver } from '../resolver'
 

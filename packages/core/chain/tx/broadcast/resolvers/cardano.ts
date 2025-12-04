@@ -1,8 +1,8 @@
-import { OtherChain } from '../../../Chain'
-import { getCardanoTxHash } from '../../hash/resolvers/cardano'
-import { rootApiUrl } from '../../../../config'
-import { extractErrorMsg } from '../../../../../lib/utils/error/extractErrorMsg'
-import { isInError } from '../../../../../lib/utils/error/isInError'
+import { OtherChain } from '@core/chain/Chain'
+import { getCardanoTxHash } from '@core/chain/tx/hash/resolvers/cardano'
+import { rootApiUrl } from '@core/config'
+import { extractErrorMsg } from '@lib/utils/error/extractErrorMsg'
+import { isInError } from '@lib/utils/error/isInError'
 
 import { BroadcastTxResolver } from '../resolver'
 import { selectEncodedBytes } from './utxo'

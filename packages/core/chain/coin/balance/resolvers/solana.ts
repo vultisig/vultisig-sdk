@@ -1,6 +1,6 @@
-import { getSolanaClient } from '../../../chains/solana/client'
-import { getSplAccounts } from '../../../chains/solana/spl/getSplAccounts'
-import { isFeeCoin } from '../../utils/isFeeCoin'
+import { getSolanaClient } from '@core/chain/chains/solana/client'
+import { getSplAccounts } from '@core/chain/chains/solana/spl/getSplAccounts'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
 import { PublicKey } from '@solana/web3.js'
 
 import { CoinBalanceResolver } from '../resolver'

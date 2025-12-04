@@ -1,4 +1,4 @@
-import { makeRecord } from '../../../../../../lib/utils/record/makeRecord'
+import { makeRecord } from '@lib/utils/record/makeRecord'
 
 import { KnownCoinMetadata } from '../../../../coin/Coin'
 

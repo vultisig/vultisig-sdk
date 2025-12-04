@@ -1,5 +1,5 @@
-import { OtherChain } from '../../../Chain'
-import { getPolkadotClient } from '../../../chains/polkadot/client'
+import { OtherChain } from '@core/chain/Chain'
+import { getPolkadotClient } from '@core/chain/chains/polkadot/client'
 
 import { TxHashResolver } from '../resolver'
 
