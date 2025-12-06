@@ -2,7 +2,7 @@
 import 'dotenv/config'
 
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk/node'
-import { Chain, createVultisig, FileStorage, Vultisig } from '@vultisig/sdk/node'
+import { Chain, FileStorage, Vultisig } from '@vultisig/sdk/node'
 import chalk from 'chalk'
 import { program } from 'commander'
 
@@ -109,10 +109,11 @@ async function findVaultByNameOrId(sdk: Vultisig, nameOrId: string): Promise<Vau
 
 async function init(vaultOverride?: string): Promise<CLIContext> {
   if (!ctx) {
-    const sdk = await createVultisig({
+    const sdk = new Vultisig({
       storage: new FileStorage(),
       onPasswordRequired: createPasswordCallback(),
     })
+    await sdk.initialize()
 
     ctx = new CLIContext(sdk)
 
@@ -572,10 +573,11 @@ setupCompletionCommand(program)
 // ============================================================================
 
 async function startInteractiveMode(): Promise<void> {
-  const sdk = await createVultisig({
+  const sdk = new Vultisig({
     storage: new FileStorage(),
     onPasswordRequired: createPasswordCallback(),
   })
+  await sdk.initialize()
 
   const session = new ShellSession(sdk)
   await session.start()

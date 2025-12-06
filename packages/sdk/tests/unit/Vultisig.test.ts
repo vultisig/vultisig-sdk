@@ -1,11 +1,15 @@
 import { Chain } from '@core/chain/Chain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { SharedWasmRuntime } from '../../src/context/SharedWasmRuntime'
+import { configureWasm } from '../../src/context/wasmRuntime'
 import { MemoryStorage } from '../../src/storage/MemoryStorage'
 import { ValidationHelpers } from '../../src/utils/validation'
 import { VaultBase } from '../../src/vault/VaultBase'
 import { SUPPORTED_CHAINS, Vultisig } from '../../src/Vultisig'
+
+// Mock WASM getter for tests
+const mockWalletCore = {}
+const mockGetWalletCore = vi.fn().mockResolvedValue(mockWalletCore)
 
 describe('Vultisig', () => {
   let sdk: Vultisig
@@ -13,6 +17,10 @@ describe('Vultisig', () => {
   beforeEach(() => {
     // Clear all mocks before each test
     vi.clearAllMocks()
+    mockGetWalletCore.mockClear()
+
+    // Configure WASM mock before creating any SDK instances
+    configureWasm(mockGetWalletCore)
 
     // Create SDK instance with test configuration
     sdk = new Vultisig({
@@ -72,28 +80,23 @@ describe('Vultisig', () => {
     it('should initialize SDK', async () => {
       expect(sdk.initialized).toBe(false)
 
-      // Mock SharedWasmRuntime.initialize to avoid actual WASM loading
-      vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
-
       await sdk.initialize()
 
       expect(sdk.initialized).toBe(true)
     })
 
     it('should handle initialization failure', async () => {
-      // Mock SharedWasmRuntime.initialize to throw error
-      vi.spyOn(SharedWasmRuntime, 'initialize').mockRejectedValue(new Error('WASM load failed'))
+      // Mock getWalletCore to throw error
+      mockGetWalletCore.mockRejectedValueOnce(new Error('WASM load failed'))
 
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
 
     it('should not initialize twice', async () => {
-      const initializeSpy = vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
-
       await sdk.initialize()
       await sdk.initialize() // Second call should be no-op
 
-      expect(initializeSpy).toHaveBeenCalledTimes(1)
+      expect(mockGetWalletCore).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -315,10 +318,7 @@ describe('Vultisig', () => {
   })
 
   describe('vault lifecycle operations', () => {
-    beforeEach(() => {
-      // Mock initialization for vault operations
-      vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
-    })
+    // WASM mock is configured globally in outer beforeEach
 
     it('should list vaults when empty', async () => {
       const vaults = await sdk.listVaults()
@@ -341,7 +341,7 @@ describe('Vultisig', () => {
 
   describe('error handling', () => {
     it('should handle initialization errors', async () => {
-      vi.spyOn(SharedWasmRuntime, 'initialize').mockRejectedValue(new Error('Init failed'))
+      mockGetWalletCore.mockRejectedValueOnce(new Error('Init failed'))
 
       await expect(sdk.initialize()).rejects.toThrow('Failed to initialize SDK')
     })
@@ -407,7 +407,7 @@ describe('Vultisig', () => {
         storage: mockStorage as any,
       })
 
-      vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
+      // WASM mock is configured globally in outer beforeEach
 
       expect(uninitializedSdk.initialized).toBe(false)
 
@@ -422,7 +422,8 @@ describe('Vultisig', () => {
       // Create a fresh SDK for this test
       const concurrentSdk = new Vultisig({ storage: new MemoryStorage(), autoInit: false })
 
-      const initSpy = vi.spyOn(SharedWasmRuntime, 'initialize').mockResolvedValue()
+      // Track calls to the mock
+      mockGetWalletCore.mockClear()
 
       // Call initialize multiple times concurrently
       const promises = await Promise.all([
@@ -437,20 +438,14 @@ describe('Vultisig', () => {
       expect(concurrentSdk.initialized).toBe(true)
       // BUG FIX: Initialize should have been called ONLY ONCE (not 3 times)
       // This verifies the race condition fix is working
-      expect(initSpy).toHaveBeenCalledTimes(1)
+      expect(mockGetWalletCore).toHaveBeenCalledTimes(1)
     })
 
     it('should retry initialization on failure', async () => {
       const retrySdk = new Vultisig({ storage: new MemoryStorage(), autoInit: false })
 
-      let attempts = 0
-      const initSpy = vi.spyOn(SharedWasmRuntime, 'initialize').mockImplementation(async () => {
-        attempts++
-        if (attempts === 1) {
-          throw new Error('First attempt failed')
-        }
-        // Second attempt succeeds
-      })
+      // First call fails, second succeeds
+      mockGetWalletCore.mockRejectedValueOnce(new Error('First attempt failed')).mockResolvedValueOnce({})
 
       // First attempt should fail
       await expect(retrySdk.initialize()).rejects.toThrow('Failed to initialize SDK')
@@ -459,7 +454,7 @@ describe('Vultisig', () => {
       // Second attempt should succeed (promise was reset on error)
       await retrySdk.initialize()
       expect(retrySdk.initialized).toBe(true)
-      expect(initSpy).toHaveBeenCalledTimes(2)
+      expect(mockGetWalletCore).toHaveBeenCalledTimes(2)
     })
   })
 })

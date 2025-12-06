@@ -6,7 +6,7 @@
  * - BrowserCrypto (Web Crypto API)
  * - BrowserPolyfills (Buffer, process)
  *
- * All Node.js/React Native code is excluded at build time.
+ * All Node.js code is excluded at build time.
  *
  * Usage:
  * ```typescript
@@ -18,13 +18,35 @@
  * ```
  */
 
-// Platform-specific implementations
-// Configure global crypto to use Browser implementation
+import initDkls from '@lib/dkls/vs_wasm'
+import initSchnorr from '@lib/schnorr/vs_schnorr_wasm'
+import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+
+import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import { memoizeAsync } from '../../utils/memoizeAsync'
 import { BrowserCrypto } from './crypto'
 import { BrowserPolyfills } from './polyfills'
 import { BrowserStorage } from './storage'
+
+// Configure crypto
 configureCrypto(new BrowserCrypto())
+
+// Process-wide memoized WASM initialization
+let walletCoreInstance: any
+
+const initAllWasm = memoizeAsync(async () => {
+  // Browser: init() auto-fetches via import.meta.url (like the simple example)
+  const [walletCore] = await Promise.all([initWalletCore(), initDkls(), initSchnorr()])
+  walletCoreInstance = walletCore
+  return walletCore
+})
+
+// Configure WASM on module load
+configureWasm(async () => {
+  if (walletCoreInstance) return walletCoreInstance
+  return initAllWasm()
+})
 
 // Re-export entire public API
 export * from '../../index'

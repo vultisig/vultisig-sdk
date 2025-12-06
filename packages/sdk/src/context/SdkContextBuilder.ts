@@ -14,7 +14,7 @@ import type { SdkConfigOptions, SdkContext } from './SdkContext'
 
 // Re-export SdkContext type for consumers
 export type { SdkContext } from './SdkContext'
-import { SharedWasmRuntime } from './SharedWasmRuntime'
+import { getWalletCore } from './wasmRuntime'
 
 /**
  * Default chains enabled for new vaults
@@ -150,8 +150,8 @@ export class SdkContextBuilder {
     // Create PasswordCacheService (instance-scoped, not singleton)
     const passwordCache = new PasswordCacheService(this.passwordCacheConfig)
 
-    // Create WasmProvider (wraps shared runtime)
-    const wasmProvider = SharedWasmRuntime.createProvider()
+    // Create WasmProvider (simple object wrapping the module-level getWalletCore)
+    const wasmProvider = { getWalletCore }
 
     // Build immutable config
     const config: Readonly<SdkConfigOptions> = Object.freeze({

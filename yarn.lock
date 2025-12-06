@@ -439,17 +439,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@core/chain@workspace:*, @core/chain@workspace:packages/core/chain":
+"@core/chain@workspace:^, @core/chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@core/chain@workspace:packages/core/chain"
   dependencies:
     "@bufbuild/protobuf": "npm:^2.7.0"
-    "@core/config": "workspace:*"
-    "@core/mpc": "workspace:*"
+    "@core/config": "workspace:^"
+    "@core/mpc": "workspace:^"
     "@cosmjs/amino": "npm:^0.36.0"
     "@cosmjs/encoding": "npm:^0.36.0"
     "@cosmjs/stargate": "npm:^0.36.0"
-    "@lib/utils": "workspace:*"
+    "@lib/utils": "workspace:^"
     "@mysten/sui": "npm:^1.37.6"
     "@noble/hashes": "npm:^2.0.0"
     "@polkadot/api": "npm:^16.4.6"
@@ -464,23 +464,23 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@core/config@workspace:*, @core/config@workspace:packages/core/config":
+"@core/config@workspace:^, @core/config@workspace:packages/core/config":
   version: 0.0.0-use.local
   resolution: "@core/config@workspace:packages/core/config"
   languageName: unknown
   linkType: soft
 
-"@core/mpc@workspace:*, @core/mpc@workspace:packages/core/mpc":
+"@core/mpc@workspace:^, @core/mpc@workspace:packages/core/mpc":
   version: 0.0.0-use.local
   resolution: "@core/mpc@workspace:packages/core/mpc"
   dependencies:
     7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.7.0"
-    "@core/chain": "workspace:*"
-    "@core/config": "workspace:*"
-    "@lib/dkls": "workspace:*"
-    "@lib/schnorr": "workspace:*"
-    "@lib/utils": "workspace:*"
+    "@core/chain": "workspace:^"
+    "@core/config": "workspace:^"
+    "@lib/dkls": "workspace:^"
+    "@lib/schnorr": "workspace:^"
+    "@lib/utils": "workspace:^"
     "@solana/web3.js": "npm:^1.98.4"
     bitcoinjs-lib: "npm:^6.1.7"
   languageName: unknown
@@ -1210,19 +1210,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lib/dkls@workspace:*, @lib/dkls@workspace:packages/lib/dkls":
+"@lib/dkls@workspace:^, @lib/dkls@workspace:packages/lib/dkls":
   version: 0.0.0-use.local
   resolution: "@lib/dkls@workspace:packages/lib/dkls"
   languageName: unknown
   linkType: soft
 
-"@lib/schnorr@workspace:*, @lib/schnorr@workspace:packages/lib/schnorr":
+"@lib/schnorr@workspace:^, @lib/schnorr@workspace:packages/lib/schnorr":
   version: 0.0.0-use.local
   resolution: "@lib/schnorr@workspace:packages/lib/schnorr"
   languageName: unknown
   linkType: soft
 
-"@lib/utils@workspace:*, @lib/utils@workspace:packages/lib/utils":
+"@lib/utils@workspace:^, @lib/utils@workspace:packages/lib/utils":
   version: 0.0.0-use.local
   resolution: "@lib/utils@workspace:packages/lib/utils"
   languageName: unknown
@@ -3554,13 +3554,13 @@ __metadata:
     7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.7.0"
     "@coral-xyz/anchor": "npm:^0.31.1"
-    "@core/chain": "workspace:*"
-    "@core/config": "workspace:*"
-    "@core/mpc": "workspace:*"
+    "@core/chain": "workspace:^"
+    "@core/config": "workspace:^"
+    "@core/mpc": "workspace:^"
     "@cosmjs/stargate": "npm:^0.36.0"
-    "@lib/dkls": "workspace:*"
-    "@lib/schnorr": "workspace:*"
-    "@lib/utils": "workspace:*"
+    "@lib/dkls": "workspace:^"
+    "@lib/schnorr": "workspace:^"
+    "@lib/utils": "workspace:^"
     "@lifi/sdk": "npm:^3.12.2"
     "@mysten/sui": "npm:^1.37.6"
     "@noble/hashes": "npm:^2.0.0"

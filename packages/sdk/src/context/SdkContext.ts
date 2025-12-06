@@ -15,28 +15,16 @@ import type { Storage } from '../storage/types'
 /**
  * WasmProvider - Abstraction for WASM module access
  *
- * Wraps the shared WASM runtime to provide a consistent interface
- * for services that need WASM functionality.
- *
- * Note: DKLS and Schnorr WASM modules are handled internally by core's
- * initializeMpcLib() - they don't need SDK-level management.
+ * Provides access to WalletCore for address derivation and operations.
+ * DKLS and Schnorr WASM modules are also initialized when getWalletCore() is called.
  */
 export type WasmProvider = {
   /**
    * Get WalletCore instance for address derivation and operations.
-   * Lazy loads on first access. Thread-safe.
+   * Lazy loads all WASM modules (WalletCore, DKLS, Schnorr) on first access.
+   * Thread-safe: concurrent calls share the same initialization promise.
    */
   getWalletCore(): Promise<any>
-
-  /**
-   * Pre-load WalletCore WASM module.
-   */
-  initialize(): Promise<void>
-
-  /**
-   * Get initialization status.
-   */
-  getStatus(): { walletCore: boolean }
 }
 
 /**

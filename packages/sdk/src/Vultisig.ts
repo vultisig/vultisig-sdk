@@ -20,17 +20,6 @@ import { VaultManager } from './VaultManager'
 export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
 
 /**
- * Pre-loaded WASM module bytes for MPC operations.
- * When provided, bypasses automatic WASM loading (fetch/import.meta.url).
- */
-export type WasmModules = {
-  /** DKLS WASM module bytes (for ECDSA signing) */
-  dkls?: BufferSource
-  /** Schnorr WASM module bytes (for EdDSA signing) */
-  schnorr?: BufferSource
-}
-
-/**
  * Configuration options for Vultisig SDK
  */
 export type VultisigConfig = {
@@ -50,12 +39,6 @@ export type VultisigConfig = {
   onPasswordRequired?: SdkConfigOptions['onPasswordRequired']
   /** Auto-initialize on construction */
   autoInit?: boolean
-  /**
-   * Pre-loaded WASM modules for MPC operations.
-   * Required for Node.js/Electron where automatic WASM loading fails.
-   * Use platform-specific `loadWasmModules()` helper to load these.
-   */
-  wasmModules?: WasmModules
 }
 
 /**
@@ -241,8 +224,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Start new initialization
     this.initializationPromise = (async () => {
       try {
-        // Initialize WASM via context's WasmProvider
-        await this.context.wasmProvider.initialize()
+        // Initialize WASM (WalletCore, DKLS, Schnorr) via context's WasmProvider
+        await this.context.wasmProvider.getWalletCore()
 
         // Load configuration from storage
         await this.loadConfigFromStorage()

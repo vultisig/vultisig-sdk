@@ -15,9 +15,6 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "react-native": "./dist/index.react-native.js",
-      "electron-main": "./dist/index.electron-main.cjs",
-      "electron-renderer": "./dist/index.electron-renderer.js",
       "browser": "./dist/index.browser.js",
       "worker": "./dist/index.browser.js",
       "node": {
@@ -36,23 +33,6 @@
     "./browser": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.browser.js"
-    },
-    "./react-native": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.react-native.js"
-    },
-    "./electron-main": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.electron-main.cjs"
-    },
-    "./electron-renderer": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.electron-renderer.js"
-    },
-    "./wasm": {
-      "types": "./dist/wasm/index.d.ts",
-      "import": "./dist/wasm/index.esm.js",
-      "require": "./dist/wasm/index.js"
     }
   },
   "scripts": {
@@ -65,8 +45,6 @@
     "build:platforms": "yarn build:platform:node && yarn build:platform:browser",
     "build:platform:node": "BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:browser": "BUILD_TARGET=browser rollup -c rollup.platforms.config.js",
-    "build:platform:react-native": "BUILD_TARGET=react-native rollup -c rollup.platforms.config.js",
-    "build:platform:electron": "BUILD_TARGET=electron rollup -c rollup.platforms.config.js",
     "_____QUALITY_____": "",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "lint": "eslint --config ../../.config/eslint.config.mjs src/**/*.{ts,tsx}",
