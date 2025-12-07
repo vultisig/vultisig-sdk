@@ -1,4 +1,4 @@
-import { DeriveChainKind } from '../../../ChainKind'
+import { DeriveChainKind } from '@core/chain/ChainKind'
 
 import { CosmosChain, EvmChain, OtherChain } from '../../../Chain'
 

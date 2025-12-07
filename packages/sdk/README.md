@@ -1,6 +1,6 @@
 # Vultisig SDK
 
-> **⚠️ Beta Release**: This SDK is currently in beta. APIs may change before the stable 1.0 release.
+> **⚠️ Alpha Release**: This SDK is currently in alpha. APIs may change before the stable 1.0 release.
 
 A TypeScript SDK for secure multi-party computation (MPC) and blockchain operations using the Vultisig protocol. Build secure, decentralized applications with threshold signature schemes and multi-chain support.
 
@@ -10,22 +10,14 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 🏦 **Fast Vault Creation** - Server-assisted vault generation for single-device usage
 - 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 30+ blockchains
 - 🔗 **Address Derivation** - Generate addresses across multiple blockchain networks
-- 📱 **Cross-Platform** - Works in browsers, Node.js, and React applications
+- 📱 **Cross-Platform** - Works in browsers and Node.js (React Native coming soon)
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
 - 🌍 **WASM Integration** - High-performance cryptographic operations via WebAssembly
 
 ## Installation
 
 ```bash
-npm install vultisig-sdk
-```
-
-### Peer Dependencies
-
-The SDK requires React 18+ if you're using it in a React application:
-
-```bash
-npm install react@^18.0.0 react-dom@^18.0.0
+npm install @vultisig/sdk
 ```
 
 ## Quick Start
@@ -33,9 +25,15 @@ npm install react@^18.0.0 react-dom@^18.0.0
 ### 1. Initialize the SDK
 
 ```typescript
-import { Vultisig } from "vultisig-sdk";
+// Node.js
+import { Vultisig, MemoryStorage } from "@vultisig/sdk/node";
 
-const sdk = new Vultisig();
+// Browser
+// import { Vultisig, MemoryStorage } from "@vultisig/sdk/browser";
+
+const sdk = new Vultisig({
+  storage: new MemoryStorage()
+});
 
 // Initialize WASM modules
 await sdk.initialize();
@@ -110,16 +108,18 @@ The SDK supports address derivation and operations for 30+ blockchain networks:
 | Dogecoin  | `dogecoin`  | Dogecoin mainnet    |
 | ...       | ...         | And many more       |
 
-## React Integration
+## Framework Integration Example
 
-### Complete Example Component
+The SDK works with any JavaScript framework. Here's a React example:
+
+### React Component Example
 
 ```typescript
-import { Vultisig, Vault } from 'vultisig-sdk'
+import { Vultisig, Vault, MemoryStorage } from '@vultisig/sdk/browser'
 import { useState, useEffect } from 'react'
 
 function VaultApp() {
-  const [sdk] = useState(() => new Vultisig())
+  const [sdk] = useState(() => new Vultisig({ storage: new MemoryStorage() }))
   const [vault, setVault] = useState<Vault | null>(null)
   const [addresses, setAddresses] = useState<Record<string, string>>({})
 
@@ -224,7 +224,7 @@ The SDK requires three WASM files to be available in your application's public d
 - `dkls.wasm` - ECDSA threshold signatures (DKLS protocol)
 - `schnorr.wasm` - EdDSA threshold signatures (Schnorr protocol)
 
-For Vite/React applications, place these files in the `public/` directory.
+For bundled applications (Vite, webpack, etc.), place these files in the `public/` directory.
 
 ## API Reference
 
@@ -308,8 +308,8 @@ try {
 
 See the `/examples` directory for complete sample applications:
 
-- **React App** - Complete React application with vault creation, import, and address derivation
-- **Node.js Script** - Server-side vault operations and blockchain interactions
+- **Browser Example** - Complete web application with vault creation, import, and address derivation
+- **Node.js Example** - Server-side vault operations and blockchain interactions
 
 ## Requirements
 
@@ -392,18 +392,6 @@ src/                     # SDK source code
 ../core/               # Core blockchain functionality
 ../lib/                # Shared libraries and utilities
 ```
-
-### TODO: Type Definitions Optimization
-
-**Current Approach:** TypeScript's native `tsc` generates type definitions in a distributed structure (one `.d.ts` file per source file). This is memory-efficient and reliable.
-
-**Future Consideration:** For better developer experience, consider implementing [@microsoft/api-extractor](https://api-extractor.com/) to:
-
-- Bundle distributed `.d.ts` files into a single rolled-up declaration file
-- Generate API documentation automatically
-- Provide API report generation for tracking changes
-
-This would be a post-processing step after `tsc` completes, avoiding the memory issues we experienced with `rollup-plugin-dts`.
 
 ## Contributing
 

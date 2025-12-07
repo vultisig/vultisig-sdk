@@ -1,5 +1,5 @@
-import { Chain } from '../../Chain'
-import { Coin } from '../Coin'
+import { Chain } from '@core/chain/Chain'
+import { Coin } from '@core/chain/coin/Coin'
 
 export type SolanaJupiterToken = {
   id: string

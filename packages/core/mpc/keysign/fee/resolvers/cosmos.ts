@@ -1,4 +1,4 @@
-import { matchRecordUnion } from '../../../../../lib/utils/matchRecordUnion'
+import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
 
 import { getCosmosChainSpecific } from '../../signingInputs/resolvers/cosmos/chainSpecific'
 import { getKeysignChain } from '../../utils/getKeysignChain'

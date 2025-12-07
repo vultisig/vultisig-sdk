@@ -1,5 +1,5 @@
-import { OtherChain } from '../../../Chain'
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
+import { OtherChain } from '@core/chain/Chain'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 
 import { TxHashResolver } from '../resolver'
 

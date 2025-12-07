@@ -1,4 +1,4 @@
-import { Chain } from '../../../../chain/Chain'
+import { Chain } from '@core/chain/Chain'
 
 const aliases: Record<string, Chain> = {
   // EVM f

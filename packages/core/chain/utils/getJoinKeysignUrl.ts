@@ -1,16 +1,16 @@
 import { create, toBinary } from '@bufbuild/protobuf'
-import { toCompressedString } from './protobuf/toCompressedString'
-import { deepLinkBaseUrl } from '../../config'
-import { getSevenZip } from '../../mpc/compression/getSevenZip'
-import { uploadPayloadToServer } from '../../mpc/keygen/server/uploadPayloadToServer'
-import { KeysignMessagePayload } from '../../mpc/keysign/keysignPayload/KeysignMessagePayload'
-import { MpcServerType, mpcServerUrl } from '../../mpc/MpcServerType'
+import { toCompressedString } from '@core/chain/utils/protobuf/toCompressedString'
+import { deepLinkBaseUrl } from '@core/config'
+import { getSevenZip } from '@core/mpc/compression/getSevenZip'
+import { uploadPayloadToServer } from '@core/mpc/keygen/server/uploadPayloadToServer'
+import { KeysignMessagePayload } from '@core/mpc/keysign/keysignPayload/KeysignMessagePayload'
+import { MpcServerType, mpcServerUrl } from '@core/mpc/MpcServerType'
 import {
   KeysignMessageSchema,
   KeysignPayloadSchema,
-} from '../../mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { matchRecordUnion } from '../../../lib/utils/matchRecordUnion'
-import { addQueryParams } from '../../../lib/utils/query/addQueryParams'
+} from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+import { addQueryParams } from '@lib/utils/query/addQueryParams'
 
 export type GetJoinKeysignUrlInput = {
   serverType: MpcServerType

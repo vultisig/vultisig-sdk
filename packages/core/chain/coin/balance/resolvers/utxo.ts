@@ -1,6 +1,6 @@
-import { UtxoChain } from '../../../Chain'
-import { getUtxos } from '../../../chains/utxo/tx/getUtxos'
-import { bigIntSum } from '../../../../../lib/utils/bigint/bigIntSum'
+import { UtxoChain } from '@core/chain/Chain'
+import { getUtxos } from '@core/chain/chains/utxo/tx/getUtxos'
+import { bigIntSum } from '@lib/utils/bigint/bigIntSum'
 
 import { CoinBalanceResolver } from '../resolver'
 

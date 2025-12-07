@@ -1,6 +1,6 @@
-import { OtherChain } from '../../../Chain'
-import { ensureHexPrefix } from '../../../../../lib/utils/hex/ensureHexPrefix'
-import { queryUrl } from '../../../../../lib/utils/query/queryUrl'
+import { OtherChain } from '@core/chain/Chain'
+import { ensureHexPrefix } from '@lib/utils/hex/ensureHexPrefix'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { polkadotRpcUrl } from '../../../chains/polkadot/client'
 import { BroadcastTxResolver } from '../resolver'

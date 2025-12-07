@@ -1,7 +1,7 @@
-import { AccountCoin } from '../../../../coin/AccountCoin'
-import { addQueryParams } from '../../../../../../lib/utils/query/addQueryParams'
-import { queryUrl } from '../../../../../../lib/utils/query/queryUrl'
-import { TransferDirection } from '../../../../../../lib/utils/TransferDirection'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { addQueryParams } from '@lib/utils/query/addQueryParams'
+import { queryUrl } from '@lib/utils/query/queryUrl'
+import { TransferDirection } from '@lib/utils/TransferDirection'
 
 import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 import { KyberSwapEnabledChain } from '../chains'

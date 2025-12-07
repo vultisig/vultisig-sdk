@@ -1,4 +1,4 @@
-import { assertField } from '../../../../../lib/utils/record/assertField'
+import { assertField } from '@lib/utils/record/assertField'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 

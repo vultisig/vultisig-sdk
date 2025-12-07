@@ -1,6 +1,6 @@
-import { without } from '../../../lib/utils/array/without'
-import { pick } from '../../../lib/utils/record/pick'
-import { RequiredFields } from '../../../lib/utils/types/RequiredFields'
+import { without } from '@lib/utils/array/without'
+import { pick } from '@lib/utils/record/pick'
+import { RequiredFields } from '@lib/utils/types/RequiredFields'
 
 import { Chain } from '../Chain'
 import { ChainEntity } from '../ChainEntity'

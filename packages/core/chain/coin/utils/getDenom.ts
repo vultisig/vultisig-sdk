@@ -1,4 +1,4 @@
-import { shouldBePresent } from '../../../../lib/utils/assert/shouldBePresent'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 
 import { CosmosChain } from '../../Chain'
 import { cosmosFeeCoinDenom } from '../../chains/cosmos/cosmosFeeCoinDenom'

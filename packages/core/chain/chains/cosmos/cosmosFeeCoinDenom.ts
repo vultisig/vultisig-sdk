@@ -1,4 +1,4 @@
-import { CosmosChain } from '../../Chain'
+import { CosmosChain } from '@core/chain/Chain'
 
 export const cosmosFeeCoinDenom: Record<CosmosChain, string> = {
   [CosmosChain.THORChain]: 'rune',

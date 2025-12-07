@@ -1,7 +1,7 @@
-import { EvmChain } from '../../../../Chain'
-import { getTwChainId } from '../../../../../mpc/keysign/tw/getTwChainId'
-import { numberToEvenHex } from '../../../../../../lib/utils/hex/numberToHex'
-import { stripHexPrefix } from '../../../../../../lib/utils/hex/stripHexPrefix'
+import { EvmChain } from '@core/chain/Chain'
+import { getTwChainId } from '@core/mpc/keysign/tw/getTwChainId'
+import { numberToEvenHex } from '@lib/utils/hex/numberToHex'
+import { stripHexPrefix } from '@lib/utils/hex/stripHexPrefix'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 type Input = {

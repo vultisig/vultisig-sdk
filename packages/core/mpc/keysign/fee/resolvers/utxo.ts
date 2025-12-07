@@ -1,4 +1,4 @@
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 
 import { getUtxoSigningInputs } from '../../signingInputs/resolvers/utxo'
 import { FeeAmountResolver } from '../resolver'

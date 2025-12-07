@@ -1,5 +1,5 @@
-import { queryUrl } from '../../lib/utils/query/queryUrl'
-import { retry } from '../../lib/utils/query/retry'
+import { queryUrl } from '@lib/utils/query/queryUrl'
+import { retry } from '@lib/utils/query/retry'
 
 type SetKeygenCompleteInput = {
   serverURL: string

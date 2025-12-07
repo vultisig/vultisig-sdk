@@ -1,6 +1,6 @@
-import { PublicKeys } from '../../chain/publicKey/PublicKeys'
-import { SignatureAlgorithm } from '../../chain/signing/SignatureAlgorithm'
-import { MpcLib } from '../mpcLib'
+import { PublicKeys } from '@core/chain/publicKey/PublicKeys'
+import { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
+import { MpcLib } from '@core/mpc/mpcLib'
 
 export type VaultKeyShares = Record<SignatureAlgorithm, string>
 

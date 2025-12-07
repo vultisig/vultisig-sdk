@@ -1,10 +1,10 @@
 import type { VaultBase } from '@vultisig/sdk'
-import { FastVault } from '@vultisig/sdk'
 import { useState } from 'react'
 
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import Modal from '@/components/common/Modal'
+import { getSDK } from '@/utils/sdk'
 
 type VaultCreatorProps = {
   onVaultCreated: (vault: VaultBase) => void
@@ -47,7 +47,8 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
     setIsLoading(true)
 
     try {
-      const result = await FastVault.create({
+      const sdk = getSDK()
+      const result = await sdk.createFastVault({
         name: formData.name,
         password: formData.password,
         email: formData.email,
@@ -57,8 +58,7 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
         setVaultId(result.vaultId)
         setStep('verify')
       } else {
-        const vault = await result.vault
-        onVaultCreated(vault)
+        onVaultCreated(result.vault)
         handleClose()
       }
     } catch (err) {

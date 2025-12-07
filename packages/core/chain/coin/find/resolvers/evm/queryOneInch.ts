@@ -1,7 +1,7 @@
-import { rootApiUrl } from '../../../../../config'
-import { sleep } from '../../../../../mpc/sleep'
-import { NoDataError } from '../../../../../../lib/utils/error/NoDataError'
-import { assertFetchResponse } from '../../../../../../lib/utils/fetch/assertFetchResponse'
+import { rootApiUrl } from '@core/config'
+import { sleep } from '@core/mpc/sleep'
+import { NoDataError } from '@lib/utils/error/NoDataError'
+import { assertFetchResponse } from '@lib/utils/fetch/assertFetchResponse'
 
 let lastRequestAt: number | null = null
 const minTimeGap = 500

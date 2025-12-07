@@ -1,7 +1,7 @@
-import { getSplAccounts } from '../../../../chains/solana/spl/getSplAccounts'
-import { FindCoinsResolver } from '../../resolver'
-import { without } from '../../../../../../lib/utils/array/without'
-import { attempt } from '../../../../../../lib/utils/attempt'
+import { getSplAccounts } from '@core/chain/chains/solana/spl/getSplAccounts'
+import { FindCoinsResolver } from '@core/chain/coin/find/resolver'
+import { without } from '@lib/utils/array/without'
+import { attempt } from '@lib/utils/attempt'
 
 import { Chain } from '../../../../Chain'
 import { getSolanaTokenMetadata } from '../../../token/metadata/resolvers/solana'

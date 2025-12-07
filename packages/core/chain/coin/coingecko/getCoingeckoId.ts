@@ -1,6 +1,6 @@
-import { rootApiUrl } from '../../../config'
-import { attempt } from '../../../../lib/utils/attempt'
-import { queryUrl } from '../../../../lib/utils/query/queryUrl'
+import { rootApiUrl } from '@core/config'
+import { attempt } from '@lib/utils/attempt'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import {
   SolanaCoingeckoTokenResponse,

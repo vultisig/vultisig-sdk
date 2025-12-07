@@ -1,6 +1,6 @@
-import { Chain } from '../../Chain'
-import { AccountCoin } from '../AccountCoin'
-import { CoinKey } from '../Coin'
+import { Chain } from '@core/chain/Chain'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { CoinKey } from '@core/chain/coin/Coin'
 
 import { assertKnownToken } from '../knownTokens/utils'
 

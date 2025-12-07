@@ -1,4 +1,4 @@
-import { match } from '../../../../lib/utils/match'
+import { match } from '@lib/utils/match'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { Chain } from '../../Chain'

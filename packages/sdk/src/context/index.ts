@@ -15,6 +15,3 @@ export {
   type SdkContextBuilderOptions,
   type ServerEndpoints,
 } from './SdkContextBuilder'
-
-// Shared WASM runtime (process singleton)
-export { SharedWasmRuntime } from './SharedWasmRuntime'

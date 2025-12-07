@@ -6,6 +6,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
 jobs:
   test-unit:
     name: Unit Tests
@@ -18,11 +21,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-          cache: "yarn"
+          node-version: "20"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Prepare Yarn
+        run: corepack prepare yarn@4.9.1 --activate
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Build packages
         run: yarn build:sdk
@@ -61,19 +69,22 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-          cache: "yarn"
+          node-version: "20"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Prepare Yarn
+        run: corepack prepare yarn@4.9.1 --activate
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Run ESLint
         run: yarn lint
-        continue-on-error: true
 
       - name: Run TypeScript check
-        run: yarn type-check
-        continue-on-error: true
+        run: yarn typecheck
 
   test-summary:
     name: Test Summary
@@ -88,8 +99,13 @@ jobs:
           echo "Lint and Type Check: ${{ needs.lint-and-type.result }}"
 
           if [ "${{ needs.test-unit.result }}" != "success" ]; then
-            echo "❌ Unit tests failed!"
+            echo "Unit tests failed!"
             exit 1
           fi
 
-          echo "✅ All tests passed!"
+          if [ "${{ needs.lint-and-type.result }}" != "success" ]; then
+            echo "Lint or type check failed!"
+            exit 1
+          fi
+
+          echo "All checks passed!"

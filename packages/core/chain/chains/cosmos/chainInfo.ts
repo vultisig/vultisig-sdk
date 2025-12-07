@@ -1,5 +1,5 @@
-import { CosmosChain } from '../../Chain'
-import { mirrorRecord } from '../../../../lib/utils/record/mirrorRecord'
+import { CosmosChain } from '@core/chain/Chain'
+import { mirrorRecord } from '@lib/utils/record/mirrorRecord'
 
 const cosmosChainId: Record<CosmosChain, string> = {
   [CosmosChain.THORChain]: 'thorchain-1',

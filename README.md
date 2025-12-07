@@ -18,26 +18,38 @@ VultisigSDK enables developers to integrate MPC wallet functionality into their 
 ## Installation
 
 ```bash
-npm install vultisig-sdk
+npm install @vultisig/sdk
 # or
-yarn add vultisig-sdk
+yarn add @vultisig/sdk
 ```
 
 ## Quick Start
 
 ```typescript
-import { Vultisig } from "vultisig-sdk";
+// Node.js
+import { Vultisig, MemoryStorage } from "@vultisig/sdk/node";
 
-// Initialize SDK
-const sdk = new Vultisig();
+// Browser
+// import { Vultisig, MemoryStorage } from "@vultisig/sdk/browser";
+
+// Initialize SDK with storage
+const sdk = new Vultisig({
+  storage: new MemoryStorage()
+});
 await sdk.initialize();
 
 // Create a fast vault (server-assisted)
-const vault = await sdk.createVault("My Wallet", {
-  type: "fast",
+const { vault, verificationRequired, vaultId } = await sdk.createFastVault({
+  name: "My Wallet",
   email: "user@example.com",
   password: "secure-password",
 });
+
+// Handle email verification if required
+if (verificationRequired) {
+  const code = "1234"; // Get from user input
+  await sdk.verifyVault(vaultId, code);
+}
 
 // Derive addresses for different chains
 const btcAddress = await vault.address("Bitcoin");
@@ -155,7 +167,10 @@ This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisi
 
 ## API Documentation
 
-TODO
+API documentation is auto-generated and available at:
+- https://vultisig.github.io/vultisig-sdk/
+
+For detailed usage, see the [SDK Users Guide](docs/SDK-USERS-GUIDE.md).
 
 ## Security
 

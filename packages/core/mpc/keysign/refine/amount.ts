@@ -1,7 +1,7 @@
-import { Chain, UtxoBasedChain } from '../../../chain/Chain'
-import { isFeeCoin } from '../../../chain/coin/utils/isFeeCoin'
-import { isOneOf } from '../../../../lib/utils/array/isOneOf'
-import { minBigInt } from '../../../../lib/utils/math/minBigInt'
+import { Chain, UtxoBasedChain } from '@core/chain/Chain'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { isOneOf } from '@lib/utils/array/isOneOf'
+import { minBigInt } from '@lib/utils/math/minBigInt'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 

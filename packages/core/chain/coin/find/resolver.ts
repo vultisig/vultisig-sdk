@@ -1,6 +1,6 @@
-import { Chain } from '../../Chain'
-import { AccountCoin } from '../AccountCoin'
-import { Resolver } from '../../../../lib/utils/types/Resolver'
+import { Chain } from '@core/chain/Chain'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { Resolver } from '@lib/utils/types/Resolver'
 
 export type FindCoinsResolverInput<T extends Chain = Chain> = {
   address: string

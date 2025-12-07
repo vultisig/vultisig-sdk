@@ -1,5 +1,5 @@
-import { queryUrl } from '../../../../lib/utils/query/queryUrl'
-import { withoutUndefinedFields } from '../../../../lib/utils/record/withoutUndefinedFields'
+import { queryUrl } from '@lib/utils/query/queryUrl'
+import { withoutUndefinedFields } from '@lib/utils/record/withoutUndefinedFields'
 
 type DeleteRelayMessageInput = {
   serverUrl: string

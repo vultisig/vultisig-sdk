@@ -1,4 +1,4 @@
-import { Chain } from '../../../../../Chain'
+import { Chain } from '@core/chain/Chain'
 
 import { queryBlockaid } from '../../../core/query'
 import { BlockaidSolanaSimulation } from '../api/core'

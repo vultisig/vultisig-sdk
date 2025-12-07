@@ -1,5 +1,5 @@
-import { Chain } from '../Chain'
-import { match } from '../../../lib/utils/match'
+import { Chain } from '@core/chain/Chain'
+import { match } from '@lib/utils/match'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { CoinType } from '@trustwallet/wallet-core/dist/src/wallet-core'
 

@@ -1,6 +1,6 @@
-import { tonConfig } from '../../../../chain/chains/ton/config'
-import { CoinKey } from '../../../../chain/coin/Coin'
-import { isFeeCoin } from '../../../../chain/coin/utils/isFeeCoin'
+import { tonConfig } from '@core/chain/chains/ton/config'
+import { CoinKey } from '@core/chain/coin/Coin'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
 
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { FeeAmountResolver } from '../resolver'

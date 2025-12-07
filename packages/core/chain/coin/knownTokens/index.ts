@@ -1,6 +1,6 @@
-import { Chain } from '../../Chain'
-import { makeRecord } from '../../../../lib/utils/record/makeRecord'
-import { omit } from '../../../../lib/utils/record/omit'
+import { Chain } from '@core/chain/Chain'
+import { makeRecord } from '@lib/utils/record/makeRecord'
+import { omit } from '@lib/utils/record/omit'
 
 import { CoinKey, KnownCoin, KnownCoinMetadata, Token } from '../Coin'
 import { knownCosmosTokens } from './cosmos'

@@ -1,12 +1,12 @@
-import { CosmosChain } from '../../../Chain'
-import { getCosmosClient } from '../../../chains/cosmos/client'
-import { cosmosFeeCoinDenom } from '../../../chains/cosmos/cosmosFeeCoinDenom'
-import { chainFeeCoin } from '../../chainFeeCoin'
-import { FindCoinsResolver } from '../resolver'
-import { getCosmosTokenMetadata } from '../../token/metadata/resolvers/cosmos'
-import { without } from '../../../../../lib/utils/array/without'
-import { shouldBePresent } from '../../../../../lib/utils/assert/shouldBePresent'
-import { attempt } from '../../../../../lib/utils/attempt'
+import { CosmosChain } from '@core/chain/Chain'
+import { getCosmosClient } from '@core/chain/chains/cosmos/client'
+import { cosmosFeeCoinDenom } from '@core/chain/chains/cosmos/cosmosFeeCoinDenom'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { FindCoinsResolver } from '@core/chain/coin/find/resolver'
+import { getCosmosTokenMetadata } from '@core/chain/coin/token/metadata/resolvers/cosmos'
+import { without } from '@lib/utils/array/without'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { attempt } from '@lib/utils/attempt'
 
 export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({
   address,

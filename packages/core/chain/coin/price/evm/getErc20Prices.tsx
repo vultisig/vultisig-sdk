@@ -1,7 +1,7 @@
-import { EvmChain } from '../../../Chain'
-import { rootApiUrl } from '../../../../config'
-import { defaultFiatCurrency, FiatCurrency } from '../../../../config/FiatCurrency'
-import { addQueryParams } from '../../../../../lib/utils/query/addQueryParams'
+import { EvmChain } from '@core/chain/Chain'
+import { rootApiUrl } from '@core/config'
+import { defaultFiatCurrency, FiatCurrency } from '@core/config/FiatCurrency'
+import { addQueryParams } from '@lib/utils/query/addQueryParams'
 
 import { queryCoingeickoPrices } from '../queryCoingeickoPrices'
 

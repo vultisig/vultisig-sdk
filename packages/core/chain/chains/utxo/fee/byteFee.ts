@@ -1,5 +1,5 @@
-import { UtxoChain } from '../../../Chain'
-import { getUtxoStats } from '../client/getUtxoStats'
+import { UtxoChain } from '@core/chain/Chain'
+import { getUtxoStats } from '@core/chain/chains/utxo/client/getUtxoStats'
 
 const byteFeeMultiplier = (value: bigint) => (value * 25n) / 10n
 

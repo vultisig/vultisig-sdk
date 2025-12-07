@@ -1,13 +1,13 @@
 import { create } from '@bufbuild/protobuf'
-import { Chain } from '../../../../../chain/Chain'
-import { getSolanaClient } from '../../../../../chain/chains/solana/client'
-import { solanaConfig } from '../../../../../chain/chains/solana/solanaConfig'
-import { isFeeCoin } from '../../../../../chain/coin/utils/isFeeCoin'
-import { SolanaSpecific } from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
+import { Chain } from '@core/chain/Chain'
+import { getSolanaClient } from '@core/chain/chains/solana/client'
+import { solanaConfig } from '@core/chain/chains/solana/solanaConfig'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { SolanaSpecific } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import {
   KeysignPayload,
   KeysignPayloadSchema,
-} from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
+} from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Message } from '@solana/web3.js'
 import { WalletCore } from '@trustwallet/wallet-core'
 

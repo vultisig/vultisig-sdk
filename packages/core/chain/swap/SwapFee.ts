@@ -1,4 +1,4 @@
-import { CoinAmount, CoinKey } from '../coin/Coin'
+import { CoinAmount, CoinKey } from '@core/chain/coin/Coin'
 
 export type SwapFee = CoinKey & CoinAmount
 

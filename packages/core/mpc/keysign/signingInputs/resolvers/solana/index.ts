@@ -1,6 +1,6 @@
-import { getCoinType } from '../../../../../chain/coin/coinType'
-import { shouldBePresent } from '../../../../../../lib/utils/assert/shouldBePresent'
-import { matchRecordUnion } from '../../../../../../lib/utils/matchRecordUnion'
+import { getCoinType } from '@core/chain/coin/coinType'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
 import { TW } from '@trustwallet/wallet-core'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'

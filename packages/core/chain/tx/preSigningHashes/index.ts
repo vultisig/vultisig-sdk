@@ -1,6 +1,6 @@
-import { getPreSigningOutput } from '../../../mpc/keysign/preSigningOutput'
-import { without } from '../../../../lib/utils/array/without'
-import { shouldBePresent } from '../../../../lib/utils/assert/shouldBePresent'
+import { getPreSigningOutput } from '@core/mpc/keysign/preSigningOutput'
+import { without } from '@lib/utils/array/without'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { Chain } from '../../Chain'

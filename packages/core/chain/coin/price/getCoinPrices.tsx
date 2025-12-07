@@ -1,7 +1,7 @@
-import { rootApiUrl } from '../../../config'
-import { FiatCurrency } from '../../../config/FiatCurrency'
-import { defaultFiatCurrency } from '../../../config/FiatCurrency'
-import { addQueryParams } from '../../../../lib/utils/query/addQueryParams'
+import { rootApiUrl } from '@core/config'
+import { FiatCurrency } from '@core/config/FiatCurrency'
+import { defaultFiatCurrency } from '@core/config/FiatCurrency'
+import { addQueryParams } from '@lib/utils/query/addQueryParams'
 
 import { queryCoingeickoPrices } from './queryCoingeickoPrices'
 const baseUrl = `${rootApiUrl}/coingeicko/api/v3/simple/price`

@@ -1,6 +1,6 @@
-import { EvmChain } from '../../../../../Chain'
-import { isChainOfKind } from '../../../../../ChainKind'
-import { shouldBePresent } from '../../../../../../../lib/utils/assert/shouldBePresent'
+import { EvmChain } from '@core/chain/Chain'
+import { isChainOfKind } from '@core/chain/ChainKind'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 
 import {
   BlockaidEvmSimulationInfo,

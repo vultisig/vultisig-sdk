@@ -1,4 +1,4 @@
-import { rootApiUrl } from '../../../../../config'
+import { rootApiUrl } from '@core/config'
 
 export const rujiraGraphQlEndpoint = `${rootApiUrl}/ruji/api/graphql`
 

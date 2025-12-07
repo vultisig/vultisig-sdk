@@ -1,4 +1,4 @@
-import { isOneOf } from '../../../../../../../lib/utils/array/isOneOf'
+import { isOneOf } from '@lib/utils/array/isOneOf'
 
 import { RiskLevel } from '../../../core/riskLevel'
 import { BlockaidValidationResult } from '../core'

@@ -1,4 +1,4 @@
-import { attempt } from '../../../../../../lib/utils/attempt'
+import { attempt } from '@lib/utils/attempt'
 import { Interface } from 'ethers'
 
 import { getEvmContractCallHexSignature } from './hexSignature'

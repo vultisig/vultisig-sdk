@@ -23,7 +23,7 @@ import type { Storage } from '../storage/types'
 import {
   Balance,
   FiatCurrency,
-  GasInfo,
+  GasInfoForChain,
   Signature,
   SigningMode,
   SigningPayload,
@@ -305,7 +305,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       this.coreVault,
       chain => this.address(chain),
       (event, data) => this.emit(event, data),
-      this.wasmProvider
+      this.wasmProvider,
+      this.fiatValueService
     )
 
     // Setup event-driven cache invalidation
@@ -822,7 +823,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Get gas info for chain
    */
-  async gas(chain: Chain): Promise<GasInfo> {
+  async gas<C extends Chain>(chain: C): Promise<GasInfoForChain<C>> {
     return this.gasEstimationService.getGasInfo(chain)
   }
 

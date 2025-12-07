@@ -1,2 +1,2 @@
-import { rootApiUrl } from '../../config'
+import { rootApiUrl } from '@core/config'
 export const fastVaultServerUrl = `${rootApiUrl}/vault`

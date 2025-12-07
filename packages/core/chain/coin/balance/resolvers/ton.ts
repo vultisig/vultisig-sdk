@@ -1,5 +1,5 @@
-import { getTonAccountInfo } from '../../../chains/ton/account/getTonAccountInfo'
-import { bigIntMax } from '../../../../../lib/utils/bigint/bigIntMax'
+import { getTonAccountInfo } from '@core/chain/chains/ton/account/getTonAccountInfo'
+import { bigIntMax } from '@lib/utils/bigint/bigIntMax'
 
 import { CoinBalanceResolver } from '../resolver'
 

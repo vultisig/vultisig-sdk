@@ -1,4 +1,4 @@
-import { CosmosChain } from '../../Chain'
+import { CosmosChain } from '@core/chain/Chain'
 
 export const tendermintRpcUrl: Record<CosmosChain, string> = {
   Cosmos: 'https://cosmos-rpc.publicnode.com:443',

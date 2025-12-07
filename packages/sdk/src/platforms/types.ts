@@ -3,26 +3,6 @@
  */
 
 /**
- * WASM loader interface for platform-specific WASM loading
- */
-export type PlatformWasmLoader = {
-  /**
-   * Load DKLS WASM module
-   */
-  loadDkls(): Promise<ArrayBuffer>
-
-  /**
-   * Load Schnorr WASM module
-   */
-  loadSchnorr(): Promise<ArrayBuffer>
-
-  /**
-   * Resolve WASM path for a given module
-   */
-  resolvePath(module: string): string
-}
-
-/**
  * Crypto interface for platform-specific crypto operations
  */
 export type PlatformCrypto = {

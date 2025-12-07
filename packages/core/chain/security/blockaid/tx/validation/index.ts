@@ -1,4 +1,4 @@
-import { DeriveChainKind, getChainKind } from '../../../../ChainKind'
+import { DeriveChainKind, getChainKind } from '@core/chain/ChainKind'
 
 import { BlockaidValidationSupportedChain } from '../../validationChains'
 import { BlockaidValidation } from './api/core'
