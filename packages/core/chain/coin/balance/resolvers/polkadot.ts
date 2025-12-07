@@ -1,7 +1,7 @@
-import { toChainAmount } from '../../../amount/toChainAmount'
-import { Chain } from '../../../Chain'
-import { chainFeeCoin } from '../../chainFeeCoin'
-import { queryUrl } from '../../../../../lib/utils/query/queryUrl'
+import { toChainAmount } from '@core/chain/amount/toChainAmount'
+import { Chain } from '@core/chain/Chain'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { CoinBalanceResolver } from '../resolver'
 

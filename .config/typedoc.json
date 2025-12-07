@@ -1,0 +1,18 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../packages/sdk/src/index.ts"],
+  "out": "../docs/api",
+  "name": "Vultisig SDK",
+  "readme": "../packages/sdk/README.md",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "includeVersion": true,
+  "skipErrorChecking": true,
+  "navigationLinks": {
+    "User Guide": "../docs/SDK-USERS-GUIDE.md",
+    "GitHub": "https://github.com/vultisig/vultisig-sdk"
+  },
+  "plugin": [],
+  "tsconfig": "../packages/sdk/tsconfig.json"
+}

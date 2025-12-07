@@ -115,23 +115,31 @@ const wrappedFetch = async function (input: RequestInfo | URL, init?: RequestIni
 globalThis.fetch = wrappedFetch as any
 
 /**
- * Configure SharedWasmRuntime for E2E tests
- * Uses Node.js WASM loader for test environment
+ * Configure crypto and WASM for E2E tests
  */
-import { SharedWasmRuntime } from '../../src/context/SharedWasmRuntime'
+import { initializeMpcLib } from '@core/mpc/lib/initialize'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+
+import { configureWasm } from '../../src/context/wasmRuntime'
 import { configureCrypto } from '../../src/crypto'
 import { NodeCrypto } from '../../src/platforms/node/crypto'
-import { NodeWasmLoader } from '../../src/platforms/node/wasm'
 
 configureCrypto(new NodeCrypto())
 
-// Configure SharedWasmRuntime to use Node.js loader
-const wasmLoader = new NodeWasmLoader()
-SharedWasmRuntime.configure({
-  wasmPaths: {
-    dkls: () => wasmLoader.loadDkls(),
-    schnorr: () => wasmLoader.loadSchnorr(),
-  },
+// Configure WASM initialization for E2E tests
+// Uses the fetch polyfill above to load .wasm files from filesystem
+let walletCoreInstance: any
+
+const initAllWasm = memoizeAsync(async () => {
+  const [walletCore] = await Promise.all([initWalletCore(), initializeMpcLib('ecdsa'), initializeMpcLib('eddsa')])
+  walletCoreInstance = walletCore
+  return walletCore
+})
+
+configureWasm(async () => {
+  if (walletCoreInstance) return walletCoreInstance
+  return initAllWasm()
 })
 
 console.log('✅ E2E test setup loaded')

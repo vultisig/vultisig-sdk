@@ -1,5 +1,5 @@
-import { ChainKind, ChainOfKind } from '../../../chain/ChainKind'
-import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { ChainKind, ChainOfKind } from '@core/chain/ChainKind'
+import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import { getKeysignCoin } from './getKeysignCoin'
 

@@ -1,4 +1,4 @@
-import { Chain } from '../../../Chain'
+import { Chain } from '@core/chain/Chain'
 
 export const kyberSwapEnabledChains = [
   Chain.Ethereum,

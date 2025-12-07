@@ -1,5 +1,5 @@
-import { isValidAddress } from '../../../chain/utils/isValidAddress'
-import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { isValidAddress } from '@core/chain/utils/isValidAddress'
+import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getKeysignCoin } from './getKeysignCoin'

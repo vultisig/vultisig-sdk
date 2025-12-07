@@ -1,5 +1,5 @@
-import { Chain } from '../../Chain'
-import { getCoinType } from '../../coin/coinType'
+import { Chain } from '@core/chain/Chain'
+import { getCoinType } from '@core/chain/coin/coinType'
 import {
   PublicKey,
   WalletCore,

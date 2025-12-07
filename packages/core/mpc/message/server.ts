@@ -1,10 +1,10 @@
-import { base64Encode } from '../../../lib/utils/base64Encode'
-import { decryptWithAesGcm } from '../../../lib/utils/encryption/aesGcm/decryptWithAesGcm'
-import { encryptWithAesGcm } from '../../../lib/utils/encryption/aesGcm/encryptWithAesGcm'
+import { base64Encode } from '@lib/utils/base64Encode'
+import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGcm'
+import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGcm'
 import {
   encryptedEncoding,
   plainTextEncoding,
-} from '../../../lib/utils/encryption/config'
+} from '@lib/utils/encryption/config'
 
 export const fromMpcServerMessage = (body: string, hexEncryptionKey: string) =>
   Buffer.from(

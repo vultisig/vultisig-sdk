@@ -113,36 +113,32 @@ describe('formatBalance', () => {
         {
           id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
           symbol: 'USDC',
+          name: 'USD Coin',
           decimals: 6,
           chainId: Chain.Ethereum,
-          logo: 'usdc.png',
-          priceProviderId: 'usd-coin',
         },
         {
           id: '0xdac17f958d2ee523a2206206994597c13d831ec7',
           symbol: 'USDT',
+          name: 'Tether',
           decimals: 6,
           chainId: Chain.Ethereum,
-          logo: 'usdt.png',
-          priceProviderId: 'tether',
         },
         {
           id: '0x6b175474e89094c44da98b954eedeac495271d0f',
           symbol: 'DAI',
+          name: 'Dai',
           decimals: 18,
           chainId: Chain.Ethereum,
-          logo: 'dai.png',
-          priceProviderId: 'dai',
         },
       ],
       Polygon: [
         {
           id: '0x2791bca1f2de4661ed88a30c99a7a9449aa84174',
           symbol: 'USDC',
+          name: 'USD Coin',
           decimals: 6,
           chainId: Chain.Polygon,
-          logo: 'usdc.png',
-          priceProviderId: 'usd-coin',
         },
       ],
     }
@@ -294,10 +290,9 @@ describe('formatBalance', () => {
           {
             id: splTokenAddress,
             symbol: 'USDC',
+            name: 'USD Coin',
             decimals: 6,
             chainId: Chain.Solana,
-            logo: 'usdc.png',
-            priceProviderId: 'usd-coin',
           },
         ],
       }

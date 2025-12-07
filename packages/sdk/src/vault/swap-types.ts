@@ -7,6 +7,7 @@
 import type { Chain } from '@core/chain/Chain'
 import type { AccountCoin } from '@core/chain/coin/AccountCoin'
 import type { SwapQuote } from '@core/chain/swap/quote/SwapQuote'
+import type { FiatCurrency } from '@core/config/FiatCurrency'
 import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 // Re-export core swap types for SDK consumers
@@ -14,6 +15,7 @@ export type { GeneralSwapProvider } from '@core/chain/swap/general/GeneralSwapPr
 export type { GeneralSwapQuote } from '@core/chain/swap/general/GeneralSwapQuote'
 export type { NativeSwapQuote } from '@core/chain/swap/native/NativeSwapQuote'
 export type { SwapQuote } from '@core/chain/swap/quote/SwapQuote'
+export type { FiatCurrency } from '@core/config/FiatCurrency'
 
 /**
  * Simplified coin input format
@@ -45,6 +47,8 @@ export type SwapQuoteParams = {
   referral?: string
   /** Affiliate fee in basis points (e.g., 50 = 0.5%) */
   affiliateBps?: number
+  /** Optional fiat currency for fee/output conversion (e.g., 'usd', 'eur') */
+  fiatCurrency?: FiatCurrency
 }
 
 /**
@@ -60,15 +64,43 @@ export type SwapApprovalInfo = {
 }
 
 /**
- * Fee breakdown for a swap
+ * Fee breakdown for a swap (in native token units)
  */
 export type SwapFees = {
-  /** Network/gas fees */
-  network: string
+  /** Network/gas fees (in smallest unit, e.g., wei) */
+  network: bigint
   /** Affiliate fees (if applicable) */
-  affiliate?: string
+  affiliate?: bigint
   /** Total fees */
-  total: string
+  total: bigint
+}
+
+/**
+ * Fee breakdown in fiat currency
+ */
+export type SwapFeesFiat = {
+  /** Network/gas fees in fiat */
+  network: number
+  /** Affiliate fees in fiat (if applicable) */
+  affiliate?: number
+  /** Total fees in fiat */
+  total: number
+  /** The fiat currency used */
+  currency: FiatCurrency
+}
+
+/**
+ * Resolved coin info included in quote results
+ */
+export type ResolvedCoinInfo = {
+  /** Chain the coin is on */
+  chain: Chain
+  /** Token ticker/symbol */
+  ticker: string
+  /** Decimal places for display formatting */
+  decimals: number
+  /** Token contract address (undefined for native tokens) */
+  tokenId?: string
 }
 
 /**
@@ -77,8 +109,10 @@ export type SwapFees = {
 export type SwapQuoteResult = {
   /** Raw quote from core (for use with prepareSwapTx) */
   quote: SwapQuote
-  /** Expected output amount (human-readable) */
-  estimatedOutput: string
+  /** Expected output amount (in smallest unit, e.g., wei) */
+  estimatedOutput: bigint
+  /** Expected output amount in fiat (when fiatCurrency was requested) */
+  estimatedOutputFiat?: number
   /** Provider used for the swap (e.g., '1inch', 'thorchain', 'kyber', 'li.fi') */
   provider: string
   /** Quote expiry timestamp (milliseconds) */
@@ -87,10 +121,16 @@ export type SwapQuoteResult = {
   requiresApproval: boolean
   /** Approval details (when requiresApproval is true) */
   approvalInfo?: SwapApprovalInfo
-  /** Fee breakdown */
+  /** Fee breakdown (in native token units) */
   fees: SwapFees
+  /** Fee breakdown in fiat (when fiatCurrency was requested) */
+  feesFiat?: SwapFeesFiat
   /** Warnings from the quote provider */
   warnings: string[]
+  /** Resolved source coin info (for display) */
+  fromCoin: ResolvedCoinInfo
+  /** Resolved destination coin info (for display) */
+  toCoin: ResolvedCoinInfo
 }
 
 /**

@@ -1,4 +1,4 @@
-import { EvmChain } from '../../../../../Chain'
+import { EvmChain } from '@core/chain/Chain'
 
 import { queryBlockaid } from '../../../core/query'
 import { BlockaidEVMSimulation } from '../api/core'

@@ -1,15 +1,17 @@
 import { Chain } from '@core/chain/Chain'
 import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
+import { isValidAddress } from '@core/chain/utils/isValidAddress'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
-import type { SdkConfigOptions,SdkContext } from './context/SdkContext'
+import { getDefaultStorage } from './context/defaultStorage'
+import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
 import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
 import type { Storage } from './storage/types'
-import { AddressBook, AddressBookEntry, ServerStatus } from './types'
+import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
@@ -22,8 +24,8 @@ export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
  * Configuration options for Vultisig SDK
  */
 export type VultisigConfig = {
-  /** Required: Storage implementation */
-  storage: Storage
+  /** Storage implementation (optional - uses platform default if not provided) */
+  storage?: Storage
   /** Optional server endpoints override */
   serverEndpoints?: SdkContextBuilderOptions['serverEndpoints']
   /** Default chains for new vaults */
@@ -117,19 +119,16 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Create a new Vultisig SDK instance
    *
-   * @param config - Required configuration including storage
-   * @throws Error if storage is not provided
+   * @param config - Configuration options (storage uses platform default if not provided)
    */
-  constructor(config: VultisigConfig) {
+  constructor(config: VultisigConfig = {}) {
     super()
 
-    // Validate required config
-    if (!config || !config.storage) {
-      throw new Error('Vultisig requires a storage implementation. Pass storage in config.')
-    }
+    // Use provided storage or platform default
+    const storage = config.storage ?? getDefaultStorage()
 
     // Build SdkContext from config
-    const builder = new SdkContextBuilder().withStorage(config.storage).withConfig({
+    const builder = new SdkContextBuilder().withStorage(storage).withConfig({
       defaultChains: config.defaultChains,
       defaultCurrency: config.defaultCurrency,
       cacheConfig: config.cacheConfig,
@@ -223,8 +222,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Start new initialization
     this.initializationPromise = (async () => {
       try {
-        // Initialize WASM via context's WasmProvider
-        await this.context.wasmProvider.initialize()
+        // Initialize WASM (WalletCore, DKLS, Schnorr) via context's WasmProvider
+        await this.context.wasmProvider.getWalletCore()
 
         // Load configuration from storage
         await this.loadConfigFromStorage()
@@ -285,6 +284,87 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async resendVaultVerification(vaultId: string): Promise<void> {
     await this.ensureInitialized()
     return this.context.serverManager.resendVaultVerification(vaultId)
+  }
+
+  /**
+   * Create a new fast vault (2-of-2 with VultiServer)
+   *
+   * @param options - Vault creation options
+   * @returns Created vault and verification info
+   *
+   * @example
+   * ```typescript
+   * const result = await sdk.createFastVault({
+   *   name: 'My Fast Vault',
+   *   password: 'securePassword123',
+   *   email: 'user@example.com',
+   *   onProgress: (step) => console.log(step.message)
+   * })
+   *
+   * if (result.verificationRequired) {
+   *   const code = await promptUser('Enter verification code:')
+   *   await sdk.verifyVault(result.vaultId, code)
+   * }
+   * ```
+   */
+  async createFastVault(options: {
+    name: string
+    password: string
+    email: string
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{
+    vault: FastVault
+    vaultId: string
+    verificationRequired: true
+  }> {
+    await this.ensureInitialized()
+    const result = await FastVault.create(this.context, options)
+
+    // Store the vault and set as active
+    await result.vault.save()
+    await this.vaultManager.setActiveVault(result.vaultId)
+
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+    return result
+  }
+
+  /**
+   * Create a new secure vault (multi-device MPC)
+   *
+   * @param options - Vault creation options
+   * @returns Created vault and session info
+   *
+   * @example
+   * ```typescript
+   * const result = await sdk.createSecureVault({
+   *   name: 'My Secure Vault',
+   *   password: 'securePassword123',
+   *   devices: 3,
+   *   threshold: 2,
+   *   onProgress: (step) => console.log(step.message)
+   * })
+   * ```
+   */
+  async createSecureVault(options: {
+    name: string
+    password: string
+    devices: number
+    threshold?: number
+    onProgress?: (step: VaultCreationStep) => void
+  }): Promise<{
+    vault: SecureVault
+    vaultId: string
+    sessionId: string
+  }> {
+    await this.ensureInitialized()
+    const result = await SecureVault.create(this.context, options)
+
+    // Store the vault and set as active
+    await result.vault.save()
+    await this.vaultManager.setActiveVault(result.vaultId)
+
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+    return result
   }
 
   /**
@@ -464,8 +544,26 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   /**
    * Add address book entries
+   *
+   * @param entries - Address book entries to add
+   * @throws Error if any address is invalid for its chain
    */
   async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> {
+    // Validate all addresses before adding
+    const walletCore = await this.context.wasmProvider.getWalletCore()
+
+    for (const entry of entries) {
+      const isValid = isValidAddress({
+        chain: entry.chain,
+        address: entry.address,
+        walletCore,
+      })
+
+      if (!isValid) {
+        throw new Error(`Invalid address for ${entry.chain}: ${entry.address}`)
+      }
+    }
+
     return this.addressBookManager.addAddressBookEntry(entries)
   }
 

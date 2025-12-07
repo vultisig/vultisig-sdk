@@ -1,16 +1,16 @@
-import { Chain, CosmosChain, VaultBasedCosmosChain } from '../../../../../chain/Chain'
-import { cosmosFeeCoinDenom } from '../../../../../chain/chains/cosmos/cosmosFeeCoinDenom'
-import { getCosmosGasLimit } from '../../../../../chain/chains/cosmos/cosmosGasLimitRecord'
-import { getCosmosChainKind } from '../../../../../chain/chains/cosmos/utils/getCosmosChainKind'
-import { areEqualCoins } from '../../../../../chain/coin/Coin'
-import { nativeSwapChainIds } from '../../../../../chain/swap/native/NativeSwapChain'
+import { Chain, CosmosChain, VaultBasedCosmosChain } from '@core/chain/Chain'
+import { cosmosFeeCoinDenom } from '@core/chain/chains/cosmos/cosmosFeeCoinDenom'
+import { getCosmosGasLimit } from '@core/chain/chains/cosmos/cosmosGasLimitRecord'
+import { getCosmosChainKind } from '@core/chain/chains/cosmos/utils/getCosmosChainKind'
+import { areEqualCoins } from '@core/chain/coin/Coin'
+import { nativeSwapChainIds } from '@core/chain/swap/native/NativeSwapChain'
 import {
   THORChainSpecific,
   TransactionType,
-} from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
-import { shouldBePresent } from '../../../../../../lib/utils/assert/shouldBePresent'
-import { matchRecordUnion } from '../../../../../../lib/utils/matchRecordUnion'
-import { getRecordUnionValue } from '../../../../../../lib/utils/record/union/getRecordUnionValue'
+} from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+import { getRecordUnionValue } from '@lib/utils/record/union/getRecordUnionValue'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 

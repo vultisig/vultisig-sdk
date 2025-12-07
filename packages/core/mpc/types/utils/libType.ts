@@ -1,6 +1,6 @@
-import { MpcLib } from '../../mpcLib'
-import { LibType } from '../vultisig/keygen/v1/lib_type_message_pb'
-import { mirrorRecord } from '../../../../lib/utils/record/mirrorRecord'
+import { MpcLib } from '@core/mpc/mpcLib'
+import { LibType } from '@core/mpc/types/vultisig/keygen/v1/lib_type_message_pb'
+import { mirrorRecord } from '@lib/utils/record/mirrorRecord'
 
 const mpcLibToLibType: Record<MpcLib, LibType> = {
   GG20: LibType.GG20,

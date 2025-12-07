@@ -9,7 +9,7 @@ import * as path from 'path'
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
-export class NodeStorage implements Storage {
+export class FileStorage implements Storage {
   public readonly basePath: string
   private initPromise?: Promise<void>
 

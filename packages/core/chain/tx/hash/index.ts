@@ -1,5 +1,5 @@
-import { Chain } from '../../Chain'
-import { ChainKind, getChainKind } from '../../ChainKind'
+import { Chain } from '@core/chain/Chain'
+import { ChainKind, getChainKind } from '@core/chain/ChainKind'
 
 import { SigningOutput } from '../../tw/signingOutput'
 import { TxHashResolver } from './resolver'

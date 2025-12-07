@@ -1,12 +1,12 @@
 import { create } from '@bufbuild/protobuf'
-import { getTonAccountInfo } from '../../../../../chain/chains/ton/account/getTonAccountInfo'
+import { getTonAccountInfo } from '@core/chain/chains/ton/account/getTonAccountInfo'
 import {
   getJettonWalletAddress,
   getTonWalletState,
-} from '../../../../../chain/chains/ton/api'
-import { getCoinBalance } from '../../../../../chain/coin/balance'
-import { TonSpecificSchema } from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
-import { attempt } from '../../../../../../lib/utils/attempt'
+} from '@core/chain/chains/ton/api'
+import { getCoinBalance } from '@core/chain/coin/balance'
+import { TonSpecificSchema } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { attempt } from '@lib/utils/attempt'
 
 import { getTonFeeAmount } from '../../../fee/resolvers/ton'
 import { getKeysignAmount } from '../../../utils/getKeysignAmount'

@@ -1,4 +1,4 @@
-import { FeePriority } from '../FeePriority'
+import { FeePriority } from '../../fee/FeePriority'
 
 export type UtxoFeeSettings = { priority: FeePriority } | { byteFee: bigint }
 

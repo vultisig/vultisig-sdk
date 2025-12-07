@@ -1,4 +1,4 @@
-import { NameProp } from '../entities/props'
+import { NameProp } from '@lib/utils/entities/props'
 
 type InitiateFileDownloadInput = {
   blob: Blob

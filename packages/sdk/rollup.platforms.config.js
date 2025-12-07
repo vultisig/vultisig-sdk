@@ -24,6 +24,9 @@ const external = [
   'electron',
   '@react-native-async-storage/async-storage',
   /\.wasm$/,
+  // wasm-bindgen generated JS must be external - bundling breaks externref tables
+  /lib\/dkls\/vs_wasm/,
+  /lib\/schnorr\/vs_schnorr_wasm/,
   'tiny-secp256k1',
   '@solana/web3.js',
   '@cosmjs/stargate',
@@ -31,6 +34,14 @@ const external = [
   '@bufbuild/protobuf',
   'ripple-binary-codec',
 ]
+
+// Rewrite WASM import paths for bundled output
+// Converts ../../../lib/dkls/vs_wasm to ./lib/dkls/vs_wasm.js (relative to dist/)
+const wasmPathsResolver = id => {
+  if (id.match(/lib\/dkls\/vs_wasm/)) return './lib/dkls/vs_wasm.js'
+  if (id.match(/lib\/schnorr\/vs_schnorr_wasm/)) return './lib/schnorr/vs_schnorr_wasm.js'
+  return id
+}
 
 const wasmCopyPlugin = copy({
   targets: [
@@ -94,6 +105,7 @@ const configs = {
         format: 'es',
         sourcemap: true,
         inlineDynamicImports: true,
+        paths: wasmPathsResolver,
       },
       external,
       plugins: [
@@ -124,6 +136,7 @@ const configs = {
         exports: 'named',
         interop: 'auto',
         inlineDynamicImports: true,
+        paths: wasmPathsResolver,
       },
       external,
       plugins: createPlugins({
@@ -141,6 +154,7 @@ const configs = {
       format: 'es',
       sourcemap: true,
       inlineDynamicImports: true,
+      paths: wasmPathsResolver,
     },
     external,
     plugins: createPlugins({
@@ -167,6 +181,7 @@ const configs = {
       format: 'es',
       sourcemap: true,
       inlineDynamicImports: true,
+      paths: wasmPathsResolver,
     },
     external,
     plugins: createPlugins({
@@ -196,6 +211,7 @@ const configs = {
         exports: 'named',
         interop: 'auto',
         inlineDynamicImports: true,
+        paths: wasmPathsResolver,
       },
       external,
       plugins: createPlugins({
@@ -212,6 +228,7 @@ const configs = {
         format: 'es',
         sourcemap: true,
         inlineDynamicImports: true,
+        paths: wasmPathsResolver,
       },
       external,
       plugins: createPlugins({

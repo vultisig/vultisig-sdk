@@ -1,13 +1,13 @@
-import { EvmChain } from '../../../../Chain'
-import { getEvmChainId } from '../../../../chains/evm/chainInfo'
-import { evmNativeCoinAddress } from '../../../../chains/evm/config'
-import { FindCoinsResolver } from '../../resolver'
-import { queryOneInch } from './queryOneInch'
-import { OneInchToken } from '../../../oneInch/token'
-import { without } from '../../../../../../lib/utils/array/without'
-import { attempt } from '../../../../../../lib/utils/attempt'
-import { NoDataError } from '../../../../../../lib/utils/error/NoDataError'
-import { hexToNumber } from '../../../../../../lib/utils/hex/hexToNumber'
+import { EvmChain } from '@core/chain/Chain'
+import { getEvmChainId } from '@core/chain/chains/evm/chainInfo'
+import { evmNativeCoinAddress } from '@core/chain/chains/evm/config'
+import { FindCoinsResolver } from '@core/chain/coin/find/resolver'
+import { queryOneInch } from '@core/chain/coin/find/resolvers/evm/queryOneInch'
+import { OneInchToken } from '@core/chain/coin/oneInch/token'
+import { without } from '@lib/utils/array/without'
+import { attempt } from '@lib/utils/attempt'
+import { NoDataError } from '@lib/utils/error/NoDataError'
+import { hexToNumber } from '@lib/utils/hex/hexToNumber'
 
 export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({
   address,

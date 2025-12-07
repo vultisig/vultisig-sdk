@@ -1,5 +1,5 @@
-import { match } from '../../../../lib/utils/match'
-import { matchRecordUnion } from '../../../../lib/utils/matchRecordUnion'
+import { match } from '@lib/utils/match'
+import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
 
 import { KeygenOperation } from '../../keygen/KeygenOperation'
 import { KeygenMessageSchema } from '../vultisig/keygen/v1/keygen_message_pb'

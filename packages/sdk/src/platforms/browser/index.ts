@@ -3,43 +3,59 @@
  *
  * This bundle includes only browser-specific implementations:
  * - BrowserStorage (IndexedDB/localStorage)
- * - BrowserWasmLoader (fetch)
  * - BrowserCrypto (Web Crypto API)
  * - BrowserPolyfills (Buffer, process)
  *
- * All Node.js/React Native code is excluded at build time.
+ * All Node.js code is excluded at build time.
  *
  * Usage:
  * ```typescript
- * import { Vultisig, BrowserStorage } from '@vultisig/sdk/browser'
+ * import { Vultisig, Chain } from '@vultisig/sdk'
  *
- * const sdk = new Vultisig({
- *   storage: new BrowserStorage()
- * })
+ * const sdk = new Vultisig()  // Uses BrowserStorage by default
+ * await sdk.initialize()
  * ```
  */
 
-// Platform-specific implementations
-// Configure global crypto to use Browser implementation
+import initDkls from '@lib/dkls/vs_wasm'
+import initSchnorr from '@lib/schnorr/vs_schnorr_wasm'
+import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+
+import { configureDefaultStorage } from '../../context/defaultStorage'
+import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import { memoizeAsync } from '../../utils/memoizeAsync'
 import { BrowserCrypto } from './crypto'
 import { BrowserPolyfills } from './polyfills'
 import { BrowserStorage } from './storage'
-import { BrowserWasmLoader } from './wasm'
+
+// Configure crypto
 configureCrypto(new BrowserCrypto())
 
-// Configure SharedWasmRuntime to use Browser loader (process-wide singleton)
-import { SharedWasmRuntime } from '../../context/SharedWasmRuntime'
-const wasmLoader = new BrowserWasmLoader()
-SharedWasmRuntime.configure({
-  wasmPaths: {
-    dkls: () => wasmLoader.loadDkls(),
-    schnorr: () => wasmLoader.loadSchnorr(),
-  },
+// Configure default storage for Browser
+configureDefaultStorage(() => new BrowserStorage())
+
+// Process-wide memoized WASM initialization
+let walletCoreInstance: any
+
+const initAllWasm = memoizeAsync(async () => {
+  // Browser: init() auto-fetches via import.meta.url (like the simple example)
+  const [walletCore] = await Promise.all([initWalletCore(), initDkls(), initSchnorr()])
+  walletCoreInstance = walletCore
+  return walletCore
+})
+
+// Configure WASM on module load
+configureWasm(async () => {
+  if (walletCoreInstance) return walletCoreInstance
+  return initAllWasm()
 })
 
 // Re-export entire public API
 export * from '../../index'
 
 // Export platform-specific implementations for users to pass to Vultisig
-export { BrowserCrypto, BrowserPolyfills, BrowserStorage, BrowserWasmLoader }
+export { BrowserCrypto, BrowserPolyfills, BrowserStorage }
+
+// Export BrowserStorage as the default Storage type for this platform
+export { BrowserStorage as Storage }

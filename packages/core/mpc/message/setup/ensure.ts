@@ -1,7 +1,7 @@
-import { SignatureAlgorithm } from '../../../chain/signing/SignatureAlgorithm'
-import { getMessageHash } from '../../getMessageHash'
-import { prefixErrorWith } from '../../../../lib/utils/error/prefixErrorWith'
-import { transformError } from '../../../../lib/utils/error/transformError'
+import { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
+import { getMessageHash } from '@core/mpc/getMessageHash'
+import { prefixErrorWith } from '@lib/utils/error/prefixErrorWith'
+import { transformError } from '@lib/utils/error/transformError'
 
 import { makeSetupMessage } from '../../keysign/setupMessage/make'
 import { fromMpcServerMessage, toMpcServerMessage } from '../server'

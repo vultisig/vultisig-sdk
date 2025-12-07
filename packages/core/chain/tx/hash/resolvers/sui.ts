@@ -1,5 +1,5 @@
-import { OtherChain } from '../../../Chain'
-import { getSuiClient } from '../../../chains/sui/client'
+import { OtherChain } from '@core/chain/Chain'
+import { getSuiClient } from '@core/chain/chains/sui/client'
 
 import { TxHashResolver } from '../resolver'
 

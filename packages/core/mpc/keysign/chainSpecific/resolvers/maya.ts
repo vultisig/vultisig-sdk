@@ -1,7 +1,7 @@
 import { create } from '@bufbuild/protobuf'
-import { CosmosChain } from '../../../../chain/Chain'
-import { getCosmosAccountInfo } from '../../../../chain/chains/cosmos/account/getCosmosAccountInfo'
-import { MAYAChainSpecificSchema } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
+import { CosmosChain } from '@core/chain/Chain'
+import { getCosmosAccountInfo } from '@core/chain/chains/cosmos/account/getCosmosAccountInfo'
+import { MAYAChainSpecificSchema } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../resolver'

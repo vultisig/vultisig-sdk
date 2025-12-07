@@ -1,9 +1,9 @@
-import { AccountCoin } from '../../coin/AccountCoin'
-import { isFeeCoin } from '../../coin/utils/isFeeCoin'
-import { GeneralSwapTx } from '../general/GeneralSwapQuote'
-import { SwapQuote } from '../quote/SwapQuote'
-import { isOneOf } from '../../../../lib/utils/array/isOneOf'
-import { matchRecordUnion } from '../../../../lib/utils/matchRecordUnion'
+import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { GeneralSwapTx } from '@core/chain/swap/general/GeneralSwapQuote'
+import { SwapQuote } from '@core/chain/swap/quote/SwapQuote'
+import { isOneOf } from '@lib/utils/array/isOneOf'
+import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
 
 import { EvmChain } from '../../Chain'
 

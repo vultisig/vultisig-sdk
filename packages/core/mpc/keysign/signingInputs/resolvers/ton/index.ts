@@ -1,5 +1,5 @@
-import { isFeeCoin } from '../../../../../chain/coin/utils/isFeeCoin'
-import { shouldBePresent } from '../../../../../../lib/utils/assert/shouldBePresent'
+import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 import { TW } from '@trustwallet/wallet-core'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'

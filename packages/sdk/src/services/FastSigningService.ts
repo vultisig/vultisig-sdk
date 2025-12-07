@@ -60,8 +60,6 @@ export class FastSigningService {
     // Get WalletCore instance via WasmProvider
     const walletCore = await this.wasmProvider.getWalletCore()
 
-    console.log(`📝 Using ${payload.messageHashes.length} pre-computed message hash(es)`)
-
     reportProgress({
       step: 'preparing',
       progress: 20,
@@ -73,7 +71,6 @@ export class FastSigningService {
 
     // Step 2: Coordinate fast signing with server
     // ServerManager handles: API calls, relay session, MPC coordination, keysign
-    console.log(`🚀 Starting fast signing coordination with VultiServer...`)
     const signature = await this.serverManager.coordinateFastSigning({
       vault,
       messages: payload.messageHashes,
@@ -83,7 +80,6 @@ export class FastSigningService {
       onProgress: reportProgress,
     })
 
-    console.log(`✅ Fast signing completed successfully`)
     return signature
   }
 

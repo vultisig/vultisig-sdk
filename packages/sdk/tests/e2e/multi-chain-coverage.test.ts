@@ -16,7 +16,7 @@
 import { loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { Chain, VaultBase } from '@/index'
+import { Chain, EvmGasInfo, VaultBase } from '@/index'
 
 describe('E2E: Multi-Chain Coverage (Production)', () => {
   let vault: VaultBase
@@ -129,7 +129,15 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
     })
 
     it('should verify EVM chains share the same address', async () => {
-      const evmChains = [Chain.Ethereum, Chain.BSC, Chain.Polygon, Chain.Avalanche, Chain.Arbitrum, 'Optimism', 'Base']
+      const evmChains = [
+        Chain.Ethereum,
+        Chain.BSC,
+        Chain.Polygon,
+        Chain.Avalanche,
+        Chain.Arbitrum,
+        Chain.Optimism,
+        Chain.Base,
+      ]
       const availableEvmChains = evmChains.filter(chain => TEST_VAULT_CONFIG.testChains.includes(chain))
 
       if (availableEvmChains.length < 2) {
@@ -153,7 +161,15 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
 
   describe('Gas Estimation Coverage', () => {
     it('should estimate gas for EVM chains', async () => {
-      const evmChains = [Chain.Ethereum, Chain.BSC, Chain.Polygon, Chain.Avalanche, Chain.Arbitrum, 'Optimism', 'Base']
+      const evmChains = [
+        Chain.Ethereum,
+        Chain.BSC,
+        Chain.Polygon,
+        Chain.Avalanche,
+        Chain.Arbitrum,
+        Chain.Optimism,
+        Chain.Base,
+      ]
       const availableEvmChains = evmChains.filter(chain => TEST_VAULT_CONFIG.testChains.includes(chain))
 
       console.log(`\n⛽ Estimating gas for ${availableEvmChains.length} EVM chains...\n`)
@@ -162,7 +178,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
 
       for (const chain of availableEvmChains) {
         try {
-          const gasInfo = await vault.gas(chain as Chain)
+          const gasInfo = (await vault.gas(chain as Chain)) as EvmGasInfo
           gasEstimates[chain] = gasInfo.estimatedCost || 0n
 
           console.log(`  ✅ ${chain}: ${gasInfo.estimatedCost} wei`)

@@ -1,4 +1,4 @@
-import { memoizeAsync } from '../../../../lib/utils/memoizeAsync'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { Client } from 'xrpl'
 
 export const getRippleClient = memoizeAsync(async () => {

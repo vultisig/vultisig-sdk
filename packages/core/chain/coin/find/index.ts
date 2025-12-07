@@ -1,6 +1,6 @@
-import { Chain } from '../../Chain'
-import { getChainKind } from '../../ChainKind'
-import { isOneOf } from '../../../../lib/utils/array/isOneOf'
+import { Chain } from '@core/chain/Chain'
+import { getChainKind } from '@core/chain/ChainKind'
+import { isOneOf } from '@lib/utils/array/isOneOf'
 
 import {
   CoinFinderChainKind,

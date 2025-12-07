@@ -1,6 +1,6 @@
-import { SignatureAlgorithm } from '../../chain/signing/SignatureAlgorithm'
-import { SignSession as DklsSignSession } from '../../../lib/dkls/vs_wasm'
-import { SignSession as SchnorrSignSession } from '../../../lib/schnorr/vs_schnorr_wasm'
+import { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
+import { SignSession as DklsSignSession } from '@lib/dkls/vs_wasm'
+import { SignSession as SchnorrSignSession } from '@lib/schnorr/vs_schnorr_wasm'
 
 import { toMpcLibKeyshare } from './keyshare'
 

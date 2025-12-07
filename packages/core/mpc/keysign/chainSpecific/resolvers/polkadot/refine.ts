@@ -1,17 +1,17 @@
 import { create } from '@bufbuild/protobuf'
-import { Chain } from '../../../../../chain/Chain'
-import { polkadotRpcUrl } from '../../../../../chain/chains/polkadot/client'
-import { getCoinType } from '../../../../../chain/coin/coinType'
-import { decodeSigningOutput } from '../../../../../chain/tw/signingOutput'
-import { getPreSigningOutput } from '../../../preSigningOutput'
-import { getEncodedSigningInputs } from '../../../signingInputs'
-import { PolkadotSpecific } from '../../../../types/vultisig/keysign/v1/blockchain_specific_pb'
+import { Chain } from '@core/chain/Chain'
+import { polkadotRpcUrl } from '@core/chain/chains/polkadot/client'
+import { getCoinType } from '@core/chain/coin/coinType'
+import { decodeSigningOutput } from '@core/chain/tw/signingOutput'
+import { getPreSigningOutput } from '@core/mpc/keysign/preSigningOutput'
+import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
+import { PolkadotSpecific } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import {
   KeysignPayload,
   KeysignPayloadSchema,
-} from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
-import { ensureHexPrefix } from '../../../../../../lib/utils/hex/ensureHexPrefix'
-import { queryUrl } from '../../../../../../lib/utils/query/queryUrl'
+} from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { ensureHexPrefix } from '@lib/utils/hex/ensureHexPrefix'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getKeysignChain } from '../../../utils/getKeysignChain'

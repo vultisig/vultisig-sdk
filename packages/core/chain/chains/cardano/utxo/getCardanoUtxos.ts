@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf'
-import { UtxoInfoSchema } from '../../../../mpc/types/vultisig/keysign/v1/utxo_info_pb'
-import { queryUrl } from '../../../../../lib/utils/query/queryUrl'
+import { UtxoInfoSchema } from '@core/mpc/types/vultisig/keysign/v1/utxo_info_pb'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { cardanoApiUrl } from '../client/config'
 

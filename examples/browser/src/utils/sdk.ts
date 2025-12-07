@@ -1,4 +1,4 @@
-import { GlobalConfig, Vultisig } from '@vultisig/sdk'
+import { Vultisig } from '@vultisig/sdk'
 
 let sdkInstance: Vultisig | null = null
 
@@ -15,11 +15,11 @@ export async function initializeSDK(): Promise<Vultisig> {
     return sdkInstance
   }
 
-  // Configure global settings before SDK initialization
-  GlobalConfig.configure({
+  // Initialize SDK with instance-scoped configuration
+  // Storage defaults to BrowserStorage in browser environment
+  sdkInstance = new Vultisig({
     passwordCache: {
       defaultTTL: PASSWORD_CACHE_TTL,
-      // registerExitHandlers: false, // Not needed in browser
     },
     onPasswordRequired: async (vaultId: string, vaultName?: string) => {
       // This will be called when a vault needs to be unlocked
@@ -34,9 +34,6 @@ export async function initializeSDK(): Promise<Vultisig> {
       return password
     },
   })
-
-  // Initialize SDK
-  sdkInstance = new Vultisig()
   await sdkInstance.initialize()
 
   return sdkInstance

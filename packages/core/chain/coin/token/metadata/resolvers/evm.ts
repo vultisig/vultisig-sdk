@@ -1,6 +1,6 @@
-import { EvmChain } from '../../../../Chain'
-import { getEvmClient } from '../../../../chains/evm/client'
-import { TokenMetadataResolver } from '../resolver'
+import { EvmChain } from '@core/chain/Chain'
+import { getEvmClient } from '@core/chain/chains/evm/client'
+import { TokenMetadataResolver } from '@core/chain/coin/token/metadata/resolver'
 import { Address, erc20Abi } from 'viem'
 
 export const getEvmTokenMetadata: TokenMetadataResolver<EvmChain> = async ({

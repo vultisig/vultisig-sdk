@@ -50,6 +50,10 @@ Thumbs.db
 coverage/
 *.cover.out
 
+# Generated documentation
+docs/api/
+docs/plans/
+
 # Environment configuration
 .env
 .env.local

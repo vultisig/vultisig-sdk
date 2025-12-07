@@ -1,5 +1,5 @@
-import { Chain, EvmChain } from '../../../../Chain'
-import { DeriveChainKind, getChainKind } from '../../../../ChainKind'
+import { Chain, EvmChain } from '@core/chain/Chain'
+import { DeriveChainKind, getChainKind } from '@core/chain/ChainKind'
 
 import { BlockaidSimulationSupportedChain } from '../../simulationChains'
 import {

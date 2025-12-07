@@ -1,6 +1,6 @@
-import { Chain } from '../../../chain/Chain'
-import { hyperliquid } from '../../../chain/chains/evm/chainInfo'
-import { getCoinType } from '../../../chain/coin/coinType'
+import { Chain } from '@core/chain/Chain'
+import { hyperliquid } from '@core/chain/chains/evm/chainInfo'
+import { getCoinType } from '@core/chain/coin/coinType'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 type Input = {

@@ -8,8 +8,8 @@
  * - Active vault management
  * - Error handling and edge cases
  *
- * NOTE: Vault creation is now handled by FastVault.create() static method
- * and is tested separately.
+ * NOTE: Vault creation is now handled by sdk.createFastVault() and
+ * sdk.createSecureVault() facade methods which internally manage context.
  *
  * Test Coverage:
  * - Import from .vult files (encrypted/unencrypted)
