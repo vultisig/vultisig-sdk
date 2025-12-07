@@ -8,7 +8,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 
 - 🔐 **Multi-Party Computation (MPC)** - Secure threshold signatures using DKLS and Schnorr protocols
 - 🏦 **Fast Vault Creation** - Server-assisted vault generation for single-device usage
-- 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 30+ blockchains
+- 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 40+ blockchains
 - 🔗 **Address Derivation** - Generate addresses across multiple blockchain networks
 - 📱 **Cross-Platform** - Works in browsers and Node.js (React Native coming soon)
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
@@ -90,7 +90,7 @@ const backupBase64 = await vault.exportAsBase64("BackupPassword123!");
 
 ## Supported Blockchains
 
-The SDK supports address derivation and operations for 30+ blockchain networks:
+The SDK supports address derivation and operations for 40+ blockchain networks:
 
 | Network   | Chain ID    | Description         |
 | --------- | ----------- | ------------------- |

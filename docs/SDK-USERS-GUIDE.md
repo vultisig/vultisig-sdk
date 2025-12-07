@@ -143,7 +143,7 @@ sdk.dispose()
 The SDK supports two types of vaults:
 
 - **FastVault**: 2-of-2 MPC with VultiServer assistance. Always encrypted with password. Best for quick setup and individual use.
-- **SecureVault**: Multi-device MPC without server. Optionally encrypted. Best for maximum security and multi-device scenarios.
+- **SecureVault** *(Coming Soon)*: Multi-device MPC without server. Optionally encrypted. Best for maximum security and multi-device scenarios.
 
 ### Supported Chains
 
@@ -1276,6 +1276,7 @@ class Vultisig {
     onProgress?: (step: VaultCreationStep) => void
   }): Promise<{ vault: FastVault, vaultId: string, verificationRequired: true }>
 
+  // Coming Soon - Not yet implemented
   createSecureVault(options: {
     name: string
     password: string

@@ -23,12 +23,12 @@
 
 ## Overview
 
-The Vultisig SDK is a TypeScript library for creating and managing multi-chain cryptocurrency vaults using threshold signature schemes (TSS). It provides a unified interface for interacting with 34+ blockchain networks through multi-party computation (MPC), working seamlessly across browser and Node.js environments.
+The Vultisig SDK is a TypeScript library for creating and managing multi-chain cryptocurrency vaults using threshold signature schemes (TSS). It provides a unified interface for interacting with 40+ blockchain networks through multi-party computation (MPC), working seamlessly across browser and Node.js environments.
 
 ### What It Does
 
 - **Vault Management** - Create, import, and manage cryptocurrency vaults
-- **Multi-Chain Support** - Unified API for Bitcoin, Ethereum, Solana, and 30+ other chains
+- **Multi-Chain Support** - Unified API for Bitcoin, Ethereum, Solana, and 40+ other chains
 - **MPC Signing** - Secure transaction signing using threshold signatures
 - **Balance Tracking** - Query native and token balances across all chains
 - **Address Derivation** - Generate addresses for any supported chain
@@ -992,7 +992,7 @@ vault.broadcast(chain, keysignPayload, signature)
 
 ## Chain Support
 
-### Supported Chains (34+)
+### Supported Chains (40+)
 
 All chains supported through Core's functional resolvers. The SDK has no chain-specific code.
 
