@@ -19,21 +19,54 @@
  * ```
  */
 
-import initDkls from '@lib/dkls/vs_wasm'
-import initSchnorr from '@lib/schnorr/vs_schnorr_wasm'
-import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 import { readFile } from 'fs/promises'
-import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
+
+/**
+ * WASM Fetch Polyfill for Node.js
+ *
+ * Node.js fetch() doesn't support file:// URLs.
+ * wasm-bindgen's init() without bytes uses: fetch(new URL('*.wasm', import.meta.url))
+ *
+ * This polyfill intercepts file:// .wasm requests and loads from filesystem.
+ * Must be installed BEFORE any WASM initialization (including imports that may trigger it).
+ */
+const originalFetch = globalThis.fetch
+
+const wasmFetchPolyfill = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+
+  // Intercept file:// .wasm requests
+  if (url.endsWith('.wasm') && url.startsWith('file://')) {
+    const filePath = fileURLToPath(url)
+    const buffer = await readFile(filePath)
+    const uint8Array = new Uint8Array(buffer)
+    const arrayBuffer = uint8Array.buffer
+    const blob = new Blob([arrayBuffer], { type: 'application/wasm' })
+    return new Response(blob, {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'Content-Type': 'application/wasm' },
+    })
+  }
+
+  // Pass through to original fetch
+  return originalFetch(input as any, init)
+}
+
+// Install polyfill FIRST (before any imports that might trigger WASM init)
+globalThis.fetch = wasmFetchPolyfill as any
+
+// Now safe to import modules that may trigger WASM initialization
+import { initializeMpcLib } from '@core/mpc/lib/initialize'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
-import { memoizeAsync } from '../../utils/memoizeAsync'
 import { NodeCrypto } from './crypto'
 import { NodePolyfills } from './polyfills'
 import { FileStorage } from './storage'
-
-const currentDir = dirname(fileURLToPath(import.meta.url))
 
 // Configure crypto
 configureCrypto(new NodeCrypto())
@@ -42,16 +75,13 @@ configureCrypto(new NodeCrypto())
 let walletCoreInstance: any
 
 const initAllWasm = memoizeAsync(async () => {
-  // Node: read WASM from filesystem (like the simple example)
-  const libDir = join(currentDir, '../../lib')
-
-  const [dklsBytes, schnorrBytes] = await Promise.all([
-    readFile(join(libDir, 'dkls/vs_wasm_bg.wasm')),
-    readFile(join(libDir, 'schnorr/vs_schnorr_wasm_bg.wasm')),
+  // Initialize all WASM modules using core's initializeMpcLib
+  // The fetch polyfill allows wasm-bindgen to load .wasm from filesystem
+  const [walletCore] = await Promise.all([
+    initWalletCore(),
+    initializeMpcLib('ecdsa'), // DKLS - via core's single source of truth
+    initializeMpcLib('eddsa'), // Schnorr - via core's single source of truth
   ])
-
-  const [walletCore] = await Promise.all([initWalletCore(), initDkls(dklsBytes), initSchnorr(schnorrBytes)])
-
   walletCoreInstance = walletCore
   return walletCore
 })

@@ -115,16 +115,32 @@ const wrappedFetch = async function (input: RequestInfo | URL, init?: RequestIni
 globalThis.fetch = wrappedFetch as any
 
 /**
- * Configure crypto for E2E tests
+ * Configure crypto and WASM for E2E tests
  */
+import { initializeMpcLib } from '@core/mpc/lib/initialize'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+
+import { configureWasm } from '../../src/context/wasmRuntime'
 import { configureCrypto } from '../../src/crypto'
 import { NodeCrypto } from '../../src/platforms/node/crypto'
 
 configureCrypto(new NodeCrypto())
 
-// Note: DKLS and Schnorr WASM modules are handled automatically by core's
-// initializeMpcLib() using wasm-bindgen's import.meta.url. The fetch polyfill
-// above allows wasm-bindgen to load .wasm files from the filesystem.
+// Configure WASM initialization for E2E tests
+// Uses the fetch polyfill above to load .wasm files from filesystem
+let walletCoreInstance: any
+
+const initAllWasm = memoizeAsync(async () => {
+  const [walletCore] = await Promise.all([initWalletCore(), initializeMpcLib('ecdsa'), initializeMpcLib('eddsa')])
+  walletCoreInstance = walletCore
+  return walletCore
+})
+
+configureWasm(async () => {
+  if (walletCoreInstance) return walletCoreInstance
+  return initAllWasm()
+})
 
 console.log('✅ E2E test setup loaded')
 console.log('🌐 Real network calls ENABLED (no API mocks)')
