@@ -5,6 +5,7 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 
 import { AddressBookManager } from './AddressBookManager'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
+import { getDefaultStorage } from './context/defaultStorage'
 import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
 import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
@@ -23,8 +24,8 @@ export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
  * Configuration options for Vultisig SDK
  */
 export type VultisigConfig = {
-  /** Required: Storage implementation */
-  storage: Storage
+  /** Storage implementation (optional - uses platform default if not provided) */
+  storage?: Storage
   /** Optional server endpoints override */
   serverEndpoints?: SdkContextBuilderOptions['serverEndpoints']
   /** Default chains for new vaults */
@@ -118,19 +119,16 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Create a new Vultisig SDK instance
    *
-   * @param config - Required configuration including storage
-   * @throws Error if storage is not provided
+   * @param config - Configuration options (storage uses platform default if not provided)
    */
-  constructor(config: VultisigConfig) {
+  constructor(config: VultisigConfig = {}) {
     super()
 
-    // Validate required config
-    if (!config || !config.storage) {
-      throw new Error('Vultisig requires a storage implementation. Pass storage in config.')
-    }
+    // Use provided storage or platform default
+    const storage = config.storage ?? getDefaultStorage()
 
     // Build SdkContext from config
-    const builder = new SdkContextBuilder().withStorage(config.storage).withConfig({
+    const builder = new SdkContextBuilder().withStorage(storage).withConfig({
       defaultChains: config.defaultChains,
       defaultCurrency: config.defaultCurrency,
       cacheConfig: config.cacheConfig,

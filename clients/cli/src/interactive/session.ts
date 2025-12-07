@@ -8,8 +8,8 @@
  * - Event buffering
  * - Dynamic prompt showing vault name and lock status
  */
-import type { FiatCurrency, Vultisig } from '@vultisig/sdk/node'
-import { Chain, fiatCurrencies } from '@vultisig/sdk/node'
+import type { FiatCurrency, Vultisig } from '@vultisig/sdk'
+import { Chain, fiatCurrencies } from '@vultisig/sdk'
 import chalk from 'chalk'
 import ora from 'ora'
 import * as repl from 'repl'

@@ -1,4 +1,4 @@
-import { BrowserStorage, Vultisig } from '@vultisig/sdk/browser'
+import { Vultisig } from '@vultisig/sdk'
 
 let sdkInstance: Vultisig | null = null
 
@@ -16,8 +16,8 @@ export async function initializeSDK(): Promise<Vultisig> {
   }
 
   // Initialize SDK with instance-scoped configuration
+  // Storage defaults to BrowserStorage in browser environment
   sdkInstance = new Vultisig({
-    storage: new BrowserStorage(),
     passwordCache: {
       defaultTTL: PASSWORD_CACHE_TTL,
     },

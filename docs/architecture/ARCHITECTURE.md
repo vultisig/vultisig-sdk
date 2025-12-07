@@ -1,6 +1,6 @@
 # Vultisig SDK Architecture
 
-**Status:** Pre-Alpha
+**Status:** Alpha (0.1.0-alpha.1)
 
 ---
 
@@ -320,11 +320,10 @@ packages/sdk/src/
 The main SDK class that orchestrates all functionality using the facade pattern.
 
 ```typescript
-import { Vultisig, FileStorage } from "@vultisig/sdk/node";
+import { Vultisig, Chain } from "@vultisig/sdk";
 
-// Storage is required
+// Storage defaults to FileStorage (Node) or BrowserStorage (browser)
 const sdk = new Vultisig({
-  storage: new FileStorage(),  // Or MemoryStorage, or custom implementation
   defaultChains: [Chain.Bitcoin, Chain.Ethereum],
 });
 

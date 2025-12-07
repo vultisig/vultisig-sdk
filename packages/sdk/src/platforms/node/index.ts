@@ -10,11 +10,9 @@
  *
  * Usage:
  * ```typescript
- * import { Vultisig, FileStorage } from '@vultisig/sdk/node'
+ * import { Vultisig, Chain } from '@vultisig/sdk'
  *
- * const sdk = new Vultisig({
- *   storage: new FileStorage({ basePath: '~/.myapp' })
- * })
+ * const sdk = new Vultisig()  // Uses FileStorage by default
  * await sdk.initialize()
  * ```
  */
@@ -62,6 +60,7 @@ import { initializeMpcLib } from '@core/mpc/lib/initialize'
 import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 
+import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import { NodeCrypto } from './crypto'
@@ -70,6 +69,9 @@ import { FileStorage } from './storage'
 
 // Configure crypto
 configureCrypto(new NodeCrypto())
+
+// Configure default storage for Node
+configureDefaultStorage(() => new FileStorage())
 
 // Process-wide memoized WASM initialization
 let walletCoreInstance: any
@@ -100,3 +102,6 @@ export { FileStorage, NodeCrypto, NodePolyfills }
 
 // Backwards-compatible alias
 export { FileStorage as NodeStorage }
+
+// Export FileStorage as the default Storage type for this platform
+export { FileStorage as Storage }

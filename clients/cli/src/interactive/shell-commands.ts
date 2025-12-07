@@ -5,7 +5,7 @@
  * - unlock: Unlock vault (cache password)
  * - status: Show vault status
  */
-import type { FiatCurrency } from '@vultisig/sdk/node'
+import type { FiatCurrency } from '@vultisig/sdk'
 import chalk from 'chalk'
 import Table from 'cli-table3'
 import inquirer from 'inquirer'

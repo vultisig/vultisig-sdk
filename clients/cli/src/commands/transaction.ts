@@ -1,8 +1,8 @@
 /**
  * Transaction Commands - send transactions
  */
-import type { VaultBase } from '@vultisig/sdk/node'
-import { Chain, Vultisig } from '@vultisig/sdk/node'
+import type { VaultBase } from '@vultisig/sdk'
+import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendParams, TransactionResult } from '../core'
 import { createSpinner, isJsonOutput, outputJson, warn } from '../lib/output'

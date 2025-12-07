@@ -1,7 +1,7 @@
 /**
  * Chain Commands - chains and addresses
  */
-import type { Chain } from '@vultisig/sdk/node'
+import type { Chain } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'

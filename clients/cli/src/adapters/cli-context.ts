@@ -6,7 +6,7 @@
  * - Passwords are retrieved from env vars or prompted
  * - No password caching between commands (stateless)
  */
-import type { Vultisig } from '@vultisig/sdk/node'
+import type { Vultisig } from '@vultisig/sdk'
 
 import { BaseCommandContext } from '../core/command-context'
 import { getPassword } from '../core/password-manager'

@@ -10,11 +10,10 @@
  *
  * Usage:
  * ```typescript
- * import { Vultisig, BrowserStorage } from '@vultisig/sdk/browser'
+ * import { Vultisig, Chain } from '@vultisig/sdk'
  *
- * const sdk = new Vultisig({
- *   storage: new BrowserStorage()
- * })
+ * const sdk = new Vultisig()  // Uses BrowserStorage by default
+ * await sdk.initialize()
  * ```
  */
 
@@ -22,6 +21,7 @@ import initDkls from '@lib/dkls/vs_wasm'
 import initSchnorr from '@lib/schnorr/vs_schnorr_wasm'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 
+import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import { memoizeAsync } from '../../utils/memoizeAsync'
@@ -31,6 +31,9 @@ import { BrowserStorage } from './storage'
 
 // Configure crypto
 configureCrypto(new BrowserCrypto())
+
+// Configure default storage for Browser
+configureDefaultStorage(() => new BrowserStorage())
 
 // Process-wide memoized WASM initialization
 let walletCoreInstance: any
@@ -53,3 +56,6 @@ export * from '../../index'
 
 // Export platform-specific implementations for users to pass to Vultisig
 export { BrowserCrypto, BrowserPolyfills, BrowserStorage }
+
+// Export BrowserStorage as the default Storage type for this platform
+export { BrowserStorage as Storage }

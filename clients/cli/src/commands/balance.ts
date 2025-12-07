@@ -1,8 +1,8 @@
 /**
  * Balance Commands - balance and portfolio
  */
-import type { Chain, FiatCurrency } from '@vultisig/sdk/node'
-import { fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk/node'
+import type { Chain, FiatCurrency } from '@vultisig/sdk'
+import { fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk'
 
 import type { CommandContext, PortfolioSummary } from '../core'
 import { createSpinner, error, isJsonOutput, outputJson, warn } from '../lib/output'

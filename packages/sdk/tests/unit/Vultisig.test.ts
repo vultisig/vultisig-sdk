@@ -1,6 +1,7 @@
 import { Chain } from '@core/chain/Chain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { configureDefaultStorage } from '../../src/context/defaultStorage'
 import { configureWasm } from '../../src/context/wasmRuntime'
 import { MemoryStorage } from '../../src/storage/MemoryStorage'
 import { ValidationHelpers } from '../../src/utils/validation'
@@ -22,6 +23,9 @@ describe('Vultisig', () => {
     // Configure WASM mock before creating any SDK instances
     configureWasm(mockGetWalletCore)
 
+    // Configure default storage for tests (simulates platform entry point)
+    configureDefaultStorage(() => new MemoryStorage())
+
     // Create SDK instance with test configuration
     sdk = new Vultisig({
       autoInit: false, // Don't auto-initialize to avoid WASM loading in tests
@@ -39,9 +43,11 @@ describe('Vultisig', () => {
   })
 
   describe('initialization', () => {
-    it('should require storage configuration', async () => {
-      // Storage is now required
-      expect(() => new Vultisig({} as any)).toThrow('Vultisig requires a storage implementation')
+    it('should use default storage when not provided', async () => {
+      // When default storage is configured, Vultisig can be created without explicit storage
+      const sdkWithDefaultStorage = new Vultisig({ autoInit: false })
+      expect(sdkWithDefaultStorage).toBeDefined()
+      expect(sdkWithDefaultStorage).toBeInstanceOf(Vultisig)
     })
 
     it('should create instance with storage configuration', async () => {
@@ -352,9 +358,11 @@ describe('Vultisig', () => {
   })
 
   describe('storage integration', () => {
-    it('should require storage', () => {
-      // Storage is now required - no default storage is created
-      expect(() => new Vultisig({ autoInit: false } as any)).toThrow('Vultisig requires a storage implementation')
+    it('should use default storage when not explicitly provided', () => {
+      // With default storage configured, SDK can be created without explicit storage
+      const sdkWithDefault = new Vultisig({ autoInit: false })
+      expect(sdkWithDefault).toBeDefined()
+      expect(sdkWithDefault.storage).toBeDefined()
     })
 
     it('should accept custom storage', () => {
@@ -376,9 +384,11 @@ describe('Vultisig', () => {
   })
 
   describe('edge cases', () => {
-    it('should require storage in config', () => {
-      // Storage is now required, undefined config throws
-      expect(() => new Vultisig()).toThrow('Vultisig requires a storage implementation')
+    it('should work with no config when default storage is configured', () => {
+      // With default storage configured, SDK can be created with no config
+      const sdkNoConfig = new Vultisig()
+      expect(sdkNoConfig).toBeDefined()
+      expect(sdkNoConfig.storage).toBeDefined()
     })
 
     it('should handle partial config with storage', () => {

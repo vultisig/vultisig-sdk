@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import 'dotenv/config'
 
-import type { FiatCurrency, VaultBase } from '@vultisig/sdk/node'
-import { Chain, FileStorage, Vultisig } from '@vultisig/sdk/node'
+import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
+import { Chain, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
 
@@ -110,7 +110,6 @@ async function findVaultByNameOrId(sdk: Vultisig, nameOrId: string): Promise<Vau
 async function init(vaultOverride?: string): Promise<CLIContext> {
   if (!ctx) {
     const sdk = new Vultisig({
-      storage: new FileStorage(),
       onPasswordRequired: createPasswordCallback(),
     })
     await sdk.initialize()
@@ -574,7 +573,6 @@ setupCompletionCommand(program)
 
 async function startInteractiveMode(): Promise<void> {
   const sdk = new Vultisig({
-    storage: new FileStorage(),
     onPasswordRequired: createPasswordCallback(),
   })
   await sdk.initialize()

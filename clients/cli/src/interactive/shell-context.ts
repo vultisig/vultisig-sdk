@@ -6,7 +6,7 @@
  * - Password caching with TTL
  * - Lock/unlock support
  */
-import type { VaultBase, Vultisig } from '@vultisig/sdk/node'
+import type { VaultBase, Vultisig } from '@vultisig/sdk'
 import inquirer from 'inquirer'
 
 import { BaseCommandContext, DEFAULT_PASSWORD_CACHE_TTL } from '../core/command-context'

@@ -1,8 +1,8 @@
 /**
  * Settings Commands - currency, server, address-book
  */
-import type { FiatCurrency } from '@vultisig/sdk/node'
-import { Chain, fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk/node'
+import type { FiatCurrency } from '@vultisig/sdk'
+import { Chain, fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 

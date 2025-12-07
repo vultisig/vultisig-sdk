@@ -3,13 +3,29 @@ name: Publish to NPM
 on:
   push:
     tags:
-      - "v*" # Trigger on version tags like v1.0.0
-  workflow_dispatch: # Allow manual trigger
+      - "v*"
+  workflow_dispatch:
     inputs:
-      version:
-        description: "Version to publish (leave empty for package.json version)"
+      package:
+        description: "Package to publish"
+        required: true
+        type: choice
+        options:
+          - sdk
+          - cli
+          - all
+      dry_run:
+        description: "Dry run (no actual publish)"
         required: false
-        type: string
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
   publish:
@@ -22,54 +38,65 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
           registry-url: "https://registry.npmjs.org/"
 
-      - name: Setup Yarn
+      - name: Enable Corepack
         run: corepack enable
 
+      - name: Prepare Yarn
+        run: corepack prepare yarn@4.9.1 --activate
+
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Run type checking
-        run: npm run typecheck
+        run: yarn typecheck
 
       - name: Run linting
-        run: npm run lint
+        run: yarn lint
 
       - name: Run tests
-        run: npm run test
+        run: yarn test
 
-      - name: Build SDK package
-        working-directory: ./src
-        run: |
-          npm run build
+      - name: Build SDK
+        run: yarn build:sdk
 
-      - name: Update version if specified
-        if: github.event.inputs.version != ''
-        working-directory: ./src
-        run: |
-          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+      - name: Build CLI
+        run: yarn cli:build
 
-      - name: Check package contents
-        working-directory: ./src
-        run: |
-          npm pack --dry-run
+      - name: Check SDK package contents
+        working-directory: ./packages/sdk
+        run: npm pack --dry-run
 
-      - name: Publish to NPM
-        working-directory: ./src
-        run: |
-          npm publish
+      - name: Check CLI package contents
+        working-directory: ./clients/cli
+        run: npm pack --dry-run
+
+      - name: Publish SDK to NPM
+        if: |
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+          (github.event.inputs.package == 'sdk' || github.event.inputs.package == 'all') &&
+          github.event.inputs.dry_run != 'true'
+        working-directory: ./packages/sdk
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish CLI to NPM
+        if: |
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+          (github.event.inputs.package == 'cli' || github.event.inputs.package == 'all') &&
+          github.event.inputs.dry_run != 'true'
+        working-directory: ./clients/cli
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

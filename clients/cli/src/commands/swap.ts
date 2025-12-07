@@ -1,7 +1,7 @@
 /**
  * Swap Commands - swap-chains, swap-quote, swap
  */
-import type { Chain, SwapQuoteResult } from '@vultisig/sdk/node'
+import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
 import { createSpinner, info, isJsonOutput, outputJson, warn } from '../lib/output'

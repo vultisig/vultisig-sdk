@@ -7,7 +7,7 @@
  * - Password management
  * - Mode information (CLI vs interactive)
  */
-import type { VaultBase, Vultisig } from '@vultisig/sdk/node'
+import type { VaultBase, Vultisig } from '@vultisig/sdk'
 
 /**
  * Password cache entry with expiration

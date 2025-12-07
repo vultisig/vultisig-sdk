@@ -1,6 +1,6 @@
 # Vultisig SDK Users Guide
 
-> **Pre-Alpha Software**: This SDK is currently in pre-alpha development. APIs may change without notice. Use in production at your own risk.
+> **⚠️ Alpha Release**: This SDK is currently in alpha development. APIs may change without notice. Use in production at your own risk.
 
 ## Table of Contents
 
@@ -48,14 +48,14 @@ For browser environments, you need to serve the WASM files from your public dire
 
 ### Basic Initialization
 
-**Node.js:**
+The SDK automatically uses the appropriate storage for your platform:
+- **Node.js**: `FileStorage` (stores in `~/.vultisig` by default)
+- **Browser**: `BrowserStorage` (uses IndexedDB with localStorage fallback)
 
 ```typescript
-import { Vultisig, FileStorage } from '@vultisig/sdk/node'
+import { Vultisig } from '@vultisig/sdk'
 
-const sdk = new Vultisig({
-  storage: new FileStorage(),  // Stores in ~/.vultisig by default
-})
+const sdk = new Vultisig()  // Storage is auto-configured for your platform
 
 await sdk.initialize()
 
@@ -63,13 +63,13 @@ await sdk.initialize()
 sdk.dispose()
 ```
 
-**Browser:**
+**Custom Storage (optional):**
 
 ```typescript
-import { Vultisig, MemoryStorage } from '@vultisig/sdk/browser'
+import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),  // Or IndexedDB implementation
+  storage: new MemoryStorage(),  // Override with custom storage
 })
 
 await sdk.initialize()
@@ -83,12 +83,10 @@ sdk.dispose()
 Here's a complete example showing vault creation, address derivation, and balance checking with password management:
 
 ```typescript
-import { Vultisig, FileStorage, Chain } from '@vultisig/sdk/node'
+import { Vultisig, Chain } from '@vultisig/sdk'
 
 // Step 1: Initialize SDK with configuration
 const sdk = new Vultisig({
-  storage: new FileStorage(),  // Required: provide storage implementation
-
   // Password handling (recommended for production)
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     // Prompt user for password - implementation depends on platform
@@ -181,7 +179,7 @@ interface Storage {
 For scenarios where you don't need persistent storage—such as one-off operations, testing, or serverless functions—use `MemoryStorage` to create ephemeral vault instances:
 
 ```typescript
-import { Vultisig, MemoryStorage, Chain } from '@vultisig/sdk/node'
+import { Vultisig, MemoryStorage, Chain } from '@vultisig/sdk'
 import * as fs from 'fs'
 
 // Create SDK with in-memory storage (no persistence)
@@ -245,7 +243,7 @@ Configure a password callback when creating your SDK instance to automatically p
 #### Browser Example (with Modal)
 
 ```typescript
-import { Vultisig, MemoryStorage } from '@vultisig/sdk/browser'
+import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
   storage: new MemoryStorage(),
@@ -268,7 +266,7 @@ const sdk = new Vultisig({
 #### Node.js Example (Command Line)
 
 ```typescript
-import { Vultisig, FileStorage } from '@vultisig/sdk/node'
+import { Vultisig } from '@vultisig/sdk'
 import * as readline from 'readline'
 
 const sdk = new Vultisig({
@@ -919,7 +917,7 @@ try {
 All configuration is passed to the `Vultisig` constructor. The SDK uses instance-scoped configuration (no global state):
 
 ```typescript
-import { Vultisig, FileStorage, Chain } from '@vultisig/sdk/node'
+import { Vultisig, Chain } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
   // Required: Storage implementation
@@ -993,7 +991,7 @@ sdk2.dispose()
 Implement the `Storage` interface for custom persistence:
 
 ```typescript
-import { Storage, Vultisig } from '@vultisig/sdk/node'
+import { Vultisig, type VaultStorage } from '@vultisig/sdk'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -1485,11 +1483,13 @@ cp node_modules/vultisig-sdk/dist/*.wasm public/
 
 **IndexedDB Storage**: For persistent storage, use IndexedDB (see [examples/browser](../examples/browser) for implementation).
 
-**Platform Import**:
+**Import**:
 
 ```typescript
-// Explicit browser import (recommended)
-import { Vultisig, MemoryStorage, Chain } from '@vultisig/sdk/browser'
+import { Vultisig, Chain } from '@vultisig/sdk'
+
+const sdk = new Vultisig()  // Uses BrowserStorage (IndexedDB) by default
+await sdk.initialize()
 ```
 
 **Security Considerations**:
@@ -1499,22 +1499,12 @@ import { Vultisig, MemoryStorage, Chain } from '@vultisig/sdk/browser'
 
 ### Node.js
 
-**Platform Import**:
+**Import**:
 
 ```typescript
-// Explicit Node.js import (recommended)
-import { Vultisig, FileStorage, Chain } from '@vultisig/sdk/node'
-```
+import { Vultisig, Chain } from '@vultisig/sdk'
 
-**File Storage**: Use the built-in `FileStorage` class for persistence:
-
-```typescript
-import { Vultisig, FileStorage } from '@vultisig/sdk/node'
-
-const sdk = new Vultisig({
-  storage: new FileStorage()  // Stores data in ~/.vultisig by default
-})
-
+const sdk = new Vultisig()  // Uses FileStorage (~/.vultisig) by default
 await sdk.initialize()
 // ... use the SDK ...
 sdk.dispose()

@@ -4,7 +4,7 @@
  * Prevents vault events from interfering with the REPL prompt.
  * Events are collected during command execution and displayed after completion.
  */
-import type { VaultBase } from '@vultisig/sdk/node'
+import type { VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 type BufferedEvent = {

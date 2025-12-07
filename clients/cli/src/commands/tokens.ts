@@ -1,7 +1,7 @@
 /**
  * Token Commands - token management
  */
-import type { Chain } from '@vultisig/sdk/node'
+import type { Chain } from '@vultisig/sdk'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 

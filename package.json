@@ -45,7 +45,9 @@
     "prepare": "husky",
     "cli": "yarn workspace @vultisig/cli dev",
     "cli:build": "yarn workspace @vultisig/cli build",
-    "cli:interactive": "yarn workspace @vultisig/cli repl"
+    "cli:interactive": "yarn workspace @vultisig/cli repl",
+    "docs": "typedoc --options .config/typedoc.json",
+    "docs:watch": "typedoc --options .config/typedoc.json --watch"
   },
   "lint-staged": {
     "packages/sdk/**/*.{js,jsx,ts,tsx}": [
@@ -99,6 +101,7 @@
     "rollup-plugin-dts": "^6.2.3",
     "syncpack": "^13.0.3",
     "tsx": "^4.20.5",
+    "typedoc": "^0.27.6",
     "typescript": "^5.8.2",
     "vite": "^6.2.2",
     "vitest": "^3.0.9"

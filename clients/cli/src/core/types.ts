@@ -1,7 +1,7 @@
 /**
  * Shared type definitions for CLI and Interactive Shell
  */
-import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk/node'
+import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk'
 
 /**
  * Parameters for sending a transaction

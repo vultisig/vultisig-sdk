@@ -1,7 +1,7 @@
 /**
  * Vault Management Commands - create, import, export, verify, switch, rename, info, vaults
  */
-import type { VaultBase } from '@vultisig/sdk/node'
+import type { VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
 import inquirer from 'inquirer'

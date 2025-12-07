@@ -1,7 +1,7 @@
 /**
  * Tab Completion - Provides intelligent tab completion for the shell
  */
-import { Chain } from '@vultisig/sdk/node'
+import { Chain } from '@vultisig/sdk'
 import fs from 'fs'
 import path from 'path'
 

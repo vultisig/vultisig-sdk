@@ -8,8 +8,8 @@
  * Note: For output helpers (info, success, warn, error, createSpinner),
  * import directly from './lib/output' which respects silent mode.
  */
-import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk/node'
-import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk/node'
+import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk'
+import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 

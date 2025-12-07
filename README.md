@@ -155,7 +155,10 @@ This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisi
 
 ## API Documentation
 
-TODO
+API documentation is auto-generated and available at:
+- https://vultisig.github.io/vultisig-sdk/
+
+For detailed usage, see the [SDK Users Guide](docs/SDK-USERS-GUIDE.md).
 
 ## Security
 
