@@ -106,6 +106,35 @@ import { NodeCrypto } from '../../src/platforms/node/crypto'
 
 configureCrypto(new NodeCrypto())
 
-// Note: DKLS and Schnorr WASM modules are handled automatically by core's
-// initializeMpcLib() using wasm-bindgen's import.meta.url. The fetch polyfill
-// above allows wasm-bindgen to load .wasm files from the filesystem.
+/**
+ * Configure WASM for integration tests
+ * The SDK requires WASM to be configured before initialization.
+ */
+import { initializeMpcLib } from '@core/mpc/lib/initialize'
+import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+
+import { configureWasm } from '../../src/context/wasmRuntime'
+
+// Process-wide memoized WASM initialization
+let walletCoreInstance: any
+
+const initAllWasm = memoizeAsync(async () => {
+  // Initialize all WASM modules using core's initializeMpcLib
+  // The fetch polyfill allows wasm-bindgen to load .wasm from filesystem
+  const [walletCore] = await Promise.all([
+    initWalletCore(),
+    initializeMpcLib('ecdsa'), // DKLS - via core's single source of truth
+    initializeMpcLib('eddsa'), // Schnorr - via core's single source of truth
+  ])
+  walletCoreInstance = walletCore
+  return walletCore
+})
+
+// Configure WASM on setup
+configureWasm(async () => {
+  if (walletCoreInstance) return walletCoreInstance
+  return initAllWasm()
+})
+
+console.log('✅ Integration test WASM configuration loaded')
