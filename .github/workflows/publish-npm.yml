@@ -22,7 +22,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 env:
   NODE_OPTIONS: "--max-old-space-size=4096"
@@ -76,20 +75,20 @@ jobs:
       - name: Publish SDK to NPM
         if: |
           (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-          (github.event.inputs.package == 'sdk' || github.event.inputs.package == 'all') &&
-          github.event.inputs.dry_run != 'true'
+          ((github.event.inputs.package == 'sdk' || github.event.inputs.package == 'all') &&
+           github.event.inputs.dry_run != 'true')
         working-directory: ./packages/sdk
-        run: npm publish --provenance --access public
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish CLI to NPM
         if: |
           (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-          (github.event.inputs.package == 'cli' || github.event.inputs.package == 'all') &&
-          github.event.inputs.dry_run != 'true'
+          ((github.event.inputs.package == 'cli' || github.event.inputs.package == 'all') &&
+           github.event.inputs.dry_run != 'true')
         working-directory: ./clients/cli
-        run: npm publish --provenance --access public
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

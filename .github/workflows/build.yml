@@ -71,6 +71,9 @@ jobs:
       - name: Lint
         run: yarn lint
 
+      - name: Build SDK
+        run: yarn build:sdk
+
       - name: Run unit tests
         run: yarn test
 

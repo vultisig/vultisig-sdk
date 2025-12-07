@@ -17,7 +17,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 ## Installation
 
 ```bash
-npm install vultisig-sdk
+npm install @vultisig/sdk
 ```
 
 ## Quick Start
@@ -25,9 +25,15 @@ npm install vultisig-sdk
 ### 1. Initialize the SDK
 
 ```typescript
-import { Vultisig } from "vultisig-sdk";
+// Node.js
+import { Vultisig, MemoryStorage } from "@vultisig/sdk/node";
 
-const sdk = new Vultisig();
+// Browser
+// import { Vultisig, MemoryStorage } from "@vultisig/sdk/browser";
+
+const sdk = new Vultisig({
+  storage: new MemoryStorage()
+});
 
 // Initialize WASM modules
 await sdk.initialize();
@@ -109,11 +115,11 @@ The SDK works with any JavaScript framework. Here's a React example:
 ### React Component Example
 
 ```typescript
-import { Vultisig, Vault } from 'vultisig-sdk'
+import { Vultisig, Vault, MemoryStorage } from '@vultisig/sdk/browser'
 import { useState, useEffect } from 'react'
 
 function VaultApp() {
-  const [sdk] = useState(() => new Vultisig())
+  const [sdk] = useState(() => new Vultisig({ storage: new MemoryStorage() }))
   const [vault, setVault] = useState<Vault | null>(null)
   const [addresses, setAddresses] = useState<Record<string, string>>({})
 
