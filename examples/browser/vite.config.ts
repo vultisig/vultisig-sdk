@@ -22,7 +22,7 @@ export default defineConfig({
     {
       name: 'copy-wasm-files',
       buildStart() {
-        const sdkLibPath = path.resolve(__dirname, '../../packages/sdk/lib')
+        const sdkLibPath = path.resolve(__dirname, '../../packages/sdk/dist/lib')
         const publicLibPath = path.resolve(__dirname, 'public/lib')
 
         try {

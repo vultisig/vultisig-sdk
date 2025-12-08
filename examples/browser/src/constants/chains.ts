@@ -1,39 +1,39 @@
-import type { Chain } from '@vultisig/sdk'
+import { Chain } from '@vultisig/sdk'
 
 /**
  * Commonly used chains for quick access
  */
 export const POPULAR_CHAINS: Chain[] = [
-  'Ethereum',
-  'Bitcoin',
-  'Avalanche',
-  'BSC',
-  'Polygon',
-  'Arbitrum',
-  'Optimism',
-  'Base',
+  Chain.Ethereum,
+  Chain.Bitcoin,
+  Chain.Avalanche,
+  Chain.BSC,
+  Chain.Polygon,
+  Chain.Arbitrum,
+  Chain.Optimism,
+  Chain.Base,
 ]
 
 /**
  * All supported chains
  */
 export const ALL_CHAINS: Chain[] = [
-  'Ethereum',
-  'Bitcoin',
-  'Avalanche',
-  'BSC',
-  'Polygon',
-  'Arbitrum',
-  'Optimism',
-  'Base',
-  'Solana',
-  'THORChain',
-  'Maya',
-  'Cosmos',
-  'Kujira',
-  'Dydx',
-  'Polkadot',
-  'Sui',
+  Chain.Ethereum,
+  Chain.Bitcoin,
+  Chain.Avalanche,
+  Chain.BSC,
+  Chain.Polygon,
+  Chain.Arbitrum,
+  Chain.Optimism,
+  Chain.Base,
+  Chain.Solana,
+  Chain.THORChain,
+  Chain.MayaChain,
+  Chain.Cosmos,
+  Chain.Kujira,
+  Chain.Dydx,
+  Chain.Polkadot,
+  Chain.Sui,
   // Add more as SDK supports them
 ]
 

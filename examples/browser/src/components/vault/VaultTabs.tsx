@@ -75,51 +75,39 @@ export default function VaultTabs({ sdk, openVaults, onTabSwitch, onTabClose, on
               key={vault.id}
               className={`
                 group relative flex items-center gap-2 px-4 py-3
-                transition-all duration-200 cursor-pointer
+                transition-all duration-200 cursor-pointer rounded-t-lg
                 min-w-[140px] max-w-[240px]
-                ${activeVaultId === vault.id ? 'text-gray-900' : 'text-gray-600 hover:text-gray-900'}
+                ${
+                  activeVaultId === vault.id
+                    ? 'bg-primary text-white'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }
               `}
               onClick={() => onTabSwitch(vault.id)}
               onKeyDown={e => e.key === 'Enter' && onTabSwitch(vault.id)}
               role="button"
               tabIndex={0}
             >
-              {/* Active indicator - bottom border */}
-              <div
-                className={`
-                  absolute bottom-0 left-0 right-0 h-0.5 transition-all duration-200
-                  ${activeVaultId === vault.id ? 'bg-primary' : 'bg-transparent group-hover:bg-gray-300'}
-                `}
-              />
-
-              {/* Background highlight for active tab */}
-              <div
-                className={`
-                  absolute inset-0 transition-all duration-200
-                  ${activeVaultId === vault.id ? 'bg-gray-50' : 'bg-transparent group-hover:bg-gray-50'}
-                `}
-              />
-
               {/* Tab content */}
-              <div className="relative flex items-center gap-2 flex-1 overflow-hidden">
+              <div className="flex items-center gap-2 flex-1 overflow-hidden">
+                <span className="font-medium truncate">{vault.name}</span>
                 <span
-                  className={`
-                  font-medium truncate
-                  ${activeVaultId === vault.id ? 'text-gray-900' : 'text-gray-700'}
-                `}
+                  className={`text-xs font-mono shrink-0 ${activeVaultId === vault.id ? 'text-blue-200' : 'text-gray-400'}`}
                 >
-                  {vault.name}
+                  {shortenAddress(vault.id, 4)}
                 </span>
-                <span className="text-xs text-gray-400 font-mono shrink-0">{shortenAddress(vault.id, 4)}</span>
               </div>
 
               {/* Close button */}
               <button
-                className="
-                  relative ml-1 p-1 rounded
-                  text-gray-400 hover:text-gray-700 hover:bg-gray-200
-                  transition-all duration-150
-                "
+                className={`
+                  ml-1 p-1 rounded transition-all duration-150
+                  ${
+                    activeVaultId === vault.id
+                      ? 'text-blue-200 hover:text-white hover:bg-blue-600'
+                      : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200'
+                  }
+                `}
                 onClick={e => handleCloseTab(e, vault.id)}
                 aria-label="Close tab"
               >
