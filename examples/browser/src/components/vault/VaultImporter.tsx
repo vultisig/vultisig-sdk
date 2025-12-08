@@ -47,10 +47,11 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
 
           // Check if vault is encrypted using SDK method
           if (sdk.isVaultEncrypted(content)) {
-            password = window.prompt(`Enter password for ${file.name}:`)
-            if (!password) {
+            const input = window.prompt(`Enter password for ${file.name}:`)
+            if (!input) {
               throw new Error('Password required for encrypted vault')
             }
+            password = input
           }
 
           // Import vault through SDK

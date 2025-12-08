@@ -1,4 +1,12 @@
-import type { VaultListItem } from '@/types'
+/**
+ * Vault list item for localStorage persistence
+ */
+export type VaultListItem = {
+  id: string
+  name: string
+  type: 'fast' | 'secure'
+  createdAt: number
+}
 
 const VAULT_LIST_KEY = 'vultisig_vault_list'
 const SETTINGS_KEY = 'vultisig_settings'

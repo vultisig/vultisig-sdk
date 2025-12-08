@@ -80,8 +80,17 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
 
       const { getSDK } = await import('@/utils/sdk')
       const sdk = getSDK()
-      const vault = await sdk.verifyVault(vaultId, verificationCode)
+      const verified = await sdk.verifyVault(vaultId, verificationCode)
 
+      if (!verified) {
+        throw new Error('Verification failed. Please check your code and try again.')
+      }
+
+      // Get the vault after successful verification
+      const vault = await sdk.getVaultById(vaultId)
+      if (!vault) {
+        throw new Error('Failed to retrieve vault after verification')
+      }
       onVaultCreated(vault)
       handleClose()
     } catch (err) {

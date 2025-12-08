@@ -68,6 +68,9 @@ docs/plans/
 .vite/
 vite.config.ts.timestamp-*
 
+# Vercel
+.vercel/
+
 # Storybook
 *storybook.log
 storybook-static
