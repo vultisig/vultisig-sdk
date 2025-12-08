@@ -317,6 +317,27 @@ See the `/examples` directory for complete sample applications:
 - Modern browser with WebAssembly support
 - Network access for VultiServer communication (for Fast Vault features)
 
+## Known Issues
+
+### Node.js WASM Loading
+
+⚠️ **Node.js environments currently have a known issue loading DKLS and Schnorr WASM modules.**
+
+The WASM files (`dkls.wasm`, `schnorr.wasm`) may fail to load properly in Node.js due to module resolution differences between browser and Node environments. This affects:
+- Vault creation (Fast Vault)
+- Transaction signing
+
+**Workaround**: Use the browser environment for MPC operations, or stay tuned for upcoming fixes.
+
+**Affected features**:
+- `createFastVault()` - May fail in Node.js
+- Transaction signing operations
+
+**Working in Node.js**:
+- Vault import/export
+- Address derivation (uses `wallet-core.wasm` which loads correctly)
+- Vault file encryption/decryption
+
 ## Security Considerations
 
 - **Private Keys**: The SDK uses threshold signatures - private keys are never stored in a single location
