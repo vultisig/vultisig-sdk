@@ -102,7 +102,9 @@ jobs:
 
       - name: Build Browser Example
         working-directory: ./examples/browser
-        run: yarn build
+        run: |
+          yarn build
+          cp vercel.json dist/
 
       - name: Deploy to Vercel (Production)
         if: |
