@@ -1,14 +1,47 @@
 import react from '@vitejs/plugin-react'
 import { copyFileSync, mkdirSync } from 'fs'
 import path from 'path'
+import type { Plugin } from 'vite'
 import { defineConfig } from 'vite'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import wasm from 'vite-plugin-wasm'
+
+// Plugin to resolve vite-plugin-node-polyfills shim imports from the SDK
+function resolvePolyfillShims(): Plugin {
+  return {
+    name: 'resolve-polyfill-shims',
+    resolveId(id) {
+      if (id === 'vite-plugin-node-polyfills/shims/buffer') {
+        return { id: '\0polyfill-buffer', external: false }
+      }
+      if (id === 'vite-plugin-node-polyfills/shims/process') {
+        return { id: '\0polyfill-process', external: false }
+      }
+      if (id === 'vite-plugin-node-polyfills/shims/global') {
+        return { id: '\0polyfill-global', external: false }
+      }
+      return null
+    },
+    load(id) {
+      if (id === '\0polyfill-buffer') {
+        return 'import { Buffer } from "buffer"; export { Buffer }; export default Buffer;'
+      }
+      if (id === '\0polyfill-process') {
+        return 'import process from "process/browser"; export { process }; export default process;'
+      }
+      if (id === '\0polyfill-global') {
+        return 'export default globalThis;'
+      }
+      return null
+    },
+  }
+}
 
 export default defineConfig({
   plugins: [
     react(),
     wasm(), // Required for WASM loading
+    resolvePolyfillShims(), // Handle SDK's polyfill shim imports
     nodePolyfills({
       exclude: ['fs'], // fs not available in browser
       globals: {
