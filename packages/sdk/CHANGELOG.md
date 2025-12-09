@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 0.1.1-alpha.0
+
+### Patch Changes
+
+- [`cc96f64`](https://github.com/vultisig/vultisig-sdk/commit/cc96f64622a651eb6156f279afbbfe0aa4219179) - fix: re-release as alpha (0.1.0 was accidentally published as stable)
+
 ## 0.1.0
 
 ### Patch Changes
