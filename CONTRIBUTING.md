@@ -35,11 +35,46 @@ This is a Yarn workspaces monorepo:
 
 ```
 vultisig-sdk/
-├── packages/sdk/       # Main SDK package (@vultisig/sdk)
-├── clients/cli/        # CLI tool (@vultisig/cli)
-├── examples/           # Example applications
-└── docs/               # Documentation
+├── packages/
+│   ├── sdk/               # SDK workspace package (@vultisig/sdk)
+│   │   ├── src/          # SDK source code
+│   │   │   ├── chains/   # Address derivation and chain management
+│   │   │   ├── mpc/      # Multi-party computation logic
+│   │   │   ├── vault/    # Vault creation and management
+│   │   │   ├── server/   # Fast vault server integration
+│   │   │   └── wasm/     # WASM module management
+│   │   └── tests/        # SDK test suite
+│   ├── core/             # ⚠️ UPSTREAM CODE - DO NOT EDIT
+│   │   ├── chain/        # Chain-specific implementations
+│   │   ├── mpc/          # MPC protocol implementations
+│   │   └── ui/           # UI components and utilities
+│   └── lib/              # ⚠️ UPSTREAM CODE - DO NOT EDIT
+│       ├── utils/        # Common utilities
+│       ├── ui/           # UI library components
+│       └── dkls/         # DKLS WASM bindings
+├── clients/cli/          # CLI workspace (@vultisig/cli)
+├── examples/             # Example workspaces
+└── docs/                 # Documentation
 ```
+
+### Upstream Code Warning
+
+The `packages/core/` and `packages/lib/` directories contain code synced from the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository. **These directories should NEVER be modified directly.**
+
+- ❌ **Do NOT** edit files in `packages/core/` or `packages/lib/`
+- ✅ **Do** make changes in the upstream vultisig-windows repository
+- ✅ **Do** sync changes using `yarn sync-and-copy` after upstream updates
+
+### Path Aliases
+
+All imports use TypeScript path aliases:
+
+- `@core/*` → `packages/core/*`
+- `@lib/*` → `packages/lib/*`
+
+### Workspace Bundling
+
+The SDK uses **workspace bundling** - it includes all necessary code from `core/` and `lib/` packages into a single distributable bundle. When you run `yarn build:sdk`, it creates the distributable SDK package in `packages/sdk/dist/` with all workspace dependencies bundled.
 
 ## Code Style
 
@@ -71,6 +106,22 @@ yarn test:e2e
 # Run all tests
 yarn test:all
 ```
+
+## Available Scripts
+
+| Script | Description |
+|--------|-------------|
+| `yarn build:sdk` | Build the SDK with all workspace dependencies |
+| `yarn test` | Run SDK tests |
+| `yarn test:unit` | Run unit tests only |
+| `yarn test:integration` | Run integration tests |
+| `yarn test:e2e` | Run end-to-end tests (requires vault) |
+| `yarn lint` | Run ESLint across all packages |
+| `yarn lint:fix` | Auto-fix linting issues |
+| `yarn format` | Format code with Prettier |
+| `yarn typecheck` | Run TypeScript type checking |
+| `yarn sync-and-copy` | Sync latest code from vultisig-windows |
+| `yarn docs` | Generate TypeDoc API documentation |
 
 ## Pull Request Process
 

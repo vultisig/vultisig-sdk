@@ -55,112 +55,6 @@ console.log("Bitcoin Address:", btcAddress);
 console.log("Ethereum Address:", ethAddress);
 ```
 
-## Development
-
-### Prerequisites
-
-- Node.js 20+
-- Yarn 4.x
-
-### Setup
-
-This is a monorepo with workspace packages. **Always run `yarn install` from the root directory first.**
-
-```bash
-# Clone the repository
-git clone https://github.com/vultisig/vultisig-sdk.git
-cd vultisig-sdk
-
-# IMPORTANT: Install dependencies from root (sets up all workspaces)
-yarn install
-
-# Build the SDK (bundles all workspace packages)
-yarn workspace @vultisig/sdk build
-
-# Run tests
-yarn workspace @vultisig/sdk test
-```
-
-### Project Structure
-
-This is a **monorepo** with the following structure:
-
-```
-vultisig-sdk/
-├── packages/
-│   ├── sdk/               # SDK workspace package (@vultisig/sdk)
-│   │   ├── src/          # SDK source code
-│   │   │   ├── chains/   # Address derivation and chain management
-│   │   │   ├── mpc/      # Multi-party computation logic
-│   │   │   ├── vault/    # Vault creation and management
-│   │   │   ├── server/   # Fast vault server integration
-│   │   │   └── wasm/     # WASM module management
-│   │   └── tests/        # SDK test suite
-│   ├── core/             # ⚠️ UPSTREAM CODE - DO NOT EDIT
-│   │   ├── chain/        # Chain-specific implementations
-│   │   ├── mpc/          # MPC protocol implementations
-│   │   └── ui/           # UI components and utilities
-│   └── lib/              # ⚠️ UPSTREAM CODE - DO NOT EDIT
-│       ├── utils/        # Common utilities
-│       ├── ui/           # UI library components
-│       └── dkls/         # DKLS WASM bindings
-├── clients/cli/          # CLI workspace
-├── examples/             # Example workspaces
-└── package.json          # Root workspace
-```
-
-**⚠️ IMPORTANT: Do Not Edit Upstream Code**
-
-The `packages/core/` and `packages/lib/` directories contain code synced from the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository. **These directories should NEVER be modified directly.**
-
-- ❌ **Do NOT** edit files in `packages/core/` or `packages/lib/`
-- ✅ **Do** make changes in the upstream vultisig-windows repository
-- ✅ **Do** sync changes using `yarn sync-and-copy` after upstream updates
-
-All imports use TypeScript path aliases:
-
-- `@core/*` → `packages/core/*`
-- `@lib/*` → `packages/lib/*`
-
-### Build Process
-
-The SDK uses **workspace bundling** - it includes all necessary code from `core/` and `lib/` packages into a single distributable bundle.
-
-#### Build SDK
-
-```bash
-# From root directory (after yarn install)
-yarn workspace @vultisig/sdk build
-```
-
-This creates the distributable SDK package in `packages/sdk/dist/` with all workspace dependencies bundled.
-
-#### Run Tests
-
-```bash
-# From root directory
-yarn workspace @vultisig/sdk test
-```
-
-### Syncing from vultisig-windows
-
-The SDK syncs core functionality from the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository. To update to the latest upstream code:
-
-```bash
-# Fetch latest code from vultisig-windows
-yarn sync-and-copy
-```
-
-This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisig-windows and syncs them to the packages directory. See [SUBTREE-SYNC.md](docs/SUBTREE-SYNC.md) for details.
-
-### Available Scripts
-
-- `yarn workspace @vultisig/sdk build` - Build the SDK with all workspace dependencies
-- `yarn workspace @vultisig/sdk test` - Run SDK tests
-- `yarn sync-and-copy` - Sync latest code from vultisig-windows
-- `yarn lint` - Run ESLint across all packages
-- `yarn typecheck` - Run TypeScript type checking
-
 ## API Documentation
 
 API documentation is auto-generated and available at:
@@ -177,14 +71,7 @@ For detailed usage, see the [SDK Users Guide](docs/SDK-USERS-GUIDE.md).
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feat/new-feature`)
-3. Make your changes
-4. Add tests if applicable
-5. Run `yarn lint && yarn typecheck && yarn test`
-6. Commit your changes (`git commit -am 'Add new feature'`)
-7. Push to the branch (`git push origin feat/new-feature`)
-8. Create a Pull Request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure, and contribution guidelines.
 
 ## License
 
