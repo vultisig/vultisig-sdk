@@ -157,10 +157,12 @@ vultisig -i
 
 | Command | Description |
 |---------|-------------|
+| `vault <name>` | Switch to a different vault |
 | `lock` | Lock vault (clear cached password) |
 | `unlock` | Unlock vault (cache password) |
 | `status` | Show vault status |
 | `help` | Show available commands |
+| `.clear` | Clear the screen |
 | `.exit` | Exit the shell |
 
 ## Global Options
@@ -169,6 +171,7 @@ vultisig -i
 -v, --version            Show version
 -i, --interactive        Start interactive shell mode
 -o, --output <format>    Output format: table, json (default: table)
+--vault <nameOrId>       Specify vault by name or ID
 --silent                 Suppress informational output, show only results
 --debug                  Enable debug output
 -h, --help               Show help
@@ -285,6 +288,9 @@ vultisig portfolio -o json | jq -r '.portfolio.totalUsdValue'
 ### Environment Variables
 
 ```bash
+# Pre-select vault by name or ID
+VULTISIG_VAULT=MyWallet
+
 # Override config directory
 VULTISIG_CONFIG_DIR=/custom/path
 

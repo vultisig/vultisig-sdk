@@ -26,17 +26,13 @@ yarn add @vultisig/sdk
 ## Quick Start
 
 ```typescript
-// Node.js
-import { Vultisig, MemoryStorage } from "@vultisig/sdk/node";
-
-// Browser
-// import { Vultisig, MemoryStorage } from "@vultisig/sdk/browser";
+import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 
 // Initialize SDK with storage
 const sdk = new Vultisig({
   storage: new MemoryStorage()
-});
-await sdk.initialize();
+})
+await sdk.initialize()
 
 // Create a fast vault (server-assisted)
 const { vault, verificationRequired, vaultId } = await sdk.createFastVault({
@@ -63,7 +59,7 @@ console.log("Ethereum Address:", ethAddress);
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - Yarn 4.x
 
 ### Setup
@@ -137,7 +133,7 @@ The SDK uses **workspace bundling** - it includes all necessary code from `core/
 yarn workspace @vultisig/sdk build
 ```
 
-This creates the distributable SDK package in `src/dist/` with all workspace dependencies bundled.
+This creates the distributable SDK package in `packages/sdk/dist/` with all workspace dependencies bundled.
 
 #### Run Tests
 
@@ -151,11 +147,11 @@ yarn workspace @vultisig/sdk test
 The SDK syncs core functionality from the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository. To update to the latest upstream code:
 
 ```bash
-# Fetch latest code from vultisig-windows and copy to src/
+# Fetch latest code from vultisig-windows
 yarn sync-and-copy
 ```
 
-This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisig-windows, transforms imports from package paths to relative paths, and copies selected files to `src/`. See [SUBTREE-SYNC.md](docs/SUBTREE-SYNC.md) for details.
+This fetches the latest `core/`, `lib/`, and `clients/` directories from vultisig-windows and syncs them to the packages directory. See [SUBTREE-SYNC.md](docs/SUBTREE-SYNC.md) for details.
 
 ### Available Scripts
 
@@ -192,7 +188,7 @@ For detailed usage, see the [SDK Users Guide](docs/SDK-USERS-GUIDE.md).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](src/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
 
