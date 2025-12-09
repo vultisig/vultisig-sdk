@@ -31,7 +31,7 @@ yarn add @vultisig/sdk
 
 ### Platform Requirements
 
-- **Node.js**: Version 18 or higher
+- **Node.js**: Version 20 or higher
 - **Browser**: Modern browsers with WebAssembly support (Chrome, Firefox, Safari, Edge)
 - **TypeScript**: Optional but recommended
 
@@ -41,7 +41,7 @@ For browser environments, you need to serve the WASM files from your public dire
 
 1. Copy WASM files to your public directory:
    ```bash
-   cp node_modules/vultisig-sdk/dist/*.wasm public/
+   cp node_modules/@vultisig/sdk/dist/*.wasm public/
    ```
 
 2. The SDK will automatically load these files from the root path (`/`)
@@ -165,12 +165,14 @@ By default, the SDK uses in-memory storage (data is lost on restart). For persis
 - **Custom**: Implement the `Storage` interface
 
 ```typescript
-interface Storage {
-  get(key: string): Promise<string | null>
-  set(key: string, value: string): Promise<void>
+type Storage = {
+  get<T>(key: string): Promise<T | null>
+  set<T>(key: string, value: T): Promise<void>
   remove(key: string): Promise<void>
+  list(): Promise<string[]>
   clear(): Promise<void>
-  list(prefix?: string): Promise<string[]>
+  getUsage?(): Promise<number>
+  getQuota?(): Promise<number | undefined>
 }
 ```
 
@@ -1474,7 +1476,7 @@ new Vultisig({
 
 ```bash
 # Copy to public directory
-cp node_modules/vultisig-sdk/dist/*.wasm public/
+cp node_modules/@vultisig/sdk/dist/*.wasm public/
 
 # Ensure your dev server serves these files from /
 # Vite: automatically serves from public/
@@ -1519,27 +1521,9 @@ sdk.dispose()
 
 **Status**: Coming soon
 
-**Platform Import** (when available):
-
-```typescript
-import { Vultisig } from '@vultisig/sdk/react-native'
-```
-
 ### Electron
 
 **Status**: Coming soon
-
-**Main Process** (when available):
-
-```typescript
-import { Vultisig } from '@vultisig/sdk/electron-main'
-```
-
-**Renderer Process** (when available):
-
-```typescript
-import { Vultisig } from '@vultisig/sdk/electron-renderer'
-```
 
 ---
 

@@ -25,18 +25,14 @@ npm install @vultisig/sdk
 ### 1. Initialize the SDK
 
 ```typescript
-// Node.js
-import { Vultisig, MemoryStorage } from "@vultisig/sdk/node";
-
-// Browser
-// import { Vultisig, MemoryStorage } from "@vultisig/sdk/browser";
+import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
   storage: new MemoryStorage()
-});
+})
 
 // Initialize WASM modules
-await sdk.initialize();
+await sdk.initialize()
 ```
 
 ### 2. Create a Fast Vault (Server-Assisted)
@@ -115,12 +111,13 @@ The SDK works with any JavaScript framework. Here's a React example:
 ### React Component Example
 
 ```typescript
-import { Vultisig, Vault, MemoryStorage } from '@vultisig/sdk/browser'
+import { Vultisig, MemoryStorage } from '@vultisig/sdk'
+import type { VaultBase } from '@vultisig/sdk'
 import { useState, useEffect } from 'react'
 
 function VaultApp() {
   const [sdk] = useState(() => new Vultisig({ storage: new MemoryStorage() }))
-  const [vault, setVault] = useState<Vault | null>(null)
+  const [vault, setVault] = useState<VaultBase | null>(null)
   const [addresses, setAddresses] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -313,7 +310,7 @@ See the `/examples` directory for complete sample applications:
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 20+
 - Modern browser with WebAssembly support
 - Network access for VultiServer communication (for Fast Vault features)
 
@@ -349,7 +346,7 @@ The WASM files (`dkls.wasm`, `schnorr.wasm`) may fail to load properly in Node.j
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - Yarn 4.x
 
 ### Setup
@@ -367,31 +364,25 @@ yarn install
 
 ### Building
 
-The SDK bundles functionality from workspace packages (`core/` and `lib/`) into a single distributable package.
+The SDK bundles functionality from workspace packages (`packages/core/` and `packages/lib/`) into a single distributable package.
 
 ```bash
 # Build the SDK (from root directory)
 yarn workspace @vultisig/sdk build
-
-# Or using npm scripts (from src/ directory)
-cd src && npm run build
 ```
 
-This creates the distributable package in `src/dist/` with all dependencies bundled.
+This creates the distributable package in `packages/sdk/dist/` with all dependencies bundled.
 
 ### Testing
 
 ```bash
 # Run tests (from root directory)
 yarn workspace @vultisig/sdk test
-
-# Or from src/ directory
-cd src && npm test
 ```
 
 ### Development Workflow
 
-1. **Make changes** to SDK code in `src/` or workspace packages in `core/`/`lib/`
+1. **Make changes** to SDK code in `packages/sdk/src/` or workspace packages in `packages/core/`/`packages/lib/`
 2. **Build**: `yarn workspace @vultisig/sdk build`
 3. **Test**: `yarn workspace @vultisig/sdk test`
 4. **Lint**: `yarn lint` (from root)
@@ -399,26 +390,26 @@ cd src && npm test
 ### Project Structure
 
 ```
-src/                     # SDK source code
-├── chains/             # Address derivation and chain management
-├── mpc/               # Multi-party computation logic
-├── vault/             # Vault creation and management
-├── server/            # Fast vault server integration
-├── wasm/              # WASM module management
+packages/sdk/
+├── src/                # SDK source code
+│   ├── chains/        # Address derivation and chain management
+│   ├── mpc/           # Multi-party computation logic
+│   ├── vault/         # Vault creation and management
+│   ├── server/        # Fast vault server integration
+│   └── wasm/          # WASM module management
 ├── tests/             # Test suite
-├── rollup.config.js   # Build configuration
 └── package.json       # SDK package configuration
 
 # Workspace packages (bundled into SDK)
-../core/               # Core blockchain functionality
-../lib/                # Shared libraries and utilities
+packages/core/         # Core blockchain functionality
+packages/lib/          # Shared libraries and utilities
 ```
 
 ## Contributing
 
 1. Fork the repository
 2. Install dependencies from root: `yarn install`
-3. Make your changes in `src/` or workspace packages
+3. Make your changes in `packages/sdk/src/` or workspace packages
 4. Run tests: `yarn workspace @vultisig/sdk test`
 5. Build: `yarn workspace @vultisig/sdk build`
 6. Submit a pull request
