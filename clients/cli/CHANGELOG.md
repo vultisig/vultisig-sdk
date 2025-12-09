@@ -1,5 +1,11 @@
 # @vultisig/cli
 
+## 0.1.1-alpha.2
+
+### Patch Changes
+
+- [`9dcfb8b`](https://github.com/vultisig/vultisig-sdk/commit/9dcfb8b4b29de73b1301f791b50dc417a8f899f3) - fix: use yarn npm publish to properly resolve workspace protocols
+
 ## 0.1.1-alpha.1
 
 ### Patch Changes
