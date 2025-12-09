@@ -50,7 +50,7 @@
     "docs:watch": "typedoc --options .config/typedoc.json --watch",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "yarn workspaces foreach --all --no-private npm publish --tolerate-republish",
+    "changeset:publish": "yarn workspace @vultisig/sdk npm publish --tolerate-republish && yarn workspace @vultisig/cli npm publish --tolerate-republish",
     "release": "yarn build:sdk && yarn cli:build && yarn changeset:publish"
   },
   "lint-staged": {
