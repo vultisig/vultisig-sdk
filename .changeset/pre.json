@@ -1,0 +1,16 @@
+{
+  "mode": "pre",
+  "tag": "alpha",
+  "initialVersions": {
+    "@vultisig/cli": "0.1.0",
+    "@vultisig/example-browser": "0.1.1",
+    "@core/chain": "0.0.1",
+    "@core/config": "0.0.1",
+    "@core/mpc": "0.0.1",
+    "@lib/dkls": "0.1.0",
+    "@lib/schnorr": "0.1.0",
+    "@lib/utils": "0.0.1",
+    "@vultisig/sdk": "0.1.0"
+  },
+  "changesets": []
+}
