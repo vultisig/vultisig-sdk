@@ -13,6 +13,7 @@
     "@vultisig/sdk": "0.1.0"
   },
   "changesets": [
-    "fix-alpha-release"
+    "fix-alpha-release",
+    "fix-workspace-protocol"
   ]
 }
