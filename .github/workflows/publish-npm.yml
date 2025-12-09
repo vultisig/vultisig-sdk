@@ -83,16 +83,9 @@ jobs:
           ((github.event.inputs.package == 'sdk' || github.event.inputs.package == 'all') &&
            github.event.inputs.dry_run != 'true')
         working-directory: ./packages/sdk
-        run: |
-          npm publish --access public || {
-            if [[ $? -eq 1 ]] && npm view @vultisig/sdk@$(node -p "require('./package.json').version") version 2>/dev/null; then
-              echo "Version already published, continuing..."
-            else
-              exit 1
-            fi
-          }
+        run: yarn npm publish --tolerate-republish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish CLI to NPM
         if: |
@@ -100,16 +93,9 @@ jobs:
           ((github.event.inputs.package == 'cli' || github.event.inputs.package == 'all') &&
            github.event.inputs.dry_run != 'true')
         working-directory: ./clients/cli
-        run: |
-          npm publish --access public || {
-            if [[ $? -eq 1 ]] && npm view @vultisig/cli@$(node -p "require('./package.json').version") version 2>/dev/null; then
-              echo "Version already published, continuing..."
-            else
-              exit 1
-            fi
-          }
+        run: yarn npm publish --tolerate-republish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install Vercel CLI
         run: npm install -g vercel
