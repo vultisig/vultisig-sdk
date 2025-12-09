@@ -4,9 +4,9 @@
 import type { FiatCurrency } from '@vultisig/sdk'
 import { Chain, fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk'
 import chalk from 'chalk'
-import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
+import { replPrompt } from '../interactive'
 import {
   createSpinner,
   error,
@@ -120,37 +120,39 @@ export async function executeAddressBook(
     let address = options.address
     let name = options.name
 
-    const prompts = []
+    // Prompt one at a time to avoid duplicate rendering issues
     if (!chain) {
-      prompts.push({
-        type: 'list',
-        name: 'chain',
-        message: 'Select chain:',
-        choices: Object.values(Chain),
-      })
+      const chainAnswer = await replPrompt([
+        {
+          type: 'list',
+          name: 'chain',
+          message: 'Select chain:',
+          choices: Object.values(Chain),
+        },
+      ])
+      chain = chainAnswer.chain
     }
     if (!address) {
-      prompts.push({
-        type: 'input',
-        name: 'address',
-        message: 'Enter address:',
-        validate: (input: string) => input.trim() !== '' || 'Address is required',
-      })
+      const addressAnswer = await replPrompt([
+        {
+          type: 'input',
+          name: 'address',
+          message: 'Enter address:',
+          validate: (input: string) => input.trim() !== '' || 'Address is required',
+        },
+      ])
+      address = addressAnswer.address?.trim()
     }
     if (!name) {
-      prompts.push({
-        type: 'input',
-        name: 'name',
-        message: 'Enter name/label:',
-        validate: (input: string) => input.trim() !== '' || 'Name is required',
-      })
-    }
-
-    if (prompts.length > 0) {
-      const answers = await inquirer.prompt(prompts)
-      chain = chain || answers.chain
-      address = address || answers.address?.trim()
-      name = name || answers.name?.trim()
+      const nameAnswer = await replPrompt([
+        {
+          type: 'input',
+          name: 'name',
+          message: 'Enter name/label:',
+          validate: (input: string) => input.trim() !== '' || 'Name is required',
+        },
+      ])
+      name = nameAnswer.name?.trim()
     }
 
     const spinner = createSpinner('Adding address to address book...')

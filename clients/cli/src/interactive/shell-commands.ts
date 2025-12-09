@@ -8,10 +8,10 @@
 import type { FiatCurrency } from '@vultisig/sdk'
 import chalk from 'chalk'
 import Table from 'cli-table3'
-import inquirer from 'inquirer'
 import ora from 'ora'
 
 import type { VaultStatus } from '../core/types'
+import { replPrompt } from './repl-prompt'
 import type { ShellContext } from './shell-context'
 
 /**
@@ -62,7 +62,7 @@ export async function executeUnlock(ctx: ShellContext): Promise<void> {
     return
   }
 
-  const { password } = await inquirer.prompt([
+  const { password } = await replPrompt([
     {
       type: 'password',
       name: 'password',

@@ -6,8 +6,7 @@
  * 2. VAULT_PASSWORD env var (single fallback password)
  * 3. Interactive prompt (if no env password found and not in silent/JSON mode)
  */
-import inquirer from 'inquirer'
-
+import { replPrompt } from '../interactive'
 import { isJsonOutput, isSilent } from '../lib/output'
 
 /**
@@ -63,7 +62,7 @@ export function getPasswordFromEnv(vaultId: string, vaultName?: string): string 
  */
 export async function promptForPassword(vaultName?: string, vaultId?: string): Promise<string> {
   const displayName = vaultName || vaultId || 'vault'
-  const { password } = await inquirer.prompt([
+  const { password } = await replPrompt([
     {
       type: 'password',
       name: 'password',

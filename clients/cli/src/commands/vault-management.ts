@@ -4,9 +4,9 @@
 import type { VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
-import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
+import { replPrompt } from '../interactive'
 import { createSpinner, error, info, isJsonOutput, outputJson, printResult, success, warn } from '../lib/output'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
@@ -37,43 +37,49 @@ export async function executeCreate(
   let name = options.name
   let password = options.password
 
-  const prompts = []
+  // Prompt one at a time to avoid duplicate rendering issues
   if (!name) {
-    prompts.push({
-      type: 'input',
-      name: 'name',
-      message: 'Enter vault name:',
-      validate: (input: string) => input.trim() !== '' || 'Name is required',
-    })
-  }
-  if (!password) {
-    prompts.push({
-      type: 'password',
-      name: 'password',
-      message: 'Enter password:',
-      mask: '*',
-      validate: (input: string) => input.length >= 8 || 'Password must be at least 8 characters',
-    })
-    prompts.push({
-      type: 'password',
-      name: 'confirmPassword',
-      message: 'Confirm password:',
-      mask: '*',
-      validate: (input: string, ans: any) => input === ans.password || 'Passwords do not match',
-    })
+    const nameAnswer = await replPrompt([
+      {
+        type: 'input',
+        name: 'name',
+        message: 'Enter vault name:',
+        validate: (input: string) => input.trim() !== '' || 'Name is required',
+      },
+    ])
+    name = nameAnswer.name
   }
 
-  if (prompts.length > 0) {
-    const answers = (await inquirer.prompt(prompts)) as any
-    name = name || answers.name
-    password = password || answers.password
+  if (!password) {
+    const passwordAnswer = await replPrompt([
+      {
+        type: 'password',
+        name: 'password',
+        message: 'Enter password:',
+        mask: '*',
+        validate: (input: string) => input.length >= 8 || 'Password must be at least 8 characters',
+      },
+    ])
+    password = passwordAnswer.password
+
+    const confirmAnswer = await replPrompt([
+      {
+        type: 'password',
+        name: 'confirmPassword',
+        message: 'Confirm password:',
+        mask: '*',
+        validate: (input: string) => input === password || 'Passwords do not match',
+      },
+    ])
+    // confirmAnswer is used for validation only
+    void confirmAnswer
   }
 
   if (vaultType === 'fast') {
     let email = options.email
 
     if (!email) {
-      const emailAnswer = await inquirer.prompt([
+      const emailAnswer = await replPrompt([
         {
           type: 'input',
           name: 'email',
@@ -106,7 +112,7 @@ export async function executeCreate(
         warn('\nA verification code has been sent to your email.')
         info('Please check your inbox and enter the code.')
 
-        const codeAnswer = await inquirer.prompt([
+        const codeAnswer = await replPrompt([
           {
             type: 'input',
             name: 'code',
@@ -171,7 +177,7 @@ export async function executeCreate(
     }
 
     if (securePrompts.length > 0) {
-      const secureAnswers = (await inquirer.prompt(securePrompts)) as any
+      const secureAnswers = (await replPrompt(securePrompts)) as any
       threshold = threshold ?? secureAnswers.threshold
       totalShares = totalShares ?? secureAnswers.totalShares
     }
@@ -213,7 +219,7 @@ export async function executeCreate(
  * Execute import vault command
  */
 export async function executeImport(ctx: CommandContext, file: string): Promise<VaultBase> {
-  const { password } = await inquirer.prompt([
+  const { password } = await replPrompt([
     {
       type: 'password',
       name: 'password',
@@ -255,7 +261,7 @@ export async function executeVerify(
   let code = options.code
 
   if (!code) {
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await replPrompt([
       {
         type: 'input',
         name: 'code',
@@ -298,7 +304,7 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
 
   // Only prompt if --encrypt/--no-encrypt not specified
   if (encrypt === undefined) {
-    const encryptAnswer = await inquirer.prompt([
+    const encryptAnswer = await replPrompt([
       {
         type: 'confirm',
         name: 'encrypt',
@@ -310,7 +316,7 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
   }
 
   if (encrypt && !password) {
-    const passwordAnswer = await inquirer.prompt([
+    const passwordAnswer = await replPrompt([
       {
         type: 'password',
         name: 'password',

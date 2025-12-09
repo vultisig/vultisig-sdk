@@ -3,9 +3,9 @@
  */
 import type { Chain } from '@vultisig/sdk'
 import chalk from 'chalk'
-import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
+import { replPrompt } from '../interactive'
 import { createSpinner, info, isJsonOutput, outputJson, printResult, printTable, success, warn } from '../lib/output'
 
 export type TokensOptions = {
@@ -39,39 +39,40 @@ export async function executeTokens(ctx: CommandContext, options: TokensOptions)
     let name = options.name
     let decimals = options.decimals
 
-    // Only prompt for missing values
-    const prompts = []
+    // Prompt one at a time to avoid duplicate rendering issues
     if (!symbol) {
-      prompts.push({
-        type: 'input',
-        name: 'symbol',
-        message: 'Enter token symbol (e.g., USDT):',
-        validate: (input: string) => input.trim() !== '' || 'Symbol is required',
-      })
+      const symbolAnswer = await replPrompt([
+        {
+          type: 'input',
+          name: 'symbol',
+          message: 'Enter token symbol (e.g., USDT):',
+          validate: (input: string) => input.trim() !== '' || 'Symbol is required',
+        },
+      ])
+      symbol = symbolAnswer.symbol?.trim()
     }
     if (!name) {
-      prompts.push({
-        type: 'input',
-        name: 'name',
-        message: 'Enter token name (e.g., Tether USD):',
-        validate: (input: string) => input.trim() !== '' || 'Name is required',
-      })
+      const nameAnswer = await replPrompt([
+        {
+          type: 'input',
+          name: 'name',
+          message: 'Enter token name (e.g., Tether USD):',
+          validate: (input: string) => input.trim() !== '' || 'Name is required',
+        },
+      ])
+      name = nameAnswer.name?.trim()
     }
     if (decimals === undefined) {
-      prompts.push({
-        type: 'number',
-        name: 'decimals',
-        message: 'Enter token decimals:',
-        default: 18,
-        validate: (input: number) => input >= 0 || 'Decimals must be non-negative',
-      })
-    }
-
-    if (prompts.length > 0) {
-      const answers = await inquirer.prompt(prompts)
-      symbol = symbol || answers.symbol?.trim()
-      name = name || answers.name?.trim()
-      decimals = decimals ?? answers.decimals
+      const decimalsAnswer = await replPrompt([
+        {
+          type: 'number',
+          name: 'decimals',
+          message: 'Enter token decimals:',
+          default: 18,
+          validate: (input: number) => input >= 0 || 'Decimals must be non-negative',
+        },
+      ])
+      decimals = decimalsAnswer.decimals
     }
 
     await addToken(ctx, {

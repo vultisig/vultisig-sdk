@@ -36,6 +36,7 @@ import {
 } from '../commands'
 import { createCompleter, findChainByName } from './completer'
 import { EventBuffer } from './event-buffer'
+import { registerReplServer, unregisterReplServer } from './repl-prompt'
 import { executeLock, executeStatus, executeUnlock, showHelp } from './shell-commands'
 import { createShellContext, ShellContext } from './shell-context'
 
@@ -91,6 +92,15 @@ export class ShellSession {
       terminal: true,
       useColors: true,
       completer: createCompleter(this.ctx),
+    })
+
+    // Register REPL server for prompt coordination
+    // This enables replPrompt() to pause/resume REPL input during prompts
+    registerReplServer(this.replServer)
+
+    // Unregister on exit
+    this.replServer.on('exit', () => {
+      unregisterReplServer()
     })
 
     // Setup REPL commands

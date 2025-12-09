@@ -11,7 +11,8 @@
 import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk'
 import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
-import inquirer from 'inquirer'
+
+import { replPrompt } from './interactive'
 
 // Re-export types from core for backwards compatibility
 export type { PortfolioSummary, SendParams } from './core/types'
@@ -181,7 +182,7 @@ export function displayVaultsList(vaults: VaultBase[], activeVault: VaultBase | 
 // ============================================================================
 
 export async function confirmTransaction(): Promise<boolean> {
-  const { confirmed } = await inquirer.prompt([
+  const { confirmed } = await replPrompt([
     {
       type: 'confirm',
       name: 'confirmed',
@@ -193,7 +194,7 @@ export async function confirmTransaction(): Promise<boolean> {
 }
 
 export async function promptForPassword(message = 'Enter password:'): Promise<string> {
-  const { password } = await inquirer.prompt([
+  const { password } = await replPrompt([
     {
       type: 'password',
       name: 'password',
@@ -376,7 +377,7 @@ export function displaySwapChains(chains: readonly Chain[]): void {
 }
 
 export async function confirmSwap(): Promise<boolean> {
-  const { confirmed } = await inquirer.prompt([
+  const { confirmed } = await replPrompt([
     {
       type: 'confirm',
       name: 'confirmed',
