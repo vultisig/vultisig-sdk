@@ -14,7 +14,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:@vultisig/sdk --external:dotenv --external:chalk --external:commander --external:inquirer --external:ora --external:cli-table3 --external:tabtab --external:ws",
     "start": "node dist/index.js",
     "dev": "npx tsx src/index.ts",
     "cli": "npx tsx src/index.ts",
@@ -63,11 +63,12 @@
     "@types/node": "^22.13.10",
     "@types/tabtab": "^3.0.4",
     "@types/ws": "^8.18.1",
+    "esbuild": "^0.24.0",
     "tsx": "^4.7.0",
     "typescript": "^5.8.2"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "publishConfig": {
     "access": "public",
