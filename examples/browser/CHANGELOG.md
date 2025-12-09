@@ -1,5 +1,12 @@
 # @vultisig/example-browser
 
+## 0.1.2-alpha.0
+
+### Patch Changes
+
+- Updated dependencies [[`cc96f64`](https://github.com/vultisig/vultisig-sdk/commit/cc96f64622a651eb6156f279afbbfe0aa4219179)]:
+  - @vultisig/sdk@0.1.1-alpha.0
+
 ## 0.1.1
 
 ### Patch Changes

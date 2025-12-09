@@ -12,5 +12,7 @@
     "@lib/utils": "0.0.1",
     "@vultisig/sdk": "0.1.0"
   },
-  "changesets": []
+  "changesets": [
+    "fix-alpha-release"
+  ]
 }
