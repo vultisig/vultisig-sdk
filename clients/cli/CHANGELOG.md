@@ -1,5 +1,11 @@
 # @vultisig/cli
 
+## 0.1.1-alpha.1
+
+### Patch Changes
+
+- [`0985a37`](https://github.com/vultisig/vultisig-sdk/commit/0985a375c6009e2550231d759e84b576454ce759) - fix: use workspace:^ for SDK dependency to resolve correctly when publishing
+
 ## 0.1.1-alpha.0
 
 ### Patch Changes
