@@ -1,6 +1,10 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": ["../packages/sdk/src/index.ts"],
+  "entryPoints": [
+    "../packages/sdk/src/index.ts",
+    "../packages/sdk/src/platforms/node/index.ts",
+    "../packages/sdk/src/platforms/browser/index.ts"
+  ],
   "out": "../docs/api",
   "name": "Vultisig SDK",
   "readme": "../packages/sdk/README.md",
