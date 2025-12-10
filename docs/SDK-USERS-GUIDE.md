@@ -101,7 +101,8 @@ const sdk = new Vultisig({
 await sdk.initialize()
 
 // Step 2: Create a fast vault (server-assisted, always encrypted)
-const { vault, verificationRequired } = await sdk.createFastVault({
+// Returns the vaultId - vault is returned from verifyVault()
+const vaultId = await sdk.createFastVault({
   name: "My Wallet",
   email: "user@example.com",
   password: "SecurePassword123!",
@@ -110,13 +111,12 @@ const { vault, verificationRequired } = await sdk.createFastVault({
   }
 })
 
-// Step 3: Handle email verification if required
-if (verificationRequired) {
-  const code = await getVerificationCode() // Get code from user
-  await sdk.verifyVault(vault.id, code)
-}
+// Step 3: Verify with email code and get the vault
+// The vault is saved to storage and returned after successful verification
+const code = await getVerificationCode() // Get code from user
+const vault = await sdk.verifyVault(vaultId, code)
 
-// Step 4: Get an address
+// Step 4: Now use the vault
 const btcAddress = await vault.address(Chain.Bitcoin)
 console.log('Bitcoin address:', btcAddress)
 
@@ -425,7 +425,8 @@ const { filename, data } = await vault.export()
 Create a new vault with server assistance:
 
 ```typescript
-const { vault, vaultId, verificationRequired } = await sdk.createFastVault({
+// Step 1: Create vault - returns vaultId (vault not returned yet)
+const vaultId = await sdk.createFastVault({
   name: "My Wallet",
   email: "user@example.com",
   password: "SecurePassword123!",
@@ -434,14 +435,23 @@ const { vault, vaultId, verificationRequired } = await sdk.createFastVault({
   }
 })
 
-// Handle email verification if required
-if (verificationRequired) {
-  const code = await promptUserForVerificationCode()
-  await sdk.verifyVault(vaultId, code)
-}
+// Step 2: Verify with email code - returns the vault
+const code = await promptUserForVerificationCode()
+const vault = await sdk.verifyVault(vaultId, code)
 
 console.log('Vault created:', vault.name)
 ```
+
+**Important: Verification Flow**
+
+Fast vaults require email verification. The vault is only returned **after successful verification**:
+
+1. `createFastVault()` generates keys and returns the `vaultId`
+2. The vault exists in memory but is **not returned or persisted**
+3. User calls `verifyVault(vaultId, code)` with the email verification code
+4. On success, the vault is saved to storage, set as active, and **returned**
+
+**If the process is killed before verification completes, the vault is lost.** This is intentional - unverified vaults cannot be used for signing anyway. The user simply needs to call `createFastVault()` again to restart the process.
 
 ### Importing Vaults
 
@@ -1270,13 +1280,13 @@ class Vultisig {
   // Cleanup (releases all resources)
   dispose(): void
 
-  // Vault creation
+  // Vault creation (returns vaultId - call verifyVault to get the vault)
   createFastVault(options: {
     name: string
     password: string
     email: string
     onProgress?: (step: VaultCreationStep) => void
-  }): Promise<{ vault: FastVault, vaultId: string, verificationRequired: true }>
+  }): Promise<string>
 
   // Coming Soon - Not yet implemented
   createSecureVault(options: {
@@ -1303,8 +1313,8 @@ class Vultisig {
   getAddressBook(chain?: Chain): Promise<AddressBookEntry[]>
   addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
 
-  // Vault verification
-  verifyVault(vaultId: string, code: string): Promise<boolean>
+  // Vault verification (returns the vault on success)
+  verifyVault(vaultId: string, code: string): Promise<FastVault>
   resendVaultVerification(vaultId: string): Promise<void>
 }
 ```
@@ -1378,12 +1388,16 @@ Fast vaults and secure vaults are created through the Vultisig class:
 
 ```typescript
 // Create fast vault (2-of-2 with server)
-const { vault, vaultId, verificationRequired } = await sdk.createFastVault({
+// Returns vaultId - call verifyVault to get the vault
+const vaultId = await sdk.createFastVault({
   name: string
   email: string
   password: string
   onProgress?: (step: VaultCreationStep) => void
 })
+
+// Verify with email code to get the vault (saves and returns it)
+const vault = await sdk.verifyVault(vaultId, code)
 
 // Create secure vault (multi-device MPC) - not yet implemented
 const { vault, vaultId, sessionId } = await sdk.createSecureVault({
