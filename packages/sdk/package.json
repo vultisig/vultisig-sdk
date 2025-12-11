@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "0.2.0-alpha.3",
+  "version": "0.2.0-alpha.4",
   "description": "TypeScript SDK for secure multi-party computation and blockchain operations",
   "type": "module",
   "main": "dist/index.node.cjs",
