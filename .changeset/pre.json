@@ -13,8 +13,14 @@
     "@vultisig/sdk": "0.1.0"
   },
   "changesets": [
+    "defer-vault-storage-until-verification",
     "fix-alpha-release",
+    "fix-cli-command-references",
+    "fix-interactive-shell-prompts",
     "fix-publish-script",
-    "fix-workspace-protocol"
+    "fix-workspace-protocol",
+    "update-browser-cli-for-new-vault-api",
+    "update-docs-to-current-state",
+    "verification-retry-on-wrong-input"
   ]
 }
