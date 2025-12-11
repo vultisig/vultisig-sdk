@@ -1,5 +1,21 @@
 # @vultisig/sdk
 
+## 0.2.0-alpha.3
+
+### Minor Changes
+
+- [#55](https://github.com/vultisig/vultisig-sdk/pull/55) [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - **BREAKING**: Change fast vault creation API to return vault from verification
+  - `createFastVault()` now returns `Promise<string>` (just the vaultId)
+  - `verifyVault()` now returns `Promise<FastVault>` instead of `Promise<boolean>`
+  - Vault is only persisted to storage after successful email verification
+  - If process is killed before verification, vault is lost (user recreates)
+
+  This is a cleaner API - the user only gets the vault after it's verified and persisted.
+
+### Patch Changes
+
+- [#55](https://github.com/vultisig/vultisig-sdk/pull/55) [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Update ARCHITECTURE.md and SDK-USERS-GUIDE.md to reflect current codebase state: fix version number, monorepo structure, createFastVault API example, platform bundles table, and storage layer description.
+
 ## 0.1.1-alpha.0
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @vultisig/example-browser
 
+## 0.1.2-alpha.1
+
+### Patch Changes
+
+- [#55](https://github.com/vultisig/vultisig-sdk/pull/55) [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Update browser example and CLI for new fast vault creation API
+  - Updated to use new `createFastVault()` that returns just the vaultId
+  - Updated to use new `verifyVault()` that returns the FastVault
+  - Removed `code` from CLI `CreateVaultOptions` (verification code always prompted interactively)
+  - Removed `--code` option from CLI create command
+
+- Updated dependencies [[`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c), [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c)]:
+  - @vultisig/sdk@0.2.0-alpha.3
+
 ## 0.1.2-alpha.0
 
 ### Patch Changes

@@ -1,5 +1,24 @@
 # @vultisig/cli
 
+## 0.2.0-alpha.3
+
+### Patch Changes
+
+- [#55](https://github.com/vultisig/vultisig-sdk/pull/55) [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Replace development command references (`npm run wallet`) with production CLI name (`vultisig`) in all user-facing messages.
+
+- [#55](https://github.com/vultisig/vultisig-sdk/pull/55) [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Fix interactive shell prompts by replacing REPL with readline to prevent stdin conflicts with inquirer
+
+- [#55](https://github.com/vultisig/vultisig-sdk/pull/55) [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Update browser example and CLI for new fast vault creation API
+  - Updated to use new `createFastVault()` that returns just the vaultId
+  - Updated to use new `verifyVault()` that returns the FastVault
+  - Removed `code` from CLI `CreateVaultOptions` (verification code always prompted interactively)
+  - Removed `--code` option from CLI create command
+
+- [#55](https://github.com/vultisig/vultisig-sdk/pull/55) [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add inline verification code retry during vault creation. When entering an incorrect code, users can now retry, resend the verification email, or abort gracefully instead of being kicked back to the main menu.
+
+- Updated dependencies [[`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c), [`95ba10b`](https://github.com/vultisig/vultisig-sdk/commit/95ba10baf2dc2dc4ba8e48825f10f34ec275a73c)]:
+  - @vultisig/sdk@0.2.0-alpha.3
+
 ## 0.1.1-alpha.2
 
 ### Patch Changes
