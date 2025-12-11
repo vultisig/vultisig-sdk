@@ -127,9 +127,9 @@ export async function executeCreate(
 
         success('\n+ Vault created!')
         info('\nYour vault is ready. Run the following commands:')
-        printResult(chalk.cyan('  npm run wallet balance     ') + '- View balances')
-        printResult(chalk.cyan('  npm run wallet addresses   ') + '- View addresses')
-        printResult(chalk.cyan('  npm run wallet portfolio   ') + '- View portfolio value')
+        printResult(chalk.cyan('  vultisig balance     ') + '- View balances')
+        printResult(chalk.cyan('  vultisig addresses   ') + '- View addresses')
+        printResult(chalk.cyan('  vultisig portfolio   ') + '- View portfolio value')
 
         return vault
       } catch (err: any) {
@@ -139,7 +139,7 @@ export async function executeCreate(
         if (attempts >= MAX_VERIFY_ATTEMPTS) {
           warn('\nMaximum attempts reached.')
           warn('\nTo retry verification later, use:')
-          info(`  npm run wallet verify ${vaultId}`)
+          info(`  vultisig verify ${vaultId}`)
           err.exitCode = 1
           throw err
         }
@@ -160,7 +160,7 @@ export async function executeCreate(
 
         if (action === 'abort') {
           warn('\nVault creation paused. To complete verification, use:')
-          info(`  npm run wallet verify ${vaultId}`)
+          info(`  vultisig verify ${vaultId}`)
           warn('\nNote: The pending vault is stored in memory only and will be lost if you exit.')
           return undefined as any
         }
@@ -272,7 +272,7 @@ export async function executeImport(ctx: CommandContext, file: string): Promise<
   spinner.succeed(`Vault imported: ${vault.name}`)
 
   success('\n+ Vault imported successfully!')
-  info('\nRun "npm run wallet balance" to view balances')
+  info('\nRun "vultisig balance" to view balances')
 
   return vault
 }
@@ -325,7 +325,7 @@ export async function executeVerify(
     spinner.fail('Verification failed')
     error(`\n✗ ${err.message || 'Verification failed. Please check the code and try again.'}`)
     warn('\nTip: Use --resend to get a new verification code:')
-    info(`  npm run wallet verify ${vaultId} --resend`)
+    info(`  vultisig verify ${vaultId} --resend`)
     return false
   }
 }
@@ -417,7 +417,7 @@ export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
   const activeVault = ctx.getActiveVault()
   displayVaultsList(vaults, activeVault)
 
-  info(chalk.gray('\nUse "npm run wallet switch <id>" to switch active vault'))
+  info(chalk.gray('\nUse "vultisig switch <id>" to switch active vault'))
 
   return vaults
 }
