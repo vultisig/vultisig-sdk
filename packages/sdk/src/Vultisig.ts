@@ -15,6 +15,7 @@ import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from '
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
+import { VaultError, VaultErrorCode } from './vault/VaultError'
 import { VaultManager } from './VaultManager'
 
 // Re-export constants
@@ -76,6 +77,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   // Module managers
   private readonly addressBookManager: AddressBookManager
   private readonly vaultManager: VaultManager
+
+  // Pending vaults awaiting email verification (not yet persisted to storage)
+  private readonly pendingVaults: Map<string, FastVault> = new Map()
 
   // Chain and currency configuration
   private _defaultChains: Chain[]
@@ -248,6 +252,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    *
    * After calling dispose():
    * - Password cache is destroyed (passwords zeroed in memory)
+   * - Pending (unverified) vaults are discarded
    * - All method calls will throw
    * - A new Vultisig instance must be created to continue
    *
@@ -257,6 +262,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     if (this._disposed) {
       return // Already disposed
     }
+
+    // Clear pending vaults (unverified vaults are discarded)
+    this.pendingVaults.clear()
 
     // Destroy password cache (zeros passwords in memory)
     this.context.passwordCache.destroy()
@@ -271,11 +279,40 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   // === VAULT LIFECYCLE ===
 
   /**
-   * Verify fast vault with email code
+   * Verify fast vault with email code and get the vault
+   *
+   * On successful verification, the pending vault is saved to storage, set as active,
+   * and returned. Throws an error if verification fails or if no pending vault exists.
+   *
+   * @param vaultId - The vault ID to verify
+   * @param code - The verification code from email
+   * @returns The verified and persisted FastVault
+   * @throws VaultError if verification fails or no pending vault found
    */
-  async verifyVault(vaultId: string, code: string): Promise<boolean> {
+  async verifyVault(vaultId: string, code: string): Promise<FastVault> {
     await this.ensureInitialized()
-    return this.context.serverManager.verifyVault(vaultId, code)
+
+    const pendingVault = this.pendingVaults.get(vaultId)
+    if (!pendingVault) {
+      throw new VaultError(
+        VaultErrorCode.InvalidVault,
+        'No pending vault found for this ID. Create a vault first with createFastVault().'
+      )
+    }
+
+    const success = await this.context.serverManager.verifyVault(vaultId, code)
+
+    if (!success) {
+      throw new VaultError(VaultErrorCode.InvalidConfig, 'Verification failed. Check the code and try again.')
+    }
+
+    // Save and activate the vault
+    await pendingVault.save()
+    await this.vaultManager.setActiveVault(vaultId)
+    this.pendingVaults.delete(vaultId)
+    this.emit('vaultChanged', { vaultId })
+
+    return pendingVault
   }
 
   /**
@@ -289,22 +326,27 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Create a new fast vault (2-of-2 with VultiServer)
    *
+   * The vault is created in memory but NOT persisted until email verification succeeds.
+   * Call `verifyVault()` with the email code to complete creation and get the vault.
+   *
    * @param options - Vault creation options
-   * @returns Created vault and verification info
+   * @returns Vault ID (call verifyVault with this ID to get the vault)
    *
    * @example
    * ```typescript
-   * const result = await sdk.createFastVault({
+   * const vaultId = await sdk.createFastVault({
    *   name: 'My Fast Vault',
    *   password: 'securePassword123',
    *   email: 'user@example.com',
    *   onProgress: (step) => console.log(step.message)
    * })
    *
-   * if (result.verificationRequired) {
-   *   const code = await promptUser('Enter verification code:')
-   *   await sdk.verifyVault(result.vaultId, code)
-   * }
+   * // User receives email with verification code
+   * const code = await promptUser('Enter verification code:')
+   * const vault = await sdk.verifyVault(vaultId, code)
+   *
+   * // Now use the vault
+   * const address = await vault.address(Chain.Bitcoin)
    * ```
    */
   async createFastVault(options: {
@@ -312,20 +354,15 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     password: string
     email: string
     onProgress?: (step: VaultCreationStep) => void
-  }): Promise<{
-    vault: FastVault
-    vaultId: string
-    verificationRequired: true
-  }> {
+  }): Promise<string> {
     await this.ensureInitialized()
     const result = await FastVault.create(this.context, options)
 
-    // Store the vault and set as active
-    await result.vault.save()
-    await this.vaultManager.setActiveVault(result.vaultId)
+    // Store vault in pending map - it will be saved after email verification succeeds
+    this.pendingVaults.set(result.vaultId, result.vault)
 
-    this.emit('vaultChanged', { vaultId: result.vaultId })
-    return result
+    // Return vaultId - vault is returned from verifyVault() after successful verification
+    return result.vaultId
   }
 
   /**

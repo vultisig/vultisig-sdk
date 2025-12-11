@@ -264,19 +264,10 @@ export class FastVault extends VaultBase {
       // Step 7: Cache password
       context.passwordCache.set(vaultId, options.password)
 
-      // Step 8: Save to storage
-      reportProgress({
-        step: 'complete',
-        progress: 95,
-        message: 'Saving vault',
-      })
+      // Note: Vault is NOT saved here - it remains in memory until email verification succeeds.
+      // The Vultisig.verifyVault() method will save the vault after successful verification.
 
-      await vaultInstance.save()
-
-      // Step 9: Set as active vault
-      await context.storage.set('activeVaultId', vaultId)
-
-      // Step 10: Complete
+      // Step 8: Complete
       reportProgress({
         step: 'complete',
         progress: 100,

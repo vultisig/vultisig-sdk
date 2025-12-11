@@ -31,7 +31,7 @@ export async function executeCurrency(ctx: CommandContext, newCurrency?: string)
     printResult(chalk.cyan('\nCurrent Currency Preference:'))
     printResult(`  ${chalk.green(currentCurrency.toUpperCase())} - ${currencyName}`)
     info(chalk.gray(`\nSupported currencies: ${fiatCurrencies.join(', ')}`))
-    info(chalk.gray('Use "npm run wallet currency <code>" to change'))
+    info(chalk.gray('Use "vultisig currency <code>" to change'))
     return currentCurrency
   }
 
