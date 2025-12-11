@@ -1,3 +1,4 @@
+import { Chain } from '@core/chain/Chain'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 import type { WasmProvider } from '../context/SdkContext'
@@ -76,6 +77,70 @@ export class FastSigningService {
       messages: payload.messageHashes,
       password: vaultPassword,
       payload,
+      walletCore,
+      onProgress: reportProgress,
+    })
+
+    return signature
+  }
+
+  /**
+   * Sign raw bytes with VultiServer assistance (2-of-2 threshold signing)
+   *
+   * Unlike signWithServer(), this method:
+   * - Does NOT require a full transaction payload
+   * - Takes chain to determine algorithm and derivation path
+   * - Uses pre-hashed data directly
+   *
+   * @param vault Vault data with keys and signers
+   * @param options Sign bytes options (messageHashes and chain)
+   * @param vaultPassword Password for vault encryption
+   * @param onProgress Optional callback for signing progress updates
+   * @returns Signature result
+   */
+  async signBytesWithServer(
+    vault: CoreVault,
+    options: {
+      messageHashes: string[]
+      chain: Chain
+    },
+    vaultPassword: string,
+    onProgress?: (step: SigningStep) => void
+  ): Promise<Signature> {
+    const reportProgress = onProgress || (() => {})
+
+    // Step 1: Preparing
+    reportProgress({
+      step: 'preparing',
+      progress: 0,
+      message: 'Preparing bytes for signing...',
+      mode: 'fast' as SigningMode,
+      participantCount: 2,
+      participantsReady: 0,
+    })
+
+    // Validate vault has server signer
+    this.validateFastVault(vault)
+
+    // Get WalletCore instance via WasmProvider
+    const walletCore = await this.wasmProvider.getWalletCore()
+
+    reportProgress({
+      step: 'preparing',
+      progress: 20,
+      message: 'Connecting to signing service...',
+      mode: 'fast' as SigningMode,
+      participantCount: 2,
+      participantsReady: 1,
+    })
+
+    // Step 2: Coordinate fast signing with server
+    // Create a minimal payload with chain info for derivation path calculation
+    const signature = await this.serverManager.coordinateFastSigning({
+      vault,
+      messages: options.messageHashes,
+      password: vaultPassword,
+      payload: { chain: options.chain, transaction: null, messageHashes: options.messageHashes },
       walletCore,
       onProgress: reportProgress,
     })

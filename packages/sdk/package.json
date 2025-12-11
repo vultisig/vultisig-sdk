@@ -63,6 +63,7 @@
     "test:e2e:multi-chain": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/multi-chain-coverage.test.ts",
     "test:e2e:prepare-send": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/prepare-send-tx.test.ts",
     "test:e2e:fast-signing": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/fast-signing.test.ts",
+    "test:e2e:sign-bytes": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/sign-bytes.test.ts",
     "test:e2e:fiat-value": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/fiat-value-service.test.ts",
     "test:e2e:swap-quotes": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/swap-quotes.test.ts",
     "test:e2e:swap-transactions": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/swap-transactions.test.ts",

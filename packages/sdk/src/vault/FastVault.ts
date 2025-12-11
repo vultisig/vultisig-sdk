@@ -8,7 +8,8 @@ import { fromBase64 } from '@lib/utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
 import { FastSigningService } from '../services/FastSigningService'
-import type { Signature, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
+import type { Signature, SignBytesOptions, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
+import { normalizeToHex } from '../utils/bytes'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -99,6 +100,81 @@ export class FastVault extends VaultBase {
       throw new VaultError(
         VaultErrorCode.SigningFailed,
         `Fast signing failed: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Sign arbitrary pre-hashed bytes using fast signing (2-of-2 MPC with VultiServer)
+   *
+   * This method is for advanced use cases where you need to sign raw bytes
+   * without a chain-specific transaction context. The input data should already
+   * be hashed (e.g., a 32-byte hash for ECDSA, 64-byte message for EdDSA).
+   *
+   * @param options - Signing options
+   * @param options.data - Pre-hashed data as Uint8Array, Buffer, or hex string
+   * @param options.chain - Chain to determine algorithm and derivation path
+   * @returns Signature from server coordination
+   * @throws {VaultError} If signing fails
+   *
+   * @example
+   * ```typescript
+   * // Sign a keccak256 hash for Ethereum
+   * const hash = keccak256(message)
+   * const sig = await vault.signBytes({
+   *   data: hash,
+   *   chain: Chain.Ethereum
+   * })
+   *
+   * // Sign with hex string input
+   * const sig = await vault.signBytes({
+   *   data: '0xabc123...',
+   *   chain: Chain.Bitcoin
+   * })
+   * ```
+   */
+  async signBytes(options: SignBytesOptions): Promise<Signature> {
+    try {
+      // Normalize input to hex string
+      const messageHash = normalizeToHex(options.data)
+
+      // Ensure keyShares are loaded from vault file (lazy loading)
+      await this.ensureKeySharesLoaded()
+
+      // Fast vaults are always encrypted - resolve password
+      const password = await this.resolvePassword()
+
+      // Sign with server coordination
+      const signature = await this.fastSigningService.signBytesWithServer(
+        this.coreVault,
+        {
+          messageHashes: [messageHash],
+          chain: options.chain,
+        },
+        password,
+        step => {
+          this.emit('signingProgress', { step })
+        }
+      )
+
+      // Emit signing complete event
+      this.emit('transactionSigned', {
+        signature,
+        payload: { chain: options.chain, transaction: null, messageHashes: [messageHash] },
+      })
+
+      return signature
+    } catch (error) {
+      this.emit('error', error as Error)
+
+      if (error instanceof VaultError) {
+        throw error
+      }
+
+      throw new VaultError(
+        VaultErrorCode.SigningFailed,
+        `signBytes failed: ${(error as Error).message}`,
         error as Error
       )
     }
