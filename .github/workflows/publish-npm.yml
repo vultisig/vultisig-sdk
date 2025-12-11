@@ -77,23 +77,11 @@ jobs:
         working-directory: ./clients/cli
         run: npm pack --dry-run
 
-      - name: Publish SDK to NPM
+      - name: Publish packages to NPM
         if: |
           (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-          ((github.event.inputs.package == 'sdk' || github.event.inputs.package == 'all') &&
-           github.event.inputs.dry_run != 'true')
-        working-directory: ./packages/sdk
-        run: yarn npm publish --tolerate-republish
-        env:
-          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish CLI to NPM
-        if: |
-          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-          ((github.event.inputs.package == 'cli' || github.event.inputs.package == 'all') &&
-           github.event.inputs.dry_run != 'true')
-        working-directory: ./clients/cli
-        run: yarn npm publish --tolerate-republish
+          (github.event.inputs.dry_run != 'true')
+        run: yarn changeset:publish
         env:
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
