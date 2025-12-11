@@ -149,7 +149,6 @@ program
   .option('--name <name>', 'Vault name')
   .option('--password <password>', 'Vault password')
   .option('--email <email>', 'Email for verification (fast vault)')
-  .option('--code <code>', 'Verification code (if already received)')
   .option('--threshold <m>', 'Signing threshold (secure vault)')
   .option('--shares <n>', 'Total shares (secure vault)')
   .action(
@@ -159,7 +158,6 @@ program
         name?: string
         password?: string
         email?: string
-        code?: string
         threshold?: string
         shares?: string
       }) => {
@@ -169,7 +167,6 @@ program
           name: options.name,
           password: options.password,
           email: options.email,
-          code: options.code,
           threshold: options.threshold ? parseInt(options.threshold, 10) : undefined,
           shares: options.shares ? parseInt(options.shares, 10) : undefined,
         })

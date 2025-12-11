@@ -1,5 +1,5 @@
 /**
- * Shell Session - Main REPL session using Node.js repl module
+ * Shell Session - Interactive shell using readline
  *
  * Provides an interactive shell with:
  * - All CLI commands available
@@ -12,7 +12,7 @@ import type { FiatCurrency, Vultisig } from '@vultisig/sdk'
 import { Chain, fiatCurrencies } from '@vultisig/sdk'
 import chalk from 'chalk'
 import ora from 'ora'
-import * as repl from 'repl'
+import * as readline from 'readline'
 
 import {
   executeAddressBook,
@@ -40,9 +40,9 @@ import { executeLock, executeStatus, executeUnlock, showHelp } from './shell-com
 import { createShellContext, ShellContext } from './shell-context'
 
 /**
- * Create a REPL-safe spinner that doesn't interfere with stdin
+ * Create a spinner for async operations
  */
-function createReplSafeSpinner(text: string) {
+function createSpinner(text: string) {
   return ora({
     text,
     hideCursor: false,
@@ -58,7 +58,6 @@ function createReplSafeSpinner(text: string) {
 export class ShellSession {
   private ctx: ShellContext
   private eventBuffer: EventBuffer
-  private replServer!: repl.REPLServer
 
   constructor(sdk: Vultisig, options?: { passwordTtlMs?: number }) {
     this.ctx = createShellContext(sdk, options)
@@ -81,96 +80,65 @@ export class ShellSession {
     this.displayVaultList()
 
     // Show quick help
-    console.log(chalk.gray('Type "help" for available commands, ".exit" to quit\n'))
+    console.log(chalk.gray('Type "help" for available commands, "exit" to quit\n'))
 
-    // Create the REPL server with completer
-    this.replServer = repl.start({
-      prompt: this.getPrompt(),
-      eval: this.evalCommand.bind(this),
-      ignoreUndefined: true,
-      terminal: true,
-      useColors: true,
-      completer: createCompleter(this.ctx),
-    })
-
-    // Setup REPL commands
-    this.setupReplCommands()
+    // Start the command loop
+    this.promptLoop().catch(() => {})
   }
 
   /**
-   * Custom eval function for command processing
+   * Main prompt loop - creates fresh readline for each command
    */
-  private async evalCommand(
-    cmd: string,
-    _context: any,
-    _filename: string,
-    callback: (err: Error | null, result?: any) => void
-  ): Promise<void> {
-    const input = cmd.trim()
-
-    // Handle empty input
-    if (!input) {
-      callback(null)
-      return
+  private async promptLoop(): Promise<void> {
+    while (true) {
+      const line = await this.readLine(this.getPrompt())
+      await this.processLine(line)
     }
+  }
 
-    // Parse command and arguments
+  /**
+   * Read a single line with tab completion, then close readline
+   */
+  private readLine(prompt: string): Promise<string> {
+    return new Promise(resolve => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        completer: (line: string, cb: (err: Error | null, result: [string[], string]) => void) => {
+          cb(null, createCompleter(this.ctx)(line))
+        },
+        terminal: true,
+      })
+      rl.question(prompt, answer => {
+        rl.close()
+        resolve(answer)
+      })
+      rl.on('SIGINT', () => {
+        rl.close()
+        console.log(chalk.yellow('\nGoodbye!'))
+        this.ctx.dispose()
+        process.exit(0)
+      })
+    })
+  }
+
+  /**
+   * Process a line of input
+   */
+  private async processLine(line: string): Promise<void> {
+    const input = line.trim()
+    if (!input) return
+
     const [command, ...args] = input.split(/\s+/)
 
     try {
-      // Start command execution - buffer events during command
       this.eventBuffer.startCommand()
-
-      // Execute command
       await this.executeCommand(command.toLowerCase(), args)
-
-      // End command execution - flush buffered events
       this.eventBuffer.endCommand()
-
-      // Update prompt if needed
-      this.replServer.setPrompt(this.getPrompt())
-
-      // Signal completion to REPL
-      callback(null)
-
-      // Restore terminal state after async commands
-      // Some commands (like ora spinners) pause stdin and disable raw mode
-      this.restoreTerminalState()
     } catch (error: any) {
-      // End command execution even on error
       this.eventBuffer.endCommand()
-
-      // Show error
-      console.error(chalk.red(`\nx Error: ${error.message}`))
-
-      // Update prompt
-      this.replServer.setPrompt(this.getPrompt())
-
-      // Signal completion
-      callback(null)
-
-      // Restore terminal state after error
-      this.restoreTerminalState()
+      console.error(chalk.red(`\nError: ${error.message}`))
     }
-  }
-
-  /**
-   * Restore terminal state after commands that may have altered it.
-   * Some libraries (like ora spinners) pause stdin and disable raw mode.
-   */
-  private restoreTerminalState(): void {
-    // Resume stdin if paused
-    if (process.stdin.isPaused()) {
-      process.stdin.resume()
-    }
-
-    // Restore raw mode if disabled (required for REPL to work properly)
-    if (process.stdin.isTTY && !(process.stdin as any).isRaw) {
-      process.stdin.setRawMode(true)
-    }
-
-    // Force prompt redisplay
-    this.replServer.displayPrompt()
   }
 
   /**
@@ -284,11 +252,23 @@ export class ShellSession {
         showHelp()
         break
 
+      // Clear screen
+      case 'clear':
+        console.clear()
+        this.displayVaultList()
+        break
+
+      // Exit
+      case 'exit':
+      case 'quit':
+        console.log(chalk.yellow('\nGoodbye!'))
+        this.ctx.dispose()
+        process.exit(0)
+        break // eslint requires break even after process.exit
+
       default:
-        if (command && !command.startsWith('.')) {
-          console.log(chalk.yellow(`Unknown command: ${command}`))
-          console.log(chalk.gray('Type "help" for available commands'))
-        }
+        console.log(chalk.yellow(`Unknown command: ${command}`))
+        console.log(chalk.gray('Type "help" for available commands'))
         break
     }
   }
@@ -547,40 +527,8 @@ export class ShellSession {
 
   // ===== Setup =====
 
-  private setupReplCommands(): void {
-    // Add .help command
-    this.replServer.defineCommand('help', {
-      help: 'Show available commands',
-      action: () => {
-        showHelp()
-        this.replServer.displayPrompt()
-      },
-    })
-
-    // Add .clear command
-    this.replServer.defineCommand('clear', {
-      help: 'Clear the screen',
-      action: () => {
-        console.clear()
-        this.displayVaultList()
-        this.replServer.displayPrompt()
-      },
-    })
-
-    // Override .exit to clean up
-    const originalExit = this.replServer.commands.exit
-    this.replServer.defineCommand('exit', {
-      help: originalExit.help,
-      action: () => {
-        console.log(chalk.yellow('\nGoodbye!'))
-        this.ctx.dispose()
-        originalExit.action.call(this.replServer)
-      },
-    })
-  }
-
   private async loadAllVaults(): Promise<void> {
-    const spinner = createReplSafeSpinner('Loading vaults...').start()
+    const spinner = createSpinner('Loading vaults...').start()
 
     try {
       // Load active vault first

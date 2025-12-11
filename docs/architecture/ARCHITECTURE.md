@@ -1,6 +1,6 @@
 # Vultisig SDK Architecture
 
-**Status:** Alpha (0.1.0-alpha.1)
+**Status:** Alpha (0.1.1-alpha.0)
 
 ---
 
@@ -120,7 +120,8 @@ The SDK supports multiple JavaScript environments through separate build-time bu
 
 | Bundle                      | Platform         | Storage      | Use Case                |
 | --------------------------- | ---------------- | ------------ | ----------------------- |
-| `index.node.esm.js`         | Node.js          | Filesystem   | Server-side, CLI tools  |
+| `index.node.cjs`            | Node.js (CJS)    | Filesystem   | CommonJS environments   |
+| `index.node.esm.js`         | Node.js (ESM)    | Filesystem   | Server-side, CLI tools  |
 | `index.browser.js`          | Browser          | IndexedDB    | Web applications        |
 
 Users import the appropriate bundle for their platform - the SDK API remains identical across all bundles.
@@ -196,13 +197,11 @@ vultisig-sdk/
 ├── packages/
 │   ├── sdk/                    # Main SDK (@vultisig/sdk)
 │   ├── core/                   # Upstream core library (read-only)
-│   └── lib/                    # Upstream utilities (read-only)
+│   └── lib/                    # WASM bindings (dkls, schnorr)
 ├── clients/
-│   └── cli/                    # CLI client
+│   └── cli/                    # CLI application
 ├── examples/
-│   ├── browser/               # Browser example
-│   ├── cli/                   # CLI examples
-│   └── shell/                 # Shell/integration examples
+│   └── browser/               # Browser example (React/Vite)
 ├── .config/                   # Shared configuration
 ├── scripts/                   # Build and utility scripts
 └── docs/                      # Documentation
@@ -212,7 +211,7 @@ vultisig-sdk/
 
 - **`@vultisig/sdk`** - The main SDK package users install
 - **`packages/core`** - Chain implementations, MPC protocol, signing logic (synced from upstream)
-- **`packages/lib`** - WASM binaries, crypto utilities (synced from upstream)
+- **`packages/lib`** - WASM bindings (dkls, schnorr) - synced from upstream
 
 ---
 
@@ -329,12 +328,16 @@ const sdk = new Vultisig({
 
 await sdk.initialize();
 
-// Create a fast vault
-const { vault } = await sdk.createFastVault({
+// Create a fast vault - returns vaultId
+const vaultId = await sdk.createFastVault({
   name: "My Vault",
   password: "secure-password",
   email: "user@example.com"
 });
+
+// Verify with email code to get the vault
+const code = await getVerificationCode();
+const vault = await sdk.verifyVault(vaultId, code);
 
 // Get vault address
 const address = await vault.address("Ethereum");
