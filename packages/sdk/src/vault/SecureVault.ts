@@ -7,7 +7,7 @@ import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGc
 import { fromBase64 } from '@lib/utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
-import type { Signature, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
+import type { Signature, SignBytesOptions, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
 
@@ -118,6 +118,18 @@ export class SecureVault extends VaultBase {
     // When signing is implemented, emit events:
     // this.emit('transactionSigned', { signature, payload })
     // return signature
+  }
+
+  /**
+   * Sign arbitrary pre-hashed bytes
+   *
+   * Not yet implemented for SecureVault.
+   *
+   * @param _options - Signing options (unused)
+   * @throws {VaultError} Always throws NotImplemented error
+   */
+  async signBytes(_options: SignBytesOptions): Promise<Signature> {
+    throw new VaultError(VaultErrorCode.NotImplemented, 'signBytes is not yet implemented for SecureVault')
   }
 
   /**

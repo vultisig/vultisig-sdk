@@ -108,6 +108,30 @@ export type SigningPayload = {
   messageHashes?: string[] // Pre-computed message hashes for signing
 }
 
+/**
+ * Input format for signBytes - accepts raw bytes or hex string
+ */
+export type BytesInput = Uint8Array | Buffer | string
+
+/**
+ * Options for the signBytes method
+ */
+export type SignBytesOptions = {
+  /**
+   * The pre-hashed data to sign.
+   * - If Uint8Array or Buffer: used directly as raw bytes
+   * - If string: interpreted as hex-encoded bytes (with or without 0x prefix)
+   */
+  data: BytesInput
+
+  /**
+   * Chain to sign for. Used to determine:
+   * - Signature algorithm (ECDSA for EVM/UTXO, EdDSA for Solana/Sui)
+   * - Derivation path (chain-specific BIP-44 path)
+   */
+  chain: Chain
+}
+
 export type Signature = {
   signature: string
   recovery?: number

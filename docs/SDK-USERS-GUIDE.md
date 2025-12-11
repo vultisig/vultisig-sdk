@@ -659,6 +659,130 @@ console.log('Max Priority Fee:', gasInfo.maxPriorityFeePerGas)
 console.log('Max Fee:', gasInfo.maxFeePerGas)
 ```
 
+### Signing Arbitrary Bytes
+
+The `signBytes()` method allows you to sign pre-hashed data directly, giving you full control over transaction construction. This is useful when you need to:
+
+- Sign transactions built with external libraries (ethers.js, viem, bitcoinjs-lib, etc.)
+- Implement custom signing flows not covered by `prepareSendTx()`
+- Sign arbitrary messages for authentication or verification
+
+**Input Formats:**
+
+```typescript
+// Uint8Array
+const hash = new Uint8Array(32).fill(0xab)
+const sig = await vault.signBytes({ data: hash, chain: Chain.Ethereum })
+
+// Buffer
+const hash = Buffer.from('...', 'hex')
+const sig = await vault.signBytes({ data: hash, chain: Chain.Ethereum })
+
+// Hex string (with or without 0x prefix)
+const sig = await vault.signBytes({ data: '0xabc123...', chain: Chain.Ethereum })
+const sig = await vault.signBytes({ data: 'abc123...', chain: Chain.Ethereum })
+```
+
+**Chain Parameter:**
+
+The `chain` parameter determines the signing algorithm and derivation path:
+
+- **ECDSA chains** (Ethereum, Bitcoin, Polygon, etc.): Uses secp256k1, returns `{ signature, recovery }`
+- **EdDSA chains** (Solana, Sui): Uses Ed25519, returns `{ signature }`
+
+**Complete Example: Custom EVM Transaction**
+
+```typescript
+import { keccak256, Transaction, parseEther } from 'ethers'
+import { Chain } from '@vultisig/sdk'
+
+// Step 1: Build transaction externally
+const tx = Transaction.from({
+  to: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+  value: parseEther('0.1'),
+  gasLimit: 21000n,
+  maxFeePerGas: 50000000000n,
+  maxPriorityFeePerGas: 2000000000n,
+  nonce: 42,
+  chainId: 1,
+  type: 2  // EIP-1559
+})
+
+// Step 2: Get the unsigned transaction hash
+const unsignedHash = keccak256(tx.unsignedSerialized)
+
+// Step 3: Sign the hash with signBytes
+const signature = await vault.signBytes({
+  data: unsignedHash,
+  chain: Chain.Ethereum
+})
+
+// Step 4: Apply signature to transaction
+const signedTx = tx.clone()
+signedTx.signature = {
+  r: '0x' + signature.signature.slice(0, 64),
+  s: '0x' + signature.signature.slice(64, 128),
+  v: signature.recovery! + 27
+}
+
+// Step 5: Broadcast the signed transaction
+const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com')
+const txResponse = await provider.broadcastTransaction(signedTx.serialized)
+console.log('Transaction hash:', txResponse.hash)
+```
+
+**Complete Example: Bitcoin Transaction with bitcoinjs-lib**
+
+```typescript
+import * as bitcoin from 'bitcoinjs-lib'
+import { Chain } from '@vultisig/sdk'
+
+// Step 1: Build PSBT externally
+const psbt = new bitcoin.Psbt({ network: bitcoin.networks.bitcoin })
+psbt.addInput({
+  hash: 'previous-txid...',
+  index: 0,
+  witnessUtxo: { script: Buffer.from('...'), value: 100000 }
+})
+psbt.addOutput({
+  address: 'bc1q...',
+  value: 90000
+})
+
+// Step 2: Get sighash for each input
+const sighash = psbt.getTxForSigning().hashForWitnessV0(
+  0,  // input index
+  Buffer.from('...'),  // scriptCode
+  100000,  // value
+  bitcoin.Transaction.SIGHASH_ALL
+)
+
+// Step 3: Sign with signBytes
+const signature = await vault.signBytes({
+  data: sighash,
+  chain: Chain.Bitcoin
+})
+
+// Step 4: Apply signature to PSBT
+// (Implementation depends on your PSBT setup)
+
+// Step 5: Finalize and broadcast
+psbt.finalizeAllInputs()
+const rawTx = psbt.extractTransaction().toHex()
+// Broadcast via your preferred method
+```
+
+**Return Type:**
+
+```typescript
+type Signature = {
+  signature: string   // Hex-encoded signature (r || s for ECDSA, full sig for EdDSA)
+  recovery?: number   // Recovery byte for ECDSA (0 or 1), undefined for EdDSA
+}
+```
+
+**Note:** `signBytes()` is currently only available for FastVault. SecureVault support is planned for a future release.
+
 ### Token Management
 
 Add and manage custom tokens:
@@ -1353,6 +1477,7 @@ class VaultBase {
   // Transactions
   prepareSendTx(params: SendTxParams): Promise<SigningPayload>
   sign(payload: SigningPayload): Promise<Signature>
+  signBytes(options: SignBytesOptions): Promise<Signature>  // Sign pre-hashed data
   broadcastTx(params: BroadcastParams): Promise<string>
   gas(chain: Chain): Promise<GasInfo>
 
