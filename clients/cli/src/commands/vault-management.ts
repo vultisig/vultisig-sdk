@@ -16,7 +16,6 @@ export type CreateVaultOptions = {
   name?: string
   password?: string
   email?: string // for fast vault
-  code?: string // verification code
   threshold?: number // for secure vault
   shares?: number // for secure vault
 }
@@ -86,7 +85,8 @@ export async function executeCreate(
 
     const spinner = createSpinner('Creating vault...')
 
-    const result = await ctx.sdk.createFastVault({
+    // createFastVault returns just the vaultId - vault is returned from verifyVault
+    const vaultId = await ctx.sdk.createFastVault({
       name: name!,
       password: password!,
       email: email!,
@@ -95,53 +95,49 @@ export async function executeCreate(
       },
     })
 
-    setupVaultEvents(result.vault)
-    await ctx.setActiveVault(result.vault)
-    spinner.succeed(`Vault created: ${name}`)
+    spinner.succeed(`Vault keys generated: ${name}`)
 
-    if (result.verificationRequired) {
-      let code = options.code
+    // Fast vaults always require email verification
+    warn('\nA verification code has been sent to your email.')
+    info('Please check your inbox and enter the code.')
 
-      if (!code) {
-        warn('\nA verification code has been sent to your email.')
-        info('Please check your inbox and enter the code.')
+    const codeAnswer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'code',
+        message: `Verification code sent to ${email}. Enter code:`,
+        validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+      },
+    ])
+    const code = codeAnswer.code
 
-        const codeAnswer = await inquirer.prompt([
-          {
-            type: 'input',
-            name: 'code',
-            message: `Verification code sent to ${email}. Enter code:`,
-            validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
-          },
-        ])
-        code = codeAnswer.code
-      }
+    const verifySpinner = createSpinner('Verifying email code...')
 
-      const verifySpinner = createSpinner('Verifying email code...')
-      const verified = await ctx.sdk.verifyVault(result.vaultId, code!)
+    try {
+      // verifyVault now returns the vault directly (throws on failure)
+      const vault = await ctx.sdk.verifyVault(vaultId, code!)
+      verifySpinner.succeed('Email verified successfully!')
 
-      if (verified) {
-        verifySpinner.succeed('Email verified successfully!')
-      } else {
-        verifySpinner.fail('Invalid verification code')
-        error('\nx Verification failed. Please check the code and try again.')
-        warn('\nTo retry verification, use:')
-        info(`  npm run wallet verify ${result.vaultId}`)
-        warn('\nTo resend the verification email:')
-        info(`  npm run wallet verify ${result.vaultId} --resend`)
-        const err: any = new Error('Verification failed')
-        err.exitCode = 1
-        throw err
-      }
+      setupVaultEvents(vault)
+      await ctx.setActiveVault(vault)
+
+      success('\n+ Vault created!')
+      info('\nYour vault is ready. Run the following commands:')
+      printResult(chalk.cyan('  npm run wallet balance     ') + '- View balances')
+      printResult(chalk.cyan('  npm run wallet addresses   ') + '- View addresses')
+      printResult(chalk.cyan('  npm run wallet portfolio   ') + '- View portfolio value')
+
+      return vault
+    } catch (err: any) {
+      verifySpinner.fail('Verification failed')
+      error(`\n✗ ${err.message || 'Verification failed. Please check the code and try again.'}`)
+      warn('\nTo retry verification, use:')
+      info(`  npm run wallet verify ${vaultId}`)
+      warn('\nTo resend the verification email:')
+      info(`  npm run wallet verify ${vaultId} --resend`)
+      err.exitCode = 1
+      throw err
     }
-
-    success('\n+ Vault created!')
-    info('\nYour vault is ready. Run the following commands:')
-    printResult(chalk.cyan('  npm run wallet balance     ') + '- View balances')
-    printResult(chalk.cyan('  npm run wallet addresses   ') + '- View addresses')
-    printResult(chalk.cyan('  npm run wallet portfolio   ') + '- View portfolio value')
-
-    return result.vault
   } else {
     // Secure vault
     let threshold = options.threshold
@@ -239,6 +235,9 @@ export async function executeImport(ctx: CommandContext, file: string): Promise<
 
 /**
  * Execute verify vault command
+ *
+ * Note: This command is for re-verifying a vault after initial creation failed.
+ * It requires that the vault was created in the current session (pending in memory).
  */
 export async function executeVerify(
   ctx: CommandContext,
@@ -267,14 +266,20 @@ export async function executeVerify(
   }
 
   const spinner = createSpinner('Verifying email code...')
-  const verified = await ctx.sdk.verifyVault(vaultId, code!)
 
-  if (verified) {
+  try {
+    // verifyVault now returns the vault directly (throws on failure)
+    const vault = await ctx.sdk.verifyVault(vaultId, code!)
     spinner.succeed('Vault verified successfully!')
+
+    setupVaultEvents(vault)
+    await ctx.setActiveVault(vault)
+
+    success(`\n+ Vault "${vault.name}" is now ready to use!`)
     return true
-  } else {
-    spinner.fail('Invalid verification code')
-    error('\nx Verification failed. Please check the code and try again.')
+  } catch (err: any) {
+    spinner.fail('Verification failed')
+    error(`\n✗ ${err.message || 'Verification failed. Please check the code and try again.'}`)
     warn('\nTip: Use --resend to get a new verification code:')
     info(`  npm run wallet verify ${vaultId} --resend`)
     return false

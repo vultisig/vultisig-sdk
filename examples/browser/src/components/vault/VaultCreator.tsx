@@ -48,19 +48,16 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
 
     try {
       const sdk = getSDK()
-      const result = await sdk.createFastVault({
+      // createFastVault returns just the vaultId - vault is returned from verifyVault
+      const vaultId = await sdk.createFastVault({
         name: formData.name,
         password: formData.password,
         email: formData.email,
       })
 
-      if (result.verificationRequired) {
-        setVaultId(result.vaultId)
-        setStep('verify')
-      } else {
-        onVaultCreated(result.vault)
-        handleClose()
-      }
+      // Fast vaults always require email verification
+      setVaultId(vaultId)
+      setStep('verify')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create vault')
     } finally {
@@ -80,17 +77,8 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
 
       const { getSDK } = await import('@/utils/sdk')
       const sdk = getSDK()
-      const verified = await sdk.verifyVault(vaultId, verificationCode)
-
-      if (!verified) {
-        throw new Error('Verification failed. Please check your code and try again.')
-      }
-
-      // Get the vault after successful verification
-      const vault = await sdk.getVaultById(vaultId)
-      if (!vault) {
-        throw new Error('Failed to retrieve vault after verification')
-      }
+      // verifyVault now returns the vault directly (throws on failure)
+      const vault = await sdk.verifyVault(vaultId, verificationCode)
       onVaultCreated(vault)
       handleClose()
     } catch (err) {
