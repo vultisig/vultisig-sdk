@@ -158,11 +158,13 @@ See the [Quick Reference](#supported-chains) section for the complete list.
 
 ### Storage Layer
 
-By default, the SDK uses in-memory storage (data is lost on restart). For persistence:
+The SDK uses platform-appropriate storage by default:
 
-- **Browser**: Use IndexedDB storage (see [examples/browser](../examples/browser))
-- **Node.js**: Implement file-based storage or use a database
-- **Custom**: Implement the `Storage` interface
+- **Node.js**: `FileStorage` - Stores vaults in `~/.vultisig` directory
+- **Browser**: `BrowserStorage` - Uses IndexedDB with localStorage fallback
+- **Fallback**: `MemoryStorage` - In-memory only (data lost on restart)
+
+For custom persistence, implement the `Storage` interface:
 
 ```typescript
 type Storage = {
