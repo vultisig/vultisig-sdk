@@ -25,6 +25,7 @@ import {
   FiatCurrency,
   GasInfoForChain,
   Signature,
+  SignBytesOptions,
   SigningMode,
   SigningPayload,
   Token,
@@ -320,6 +321,24 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Implementation differs between fast and secure vaults
    */
   abstract sign(payload: SigningPayload): Promise<Signature>
+
+  /**
+   * Sign arbitrary pre-hashed bytes
+   *
+   * This method is for advanced use cases where you need to sign raw bytes
+   * without a chain-specific transaction context. The input data should already
+   * be hashed (e.g., a 32-byte hash for ECDSA, 64-byte message for EdDSA).
+   *
+   * The chain parameter determines:
+   * - Signature algorithm (ECDSA for EVM/UTXO chains, EdDSA for Solana/Sui)
+   * - Derivation path (chain-specific BIP-44 path)
+   *
+   * Implementation differs between fast and secure vaults.
+   *
+   * @param options - Signing options (data and chain)
+   * @returns Signature from vault coordination
+   */
+  abstract signBytes(options: SignBytesOptions): Promise<Signature>
 
   /**
    * Get available signing modes for this vault type
