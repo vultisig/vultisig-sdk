@@ -14,10 +14,12 @@
   },
   "changesets": [
     "add-sign-bytes",
+    "bundling-optimizations",
     "defer-vault-storage-until-verification",
     "fix-alpha-release",
     "fix-cli-command-references",
     "fix-interactive-shell-prompts",
+    "fix-node-crypto-polyfill",
     "fix-publish-script",
     "fix-workspace-protocol",
     "update-browser-cli-for-new-vault-api",
