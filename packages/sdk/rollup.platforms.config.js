@@ -2,6 +2,7 @@ import commonjs from '@rollup/plugin-commonjs'
 import json from '@rollup/plugin-json'
 import resolve from '@rollup/plugin-node-resolve'
 import replace from '@rollup/plugin-replace'
+import terser from '@rollup/plugin-terser'
 import typescript from '@rollup/plugin-typescript'
 import { defineConfig } from 'rollup'
 import copy from 'rollup-plugin-copy'
@@ -50,6 +51,16 @@ const wasmCopyPlugin = copy({
   ],
 })
 
+// Centralized warning handler - suppresses expected warnings from WASM loading and dependencies
+const onwarn = (warning, warn) => {
+  // DYNAMIC_IMPORT: Expected for WASM lazy loading
+  // CIRCULAR_DEPENDENCY: Known circular dependencies in SDK internals
+  // 'this' warnings: From @wallet-standard CommonJS modules
+  if (warning.code === 'DYNAMIC_IMPORT' || warning.code === 'CIRCULAR_DEPENDENCY' || warning.message?.includes('this'))
+    return
+  warn(warning)
+}
+
 const createPlugins = (platformOptions = {}) => {
   const { preferBuiltins = false, browser = false, replaceOptions = {} } = platformOptions
 
@@ -90,6 +101,11 @@ const createPlugins = (platformOptions = {}) => {
     }),
     json(),
     commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
+    terser({
+      format: { comments: false },
+      compress: { passes: 1, drop_debugger: true },
+      mangle: { keep_fnames: true, keep_classnames: true },
+    }),
   ]
 }
 
@@ -117,15 +133,7 @@ const configs = {
         }),
         wasmCopyPlugin,
       ],
-      onwarn(warning, warn) {
-        if (
-          warning.code === 'DYNAMIC_IMPORT' ||
-          warning.code === 'CIRCULAR_DEPENDENCY' ||
-          warning.message?.includes('this')
-        )
-          return
-        warn(warning)
-      },
+      onwarn,
     },
     {
       input: './src/platforms/node/index.ts',
@@ -164,15 +172,7 @@ const configs = {
         'process.env.VULTISIG_PLATFORM': JSON.stringify('browser'),
       },
     }),
-    onwarn(warning, warn) {
-      if (
-        warning.code === 'DYNAMIC_IMPORT' ||
-        warning.code === 'CIRCULAR_DEPENDENCY' ||
-        warning.message?.includes('this')
-      )
-        return
-      warn(warning)
-    },
+    onwarn,
   },
   'react-native': {
     input: './src/platforms/react-native/index.ts',
@@ -191,15 +191,7 @@ const configs = {
         'typeof window': JSON.stringify('undefined'),
       },
     }),
-    onwarn(warning, warn) {
-      if (
-        warning.code === 'DYNAMIC_IMPORT' ||
-        warning.code === 'CIRCULAR_DEPENDENCY' ||
-        warning.message?.includes('this')
-      )
-        return
-      warn(warning)
-    },
+    onwarn,
   },
   electron: [
     {
@@ -238,15 +230,7 @@ const configs = {
           'process.env.VULTISIG_PLATFORM': JSON.stringify('electron-renderer'),
         },
       }),
-      onwarn(warning, warn) {
-        if (
-          warning.code === 'DYNAMIC_IMPORT' ||
-          warning.code === 'CIRCULAR_DEPENDENCY' ||
-          warning.message?.includes('this')
-        )
-          return
-        warn(warning)
-      },
+      onwarn,
     },
   ],
 }

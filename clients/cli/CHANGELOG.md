@@ -1,5 +1,18 @@
 # @vultisig/cli
 
+## 0.2.0-alpha.5
+
+### Patch Changes
+
+- [#57](https://github.com/vultisig/vultisig-sdk/pull/57) [`6137bc6`](https://github.com/vultisig/vultisig-sdk/commit/6137bc65bdf06ea5f6ede009ac72ec58b7cac7d1) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Optimize SDK bundling configuration
+  - Add terser minification (~60% bundle size reduction)
+  - Add clean script to remove stale dist files before builds
+  - Centralize duplicated onwarn handler in rollup config
+  - Add package.json exports for react-native and electron platforms
+
+- Updated dependencies [[`6137bc6`](https://github.com/vultisig/vultisig-sdk/commit/6137bc65bdf06ea5f6ede009ac72ec58b7cac7d1), [`c75f442`](https://github.com/vultisig/vultisig-sdk/commit/c75f442ce4e34521aa8d0f704c415f63c24dba8f)]:
+  - @vultisig/sdk@0.2.0-alpha.5
+
 ## 0.2.0-alpha.3
 
 ### Patch Changes
