@@ -17,6 +17,7 @@
       "types": "./dist/index.d.ts",
       "browser": "./dist/index.browser.js",
       "worker": "./dist/index.browser.js",
+      "react-native": "./dist/index.react-native.js",
       "node": {
         "import": "./dist/index.node.esm.js",
         "require": "./dist/index.node.cjs"
@@ -33,11 +34,24 @@
     "./browser": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.browser.js"
+    },
+    "./react-native": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.react-native.js"
+    },
+    "./electron/main": {
+      "types": "./dist/index.node.d.ts",
+      "require": "./dist/index.electron-main.cjs"
+    },
+    "./electron/renderer": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.electron-renderer.js"
     }
   },
   "scripts": {
     "_____BUILD_____": "",
-    "build": "yarn build:platforms && yarn build:types",
+    "clean": "rm -rf dist",
+    "build": "yarn clean && yarn build:platforms && yarn build:types",
     "build:js": "yarn build:platforms",
     "build:types": "rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
