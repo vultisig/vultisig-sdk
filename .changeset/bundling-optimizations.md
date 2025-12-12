@@ -1,5 +1,6 @@
 ---
 "@vultisig/sdk": patch
+"@vultisig/cli": patch
 ---
 
 Optimize SDK bundling configuration

@@ -1,5 +1,19 @@
 # @vultisig/sdk
 
+## 0.2.0-alpha.5
+
+### Patch Changes
+
+- [#57](https://github.com/vultisig/vultisig-sdk/pull/57) [`6137bc6`](https://github.com/vultisig/vultisig-sdk/commit/6137bc65bdf06ea5f6ede009ac72ec58b7cac7d1) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Optimize SDK bundling configuration
+  - Add terser minification (~60% bundle size reduction)
+  - Add clean script to remove stale dist files before builds
+  - Centralize duplicated onwarn handler in rollup config
+  - Add package.json exports for react-native and electron platforms
+
+- [#57](https://github.com/vultisig/vultisig-sdk/pull/57) [`c75f442`](https://github.com/vultisig/vultisig-sdk/commit/c75f442ce4e34521aa8d0f704c415f63c24dba8f) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - fix(node): add globalThis.crypto polyfill for WASM MPC libraries
+
+  The WASM MPC libraries (DKLS, Schnorr) use `crypto.getRandomValues()` internally via wasm-bindgen. Node.js 18+ has webcrypto but it's not on `globalThis` by default, causing "unreachable" errors during MPC signing. This adds the polyfill before any WASM initialization.
+
 ## 0.2.0-alpha.4
 
 ### Minor Changes
