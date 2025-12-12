@@ -17,8 +17,19 @@
  * ```
  */
 
+import { webcrypto } from 'crypto'
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
+
+/**
+ * Crypto Polyfill for Node.js
+ *
+ * The WASM MPC libraries (DKLS, Schnorr) use crypto.getRandomValues() internally
+ * via wasm-bindgen. Node.js 18+ has webcrypto but it's not on globalThis by default.
+ */
+if (typeof globalThis.crypto === 'undefined') {
+  ;(globalThis as any).crypto = webcrypto
+}
 
 /**
  * WASM Fetch Polyfill for Node.js
