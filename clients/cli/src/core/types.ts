@@ -13,6 +13,7 @@ export type SendParams = {
   tokenId?: string
   memo?: string
   yes?: boolean // Skip confirmation prompt
+  password?: string // Vault password for signing
 }
 
 /**
