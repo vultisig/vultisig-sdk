@@ -10,7 +10,10 @@ import { join } from 'path'
 
 import { info } from './output'
 
-// Package version (will be replaced during build or read from package.json)
+// Build-time injected version (replaced by esbuild --define)
+declare const __CLI_VERSION__: string | undefined
+
+// Package version cache
 let cachedVersion: string | null = null
 
 /**
@@ -19,15 +22,20 @@ let cachedVersion: string | null = null
 export function getVersion(): string {
   if (cachedVersion) return cachedVersion
 
+  // Use build-time injected version if available
+  if (typeof __CLI_VERSION__ !== 'undefined') {
+    cachedVersion = __CLI_VERSION__
+    return cachedVersion
+  }
+
+  // Fallback: try to read from package.json (for development mode)
   try {
-    // Try to read from package.json in the installed location
     const packagePath = new URL('../../package.json', import.meta.url)
     const pkg = JSON.parse(readFileSync(packagePath, 'utf-8'))
     cachedVersion = pkg.version
     return cachedVersion!
   } catch {
-    // Fallback version
-    cachedVersion = '0.1.0-beta.1'
+    cachedVersion = '0.0.0-unknown'
     return cachedVersion
   }
 }
