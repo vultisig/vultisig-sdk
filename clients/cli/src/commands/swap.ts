@@ -4,6 +4,7 @@
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
+import { ensureVaultUnlocked } from '../core'
 import { createSpinner, info, isJsonOutput, outputJson, warn } from '../lib/output'
 import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult } from '../ui'
 
@@ -90,6 +91,7 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
 export type SwapOptions = {
   slippage?: number
   yes?: boolean // Skip confirmation prompt
+  password?: string // Vault password for signing
 } & SwapQuoteOptions
 
 /**
@@ -157,6 +159,9 @@ export async function executeSwap(
   })
 
   prepSpinner.succeed('Swap prepared')
+
+  // Pre-unlock vault before signing to avoid password prompt interference with spinner
+  await ensureVaultUnlocked(vault, options.password)
 
   // 5. Handle approval if needed
   if (approvalPayload) {

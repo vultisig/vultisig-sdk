@@ -86,6 +86,9 @@ vultisig send ethereum 0xRecipient... 0.1
 
 # Send ERC-20 token
 vultisig send ethereum 0xRecipient... 100 --token 0xTokenAddress...
+
+# Provide password via flag (for scripts/automation)
+vultisig send ethereum 0xRecipient... 0.1 --password mypassword
 ```
 
 ### Interactive Shell
@@ -136,6 +139,17 @@ vultisig -i
 | `swap-chains` | List chains that support swaps |
 | `swap-quote <from> <to> <amount>` | Get a swap quote |
 | `swap <from> <to> <amount>` | Execute a swap |
+
+```bash
+# Execute a swap
+vultisig swap ethereum bitcoin 0.1
+
+# With password for automation
+vultisig swap ethereum bitcoin 0.1 --password mypassword
+
+# Skip confirmation prompt
+vultisig swap ethereum bitcoin 0.1 -y --password mypassword
+```
 
 ### Settings
 

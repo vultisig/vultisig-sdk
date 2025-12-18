@@ -5,6 +5,7 @@ import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendParams, TransactionResult } from '../core'
+import { ensureVaultUnlocked } from '../core'
 import { createSpinner, isJsonOutput, outputJson, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
 
@@ -92,6 +93,9 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
       throw new Error('Transaction cancelled by user')
     }
   }
+
+  // Pre-unlock vault before signing to avoid password prompt interference with spinner
+  await ensureVaultUnlocked(vault, params.password)
 
   // 5. Sign transaction
   const signSpinner = createSpinner('Signing transaction...')

@@ -103,3 +103,36 @@ export function createPasswordCallback(): (vaultId: string, vaultName?: string) 
     return getPassword(vaultId, vaultName)
   }
 }
+
+/**
+ * Ensure a vault is unlocked before signing operations.
+ * This should be called BEFORE starting any spinner to avoid prompt interference.
+ *
+ * @param vault - The vault to unlock
+ * @param password - Optional password provided via CLI flag
+ */
+export async function ensureVaultUnlocked(
+  vault: {
+    isEncrypted: boolean
+    isUnlocked: () => boolean
+    unlock: (password: string) => Promise<void>
+    id: string
+    name: string
+  },
+  password?: string
+): Promise<void> {
+  // Skip if vault doesn't need unlocking
+  if (!vault.isEncrypted || vault.isUnlocked()) {
+    return
+  }
+
+  if (password) {
+    // Use CLI-provided password
+    await vault.unlock(password)
+    return
+  }
+
+  // Prompt for password before spinner starts
+  const inputPassword = await promptForPassword(vault.name, vault.id)
+  await vault.unlock(inputPassword)
+}

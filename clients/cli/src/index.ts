@@ -225,13 +225,14 @@ program
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
   .action(
     withExit(
       async (
         chainStr: string,
         to: string,
         amount: string,
-        options: { token?: string; memo?: string; yes?: boolean }
+        options: { token?: string; memo?: string; yes?: boolean; password?: string }
       ) => {
         const context = await init(program.opts().vault)
         try {
@@ -242,6 +243,7 @@ program
             tokenId: options.token,
             memo: options.memo,
             yes: options.yes,
+            password: options.password,
           })
         } catch (err: any) {
           if (err.message === 'Transaction cancelled by user') {
@@ -476,13 +478,14 @@ program
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
   .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
   .action(
     withExit(
       async (
         fromChainStr: string,
         toChainStr: string,
         amountStr: string,
-        options: { fromToken?: string; toToken?: string; slippage?: string; yes?: boolean }
+        options: { fromToken?: string; toToken?: string; slippage?: string; yes?: boolean; password?: string }
       ) => {
         const context = await init(program.opts().vault)
         try {
@@ -494,6 +497,7 @@ program
             toToken: options.toToken,
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,
             yes: options.yes,
+            password: options.password,
           })
         } catch (err: any) {
           if (err.message === 'Swap cancelled by user') {

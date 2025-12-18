@@ -39,20 +39,15 @@ await sdk.initialize()
 
 ```typescript
 // Create a new vault using VultiServer
-const { vault, vaultId, verificationRequired } = await sdk.createFastVault({
+const vaultId = await sdk.createFastVault({
   name: "My Secure Wallet",
   email: "user@example.com",
   password: "SecurePassword123!",
 });
 
-if (verificationRequired) {
-  // User will receive a 4-digit code via email
-  const code = "1234"; // Get from user input
-  await sdk.verifyVault(vaultId, code);
-
-  // Retrieve the complete vault after verification
-  const verifiedVault = await sdk.getVault(vaultId, "SecurePassword123!");
-}
+// User will receive a verification code via email
+const code = "1234"; // Get from user input
+const vault = await sdk.verifyVault(vaultId, code);
 ```
 
 ### 3. Derive Blockchain Addresses
@@ -127,20 +122,16 @@ function VaultApp() {
 
   const createVault = async () => {
     try {
-      const result = await sdk.createFastVault({
+      const vaultId = await sdk.createFastVault({
         name: 'My Wallet',
         email: 'user@example.com',
         password: 'SecurePassword123!'
       })
 
-      if (result.verificationRequired) {
-        const code = prompt('Enter 4-digit verification code:')
-        await sdk.verifyVault(result.vaultId, code!)
-        const verifiedVault = await sdk.getVault(result.vaultId, 'SecurePassword123!')
-        setVault(verifiedVault)
-      } else {
-        setVault(result.vault)
-      }
+      // User receives verification code via email
+      const code = prompt('Enter verification code from email:')
+      const vault = await sdk.verifyVault(vaultId, code!)
+      setVault(vault)
     } catch (error) {
       console.error('Vault creation failed:', error)
     }
@@ -231,9 +222,9 @@ For bundled applications (Vite, webpack, etc.), place these files in the `public
 
 Initialize the SDK and load all WASM modules.
 
-#### `createFastVault(options): Promise<{vault, vaultId, verificationRequired}>`
+#### `createFastVault(options): Promise<string>`
 
-Create a new vault using VultiServer assistance.
+Create a new vault using VultiServer assistance. Returns the vaultId.
 
 **Parameters:**
 
@@ -241,13 +232,9 @@ Create a new vault using VultiServer assistance.
 - `options.email: string` - Email for verification
 - `options.password: string` - Vault encryption password
 
-#### `verifyVault(vaultId, code): Promise<boolean>`
+#### `verifyVault(vaultId, code): Promise<FastVault>`
 
-Verify vault creation with email verification code.
-
-#### `getVault(vaultId, password): Promise<Vault>`
-
-Retrieve a verified vault from VultiServer.
+Verify vault creation with email verification code. Returns the verified vault.
 
 #### `vault.address(chain): Promise<string>`
 
@@ -313,27 +300,6 @@ See the `/examples` directory for complete sample applications:
 - Node.js 20+
 - Modern browser with WebAssembly support
 - Network access for VultiServer communication (for Fast Vault features)
-
-## Known Issues
-
-### Node.js WASM Loading
-
-⚠️ **Node.js environments currently have a known issue loading DKLS and Schnorr WASM modules.**
-
-The WASM files (`dkls.wasm`, `schnorr.wasm`) may fail to load properly in Node.js due to module resolution differences between browser and Node environments. This affects:
-- Vault creation (Fast Vault)
-- Transaction signing
-
-**Workaround**: Use the browser environment for MPC operations, or stay tuned for upcoming fixes.
-
-**Affected features**:
-- `createFastVault()` - May fail in Node.js
-- Transaction signing operations
-
-**Working in Node.js**:
-- Vault import/export
-- Address derivation (uses `wallet-core.wasm` which loads correctly)
-- Vault file encryption/decryption
 
 ## Security Considerations
 

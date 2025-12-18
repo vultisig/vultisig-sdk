@@ -14,7 +14,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/index.js --external:@vultisig/sdk --external:dotenv --external:chalk --external:commander --external:inquirer --external:ora --external:cli-table3 --external:tabtab --external:ws",
+    "build": "node build.mjs",
     "start": "node dist/index.js",
     "dev": "npx tsx src/index.ts",
     "cli": "npx tsx src/index.ts",
