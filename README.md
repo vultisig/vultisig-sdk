@@ -35,17 +35,15 @@ const sdk = new Vultisig({
 await sdk.initialize()
 
 // Create a fast vault (server-assisted)
-const { vault, verificationRequired, vaultId } = await sdk.createFastVault({
+const vaultId = await sdk.createFastVault({
   name: "My Wallet",
   email: "user@example.com",
   password: "secure-password",
 });
 
-// Handle email verification if required
-if (verificationRequired) {
-  const code = "1234"; // Get from user input
-  await sdk.verifyVault(vaultId, code);
-}
+// Verify with email code and get the vault
+const code = "1234"; // Get verification code from user
+const vault = await sdk.verifyVault(vaultId, code);
 
 // Derive addresses for different chains
 const btcAddress = await vault.address("Bitcoin");
