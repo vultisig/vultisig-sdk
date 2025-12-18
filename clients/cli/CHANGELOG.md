@@ -1,5 +1,14 @@
 # @vultisig/cli
 
+## 0.2.0-alpha.6
+
+### Patch Changes
+
+- [#58](https://github.com/vultisig/vultisig-sdk/pull/58) [`c9b7d88`](https://github.com/vultisig/vultisig-sdk/commit/c9b7d888e21e9db1b928ddc929294aa15157e476) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Fix password prompt being swallowed by spinner during signing
+  - Add `--password` option to `send` and `swap` commands for non-interactive use
+  - Pre-unlock vault before signing spinner starts to prevent prompt interference
+  - Password prompt now appears before spinner when not provided via CLI flag
+
 ## 0.2.0-alpha.5
 
 ### Patch Changes

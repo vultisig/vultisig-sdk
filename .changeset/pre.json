@@ -20,6 +20,7 @@
     "fix-cli-command-references",
     "fix-interactive-shell-prompts",
     "fix-node-crypto-polyfill",
+    "fix-password-prompt-spinner",
     "fix-publish-script",
     "fix-workspace-protocol",
     "update-browser-cli-for-new-vault-api",
