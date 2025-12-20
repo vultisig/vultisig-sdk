@@ -12,7 +12,8 @@ import {
   executeAddresses,
   executeBalance,
   executeChains,
-  executeCreate,
+  executeCreateFast,
+  executeCreateSecure,
   executeCurrency,
   executeExport,
   executeImport,
@@ -141,37 +142,41 @@ async function init(vaultOverride?: string): Promise<CLIContext> {
 // Commands
 // ============================================================================
 
-// Command: Create new vault
-program
-  .command('create')
-  .description('Create a new vault')
-  .option('--type <type>', 'Vault type: fast or secure', 'fast')
-  .option('--name <name>', 'Vault name')
-  .option('--password <password>', 'Vault password')
-  .option('--email <email>', 'Email for verification (fast vault)')
-  .option('--threshold <m>', 'Signing threshold (secure vault)')
-  .option('--shares <n>', 'Total shares (secure vault)')
+// Command: Create vault (with subcommands)
+const createCmd = program.command('create').description('Create a vault')
+
+// Subcommand: Create fast vault (server-assisted 2-of-2)
+createCmd
+  .command('fast')
+  .description('Create a fast vault (server-assisted 2-of-2)')
+  .requiredOption('--name <name>', 'Vault name')
+  .requiredOption('--password <password>', 'Vault password')
+  .requiredOption('--email <email>', 'Email for verification')
   .action(
-    withExit(
-      async (options: {
-        type: string
-        name?: string
-        password?: string
-        email?: string
-        threshold?: string
-        shares?: string
-      }) => {
-        const context = await init(program.opts().vault)
-        await executeCreate(context, {
-          type: options.type as 'fast' | 'secure',
-          name: options.name,
-          password: options.password,
-          email: options.email,
-          threshold: options.threshold ? parseInt(options.threshold, 10) : undefined,
-          shares: options.shares ? parseInt(options.shares, 10) : undefined,
-        })
-      }
-    )
+    withExit(async (options: { name: string; password: string; email: string }) => {
+      const context = await init(program.opts().vault)
+      await executeCreateFast(context, options)
+    })
+  )
+
+// Subcommand: Create secure vault (multi-device MPC)
+createCmd
+  .command('secure')
+  .description('Create a secure vault (multi-device MPC)')
+  .requiredOption('--name <name>', 'Vault name')
+  .option('--password <password>', 'Vault password (optional)')
+  .option('--threshold <m>', 'Signing threshold', '2')
+  .option('--shares <n>', 'Total shares', '3')
+  .action(
+    withExit(async (options: { name: string; password?: string; threshold: string; shares: string }) => {
+      const context = await init(program.opts().vault)
+      await executeCreateSecure(context, {
+        name: options.name,
+        password: options.password,
+        threshold: parseInt(options.threshold, 10),
+        shares: parseInt(options.shares, 10),
+      })
+    })
   )
 
 // Command: Import vault from file

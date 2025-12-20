@@ -21,282 +21,199 @@ import {
 } from '../lib/output'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
-export type CreateVaultOptions = {
-  type: 'fast' | 'secure'
-  // Non-interactive options
-  name?: string
+export type FastVaultOptions = {
+  name: string
+  password: string
+  email: string
+}
+
+export type SecureVaultOptions = {
+  name: string
   password?: string
-  email?: string // for fast vault
-  threshold?: number // for secure vault
-  shares?: number // for secure vault
+  threshold: number
+  shares: number
 }
 
 /**
- * Execute create vault command
+ * Create a fast vault (server-assisted 2-of-2)
  */
-export async function executeCreate(
-  ctx: CommandContext,
-  options: CreateVaultOptions = { type: 'fast' }
-): Promise<VaultBase> {
-  const vaultType = options.type.toLowerCase()
-  if (vaultType !== 'fast' && vaultType !== 'secure') {
-    throw new Error('Invalid vault type. Must be "fast" or "secure"')
-  }
+export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
+  const { name, password, email } = options
 
-  // Use provided options or prompt for missing values
-  let name = options.name
-  let password = options.password
+  const spinner = createSpinner('Creating vault...')
 
-  const prompts = []
-  if (!name) {
-    prompts.push({
-      type: 'input',
-      name: 'name',
-      message: 'Enter vault name:',
-      validate: (input: string) => input.trim() !== '' || 'Name is required',
-    })
-  }
-  if (!password) {
-    prompts.push({
-      type: 'password',
-      name: 'password',
-      message: 'Enter password:',
-      mask: '*',
-      validate: (input: string) => input.length >= 8 || 'Password must be at least 8 characters',
-    })
-    prompts.push({
-      type: 'password',
-      name: 'confirmPassword',
-      message: 'Confirm password:',
-      mask: '*',
-      validate: (input: string, ans: any) => input === ans.password || 'Passwords do not match',
-    })
-  }
+  // createFastVault returns just the vaultId - vault is returned from verifyVault
+  const vaultId = await ctx.sdk.createFastVault({
+    name,
+    password,
+    email: email!,
+    onProgress: step => {
+      spinner.text = `${step.message} (${step.progress}%)`
+    },
+  })
 
-  if (prompts.length > 0) {
-    const answers = (await inquirer.prompt(prompts)) as any
-    name = name || answers.name
-    password = password || answers.password
-  }
+  spinner.succeed(`Vault keys generated: ${name}`)
 
-  if (vaultType === 'fast') {
-    let email = options.email
+  // Fast vaults always require email verification
+  warn('\nA verification code has been sent to your email.')
+  info('Please check your inbox and enter the code.')
 
-    if (!email) {
-      const emailAnswer = await inquirer.prompt([
+  const MAX_VERIFY_ATTEMPTS = 5
+  let attempts = 0
+
+  while (attempts < MAX_VERIFY_ATTEMPTS) {
+    attempts++
+
+    const codeAnswer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'code',
+        message: `Verification code sent to ${email}. Enter code:`,
+        validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+      },
+    ])
+
+    const verifySpinner = createSpinner('Verifying email code...')
+
+    try {
+      const vault = await ctx.sdk.verifyVault(vaultId, codeAnswer.code)
+      verifySpinner.succeed('Email verified successfully!')
+
+      setupVaultEvents(vault)
+      await ctx.setActiveVault(vault)
+
+      success('\n+ Vault created!')
+      info('\nYour vault is ready. Run the following commands:')
+      printResult(chalk.cyan('  vultisig balance     ') + '- View balances')
+      printResult(chalk.cyan('  vultisig addresses   ') + '- View addresses')
+      printResult(chalk.cyan('  vultisig portfolio   ') + '- View portfolio value')
+
+      return vault
+    } catch (err: any) {
+      verifySpinner.fail('Verification failed')
+      error(`\n✗ ${err.message || 'Invalid verification code'}`)
+
+      if (attempts >= MAX_VERIFY_ATTEMPTS) {
+        warn('\nMaximum attempts reached.')
+        warn('\nTo retry verification later, use:')
+        info(`  vultisig verify ${vaultId}`)
+        err.exitCode = 1
+        throw err
+      }
+
+      // Offer retry options
+      const { action } = await inquirer.prompt([
         {
-          type: 'input',
-          name: 'email',
-          message: 'Enter email for verification:',
-          validate: (input: string) => /\S+@\S+\.\S+/.test(input) || 'Invalid email format',
+          type: 'list',
+          name: 'action',
+          message: `What would you like to do? (${MAX_VERIFY_ATTEMPTS - attempts} attempts remaining)`,
+          choices: [
+            { name: 'Enter a different code', value: 'retry' },
+            { name: 'Resend verification email (rate limited)', value: 'resend' },
+            { name: 'Abort and verify later', value: 'abort' },
+          ],
         },
       ])
-      email = emailAnswer.email
+
+      if (action === 'abort') {
+        warn('\nVault creation paused. To complete verification, use:')
+        info(`  vultisig verify ${vaultId}`)
+        warn('\nNote: The pending vault is stored in memory only and will be lost if you exit.')
+        return undefined as any
+      }
+
+      if (action === 'resend') {
+        const resendSpinner = createSpinner('Resending verification email...')
+        try {
+          await ctx.sdk.resendVaultVerification(vaultId)
+          resendSpinner.succeed('Verification email sent!')
+          info('Check your inbox for the new code. Note: There may be a ~3 minute cooldown between resends.')
+        } catch (resendErr: any) {
+          resendSpinner.fail('Failed to resend')
+          warn(resendErr.message || 'Could not resend email. You may need to wait a few minutes.')
+        }
+      }
+      // Continue loop for retry
     }
+  }
 
-    const spinner = createSpinner('Creating vault...')
+  // This should never be reached, but TypeScript needs it
+  throw new Error('Verification loop exited unexpectedly')
+}
 
-    // createFastVault returns just the vaultId - vault is returned from verifyVault
-    const vaultId = await ctx.sdk.createFastVault({
-      name: name!,
-      password: password!,
-      email: email!,
+/**
+ * Create a secure vault (multi-device MPC)
+ */
+export async function executeCreateSecure(ctx: CommandContext, options: SecureVaultOptions): Promise<VaultBase> {
+  const { name, password, threshold, shares: totalShares } = options
+
+  const spinner = createSpinner('Creating secure vault...')
+
+  try {
+    const result = await ctx.sdk.createSecureVault({
+      name,
+      password,
+      devices: totalShares,
+      threshold,
       onProgress: step => {
         spinner.text = `${step.message} (${step.progress}%)`
       },
+      onQRCodeReady: qrPayload => {
+        if (isJsonOutput()) {
+          // JSON mode: Print QR URL immediately for scripting
+          printResult(qrPayload)
+        } else if (isSilent()) {
+          // Silent mode: Print URL only
+          printResult(`QR Payload: ${qrPayload}`)
+        } else {
+          // Interactive: Display ASCII QR code
+          spinner.stop()
+          info('\nScan this QR code with your Vultisig mobile app:')
+          qrcode.generate(qrPayload, { small: true })
+          info(`\nOr use this URL: ${qrPayload}\n`)
+          spinner.start(`Waiting for ${totalShares} devices to join...`)
+        }
+      },
+      onDeviceJoined: (deviceId, totalJoined, required) => {
+        if (!isSilent()) {
+          spinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
+        } else if (!isJsonOutput()) {
+          printResult(`Device joined: ${totalJoined}/${required}`)
+        }
+      },
     })
 
-    spinner.succeed(`Vault keys generated: ${name}`)
+    setupVaultEvents(result.vault)
+    await ctx.setActiveVault(result.vault)
+    spinner.succeed(`Secure vault created: ${name} (${threshold}-of-${totalShares})`)
 
-    // Fast vaults always require email verification
-    warn('\nA verification code has been sent to your email.')
-    info('Please check your inbox and enter the code.')
-
-    const MAX_VERIFY_ATTEMPTS = 5
-    let attempts = 0
-
-    while (attempts < MAX_VERIFY_ATTEMPTS) {
-      attempts++
-
-      const codeAnswer = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'code',
-          message: `Verification code sent to ${email}. Enter code:`,
-          validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+    // JSON mode: output structured data
+    if (isJsonOutput()) {
+      outputJson({
+        vault: {
+          id: result.vaultId,
+          name: name,
+          type: 'secure',
+          threshold: threshold,
+          totalSigners: totalShares,
         },
-      ])
-
-      const verifySpinner = createSpinner('Verifying email code...')
-
-      try {
-        const vault = await ctx.sdk.verifyVault(vaultId, codeAnswer.code)
-        verifySpinner.succeed('Email verified successfully!')
-
-        setupVaultEvents(vault)
-        await ctx.setActiveVault(vault)
-
-        success('\n+ Vault created!')
-        info('\nYour vault is ready. Run the following commands:')
-        printResult(chalk.cyan('  vultisig balance     ') + '- View balances')
-        printResult(chalk.cyan('  vultisig addresses   ') + '- View addresses')
-        printResult(chalk.cyan('  vultisig portfolio   ') + '- View portfolio value')
-
-        return vault
-      } catch (err: any) {
-        verifySpinner.fail('Verification failed')
-        error(`\n✗ ${err.message || 'Invalid verification code'}`)
-
-        if (attempts >= MAX_VERIFY_ATTEMPTS) {
-          warn('\nMaximum attempts reached.')
-          warn('\nTo retry verification later, use:')
-          info(`  vultisig verify ${vaultId}`)
-          err.exitCode = 1
-          throw err
-        }
-
-        // Offer retry options
-        const { action } = await inquirer.prompt([
-          {
-            type: 'list',
-            name: 'action',
-            message: `What would you like to do? (${MAX_VERIFY_ATTEMPTS - attempts} attempts remaining)`,
-            choices: [
-              { name: 'Enter a different code', value: 'retry' },
-              { name: 'Resend verification email (rate limited)', value: 'resend' },
-              { name: 'Abort and verify later', value: 'abort' },
-            ],
-          },
-        ])
-
-        if (action === 'abort') {
-          warn('\nVault creation paused. To complete verification, use:')
-          info(`  vultisig verify ${vaultId}`)
-          warn('\nNote: The pending vault is stored in memory only and will be lost if you exit.')
-          return undefined as any
-        }
-
-        if (action === 'resend') {
-          const resendSpinner = createSpinner('Resending verification email...')
-          try {
-            await ctx.sdk.resendVaultVerification(vaultId)
-            resendSpinner.succeed('Verification email sent!')
-            info('Check your inbox for the new code. Note: There may be a ~3 minute cooldown between resends.')
-          } catch (resendErr: any) {
-            resendSpinner.fail('Failed to resend')
-            warn(resendErr.message || 'Could not resend email. You may need to wait a few minutes.')
-          }
-        }
-        // Continue loop for retry
-      }
-    }
-
-    // This should never be reached, but TypeScript needs it
-    throw new Error('Verification loop exited unexpectedly')
-  } else {
-    // Secure vault
-    let threshold = options.threshold
-    let totalShares = options.shares
-
-    const securePrompts = []
-    if (threshold === undefined) {
-      securePrompts.push({
-        type: 'number',
-        name: 'threshold',
-        message: 'Signing threshold (m):',
-        default: 2,
-        validate: (input: number) => input > 0 || 'Threshold must be greater than 0',
+        sessionId: result.sessionId,
       })
-    }
-    if (totalShares === undefined) {
-      securePrompts.push({
-        type: 'number',
-        name: 'totalShares',
-        message: 'Total shares (n):',
-        default: 3,
-        validate: (input: number, ans: any) => {
-          const t = threshold ?? ans.threshold
-          return input >= t || `Total shares must be >= threshold (${t})`
-        },
-      })
-    }
-
-    if (securePrompts.length > 0) {
-      const secureAnswers = (await inquirer.prompt(securePrompts)) as any
-      threshold = threshold ?? secureAnswers.threshold
-      totalShares = totalShares ?? secureAnswers.totalShares
-    }
-
-    const spinner = createSpinner('Creating secure vault...')
-
-    try {
-      const result = await ctx.sdk.createSecureVault({
-        name: name!,
-        password: password!,
-        devices: totalShares!,
-        threshold: threshold!,
-        onProgress: step => {
-          spinner.text = `${step.message} (${step.progress}%)`
-        },
-        onQRCodeReady: qrPayload => {
-          if (isJsonOutput()) {
-            // JSON mode: Print QR URL immediately for scripting
-            // (final JSON output comes after completion)
-            printResult(qrPayload)
-          } else if (isSilent()) {
-            // Silent mode: Print URL only
-            printResult(`QR Payload: ${qrPayload}`)
-          } else {
-            // Interactive: Display ASCII QR code
-            spinner.stop()
-            info('\nScan this QR code with your Vultisig mobile app:')
-            qrcode.generate(qrPayload, { small: true })
-            info(`\nOr use this URL: ${qrPayload}\n`)
-            spinner.start(`Waiting for ${totalShares} devices to join...`)
-          }
-        },
-        onDeviceJoined: (deviceId, totalJoined, required) => {
-          if (!isSilent()) {
-            spinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
-          } else if (!isJsonOutput()) {
-            // Silent non-JSON: print progress
-            printResult(`Device joined: ${totalJoined}/${required}`)
-          }
-        },
-      })
-
-      setupVaultEvents(result.vault)
-      await ctx.setActiveVault(result.vault)
-      spinner.succeed(`Secure vault created: ${name} (${threshold}-of-${totalShares})`)
-
-      // JSON mode: output structured data
-      if (isJsonOutput()) {
-        outputJson({
-          vault: {
-            id: result.vaultId,
-            name: name,
-            type: 'secure',
-            threshold: threshold,
-            totalSigners: totalShares,
-          },
-          sessionId: result.sessionId,
-        })
-        return result.vault
-      }
-
-      warn(`\nImportant: Save your vault backup file (.vult) in a secure location.`)
-      warn(`This is a ${threshold}-of-${totalShares} vault. You'll need ${threshold} devices to sign transactions.`)
-
-      success('\n+ Vault created!')
-
       return result.vault
-    } catch (err: any) {
-      spinner.fail('Secure vault creation failed')
-      if (err.message?.includes('not implemented')) {
-        warn('\nSecure vault creation is not yet implemented in the SDK')
-      }
-      throw err
     }
+
+    warn(`\nImportant: Save your vault backup file (.vult) in a secure location.`)
+    warn(`This is a ${threshold}-of-${totalShares} vault. You'll need ${threshold} devices to sign transactions.`)
+
+    success('\n+ Vault created!')
+
+    return result.vault
+  } catch (err: any) {
+    spinner.fail('Secure vault creation failed')
+    if (err.message?.includes('not implemented')) {
+      warn('\nSecure vault creation is not yet implemented in the SDK')
+    }
+    throw err
   }
 }
 

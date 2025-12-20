@@ -19,7 +19,8 @@ import {
   executeAddresses,
   executeBalance,
   executeChains,
-  executeCreate,
+  executeCreateFast,
+  executeCreateSecure,
   executeCurrency,
   executeExport,
   executeImport,
@@ -160,7 +161,7 @@ export class ShellSession {
         break
 
       case 'create':
-        await this.createVault()
+        await this.createVault(args)
         break
 
       case 'info':
@@ -311,10 +312,27 @@ export class ShellSession {
     this.eventBuffer.setupVaultListeners(vault)
   }
 
-  private async createVault(): Promise<void> {
-    const vault = await executeCreate(this.ctx, { type: 'fast' })
-    this.ctx.addVault(vault)
-    this.eventBuffer.setupVaultListeners(vault)
+  private async createVault(args: string[]): Promise<void> {
+    const type = args[0]?.toLowerCase()
+
+    if (!type || (type !== 'fast' && type !== 'secure')) {
+      console.log(chalk.yellow('Usage: create <fast|secure>'))
+      console.log(chalk.gray('  create fast   - Create a fast vault (server-assisted 2-of-2)'))
+      console.log(chalk.gray('  create secure - Create a secure vault (multi-device MPC)'))
+      return
+    }
+
+    let vault
+    if (type === 'fast') {
+      vault = await executeCreateFast(this.ctx, {})
+    } else {
+      vault = await executeCreateSecure(this.ctx, {})
+    }
+
+    if (vault) {
+      this.ctx.addVault(vault)
+      this.eventBuffer.setupVaultListeners(vault)
+    }
   }
 
   private async runBalance(args: string[]): Promise<void> {
