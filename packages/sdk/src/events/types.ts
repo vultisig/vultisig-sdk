@@ -129,6 +129,46 @@ export type VaultEvents = {
   /** Emitted when vault is locked (keyshares cleared) */
   locked: Record<string, never>
 
+  // ===== SECURE VAULT EVENTS =====
+
+  /** Emitted when QR code is ready for device pairing (SecureVault) */
+  qrCodeReady: {
+    /** The QR payload URL to display */
+    qrPayload: string
+    /** The action being performed */
+    action: 'keygen' | 'keysign'
+    /** Session ID for the operation */
+    sessionId: string
+  }
+
+  /** Emitted when a device joins the session (SecureVault) */
+  deviceJoined: {
+    /** Device ID that joined */
+    deviceId: string
+    /** Total devices joined so far */
+    totalJoined: number
+    /** Total devices required */
+    required: number
+  }
+
+  /** Emitted when all required devices have joined (SecureVault) */
+  allDevicesReady: {
+    /** List of all device IDs */
+    devices: string[]
+    /** Session ID */
+    sessionId: string
+  }
+
+  /** Emitted during keygen with phase progress (SecureVault) */
+  keygenProgress: {
+    /** Current keygen phase */
+    phase: 'ecdsa' | 'eddsa' | 'complete'
+    /** Optional round number */
+    round?: number
+    /** Optional status message */
+    message?: string
+  }
+
   // ===== SWAP EVENTS =====
 
   /** Emitted when a swap quote is received */

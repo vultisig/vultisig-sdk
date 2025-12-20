@@ -5,9 +5,20 @@ import type { VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
+import qrcode from 'qrcode-terminal'
 
 import type { CommandContext } from '../core'
-import { createSpinner, error, info, isJsonOutput, outputJson, printResult, success, warn } from '../lib/output'
+import {
+  createSpinner,
+  error,
+  info,
+  isJsonOutput,
+  isSilent,
+  outputJson,
+  printResult,
+  success,
+  warn,
+} from '../lib/output'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
 export type CreateVaultOptions = {
@@ -227,11 +238,51 @@ export async function executeCreate(
         onProgress: step => {
           spinner.text = `${step.message} (${step.progress}%)`
         },
+        onQRCodeReady: qrPayload => {
+          if (isJsonOutput()) {
+            // JSON mode: Print QR URL immediately for scripting
+            // (final JSON output comes after completion)
+            printResult(qrPayload)
+          } else if (isSilent()) {
+            // Silent mode: Print URL only
+            printResult(`QR Payload: ${qrPayload}`)
+          } else {
+            // Interactive: Display ASCII QR code
+            spinner.stop()
+            info('\nScan this QR code with your Vultisig mobile app:')
+            qrcode.generate(qrPayload, { small: true })
+            info(`\nOr use this URL: ${qrPayload}\n`)
+            spinner.start(`Waiting for ${totalShares} devices to join...`)
+          }
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          if (!isSilent()) {
+            spinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
+          } else if (!isJsonOutput()) {
+            // Silent non-JSON: print progress
+            printResult(`Device joined: ${totalJoined}/${required}`)
+          }
+        },
       })
 
       setupVaultEvents(result.vault)
       await ctx.setActiveVault(result.vault)
       spinner.succeed(`Secure vault created: ${name} (${threshold}-of-${totalShares})`)
+
+      // JSON mode: output structured data
+      if (isJsonOutput()) {
+        outputJson({
+          vault: {
+            id: result.vaultId,
+            name: name,
+            type: 'secure',
+            threshold: threshold,
+            totalSigners: totalShares,
+          },
+          sessionId: result.sessionId,
+        })
+        return result.vault
+      }
 
       warn(`\nImportant: Save your vault backup file (.vult) in a secure location.`)
       warn(`This is a ${threshold}-of-${totalShares} vault. You'll need ${threshold} devices to sign transactions.`)

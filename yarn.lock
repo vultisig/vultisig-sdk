@@ -4020,6 +4020,7 @@ __metadata:
     esbuild: "npm:^0.24.0"
     inquirer: "npm:^9.2.0"
     ora: "npm:^8.0.0"
+    qrcode-terminal: "npm:^0.12.0"
     tabtab: "npm:^3.0.2"
     tsx: "npm:^4.7.0"
     typescript: "npm:^5.8.2"
@@ -10477,6 +10478,15 @@ __metadata:
   version: 6.1.0
   resolution: "pure-rand@npm:6.1.0"
   checksum: 10c0/1abe217897bf74dcb3a0c9aba3555fe975023147b48db540aa2faf507aee91c03bf54f6aef0eb2bf59cc259a16d06b28eca37f0dc426d94f4692aeff02fb0e65
+  languageName: node
+  linkType: hard
+
+"qrcode-terminal@npm:^0.12.0":
+  version: 0.12.0
+  resolution: "qrcode-terminal@npm:0.12.0"
+  bin:
+    qrcode-terminal: ./bin/qrcode-terminal.js
+  checksum: 10c0/1d8996a743d6c95e22056bd45fe958c306213adc97d7ef8cf1e03bc1aeeb6f27180a747ec3d761141921351eb1e3ca688f7b673ab54cdae9fa358dffaa49563c
   languageName: node
   linkType: hard
 

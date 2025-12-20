@@ -7,7 +7,18 @@ import { decryptWithAesGcm } from '@lib/utils/encryption/aesGcm/decryptWithAesGc
 import { fromBase64 } from '@lib/utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
-import type { Signature, SignBytesOptions, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
+import { RelaySigningService } from '../services/RelaySigningService'
+import { SecureVaultCreationService, type SecureVaultCreationStep } from '../services/SecureVaultCreationService'
+import type {
+  Signature,
+  SignBytesOptions,
+  SigningMode,
+  SigningPayload,
+  SigningStep,
+  VaultCreationStep,
+  VaultData,
+} from '../types'
+import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
 
@@ -58,78 +69,135 @@ export class SecureVault extends VaultBase {
   }
 
   /**
-   * Sign a transaction using relay or local signing mode
+   * Sign a transaction using relay signing mode
    *
-   * @param mode - Signing mode ('relay' or 'local')
-   * @param payload - Transaction payload to sign
+   * This method coordinates multi-device MPC signing via the relay server.
+   * It will display a QR code for mobile device pairing and emit progress events.
+   *
+   * @param payload - Transaction payload to sign (must include messageHashes)
+   * @param options - Signing options including callbacks for QR and device joining
    * @returns Signature from multi-device coordination
+   *
+   * @example
+   * ```typescript
+   * vault.on('qrCodeReady', ({ qrPayload }) => displayQR(qrPayload))
+   * vault.on('deviceJoined', ({ deviceId, totalJoined, required }) => {
+   *   console.log(`${totalJoined}/${required} devices ready`)
+   * })
+   * const signature = await vault.sign(payload)
+   * ```
    */
-  async sign(_payload: SigningPayload): Promise<Signature> {
+  async sign(
+    payload: SigningPayload,
+    options: {
+      onQRCodeReady?: (qrPayload: string) => void
+      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+    } = {}
+  ): Promise<Signature> {
     // Ensure keyShares are loaded (will decrypt if encrypted)
     await this.ensureKeySharesLoaded()
-    throw new VaultError(VaultErrorCode.NotImplemented, 'not implemented')
-    // Sign using appropriate service
-    // let signature: Signature = ''
 
-    // if (mode === 'relay') {
-    //   if (!this.relaySigningService) {
-    //     throw new VaultError(
-    //       VaultErrorCode.NotImplemented,
-    //       'Relay signing not implemented yet. ' +
-    //         'This feature is planned for future releases.'
-    //     )
-    //   }
-    //   // When implemented:
-    //   // signature = await this.relaySigningService.sign(
-    //   //   this.coreVault,
-    //   //   payload,
-    //   //   step => this.emit('signingProgress', { step })
-    //   // )
-    //   throw new VaultError(
-    //     VaultErrorCode.NotImplemented,
-    //     'Relay signing not implemented yet'
-    //   )
-    // } else if (mode === 'local') {
-    //   if (!this.localSigningService) {
-    //     throw new VaultError(
-    //       VaultErrorCode.NotImplemented,
-    //       'Local signing not implemented yet. ' +
-    //         'This feature is planned for future releases.'
-    //     )
-    //   }
-    //   // When implemented:
-    //   // signature = await this.localSigningService.sign(
-    //   //   this.coreVault,
-    //   //   payload,
-    //   //   step => this.emit('signingProgress', { step })
-    //   // )
-    //   throw new VaultError(
-    //     VaultErrorCode.NotImplemented,
-    //     'Local signing not implemented yet'
-    //   )
-    // } else {
-    //   throw new VaultError(
-    //     VaultErrorCode.InvalidConfig,
-    //     `Unsupported signing mode: ${mode}. ` +
-    //       `Available modes: ${this.availableSigningModes.join(', ')}`
-    //   )
-    // }
+    // Create relay signing service
+    const relaySigningService = new RelaySigningService()
 
-    // When signing is implemented, emit events:
-    // this.emit('transactionSigned', { signature, payload })
-    // return signature
+    // Sign using relay service with event emission
+    const signature = await relaySigningService.signWithRelay(this.coreVault, payload, {
+      onProgress: (step: SigningStep) => this.emit('signingProgress', { step }),
+      onQRCodeReady: qrPayload => {
+        this.emit('qrCodeReady', {
+          qrPayload,
+          action: 'keysign',
+          sessionId: '',
+        })
+        if (options.onQRCodeReady) {
+          options.onQRCodeReady(qrPayload)
+        }
+      },
+      onDeviceJoined: (deviceId, totalJoined, required) => {
+        this.emit('deviceJoined', { deviceId, totalJoined, required })
+        if (options.onDeviceJoined) {
+          options.onDeviceJoined(deviceId, totalJoined, required)
+        }
+      },
+    })
+
+    // Emit completion event
+    this.emit('transactionSigned', { signature, payload })
+
+    return signature
   }
 
   /**
-   * Sign arbitrary pre-hashed bytes
+   * Sign arbitrary pre-hashed bytes using relay signing mode
    *
-   * Not yet implemented for SecureVault.
+   * This method coordinates multi-device MPC signing for raw bytes via the relay server.
+   * It will display a QR code for mobile device pairing and emit progress events.
    *
-   * @param _options - Signing options (unused)
-   * @throws {VaultError} Always throws NotImplemented error
+   * @param options - Sign bytes options (data and chain)
+   * @param signingOptions - Signing options including callbacks for QR and device joining
+   * @returns Signature result
+   *
+   * @example
+   * ```typescript
+   * const messageHash = '0x...' // Pre-hashed data
+   * const signature = await vault.signBytes(
+   *   { data: messageHash, chain: 'Ethereum' },
+   *   { onQRCodeReady: (qr) => displayQR(qr) }
+   * )
+   * ```
    */
-  async signBytes(_options: SignBytesOptions): Promise<Signature> {
-    throw new VaultError(VaultErrorCode.NotImplemented, 'signBytes is not yet implemented for SecureVault')
+  async signBytes(
+    options: SignBytesOptions,
+    signingOptions: {
+      onQRCodeReady?: (qrPayload: string) => void
+      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+    } = {}
+  ): Promise<Signature> {
+    // Ensure keyShares are loaded (will decrypt if encrypted)
+    await this.ensureKeySharesLoaded()
+
+    // Convert data to hex string message hash
+    let messageHash: string
+    if (typeof options.data === 'string') {
+      // Already hex string (remove 0x if present)
+      messageHash = options.data.startsWith('0x') ? options.data.slice(2) : options.data
+    } else {
+      // Convert Uint8Array/Buffer to hex
+      messageHash = Buffer.from(options.data).toString('hex')
+    }
+
+    // Create relay signing service
+    const relaySigningService = new RelaySigningService()
+
+    // Sign using relay service with event emission
+    const signature = await relaySigningService.signBytesWithRelay(
+      this.coreVault,
+      {
+        messageHashes: [messageHash],
+        chain: options.chain,
+      },
+      {
+        onProgress: (step: SigningStep) => this.emit('signingProgress', { step }),
+        onQRCodeReady: qrPayload => {
+          this.emit('qrCodeReady', {
+            qrPayload,
+            action: 'keysign',
+            sessionId: '',
+          })
+          if (signingOptions.onQRCodeReady) {
+            signingOptions.onQRCodeReady(qrPayload)
+          }
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          this.emit('deviceJoined', { deviceId, totalJoined, required })
+          if (signingOptions.onDeviceJoined) {
+            signingOptions.onDeviceJoined(deviceId, totalJoined, required)
+          }
+        },
+      }
+    )
+
+    return signature
   }
 
   /**
@@ -192,32 +260,141 @@ export class SecureVault extends VaultBase {
   /**
    * Create a new secure vault (multi-device MPC).
    *
-   * @param _context - SDK context with all dependencies
+   * This method orchestrates the multi-device keygen ceremony:
+   * 1. Generates a QR code for mobile app pairing
+   * 2. Waits for all devices to join
+   * 3. Runs DKLS (ECDSA) + Schnorr (EdDSA) keygen
+   * 4. Returns the created vault
+   *
+   * @param context - SDK context with all dependencies
    * @param options - Vault creation options
-   * @throws Not yet implemented
-   * @todo Implement secure vault creation
+   * @returns Promise resolving to vault instance, ID, and session ID
+   *
+   * @example
+   * ```typescript
+   * const { vault, vaultId, sessionId } = await SecureVault.create(
+   *   sdkContext,
+   *   {
+   *     name: 'My Secure Wallet',
+   *     devices: 3,
+   *     onProgress: (step) => console.log(step.message),
+   *     onQRCodeReady: (qrPayload) => displayQR(qrPayload),
+   *     onDeviceJoined: (id, joined, required) => console.log(`${joined}/${required}`)
+   *   }
+   * )
+   * ```
    */
   static async create(
-    _context: SdkContext,
+    context: SdkContext,
     options: {
+      /** Vault name */
       name: string
-      password: string
+      /** Optional password for vault encryption (secure vaults can be unencrypted) */
+      password?: string
+      /** Total number of devices participating (including this one) */
       devices: number
+      /** Signing threshold - defaults to ceil((devices+1)/2) */
       threshold?: number
+      /** Progress callback */
       onProgress?: (step: VaultCreationStep) => void
+      /** Callback when QR code is ready for display */
+      onQRCodeReady?: (qrPayload: string) => void
+      /** Callback when a device joins the session */
+      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
     }
   ): Promise<{
     vault: SecureVault
     vaultId: string
     sessionId: string
   }> {
-    // Suppress unused parameter warnings
-    void options
+    const reportProgress = options.onProgress || (() => {})
 
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      'SecureVault.create() is not yet implemented. Use relay server for multi-device setup.'
-    )
+    try {
+      // Step 1: Create SecureVaultCreationService (uses default relay URL)
+      const creationService = new SecureVaultCreationService()
+
+      // Step 2: Map progress callbacks
+      const mapProgress = (step: SecureVaultCreationStep): VaultCreationStep => ({
+        step:
+          step.step === 'keygen_ecdsa' || step.step === 'keygen_eddsa'
+            ? 'keygen'
+            : step.step === 'complete'
+              ? 'complete'
+              : 'keygen',
+        progress: step.progress,
+        message: step.message,
+      })
+
+      // Step 3: Run multi-device keygen ceremony
+      const result = await creationService.createVault({
+        name: options.name,
+        password: options.password,
+        devices: options.devices,
+        threshold: options.threshold,
+        onProgress: step => reportProgress(mapProgress(step)),
+        onQRCodeReady: options.onQRCodeReady,
+        onDeviceJoined: options.onDeviceJoined,
+      })
+
+      // Step 4: Generate .vult backup file
+      reportProgress({
+        step: 'complete',
+        progress: 92,
+        message: 'Creating backup file',
+      })
+
+      const vultContent = options.password
+        ? await createVaultBackup(result.vault, options.password)
+        : await createVaultBackup(result.vault)
+
+      // Step 5: Build VaultContext from SdkContext
+      const vaultContext: VaultContext = {
+        storage: context.storage,
+        config: context.config,
+        serverManager: context.serverManager,
+        passwordCache: context.passwordCache,
+        wasmProvider: context.wasmProvider,
+      }
+
+      // Step 6: Instantiate vault
+      reportProgress({
+        step: 'complete',
+        progress: 96,
+        message: 'Creating vault instance',
+      })
+
+      const vaultInstance = new SecureVault(
+        result.vaultId,
+        result.vault.name,
+        vultContent,
+        vaultContext,
+        result.vault // Pre-parsed vault data
+      )
+
+      // Step 7: Cache password if provided
+      if (options.password) {
+        context.passwordCache.set(result.vaultId, options.password)
+      }
+
+      // Step 8: Complete
+      reportProgress({
+        step: 'complete',
+        progress: 100,
+        message: 'Secure vault created successfully',
+      })
+
+      return {
+        vault: vaultInstance,
+        vaultId: result.vaultId,
+        sessionId: result.sessionId,
+      }
+    } catch (error) {
+      // Wrap errors with context
+      if (error instanceof Error) {
+        throw new VaultError(VaultErrorCode.CreateFailed, `Failed to create secure vault: ${error.message}`, error)
+      }
+      throw error
+    }
   }
 
   /**
