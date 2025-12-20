@@ -591,14 +591,18 @@ async function startInteractiveMode(): Promise<void> {
 // Cleanup & Entry Point
 // ============================================================================
 
+// Check for interactive mode before parsing commands
+const isInteractiveMode = process.argv.includes('-i') || process.argv.includes('--interactive')
+
 process.on('SIGINT', () => {
+  // In interactive mode, session.ts handles SIGINT with double Ctrl+C
+  if (isInteractiveMode) return
   warn('\n\nShutting down...')
   ctx?.dispose()
   process.exit(0)
 })
 
-// Check for interactive mode before parsing commands
-if (process.argv.includes('-i') || process.argv.includes('--interactive')) {
+if (isInteractiveMode) {
   startInteractiveMode().catch(err => {
     error(`Failed to start interactive mode: ${err.message}`)
     process.exit(1)

@@ -21,10 +21,26 @@ import {
 } from '../lib/output'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
+/**
+ * Race a promise against an abort signal
+ */
+function withAbortSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise
+
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      if (signal.aborted) reject(new Error('Operation cancelled'))
+      signal.addEventListener('abort', () => reject(new Error('Operation cancelled')), { once: true })
+    }),
+  ])
+}
+
 export type FastVaultOptions = {
   name: string
   password: string
   email: string
+  signal?: AbortSignal
 }
 
 export type SecureVaultOptions = {
@@ -32,25 +48,29 @@ export type SecureVaultOptions = {
   password?: string
   threshold: number
   shares: number
+  signal?: AbortSignal
 }
 
 /**
  * Create a fast vault (server-assisted 2-of-2)
  */
 export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
-  const { name, password, email } = options
+  const { name, password, email, signal } = options
 
   const spinner = createSpinner('Creating vault...')
 
   // createFastVault returns just the vaultId - vault is returned from verifyVault
-  const vaultId = await ctx.sdk.createFastVault({
-    name,
-    password,
-    email: email!,
-    onProgress: step => {
-      spinner.text = `${step.message} (${step.progress}%)`
-    },
-  })
+  const vaultId = await withAbortSignal(
+    ctx.sdk.createFastVault({
+      name,
+      password,
+      email: email!,
+      onProgress: step => {
+        spinner.text = `${step.message} (${step.progress}%)`
+      },
+    }),
+    signal
+  )
 
   spinner.succeed(`Vault keys generated: ${name}`)
 
@@ -145,43 +165,47 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
  * Create a secure vault (multi-device MPC)
  */
 export async function executeCreateSecure(ctx: CommandContext, options: SecureVaultOptions): Promise<VaultBase> {
-  const { name, password, threshold, shares: totalShares } = options
+  const { name, password, threshold, shares: totalShares, signal } = options
 
   const spinner = createSpinner('Creating secure vault...')
 
   try {
-    const result = await ctx.sdk.createSecureVault({
-      name,
-      password,
-      devices: totalShares,
-      threshold,
-      onProgress: step => {
-        spinner.text = `${step.message} (${step.progress}%)`
-      },
-      onQRCodeReady: qrPayload => {
-        if (isJsonOutput()) {
-          // JSON mode: Print QR URL immediately for scripting
-          printResult(qrPayload)
-        } else if (isSilent()) {
-          // Silent mode: Print URL only
-          printResult(`QR Payload: ${qrPayload}`)
-        } else {
-          // Interactive: Display ASCII QR code
-          spinner.stop()
-          info('\nScan this QR code with your Vultisig mobile app:')
-          qrcode.generate(qrPayload, { small: true })
-          info(`\nOr use this URL: ${qrPayload}\n`)
-          spinner.start(`Waiting for ${totalShares} devices to join...`)
-        }
-      },
-      onDeviceJoined: (deviceId, totalJoined, required) => {
-        if (!isSilent()) {
-          spinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
-        } else if (!isJsonOutput()) {
-          printResult(`Device joined: ${totalJoined}/${required}`)
-        }
-      },
-    })
+    const result = await withAbortSignal(
+      ctx.sdk.createSecureVault({
+        name,
+        password,
+        devices: totalShares,
+        threshold,
+        onProgress: step => {
+          spinner.text = `${step.message} (${step.progress}%)`
+        },
+        onQRCodeReady: qrPayload => {
+          if (isJsonOutput()) {
+            // JSON mode: Print QR URL immediately for scripting
+            printResult(qrPayload)
+          } else if (isSilent()) {
+            // Silent mode: Print URL only
+            printResult(`QR Payload: ${qrPayload}`)
+          } else {
+            // Interactive: Display ASCII QR code
+            spinner.stop()
+            info('\nScan this QR code with your Vultisig mobile app:')
+            qrcode.generate(qrPayload, { small: true })
+            info(`\nOr use this URL: ${qrPayload}\n`)
+            info(chalk.gray('(Press Ctrl+C to cancel)\n'))
+            spinner.start(`Waiting for ${totalShares} devices to join...`)
+          }
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          if (!isSilent()) {
+            spinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
+          } else if (!isJsonOutput()) {
+            printResult(`Device joined: ${totalJoined}/${required}`)
+          }
+        },
+      }),
+      signal
+    )
 
     setupVaultEvents(result.vault)
     await ctx.setActiveVault(result.vault)
