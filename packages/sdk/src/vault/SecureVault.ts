@@ -93,6 +93,7 @@ export class SecureVault extends VaultBase {
   async sign(
     payload: SigningPayload,
     options: {
+      signal?: AbortSignal
       onQRCodeReady?: (qrPayload: string) => void
       onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
     } = {}
@@ -105,7 +106,10 @@ export class SecureVault extends VaultBase {
 
     // Sign using relay service with event emission
     const signature = await relaySigningService.signWithRelay(this.coreVault, payload, {
-      onProgress: (step: SigningStep) => this.emit('signingProgress', { step }),
+      signal: options.signal,
+      onProgress: (step: SigningStep) => {
+        this.emit('signingProgress', { step })
+      },
       onQRCodeReady: qrPayload => {
         this.emit('qrCodeReady', {
           qrPayload,
@@ -152,6 +156,7 @@ export class SecureVault extends VaultBase {
   async signBytes(
     options: SignBytesOptions,
     signingOptions: {
+      signal?: AbortSignal
       onQRCodeReady?: (qrPayload: string) => void
       onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
     } = {}
@@ -180,7 +185,10 @@ export class SecureVault extends VaultBase {
         chain: options.chain,
       },
       {
-        onProgress: (step: SigningStep) => this.emit('signingProgress', { step }),
+        signal: signingOptions.signal,
+        onProgress: (step: SigningStep) => {
+          this.emit('signingProgress', { step })
+        },
         onQRCodeReady: qrPayload => {
           this.emit('qrCodeReady', {
             qrPayload,

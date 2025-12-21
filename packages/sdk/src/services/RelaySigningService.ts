@@ -50,6 +50,8 @@ export type RelaySigningStep =
  * Options for relay signing
  */
 export type RelaySigningOptions = {
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal
   /** Progress callback - maps to SigningStep for consistency */
   onProgress?: (step: SigningStep) => void
   /** Callback when QR code is ready for display */
@@ -143,19 +145,36 @@ export class RelaySigningService {
     options: {
       timeout?: number
       pollInterval?: number
+      signal?: AbortSignal
       onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+      onProgress?: (step: SigningStep) => void
     } = {}
   ): Promise<string[]> {
-    const { timeout = 300000, pollInterval = 2000, onDeviceJoined } = options
+    const { timeout = 300000, pollInterval = 2000, signal, onDeviceJoined, onProgress } = options
     const startTime = Date.now()
     let lastJoinedCount = 0
 
     while (Date.now() - startTime < timeout) {
+      // Check for abort via signal
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
       try {
         // Query the relay session to see who has joined (same approach as keygen)
         const url = `${this.relayUrl}/${sessionId}`
         const allPeers = await queryUrl<string[]>(url)
         const uniquePeers = withoutDuplicates(allPeers)
+
+        // Report progress
+        onProgress?.({
+          step: 'coordinating',
+          progress: 30,
+          message: `Waiting for ${requiredDevices - uniquePeers.length} more devices...`,
+          mode: 'relay' as SigningMode,
+          participantsReady: uniquePeers.length,
+          participantCount: requiredDevices,
+        })
 
         // Notify about new devices
         if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
@@ -172,8 +191,12 @@ export class RelaySigningService {
           const otherPeers = uniquePeers.filter(p => p !== localPartyId)
           return [localPartyId, ...otherPeers]
         }
-      } catch {
-        // Ignore polling errors, continue waiting
+      } catch (error) {
+        // Re-throw abort errors
+        if (error instanceof Error && error.message === 'Operation aborted') {
+          throw error
+        }
+        // Ignore other polling errors, continue waiting
       }
 
       await new Promise(resolve => setTimeout(resolve, pollInterval))
@@ -195,20 +218,22 @@ export class RelaySigningService {
     payload: SigningPayload,
     options: RelaySigningOptions = {}
   ): Promise<Signature> {
-    const { onProgress, onQRCodeReady, onDeviceJoined, deviceTimeout, pollInterval } = options
+    const { signal, onProgress, onQRCodeReady, onDeviceJoined, deviceTimeout, pollInterval } = options
 
     type StepType = 'preparing' | 'coordinating' | 'signing' | 'broadcasting' | 'complete'
-    const reportProgress = (step: StepType, progress: number, message: string) => {
-      if (onProgress) {
-        onProgress({
-          step,
-          progress,
-          message,
-          mode: 'relay' as SigningMode,
-          participantCount: vault.signers.length,
-          participantsReady: 0,
-        })
+    const reportProgress = (step: StepType, progress: number, message: string, participantsReady = 0) => {
+      // Check for abort via signal
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
       }
+      onProgress?.({
+        step,
+        progress,
+        message,
+        mode: 'relay' as SigningMode,
+        participantCount: vault.signers.length,
+        participantsReady,
+      })
     }
 
     try {
@@ -265,7 +290,9 @@ export class RelaySigningService {
       const devices = await this.waitForDevices(sessionId, localPartyId, threshold, {
         timeout: deviceTimeout,
         pollInterval,
+        signal,
         onDeviceJoined,
+        onProgress,
       })
 
       reportProgress('coordinating', 50, `All ${devices.length} devices connected`)
@@ -354,20 +381,22 @@ export class RelaySigningService {
     },
     options: RelaySigningOptions = {}
   ): Promise<Signature> {
-    const { onProgress, onQRCodeReady, onDeviceJoined, deviceTimeout, pollInterval } = options
+    const { signal, onProgress, onQRCodeReady, onDeviceJoined, deviceTimeout, pollInterval } = options
 
     type StepType = 'preparing' | 'coordinating' | 'signing' | 'broadcasting' | 'complete'
-    const reportProgress = (step: StepType, progress: number, message: string) => {
-      if (onProgress) {
-        onProgress({
-          step,
-          progress,
-          message,
-          mode: 'relay' as SigningMode,
-          participantCount: vault.signers.length,
-          participantsReady: 0,
-        })
+    const reportProgress = (step: StepType, progress: number, message: string, participantsReady = 0) => {
+      // Check for abort via signal
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
       }
+      onProgress?.({
+        step,
+        progress,
+        message,
+        mode: 'relay' as SigningMode,
+        participantCount: vault.signers.length,
+        participantsReady,
+      })
     }
 
     try {
@@ -415,7 +444,9 @@ export class RelaySigningService {
       const devices = await this.waitForDevices(sessionId, localPartyId, threshold, {
         timeout: deviceTimeout,
         pollInterval,
+        signal,
         onDeviceJoined,
+        onProgress,
       })
 
       // Start MPC session

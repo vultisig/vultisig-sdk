@@ -140,11 +140,14 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
   try {
     const messageHashes = await vault.extractMessageHashes(payload)
 
-    const signature = await vault.sign({
-      transaction: payload,
-      chain: payload.coin.chain,
-      messageHashes,
-    })
+    const signature = await vault.sign(
+      {
+        transaction: payload,
+        chain: payload.coin.chain,
+        messageHashes,
+      },
+      { signal: params.signal }
+    )
 
     signSpinner.succeed('Transaction signed')
 

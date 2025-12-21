@@ -67,11 +67,11 @@ export class FastVault extends VaultBase {
    *
    * Mode parameter is ignored - fast vaults always use 'fast' mode.
    *
-   * @param mode - Signing mode (must be 'fast', others will throw)
    * @param payload - Transaction payload to sign
+   * @param options - Optional parameters including abort signal
    * @returns Signature from server coordination
    */
-  async sign(payload: SigningPayload): Promise<Signature> {
+  async sign(payload: SigningPayload, options?: { signal?: AbortSignal }): Promise<Signature> {
     try {
       // Ensure keyShares are loaded from vault file (lazy loading)
       await this.ensureKeySharesLoaded()
@@ -81,10 +81,13 @@ export class FastVault extends VaultBase {
       const password = await this.resolvePassword()
 
       // Sign with server coordination
-      const signature = await this.fastSigningService.signWithServer(this.coreVault, payload, password, step => {
-        // Emit progress on THIS vault instance
-        this.emit('signingProgress', { step })
-      })
+      const signature = await this.fastSigningService.signWithServer(
+        this.coreVault,
+        payload,
+        password,
+        step => this.emit('signingProgress', { step }),
+        options?.signal
+      )
 
       // Emit transaction signed event (serves as completion event)
       this.emit('transactionSigned', { signature, payload })
@@ -115,6 +118,7 @@ export class FastVault extends VaultBase {
    * @param options - Signing options
    * @param options.data - Pre-hashed data as Uint8Array, Buffer, or hex string
    * @param options.chain - Chain to determine algorithm and derivation path
+   * @param signingOptions - Optional parameters including abort signal
    * @returns Signature from server coordination
    * @throws {VaultError} If signing fails
    *
@@ -134,7 +138,7 @@ export class FastVault extends VaultBase {
    * })
    * ```
    */
-  async signBytes(options: SignBytesOptions): Promise<Signature> {
+  async signBytes(options: SignBytesOptions, signingOptions?: { signal?: AbortSignal }): Promise<Signature> {
     try {
       // Normalize input to hex string
       const messageHash = normalizeToHex(options.data)
@@ -153,9 +157,8 @@ export class FastVault extends VaultBase {
           chain: options.chain,
         },
         password,
-        step => {
-          this.emit('signingProgress', { step })
-        }
+        step => this.emit('signingProgress', { step }),
+        signingOptions?.signal
       )
 
       // Emit signing complete event
