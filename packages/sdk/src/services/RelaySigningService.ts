@@ -15,21 +15,22 @@
 import { create, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@core/chain/Chain'
 import { getChainKind } from '@core/chain/ChainKind'
-import { type SignatureAlgorithm,signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
+import { type SignatureAlgorithm, signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
 import { toCompressedString } from '@core/chain/utils/protobuf/toCompressedString'
 import { getSevenZip } from '@core/mpc/compression/getSevenZip'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { keysign } from '@core/mpc/keysign'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
-import { getMpcRelayMessages } from '@core/mpc/message/relay/get'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
 import { KeysignMessageSchema, KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
+import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { randomUUID } from '../crypto'
-import type { Signature, SigningMode,SigningPayload, SigningStep } from '../types'
+import type { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
 
 // Default relay server URL
 const DEFAULT_RELAY_URL = 'https://api.vultisig.com/router'
@@ -145,32 +146,31 @@ export class RelaySigningService {
       onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
     } = {}
   ): Promise<string[]> {
-    const { timeout = 300000, pollInterval = 1000, onDeviceJoined } = options
+    const { timeout = 300000, pollInterval = 2000, onDeviceJoined } = options
     const startTime = Date.now()
-    const knownDevices = new Set<string>([localPartyId])
+    let lastJoinedCount = 0
 
     while (Date.now() - startTime < timeout) {
       try {
-        // Check for messages to discover peers
-        const messages = await getMpcRelayMessages({
-          serverUrl: this.relayUrl,
-          sessionId,
-          localPartyId,
-        })
+        // Query the relay session to see who has joined (same approach as keygen)
+        const url = `${this.relayUrl}/${sessionId}`
+        const allPeers = await queryUrl<string[]>(url)
+        const uniquePeers = withoutDuplicates(allPeers)
 
-        // Track new devices from message senders
-        for (const msg of messages) {
-          if (msg.from && !knownDevices.has(msg.from)) {
-            knownDevices.add(msg.from)
-            if (onDeviceJoined) {
-              onDeviceJoined(msg.from, knownDevices.size, requiredDevices)
-            }
+        // Notify about new devices
+        if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
+          const newDevices = uniquePeers.slice(lastJoinedCount)
+          for (const device of newDevices) {
+            onDeviceJoined(device, uniquePeers.length, requiredDevices)
           }
+          lastJoinedCount = uniquePeers.length
         }
 
         // Check if we have enough devices
-        if (knownDevices.size >= requiredDevices) {
-          return Array.from(knownDevices)
+        if (uniquePeers.length >= requiredDevices) {
+          // Ensure local party is first in the list
+          const otherPeers = uniquePeers.filter(p => p !== localPartyId)
+          return [localPartyId, ...otherPeers]
         }
       } catch {
         // Ignore polling errors, continue waiting
@@ -179,7 +179,7 @@ export class RelaySigningService {
       await new Promise(resolve => setTimeout(resolve, pollInterval))
     }
 
-    throw new Error(`Timeout waiting for devices. Got ${knownDevices.size}/${requiredDevices} devices.`)
+    throw new Error(`Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`)
   }
 
   /**

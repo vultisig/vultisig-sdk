@@ -208,35 +208,66 @@ export class ShellSession {
 
   /**
    * Run an async operation with Ctrl+C cancellation support.
-   * The signal is passed to the function (for operations that support it),
-   * and SIGINT directly rejects the promise for immediate cancellation.
+   * Uses Promise.race to avoid wrapping the original promise chain,
+   * which can interfere with MPC protocol timing.
    */
   private withCancellation<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const abortController = new AbortController()
 
-    return new Promise<T>((resolve, reject) => {
-      const onSigint = () => {
-        cleanup()
-        abortController.abort()
-        reject(new Error('Operation cancelled'))
-      }
-
-      const cleanup = () => {
-        process.removeListener('SIGINT', onSigint)
-      }
-
-      process.on('SIGINT', onSigint)
-
-      fn(abortController.signal)
-        .then(result => {
-          cleanup()
-          resolve(result)
-        })
-        .catch(err => {
-          cleanup()
-          reject(err)
-        })
+    // Create a cancellation promise that rejects on SIGINT
+    let rejectCancellation: (err: Error) => void
+    const cancellationPromise = new Promise<never>((_, reject) => {
+      rejectCancellation = reject
     })
+
+    const onSigint = () => {
+      cleanup()
+      abortController.abort()
+      rejectCancellation(new Error('Operation cancelled'))
+    }
+
+    const cleanup = () => {
+      process.removeListener('SIGINT', onSigint)
+    }
+
+    process.on('SIGINT', onSigint)
+
+    // Race the operation against the cancellation promise
+    // This preserves the original promise chain timing
+    return Promise.race([fn(abortController.signal), cancellationPromise]).finally(cleanup)
+  }
+
+  /**
+   * Run an async operation with Ctrl+C cancellation support.
+   * For MPC signing operations (send, swap), we force exit on Ctrl+C
+   * since MPC signing can't be gracefully cancelled mid-operation.
+   */
+  private async withSigintHandler<T>(fn: () => Promise<T>): Promise<T> {
+    const onSigint = () => {
+      cleanup()
+      // Stop spinners and clean up terminal
+      stopAllSpinners()
+      process.stdout.write('\x1B[?25h') // Show cursor
+      process.stdout.write('\r\x1B[K') // Clear current line
+      console.log(chalk.yellow('\nOperation cancelled'))
+      // Force exit - MPC signing operations can't be gracefully cancelled
+      process.exit(0)
+    }
+
+    const cleanup = () => {
+      process.removeListener('SIGINT', onSigint)
+    }
+
+    process.on('SIGINT', onSigint)
+
+    try {
+      const result = await fn()
+      cleanup()
+      return result
+    } catch (err) {
+      cleanup()
+      throw err
+    }
   }
 
   /**
@@ -571,9 +602,11 @@ export class ShellSession {
     }
 
     try {
-      await this.withCancellation(() => executeSend(this.ctx, { chain, to, amount, tokenId, memo }))
+      // Use withSigintHandler instead of withCancellation - the latter's Promise.race
+      // interferes with the MPC protocol's async message handling for fast vault signing
+      await this.withSigintHandler(() => executeSend(this.ctx, { chain, to, amount, tokenId, memo }))
     } catch (err: any) {
-      if (err.message === 'Transaction cancelled by user') {
+      if (err.message === 'Transaction cancelled by user' || err.message === 'Operation cancelled') {
         console.log(chalk.yellow('\nTransaction cancelled'))
         return
       }
@@ -697,11 +730,13 @@ export class ShellSession {
     }
 
     try {
-      await this.withCancellation(() =>
+      // Use withSigintHandler instead of withCancellation - the latter's Promise.race
+      // interferes with the MPC protocol's async message handling for fast vault signing
+      await this.withSigintHandler(() =>
         executeSwap(this.ctx, { fromChain, toChain, amount, fromToken, toToken, slippage })
       )
     } catch (err: any) {
-      if (err.message === 'Swap cancelled by user') {
+      if (err.message === 'Swap cancelled by user' || err.message === 'Operation cancelled') {
         console.log(chalk.yellow('\nSwap cancelled'))
         return
       }

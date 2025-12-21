@@ -26,13 +26,16 @@ import { VaultError, VaultErrorCode } from './VaultError'
  * SecureVault - Multi-device MPC vault
  *
  * Secure vaults use multi-device threshold signature scheme with (n+1)/2 threshold.
- * They can be encrypted or unencrypted and support relay/local signing modes.
+ * They can be encrypted or unencrypted.
  *
  * Key characteristics:
  * - Can be encrypted or unencrypted (isEncrypted varies)
  * - (n+1)/2 threshold for n signers
- * - Supports 'relay' and/or 'local' signing modes (when implemented)
+ * - Currently supports 'relay' signing mode
  * - Does NOT support 'fast' signing mode
+ *
+ * @todo Implement 'local' signing mode for direct device-to-device MPC
+ *       without relay server (requires LocalSigningService)
  */
 export class SecureVault extends VaultBase {
   private readonly context: VaultContext
@@ -53,11 +56,11 @@ export class SecureVault extends VaultBase {
   }
 
   /**
-   * Secure vaults support relay and/or local signing modes
-   * Not yet implemented - returns empty array
+   * Secure vaults currently support relay signing mode.
+   * Local signing mode is planned for future implementation.
    */
   get availableSigningModes(): SigningMode[] {
-    return []
+    return ['relay']
   }
 
   /**
