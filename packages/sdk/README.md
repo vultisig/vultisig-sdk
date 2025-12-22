@@ -7,7 +7,9 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 ## Features
 
 - 🔐 **Multi-Party Computation (MPC)** - Secure threshold signatures using DKLS and Schnorr protocols
-- 🏦 **Fast Vault Creation** - Server-assisted vault generation for single-device usage
+- 🏦 **Fast Vault** - Server-assisted 2-of-2 vault for quick setup and instant signing
+- 🛡️ **Secure Vault** - Multi-device N-of-M threshold signing with mobile device pairing
+- 📲 **QR Code Pairing** - Pair with Vultisig mobile apps (iOS/Android) for vault creation and signing
 - 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 40+ blockchains
 - 🔗 **Address Derivation** - Generate addresses across multiple blockchain networks
 - 📱 **Cross-Platform** - Works in browsers and Node.js (React Native coming soon)
@@ -63,7 +65,49 @@ console.log("ETH:", ethAddress); // 0x...
 console.log("SOL:", solAddress); // 9WzD...
 ```
 
-### 4. Import/Export Vaults
+### 4. Create a Secure Vault (Multi-Device)
+
+```typescript
+// Create a secure vault with 2-of-3 threshold
+const { vault, vaultId, sessionId } = await sdk.createSecureVault({
+  name: "Team Wallet",
+  devices: 3,                    // Total number of devices
+  threshold: 2,                  // Optional: defaults to ceil((devices+1)/2)
+  password: "optional-password", // Optional: encrypt the vault
+  onQRCodeReady: (qrPayload) => {
+    // Display this QR code for other devices to scan with Vultisig app
+    displayQRCode(qrPayload);
+  },
+  onDeviceJoined: (deviceId, totalJoined, required) => {
+    console.log(`Device joined: ${totalJoined}/${required}`);
+  },
+  onProgress: (step) => {
+    console.log(`${step.step}: ${step.message}`);
+  }
+});
+
+console.log("Vault created:", vault.name);
+```
+
+### 5. Sign with Secure Vault
+
+```typescript
+// Signing requires coordination with other devices
+await vault.sign(transactionPayload, {
+  onQRCodeReady: (qrPayload) => {
+    // Display QR for devices to join the signing session
+    displayQRCode(qrPayload);
+  },
+  onDeviceJoined: (deviceId, total, required) => {
+    console.log(`Signing: ${total}/${required} devices ready`);
+  },
+  onProgress: (step) => {
+    console.log(`Signing progress: ${step.message}`);
+  }
+});
+```
+
+### 6. Import/Export Vaults
 
 ```typescript
 // Check if a vault file is encrypted
@@ -98,6 +142,32 @@ The SDK supports address derivation and operations for 40+ blockchain networks:
 | Litecoin  | `litecoin`  | Litecoin mainnet    |
 | Dogecoin  | `dogecoin`  | Dogecoin mainnet    |
 | ...       | ...         | And many more       |
+
+## Vault Types
+
+The SDK supports two vault types for different security and usability requirements:
+
+| Feature | Fast Vault | Secure Vault |
+|---------|------------|--------------|
+| **Threshold** | 2-of-2 | N-of-M (configurable) |
+| **Setup** | Server-assisted, instant | Multi-device, requires pairing |
+| **Signing** | Instant via VultiServer | Requires device coordination |
+| **Use Cases** | Personal wallets, quick setup | Team wallets, high security, custody |
+| **Device Pairing** | None required | QR code with Vultisig mobile app |
+| **Password** | Required | Optional |
+
+### When to Use Each Type
+
+**Fast Vault** - Best for:
+- Individual users wanting quick setup
+- Development and testing
+- Situations where server-assisted signing is acceptable
+
+**Secure Vault** - Best for:
+- Team or organizational wallets
+- High-value assets requiring multi-party approval
+- Scenarios requiring configurable thresholds (2-of-3, 3-of-5, etc.)
+- Maximum security without server dependency during signing
 
 ## Framework Integration Example
 
@@ -236,6 +306,26 @@ Create a new vault using VultiServer assistance. Returns the vaultId.
 
 Verify vault creation with email verification code. Returns the verified vault.
 
+#### `createSecureVault(options): Promise<{ vault, vaultId, sessionId }>`
+
+Create a multi-device secure vault with N-of-M threshold signing.
+
+**Parameters:**
+
+- `options.name: string` - Vault name
+- `options.devices: number` - Number of devices participating (minimum 2)
+- `options.threshold?: number` - Signing threshold (defaults to ceil((devices+1)/2))
+- `options.password?: string` - Optional vault encryption password
+- `options.onQRCodeReady?: (qrPayload: string) => void` - Called when QR code is ready for device pairing
+- `options.onDeviceJoined?: (deviceId: string, total: number, required: number) => void` - Called when a device joins
+- `options.onProgress?: (step: VaultCreationStep) => void` - Called with creation progress updates
+
+**Returns:**
+
+- `vault: SecureVault` - The created vault instance
+- `vaultId: string` - Unique vault identifier
+- `sessionId: string` - Session ID used for creation
+
 #### `vault.address(chain): Promise<string>`
 
 Derive a blockchain address for the given chain (called on Vault instance).
@@ -251,6 +341,28 @@ Export a vault to encrypted backup format as a Blob (called on Vault instance).
 #### `vault.exportAsBase64(password?): Promise<string>`
 
 Export a vault to encrypted backup format as a base64 string (called on Vault instance).
+
+#### `secureVault.sign(payload, options?): Promise<SigningResult>`
+
+Sign a transaction with a SecureVault (requires device coordination).
+
+**Parameters:**
+
+- `payload: SigningPayload` - Transaction data to sign
+- `options.signal?: AbortSignal` - Optional signal to cancel the signing operation
+- `options.onQRCodeReady?: (qrPayload: string) => void` - Called when QR code is ready for device pairing
+- `options.onDeviceJoined?: (deviceId: string, total: number, required: number) => void` - Called when a device joins
+- `options.onProgress?: (step: SigningStep) => void` - Called with signing progress updates
+
+#### `secureVault.signBytes(options, signingOptions?): Promise<SigningResult>`
+
+Sign arbitrary bytes with a SecureVault.
+
+**Parameters:**
+
+- `options.chain: string` - Chain for signature algorithm selection
+- `options.messages: (Uint8Array | Buffer | string)[]` - Messages to sign (hex strings or bytes)
+- `signingOptions.signal?: AbortSignal` - Optional signal to cancel the operation
 
 ### Utility Methods
 
@@ -306,6 +418,8 @@ See the `/examples` directory for complete sample applications:
 - **Private Keys**: The SDK uses threshold signatures - private keys are never stored in a single location
 - **Encryption**: Vault keyshares are encrypted using AES-GCM with user-provided passwords
 - **Server Trust**: Fast Vaults use VultiServer as one party in the MPC protocol
+- **Secure Vault Independence**: Secure Vaults only use the relay server for coordination, not signing
+- **Configurable Thresholds**: Secure Vaults support custom M-of-N thresholds for multi-party approval
 - **WASM Integrity**: Ensure WASM files are served from trusted sources
 
 ## Development

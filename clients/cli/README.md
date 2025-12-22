@@ -53,7 +53,7 @@ vultisig completion fish >> ~/.config/fish/completions/vultisig.fish
 
 ## Quick Start
 
-### Create a Vault
+### Create a Fast Vault
 
 ```bash
 vultisig create
@@ -64,6 +64,46 @@ You'll be prompted to:
 2. Set a password (min 8 characters)
 3. Provide an email for verification
 4. Enter the verification code sent to your email
+
+### Create a Secure Vault (Multi-Device)
+
+```bash
+vultisig create --secure --name "Team Wallet" --shares 3
+```
+
+This creates a secure vault with configurable N-of-M threshold:
+1. A QR code displays in your terminal
+2. Other participants scan with Vultisig mobile app (iOS/Android)
+3. Once all devices join, keygen runs automatically
+4. Vault is created and ready to use
+
+**Secure vault options:**
+- `--shares <n>` - Number of participating devices (default: 2)
+- `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
+
+**Example session:**
+```bash
+$ vultisig create --secure --name "Team Wallet" --shares 3
+
+Creating secure vault: Team Wallet (2-of-3)
+
+Scan this QR code with Vultisig mobile app:
+████████████████████████████
+█ ▄▄▄▄▄ █▀ ▄█▄█▀█ ▄▄▄▄▄ █
+█ █   █ █▀▄▄▄ ▄██ █   █ █
+...
+
+Waiting for devices to join...
+⠋ Device joined: iPhone-abc123 (2/3)
+⠋ Device joined: Android-def456 (3/3)
+
+All devices joined. Running keygen...
+✓ ECDSA keygen complete
+✓ EdDSA keygen complete
+
+✓ Secure vault created: Team Wallet
+  Vault ID: vault_abc123def456
+```
 
 ### Check Balances
 
@@ -91,6 +131,29 @@ vultisig send ethereum 0xRecipient... 100 --token 0xTokenAddress...
 vultisig send ethereum 0xRecipient... 0.1 --password mypassword
 ```
 
+**Secure vault transactions:**
+
+When using a secure vault, a QR code displays for device coordination:
+
+```bash
+$ vultisig send ethereum 0x742d35Cc... 0.1
+
+Preparing transaction...
+
+Scan this QR code to approve transaction:
+████████████████████████████
+...
+
+Waiting for devices to join signing session...
+⠋ Device joined: iPhone-abc123 (2/2)
+
+Signing transaction...
+✓ Transaction signed
+✓ Broadcast: 0x9f8e7d6c...
+```
+
+You can cancel with Ctrl+C while waiting for devices.
+
 ### Interactive Shell
 
 Start an interactive session with tab completion and password caching:
@@ -107,7 +170,8 @@ vultisig -i
 
 | Command | Description |
 |---------|-------------|
-| `create` | Create a new vault |
+| `create` | Create a new fast vault (server-assisted) |
+| `create --secure` | Create a secure vault (multi-device MPC) |
 | `import <file>` | Import vault from .vult file |
 | `export [path]` | Export vault to file |
 | `verify <vaultId>` | Verify vault with email code |
@@ -115,6 +179,12 @@ vultisig -i
 | `switch <vaultId>` | Switch to a different vault |
 | `rename <newName>` | Rename the active vault |
 | `info` | Show detailed vault information |
+
+**Create options:**
+- `--secure` - Create a secure vault instead of fast vault
+- `--name <name>` - Vault name
+- `--shares <n>` - Number of devices for secure vault (default: 2)
+- `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
 
 ### Wallet Operations
 

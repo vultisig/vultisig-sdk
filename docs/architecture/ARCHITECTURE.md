@@ -502,26 +502,75 @@ class FastVault extends VaultBase {
 
 **File:** `src/vault/SecureVault.ts`
 
-Multi-device MPC vault for maximum security.
+Multi-device MPC vault for maximum security with configurable N-of-M thresholds.
 
 ```typescript
 class SecureVault extends VaultBase {
-  // Can be encrypted or unencrypted
+  // Optionally encrypted
   // Multiple devices participate in signing
-  // Supports 'relay' and 'local' signing modes (planned)
+  // Uses relay server for device coordination
 
-  async sign(payload: SigningPayload, password?: string): Promise<Signature> {
-    // Coordinates with other devices
+  // Static factory method for vault creation
+  static async create(
+    context: VaultContext,
+    options: SecureVaultCreateOptions
+  ): Promise<{ vault: SecureVault; vaultId: string; sessionId: string }> {
+    // Orchestrates multi-device keygen ceremony
+  }
+
+  async sign(
+    payload: SigningPayload,
+    options?: SigningOptions
+  ): Promise<Signature> {
+    // Coordinates with devices via RelaySigningService
+  }
+
+  async signBytes(
+    options: SignBytesOptions,
+    signingOptions?: SigningOptions
+  ): Promise<Signature> {
+    // Signs arbitrary pre-hashed data with device coordination
+  }
+
+  get availableSigningModes(): SigningMode[] {
+    return ['relay'];  // 'local' mode planned for future
   }
 }
 ```
 
 **Characteristics:**
 
-- Configurable encryption
-- N-of-M threshold (multiple devices)
+- Configurable encryption (optional password)
+- N-of-M threshold with formula: `Math.ceil((devices + 1) / 2)`
+- QR code pairing with Vultisig mobile apps (iOS/Android)
+- Relay server coordination for device communication
 - Higher security (no single point of compromise)
-- Requires device coordination
+- Supports both ECDSA (DKLS) and EdDSA (Schnorr) key generation
+
+**Creation Options:**
+
+```typescript
+interface SecureVaultCreateOptions {
+  name: string;
+  devices: number;               // Total participating devices (min 2)
+  threshold?: number;            // Signing threshold (default: ceil((devices+1)/2))
+  password?: string;             // Optional encryption
+  onProgress?: (step: VaultCreationStep) => void;
+  onQRCodeReady?: (qrPayload: string) => void;
+  onDeviceJoined?: (deviceId: string, total: number, required: number) => void;
+}
+```
+
+**Signing Options:**
+
+```typescript
+interface SigningOptions {
+  signal?: AbortSignal;          // Cancellation support
+  onQRCodeReady?: (qrPayload: string) => void;
+  onDeviceJoined?: (deviceId: string, total: number, required: number) => void;
+  onProgress?: (step: SigningStep) => void;
+}
+```
 
 ### Vault Services
 
@@ -632,6 +681,84 @@ Fetches fiat values for tokens/coins.
 
 Caches vault passwords with configurable TTL.
 
+### RelaySigningService
+
+**File:** `src/services/RelaySigningService.ts`
+
+Coordinates multi-device threshold signing via relay server.
+
+```typescript
+class RelaySigningService {
+  // Generate session parameters for signing
+  generateSessionParams(): { sessionId: string; hexEncryptionKey: string; localPartyId: string };
+
+  // Generate QR payload for device pairing
+  generateQRPayload(options: QRPayloadOptions): Promise<string>;
+
+  // Wait for devices to join the signing session
+  waitForDevices(options: WaitOptions): Promise<string[]>;
+
+  // Execute the full relay signing flow
+  signWithRelay(options: SignWithRelayOptions): Promise<Signature>;
+
+  // Sign arbitrary bytes with relay coordination
+  signBytesWithRelay(options: SignBytesWithRelayOptions): Promise<Signature>;
+}
+```
+
+**Signing Flow:**
+
+```
+1. Generate session parameters (sessionId, encryptionKey, localPartyId)
+2. Generate QR payload with compressed protobuf
+3. Display QR → Other devices scan with Vultisig app
+4. Poll relay server for device joins (5-minute timeout)
+5. Once threshold reached, execute MPC keysign (ECDSA or EdDSA)
+6. Return aggregated signature
+```
+
+**QR Payload Format:**
+
+```
+vultisig://?type=SignTransaction&tssType=Keysign&jsonData=<compressed_base64>
+```
+
+The payload uses LZMA (7-zip) compression for efficient QR encoding.
+
+### SecureVaultCreationService
+
+**File:** `src/services/SecureVaultCreationService.ts`
+
+Orchestrates multi-device MPC vault creation ceremony.
+
+```typescript
+class SecureVaultCreationService {
+  // Execute the full vault creation ceremony
+  createVault(options: CreateVaultOptions): Promise<SecureVaultCreationResult>;
+}
+```
+
+**Creation Steps:**
+
+```
+1. initializing    - Generate session parameters
+2. generating_qr   - Create QR payload for device pairing
+3. waiting_for_devices - Poll relay for device joins with callbacks
+4. keygen_ecdsa    - Run DKLS keygen for ECDSA keys (secp256k1)
+5. keygen_eddsa    - Run Schnorr keygen for EdDSA keys (ed25519)
+6. finalizing      - Create vault object and backup file
+```
+
+**Threshold Calculation:**
+
+```typescript
+const threshold = Math.ceil((devices + 1) / 2);
+// 2 devices → 2-of-2
+// 3 devices → 2-of-3
+// 4 devices → 3-of-4
+// 5 devices → 3-of-5
+```
+
 ### SwapService
 
 **File:** `src/vault/services/SwapService.ts`
@@ -739,6 +866,7 @@ interface SdkEvents {
 
 ```typescript
 interface VaultEvents {
+  // Common vault events
   balanceUpdated: { chain: string; balance: Balance };
   transactionSigned: { chain: string; txHash: string };
   chainAdded: { chain: string };
@@ -751,6 +879,13 @@ interface VaultEvents {
   deleted: void;
   loaded: void;
   error: { error: Error };
+
+  // SecureVault-specific events
+  qrCodeReady: { qrPayload: string; action: 'keygen' | 'keysign'; sessionId: string };
+  deviceJoined: { deviceId: string; totalJoined: number; required: number };
+  allDevicesReady: { devices: string[]; sessionId: string };
+  keygenProgress: { phase: 'ecdsa' | 'eddsa' | 'complete'; round?: number; message?: string };
+  signingProgress: { step: string; progress: number; message: string };
 }
 ```
 
@@ -989,6 +1124,99 @@ vault.sign(result.keysignPayload, password)
 vault.broadcast(chain, keysignPayload, signature)
   │
   └── Return txHash
+```
+
+### Secure Vault Creation Flow
+
+```
+sdk.createSecureVault({ name, devices: 3, onQRCodeReady, onDeviceJoined })
+  │
+  └── SecureVaultCreationService.createVault()
+        │
+        ├── Step 1: Generate session parameters
+        │     └── { sessionId, hexEncryptionKey, localPartyId }
+        │
+        ├── Step 2: Generate QR payload
+        │     └── vultisig://?type=NewVault&tssType=Keygen&jsonData=<compressed>
+        │
+        ├── Step 3: onQRCodeReady(qrPayload)
+        │     └── Application displays QR code
+        │
+        ├── Step 4: Wait for devices (poll relay server)
+        │     │
+        │     ├── Device B scans QR → onDeviceJoined(id, 2, 3)
+        │     │
+        │     └── Device C scans QR → onDeviceJoined(id, 3, 3)
+        │
+        ├── Step 5: Execute DKLS keygen (ECDSA)
+        │     └── MPC protocol generates secp256k1 key shares
+        │
+        ├── Step 6: Execute Schnorr keygen (EdDSA)
+        │     └── MPC protocol generates ed25519 key shares
+        │
+        ├── Step 7: Create vault and backup file
+        │     └── Returns { vault, vaultId, sessionId }
+        │
+        └── Return SecureVault instance
+```
+
+### Secure Vault Signing Flow
+
+```
+Device A (SDK)              Relay Server              Device B (Mobile)
+    │                            │                          │
+    │  1. Generate session       │                          │
+    │     parameters             │                          │
+    │                            │                          │
+    │  2. Generate QR payload    │                          │
+    │     (compressed protobuf)  │                          │
+    │                            │                          │
+    │  3. onQRCodeReady ─────────┼──────────────────────────│
+    │     (display QR)           │                          │
+    │                            │                          │
+    │                            │  4. Scan QR ─────────────│
+    │                            │     (join session)       │
+    │                            │                          │
+    │  5. onDeviceJoined ────────┼──────────────────────────│
+    │     (update UI)            │                          │
+    │                            │                          │
+    │                            │                          │
+    │══════════════════ MPC Keysign Protocol ══════════════│
+    │                            │                          │
+    │  Round 1 ──────────────────┼──────────────────────────│
+    │          ◄─────────────────┼──────────────────────────│
+    │                            │                          │
+    │  Round 2 ──────────────────┼──────────────────────────│
+    │          ◄─────────────────┼──────────────────────────│
+    │                            │                          │
+    │  Round N ──────────────────┼──────────────────────────│
+    │          ◄─────────────────┼──────────────────────────│
+    │                            │                          │
+    │══════════════════════════════════════════════════════│
+    │                            │                          │
+    │  6. Signature aggregated   │                          │
+    │                            │                          │
+    │  7. Return Signature       │                          │
+    │                            │                          │
+    ▼                            ▼                          ▼
+
+vault.sign(payload, { onQRCodeReady, onDeviceJoined })
+  │
+  └── RelaySigningService.signWithRelay()
+        │
+        ├── generateSessionParams()
+        │
+        ├── generateQRPayload()
+        │
+        ├── onQRCodeReady(qrPayload)
+        │
+        ├── waitForDevices()
+        │     └── Polls relay until threshold devices join
+        │
+        ├── Core: keysign() - MPC signing protocol
+        │     └── ECDSA (DKLS) or EdDSA (Schnorr) based on chain
+        │
+        └── Return Signature
 ```
 
 ---

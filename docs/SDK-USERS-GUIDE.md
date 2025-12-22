@@ -143,7 +143,15 @@ sdk.dispose()
 The SDK supports two types of vaults:
 
 - **FastVault**: 2-of-2 MPC with VultiServer assistance. Always encrypted with password. Best for quick setup and individual use.
-- **SecureVault** *(Coming Soon)*: Multi-device MPC without server. Optionally encrypted. Best for maximum security and multi-device scenarios.
+- **SecureVault**: Multi-device N-of-M MPC with configurable thresholds. Optionally encrypted. Best for maximum security, teams, and multi-device scenarios.
+
+| Feature | FastVault | SecureVault |
+|---------|-----------|-------------|
+| **Threshold** | 2-of-2 (fixed) | N-of-M (configurable) |
+| **Setup** | Server-assisted, instant | Multi-device, requires QR pairing |
+| **Signing** | Instant via VultiServer | Requires device coordination |
+| **Password** | Required | Optional |
+| **Use Cases** | Personal wallets, development | Team wallets, high security, custody |
 
 ### Supported Chains
 
@@ -454,6 +462,150 @@ Fast vaults require email verification. The vault is only returned **after succe
 4. On success, the vault is saved to storage, set as active, and **returned**
 
 **If the process is killed before verification completes, the vault is lost.** This is intentional - unverified vaults cannot be used for signing anyway. The user simply needs to call `createFastVault()` again to restart the process.
+
+### Creating Secure Vaults
+
+Secure vaults use multi-device MPC with configurable N-of-M thresholds. Creation requires coordination with other devices running the Vultisig mobile app.
+
+```typescript
+// Create a 2-of-3 secure vault
+const { vault, vaultId, sessionId } = await sdk.createSecureVault({
+  name: "Team Wallet",
+  devices: 3,                    // Total number of devices
+  threshold: 2,                  // Signing threshold (defaults to ceil((devices+1)/2))
+  password: "OptionalPassword",  // Optional encryption password
+
+  // Called when QR code is ready for device pairing
+  onQRCodeReady: (qrPayload) => {
+    // Display this QR for other devices to scan with Vultisig app
+    displayQRCode(qrPayload);
+  },
+
+  // Called each time a device joins
+  onDeviceJoined: (deviceId, totalJoined, required) => {
+    console.log(`Device joined: ${totalJoined}/${required}`);
+  },
+
+  // Called with creation progress updates
+  onProgress: (step) => {
+    console.log(`${step.step}: ${step.message} (${step.progress}%)`);
+  }
+});
+
+console.log('Secure vault created:', vault.name);
+console.log('Vault ID:', vaultId);
+```
+
+**Creation Flow:**
+
+1. `createSecureVault()` generates session parameters and a QR payload
+2. `onQRCodeReady` callback receives the QR data - display this for other devices
+3. Other participants scan the QR with the Vultisig mobile app (iOS/Android)
+4. `onDeviceJoined` fires as each device joins the session
+5. Once all devices join, MPC keygen runs automatically (DKLS for ECDSA, Schnorr for EdDSA)
+6. The vault is created and saved, then returned
+
+**Threshold Configuration:**
+
+The threshold determines how many devices must participate in signing:
+
+| Devices | Default Threshold | Can Sign With |
+|---------|-------------------|---------------|
+| 2 | 2 | Both devices |
+| 3 | 2 | Any 2 of 3 |
+| 4 | 3 | Any 3 of 4 |
+| 5 | 3 | Any 3 of 5 |
+
+Formula: `threshold = Math.ceil((devices + 1) / 2)`
+
+**Cancellation Support:**
+
+```typescript
+const controller = new AbortController();
+
+// Allow user to cancel
+cancelButton.onclick = () => controller.abort();
+
+try {
+  const { vault } = await sdk.createSecureVault({
+    name: "Team Wallet",
+    devices: 3,
+    signal: controller.signal,
+    onQRCodeReady: displayQRCode
+  });
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.log('Vault creation cancelled');
+  }
+}
+```
+
+### Signing with Secure Vault
+
+Signing with a secure vault requires coordination with other devices. The threshold number of devices must participate.
+
+```typescript
+// Prepare the transaction as usual
+const keysignPayload = await vault.prepareSendTx({
+  coin,
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+  amount: '100000000000000000'
+});
+
+// Sign with device coordination
+const signature = await vault.sign(keysignPayload, {
+  // Called when QR is ready for devices to join signing session
+  onQRCodeReady: (qrPayload) => {
+    displayQRCode(qrPayload);
+    console.log('Scan with other devices to approve transaction');
+  },
+
+  // Called as devices join the signing session
+  onDeviceJoined: (deviceId, total, required) => {
+    console.log(`Signing: ${total}/${required} devices ready`);
+  },
+
+  // Called with signing progress updates
+  onProgress: (step) => {
+    console.log(`${step.step}: ${step.message}`);
+  }
+});
+
+// Broadcast once signature is obtained
+const txHash = await vault.broadcastTx({
+  chain: Chain.Ethereum,
+  keysignPayload,
+  signature
+});
+```
+
+**Signing Flow:**
+
+1. Call `vault.sign()` with transaction payload and callbacks
+2. `onQRCodeReady` fires with QR data - display for other participants
+3. Other devices scan QR and approve the transaction in the Vultisig app
+4. `onDeviceJoined` fires as devices join the signing session
+5. Once threshold is reached, MPC signing runs automatically
+6. Signature is returned and can be broadcast
+
+**Signing Arbitrary Bytes with Secure Vault:**
+
+```typescript
+// Sign pre-hashed data (useful for custom transaction construction)
+const signature = await vault.signBytes({
+  chain: Chain.Ethereum,
+  messages: [transactionHash]  // Uint8Array, Buffer, or hex string
+}, {
+  onQRCodeReady: displayQRCode,
+  onDeviceJoined: (id, total, required) => {
+    console.log(`${total}/${required} ready`);
+  }
+});
+```
+
+**Timeout Behavior:**
+
+Device coordination has a 5-minute timeout by default. If threshold devices don't join within this window, the signing operation fails.
 
 ### Importing Vaults
 
@@ -781,7 +933,7 @@ type Signature = {
 }
 ```
 
-**Note:** `signBytes()` is currently only available for FastVault. SecureVault support is planned for a future release.
+**Note:** `signBytes()` is available for both FastVault and SecureVault. For SecureVault, provide signing options with callbacks for device coordination.
 
 ### Token Management
 
@@ -1414,13 +1566,15 @@ class Vultisig {
     onProgress?: (step: VaultCreationStep) => void
   }): Promise<string>
 
-  // Coming Soon - Not yet implemented
+  // Create multi-device secure vault with N-of-M threshold
   createSecureVault(options: {
     name: string
-    password: string
-    devices: number
-    threshold?: number
+    password?: string              // Optional encryption
+    devices: number                // Number of participating devices
+    threshold?: number             // Signing threshold (defaults to ceil((devices+1)/2))
     onProgress?: (step: VaultCreationStep) => void
+    onQRCodeReady?: (qrPayload: string) => void
+    onDeviceJoined?: (deviceId: string, total: number, required: number) => void
   }): Promise<{ vault: SecureVault, vaultId: string, sessionId: string }>
 
   // Vault management
@@ -1476,10 +1630,18 @@ class VaultBase {
 
   // Transactions
   prepareSendTx(params: SendTxParams): Promise<SigningPayload>
-  sign(payload: SigningPayload): Promise<Signature>
-  signBytes(options: SignBytesOptions): Promise<Signature>  // Sign pre-hashed data
+  sign(payload: SigningPayload, options?: SigningOptions): Promise<Signature>
+  signBytes(options: SignBytesOptions, signingOptions?: SigningOptions): Promise<Signature>
   broadcastTx(params: BroadcastParams): Promise<string>
   gas(chain: Chain): Promise<GasInfo>
+
+  // SigningOptions (for SecureVault device coordination)
+  // {
+  //   signal?: AbortSignal
+  //   onQRCodeReady?: (qrPayload: string) => void
+  //   onDeviceJoined?: (deviceId: string, total: number, required: number) => void
+  //   onProgress?: (step: SigningStep) => void
+  // }
 
   // Swaps
   getSwapQuote(params: SwapQuoteParams): Promise<SwapQuoteResult>
@@ -1526,13 +1688,15 @@ const vaultId = await sdk.createFastVault({
 // Verify with email code to get the vault (saves and returns it)
 const vault = await sdk.verifyVault(vaultId, code)
 
-// Create secure vault (multi-device MPC) - not yet implemented
+// Create secure vault (multi-device MPC with N-of-M threshold)
 const { vault, vaultId, sessionId } = await sdk.createSecureVault({
   name: string
-  password: string
-  devices: number
-  threshold?: number
+  password?: string               // Optional encryption
+  devices: number                 // Total participating devices
+  threshold?: number              // Signing threshold (defaults to ceil((devices+1)/2))
   onProgress?: (step: VaultCreationStep) => void
+  onQRCodeReady?: (qrPayload: string) => void
+  onDeviceJoined?: (deviceId: string, total: number, required: number) => void
 })
 ```
 
