@@ -169,4 +169,35 @@ jobs:
         run: |
           curl -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
-            -d "{\"embeds\":[{\"title\":\"VultisigSDK v${VERSION} Released!\",\"color\":5814783,\"description\":\"A new version has been published to npm.\",\"fields\":[{\"name\":\"Packages\",\"value\":\"[@vultisig/sdk](https://www.npmjs.com/package/@vultisig/sdk)\\n[@vultisig/cli](https://www.npmjs.com/package/@vultisig/cli)\",\"inline\":true},{\"name\":\"Version\",\"value\":\"v${VERSION}\",\"inline\":true},{\"name\":\"Install\",\"value\":\"\`\`\`npm install @vultisig/sdk@${VERSION}\`\`\`\"}]}]}"
+            -d @- << EOF
+          {
+            "embeds": [{
+              "title": "VultisigSDK v${VERSION} Released!",
+              "color": 5814783,
+              "description": "A new version of VultisigSDK has been published to npm.",
+              "fields": [
+                {
+                  "name": "Packages",
+                  "value": "[@vultisig/sdk](https://www.npmjs.com/package/@vultisig/sdk)\n[@vultisig/cli](https://www.npmjs.com/package/@vultisig/cli)",
+                  "inline": true
+                },
+                {
+                  "name": "Version",
+                  "value": "v${VERSION}",
+                  "inline": true
+                },
+                {
+                  "name": "Installation",
+                  "value": "\`\`\`bash\nnpm install @vultisig/sdk@${VERSION}\n\`\`\`"
+                },
+                {
+                  "name": "Links",
+                  "value": "[Documentation](https://vultisig.github.io/vultisig-sdk/) | [Changelog](https://github.com/vultisig/vultisig-sdk/releases) | [GitHub](https://github.com/vultisig/vultisig-sdk)"
+                }
+              ],
+              "footer": {
+                "text": "VultisigSDK - Multi-party computation wallet SDK"
+              }
+            }]
+          }
+          EOF

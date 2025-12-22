@@ -23,6 +23,7 @@
     "fix-password-prompt-spinner",
     "fix-publish-script",
     "fix-workspace-protocol",
+    "secure-vault-support",
     "update-browser-cli-for-new-vault-api",
     "update-docs-to-current-state",
     "verification-retry-on-wrong-input"
