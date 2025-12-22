@@ -23,10 +23,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org/"
@@ -47,7 +47,7 @@ jobs:
 
       - name: Create Release Pull Request or Publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1
         with:
           version: yarn changeset:version
           publish: yarn changeset:publish
@@ -59,45 +59,25 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Enable Auto-Merge on Version PR
+        if: steps.changesets.outputs.pullRequestNumber
+        run: gh pr merge ${{ steps.changesets.outputs.pullRequestNumber }} --auto --merge
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
       - name: Notify Discord
-        if: steps.changesets.outputs.published == 'true'
+        if: always()
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
         run: |
-          VERSION=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version')
+          # Get version from package.json
+          VERSION=$(jq -r .version packages/sdk/package.json)
 
-          curl -X POST "$DISCORD_WEBHOOK" \
-            -H "Content-Type: application/json" \
-            -d @- << 'EOF'
-          {
-            "embeds": [{
-              "title": "VultisigSDK v'"${VERSION}"' Released!",
-              "color": 5814783,
-              "description": "A new version of VultisigSDK has been published to npm.",
-              "fields": [
-                {
-                  "name": "Packages",
-                  "value": "[@vultisig/sdk](https://www.npmjs.com/package/@vultisig/sdk)\n[@vultisig/cli](https://www.npmjs.com/package/@vultisig/cli)",
-                  "inline": true
-                },
-                {
-                  "name": "Version",
-                  "value": "v'"${VERSION}"'",
-                  "inline": true
-                },
-                {
-                  "name": "Installation",
-                  "value": "```bash\nnpm install @vultisig/sdk@'"${VERSION}"'\n```"
-                },
-                {
-                  "name": "Links",
-                  "value": "[Documentation](https://vultisig.github.io/vultisig-sdk/) | [Changelog](https://github.com/vultisig/vultisig-sdk/releases) | [GitHub](https://github.com/vultisig/vultisig-sdk)"
-                }
-              ],
-              "footer": {
-                "text": "VultisigSDK - Multi-party computation wallet SDK"
-              }
-            }]
-          }
-          EOF
+          # Check if this version exists on npm (just published)
+          PUBLISHED=$(npm view @vultisig/sdk@$VERSION version 2>/dev/null || echo "")
+
+          if [ "$PUBLISHED" = "$VERSION" ]; then
+            curl -X POST "$DISCORD_WEBHOOK" \
+              -H "Content-Type: application/json" \
+              -d "{\"embeds\":[{\"title\":\"VultisigSDK v${VERSION} Released!\",\"color\":5814783,\"description\":\"A new version of VultisigSDK has been published to npm.\",\"fields\":[{\"name\":\"Packages\",\"value\":\"[@vultisig/sdk](https://www.npmjs.com/package/@vultisig/sdk)\\n[@vultisig/cli](https://www.npmjs.com/package/@vultisig/cli)\",\"inline\":true},{\"name\":\"Version\",\"value\":\"v${VERSION}\",\"inline\":true},{\"name\":\"Installation\",\"value\":\"\`\`\`bash\\nnpm install @vultisig/sdk@${VERSION}\\n\`\`\`\"},{\"name\":\"Links\",\"value\":\"[Documentation](https://vultisig.github.io/vultisig-sdk/) | [Changelog](https://github.com/vultisig/vultisig-sdk/releases) | [GitHub](https://github.com/vultisig/vultisig-sdk)\"}],\"footer\":{\"text\":\"VultisigSDK - Multi-party computation wallet SDK\"}}]}"
+          fi
