@@ -8,6 +8,7 @@ import EventLog from '@/components/events/EventLog'
 // Components
 import Layout from '@/components/layout/Layout'
 import ServerStatus from '@/components/settings/ServerStatus'
+import SecureVaultCreator from '@/components/vault/SecureVaultCreator'
 import Vault from '@/components/vault/Vault'
 import VaultCreator from '@/components/vault/VaultCreator'
 import VaultImporter from '@/components/vault/VaultImporter'
@@ -160,6 +161,23 @@ function App() {
         addEvent('signing', 'vault', `${vaultPrefix} ${step.message} (${step.progress}%)`)
       }
 
+      // Secure vault events
+      const handleQrCodeReady = ({ action }: any) => {
+        addEvent('info', 'vault', `${vaultPrefix} QR code ready for ${action}`)
+      }
+
+      const handleDeviceJoined = ({ deviceId, totalJoined, required }: any) => {
+        addEvent(
+          'info',
+          'vault',
+          `${vaultPrefix} Device joined: ${totalJoined}/${required} (${deviceId.slice(0, 8)}...)`
+        )
+      }
+
+      const handleKeygenProgress = ({ phase, message }: any) => {
+        addEvent('info', 'vault', `${vaultPrefix} Keygen ${phase}: ${message || ''}`)
+      }
+
       // Chain events
       const handleChainAdded = ({ chain }: any) => {
         addEvent('chain', 'vault', `${vaultPrefix} Chain added: ${chain}`)
@@ -235,6 +253,9 @@ function App() {
       vault.on('transactionSigned', handleTransactionSigned)
       vault.on('transactionBroadcast', handleTransactionBroadcast)
       vault.on('signingProgress', handleSigningProgress)
+      vault.on('qrCodeReady', handleQrCodeReady)
+      vault.on('deviceJoined', handleDeviceJoined)
+      vault.on('keygenProgress', handleKeygenProgress)
       vault.on('chainAdded', handleChainAdded)
       vault.on('chainRemoved', handleChainRemoved)
       vault.on('tokenAdded', handleTokenAdded)
@@ -259,6 +280,9 @@ function App() {
         vault.off('transactionSigned', handleTransactionSigned)
         vault.off('transactionBroadcast', handleTransactionBroadcast)
         vault.off('signingProgress', handleSigningProgress)
+        vault.off('qrCodeReady', handleQrCodeReady)
+        vault.off('deviceJoined', handleDeviceJoined)
+        vault.off('keygenProgress', handleKeygenProgress)
         vault.off('chainAdded', handleChainAdded)
         vault.off('chainRemoved', handleChainRemoved)
         vault.off('tokenAdded', handleTokenAdded)
@@ -466,6 +490,7 @@ function App() {
         sidebar={
           <div className="space-y-3">
             <VaultCreator onVaultCreated={handleVaultCreated} />
+            <SecureVaultCreator onVaultCreated={handleVaultCreated} />
             <VaultImporter onVaultImported={handleVaultImported} />
             <hr className="border-gray-200" />
             <Button variant="secondary" fullWidth onClick={() => setIsAddressBookOpen(true)}>

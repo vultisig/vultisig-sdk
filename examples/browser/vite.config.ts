@@ -85,7 +85,12 @@ export default defineConfig({
           )
           copyFileSync(path.join(walletCoreLibPath, 'wallet-core.js'), path.join(__dirname, 'public/wallet-core.js'))
 
-          console.log('✅ Copied WASM files to public/lib/ and public/')
+          // Copy 7z-wasm files (used for compression during signing)
+          const sevenZipPath = path.resolve(__dirname, '../../node_modules/7z-wasm')
+          mkdirSync(path.join(__dirname, 'public/7z-wasm'), { recursive: true })
+          copyFileSync(path.join(sevenZipPath, '7zz.wasm'), path.join(__dirname, 'public/7z-wasm/7zz.wasm'))
+
+          console.log('✅ Copied WASM files to public/lib/, public/, and public/7z-wasm/')
         } catch (error) {
           console.error('Failed to copy WASM files:', error)
         }

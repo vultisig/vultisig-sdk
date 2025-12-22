@@ -4041,6 +4041,7 @@ __metadata:
     path-browserify: "npm:^1.0.1"
     postcss: "npm:^8.4.47"
     process: "npm:^0.11.10"
+    qrcode.react: "npm:^4.2.0"
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
     stream-browserify: "npm:^3.0.0"
@@ -10344,6 +10345,15 @@ __metadata:
   bin:
     qrcode-terminal: ./bin/qrcode-terminal.js
   checksum: 10c0/1d8996a743d6c95e22056bd45fe958c306213adc97d7ef8cf1e03bc1aeeb6f27180a747ec3d761141921351eb1e3ca688f7b673ab54cdae9fa358dffaa49563c
+  languageName: node
+  linkType: hard
+
+"qrcode.react@npm:^4.2.0":
+  version: 4.2.0
+  resolution: "qrcode.react@npm:4.2.0"
+  peerDependencies:
+    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+  checksum: 10c0/68c691d130e5fda2f57cee505ed7aea840e7d02033100687b764601f9595e1116e34c13876628a93e1a5c2b85e4efc27d30b2fda72e2050c02f3e1c4e998d248
   languageName: node
   linkType: hard
 
