@@ -14,6 +14,7 @@ export type SendParams = {
   memo?: string
   yes?: boolean // Skip confirmation prompt
   password?: string // Vault password for signing
+  signal?: AbortSignal // Optional abort signal for cancellation
 }
 
 /**

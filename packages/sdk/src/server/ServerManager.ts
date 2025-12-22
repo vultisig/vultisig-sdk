@@ -104,10 +104,17 @@ export class ServerManager {
     password: string
     payload: SigningPayload
     walletCore: WalletCore
+    signal?: AbortSignal
     onProgress?: (step: import('../types').SigningStep) => void
   }): Promise<Signature> {
-    const { vault, messages, password, payload, walletCore, onProgress } = options
-    const reportProgress = onProgress || (() => {})
+    const { vault, messages, password, payload, walletCore, signal, onProgress } = options
+    const reportProgress = (step: import('../types').SigningStep) => {
+      // Check for abort via signal
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+      onProgress?.(step)
+    }
 
     // Use SDK adapter to extract chain-specific signing information
     const { signatureAlgorithm, derivePath, chainPath } = getChainSigningInfo(payload, walletCore)
@@ -181,7 +188,7 @@ export class ServerManager {
       participantsReady: 1,
     })
 
-    const devices = await this.waitForPeers(sessionId, signingLocalPartyId)
+    const devices = await this.waitForPeers(sessionId, signingLocalPartyId, signal, onProgress)
     const peers = devices.filter(device => device !== signingLocalPartyId)
     console.log(`✅ All participants ready: [${devices.join(', ')}]`)
 
@@ -453,24 +460,48 @@ export class ServerManager {
 
   // ===== Private Helper Methods =====
 
-  private async waitForPeers(sessionId: string, localPartyId: string): Promise<string[]> {
+  private async waitForPeers(
+    sessionId: string,
+    localPartyId: string,
+    signal?: AbortSignal,
+    onProgress?: (step: import('../types').SigningStep) => void
+  ): Promise<string[]> {
     const maxWaitTime = 30000
     const checkInterval = 2000
     const startTime = Date.now()
 
     while (Date.now() - startTime < maxWaitTime) {
+      // Check for abort via signal
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
       try {
         const url = `${this.config.messageRelay}/${sessionId}`
         const allPeers = await queryUrl<string[]>(url)
         const uniquePeers = withoutDuplicates(allPeers)
         const otherPeers = without(uniquePeers, localPartyId)
 
+        // Report progress
+        onProgress?.({
+          step: 'coordinating',
+          progress: 50,
+          message: 'Waiting for server...',
+          mode: 'fast' as import('../types').SigningMode,
+          participantCount: 2,
+          participantsReady: uniquePeers.length,
+        })
+
         if (otherPeers.length > 0) {
           return [localPartyId, ...otherPeers]
         }
 
         await new Promise(resolve => setTimeout(resolve, checkInterval))
-      } catch {
+      } catch (error) {
+        // Re-throw abort errors
+        if (error instanceof Error && error.message === 'Operation aborted') {
+          throw error
+        }
         await new Promise(resolve => setTimeout(resolve, checkInterval))
       }
     }

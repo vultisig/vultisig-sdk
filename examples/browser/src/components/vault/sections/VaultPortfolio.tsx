@@ -1,5 +1,5 @@
 import type { Chain, FiatCurrency, VaultBase } from '@vultisig/sdk'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import Button from '@/components/common/Button'
 import Select from '@/components/common/Select'
@@ -45,30 +45,43 @@ export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
   const [currency, setCurrency] = useState<FiatCurrency>((vault.currency?.toLowerCase() || 'usd') as FiatCurrency)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Load portfolio on mount
+  // Load portfolio on mount and currency change
   useEffect(() => {
     loadPortfolio()
+    return () => {
+      abortControllerRef.current?.abort()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currency])
 
   const loadPortfolio = async () => {
+    // Cancel any in-progress fetch
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
     setIsLoading(true)
     setError(null)
 
     try {
       // Set currency preference
       await vault.setCurrency(currency)
+      if (signal.aborted) return
 
       // Get total portfolio value (returns Value object with amount string)
       const totalValue = await vault.getTotalValue(currency)
+      if (signal.aborted) return
       const total = parseFloat(totalValue.amount)
 
       // Get value by chain
       const byChain: Partial<Record<Chain, number>> = {}
       for (const chain of vault.chains) {
+        if (signal.aborted) break
         try {
           const value = await vault.getValue(chain, undefined, currency)
+          if (signal.aborted) break
           const numValue = parseFloat(value.amount)
           if (numValue > 0) {
             byChain[chain] = numValue
@@ -78,11 +91,17 @@ export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
         }
       }
 
-      setPortfolio({ total, byChain })
+      if (!signal.aborted) {
+        setPortfolio({ total, byChain })
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load portfolio')
+      if (!signal.aborted) {
+        setError(err instanceof Error ? err.message : 'Failed to load portfolio')
+      }
     } finally {
-      setIsLoading(false)
+      if (!signal.aborted) {
+        setIsLoading(false)
+      }
     }
   }
 

@@ -4,14 +4,20 @@ A TypeScript SDK for multi-party computation (MPC) wallet operations, providing 
 
 ## Overview
 
-VultisigSDK enables developers to integrate MPC wallet functionality into their applications. The SDK uses server-assisted Fast Vault creation with comprehensive blockchain support including Bitcoin, Ethereum, Cosmos, and many others.
+VultisigSDK enables developers to integrate MPC wallet functionality into their applications. The SDK supports two vault types:
+
+- **Fast Vault**: Server-assisted 2-of-2 MPC for quick setup and instant signing
+- **Secure Vault**: Multi-device N-of-M MPC for enhanced security with configurable thresholds
+
+Both vault types provide comprehensive blockchain support including Bitcoin, Ethereum, Cosmos, Solana, and 40+ others.
 
 ## Features
 
-- **Multi-Party Computation**: Secure 2-of-2 threshold key generation and signing with VultiServer
+- **Fast Vault**: Server-assisted 2-of-2 MPC with VultiServer for instant signing
+- **Secure Vault**: Multi-device N-of-M threshold signing with mobile device pairing
+- **QR Code Pairing**: Pair with Vultisig mobile apps for secure vault operations
 - **Address Derivation**: Generate blockchain addresses using WalletCore WASM
 - **Vault Management**: Create, import, export, and manage encrypted vaults
-- **Server-Assisted Signing**: Fast, secure transaction signing via VultiServer
 - **Cross-Chain Support**: Bitcoin, Ethereum, Cosmos, Solana, and 40+ blockchains
 - **TypeScript**: Full type safety and IntelliSense support
 
@@ -25,32 +31,53 @@ yarn add @vultisig/sdk
 
 ## Quick Start
 
+### Fast Vault (Server-Assisted)
+
 ```typescript
 import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 
-// Initialize SDK with storage
-const sdk = new Vultisig({
-  storage: new MemoryStorage()
-})
+// Initialize SDK
+const sdk = new Vultisig({ storage: new MemoryStorage() })
 await sdk.initialize()
 
-// Create a fast vault (server-assisted)
+// Create a fast vault (server-assisted 2-of-2)
 const vaultId = await sdk.createFastVault({
   name: "My Wallet",
   email: "user@example.com",
   password: "secure-password",
 });
 
-// Verify with email code and get the vault
-const code = "1234"; // Get verification code from user
-const vault = await sdk.verifyVault(vaultId, code);
+// Verify with email code
+const vault = await sdk.verifyVault(vaultId, "1234");
 
-// Derive addresses for different chains
+// Derive addresses
 const btcAddress = await vault.address("Bitcoin");
 const ethAddress = await vault.address("Ethereum");
+```
 
-console.log("Bitcoin Address:", btcAddress);
-console.log("Ethereum Address:", ethAddress);
+### Secure Vault (Multi-Device)
+
+```typescript
+// Create a secure vault (2-of-3 threshold)
+const { vault } = await sdk.createSecureVault({
+  name: "Team Wallet",
+  devices: 3,
+  onQRCodeReady: (qrPayload) => {
+    // Display QR code for other devices to scan
+    displayQRCode(qrPayload);
+  },
+  onDeviceJoined: (deviceId, total, required) => {
+    console.log(`Device joined: ${total}/${required}`);
+  }
+});
+
+// Sign transactions (requires device coordination)
+await vault.sign(payload, {
+  onQRCodeReady: (qr) => displayQRCode(qr),
+  onDeviceJoined: (id, total, required) => {
+    console.log(`Signing: ${total}/${required} devices ready`);
+  }
+});
 ```
 
 ## API Documentation
@@ -64,6 +91,7 @@ For detailed usage, see the [SDK Users Guide](docs/SDK-USERS-GUIDE.md).
 
 - **No Private Keys**: Private keys never exist in complete form
 - **MPC Security**: Keys are split across multiple parties using threshold signatures
+- **Configurable Thresholds**: Secure vaults support N-of-M signing (e.g., 2-of-3, 3-of-5)
 - **Encryption**: All vault data is encrypted with user passwords
 - **WASM Isolation**: Cryptographic operations run in WebAssembly sandbox
 

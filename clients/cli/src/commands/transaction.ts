@@ -3,10 +3,11 @@
  */
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
+import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, SendParams, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import { createSpinner, isJsonOutput, outputJson, warn } from '../lib/output'
+import { createSpinner, info, isJsonOutput, isSilent, outputJson, printResult, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
 
 // AccountCoin type from SDK internals
@@ -98,20 +99,55 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
   await ensureVaultUnlocked(vault, params.password)
 
   // 5. Sign transaction
-  const signSpinner = createSpinner('Signing transaction...')
+  const isSecureVault = vault.type === 'secure'
+  const signSpinner = createSpinner(isSecureVault ? 'Preparing secure signing session...' : 'Signing transaction...')
 
   vault.on('signingProgress', ({ step }: any) => {
     signSpinner.text = `${step.message} (${step.progress}%)`
   })
 
+  // For secure vaults, handle QR code display and device joining
+  if (isSecureVault) {
+    vault.on('qrCodeReady', ({ qrPayload }: { qrPayload: string }) => {
+      if (isJsonOutput()) {
+        // JSON mode: Print QR URL immediately for scripting
+        printResult(qrPayload)
+      } else if (isSilent()) {
+        // Silent mode: Print URL only
+        printResult(`QR Payload: ${qrPayload}`)
+      } else {
+        // Interactive: Display ASCII QR code
+        signSpinner.stop()
+        info('\nScan this QR code with your Vultisig mobile app to sign:')
+        qrcode.generate(qrPayload, { small: true })
+        info(`\nOr use this URL: ${qrPayload}\n`)
+        signSpinner.start('Waiting for devices to join signing session...')
+      }
+    })
+
+    vault.on(
+      'deviceJoined',
+      ({ deviceId, totalJoined, required }: { deviceId: string; totalJoined: number; required: number }) => {
+        if (!isSilent()) {
+          signSpinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
+        } else if (!isJsonOutput()) {
+          printResult(`Device joined: ${totalJoined}/${required}`)
+        }
+      }
+    )
+  }
+
   try {
     const messageHashes = await vault.extractMessageHashes(payload)
 
-    const signature = await vault.sign({
-      transaction: payload,
-      chain: payload.coin.chain,
-      messageHashes,
-    })
+    const signature = await vault.sign(
+      {
+        transaction: payload,
+        chain: payload.coin.chain,
+        messageHashes,
+      },
+      { signal: params.signal }
+    )
 
     signSpinner.succeed('Transaction signed')
 
@@ -142,5 +178,9 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     return result
   } finally {
     vault.removeAllListeners('signingProgress')
+    if (isSecureVault) {
+      vault.removeAllListeners('qrCodeReady')
+      vault.removeAllListeners('deviceJoined')
+    }
   }
 }

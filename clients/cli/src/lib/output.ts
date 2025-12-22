@@ -153,6 +153,19 @@ export interface SilentAwareSpinner {
   info(text?: string): SilentAwareSpinner
 }
 
+// Global set of active spinners for cleanup on cancellation
+const activeSpinners = new Set<Ora | SilentAwareSpinner>()
+
+/**
+ * Stop all active spinners - called on Ctrl+C cancellation
+ */
+export function stopAllSpinners(): void {
+  for (const spinner of activeSpinners) {
+    spinner.stop()
+  }
+  activeSpinners.clear()
+}
+
 /**
  * No-op spinner for silent mode
  */
@@ -163,20 +176,25 @@ function createNoopSpinner(text: string): SilentAwareSpinner {
       return this
     },
     stop() {
+      activeSpinners.delete(this)
       return this
     },
     succeed() {
+      activeSpinners.delete(this)
       return this
     },
     fail(text?: string) {
+      activeSpinners.delete(this)
       // Errors are always shown
       if (text) printError(text)
       return this
     },
     warn() {
+      activeSpinners.delete(this)
       return this
     },
     info() {
+      activeSpinners.delete(this)
       return this
     },
   }
@@ -184,12 +202,51 @@ function createNoopSpinner(text: string): SilentAwareSpinner {
 }
 
 /**
+ * Wrap an ora spinner to track it for cleanup
+ */
+function wrapOraSpinner(spinner: Ora): Ora {
+  const originalStop = spinner.stop.bind(spinner)
+  const originalSucceed = spinner.succeed.bind(spinner)
+  const originalFail = spinner.fail.bind(spinner)
+  const originalWarn = spinner.warn.bind(spinner)
+  const originalInfo = spinner.info.bind(spinner)
+
+  spinner.stop = () => {
+    activeSpinners.delete(spinner)
+    return originalStop()
+  }
+  spinner.succeed = (text?: string) => {
+    activeSpinners.delete(spinner)
+    return originalSucceed(text)
+  }
+  spinner.fail = (text?: string) => {
+    activeSpinners.delete(spinner)
+    return originalFail(text)
+  }
+  spinner.warn = (text?: string) => {
+    activeSpinners.delete(spinner)
+    return originalWarn(text)
+  }
+  spinner.info = (text?: string) => {
+    activeSpinners.delete(spinner)
+    return originalInfo(text)
+  }
+
+  return spinner
+}
+
+/**
  * Create a spinner that respects silent mode
  * In silent mode, returns a no-op spinner (except fail() still prints)
+ * All spinners are tracked globally for cleanup on cancellation
  */
 export function createSpinner(text: string): SilentAwareSpinner | Ora {
   if (silentMode) {
-    return createNoopSpinner(text)
+    const spinner = createNoopSpinner(text)
+    activeSpinners.add(spinner)
+    return spinner
   }
-  return ora(text).start()
+  const spinner = wrapOraSpinner(ora(text).start())
+  activeSpinners.add(spinner)
+  return spinner
 }

@@ -1,5 +1,5 @@
 import type { Balance, Chain, VaultBase } from '@vultisig/sdk'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import Button from '@/components/common/Button'
 import Spinner from '@/components/common/Spinner'
@@ -19,8 +19,14 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [includeTokens, setIncludeTokens] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleRefresh = async () => {
+    // Cancel any in-progress fetch
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
     setIsLoading(true)
     setError(null)
 
@@ -28,17 +34,22 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
       const entries: BalanceEntry[] = []
 
       for (const chain of vault.chains) {
+        if (signal.aborted) break
+
         try {
           // Native balance
           const balance = await vault.balance(chain)
+          if (signal.aborted) break
           entries.push({ chain, balance })
 
           // Token balances
           if (includeTokens) {
             const tokens = vault.getTokens(chain)
             for (const token of tokens) {
+              if (signal.aborted) break
               try {
                 const tokenBalance = await vault.balance(chain, token.id)
+                if (signal.aborted) break
                 entries.push({ chain, balance: tokenBalance, tokenId: token.id })
               } catch (err) {
                 console.error(`Failed to get balance for ${token.symbol}:`, err)
@@ -50,9 +61,13 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
         }
       }
 
-      setBalances(entries)
+      if (!signal.aborted) {
+        setBalances(entries)
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load balances')
+      if (!signal.aborted) {
+        setError(err instanceof Error ? err.message : 'Failed to load balances')
+      }
     } finally {
       setIsLoading(false)
     }

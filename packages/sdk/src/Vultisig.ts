@@ -378,7 +378,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    *   password: 'securePassword123',
    *   devices: 3,
    *   threshold: 2,
-   *   onProgress: (step) => console.log(step.message)
+   *   onProgress: (step) => console.log(step.message),
+   *   onQRCodeReady: (qrPayload) => displayQR(qrPayload),
+   *   onDeviceJoined: (deviceId, total, required) => console.log(`${total}/${required}`)
    * })
    * ```
    */
@@ -388,6 +390,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     devices: number
     threshold?: number
     onProgress?: (step: VaultCreationStep) => void
+    onQRCodeReady?: (qrPayload: string) => void
+    onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   }): Promise<{
     vault: SecureVault
     vaultId: string

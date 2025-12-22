@@ -18,9 +18,10 @@ export { addToken, executeTokens, listTokens, removeToken } from './tokens'
 export { executeSend, sendTransaction } from './transaction'
 
 // Vault management commands
-export type { CreateVaultOptions } from './vault-management'
+export type { FastVaultOptions, SecureVaultOptions } from './vault-management'
 export {
-  executeCreate,
+  executeCreateFast,
+  executeCreateSecure,
   executeExport,
   executeImport,
   executeInfo,

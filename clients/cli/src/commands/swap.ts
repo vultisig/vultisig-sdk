@@ -92,6 +92,7 @@ export type SwapOptions = {
   slippage?: number
   yes?: boolean // Skip confirmation prompt
   password?: string // Vault password for signing
+  signal?: AbortSignal // Optional abort signal for cancellation
 } & SwapQuoteOptions
 
 /**
@@ -175,11 +176,14 @@ export async function executeSwap(
 
     try {
       const approvalHashes = await vault.extractMessageHashes(approvalPayload)
-      const approvalSig = await vault.sign({
-        transaction: approvalPayload,
-        chain: options.fromChain,
-        messageHashes: approvalHashes,
-      })
+      const approvalSig = await vault.sign(
+        {
+          transaction: approvalPayload,
+          chain: options.fromChain,
+          messageHashes: approvalHashes,
+        },
+        { signal: options.signal }
+      )
 
       approvalSpinner.succeed('Approval signed')
 
@@ -209,11 +213,14 @@ export async function executeSwap(
 
   try {
     const messageHashes = await vault.extractMessageHashes(keysignPayload)
-    const signature = await vault.sign({
-      transaction: keysignPayload,
-      chain: options.fromChain,
-      messageHashes,
-    })
+    const signature = await vault.sign(
+      {
+        transaction: keysignPayload,
+        chain: options.fromChain,
+        messageHashes,
+      },
+      { signal: options.signal }
+    )
 
     signSpinner.succeed('Swap transaction signed')
 

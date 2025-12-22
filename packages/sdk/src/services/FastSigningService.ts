@@ -27,13 +27,15 @@ export class FastSigningService {
    * @param payload Signing payload with transaction data (must include messageHashes)
    * @param vaultPassword Password for vault encryption
    * @param onProgress Optional callback for signing progress updates
+   * @param signal Optional AbortSignal for cancellation
    * @returns Signed transaction ready for broadcast
    */
   async signWithServer(
     vault: CoreVault,
     payload: SigningPayload,
     vaultPassword: string,
-    onProgress?: (step: SigningStep) => void
+    onProgress?: (step: SigningStep) => void,
+    signal?: AbortSignal
   ): Promise<Signature> {
     const reportProgress = onProgress || (() => {})
 
@@ -78,6 +80,7 @@ export class FastSigningService {
       password: vaultPassword,
       payload,
       walletCore,
+      signal,
       onProgress: reportProgress,
     })
 
@@ -96,6 +99,7 @@ export class FastSigningService {
    * @param options Sign bytes options (messageHashes and chain)
    * @param vaultPassword Password for vault encryption
    * @param onProgress Optional callback for signing progress updates
+   * @param signal Optional AbortSignal for cancellation
    * @returns Signature result
    */
   async signBytesWithServer(
@@ -105,7 +109,8 @@ export class FastSigningService {
       chain: Chain
     },
     vaultPassword: string,
-    onProgress?: (step: SigningStep) => void
+    onProgress?: (step: SigningStep) => void,
+    signal?: AbortSignal
   ): Promise<Signature> {
     const reportProgress = onProgress || (() => {})
 
@@ -142,6 +147,7 @@ export class FastSigningService {
       password: vaultPassword,
       payload: { chain: options.chain, transaction: null, messageHashes: options.messageHashes },
       walletCore,
+      signal,
       onProgress: reportProgress,
     })
 

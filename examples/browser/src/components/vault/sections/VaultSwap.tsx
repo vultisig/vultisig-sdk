@@ -1,11 +1,14 @@
-import type { Chain, FiatCurrency, SwapQuoteResult, Token, VaultBase } from '@vultisig/sdk'
-import { useEffect, useState } from 'react'
+import type { Chain, FiatCurrency, SigningStep, SwapQuoteResult, Token, VaultBase } from '@vultisig/sdk'
+import { useEffect, useRef, useState } from 'react'
 
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import Select from '@/components/common/Select'
 import Spinner from '@/components/common/Spinner'
+import SigningModal from '@/components/signing/SigningModal'
 import { TokenSelector } from '@/components/token'
+
+type SigningModalStep = 'waiting_for_qr' | 'qr_ready' | 'devices_joining' | 'signing' | 'complete'
 
 type VaultSwapProps = {
   vault: VaultBase
@@ -21,6 +24,8 @@ type DisplayQuote = {
 }
 
 export default function VaultSwap({ vault }: VaultSwapProps) {
+  const isSecureVault = vault.type === 'secure'
+
   const [supportedChains, setSupportedChains] = useState<Chain[]>([])
   const [isLoadingChains, setIsLoadingChains] = useState(true)
 
@@ -39,6 +44,15 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
   const [progress, setProgress] = useState<string | null>(null)
   const [result, setResult] = useState<{ txHash: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Secure vault signing state
+  const [showSigningModal, setShowSigningModal] = useState(false)
+  const [signingModalStep, setSigningModalStep] = useState<SigningModalStep>('waiting_for_qr')
+  const [signingQrCode, setSigningQrCode] = useState<string | null>(null)
+  const [devicesJoined, setDevicesJoined] = useState(0)
+  const [deviceIds, setDeviceIds] = useState<string[]>([])
+  const [signingProgress, setSigningProgress] = useState<SigningStep | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Load supported swap chains
   useEffect(() => {
@@ -149,6 +163,28 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
     }
   }
 
+  // Secure vault signing helpers
+  const resetSigningState = () => {
+    setShowSigningModal(false)
+    setSigningModalStep('waiting_for_qr')
+    setSigningQrCode(null)
+    setDevicesJoined(0)
+    setDeviceIds([])
+    setSigningProgress(null)
+    if (abortControllerRef.current) {
+      abortControllerRef.current = null
+    }
+  }
+
+  const handleCancelSigning = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    resetSigningState()
+    setIsSwapping(false)
+    setProgress(null)
+  }
+
   // Execute swap
   const handleSwap = async () => {
     if (!quote || !formData.fromChain || !formData.toChain || !formData.amount) {
@@ -161,12 +197,54 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
     setResult(null)
     setError(null)
 
+    // Reset secure vault signing state
+    if (isSecureVault) {
+      resetSigningState()
+      abortControllerRef.current = new AbortController()
+    }
+
     try {
       // Subscribe to signing progress
       const handleProgress = ({ step }: { step: { message: string; progress: number } }) => {
         setProgress(`${step.message} (${step.progress}%)`)
+        if (isSecureVault) {
+          setSigningProgress(step as SigningStep)
+        }
       }
       vault.on('signingProgress', handleProgress)
+
+      // Secure vault event handlers
+      let handleQrCodeReady: ((data: { qrPayload: string }) => void) | null = null
+      let handleDeviceJoined: ((data: { deviceId: string; totalJoined: number; required: number }) => void) | null =
+        null
+
+      if (isSecureVault) {
+        handleQrCodeReady = ({ qrPayload }: { qrPayload: string }) => {
+          setSigningQrCode(qrPayload)
+          setSigningModalStep('qr_ready')
+        }
+
+        handleDeviceJoined = ({
+          deviceId,
+          totalJoined,
+          required,
+        }: {
+          deviceId: string
+          totalJoined: number
+          required: number
+        }) => {
+          setDevicesJoined(totalJoined)
+          setDeviceIds(prev => (prev.includes(deviceId) ? prev : [...prev, deviceId]))
+          if (totalJoined >= required) {
+            setSigningModalStep('signing')
+          } else {
+            setSigningModalStep('devices_joining')
+          }
+        }
+
+        vault.on('qrCodeReady', handleQrCodeReady)
+        vault.on('deviceJoined', handleDeviceJoined)
+      }
 
       const fromAddress = await vault.address(formData.fromChain)
       const toAddress = await vault.address(formData.toChain)
@@ -221,13 +299,26 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
 
       // Handle approval if needed
       if (swapResult.approvalPayload) {
+        if (isSecureVault) {
+          setShowSigningModal(true)
+          setSigningModalStep('waiting_for_qr')
+          // Reset device state for new signing session
+          setDevicesJoined(0)
+          setDeviceIds([])
+        }
+
         setProgress('Signing approval transaction...')
         const approvalHashes = await vault.extractMessageHashes(swapResult.approvalPayload)
-        const approvalSig = await vault.sign({
-          transaction: swapResult.approvalPayload,
-          chain: formData.fromChain,
-          messageHashes: approvalHashes,
-        })
+        const approvalSig = await vault.sign(
+          {
+            transaction: swapResult.approvalPayload,
+            chain: formData.fromChain,
+            messageHashes: approvalHashes,
+          },
+          {
+            signal: abortControllerRef.current?.signal,
+          }
+        )
 
         setProgress('Broadcasting approval...')
         await vault.broadcastTx({
@@ -239,16 +330,39 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
         // Wait a bit for approval to be mined
         setProgress('Waiting for approval confirmation...')
         await new Promise(resolve => setTimeout(resolve, 5000))
+
+        // Check if aborted before proceeding to swap
+        if (abortControllerRef.current?.signal.aborted) {
+          throw new Error('Operation aborted')
+        }
+
+        // Reset for swap signing
+        if (isSecureVault) {
+          setDevicesJoined(0)
+          setDeviceIds([])
+          setSigningQrCode(null)
+          setSigningModalStep('waiting_for_qr')
+        }
       }
 
       // Sign and broadcast main swap transaction
+      if (isSecureVault) {
+        setShowSigningModal(true)
+        setSigningModalStep('waiting_for_qr')
+      }
+
       setProgress('Signing swap transaction...')
       const swapHashes = await vault.extractMessageHashes(swapResult.keysignPayload)
-      const swapSig = await vault.sign({
-        transaction: swapResult.keysignPayload,
-        chain: formData.fromChain,
-        messageHashes: swapHashes,
-      })
+      const swapSig = await vault.sign(
+        {
+          transaction: swapResult.keysignPayload,
+          chain: formData.fromChain,
+          messageHashes: swapHashes,
+        },
+        {
+          signal: abortControllerRef.current?.signal,
+        }
+      )
 
       setProgress('Broadcasting swap...')
       const txHash = await vault.broadcastTx({
@@ -257,7 +371,20 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
         signature: swapSig,
       })
 
+      // Cleanup event handlers
       vault.off('signingProgress', handleProgress)
+      if (isSecureVault && handleQrCodeReady && handleDeviceJoined) {
+        vault.off('qrCodeReady', handleQrCodeReady)
+        vault.off('deviceJoined', handleDeviceJoined)
+      }
+
+      // Show success state in modal for secure vault
+      if (isSecureVault) {
+        setSigningModalStep('complete')
+        setTimeout(() => {
+          resetSigningState()
+        }, 2000)
+      }
 
       setResult({ txHash })
       setProgress(null)
@@ -266,6 +393,17 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
       // Reset form
       setFormData(prev => ({ ...prev, amount: '' }))
     } catch (err) {
+      // Cleanup on error
+      if (isSecureVault) {
+        resetSigningState()
+      }
+
+      if (err instanceof Error && (err.message.includes('cancelled') || err.message === 'Operation aborted')) {
+        // User cancelled, just reset
+        setProgress(null)
+        return
+      }
+
       setError(err instanceof Error ? err.message : 'Failed to execute swap')
       setProgress(null)
     } finally {
@@ -301,167 +439,190 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
   }
 
   return (
-    <div className="max-w-lg mx-auto">
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-6">Swap Tokens</h2>
+    <>
+      {/* Signing Modal for secure vaults */}
+      {isSecureVault && (
+        <SigningModal
+          isOpen={showSigningModal}
+          onClose={resetSigningState}
+          onCancel={handleCancelSigning}
+          qrCode={signingQrCode}
+          step={signingModalStep}
+          devicesJoined={devicesJoined}
+          devicesRequired={vault.threshold}
+          deviceIds={deviceIds}
+          signingProgress={signingProgress}
+          error={error}
+        />
+      )}
 
-        <div className="space-y-4">
-          {/* From */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="text-sm text-gray-500 mb-2">From</div>
-            <div className="grid grid-cols-2 gap-3">
-              <Select
-                options={chainOptions}
-                value={formData.fromChain}
-                onChange={e =>
-                  setFormData(prev => ({
-                    ...prev,
-                    fromChain: e.target.value as Chain,
-                    fromTokenId: '',
-                  }))
-                }
-              />
-              <TokenSelector
-                chain={formData.fromChain as Chain}
-                vault={vault}
-                value={formData.fromTokenId}
-                onChange={tokenId => setFormData(prev => ({ ...prev, fromTokenId: tokenId }))}
-              />
-            </div>
-            <Input
-              value={formData.amount}
-              onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-              placeholder="0.0"
-              className="mt-3"
-            />
-          </div>
-
-          {/* Swap arrow */}
-          <div className="flex justify-center">
-            <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-            </div>
-          </div>
-
-          {/* To */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="text-sm text-gray-500 mb-2">To</div>
-            <div className="grid grid-cols-2 gap-3">
-              <Select
-                options={chainOptions}
-                value={formData.toChain}
-                onChange={e =>
-                  setFormData(prev => ({
-                    ...prev,
-                    toChain: e.target.value as Chain,
-                    toTokenId: '',
-                  }))
-                }
-              />
-              <TokenSelector
-                chain={formData.toChain as Chain}
-                vault={vault}
-                value={formData.toTokenId}
-                onChange={tokenId => setFormData(prev => ({ ...prev, toTokenId: tokenId }))}
-              />
-            </div>
-            {quote && (
-              <div className="mt-3 p-3 bg-white rounded border border-gray-200">
-                <div className="text-2xl font-mono font-bold text-gray-900">{quote.expectedOutput}</div>
-                {quote.expectedOutputFiat !== undefined && (
-                  <div className="text-sm text-gray-500">≈ ${quote.expectedOutputFiat.toFixed(2)}</div>
-                )}
-              </div>
+      <div className="max-w-lg mx-auto">
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-6">
+            Swap Tokens
+            {isSecureVault && (
+              <span className="ml-2 text-xs font-normal text-blue-600 bg-blue-50 px-2 py-1 rounded">Secure Vault</span>
             )}
-          </div>
+          </h2>
 
-          {/* Quote details */}
-          {quote && (
-            <div className="bg-blue-50 rounded-lg p-4 text-sm">
-              <div className="flex justify-between mb-1">
-                <span className="text-gray-600">Network fee</span>
-                <span className="font-medium">
-                  {quote.feeFiat !== undefined ? `$${quote.feeFiat.toFixed(2)}` : quote.fee}
-                </span>
+          <div className="space-y-4">
+            {/* From */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="text-sm text-gray-500 mb-2">From</div>
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  options={chainOptions}
+                  value={formData.fromChain}
+                  onChange={e =>
+                    setFormData(prev => ({
+                      ...prev,
+                      fromChain: e.target.value as Chain,
+                      fromTokenId: '',
+                    }))
+                  }
+                />
+                <TokenSelector
+                  chain={formData.fromChain as Chain}
+                  vault={vault}
+                  value={formData.fromTokenId}
+                  onChange={tokenId => setFormData(prev => ({ ...prev, fromTokenId: tokenId }))}
+                />
               </div>
-              {quote.provider && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Provider</span>
-                  <span className="font-medium">{quote.provider}</span>
+              <Input
+                value={formData.amount}
+                onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                placeholder="0.0"
+                className="mt-3"
+              />
+            </div>
+
+            {/* Swap arrow */}
+            <div className="flex justify-center">
+              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+            </div>
+
+            {/* To */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="text-sm text-gray-500 mb-2">To</div>
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  options={chainOptions}
+                  value={formData.toChain}
+                  onChange={e =>
+                    setFormData(prev => ({
+                      ...prev,
+                      toChain: e.target.value as Chain,
+                      toTokenId: '',
+                    }))
+                  }
+                />
+                <TokenSelector
+                  chain={formData.toChain as Chain}
+                  vault={vault}
+                  value={formData.toTokenId}
+                  onChange={tokenId => setFormData(prev => ({ ...prev, toTokenId: tokenId }))}
+                />
+              </div>
+              {quote && (
+                <div className="mt-3 p-3 bg-white rounded border border-gray-200">
+                  <div className="text-2xl font-mono font-bold text-gray-900">{quote.expectedOutput}</div>
+                  {quote.expectedOutputFiat !== undefined && (
+                    <div className="text-sm text-gray-500">≈ ${quote.expectedOutputFiat.toFixed(2)}</div>
+                  )}
                 </div>
               )}
             </div>
-          )}
 
-          {/* Slippage */}
-          <div>
-            <span className="text-sm text-gray-600 mb-1 block">Slippage Tolerance</span>
-            <div className="flex gap-2">
-              {['0.5', '1', '2', '3'].map(slippage => (
-                <button
-                  key={slippage}
-                  type="button"
-                  className={`px-3 py-1 rounded text-sm ${
-                    formData.slippage === slippage
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  onClick={() => setFormData(prev => ({ ...prev, slippage }))}
-                >
-                  {slippage}%
-                </button>
-              ))}
-            </div>
-          </div>
+            {/* Quote details */}
+            {quote && (
+              <div className="bg-blue-50 rounded-lg p-4 text-sm">
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-600">Network fee</span>
+                  <span className="font-medium">
+                    {quote.feeFiat !== undefined ? `$${quote.feeFiat.toFixed(2)}` : quote.fee}
+                  </span>
+                </div>
+                {quote.provider && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Provider</span>
+                    <span className="font-medium">{quote.provider}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* Progress */}
-          {progress && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                <span className="text-blue-700">{progress}</span>
+            {/* Slippage */}
+            <div>
+              <span className="text-sm text-gray-600 mb-1 block">Slippage Tolerance</span>
+              <div className="flex gap-2">
+                {['0.5', '1', '2', '3'].map(slippage => (
+                  <button
+                    key={slippage}
+                    type="button"
+                    className={`px-3 py-1 rounded text-sm ${
+                      formData.slippage === slippage
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    onClick={() => setFormData(prev => ({ ...prev, slippage }))}
+                  >
+                    {slippage}%
+                  </button>
+                ))}
               </div>
             </div>
-          )}
 
-          {/* Error */}
-          {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
+            {/* Progress (only for fast vaults - secure vaults use modal) */}
+            {!isSecureVault && progress && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                  <span className="text-blue-700">{progress}</span>
+                </div>
+              </div>
+            )}
 
-          {/* Success */}
-          {result && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Swap Submitted!
+            {/* Error */}
+            {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
+
+            {/* Success */}
+            {result && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Swap Submitted!
+                </div>
+                <div className="text-sm text-green-600 break-all">
+                  <span className="font-medium">Hash:</span> {result.txHash}
+                </div>
               </div>
-              <div className="text-sm text-green-600 break-all">
-                <span className="font-medium">Hash:</span> {result.txHash}
-              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={handleGetQuote}
+                isLoading={isLoadingQuote}
+                disabled={!formData.fromChain || !formData.toChain || !formData.amount || isSwapping}
+              >
+                Get Quote
+              </Button>
+              <Button variant="primary" fullWidth onClick={handleSwap} isLoading={isSwapping} disabled={!quote}>
+                Swap
+              </Button>
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              fullWidth
-              onClick={handleGetQuote}
-              isLoading={isLoadingQuote}
-              disabled={!formData.fromChain || !formData.toChain || !formData.amount || isSwapping}
-            >
-              Get Quote
-            </Button>
-            <Button variant="primary" fullWidth onClick={handleSwap} isLoading={isSwapping} disabled={!quote}>
-              Swap
-            </Button>
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 

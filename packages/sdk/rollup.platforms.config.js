@@ -34,6 +34,8 @@ const external = [
   '@cosmjs/amino',
   '@bufbuild/protobuf',
   'ripple-binary-codec',
+  // 7z-wasm uses Emscripten-style WASM loading - must stay external so it can find its .wasm file
+  '7z-wasm',
 ]
 
 // Rewrite WASM import paths for bundled output

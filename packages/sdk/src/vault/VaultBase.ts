@@ -319,8 +319,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Sign a transaction using the vault's signing mode(s)
    * Implementation differs between fast and secure vaults
+   *
+   * @param payload - Transaction payload to sign
+   * @param options - Optional parameters including abort signal
    */
-  abstract sign(payload: SigningPayload): Promise<Signature>
+  abstract sign(payload: SigningPayload, options?: { signal?: AbortSignal }): Promise<Signature>
 
   /**
    * Sign arbitrary pre-hashed bytes
@@ -336,9 +339,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Implementation differs between fast and secure vaults.
    *
    * @param options - Signing options (data and chain)
+   * @param signingOptions - Optional parameters including abort signal
    * @returns Signature from vault coordination
    */
-  abstract signBytes(options: SignBytesOptions): Promise<Signature>
+  abstract signBytes(options: SignBytesOptions, signingOptions?: { signal?: AbortSignal }): Promise<Signature>
 
   /**
    * Get available signing modes for this vault type
