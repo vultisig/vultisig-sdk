@@ -14,12 +14,23 @@ import chalk from 'chalk'
 import ora from 'ora'
 import * as readline from 'readline'
 
+/**
+ * Error thrown when user cancels a prompt with Ctrl+C
+ */
+class PromptCancelledError extends Error {
+  name = 'PromptCancelledError'
+  constructor() {
+    super('Prompt cancelled')
+  }
+}
+
 import {
   executeAddressBook,
   executeAddresses,
   executeBalance,
   executeChains,
-  executeCreate,
+  executeCreateFast,
+  executeCreateSecure,
   executeCurrency,
   executeExport,
   executeImport,
@@ -34,6 +45,7 @@ import {
   executeTokens,
   executeVaults,
 } from '../commands'
+import { stopAllSpinners } from '../lib/output'
 import { createCompleter, findChainByName } from './completer'
 import { EventBuffer } from './event-buffer'
 import { executeLock, executeStatus, executeUnlock, showHelp } from './shell-commands'
@@ -58,6 +70,8 @@ function createSpinner(text: string) {
 export class ShellSession {
   private ctx: ShellContext
   private eventBuffer: EventBuffer
+  private lastSigintTime = 0
+  private readonly DOUBLE_CTRL_C_TIMEOUT = 2000 // 2 seconds
 
   constructor(sdk: Vultisig, options?: { passwordTtlMs?: number }) {
     this.ctx = createShellContext(sdk, options)
@@ -114,12 +128,154 @@ export class ShellSession {
         resolve(answer)
       })
       rl.on('SIGINT', () => {
+        const now = Date.now()
+        if (now - this.lastSigintTime < this.DOUBLE_CTRL_C_TIMEOUT) {
+          // Double Ctrl+C - exit
+          rl.close()
+          console.log(chalk.yellow('\nGoodbye!'))
+          this.ctx.dispose()
+          process.exit(0)
+        }
+        this.lastSigintTime = now
+        console.log(chalk.yellow('\n(Press Ctrl+C again to exit)'))
         rl.close()
-        console.log(chalk.yellow('\nGoodbye!'))
-        this.ctx.dispose()
-        process.exit(0)
+        resolve('')
       })
     })
+  }
+
+  /**
+   * Simple prompt for input (used within commands)
+   */
+  private prompt(message: string, defaultValue?: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const displayPrompt = defaultValue ? `${message} [${defaultValue}]: ` : `${message}: `
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: true,
+      })
+      rl.question(displayPrompt, answer => {
+        rl.close()
+        resolve(answer.trim() || defaultValue || '')
+      })
+      rl.on('SIGINT', () => {
+        rl.close()
+        reject(new PromptCancelledError())
+      })
+    })
+  }
+
+  /**
+   * Prompt for password input (masked)
+   */
+  private promptPassword(message: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: true,
+      })
+
+      // Mask input
+      const stdin = process.stdin
+      const onData = (char: Buffer) => {
+        const c = char.toString()
+        if (c === '\n' || c === '\r') return
+        if (c === '\u0003') return // Ctrl+C handled by SIGINT
+        if (c === '\u007F' || c === '\b') {
+          // Backspace
+          process.stdout.write('\b \b')
+        } else {
+          process.stdout.write('*')
+        }
+      }
+
+      stdin.on('data', onData)
+
+      rl.question(`${message}: `, answer => {
+        stdin.removeListener('data', onData)
+        rl.close()
+        resolve(answer)
+      })
+      rl.on('SIGINT', () => {
+        stdin.removeListener('data', onData)
+        rl.close()
+        reject(new PromptCancelledError())
+      })
+    })
+  }
+
+  /**
+   * Run an async operation with Ctrl+C cancellation support.
+   * Uses Promise.race to avoid wrapping the original promise chain,
+   * which can interfere with MPC protocol timing.
+   */
+  private withCancellation<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const abortController = new AbortController()
+
+    // Create a cancellation promise that rejects on SIGINT
+    let rejectCancellation: (err: Error) => void
+    const cancellationPromise = new Promise<never>((_, reject) => {
+      rejectCancellation = reject
+    })
+
+    const onSigint = () => {
+      cleanup()
+      abortController.abort()
+      rejectCancellation(new Error('Operation cancelled'))
+    }
+
+    const cleanup = () => {
+      process.removeListener('SIGINT', onSigint)
+    }
+
+    process.on('SIGINT', onSigint)
+
+    // Race the operation against the cancellation promise
+    // This preserves the original promise chain timing
+    return Promise.race([fn(abortController.signal), cancellationPromise]).finally(cleanup)
+  }
+
+  /**
+   * Run an async operation with Ctrl+C cancellation support.
+   * Creates an AbortController and passes the signal to the operation.
+   * On SIGINT, aborts the signal which causes the operation to throw.
+   */
+  private async withAbortHandler<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController()
+
+    const onSigint = () => {
+      // Abort the signal - operations check signal.aborted in their loops
+      controller.abort()
+      // Stop spinners and clean up terminal
+      stopAllSpinners()
+      process.stdout.write('\x1B[?25h') // Show cursor
+      process.stdout.write('\r\x1B[K') // Clear current line
+      console.log(chalk.yellow('\nCancelling operation...'))
+    }
+
+    const cleanup = () => {
+      process.removeListener('SIGINT', onSigint)
+    }
+
+    process.on('SIGINT', onSigint)
+
+    try {
+      const result = await fn(controller.signal)
+      cleanup()
+      return result
+    } catch (err) {
+      cleanup()
+      // Stop any remaining spinners on error
+      stopAllSpinners()
+      // If the signal was aborted, throw a normalized error regardless of wrapping
+      // This ensures the caller can check for 'Operation aborted' consistently
+      if (controller.signal.aborted) {
+        throw new Error('Operation aborted')
+      }
+      throw err
+    }
   }
 
   /**
@@ -129,6 +285,9 @@ export class ShellSession {
     const input = line.trim()
     if (!input) return
 
+    // Reset double Ctrl+C state when user enters a command
+    this.lastSigintTime = 0
+
     const [command, ...args] = input.split(/\s+/)
 
     try {
@@ -137,6 +296,20 @@ export class ShellSession {
       this.eventBuffer.endCommand()
     } catch (error: any) {
       this.eventBuffer.endCommand()
+      // Handle prompt/operation cancellation (Ctrl+C)
+      if (
+        error.name === 'ExitPromptError' ||
+        error.name === 'PromptCancelledError' ||
+        error.message === 'Operation cancelled' ||
+        error.message === 'Operation aborted'
+      ) {
+        // Stop all active spinners and clean up terminal state
+        stopAllSpinners()
+        process.stdout.write('\x1B[?25h') // Show cursor
+        process.stdout.write('\r\x1B[K') // Clear current line
+        console.log(chalk.yellow('Operation cancelled'))
+        return
+      }
       console.error(chalk.red(`\nError: ${error.message}`))
     }
   }
@@ -160,7 +333,7 @@ export class ShellSession {
         break
 
       case 'create':
-        await this.createVault()
+        await this.createVault(args)
         break
 
       case 'info':
@@ -311,20 +484,89 @@ export class ShellSession {
     this.eventBuffer.setupVaultListeners(vault)
   }
 
-  private async createVault(): Promise<void> {
-    const vault = await executeCreate(this.ctx, { type: 'fast' })
-    this.ctx.addVault(vault)
-    this.eventBuffer.setupVaultListeners(vault)
+  private async createVault(args: string[]): Promise<void> {
+    const type = args[0]?.toLowerCase()
+
+    if (!type || (type !== 'fast' && type !== 'secure')) {
+      console.log(chalk.yellow('Usage: create <fast|secure>'))
+      console.log(chalk.gray('  create fast   - Create a fast vault (server-assisted 2-of-2)'))
+      console.log(chalk.gray('  create secure - Create a secure vault (multi-device MPC)'))
+      return
+    }
+
+    let vault
+    if (type === 'fast') {
+      // Prompt for fast vault options
+      const name = await this.prompt('Vault name')
+      if (!name) {
+        console.log(chalk.red('Name is required'))
+        return
+      }
+
+      const password = await this.promptPassword('Vault password')
+      if (!password) {
+        console.log(chalk.red('Password is required'))
+        return
+      }
+
+      const email = await this.prompt('Email for verification')
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        console.log(chalk.red('Valid email is required'))
+        return
+      }
+
+      vault = await this.withCancellation(signal => executeCreateFast(this.ctx, { name, password, email, signal }))
+    } else {
+      // Prompt for secure vault options
+      const name = await this.prompt('Vault name')
+      if (!name) {
+        console.log(chalk.red('Name is required'))
+        return
+      }
+
+      const sharesStr = await this.prompt('Total shares (devices)', '3')
+      const shares = parseInt(sharesStr, 10)
+      if (isNaN(shares) || shares < 2) {
+        console.log(chalk.red('Must have at least 2 shares'))
+        return
+      }
+
+      const thresholdStr = await this.prompt('Signing threshold', '2')
+      const threshold = parseInt(thresholdStr, 10)
+      if (isNaN(threshold) || threshold < 1 || threshold > shares) {
+        console.log(chalk.red(`Threshold must be between 1 and ${shares}`))
+        return
+      }
+
+      const password = await this.promptPassword('Vault password (optional, press Enter to skip)')
+
+      vault = await this.withCancellation(signal =>
+        executeCreateSecure(this.ctx, {
+          name,
+          password: password || undefined,
+          threshold,
+          shares,
+          signal,
+        })
+      )
+    }
+
+    if (vault) {
+      this.ctx.addVault(vault)
+      this.eventBuffer.setupVaultListeners(vault)
+    }
   }
 
   private async runBalance(args: string[]): Promise<void> {
     const chainStr = args[0]
     const includeTokens = args.includes('-t') || args.includes('--tokens')
 
-    await executeBalance(this.ctx, {
-      chain: chainStr ? findChainByName(chainStr) || (chainStr as Chain) : undefined,
-      includeTokens,
-    })
+    await this.withCancellation(() =>
+      executeBalance(this.ctx, {
+        chain: chainStr ? findChainByName(chainStr) || (chainStr as Chain) : undefined,
+        includeTokens,
+      })
+    )
   }
 
   private async runPortfolio(args: string[]): Promise<void> {
@@ -343,7 +585,7 @@ export class ShellSession {
       return
     }
 
-    await executePortfolio(this.ctx, { currency })
+    await this.withCancellation(() => executePortfolio(this.ctx, { currency }))
   }
 
   private async runSend(args: string[]): Promise<void> {
@@ -369,9 +611,14 @@ export class ShellSession {
     }
 
     try {
-      await executeSend(this.ctx, { chain, to, amount, tokenId, memo })
+      // Use withAbortHandler to create an AbortSignal and pass it to executeSend
+      await this.withAbortHandler(signal => executeSend(this.ctx, { chain, to, amount, tokenId, memo, signal }))
     } catch (err: any) {
-      if (err.message === 'Transaction cancelled by user') {
+      if (
+        err.message === 'Transaction cancelled by user' ||
+        err.message === 'Operation cancelled' ||
+        err.message === 'Operation aborted'
+      ) {
         console.log(chalk.yellow('\nTransaction cancelled'))
         return
       }
@@ -459,7 +706,7 @@ export class ShellSession {
       }
     }
 
-    await executeSwapQuote(this.ctx, { fromChain, toChain, amount, fromToken, toToken })
+    await this.withCancellation(() => executeSwapQuote(this.ctx, { fromChain, toChain, amount, fromToken, toToken }))
   }
 
   private async runSwap(args: string[]): Promise<void> {
@@ -495,9 +742,16 @@ export class ShellSession {
     }
 
     try {
-      await executeSwap(this.ctx, { fromChain, toChain, amount, fromToken, toToken, slippage })
+      // Use withAbortHandler to create an AbortSignal and pass it to executeSwap
+      await this.withAbortHandler(signal =>
+        executeSwap(this.ctx, { fromChain, toChain, amount, fromToken, toToken, slippage, signal })
+      )
     } catch (err: any) {
-      if (err.message === 'Swap cancelled by user') {
+      if (
+        err.message === 'Swap cancelled by user' ||
+        err.message === 'Operation cancelled' ||
+        err.message === 'Operation aborted'
+      ) {
         console.log(chalk.yellow('\nSwap cancelled'))
         return
       }

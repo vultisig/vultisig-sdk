@@ -341,6 +341,14 @@ export type SigningStep = {
   participantsReady?: number
 }
 
+/**
+ * Standard progress callback type for long-running operations
+ * Used for signing, vault creation, and other long-running operations
+ *
+ * Note: For cancellation, use AbortSignal instead of return values
+ */
+export type OnProgressCallback = (step: SigningStep) => void
+
 export type AddressBookEntry = {
   chain: Chain
   address: string

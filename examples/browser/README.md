@@ -5,10 +5,12 @@ Browser-based example application demonstrating the Vultisig SDK for fast vault 
 ## Features
 
 - 🔐 Create fast vaults with email verification
+- 🛡️ Create secure vaults with multi-device MPC (QR pairing)
 - 📦 Import/export vault files
 - 💰 Check balances across multiple chains
-- 💸 Send transactions with 2-of-2 signing
-- 📊 Real-time event logging
+- 💸 Send transactions (fast vault: instant, secure vault: device coordination)
+- 📲 QR code display for mobile device pairing
+- 📊 Real-time event logging and device join tracking
 - 🎨 Modern React UI with Tailwind CSS
 - 📑 Multi-vault tab interface
 
@@ -43,12 +45,25 @@ yarn preview
 
 ## Usage
 
-### Create a Vault
+### Create a Fast Vault
 
 1. Click "Create New Vault"
-2. Enter vault name, email, and password
-3. Check email for verification code
-4. Enter code to complete creation
+2. Select "Fast Vault" type
+3. Enter vault name, email, and password
+4. Check email for verification code
+5. Enter code to complete creation
+
+### Create a Secure Vault
+
+1. Click "Create New Vault"
+2. Select "Secure Vault" type
+3. Enter vault name and number of devices (e.g., 3 for 2-of-3)
+4. Optionally set a password for vault encryption
+5. A QR code displays on screen
+6. Other participants scan with Vultisig mobile app (iOS/Android)
+7. Device join progress shows in real-time
+8. Keygen runs automatically when all devices join
+9. Vault is created and ready to use
 
 ### Import Vaults
 
@@ -63,10 +78,21 @@ yarn preview
 
 ### Send Transaction
 
+**Fast Vault:**
 1. Select chain and enter recipient address
 2. Enter amount to send
 3. Click "Send Transaction"
-4. Transaction will be signed and broadcast automatically
+4. Transaction is signed instantly and broadcast
+
+**Secure Vault:**
+1. Select chain and enter recipient address
+2. Enter amount to send
+3. Click "Send Transaction"
+4. A QR code displays for signing session
+5. Other participants scan with Vultisig app to approve
+6. Device join progress shows (e.g., "2/3 devices ready")
+7. Once threshold reached, signature is generated
+8. Transaction is broadcast
 
 ## Architecture
 
@@ -77,6 +103,7 @@ yarn preview
 - **Vultisig SDK**: Wallet functionality
 - **IndexedDB**: Vault storage (via SDK)
 - **LocalStorage**: App settings
+- **7z-wasm**: LZMA compression for QR payloads (secure vault)
 
 ## Project Structure
 
@@ -97,6 +124,16 @@ See [BROWSER_EXAMPLE_IMPLEMENTATION.md](../../docs/plans/BROWSER_EXAMPLE_IMPLEME
 - Events are color-coded by type
 - Auto-scroll option for monitoring
 - Events show vault context with name prefixes
+
+### Secure Vault UI Components
+
+The example includes specialized components for secure vault operations:
+
+- **SecureVaultCreator** - Multi-step form for vault creation with device pairing
+- **SigningModal** - Transaction signing flow with QR and device tracking
+- **QRCodeModal** - Displays QR codes for mobile app scanning
+- **DeviceProgress** - Shows device join progress (e.g., "2/3 devices ready")
+- **ProgressModal** - Generic progress display for keygen/signing phases
 
 ### Browser-Optimized
 
