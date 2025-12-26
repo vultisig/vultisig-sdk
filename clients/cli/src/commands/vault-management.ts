@@ -5,6 +5,7 @@ import type { VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
+import path from 'path'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext } from '../core'
@@ -324,8 +325,8 @@ export async function executeVerify(
 
 export type ExportVaultOptions = {
   outputPath?: string
-  encrypt?: boolean
-  password?: string
+  password?: string // Vault unlock password (already cached by init)
+  exportPassword?: string // Export file encryption password
 }
 
 /**
@@ -334,48 +335,67 @@ export type ExportVaultOptions = {
 export async function executeExport(ctx: CommandContext, options: ExportVaultOptions = {}): Promise<string> {
   const vault = await ctx.ensureActiveVault()
 
-  let encrypt = options.encrypt
-  let password = options.password
-
-  // Only prompt if --encrypt/--no-encrypt not specified
-  if (encrypt === undefined) {
-    const encryptAnswer = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'encrypt',
-        message: 'Encrypt export with password?',
-        default: true,
-      },
-    ])
-    encrypt = encryptAnswer.encrypt
-  }
-
-  if (encrypt && !password) {
-    const passwordAnswer = await inquirer.prompt([
-      {
-        type: 'password',
-        name: 'password',
-        message: 'Enter password:',
-        mask: '*',
-      },
-    ])
-    password = passwordAnswer.password
+  // Determine export password with fallback logic:
+  // 1. Use --exportPassword if provided
+  // 2. Else use --password if provided (same password for both unlock and export)
+  // 3. Else prompt for export password
+  let exportPassword = options.exportPassword
+  if (exportPassword === undefined) {
+    if (options.password !== undefined) {
+      // Default: use unlock password for export encryption too
+      exportPassword = options.password
+    } else {
+      // Prompt for export password
+      const answer = await inquirer.prompt([
+        {
+          type: 'password',
+          name: 'exportPassword',
+          message: 'Enter password for export encryption (leave empty for no encryption):',
+          mask: '*',
+        },
+      ])
+      exportPassword = answer.exportPassword || undefined // empty string → undefined
+    }
   }
 
   const spinner = createSpinner('Exporting vault...')
 
-  // Pass password to export if encrypting
-  const { data: vultContent } = await vault.export(encrypt ? password : undefined)
-  const fileName = options.outputPath || `${vault.name}-${vault.localPartyId}-vault.vult`
+  // Pass export password to SDK - encrypts if password is provided
+  const { data: vultContent, filename: sdkFilename } = await vault.export(exportPassword)
 
-  await fs.writeFile(fileName, vultContent, 'utf-8')
+  // Determine output path
+  let outputPath: string
+  if (options.outputPath) {
+    const resolvedPath = path.resolve(options.outputPath)
+    // Check if path is a directory - if so, append the SDK filename
+    try {
+      const stat = await fs.stat(resolvedPath)
+      if (stat.isDirectory()) {
+        outputPath = path.join(resolvedPath, sdkFilename)
+      } else {
+        outputPath = resolvedPath
+      }
+    } catch {
+      // Path doesn't exist yet, use as-is (could be a new file path)
+      outputPath = resolvedPath
+    }
+  } else {
+    outputPath = path.resolve(sdkFilename)
+  }
 
-  spinner.succeed(`Vault exported: ${fileName}`)
+  // Ensure parent directory exists
+  const parentDir = path.dirname(outputPath)
+  await fs.mkdir(parentDir, { recursive: true })
+
+  // Write the vault file
+  await fs.writeFile(outputPath, vultContent, 'utf-8')
+
+  spinner.succeed(`Vault exported: ${outputPath}`)
 
   success('\n+ Vault exported successfully!')
-  info(`File: ${fileName}`)
+  info(`File: ${outputPath}`)
 
-  return fileName
+  return outputPath
 }
 
 /**

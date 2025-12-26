@@ -206,7 +206,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       libType: parsedVault.libType,
       isBackedUp: parsedVault.isBackedUp ?? true,
       order: parsedVault.order ?? 0,
-      keyShares: { ecdsa: '', eddsa: '' }, // Lazy-loaded from vaultFileContent
+      keyShares:
+        parsedVaultData?.keyShares?.ecdsa && parsedVaultData?.keyShares?.eddsa
+          ? parsedVaultData.keyShares
+          : { ecdsa: '', eddsa: '' }, // Lazy-loaded from vaultFileContent if not provided
       folderId: parsedVault.folderId,
     }
 
@@ -665,6 +668,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Export vault backup
    */
   async export(password?: string): Promise<{ filename: string; data: string }> {
+    // Ensure keyShares are loaded from vault file before exporting
+    // This is critical: keyShares are lazy-loaded and will be empty if not loaded
+    await this.ensureKeySharesLoaded()
+
     const totalSigners = this.vaultData.signers.length
     const localPartyIndex = this.vaultData.signers.indexOf(this.vaultData.localPartyId) + 1
 
