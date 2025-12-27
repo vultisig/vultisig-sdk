@@ -15,6 +15,7 @@
   "changesets": [
     "add-sign-bytes",
     "bundling-optimizations",
+    "cli-export-password-options",
     "defer-vault-storage-until-verification",
     "fix-alpha-release",
     "fix-cli-command-references",
@@ -22,8 +23,10 @@
     "fix-node-crypto-polyfill",
     "fix-password-prompt-spinner",
     "fix-publish-script",
+    "fix-vault-export-keyshares",
     "fix-workspace-protocol",
     "secure-vault-support",
+    "simplify-export-command",
     "update-browser-cli-for-new-vault-api",
     "update-docs-to-current-state",
     "verification-retry-on-wrong-input"
