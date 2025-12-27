@@ -7,7 +7,6 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   NODE_OPTIONS: "--max-old-space-size=4096"
@@ -56,19 +55,21 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Enable Auto-Merge on Version PR
-        if: steps.changesets.outputs.pullRequestNumber
-        run: gh pr merge ${{ steps.changesets.outputs.pullRequestNumber }} --auto --merge
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-
       - name: Check if published
         id: check-publish
         run: |
-          if [ "${{ steps.changesets.outputs.published }}" == "true" ]; then
-            VERSION=$(echo '${{ steps.changesets.outputs.publishedPackages }}' | jq -r '.[0].version')
+          # Get version from local package.json
+          LOCAL_VERSION=$(node -p "require('./packages/sdk/package.json').version")
+
+          # Get latest version from npm (empty if not published yet)
+          NPM_VERSION=$(npm view @vultisig/sdk version 2>/dev/null || echo "")
+
+          echo "Local version: $LOCAL_VERSION"
+          echo "NPM version: $NPM_VERSION"
+
+          if [ "$LOCAL_VERSION" == "$NPM_VERSION" ]; then
             echo "published=true" >> $GITHUB_OUTPUT
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
           else
             echo "published=false" >> $GITHUB_OUTPUT
           fi
