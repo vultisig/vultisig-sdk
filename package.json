@@ -34,6 +34,10 @@
     "test:e2e:prepare-send": "yarn workspace @vultisig/sdk test:e2e:prepare-send",
     "test:e2e:fast-signing": "yarn workspace @vultisig/sdk test:e2e:fast-signing",
     "test:e2e:fiat-value": "yarn workspace @vultisig/sdk test:e2e:fiat-value",
+    "test:e2e:sign-bytes": "yarn workspace @vultisig/sdk test:e2e:sign-bytes",
+    "test:e2e:swap-quotes": "yarn workspace @vultisig/sdk test:e2e:swap-quotes",
+    "test:e2e:swap-transactions": "yarn workspace @vultisig/sdk test:e2e:swap-transactions",
+    "test:e2e:secure-signing": "yarn workspace @vultisig/sdk test:e2e:secure-signing",
     "test:watch": "yarn workspace @vultisig/sdk test:watch",
     "test:unit:watch": "yarn workspace @vultisig/sdk test:unit:watch",
     "test:integration:watch": "yarn workspace @vultisig/sdk test:integration:watch",
@@ -115,6 +119,7 @@
   "resolutions": {
     "readable-stream": "3.6.2",
     "@noble/hashes": "1.8.0",
-    "@lifi/sdk/@solana/web3.js": "1.98.4"
+    "@lifi/sdk/@solana/web3.js": "1.98.4",
+    "@cosmjs/encoding/@scure/base": "1.2.6"
   }
 }

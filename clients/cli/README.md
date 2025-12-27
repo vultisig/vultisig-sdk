@@ -186,6 +186,29 @@ vultisig -i
 - `--shares <n>` - Number of devices for secure vault (default: 2)
 - `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
 
+**Export options:**
+- `[path]` - Output file or directory (defaults to SDK-generated filename in current directory)
+- `--password <password>` - Password to unlock encrypted vaults
+- `--exportPassword <password>` - Password to encrypt the export file (defaults to `--password` if provided)
+
+```bash
+# Export to current directory (prompts for export password)
+vultisig export
+
+# Export to specific directory
+vultisig export /path/to/backups/
+
+# Export with encryption (same password for unlock and export)
+vultisig export --password mypassword
+
+# Export with different passwords for unlock vs export
+vultisig export --password unlockPass --exportPassword exportPass
+
+# Export without encryption (leave password prompt empty)
+vultisig export
+# > Enter password for export encryption (leave empty for no encryption): [enter]
+```
+
 ### Wallet Operations
 
 | Command | Description |

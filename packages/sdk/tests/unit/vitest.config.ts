@@ -30,9 +30,10 @@ export default defineConfig({
     testTimeout: 30000, // 30 seconds for unit tests (WASM loading can take time)
     hookTimeout: 30000, // 30 seconds for hooks
     teardownTimeout: 10000, // 10 seconds for cleanup
-    // Allow importing from workspace packages
+    // Allow importing from workspace packages - inline ESM-only deps
     deps: {
-      external: ['@trustwallet/wallet-core'],
+      interopDefault: true,
+      inline: [/@cosmjs/, /@scure/],
     },
     // Coverage configuration for Phase 1: 30% target
     coverage: {
@@ -61,11 +62,11 @@ export default defineConfig({
     },
     // Reporter configuration
     reporters: ['verbose'],
-    // Parallel execution
-    pool: 'threads',
+    // Parallel execution - use forks for better ESM compatibility
+    pool: 'forks',
     poolOptions: {
-      threads: {
-        singleThread: false,
+      forks: {
+        singleFork: false,
         isolate: true,
       },
     },

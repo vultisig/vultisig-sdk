@@ -30,7 +30,7 @@ import {
   executeVaults,
   executeVerify,
 } from './commands'
-import { createPasswordCallback } from './core'
+import { cachePassword, createPasswordCallback } from './core'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
 import {
@@ -108,8 +108,15 @@ async function findVaultByNameOrId(sdk: Vultisig, nameOrId: string): Promise<Vau
   return null
 }
 
-async function init(vaultOverride?: string): Promise<CLIContext> {
+async function init(vaultOverride?: string, unlockPassword?: string): Promise<CLIContext> {
   if (!ctx) {
+    // Cache password BEFORE SDK init if provided
+    // This allows the SDK's onPasswordRequired callback to find it
+    const vaultSelector = vaultOverride || process.env.VULTISIG_VAULT
+    if (unlockPassword && vaultSelector) {
+      cachePassword(vaultSelector, unlockPassword)
+    }
+
     const sdk = new Vultisig({
       onPasswordRequired: createPasswordCallback(),
     })
@@ -118,7 +125,6 @@ async function init(vaultOverride?: string): Promise<CLIContext> {
     ctx = new CLIContext(sdk)
 
     // Determine which vault to use (precedence: flag > env var > stored active)
-    const vaultSelector = vaultOverride || process.env.VULTISIG_VAULT
     let vault: VaultBase | null = null
 
     if (vaultSelector) {
@@ -299,16 +305,15 @@ program
 program
   .command('export [path]')
   .description('Export vault to file')
-  .option('--encrypt', 'Encrypt the export with a password')
-  .option('--no-encrypt', 'Export without encryption')
-  .option('--password <password>', 'Password for encryption')
+  .option('--password <password>', 'Password to unlock the vault (for encrypted vaults)')
+  .option('--exportPassword <password>', 'Password to encrypt the exported file (defaults to --password)')
   .action(
-    withExit(async (path: string | undefined, options: { encrypt?: boolean; password?: string }) => {
-      const context = await init(program.opts().vault)
+    withExit(async (path: string | undefined, options: { password?: string; exportPassword?: string }) => {
+      const context = await init(program.opts().vault, options.password)
       await executeExport(context, {
         outputPath: path,
-        encrypt: options.encrypt,
         password: options.password,
+        exportPassword: options.exportPassword,
       })
     })
   )

@@ -1,8 +1,6 @@
 name: Test Suite
 
 on:
-  push:
-    branches: [main, develop, tests]
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -16,10 +14,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
         with:
           node-version: "20"
 
@@ -27,7 +25,7 @@ jobs:
         run: corepack enable
 
       - name: Prepare Yarn
-        run: corepack prepare yarn@4.9.1 --activate
+        run: corepack prepare yarn@4.12.0 --activate
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -44,7 +42,7 @@ jobs:
         working-directory: packages/sdk
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v4
         with:
           files: ./packages/sdk/coverage/lcov.info
           flags: unittests
@@ -52,7 +50,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Archive coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-report
           path: packages/sdk/coverage/
@@ -64,10 +62,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
         with:
           node-version: "20"
 
@@ -75,7 +73,7 @@ jobs:
         run: corepack enable
 
       - name: Prepare Yarn
-        run: corepack prepare yarn@4.9.1 --activate
+        run: corepack prepare yarn@4.12.0 --activate
 
       - name: Install dependencies
         run: yarn install --immutable
