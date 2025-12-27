@@ -86,8 +86,12 @@ jobs:
 
       - name: Create and push tag
         run: |
-          git tag -a "v${{ needs.release.outputs.version }}" -m "Release v${{ needs.release.outputs.version }}" || true
-          git push origin "v${{ needs.release.outputs.version }}" --force
+          if git rev-parse "v${{ needs.release.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ needs.release.outputs.version }} already exists, skipping tag creation"
+            exit 0
+          fi
+          git tag -a "v${{ needs.release.outputs.version }}" -m "Release v${{ needs.release.outputs.version }}"
+          git push origin "v${{ needs.release.outputs.version }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2
