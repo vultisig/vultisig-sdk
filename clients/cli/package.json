@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/cli",
-  "version": "0.2.0-alpha.7",
+  "version": "0.2.0-beta.8",
   "description": "Command-line wallet for Vultisig - multi-chain MPC wallet management",
   "type": "module",
   "bin": {

@@ -1,5 +1,26 @@
 # @vultisig/cli
 
+## 0.2.0-beta.8
+
+### Minor Changes
+
+- [#62](https://github.com/vultisig/vultisig-sdk/pull/62) [`008db7f`](https://github.com/vultisig/vultisig-sdk/commit/008db7fb27580ec78df3bbc41b25aac24924ffd8) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat: separate unlock and export passwords in CLI export command
+
+  The export command now has two distinct password options:
+  - `--password`: Unlocks the vault (decrypts stored keyshares for encrypted vaults)
+  - `--exportPassword`: Encrypts the exported file (defaults to `--password` if not specified)
+
+  This fixes the "Password required but callback returned empty value" error when exporting encrypted vaults.
+
+  Password resolution now uses an in-memory cache that persists across SDK callbacks, allowing the CLI to pre-cache the unlock password before vault loading.
+
+### Patch Changes
+
+- [#62](https://github.com/vultisig/vultisig-sdk/pull/62) [`008db7f`](https://github.com/vultisig/vultisig-sdk/commit/008db7fb27580ec78df3bbc41b25aac24924ffd8) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Simplify export command by removing `--encrypt` and `--no-encrypt` flags. Password is now optional - if provided, vault is encrypted; if omitted or empty, vault is exported without encryption. Path argument now supports directories (appends SDK-generated filename).
+
+- Updated dependencies [[`008db7f`](https://github.com/vultisig/vultisig-sdk/commit/008db7fb27580ec78df3bbc41b25aac24924ffd8)]:
+  - @vultisig/sdk@0.2.0-beta.8
+
 ## 0.2.0-alpha.7
 
 ### Minor Changes
