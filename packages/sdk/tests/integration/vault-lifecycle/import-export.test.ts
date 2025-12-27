@@ -148,7 +148,14 @@ describe('Integration: Vault Export', () => {
       wasmProvider: context.wasmProvider,
     }
 
-    return FastVault.fromStorage(vaultData, mockFastSigningService, vaultContext)
+    const vault = FastVault.fromStorage(vaultData, mockFastSigningService, vaultContext)
+
+    // Manually set keyShares on coreVault for test vaults
+    // In production, these would be loaded from the encrypted vault file
+    // But for tests, we set them directly to bypass the lazy-loading mechanism
+    ;(vault as any).coreVault.keyShares = mockVaultData.keyShares
+
+    return vault
   }
 
   describe('Unencrypted Export', () => {
@@ -429,6 +436,63 @@ describe('Integration: Vault Export', () => {
       console.log('✅ Export with special character password handled')
       console.log(`   Password: ${specialPassword}`)
       console.log(`   Export size: ${data.length} bytes`)
+    })
+  })
+
+  describe('Export/Re-import Round-trip', () => {
+    it('should export vault with valid keyshares that can be re-imported', async () => {
+      const password = 'TestPassword123!'
+      const vault = await createTestVault('Round-trip Test')
+
+      // Derive an address before export
+      const originalEthAddress = await vault.address(Chain.Ethereum)
+      expect(originalEthAddress).toBeDefined()
+
+      // Export the vault (encrypted)
+      const { data: exportedData } = await vault.export(password)
+      expect(exportedData).toBeDefined()
+      expect(exportedData.length).toBeGreaterThan(0)
+
+      // Re-import the exported vault
+      const reimportedVault = await sdk.importVault(exportedData, password)
+      expect(reimportedVault).toBeDefined()
+
+      // Verify the re-imported vault can derive the same address
+      const reimportedEthAddress = await reimportedVault.address(Chain.Ethereum)
+      expect(reimportedEthAddress).toBe(originalEthAddress)
+
+      // Verify key metadata matches
+      expect(reimportedVault.publicKeys.ecdsa).toBe(vault.publicKeys.ecdsa)
+      expect(reimportedVault.publicKeys.eddsa).toBe(vault.publicKeys.eddsa)
+
+      console.log('✅ Export/re-import round-trip successful')
+      console.log(`   Original ETH address: ${originalEthAddress}`)
+      console.log(`   Re-imported ETH address: ${reimportedEthAddress}`)
+    })
+
+    it('should export unencrypted vault that can be re-imported', async () => {
+      const vault = await createTestVault('Unencrypted Round-trip Test')
+
+      // Derive addresses before export
+      const originalBtcAddress = await vault.address(Chain.Bitcoin)
+      const originalSolAddress = await vault.address(Chain.Solana)
+
+      // Export without password (unencrypted)
+      const { data: exportedData } = await vault.export()
+
+      // Re-import
+      const reimportedVault = await sdk.importVault(exportedData)
+
+      // Verify addresses match
+      const reimportedBtcAddress = await reimportedVault.address(Chain.Bitcoin)
+      const reimportedSolAddress = await reimportedVault.address(Chain.Solana)
+
+      expect(reimportedBtcAddress).toBe(originalBtcAddress)
+      expect(reimportedSolAddress).toBe(originalSolAddress)
+
+      console.log('✅ Unencrypted round-trip successful')
+      console.log(`   BTC: ${originalBtcAddress}`)
+      console.log(`   SOL: ${originalSolAddress}`)
     })
   })
 })
