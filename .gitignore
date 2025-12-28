@@ -25,6 +25,7 @@ bin/
 # Examples build artifacts
 examples/*/dist/
 examples/*/build/
+examples/*/dist-electron/
 
 # IDE and Editor files
 .idea/

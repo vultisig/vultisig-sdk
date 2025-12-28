@@ -42,7 +42,9 @@
     },
     "./electron": {
       "types": "./dist/index.node.d.ts",
-      "require": "./dist/index.electron-main.cjs"
+      "import": "./dist/index.electron-main.cjs",
+      "require": "./dist/index.electron-main.cjs",
+      "default": "./dist/index.electron-main.cjs"
     }
   },
   "scripts": {
