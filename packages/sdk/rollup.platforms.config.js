@@ -195,52 +195,32 @@ const configs = {
     }),
     onwarn,
   },
-  electron: [
-    {
-      input: './src/platforms/electron-main/index.ts',
-      output: {
-        file: './dist/index.electron-main.cjs',
-        format: 'cjs',
-        sourcemap: true,
-        exports: 'named',
-        interop: 'auto',
-        inlineDynamicImports: true,
-        paths: wasmPathsResolver,
-      },
-      external,
-      plugins: createPlugins({
-        preferBuiltins: true,
-        replaceOptions: {
-          'process.env.VULTISIG_PLATFORM': JSON.stringify('electron-main'),
-        },
-      }),
+  electron: {
+    input: './src/platforms/electron-main/index.ts',
+    output: {
+      file: './dist/index.electron-main.cjs',
+      format: 'cjs',
+      sourcemap: true,
+      exports: 'named',
+      interop: 'auto',
+      inlineDynamicImports: true,
+      paths: wasmPathsResolver,
     },
-    {
-      input: './src/platforms/electron-renderer/index.ts',
-      output: {
-        file: './dist/index.electron-renderer.js',
-        format: 'es',
-        sourcemap: true,
-        inlineDynamicImports: true,
-        paths: wasmPathsResolver,
+    external,
+    plugins: createPlugins({
+      preferBuiltins: true,
+      replaceOptions: {
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('electron'),
       },
-      external,
-      plugins: createPlugins({
-        preferBuiltins: false,
-        browser: true,
-        replaceOptions: {
-          'process.env.VULTISIG_PLATFORM': JSON.stringify('electron-renderer'),
-        },
-      }),
-      onwarn,
-    },
-  ],
+    }),
+    onwarn,
+  },
 }
 
 // Export based on target
 let exportConfig
 if (target === 'all') {
-  exportConfig = [...configs.node, configs.browser, configs['react-native'], ...configs.electron]
+  exportConfig = [...configs.node, configs.browser, configs['react-native'], configs.electron]
 } else if (configs[target]) {
   const config = configs[target]
   exportConfig = Array.isArray(config) ? config : [config]
