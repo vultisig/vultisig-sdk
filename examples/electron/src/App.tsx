@@ -43,8 +43,14 @@ function App() {
     []
   )
 
+  // Track if initialization has already run (prevents double execution in React Strict Mode)
+  const initRef = useRef(false)
+
   // Initialize app and load vaults
   useEffect(() => {
+    if (initRef.current) return
+    initRef.current = true
+
     const init = async () => {
       try {
         // Load available chains
