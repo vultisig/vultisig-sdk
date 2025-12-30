@@ -23,16 +23,16 @@ function copyWasmFiles(): { name: string; buildStart: () => void } {
 
       // 1. secp256k1.wasm - tiny-secp256k1 uses path.join(dirName, "..", wasmFilename)
       //    When bundled, dirName is dist-electron/, so it looks in examples/electron/
-      //    Note: tiny-secp256k1 is installed in packages/sdk/node_modules, not root node_modules
+      //    Note: tiny-secp256k1 is hoisted to root node_modules by Yarn workspaces
       copyFileSync(
-        path.join(sdkDist, '../node_modules/tiny-secp256k1/lib/secp256k1.wasm'),
+        path.resolve(dirName, '../../node_modules/tiny-secp256k1/lib/secp256k1.wasm'),
         path.resolve(dirName, 'secp256k1.wasm')
       )
 
       // 2. wallet-core.wasm - Trust Wallet Core (loaded via fetch polyfill)
-      //    Note: @trustwallet/wallet-core is installed in packages/sdk/node_modules, not root node_modules
+      //    Note: @trustwallet/wallet-core is hoisted to root node_modules by Yarn workspaces
       copyFileSync(
-        path.join(sdkDist, '../node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'),
+        path.resolve(dirName, '../../node_modules/@trustwallet/wallet-core/dist/lib/wallet-core.wasm'),
         path.join(distElectron, 'wallet-core.wasm')
       )
 

@@ -1,11 +1,16 @@
+import alias from '@rollup/plugin-alias'
 import commonjs from '@rollup/plugin-commonjs'
 import json from '@rollup/plugin-json'
 import resolve from '@rollup/plugin-node-resolve'
 import replace from '@rollup/plugin-replace'
 import terser from '@rollup/plugin-terser'
-import typescript from '@rollup/plugin-typescript'
+import path from 'path'
 import { defineConfig } from 'rollup'
 import copy from 'rollup-plugin-copy'
+import esbuild from 'rollup-plugin-esbuild'
+import { fileURLToPath } from 'url'
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
 const external = [
   'axios',
@@ -67,26 +72,16 @@ const createPlugins = (platformOptions = {}) => {
   const { preferBuiltins = false, browser = false, replaceOptions = {} } = platformOptions
 
   return [
-    replace({ preventAssignment: true, ...replaceOptions }),
-    typescript({
-      tsconfig: './tsconfig.json',
-      outputToFilesystem: true,
-      exclude: ['**/*.test.*', '**/*.stories.*'],
-      include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
-      compilerOptions: {
-        skipLibCheck: true,
-        noEmit: false,
-        noImplicitAny: false,
-        ignoreDeprecations: '5.0',
-        noImplicitReturns: false,
-        noUnusedLocals: false,
-        noUnusedParameters: false,
-        strict: false,
-      },
+    alias({
+      entries: [
+        { find: /^@core\/(.*)/, replacement: path.resolve(currentDir, '../core/$1') },
+        { find: /^@lib\/(.*)/, replacement: path.resolve(currentDir, '../lib/$1') },
+      ],
     }),
     resolve({
       preferBuiltins,
       browser,
+      extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
       exportConditions: browser ? ['browser', 'module', 'import', 'default'] : ['node', 'module', 'import', 'default'],
       skip: [
         'axios',
@@ -100,6 +95,14 @@ const createPlugins = (platformOptions = {}) => {
         '@cosmjs/amino',
       ],
       ignore: [/\.wasm$/],
+    }),
+    replace({ preventAssignment: true, ...replaceOptions }),
+    esbuild({
+      include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
+      exclude: ['**/*.test.*', '**/*.stories.*', '**/node_modules/**'],
+      target: 'es2021',
+      minify: false,
+      tsconfig: './tsconfig.json',
     }),
     json(),
     commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
