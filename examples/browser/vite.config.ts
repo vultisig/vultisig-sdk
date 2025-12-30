@@ -78,11 +78,8 @@ export default defineConfig({
           )
 
           // Copy WalletCore WASM files (from @trustwallet/wallet-core package)
-          // Note: @trustwallet/wallet-core is installed in packages/sdk/node_modules, not root node_modules
-          const walletCoreLibPath = path.resolve(
-            __dirname,
-            '../../packages/sdk/node_modules/@trustwallet/wallet-core/dist/lib'
-          )
+          // Note: @trustwallet/wallet-core is hoisted to root node_modules by Yarn workspaces
+          const walletCoreLibPath = path.resolve(__dirname, '../../node_modules/@trustwallet/wallet-core/dist/lib')
           copyFileSync(
             path.join(walletCoreLibPath, 'wallet-core.wasm'),
             path.join(__dirname, 'public/wallet-core.wasm')
@@ -90,8 +87,8 @@ export default defineConfig({
           copyFileSync(path.join(walletCoreLibPath, 'wallet-core.js'), path.join(__dirname, 'public/wallet-core.js'))
 
           // Copy 7z-wasm files (used for compression during signing)
-          // Note: 7z-wasm is installed in packages/sdk/node_modules, not root node_modules
-          const sevenZipPath = path.resolve(__dirname, '../../packages/sdk/node_modules/7z-wasm')
+          // Note: 7z-wasm is hoisted to root node_modules by Yarn workspaces
+          const sevenZipPath = path.resolve(__dirname, '../../node_modules/7z-wasm')
           mkdirSync(path.join(__dirname, 'public/7z-wasm'), { recursive: true })
           copyFileSync(path.join(sevenZipPath, '7zz.wasm'), path.join(__dirname, 'public/7z-wasm/7zz.wasm'))
 
