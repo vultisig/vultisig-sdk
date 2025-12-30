@@ -84,7 +84,11 @@ export class FileStorage implements Storage {
 
     try {
       const filePath = this.getFilePath(key)
-      const tempPath = `${filePath}.tmp`
+      // Use unique temp file to avoid race conditions with concurrent writes
+      const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`
+
+      // Ensure parent directory exists right before writing
+      await fs.mkdir(path.dirname(filePath), { recursive: true })
 
       await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
         encoding: 'utf-8',
