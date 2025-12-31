@@ -112,7 +112,7 @@ export class SecureVaultCreationService {
       sessionId: randomUUID(),
       hexEncryptionKey: generateHexEncryptionKey(),
       hexChainCode: generateHexChainCode(),
-      localPartyId: generateLocalPartyId('extension'),
+      localPartyId: generateLocalPartyId('sdk'),
     }
   }
 
