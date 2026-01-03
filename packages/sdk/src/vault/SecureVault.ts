@@ -19,6 +19,7 @@ import type {
   VaultCreationStep,
   VaultData,
 } from '../types'
+import { normalizeToHex } from '../utils/bytes'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -162,54 +163,67 @@ export class SecureVault extends VaultBase {
       onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
     } = {}
   ): Promise<Signature> {
-    // Ensure keyShares are loaded (will decrypt if encrypted)
-    await this.ensureKeySharesLoaded()
+    try {
+      // Normalize input to hex string
+      const messageHash = normalizeToHex(options.data)
 
-    // Convert data to hex string message hash
-    let messageHash: string
-    if (typeof options.data === 'string') {
-      // Already hex string (remove 0x if present)
-      messageHash = options.data.startsWith('0x') ? options.data.slice(2) : options.data
-    } else {
-      // Convert Uint8Array/Buffer to hex
-      messageHash = Buffer.from(options.data).toString('hex')
-    }
+      // Ensure keyShares are loaded (will decrypt if encrypted)
+      await this.ensureKeySharesLoaded()
 
-    // Create relay signing service
-    const relaySigningService = new RelaySigningService()
+      // Create relay signing service
+      const relaySigningService = new RelaySigningService()
 
-    // Sign using relay service with event emission
-    const signature = await relaySigningService.signBytesWithRelay(
-      this.coreVault,
-      {
-        messageHashes: [messageHash],
-        chain: options.chain,
-      },
-      {
-        signal: signingOptions.signal,
-        onProgress: (step: SigningStep) => {
-          this.emit('signingProgress', { step })
+      // Sign using relay service with event emission
+      const signature = await relaySigningService.signBytesWithRelay(
+        this.coreVault,
+        {
+          messageHashes: [messageHash],
+          chain: options.chain,
         },
-        onQRCodeReady: qrPayload => {
-          this.emit('qrCodeReady', {
-            qrPayload,
-            action: 'keysign',
-            sessionId: '',
-          })
-          if (signingOptions.onQRCodeReady) {
-            signingOptions.onQRCodeReady(qrPayload)
-          }
-        },
-        onDeviceJoined: (deviceId, totalJoined, required) => {
-          this.emit('deviceJoined', { deviceId, totalJoined, required })
-          if (signingOptions.onDeviceJoined) {
-            signingOptions.onDeviceJoined(deviceId, totalJoined, required)
-          }
-        },
+        {
+          signal: signingOptions.signal,
+          onProgress: (step: SigningStep) => {
+            this.emit('signingProgress', { step })
+          },
+          onQRCodeReady: qrPayload => {
+            this.emit('qrCodeReady', {
+              qrPayload,
+              action: 'keysign',
+              sessionId: '',
+            })
+            if (signingOptions.onQRCodeReady) {
+              signingOptions.onQRCodeReady(qrPayload)
+            }
+          },
+          onDeviceJoined: (deviceId, totalJoined, required) => {
+            this.emit('deviceJoined', { deviceId, totalJoined, required })
+            if (signingOptions.onDeviceJoined) {
+              signingOptions.onDeviceJoined(deviceId, totalJoined, required)
+            }
+          },
+        }
+      )
+
+      // Emit signing complete event
+      this.emit('transactionSigned', {
+        signature,
+        payload: { chain: options.chain, transaction: null, messageHashes: [messageHash] },
+      })
+
+      return signature
+    } catch (error) {
+      this.emit('error', error as Error)
+
+      if (error instanceof VaultError) {
+        throw error
       }
-    )
 
-    return signature
+      throw new VaultError(
+        VaultErrorCode.SigningFailed,
+        `signBytes failed: ${(error as Error).message}`,
+        error as Error
+      )
+    }
   }
 
   /**
