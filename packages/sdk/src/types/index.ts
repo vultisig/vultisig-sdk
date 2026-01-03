@@ -132,6 +132,21 @@ export type SignBytesOptions = {
   chain: Chain
 }
 
+/**
+ * Parameters for broadcasting a pre-signed raw transaction
+ */
+export type BroadcastRawTxParams = {
+  /**
+   * Target blockchain to broadcast on
+   */
+  chain: Chain
+
+  /**
+   * Hex-encoded signed transaction (with or without 0x prefix)
+   */
+  rawTx: string
+}
+
 export type Signature = {
   signature: string
   recovery?: number

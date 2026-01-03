@@ -11,6 +11,7 @@ import {
   executeAddressBook,
   executeAddresses,
   executeBalance,
+  executeBroadcast,
   executeChains,
   executeCreateFast,
   executeCreateSecure,
@@ -22,6 +23,7 @@ import {
   executeRename,
   executeSend,
   executeServer,
+  executeSignBytes,
   executeSwap,
   executeSwapChains,
   executeSwapQuote,
@@ -265,6 +267,40 @@ program
         }
       }
     )
+  )
+
+// Command: Sign arbitrary bytes (for externally constructed transactions)
+program
+  .command('sign')
+  .description('Sign pre-hashed bytes (for externally constructed transactions)')
+  .requiredOption('--chain <chain>', 'Target blockchain')
+  .requiredOption('--bytes <base64>', 'Base64-encoded pre-hashed data to sign')
+  .option('--password <password>', 'Vault password for signing')
+  .action(
+    withExit(async (options: { chain: string; bytes: string; password?: string }) => {
+      const context = await init(program.opts().vault, options.password)
+      await executeSignBytes(context, {
+        chain: findChainByName(options.chain) || (options.chain as Chain),
+        bytes: options.bytes,
+        password: options.password,
+      })
+    })
+  )
+
+// Command: Broadcast raw transaction
+program
+  .command('broadcast')
+  .description('Broadcast a pre-signed raw transaction')
+  .requiredOption('--chain <chain>', 'Target blockchain')
+  .requiredOption('--raw-tx <hex>', 'Hex-encoded signed transaction')
+  .action(
+    withExit(async (options: { chain: string; rawTx: string }) => {
+      const context = await init(program.opts().vault)
+      await executeBroadcast(context, {
+        chain: findChainByName(options.chain) || (options.chain as Chain),
+        rawTx: options.rawTx,
+      })
+    })
   )
 
 // Command: Show portfolio value
