@@ -102,8 +102,10 @@ export type VaultEvents = {
     chain: Chain
     /** The transaction hash returned by the network */
     txHash: string
-    /** The original keysign payload used to create the transaction */
-    keysignPayload: any
+    /** The original keysign payload used to create the transaction (undefined for raw broadcasts) */
+    keysignPayload?: any
+    /** True if this was a raw transaction broadcast (via broadcastRawTx) */
+    raw?: boolean
   }
 
   /** Emitted when vault is saved to storage */

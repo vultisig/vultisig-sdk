@@ -39,6 +39,7 @@ import { BalanceService } from './services/BalanceService'
 import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
 import { PreferencesService } from './services/PreferencesService'
+import { RawBroadcastService } from './services/RawBroadcastService'
 import { SwapService } from './services/SwapService'
 import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
@@ -84,6 +85,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   protected balanceService: BalanceService
   protected gasEstimationService: GasEstimationService
   protected broadcastService: BroadcastService
+  protected rawBroadcastService: RawBroadcastService
   protected preferencesService: PreferencesService
   protected swapService: SwapService
 
@@ -288,6 +290,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       keysignPayload => this.extractMessageHashes(keysignPayload),
       this.wasmProvider
     )
+    this.rawBroadcastService = new RawBroadcastService()
     this.preferencesService = new PreferencesService(
       this.cacheService,
       () => this._userChains,
@@ -905,6 +908,55 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       return txHash
     } catch (error) {
       // BroadcastService already wraps errors in VaultError
+      this.emit('error', error as Error)
+      throw error
+    }
+  }
+
+  /**
+   * Broadcast a pre-signed raw transaction to the blockchain network
+   *
+   * This method is for advanced use cases where you construct and sign
+   * transactions externally (e.g., with ethers.js or bitcoinjs-lib) and
+   * just need to broadcast the final signed transaction bytes.
+   *
+   * @param params - Broadcast parameters
+   * @param params.chain - Target blockchain
+   * @param params.rawTx - Hex-encoded signed transaction (with or without 0x prefix)
+   *
+   * @returns Transaction hash on success
+   *
+   * @throws {VaultError} With code BroadcastFailed if broadcast fails
+   * @throws {VaultError} With code UnsupportedChain if chain is not yet supported
+   *
+   * @example
+   * ```typescript
+   * // Build and sign transaction with ethers.js
+   * const signedTx = await ethersWallet.signTransaction(tx)
+   *
+   * // Broadcast via SDK
+   * const txHash = await vault.broadcastRawTx({
+   *   chain: Chain.Ethereum,
+   *   rawTx: signedTx,
+   * })
+   * console.log(`Transaction: ${txHash}`)
+   * ```
+   */
+  async broadcastRawTx(params: { chain: Chain; rawTx: string }): Promise<string> {
+    const { chain, rawTx } = params
+
+    try {
+      const txHash = await this.rawBroadcastService.broadcastRawTx({ chain, rawTx })
+
+      // Emit success event
+      this.emit('transactionBroadcast', {
+        chain,
+        txHash,
+        raw: true,
+      })
+
+      return txHash
+    } catch (error) {
       this.emit('error', error as Error)
       throw error
     }
