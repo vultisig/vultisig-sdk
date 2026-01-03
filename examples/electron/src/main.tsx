@@ -3,8 +3,6 @@ import './styles.css'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 
-import { sdk } from '@/api/sdk-bridge'
-
 import App from './App'
 
 // Initialize SDK before rendering
@@ -12,7 +10,7 @@ async function bootstrap() {
   try {
     // SDK is already initialized in the main process
     // Just verify it's ready
-    await sdk.initialize()
+    await window.electronAPI.initialize()
 
     ReactDOM.createRoot(document.getElementById('root')!).render(
       <React.StrictMode>

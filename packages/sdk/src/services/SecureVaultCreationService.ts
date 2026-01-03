@@ -59,7 +59,7 @@ export type SecureVaultCreateOptions = {
   password?: string
   /** Total number of devices participating (including this one) */
   devices: number
-  /** Signing threshold - defaults to ceil((devices+1)/2) */
+  /** Signing threshold - defaults to 2/3 majority (ceil(devices*2/3)) */
   threshold?: number
   /** Progress callback */
   onProgress?: (step: SecureVaultCreationStep) => void
@@ -93,7 +93,7 @@ export class SecureVaultCreationService {
 
   /**
    * Calculate threshold from device count
-   * Uses (n+1)/2 formula - e.g., 2-of-3, 3-of-5
+   * Uses 2/3 majority formula - e.g., 2-of-2, 2-of-3, 3-of-4
    */
   calculateThreshold(devices: number): number {
     return getKeygenThreshold(devices)

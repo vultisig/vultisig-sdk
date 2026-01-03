@@ -29,6 +29,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addChain: (vaultId: string, chain: string) => ipcRenderer.invoke('vault:addChain', vaultId, chain),
   removeChain: (vaultId: string, chain: string) => ipcRenderer.invoke('vault:removeChain', vaultId, chain),
   getTokens: (vaultId: string, chain: string) => ipcRenderer.invoke('vault:getTokens', vaultId, chain),
+  addToken: (vaultId: string, chain: string, token: any) => ipcRenderer.invoke('vault:addToken', vaultId, chain, token),
+  removeToken: (vaultId: string, chain: string, tokenId: string) =>
+    ipcRenderer.invoke('vault:removeToken', vaultId, chain, tokenId),
+
+  // Portfolio
+  setCurrency: (vaultId: string, currency: string) => ipcRenderer.invoke('vault:setCurrency', vaultId, currency),
+  getValue: (vaultId: string, chain: string, tokenId?: string, currency?: string) =>
+    ipcRenderer.invoke('vault:getValue', vaultId, chain, tokenId, currency),
+  getTotalValue: (vaultId: string, currency?: string) => ipcRenderer.invoke('vault:getTotalValue', vaultId, currency),
+
+  // Swap
+  getSupportedSwapChains: () => ipcRenderer.invoke('vault:getSupportedSwapChains'),
+  isSwapSupported: (fromChain: string, toChain: string) =>
+    ipcRenderer.invoke('vault:isSwapSupported', fromChain, toChain),
+  getSwapQuote: (vaultId: string, params: any) => ipcRenderer.invoke('vault:getSwapQuote', vaultId, params),
+  prepareSwapTx: (vaultId: string, params: any) => ipcRenderer.invoke('vault:prepareSwapTx', vaultId, params),
 
   // Transactions
   prepareSendTx: (vaultId: string, params: { coin: any; receiver: string; amount: string; memo?: string }) =>
@@ -96,5 +112,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event: Electron.IpcRendererEvent, data: { step: any }) => callback(data)
     ipcRenderer.on('vault:signingProgress', handler)
     return () => ipcRenderer.removeListener('vault:signingProgress', handler)
+  },
+  onBalanceUpdated: (callback: (data: { chain: string; tokenId?: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { chain: string; tokenId?: string }) => callback(data)
+    ipcRenderer.on('vault:balanceUpdated', handler)
+    return () => ipcRenderer.removeListener('vault:balanceUpdated', handler)
+  },
+  onChainChanged: (callback: (data: { chain: string; action: 'added' | 'removed' }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { chain: string; action: 'added' | 'removed' }) =>
+      callback(data)
+    ipcRenderer.on('vault:chainChanged', handler)
+    return () => ipcRenderer.removeListener('vault:chainChanged', handler)
+  },
+  onTransactionBroadcast: (callback: (data: { chain: string; txHash: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { chain: string; txHash: string }) => callback(data)
+    ipcRenderer.on('vault:transactionBroadcast', handler)
+    return () => ipcRenderer.removeListener('vault:transactionBroadcast', handler)
+  },
+  onError: (callback: (data: { message: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { message: string }) => callback(data)
+    ipcRenderer.on('vault:error', handler)
+    return () => ipcRenderer.removeListener('vault:error', handler)
+  },
+  onVaultChanged: (callback: (data: { vault: any | null }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { vault: any | null }) => callback(data)
+    ipcRenderer.on('vault:changed', handler)
+    return () => ipcRenderer.removeListener('vault:changed', handler)
   },
 })
