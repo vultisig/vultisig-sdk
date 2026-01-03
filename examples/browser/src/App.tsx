@@ -1,25 +1,40 @@
-import type { VaultBase } from '@vultisig/sdk'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import type { EventLogEntry, VaultInfo } from '@vultisig/examples-shared'
+// Import from shared package
+import {
+  AdapterProvider,
+  Button,
+  createEvent,
+  EventLog,
+  Layout,
+  SecureVaultCreator,
+  Toast,
+  useToast,
+  Vault,
+  VaultCreator,
+  VaultImporter,
+  VaultTabs,
+} from '@vultisig/examples-shared'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+// Platform-specific imports
+import { BrowserFileAdapter, BrowserSDKAdapter } from '@/adapters'
 import AddressBook from '@/components/address-book/AddressBook'
-import Button from '@/components/common/Button'
-import { Toast, useToast } from '@/components/common/Toast'
-import EventLog from '@/components/events/EventLog'
-// Components
-import Layout from '@/components/layout/Layout'
 import ServerStatus from '@/components/settings/ServerStatus'
-import SecureVaultCreator from '@/components/vault/SecureVaultCreator'
-import Vault from '@/components/vault/Vault'
-import VaultCreator from '@/components/vault/VaultCreator'
-import VaultImporter from '@/components/vault/VaultImporter'
-import VaultTabs from '@/components/vault/VaultTabs'
-import type { AppState, EventLogEntry } from '@/types'
-import { createEvent } from '@/utils/events'
 import { getSDK } from '@/utils/sdk'
+
+type AppState = {
+  sdkAdapter: BrowserSDKAdapter | null
+  fileAdapter: BrowserFileAdapter | null
+  openVaults: Map<string, VaultInfo>
+  events: EventLogEntry[]
+  isLoading: boolean
+  error: string | null
+}
 
 function App() {
   const [appState, setAppState] = useState<AppState>({
-    sdk: null,
+    sdkAdapter: null,
+    fileAdapter: null,
     openVaults: new Map(),
     events: [],
     isLoading: true,
@@ -49,22 +64,25 @@ function App() {
     const init = async () => {
       try {
         const sdk = getSDK()
+        const sdkAdapter = new BrowserSDKAdapter(sdk)
+        const fileAdapter = new BrowserFileAdapter()
 
-        // Load all existing vaults and open them automatically
-        const existingVaults = await sdk.listVaults()
-        const openVaultsMap = new Map<string, VaultBase>()
-        existingVaults.forEach((vault: VaultBase) => {
+        // Load all existing vaults
+        const existingVaults = await sdkAdapter.listVaults()
+        const openVaultsMap = new Map<string, VaultInfo>()
+        existingVaults.forEach((vault: VaultInfo) => {
           openVaultsMap.set(vault.id, vault)
         })
 
         // Set first vault as active if any exist
         if (existingVaults.length > 0) {
-          await sdk.setActiveVault(existingVaults[0])
+          await sdkAdapter.setActiveVault(existingVaults[0].id)
         }
 
         setAppState(prev => ({
           ...prev,
-          sdk,
+          sdkAdapter,
+          fileAdapter,
           openVaults: openVaultsMap,
           isLoading: false,
         }))
@@ -83,232 +101,54 @@ function App() {
     init()
   }, [addEvent])
 
-  // Subscribe to SDK events
+  // Subscribe to SDK adapter events
   useEffect(() => {
-    if (!appState.sdk) return
+    if (!appState.sdkAdapter) return
 
-    const sdk = appState.sdk
+    const adapter = appState.sdkAdapter
 
-    const handleVaultChanged = ({ vaultId }: { vaultId: string }) => {
-      addEvent('info', 'sdk', `Vault changed: ${vaultId}`)
-    }
-
-    const handleError = (error: Error) => {
-      addEvent('error', 'sdk', `SDK error: ${error.message}`)
-      showToastRef.current(error.message, 'error')
-    }
-
-    const handleVaultCreationProgress = ({ step }: any) => {
-      addEvent('info', 'sdk', `Vault creation: ${step.message} (${step.progress}%)`)
-    }
-
-    const handleVaultCreationComplete = ({ vault }: any) => {
-      addEvent('success', 'sdk', `Vault creation complete: ${vault.name}`)
-    }
-
-    const handleDisposed = () => {
-      addEvent('info', 'sdk', 'SDK disposed')
-    }
-
-    sdk.on('vaultChanged', handleVaultChanged)
-    sdk.on('error', handleError)
-    sdk.on('vaultCreationProgress', handleVaultCreationProgress)
-    sdk.on('vaultCreationComplete', handleVaultCreationComplete)
-    sdk.on('disposed', handleDisposed)
-
-    return () => {
-      sdk.off('vaultChanged', handleVaultChanged)
-      sdk.off('error', handleError)
-      sdk.off('vaultCreationProgress', handleVaultCreationProgress)
-      sdk.off('vaultCreationComplete', handleVaultCreationComplete)
-      sdk.off('disposed', handleDisposed)
-    }
-  }, [appState.sdk, addEvent])
-
-  // Subscribe to all open vault events
-  useEffect(() => {
-    const cleanupFunctions: (() => void)[] = []
-
-    appState.openVaults.forEach(vault => {
-      // Create handlers with vault context
-      const vaultPrefix = `[${vault.name}]`
-
-      // Balance & Value events
-      const handleBalanceUpdated = ({ chain }: any) => {
-        addEvent('balance', 'vault', `${vaultPrefix} Balance updated for ${chain}`)
-      }
-
-      const handleValuesUpdated = ({ chain }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Fiat values updated for ${chain}`)
-      }
-
-      const handleTotalValueUpdated = ({ value }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Total portfolio value: ${value.amount} ${value.currency}`)
-      }
-
-      // Transaction events
-      const handleTransactionSigned = () => {
-        addEvent('success', 'vault', `${vaultPrefix} Transaction signed successfully`)
-        showToastRef.current('Transaction signed!', 'success')
-      }
-
-      const handleTransactionBroadcast = ({ chain, txHash }: any) => {
-        addEvent('transaction', 'vault', `${vaultPrefix} Transaction broadcast on ${chain}: ${txHash}`)
-        showToastRef.current('Transaction broadcast!', 'success')
-      }
-
-      const handleSigningProgress = ({ step }: any) => {
-        addEvent('signing', 'vault', `${vaultPrefix} ${step.message} (${step.progress}%)`)
-      }
-
-      // Secure vault events
-      const handleQrCodeReady = ({ action }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} QR code ready for ${action}`)
-      }
-
-      const handleDeviceJoined = ({ deviceId, totalJoined, required }: any) => {
-        addEvent(
-          'info',
-          'vault',
-          `${vaultPrefix} Device joined: ${totalJoined}/${required} (${deviceId.slice(0, 8)}...)`
-        )
-      }
-
-      const handleKeygenProgress = ({ phase, message }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Keygen ${phase}: ${message || ''}`)
-      }
-
-      // Chain events
-      const handleChainAdded = ({ chain }: any) => {
-        addEvent('chain', 'vault', `${vaultPrefix} Chain added: ${chain}`)
-        showToastRef.current(`Added ${chain}`, 'success')
-      }
-
-      const handleChainRemoved = ({ chain }: any) => {
-        addEvent('chain', 'vault', `${vaultPrefix} Chain removed: ${chain}`)
-      }
-
-      // Token events
-      const handleTokenAdded = ({ chain, token }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Token added on ${chain}: ${token.symbol}`)
-        showToastRef.current(`Added ${token.symbol}`, 'success')
-      }
-
-      const handleTokenRemoved = ({ chain, tokenId }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Token removed on ${chain}: ${tokenId}`)
-      }
-
-      // Vault lifecycle events
-      const handleRenamed = ({ oldName, newName }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Renamed from "${oldName}" to "${newName}"`)
-      }
-
-      const handleSaved = () => {
-        addEvent('info', 'vault', `${vaultPrefix} Vault saved`)
-      }
-
-      const handleDeleted = () => {
-        addEvent('info', 'vault', `${vaultPrefix} Vault deleted`)
-      }
-
-      const handleLoaded = () => {
-        addEvent('info', 'vault', `${vaultPrefix} Vault loaded`)
-      }
-
-      const handleUnlocked = () => {
-        addEvent('success', 'vault', `${vaultPrefix} Vault unlocked`)
-      }
-
-      const handleLocked = () => {
-        addEvent('info', 'vault', `${vaultPrefix} Vault locked`)
-      }
-
-      // Swap events
-      const handleSwapQuoteReceived = ({ quote }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Swap quote received from ${quote.provider}`)
-      }
-
-      const handleSwapApprovalRequired = ({ token, amount }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Approval required for ${amount} ${token}`)
-      }
-
-      const handleSwapApprovalGranted = ({ token, txHash }: any) => {
-        addEvent('success', 'vault', `${vaultPrefix} Approval granted for ${token}: ${txHash}`)
-      }
-
-      const handleSwapPrepared = ({ provider, fromAmount, toAmountExpected }: any) => {
-        addEvent('info', 'vault', `${vaultPrefix} Swap prepared via ${provider}: ${fromAmount} → ${toAmountExpected}`)
-      }
-
-      // Error event
-      const handleVaultError = (error: Error) => {
-        addEvent('error', 'vault', `${vaultPrefix} Vault error: ${error.message}`)
-        showToastRef.current(error.message, 'error')
-      }
-
-      // Subscribe to all events
-      vault.on('balanceUpdated', handleBalanceUpdated)
-      vault.on('valuesUpdated', handleValuesUpdated)
-      vault.on('totalValueUpdated', handleTotalValueUpdated)
-      vault.on('transactionSigned', handleTransactionSigned)
-      vault.on('transactionBroadcast', handleTransactionBroadcast)
-      vault.on('signingProgress', handleSigningProgress)
-      vault.on('qrCodeReady', handleQrCodeReady)
-      vault.on('deviceJoined', handleDeviceJoined)
-      vault.on('keygenProgress', handleKeygenProgress)
-      vault.on('chainAdded', handleChainAdded)
-      vault.on('chainRemoved', handleChainRemoved)
-      vault.on('tokenAdded', handleTokenAdded)
-      vault.on('tokenRemoved', handleTokenRemoved)
-      vault.on('renamed', handleRenamed)
-      vault.on('saved', handleSaved)
-      vault.on('deleted', handleDeleted)
-      vault.on('loaded', handleLoaded)
-      vault.on('unlocked', handleUnlocked)
-      vault.on('locked', handleLocked)
-      vault.on('swapQuoteReceived', handleSwapQuoteReceived)
-      vault.on('swapApprovalRequired', handleSwapApprovalRequired)
-      vault.on('swapApprovalGranted', handleSwapApprovalGranted)
-      vault.on('swapPrepared', handleSwapPrepared)
-      vault.on('error', handleVaultError)
-
-      // Store cleanup function
-      cleanupFunctions.push(() => {
-        vault.off('balanceUpdated', handleBalanceUpdated)
-        vault.off('valuesUpdated', handleValuesUpdated)
-        vault.off('totalValueUpdated', handleTotalValueUpdated)
-        vault.off('transactionSigned', handleTransactionSigned)
-        vault.off('transactionBroadcast', handleTransactionBroadcast)
-        vault.off('signingProgress', handleSigningProgress)
-        vault.off('qrCodeReady', handleQrCodeReady)
-        vault.off('deviceJoined', handleDeviceJoined)
-        vault.off('keygenProgress', handleKeygenProgress)
-        vault.off('chainAdded', handleChainAdded)
-        vault.off('chainRemoved', handleChainRemoved)
-        vault.off('tokenAdded', handleTokenAdded)
-        vault.off('tokenRemoved', handleTokenRemoved)
-        vault.off('renamed', handleRenamed)
-        vault.off('saved', handleSaved)
-        vault.off('deleted', handleDeleted)
-        vault.off('loaded', handleLoaded)
-        vault.off('unlocked', handleUnlocked)
-        vault.off('locked', handleLocked)
-        vault.off('swapQuoteReceived', handleSwapQuoteReceived)
-        vault.off('swapApprovalRequired', handleSwapApprovalRequired)
-        vault.off('swapApprovalGranted', handleSwapApprovalGranted)
-        vault.off('swapPrepared', handleSwapPrepared)
-        vault.off('error', handleVaultError)
-      })
+    const unsubProgress = adapter.onProgress(step => {
+      addEvent('info', 'sdk', `${step.message} (${step.progress}%)`)
     })
 
-    // Cleanup all subscriptions
-    return () => {
-      cleanupFunctions.forEach(cleanup => cleanup())
-    }
-  }, [appState.openVaults, addEvent])
+    const unsubSigning = adapter.onSigningProgress(step => {
+      addEvent('signing', 'vault', `${step.message} (${step.progress}%)`)
+    })
 
-  const handleVaultCreated = async (vault: VaultBase) => {
-    // Vault is already saved by SDK, just add to open vaults
+    const unsubVaultChanged = adapter.onVaultChanged(vault => {
+      if (vault) {
+        addEvent('info', 'sdk', `Vault changed: ${vault.name}`)
+      }
+    })
+
+    const unsubBalance = adapter.onBalanceUpdated(({ chain, tokenId }) => {
+      addEvent('balance', 'vault', `Balance updated: ${chain}${tokenId ? `:${tokenId}` : ''}`)
+    })
+
+    const unsubChain = adapter.onChainChanged(({ chain, action }) => {
+      addEvent('chain', 'vault', `Chain ${action}: ${chain}`)
+    })
+
+    const unsubTx = adapter.onTransactionBroadcast(({ chain, txHash }) => {
+      addEvent('transaction', 'vault', `Transaction broadcast on ${chain}: ${txHash.slice(0, 10)}...`)
+    })
+
+    const unsubError = adapter.onError(error => {
+      addEvent('error', 'sdk', `Error: ${error.message}`)
+    })
+
+    return () => {
+      unsubProgress()
+      unsubSigning()
+      unsubVaultChanged()
+      unsubBalance()
+      unsubChain()
+      unsubTx()
+      unsubError()
+    }
+  }, [appState.sdkAdapter, addEvent])
+
+  const handleVaultCreated = async (vault: VaultInfo) => {
     setAppState(prev => {
       const newOpenVaults = new Map(prev.openVaults)
       newOpenVaults.set(vault.id, vault)
@@ -319,15 +159,14 @@ function App() {
       }
     })
 
-    // Set as active vault in SDK
-    await appState.sdk.setActiveVault(vault)
+    // Set as active vault
+    await appState.sdkAdapter?.setActiveVault(vault.id)
 
     addEvent('vault', 'sdk', `Vault created: ${vault.name}`)
     showToast(`Vault "${vault.name}" created!`, 'success')
   }
 
-  const handleVaultImported = async (vaults: VaultBase[]) => {
-    // Vaults are already saved by SDK, just add to open vaults
+  const handleVaultImported = async (vaults: VaultInfo[]) => {
     setAppState(prev => {
       const newOpenVaults = new Map(prev.openVaults)
       vaults.forEach(vault => newOpenVaults.set(vault.id, vault))
@@ -338,9 +177,9 @@ function App() {
       }
     })
 
-    // Set first vault as active in SDK
+    // Set first vault as active
     if (vaults.length > 0) {
-      await appState.sdk.setActiveVault(vaults[0])
+      await appState.sdkAdapter?.setActiveVault(vaults[0].id)
     }
 
     addEvent('vault', 'sdk', `Imported ${vaults.length} vault(s)`)
@@ -350,14 +189,14 @@ function App() {
   const handleTabOpen = async (vaultId: string) => {
     // Check if vault is already open
     if (appState.openVaults.has(vaultId)) {
-      const vault = appState.openVaults.get(vaultId)!
-      await appState.sdk.setActiveVault(vault)
+      await appState.sdkAdapter?.setActiveVault(vaultId)
       return
     }
 
-    // Load vault from SDK
+    // Load vault from SDK adapter
     try {
-      const vault = await appState.sdk.getVaultById(vaultId)
+      const vaults = await appState.sdkAdapter?.listVaults()
+      const vault = vaults?.find(v => v.id === vaultId)
 
       if (!vault) {
         throw new Error('Vault not found')
@@ -373,9 +212,7 @@ function App() {
         }
       })
 
-      // Set as active vault in SDK
-      await appState.sdk.setActiveVault(vault)
-
+      await appState.sdkAdapter?.setActiveVault(vaultId)
       addEvent('info', 'sdk', `Vault opened: ${vault.name}`)
     } catch (error) {
       addEvent('error', 'sdk', `Failed to load vault: ${error}`)
@@ -396,14 +233,12 @@ function App() {
       }
     })
 
-    // If this was the active vault, clear it or switch to another
-    const activeVault = await appState.sdk.getActiveVault()
+    // If this was the active vault, switch to another
+    const activeVault = await appState.sdkAdapter?.getActiveVault()
     if (activeVault?.id === vaultId) {
       const remainingVaults = Array.from(appState.openVaults.values()).filter(v => v.id !== vaultId)
       if (remainingVaults.length > 0) {
-        await appState.sdk.setActiveVault(remainingVaults[remainingVaults.length - 1])
-      } else {
-        await appState.sdk.setActiveVault(null)
+        await appState.sdkAdapter?.setActiveVault(remainingVaults[remainingVaults.length - 1].id)
       }
     }
 
@@ -415,7 +250,7 @@ function App() {
   const handleTabSwitch = async (vaultId: string) => {
     const vault = appState.openVaults.get(vaultId)
     if (vault) {
-      await appState.sdk.setActiveVault(vault)
+      await appState.sdkAdapter?.setActiveVault(vaultId)
       addEvent('info', 'sdk', `Switched to vault: ${vault.name}`)
     }
   }
@@ -427,7 +262,6 @@ function App() {
   const handleVaultDeleted = async (vaultId: string) => {
     const deletedVault = appState.openVaults.get(vaultId)
 
-    // Remove from open vaults
     setAppState(prev => {
       const newOpenVaults = new Map(prev.openVaults)
       newOpenVaults.delete(vaultId)
@@ -437,9 +271,7 @@ function App() {
     // Switch to another vault if available
     const remainingVaults = Array.from(appState.openVaults.values()).filter(v => v.id !== vaultId)
     if (remainingVaults.length > 0) {
-      await appState.sdk.setActiveVault(remainingVaults[remainingVaults.length - 1])
-    } else {
-      await appState.sdk.setActiveVault(null)
+      await appState.sdkAdapter?.setActiveVault(remainingVaults[remainingVaults.length - 1].id)
     }
 
     addEvent('vault', 'sdk', `Vault deleted: ${deletedVault?.name || vaultId}`)
@@ -447,13 +279,11 @@ function App() {
   }
 
   const handleVaultRenamed = (vaultId: string, newName: string) => {
-    // Update the vault in openVaults map (the vault object is already updated)
     setAppState(prev => {
       const newOpenVaults = new Map(prev.openVaults)
       const vault = newOpenVaults.get(vaultId)
       if (vault) {
-        // Force re-render by creating new map
-        newOpenVaults.set(vaultId, vault)
+        newOpenVaults.set(vaultId, { ...vault, name: newName })
       }
       return { ...prev, openVaults: newOpenVaults }
     })
@@ -461,6 +291,17 @@ function App() {
     addEvent('vault', 'sdk', `Vault renamed to: ${newName}`)
     showToast(`Vault renamed to "${newName}"`, 'success')
   }
+
+  const handleVaultUpdated = (updatedVault: VaultInfo) => {
+    setAppState(prev => {
+      const newOpenVaults = new Map(prev.openVaults)
+      newOpenVaults.set(updatedVault.id, updatedVault)
+      return { ...prev, openVaults: newOpenVaults }
+    })
+  }
+
+  // Memoize open vaults array for VaultTabs
+  const openVaultsArray = useMemo(() => Array.from(appState.openVaults.values()), [appState.openVaults])
 
   if (appState.isLoading) {
     return (
@@ -484,8 +325,12 @@ function App() {
     )
   }
 
+  if (!appState.sdkAdapter || !appState.fileAdapter) {
+    return null
+  }
+
   return (
-    <>
+    <AdapterProvider sdk={appState.sdkAdapter} file={appState.fileAdapter}>
       <Layout
         sidebar={
           <div className="space-y-3">
@@ -526,17 +371,17 @@ function App() {
         main={
           <>
             <VaultTabs
-              sdk={appState.sdk}
-              openVaults={Array.from(appState.openVaults.values())}
+              openVaults={openVaultsArray}
               onTabSwitch={handleTabSwitch}
               onTabClose={handleTabClose}
               onTabOpen={handleTabOpen}
             />
             <VaultContent
-              sdk={appState.sdk}
               openVaults={appState.openVaults}
+              sdkAdapter={appState.sdkAdapter}
               onVaultDeleted={handleVaultDeleted}
               onVaultRenamed={handleVaultRenamed}
+              onVaultUpdated={handleVaultUpdated}
             />
           </>
         }
@@ -545,48 +390,44 @@ function App() {
       {toast && <Toast {...toast} />}
       <AddressBook isOpen={isAddressBookOpen} onClose={() => setIsAddressBookOpen(false)} />
       <ServerStatus isOpen={isServerStatusOpen} onClose={() => setIsServerStatusOpen(false)} />
-    </>
+    </AdapterProvider>
   )
 }
 
 // Separate component to handle active vault rendering
 function VaultContent({
-  sdk,
   openVaults,
+  sdkAdapter,
   onVaultDeleted,
   onVaultRenamed,
+  onVaultUpdated,
 }: {
-  sdk: any
-  openVaults: Map<string, VaultBase>
+  openVaults: Map<string, VaultInfo>
+  sdkAdapter: BrowserSDKAdapter
   onVaultDeleted: (vaultId: string) => void
   onVaultRenamed: (vaultId: string, newName: string) => void
+  onVaultUpdated: (vault: VaultInfo) => void
 }) {
   const [activeVaultId, setActiveVaultId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!sdk) return
-
     const loadActiveVault = async () => {
-      const vault = await sdk.getActiveVault()
+      const vault = await sdkAdapter.getActiveVault()
       setActiveVaultId(vault?.id || null)
     }
 
     loadActiveVault()
 
     // Listen for vault changes
-    const handleVaultChanged = async () => {
-      const vault = await sdk.getActiveVault()
+    const unsubscribe = sdkAdapter.onVaultChanged(vault => {
       setActiveVaultId(vault?.id || null)
-    }
-
-    sdk.on('vaultChanged', handleVaultChanged)
+    })
 
     return () => {
-      sdk.off('vaultChanged', handleVaultChanged)
+      unsubscribe()
     }
-  }, [sdk])
+  }, [sdkAdapter])
 
-  // Get the vault instance from openVaults (same instance we subscribe to)
   const activeVault = activeVaultId ? openVaults.get(activeVaultId) : null
 
   if (!activeVault) {
@@ -600,7 +441,15 @@ function VaultContent({
     )
   }
 
-  return <Vault vault={activeVault} sdk={sdk} onVaultDeleted={onVaultDeleted} onVaultRenamed={onVaultRenamed} />
+  return (
+    <Vault
+      key={activeVault.id}
+      vault={activeVault}
+      onVaultDeleted={onVaultDeleted}
+      onVaultRenamed={onVaultRenamed}
+      onVaultUpdated={onVaultUpdated}
+    />
+  )
 }
 
 export default App

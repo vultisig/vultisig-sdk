@@ -16,6 +16,7 @@
     "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "@vultisig/examples-shared": "workspace:*",
     "@vultisig/sdk": "workspace:*",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",

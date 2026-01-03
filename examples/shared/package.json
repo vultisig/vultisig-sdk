@@ -1,0 +1,27 @@
+{
+  "name": "@vultisig/examples-shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./components/*": "./src/components/*",
+    "./adapters": "./src/adapters/index.ts",
+    "./utils/*": "./src/utils/*",
+    "./types": "./src/types/index.ts"
+  },
+  "dependencies": {
+    "qrcode.react": "^4.2.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.8.2"
+  }
+}
