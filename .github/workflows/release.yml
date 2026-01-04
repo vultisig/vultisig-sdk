@@ -201,7 +201,7 @@ jobs:
                 },
                 {
                   "name": "Links",
-                  "value": "[Documentation](https://vultisig.github.io/vultisig-sdk/) | [Browser Demo](${BROWSER_URL}) | [Changelog](https://github.com/vultisig/vultisig-sdk/releases) | [GitHub](https://github.com/vultisig/vultisig-sdk)"
+                  "value": "[Documentation](https://vultisig.github.io/vultisig-sdk/) | [Browser Demo](https://browser-six-sandy.vercel.app/) | [Changelog](https://github.com/vultisig/vultisig-sdk/releases) | [GitHub](https://github.com/vultisig/vultisig-sdk)"
                 }
               ],
               "footer": {
