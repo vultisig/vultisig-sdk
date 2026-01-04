@@ -244,6 +244,204 @@ vultisig swap ethereum bitcoin 0.1 --password mypassword
 vultisig swap ethereum bitcoin 0.1 -y --password mypassword
 ```
 
+### Advanced Operations
+
+| Command | Description |
+|---------|-------------|
+| `sign` | Sign pre-hashed bytes for custom transactions |
+| `broadcast` | Broadcast a pre-signed raw transaction |
+
+#### Signing Arbitrary Bytes
+
+Sign pre-hashed data for externally constructed transactions:
+
+```bash
+# Sign a pre-hashed message (base64 encoded)
+vultisig sign --chain ethereum --bytes "aGVsbG8gd29ybGQ="
+
+# With password
+vultisig sign --chain bitcoin --bytes "..." --password mypassword
+
+# JSON output
+vultisig sign --chain ethereum --bytes "..." -o json
+```
+
+**Output:**
+```
+Signature: <base64-encoded signature>
+Recovery: 0
+Format: ecdsa
+```
+
+**JSON output:**
+```json
+{
+  "signature": "<base64>",
+  "recovery": 0,
+  "format": "ecdsa"
+}
+```
+
+#### Broadcasting Raw Transactions
+
+Broadcast pre-signed transactions to the network:
+
+```bash
+# EVM transaction (hex)
+vultisig broadcast --chain ethereum --raw-tx "0x02f8..."
+
+# Bitcoin transaction (hex)
+vultisig broadcast --chain bitcoin --raw-tx "0200000001..."
+
+# Solana transaction (base64)
+vultisig broadcast --chain solana --raw-tx "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQABAwIAAA..."
+
+# Sui transaction (JSON)
+vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"...","signature":"..."}'
+```
+
+**Output:**
+```
+TX Hash: 0x9f8e7d6c...
+Explorer: https://etherscan.io/tx/0x9f8e7d6c...
+```
+
+**Supported broadcast formats by chain:**
+
+| Chain | `--raw-tx` Format |
+|-------|-------------------|
+| EVM (Ethereum, Polygon, etc.) | Hex-encoded signed tx |
+| UTXO (Bitcoin, Litecoin, etc.) | Hex-encoded raw tx |
+| Solana | Base64-encoded tx bytes |
+| Sui | JSON: `{"unsignedTx":"...","signature":"..."}` |
+| Cosmos | JSON: `{"tx_bytes":"..."}` or base64 |
+| TON | Base64 BOC |
+| Polkadot | Hex-encoded extrinsic |
+| Ripple | Hex-encoded tx blob |
+| Tron | JSON tx object |
+
+#### Example: Custom EVM Transaction
+
+Build and sign a transaction with ethers.js, broadcast with CLI:
+
+```bash
+# 1. Build transaction externally (save as build-evm-tx.js)
+cat > build-evm-tx.js << 'EOF'
+const { keccak256, Transaction, parseEther } = require('ethers');
+const tx = Transaction.from({
+  to: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+  value: parseEther('0.01'),
+  gasLimit: 21000n,
+  maxFeePerGas: 50000000000n,
+  maxPriorityFeePerGas: 2000000000n,
+  nonce: 0,
+  chainId: 1,
+  type: 2
+});
+const hash = keccak256(tx.unsignedSerialized);
+console.log('HASH:', Buffer.from(hash.slice(2), 'hex').toString('base64'));
+console.log('UNSIGNED:', tx.unsignedSerialized);
+EOF
+node build-evm-tx.js
+
+# 2. Sign the hash with Vultisig
+vultisig sign --chain ethereum --bytes "<base64-hash-from-step-1>" -o json > sig.json
+
+# 3. Assemble signed transaction (use r,s,v from sig.json)
+# The signature field contains r||s (64 bytes hex), recovery is v
+
+# 4. Broadcast the assembled signed transaction
+vultisig broadcast --chain ethereum --raw-tx "0x02f8..."
+```
+
+#### Example: Custom Bitcoin Transaction
+
+Build a PSBT with bitcoinjs-lib, sign with CLI:
+
+```bash
+# 1. Build PSBT and get sighash (save as build-btc-tx.js)
+cat > build-btc-tx.js << 'EOF'
+const bitcoin = require('bitcoinjs-lib');
+const psbt = new bitcoin.Psbt({ network: bitcoin.networks.bitcoin });
+// Add your inputs and outputs
+psbt.addInput({
+  hash: '<previous-txid>',
+  index: 0,
+  witnessUtxo: { script: Buffer.from('...'), value: 100000 }
+});
+psbt.addOutput({ address: 'bc1q...', value: 90000 });
+// Get sighash for signing
+const sighash = psbt.getTxForSigning().hashForWitnessV0(0, scriptCode, 100000, 0x01);
+console.log('SIGHASH:', sighash.toString('base64'));
+EOF
+node build-btc-tx.js
+
+# 2. Sign with Vultisig
+vultisig sign --chain bitcoin --bytes "<base64-sighash>" -o json > sig.json
+
+# 3. Apply signature to PSBT and finalize (use signature from sig.json)
+
+# 4. Broadcast
+vultisig broadcast --chain bitcoin --raw-tx "0200000001..."
+```
+
+#### Example: Custom Solana Transaction
+
+Build with @solana/web3.js, sign with CLI:
+
+```bash
+# 1. Build transaction (save as build-sol-tx.js)
+cat > build-sol-tx.js << 'EOF'
+const { Transaction, SystemProgram, PublicKey, Connection } = require('@solana/web3.js');
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+const fromPubkey = new PublicKey('<your-pubkey>');
+const toPubkey = new PublicKey('<recipient-pubkey>');
+
+const tx = new Transaction().add(
+  SystemProgram.transfer({ fromPubkey, toPubkey, lamports: 1000000 })
+);
+tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+tx.feePayer = fromPubkey;
+
+const message = tx.serializeMessage();
+console.log('MESSAGE:', message.toString('base64'));
+EOF
+node build-sol-tx.js
+
+# 2. Sign the message with Vultisig (EdDSA)
+vultisig sign --chain solana --bytes "<base64-message>" -o json > sig.json
+
+# 3. Assemble signed transaction (attach signature to message)
+
+# 4. Broadcast (base64 encoded signed transaction)
+vultisig broadcast --chain solana --raw-tx "<base64-signed-tx>"
+```
+
+#### Example: Custom Sui Transaction
+
+Build with @mysten/sui, sign with CLI:
+
+```bash
+# 1. Build transaction (save as build-sui-tx.js)
+cat > build-sui-tx.js << 'EOF'
+const { SuiClient, getFullnodeUrl } = require('@mysten/sui/client');
+const { Transaction } = require('@mysten/sui/transactions');
+
+const client = new SuiClient({ url: getFullnodeUrl('mainnet') });
+const tx = new Transaction();
+tx.transferObjects([tx.gas], '<recipient-address>');
+const bytes = await tx.build({ client });
+console.log('TX_BYTES:', Buffer.from(bytes).toString('base64'));
+EOF
+node build-sui-tx.js
+
+# 2. Sign the transaction bytes with Vultisig (EdDSA)
+vultisig sign --chain sui --bytes "<base64-tx-bytes>" -o json > sig.json
+
+# 3. Broadcast (requires JSON with both unsigned tx and signature)
+vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"<base64-tx-bytes>","signature":"<base64-signature-from-sig.json>"}'
+```
+
 ### Settings
 
 | Command | Description |

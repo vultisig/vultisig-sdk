@@ -1,24 +1,22 @@
-import { Chain, EvmChain, UtxoBasedChain } from '@core/chain/Chain'
+import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@core/chain/Chain'
 import { isChainOfKind } from '@core/chain/ChainKind'
+import { getCosmosClient } from '@core/chain/chains/cosmos/client'
 import { getEvmClient } from '@core/chain/chains/evm/client'
+import { polkadotRpcUrl } from '@core/chain/chains/polkadot/client'
+import { getRippleClient } from '@core/chain/chains/ripple/client'
+import { getSolanaClient } from '@core/chain/chains/solana/client'
+import { getSuiClient } from '@core/chain/chains/sui/client'
+import { tronRpcUrl } from '@core/chain/chains/tron/config'
 import { getBlockchairBaseUrl } from '@core/chain/chains/utxo/client/getBlockchairBaseUrl'
+import { rootApiUrl } from '@core/config'
 import { attempt } from '@lib/utils/attempt'
 import { extractErrorMsg } from '@lib/utils/error/extractErrorMsg'
 import { isInError } from '@lib/utils/error/isInError'
 import { ensureHexPrefix } from '@lib/utils/hex/ensureHexPrefix'
 import { queryUrl } from '@lib/utils/query/queryUrl'
+import base58 from 'bs58'
 
 import { VaultError, VaultErrorCode } from '../VaultError'
-
-// TODO: Add raw broadcast support for:
-// - Solana (base58 encoded)
-// - Cosmos (JSON + base64 tx_bytes)
-// - TON (BOC format via Vultisig backend)
-// - Polkadot (hex extrinsic)
-// - Ripple (hex blob)
-// - Cardano (CBOR hex via Ogmios)
-// - Sui (unsignedTx + signature pair)
-// - Tron (JSON object)
 
 type BlockchairBroadcastResponse =
   | {
@@ -84,10 +82,35 @@ export class RawBroadcastService {
         return await this.broadcastUtxoRawTx(chain, rawTx)
       }
 
-      throw new VaultError(
-        VaultErrorCode.UnsupportedChain,
-        `Raw broadcast not yet supported for chain: ${chain}. Currently supported: EVM chains, UTXO chains (Bitcoin, Litecoin, etc.)`
-      )
+      if (chain === OtherChain.Solana) {
+        return await this.broadcastSolanaRawTx(rawTx)
+      }
+
+      if (isChainOfKind(chain, 'cosmos')) {
+        return await this.broadcastCosmosRawTx(chain as CosmosChain, rawTx)
+      }
+
+      if (chain === OtherChain.Ton) {
+        return await this.broadcastTonRawTx(rawTx)
+      }
+
+      if (chain === OtherChain.Polkadot) {
+        return await this.broadcastPolkadotRawTx(rawTx)
+      }
+
+      if (chain === OtherChain.Ripple) {
+        return await this.broadcastRippleRawTx(rawTx)
+      }
+
+      if (chain === OtherChain.Sui) {
+        return await this.broadcastSuiRawTx(rawTx)
+      }
+
+      if (chain === OtherChain.Tron) {
+        return await this.broadcastTronRawTx(rawTx)
+      }
+
+      throw new VaultError(VaultErrorCode.UnsupportedChain, `Raw broadcast not yet supported for chain: ${chain}`)
     } catch (error) {
       if (error instanceof VaultError) {
         throw error
@@ -171,5 +194,237 @@ export class RawBroadcastService {
     }
 
     throw new Error(`Failed to broadcast transaction: ${extractErrorMsg(errorMsg)}`)
+  }
+
+  /**
+   * Broadcast a raw Solana transaction
+   * @param rawTx - Base58 or Base64 encoded signed transaction
+   */
+  private async broadcastSolanaRawTx(rawTx: string): Promise<string> {
+    const client = getSolanaClient()
+
+    // Detect format: base58 (no padding, no +/) vs base64 (may have = padding or +/)
+    const isBase64 = rawTx.includes('=') || /[+/]/.test(rawTx)
+    const txBytes = isBase64 ? Buffer.from(rawTx, 'base64') : base58.decode(rawTx)
+
+    const { data: signature, error } = await attempt(
+      client.sendRawTransaction(txBytes, {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+        maxRetries: 3,
+      })
+    )
+
+    if (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
+        throw new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Transaction may have already been submitted: ${errorMessage}`,
+          error instanceof Error ? error : new Error(errorMessage)
+        )
+      }
+      throw error
+    }
+
+    return signature
+  }
+
+  /**
+   * Broadcast a raw Cosmos transaction (works for all Cosmos-based chains)
+   * @param chain - The Cosmos chain to broadcast to
+   * @param rawTx - JSON string with tx_bytes (base64) OR raw base64 protobuf bytes
+   */
+  private async broadcastCosmosRawTx(chain: CosmosChain, rawTx: string): Promise<string> {
+    // Support both formats:
+    // 1. JSON: { "tx_bytes": "base64..." }
+    // 2. Raw base64 protobuf bytes
+    let txBytes: Uint8Array
+
+    try {
+      const parsed = JSON.parse(rawTx)
+      txBytes = Buffer.from(parsed.tx_bytes, 'base64')
+    } catch {
+      // Assume raw base64
+      txBytes = Buffer.from(rawTx, 'base64')
+    }
+
+    const client = await getCosmosClient(chain)
+    const { data: result, error } = await attempt(client.broadcastTx(txBytes))
+
+    if (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (isInError(error, 'tx already exists in cache', 'account sequence mismatch')) {
+        throw new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Transaction may have already been submitted: ${errorMessage}`,
+          error instanceof Error ? error : new Error(errorMessage)
+        )
+      }
+      throw error
+    }
+
+    return result.transactionHash
+  }
+
+  /**
+   * Broadcast a raw TON transaction
+   * @param rawTx - BOC (Bag of Cells) as base64 string
+   */
+  private async broadcastTonRawTx(rawTx: string): Promise<string> {
+    const url = `${rootApiUrl}/ton/v2/sendBocReturnHash`
+
+    const { data: response, error } = await attempt(
+      queryUrl<{ result: { hash: string } }>(url, {
+        body: { boc: rawTx },
+      })
+    )
+
+    if (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (isInError(error, 'duplicate message')) {
+        throw new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Transaction may have already been submitted: ${errorMessage}`,
+          error instanceof Error ? error : new Error(errorMessage)
+        )
+      }
+      throw error
+    }
+
+    return response.result.hash
+  }
+
+  /**
+   * Broadcast a raw Polkadot transaction
+   * @param rawTx - Hex-encoded extrinsic (with or without 0x prefix)
+   */
+  private async broadcastPolkadotRawTx(rawTx: string): Promise<string> {
+    const hexWithPrefix = ensureHexPrefix(rawTx)
+
+    const { data: response, error } = await attempt(
+      queryUrl<{ result: string; error?: { message: string } }>(polkadotRpcUrl, {
+        body: {
+          jsonrpc: '2.0',
+          method: 'author_submitExtrinsic',
+          params: [hexWithPrefix],
+          id: 1,
+        },
+      })
+    )
+
+    if (error) {
+      throw error
+    }
+
+    if (response.error) {
+      throw new Error(`Polkadot broadcast failed: ${response.error.message}`)
+    }
+
+    return response.result
+  }
+
+  /**
+   * Broadcast a raw Ripple/XRP transaction
+   * @param rawTx - Hex-encoded signed transaction blob
+   */
+  private async broadcastRippleRawTx(rawTx: string): Promise<string> {
+    const client = await getRippleClient()
+
+    // Strip 0x prefix if present
+    const txBlob = rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx
+
+    const { data: response, error } = await attempt(
+      client.request({
+        command: 'submit',
+        tx_blob: txBlob,
+      })
+    )
+
+    if (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (isInError(error, 'tefPAST_SEQ', 'tefALREADY')) {
+        throw new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Transaction may have already been submitted: ${errorMessage}`,
+          error instanceof Error ? error : new Error(errorMessage)
+        )
+      }
+      throw error
+    }
+
+    // Response contains tx hash in result.tx_json.hash
+    return response.result.tx_json.hash
+  }
+
+  /**
+   * Broadcast a raw Sui transaction
+   * @param rawTx - JSON string with { unsignedTx, signature }
+   */
+  private async broadcastSuiRawTx(rawTx: string): Promise<string> {
+    const { unsignedTx, signature } = JSON.parse(rawTx)
+
+    if (!unsignedTx || !signature) {
+      throw new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        'Sui broadcast requires JSON with "unsignedTx" and "signature" fields'
+      )
+    }
+
+    const client = getSuiClient()
+    const { data: result, error } = await attempt(
+      client.executeTransactionBlock({
+        transactionBlock: unsignedTx,
+        signature: [signature],
+      })
+    )
+
+    if (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (isInError(error, 'Transaction already executed')) {
+        throw new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Transaction may have already been submitted: ${errorMessage}`,
+          error instanceof Error ? error : new Error(errorMessage)
+        )
+      }
+      throw error
+    }
+
+    return result.digest
+  }
+
+  /**
+   * Broadcast a raw Tron transaction
+   * @param rawTx - JSON transaction object (stringified)
+   */
+  private async broadcastTronRawTx(rawTx: string): Promise<string> {
+    // Parse JSON if string
+    const txJson = JSON.parse(rawTx)
+
+    const { data: response, error } = await attempt(
+      queryUrl<{ txid?: string; result?: boolean; code?: string; message?: string }>(
+        `${tronRpcUrl}/wallet/broadcasttransaction`,
+        { body: txJson }
+      )
+    )
+
+    if (error) {
+      throw error
+    }
+
+    if (response.code && response.code !== 'SUCCESS') {
+      const errorMsg = response.message || response.code
+      if (isInError(errorMsg, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
+        throw new VaultError(VaultErrorCode.BroadcastFailed, `Transaction may have already been submitted: ${errorMsg}`)
+      }
+      throw new Error(`Tron broadcast failed: ${errorMsg}`)
+    }
+
+    if (!response.txid) {
+      throw new Error('Tron broadcast did not return transaction ID')
+    }
+
+    return response.txid
   }
 }
