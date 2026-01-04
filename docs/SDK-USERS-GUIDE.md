@@ -880,10 +880,12 @@ signedTx.signature = {
   v: signature.recovery! + 27
 }
 
-// Step 5: Broadcast the signed transaction
-const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com')
-const txResponse = await provider.broadcastTransaction(signedTx.serialized)
-console.log('Transaction hash:', txResponse.hash)
+// Step 5: Broadcast using SDK
+const txHash = await vault.broadcastRawTx({
+  chain: Chain.Ethereum,
+  rawTx: signedTx.serialized
+})
+console.log('Transaction hash:', txHash)
 ```
 
 **Complete Example: Bitcoin Transaction with bitcoinjs-lib**
@@ -921,10 +923,14 @@ const signature = await vault.signBytes({
 // Step 4: Apply signature to PSBT
 // (Implementation depends on your PSBT setup)
 
-// Step 5: Finalize and broadcast
+// Step 5: Finalize and broadcast using SDK
 psbt.finalizeAllInputs()
 const rawTx = psbt.extractTransaction().toHex()
-// Broadcast via your preferred method
+const txHash = await vault.broadcastRawTx({
+  chain: Chain.Bitcoin,
+  rawTx
+})
+console.log('Transaction hash:', txHash)
 ```
 
 **Return Type:**
@@ -937,6 +943,51 @@ type Signature = {
 ```
 
 **Note:** `signBytes()` is available for both FastVault and SecureVault. For SecureVault, provide signing options with callbacks for device coordination.
+
+### Broadcasting Raw Transactions
+
+The `broadcastRawTx()` method broadcasts pre-signed raw transactions to the blockchain network. Use this with `signBytes()` for custom transaction workflows.
+
+```typescript
+const txHash = await vault.broadcastRawTx({
+  chain: Chain.Ethereum,
+  rawTx: '0x02f8...'  // hex-encoded signed transaction
+})
+```
+
+**Supported Input Formats:**
+
+| Chain Family | Input Format |
+|--------------|--------------|
+| EVM (Ethereum, Polygon, BSC, etc.) | Hex-encoded signed tx (with/without 0x) |
+| UTXO (Bitcoin, Litecoin, etc.) | Hex-encoded raw tx |
+| Solana | Base58 or Base64 encoded tx bytes |
+| Cosmos (Cosmos, Osmosis, THORChain, etc.) | JSON `{tx_bytes}` or raw base64 protobuf |
+| TON | BOC (Bag of Cells) as base64 string |
+| Polkadot | Hex-encoded extrinsic |
+| Ripple | Hex-encoded tx blob |
+| Sui | JSON `{unsignedTx, signature}` |
+| Tron | JSON tx object |
+
+**Error Handling:**
+
+The method throws `VaultError` with these codes:
+- `BroadcastFailed` - Transaction failed to broadcast (may include "already submitted" errors)
+- `UnsupportedChain` - Chain not yet supported for raw broadcast
+
+```typescript
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+
+try {
+  const txHash = await vault.broadcastRawTx({ chain, rawTx })
+} catch (error) {
+  if (error instanceof VaultError) {
+    if (error.code === VaultErrorCode.BroadcastFailed) {
+      console.log('Broadcast failed:', error.message)
+    }
+  }
+}
+```
 
 ### Token Management
 
