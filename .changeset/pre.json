@@ -10,10 +10,13 @@
     "@lib/dkls": "0.1.0",
     "@lib/schnorr": "0.1.0",
     "@lib/utils": "0.0.1",
-    "@vultisig/sdk": "0.2.0-alpha.7"
+    "@vultisig/sdk": "0.2.0-alpha.7",
+    "@vultisig/example-electron": "0.1.0",
+    "@vultisig/examples-shared": "0.1.0"
   },
   "changesets": [
     "add-sign-bytes",
+    "broadcast-raw-tx-all-chains",
     "bundling-optimizations",
     "cli-export-password-options",
     "defer-vault-storage-until-verification",
@@ -26,6 +29,7 @@
     "fix-vault-export-keyshares",
     "fix-workspace-protocol",
     "secure-vault-support",
+    "shared-examples-refactor",
     "simplify-export-command",
     "update-browser-cli-for-new-vault-api",
     "update-docs-to-current-state",
