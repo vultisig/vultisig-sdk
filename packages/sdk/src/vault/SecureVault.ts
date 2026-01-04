@@ -1,4 +1,5 @@
 import { fromBinary } from '@bufbuild/protobuf'
+import { getKeygenThreshold } from '@core/mpc/getKeygenThreshold'
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
 import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
@@ -18,6 +19,7 @@ import type {
   VaultCreationStep,
   VaultData,
 } from '../types'
+import { normalizeToHex } from '../utils/bytes'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -25,12 +27,12 @@ import { VaultError, VaultErrorCode } from './VaultError'
 /**
  * SecureVault - Multi-device MPC vault
  *
- * Secure vaults use multi-device threshold signature scheme with (n+1)/2 threshold.
+ * Secure vaults use multi-device threshold signature scheme with 2/3 majority threshold.
  * They can be encrypted or unencrypted.
  *
  * Key characteristics:
  * - Can be encrypted or unencrypted (isEncrypted varies)
- * - (n+1)/2 threshold for n signers
+ * - 2/3 majority threshold (ceil(n*2/3)) for n signers
  * - Currently supports 'relay' signing mode
  * - Does NOT support 'fast' signing mode
  *
@@ -64,11 +66,11 @@ export class SecureVault extends VaultBase {
   }
 
   /**
-   * Secure vaults use (n+1)/2 threshold for n signers
-   * Example: 3 signers → threshold of 2
+   * Secure vaults use 2/3 majority threshold for n signers
+   * Example: 2 signers → threshold of 2, 3 signers → threshold of 2
    */
   get threshold(): number {
-    return Math.floor((this.coreVault.signers.length + 1) / 2)
+    return getKeygenThreshold(this.coreVault.signers.length)
   }
 
   /**
@@ -161,54 +163,67 @@ export class SecureVault extends VaultBase {
       onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
     } = {}
   ): Promise<Signature> {
-    // Ensure keyShares are loaded (will decrypt if encrypted)
-    await this.ensureKeySharesLoaded()
+    try {
+      // Normalize input to hex string
+      const messageHash = normalizeToHex(options.data)
 
-    // Convert data to hex string message hash
-    let messageHash: string
-    if (typeof options.data === 'string') {
-      // Already hex string (remove 0x if present)
-      messageHash = options.data.startsWith('0x') ? options.data.slice(2) : options.data
-    } else {
-      // Convert Uint8Array/Buffer to hex
-      messageHash = Buffer.from(options.data).toString('hex')
-    }
+      // Ensure keyShares are loaded (will decrypt if encrypted)
+      await this.ensureKeySharesLoaded()
 
-    // Create relay signing service
-    const relaySigningService = new RelaySigningService()
+      // Create relay signing service
+      const relaySigningService = new RelaySigningService()
 
-    // Sign using relay service with event emission
-    const signature = await relaySigningService.signBytesWithRelay(
-      this.coreVault,
-      {
-        messageHashes: [messageHash],
-        chain: options.chain,
-      },
-      {
-        signal: signingOptions.signal,
-        onProgress: (step: SigningStep) => {
-          this.emit('signingProgress', { step })
+      // Sign using relay service with event emission
+      const signature = await relaySigningService.signBytesWithRelay(
+        this.coreVault,
+        {
+          messageHashes: [messageHash],
+          chain: options.chain,
         },
-        onQRCodeReady: qrPayload => {
-          this.emit('qrCodeReady', {
-            qrPayload,
-            action: 'keysign',
-            sessionId: '',
-          })
-          if (signingOptions.onQRCodeReady) {
-            signingOptions.onQRCodeReady(qrPayload)
-          }
-        },
-        onDeviceJoined: (deviceId, totalJoined, required) => {
-          this.emit('deviceJoined', { deviceId, totalJoined, required })
-          if (signingOptions.onDeviceJoined) {
-            signingOptions.onDeviceJoined(deviceId, totalJoined, required)
-          }
-        },
+        {
+          signal: signingOptions.signal,
+          onProgress: (step: SigningStep) => {
+            this.emit('signingProgress', { step })
+          },
+          onQRCodeReady: qrPayload => {
+            this.emit('qrCodeReady', {
+              qrPayload,
+              action: 'keysign',
+              sessionId: '',
+            })
+            if (signingOptions.onQRCodeReady) {
+              signingOptions.onQRCodeReady(qrPayload)
+            }
+          },
+          onDeviceJoined: (deviceId, totalJoined, required) => {
+            this.emit('deviceJoined', { deviceId, totalJoined, required })
+            if (signingOptions.onDeviceJoined) {
+              signingOptions.onDeviceJoined(deviceId, totalJoined, required)
+            }
+          },
+        }
+      )
+
+      // Emit signing complete event
+      this.emit('transactionSigned', {
+        signature,
+        payload: { chain: options.chain, transaction: null, messageHashes: [messageHash] },
+      })
+
+      return signature
+    } catch (error) {
+      this.emit('error', error as Error)
+
+      if (error instanceof VaultError) {
+        throw error
       }
-    )
 
-    return signature
+      throw new VaultError(
+        VaultErrorCode.SigningFailed,
+        `signBytes failed: ${(error as Error).message}`,
+        error as Error
+      )
+    }
   }
 
   /**
@@ -304,7 +319,7 @@ export class SecureVault extends VaultBase {
       password?: string
       /** Total number of devices participating (including this one) */
       devices: number
-      /** Signing threshold - defaults to ceil((devices+1)/2) */
+      /** Signing threshold - defaults to 2/3 majority (ceil(devices*2/3)) */
       threshold?: number
       /** Progress callback */
       onProgress?: (step: VaultCreationStep) => void

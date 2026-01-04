@@ -41,6 +41,13 @@ jobs:
           yarn build:sdk
           yarn cli:build
 
+      - name: Upload SDK build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-dist
+          path: packages/sdk/dist
+          retention-days: 1
+
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1
@@ -110,6 +117,8 @@ jobs:
     needs: release
     if: needs.release.outputs.published == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
@@ -117,19 +126,26 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Download SDK build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-dist
+          path: packages/sdk/dist
+
       - run: corepack enable
       - run: corepack prepare yarn@4.12.0 --activate
       - run: yarn install --immutable
-      - run: yarn build:sdk
 
       - run: npm install -g vercel
 
       - name: Build & Deploy
+        id: deploy
         working-directory: ./examples/browser
         run: |
           yarn build
           cp vercel.json dist/
-          vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }}
+          DEPLOY_URL=$(vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -173,6 +189,7 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           VERSION: ${{ needs.release.outputs.version }}
+          BROWSER_URL: ${{ needs.deploy-vercel.outputs.url }}
         run: |
           curl -X POST "$DISCORD_WEBHOOK" \
             -H "Content-Type: application/json" \
@@ -199,7 +216,7 @@ jobs:
                 },
                 {
                   "name": "Links",
-                  "value": "[Documentation](https://vultisig.github.io/vultisig-sdk/) | [Changelog](https://github.com/vultisig/vultisig-sdk/releases) | [GitHub](https://github.com/vultisig/vultisig-sdk)"
+                  "value": "[Documentation](https://vultisig.github.io/vultisig-sdk/) | [Browser Demo](${BROWSER_URL}) | [Changelog](https://github.com/vultisig/vultisig-sdk/releases) | [GitHub](https://github.com/vultisig/vultisig-sdk)"
                 }
               ],
               "footer": {

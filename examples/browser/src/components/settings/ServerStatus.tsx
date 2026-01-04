@@ -1,8 +1,6 @@
+import { Button, Modal, Spinner } from '@vultisig/examples-shared'
 import { useEffect, useState } from 'react'
 
-import Button from '@/components/common/Button'
-import Modal from '@/components/common/Modal'
-import Spinner from '@/components/common/Spinner'
 import { getSDK } from '@/utils/sdk'
 
 type ServerStatusProps = {

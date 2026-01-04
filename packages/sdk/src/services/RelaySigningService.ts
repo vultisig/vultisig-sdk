@@ -85,7 +85,7 @@ export class RelaySigningService {
     return {
       sessionId: randomUUID(),
       hexEncryptionKey: generateHexEncryptionKey(),
-      localPartyId: generateLocalPartyId('extension'),
+      localPartyId: generateLocalPartyId('sdk'),
     }
   }
 

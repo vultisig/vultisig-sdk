@@ -18,6 +18,7 @@
       "browser": "./dist/index.browser.js",
       "worker": "./dist/index.browser.js",
       "react-native": "./dist/index.react-native.js",
+      "electron": "./dist/index.electron-main.cjs",
       "node": {
         "import": "./dist/index.node.esm.js",
         "require": "./dist/index.node.cjs"
@@ -39,13 +40,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.react-native.js"
     },
-    "./electron/main": {
+    "./electron": {
       "types": "./dist/index.node.d.ts",
-      "require": "./dist/index.electron-main.cjs"
-    },
-    "./electron/renderer": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.electron-renderer.js"
+      "import": "./dist/index.electron-main.cjs",
+      "require": "./dist/index.electron-main.cjs",
+      "default": "./dist/index.electron-main.cjs"
     }
   },
   "scripts": {
@@ -56,9 +55,11 @@
     "build:types": "rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
-    "build:platforms": "yarn build:platform:node && yarn build:platform:browser",
+    "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\"",
+    "build:fast": "yarn clean && BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:node": "BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:browser": "BUILD_TARGET=browser rollup -c rollup.platforms.config.js",
+    "build:platform:electron": "BUILD_TARGET=electron rollup -c rollup.platforms.config.js",
     "_____QUALITY_____": "",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "lint": "eslint --config ../../.config/eslint.config.mjs src/**/*.{ts,tsx}",
@@ -160,6 +161,7 @@
     "@types/chrome": "^0.1.27",
     "@types/node": "^22.13.10",
     "@vitest/coverage-v8": "3.2.4",
+    "concurrently": "^9.2.1",
     "dotenv": "^17.2.3",
     "electron": "^39.2.3",
     "fake-indexeddb": "^6.2.5",
@@ -167,6 +169,7 @@
     "rollup": "^4.32.1",
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-dts": "^6.1.1",
+    "rollup-plugin-esbuild": "^6.2.1",
     "tsx": "^4.19.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

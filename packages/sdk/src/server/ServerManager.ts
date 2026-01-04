@@ -122,7 +122,7 @@ export class ServerManager {
     // Generate session parameters
     const sessionId = randomUUID()
     const hexEncryptionKey = getHexEncodedRandomBytes(32)
-    const signingLocalPartyId = generateLocalPartyId('extension')
+    const signingLocalPartyId = generateLocalPartyId('sdk')
 
     console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
     console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
@@ -314,7 +314,7 @@ export class ServerManager {
     const sessionId = randomUUID()
     const hexEncryptionKey = generateHexEncryptionKey()
     const hexChainCode = generateHexChainCode()
-    const localPartyId = generateLocalPartyId('extension')
+    const localPartyId = generateLocalPartyId('sdk')
 
     const log = options.onLog || (() => {})
     const progress = options.onProgress || (() => {})
