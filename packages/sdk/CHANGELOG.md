@@ -1,5 +1,39 @@
 # @vultisig/sdk
 
+## 0.2.0-beta.9
+
+### Minor Changes
+
+- [#64](https://github.com/vultisig/vultisig-sdk/pull/64) [`a36a7f6`](https://github.com/vultisig/vultisig-sdk/commit/a36a7f614c03e32ebc7e843cbf1ab30b6be0d4af) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat(sdk): add broadcastRawTx() for broadcasting pre-signed transactions
+
+  Adds `broadcastRawTx()` method supporting all chain families:
+  - EVM: Ethereum, Polygon, BSC, Arbitrum, Base, etc. (hex-encoded)
+  - UTXO: Bitcoin, Litecoin, Dogecoin, etc. (hex-encoded)
+  - Solana: Base58 or Base64 encoded transaction bytes
+  - Cosmos: JSON `{tx_bytes}` or raw base64 protobuf (10 chains)
+  - TON: BOC as base64 string
+  - Polkadot: Hex-encoded extrinsic
+  - Ripple: Hex-encoded transaction blob
+  - Sui: JSON `{unsignedTx, signature}`
+  - Tron: JSON transaction object
+
+  CLI commands added:
+  - `vultisig sign --chain <chain> --bytes <base64>` - sign pre-hashed data
+  - `vultisig broadcast --chain <chain> --raw-tx <data>` - broadcast raw tx
+
+  Documentation updated with complete workflow examples for EVM, UTXO, Solana, and Sui.
+
+### Patch Changes
+
+- [#64](https://github.com/vultisig/vultisig-sdk/pull/64) [`91990d3`](https://github.com/vultisig/vultisig-sdk/commit/91990d3fc7ef1a8d7068f5cbae8f8f3dda5b68f3) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat: shared examples package and electron adapter parity
+  - Created `examples/shared` package with shared components and adapters for browser and electron examples
+  - Implemented adapter pattern (ISDKAdapter, IFileAdapter) for platform-agnostic code
+  - Added full Electron IPC handlers for token, portfolio, and swap operations
+  - Fixed BigInt serialization for Electron IPC (prepareSendTx, sign, swap operations)
+  - Fixed SecureVault threshold calculation using correct 2/3 majority formula
+  - Added event subscriptions in Electron app for balance, chain, transaction, and error events
+  - Reduced code duplication between browser and electron examples by ~1400 lines
+
 ## 0.2.0-beta.8
 
 ### Patch Changes
