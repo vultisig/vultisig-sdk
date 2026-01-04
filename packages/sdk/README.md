@@ -1,6 +1,6 @@
 # Vultisig SDK
 
-> **⚠️ Alpha Release**: This SDK is currently in alpha. APIs may change before the stable 1.0 release.
+> **⚠️ Beta Release**: This SDK is currently in beta. APIs may change before the stable 1.0 release.
 
 A TypeScript SDK for secure multi-party computation (MPC) and blockchain operations using the Vultisig protocol. Build secure, decentralized applications with threshold signature schemes and multi-chain support.
 
@@ -12,7 +12,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 📲 **QR Code Pairing** - Pair with Vultisig mobile apps (iOS/Android) for vault creation and signing
 - 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 40+ blockchains
 - 🔗 **Address Derivation** - Generate addresses across multiple blockchain networks
-- 📱 **Cross-Platform** - Works in browsers and Node.js (React Native coming soon)
+- 📱 **Cross-Platform** - Works in browsers, Node.js, and Electron (React Native coming soon)
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
 - 🌍 **WASM Integration** - High-performance cryptographic operations via WebAssembly
 
@@ -411,6 +411,7 @@ See the `/examples` directory for complete sample applications:
 
 - Node.js 20+
 - Modern browser with WebAssembly support
+- Electron 20+ (for desktop applications)
 - Network access for VultiServer communication (for Fast Vault features)
 
 ## Security Considerations

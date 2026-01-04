@@ -1,10 +1,7 @@
+import { Button, Input, Modal, Select } from '@vultisig/examples-shared'
 import { Chain } from '@vultisig/sdk'
 import { useEffect, useState } from 'react'
 
-import Button from '@/components/common/Button'
-import Input from '@/components/common/Input'
-import Modal from '@/components/common/Modal'
-import Select from '@/components/common/Select'
 import { getSDK } from '@/utils/sdk'
 
 type AddressBookEntry = {

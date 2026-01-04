@@ -80,7 +80,7 @@ describe('RelaySigningService', () => {
     it('should generate valid local party ID', () => {
       const params = service.generateSessionParams()
       expect(params.localPartyId).toBeDefined()
-      expect(params.localPartyId).toContain('extension')
+      expect(params.localPartyId).toContain('sdk-party')
     })
 
     it('should generate unique session IDs on each call', () => {

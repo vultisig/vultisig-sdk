@@ -1,6 +1,6 @@
 # Vultisig SDK Users Guide
 
-> **⚠️ Alpha Release**: This SDK is currently in alpha development. APIs may change without notice. Use in production at your own risk.
+> **⚠️ Beta Release**: This SDK is currently in beta. APIs may change before the stable 1.0 release.
 
 ## Table of Contents
 
@@ -33,6 +33,7 @@ yarn add @vultisig/sdk
 
 - **Node.js**: Version 20 or higher
 - **Browser**: Modern browsers with WebAssembly support (Chrome, Firefox, Safari, Edge)
+- **Electron**: Version 20 or higher (for desktop applications)
 - **TypeScript**: Optional but recommended
 
 ### Browser Setup: WASM Files
@@ -51,6 +52,7 @@ For browser environments, you need to serve the WASM files from your public dire
 The SDK automatically uses the appropriate storage for your platform:
 - **Node.js**: `FileStorage` (stores in `~/.vultisig` by default)
 - **Browser**: `BrowserStorage` (uses IndexedDB with localStorage fallback)
+- **Electron**: `FileStorage` (same as Node.js, shared with CLI)
 
 ```typescript
 import { Vultisig } from '@vultisig/sdk'
@@ -170,6 +172,7 @@ The SDK uses platform-appropriate storage by default:
 
 - **Node.js**: `FileStorage` - Stores vaults in `~/.vultisig` directory
 - **Browser**: `BrowserStorage` - Uses IndexedDB with localStorage fallback
+- **Electron**: `FileStorage` - Same as Node.js (vaults shared with CLI)
 - **Fallback**: `MemoryStorage` - In-memory only (data lost on restart)
 
 For custom persistence, implement the `Storage` interface:
@@ -877,10 +880,12 @@ signedTx.signature = {
   v: signature.recovery! + 27
 }
 
-// Step 5: Broadcast the signed transaction
-const provider = new ethers.JsonRpcProvider('https://eth.llamarpc.com')
-const txResponse = await provider.broadcastTransaction(signedTx.serialized)
-console.log('Transaction hash:', txResponse.hash)
+// Step 5: Broadcast using SDK
+const txHash = await vault.broadcastRawTx({
+  chain: Chain.Ethereum,
+  rawTx: signedTx.serialized
+})
+console.log('Transaction hash:', txHash)
 ```
 
 **Complete Example: Bitcoin Transaction with bitcoinjs-lib**
@@ -918,10 +923,14 @@ const signature = await vault.signBytes({
 // Step 4: Apply signature to PSBT
 // (Implementation depends on your PSBT setup)
 
-// Step 5: Finalize and broadcast
+// Step 5: Finalize and broadcast using SDK
 psbt.finalizeAllInputs()
 const rawTx = psbt.extractTransaction().toHex()
-// Broadcast via your preferred method
+const txHash = await vault.broadcastRawTx({
+  chain: Chain.Bitcoin,
+  rawTx
+})
+console.log('Transaction hash:', txHash)
 ```
 
 **Return Type:**
@@ -934,6 +943,51 @@ type Signature = {
 ```
 
 **Note:** `signBytes()` is available for both FastVault and SecureVault. For SecureVault, provide signing options with callbacks for device coordination.
+
+### Broadcasting Raw Transactions
+
+The `broadcastRawTx()` method broadcasts pre-signed raw transactions to the blockchain network. Use this with `signBytes()` for custom transaction workflows.
+
+```typescript
+const txHash = await vault.broadcastRawTx({
+  chain: Chain.Ethereum,
+  rawTx: '0x02f8...'  // hex-encoded signed transaction
+})
+```
+
+**Supported Input Formats:**
+
+| Chain Family | Input Format |
+|--------------|--------------|
+| EVM (Ethereum, Polygon, BSC, etc.) | Hex-encoded signed tx (with/without 0x) |
+| UTXO (Bitcoin, Litecoin, etc.) | Hex-encoded raw tx |
+| Solana | Base58 or Base64 encoded tx bytes |
+| Cosmos (Cosmos, Osmosis, THORChain, etc.) | JSON `{tx_bytes}` or raw base64 protobuf |
+| TON | BOC (Bag of Cells) as base64 string |
+| Polkadot | Hex-encoded extrinsic |
+| Ripple | Hex-encoded tx blob |
+| Sui | JSON `{unsignedTx, signature}` |
+| Tron | JSON tx object |
+
+**Error Handling:**
+
+The method throws `VaultError` with these codes:
+- `BroadcastFailed` - Transaction failed to broadcast (may include "already submitted" errors)
+- `UnsupportedChain` - Chain not yet supported for raw broadcast
+
+```typescript
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+
+try {
+  const txHash = await vault.broadcastRawTx({ chain, rawTx })
+} catch (error) {
+  if (error instanceof VaultError) {
+    if (error.code === VaultErrorCode.BroadcastFailed) {
+      console.log('Broadcast failed:', error.message)
+    }
+  }
+}
+```
 
 ### Token Management
 
@@ -1828,7 +1882,108 @@ sdk.dispose()
 
 ### Electron
 
-**Status**: Coming soon
+The SDK supports Electron desktop applications. The SDK runs in the **main process** and uses `FileStorage` (`~/.vultisig`), which means vaults are shared with the CLI tool.
+
+**Architecture**:
+
+```
+┌─────────────────────────────────────────────┐
+│              Electron App                    │
+├─────────────────┬───────────────────────────┤
+│  Main Process   │    Renderer Process       │
+│  (SDK runs here)│    (UI only)              │
+├─────────────────┼───────────────────────────┤
+│ • Vultisig SDK  │ • React/Vue/etc UI        │
+│ • FileStorage   │ • Calls main via IPC      │
+│ • WASM modules  │ • No SDK import needed    │
+└─────────────────┴───────────────────────────┘
+         ↑                    ↑
+         └──── IPC Bridge ────┘
+```
+
+**Main Process Setup**:
+
+```typescript
+// main.ts - SDK runs here
+import { app, BrowserWindow, ipcMain } from 'electron'
+import { Vultisig, Chain } from '@vultisig/sdk'
+
+let sdk: Vultisig
+
+app.whenReady().then(async () => {
+  // Initialize SDK in main process
+  sdk = new Vultisig()  // Uses FileStorage (~/.vultisig)
+  await sdk.initialize()
+
+  // Expose SDK operations via IPC
+  ipcMain.handle('sdk:listVaults', () => sdk.listVaults())
+  ipcMain.handle('sdk:getAddress', async (_, chain) => {
+    const vault = await sdk.getActiveVault()
+    return vault?.address(chain)
+  })
+  ipcMain.handle('sdk:getBalance', async (_, chain) => {
+    const vault = await sdk.getActiveVault()
+    return vault?.balance(chain)
+  })
+
+  // Create window...
+})
+```
+
+**Preload Script**:
+
+```typescript
+// preload.ts - Bridge between main and renderer
+import { contextBridge, ipcRenderer } from 'electron'
+
+contextBridge.exposeInMainWorld('vultisig', {
+  listVaults: () => ipcRenderer.invoke('sdk:listVaults'),
+  getAddress: (chain: string) => ipcRenderer.invoke('sdk:getAddress', chain),
+  getBalance: (chain: string) => ipcRenderer.invoke('sdk:getBalance', chain),
+})
+```
+
+**Renderer (UI)**:
+
+```typescript
+// renderer.ts - Your React/Vue/etc app
+// No SDK import needed - use the IPC bridge
+
+const vaults = await window.vultisig.listVaults()
+const address = await window.vultisig.getAddress('Bitcoin')
+const balance = await window.vultisig.getBalance('Ethereum')
+```
+
+**Shared Vaults with CLI**:
+
+Because both Electron and CLI use `FileStorage` with `~/.vultisig`:
+
+```bash
+# Create vault with CLI
+vsig vault create --name "My Wallet"
+
+# Open Electron app → same vault is available!
+```
+
+**WASM Files**:
+
+Include WASM files in your Electron build:
+
+```json
+// electron-builder.json
+{
+  "files": [
+    "dist/**/*",
+    "node_modules/@vultisig/sdk/dist/**/*.wasm"
+  ]
+}
+```
+
+**Security Best Practices**:
+- Always use `contextIsolation: true` (Electron default)
+- Never use `nodeIntegration: true` in renderer
+- Keep all vault operations in main process
+- Only expose necessary operations via IPC
 
 ---
 

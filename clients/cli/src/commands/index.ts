@@ -17,6 +17,14 @@ export { addToken, executeTokens, listTokens, removeToken } from './tokens'
 // Transaction commands
 export { executeSend, sendTransaction } from './transaction'
 
+// Sign command (arbitrary bytes)
+export type { SignBytesParams, SignBytesResult } from './sign'
+export { executeSignBytes, signBytes } from './sign'
+
+// Broadcast command (raw transactions)
+export type { BroadcastRawParams, BroadcastRawResult } from './broadcast'
+export { executeBroadcast } from './broadcast'
+
 // Vault management commands
 export type { FastVaultOptions, SecureVaultOptions } from './vault-management'
 export {
