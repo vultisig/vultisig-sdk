@@ -989,6 +989,168 @@ try {
 }
 ```
 
+### Cosmos Signing (SignAmino & SignDirect)
+
+For Cosmos SDK chains (Cosmos, Osmosis, THORChain, MayaChain, Dydx, Kujira, etc.), the SDK provides two signing methods that give you full control over transaction construction:
+
+- **SignAmino**: Legacy JSON/Amino format, widely supported
+- **SignDirect**: Modern Protobuf format, more efficient
+
+#### SignAmino Example (Governance Vote)
+
+```typescript
+import { Chain } from '@vultisig/sdk'
+
+const cosmosAddress = await vault.address(Chain.Cosmos)
+
+// Prepare a governance vote using SignAmino
+const payload = await vault.prepareSignAminoTx({
+  chain: 'Cosmos',
+  coin: {
+    chain: 'Cosmos',
+    address: cosmosAddress,
+    decimals: 6,
+    ticker: 'ATOM',
+  },
+  msgs: [{
+    type: 'cosmos-sdk/MsgVote',
+    value: JSON.stringify({
+      proposal_id: '123',
+      voter: cosmosAddress,
+      option: 'VOTE_OPTION_YES',
+    }),
+  }],
+  fee: {
+    amount: [{ denom: 'uatom', amount: '5000' }],
+    gas: '200000',
+  },
+  memo: 'Vote via Vultisig SDK',
+})
+
+// Sign and broadcast
+const signature = await vault.sign(payload)
+const txHash = await vault.broadcastTx({
+  chain: Chain.Cosmos,
+  keysignPayload: payload,
+  signature,
+})
+```
+
+#### SignAmino with Multiple Messages
+
+```typescript
+// Send multiple transactions in a single batch
+const payload = await vault.prepareSignAminoTx({
+  chain: 'Cosmos',
+  coin: {
+    chain: 'Cosmos',
+    address: cosmosAddress,
+    decimals: 6,
+    ticker: 'ATOM',
+  },
+  msgs: [
+    {
+      type: 'cosmos-sdk/MsgSend',
+      value: JSON.stringify({
+        from_address: cosmosAddress,
+        to_address: 'cosmos1recipient1...',
+        amount: [{ denom: 'uatom', amount: '1000000' }],
+      }),
+    },
+    {
+      type: 'cosmos-sdk/MsgSend',
+      value: JSON.stringify({
+        from_address: cosmosAddress,
+        to_address: 'cosmos1recipient2...',
+        amount: [{ denom: 'uatom', amount: '2000000' }],
+      }),
+    },
+  ],
+  fee: {
+    amount: [{ denom: 'uatom', amount: '10000' }],
+    gas: '300000',
+  },
+})
+```
+
+#### SignDirect Example (Pre-encoded Transaction)
+
+Use SignDirect when you have pre-encoded Protobuf transaction bytes:
+
+```typescript
+// SignDirect with pre-encoded bytes (from cosmjs or similar)
+const payload = await vault.prepareSignDirectTx({
+  chain: 'Cosmos',
+  coin: {
+    chain: 'Cosmos',
+    address: cosmosAddress,
+    decimals: 6,
+    ticker: 'ATOM',
+  },
+  bodyBytes: 'base64EncodedTxBodyBytes...',
+  authInfoBytes: 'base64EncodedAuthInfoBytes...',
+  chainId: 'cosmoshub-4',
+  accountNumber: '12345',
+})
+
+const signature = await vault.sign(payload)
+```
+
+#### Supported Cosmos Chains
+
+| Chain | Chain ID | Native Denom |
+|-------|----------|--------------|
+| Cosmos | cosmoshub-4 | uatom |
+| Osmosis | osmosis-1 | uosmo |
+| THORChain | thorchain-1 | rune |
+| MayaChain | mayachain-1 | cacao |
+| Dydx | dydx-mainnet-1 | adydx |
+| Kujira | kaiyo-1 | ukuji |
+| Terra | phoenix-1 | uluna |
+| TerraClassic | columbus-5 | uluna |
+| Noble | noble-1 | uusdc |
+| Akash | akashnet-2 | uakt |
+
+#### Common Message Types
+
+```typescript
+// MsgSend - Transfer tokens
+{ type: 'cosmos-sdk/MsgSend', value: JSON.stringify({
+  from_address: '...',
+  to_address: '...',
+  amount: [{ denom: 'uatom', amount: '1000000' }],
+})}
+
+// MsgVote - Governance vote
+{ type: 'cosmos-sdk/MsgVote', value: JSON.stringify({
+  proposal_id: '123',
+  voter: '...',
+  option: 'VOTE_OPTION_YES',  // YES, NO, ABSTAIN, NO_WITH_VETO
+})}
+
+// MsgDelegate - Stake tokens
+{ type: 'cosmos-sdk/MsgDelegate', value: JSON.stringify({
+  delegator_address: '...',
+  validator_address: 'cosmosvaloper1...',
+  amount: { denom: 'uatom', amount: '1000000' },
+})}
+
+// MsgUndelegate - Unstake tokens
+{ type: 'cosmos-sdk/MsgUndelegate', value: JSON.stringify({
+  delegator_address: '...',
+  validator_address: 'cosmosvaloper1...',
+  amount: { denom: 'uatom', amount: '1000000' },
+})}
+
+// MsgWithdrawDelegatorReward - Claim staking rewards
+{ type: 'cosmos-sdk/MsgWithdrawDelegatorReward', value: JSON.stringify({
+  delegator_address: '...',
+  validator_address: 'cosmosvaloper1...',
+})}
+```
+
+---
+
 ### Token Management
 
 Add and manage custom tokens:
@@ -1689,6 +1851,10 @@ class VaultBase {
   broadcastTx(params: BroadcastParams): Promise<string>
   gas(chain: Chain): Promise<GasInfo>
 
+  // Cosmos Signing (SignAmino & SignDirect)
+  prepareSignAminoTx(input: SignAminoInput, options?: CosmosSigningOptions): Promise<KeysignPayload>
+  prepareSignDirectTx(input: SignDirectInput, options?: CosmosSigningOptions): Promise<KeysignPayload>
+
   // SigningOptions (for SecureVault device coordination)
   // {
   //   signal?: AbortSignal
@@ -1823,6 +1989,55 @@ new Vultisig({
     messageRelay: string           // Custom relay server URL
   }
 })
+```
+
+### Cosmos Signing Types
+
+```typescript
+// SignAmino input for Cosmos SDK chains
+interface SignAminoInput {
+  chain: CosmosChain           // 'Cosmos', 'Osmosis', 'THORChain', etc.
+  coin: AccountCoin
+  msgs: CosmosMsgInput[]       // Array of messages to sign
+  fee: CosmosFeeInput
+  memo?: string
+}
+
+// SignDirect input for pre-encoded Protobuf transactions
+interface SignDirectInput {
+  chain: CosmosChain
+  coin: AccountCoin
+  bodyBytes: string            // Base64-encoded TxBody
+  authInfoBytes: string        // Base64-encoded AuthInfo
+  chainId: string              // e.g., 'cosmoshub-4'
+  accountNumber: string
+  memo?: string
+}
+
+// Cosmos message format
+interface CosmosMsgInput {
+  type: string                 // e.g., 'cosmos-sdk/MsgSend'
+  value: string                // JSON-stringified message value
+}
+
+// Cosmos fee format
+interface CosmosFeeInput {
+  amount: CosmosCoinAmount[]
+  gas: string
+  payer?: string
+  granter?: string
+}
+
+// Cosmos coin amount
+interface CosmosCoinAmount {
+  denom: string                // e.g., 'uatom'
+  amount: string               // e.g., '1000000'
+}
+
+// Options for Cosmos signing
+interface CosmosSigningOptions {
+  skipChainSpecificFetch?: boolean  // Skip account/sequence fetch
+}
 ```
 
 ---
