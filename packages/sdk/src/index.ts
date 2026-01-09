@@ -135,3 +135,33 @@ export type {
 } from './types'
 // Swap type guards
 export { isAccountCoin, isSimpleCoinInput } from './types'
+
+// ============================================================================
+// PUBLIC API - Seedphrase Import
+// ============================================================================
+
+// Seedphrase validation and import types
+export type {
+  ChainDiscoveryPhase,
+  ChainDiscoveryProgress,
+  ChainDiscoveryResult,
+  DerivedMasterKeys,
+  ImportSeedphraseAsFastVaultOptions,
+  ImportSeedphraseAsSecureVaultOptions,
+  SeedphraseImportResult,
+  SeedphraseValidation,
+  SeedphraseWordCount,
+} from './seedphrase'
+export { SEEDPHRASE_WORD_COUNTS } from './seedphrase'
+
+// Seedphrase utilities (for advanced use cases)
+export {
+  ChainDiscoveryService,
+  cleanMnemonic,
+  MasterKeyDeriver,
+  SeedphraseValidator,
+  validateSeedphrase,
+} from './seedphrase'
+
+// Seedphrase import services
+export { FastVaultSeedphraseImportService, SecureVaultSeedphraseImportService } from './services'

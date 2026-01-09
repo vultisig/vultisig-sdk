@@ -9,6 +9,7 @@
 - [Core Concepts](#core-concepts)
 - [Password Management](#password-management)
 - [Vault Management](#vault-management)
+- [Seedphrase Import](#seedphrase-import)
 - [Essential Operations](#essential-operations)
 - [Token Swaps](#token-swaps)
 - [Configuration](#configuration)
@@ -702,6 +703,140 @@ await sdk.deleteVault(vault)
 await vault.rename('New Wallet Name')
 console.log('Vault renamed to:', vault.name)
 ```
+
+---
+
+## Seedphrase Import
+
+Import existing wallets from BIP39 mnemonic phrases (12 or 24 words). This allows migrating wallets from other applications into Vultisig.
+
+### Validating a Seedphrase
+
+Always validate the mnemonic before attempting import:
+
+```typescript
+const result = await sdk.validateSeedphrase(mnemonic)
+
+if (result.valid) {
+  console.log(`Valid ${result.wordCount}-word mnemonic`)
+} else {
+  console.error('Validation failed:', result.error)
+  if (result.invalidWords?.length) {
+    console.error('Invalid words:', result.invalidWords.join(', '))
+  }
+}
+```
+
+### Discovering Chains with Balances
+
+Before importing, you can scan chains to find existing balances:
+
+```typescript
+const results = await sdk.discoverChainsFromSeedphrase(
+  mnemonic,
+  [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain, Chain.Solana],
+  (progress) => {
+    console.log(`${progress.phase}: ${progress.chain}`)
+    console.log(`Progress: ${progress.chainsProcessed}/${progress.chainsTotal}`)
+    console.log(`Found balances on: ${progress.chainsWithBalance.join(', ')}`)
+  }
+)
+
+console.log('\nDiscovery Results:')
+for (const result of results) {
+  const status = result.hasBalance ? 'Y' : 'N'
+  console.log(`[${status}] ${result.chain}: ${result.address}`)
+  if (result.hasBalance) {
+    console.log(`    Balance: ${result.balance} ${result.symbol}`)
+  }
+}
+```
+
+**Progress Phases:**
+- `validating` - Validating the mnemonic
+- `deriving` - Deriving addresses for each chain
+- `fetching` - Fetching balances from blockchain
+- `complete` - Discovery finished
+
+### Importing as FastVault
+
+Import a seedphrase with VultiServer assistance (2-of-2 threshold):
+
+```typescript
+const vaultId = await sdk.importSeedphraseAsFastVault({
+  mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+  name: 'Imported Wallet',
+  email: 'user@example.com',
+  password: 'SecurePassword123!',
+
+  // Auto-enable chains that have balances
+  discoverChains: true,
+
+  // Or specify exact chains to enable
+  // chains: [Chain.Bitcoin, Chain.Ethereum],
+
+  // Progress callbacks
+  onProgress: (step) => {
+    console.log(`${step.step}: ${step.message} (${step.progress}%)`)
+  },
+  onChainDiscovery: (progress) => {
+    console.log(`Discovering ${progress.chain}: ${progress.phase}`)
+  }
+})
+
+// Complete with email verification
+const code = await getVerificationCodeFromUser()
+const vault = await sdk.verifyVault(vaultId, code)
+
+console.log('Import complete:', vault.name)
+```
+
+### Importing as SecureVault
+
+Import a seedphrase with multi-device MPC (N-of-M threshold):
+
+```typescript
+const { vault, vaultId, sessionId } = await sdk.importSeedphraseAsSecureVault({
+  mnemonic: 'abandon abandon abandon...',
+  name: 'Team Wallet',
+  devices: 3,      // Total devices
+  threshold: 2,    // Signing threshold
+  password: 'OptionalPassword',
+  discoverChains: true,
+
+  onProgress: (step) => {
+    console.log(`${step.step}: ${step.message}`)
+  },
+  onQRCodeReady: (qrPayload) => {
+    // Display QR for other devices to scan
+    displayQRCode(qrPayload)
+  },
+  onDeviceJoined: (deviceId, total, required) => {
+    console.log(`Device joined: ${total}/${required}`)
+  },
+  onChainDiscovery: (progress) => {
+    console.log(`Discovering: ${progress.message}`)
+  }
+})
+
+console.log('SecureVault imported:', vault.name)
+```
+
+### Import Flow Comparison
+
+| Feature | FastVault Import | SecureVault Import |
+|---------|-----------------|-------------------|
+| **Threshold** | 2-of-2 (with VultiServer) | N-of-M (configurable) |
+| **Verification** | Email code required | Device pairing via QR |
+| **Password** | Required | Optional |
+| **Signing** | Instant | Requires device coordination |
+
+### Security Considerations
+
+1. **Memory Safety**: The SDK clears mnemonic from memory after derivation
+2. **No Logging**: Mnemonics are never logged or persisted
+3. **HTTPS Only**: All server communication is encrypted
+4. **Input Validation**: Always validate before import to catch typos
 
 ---
 
@@ -1805,6 +1940,20 @@ class Vultisig {
   isVaultEncrypted(vultContent: string): boolean
   getServerStatus(): Promise<ServerStatus>
 
+  // Seedphrase import
+  validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation>
+  discoverChainsFromSeedphrase(
+    mnemonic: string,
+    chains?: Chain[],
+    onProgress?: (progress: ChainDiscoveryProgress) => void
+  ): Promise<ChainDiscoveryResult[]>
+  importSeedphraseAsFastVault(options: ImportSeedphraseAsFastVaultOptions): Promise<string>
+  importSeedphraseAsSecureVault(options: ImportSeedphraseAsSecureVaultOptions): Promise<{
+    vault: SecureVault
+    vaultId: string
+    sessionId: string
+  }>
+
   // Address book
   getAddressBook(chain?: Chain): Promise<AddressBookEntry[]>
   addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
@@ -2037,6 +2186,63 @@ interface CosmosCoinAmount {
 // Options for Cosmos signing
 interface CosmosSigningOptions {
   skipChainSpecificFetch?: boolean  // Skip account/sequence fetch
+}
+```
+
+### Seedphrase Import Types
+
+```typescript
+type SeedphraseValidation = {
+  valid: boolean
+  wordCount: number
+  invalidWords?: string[]
+  error?: string
+}
+
+type ChainDiscoveryPhase = 'validating' | 'deriving' | 'fetching' | 'complete'
+
+type ChainDiscoveryProgress = {
+  phase: ChainDiscoveryPhase
+  chain?: Chain
+  chainsProcessed: number
+  chainsTotal: number
+  chainsWithBalance: Chain[]
+  message: string
+}
+
+type ChainDiscoveryResult = {
+  chain: Chain
+  address: string
+  balance: string
+  decimals: number
+  symbol: string
+  hasBalance: boolean
+}
+
+type ImportSeedphraseAsFastVaultOptions = {
+  mnemonic: string
+  name: string
+  email: string
+  password: string
+  chains?: Chain[]
+  discoverChains?: boolean
+  chainsToScan?: Chain[]
+  onProgress?: (step: VaultCreationStep) => void
+  onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+}
+
+type ImportSeedphraseAsSecureVaultOptions = {
+  mnemonic: string
+  name: string
+  password?: string
+  devices: number
+  threshold?: number
+  chains?: Chain[]
+  discoverChains?: boolean
+  onProgress?: (step: VaultCreationStep) => void
+  onQRCodeReady?: (qrPayload: string) => void
+  onDeviceJoined?: (deviceId: string, total: number, required: number) => void
+  onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
 ```
 

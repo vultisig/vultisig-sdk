@@ -14,6 +14,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 🔗 **Address Derivation** - Generate addresses across multiple blockchain networks
 - 📱 **Cross-Platform** - Works in browsers, Node.js, and Electron (React Native coming soon)
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
+- 🔑 **Seedphrase Import** - Import existing BIP39 mnemonics with automatic chain discovery
 - 🌍 **WASM Integration** - High-performance cryptographic operations via WebAssembly
 
 ## Installation
@@ -121,6 +122,45 @@ const backupBlob = await vault.export("BackupPassword123!");
 
 // Or export as base64 string
 const backupBase64 = await vault.exportAsBase64("BackupPassword123!");
+```
+
+### 7. Import from Seedphrase
+
+Import an existing wallet from a BIP39 mnemonic:
+
+```typescript
+// Validate the seedphrase first
+const validation = await sdk.validateSeedphrase(mnemonic)
+if (!validation.valid) {
+  console.error(validation.error)
+  return
+}
+
+// Discover which chains have balances
+const chains = await sdk.discoverChainsFromSeedphrase(
+  mnemonic,
+  [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain],
+  (progress) => console.log(`${progress.chain}: ${progress.phase}`)
+)
+
+for (const result of chains) {
+  if (result.hasBalance) {
+    console.log(`${result.chain}: ${result.balance} ${result.symbol}`)
+  }
+}
+
+// Import as FastVault (requires email verification)
+const vaultId = await sdk.importSeedphraseAsFastVault({
+  mnemonic,
+  name: 'Imported Wallet',
+  email: 'user@example.com',
+  password: 'SecurePassword123!',
+  discoverChains: true, // Auto-enable chains with balances
+  onProgress: (step) => console.log(step.message)
+})
+
+// Verify with email code
+const vault = await sdk.verifyVault(vaultId, verificationCode)
 ```
 
 ## Supported Blockchains
@@ -325,6 +365,51 @@ Create a multi-device secure vault with N-of-M threshold signing.
 - `vault: SecureVault` - The created vault instance
 - `vaultId: string` - Unique vault identifier
 - `sessionId: string` - Session ID used for creation
+
+#### `validateSeedphrase(mnemonic): Promise<SeedphraseValidation>`
+
+Validate a BIP39 mnemonic phrase.
+
+**Returns:**
+- `valid: boolean` - Whether the mnemonic is valid
+- `wordCount: number` - Number of words (12 or 24)
+- `invalidWords?: string[]` - Words not in BIP39 wordlist
+- `error?: string` - Error message if invalid
+
+#### `discoverChainsFromSeedphrase(mnemonic, chains?, onProgress?): Promise<ChainDiscoveryResult[]>`
+
+Discover chains with balances for a seedphrase.
+
+**Parameters:**
+- `mnemonic: string` - BIP39 mnemonic phrase
+- `chains?: Chain[]` - Chains to scan (defaults to common chains)
+- `onProgress?: (progress: ChainDiscoveryProgress) => void` - Progress callback
+
+#### `importSeedphraseAsFastVault(options): Promise<string>`
+
+Import a seedphrase as a FastVault. Returns vaultId for email verification.
+
+**Parameters:**
+- `options.mnemonic: string` - BIP39 mnemonic (12 or 24 words)
+- `options.name: string` - Vault name
+- `options.email: string` - Email for verification
+- `options.password: string` - Vault encryption password
+- `options.discoverChains?: boolean` - Auto-enable chains with balances
+- `options.onProgress?: (step: VaultCreationStep) => void` - Progress callback
+- `options.onChainDiscovery?: (progress: ChainDiscoveryProgress) => void` - Discovery callback
+
+#### `importSeedphraseAsSecureVault(options): Promise<{ vault, vaultId, sessionId }>`
+
+Import a seedphrase as a SecureVault with multi-device MPC.
+
+**Parameters:**
+- `options.mnemonic: string` - BIP39 mnemonic (12 or 24 words)
+- `options.name: string` - Vault name
+- `options.devices: number` - Number of participating devices
+- `options.threshold?: number` - Signing threshold
+- `options.password?: string` - Optional encryption password
+- `options.onQRCodeReady?: (qrPayload: string) => void` - QR callback
+- `options.onDeviceJoined?: (deviceId, total, required) => void` - Device join callback
 
 #### `vault.address(chain): Promise<string>`
 

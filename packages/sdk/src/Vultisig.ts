@@ -10,6 +10,17 @@ import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
 import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
 import type { SdkEvents } from './events/types'
+import { ChainDiscoveryService } from './seedphrase/ChainDiscoveryService'
+import { SeedphraseValidator } from './seedphrase/SeedphraseValidator'
+import type {
+  ChainDiscoveryProgress,
+  ChainDiscoveryResult,
+  ImportSeedphraseAsFastVaultOptions,
+  ImportSeedphraseAsSecureVaultOptions,
+  SeedphraseValidation,
+} from './seedphrase/types'
+import { FastVaultSeedphraseImportService } from './services/FastVaultSeedphraseImportService'
+import { SecureVaultSeedphraseImportService } from './services/SecureVaultSeedphraseImportService'
 import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
 import { FastVault } from './vault/FastVault'
@@ -406,6 +417,157 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     this.emit('vaultChanged', { vaultId: result.vaultId })
     return result
+  }
+
+  // === SEEDPHRASE IMPORT ===
+
+  /**
+   * Validate a BIP39 seedphrase (mnemonic)
+   *
+   * @param mnemonic - The seedphrase to validate (space-separated words)
+   * @returns Validation result with word count and any errors
+   *
+   * @example
+   * ```typescript
+   * const validation = await sdk.validateSeedphrase('abandon abandon abandon ...')
+   * if (validation.valid) {
+   *   console.log(`Valid ${validation.wordCount}-word seedphrase`)
+   * } else {
+   *   console.log(`Invalid: ${validation.error}`)
+   * }
+   * ```
+   */
+  async validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation> {
+    await this.ensureInitialized()
+    const validator = new SeedphraseValidator(this.context.wasmProvider)
+    return validator.validate(mnemonic)
+  }
+
+  /**
+   * Discover chains with existing balances from a seedphrase
+   *
+   * Derives addresses for each chain and checks for non-zero balances.
+   * Useful for determining which chains to include when importing a seedphrase.
+   *
+   * @param mnemonic - The seedphrase to derive addresses from
+   * @param chains - Optional list of chains to scan (defaults to all supported)
+   * @param onProgress - Optional progress callback
+   * @returns Array of chain discovery results
+   *
+   * @example
+   * ```typescript
+   * const results = await sdk.discoverChainsFromSeedphrase(
+   *   'abandon abandon abandon ...',
+   *   [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
+   *   (progress) => console.log(`${progress.chainsProcessed}/${progress.chainsTotal}`)
+   * )
+   *
+   * const chainsWithBalance = results.filter(r => r.hasBalance)
+   * console.log('Chains with funds:', chainsWithBalance.map(r => r.chain))
+   * ```
+   */
+  async discoverChainsFromSeedphrase(
+    mnemonic: string,
+    chains?: Chain[],
+    onProgress?: (progress: ChainDiscoveryProgress) => void
+  ): Promise<ChainDiscoveryResult[]> {
+    await this.ensureInitialized()
+    const discoveryService = new ChainDiscoveryService(this.context.wasmProvider)
+    return discoveryService.discoverChains(mnemonic, {
+      config: { chains },
+      onProgress,
+    })
+  }
+
+  /**
+   * Import a seedphrase as a FastVault (2-of-3 with VultiServer)
+   *
+   * Creates a FastVault from an existing BIP39 seedphrase. The vault requires
+   * email verification before it can be used.
+   *
+   * @param options - Import options including mnemonic, name, password, and email
+   * @returns Vault ID (call verifyVault with this ID and email code to get the vault)
+   *
+   * @example
+   * ```typescript
+   * const vaultId = await sdk.importSeedphraseAsFastVault({
+   *   mnemonic: 'abandon abandon abandon ... about',
+   *   name: 'Imported Wallet',
+   *   password: 'securePassword',
+   *   email: 'user@example.com',
+   *   discoverChains: true,
+   *   onProgress: (step) => console.log(step.message),
+   *   onChainDiscovery: (progress) => console.log(`Scanning: ${progress.chain}`)
+   * })
+   *
+   * // User receives email with verification code
+   * const code = await promptUser('Enter verification code:')
+   * const vault = await sdk.verifyVault(vaultId, code)
+   * ```
+   */
+  async importSeedphraseAsFastVault(options: ImportSeedphraseAsFastVaultOptions): Promise<string> {
+    await this.ensureInitialized()
+    const importService = new FastVaultSeedphraseImportService(this.context)
+    const result = await importService.importSeedphrase(options)
+
+    // Create FastVault from the import result
+    const vault = new FastVault(this.context, result.vault)
+
+    // Store in pending vaults - will be saved after email verification
+    this.pendingVaults.set(result.vaultId, vault)
+
+    return result.vaultId
+  }
+
+  /**
+   * Import a seedphrase as a SecureVault (multi-device MPC)
+   *
+   * Creates a SecureVault from an existing BIP39 seedphrase using multi-device
+   * coordination. Requires QR code scanning by other devices.
+   *
+   * @param options - Import options including mnemonic, name, device count
+   * @returns Created vault, vault ID, and session ID
+   *
+   * @example
+   * ```typescript
+   * const result = await sdk.importSeedphraseAsSecureVault({
+   *   mnemonic: 'abandon abandon abandon ... about',
+   *   name: 'Imported Secure Wallet',
+   *   devices: 2,
+   *   discoverChains: true,
+   *   onProgress: (step) => console.log(step.message),
+   *   onQRCodeReady: (qrPayload) => displayQRCode(qrPayload),
+   *   onDeviceJoined: (id, total, required) => console.log(`${total}/${required} devices`)
+   * })
+   *
+   * console.log('Vault created:', result.vaultId)
+   * ```
+   */
+  async importSeedphraseAsSecureVault(options: ImportSeedphraseAsSecureVaultOptions): Promise<{
+    vault: SecureVault
+    vaultId: string
+    sessionId: string
+    discoveredChains?: ChainDiscoveryResult[]
+  }> {
+    await this.ensureInitialized()
+    const importService = new SecureVaultSeedphraseImportService(this.context)
+    const result = await importService.importSeedphrase(options)
+
+    // Create SecureVault from the import result
+    const vault = new SecureVault(this.context, result.vault)
+
+    // Save the vault and set as active
+    await vault.save()
+    await this.vaultManager.setActiveVault(result.vaultId)
+
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+
+    return {
+      vault,
+      vaultId: result.vaultId,
+      sessionId: result.sessionId,
+      discoveredChains: result.discoveredChains,
+    }
   }
 
   /**
