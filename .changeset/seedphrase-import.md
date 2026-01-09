@@ -1,5 +1,6 @@
 ---
 "@vultisig/sdk": minor
+"@vultisig/cli": minor
 ---
 
 Add seedphrase (BIP39 mnemonic) import functionality
@@ -30,3 +31,14 @@ This release adds the ability to import existing wallets from BIP39 mnemonic phr
 - `ChainDiscoveryService` - Balance scanning across chains
 - `FastVaultSeedphraseImportService` - FastVault import orchestration
 - `SecureVaultSeedphraseImportService` - SecureVault import orchestration
+
+**New CLI Commands:**
+- `vultisig import-seedphrase fast` - Import as FastVault (2-of-2 with VultiServer)
+- `vultisig import-seedphrase secure` - Import as SecureVault (N-of-M multi-device)
+
+**CLI Features:**
+- Secure seedphrase input (masked with `*`)
+- `--discover-chains` flag to scan for existing balances
+- `--chains` flag to specify chains (comma-separated)
+- Interactive shell support with tab completion
+- Progress spinners during import
