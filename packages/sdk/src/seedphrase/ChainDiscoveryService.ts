@@ -6,6 +6,7 @@
  */
 import { Chain } from '@core/chain/Chain'
 import { getCoinBalance } from '@core/chain/coin/balance'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 
 import { SUPPORTED_CHAINS } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'
@@ -174,26 +175,31 @@ export class ChainDiscoveryService {
    * Actually check the balance for a chain
    */
   private async doCheckChainBalance(mnemonic: string, chain: Chain): Promise<ChainDiscoveryResult> {
+    // Get chain's native coin metadata
+    const coinMeta = chainFeeCoin[chain]
+    const decimals = coinMeta?.decimals ?? 18
+    const symbol = coinMeta?.ticker ?? chain
+
     try {
       // Derive address for this chain
       const address = await this.keyDeriver.deriveAddress(mnemonic, chain)
 
-      // Fetch balance
-      const balanceResult = await getCoinBalance({
+      // Fetch balance (returns bigint)
+      const balanceRaw = await getCoinBalance({
         chain,
         address,
       })
 
       // Check if balance is non-zero
-      const balance = balanceResult.amount?.toString() ?? '0'
-      const hasBalance = BigInt(balance) > 0n
+      const balance = balanceRaw.toString()
+      const hasBalance = balanceRaw > 0n
 
       return {
         chain,
         address,
         balance,
-        decimals: balanceResult.decimals ?? 18,
-        symbol: balanceResult.ticker ?? chain,
+        decimals,
+        symbol,
         hasBalance,
       }
     } catch (error) {
@@ -212,8 +218,8 @@ export class ChainDiscoveryService {
         chain,
         address,
         balance: '0',
-        decimals: 18,
-        symbol: chain,
+        decimals,
+        symbol,
         hasBalance: false,
       }
     }

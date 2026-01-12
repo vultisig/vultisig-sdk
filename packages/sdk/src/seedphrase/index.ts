@@ -23,7 +23,7 @@ export { SEEDPHRASE_WORD_COUNTS } from './types'
 export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from './SeedphraseValidator'
 
 // Key Deriver
-export { type DerivedChainKey,MasterKeyDeriver } from './MasterKeyDeriver'
+export { type DerivedChainKey, MasterKeyDeriver } from './MasterKeyDeriver'
 
 // Chain Discovery
-export { type ChainDiscoveryConfig,ChainDiscoveryService } from './ChainDiscoveryService'
+export { type ChainDiscoveryConfig, ChainDiscoveryService } from './ChainDiscoveryService'

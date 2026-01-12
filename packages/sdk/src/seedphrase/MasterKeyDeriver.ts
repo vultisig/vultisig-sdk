@@ -154,6 +154,19 @@ export class MasterKeyDeriver {
 
     try {
       const coinType = this.getCoinType(chain, walletCore)
+
+      // Special handling for MayaChain: derive with 'maya' prefix
+      if (chain === 'MayaChain') {
+        const publicKey = hdWallet.getKeyForCoin(coinType).getPublicKeySecp256k1(false)
+        return walletCore.AnyAddress.createBech32WithPublicKey(publicKey, coinType, 'maya').description()
+      }
+
+      // Special handling for Sei: use Ethereum address for EVM RPC
+      if (chain === 'Sei') {
+        const ethCoinType = walletCore.CoinType.ethereum
+        return hdWallet.getAddressForCoin(ethCoinType)
+      }
+
       return hdWallet.getAddressForCoin(coinType)
     } finally {
       if (hdWallet.delete) {

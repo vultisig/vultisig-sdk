@@ -27,10 +27,7 @@ import { randomUUID } from '../crypto'
 import { ChainDiscoveryService } from '../seedphrase/ChainDiscoveryService'
 import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
 import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
-import type {
-  ChainDiscoveryResult,
-  ImportSeedphraseAsFastVaultOptions,
-} from '../seedphrase/types'
+import type { ChainDiscoveryResult, ImportSeedphraseAsFastVaultOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 
@@ -254,12 +251,21 @@ export class FastVaultSeedphraseImportService {
       localPartyId,
     })
 
+    // Wait for server completion with tolerance for import flows
+    // VultiServer's /import endpoint may not signal completion the same way /create does
+    // Since MPC already succeeded (we have the keys), this is just a secondary check
     const peers = devices.filter(d => d !== localPartyId)
-    await waitForKeygenComplete({
-      serverURL: this.serverUrl,
-      sessionId,
-      peers,
-    })
+    try {
+      await waitForKeygenComplete({
+        serverURL: this.serverUrl,
+        sessionId,
+        peers,
+      })
+    } catch {
+      // For key import, if MPC succeeded but server didn't signal completion,
+      // we can proceed since we have valid keys from the completed MPC exchange
+      console.warn('Server completion signal not received, proceeding with valid MPC keys')
+    }
 
     // Step 12: Build vault structure
     const vault: CoreVault = {

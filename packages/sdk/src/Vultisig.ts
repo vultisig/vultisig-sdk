@@ -6,6 +6,7 @@ import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFr
 import { AddressBookManager } from './AddressBookManager'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
 import { getDefaultStorage } from './context/defaultStorage'
+import type { VaultContext } from './context/SdkContext'
 import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
 import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
 import { UniversalEventEmitter } from './events/EventEmitter'
@@ -19,10 +20,12 @@ import type {
   ImportSeedphraseAsSecureVaultOptions,
   SeedphraseValidation,
 } from './seedphrase/types'
+import { FastSigningService } from './services/FastSigningService'
 import { FastVaultSeedphraseImportService } from './services/FastVaultSeedphraseImportService'
 import { SecureVaultSeedphraseImportService } from './services/SecureVaultSeedphraseImportService'
 import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
+import { createVaultBackup } from './utils/export'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
@@ -510,8 +513,26 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     const importService = new FastVaultSeedphraseImportService(this.context)
     const result = await importService.importSeedphrase(options)
 
-    // Create FastVault from the import result
-    const vault = new FastVault(this.context, result.vault)
+    // Create backup file from CoreVault
+    const vultContent = await createVaultBackup(result.vault, options.password)
+
+    // Create FastSigningService
+    const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
+
+    // Build VaultContext from SdkContext
+    const vaultContext: VaultContext = {
+      storage: this.context.storage,
+      config: this.context.config,
+      serverManager: this.context.serverManager,
+      passwordCache: this.context.passwordCache,
+      wasmProvider: this.context.wasmProvider,
+    }
+
+    // Create FastVault from import using the factory method
+    const vault = FastVault.fromImport(result.vaultId, vultContent, result.vault, fastSigningService, vaultContext)
+
+    // Cache password for unlocking
+    this.context.passwordCache.set(result.vaultId, options.password)
 
     // Store in pending vaults - will be saved after email verification
     this.pendingVaults.set(result.vaultId, vault)
@@ -553,8 +574,25 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     const importService = new SecureVaultSeedphraseImportService(this.context)
     const result = await importService.importSeedphrase(options)
 
-    // Create SecureVault from the import result
-    const vault = new SecureVault(this.context, result.vault)
+    // Create backup file from CoreVault (use password if provided, empty string otherwise)
+    const vultContent = await createVaultBackup(result.vault, options.password || '')
+
+    // Build VaultContext from SdkContext
+    const vaultContext: VaultContext = {
+      storage: this.context.storage,
+      config: this.context.config,
+      serverManager: this.context.serverManager,
+      passwordCache: this.context.passwordCache,
+      wasmProvider: this.context.wasmProvider,
+    }
+
+    // Create SecureVault from import using the factory method
+    const vault = SecureVault.fromImport(result.vaultId, vultContent, result.vault, vaultContext)
+
+    // Cache password if provided
+    if (options.password) {
+      this.context.passwordCache.set(result.vaultId, options.password)
+    }
 
     // Save the vault and set as active
     await vault.save()

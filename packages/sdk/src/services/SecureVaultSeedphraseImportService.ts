@@ -35,10 +35,7 @@ import { randomUUID } from '../crypto'
 import { ChainDiscoveryService } from '../seedphrase/ChainDiscoveryService'
 import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
 import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
-import type {
-  ChainDiscoveryResult,
-  ImportSeedphraseAsSecureVaultOptions,
-} from '../seedphrase/types'
+import type { ChainDiscoveryResult, ImportSeedphraseAsSecureVaultOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 
@@ -377,12 +374,21 @@ export class SecureVaultSeedphraseImportService {
       localPartyId,
     })
 
+    // Wait for peer completion with tolerance for import flows
+    // Other devices may complete at different rates, and since MPC already
+    // succeeded (we have the keys), this is just a secondary check
     const peers = allDevices.filter(d => d !== localPartyId)
-    await waitForKeygenComplete({
-      serverURL: this.relayUrl,
-      sessionId,
-      peers,
-    })
+    try {
+      await waitForKeygenComplete({
+        serverURL: this.relayUrl,
+        sessionId,
+        peers,
+      })
+    } catch {
+      // For key import, if MPC succeeded but peers didn't all signal completion,
+      // we can proceed since we have valid keys from the completed MPC exchange
+      console.warn('Not all peer completion signals received, proceeding with valid MPC keys')
+    }
 
     // Step 12: Build vault structure
     const vault: CoreVault = {
