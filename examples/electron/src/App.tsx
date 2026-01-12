@@ -8,6 +8,7 @@ import {
   Layout,
   Modal,
   SecureVaultCreator,
+  SeedphraseImporter,
   Toast,
   useToast,
   Vault,
@@ -405,6 +406,7 @@ function App() {
             <VaultCreator onVaultCreated={handleVaultCreated} />
             <SecureVaultCreator onVaultCreated={handleVaultCreated} />
             <VaultImporter onVaultImported={handleVaultImported} />
+            <SeedphraseImporter onVaultCreated={handleVaultCreated} />
           </div>
         }
         main={

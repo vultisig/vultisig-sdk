@@ -8,9 +8,12 @@ import type {
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
+  ImportSeedphraseFastOptions,
+  ImportSeedphraseSecureOptions,
   PrepareSwapParams,
   ProgressStep,
   SaveFileOptions,
+  SeedphraseValidation,
   SelectedFile,
   SelectFilesOptions,
   SelectFilesResult,
@@ -38,6 +41,13 @@ export type ISDKAdapter = {
   importVault(content: string, password?: string): Promise<VaultInfo>
 
   isVaultEncrypted(content: string): Promise<boolean>
+
+  // ===== Seedphrase Import =====
+  validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation>
+
+  importSeedphraseAsFastVault(options: ImportSeedphraseFastOptions): Promise<{ vaultId: string }>
+
+  importSeedphraseAsSecureVault(options: ImportSeedphraseSecureOptions): Promise<CreateSecureVaultResult>
 
   deleteVault(vaultId: string): Promise<void>
 
