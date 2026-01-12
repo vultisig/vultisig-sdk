@@ -171,6 +171,10 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     return this.vaultToInfo(vault)
   }
 
+  async resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void> {
+    await this.sdk.resendVaultVerification(options)
+  }
+
   async createSecureVault(options: CreateSecureVaultOptions): Promise<CreateSecureVaultResult> {
     const result = await this.sdk.createSecureVault({
       name: options.name,

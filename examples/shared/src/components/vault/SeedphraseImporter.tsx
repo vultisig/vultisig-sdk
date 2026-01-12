@@ -49,6 +49,10 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
   const [keygenProgress, setKeygenProgress] = useState<ProgressStep | null>(null)
   const [createdVault, setCreatedVault] = useState<VaultInfo | null>(null)
 
+  // Resend verification state
+  const [isResending, setIsResending] = useState(false)
+  const [resendSuccess, setResendSuccess] = useState(false)
+
   // Calculate word count
   const wordCount = mnemonic.trim() ? mnemonic.trim().split(/\s+/).length : 0
   const isValidWordCount = wordCount === 12 || wordCount === 24
@@ -141,6 +145,29 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
     }
   }
 
+  const handleResendCode = async () => {
+    if (!vaultId) return
+
+    setIsResending(true)
+    setResendSuccess(false)
+    setError(null)
+
+    try {
+      await sdk.resendVaultVerification({
+        vaultId,
+        email: formData.email,
+        password: formData.password,
+      })
+      setResendSuccess(true)
+      // Clear success message after 3 seconds
+      setTimeout(() => setResendSuccess(false), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resend code')
+    } finally {
+      setIsResending(false)
+    }
+  }
+
   const handleImportSecure = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -212,6 +239,8 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
     setDevicesJoined(0)
     setKeygenProgress(null)
     setCreatedVault(null)
+    setIsResending(false)
+    setResendSuccess(false)
     setError(null)
   }
 
@@ -404,9 +433,15 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
         placeholder="123456"
         required
       />
+      {resendSuccess && (
+        <div className="text-sm text-green-600 bg-green-50 p-3 rounded">Verification code sent successfully!</div>
+      )}
       {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
       <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>
         Verify & Complete
+      </Button>
+      <Button type="button" variant="secondary" fullWidth isLoading={isResending} onClick={handleResendCode}>
+        {isResending ? 'Sending...' : 'Resend Code'}
       </Button>
     </form>
   )

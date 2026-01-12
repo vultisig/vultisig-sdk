@@ -1,11 +1,11 @@
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { getVaultFromServer } from '@core/mpc/fast/api/getVaultFromServer'
+import { resendVaultShare } from '@core/mpc/fast/api/resendVaultShare'
 import { reshareWithServer } from '@core/mpc/fast/api/reshareWithServer'
 import { setupVaultWithServer } from '@core/mpc/fast/api/setupVaultWithServer'
 import { signWithServer } from '@core/mpc/fast/api/signWithServer'
 import { verifyVaultEmailCode } from '@core/mpc/fast/api/verifyVaultEmailCode'
-import { fastVaultServerUrl } from '@core/mpc/fast/config'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
 import { keysign } from '@core/mpc/keysign'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
@@ -65,10 +65,13 @@ export class ServerManager {
 
   /**
    * Resend vault verification email
+   * Uses POST /vault/resend with public_key_ecdsa, email, password
    */
-  async resendVaultVerification(vaultId: string): Promise<void> {
-    await queryUrl(`${fastVaultServerUrl}/resend-verification/${vaultId}`, {
-      responseType: 'none',
+  async resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void> {
+    await resendVaultShare({
+      public_key_ecdsa: options.vaultId,
+      email: options.email,
+      password: options.password,
     })
   }
 

@@ -36,6 +36,8 @@ export type ISDKAdapter = {
 
   verifyVault(vaultId: string, code: string): Promise<VaultInfo>
 
+  resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void>
+
   createSecureVault(options: CreateSecureVaultOptions): Promise<CreateSecureVaultResult>
 
   importVault(content: string, password?: string): Promise<VaultInfo>

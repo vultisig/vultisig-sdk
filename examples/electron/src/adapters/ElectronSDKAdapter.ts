@@ -36,6 +36,7 @@ declare global {
       listVaults(): Promise<VaultInfo[]>
       createFastVault(options: { name: string; password: string; email: string }): Promise<{ vaultId: string }>
       verifyVault(vaultId: string, code: string): Promise<VaultInfo>
+      resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void>
       createSecureVault(options: {
         name: string
         password?: string
@@ -212,6 +213,10 @@ export class ElectronSDKAdapter implements ISDKAdapter {
 
   async verifyVault(vaultId: string, code: string): Promise<VaultInfo> {
     return window.electronAPI.verifyVault(vaultId, code)
+  }
+
+  async resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void> {
+    return window.electronAPI.resendVaultVerification(options)
   }
 
   async createSecureVault(options: CreateSecureVaultOptions): Promise<CreateSecureVaultResult> {

@@ -331,10 +331,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
   /**
    * Resend vault verification email
+   * Requires email and password to authenticate with the server
    */
-  async resendVaultVerification(vaultId: string): Promise<void> {
+  async resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void> {
     await this.ensureInitialized()
-    return this.context.serverManager.resendVaultVerification(vaultId)
+    return this.context.serverManager.resendVaultVerification(options)
   }
 
   /**
