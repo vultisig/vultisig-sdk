@@ -1,12 +1,15 @@
 // Adapters
-export type { IFileAdapter,ISDKAdapter } from './adapters'
-export { AdapterProvider, useFileAdapter,useSDKAdapter } from './adapters'
+export type { IFileAdapter, ISDKAdapter } from './adapters'
+export { AdapterProvider, useFileAdapter, useSDKAdapter } from './adapters'
 
 // Types
 export type {
   BalanceInfo,
   BalanceResult,
   BroadcastParams,
+  ChainDiscoveryPhase,
+  ChainDiscoveryProgress,
+  ChainDiscoveryResult,
   CoinInfo,
   CreateFastVaultOptions,
   CreateSecureVaultOptions,
@@ -17,9 +20,12 @@ export type {
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
+  ImportSeedphraseFastOptions,
+  ImportSeedphraseSecureOptions,
   PrepareSwapParams,
   ProgressStep,
   SaveFileOptions,
+  SeedphraseValidation,
   SelectedFile,
   SelectFilesOptions,
   SelectFilesResult,
@@ -33,7 +39,7 @@ export type {
 
 // Utils
 export { createEvent } from './utils/events'
-export { formatBalance,shortenAddress } from './utils/formatting'
+export { formatBalance, shortenAddress } from './utils/formatting'
 
 // Constants
 export type { CommonToken } from './constants/tokens'
@@ -62,10 +68,11 @@ export { default as EventLog } from './components/events/EventLog'
 export { default as SigningModal } from './components/signing/SigningModal'
 
 // Token components
-export { AddTokenModal,TokenSelector } from './components/token'
+export { AddTokenModal, TokenSelector } from './components/token'
 
 // Vault components
 export { default as SecureVaultCreator } from './components/vault/SecureVaultCreator'
+export { default as SeedphraseImporter } from './components/vault/SeedphraseImporter'
 export type { VaultSection } from './components/vault/Vault'
 export { default as Vault } from './components/vault/Vault'
 export { default as VaultCreator } from './components/vault/VaultCreator'

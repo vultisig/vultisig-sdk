@@ -9,6 +9,7 @@
 - [Core Concepts](#core-concepts)
 - [Password Management](#password-management)
 - [Vault Management](#vault-management)
+- [Seedphrase Import](#seedphrase-import)
 - [Essential Operations](#essential-operations)
 - [Token Swaps](#token-swaps)
 - [Configuration](#configuration)
@@ -705,6 +706,140 @@ console.log('Vault renamed to:', vault.name)
 
 ---
 
+## Seedphrase Import
+
+Import existing wallets from BIP39 mnemonic phrases (12 or 24 words). This allows migrating wallets from other applications into Vultisig.
+
+### Validating a Seedphrase
+
+Always validate the mnemonic before attempting import:
+
+```typescript
+const result = await sdk.validateSeedphrase(mnemonic)
+
+if (result.valid) {
+  console.log(`Valid ${result.wordCount}-word mnemonic`)
+} else {
+  console.error('Validation failed:', result.error)
+  if (result.invalidWords?.length) {
+    console.error('Invalid words:', result.invalidWords.join(', '))
+  }
+}
+```
+
+### Discovering Chains with Balances
+
+Before importing, you can scan chains to find existing balances:
+
+```typescript
+const results = await sdk.discoverChainsFromSeedphrase(
+  mnemonic,
+  [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain, Chain.Solana],
+  (progress) => {
+    console.log(`${progress.phase}: ${progress.chain}`)
+    console.log(`Progress: ${progress.chainsProcessed}/${progress.chainsTotal}`)
+    console.log(`Found balances on: ${progress.chainsWithBalance.join(', ')}`)
+  }
+)
+
+console.log('\nDiscovery Results:')
+for (const result of results) {
+  const status = result.hasBalance ? 'Y' : 'N'
+  console.log(`[${status}] ${result.chain}: ${result.address}`)
+  if (result.hasBalance) {
+    console.log(`    Balance: ${result.balance} ${result.symbol}`)
+  }
+}
+```
+
+**Progress Phases:**
+- `validating` - Validating the mnemonic
+- `deriving` - Deriving addresses for each chain
+- `fetching` - Fetching balances from blockchain
+- `complete` - Discovery finished
+
+### Importing as FastVault
+
+Import a seedphrase with VultiServer assistance (2-of-2 threshold):
+
+```typescript
+const vaultId = await sdk.importSeedphraseAsFastVault({
+  mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+  name: 'Imported Wallet',
+  email: 'user@example.com',
+  password: 'SecurePassword123!',
+
+  // Auto-enable chains that have balances
+  discoverChains: true,
+
+  // Or specify exact chains to enable
+  // chains: [Chain.Bitcoin, Chain.Ethereum],
+
+  // Progress callbacks
+  onProgress: (step) => {
+    console.log(`${step.step}: ${step.message} (${step.progress}%)`)
+  },
+  onChainDiscovery: (progress) => {
+    console.log(`Discovering ${progress.chain}: ${progress.phase}`)
+  }
+})
+
+// Complete with email verification
+const code = await getVerificationCodeFromUser()
+const vault = await sdk.verifyVault(vaultId, code)
+
+console.log('Import complete:', vault.name)
+```
+
+### Importing as SecureVault
+
+Import a seedphrase with multi-device MPC (N-of-M threshold):
+
+```typescript
+const { vault, vaultId, sessionId } = await sdk.importSeedphraseAsSecureVault({
+  mnemonic: 'abandon abandon abandon...',
+  name: 'Team Wallet',
+  devices: 3,      // Total devices
+  threshold: 2,    // Signing threshold
+  password: 'OptionalPassword',
+  discoverChains: true,
+
+  onProgress: (step) => {
+    console.log(`${step.step}: ${step.message}`)
+  },
+  onQRCodeReady: (qrPayload) => {
+    // Display QR for other devices to scan
+    displayQRCode(qrPayload)
+  },
+  onDeviceJoined: (deviceId, total, required) => {
+    console.log(`Device joined: ${total}/${required}`)
+  },
+  onChainDiscovery: (progress) => {
+    console.log(`Discovering: ${progress.message}`)
+  }
+})
+
+console.log('SecureVault imported:', vault.name)
+```
+
+### Import Flow Comparison
+
+| Feature | FastVault Import | SecureVault Import |
+|---------|-----------------|-------------------|
+| **Threshold** | 2-of-2 (with VultiServer) | N-of-M (configurable) |
+| **Verification** | Email code required | Device pairing via QR |
+| **Password** | Required | Optional |
+| **Signing** | Instant | Requires device coordination |
+
+### Security Considerations
+
+1. **Memory Safety**: The SDK clears mnemonic from memory after derivation
+2. **No Logging**: Mnemonics are never logged or persisted
+3. **HTTPS Only**: All server communication is encrypted
+4. **Input Validation**: Always validate before import to catch typos
+
+---
+
 ## Essential Operations
 
 ### Address Derivation
@@ -988,6 +1123,168 @@ try {
   }
 }
 ```
+
+### Cosmos Signing (SignAmino & SignDirect)
+
+For Cosmos SDK chains (Cosmos, Osmosis, THORChain, MayaChain, Dydx, Kujira, etc.), the SDK provides two signing methods that give you full control over transaction construction:
+
+- **SignAmino**: Legacy JSON/Amino format, widely supported
+- **SignDirect**: Modern Protobuf format, more efficient
+
+#### SignAmino Example (Governance Vote)
+
+```typescript
+import { Chain } from '@vultisig/sdk'
+
+const cosmosAddress = await vault.address(Chain.Cosmos)
+
+// Prepare a governance vote using SignAmino
+const payload = await vault.prepareSignAminoTx({
+  chain: 'Cosmos',
+  coin: {
+    chain: 'Cosmos',
+    address: cosmosAddress,
+    decimals: 6,
+    ticker: 'ATOM',
+  },
+  msgs: [{
+    type: 'cosmos-sdk/MsgVote',
+    value: JSON.stringify({
+      proposal_id: '123',
+      voter: cosmosAddress,
+      option: 'VOTE_OPTION_YES',
+    }),
+  }],
+  fee: {
+    amount: [{ denom: 'uatom', amount: '5000' }],
+    gas: '200000',
+  },
+  memo: 'Vote via Vultisig SDK',
+})
+
+// Sign and broadcast
+const signature = await vault.sign(payload)
+const txHash = await vault.broadcastTx({
+  chain: Chain.Cosmos,
+  keysignPayload: payload,
+  signature,
+})
+```
+
+#### SignAmino with Multiple Messages
+
+```typescript
+// Send multiple transactions in a single batch
+const payload = await vault.prepareSignAminoTx({
+  chain: 'Cosmos',
+  coin: {
+    chain: 'Cosmos',
+    address: cosmosAddress,
+    decimals: 6,
+    ticker: 'ATOM',
+  },
+  msgs: [
+    {
+      type: 'cosmos-sdk/MsgSend',
+      value: JSON.stringify({
+        from_address: cosmosAddress,
+        to_address: 'cosmos1recipient1...',
+        amount: [{ denom: 'uatom', amount: '1000000' }],
+      }),
+    },
+    {
+      type: 'cosmos-sdk/MsgSend',
+      value: JSON.stringify({
+        from_address: cosmosAddress,
+        to_address: 'cosmos1recipient2...',
+        amount: [{ denom: 'uatom', amount: '2000000' }],
+      }),
+    },
+  ],
+  fee: {
+    amount: [{ denom: 'uatom', amount: '10000' }],
+    gas: '300000',
+  },
+})
+```
+
+#### SignDirect Example (Pre-encoded Transaction)
+
+Use SignDirect when you have pre-encoded Protobuf transaction bytes:
+
+```typescript
+// SignDirect with pre-encoded bytes (from cosmjs or similar)
+const payload = await vault.prepareSignDirectTx({
+  chain: 'Cosmos',
+  coin: {
+    chain: 'Cosmos',
+    address: cosmosAddress,
+    decimals: 6,
+    ticker: 'ATOM',
+  },
+  bodyBytes: 'base64EncodedTxBodyBytes...',
+  authInfoBytes: 'base64EncodedAuthInfoBytes...',
+  chainId: 'cosmoshub-4',
+  accountNumber: '12345',
+})
+
+const signature = await vault.sign(payload)
+```
+
+#### Supported Cosmos Chains
+
+| Chain | Chain ID | Native Denom |
+|-------|----------|--------------|
+| Cosmos | cosmoshub-4 | uatom |
+| Osmosis | osmosis-1 | uosmo |
+| THORChain | thorchain-1 | rune |
+| MayaChain | mayachain-1 | cacao |
+| Dydx | dydx-mainnet-1 | adydx |
+| Kujira | kaiyo-1 | ukuji |
+| Terra | phoenix-1 | uluna |
+| TerraClassic | columbus-5 | uluna |
+| Noble | noble-1 | uusdc |
+| Akash | akashnet-2 | uakt |
+
+#### Common Message Types
+
+```typescript
+// MsgSend - Transfer tokens
+{ type: 'cosmos-sdk/MsgSend', value: JSON.stringify({
+  from_address: '...',
+  to_address: '...',
+  amount: [{ denom: 'uatom', amount: '1000000' }],
+})}
+
+// MsgVote - Governance vote
+{ type: 'cosmos-sdk/MsgVote', value: JSON.stringify({
+  proposal_id: '123',
+  voter: '...',
+  option: 'VOTE_OPTION_YES',  // YES, NO, ABSTAIN, NO_WITH_VETO
+})}
+
+// MsgDelegate - Stake tokens
+{ type: 'cosmos-sdk/MsgDelegate', value: JSON.stringify({
+  delegator_address: '...',
+  validator_address: 'cosmosvaloper1...',
+  amount: { denom: 'uatom', amount: '1000000' },
+})}
+
+// MsgUndelegate - Unstake tokens
+{ type: 'cosmos-sdk/MsgUndelegate', value: JSON.stringify({
+  delegator_address: '...',
+  validator_address: 'cosmosvaloper1...',
+  amount: { denom: 'uatom', amount: '1000000' },
+})}
+
+// MsgWithdrawDelegatorReward - Claim staking rewards
+{ type: 'cosmos-sdk/MsgWithdrawDelegatorReward', value: JSON.stringify({
+  delegator_address: '...',
+  validator_address: 'cosmosvaloper1...',
+})}
+```
+
+---
 
 ### Token Management
 
@@ -1643,6 +1940,20 @@ class Vultisig {
   isVaultEncrypted(vultContent: string): boolean
   getServerStatus(): Promise<ServerStatus>
 
+  // Seedphrase import
+  validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation>
+  discoverChainsFromSeedphrase(
+    mnemonic: string,
+    chains?: Chain[],
+    onProgress?: (progress: ChainDiscoveryProgress) => void
+  ): Promise<ChainDiscoveryResult[]>
+  importSeedphraseAsFastVault(options: ImportSeedphraseAsFastVaultOptions): Promise<string>
+  importSeedphraseAsSecureVault(options: ImportSeedphraseAsSecureVaultOptions): Promise<{
+    vault: SecureVault
+    vaultId: string
+    sessionId: string
+  }>
+
   // Address book
   getAddressBook(chain?: Chain): Promise<AddressBookEntry[]>
   addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
@@ -1688,6 +1999,10 @@ class VaultBase {
   signBytes(options: SignBytesOptions, signingOptions?: SigningOptions): Promise<Signature>
   broadcastTx(params: BroadcastParams): Promise<string>
   gas(chain: Chain): Promise<GasInfo>
+
+  // Cosmos Signing (SignAmino & SignDirect)
+  prepareSignAminoTx(input: SignAminoInput, options?: CosmosSigningOptions): Promise<KeysignPayload>
+  prepareSignDirectTx(input: SignDirectInput, options?: CosmosSigningOptions): Promise<KeysignPayload>
 
   // SigningOptions (for SecureVault device coordination)
   // {
@@ -1823,6 +2138,112 @@ new Vultisig({
     messageRelay: string           // Custom relay server URL
   }
 })
+```
+
+### Cosmos Signing Types
+
+```typescript
+// SignAmino input for Cosmos SDK chains
+interface SignAminoInput {
+  chain: CosmosChain           // 'Cosmos', 'Osmosis', 'THORChain', etc.
+  coin: AccountCoin
+  msgs: CosmosMsgInput[]       // Array of messages to sign
+  fee: CosmosFeeInput
+  memo?: string
+}
+
+// SignDirect input for pre-encoded Protobuf transactions
+interface SignDirectInput {
+  chain: CosmosChain
+  coin: AccountCoin
+  bodyBytes: string            // Base64-encoded TxBody
+  authInfoBytes: string        // Base64-encoded AuthInfo
+  chainId: string              // e.g., 'cosmoshub-4'
+  accountNumber: string
+  memo?: string
+}
+
+// Cosmos message format
+interface CosmosMsgInput {
+  type: string                 // e.g., 'cosmos-sdk/MsgSend'
+  value: string                // JSON-stringified message value
+}
+
+// Cosmos fee format
+interface CosmosFeeInput {
+  amount: CosmosCoinAmount[]
+  gas: string
+  payer?: string
+  granter?: string
+}
+
+// Cosmos coin amount
+interface CosmosCoinAmount {
+  denom: string                // e.g., 'uatom'
+  amount: string               // e.g., '1000000'
+}
+
+// Options for Cosmos signing
+interface CosmosSigningOptions {
+  skipChainSpecificFetch?: boolean  // Skip account/sequence fetch
+}
+```
+
+### Seedphrase Import Types
+
+```typescript
+type SeedphraseValidation = {
+  valid: boolean
+  wordCount: number
+  invalidWords?: string[]
+  error?: string
+}
+
+type ChainDiscoveryPhase = 'validating' | 'deriving' | 'fetching' | 'complete'
+
+type ChainDiscoveryProgress = {
+  phase: ChainDiscoveryPhase
+  chain?: Chain
+  chainsProcessed: number
+  chainsTotal: number
+  chainsWithBalance: Chain[]
+  message: string
+}
+
+type ChainDiscoveryResult = {
+  chain: Chain
+  address: string
+  balance: string
+  decimals: number
+  symbol: string
+  hasBalance: boolean
+}
+
+type ImportSeedphraseAsFastVaultOptions = {
+  mnemonic: string
+  name: string
+  email: string
+  password: string
+  chains?: Chain[]
+  discoverChains?: boolean
+  chainsToScan?: Chain[]
+  onProgress?: (step: VaultCreationStep) => void
+  onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+}
+
+type ImportSeedphraseAsSecureVaultOptions = {
+  mnemonic: string
+  name: string
+  password?: string
+  devices: number
+  threshold?: number
+  chains?: Chain[]
+  discoverChains?: boolean
+  onProgress?: (step: VaultCreationStep) => void
+  onQRCodeReady?: (qrPayload: string) => void
+  onDeviceJoined?: (deviceId: string, total: number, required: number) => void
+  onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+}
 ```
 
 ---

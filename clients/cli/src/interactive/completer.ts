@@ -15,6 +15,7 @@ const COMMANDS = [
   'vaults',
   'vault',
   'import',
+  'import-seedphrase',
   'create',
   'info',
   'export',
@@ -87,6 +88,15 @@ export function createCompleter(ctx: ShellContext) {
       if (['balance', 'bal', 'tokens', 'send', 'swap', 'swap-quote'].includes(command) && parts.length === 2) {
         const partial = parts[1] || ''
         return completeChainName(partial)
+      }
+
+      // Subcommand completion for create and import-seedphrase
+      if ((command === 'create' || command === 'import-seedphrase') && parts.length === 2) {
+        const types = ['fast', 'secure']
+        const partial = parts[1] || ''
+        const partialLower = partial.toLowerCase()
+        const matches = types.filter(t => t.startsWith(partialLower))
+        return [matches.length ? matches : types, partial]
       }
 
       // Command completion

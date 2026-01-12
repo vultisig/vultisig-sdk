@@ -243,7 +243,10 @@ packages/sdk/src/
 │   │   ├── GasEstimationService.ts # Gas/fee estimation
 │   │   ├── TransactionBuilder.ts   # TX preparation
 │   │   ├── BroadcastService.ts     # TX broadcasting
-│   │   └── PreferencesService.ts   # User preferences
+│   │   ├── PreferencesService.ts   # User preferences
+│   │   └── cosmos/                # Cosmos-specific helpers
+│   │       ├── buildCosmosPayload.ts  # SignAmino/SignDirect builders
+│   │       └── index.ts
 │   └── utils/
 │       └── convertSignature.ts # Signature conversion
 │
@@ -464,6 +467,8 @@ abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   async balance(chain: Chain, tokenId?: string): Promise<Balance>;
   async gas(chain: Chain): Promise<GasEstimate>;
   async prepareSendTx(params): Promise<KeysignPayload>;
+  async prepareSignAminoTx(input: SignAminoInput, options?: CosmosSigningOptions): Promise<KeysignPayload>;
+  async prepareSignDirectTx(input: SignDirectInput, options?: CosmosSigningOptions): Promise<KeysignPayload>;
   async extractMessageHashes(payload): Promise<string[]>;
   async broadcast(chain, payload, signature): Promise<string>;
 
@@ -581,7 +586,7 @@ Each vault contains specialized services:
 | `AddressService`         | Address derivation with caching      |
 | `BalanceService`         | Balance fetching with TTL cache      |
 | `GasEstimationService`   | Gas/fee estimation                   |
-| `TransactionBuilder`     | Transaction preparation              |
+| `TransactionBuilder`     | Transaction preparation (including Cosmos SignAmino/SignDirect) |
 | `BroadcastService`       | Transaction broadcasting             |
 | `PreferencesService`     | User chain/token preferences         |
 | `SwapService`            | Cross-chain and DEX swap operations  |
@@ -907,6 +912,15 @@ From `src/index.ts`:
 - `ValidationHelpers` - Validation utilities
 - `SharedWasmRuntime` - WASM singleton (advanced usage)
 
+**Cosmos Signing Types:**
+
+- `SignAminoInput` - Input for SignAmino transactions
+- `SignDirectInput` - Input for SignDirect transactions
+- `CosmosMsgInput` - Cosmos message format
+- `CosmosFeeInput` - Cosmos fee format
+- `CosmosCoinAmount` - Cosmos coin amount
+- `CosmosSigningOptions` - Options for Cosmos signing
+
 **Type Guards:**
 
 - `isFastVault(vault)` - Check if vault is FastVault
@@ -1125,6 +1139,61 @@ vault.broadcast(chain, keysignPayload, signature)
   │
   └── Return txHash
 ```
+
+### Cosmos Signing Flow (SignAmino/SignDirect)
+
+The SDK supports two Cosmos signing modes for custom transaction construction:
+
+```
+// SignAmino - Legacy JSON/Amino format
+vault.prepareSignAminoTx({ chain, coin, msgs, fee, memo })
+  │
+  └── TransactionBuilder.prepareSignAminoTx()
+        │
+        ├── Validate chain is Cosmos-SDK based
+        │
+        ├── Get public key for chain
+        │
+        ├── buildSignAminoKeysignPayload()
+        │     │
+        │     ├── Create SignAmino protobuf message
+        │     │     └── { fee, msgs, memo }
+        │     │
+        │     ├── Set on KeysignPayload.signData.signAmino
+        │     │
+        │     └── Return KeysignPayload
+        │
+        └── Return KeysignPayload
+
+// SignDirect - Modern Protobuf format
+vault.prepareSignDirectTx({ chain, coin, bodyBytes, authInfoBytes, chainId, accountNumber })
+  │
+  └── TransactionBuilder.prepareSignDirectTx()
+        │
+        ├── Validate chain is Cosmos-SDK based
+        │
+        ├── Get public key for chain
+        │
+        ├── buildSignDirectKeysignPayload()
+        │     │
+        │     ├── Create SignDirect protobuf message
+        │     │     └── { bodyBytes, authInfoBytes, chainId, accountNumber }
+        │     │
+        │     ├── Set on KeysignPayload.signData.signDirect
+        │     │
+        │     └── Return KeysignPayload
+        │
+        └── Return KeysignPayload
+
+// After preparing, sign and broadcast as usual
+vault.sign(payload, password)
+vault.broadcastTx({ chain, keysignPayload, signature })
+```
+
+**Supported Cosmos Chains:**
+- Cosmos, Osmosis, THORChain, MayaChain, Dydx, Kujira, Terra, TerraClassic, Noble, Akash
+
+---
 
 ### Secure Vault Creation Flow
 

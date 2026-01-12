@@ -45,3 +45,6 @@ function getCrypto(): PlatformCrypto {
 export function randomUUID(): string {
   return getCrypto().randomUUID()
 }
+
+// Re-export Ed25519 scalar clamping utility
+export { clampThenUniformScalar } from './ed25519ScalarClamp'

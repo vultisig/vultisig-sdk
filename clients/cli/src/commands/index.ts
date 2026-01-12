@@ -26,12 +26,19 @@ export type { BroadcastRawParams, BroadcastRawResult } from './broadcast'
 export { executeBroadcast } from './broadcast'
 
 // Vault management commands
-export type { FastVaultOptions, SecureVaultOptions } from './vault-management'
+export type {
+  FastVaultOptions,
+  ImportSeedphraseFastOptions,
+  ImportSeedphraseSecureOptions,
+  SecureVaultOptions,
+} from './vault-management'
 export {
   executeCreateFast,
   executeCreateSecure,
   executeExport,
   executeImport,
+  executeImportSeedphraseFast,
+  executeImportSeedphraseSecure,
   executeInfo,
   executeRename,
   executeSwitch,

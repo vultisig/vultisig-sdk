@@ -583,3 +583,13 @@ export type {
   SwapTxParams,
 } from '../vault/swap-types'
 export { isAccountCoin, isSimpleCoinInput } from '../vault/swap-types'
+
+// Cosmos signing types
+export type {
+  CosmosCoinAmount,
+  CosmosFeeInput,
+  CosmosMsgInput,
+  CosmosSigningOptions,
+  SignAminoInput,
+  SignDirectInput,
+} from './cosmos'
