@@ -212,7 +212,7 @@ export class MasterKeyDeriver {
       MayaChain: 'thorchain', // MayaChain uses THORChain cointype
       Litecoin: 'litecoin',
       Dogecoin: 'dogecoin',
-      BitcoinCash: 'bitcoinCash',
+      'Bitcoin-Cash': 'bitcoinCash',
       Dash: 'dash',
       Polygon: 'polygon',
       Arbitrum: 'arbitrum',
@@ -233,7 +233,7 @@ export class MasterKeyDeriver {
       TerraClassic: 'terra',
       Noble: 'noble',
       Akash: 'akash',
-      Cronos: 'cronos',
+      CronosChain: 'cronos',
       Blast: 'blast',
       Zksync: 'zksync',
       Mantle: 'mantle',

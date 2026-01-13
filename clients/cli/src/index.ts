@@ -258,13 +258,28 @@ importSeedphraseCmd
           mnemonic = await promptSeedphrase()
         }
 
+        // Parse chains with case-insensitive lookup
+        let chains: Chain[] | undefined
+        if (options.chains) {
+          const chainNames = options.chains.split(',').map(c => c.trim())
+          chains = []
+          for (const name of chainNames) {
+            const chain = findChainByName(name)
+            if (chain) {
+              chains.push(chain)
+            } else {
+              console.warn(`Warning: Unknown chain "${name}" - skipping`)
+            }
+          }
+        }
+
         await executeImportSeedphraseFast(context, {
           mnemonic,
           name: options.name,
           password: options.password,
           email: options.email,
           discoverChains: options.discoverChains,
-          chains: options.chains?.split(',').map(c => c.trim()),
+          chains,
         })
       }
     )
@@ -299,6 +314,21 @@ importSeedphraseCmd
           mnemonic = await promptSeedphrase()
         }
 
+        // Parse chains with case-insensitive lookup
+        let chains: Chain[] | undefined
+        if (options.chains) {
+          const chainNames = options.chains.split(',').map(c => c.trim())
+          chains = []
+          for (const name of chainNames) {
+            const chain = findChainByName(name)
+            if (chain) {
+              chains.push(chain)
+            } else {
+              console.warn(`Warning: Unknown chain "${name}" - skipping`)
+            }
+          }
+        }
+
         await executeImportSeedphraseSecure(context, {
           mnemonic,
           name: options.name,
@@ -306,7 +336,7 @@ importSeedphraseCmd
           threshold: parseInt(options.threshold, 10),
           shares: parseInt(options.shares, 10),
           discoverChains: options.discoverChains,
-          chains: options.chains?.split(',').map(c => c.trim()),
+          chains,
         })
       }
     )
@@ -318,16 +348,20 @@ program
   .description('Verify vault with email verification code')
   .option('-r, --resend', 'Resend verification email')
   .option('--code <code>', 'Verification code')
+  .option('--email <email>', 'Email address (required for --resend)')
+  .option('--password <password>', 'Vault password (required for --resend)')
   .action(
-    withExit(async (vaultId: string, options: { resend?: boolean; code?: string }) => {
-      const context = await init(program.opts().vault)
-      const verified = await executeVerify(context, vaultId, options)
-      if (!verified) {
-        const err: any = new Error('Verification failed')
-        err.exitCode = 1
-        throw err
+    withExit(
+      async (vaultId: string, options: { resend?: boolean; code?: string; email?: string; password?: string }) => {
+        const context = await init(program.opts().vault)
+        const verified = await executeVerify(context, vaultId, options)
+        if (!verified) {
+          const err: any = new Error('Verification failed')
+          err.exitCode = 1
+          throw err
+        }
       }
-    })
+    )
   )
 
 // Command: Show balances
