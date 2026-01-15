@@ -216,6 +216,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
           ? parsedVaultData.keyShares
           : { ecdsa: '', eddsa: '' }, // Lazy-loaded from vaultFileContent if not provided
       folderId: parsedVault.folderId,
+      chainPublicKeys: parsedVault.chainPublicKeys,
+      chainKeyShares: parsedVault.chainKeyShares,
     }
 
     // Determine vault type

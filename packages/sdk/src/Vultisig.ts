@@ -532,6 +532,12 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Create FastVault from import using the factory method
     const vault = FastVault.fromImport(result.vaultId, vultContent, result.vault, fastSigningService, vaultContext)
 
+    // Set imported chains as active (use explicit chains or discovered chains with balances)
+    const chainsToSet = options.chains ?? result.discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? []
+    if (chainsToSet.length > 0) {
+      await vault.setChains(chainsToSet)
+    }
+
     // Cache password for unlocking
     this.context.passwordCache.set(result.vaultId, options.password)
 
@@ -589,6 +595,12 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Create SecureVault from import using the factory method
     const vault = SecureVault.fromImport(result.vaultId, vultContent, result.vault, vaultContext)
+
+    // Set imported chains as active (use explicit chains or discovered chains with balances)
+    const chainsToSet = options.chains ?? result.discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? []
+    if (chainsToSet.length > 0) {
+      await vault.setChains(chainsToSet)
+    }
 
     // Cache password if provided
     if (options.password) {

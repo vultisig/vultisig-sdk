@@ -35,6 +35,7 @@ export class AddressService {
           walletCore,
           publicKeys: this.vaultData.publicKeys,
           hexChainCode: this.vaultData.hexChainCode,
+          chainPublicKeys: this.vaultData.chainPublicKeys,
         })
 
         return deriveAddress({
