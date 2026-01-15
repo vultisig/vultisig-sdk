@@ -6,11 +6,13 @@
  * 2. Derive master keys
  * 3. Generate QR code for mobile pairing
  * 4. Wait for devices to join
- * 5. Run DKLS key import (ECDSA)
- * 6. Run Schnorr key import (EdDSA)
- * 7. Optionally discover chains with balances
+ * 5. Run DKLS key import (ECDSA) for master key
+ * 6. Run Schnorr key import (EdDSA) for master key
+ * 7. Run per-chain key imports (DKLS or Schnorr based on chain type)
+ * 8. Optionally discover chains with balances
  */
 import { create, toBinary } from '@bufbuild/protobuf'
+import type { Chain } from '@core/chain/Chain'
 import { toCompressedString } from '@core/chain/utils/protobuf/toCompressedString'
 import { getSevenZip } from '@core/mpc/compression/getSevenZip'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
@@ -89,10 +91,10 @@ export class SecureVaultSeedphraseImportService {
     hexChainCode: string
     localPartyId: string
     vaultName: string
+    chains: string[]
   }): Promise<string> {
     // Create KeygenMessage protobuf
-    // Note: For key import, we still use the same QR format as keygen
-    // The mobile app will detect it's a key import from the session type
+    // For key import, include chains field so mobile apps know which chains to import
     const keygenMessage = create(KeygenMessageSchema, {
       sessionId: params.sessionId,
       hexChainCode: params.hexChainCode,
@@ -100,7 +102,8 @@ export class SecureVaultSeedphraseImportService {
       encryptionKeyHex: params.hexEncryptionKey,
       useVultisigRelay: true,
       vaultName: params.vaultName,
-      libType: LibType.DKLS,
+      libType: LibType.KEYIMPORT,
+      chains: params.chains,
     })
 
     // Serialize to binary
@@ -237,11 +240,9 @@ export class SecureVaultSeedphraseImportService {
       })
     }
 
-    // Determine which chains to import (used after keygen completes)
-    const _chainsToImport =
+    // Determine which chains to import
+    const chainsToImport =
       options.chains ?? discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? DEFAULT_CHAINS
-    // TODO: Apply chains after vault creation - for now vault uses default chains
-    void _chainsToImport
 
     // Step 4: Generate session parameters
     reportProgress({
@@ -268,6 +269,7 @@ export class SecureVaultSeedphraseImportService {
       hexChainCode,
       localPartyId,
       vaultName: name,
+      chains: chainsToImport,
     })
 
     // Notify QR is ready
@@ -361,7 +363,65 @@ export class SecureVaultSeedphraseImportService {
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
-    // Step 11: Signal completion
+    // Step 11: Per-chain key imports
+    reportProgress({
+      step: 'keygen',
+      progress: 75,
+      message: 'Importing chain-specific keys...',
+    })
+
+    const chainPublicKeys: Partial<Record<Chain, string>> = {}
+    const chainKeyShares: Partial<Record<Chain, string>> = {}
+
+    // Derive chain-specific private keys
+    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic, chainsToImport as Chain[])
+
+    // Import each chain's key via MPC
+    for (let i = 0; i < chainPrivateKeys.length; i++) {
+      const { chain, privateKeyHex, isEddsa } = chainPrivateKeys[i]
+
+      reportProgress({
+        step: 'keygen',
+        progress: 75 + Math.floor((i / chainPrivateKeys.length) * 15),
+        message: `Importing ${chain} key (${i + 1}/${chainPrivateKeys.length})...`,
+        chainId: chain,
+      })
+
+      if (isEddsa) {
+        // EdDSA chains use Schnorr
+        const chainSchnorr = new Schnorr(
+          { keyimport: true },
+          true, // isInitiateDevice
+          this.relayUrl,
+          sessionId,
+          localPartyId,
+          allDevices,
+          [], // oldKeygenCommittee
+          hexEncryptionKey,
+          new Uint8Array() // Empty setup for chain imports
+        )
+        const chainResult = await chainSchnorr.startKeyImportWithRetry(privateKeyHex, eddsaResult.chaincode, chain)
+        chainPublicKeys[chain] = chainResult.publicKey
+        chainKeyShares[chain] = chainResult.keyshare
+      } else {
+        // ECDSA chains use DKLS
+        const chainDkls = new DKLS(
+          { keyimport: true },
+          true, // isInitiateDevice
+          this.relayUrl,
+          sessionId,
+          localPartyId,
+          allDevices,
+          [], // oldKeygenCommittee
+          hexEncryptionKey
+        )
+        const chainResult = await chainDkls.startKeyImportWithRetry(privateKeyHex, ecdsaResult.chaincode, chain)
+        chainPublicKeys[chain] = chainResult.publicKey
+        chainKeyShares[chain] = chainResult.keyshare
+      }
+    }
+
+    // Step 12: Signal completion
     reportProgress({
       step: 'keygen',
       progress: 90,
@@ -390,7 +450,7 @@ export class SecureVaultSeedphraseImportService {
       console.warn('Not all peer completion signals received, proceeding with valid MPC keys')
     }
 
-    // Step 12: Build vault structure
+    // Step 13: Build vault structure
     const vault: CoreVault = {
       name,
       publicKeys: {
@@ -408,6 +468,8 @@ export class SecureVaultSeedphraseImportService {
       isBackedUp: false,
       order: 0,
       createdAt: Date.now(),
+      chainPublicKeys,
+      chainKeyShares,
     }
 
     reportProgress({

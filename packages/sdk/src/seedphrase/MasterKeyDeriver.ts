@@ -5,11 +5,25 @@
  * for use in TSS key import. Mirrors the iOS/Windows implementation.
  */
 import type { Chain } from '@core/chain/Chain'
+import { getChainKind } from '@core/chain/ChainKind'
+import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
 
 import type { WasmProvider } from '../context/SdkContext'
 import { clampThenUniformScalar } from '../crypto/ed25519ScalarClamp'
 import { cleanMnemonic } from './SeedphraseValidator'
 import type { DerivedMasterKeys } from './types'
+
+/**
+ * Result from deriving a chain-specific private key for MPC import
+ */
+export type ChainPrivateKey = {
+  /** Chain this key is for */
+  chain: Chain
+  /** Private key as hex string (clamped for EdDSA chains) */
+  privateKeyHex: string
+  /** Whether this is an EdDSA key */
+  isEddsa: boolean
+}
 
 /**
  * Result from deriving a chain-specific key
@@ -132,6 +146,60 @@ export class MasterKeyDeriver {
         address,
         isEddsa,
       }
+    } finally {
+      if (hdWallet.delete) {
+        hdWallet.delete()
+      }
+    }
+  }
+
+  /**
+   * Derive private keys for multiple chains efficiently (single HDWallet creation)
+   *
+   * This is optimized for seedphrase import where we need to derive keys for
+   * multiple chains in a single operation. Uses signatureAlgorithms to determine
+   * whether each chain uses ECDSA or EdDSA.
+   *
+   * @param mnemonic - BIP39 mnemonic phrase
+   * @param chains - Array of chains to derive keys for
+   * @returns Array of chain private keys
+   */
+  async deriveChainPrivateKeys(mnemonic: string, chains: Chain[]): Promise<ChainPrivateKey[]> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    const cleaned = cleanMnemonic(mnemonic)
+
+    const hdWallet = walletCore.HDWallet.createWithMnemonic(cleaned, '')
+
+    try {
+      const results: ChainPrivateKey[] = []
+
+      for (const chain of chains) {
+        const coinType = this.getCoinType(chain, walletCore)
+        const chainKind = getChainKind(chain)
+        const algorithm = signatureAlgorithms[chainKind]
+        const isEddsa = algorithm === 'eddsa'
+
+        // Derive chain-specific key
+        const chainKey = hdWallet.getKeyForCoin(coinType)
+        const chainKeyData = new Uint8Array(chainKey.data())
+
+        let privateKeyHex: string
+        if (isEddsa) {
+          // EdDSA keys require clamping transformation
+          const clampedKey = clampThenUniformScalar(chainKeyData)
+          privateKeyHex = Buffer.from(clampedKey).toString('hex')
+        } else {
+          privateKeyHex = Buffer.from(chainKeyData).toString('hex')
+        }
+
+        results.push({
+          chain,
+          privateKeyHex,
+          isEddsa,
+        })
+      }
+
+      return results
     } finally {
       if (hdWallet.delete) {
         hdWallet.delete()

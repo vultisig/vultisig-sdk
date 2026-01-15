@@ -5,10 +5,12 @@
  * 1. Validate mnemonic
  * 2. Derive master keys
  * 3. Setup with VultiServer
- * 4. Run DKLS key import (ECDSA)
- * 5. Run Schnorr key import (EdDSA)
- * 6. Optionally discover chains with balances
+ * 4. Run DKLS key import (ECDSA) for master key
+ * 5. Run Schnorr key import (EdDSA) for master key
+ * 6. Run per-chain key imports (DKLS or Schnorr based on chain type)
+ * 7. Optionally discover chains with balances
  */
+import type { Chain } from '@core/chain/Chain'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { fastVaultServerUrl } from '@core/mpc/fast/config'
@@ -16,6 +18,7 @@ import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComple
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
+import { toLibType } from '@core/mpc/types/utils/libType'
 import { generateHexChainCode } from '@core/mpc/utils/generateHexChainCode'
 import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
@@ -163,7 +166,7 @@ export class FastVaultSeedphraseImportService {
       local_party_id: serverPartyId,
       encryption_password: password,
       email,
-      lib_type: 1, // DKLS
+      lib_type: toLibType({ libType: 'DKLS', isKeyImport: true }), // KEYIMPORT (2)
       chains: chainsToImport,
     })
 
@@ -238,7 +241,65 @@ export class FastVaultSeedphraseImportService {
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
-    // Step 11: Signal completion
+    // Step 11: Per-chain key imports
+    reportProgress({
+      step: 'keygen',
+      progress: 75,
+      message: 'Importing chain-specific keys...',
+    })
+
+    const chainPublicKeys: Partial<Record<Chain, string>> = {}
+    const chainKeyShares: Partial<Record<Chain, string>> = {}
+
+    // Derive chain-specific private keys
+    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic, chainsToImport as Chain[])
+
+    // Import each chain's key via MPC
+    for (let i = 0; i < chainPrivateKeys.length; i++) {
+      const { chain, privateKeyHex, isEddsa } = chainPrivateKeys[i]
+
+      reportProgress({
+        step: 'keygen',
+        progress: 75 + Math.floor((i / chainPrivateKeys.length) * 15),
+        message: `Importing ${chain} key (${i + 1}/${chainPrivateKeys.length})...`,
+        chainId: chain,
+      })
+
+      if (isEddsa) {
+        // EdDSA chains use Schnorr
+        const chainSchnorr = new Schnorr(
+          { keyimport: true },
+          true, // isInitiateDevice
+          this.serverUrl,
+          sessionId,
+          localPartyId,
+          devices,
+          [], // oldKeygenCommittee
+          hexEncryptionKey,
+          new Uint8Array() // Empty setup for chain imports
+        )
+        const chainResult = await chainSchnorr.startKeyImportWithRetry(privateKeyHex, eddsaResult.chaincode, chain)
+        chainPublicKeys[chain] = chainResult.publicKey
+        chainKeyShares[chain] = chainResult.keyshare
+      } else {
+        // ECDSA chains use DKLS
+        const chainDkls = new DKLS(
+          { keyimport: true },
+          true, // isInitiateDevice
+          this.serverUrl,
+          sessionId,
+          localPartyId,
+          devices,
+          [], // oldKeygenCommittee
+          hexEncryptionKey
+        )
+        const chainResult = await chainDkls.startKeyImportWithRetry(privateKeyHex, ecdsaResult.chaincode, chain)
+        chainPublicKeys[chain] = chainResult.publicKey
+        chainKeyShares[chain] = chainResult.keyshare
+      }
+    }
+
+    // Step 12: Signal completion
     reportProgress({
       step: 'keygen',
       progress: 90,
@@ -267,7 +328,7 @@ export class FastVaultSeedphraseImportService {
       console.warn('Server completion signal not received, proceeding with valid MPC keys')
     }
 
-    // Step 12: Build vault structure
+    // Step 13: Build vault structure
     const vault: CoreVault = {
       name,
       publicKeys: {
@@ -285,6 +346,8 @@ export class FastVaultSeedphraseImportService {
       isBackedUp: false,
       order: 0,
       createdAt: Date.now(),
+      chainPublicKeys,
+      chainKeyShares,
     }
 
     reportProgress({
