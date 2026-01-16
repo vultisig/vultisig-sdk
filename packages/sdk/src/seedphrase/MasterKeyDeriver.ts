@@ -135,7 +135,12 @@ export class MasterKeyDeriver {
       }
 
       // Get public key and address
-      const publicKey = chainKey.getPublicKeySecp256k1(true) // compressed
+      // EdDSA chains use ed25519 public keys, ECDSA chains use secp256k1
+      const publicKey = isEddsa
+        ? chain === 'Cardano'
+          ? chainKey.getPublicKeyEd25519Cardano()
+          : chainKey.getPublicKeyEd25519()
+        : chainKey.getPublicKeySecp256k1(true) // compressed
       const publicKeyHex = Buffer.from(publicKey.data()).toString('hex')
       const address = hdWallet.getAddressForCoin(coinType)
 

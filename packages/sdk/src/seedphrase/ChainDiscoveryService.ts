@@ -76,7 +76,8 @@ export class ChainDiscoveryService {
   ): Promise<ChainDiscoveryResult[]> {
     const config = options?.config ?? {}
     const onProgress = options?.onProgress
-    const concurrencyLimit = config.concurrencyLimit ?? 5
+    // Ensure concurrencyLimit is at least 1 to prevent infinite loop
+    const concurrencyLimit = Math.max(1, config.concurrencyLimit ?? 5)
     const chains = config.chains ?? SUPPORTED_CHAINS
     const timeoutPerChain = config.timeoutPerChain ?? 10000
 
@@ -160,15 +161,18 @@ export class ChainDiscoveryService {
    * Check balance for a single chain
    */
   private async checkChainBalance(mnemonic: string, chain: Chain, timeout: number): Promise<ChainDiscoveryResult> {
-    // Create timeout promise
+    // Create timeout promise with cleanup to prevent unhandled rejections
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`Timeout checking ${chain}`)), timeout)
+      timeoutId = setTimeout(() => reject(new Error(`Timeout checking ${chain}`)), timeout)
     })
 
-    // Race against timeout
+    // Race against timeout, ensuring timer is cleaned up
     const resultPromise = this.doCheckChainBalance(mnemonic, chain)
 
-    return Promise.race([resultPromise, timeoutPromise])
+    return Promise.race([resultPromise, timeoutPromise]).finally(() => {
+      if (timeoutId) clearTimeout(timeoutId)
+    })
   }
 
   /**
