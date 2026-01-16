@@ -306,6 +306,7 @@ export class ServerManager {
     name: string
     email: string
     password: string
+    signal?: AbortSignal
     onLog?: (msg: string) => void
     onProgress?: (u: KeygenProgressUpdate) => void
   }): Promise<{
@@ -320,7 +321,12 @@ export class ServerManager {
     const localPartyId = generateLocalPartyId('sdk')
 
     const log = options.onLog || (() => {})
-    const progress = options.onProgress || (() => {})
+    const progress = (update: KeygenProgressUpdate) => {
+      if (options.signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+      options.onProgress?.(update)
+    }
 
     log('Creating vault on FastVault server...')
 
@@ -348,7 +354,7 @@ export class ServerManager {
 
     log('Waiting for server and starting MPC session...')
 
-    const devices = await this.waitForPeers(sessionId, localPartyId)
+    const devices = await this.waitForPeers(sessionId, localPartyId, options.signal)
 
     await startMpcSession({
       serverUrl: this.config.messageRelay,
@@ -375,6 +381,11 @@ export class ServerManager {
     const ecdsaResult = await dkls.startKeygenWithRetry()
     log('ECDSA keygen completed successfully')
 
+    // Check for abort before EdDSA keygen
+    if (options.signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
     // EdDSA keygen using the same setup message
     progress({ phase: 'eddsa', message: 'Generating EdDSA keys...' })
 
@@ -394,6 +405,11 @@ export class ServerManager {
     // Run EdDSA keygen
     const eddsaResult = await schnorr.startKeygenWithRetry()
     log('EdDSA keygen completed successfully')
+
+    // Check for abort before finalization
+    if (options.signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
 
     // Signal keygen completion to all participants
     await setKeygenComplete({

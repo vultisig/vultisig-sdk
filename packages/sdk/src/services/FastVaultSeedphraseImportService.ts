@@ -98,9 +98,12 @@ export class FastVaultSeedphraseImportService {
     verificationRequired: boolean
     discoveredChains?: ChainDiscoveryResult[]
   }> {
-    const { mnemonic, name, password, email, onProgress, onChainDiscovery } = options
+    const { mnemonic, name, password, email, signal, onProgress, onChainDiscovery } = options
 
     const reportProgress = (step: VaultCreationStep) => {
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
       onProgress?.(step)
     }
 
@@ -190,7 +193,7 @@ export class FastVaultSeedphraseImportService {
       message: 'Waiting for server...',
     })
 
-    const devices = await this.waitForPeers(sessionId, localPartyId)
+    const devices = await this.waitForPeers(sessionId, localPartyId, signal)
 
     // Step 8: Start MPC session
     await startMpcSession({
@@ -219,6 +222,11 @@ export class FastVaultSeedphraseImportService {
 
     const ecdsaResult = await dkls.startKeyImportWithRetry(masterKeys.ecdsaPrivateKeyHex, hexChainCode)
 
+    // Check for abort before EdDSA key import
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
     // Step 10: EdDSA key import via Schnorr
     reportProgress({
       step: 'keygen',
@@ -241,6 +249,11 @@ export class FastVaultSeedphraseImportService {
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
+    // Check for abort before per-chain imports
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
     // Step 11: Per-chain key imports
     reportProgress({
       step: 'keygen',
@@ -256,6 +269,11 @@ export class FastVaultSeedphraseImportService {
 
     // Import each chain's key via MPC
     for (let i = 0; i < chainPrivateKeys.length; i++) {
+      // Check for abort at start of each chain import
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
       const { chain, privateKeyHex, isEddsa } = chainPrivateKeys[i]
 
       reportProgress({
@@ -367,12 +385,17 @@ export class FastVaultSeedphraseImportService {
   /**
    * Wait for peers to join the session
    */
-  private async waitForPeers(sessionId: string, localPartyId: string): Promise<string[]> {
+  private async waitForPeers(sessionId: string, localPartyId: string, signal?: AbortSignal): Promise<string[]> {
     const maxWaitTime = 30000
     const checkInterval = 2000
     const startTime = Date.now()
 
     while (Date.now() - startTime < maxWaitTime) {
+      // Check for abort
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
       try {
         const url = `${this.serverUrl}/${sessionId}`
         const allPeers = await queryUrl<string[]>(url)

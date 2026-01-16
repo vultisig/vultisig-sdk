@@ -84,6 +84,8 @@ export type ImportSeedphraseAsFastVaultOptions = {
   discoverChains?: boolean
   /** Chains to scan during discovery (defaults to all supported) */
   chainsToScan?: Chain[]
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal
   /** Progress callback for vault creation steps */
   onProgress?: (step: VaultCreationStep) => void
   /** Progress callback for chain discovery */
@@ -110,6 +112,8 @@ export type ImportSeedphraseAsSecureVaultOptions = {
   discoverChains?: boolean
   /** Chains to scan during discovery */
   chainsToScan?: Chain[]
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal
   /** Progress callback for vault creation steps */
   onProgress?: (step: VaultCreationStep) => void
   /** Callback when QR code is ready for mobile pairing */

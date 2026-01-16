@@ -126,6 +126,7 @@ export class SecureVaultSeedphraseImportService {
     sessionId: string,
     localPartyId: string,
     requiredDevices: number,
+    signal?: AbortSignal,
     onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   ): Promise<string[]> {
     const maxWaitTime = 300000 // 5 minutes for multi-device setup
@@ -134,6 +135,11 @@ export class SecureVaultSeedphraseImportService {
     let lastJoinedCount = 0
 
     while (Date.now() - startTime < maxWaitTime) {
+      // Check for abort
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
       try {
         const url = `${this.relayUrl}/${sessionId}`
         const allPeers = await queryUrl<string[]>(url)
@@ -184,6 +190,7 @@ export class SecureVaultSeedphraseImportService {
       name,
       devices,
       threshold: customThreshold,
+      signal,
       onProgress,
       onQRCodeReady,
       onDeviceJoined,
@@ -193,6 +200,9 @@ export class SecureVaultSeedphraseImportService {
     const threshold = customThreshold || this.calculateThreshold(devices)
 
     const reportProgress = (step: VaultCreationStep) => {
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
       onProgress?.(step)
     }
 
@@ -297,16 +307,22 @@ export class SecureVaultSeedphraseImportService {
       message: `Waiting for ${devices} devices to join...`,
     })
 
-    const allDevices = await this.waitForPeers(sessionId, localPartyId, devices, (deviceId, total, required) => {
-      if (onDeviceJoined) {
-        onDeviceJoined(deviceId, total, required)
+    const allDevices = await this.waitForPeers(
+      sessionId,
+      localPartyId,
+      devices,
+      signal,
+      (deviceId, total, required) => {
+        if (onDeviceJoined) {
+          onDeviceJoined(deviceId, total, required)
+        }
+        reportProgress({
+          step: 'keygen',
+          progress: 30 + Math.floor((total / required) * 15),
+          message: `${total}/${required} devices joined...`,
+        })
       }
-      reportProgress({
-        step: 'keygen',
-        progress: 30 + Math.floor((total / required) * 15),
-        message: `${total}/${required} devices joined...`,
-      })
-    })
+    )
 
     // Step 8: Start MPC session
     reportProgress({
@@ -341,6 +357,11 @@ export class SecureVaultSeedphraseImportService {
 
     const ecdsaResult = await dkls.startKeyImportWithRetry(masterKeys.ecdsaPrivateKeyHex, hexChainCode)
 
+    // Check for abort before EdDSA key import
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
     // Step 10: EdDSA key import via Schnorr
     reportProgress({
       step: 'keygen',
@@ -363,6 +384,11 @@ export class SecureVaultSeedphraseImportService {
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
+    // Check for abort before per-chain imports
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
     // Step 11: Per-chain key imports
     reportProgress({
       step: 'keygen',
@@ -378,6 +404,11 @@ export class SecureVaultSeedphraseImportService {
 
     // Import each chain's key via MPC
     for (let i = 0; i < chainPrivateKeys.length; i++) {
+      // Check for abort at start of each chain import
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
       const { chain, privateKeyHex, isEddsa } = chainPrivateKeys[i]
 
       reportProgress({

@@ -368,6 +368,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     name: string
     password: string
     email: string
+    signal?: AbortSignal
     onProgress?: (step: VaultCreationStep) => void
   }): Promise<string> {
     await this.ensureInitialized()
@@ -404,6 +405,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     password: string
     devices: number
     threshold?: number
+    signal?: AbortSignal
     onProgress?: (step: VaultCreationStep) => void
     onQRCodeReady?: (qrPayload: string) => void
     onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
