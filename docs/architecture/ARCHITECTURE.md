@@ -1,7 +1,5 @@
 # Vultisig SDK Architecture
 
-**Status:** Alpha (0.1.1-alpha.0)
-
 ---
 
 ## Table of Contents
@@ -546,7 +544,7 @@ class SecureVault extends VaultBase {
 **Characteristics:**
 
 - Configurable encryption (optional password)
-- N-of-M threshold with formula: `Math.ceil((devices + 1) / 2)`
+- N-of-M threshold with formula: `Math.ceil((devices * 2) / 3)`
 - QR code pairing with Vultisig mobile apps (iOS/Android)
 - Relay server coordination for device communication
 - Higher security (no single point of compromise)
@@ -558,7 +556,7 @@ class SecureVault extends VaultBase {
 interface SecureVaultCreateOptions {
   name: string;
   devices: number;               // Total participating devices (min 2)
-  threshold?: number;            // Signing threshold (default: ceil((devices+1)/2))
+  threshold?: number;            // Signing threshold (default: ceil(devices*2/3))
   password?: string;             // Optional encryption
   onProgress?: (step: VaultCreationStep) => void;
   onQRCodeReady?: (qrPayload: string) => void;
@@ -757,11 +755,11 @@ class SecureVaultCreationService {
 **Threshold Calculation:**
 
 ```typescript
-const threshold = Math.ceil((devices + 1) / 2);
+const threshold = Math.ceil((devices * 2) / 3);
 // 2 devices → 2-of-2
 // 3 devices → 2-of-3
 // 4 devices → 3-of-4
-// 5 devices → 3-of-5
+// 5 devices → 4-of-5
 ```
 
 ### SwapService
@@ -941,14 +939,38 @@ interface Balance {
   symbol: string;
   chainId: string;
   tokenId?: string;
+  value?: number;         // USD value (deprecated, use fiatValue)
+  fiatValue?: number;     // Fiat value
+  fiatCurrency?: string;  // Fiat currency code
 }
 
-// Gas estimation
-interface GasEstimate {
-  chainId: string;
+// Fiat value
+interface Value {
+  amount: string;
+  currency: string;
+  lastUpdated: number;
+}
+
+// Gas estimation (chain-specific)
+type GasInfoForChain<C extends Chain> =
+  C extends EvmChain ? EvmGasInfo :
+  C extends UtxoChain ? UtxoGasInfo :
+  C extends CosmosChain ? CosmosGasInfo :
+  OtherGasInfo;
+
+interface EvmGasInfo {
   gasPrice: string;
   maxFeePerGas?: string;
-  priorityFee?: string;
+  maxPriorityFeePerGas?: string;
+}
+
+interface UtxoGasInfo {
+  feePerByte: string;
+}
+
+interface CosmosGasInfo {
+  gasPrice: string;
+  gas: string;
 }
 
 // Signature result
@@ -1292,7 +1314,7 @@ vault.sign(payload, { onQRCodeReady, onDeviceJoined })
 
 ## Chain Support
 
-### Supported Chains (40+)
+### Supported Chains (36)
 
 All chains supported through Core's functional resolvers. The SDK has no chain-specific code.
 

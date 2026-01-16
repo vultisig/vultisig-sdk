@@ -1,7 +1,5 @@
 # Vultisig SDK Users Guide
 
-> **⚠️ Beta Release**: This SDK is currently in beta. APIs may change before the stable 1.0 release.
-
 ## Table of Contents
 
 - [Installation & Setup](#installation--setup)
@@ -158,12 +156,12 @@ The SDK supports two types of vaults:
 
 ### Supported Chains
 
-The SDK supports 40+ blockchains across multiple ecosystems:
+The SDK supports 36 blockchains across multiple ecosystems:
 
-- **EVM**: Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, Avalanche, Blast, Cronos, ZkSync
-- **UTXO**: Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash
-- **Cosmos**: Cosmos Hub, THORChain, MayaChain, Osmosis, Dydx, Kujira, Terra
-- **Other**: Solana, Polkadot, Sui, TON, Ripple, Tron, Cardano
+- **EVM (13)**: Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, Avalanche, Blast, Cronos, ZkSync, Hyperliquid, Mantle, Sei
+- **UTXO (6)**: Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash
+- **Cosmos (10)**: Cosmos Hub, THORChain, MayaChain, Osmosis, Dydx, Kujira, Terra, Terra Classic, Noble, Akash
+- **Other (7)**: Solana, Polkadot, Sui, TON, Ripple, Tron, Cardano
 
 See the [Quick Reference](#supported-chains) section for the complete list.
 
@@ -518,9 +516,9 @@ The threshold determines how many devices must participate in signing:
 | 2 | 2 | Both devices |
 | 3 | 2 | Any 2 of 3 |
 | 4 | 3 | Any 3 of 4 |
-| 5 | 3 | Any 3 of 5 |
+| 5 | 4 | Any 4 of 5 |
 
-Formula: `threshold = Math.ceil((devices + 1) / 2)`
+Formula: `threshold = Math.ceil((devices * 2) / 3)`
 
 **Cancellation Support:**
 
@@ -1791,52 +1789,84 @@ Subscribe to vault events for reactive UIs:
 ### Available Events
 
 ```typescript
-// Balance updated
+// Vault Lifecycle Events
+vault.on('saved', () => console.log('Vault saved'))
+vault.on('loaded', () => console.log('Vault loaded'))
+vault.on('deleted', () => console.log('Vault deleted'))
+vault.on('unlocked', () => console.log('Vault unlocked'))
+vault.on('locked', () => console.log('Vault locked'))
+
+// Balance & Value Events
 vault.on('balanceUpdated', ({ chain, tokenId }) => {
   console.log(`Balance updated: ${chain}${tokenId ? ':' + tokenId : ''}`)
 })
-
-// Transaction broadcast
-vault.on('transactionBroadcast', ({ chain, txHash }) => {
-  console.log(`Transaction on ${chain}: ${txHash}`)
+vault.on('valuesUpdated', ({ chain }) => {
+  console.log(`Fiat values updated for: ${chain}`)
+})
+vault.on('totalValueUpdated', ({ value }) => {
+  console.log(`Total portfolio value: ${value.amount} ${value.currency}`)
 })
 
-// Chain added
+// Transaction Events
+vault.on('transactionSigned', ({ chain, txHash }) => {
+  console.log(`Transaction signed on ${chain}: ${txHash}`)
+})
+vault.on('transactionBroadcast', ({ chain, txHash }) => {
+  console.log(`Transaction broadcast on ${chain}: ${txHash}`)
+})
+vault.on('signingProgress', ({ step, progress, message }) => {
+  console.log(`Signing: ${message} (${progress}%)`)
+})
+
+// Chain & Token Events
 vault.on('chainAdded', ({ chain }) => {
   console.log(`Chain added: ${chain}`)
 })
-
-// Chain removed
 vault.on('chainRemoved', ({ chain }) => {
   console.log(`Chain removed: ${chain}`)
 })
-
-// Token added
 vault.on('tokenAdded', ({ chain, token }) => {
   console.log(`Token added on ${chain}: ${token.symbol}`)
 })
-
-// Token removed
 vault.on('tokenRemoved', ({ chain, tokenId }) => {
   console.log(`Token removed from ${chain}: ${tokenId}`)
 })
 
-// Currency changed
-vault.on('currencyChanged', ({ currency }) => {
-  console.log(`Currency changed to: ${currency}`)
-})
-
-// Vault renamed
+// Vault Management Events
 vault.on('renamed', ({ oldName, newName }) => {
   console.log(`Vault renamed: ${oldName} -> ${newName}`)
 })
 
-// Swap quote received
+// Swap Events
 vault.on('swapQuoteReceived', ({ quote }) => {
   console.log(`Swap quote: ${quote.estimatedOutput} via ${quote.provider}`)
 })
+vault.on('swapApprovalRequired', ({ token, spender }) => {
+  console.log(`ERC-20 approval required for ${token}`)
+})
+vault.on('swapApprovalGranted', ({ token, txHash }) => {
+  console.log(`Approval granted: ${txHash}`)
+})
+vault.on('swapPrepared', ({ keysignPayload }) => {
+  console.log('Swap transaction prepared')
+})
 
-// Error events
+// SecureVault Device Coordination Events
+vault.on('qrCodeReady', ({ qrPayload, action, sessionId }) => {
+  console.log(`QR ready for ${action}`)
+  displayQRCode(qrPayload)
+})
+vault.on('deviceJoined', ({ deviceId, totalJoined, required }) => {
+  console.log(`Device joined: ${totalJoined}/${required}`)
+})
+vault.on('allDevicesReady', ({ devices, sessionId }) => {
+  console.log(`All ${devices.length} devices ready`)
+})
+vault.on('keygenProgress', ({ phase, message }) => {
+  console.log(`Keygen ${phase}: ${message}`)
+})
+
+// Error Events
 vault.on('error', (error) => {
   console.error('Vault error:', error.message)
 })
@@ -1892,14 +1922,14 @@ vault.off('balanceUpdated', handler)
 
 ```typescript
 class Vultisig {
-  // Constructor - storage is required
-  constructor(config: {
-    storage: Storage               // Required
+  // Constructor - storage uses platform default if not provided
+  constructor(config?: {
+    storage?: Storage              // Optional - uses FileStorage (Node) or BrowserStorage (browser)
     defaultChains?: Chain[]
     defaultCurrency?: string
     onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
     passwordCache?: { defaultTTL: number }
-    cacheConfig?: CacheConfig
+    cacheConfig?: { balanceTTL?: number, priceTTL?: number, maxMemoryCacheSize?: number }
     serverEndpoints?: { fastVault?: string, messageRelay?: string }
   })
 
@@ -1914,6 +1944,7 @@ class Vultisig {
     name: string
     password: string
     email: string
+    signal?: AbortSignal
     onProgress?: (step: VaultCreationStep) => void
   }): Promise<string>
 
@@ -1922,7 +1953,8 @@ class Vultisig {
     name: string
     password?: string              // Optional encryption
     devices: number                // Number of participating devices
-    threshold?: number             // Signing threshold (defaults to ceil((devices+1)/2))
+    threshold?: number             // Signing threshold (defaults to ceil(devices*2/3))
+    signal?: AbortSignal
     onProgress?: (step: VaultCreationStep) => void
     onQRCodeReady?: (qrPayload: string) => void
     onDeviceJoined?: (deviceId: string, total: number, required: number) => void
@@ -1933,12 +1965,21 @@ class Vultisig {
   listVaults(): Promise<VaultBase[]>
   getVaultById(id: string): Promise<VaultBase | null>
   getActiveVault(): Promise<VaultBase | null>
+  hasActiveVault(): Promise<boolean>
   setActiveVault(vault: VaultBase | null): Promise<void>
   deleteVault(vault: VaultBase): Promise<void>
+  clearVaults(): Promise<void>
 
   // Utilities
   isVaultEncrypted(vultContent: string): boolean
+  isVaultContentEncrypted(vultContent: string): Promise<boolean>
   getServerStatus(): Promise<ServerStatus>
+
+  // Static utilities
+  static getTxExplorerUrl(chain: Chain, txHash: string): string
+  static getAddressExplorerUrl(chain: Chain, address: string): string
+  static isFastVault(vault: VaultBase): vault is FastVault
+  static isSecureVault(vault: VaultBase): vault is SecureVault
 
   // Seedphrase import
   validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation>
@@ -1955,12 +1996,14 @@ class Vultisig {
   }>
 
   // Address book
-  getAddressBook(chain?: Chain): Promise<AddressBookEntry[]>
+  getAddressBook(chain?: Chain): Promise<AddressBook>
   addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
+  removeAddressBookEntry(addresses: Array<{ chain: Chain, address: string }>): Promise<void>
+  updateAddressBookEntry(chain: Chain, address: string, name: string): Promise<void>
 
   // Vault verification (returns the vault on success)
   verifyVault(vaultId: string, code: string): Promise<FastVault>
-  resendVaultVerification(vaultId: string): Promise<void>
+  resendVaultVerification(options: { vaultId: string, email: string, password: string }): Promise<void>
 }
 ```
 
@@ -1973,15 +2016,23 @@ class VaultBase {
   name: string
   type: 'fast' | 'secure'
   isEncrypted: boolean
+  threshold: number
+  chains: Chain[]
+  tokens: Record<string, Token[]>
+  currency: string
 
   // Vault management
   save(): Promise<void>
+  load(): Promise<void>
+  exists(): Promise<boolean>
+  loadPreferences(): Promise<void>
   rename(newName: string): Promise<void>
   export(password?: string): Promise<{ filename: string, data: string }>
   delete(): Promise<void>
-  lock(): Promise<void>
+  lock(): void
   unlock(password: string): Promise<void>
   isUnlocked(): boolean
+  getUnlockTimeRemaining(): number | undefined
 
   // Addresses
   address(chain: Chain): Promise<string>
@@ -1990,15 +2041,17 @@ class VaultBase {
   // Balances
   balance(chain: Chain, tokenId?: string): Promise<Balance>
   balances(chains?: Chain[], includeTokens?: boolean): Promise<Record<string, Balance>>
-  updateBalance(chain: Chain, tokenId?: string): Promise<void>
-  updateBalances(chains?: Chain[]): Promise<void>
+  updateBalance(chain: Chain, tokenId?: string): Promise<Balance>
+  updateBalances(chains?: Chain[], includeTokens?: boolean): Promise<Record<string, Balance>>
 
   // Transactions
-  prepareSendTx(params: SendTxParams): Promise<SigningPayload>
+  prepareSendTx(params: SendTxParams): Promise<KeysignPayload>
+  extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: SigningOptions): Promise<Signature>
   signBytes(options: SignBytesOptions, signingOptions?: SigningOptions): Promise<Signature>
   broadcastTx(params: BroadcastParams): Promise<string>
-  gas(chain: Chain): Promise<GasInfo>
+  broadcastRawTx(params: { chain: Chain, rawTx: string }): Promise<string>
+  gas<C extends Chain>(chain: C): Promise<GasInfoForChain<C>>
 
   // Cosmos Signing (SignAmino & SignDirect)
   prepareSignAminoTx(input: SignAminoInput, options?: CosmosSigningOptions): Promise<KeysignPayload>
@@ -2025,13 +2078,16 @@ class VaultBase {
   removeChain(chain: Chain): Promise<void>
   resetToDefaultChains(): Promise<void>
   getTokens(chain: Chain): Token[]
+  setTokens(chain: Chain, tokens: Token[]): Promise<void>
   addToken(chain: Chain, token: Token): Promise<void>
   removeToken(chain: Chain, tokenId: string): Promise<void>
 
   // Portfolio
-  getValue(chain: Chain, tokenId?: string, currency?: string): Promise<number>
-  getTotalValue(currency?: string): Promise<number>
-  updateTotalValue(): Promise<void>
+  getValue(chain: Chain, tokenId?: string, fiatCurrency?: FiatCurrency): Promise<Value>
+  getValues(chain: Chain, fiatCurrency?: FiatCurrency): Promise<Record<string, Value>>
+  getTotalValue(fiatCurrency?: FiatCurrency): Promise<Value>
+  updateValues(chain: Chain | 'all'): Promise<void>
+  updateTotalValue(fiatCurrency?: FiatCurrency): Promise<Value>
   setCurrency(currency: string): Promise<void>
 
   // Events
@@ -2062,7 +2118,8 @@ const { vault, vaultId, sessionId } = await sdk.createSecureVault({
   name: string
   password?: string               // Optional encryption
   devices: number                 // Total participating devices
-  threshold?: number              // Signing threshold (defaults to ceil((devices+1)/2))
+  threshold?: number              // Signing threshold (defaults to ceil(devices*2/3))
+  signal?: AbortSignal            // Optional cancellation
   onProgress?: (step: VaultCreationStep) => void
   onQRCodeReady?: (qrPayload: string) => void
   onDeviceJoined?: (deviceId: string, total: number, required: number) => void
@@ -2073,7 +2130,7 @@ const { vault, vaultId, sessionId } = await sdk.createSecureVault({
 
 ```typescript
 enum Chain {
-  // EVM Chains
+  // EVM Chains (13)
   Ethereum = 'Ethereum',
   Polygon = 'Polygon',
   BinanceSmartChain = 'BSC',
@@ -2084,15 +2141,19 @@ enum Chain {
   Blast = 'Blast',
   CronosChain = 'CronosChain',
   ZkSync = 'ZkSync',
+  Hyperliquid = 'Hyperliquid',
+  Mantle = 'Mantle',
+  Sei = 'Sei',
 
-  // UTXO Chains
+  // UTXO Chains (6)
   Bitcoin = 'Bitcoin',
   BitcoinCash = 'BitcoinCash',
   Litecoin = 'Litecoin',
   Dogecoin = 'Dogecoin',
   Dash = 'Dash',
+  Zcash = 'Zcash',
 
-  // Cosmos Chains
+  // Cosmos Chains (10)
   THORChain = 'THORChain',
   MayaChain = 'MayaChain',
   Cosmos = 'Cosmos',
@@ -2101,8 +2162,10 @@ enum Chain {
   Kujira = 'Kujira',
   TerraClassic = 'TerraClassic',
   Terra = 'Terra',
+  Noble = 'Noble',
+  Akash = 'Akash',
 
-  // Other Chains
+  // Other Chains (7)
   Solana = 'Solana',
   Polkadot = 'Polkadot',
   Sui = 'Sui',
@@ -2116,26 +2179,32 @@ enum Chain {
 ### Common Configuration Options
 
 ```typescript
-// Vultisig constructor options
+// Vultisig constructor options (all optional)
 new Vultisig({
-  // Required
-  storage: Storage,                // Storage implementation (MemoryStorage, custom, etc.)
+  // Storage - uses platform default if not provided
+  storage?: Storage,               // FileStorage (Node.js) or BrowserStorage (browser) by default
 
-  // Optional
-  defaultChains: Chain[],          // Default chains for new vaults
-  defaultCurrency: string,         // Default fiat currency ('USD', 'EUR', etc.)
-  cacheConfig: {
-    balanceTTL: number,            // Balance cache TTL in ms (default: 300000 = 5min)
-    priceTTL: number,              // Price cache TTL in ms (default: 300000 = 5min)
-    maxMemoryCacheSize: number     // Max cache entries (default: 1000)
+  // Vault defaults
+  defaultChains?: Chain[],         // Default chains for new vaults
+  defaultCurrency?: string,        // Default fiat currency ('USD', 'EUR', etc.)
+
+  // Cache configuration
+  cacheConfig?: {
+    balanceTTL?: number,           // Balance cache TTL in ms (default: 300000 = 5min)
+    priceTTL?: number,             // Price cache TTL in ms (default: 300000 = 5min)
+    maxMemoryCacheSize?: number    // Max cache entries (default: 1000)
   },
-  passwordCache: {
+
+  // Password management
+  passwordCache?: {
     defaultTTL: number             // Password cache TTL in milliseconds
   },
-  onPasswordRequired: (vaultId: string, vaultName: string) => Promise<string>,
-  serverEndpoints: {
-    fastVault: string,             // Custom VultiServer URL
-    messageRelay: string           // Custom relay server URL
+  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>,
+
+  // Server endpoints (advanced)
+  serverEndpoints?: {
+    fastVault?: string,            // Custom VultiServer URL
+    messageRelay?: string          // Custom relay server URL
   }
 })
 ```
