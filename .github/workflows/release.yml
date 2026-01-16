@@ -24,9 +24,9 @@ jobs:
       - name: Check for changesets or release commit
         id: check
         run: |
-          # Check if this is a release PR merge (commit message starts with "chore: version packages")
+          # Check if this is a release PR merge (commit message contains "chore: version packages")
           COMMIT_MSG=$(git log -1 --pretty=%B)
-          if [[ "$COMMIT_MSG" == "chore: version packages"* ]]; then
+          if [[ "$COMMIT_MSG" == *"chore: version packages"* ]]; then
             echo "Release PR merge detected"
             echo "should_release=true" >> $GITHUB_OUTPUT
             exit 0
