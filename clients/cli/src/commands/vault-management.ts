@@ -146,7 +146,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
       if (action === 'resend') {
         const resendSpinner = createSpinner('Resending verification email...')
         try {
-          await ctx.sdk.resendVaultVerification(vaultId)
+          await ctx.sdk.resendVaultVerification({ vaultId, email: email!, password })
           resendSpinner.succeed('Verification email sent!')
           info('Check your inbox for the new code. Note: There may be a ~3 minute cooldown between resends.')
         } catch (resendErr: any) {
@@ -704,7 +704,7 @@ export async function executeImportSeedphraseFast(
       if (action === 'resend') {
         const resendSpinner = createSpinner('Resending verification email...')
         try {
-          await ctx.sdk.resendVaultVerification(vaultId)
+          await ctx.sdk.resendVaultVerification({ vaultId, email, password })
           resendSpinner.succeed('Verification email sent!')
           info('Check your inbox for the new code.')
         } catch (resendErr: any) {
