@@ -1,5 +1,5 @@
 ---
-"@anthropic/vultisig-sdk": minor
+"@vultisig/sdk": minor
 ---
 
 Remove internal-only exports from public API for GA launch
