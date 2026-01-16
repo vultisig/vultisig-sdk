@@ -7,7 +7,7 @@
  *
  * Copied from vultisig-windows: core/mpc/utils/ed25519ScalarClamp.ts
  */
-import { sha512 } from '@noble/hashes/sha512'
+import { sha512 } from '@noble/hashes/sha2'
 
 /**
  * Ed25519 group order (L)

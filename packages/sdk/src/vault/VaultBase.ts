@@ -243,6 +243,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       folderId: this.coreVault.folderId,
       lastModified: Date.now(),
 
+      // Chain-specific keys (for seedphrase imports)
+      chainPublicKeys: this.coreVault.chainPublicKeys,
+      chainKeyShares: this.coreVault.chainKeyShares,
+
       // User Preferences
       currency: this.config?.defaultCurrency?.toLowerCase() || 'usd',
       chains: this.config?.defaultChains?.map(c => c.toString()) || [],
