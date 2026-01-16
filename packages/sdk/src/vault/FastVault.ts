@@ -262,6 +262,7 @@ export class FastVault extends VaultBase {
       name: string
       password: string
       email: string
+      signal?: AbortSignal
       onProgress?: (step: VaultCreationStep) => void
     }
   ): Promise<{
@@ -269,7 +270,12 @@ export class FastVault extends VaultBase {
     vaultId: string
     verificationRequired: true
   }> {
-    const reportProgress = options.onProgress || (() => {})
+    const reportProgress = (step: VaultCreationStep) => {
+      if (options.signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+      options.onProgress?.(step)
+    }
 
     try {
       // Step 1: Create vault on server with MPC keygen
@@ -283,6 +289,7 @@ export class FastVault extends VaultBase {
         name: options.name,
         email: options.email,
         password: options.password,
+        signal: options.signal,
         onProgress: update => {
           // Map server progress updates to vault creation progress
           let progress = 10

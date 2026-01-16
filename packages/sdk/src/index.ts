@@ -82,10 +82,14 @@ export type {
   CachedBalance,
   ChainConfig,
   CoinInput,
+  // Cosmos signing types
+  CosmosCoinAmount,
+  CosmosFeeInput,
   CosmosGasInfo,
+  CosmosMsgInput,
+  CosmosSigningOptions,
   EvmGasInfo,
   ExportOptions,
-  FastSigningInput,
   GasEstimate,
   GasInfo,
   GasInfoForChain,
@@ -98,8 +102,10 @@ export type {
   ReshareOptions,
   SDKConfig,
   ServerStatus,
+  SignAminoInput,
   Signature,
   SignBytesOptions,
+  SignDirectInput,
   SigningMode,
   SigningPayload,
   SigningStep,
@@ -128,3 +134,20 @@ export type {
 } from './types'
 // Swap type guards
 export { isAccountCoin, isSimpleCoinInput } from './types'
+
+// ============================================================================
+// PUBLIC API - Seedphrase Import
+// ============================================================================
+
+// Seedphrase validation and import types
+export type {
+  ChainDiscoveryPhase,
+  ChainDiscoveryProgress,
+  ChainDiscoveryResult,
+  ImportSeedphraseAsFastVaultOptions,
+  ImportSeedphraseAsSecureVaultOptions,
+  SeedphraseImportResult,
+  SeedphraseValidation,
+  SeedphraseWordCount,
+} from './seedphrase'
+export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'

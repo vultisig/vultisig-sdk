@@ -5,6 +5,7 @@ import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
+import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
 import {
@@ -18,6 +19,8 @@ import {
   executeCurrency,
   executeExport,
   executeImport,
+  executeImportSeedphraseFast,
+  executeImportSeedphraseSecure,
   executeInfo,
   executePortfolio,
   executeRename,
@@ -198,22 +201,167 @@ program
     })
   )
 
+// Command: Import seedphrase (with subcommands)
+const importSeedphraseCmd = program.command('import-seedphrase').description('Import wallet from BIP39 seedphrase')
+
+/**
+ * Prompt for seedphrase with secure input (masked)
+ */
+async function promptSeedphrase(): Promise<string> {
+  info('\nEnter your 12 or 24-word recovery phrase.')
+  info('Words will be hidden as you type.\n')
+
+  const answer = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'mnemonic',
+      message: 'Seedphrase:',
+      mask: '*',
+      validate: (input: string) => {
+        const words = input.trim().split(/\s+/)
+        if (words.length !== 12 && words.length !== 24) {
+          return `Expected 12 or 24 words, got ${words.length}`
+        }
+        return true
+      },
+    },
+  ])
+
+  return answer.mnemonic.trim().toLowerCase()
+}
+
+// Subcommand: import-seedphrase fast
+importSeedphraseCmd
+  .command('fast')
+  .description('Import as FastVault (server-assisted 2-of-2)')
+  .requiredOption('--name <name>', 'Vault name')
+  .requiredOption('--password <password>', 'Vault password')
+  .requiredOption('--email <email>', 'Email for verification')
+  .option('--mnemonic <words>', 'Seedphrase (12 or 24 words, space-separated)')
+  .option('--discover-chains', 'Scan chains for existing balances')
+  .option('--chains <chains>', 'Specific chains to enable (comma-separated)')
+  .action(
+    withExit(
+      async (options: {
+        name: string
+        password: string
+        email: string
+        mnemonic?: string
+        discoverChains?: boolean
+        chains?: string
+      }) => {
+        const context = await init(program.opts().vault)
+
+        // If mnemonic not provided via flag, prompt securely
+        let mnemonic = options.mnemonic
+        if (!mnemonic) {
+          mnemonic = await promptSeedphrase()
+        }
+
+        // Parse chains with case-insensitive lookup
+        let chains: Chain[] | undefined
+        if (options.chains) {
+          const chainNames = options.chains.split(',').map(c => c.trim())
+          chains = []
+          for (const name of chainNames) {
+            const chain = findChainByName(name)
+            if (chain) {
+              chains.push(chain)
+            } else {
+              console.warn(`Warning: Unknown chain "${name}" - skipping`)
+            }
+          }
+        }
+
+        await executeImportSeedphraseFast(context, {
+          mnemonic,
+          name: options.name,
+          password: options.password,
+          email: options.email,
+          discoverChains: options.discoverChains,
+          chains,
+        })
+      }
+    )
+  )
+
+// Subcommand: import-seedphrase secure
+importSeedphraseCmd
+  .command('secure')
+  .description('Import as SecureVault (multi-device MPC)')
+  .requiredOption('--name <name>', 'Vault name')
+  .option('--password <password>', 'Vault password (optional)')
+  .option('--threshold <m>', 'Signing threshold', '2')
+  .option('--shares <n>', 'Total shares', '3')
+  .option('--mnemonic <words>', 'Seedphrase (12 or 24 words)')
+  .option('--discover-chains', 'Scan chains for existing balances')
+  .option('--chains <chains>', 'Specific chains to enable (comma-separated)')
+  .action(
+    withExit(
+      async (options: {
+        name: string
+        password?: string
+        threshold: string
+        shares: string
+        mnemonic?: string
+        discoverChains?: boolean
+        chains?: string
+      }) => {
+        const context = await init(program.opts().vault)
+
+        let mnemonic = options.mnemonic
+        if (!mnemonic) {
+          mnemonic = await promptSeedphrase()
+        }
+
+        // Parse chains with case-insensitive lookup
+        let chains: Chain[] | undefined
+        if (options.chains) {
+          const chainNames = options.chains.split(',').map(c => c.trim())
+          chains = []
+          for (const name of chainNames) {
+            const chain = findChainByName(name)
+            if (chain) {
+              chains.push(chain)
+            } else {
+              console.warn(`Warning: Unknown chain "${name}" - skipping`)
+            }
+          }
+        }
+
+        await executeImportSeedphraseSecure(context, {
+          mnemonic,
+          name: options.name,
+          password: options.password,
+          threshold: parseInt(options.threshold, 10),
+          shares: parseInt(options.shares, 10),
+          discoverChains: options.discoverChains,
+          chains,
+        })
+      }
+    )
+  )
+
 // Command: Verify vault with email code
 program
   .command('verify <vaultId>')
   .description('Verify vault with email verification code')
   .option('-r, --resend', 'Resend verification email')
   .option('--code <code>', 'Verification code')
+  .option('--email <email>', 'Email address (required for --resend)')
+  .option('--password <password>', 'Vault password (required for --resend)')
   .action(
-    withExit(async (vaultId: string, options: { resend?: boolean; code?: string }) => {
-      const context = await init(program.opts().vault)
-      const verified = await executeVerify(context, vaultId, options)
-      if (!verified) {
-        const err: any = new Error('Verification failed')
-        err.exitCode = 1
-        throw err
+    withExit(
+      async (vaultId: string, options: { resend?: boolean; code?: string; email?: string; password?: string }) => {
+        const context = await init(program.opts().vault)
+        const verified = await executeVerify(context, vaultId, options)
+        if (!verified) {
+          const err: any = new Error('Verification failed')
+          err.exitCode = 1
+          throw err
+        }
       }
-    })
+    )
   )
 
 // Command: Show balances

@@ -1,7 +1,5 @@
 # Vultisig SDK Architecture
 
-**Status:** Alpha (0.1.1-alpha.0)
-
 ---
 
 ## Table of Contents
@@ -243,7 +241,10 @@ packages/sdk/src/
 │   │   ├── GasEstimationService.ts # Gas/fee estimation
 │   │   ├── TransactionBuilder.ts   # TX preparation
 │   │   ├── BroadcastService.ts     # TX broadcasting
-│   │   └── PreferencesService.ts   # User preferences
+│   │   ├── PreferencesService.ts   # User preferences
+│   │   └── cosmos/                # Cosmos-specific helpers
+│   │       ├── buildCosmosPayload.ts  # SignAmino/SignDirect builders
+│   │       └── index.ts
 │   └── utils/
 │       └── convertSignature.ts # Signature conversion
 │
@@ -464,6 +465,8 @@ abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   async balance(chain: Chain, tokenId?: string): Promise<Balance>;
   async gas(chain: Chain): Promise<GasEstimate>;
   async prepareSendTx(params): Promise<KeysignPayload>;
+  async prepareSignAminoTx(input: SignAminoInput, options?: CosmosSigningOptions): Promise<KeysignPayload>;
+  async prepareSignDirectTx(input: SignDirectInput, options?: CosmosSigningOptions): Promise<KeysignPayload>;
   async extractMessageHashes(payload): Promise<string[]>;
   async broadcast(chain, payload, signature): Promise<string>;
 
@@ -541,7 +544,7 @@ class SecureVault extends VaultBase {
 **Characteristics:**
 
 - Configurable encryption (optional password)
-- N-of-M threshold with formula: `Math.ceil((devices + 1) / 2)`
+- N-of-M threshold with formula: `Math.ceil((devices * 2) / 3)`
 - QR code pairing with Vultisig mobile apps (iOS/Android)
 - Relay server coordination for device communication
 - Higher security (no single point of compromise)
@@ -553,7 +556,7 @@ class SecureVault extends VaultBase {
 interface SecureVaultCreateOptions {
   name: string;
   devices: number;               // Total participating devices (min 2)
-  threshold?: number;            // Signing threshold (default: ceil((devices+1)/2))
+  threshold?: number;            // Signing threshold (default: ceil(devices*2/3))
   password?: string;             // Optional encryption
   onProgress?: (step: VaultCreationStep) => void;
   onQRCodeReady?: (qrPayload: string) => void;
@@ -581,7 +584,7 @@ Each vault contains specialized services:
 | `AddressService`         | Address derivation with caching      |
 | `BalanceService`         | Balance fetching with TTL cache      |
 | `GasEstimationService`   | Gas/fee estimation                   |
-| `TransactionBuilder`     | Transaction preparation              |
+| `TransactionBuilder`     | Transaction preparation (including Cosmos SignAmino/SignDirect) |
 | `BroadcastService`       | Transaction broadcasting             |
 | `PreferencesService`     | User chain/token preferences         |
 | `SwapService`            | Cross-chain and DEX swap operations  |
@@ -752,11 +755,11 @@ class SecureVaultCreationService {
 **Threshold Calculation:**
 
 ```typescript
-const threshold = Math.ceil((devices + 1) / 2);
+const threshold = Math.ceil((devices * 2) / 3);
 // 2 devices → 2-of-2
 // 3 devices → 2-of-3
 // 4 devices → 3-of-4
-// 5 devices → 3-of-5
+// 5 devices → 4-of-5
 ```
 
 ### SwapService
@@ -907,6 +910,15 @@ From `src/index.ts`:
 - `ValidationHelpers` - Validation utilities
 - `SharedWasmRuntime` - WASM singleton (advanced usage)
 
+**Cosmos Signing Types:**
+
+- `SignAminoInput` - Input for SignAmino transactions
+- `SignDirectInput` - Input for SignDirect transactions
+- `CosmosMsgInput` - Cosmos message format
+- `CosmosFeeInput` - Cosmos fee format
+- `CosmosCoinAmount` - Cosmos coin amount
+- `CosmosSigningOptions` - Options for Cosmos signing
+
 **Type Guards:**
 
 - `isFastVault(vault)` - Check if vault is FastVault
@@ -927,14 +939,38 @@ interface Balance {
   symbol: string;
   chainId: string;
   tokenId?: string;
+  value?: number;         // USD value (deprecated, use fiatValue)
+  fiatValue?: number;     // Fiat value
+  fiatCurrency?: string;  // Fiat currency code
 }
 
-// Gas estimation
-interface GasEstimate {
-  chainId: string;
+// Fiat value
+interface Value {
+  amount: string;
+  currency: string;
+  lastUpdated: number;
+}
+
+// Gas estimation (chain-specific)
+type GasInfoForChain<C extends Chain> =
+  C extends EvmChain ? EvmGasInfo :
+  C extends UtxoChain ? UtxoGasInfo :
+  C extends CosmosChain ? CosmosGasInfo :
+  OtherGasInfo;
+
+interface EvmGasInfo {
   gasPrice: string;
   maxFeePerGas?: string;
-  priorityFee?: string;
+  maxPriorityFeePerGas?: string;
+}
+
+interface UtxoGasInfo {
+  feePerByte: string;
+}
+
+interface CosmosGasInfo {
+  gasPrice: string;
+  gas: string;
 }
 
 // Signature result
@@ -1126,6 +1162,61 @@ vault.broadcast(chain, keysignPayload, signature)
   └── Return txHash
 ```
 
+### Cosmos Signing Flow (SignAmino/SignDirect)
+
+The SDK supports two Cosmos signing modes for custom transaction construction:
+
+```
+// SignAmino - Legacy JSON/Amino format
+vault.prepareSignAminoTx({ chain, coin, msgs, fee, memo })
+  │
+  └── TransactionBuilder.prepareSignAminoTx()
+        │
+        ├── Validate chain is Cosmos-SDK based
+        │
+        ├── Get public key for chain
+        │
+        ├── buildSignAminoKeysignPayload()
+        │     │
+        │     ├── Create SignAmino protobuf message
+        │     │     └── { fee, msgs, memo }
+        │     │
+        │     ├── Set on KeysignPayload.signData.signAmino
+        │     │
+        │     └── Return KeysignPayload
+        │
+        └── Return KeysignPayload
+
+// SignDirect - Modern Protobuf format
+vault.prepareSignDirectTx({ chain, coin, bodyBytes, authInfoBytes, chainId, accountNumber })
+  │
+  └── TransactionBuilder.prepareSignDirectTx()
+        │
+        ├── Validate chain is Cosmos-SDK based
+        │
+        ├── Get public key for chain
+        │
+        ├── buildSignDirectKeysignPayload()
+        │     │
+        │     ├── Create SignDirect protobuf message
+        │     │     └── { bodyBytes, authInfoBytes, chainId, accountNumber }
+        │     │
+        │     ├── Set on KeysignPayload.signData.signDirect
+        │     │
+        │     └── Return KeysignPayload
+        │
+        └── Return KeysignPayload
+
+// After preparing, sign and broadcast as usual
+vault.sign(payload, password)
+vault.broadcastTx({ chain, keysignPayload, signature })
+```
+
+**Supported Cosmos Chains:**
+- Cosmos, Osmosis, THORChain, MayaChain, Dydx, Kujira, Terra, TerraClassic, Noble, Akash
+
+---
+
 ### Secure Vault Creation Flow
 
 ```
@@ -1223,7 +1314,7 @@ vault.sign(payload, { onQRCodeReady, onDeviceJoined })
 
 ## Chain Support
 
-### Supported Chains (40+)
+### Supported Chains (36)
 
 All chains supported through Core's functional resolvers. The SDK has no chain-specific code.
 

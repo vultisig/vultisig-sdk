@@ -1,5 +1,67 @@
 // Shared types for both browser and electron examples
 
+// ===== Seedphrase Import Types =====
+
+/** Result of seedphrase validation */
+export type SeedphraseValidation = {
+  valid: boolean
+  wordCount: number
+  invalidWords?: string[]
+  error?: string
+}
+
+/** Chain discovery progress phases */
+export type ChainDiscoveryPhase = 'validating' | 'deriving' | 'fetching' | 'complete'
+
+/** Progress update during chain discovery */
+export type ChainDiscoveryProgress = {
+  phase: ChainDiscoveryPhase
+  chain?: string
+  chainsProcessed: number
+  chainsTotal: number
+  chainsWithBalance: string[]
+  message: string
+}
+
+/** Result for a single chain during discovery */
+export type ChainDiscoveryResult = {
+  chain: string
+  address: string
+  balance: string
+  decimals: number
+  symbol: string
+  hasBalance: boolean
+}
+
+/** Options for importing seedphrase as FastVault */
+export type ImportSeedphraseFastOptions = {
+  mnemonic: string
+  name: string
+  password: string
+  email: string
+  discoverChains?: boolean
+  chains?: string[]
+  onProgress?: (step: ProgressStep) => void
+  onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+}
+
+/** Options for importing seedphrase as SecureVault */
+export type ImportSeedphraseSecureOptions = {
+  mnemonic: string
+  name: string
+  password?: string
+  devices: number
+  threshold?: number
+  discoverChains?: boolean
+  chains?: string[]
+  onProgress?: (step: ProgressStep) => void
+  onQRCodeReady?: (qrPayload: string) => void
+  onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+  onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+}
+
+// ===== Vault Types =====
+
 export type VaultInfo = {
   id: string
   name: string

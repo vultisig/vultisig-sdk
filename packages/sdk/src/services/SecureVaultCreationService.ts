@@ -61,6 +61,8 @@ export type SecureVaultCreateOptions = {
   devices: number
   /** Signing threshold - defaults to 2/3 majority (ceil(devices*2/3)) */
   threshold?: number
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal
   /** Progress callback */
   onProgress?: (step: SecureVaultCreationStep) => void
   /** Callback when QR code payload is ready for display */
@@ -160,6 +162,7 @@ export class SecureVaultCreationService {
     sessionId: string,
     localPartyId: string,
     requiredDevices: number,
+    signal?: AbortSignal,
     onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   ): Promise<string[]> {
     const maxWaitTime = 300000 // 5 minutes for multi-device setup
@@ -168,6 +171,11 @@ export class SecureVaultCreationService {
     let lastJoinedCount = 0
 
     while (Date.now() - startTime < maxWaitTime) {
+      // Check for abort
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
       try {
         const url = `${this.relayUrl}/${sessionId}`
         const allPeers = await queryUrl<string[]>(url)
@@ -205,9 +213,14 @@ export class SecureVaultCreationService {
    * @returns Created vault, vault ID, and session ID
    */
   async createVault(options: SecureVaultCreateOptions): Promise<SecureVaultCreateResult> {
-    const { name, devices, threshold: customThreshold, onProgress, onQRCodeReady, onDeviceJoined } = options
+    const { name, devices, threshold: customThreshold, signal, onProgress, onQRCodeReady, onDeviceJoined } = options
 
-    const reportProgress = onProgress || (() => {})
+    const reportProgress = (step: SecureVaultCreationStep) => {
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+      onProgress?.(step)
+    }
     const threshold = customThreshold || this.calculateThreshold(devices)
 
     // Validate inputs
@@ -274,20 +287,26 @@ export class SecureVaultCreationService {
       devicesRequired: devices,
     })
 
-    const allDevices = await this.waitForPeers(sessionId, localPartyId, devices, (deviceId, total, required) => {
-      // Notify via callback
-      if (onDeviceJoined) {
-        onDeviceJoined(deviceId, total, required)
+    const allDevices = await this.waitForPeers(
+      sessionId,
+      localPartyId,
+      devices,
+      signal,
+      (deviceId, total, required) => {
+        // Notify via callback
+        if (onDeviceJoined) {
+          onDeviceJoined(deviceId, total, required)
+        }
+        reportProgress({
+          step: 'waiting_for_devices',
+          progress: 20 + Math.floor((total / required) * 20),
+          message: `${total}/${required} devices joined...`,
+          sessionId,
+          devicesJoined: total,
+          devicesRequired: required,
+        })
       }
-      reportProgress({
-        step: 'waiting_for_devices',
-        progress: 20 + Math.floor((total / required) * 20),
-        message: `${total}/${required} devices joined...`,
-        sessionId,
-        devicesJoined: total,
-        devicesRequired: required,
-      })
-    })
+    )
 
     // Step 5: Start MPC session
     reportProgress({
@@ -326,6 +345,11 @@ export class SecureVaultCreationService {
 
     const ecdsaResult = await dkls.startKeygenWithRetry()
 
+    // Check for abort before EdDSA keygen
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
     // Step 7: EdDSA keygen
     reportProgress({
       step: 'keygen_eddsa',
@@ -348,6 +372,11 @@ export class SecureVaultCreationService {
     )
 
     const eddsaResult = await schnorr.startKeygenWithRetry()
+
+    // Check for abort before finalization
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
 
     // Step 8: Signal completion
     reportProgress({

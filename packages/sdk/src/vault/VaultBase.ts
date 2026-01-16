@@ -22,10 +22,13 @@ import type { Storage } from '../storage/types'
 // Types
 import {
   Balance,
+  CosmosSigningOptions,
   FiatCurrency,
   GasInfoForChain,
+  SignAminoInput,
   Signature,
   SignBytesOptions,
+  SignDirectInput,
   SigningMode,
   SigningPayload,
   Token,
@@ -213,6 +216,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
           ? parsedVaultData.keyShares
           : { ecdsa: '', eddsa: '' }, // Lazy-loaded from vaultFileContent if not provided
       folderId: parsedVault.folderId,
+      chainPublicKeys: parsedVault.chainPublicKeys,
+      chainKeyShares: parsedVault.chainKeyShares,
     }
 
     // Determine vault type
@@ -237,6 +242,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       order: this.coreVault.order,
       folderId: this.coreVault.folderId,
       lastModified: Date.now(),
+
+      // Chain-specific keys (for seedphrase imports)
+      chainPublicKeys: this.coreVault.chainPublicKeys,
+      chainKeyShares: this.coreVault.chainKeyShares,
 
       // User Preferences
       currency: this.config?.defaultCurrency?.toLowerCase() || 'usd',
@@ -880,6 +889,78 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]> {
     return this.transactionBuilder.extractMessageHashes(keysignPayload)
+  }
+
+  /**
+   * Prepare a SignAmino keysign payload for custom Cosmos messages
+   *
+   * SignAmino uses the legacy Amino (JSON) signing format, which is widely
+   * supported across Cosmos SDK chains. Use this for governance votes,
+   * staking operations, IBC transfers, and other custom messages.
+   *
+   * @param input - SignAmino transaction parameters
+   * @param options - Optional signing options
+   * @returns A KeysignPayload ready to be signed with the sign() method
+   *
+   * @example
+   * ```typescript
+   * const payload = await vault.prepareSignAminoTx({
+   *   chain: Chain.Cosmos,
+   *   coin: {
+   *     chain: Chain.Cosmos,
+   *     address: await vault.address(Chain.Cosmos),
+   *     decimals: 6,
+   *     ticker: 'ATOM',
+   *   },
+   *   msgs: [{
+   *     type: 'cosmos-sdk/MsgVote',
+   *     value: JSON.stringify({
+   *       proposal_id: '123',
+   *       voter: cosmosAddress,
+   *       option: 'VOTE_OPTION_YES',
+   *     }),
+   *   }],
+   *   fee: {
+   *     amount: [{ denom: 'uatom', amount: '5000' }],
+   *     gas: '200000',
+   *   },
+   * })
+   * ```
+   */
+  async prepareSignAminoTx(input: SignAminoInput, options?: CosmosSigningOptions): Promise<KeysignPayload> {
+    return this.transactionBuilder.prepareSignAminoTx(input, options)
+  }
+
+  /**
+   * Prepare a SignDirect keysign payload for custom Cosmos messages
+   *
+   * SignDirect uses the modern Protobuf signing format, which is more
+   * efficient and type-safe. Use this when you have pre-encoded transaction
+   * bytes or need exact control over the transaction structure.
+   *
+   * @param input - SignDirect transaction parameters
+   * @param options - Optional signing options
+   * @returns A KeysignPayload ready to be signed with the sign() method
+   *
+   * @example
+   * ```typescript
+   * const payload = await vault.prepareSignDirectTx({
+   *   chain: Chain.Cosmos,
+   *   coin: {
+   *     chain: Chain.Cosmos,
+   *     address: await vault.address(Chain.Cosmos),
+   *     decimals: 6,
+   *     ticker: 'ATOM',
+   *   },
+   *   bodyBytes: encodedTxBodyBase64,
+   *   authInfoBytes: encodedAuthInfoBase64,
+   *   chainId: 'cosmoshub-4',
+   *   accountNumber: '12345',
+   * })
+   * ```
+   */
+  async prepareSignDirectTx(input: SignDirectInput, options?: CosmosSigningOptions): Promise<KeysignPayload> {
+    return this.transactionBuilder.prepareSignDirectTx(input, options)
   }
 
   // ===== TRANSACTION BROADCASTING =====

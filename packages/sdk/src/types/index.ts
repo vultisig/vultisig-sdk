@@ -463,6 +463,10 @@ export type VaultData = {
   tokens: Record<string, Token[]> // Mutable - user's custom tokens per chain
   lastValueUpdate?: number // Mutable - last portfolio value calculation
 
+  // === Chain-specific keys (for seedphrase imports) ===
+  readonly chainPublicKeys?: Partial<Record<string, string>>
+  readonly chainKeyShares?: Partial<Record<string, string>>
+
   // === Raw Vault File (immutable after load) ===
   readonly vultFileContent: string // Set once at import/creation, regenerated on export
 }
@@ -583,3 +587,13 @@ export type {
   SwapTxParams,
 } from '../vault/swap-types'
 export { isAccountCoin, isSimpleCoinInput } from '../vault/swap-types'
+
+// Cosmos signing types
+export type {
+  CosmosCoinAmount,
+  CosmosFeeInput,
+  CosmosMsgInput,
+  CosmosSigningOptions,
+  SignAminoInput,
+  SignDirectInput,
+} from './cosmos'

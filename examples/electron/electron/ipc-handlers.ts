@@ -65,6 +65,14 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   })
 
   ipcMain.handle(
+    'vault:resendVerification',
+    async (_event, options: { vaultId: string; email: string; password: string }) => {
+      const sdk = getSDK()
+      await sdk.resendVaultVerification(options)
+    }
+  )
+
+  ipcMain.handle(
     'vault:createSecure',
     async (
       _event,

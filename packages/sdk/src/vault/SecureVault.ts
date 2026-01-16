@@ -321,6 +321,8 @@ export class SecureVault extends VaultBase {
       devices: number
       /** Signing threshold - defaults to 2/3 majority (ceil(devices*2/3)) */
       threshold?: number
+      /** AbortSignal for cancellation */
+      signal?: AbortSignal
       /** Progress callback */
       onProgress?: (step: VaultCreationStep) => void
       /** Callback when QR code is ready for display */
@@ -333,7 +335,12 @@ export class SecureVault extends VaultBase {
     vaultId: string
     sessionId: string
   }> {
-    const reportProgress = options.onProgress || (() => {})
+    const reportProgress = (step: VaultCreationStep) => {
+      if (options.signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+      options.onProgress?.(step)
+    }
 
     try {
       // Step 1: Create SecureVaultCreationService (uses default relay URL)
@@ -357,6 +364,7 @@ export class SecureVault extends VaultBase {
         password: options.password,
         devices: options.devices,
         threshold: options.threshold,
+        signal: options.signal,
         onProgress: step => reportProgress(mapProgress(step)),
         onQRCodeReady: options.onQRCodeReady,
         onDeviceJoined: options.onDeviceJoined,
