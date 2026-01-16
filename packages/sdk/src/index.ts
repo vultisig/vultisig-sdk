@@ -90,7 +90,6 @@ export type {
   CosmosSigningOptions,
   EvmGasInfo,
   ExportOptions,
-  FastSigningInput,
   GasEstimate,
   GasInfo,
   GasInfoForChain,
@@ -145,23 +144,10 @@ export type {
   ChainDiscoveryPhase,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
-  DerivedMasterKeys,
   ImportSeedphraseAsFastVaultOptions,
   ImportSeedphraseAsSecureVaultOptions,
   SeedphraseImportResult,
   SeedphraseValidation,
   SeedphraseWordCount,
 } from './seedphrase'
-export { SEEDPHRASE_WORD_COUNTS } from './seedphrase'
-
-// Seedphrase utilities (for advanced use cases)
-export {
-  ChainDiscoveryService,
-  cleanMnemonic,
-  MasterKeyDeriver,
-  SeedphraseValidator,
-  validateSeedphrase,
-} from './seedphrase'
-
-// Seedphrase import services
-export { FastVaultSeedphraseImportService, SecureVaultSeedphraseImportService } from './services'
+export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'
