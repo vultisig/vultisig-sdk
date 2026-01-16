@@ -105,6 +105,52 @@ All devices joined. Running keygen...
   Vault ID: vault_abc123def456
 ```
 
+### Import from Seedphrase
+
+Import an existing wallet from a BIP39 recovery phrase (12 or 24 words):
+
+```bash
+# FastVault import (server-assisted 2-of-2)
+vultisig import-seedphrase fast --name "Imported Wallet" --email user@example.com
+
+# SecureVault import (multi-device MPC)
+vultisig import-seedphrase secure --name "Team Wallet" --shares 3
+```
+
+**Import options:**
+- `--mnemonic <words>` - Recovery phrase (space-separated words)
+- `--discover-chains` - Scan chains for existing balances before import
+- `--chains <chains>` - Specific chains to enable (comma-separated)
+
+When `--mnemonic` is not provided, you'll be prompted to enter it securely (masked input).
+
+**Example session:**
+```bash
+$ vultisig import-seedphrase fast --name "My Wallet" --email user@example.com --discover-chains
+
+Enter your 12 or 24-word recovery phrase.
+Words will be hidden as you type.
+
+Seedphrase: ************************
+Password: ********
+✓ Valid 12-word seedphrase
+
+Discovering chains with balances...
+  Bitcoin:     bc1q...xyz     0.05 BTC
+  Ethereum:    0x1234...      1.2 ETH
+✓ Found 2 chains with balances
+
+Importing seedphrase... (35%)
+✓ Keys generated, awaiting email verification
+
+Enter verification code: 123456
+✓ Vault verified successfully!
+
+Vault imported: My Wallet
+  Bitcoin:  bc1q...xyz
+  Ethereum: 0x1234...abc
+```
+
 ### Check Balances
 
 ```bash
@@ -173,6 +219,8 @@ vultisig -i
 | `create` | Create a new fast vault (server-assisted) |
 | `create --secure` | Create a secure vault (multi-device MPC) |
 | `import <file>` | Import vault from .vult file |
+| `import-seedphrase fast` | Import seedphrase as FastVault (2-of-2) |
+| `import-seedphrase secure` | Import seedphrase as SecureVault (N-of-M) |
 | `export [path]` | Export vault to file |
 | `verify <vaultId>` | Verify vault with email code |
 | `vaults` | List all stored vaults |
@@ -185,6 +233,23 @@ vultisig -i
 - `--name <name>` - Vault name
 - `--shares <n>` - Number of devices for secure vault (default: 2)
 - `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
+
+**Import seedphrase options (fast):**
+- `--name <name>` - Vault name (required)
+- `--email <email>` - Email for verification (required)
+- `--password <password>` - Vault password (required, prompted if not provided)
+- `--mnemonic <words>` - Recovery phrase (prompted securely if not provided)
+- `--discover-chains` - Auto-enable chains with existing balances
+- `--chains <chains>` - Specific chains to enable (comma-separated)
+
+**Import seedphrase options (secure):**
+- `--name <name>` - Vault name (required)
+- `--shares <n>` - Number of devices (default: 2)
+- `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
+- `--password <password>` - Vault password (optional)
+- `--mnemonic <words>` - Recovery phrase (prompted securely if not provided)
+- `--discover-chains` - Auto-enable chains with existing balances
+- `--chains <chains>` - Specific chains to enable (comma-separated)
 
 **Export options:**
 - `[path]` - Output file or directory (defaults to SDK-generated filename in current directory)
@@ -463,6 +528,8 @@ vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"<base64-tx-bytes>","sign
 | Command | Description |
 |---------|-------------|
 | `vault <name>` | Switch to a different vault |
+| `create <fast\|secure>` | Create a new vault |
+| `import-seedphrase <fast\|secure>` | Import wallet from recovery phrase |
 | `lock` | Lock vault (clear cached password) |
 | `unlock` | Unlock vault (cache password) |
 | `status` | Show vault status |

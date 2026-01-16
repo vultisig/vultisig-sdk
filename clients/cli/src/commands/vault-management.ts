@@ -1,7 +1,7 @@
 /**
  * Vault Management Commands - create, import, export, verify, switch, rename, info, vaults
  */
-import type { VaultBase } from '@vultisig/sdk'
+import type { Chain, VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
@@ -146,7 +146,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
       if (action === 'resend') {
         const resendSpinner = createSpinner('Resending verification email...')
         try {
-          await ctx.sdk.resendVaultVerification(vaultId)
+          await ctx.sdk.resendVaultVerification({ vaultId, email: email!, password })
           resendSpinner.succeed('Verification email sent!')
           info('Check your inbox for the new code. Note: There may be a ~3 minute cooldown between resends.')
         } catch (resendErr: any) {
@@ -279,13 +279,52 @@ export async function executeImport(ctx: CommandContext, file: string): Promise<
 export async function executeVerify(
   ctx: CommandContext,
   vaultId: string,
-  options: { resend?: boolean; code?: string } = {}
+  options: { resend?: boolean; code?: string; email?: string; password?: string } = {}
 ): Promise<boolean> {
   if (options.resend) {
+    // Get email and password - prompt if not provided via flags
+    let email = options.email
+    let password = options.password
+
+    if (!email || !password) {
+      info('Email and password are required to resend verification.')
+      const answers = await inquirer.prompt([
+        ...(!email
+          ? [
+              {
+                type: 'input',
+                name: 'email',
+                message: 'Email address:',
+                validate: (input: string) => input.includes('@') || 'Please enter a valid email',
+              },
+            ]
+          : []),
+        ...(!password
+          ? [
+              {
+                type: 'password',
+                name: 'password',
+                message: 'Vault password:',
+                mask: '*',
+                validate: (input: string) => input.length >= 8 || 'Password must be at least 8 characters',
+              },
+            ]
+          : []),
+      ])
+      email = email || answers.email
+      password = password || answers.password
+    }
+
     const spinner = createSpinner('Resending verification email...')
-    await ctx.sdk.resendVaultVerification(vaultId)
-    spinner.succeed('Verification email sent!')
-    info('Check your inbox for the new verification code.')
+    try {
+      await ctx.sdk.resendVaultVerification({ vaultId, email: email!, password: password! })
+      spinner.succeed('Verification email sent!')
+      info('Check your inbox for the new verification code.')
+    } catch (resendErr: any) {
+      spinner.fail('Failed to resend verification email')
+      error(resendErr.message || 'Could not resend email. You may need to wait a few minutes.')
+      return false
+    }
   }
 
   let code = options.code
@@ -506,4 +545,293 @@ export async function executeInfo(ctx: CommandContext): Promise<void> {
   }
 
   displayVaultInfo(vault)
+}
+
+// ============================================================================
+// Seedphrase Import Commands
+// ============================================================================
+
+export type ImportSeedphraseFastOptions = {
+  mnemonic: string
+  name: string
+  password: string
+  email: string
+  discoverChains?: boolean
+  chains?: Chain[]
+  signal?: AbortSignal
+}
+
+export type ImportSeedphraseSecureOptions = {
+  mnemonic: string
+  name: string
+  password?: string
+  threshold: number
+  shares: number
+  discoverChains?: boolean
+  chains?: Chain[]
+  signal?: AbortSignal
+}
+
+/**
+ * Import seedphrase as FastVault (server-assisted 2-of-2)
+ */
+export async function executeImportSeedphraseFast(
+  ctx: CommandContext,
+  options: ImportSeedphraseFastOptions
+): Promise<VaultBase> {
+  const { mnemonic, name, password, email, discoverChains, chains, signal } = options
+
+  // 1. Validate seedphrase first
+  const validateSpinner = createSpinner('Validating seedphrase...')
+  const validation = await ctx.sdk.validateSeedphrase(mnemonic)
+  if (!validation.valid) {
+    validateSpinner.fail('Invalid seedphrase')
+    if (validation.invalidWords?.length) {
+      warn(`Invalid words: ${validation.invalidWords.join(', ')}`)
+    }
+    throw new Error(validation.error || 'Invalid mnemonic phrase')
+  }
+  validateSpinner.succeed(`Valid ${validation.wordCount}-word seedphrase`)
+
+  // 2. Optional chain discovery (runs if --discover-chains is set)
+  if (discoverChains) {
+    const discoverSpinner = createSpinner('Discovering chains with balances...')
+    try {
+      // If --chains specified, only scan those; otherwise scan all
+      const discovered = await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
+        discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
+      })
+      const chainsWithBalance = discovered.filter(c => c.hasBalance)
+      discoverSpinner.succeed(`Found ${chainsWithBalance.length} chains with balances`)
+
+      if (chainsWithBalance.length > 0 && !isSilent()) {
+        info('\nChains with balances:')
+        for (const result of chainsWithBalance) {
+          info(`  ${result.chain}: ${result.balance} ${result.symbol}`)
+        }
+        info('')
+      }
+    } catch {
+      discoverSpinner.warn('Chain discovery failed, continuing with import...')
+    }
+  }
+
+  // 3. Import via SDK (discovery already handled by CLI above)
+  const importSpinner = createSpinner('Importing seedphrase...')
+  const vaultId = await withAbortSignal(
+    ctx.sdk.importSeedphraseAsFastVault({
+      mnemonic,
+      name,
+      password,
+      email,
+      // Don't pass discoverChains - CLI handles discovery above
+      chains,
+      onProgress: step => {
+        importSpinner.text = `${step.message} (${step.progress}%)`
+      },
+    }),
+    signal
+  )
+  importSpinner.succeed('Keys generated, email verification required')
+
+  // 4. Email verification flow (same as executeCreateFast)
+  warn('\nA verification code has been sent to your email.')
+  info('Please check your inbox and enter the code.')
+
+  const MAX_VERIFY_ATTEMPTS = 5
+  let attempts = 0
+
+  while (attempts < MAX_VERIFY_ATTEMPTS) {
+    attempts++
+
+    const codeAnswer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'code',
+        message: `Verification code sent to ${email}. Enter code:`,
+        validate: (input: string) => /^\d{4,6}$/.test(input) || 'Code must be 4-6 digits',
+      },
+    ])
+
+    const verifySpinner = createSpinner('Verifying email code...')
+
+    try {
+      const vault = await ctx.sdk.verifyVault(vaultId, codeAnswer.code)
+      verifySpinner.succeed('Email verified successfully!')
+
+      setupVaultEvents(vault)
+      await ctx.setActiveVault(vault)
+
+      success('\n+ Vault imported from seedphrase!')
+      info('\nYour vault is ready. Run the following commands:')
+      printResult(chalk.cyan('  vultisig balance     ') + '- View balances')
+      printResult(chalk.cyan('  vultisig addresses   ') + '- View addresses')
+      printResult(chalk.cyan('  vultisig portfolio   ') + '- View portfolio value')
+
+      return vault
+    } catch (err: any) {
+      verifySpinner.fail('Verification failed')
+      error(`\n✗ ${err.message || 'Invalid verification code'}`)
+
+      if (attempts >= MAX_VERIFY_ATTEMPTS) {
+        warn('\nMaximum attempts reached.')
+        warn('\nTo retry verification later, use:')
+        info(`  vultisig verify ${vaultId}`)
+        err.exitCode = 1
+        throw err
+      }
+
+      const { action } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'action',
+          message: `What would you like to do? (${MAX_VERIFY_ATTEMPTS - attempts} attempts remaining)`,
+          choices: [
+            { name: 'Enter a different code', value: 'retry' },
+            { name: 'Resend verification email (rate limited)', value: 'resend' },
+            { name: 'Abort and verify later', value: 'abort' },
+          ],
+        },
+      ])
+
+      if (action === 'abort') {
+        warn('\nSeedphrase import paused. To complete verification, use:')
+        info(`  vultisig verify ${vaultId}`)
+        warn('\nNote: The pending vault is stored in memory only and will be lost if you exit.')
+        return undefined as any
+      }
+
+      if (action === 'resend') {
+        const resendSpinner = createSpinner('Resending verification email...')
+        try {
+          await ctx.sdk.resendVaultVerification({ vaultId, email, password })
+          resendSpinner.succeed('Verification email sent!')
+          info('Check your inbox for the new code.')
+        } catch (resendErr: any) {
+          resendSpinner.fail('Failed to resend')
+          warn(resendErr.message || 'Could not resend email.')
+        }
+      }
+    }
+  }
+
+  throw new Error('Verification loop exited unexpectedly')
+}
+
+/**
+ * Import seedphrase as SecureVault (multi-device MPC)
+ */
+export async function executeImportSeedphraseSecure(
+  ctx: CommandContext,
+  options: ImportSeedphraseSecureOptions
+): Promise<VaultBase> {
+  const { mnemonic, name, password, threshold, shares: totalShares, discoverChains, chains, signal } = options
+
+  // 1. Validate seedphrase first
+  const validateSpinner = createSpinner('Validating seedphrase...')
+  const validation = await ctx.sdk.validateSeedphrase(mnemonic)
+  if (!validation.valid) {
+    validateSpinner.fail('Invalid seedphrase')
+    if (validation.invalidWords?.length) {
+      warn(`Invalid words: ${validation.invalidWords.join(', ')}`)
+    }
+    throw new Error(validation.error || 'Invalid mnemonic phrase')
+  }
+  validateSpinner.succeed(`Valid ${validation.wordCount}-word seedphrase`)
+
+  // 2. Optional chain discovery (runs if --discover-chains is set)
+  if (discoverChains) {
+    const discoverSpinner = createSpinner('Discovering chains with balances...')
+    try {
+      // If --chains specified, only scan those; otherwise scan all
+      const discovered = await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
+        discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
+      })
+      const chainsWithBalance = discovered.filter(c => c.hasBalance)
+      discoverSpinner.succeed(`Found ${chainsWithBalance.length} chains with balances`)
+
+      if (chainsWithBalance.length > 0 && !isSilent()) {
+        info('\nChains with balances:')
+        for (const result of chainsWithBalance) {
+          info(`  ${result.chain}: ${result.balance} ${result.symbol}`)
+        }
+        info('')
+      }
+    } catch {
+      discoverSpinner.warn('Chain discovery failed, continuing with import...')
+    }
+  }
+
+  // 3. Import via SDK (discovery already handled by CLI above)
+  const importSpinner = createSpinner('Importing seedphrase as secure vault...')
+
+  try {
+    const result = await withAbortSignal(
+      ctx.sdk.importSeedphraseAsSecureVault({
+        mnemonic,
+        name,
+        password,
+        devices: totalShares,
+        threshold,
+        // Don't pass discoverChains - CLI handles discovery above
+        chains,
+        onProgress: step => {
+          importSpinner.text = `${step.message} (${step.progress}%)`
+        },
+        onQRCodeReady: qrPayload => {
+          if (isJsonOutput()) {
+            printResult(qrPayload)
+          } else if (isSilent()) {
+            printResult(`QR Payload: ${qrPayload}`)
+          } else {
+            importSpinner.stop()
+            info('\nScan this QR code with your Vultisig mobile app:')
+            qrcode.generate(qrPayload, { small: true })
+            info(`\nOr use this URL: ${qrPayload}\n`)
+            info(chalk.gray('(Press Ctrl+C to cancel)\n'))
+            importSpinner.start(`Waiting for ${totalShares} devices to join...`)
+          }
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          if (!isSilent()) {
+            importSpinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
+          } else if (!isJsonOutput()) {
+            printResult(`Device joined: ${totalJoined}/${required}`)
+          }
+        },
+      }),
+      signal
+    )
+
+    setupVaultEvents(result.vault)
+    await ctx.setActiveVault(result.vault)
+    importSpinner.succeed(`Secure vault imported: ${name} (${threshold}-of-${totalShares})`)
+
+    if (isJsonOutput()) {
+      outputJson({
+        vault: {
+          id: result.vaultId,
+          name: name,
+          type: 'secure',
+          threshold: threshold,
+          totalSigners: totalShares,
+        },
+        sessionId: result.sessionId,
+      })
+      return result.vault
+    }
+
+    warn(`\nImportant: Save your vault backup file (.vult) in a secure location.`)
+    warn(`This is a ${threshold}-of-${totalShares} vault. You'll need ${threshold} devices to sign transactions.`)
+
+    success('\n+ Vault imported from seedphrase!')
+
+    return result.vault
+  } catch (err: any) {
+    importSpinner.fail('Secure vault import failed')
+    if (err.message?.includes('not implemented')) {
+      warn('\nSecure vault seedphrase import is not yet implemented in the SDK')
+    }
+    throw err
+  }
 }

@@ -7,6 +7,7 @@ import {
   EventLog,
   Layout,
   SecureVaultCreator,
+  SeedphraseImporter,
   Toast,
   useToast,
   Vault,
@@ -337,6 +338,7 @@ function App() {
             <VaultCreator onVaultCreated={handleVaultCreated} />
             <SecureVaultCreator onVaultCreated={handleVaultCreated} />
             <VaultImporter onVaultImported={handleVaultImported} />
+            <SeedphraseImporter onVaultCreated={handleVaultCreated} />
             <hr className="border-gray-200" />
             <Button variant="secondary" fullWidth onClick={() => setIsAddressBookOpen(true)}>
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

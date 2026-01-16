@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createFastVault: (options: { name: string; password: string; email: string }) =>
     ipcRenderer.invoke('vault:createFast', options),
   verifyVault: (vaultId: string, code: string) => ipcRenderer.invoke('vault:verify', vaultId, code),
+  resendVaultVerification: (options: { vaultId: string; email: string; password: string }) =>
+    ipcRenderer.invoke('vault:resendVerification', options),
   createSecureVault: (options: { name: string; password?: string; devices: number; threshold?: number }) =>
     ipcRenderer.invoke('vault:createSecure', options),
   importVault: (content: string, password?: string) => ipcRenderer.invoke('vault:import', content, password),

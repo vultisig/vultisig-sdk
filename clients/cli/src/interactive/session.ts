@@ -34,6 +34,8 @@ import {
   executeCurrency,
   executeExport,
   executeImport,
+  executeImportSeedphraseFast,
+  executeImportSeedphraseSecure,
   executeInfo,
   executePortfolio,
   executeRename,
@@ -336,6 +338,10 @@ export class ShellSession {
         await this.createVault(args)
         break
 
+      case 'import-seedphrase':
+        await this.importSeedphrase(args)
+        break
+
       case 'info':
         await executeInfo(this.ctx)
         break
@@ -546,6 +552,112 @@ export class ShellSession {
           password: password || undefined,
           threshold,
           shares,
+          signal,
+        })
+      )
+    }
+
+    if (vault) {
+      this.ctx.addVault(vault)
+      this.eventBuffer.setupVaultListeners(vault)
+    }
+  }
+
+  private async importSeedphrase(args: string[]): Promise<void> {
+    const type = args[0]?.toLowerCase()
+
+    if (!type || (type !== 'fast' && type !== 'secure')) {
+      console.log(chalk.cyan('Usage: import-seedphrase <fast|secure>'))
+      console.log(chalk.gray('  fast   - Import with VultiServer (2-of-2)'))
+      console.log(chalk.gray('  secure - Import with device coordination (N-of-M)'))
+      return
+    }
+
+    // Prompt for seedphrase (secure input)
+    console.log(chalk.cyan('\nEnter your recovery phrase (words separated by spaces):'))
+    const mnemonic = await this.promptPassword('Seedphrase')
+
+    // Validate immediately
+    const validation = await this.ctx.sdk.validateSeedphrase(mnemonic)
+    if (!validation.valid) {
+      console.log(chalk.red(`Invalid seedphrase: ${validation.error}`))
+      if (validation.invalidWords?.length) {
+        console.log(chalk.yellow(`Invalid words: ${validation.invalidWords.join(', ')}`))
+      }
+      return
+    }
+    console.log(chalk.green(`✓ Valid ${validation.wordCount}-word seedphrase`))
+
+    let vault
+
+    if (type === 'fast') {
+      // Prompt for FastVault options
+      const name = await this.prompt('Vault name')
+      if (!name) {
+        console.log(chalk.red('Name is required'))
+        return
+      }
+
+      const password = await this.promptPassword('Vault password')
+      if (!password) {
+        console.log(chalk.red('Password is required'))
+        return
+      }
+
+      const email = await this.prompt('Email for verification')
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        console.log(chalk.red('Valid email is required'))
+        return
+      }
+
+      const discoverStr = await this.prompt('Discover chains with balances? (y/n)', 'y')
+      const discoverChains = discoverStr.toLowerCase() === 'y'
+
+      vault = await this.withCancellation(signal =>
+        executeImportSeedphraseFast(this.ctx, {
+          mnemonic,
+          name,
+          password,
+          email,
+          discoverChains,
+          signal,
+        })
+      )
+    } else {
+      // Prompt for SecureVault options
+      const name = await this.prompt('Vault name')
+      if (!name) {
+        console.log(chalk.red('Name is required'))
+        return
+      }
+
+      const sharesStr = await this.prompt('Total shares (devices)', '3')
+      const shares = parseInt(sharesStr, 10)
+      if (isNaN(shares) || shares < 2) {
+        console.log(chalk.red('Must have at least 2 shares'))
+        return
+      }
+
+      const thresholdStr = await this.prompt('Signing threshold', '2')
+      const threshold = parseInt(thresholdStr, 10)
+      if (isNaN(threshold) || threshold < 1 || threshold > shares) {
+        console.log(chalk.red(`Threshold must be between 1 and ${shares}`))
+        return
+      }
+
+      const password = await this.promptPassword('Vault password (optional, Enter to skip)')
+
+      const discoverStr = await this.prompt('Discover chains with balances? (y/n)', 'y')
+      const discoverChains = discoverStr.toLowerCase() === 'y'
+
+      vault = await this.withCancellation(signal =>
+        executeImportSeedphraseSecure(this.ctx, {
+          mnemonic,
+          name,
+          password: password || undefined,
+          threshold,
+          shares,
+          discoverChains,
           signal,
         })
       )

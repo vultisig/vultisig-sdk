@@ -12,9 +12,49 @@ env:
   NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
+  # ============ JOB 0: Check if release workflow should run ============
+  check:
+    name: Check Release Conditions
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Check for changesets or release commit
+        id: check
+        run: |
+          # Check if this is a release PR merge (commit message starts with "chore: version packages")
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if [[ "$COMMIT_MSG" == "chore: version packages"* ]]; then
+            echo "Release PR merge detected"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check if there are any changesets (excluding README.md)
+          CHANGESETS=$(find .changeset -name "*.md" ! -name "README.md" 2>/dev/null | head -1)
+          if [ -n "$CHANGESETS" ]; then
+            echo "Changesets found"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check if manually triggered
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger detected"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "No changesets and not a release commit, skipping"
+          echo "should_release=false" >> $GITHUB_OUTPUT
+
   # ============ JOB 1: Build and Publish ============
   release:
     name: Release
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

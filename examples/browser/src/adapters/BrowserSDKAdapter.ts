@@ -8,9 +8,12 @@ import type {
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
+  ImportSeedphraseFastOptions,
+  ImportSeedphraseSecureOptions,
   ISDKAdapter,
   PrepareSwapParams,
   ProgressStep,
+  SeedphraseValidation,
   SendTxParams,
   SwapQuoteResult,
   SwapResult,
@@ -168,6 +171,10 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     return this.vaultToInfo(vault)
   }
 
+  async resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void> {
+    await this.sdk.resendVaultVerification(options)
+  }
+
   async createSecureVault(options: CreateSecureVaultOptions): Promise<CreateSecureVaultResult> {
     const result = await this.sdk.createSecureVault({
       name: options.name,
@@ -209,6 +216,77 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     const vault = await this.getVault(vaultId)
     await this.sdk.deleteVault(vault)
     this.vaultCache.delete(vaultId)
+  }
+
+  // ===== Seedphrase Import =====
+  async validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation> {
+    return this.sdk.validateSeedphrase(mnemonic)
+  }
+
+  async importSeedphraseAsFastVault(options: ImportSeedphraseFastOptions): Promise<{ vaultId: string }> {
+    const vaultId = await this.sdk.importSeedphraseAsFastVault({
+      mnemonic: options.mnemonic,
+      name: options.name,
+      password: options.password,
+      email: options.email,
+      discoverChains: options.discoverChains,
+      chains: options.chains as Chain[],
+      onProgress: step => {
+        const progressStep: ProgressStep = {
+          message: step.message,
+          progress: step.progress,
+          phase: step.step,
+        }
+        // Emit to global callbacks (for event log)
+        this.progressCallbacks.forEach(cb => cb(progressStep))
+        // Emit to component callback (for UI state)
+        options.onProgress?.(progressStep)
+      },
+      onChainDiscovery: options.onChainDiscovery,
+    })
+    return { vaultId }
+  }
+
+  async importSeedphraseAsSecureVault(options: ImportSeedphraseSecureOptions): Promise<CreateSecureVaultResult> {
+    const result = await this.sdk.importSeedphraseAsSecureVault({
+      mnemonic: options.mnemonic,
+      name: options.name,
+      password: options.password,
+      devices: options.devices,
+      threshold: options.threshold,
+      discoverChains: options.discoverChains,
+      chains: options.chains as Chain[],
+      onProgress: step => {
+        const progressStep: ProgressStep = {
+          message: step.message,
+          progress: step.progress,
+          phase: step.step,
+        }
+        // Emit to global callbacks (for event log)
+        this.progressCallbacks.forEach(cb => cb(progressStep))
+        // Emit to component callback (for UI state)
+        options.onProgress?.(progressStep)
+      },
+      onQRCodeReady: qrPayload => {
+        // Emit to global callbacks (for event log)
+        this.qrCallbacks.forEach(cb => cb(qrPayload))
+        // Emit to component callback (for UI state)
+        options.onQRCodeReady?.(qrPayload)
+      },
+      onDeviceJoined: (deviceId, totalJoined, required) => {
+        // Emit to global callbacks (for event log)
+        this.deviceCallbacks.forEach(cb => cb({ deviceId, totalJoined, required }))
+        // Emit to component callback (for UI state)
+        options.onDeviceJoined?.(deviceId, totalJoined, required)
+      },
+      onChainDiscovery: options.onChainDiscovery,
+    })
+    this.vaultCache.set(result.vault.id, result.vault)
+    this.subscribeToVaultEvents(result.vault)
+    return {
+      vault: this.vaultToInfo(result.vault),
+      sessionId: result.sessionId,
+    }
   }
 
   // ===== Vault Operations =====

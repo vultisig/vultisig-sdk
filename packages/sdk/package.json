@@ -83,6 +83,7 @@
     "test:e2e:swap-quotes": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/swap-quotes.test.ts",
     "test:e2e:swap-transactions": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/swap-transactions.test.ts",
     "test:e2e:secure-signing": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/secure-vault-multiparty-signing.test.ts",
+    "test:e2e:seedphrase": "vitest run --config tests/e2e/vitest.config.ts tests/e2e/seedphrase-import.test.ts",
     "_____TEST_WATCH_____": "",
     "test:watch": "vitest --config tests/unit/vitest.config.ts",
     "test:unit:watch": "vitest --config tests/unit/vitest.config.ts tests/unit",

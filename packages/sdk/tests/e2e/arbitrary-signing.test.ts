@@ -375,15 +375,16 @@ describe('E2E: Arbitrary Transaction Signing with ethers.js and bitcoinjs-lib', 
       console.log('✅ broadcastRawTx method is available')
     })
 
-    it('should reject unsupported chains', async () => {
+    it('should reject invalid transaction format', async () => {
+      // Solana expects base58 or base64 encoded transactions, not hex
       await expect(
         vault.broadcastRawTx({
           chain: Chain.Solana,
-          rawTx: '0x1234',
+          rawTx: '0x1234', // Invalid format for Solana
         })
-      ).rejects.toThrow(/not.*supported|unsupported/i)
+      ).rejects.toThrow(/non-base58|invalid|failed/i)
 
-      console.log('✅ Unsupported chain correctly rejected')
+      console.log('✅ Invalid transaction format correctly rejected')
     })
 
     it('should validate EVM raw tx format', async () => {
