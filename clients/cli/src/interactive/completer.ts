@@ -15,8 +15,9 @@ const COMMANDS = [
   'vaults',
   'vault',
   'import',
-  'import-seedphrase',
+  'create-from-seedphrase',
   'create',
+  'join',
   'info',
   'export',
   // Wallet operations
@@ -90,9 +91,18 @@ export function createCompleter(ctx: ShellContext) {
         return completeChainName(partial)
       }
 
-      // Subcommand completion for create and import-seedphrase
-      if ((command === 'create' || command === 'import-seedphrase') && parts.length === 2) {
+      // Subcommand completion for create, create-from-seedphrase, and join
+      if ((command === 'create' || command === 'create-from-seedphrase') && parts.length === 2) {
         const types = ['fast', 'secure']
+        const partial = parts[1] || ''
+        const partialLower = partial.toLowerCase()
+        const matches = types.filter(t => t.startsWith(partialLower))
+        return [matches.length ? matches : types, partial]
+      }
+
+      // Subcommand completion for join (only secure for now)
+      if (command === 'join' && parts.length === 2) {
+        const types = ['secure']
         const partial = parts[1] || ''
         const partialLower = partial.toLowerCase()
         const matches = types.filter(t => t.startsWith(partialLower))
