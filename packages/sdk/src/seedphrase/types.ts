@@ -7,6 +7,32 @@ import type { Chain } from '@core/chain/Chain'
 import type { VaultCreationStep } from '../types'
 
 /**
+ * Supported BIP39 mnemonic languages
+ */
+export const BIP39_LANGUAGES = [
+  'english',
+  'japanese',
+  'korean',
+  'spanish',
+  'chinese_simplified',
+  'chinese_traditional',
+  'french',
+  'italian',
+  'czech',
+  'portuguese',
+] as const
+
+export type Bip39Language = (typeof BIP39_LANGUAGES)[number]
+
+/**
+ * Options for seedphrase validation
+ */
+export type SeedphraseValidationOptions = {
+  /** Explicit language to validate against. If not provided, auto-detects. */
+  language?: Bip39Language
+}
+
+/**
  * Result of seedphrase validation
  */
 export type SeedphraseValidation = {
@@ -18,6 +44,8 @@ export type SeedphraseValidation = {
   invalidWords?: string[]
   /** Error message if validation failed */
   error?: string
+  /** Detected or specified language of the mnemonic */
+  detectedLanguage?: Bip39Language
 }
 
 /**
