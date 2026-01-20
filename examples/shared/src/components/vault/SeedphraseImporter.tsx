@@ -108,7 +108,7 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
     setIsLoading(true)
 
     try {
-      const result = await sdk.importSeedphraseAsFastVault({
+      const result = await sdk.createFastVaultFromSeedphrase({
         mnemonic: mnemonic.trim().toLowerCase(),
         name: formData.name,
         email: formData.email,
@@ -181,7 +181,7 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
     setStep('qr')
 
     try {
-      const result = await sdk.importSeedphraseAsSecureVault({
+      const result = await sdk.createSecureVaultFromSeedphrase({
         mnemonic: mnemonic.trim().toLowerCase(),
         name: formData.name,
         password: formData.password || undefined,

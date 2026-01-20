@@ -1,16 +1,18 @@
 import type {
   BalanceResult,
   BroadcastParams,
+  CreateFastVaultFromSeedphraseOptions,
   CreateFastVaultOptions,
+  CreateSecureVaultFromSeedphraseOptions,
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
   DeviceJoinedData,
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
-  ImportSeedphraseFastOptions,
-  ImportSeedphraseSecureOptions,
   ISDKAdapter,
+  JoinSecureVaultOptions,
+  JoinSecureVaultResult,
   PrepareSwapParams,
   ProgressStep,
   SeedphraseValidation,
@@ -218,13 +220,13 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     this.vaultCache.delete(vaultId)
   }
 
-  // ===== Seedphrase Import =====
+  // ===== Seedphrase Vault Creation =====
   async validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation> {
     return this.sdk.validateSeedphrase(mnemonic)
   }
 
-  async importSeedphraseAsFastVault(options: ImportSeedphraseFastOptions): Promise<{ vaultId: string }> {
-    const vaultId = await this.sdk.importSeedphraseAsFastVault({
+  async createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<{ vaultId: string }> {
+    const vaultId = await this.sdk.createFastVaultFromSeedphrase({
       mnemonic: options.mnemonic,
       name: options.name,
       password: options.password,
@@ -247,8 +249,10 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     return { vaultId }
   }
 
-  async importSeedphraseAsSecureVault(options: ImportSeedphraseSecureOptions): Promise<CreateSecureVaultResult> {
-    const result = await this.sdk.importSeedphraseAsSecureVault({
+  async createSecureVaultFromSeedphrase(
+    options: CreateSecureVaultFromSeedphraseOptions
+  ): Promise<CreateSecureVaultResult> {
+    const result = await this.sdk.createSecureVaultFromSeedphrase({
       mnemonic: options.mnemonic,
       name: options.name,
       password: options.password,
@@ -286,6 +290,41 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     return {
       vault: this.vaultToInfo(result.vault),
       sessionId: result.sessionId,
+    }
+  }
+
+  async joinSecureVault(qrPayload: string, options: JoinSecureVaultOptions): Promise<JoinSecureVaultResult> {
+    const result = await this.sdk.joinSecureVault(qrPayload, {
+      mnemonic: options.mnemonic,
+      password: options.password,
+      devices: options.devices,
+      onProgress: options.onProgress
+        ? step => {
+            const progressStep: ProgressStep = {
+              message: step.message,
+              progress: step.progress,
+              phase: step.step,
+            }
+            // Emit to global callbacks (for event log)
+            this.progressCallbacks.forEach(cb => cb(progressStep))
+            // Emit to component callback (for UI state)
+            options.onProgress?.(progressStep)
+          }
+        : undefined,
+      onDeviceJoined: options.onDeviceJoined
+        ? (deviceId, totalJoined, required) => {
+            // Emit to global callbacks (for event log)
+            this.deviceCallbacks.forEach(cb => cb({ deviceId, totalJoined, required }))
+            // Emit to component callback (for UI state)
+            options.onDeviceJoined?.(deviceId, totalJoined, required)
+          }
+        : undefined,
+    })
+    this.vaultCache.set(result.vault.id, result.vault)
+    this.subscribeToVaultEvents(result.vault)
+    return {
+      vault: this.vaultToInfo(result.vault),
+      vaultId: result.vaultId,
     }
   }
 
