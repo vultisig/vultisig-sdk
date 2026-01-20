@@ -1,5 +1,5 @@
 /**
- * SecureVaultSeedphraseImportService - Imports a seedphrase as a SecureVault
+ * SecureVaultFromSeedphraseService - Creates a SecureVault from a seedphrase
  *
  * Orchestrates the full key import flow with multi-device coordination:
  * 1. Validate mnemonic
@@ -37,28 +37,28 @@ import { randomUUID } from '../crypto'
 import { ChainDiscoveryService } from '../seedphrase/ChainDiscoveryService'
 import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
 import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
-import type { ChainDiscoveryResult, ImportSeedphraseAsSecureVaultOptions } from '../seedphrase/types'
+import type { ChainDiscoveryResult, CreateSecureVaultFromSeedphraseOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 
 /**
- * SecureVaultSeedphraseImportService
+ * SecureVaultFromSeedphraseService
  *
- * Imports an existing BIP39 seedphrase into a SecureVault (multi-device MPC).
+ * Creates a SecureVault from an existing BIP39 seedphrase via multi-device MPC.
  * Coordinates with mobile apps via QR code for device pairing.
  *
  * @example
  * ```typescript
- * const service = new SecureVaultSeedphraseImportService(context)
- * const result = await service.importSeedphrase({
+ * const service = new SecureVaultFromSeedphraseService(context)
+ * const result = await service.createFromSeedphrase({
  *   mnemonic: 'abandon abandon ... about',
- *   name: 'Imported Wallet',
+ *   name: 'My Wallet',
  *   devices: 2,
  *   onQRCodeReady: (qrPayload) => displayQRCode(qrPayload),
  * })
  * ```
  */
-export class SecureVaultSeedphraseImportService {
+export class SecureVaultFromSeedphraseService {
   private readonly validator: SeedphraseValidator
   private readonly keyDeriver: MasterKeyDeriver
   private readonly discoveryService: ChainDiscoveryService
@@ -174,12 +174,12 @@ export class SecureVaultSeedphraseImportService {
   }
 
   /**
-   * Import a seedphrase as a SecureVault
+   * Create a SecureVault from a seedphrase
    *
-   * @param options - Import options
-   * @returns Import result with vault and session information
+   * @param options - Creation options
+   * @returns Creation result with vault and session information
    */
-  async importSeedphrase(options: ImportSeedphraseAsSecureVaultOptions): Promise<{
+  async createFromSeedphrase(options: CreateSecureVaultFromSeedphraseOptions): Promise<{
     vault: CoreVault
     vaultId: string
     sessionId: string

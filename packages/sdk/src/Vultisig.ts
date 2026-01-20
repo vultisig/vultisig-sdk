@@ -16,16 +16,19 @@ import { SeedphraseValidator } from './seedphrase/SeedphraseValidator'
 import type {
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
-  ImportSeedphraseAsFastVaultOptions,
-  ImportSeedphraseAsSecureVaultOptions,
+  CreateFastVaultFromSeedphraseOptions,
+  CreateSecureVaultFromSeedphraseOptions,
+  JoinSecureVaultOptions,
   SeedphraseValidation,
 } from './seedphrase/types'
 import { FastSigningService } from './services/FastSigningService'
-import { FastVaultSeedphraseImportService } from './services/FastVaultSeedphraseImportService'
-import { SecureVaultSeedphraseImportService } from './services/SecureVaultSeedphraseImportService'
+import { FastVaultFromSeedphraseService } from './services/FastVaultFromSeedphraseService'
+import { JoinSecureVaultService } from './services/JoinSecureVaultService'
+import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
 import { createVaultBackup } from './utils/export'
+import { parseKeygenQR } from './utils/parseKeygenQR'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
@@ -486,19 +489,19 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * Import a seedphrase as a FastVault (2-of-3 with VultiServer)
+   * Create a FastVault from a seedphrase (2-of-3 with VultiServer)
    *
    * Creates a FastVault from an existing BIP39 seedphrase. The vault requires
    * email verification before it can be used.
    *
-   * @param options - Import options including mnemonic, name, password, and email
+   * @param options - Creation options including mnemonic, name, password, and email
    * @returns Vault ID (call verifyVault with this ID and email code to get the vault)
    *
    * @example
    * ```typescript
-   * const vaultId = await sdk.importSeedphraseAsFastVault({
+   * const vaultId = await sdk.createFastVaultFromSeedphrase({
    *   mnemonic: 'abandon abandon abandon ... about',
-   *   name: 'Imported Wallet',
+   *   name: 'My Wallet',
    *   password: 'securePassword',
    *   email: 'user@example.com',
    *   discoverChains: true,
@@ -511,10 +514,10 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * const vault = await sdk.verifyVault(vaultId, code)
    * ```
    */
-  async importSeedphraseAsFastVault(options: ImportSeedphraseAsFastVaultOptions): Promise<string> {
+  async createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<string> {
     await this.ensureInitialized()
-    const importService = new FastVaultSeedphraseImportService(this.context)
-    const result = await importService.importSeedphrase(options)
+    const service = new FastVaultFromSeedphraseService(this.context)
+    const result = await service.createFromSeedphrase(options)
 
     // Create backup file from CoreVault
     const vultContent = await createVaultBackup(result.vault, options.password)
@@ -550,19 +553,19 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * Import a seedphrase as a SecureVault (multi-device MPC)
+   * Create a SecureVault from a seedphrase (multi-device MPC)
    *
    * Creates a SecureVault from an existing BIP39 seedphrase using multi-device
    * coordination. Requires QR code scanning by other devices.
    *
-   * @param options - Import options including mnemonic, name, device count
+   * @param options - Creation options including mnemonic, name, device count
    * @returns Created vault, vault ID, and session ID
    *
    * @example
    * ```typescript
-   * const result = await sdk.importSeedphraseAsSecureVault({
+   * const result = await sdk.createSecureVaultFromSeedphrase({
    *   mnemonic: 'abandon abandon abandon ... about',
-   *   name: 'Imported Secure Wallet',
+   *   name: 'My Secure Wallet',
    *   devices: 2,
    *   discoverChains: true,
    *   onProgress: (step) => console.log(step.message),
@@ -573,15 +576,15 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * console.log('Vault created:', result.vaultId)
    * ```
    */
-  async importSeedphraseAsSecureVault(options: ImportSeedphraseAsSecureVaultOptions): Promise<{
+  async createSecureVaultFromSeedphrase(options: CreateSecureVaultFromSeedphraseOptions): Promise<{
     vault: SecureVault
     vaultId: string
     sessionId: string
     discoveredChains?: ChainDiscoveryResult[]
   }> {
     await this.ensureInitialized()
-    const importService = new SecureVaultSeedphraseImportService(this.context)
-    const result = await importService.importSeedphrase(options)
+    const service = new SecureVaultFromSeedphraseService(this.context)
+    const result = await service.createFromSeedphrase(options)
 
     // Create backup file from CoreVault (use password if provided, empty string otherwise)
     const vultContent = await createVaultBackup(result.vault, options.password || '')
@@ -620,6 +623,95 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       vaultId: result.vaultId,
       sessionId: result.sessionId,
       discoveredChains: result.discoveredChains,
+    }
+  }
+
+  /**
+   * Join an existing SecureVault creation session as a non-initiator device.
+   *
+   * This method works for both fresh keygen (createSecureVault) and seedphrase-based
+   * (createSecureVaultFromSeedphrase) sessions. The mode is auto-detected from the
+   * QR payload's libType field.
+   *
+   * @param qrPayload - The QR code content from the initiator device (vultisig://...)
+   * @param options - Join options (mnemonic required for seedphrase-based sessions)
+   * @returns The created SecureVault and vault ID
+   *
+   * @example
+   * ```typescript
+   * // Example 1: Joining a fresh keygen session
+   * let qrPayload: string
+   * const initiatorPromise = sdk1.createSecureVault({
+   *   name: 'Shared Vault',
+   *   devices: 3,
+   *   password: 'secret',
+   *   onQRCodeReady: (qr) => { qrPayload = qr }
+   * })
+   *
+   * // No mnemonic needed for keygen
+   * const joinerResult = await sdk2.joinSecureVault(qrPayload, { devices: 3 })
+   *
+   * // Example 2: Joining a seedphrase-based session
+   * let qrPayload: string
+   * const initiatorPromise = sdk1.createSecureVaultFromSeedphrase({
+   *   mnemonic: seedphrase,
+   *   name: 'Shared Vault',
+   *   devices: 3,
+   *   onQRCodeReady: (qr) => { qrPayload = qr }
+   * })
+   *
+   * // Mnemonic required for seedphrase-based vaults
+   * const joinerResult = await sdk2.joinSecureVault(qrPayload, {
+   *   mnemonic: seedphrase,
+   *   devices: 3,
+   * })
+   * ```
+   */
+  async joinSecureVault(
+    qrPayload: string,
+    options: JoinSecureVaultOptions
+  ): Promise<{
+    vault: SecureVault
+    vaultId: string
+  }> {
+    await this.ensureInitialized()
+
+    // Parse QR payload
+    const qrParams = await parseKeygenQR(qrPayload)
+
+    // Create join service and execute (auto-detects keygen vs from-seedphrase)
+    const joinService = new JoinSecureVaultService(this.context)
+    const result = await joinService.join(qrParams, options)
+
+    // Create backup file from CoreVault
+    const vultContent = await createVaultBackup(result.vault, options.password || '')
+
+    // Build VaultContext from SdkContext
+    const vaultContext: VaultContext = {
+      storage: this.context.storage,
+      config: this.context.config,
+      serverManager: this.context.serverManager,
+      passwordCache: this.context.passwordCache,
+      wasmProvider: this.context.wasmProvider,
+    }
+
+    // Create SecureVault from import
+    const vault = SecureVault.fromImport(result.vaultId, vultContent, result.vault, vaultContext)
+
+    // Cache password if provided
+    if (options.password) {
+      this.context.passwordCache.set(result.vaultId, options.password)
+    }
+
+    // Save the vault and set as active
+    await vault.save()
+    await this.vaultManager.setActiveVault(result.vaultId)
+
+    this.emit('vaultChanged', { vaultId: result.vaultId })
+
+    return {
+      vault,
+      vaultId: result.vaultId,
     }
   }
 

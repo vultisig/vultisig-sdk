@@ -45,11 +45,11 @@ describe('E2E: Seedphrase Import', () => {
   })
 
   describe('API Surface', () => {
-    it('should expose all seedphrase import methods', () => {
+    it('should expose all seedphrase methods', () => {
       expect(typeof sdk.validateSeedphrase).toBe('function')
       expect(typeof sdk.discoverChainsFromSeedphrase).toBe('function')
-      expect(typeof sdk.importSeedphraseAsFastVault).toBe('function')
-      expect(typeof sdk.importSeedphraseAsSecureVault).toBe('function')
+      expect(typeof sdk.createFastVaultFromSeedphrase).toBe('function')
+      expect(typeof sdk.createSecureVaultFromSeedphrase).toBe('function')
     })
   })
 
@@ -264,11 +264,11 @@ describe('E2E: Seedphrase Import', () => {
     })
   })
 
-  describe('FastVault Import', () => {
-    it('should validate mnemonic before import', async () => {
+  describe('FastVault from Seedphrase', () => {
+    it('should validate mnemonic before creation', async () => {
       // Invalid mnemonic should throw
       await expect(
-        sdk.importSeedphraseAsFastVault({
+        sdk.createFastVaultFromSeedphrase({
           mnemonic: 'invalid mnemonic words',
           name: 'Test Vault',
           password: 'testPassword123',
@@ -276,10 +276,10 @@ describe('E2E: Seedphrase Import', () => {
         })
       ).rejects.toThrow()
 
-      console.log('✅ Correctly rejected invalid mnemonic for import')
+      console.log('✅ Correctly rejected invalid mnemonic for creation')
     })
 
-    it('should report progress during import initialization', async () => {
+    it('should report progress during creation initialization', async () => {
       if (!TEST_SEEDPHRASE) {
         console.log('⏭️  Skipping: TEST_SEEDPHRASE not set')
         return
@@ -289,9 +289,9 @@ describe('E2E: Seedphrase Import', () => {
 
       // Note: This test will fail at the MPC coordination step since we don't have
       // a real VultiServer. This is expected - we're testing the pre-MPC flow.
-      console.log('🔧 Testing import progress reporting...')
+      console.log('🔧 Testing creation progress reporting...')
       try {
-        await sdk.importSeedphraseAsFastVault({
+        await sdk.createFastVaultFromSeedphrase({
           mnemonic: TEST_SEEDPHRASE,
           name: 'Test Vault',
           password: 'testPassword123',
