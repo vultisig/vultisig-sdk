@@ -30,12 +30,12 @@ import {
   executeBalance,
   executeChains,
   executeCreateFast,
+  executeCreateFromSeedphraseFast,
+  executeCreateFromSeedphraseSecure,
   executeCreateSecure,
   executeCurrency,
   executeExport,
   executeImport,
-  executeImportSeedphraseFast,
-  executeImportSeedphraseSecure,
   executeInfo,
   executePortfolio,
   executeRename,
@@ -338,7 +338,7 @@ export class ShellSession {
         await this.createVault(args)
         break
 
-      case 'import-seedphrase':
+      case 'create-from-seedphrase':
         await this.importSeedphrase(args)
         break
 
@@ -567,7 +567,7 @@ export class ShellSession {
     const type = args[0]?.toLowerCase()
 
     if (!type || (type !== 'fast' && type !== 'secure')) {
-      console.log(chalk.cyan('Usage: import-seedphrase <fast|secure>'))
+      console.log(chalk.cyan('Usage: create-from-seedphrase <fast|secure>'))
       console.log(chalk.gray('  fast   - Import with VultiServer (2-of-2)'))
       console.log(chalk.gray('  secure - Import with device coordination (N-of-M)'))
       return
@@ -614,7 +614,7 @@ export class ShellSession {
       const discoverChains = discoverStr.toLowerCase() === 'y'
 
       vault = await this.withCancellation(signal =>
-        executeImportSeedphraseFast(this.ctx, {
+        executeCreateFromSeedphraseFast(this.ctx, {
           mnemonic,
           name,
           password,
@@ -651,7 +651,7 @@ export class ShellSession {
       const discoverChains = discoverStr.toLowerCase() === 'y'
 
       vault = await this.withCancellation(signal =>
-        executeImportSeedphraseSecure(this.ctx, {
+        executeCreateFromSeedphraseSecure(this.ctx, {
           mnemonic,
           name,
           password: password || undefined,

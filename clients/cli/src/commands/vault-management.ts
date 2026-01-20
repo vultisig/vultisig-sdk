@@ -551,7 +551,7 @@ export async function executeInfo(ctx: CommandContext): Promise<void> {
 // Seedphrase Import Commands
 // ============================================================================
 
-export type ImportSeedphraseFastOptions = {
+export type CreateFromSeedphraseFastOptions = {
   mnemonic: string
   name: string
   password: string
@@ -561,7 +561,7 @@ export type ImportSeedphraseFastOptions = {
   signal?: AbortSignal
 }
 
-export type ImportSeedphraseSecureOptions = {
+export type CreateFromSeedphraseSecureOptions = {
   mnemonic: string
   name: string
   password?: string
@@ -575,9 +575,9 @@ export type ImportSeedphraseSecureOptions = {
 /**
  * Import seedphrase as FastVault (server-assisted 2-of-2)
  */
-export async function executeImportSeedphraseFast(
+export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
-  options: ImportSeedphraseFastOptions
+  options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
   const { mnemonic, name, password, email, discoverChains, chains, signal } = options
 
@@ -619,7 +619,7 @@ export async function executeImportSeedphraseFast(
   // 3. Import via SDK (discovery already handled by CLI above)
   const importSpinner = createSpinner('Importing seedphrase...')
   const vaultId = await withAbortSignal(
-    ctx.sdk.importSeedphraseAsFastVault({
+    ctx.sdk.createFastVaultFromSeedphrase({
       mnemonic,
       name,
       password,
@@ -662,7 +662,7 @@ export async function executeImportSeedphraseFast(
       setupVaultEvents(vault)
       await ctx.setActiveVault(vault)
 
-      success('\n+ Vault imported from seedphrase!')
+      success('\n+ Vault created from seedphrase!')
       info('\nYour vault is ready. Run the following commands:')
       printResult(chalk.cyan('  vultisig balance     ') + '- View balances')
       printResult(chalk.cyan('  vultisig addresses   ') + '- View addresses')
@@ -721,9 +721,9 @@ export async function executeImportSeedphraseFast(
 /**
  * Import seedphrase as SecureVault (multi-device MPC)
  */
-export async function executeImportSeedphraseSecure(
+export async function executeCreateFromSeedphraseSecure(
   ctx: CommandContext,
-  options: ImportSeedphraseSecureOptions
+  options: CreateFromSeedphraseSecureOptions
 ): Promise<VaultBase> {
   const { mnemonic, name, password, threshold, shares: totalShares, discoverChains, chains, signal } = options
 
@@ -767,7 +767,7 @@ export async function executeImportSeedphraseSecure(
 
   try {
     const result = await withAbortSignal(
-      ctx.sdk.importSeedphraseAsSecureVault({
+      ctx.sdk.createSecureVaultFromSeedphrase({
         mnemonic,
         name,
         password,
@@ -824,14 +824,79 @@ export async function executeImportSeedphraseSecure(
     warn(`\nImportant: Save your vault backup file (.vult) in a secure location.`)
     warn(`This is a ${threshold}-of-${totalShares} vault. You'll need ${threshold} devices to sign transactions.`)
 
-    success('\n+ Vault imported from seedphrase!')
+    success('\n+ Vault created from seedphrase!')
 
     return result.vault
   } catch (err: any) {
-    importSpinner.fail('Secure vault import failed')
+    importSpinner.fail('Secure vault creation failed')
     if (err.message?.includes('not implemented')) {
-      warn('\nSecure vault seedphrase import is not yet implemented in the SDK')
+      warn('\nSecure vault creation from seedphrase is not yet implemented in the SDK')
     }
+    throw err
+  }
+}
+
+// ============================================================================
+// Join SecureVault Command
+// ============================================================================
+
+export type JoinSecureOptions = {
+  qrPayload: string
+  mnemonic?: string
+  password?: string
+  devices?: number
+  signal?: AbortSignal
+}
+
+/**
+ * Join an existing SecureVault creation session
+ */
+export async function executeJoinSecure(ctx: CommandContext, options: JoinSecureOptions): Promise<VaultBase> {
+  const { qrPayload, mnemonic, password, devices = 2, signal } = options
+
+  const spinner = createSpinner('Joining SecureVault session...')
+
+  try {
+    const result = await withAbortSignal(
+      ctx.sdk.joinSecureVault(qrPayload, {
+        mnemonic,
+        password,
+        devices,
+        onProgress: step => {
+          spinner.text = `${step.message} (${step.progress}%)`
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          if (!isSilent()) {
+            spinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
+          } else if (!isJsonOutput()) {
+            printResult(`Device joined: ${totalJoined}/${required}`)
+          }
+        },
+      }),
+      signal
+    )
+
+    setupVaultEvents(result.vault)
+    await ctx.setActiveVault(result.vault)
+    spinner.succeed(`Joined SecureVault: ${result.vault.name}`)
+
+    if (isJsonOutput()) {
+      outputJson({
+        vault: {
+          id: result.vaultId,
+          name: result.vault.name,
+          type: 'secure',
+        },
+      })
+      return result.vault
+    }
+
+    warn('\nImportant: Save your vault backup file (.vult) in a secure location.')
+    success('\n+ Successfully joined vault!')
+
+    return result.vault
+  } catch (err: any) {
+    spinner.fail('Failed to join SecureVault session')
     throw err
   }
 }
