@@ -1,8 +1,8 @@
 /**
- * Seedphrase import module for Vultisig SDK
+ * Seedphrase module for Vultisig SDK
  *
- * This module provides functionality to import existing BIP39 seedphrases
- * into Vultisig vaults using the TSS (Threshold Signature Scheme) protocol.
+ * This module provides functionality to create Vultisig vaults from
+ * existing BIP39 seedphrases using the TSS (Threshold Signature Scheme) protocol.
  */
 
 // Types
@@ -10,9 +10,10 @@ export type {
   ChainDiscoveryPhase,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
+  CreateFastVaultFromSeedphraseOptions,
+  CreateSecureVaultFromSeedphraseOptions,
   DerivedMasterKeys,
-  ImportSeedphraseAsFastVaultOptions,
-  ImportSeedphraseAsSecureVaultOptions,
+  JoinSecureVaultOptions,
   SeedphraseImportResult,
   SeedphraseValidation,
   SeedphraseWordCount,

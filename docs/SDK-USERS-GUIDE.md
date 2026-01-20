@@ -7,7 +7,7 @@
 - [Core Concepts](#core-concepts)
 - [Password Management](#password-management)
 - [Vault Management](#vault-management)
-- [Seedphrase Import](#seedphrase-import)
+- [Creating Vaults from Seedphrase](#creating-vaults-from-seedphrase)
 - [Essential Operations](#essential-operations)
 - [Token Swaps](#token-swaps)
 - [Configuration](#configuration)
@@ -704,7 +704,7 @@ console.log('Vault renamed to:', vault.name)
 
 ---
 
-## Seedphrase Import
+## Creating Vaults from Seedphrase
 
 Import existing wallets from BIP39 mnemonic phrases (12 or 24 words). This allows migrating wallets from other applications into Vultisig.
 
@@ -756,12 +756,12 @@ for (const result of results) {
 - `fetching` - Fetching balances from blockchain
 - `complete` - Discovery finished
 
-### Importing as FastVault
+### Creating a FastVault from Seedphrase
 
 Import a seedphrase with VultiServer assistance (2-of-2 threshold):
 
 ```typescript
-const vaultId = await sdk.importSeedphraseAsFastVault({
+const vaultId = await sdk.createFastVaultFromSeedphrase({
   mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
   name: 'Imported Wallet',
   email: 'user@example.com',
@@ -789,12 +789,12 @@ const vault = await sdk.verifyVault(vaultId, code)
 console.log('Import complete:', vault.name)
 ```
 
-### Importing as SecureVault
+### Creating a SecureVault from Seedphrase
 
 Import a seedphrase with multi-device MPC (N-of-M threshold):
 
 ```typescript
-const { vault, vaultId, sessionId } = await sdk.importSeedphraseAsSecureVault({
+const { vault, vaultId, sessionId } = await sdk.createSecureVaultFromSeedphrase({
   mnemonic: 'abandon abandon abandon...',
   name: 'Team Wallet',
   devices: 3,      // Total devices
@@ -820,14 +820,76 @@ const { vault, vaultId, sessionId } = await sdk.importSeedphraseAsSecureVault({
 console.log('SecureVault imported:', vault.name)
 ```
 
-### Import Flow Comparison
+### Joining a SecureVault Session (Programmatic Multi-Device)
 
-| Feature | FastVault Import | SecureVault Import |
-|---------|-----------------|-------------------|
+Use `joinSecureVault()` to programmatically join an existing vault creation session from another SDK instance. This enables multi-device coordination without QR code scanning.
+
+**Example 1: Joining a fresh keygen session**
+
+```typescript
+// Device 1 initiates
+let qrPayload: string
+const promise1 = sdk1.createSecureVault({
+  name: 'Shared Vault',
+  devices: 3,
+  password: 'optional',
+  onQRCodeReady: (qr) => { qrPayload = qr }
+})
+
+// Device 2 joins (no mnemonic needed for keygen)
+const promise2 = sdk2.joinSecureVault(qrPayload, {
+  devices: 3
+})
+
+// Device 3 joins
+const promise3 = sdk3.joinSecureVault(qrPayload, {
+  devices: 3
+})
+
+// Wait for all to complete
+const [result1, result2, result3] = await Promise.all([promise1, promise2, promise3])
+// All have matching vaultId but unique localPartyId
+```
+
+**Example 2: Joining a seedphrase-based session**
+
+```typescript
+// Device 1 initiates with seedphrase
+let qrPayload: string
+const promise1 = sdk1.createSecureVaultFromSeedphrase({
+  mnemonic: seedphrase,
+  name: 'Shared Wallet',
+  devices: 3,
+  onQRCodeReady: (qr) => { qrPayload = qr }
+})
+
+// Device 2 joins (mnemonic required - must match!)
+const promise2 = sdk2.joinSecureVault(qrPayload, {
+  mnemonic: seedphrase,
+  devices: 3
+})
+
+// Device 3 joins
+const promise3 = sdk3.joinSecureVault(qrPayload, {
+  mnemonic: seedphrase,
+  devices: 3
+})
+
+const [result1, result2, result3] = await Promise.all([promise1, promise2, promise3])
+```
+
+**Auto-detection:** The `joinSecureVault()` method automatically detects whether the session is a fresh keygen or seedphrase-based from the QR payload's `libType` field. For seedphrase sessions, the `mnemonic` option is required and must match the initiator's mnemonic.
+
+### Creation Flow Comparison
+
+| Feature | FastVault from Seedphrase | SecureVault from Seedphrase |
+|---------|---------------------------|------------------------------|
+| **Method** | `createFastVaultFromSeedphrase()` | `createSecureVaultFromSeedphrase()` |
 | **Threshold** | 2-of-2 (with VultiServer) | N-of-M (configurable) |
-| **Verification** | Email code required | Device pairing via QR |
+| **Verification** | Email code required | Device pairing via QR or `joinSecureVault()` |
 | **Password** | Required | Optional |
 | **Signing** | Instant | Requires device coordination |
+| **Joiner Method** | N/A (server auto-joins) | `joinSecureVault()` |
 
 ### Security Considerations
 
@@ -1981,18 +2043,22 @@ class Vultisig {
   static isFastVault(vault: VaultBase): vault is FastVault
   static isSecureVault(vault: VaultBase): vault is SecureVault
 
-  // Seedphrase import
+  // Seedphrase-based vault creation
   validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation>
   discoverChainsFromSeedphrase(
     mnemonic: string,
     chains?: Chain[],
     onProgress?: (progress: ChainDiscoveryProgress) => void
   ): Promise<ChainDiscoveryResult[]>
-  importSeedphraseAsFastVault(options: ImportSeedphraseAsFastVaultOptions): Promise<string>
-  importSeedphraseAsSecureVault(options: ImportSeedphraseAsSecureVaultOptions): Promise<{
+  createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<string>
+  createSecureVaultFromSeedphrase(options: CreateSecureVaultFromSeedphraseOptions): Promise<{
     vault: SecureVault
     vaultId: string
     sessionId: string
+  }>
+  joinSecureVault(qrPayload: string, options: JoinSecureVaultOptions): Promise<{
+    vault: SecureVault
+    vaultId: string
   }>
 
   // Address book
@@ -2258,7 +2324,7 @@ interface CosmosSigningOptions {
 }
 ```
 
-### Seedphrase Import Types
+### Seedphrase & Vault Creation Types
 
 ```typescript
 type SeedphraseValidation = {
@@ -2288,7 +2354,7 @@ type ChainDiscoveryResult = {
   hasBalance: boolean
 }
 
-type ImportSeedphraseAsFastVaultOptions = {
+type CreateFastVaultFromSeedphraseOptions = {
   mnemonic: string
   name: string
   email: string
@@ -2300,7 +2366,7 @@ type ImportSeedphraseAsFastVaultOptions = {
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
 
-type ImportSeedphraseAsSecureVaultOptions = {
+type CreateSecureVaultFromSeedphraseOptions = {
   mnemonic: string
   name: string
   password?: string
@@ -2312,6 +2378,21 @@ type ImportSeedphraseAsSecureVaultOptions = {
   onQRCodeReady?: (qrPayload: string) => void
   onDeviceJoined?: (deviceId: string, total: number, required: number) => void
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+}
+
+type JoinSecureVaultOptions = {
+  /** Mnemonic (required for seedphrase vaults, ignored for keygen) */
+  mnemonic?: string
+  /** Vault encryption password */
+  password?: string
+  /** Number of devices */
+  devices?: number
+  /** Cancellation signal */
+  signal?: AbortSignal
+  /** Progress callback */
+  onProgress?: (step: VaultCreationStep) => void
+  /** Device join callback */
+  onDeviceJoined?: (deviceId: string, total: number, required: number) => void
 }
 ```
 

@@ -18,6 +18,7 @@ export type {
 } from './SecureVaultCreationService'
 export { SecureVaultCreationService } from './SecureVaultCreationService'
 
-// Seedphrase Import Services
-export { FastVaultSeedphraseImportService } from './FastVaultSeedphraseImportService'
-export { SecureVaultSeedphraseImportService } from './SecureVaultSeedphraseImportService'
+// Vault Creation from Seedphrase Services
+export { FastVaultFromSeedphraseService } from './FastVaultFromSeedphraseService'
+export { JoinSecureVaultService } from './JoinSecureVaultService'
+export { SecureVaultFromSeedphraseService } from './SecureVaultFromSeedphraseService'
