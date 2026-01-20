@@ -1,15 +1,18 @@
 import type {
   BalanceResult,
   BroadcastParams,
+  CreateFastVaultFromSeedphraseOptions,
   CreateFastVaultOptions,
+  CreateSecureVaultFromSeedphraseOptions,
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
   DeviceJoinedData,
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
-  ImportSeedphraseFastOptions,
-  ImportSeedphraseSecureOptions,
+  ISDKAdapter,
+  JoinSecureVaultOptions,
+  JoinSecureVaultResult,
   PrepareSwapParams,
   ProgressStep,
   SeedphraseValidation,
@@ -20,7 +23,6 @@ import type {
   ValueResult,
   VaultInfo,
 } from '@vultisig/examples-shared'
-import type { ISDKAdapter } from '@vultisig/examples-shared'
 
 // Declare the window.electronAPI type
 declare global {
@@ -49,9 +51,9 @@ declare global {
       setActiveVault(vaultId: string | null): Promise<void>
       getActiveVault(): Promise<VaultInfo | null>
 
-      // Seedphrase import
+      // Seedphrase vault creation
       validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation>
-      importSeedphraseAsFastVault(options: {
+      createFastVaultFromSeedphrase(options: {
         mnemonic: string
         name: string
         password: string
@@ -59,7 +61,7 @@ declare global {
         discoverChains?: boolean
         chains?: string[]
       }): Promise<{ vaultId: string }>
-      importSeedphraseAsSecureVault(options: {
+      createSecureVaultFromSeedphrase(options: {
         mnemonic: string
         name: string
         password?: string
@@ -68,6 +70,14 @@ declare global {
         discoverChains?: boolean
         chains?: string[]
       }): Promise<CreateSecureVaultResult>
+      joinSecureVault(
+        qrPayload: string,
+        options: {
+          mnemonic?: string
+          password?: string
+          devices?: number
+        }
+      ): Promise<JoinSecureVaultResult>
 
       // Vault operations
       getAddress(vaultId: string, chain: string): Promise<string>
@@ -240,13 +250,13 @@ export class ElectronSDKAdapter implements ISDKAdapter {
     return window.electronAPI.deleteVault(vaultId)
   }
 
-  // ===== Seedphrase Import =====
+  // ===== Seedphrase Vault Creation =====
   async validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation> {
     return window.electronAPI.validateSeedphrase(mnemonic)
   }
 
-  async importSeedphraseAsFastVault(options: ImportSeedphraseFastOptions): Promise<{ vaultId: string }> {
-    return window.electronAPI.importSeedphraseAsFastVault({
+  async createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<{ vaultId: string }> {
+    return window.electronAPI.createFastVaultFromSeedphrase({
       mnemonic: options.mnemonic,
       name: options.name,
       password: options.password,
@@ -256,8 +266,10 @@ export class ElectronSDKAdapter implements ISDKAdapter {
     })
   }
 
-  async importSeedphraseAsSecureVault(options: ImportSeedphraseSecureOptions): Promise<CreateSecureVaultResult> {
-    return window.electronAPI.importSeedphraseAsSecureVault({
+  async createSecureVaultFromSeedphrase(
+    options: CreateSecureVaultFromSeedphraseOptions
+  ): Promise<CreateSecureVaultResult> {
+    return window.electronAPI.createSecureVaultFromSeedphrase({
       mnemonic: options.mnemonic,
       name: options.name,
       password: options.password,
@@ -265,6 +277,14 @@ export class ElectronSDKAdapter implements ISDKAdapter {
       threshold: options.threshold,
       discoverChains: options.discoverChains,
       chains: options.chains,
+    })
+  }
+
+  async joinSecureVault(qrPayload: string, options: JoinSecureVaultOptions): Promise<JoinSecureVaultResult> {
+    return window.electronAPI.joinSecureVault(qrPayload, {
+      mnemonic: options.mnemonic,
+      password: options.password,
+      devices: options.devices,
     })
   }
 

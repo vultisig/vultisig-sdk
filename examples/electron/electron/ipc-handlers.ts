@@ -177,6 +177,115 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     }
   })
 
+  // === SEEDPHRASE VAULT CREATION ===
+
+  ipcMain.handle('seedphrase:validate', async (_event, mnemonic: string) => {
+    const sdk = getSDK()
+    return sdk.validateSeedphrase(mnemonic)
+  })
+
+  ipcMain.handle(
+    'vault:createFastFromSeedphrase',
+    async (
+      _event,
+      options: {
+        mnemonic: string
+        name: string
+        password: string
+        email: string
+        discoverChains?: boolean
+        chains?: string[]
+      }
+    ) => {
+      const sdk = getSDK()
+      const vaultId = await sdk.createFastVaultFromSeedphrase({
+        ...options,
+        chains: options.chains as any,
+        onProgress: step => {
+          _event.sender.send('vault:creationProgress', { step })
+        },
+      })
+      return { vaultId }
+    }
+  )
+
+  ipcMain.handle(
+    'vault:createSecureFromSeedphrase',
+    async (
+      _event,
+      options: {
+        mnemonic: string
+        name: string
+        password?: string
+        devices: number
+        threshold?: number
+        discoverChains?: boolean
+        chains?: string[]
+      }
+    ) => {
+      const sdk = getSDK()
+      const result = await sdk.createSecureVaultFromSeedphrase({
+        ...options,
+        chains: options.chains as any,
+        onProgress: step => {
+          _event.sender.send('vault:creationProgress', { step })
+        },
+        onQRCodeReady: qrPayload => {
+          _event.sender.send('vault:qrCodeReady', { qrPayload })
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          _event.sender.send('vault:deviceJoined', { deviceId, totalJoined, required })
+        },
+      })
+      return {
+        vault: {
+          id: result.vault.id,
+          name: result.vault.name,
+          type: result.vault.type,
+          chains: result.vault.chains,
+          threshold: result.vault.threshold,
+          signerCount: result.vault.signers.length,
+        },
+        sessionId: result.sessionId,
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'vault:joinSecure',
+    async (
+      _event,
+      qrPayload: string,
+      options: {
+        mnemonic?: string
+        password?: string
+        devices?: number
+      }
+    ) => {
+      const sdk = getSDK()
+      const result = await sdk.joinSecureVault(qrPayload, {
+        ...options,
+        onProgress: step => {
+          _event.sender.send('vault:creationProgress', { step })
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          _event.sender.send('vault:deviceJoined', { deviceId, totalJoined, required })
+        },
+      })
+      return {
+        vault: {
+          id: result.vault.id,
+          name: result.vault.name,
+          type: result.vault.type,
+          chains: result.vault.chains,
+          threshold: result.vault.threshold,
+          signerCount: result.vault.signers.length,
+        },
+        vaultId: result.vaultId,
+      }
+    }
+  )
+
   // === VAULT OPERATIONS ===
 
   ipcMain.handle('vault:getAddress', async (_event, vaultId: string, chain: string) => {

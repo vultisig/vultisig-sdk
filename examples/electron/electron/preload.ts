@@ -22,6 +22,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setActiveVault: (vaultId: string | null) => ipcRenderer.invoke('vault:setActive', vaultId),
   getActiveVault: () => ipcRenderer.invoke('vault:getActive'),
 
+  // Seedphrase vault creation
+  validateSeedphrase: (mnemonic: string) => ipcRenderer.invoke('seedphrase:validate', mnemonic),
+  createFastVaultFromSeedphrase: (options: {
+    mnemonic: string
+    name: string
+    password: string
+    email: string
+    discoverChains?: boolean
+    chains?: string[]
+  }) => ipcRenderer.invoke('vault:createFastFromSeedphrase', options),
+  createSecureVaultFromSeedphrase: (options: {
+    mnemonic: string
+    name: string
+    password?: string
+    devices: number
+    threshold?: number
+    discoverChains?: boolean
+    chains?: string[]
+  }) => ipcRenderer.invoke('vault:createSecureFromSeedphrase', options),
+  joinSecureVault: (qrPayload: string, options: { mnemonic?: string; password?: string; devices?: number }) =>
+    ipcRenderer.invoke('vault:joinSecure', qrPayload, options),
+
   // Vault operations
   getAddress: (vaultId: string, chain: string) => ipcRenderer.invoke('vault:getAddress', vaultId, chain),
   getAllAddresses: (vaultId: string) => ipcRenderer.invoke('vault:getAllAddresses', vaultId),
