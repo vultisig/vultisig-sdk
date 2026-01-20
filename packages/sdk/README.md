@@ -1,7 +1,5 @@
 # Vultisig SDK
 
-> **⚠️ Beta Release**: This SDK is currently in beta. APIs may change before the stable 1.0 release.
-
 A TypeScript SDK for secure multi-party computation (MPC) and blockchain operations using the Vultisig protocol. Build secure, decentralized applications with threshold signature schemes and multi-chain support.
 
 ## Features

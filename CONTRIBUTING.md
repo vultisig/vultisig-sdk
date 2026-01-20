@@ -241,9 +241,9 @@ The release process is automated via the `release.yml` workflow:
 ### Versioning
 
 We follow [Semantic Versioning](https://semver.org/):
-- `0.1.0-alpha.x` - Alpha releases (current)
-- `0.1.0-beta.x` - Beta releases
-- `0.1.0` - Stable release
+- `X.Y.Z` - Stable releases (current)
+- `X.Y.Z-beta.N` - Beta pre-releases
+- `X.Y.Z-alpha.N` - Alpha pre-releases
 
 ### npm Packages
 
