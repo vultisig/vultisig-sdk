@@ -124,15 +124,16 @@ const backupBase64 = await vault.exportAsBase64("BackupPassword123!");
 
 ### 7. Import from Seedphrase
 
-Import an existing wallet from a BIP39 mnemonic:
+Import an existing wallet from a BIP39 mnemonic. Supports all 10 BIP39 languages with automatic detection:
 
 ```typescript
-// Validate the seedphrase first
+// Validate the seedphrase first (auto-detects language)
 const validation = await sdk.validateSeedphrase(mnemonic)
 if (!validation.valid) {
   console.error(validation.error)
   return
 }
+console.log(`Detected language: ${validation.detectedLanguage}`) // 'english', 'japanese', etc.
 
 // Discover which chains have balances
 const chains = await sdk.discoverChainsFromSeedphrase(
