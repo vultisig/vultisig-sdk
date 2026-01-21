@@ -710,19 +710,29 @@ Import existing wallets from BIP39 mnemonic phrases (12 or 24 words). This allow
 
 ### Validating a Seedphrase
 
-Always validate the mnemonic before attempting import:
+Always validate the mnemonic before attempting import. The SDK supports all 10 BIP39 languages with automatic language detection:
+
+- English, Japanese, Korean, Spanish, Chinese (Simplified/Traditional), French, Italian, Czech, Portuguese
 
 ```typescript
 const result = await sdk.validateSeedphrase(mnemonic)
 
 if (result.valid) {
   console.log(`Valid ${result.wordCount}-word mnemonic`)
+  console.log(`Language: ${result.detectedLanguage}`) // e.g., 'english', 'japanese'
 } else {
   console.error('Validation failed:', result.error)
   if (result.invalidWords?.length) {
     console.error('Invalid words:', result.invalidWords.join(', '))
   }
 }
+```
+
+You can also specify a language explicitly for stricter validation:
+
+```typescript
+// Validate as Japanese mnemonic only
+const result = await sdk.validateSeedphrase(mnemonic, { language: 'japanese' })
 ```
 
 ### Discovering Chains with Balances
