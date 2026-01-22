@@ -1,5 +1,94 @@
 # @vultisig/sdk
 
+## 0.3.0
+
+### Minor Changes
+
+- [#71](https://github.com/vultisig/vultisig-sdk/pull/71) [`695e664`](https://github.com/vultisig/vultisig-sdk/commit/695e664668082ca55861cf4d8fcc8c323be94c06) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat(sdk): add multi-language BIP39 mnemonic support
+
+  **New Features:**
+  - Support for all 10 BIP39 languages: English, Japanese, Korean, Spanish, Chinese (Simplified/Traditional), French, Italian, Czech, Portuguese
+  - Auto-detection of mnemonic language during validation
+  - Explicit language validation with `{ language: 'japanese' }` option
+  - Word suggestions for autocomplete with `getSuggestions(prefix, language)`
+  - Japanese ideographic space (U+3000) handling
+  - Proper Unicode NFKD normalization
+
+  **New Exports:**
+  - `Bip39Language` - Union type of supported languages
+  - `BIP39_LANGUAGES` - Array of supported language codes
+  - `SeedphraseValidationOptions` - Options for explicit language validation
+  - `detectMnemonicLanguage()` - Detect language from mnemonic
+  - `getWordlist()` - Get wordlist for a specific language
+  - `BIP39_WORDLISTS` - Map of all wordlists
+  - `normalizeMnemonic()` - Normalize mnemonic with Unicode handling
+
+  **API Usage:**
+
+  ```typescript
+  // Auto-detect language
+  const result = await sdk.validateSeedphrase(japaneseMnemonic);
+  console.log(result.detectedLanguage); // 'japanese'
+
+  // Explicit language
+  const result = await sdk.validateSeedphrase(mnemonic, { language: "korean" });
+  ```
+
+- [#71](https://github.com/vultisig/vultisig-sdk/pull/71) [`d145809`](https://github.com/vultisig/vultisig-sdk/commit/d145809eb68653a3b22921fcb90ebc985de2b16a) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat(sdk): rename seedphrase import APIs and add joinSecureVault method
+
+  **Breaking Changes:**
+  - `importSeedphraseAsFastVault()` → `createFastVaultFromSeedphrase()`
+  - `importSeedphraseAsSecureVault()` → `createSecureVaultFromSeedphrase()`
+  - Type renames: `ImportSeedphraseAsFastVaultOptions` → `CreateFastVaultFromSeedphraseOptions`, etc.
+
+  **New Features:**
+  - `joinSecureVault(qrPayload, options)` - Programmatically join SecureVault creation sessions
+    - Auto-detects keygen vs seedphrase mode from QR payload's `libType` field
+    - For keygen sessions: no mnemonic required
+    - For seedphrase sessions: `mnemonic` option required and must match initiator's
+
+  **Documentation:**
+  - Updated README.md with new method names and `joinSecureVault()` API docs
+  - Updated SDK-USERS-GUIDE.md with new section "Joining a SecureVault Session"
+
+### Patch Changes
+
+- [#71](https://github.com/vultisig/vultisig-sdk/pull/71) [`fee3f37`](https://github.com/vultisig/vultisig-sdk/commit/fee3f375f85011d14be814f06ff3d7f6684ea2fe) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - fix: address CodeRabbit PR #71 review suggestions
+
+  **Critical fixes:**
+  - JoinSecureVaultService: require `devices` parameter instead of defaulting to 2
+  - CLI vault-management: validate `devices` parameter before calling SDK
+  - parseKeygenQR: throw error on unknown libType instead of silently defaulting
+
+  **Code quality:**
+  - Replace try-catch with attempt() pattern in JoinSecureVaultService and parseKeygenQR
+  - Add abort signal checks in SecureVaultJoiner callbacks
+
+  **Documentation:**
+  - Add onProgress callback to joinSecureVault README documentation
+  - Fix markdown heading format in SDK-USERS-GUIDE.md
+  - Add language specifier to code block in CLAUDE.md
+
+  **Tests:**
+  - Fix Korean test mnemonic (removed invalid comma)
+  - Add Korean language detection test
+  - Remove sensitive private key logging in test helpers
+
+- [#72](https://github.com/vultisig/vultisig-sdk/pull/72) [`4edf52d`](https://github.com/vultisig/vultisig-sdk/commit/4edf52d3a2985d2adf772239bf19b8301f360af8) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - fix: address review comments for type safety and test reliability
+
+  **Type safety:**
+  - JoinSecureVaultOptions: make `devices` field required (was optional but enforced at runtime)
+  - parseKeygenQR: validate chains against Chain enum instead of unsafe cast
+
+  **Test improvements:**
+  - generateTestPartyId: use deterministic index-based suffix to avoid collisions
+  - multi-party-keygen-helpers: fail-fast when chainCodeHex is missing instead of silent fallback
+  - languageDetection tests: replace invalid Chinese mnemonics with valid BIP39 test vectors
+  - Add Chinese Simplified and Traditional language detection tests
+
+  **Documentation:**
+  - README: rename "Import from Seedphrase" to "Create Vault from Seedphrase" to match API naming
+
 ## 0.2.0
 
 ### Minor Changes
