@@ -12,7 +12,7 @@ To update upstream code: `yarn sync-and-copy`
 
 ## Project Structure
 
-```
+```text
 packages/sdk/src/     # Main SDK source (edit here)
 packages/sdk/tests/   # Unit, integration, e2e tests
 packages/core/        # UPSTREAM - do not edit

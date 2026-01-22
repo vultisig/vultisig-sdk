@@ -163,8 +163,8 @@ export async function coordinateMultiPartyKeyImport(
   console.log(`\n📝 Deriving master keys from mnemonic...`)
   const keyDeriver = new MasterKeyDeriver(wasmProvider)
   const masterKeys = await keyDeriver.deriveMasterKeys(mnemonic)
-  console.log(`   ECDSA master key: ${masterKeys.ecdsaPrivateKeyHex.substring(0, 16)}...`)
-  console.log(`   EdDSA master key: ${masterKeys.eddsaPrivateKeyHex.substring(0, 16)}...`)
+  console.log(`   Master keys derived`)
+  console.log(`   Chain code derived`)
 
   // Step 1: All parties join the relay session
   console.log(`\n📡 All parties joining relay session...`)

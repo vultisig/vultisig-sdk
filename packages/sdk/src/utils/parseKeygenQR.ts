@@ -55,14 +55,11 @@ async function decompressData(compressedBase64: string): Promise<Uint8Array> {
 
     // Try to read from possible output filenames
     for (const filename of possibleOutputFiles) {
-      try {
-        const data = sevenZip.FS.readFile(filename)
+      const { data } = attempt(() => sevenZip.FS.readFile(filename))
+      if (data) {
         // Cleanup the extracted file
         attempt(() => sevenZip.FS.unlink(filename))
         return new Uint8Array(data)
-      } catch {
-        // File doesn't exist, try next
-        continue
       }
     }
 
@@ -85,7 +82,7 @@ function libTypeToString(libType: LibType): 'GG20' | 'DKLS' | 'KEYIMPORT' {
     case LibType.KEYIMPORT:
       return 'KEYIMPORT'
     default:
-      return 'GG20'
+      throw new Error(`Unsupported libType: ${libType}`)
   }
 }
 
