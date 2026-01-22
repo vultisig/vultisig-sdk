@@ -122,7 +122,7 @@ const backupBlob = await vault.export("BackupPassword123!");
 const backupBase64 = await vault.exportAsBase64("BackupPassword123!");
 ```
 
-### 7. Import from Seedphrase
+### 7. Create Vault from Seedphrase
 
 Import an existing wallet from a BIP39 mnemonic. Supports all 10 BIP39 languages with automatic detection:
 
