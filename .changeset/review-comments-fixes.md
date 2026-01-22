@@ -1,5 +1,5 @@
 ---
-"@anthropic/vultisig-sdk": patch
+"@vultisig/sdk": patch
 ---
 
 fix: address review comments for type safety and test reliability

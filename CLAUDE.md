@@ -69,6 +69,14 @@ SDK builds to 5 bundles via Rollup:
 - Event-driven: Use `UniversalEventEmitter` for progress tracking
 - PascalCase for classes, camelCase for functions/variables
 
+## Changesets
+
+When creating changesets, use the exact package names from package.json:
+- `@vultisig/sdk` - Main SDK (packages/sdk)
+- `@vultisig/cli` - CLI tool (clients/cli)
+
+**Do not** use variations like `@vultisig/vultisig-sdk` or `@anthropic/vultisig-sdk`.
+
 ## Testing
 
 - **Unit**: `tests/unit/` - Fast, isolated (vitest)
