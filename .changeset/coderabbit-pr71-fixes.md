@@ -1,6 +1,6 @@
 ---
-"@anthropic/vultisig-sdk": patch
-"@anthropic/vultisig-cli": patch
+"@vultisig/sdk": patch
+"@vultisig/cli": patch
 ---
 
 fix: address CodeRabbit PR #71 review suggestions

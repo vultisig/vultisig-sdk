@@ -7,7 +7,7 @@
  * The jsonData is a compressed protobuf (KeygenMessage) containing session params.
  */
 import { fromBinary } from '@bufbuild/protobuf'
-import type { Chain } from '@core/chain/Chain'
+import { Chain } from '@core/chain/Chain'
 import { getSevenZip } from '@core/mpc/compression/getSevenZip'
 import { KeygenMessageSchema } from '@core/mpc/types/vultisig/keygen/v1/keygen_message_pb'
 import { LibType } from '@core/mpc/types/vultisig/keygen/v1/lib_type_message_pb'
@@ -71,6 +71,18 @@ async function decompressData(compressedBase64: string): Promise<Uint8Array> {
 }
 
 /**
+ * Set of valid Chain values for O(1) lookup
+ */
+const VALID_CHAINS = new Set<string>(Object.values(Chain))
+
+/**
+ * Type guard to check if a string is a valid Chain value
+ */
+function isValidChain(value: string): value is Chain {
+  return VALID_CHAINS.has(value)
+}
+
+/**
  * Convert LibType enum to string
  */
 function libTypeToString(libType: LibType): 'GG20' | 'DKLS' | 'KEYIMPORT' {
@@ -125,13 +137,20 @@ export async function parseKeygenQR(qrPayload: string): Promise<ParsedKeygenQR> 
   // Parse protobuf
   const keygenMessage = fromBinary(KeygenMessageSchema, binaryData)
 
+  // Validate and filter chains to only include recognized Chain values
+  const validatedChains = keygenMessage.chains.filter(isValidChain)
+  const invalidChains = keygenMessage.chains.filter(c => !isValidChain(c))
+  if (invalidChains.length > 0) {
+    console.warn(`QR payload contains unrecognized chains: ${invalidChains.join(', ')}`)
+  }
+
   return {
     sessionId: keygenMessage.sessionId,
     hexEncryptionKey: keygenMessage.encryptionKeyHex,
     hexChainCode: keygenMessage.hexChainCode,
     initiatorPartyId: keygenMessage.serviceName,
     vaultName: keygenMessage.vaultName,
-    chains: keygenMessage.chains as Chain[],
+    chains: validatedChains,
     libType: libTypeToString(keygenMessage.libType),
     useVultisigRelay: keygenMessage.useVultisigRelay,
   }

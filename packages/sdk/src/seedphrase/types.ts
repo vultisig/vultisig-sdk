@@ -165,8 +165,8 @@ export type JoinSecureVaultOptions = {
   mnemonic?: string
   /** Optional password for vault encryption */
   password?: string
-  /** Number of devices participating (defaults to 2 if not specified) */
-  devices?: number
+  /** Number of devices participating in the vault (required) */
+  devices: number
   /** AbortSignal for cancellation */
   signal?: AbortSignal
   /** Progress callback for vault creation steps */
