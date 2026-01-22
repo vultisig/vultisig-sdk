@@ -1,5 +1,54 @@
 # @vultisig/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- [#71](https://github.com/vultisig/vultisig-sdk/pull/71) [`cc4e5fd`](https://github.com/vultisig/vultisig-sdk/commit/cc4e5fd2ff83bcce1723435107af869a43ea069f) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Update CLI to support SDK vault creation API changes
+
+  **Breaking Changes:**
+  - Renamed `import-seedphrase` command to `create-from-seedphrase` to match SDK naming
+    - `vultisig import-seedphrase fast` → `vultisig create-from-seedphrase fast`
+    - `vultisig import-seedphrase secure` → `vultisig create-from-seedphrase secure`
+
+  **New Features:**
+  - Added `join secure` command to join existing SecureVault creation sessions
+    - Supports QR payload via `--qr`, `--qr-file`, or interactive prompt
+    - Auto-detects if mnemonic is required based on session type
+    - Example: `vultisig join secure --qr "vultisig://..."`
+
+  **Internal Changes:**
+  - Updated SDK API calls to use new method names:
+    - `importSeedphraseAsFastVault` → `createFastVaultFromSeedphrase`
+    - `importSeedphraseAsSecureVault` → `createSecureVaultFromSeedphrase`
+  - Renamed internal functions and types to match SDK naming conventions
+
+### Patch Changes
+
+- [#71](https://github.com/vultisig/vultisig-sdk/pull/71) [`fee3f37`](https://github.com/vultisig/vultisig-sdk/commit/fee3f375f85011d14be814f06ff3d7f6684ea2fe) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - fix: address CodeRabbit PR #71 review suggestions
+
+  **Critical fixes:**
+  - JoinSecureVaultService: require `devices` parameter instead of defaulting to 2
+  - CLI vault-management: validate `devices` parameter before calling SDK
+  - parseKeygenQR: throw error on unknown libType instead of silently defaulting
+
+  **Code quality:**
+  - Replace try-catch with attempt() pattern in JoinSecureVaultService and parseKeygenQR
+  - Add abort signal checks in SecureVaultJoiner callbacks
+
+  **Documentation:**
+  - Add onProgress callback to joinSecureVault README documentation
+  - Fix markdown heading format in SDK-USERS-GUIDE.md
+  - Add language specifier to code block in CLAUDE.md
+
+  **Tests:**
+  - Fix Korean test mnemonic (removed invalid comma)
+  - Add Korean language detection test
+  - Remove sensitive private key logging in test helpers
+
+- Updated dependencies [[`fee3f37`](https://github.com/vultisig/vultisig-sdk/commit/fee3f375f85011d14be814f06ff3d7f6684ea2fe), [`695e664`](https://github.com/vultisig/vultisig-sdk/commit/695e664668082ca55861cf4d8fcc8c323be94c06), [`4edf52d`](https://github.com/vultisig/vultisig-sdk/commit/4edf52d3a2985d2adf772239bf19b8301f360af8), [`d145809`](https://github.com/vultisig/vultisig-sdk/commit/d145809eb68653a3b22921fcb90ebc985de2b16a)]:
+  - @vultisig/sdk@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
