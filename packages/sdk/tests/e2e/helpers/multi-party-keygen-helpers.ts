@@ -101,13 +101,13 @@ export type MultiPartyKeyImportResult = {
 
 /**
  * Generate a unique party ID for testing
- * Uses 'sdk' for first party and 'iphone'/'android' for subsequent to simulate real devices
+ * Uses 'sdk' for first party and 'iphone'/'android' for subsequent to simulate real devices.
+ * Uses deterministic index-based suffix to ensure reproducible tests and avoid collisions.
  */
 function generateTestPartyId(index: number): string {
   const devices = ['sdk', 'iphone', 'android', 'mac', 'windows']
   const device = devices[index % devices.length]
-  const randomNum = Math.floor(Math.random() * 9000) + 1000
-  return `${device}-${randomNum}`
+  return `${device}-${String(index).padStart(4, '0')}`
 }
 
 /**
@@ -205,10 +205,11 @@ export async function coordinateMultiPartyKeyImport(
       [], // oldKeygenCommittee - not used for key import
       hexEncryptionKey
     )
-    return dkls.startKeyImportWithRetry(
-      masterKeys.ecdsaPrivateKeyHex,
-      masterKeys.chainCodeHex || generateHexEncryptionKey() // Use derived chain code or generate one
-    )
+    // Fail-fast if chain code is missing - don't silently use a generated fallback
+    if (!masterKeys.chainCodeHex) {
+      throw new Error('Failed to derive chain code from mnemonic. chainCodeHex is required for key import.')
+    }
+    return dkls.startKeyImportWithRetry(masterKeys.ecdsaPrivateKeyHex, masterKeys.chainCodeHex)
   })
   const ecdsaResults = await Promise.all(ecdsaPromises)
   console.log(`   ECDSA public key: ${ecdsaResults[0].publicKey.substring(0, 32)}...`)
