@@ -7,6 +7,7 @@ import {
   EventLog,
   Layout,
   SecureVaultCreator,
+  SecureVaultJoiner,
   SeedphraseImporter,
   Toast,
   useToast,
@@ -337,6 +338,7 @@ function App() {
           <div className="space-y-3">
             <VaultCreator onVaultCreated={handleVaultCreated} />
             <SecureVaultCreator onVaultCreated={handleVaultCreated} />
+            <SecureVaultJoiner onVaultCreated={handleVaultCreated} />
             <VaultImporter onVaultImported={handleVaultImported} />
             <SeedphraseImporter onVaultCreated={handleVaultCreated} />
             <hr className="border-gray-200" />

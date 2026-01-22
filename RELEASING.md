@@ -44,15 +44,27 @@ When running `yarn changeset`, choose the appropriate version bump:
 | `minor` | New features, backwards-compatible | `0.2.0` → `0.3.0` |
 | `major` | Breaking changes | `0.2.0` → `1.0.0` |
 
-## Pre-release Mode (Beta)
+## Pre-release Mode
 
-The repository is currently in **pre-release mode** (beta). This means:
-- Versions follow `X.Y.Z-beta.N` format
-- Each release increments the beta number
+The repository supports pre-release modes for alpha/beta releases when needed. Currently, the SDK is in **stable release mode**.
+
+### Entering Pre-release Mode
+
+To start a pre-release cycle (e.g., for testing major changes):
+
+```bash
+# Enter pre-release mode with a tag (alpha, beta, rc)
+yarn changeset pre enter beta
+
+# Commit the change
+git add .changeset/pre.json
+git commit -m "chore: enter beta pre-release mode"
+git push
+```
 
 ### Exiting Pre-release Mode
 
-When ready for a stable release:
+When ready to return to stable releases:
 
 ```bash
 # Exit pre-release mode
@@ -64,21 +76,7 @@ git commit -m "chore: exit pre-release mode"
 git push
 ```
 
-The next Release PR will bump to a stable version (e.g., `0.2.0`).
-
-### Entering Pre-release Mode
-
-To start a new pre-release cycle:
-
-```bash
-# Enter pre-release mode with a tag (alpha, beta, rc)
-yarn changeset pre enter beta
-
-# Commit the change
-git add .changeset/pre.json
-git commit -m "chore: enter beta pre-release mode"
-git push
-```
+The next Release PR will bump to a stable version.
 
 ## Emergency Manual Release
 

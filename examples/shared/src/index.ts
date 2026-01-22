@@ -11,7 +11,9 @@ export type {
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
   CoinInfo,
+  CreateFastVaultFromSeedphraseOptions,
   CreateFastVaultOptions,
+  CreateSecureVaultFromSeedphraseOptions,
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
   DeviceJoinedData,
@@ -22,6 +24,8 @@ export type {
   GetSwapQuoteParams,
   ImportSeedphraseFastOptions,
   ImportSeedphraseSecureOptions,
+  JoinSecureVaultOptions,
+  JoinSecureVaultResult,
   PrepareSwapParams,
   ProgressStep,
   SaveFileOptions,
@@ -72,6 +76,7 @@ export { AddTokenModal, TokenSelector } from './components/token'
 
 // Vault components
 export { default as SecureVaultCreator } from './components/vault/SecureVaultCreator'
+export { default as SecureVaultJoiner } from './components/vault/SecureVaultJoiner'
 export { default as SeedphraseImporter } from './components/vault/SeedphraseImporter'
 export type { VaultSection } from './components/vault/Vault'
 export { default as Vault } from './components/vault/Vault'

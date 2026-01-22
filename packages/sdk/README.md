@@ -1,7 +1,5 @@
 # Vultisig SDK
 
-> **⚠️ Beta Release**: This SDK is currently in beta. APIs may change before the stable 1.0 release.
-
 A TypeScript SDK for secure multi-party computation (MPC) and blockchain operations using the Vultisig protocol. Build secure, decentralized applications with threshold signature schemes and multi-chain support.
 
 ## Features
@@ -126,15 +124,16 @@ const backupBase64 = await vault.exportAsBase64("BackupPassword123!");
 
 ### 7. Import from Seedphrase
 
-Import an existing wallet from a BIP39 mnemonic:
+Import an existing wallet from a BIP39 mnemonic. Supports all 10 BIP39 languages with automatic detection:
 
 ```typescript
-// Validate the seedphrase first
+// Validate the seedphrase first (auto-detects language)
 const validation = await sdk.validateSeedphrase(mnemonic)
 if (!validation.valid) {
   console.error(validation.error)
   return
 }
+console.log(`Detected language: ${validation.detectedLanguage}`) // 'english', 'japanese', etc.
 
 // Discover which chains have balances
 const chains = await sdk.discoverChainsFromSeedphrase(
@@ -149,8 +148,8 @@ for (const result of chains) {
   }
 }
 
-// Import as FastVault (requires email verification)
-const vaultId = await sdk.importSeedphraseAsFastVault({
+// Create FastVault from seedphrase (requires email verification)
+const vaultId = await sdk.createFastVaultFromSeedphrase({
   mnemonic,
   name: 'Imported Wallet',
   email: 'user@example.com',
@@ -385,9 +384,9 @@ Discover chains with balances for a seedphrase.
 - `chains?: Chain[]` - Chains to scan (defaults to common chains)
 - `onProgress?: (progress: ChainDiscoveryProgress) => void` - Progress callback
 
-#### `importSeedphraseAsFastVault(options): Promise<string>`
+#### `createFastVaultFromSeedphrase(options): Promise<string>`
 
-Import a seedphrase as a FastVault. Returns vaultId for email verification.
+Create a FastVault from a BIP39 seedphrase. Returns vaultId for email verification.
 
 **Parameters:**
 - `options.mnemonic: string` - BIP39 mnemonic (12 or 24 words)
@@ -398,9 +397,9 @@ Import a seedphrase as a FastVault. Returns vaultId for email verification.
 - `options.onProgress?: (step: VaultCreationStep) => void` - Progress callback
 - `options.onChainDiscovery?: (progress: ChainDiscoveryProgress) => void` - Discovery callback
 
-#### `importSeedphraseAsSecureVault(options): Promise<{ vault, vaultId, sessionId }>`
+#### `createSecureVaultFromSeedphrase(options): Promise<{ vault, vaultId, sessionId }>`
 
-Import a seedphrase as a SecureVault with multi-device MPC.
+Create a SecureVault from a BIP39 seedphrase with multi-device MPC.
 
 **Parameters:**
 - `options.mnemonic: string` - BIP39 mnemonic (12 or 24 words)
@@ -409,6 +408,18 @@ Import a seedphrase as a SecureVault with multi-device MPC.
 - `options.threshold?: number` - Signing threshold
 - `options.password?: string` - Optional encryption password
 - `options.onQRCodeReady?: (qrPayload: string) => void` - QR callback
+- `options.onDeviceJoined?: (deviceId, total, required) => void` - Device join callback
+
+#### `joinSecureVault(qrPayload, options): Promise<{ vault, vaultId }>`
+
+Join an existing SecureVault creation session. Auto-detects keygen vs seedphrase mode.
+
+**Parameters:**
+- `qrPayload: string` - QR code content from initiator (vultisig://...)
+- `options.mnemonic?: string` - Required for seedphrase-based sessions, ignored for keygen
+- `options.devices: number` - Number of participating devices (required)
+- `options.password?: string` - Optional encryption password
+- `options.onProgress?: (step: VaultCreationStep) => void` - Progress callback
 - `options.onDeviceJoined?: (deviceId, total, required) => void` - Device join callback
 
 #### `vault.address(chain): Promise<string>`

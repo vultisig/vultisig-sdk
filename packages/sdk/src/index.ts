@@ -136,18 +136,23 @@ export type {
 export { isAccountCoin, isSimpleCoinInput } from './types'
 
 // ============================================================================
-// PUBLIC API - Seedphrase Import
+// PUBLIC API - Seedphrase & Multi-Device Vault Creation
 // ============================================================================
 
-// Seedphrase validation and import types
+// Seedphrase validation and vault creation from seedphrase types
 export type {
   ChainDiscoveryPhase,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
-  ImportSeedphraseAsFastVaultOptions,
-  ImportSeedphraseAsSecureVaultOptions,
+  CreateFastVaultFromSeedphraseOptions,
+  CreateSecureVaultFromSeedphraseOptions,
+  JoinSecureVaultOptions,
   SeedphraseImportResult,
   SeedphraseValidation,
   SeedphraseWordCount,
 } from './seedphrase'
 export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'
+
+// QR payload parsing (for programmatic multi-device coordination)
+export type { ParsedKeygenQR } from './utils/parseKeygenQR'
+export { parseKeygenQR } from './utils/parseKeygenQR'

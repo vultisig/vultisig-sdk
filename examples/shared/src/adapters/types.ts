@@ -1,15 +1,17 @@
 import type {
   BalanceResult,
   BroadcastParams,
+  CreateFastVaultFromSeedphraseOptions,
   CreateFastVaultOptions,
+  CreateSecureVaultFromSeedphraseOptions,
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
   DeviceJoinedData,
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
-  ImportSeedphraseFastOptions,
-  ImportSeedphraseSecureOptions,
+  JoinSecureVaultOptions,
+  JoinSecureVaultResult,
   PrepareSwapParams,
   ProgressStep,
   SaveFileOptions,
@@ -44,12 +46,14 @@ export type ISDKAdapter = {
 
   isVaultEncrypted(content: string): Promise<boolean>
 
-  // ===== Seedphrase Import =====
+  // ===== Seedphrase Vault Creation =====
   validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation>
 
-  importSeedphraseAsFastVault(options: ImportSeedphraseFastOptions): Promise<{ vaultId: string }>
+  createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<{ vaultId: string }>
 
-  importSeedphraseAsSecureVault(options: ImportSeedphraseSecureOptions): Promise<CreateSecureVaultResult>
+  createSecureVaultFromSeedphrase(options: CreateSecureVaultFromSeedphraseOptions): Promise<CreateSecureVaultResult>
+
+  joinSecureVault(qrPayload: string, options: JoinSecureVaultOptions): Promise<JoinSecureVaultResult>
 
   deleteVault(vaultId: string): Promise<void>
 
