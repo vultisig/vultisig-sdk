@@ -417,8 +417,9 @@ Join an existing SecureVault creation session. Auto-detects keygen vs seedphrase
 **Parameters:**
 - `qrPayload: string` - QR code content from initiator (vultisig://...)
 - `options.mnemonic?: string` - Required for seedphrase-based sessions, ignored for keygen
-- `options.devices?: number` - Number of participating devices
+- `options.devices: number` - Number of participating devices (required)
 - `options.password?: string` - Optional encryption password
+- `options.onProgress?: (step: VaultCreationStep) => void` - Progress callback
 - `options.onDeviceJoined?: (deviceId, total, required) => void` - Device join callback
 
 #### `vault.address(chain): Promise<string>`

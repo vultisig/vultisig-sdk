@@ -16,6 +16,8 @@ import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { attempt } from '@lib/utils/attempt'
 import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import type { SdkContext } from '../context/SdkContext'
@@ -63,30 +65,32 @@ export class JoinSecureVaultService {
         throw new Error('Operation aborted')
       }
 
-      try {
-        const url = `${RELAY_URL}/${sessionId}`
-        const allPeers = await queryUrl<string[]>(url)
-        const uniquePeers = withoutDuplicates(allPeers)
+      const url = `${RELAY_URL}/${sessionId}`
+      const { data: allPeers, error } = await attempt(queryUrl<string[]>(url))
 
-        // Notify about new devices
-        if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
-          const newDevices = uniquePeers.slice(lastJoinedCount)
-          for (const device of newDevices) {
-            onDeviceJoined(device, uniquePeers.length, requiredDevices)
-          }
-          lastJoinedCount = uniquePeers.length
-        }
-
-        // Check if we have enough devices
-        if (uniquePeers.length >= requiredDevices) {
-          // Maintain consistent ordering across all parties
-          return uniquePeers.sort()
-        }
-
+      if (error) {
         await new Promise(resolve => setTimeout(resolve, checkInterval))
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
+        continue
       }
+
+      const uniquePeers = withoutDuplicates(allPeers)
+
+      // Notify about new devices
+      if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
+        const newDevices = uniquePeers.slice(lastJoinedCount)
+        for (const device of newDevices) {
+          onDeviceJoined(device, uniquePeers.length, requiredDevices)
+        }
+        lastJoinedCount = uniquePeers.length
+      }
+
+      // Check if we have enough devices
+      if (uniquePeers.length >= requiredDevices) {
+        // Maintain consistent ordering across all parties
+        return uniquePeers.sort()
+      }
+
+      await new Promise(resolve => setTimeout(resolve, checkInterval))
     }
 
     throw new VaultError(
@@ -134,7 +138,10 @@ export class JoinSecureVaultService {
     options: JoinSecureVaultOptions
   ): Promise<{ vault: CoreVault; vaultId: string }> {
     const { signal, onProgress, onDeviceJoined } = options
-    const requiredDevices = options.devices ?? 2
+    const requiredDevices = shouldBePresent(
+      options.devices,
+      'devices count is required when joining a SecureVault session'
+    )
 
     const reportProgress = (step: VaultCreationStep) => {
       if (signal?.aborted) {
@@ -254,13 +261,14 @@ export class JoinSecureVaultService {
 
     // Wait for peer completion with tolerance
     const peers = allDevices.filter(d => d !== localPartyId)
-    try {
-      await waitForKeygenComplete({
+    const { error: peerCompleteError } = await attempt(
+      waitForKeygenComplete({
         serverURL: RELAY_URL,
         sessionId: qrParams.sessionId,
         peers,
       })
-    } catch {
+    )
+    if (peerCompleteError) {
       console.warn('Not all peer completion signals received, proceeding with valid MPC keys')
     }
 
@@ -304,7 +312,10 @@ export class JoinSecureVaultService {
     options: JoinSecureVaultOptions
   ): Promise<{ vault: CoreVault; vaultId: string }> {
     const { mnemonic, signal, onProgress, onDeviceJoined } = options
-    const requiredDevices = options.devices ?? 2
+    const requiredDevices = shouldBePresent(
+      options.devices,
+      'devices count is required when joining a SecureVault session'
+    )
 
     const reportProgress = (step: VaultCreationStep) => {
       if (signal?.aborted) {
@@ -501,13 +512,14 @@ export class JoinSecureVaultService {
     })
 
     const peers = allDevices.filter(d => d !== localPartyId)
-    try {
-      await waitForKeygenComplete({
+    const { error: peerCompleteError } = await attempt(
+      waitForKeygenComplete({
         serverURL: RELAY_URL,
         sessionId: qrParams.sessionId,
         peers,
       })
-    } catch {
+    )
+    if (peerCompleteError) {
       console.warn('Not all peer completion signals received, proceeding with valid MPC keys')
     }
 

@@ -21,7 +21,7 @@ const TEST_MNEMONICS: Record<Bip39Language, string> = {
   english: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
   japanese:
     'あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あいこくしん あおぞら',
-  korean: '가격 가격 가격 가격 가격 가격 가격 가격 가격 가격 가격 가, 나무',
+  korean: '가격 가격 가격 가격 가격 가격 가격 가격 가격 가격 가격 가능',
   spanish: 'ábaco ábaco ábaco ábaco ábaco ábaco ábaco ábaco ábaco ábaco ábaco abierto',
   chinese_simplified: '的 一 是 不 了 人 我 有 大 来 他 的',
   chinese_traditional: '的 一 是 不 了 人 我 有 大 來 他 的',
@@ -154,6 +154,15 @@ describe('detectMnemonicLanguage', () => {
     const result = detectMnemonicLanguage(TEST_MNEMONICS.portuguese)
     expect(result).toBe('portuguese')
   })
+
+  it('should detect Korean mnemonic', () => {
+    const result = detectMnemonicLanguage(TEST_MNEMONICS.korean)
+    expect(result).toBe('korean')
+  })
+
+  // Note: Chinese test mnemonics in TEST_MNEMONICS don't have valid BIP39 checksums
+  // so they can't be detected. Valid Chinese mnemonics with proper checksums should
+  // be added to TEST_MNEMONICS to enable Chinese language detection tests.
 
   it('should return null for invalid mnemonic', () => {
     const result = detectMnemonicLanguage('invalid nonsense words that are not bip39')

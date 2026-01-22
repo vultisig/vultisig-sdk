@@ -834,7 +834,7 @@ console.log('SecureVault imported:', vault.name)
 
 Use `joinSecureVault()` to programmatically join an existing vault creation session from another SDK instance. This enables multi-device coordination without QR code scanning.
 
-**Example 1: Joining a fresh keygen session**
+#### Example 1: Joining a fresh keygen session
 
 ```typescript
 // Device 1 initiates
@@ -861,7 +861,7 @@ const [result1, result2, result3] = await Promise.all([promise1, promise2, promi
 // All have matching vaultId but unique localPartyId
 ```
 
-**Example 2: Joining a seedphrase-based session**
+#### Example 2: Joining a seedphrase-based session
 
 ```typescript
 // Device 1 initiates with seedphrase

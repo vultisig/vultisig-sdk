@@ -852,7 +852,11 @@ export type JoinSecureOptions = {
  * Join an existing SecureVault creation session
  */
 export async function executeJoinSecure(ctx: CommandContext, options: JoinSecureOptions): Promise<VaultBase> {
-  const { qrPayload, mnemonic, password, devices = 2, signal } = options
+  const { qrPayload, mnemonic, password, devices, signal } = options
+
+  if (!devices || devices < 2) {
+    throw new Error('devices is required when joining a SecureVault (minimum 2)')
+  }
 
   const spinner = createSpinner('Joining SecureVault session...')
 

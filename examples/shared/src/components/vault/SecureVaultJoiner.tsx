@@ -86,12 +86,14 @@ export default function SecureVaultJoiner({ onVaultCreated }: SecureVaultJoinerP
           mnemonic: formData.mnemonic.trim() || undefined,
           password: formData.password || undefined,
           onProgress: (progressStep: ProgressStep) => {
+            if (abortControllerRef.current?.signal.aborted) return
             setProgress(progressStep)
             if (progressStep.phase === 'keygen') {
               setStep('keygen')
             }
           },
           onDeviceJoined: (deviceId: string, totalJoined: number, required: number) => {
+            if (abortControllerRef.current?.signal.aborted) return
             setDevicesJoined(totalJoined)
             setRequiredDevices(required)
             setDeviceIds(prev => (prev.includes(deviceId) ? prev : [...prev, deviceId]))
