@@ -2,9 +2,10 @@
 import 'dotenv/config'
 
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
-import { Chain, Vultisig } from '@vultisig/sdk'
+import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
+import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
@@ -15,13 +16,14 @@ import {
   executeBroadcast,
   executeChains,
   executeCreateFast,
+  executeCreateFromSeedphraseFast,
+  executeCreateFromSeedphraseSecure,
   executeCreateSecure,
   executeCurrency,
   executeExport,
   executeImport,
-  executeImportSeedphraseFast,
-  executeImportSeedphraseSecure,
   executeInfo,
+  executeJoinSecure,
   executePortfolio,
   executeRename,
   executeSend,
@@ -201,8 +203,10 @@ program
     })
   )
 
-// Command: Import seedphrase (with subcommands)
-const importSeedphraseCmd = program.command('import-seedphrase').description('Import wallet from BIP39 seedphrase')
+// Command: Create vault from seedphrase (with subcommands)
+const createFromSeedphraseCmd = program
+  .command('create-from-seedphrase')
+  .description('Create vault from BIP39 seedphrase')
 
 /**
  * Prompt for seedphrase with secure input (masked)
@@ -230,10 +234,35 @@ async function promptSeedphrase(): Promise<string> {
   return answer.mnemonic.trim().toLowerCase()
 }
 
-// Subcommand: import-seedphrase fast
-importSeedphraseCmd
+/**
+ * Prompt for QR code payload from initiator device
+ */
+async function promptQrPayload(): Promise<string> {
+  info('\nEnter the QR code payload from the initiator device.')
+  info('The payload starts with "vultisig://".\n')
+
+  const answer = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'qrPayload',
+      message: 'QR Payload:',
+      validate: (input: string) => {
+        const trimmed = input.trim()
+        if (!trimmed.startsWith('vultisig://')) {
+          return 'QR payload must start with "vultisig://"'
+        }
+        return true
+      },
+    },
+  ])
+
+  return answer.qrPayload.trim()
+}
+
+// Subcommand: create-from-seedphrase fast
+createFromSeedphraseCmd
   .command('fast')
-  .description('Import as FastVault (server-assisted 2-of-2)')
+  .description('Create FastVault from seedphrase (server-assisted 2-of-2)')
   .requiredOption('--name <name>', 'Vault name')
   .requiredOption('--password <password>', 'Vault password')
   .requiredOption('--email <email>', 'Email for verification')
@@ -273,7 +302,7 @@ importSeedphraseCmd
           }
         }
 
-        await executeImportSeedphraseFast(context, {
+        await executeCreateFromSeedphraseFast(context, {
           mnemonic,
           name: options.name,
           password: options.password,
@@ -285,10 +314,10 @@ importSeedphraseCmd
     )
   )
 
-// Subcommand: import-seedphrase secure
-importSeedphraseCmd
+// Subcommand: create-from-seedphrase secure
+createFromSeedphraseCmd
   .command('secure')
-  .description('Import as SecureVault (multi-device MPC)')
+  .description('Create SecureVault from seedphrase (multi-device MPC)')
   .requiredOption('--name <name>', 'Vault name')
   .option('--password <password>', 'Vault password (optional)')
   .option('--threshold <m>', 'Signing threshold', '2')
@@ -329,7 +358,7 @@ importSeedphraseCmd
           }
         }
 
-        await executeImportSeedphraseSecure(context, {
+        await executeCreateFromSeedphraseSecure(context, {
           mnemonic,
           name: options.name,
           password: options.password,
@@ -337,6 +366,52 @@ importSeedphraseCmd
           shares: parseInt(options.shares, 10),
           discoverChains: options.discoverChains,
           chains,
+        })
+      }
+    )
+  )
+
+// Command: Join vault creation session (with subcommands)
+const joinCmd = program.command('join').description('Join an existing vault creation session')
+
+// Subcommand: join secure
+joinCmd
+  .command('secure')
+  .description('Join a SecureVault creation session')
+  .option('--qr <payload>', 'QR code payload from initiator (vultisig://...)')
+  .option('--qr-file <path>', 'Read QR payload from file')
+  .option('--mnemonic <words>', 'Seedphrase (required for seedphrase-based sessions)')
+  .option('--password <password>', 'Vault password (optional)')
+  .option('--devices <n>', 'Total devices in session', '2')
+  .action(
+    withExit(
+      async (options: { qr?: string; qrFile?: string; mnemonic?: string; password?: string; devices: string }) => {
+        const context = await init(program.opts().vault)
+
+        // Get QR payload from flag, file, or prompt
+        let qrPayload = options.qr
+        if (!qrPayload && options.qrFile) {
+          qrPayload = (await fs.readFile(options.qrFile, 'utf-8')).trim()
+        }
+        if (!qrPayload) {
+          qrPayload = await promptQrPayload()
+        }
+
+        // Parse QR to check if mnemonic is needed
+        const qrParams = await parseKeygenQR(qrPayload)
+
+        let mnemonic = options.mnemonic
+        if (qrParams.libType === 'KEYIMPORT' && !mnemonic) {
+          // Seedphrase-based session requires mnemonic
+          info('\nThis session requires a seedphrase to join.')
+          mnemonic = await promptSeedphrase()
+        }
+
+        await executeJoinSecure(context, {
+          qrPayload,
+          mnemonic,
+          password: options.password,
+          devices: parseInt(options.devices, 10),
         })
       }
     )

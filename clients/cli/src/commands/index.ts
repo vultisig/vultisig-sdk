@@ -27,19 +27,21 @@ export { executeBroadcast } from './broadcast'
 
 // Vault management commands
 export type {
+  CreateFromSeedphraseFastOptions,
+  CreateFromSeedphraseSecureOptions,
   FastVaultOptions,
-  ImportSeedphraseFastOptions,
-  ImportSeedphraseSecureOptions,
+  JoinSecureOptions,
   SecureVaultOptions,
 } from './vault-management'
 export {
   executeCreateFast,
+  executeCreateFromSeedphraseFast,
+  executeCreateFromSeedphraseSecure,
   executeCreateSecure,
   executeExport,
   executeImport,
-  executeImportSeedphraseFast,
-  executeImportSeedphraseSecure,
   executeInfo,
+  executeJoinSecure,
   executeRename,
   executeSwitch,
   executeVaults,

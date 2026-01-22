@@ -1,7 +1,7 @@
 /**
- * FastVaultSeedphraseImportService - Imports a seedphrase as a FastVault
+ * FastVaultFromSeedphraseService - Creates a FastVault from a seedphrase
  *
- * Orchestrates the full key import flow with VultiServer coordination:
+ * Orchestrates the full vault creation from seedphrase with VultiServer coordination:
  * 1. Validate mnemonic
  * 2. Derive master keys
  * 3. Setup with VultiServer
@@ -30,7 +30,7 @@ import { randomUUID } from '../crypto'
 import { ChainDiscoveryService } from '../seedphrase/ChainDiscoveryService'
 import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
 import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
-import type { ChainDiscoveryResult, ImportSeedphraseAsFastVaultOptions } from '../seedphrase/types'
+import type { ChainDiscoveryResult, CreateFastVaultFromSeedphraseOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 
@@ -55,16 +55,16 @@ async function keyImportWithServer(input: {
 }
 
 /**
- * FastVaultSeedphraseImportService
+ * FastVaultFromSeedphraseService
  *
- * Imports an existing BIP39 seedphrase into a FastVault (2-of-3 with VultiServer).
+ * Creates a FastVault (2-of-3 with VultiServer) from an existing BIP39 seedphrase.
  *
  * @example
  * ```typescript
- * const service = new FastVaultSeedphraseImportService(context)
- * const result = await service.importSeedphrase({
+ * const service = new FastVaultFromSeedphraseService(context)
+ * const result = await service.createFromSeedphrase({
  *   mnemonic: 'abandon abandon ... about',
- *   name: 'Imported Wallet',
+ *   name: 'My Wallet',
  *   password: 'securePassword',
  *   email: 'user@example.com',
  *   discoverChains: true,
@@ -73,7 +73,7 @@ async function keyImportWithServer(input: {
  * const vault = await sdk.verifyVault(result.vaultId, emailCode)
  * ```
  */
-export class FastVaultSeedphraseImportService {
+export class FastVaultFromSeedphraseService {
   private readonly validator: SeedphraseValidator
   private readonly keyDeriver: MasterKeyDeriver
   private readonly discoveryService: ChainDiscoveryService
@@ -87,12 +87,12 @@ export class FastVaultSeedphraseImportService {
   }
 
   /**
-   * Import a seedphrase as a FastVault
+   * Create a FastVault from a seedphrase
    *
-   * @param options - Import options
-   * @returns Import result with vaultId for verification
+   * @param options - Creation options
+   * @returns Creation result with vaultId for verification
    */
-  async importSeedphrase(options: ImportSeedphraseAsFastVaultOptions): Promise<{
+  async createFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<{
     vault: CoreVault
     vaultId: string
     verificationRequired: boolean

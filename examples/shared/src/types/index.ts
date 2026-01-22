@@ -33,8 +33,8 @@ export type ChainDiscoveryResult = {
   hasBalance: boolean
 }
 
-/** Options for importing seedphrase as FastVault */
-export type ImportSeedphraseFastOptions = {
+/** Options for creating FastVault from seedphrase */
+export type CreateFastVaultFromSeedphraseOptions = {
   mnemonic: string
   name: string
   password: string
@@ -45,8 +45,8 @@ export type ImportSeedphraseFastOptions = {
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
 
-/** Options for importing seedphrase as SecureVault */
-export type ImportSeedphraseSecureOptions = {
+/** Options for creating SecureVault from seedphrase */
+export type CreateSecureVaultFromSeedphraseOptions = {
   mnemonic: string
   name: string
   password?: string
@@ -59,6 +59,27 @@ export type ImportSeedphraseSecureOptions = {
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
+
+/** Options for joining an existing SecureVault session */
+export type JoinSecureVaultOptions = {
+  mnemonic?: string // Required for seedphrase-based, ignored for keygen
+  password?: string
+  devices?: number
+  onProgress?: (step: ProgressStep) => void
+  onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+}
+
+/** Result of joining a SecureVault session */
+export type JoinSecureVaultResult = {
+  vault: VaultInfo
+  vaultId: string
+}
+
+/** @deprecated Use CreateFastVaultFromSeedphraseOptions instead */
+export type ImportSeedphraseFastOptions = CreateFastVaultFromSeedphraseOptions
+
+/** @deprecated Use CreateSecureVaultFromSeedphraseOptions instead */
+export type ImportSeedphraseSecureOptions = CreateSecureVaultFromSeedphraseOptions
 
 // ===== Vault Types =====
 

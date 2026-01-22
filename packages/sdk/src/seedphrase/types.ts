@@ -1,9 +1,36 @@
 /**
- * Seedphrase import types for Vultisig SDK
+ * Seedphrase types for Vultisig SDK
+ * Used for creating vaults from existing seedphrases
  */
 import type { Chain } from '@core/chain/Chain'
 
 import type { VaultCreationStep } from '../types'
+
+/**
+ * Supported BIP39 mnemonic languages
+ */
+export const BIP39_LANGUAGES = [
+  'english',
+  'japanese',
+  'korean',
+  'spanish',
+  'chinese_simplified',
+  'chinese_traditional',
+  'french',
+  'italian',
+  'czech',
+  'portuguese',
+] as const
+
+export type Bip39Language = (typeof BIP39_LANGUAGES)[number]
+
+/**
+ * Options for seedphrase validation
+ */
+export type SeedphraseValidationOptions = {
+  /** Explicit language to validate against. If not provided, auto-detects. */
+  language?: Bip39Language
+}
 
 /**
  * Result of seedphrase validation
@@ -17,6 +44,8 @@ export type SeedphraseValidation = {
   invalidWords?: string[]
   /** Error message if validation failed */
   error?: string
+  /** Detected or specified language of the mnemonic */
+  detectedLanguage?: Bip39Language
 }
 
 /**
@@ -67,9 +96,9 @@ export type ChainDiscoveryResult = {
 }
 
 /**
- * Options for importing a seedphrase as a FastVault (2-of-3 with VultiServer)
+ * Options for creating a FastVault from a seedphrase (2-of-2 with VultiServer)
  */
-export type ImportSeedphraseAsFastVaultOptions = {
+export type CreateFastVaultFromSeedphraseOptions = {
   /** The mnemonic phrase (12 or 24 words, space-separated) */
   mnemonic: string
   /** Name for the new vault */
@@ -93,9 +122,9 @@ export type ImportSeedphraseAsFastVaultOptions = {
 }
 
 /**
- * Options for importing a seedphrase as a SecureVault (2-of-2 multi-device)
+ * Options for creating a SecureVault from a seedphrase (N-of-M multi-device)
  */
-export type ImportSeedphraseAsSecureVaultOptions = {
+export type CreateSecureVaultFromSeedphraseOptions = {
   /** The mnemonic phrase (12 or 24 words, space-separated) */
   mnemonic: string
   /** Name for the new vault */
@@ -122,6 +151,28 @@ export type ImportSeedphraseAsSecureVaultOptions = {
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   /** Progress callback for chain discovery */
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+}
+
+/**
+ * Options for joining an existing SecureVault creation session as a non-initiator device.
+ * Works for both fresh keygen and seedphrase-based vaults (auto-detected from QR).
+ */
+export type JoinSecureVaultOptions = {
+  /**
+   * The mnemonic phrase (required for seedphrase-based vaults, ignored for keygen).
+   * Must match the initiator's seedphrase when joining a from-seedphrase session.
+   */
+  mnemonic?: string
+  /** Optional password for vault encryption */
+  password?: string
+  /** Number of devices participating (defaults to 2 if not specified) */
+  devices?: number
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal
+  /** Progress callback for vault creation steps */
+  onProgress?: (step: VaultCreationStep) => void
+  /** Callback when a device joins the session */
+  onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
 }
 
 /**

@@ -2,5 +2,9 @@
   "name": "@lib/utils",
   "version": "0.0.1",
   "private": true,
+  "dependencies": {
+    "long": "^5.3.2",
+    "viem": "^2.44.4"
+  },
   "type": "module"
 }
