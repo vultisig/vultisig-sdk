@@ -1,0 +1,52 @@
+name: Release PR
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version-pr:
+    name: Create/Update Version PR
+    runs-on: ubuntu-latest
+    # Skip if this is the version packages commit (prevents infinite loop)
+    if: "!contains(github.event.head_commit.message, 'chore: version packages')"
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - run: corepack enable
+      - run: corepack prepare yarn@4.12.0 --activate
+      - run: yarn install --immutable
+
+      - name: Check for changesets
+        id: changesets-check
+        run: |
+          CHANGESETS=$(find .changeset -name "*.md" ! -name "README.md" 2>/dev/null | wc -l)
+          if [ "$CHANGESETS" -gt "0" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create/Update Version PR
+        if: steps.changesets-check.outputs.exists == 'true'
+        uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1
+        with:
+          version: yarn changeset:version
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}

@@ -4,114 +4,160 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Force release even without version commit"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.workflow }}-${{ github.ref }}
 
 env:
   NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
-  # ============ JOB 0: Check if release workflow should run ============
-  check:
-    name: Check Release Conditions
+  # ============ JOB 1: Build Packages ============
+  build:
+    name: Build Packages
     runs-on: ubuntu-latest
+    # Only run on version PR merge or manual force trigger
+    if: |
+      contains(github.event.head_commit.message, 'chore: version packages') ||
+      github.event.inputs.force_release == 'true'
     outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.version.outputs.version }}
+      should_publish: ${{ steps.version.outputs.should_publish }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
-      - name: Check for changesets or release commit
-        id: check
-        run: |
-          # Check if this is a release PR merge (commit message contains "chore: version packages")
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          if [[ "$COMMIT_MSG" == *"chore: version packages"* ]]; then
-            echo "Release PR merge detected"
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Check if there are any changesets (excluding README.md)
-          CHANGESETS=$(find .changeset -name "*.md" ! -name "README.md" 2>/dev/null | head -1)
-          if [ -n "$CHANGESETS" ]; then
-            echo "Changesets found"
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Check if manually triggered
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual trigger detected"
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "No changesets and not a release commit, skipping"
-          echo "should_release=false" >> $GITHUB_OUTPUT
-
-  # ============ JOB 1: Build and Publish ============
-  release:
-    name: Release
-    needs: check
-    if: needs.check.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      id-token: write
-    outputs:
-      published: ${{ steps.changesets.outputs.published }}
-      publishedPackages: ${{ steps.changesets.outputs.publishedPackages }}
-
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
-          registry-url: "https://registry.npmjs.org/"
+          cache: "yarn"
 
       - run: corepack enable
       - run: corepack prepare yarn@4.12.0 --activate
       - run: yarn install --immutable
 
-      - name: Build packages
+      - name: Build SDK and CLI
         run: |
           yarn build:sdk
           yarn cli:build
 
-      - name: Upload SDK build artifacts
+      - name: Get version and check if new
+        id: version
+        run: |
+          LOCAL_VERSION=$(node -p "require('./packages/sdk/package.json').version")
+          echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this version is already published on NPM
+          NPM_VERSION=$(npm view @vultisig/sdk version 2>/dev/null || echo "0.0.0")
+
+          if [ "$LOCAL_VERSION" = "$NPM_VERSION" ]; then
+            echo "Version $LOCAL_VERSION already published, skipping"
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          else
+            echo "New version $LOCAL_VERSION (npm has $NPM_VERSION)"
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload SDK dist
         uses: actions/upload-artifact@v4
         with:
           name: sdk-dist
           path: packages/sdk/dist
           retention-days: 1
 
-      - name: Create Release Pull Request or Publish
-        id: changesets
-        uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308 # v1
+      - name: Upload CLI dist
+        uses: actions/upload-artifact@v4
         with:
-          version: yarn changeset:version
-          publish: yarn changeset:publish
-          title: "chore: version packages"
-          commit: "chore: version packages"
+          name: cli-dist
+          path: clients/cli/dist
+          retention-days: 1
+
+  # ============ JOB 2: Run Tests (parallel with build) ============
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    # Same condition as build
+    if: |
+      contains(github.event.head_commit.message, 'chore: version packages') ||
+      github.event.inputs.force_release == 'true'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - run: corepack enable
+      - run: corepack prepare yarn@4.12.0 --activate
+      - run: yarn install --immutable
+
+      - name: Build SDK (required for tests)
+        run: yarn build:sdk
+
+      - name: Run unit tests
+        run: yarn test
+
+      - name: Run lint and typecheck
+        run: |
+          yarn lint
+          yarn typecheck
+
+  # ============ JOB 3: Publish to NPM ============
+  publish:
+    name: Publish to NPM
+    needs: [build, test]
+    if: needs.build.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org/"
+          cache: "yarn"
+
+      - run: corepack enable
+      - run: corepack prepare yarn@4.12.0 --activate
+      - run: yarn install --immutable
+
+      - name: Download SDK dist
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-dist
+          path: packages/sdk/dist
+
+      - name: Download CLI dist
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-dist
+          path: clients/cli/dist
+
+      - name: Publish to NPM
+        run: yarn changeset:publish
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # ============ JOB 2: Tag + GitHub Release (needs release) ============
+  # ============ JOB 4: Tag + GitHub Release ============
   tag-and-release:
     name: Tag & GitHub Release
-    needs: release
-    if: needs.release.outputs.published == 'true'
+    needs: [build, test]
+    if: needs.build.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      VERSION: ${{ fromJson(needs.release.outputs.publishedPackages)[0].version }}
+      VERSION: ${{ needs.build.outputs.version }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
@@ -134,20 +180,20 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(env.VERSION, 'alpha') || contains(env.VERSION, 'beta') || contains(env.VERSION, 'rc') }}
 
-  # ============ JOB 3: Deploy Vercel (needs release, parallel with others) ============
+  # ============ JOB 5: Deploy Vercel ============
   deploy-vercel:
     name: Deploy Vercel
-    needs: release
-    if: needs.release.outputs.published == 'true'
+    needs: [build, test]
     runs-on: ubuntu-latest
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
+          cache: "yarn"
 
       - name: Download SDK build artifacts
         uses: actions/download-artifact@v4
@@ -173,14 +219,13 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-  # ============ JOB 4: Sync Docs (needs release, parallel with others) ============
+  # ============ JOB 6: Sync Docs ============
   sync-docs:
     name: Sync Docs
-    needs: release
-    if: needs.release.outputs.published == 'true'
+    needs: [build, test]
     runs-on: ubuntu-latest
     env:
-      VERSION: ${{ fromJson(needs.release.outputs.publishedPackages)[0].version }}
+      VERSION: ${{ needs.build.outputs.version }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
@@ -203,17 +248,17 @@ jobs:
           git diff --staged --quiet || git commit -m "docs: sync vultisig-sdk v$VERSION"
           git push
 
-  # ============ JOB 5: Discord Notify (waits for all parallel jobs) ============
+  # ============ JOB 7: Discord Notify ============
   notify:
     name: Discord Notify
-    needs: [release, tag-and-release, deploy-vercel, sync-docs]
-    if: always() && needs.release.outputs.published == 'true'
+    needs: [build, test, publish, tag-and-release, deploy-vercel, sync-docs]
+    if: always() && needs.build.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Notify Discord
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          VERSION: ${{ fromJson(needs.release.outputs.publishedPackages)[0].version }}
+          VERSION: ${{ needs.build.outputs.version }}
           BROWSER_URL: ${{ needs.deploy-vercel.outputs.url }}
         run: |
           curl -X POST "$DISCORD_WEBHOOK" \
