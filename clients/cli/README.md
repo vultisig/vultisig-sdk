@@ -56,19 +56,16 @@ vultisig completion fish >> ~/.config/fish/completions/vultisig.fish
 ### Create a Fast Vault
 
 ```bash
-vultisig create
+vultisig create fast --name "My Wallet" --password "mypassword" --email user@example.com
 ```
 
 You'll be prompted to:
-1. Enter a vault name
-2. Set a password (min 8 characters)
-3. Provide an email for verification
-4. Enter the verification code sent to your email
+1. Enter the verification code sent to your email
 
 ### Create a Secure Vault (Multi-Device)
 
 ```bash
-vultisig create --secure --name "Team Wallet" --shares 3
+vultisig create secure --name "Team Wallet" --shares 3
 ```
 
 This creates a secure vault with configurable N-of-M threshold:
@@ -78,12 +75,12 @@ This creates a secure vault with configurable N-of-M threshold:
 4. Vault is created and ready to use
 
 **Secure vault options:**
-- `--shares <n>` - Number of participating devices (default: 2)
-- `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
+- `--shares <n>` - Number of participating devices (default: 3)
+- `--threshold <n>` - Signing threshold (default: 2)
 
 **Example session:**
 ```bash
-$ vultisig create --secure --name "Team Wallet" --shares 3
+$ vultisig create secure --name "Team Wallet" --shares 3
 
 Creating secure vault: Team Wallet (2-of-3)
 
@@ -111,10 +108,10 @@ Import an existing wallet from a BIP39 recovery phrase (12 or 24 words):
 
 ```bash
 # FastVault import (server-assisted 2-of-2)
-vultisig import-seedphrase fast --name "Imported Wallet" --email user@example.com
+vultisig create-from-seedphrase fast --name "Imported Wallet" --email user@example.com
 
 # SecureVault import (multi-device MPC)
-vultisig import-seedphrase secure --name "Team Wallet" --shares 3
+vultisig create-from-seedphrase secure --name "Team Wallet" --shares 3
 ```
 
 **Import options:**
@@ -126,7 +123,7 @@ When `--mnemonic` is not provided, you'll be prompted to enter it securely (mask
 
 **Example session:**
 ```bash
-$ vultisig import-seedphrase fast --name "My Wallet" --email user@example.com --discover-chains
+$ vultisig create-from-seedphrase fast --name "My Wallet" --email user@example.com --discover-chains
 
 Enter your 12 or 24-word recovery phrase.
 Words will be hidden as you type.
@@ -216,11 +213,12 @@ vultisig -i
 
 | Command | Description |
 |---------|-------------|
-| `create` | Create a new fast vault (server-assisted) |
-| `create --secure` | Create a secure vault (multi-device MPC) |
+| `create fast` | Create a new fast vault (server-assisted 2-of-2) |
+| `create secure` | Create a secure vault (multi-device MPC) |
 | `import <file>` | Import vault from .vult file |
-| `import-seedphrase fast` | Import seedphrase as FastVault (2-of-2) |
-| `import-seedphrase secure` | Import seedphrase as SecureVault (N-of-M) |
+| `create-from-seedphrase fast` | Import seedphrase as FastVault (2-of-2) |
+| `create-from-seedphrase secure` | Import seedphrase as SecureVault (N-of-M) |
+| `join secure` | Join an existing SecureVault creation session |
 | `export [path]` | Export vault to file |
 | `verify <vaultId>` | Verify vault with email code |
 | `vaults` | List all stored vaults |
@@ -228,21 +226,33 @@ vultisig -i
 | `rename <newName>` | Rename the active vault |
 | `info` | Show detailed vault information |
 
-**Create options:**
-- `--secure` - Create a secure vault instead of fast vault
-- `--name <name>` - Vault name
-- `--shares <n>` - Number of devices for secure vault (default: 2)
-- `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
+**Create fast options:**
+- `--name <name>` - Vault name (required)
+- `--password <password>` - Vault password (required)
+- `--email <email>` - Email for verification (required)
 
-**Import seedphrase options (fast):**
+**Create secure options:**
+- `--name <name>` - Vault name (required)
+- `--password <password>` - Vault password (optional)
+- `--shares <n>` - Number of devices (default: 3)
+- `--threshold <n>` - Signing threshold (default: 2)
+
+**Join secure options:**
+- `--qr <payload>` - QR code payload from initiator (vultisig://...)
+- `--qr-file <path>` - Read QR payload from file
+- `--mnemonic <words>` - Seedphrase (required for seedphrase-based sessions)
+- `--password <password>` - Vault password (optional)
+- `--devices <n>` - Total devices in session (default: 2)
+
+**Create-from-seedphrase fast options:**
 - `--name <name>` - Vault name (required)
 - `--email <email>` - Email for verification (required)
-- `--password <password>` - Vault password (required, prompted if not provided)
+- `--password <password>` - Vault password (required)
 - `--mnemonic <words>` - Recovery phrase (prompted securely if not provided)
 - `--discover-chains` - Auto-enable chains with existing balances
 - `--chains <chains>` - Specific chains to enable (comma-separated)
 
-**Import seedphrase options (secure):**
+**Create-from-seedphrase secure options:**
 - `--name <name>` - Vault name (required)
 - `--shares <n>` - Number of devices (default: 2)
 - `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
@@ -528,8 +538,9 @@ vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"<base64-tx-bytes>","sign
 | Command | Description |
 |---------|-------------|
 | `vault <name>` | Switch to a different vault |
-| `create <fast\|secure>` | Create a new vault |
-| `import-seedphrase <fast\|secure>` | Import wallet from recovery phrase |
+| `vaults` | List all vaults |
+| `create` | Create a new vault |
+| `import <file>` | Import vault from file |
 | `lock` | Lock vault (clear cached password) |
 | `unlock` | Unlock vault (cache password) |
 | `status` | Show vault status |
@@ -732,7 +743,7 @@ Configuration is stored in `~/.vultisig/`:
 
 Create or import a vault first:
 ```bash
-vultisig create
+vultisig create fast --name "My Wallet" --password "mypassword" --email user@example.com
 # or
 vultisig import /path/to/vault.vult
 ```
