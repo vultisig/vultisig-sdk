@@ -123,13 +123,12 @@ When `--mnemonic` is not provided, you'll be prompted to enter it securely (mask
 
 **Example session:**
 ```bash
-$ vultisig create-from-seedphrase fast --name "My Wallet" --email user@example.com --discover-chains
+$ vultisig create-from-seedphrase fast --name "My Wallet" --email user@example.com --password "mypassword" --discover-chains
 
 Enter your 12 or 24-word recovery phrase.
 Words will be hidden as you type.
 
 Seedphrase: ************************
-Password: ********
 ✓ Valid 12-word seedphrase
 
 Discovering chains with balances...
@@ -254,7 +253,7 @@ vultisig -i
 
 **Create-from-seedphrase secure options:**
 - `--name <name>` - Vault name (required)
-- `--shares <n>` - Number of devices (default: 2)
+- `--shares <n>` - Number of devices (default: 3)
 - `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
 - `--password <password>` - Vault password (optional)
 - `--mnemonic <words>` - Recovery phrase (prompted securely if not provided)
