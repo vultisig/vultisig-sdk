@@ -269,6 +269,7 @@ createFromSeedphraseCmd
   .option('--mnemonic <words>', 'Seedphrase (12 or 24 words, space-separated)')
   .option('--discover-chains', 'Scan chains for existing balances')
   .option('--chains <chains>', 'Specific chains to enable (comma-separated)')
+  .option('--use-phantom-solana-path', 'Use Phantom wallet derivation path for Solana')
   .action(
     withExit(
       async (options: {
@@ -278,6 +279,7 @@ createFromSeedphraseCmd
         mnemonic?: string
         discoverChains?: boolean
         chains?: string
+        usePhantomSolanaPath?: boolean
       }) => {
         const context = await init(program.opts().vault)
 
@@ -309,6 +311,7 @@ createFromSeedphraseCmd
           email: options.email,
           discoverChains: options.discoverChains,
           chains,
+          usePhantomSolanaPath: options.usePhantomSolanaPath,
         })
       }
     )
@@ -325,6 +328,7 @@ createFromSeedphraseCmd
   .option('--mnemonic <words>', 'Seedphrase (12 or 24 words)')
   .option('--discover-chains', 'Scan chains for existing balances')
   .option('--chains <chains>', 'Specific chains to enable (comma-separated)')
+  .option('--use-phantom-solana-path', 'Use Phantom wallet derivation path for Solana')
   .action(
     withExit(
       async (options: {
@@ -335,6 +339,7 @@ createFromSeedphraseCmd
         mnemonic?: string
         discoverChains?: boolean
         chains?: string
+        usePhantomSolanaPath?: boolean
       }) => {
         const context = await init(program.opts().vault)
 
@@ -366,6 +371,7 @@ createFromSeedphraseCmd
           shares: parseInt(options.shares, 10),
           discoverChains: options.discoverChains,
           chains,
+          usePhantomSolanaPath: options.usePhantomSolanaPath,
         })
       }
     )

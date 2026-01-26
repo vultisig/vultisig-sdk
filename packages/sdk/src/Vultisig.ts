@@ -14,6 +14,7 @@ import type { SdkEvents } from './events/types'
 import { ChainDiscoveryService } from './seedphrase/ChainDiscoveryService'
 import { SeedphraseValidator } from './seedphrase/SeedphraseValidator'
 import type {
+  ChainDiscoveryAggregate,
   ChainDiscoveryProgress,
   ChainDiscoveryResult,
   CreateFastVaultFromSeedphraseOptions,
@@ -456,16 +457,17 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Discover chains with existing balances from a seedphrase
    *
    * Derives addresses for each chain and checks for non-zero balances.
+   * Also checks Solana's Phantom wallet derivation path and indicates if it should be used.
    * Useful for determining which chains to include when importing a seedphrase.
    *
    * @param mnemonic - The seedphrase to derive addresses from
    * @param chains - Optional list of chains to scan (defaults to all supported)
    * @param onProgress - Optional progress callback
-   * @returns Array of chain discovery results
+   * @returns Aggregate with chain discovery results and Phantom Solana path flag
    *
    * @example
    * ```typescript
-   * const results = await sdk.discoverChainsFromSeedphrase(
+   * const { results, usePhantomSolanaPath } = await sdk.discoverChainsFromSeedphrase(
    *   'abandon abandon abandon ...',
    *   [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
    *   (progress) => console.log(`${progress.chainsProcessed}/${progress.chainsTotal}`)
@@ -473,13 +475,16 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    *
    * const chainsWithBalance = results.filter(r => r.hasBalance)
    * console.log('Chains with funds:', chainsWithBalance.map(r => r.chain))
+   * if (usePhantomSolanaPath) {
+   *   console.log('Detected Phantom wallet - will use Phantom derivation path for Solana')
+   * }
    * ```
    */
   async discoverChainsFromSeedphrase(
     mnemonic: string,
     chains?: Chain[],
     onProgress?: (progress: ChainDiscoveryProgress) => void
-  ): Promise<ChainDiscoveryResult[]> {
+  ): Promise<ChainDiscoveryAggregate> {
     await this.ensureInitialized()
     const discoveryService = new ChainDiscoveryService(this.context.wasmProvider)
     return discoveryService.discoverChains(mnemonic, {

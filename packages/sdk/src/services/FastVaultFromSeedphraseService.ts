@@ -130,6 +130,8 @@ export class FastVaultFromSeedphraseService {
 
     // Step 3: Run optional chain discovery
     let discoveredChains: ChainDiscoveryResult[] | undefined
+    let usePhantomSolanaPath = options.usePhantomSolanaPath ?? false
+
     if (options.discoverChains) {
       reportProgress({
         step: 'fetching_balances',
@@ -137,10 +139,15 @@ export class FastVaultFromSeedphraseService {
         message: 'Discovering chains with balances...',
       })
 
-      discoveredChains = await this.discoveryService.discoverChains(mnemonic, {
+      const discoveryResult = await this.discoveryService.discoverChains(mnemonic, {
         config: { chains: options.chainsToScan },
         onProgress: onChainDiscovery,
       })
+      discoveredChains = discoveryResult.results
+      // Use discovered Phantom path preference unless explicitly set in options
+      if (options.usePhantomSolanaPath === undefined) {
+        usePhantomSolanaPath = discoveryResult.usePhantomSolanaPath
+      }
     }
 
     // Determine which chains to import
@@ -265,7 +272,9 @@ export class FastVaultFromSeedphraseService {
     const chainKeyShares: Partial<Record<Chain, string>> = {}
 
     // Derive chain-specific private keys
-    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic, chainsToImport as Chain[])
+    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic, chainsToImport as Chain[], {
+      usePhantomSolanaPath,
+    })
 
     // Import each chain's key via MPC
     for (let i = 0; i < chainPrivateKeys.length; i++) {

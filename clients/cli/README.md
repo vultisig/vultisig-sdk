@@ -118,8 +118,11 @@ vultisig create-from-seedphrase secure --name "Team Wallet" --shares 3
 - `--mnemonic <words>` - Recovery phrase (space-separated words)
 - `--discover-chains` - Scan chains for existing balances before import
 - `--chains <chains>` - Specific chains to enable (comma-separated)
+- `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
 When `--mnemonic` is not provided, you'll be prompted to enter it securely (masked input).
+
+> **Note:** Phantom wallet uses a non-standard derivation path for Solana. If your seedphrase was originally created in Phantom and you're importing Solana funds, use `--use-phantom-solana-path`. When using `--discover-chains`, this is auto-detected.
 
 **Example session:**
 ```bash
@@ -250,6 +253,7 @@ vultisig -i
 - `--mnemonic <words>` - Recovery phrase (prompted securely if not provided)
 - `--discover-chains` - Auto-enable chains with existing balances
 - `--chains <chains>` - Specific chains to enable (comma-separated)
+- `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
 **Create-from-seedphrase secure options:**
 - `--name <name>` - Vault name (required)
@@ -259,6 +263,7 @@ vultisig -i
 - `--mnemonic <words>` - Recovery phrase (prompted securely if not provided)
 - `--discover-chains` - Auto-enable chains with existing balances
 - `--chains <chains>` - Specific chains to enable (comma-separated)
+- `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
 **Export options:**
 - `[path]` - Output file or directory (defaults to SDK-generated filename in current directory)

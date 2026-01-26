@@ -740,7 +740,7 @@ const result = await sdk.validateSeedphrase(mnemonic, { language: 'japanese' })
 Before importing, you can scan chains to find existing balances:
 
 ```typescript
-const results = await sdk.discoverChainsFromSeedphrase(
+const { results, usePhantomSolanaPath } = await sdk.discoverChainsFromSeedphrase(
   mnemonic,
   [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain, Chain.Solana],
   (progress) => {
@@ -758,6 +758,11 @@ for (const result of results) {
     console.log(`    Balance: ${result.balance} ${result.symbol}`)
   }
 }
+
+// Phantom wallet detection (Solana only)
+if (usePhantomSolanaPath) {
+  console.log('\nDetected Phantom wallet derivation path for Solana')
+}
 ```
 
 **Progress Phases:**
@@ -765,6 +770,12 @@ for (const result of results) {
 - `deriving` - Deriving addresses for each chain
 - `fetching` - Fetching balances from blockchain
 - `complete` - Discovery finished
+
+**Phantom Wallet Detection:**
+
+When Solana is included in the discovery, the SDK automatically checks both the standard BIP44 path and Phantom wallet's non-standard derivation path (`m/44'/501'/0'/0'`). If the Phantom path has a balance but the standard path doesn't, `usePhantomSolanaPath` will be `true` and the Solana result will show the Phantom-derived address.
+
+This detection follows the logic: `usePhantomSolanaPath = phantomBalance > 0 && standardBalance === 0`
 
 ### Creating a FastVault from Seedphrase
 
@@ -783,6 +794,9 @@ const vaultId = await sdk.createFastVaultFromSeedphrase({
   // Or specify exact chains to enable
   // chains: [Chain.Bitcoin, Chain.Ethereum],
 
+  // Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true)
+  // usePhantomSolanaPath: true,
+
   // Progress callbacks
   onProgress: (step) => {
     console.log(`${step.step}: ${step.message} (${step.progress}%)`)
@@ -799,6 +813,10 @@ const vault = await sdk.verifyVault(vaultId, code)
 console.log('Import complete:', vault.name)
 ```
 
+**Phantom Wallet Support:**
+
+If your seedphrase was originally created in Phantom wallet, enable `usePhantomSolanaPath: true` to use Phantom's non-standard Solana derivation path. When `discoverChains: true` is set, this is automatically detected based on which path has funds.
+
 ### Creating a SecureVault from Seedphrase
 
 Import a seedphrase with multi-device MPC (N-of-M threshold):
@@ -811,6 +829,9 @@ const { vault, vaultId, sessionId } = await sdk.createSecureVaultFromSeedphrase(
   threshold: 2,    // Signing threshold
   password: 'OptionalPassword',
   discoverChains: true,
+
+  // Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true)
+  // usePhantomSolanaPath: true,
 
   onProgress: (step) => {
     console.log(`${step.step}: ${step.message}`)
@@ -2059,7 +2080,7 @@ class Vultisig {
     mnemonic: string,
     chains?: Chain[],
     onProgress?: (progress: ChainDiscoveryProgress) => void
-  ): Promise<ChainDiscoveryResult[]>
+  ): Promise<ChainDiscoveryAggregate>  // Returns { results, usePhantomSolanaPath }
   createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<string>
   createSecureVaultFromSeedphrase(options: CreateSecureVaultFromSeedphraseOptions): Promise<{
     vault: SecureVault
@@ -2364,6 +2385,12 @@ type ChainDiscoveryResult = {
   hasBalance: boolean
 }
 
+// Aggregate result from discoverChainsFromSeedphrase()
+type ChainDiscoveryAggregate = {
+  results: ChainDiscoveryResult[]
+  usePhantomSolanaPath: boolean  // True if Phantom's Solana derivation path should be used
+}
+
 type CreateFastVaultFromSeedphraseOptions = {
   mnemonic: string
   name: string
@@ -2372,6 +2399,8 @@ type CreateFastVaultFromSeedphraseOptions = {
   chains?: Chain[]
   discoverChains?: boolean
   chainsToScan?: Chain[]
+  /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
+  usePhantomSolanaPath?: boolean
   onProgress?: (step: VaultCreationStep) => void
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
@@ -2384,6 +2413,8 @@ type CreateSecureVaultFromSeedphraseOptions = {
   threshold?: number
   chains?: Chain[]
   discoverChains?: boolean
+  /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
+  usePhantomSolanaPath?: boolean
   onProgress?: (step: VaultCreationStep) => void
   onQRCodeReady?: (qrPayload: string) => void
   onDeviceJoined?: (deviceId: string, total: number, required: number) => void
@@ -2397,6 +2428,8 @@ type JoinSecureVaultOptions = {
   password?: string
   /** Number of devices */
   devices?: number
+  /** Use Phantom wallet derivation path for Solana */
+  usePhantomSolanaPath?: boolean
   /** Cancellation signal */
   signal?: AbortSignal
   /** Progress callback */

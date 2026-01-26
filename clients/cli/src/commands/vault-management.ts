@@ -559,6 +559,8 @@ export type CreateFromSeedphraseFastOptions = {
   discoverChains?: boolean
   chains?: Chain[]
   signal?: AbortSignal
+  /** Use Phantom wallet derivation path for Solana */
+  usePhantomSolanaPath?: boolean
 }
 
 export type CreateFromSeedphraseSecureOptions = {
@@ -570,6 +572,8 @@ export type CreateFromSeedphraseSecureOptions = {
   discoverChains?: boolean
   chains?: Chain[]
   signal?: AbortSignal
+  /** Use Phantom wallet derivation path for Solana */
+  usePhantomSolanaPath?: boolean
 }
 
 /**
@@ -579,7 +583,7 @@ export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
   options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
-  const { mnemonic, name, password, email, discoverChains, chains, signal } = options
+  const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
 
   // 1. Validate seedphrase first
   const validateSpinner = createSpinner('Validating seedphrase...')
@@ -594,20 +598,31 @@ export async function executeCreateFromSeedphraseFast(
   validateSpinner.succeed(`Valid ${validation.wordCount}-word seedphrase`)
 
   // 2. Optional chain discovery (runs if --discover-chains is set)
+  // Track if Phantom Solana path should be used (auto-detected during discovery)
+  let detectedUsePhantomSolanaPath = usePhantomSolanaPath
   if (discoverChains) {
     const discoverSpinner = createSpinner('Discovering chains with balances...')
     try {
       // If --chains specified, only scan those; otherwise scan all
-      const discovered = await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
-        discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
-      })
+      const { results: discovered, usePhantomSolanaPath: detectedPhantomPath } =
+        await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
+          discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
+        })
       const chainsWithBalance = discovered.filter(c => c.hasBalance)
       discoverSpinner.succeed(`Found ${chainsWithBalance.length} chains with balances`)
+
+      // Use discovered Phantom path preference unless explicitly set via flag
+      if (usePhantomSolanaPath === undefined) {
+        detectedUsePhantomSolanaPath = detectedPhantomPath
+      }
 
       if (chainsWithBalance.length > 0 && !isSilent()) {
         info('\nChains with balances:')
         for (const result of chainsWithBalance) {
           info(`  ${result.chain}: ${result.balance} ${result.symbol}`)
+        }
+        if (detectedPhantomPath) {
+          info('  (Using Phantom wallet derivation path for Solana)')
         }
         info('')
       }
@@ -626,6 +641,7 @@ export async function executeCreateFromSeedphraseFast(
       email,
       // Don't pass discoverChains - CLI handles discovery above
       chains,
+      usePhantomSolanaPath: detectedUsePhantomSolanaPath,
       onProgress: step => {
         importSpinner.text = `${step.message} (${step.progress}%)`
       },
@@ -725,7 +741,17 @@ export async function executeCreateFromSeedphraseSecure(
   ctx: CommandContext,
   options: CreateFromSeedphraseSecureOptions
 ): Promise<VaultBase> {
-  const { mnemonic, name, password, threshold, shares: totalShares, discoverChains, chains, signal } = options
+  const {
+    mnemonic,
+    name,
+    password,
+    threshold,
+    shares: totalShares,
+    discoverChains,
+    chains,
+    signal,
+    usePhantomSolanaPath,
+  } = options
 
   // 1. Validate seedphrase first
   const validateSpinner = createSpinner('Validating seedphrase...')
@@ -740,20 +766,31 @@ export async function executeCreateFromSeedphraseSecure(
   validateSpinner.succeed(`Valid ${validation.wordCount}-word seedphrase`)
 
   // 2. Optional chain discovery (runs if --discover-chains is set)
+  // Track if Phantom Solana path should be used (auto-detected during discovery)
+  let detectedUsePhantomSolanaPath = usePhantomSolanaPath
   if (discoverChains) {
     const discoverSpinner = createSpinner('Discovering chains with balances...')
     try {
       // If --chains specified, only scan those; otherwise scan all
-      const discovered = await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
-        discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
-      })
+      const { results: discovered, usePhantomSolanaPath: detectedPhantomPath } =
+        await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
+          discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
+        })
       const chainsWithBalance = discovered.filter(c => c.hasBalance)
       discoverSpinner.succeed(`Found ${chainsWithBalance.length} chains with balances`)
+
+      // Use discovered Phantom path preference unless explicitly set via flag
+      if (usePhantomSolanaPath === undefined) {
+        detectedUsePhantomSolanaPath = detectedPhantomPath
+      }
 
       if (chainsWithBalance.length > 0 && !isSilent()) {
         info('\nChains with balances:')
         for (const result of chainsWithBalance) {
           info(`  ${result.chain}: ${result.balance} ${result.symbol}`)
+        }
+        if (detectedPhantomPath) {
+          info('  (Using Phantom wallet derivation path for Solana)')
         }
         info('')
       }
@@ -775,6 +812,7 @@ export async function executeCreateFromSeedphraseSecure(
         threshold,
         // Don't pass discoverChains - CLI handles discovery above
         chains,
+        usePhantomSolanaPath: detectedUsePhantomSolanaPath,
         onProgress: step => {
           importSpinner.text = `${step.message} (${step.progress}%)`
         },

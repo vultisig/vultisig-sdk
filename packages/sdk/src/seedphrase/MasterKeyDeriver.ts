@@ -6,6 +6,7 @@
  */
 import type { Chain } from '@core/chain/Chain'
 import { getChainKind } from '@core/chain/ChainKind'
+import { phantomSolanaPath } from '@core/chain/publicKey/address/deriveSolanaAddressFromMnemonic'
 import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
 
 import type { WasmProvider } from '../context/SdkContext'
@@ -39,6 +40,14 @@ export type DerivedChainKey = {
   address: string
   /** Whether this is an EdDSA key (requires clamping) */
   isEddsa: boolean
+}
+
+/**
+ * Options for deriving chain private keys
+ */
+export type DeriveChainPrivateKeysOptions = {
+  /** Use Phantom wallet derivation path for Solana instead of standard BIP44 path */
+  usePhantomSolanaPath?: boolean
 }
 
 /**
@@ -167,9 +176,14 @@ export class MasterKeyDeriver {
    *
    * @param mnemonic - BIP39 mnemonic phrase
    * @param chains - Array of chains to derive keys for
+   * @param options - Derivation options (e.g., usePhantomSolanaPath)
    * @returns Array of chain private keys
    */
-  async deriveChainPrivateKeys(mnemonic: string, chains: Chain[]): Promise<ChainPrivateKey[]> {
+  async deriveChainPrivateKeys(
+    mnemonic: string,
+    chains: Chain[],
+    options?: DeriveChainPrivateKeysOptions
+  ): Promise<ChainPrivateKey[]> {
     const walletCore = await this.wasmProvider.getWalletCore()
     const cleaned = cleanMnemonic(mnemonic)
 
@@ -185,7 +199,11 @@ export class MasterKeyDeriver {
         const isEddsa = algorithm === 'eddsa'
 
         // Derive chain-specific key
-        const chainKey = hdWallet.getKeyForCoin(coinType)
+        // For Solana with Phantom path, use custom derivation path
+        const chainKey =
+          chain === 'Solana' && options?.usePhantomSolanaPath
+            ? hdWallet.getKey(coinType, phantomSolanaPath)
+            : hdWallet.getKeyForCoin(coinType)
         const chainKeyData = new Uint8Array(chainKey.data())
 
         let privateKeyHex: string
@@ -241,6 +259,39 @@ export class MasterKeyDeriver {
       }
 
       return hdWallet.getAddressForCoin(coinType)
+    } finally {
+      if (hdWallet.delete) {
+        hdWallet.delete()
+      }
+    }
+  }
+
+  /**
+   * Derive Solana address using Phantom wallet's derivation path
+   *
+   * Phantom uses a non-standard path (m/44'/501'/0'/0') instead of the
+   * standard Solana BIP44 path. This is needed to discover wallets that
+   * were originally created in Phantom.
+   *
+   * @param mnemonic - BIP39 mnemonic phrase
+   * @returns Solana address derived using Phantom's path
+   */
+  async deriveSolanaAddressWithPhantomPath(mnemonic: string): Promise<string> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    const cleaned = cleanMnemonic(mnemonic)
+
+    const hdWallet = walletCore.HDWallet.createWithMnemonic(cleaned, '')
+
+    try {
+      const coinType = walletCore.CoinType.solana
+      const privateKey = hdWallet.getKey(coinType, phantomSolanaPath)
+      const publicKey = privateKey.getPublicKeyEd25519()
+      const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
+
+      privateKey.delete()
+      publicKey.delete()
+
+      return address
     } finally {
       if (hdWallet.delete) {
         hdWallet.delete()

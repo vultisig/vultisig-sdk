@@ -71,6 +71,19 @@ yarn preview
 2. Select one or more .vult files
 3. Vaults will open in separate tabs
 
+### Import from Seedphrase
+
+1. Click "Import Seedphrase"
+2. Choose vault type (FastVault or SecureVault)
+3. Enter your 12 or 24-word recovery phrase
+4. Optionally enable:
+   - **Discover chains with existing balances** - Scans all chains for funds
+   - **Use Phantom wallet derivation path for Solana** - Enable if your seedphrase was originally created in Phantom wallet (uses different derivation path)
+5. For FastVault: Enter name, email, password and complete email verification
+6. For SecureVault: Enter name, configure devices, then scan QR with mobile app
+
+> **Note:** When "Discover chains" is enabled, the app automatically detects if Phantom's Solana derivation path should be used.
+
 ### Check Balances
 
 1. Select a vault from the tabs
