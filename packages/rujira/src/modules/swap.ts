@@ -49,10 +49,13 @@ import { EASY_ROUTES, type EasySwapRequest, type EasyRouteName } from '../easy-r
 export interface RujiraSwapOptions {
   /** Quote cache options */
   cache?: QuoteCacheOptions | false;
+  /** Quote expiry safety buffer in milliseconds (default: 5000) */
+  quoteExpiryBufferMs?: number;
 }
 
 export class RujiraSwap {
   private readonly quoteCache: QuoteCache<SwapQuote> | null;
+  private readonly quoteExpiryBufferMs: number;
 
   constructor(
     private readonly client: RujiraClient,
@@ -64,6 +67,9 @@ export class RujiraSwap {
     } else {
       this.quoteCache = new QuoteCache<SwapQuote>(options.cache);
     }
+    
+    // Initialize quote expiry buffer (5s by default)
+    this.quoteExpiryBufferMs = options.quoteExpiryBufferMs ?? 5000;
   }
 
   /**
@@ -196,7 +202,7 @@ export class RujiraSwap {
       expectedOutput: simulation.returned,
       minimumOutput,
       rate,
-      priceImpact,
+      priceImpact: priceImpact ?? 'unknown',
       fees: {
         network: '0', // Gas estimated at execution
         protocol: simulation.fee,
@@ -207,8 +213,8 @@ export class RujiraSwap {
       expiresAt: Date.now() + 30000, // 30 second expiry
       quoteId: generateQuoteId(),
       cachedAt: Date.now(),
-      warning: priceImpactEstimated
-        ? 'Price impact is estimated - orderbook data unavailable. Actual slippage may differ.'
+      warning: priceImpactEstimated || priceImpact === null
+        ? 'Price impact is estimated or unknown - orderbook data unavailable. Actual slippage may differ.'
         : undefined,
     };
 
@@ -233,10 +239,9 @@ export class RujiraSwap {
    * @returns Swap result with transaction hash
    */
   async execute(quote: SwapQuote, options: SwapOptions = {}): Promise<SwapResult> {
-    // Check quote expiry with 5 second safety buffer
+    // Check quote expiry with configurable safety buffer
     // This prevents race conditions where quote expires between check and execution
-    const EXPIRY_SAFETY_BUFFER_MS = 5000;
-    const effectiveExpiry = quote.expiresAt - EXPIRY_SAFETY_BUFFER_MS;
+    const effectiveExpiry = quote.expiresAt - this.quoteExpiryBufferMs;
     
     if (Date.now() > effectiveExpiry) {
       const isActuallyExpired = Date.now() > quote.expiresAt;
@@ -244,12 +249,14 @@ export class RujiraSwap {
         RujiraErrorCode.QUOTE_EXPIRED,
         isActuallyExpired 
           ? 'Quote has expired. Please get a new quote.'
-          : 'Quote is about to expire (within 5s safety buffer). Please get a new quote to ensure execution completes.'
+          : `Quote is about to expire (within ${this.quoteExpiryBufferMs}ms safety buffer). Please get a new quote to ensure execution completes.`
       );
     }
 
-    // Validate balance before proceeding
-    await this.validateBalance(quote.params.fromAsset, quote.params.amount);
+    // Validate balance before proceeding (unless already validated by caller)
+    if (!options.skipBalanceValidation) {
+      await this.validateBalance(quote.params.fromAsset, quote.params.amount);
+    }
 
     // Get asset info for denom
     const fromAssetInfo = getAssetInfo(quote.params.fromAsset);
@@ -449,9 +456,9 @@ export class RujiraSwap {
 
     // Get quote and execute in one call
     const quote = await this.getQuote(quoteParams);
-    // Note: execute() will re-validate balance but that's a minor overhead
-    // for extra safety in case market conditions changed
-    return this.execute(quote);
+    // Skip balance validation in execute() since we already validated above
+    // This prevents race conditions and redundant validation
+    return this.execute(quote, { skipBalanceValidation: true });
   }
 
   // ============================================================================
@@ -646,7 +653,7 @@ export class RujiraSwap {
     inputAmount: string,
     outputAmount: string,
     orderbook: OrderBook | null
-  ): string {
+  ): string | null {
     // If no orderbook data, estimate based on swap size
     if (!orderbook) {
       return this.estimatePriceImpactWithoutOrderbook(inputAmount, outputAmount);
@@ -698,19 +705,37 @@ export class RujiraSwap {
 
   /**
    * Estimate price impact when orderbook is not available
-   * Uses conservative estimate since actual impact is unknown
-   *
-   * Returns 2% as a conservative default - actual impact could be
-   * higher or lower depending on market depth.
+   * Returns a range estimate based on swap size
+   * 
+   * For large swaps (>$10k equivalent), returns null to indicate unknown impact.
+   * For smaller swaps, returns an estimated range based on typical market depth.
    */
   private estimatePriceImpactWithoutOrderbook(
-    _inputAmount: string,
+    inputAmount: string,
     _outputAmount: string
-  ): string {
-    // Conservative estimate: 2% when orderbook unavailable
-    // This is intentionally higher than typical to encourage users
-    // to verify conditions before executing large swaps
-    return '2.0';
+  ): string | null {
+    const amount = BigInt(inputAmount);
+    
+    // For very large amounts, we can't provide a reliable estimate
+    // Users should check market conditions manually
+    // Assuming 8 decimal places: 1,000,000,000,000 = $10,000 worth of RUNE
+    const largeSwapThreshold = BigInt('1000000000000'); // 10k units base
+    
+    if (amount >= largeSwapThreshold) {
+      // Return null for large swaps - forces user to check conditions
+      return null;
+    }
+    
+    // For medium amounts, provide a conservative range
+    const mediumSwapThreshold = BigInt('100000000000'); // 1k units base
+    
+    if (amount >= mediumSwapThreshold) {
+      // Medium swap: 2-5% estimated range
+      return '2.0-5.0';
+    }
+    
+    // For smaller amounts, use more conservative estimate
+    return '1.0-3.0';
   }
 
   /**

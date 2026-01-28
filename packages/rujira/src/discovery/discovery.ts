@@ -18,7 +18,7 @@ export interface DiscoveryOptions {
   graphql?: GraphQLClientOptions;
   /** RPC endpoint override */
   rpcEndpoint?: string;
-  /** Cache TTL in ms (default: 5 minutes) */
+  /** Cache TTL in ms (default: 5 minutes, set to 0 to disable caching) */
   cacheTtl?: number;
   /** Enable debug logging */
   debug?: boolean;
@@ -69,7 +69,7 @@ export class RujiraDiscovery {
       : MAINNET_CONFIG;
 
     this.rpcEndpoint = options.rpcEndpoint || networkConfig.rpcEndpoint;
-    this.cacheTtl = options.cacheTtl || 5 * 60 * 1000; // 5 minutes
+    this.cacheTtl = options.cacheTtl ?? 5 * 60 * 1000; // 5 minutes default, allow 0
     this.debug = options.debug || false;
 
     // Initialize GraphQL client
@@ -127,30 +127,84 @@ export class RujiraDiscovery {
    * Separated to allow pending promise pattern in discoverContracts
    */
   private async performDiscovery(): Promise<DiscoveredContracts> {
+    let graphqlError: unknown = null;
+    
     try {
       // Try GraphQL first
       const contracts = await this.discoverViaGraphQL();
       this.cache = contracts;
       return contracts;
     } catch (error) {
-      this.log('GraphQL discovery failed, trying chain query...', error);
+      graphqlError = error;
+      this.log('GraphQL discovery failed, analyzing error...', error);
       
-      try {
-        // Fallback to chain query
-        const contracts = await this.discoverViaChain();
-        this.cache = contracts;
-        return contracts;
-      } catch (chainError) {
-        this.log('Chain discovery also failed', chainError);
+      // Classify GraphQL error to decide fallback strategy
+      const shouldFallback = this.shouldFallbackToChain(error);
+      
+      if (shouldFallback) {
+        this.log('Error is recoverable, trying chain query fallback...');
         
-        // Return empty if both fail
-        return {
-          fin: {},
-          discoveredAt: Date.now(),
-          source: 'cache',
-        };
+        try {
+          // Fallback to chain query
+          const contracts = await this.discoverViaChain();
+          this.cache = contracts;
+          return contracts;
+        } catch (chainError) {
+          this.log('Chain discovery also failed', chainError);
+          
+          // Both methods failed - throw the most informative error
+          if (error instanceof GraphQLClient.GraphQLError && error.type === 'auth') {
+            // Auth errors are critical and shouldn't return empty cache
+            throw error;
+          }
+          
+          // Return empty cache for other error types
+          return {
+            fin: {},
+            discoveredAt: Date.now(),
+            source: 'fallback-failed',
+            lastError: error instanceof Error ? error.message : String(error),
+          };
+        }
+      } else {
+        // Error is not recoverable, fail immediately
+        this.log('Error is not recoverable, failing without fallback');
+        throw error;
       }
     }
+  }
+
+  /**
+   * Determine if we should fallback to chain query based on GraphQL error type
+   */
+  private shouldFallbackToChain(error: unknown): boolean {
+    if (error instanceof GraphQLClient.GraphQLError) {
+      switch (error.type) {
+        case 'auth':
+          // Auth errors might be due to API key issues - don't fallback
+          return false;
+        case 'server':
+          // Server errors (5xx) - worth trying fallback
+          return true;
+        case 'network':
+          // Network/HTTP errors (4xx, connectivity) - try fallback
+          return true;
+        case 'timeout':
+          // Timeout - try fallback
+          return true;
+        case 'graphql':
+          // GraphQL schema/query errors - fallback unlikely to help but try anyway
+          return true;
+        case 'unknown':
+          // Unknown errors - try fallback as last resort
+          return true;
+        default:
+          return true;
+      }
+    }
+    
+    // For non-GraphQLError instances, try fallback
+    return true;
   }
 
   /**
@@ -226,6 +280,34 @@ export class RujiraDiscovery {
    */
   clearCache(): void {
     this.cache = null;
+  }
+
+  /**
+   * Get current cache TTL setting
+   */
+  getCacheTtl(): number {
+    return this.cacheTtl;
+  }
+
+  /**
+   * Get cache status and age
+   */
+  getCacheStatus(): { 
+    cached: boolean; 
+    age?: number; 
+    valid: boolean; 
+    ttl: number; 
+  } {
+    const ttl = this.cacheTtl;
+    
+    if (!this.cache) {
+      return { cached: false, valid: false, ttl };
+    }
+    
+    const age = Date.now() - this.cache.discoveredAt;
+    const valid = this.isCacheValid();
+    
+    return { cached: true, age, valid, ttl };
   }
 
   // ============================================================================
@@ -393,6 +475,10 @@ export class RujiraDiscovery {
    */
   private isCacheValid(): boolean {
     if (!this.cache) return false;
+    
+    // If TTL is 0, caching is disabled - always return false
+    if (this.cacheTtl === 0) return false;
+    
     return Date.now() - this.cache.discoveredAt < this.cacheTtl;
   }
 
