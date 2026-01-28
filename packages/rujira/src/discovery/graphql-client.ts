@@ -176,14 +176,13 @@ export class GraphQLClient {
       feeMaker: string;
     }> }>(query);
 
-    // Transform to our internal format
-    // Normalize asset format: GAIA-ATOM -> GAIA.ATOM (THORChain standard)
+    // Return denoms directly - no conversion needed (on-chain format)
     return {
       markets: result.fin.map(m => ({
         address: m.address,
         denoms: {
-          base: this.normalizeAsset(m.assetBase.asset),
-          quote: this.normalizeAsset(m.assetQuote.asset),
+          base: m.assetBase.asset.toLowerCase(),
+          quote: m.assetQuote.asset.toLowerCase(),
         },
         config: {
           tick: m.tick,
@@ -192,26 +191,6 @@ export class GraphQLClient {
         },
       })),
     };
-  }
-
-  /**
-   * Normalize Rujira asset format to THORChain standard
-   * GAIA-ATOM -> GAIA.ATOM, ETH-USDC-0x... -> ETH.USDC-0x...
-   * (First dash becomes dot, rest stay as dashes for contract addresses)
-   */
-  private normalizeAsset(asset: string): string {
-    if (!asset) return asset;
-    
-    // Already has dot (e.g., THOR.AUTO) - leave as-is
-    if (asset.includes('.')) return asset;
-    
-    // Convert first dash to dot: GAIA-ATOM -> GAIA.ATOM
-    const dashIndex = asset.indexOf('-');
-    if (dashIndex > 0) {
-      return asset.slice(0, dashIndex) + '.' + asset.slice(dashIndex + 1);
-    }
-    
-    return asset;
   }
 
   /**
