@@ -12,7 +12,8 @@
     "packages/lib/dkls",
     "packages/lib/schnorr",
     "packages/lib/utils",
-    "packages/rujira"
+    "packages/rujira",
+    "packages/assets"
   ],
   "scripts": {
     "format": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
