@@ -75,7 +75,9 @@ export function extractChainFromThorchain(thorchainFormat: string): string {
     'DOGE': 'dogecoin',
     'LTC': 'litecoin',
     'BCH': 'bitcoincash',
-    'BNB': 'binance'
+    'BNB': 'binance',
+    'BASE': 'base',
+    'XRP': 'xrp'
   };
   
   return chainMap[parts[0]] || parts[0].toLowerCase();
@@ -170,8 +172,11 @@ export function detectFormat(input: string): 'l1' | 'thorchain' | 'fin' | 'unkno
     return 'thorchain';
   }
   
-  // FIN format: chain-symbol or chain-symbol-contract
-  if (/^[a-z]+-[a-z0-9]+(-.+)?$/.test(normalized)) {
+  // FIN format: chain-symbol, chain-symbol-contract, x/symbol, thor.symbol, or plain symbol
+  if (/^[a-z]+-[a-z0-9]+(-.+)?$/.test(normalized) || 
+      /^x\/[a-z]+$/.test(normalized) || 
+      /^thor\.[a-z]+$/.test(normalized) ||
+      /^(rune|tcy)$/.test(normalized)) {
     return 'fin';
   }
   

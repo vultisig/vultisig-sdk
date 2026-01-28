@@ -94,12 +94,14 @@ const asset2 = parseAsset('ethereum-usdc');     // FIN format
 const asset3 = parseAsset('0xA0b86a33E6441e8c673896Cf5F37c0DAc6F2e38d'); // L1 contract
 
 // Convert formats
-const thorFormat = convertFormat('bitcoin-btc', 'thorchain'); // "BTC.BTC"
-const finFormat = convertFormat('BTC.BTC', 'fin');            // "bitcoin-btc"
+const thorFormat = convertFormat('btc-btc', 'thorchain'); // "BTC.BTC"
+const finFormat = convertFormat('BTC.BTC', 'fin');        // "btc-btc"
 
 // Detect format type
 console.log(detectFormat('ETH.USDC-0X...')); // "thorchain"
-console.log(detectFormat('ethereum-usdc'));   // "fin"
+console.log(detectFormat('eth-usdc-0x...'));  // "fin"
+console.log(detectFormat('x/ruji'));          // "fin" (special format)
+console.log(detectFormat('thor.auto'));       // "fin" (special format)
 ```
 
 ### Swap Routing
@@ -121,17 +123,48 @@ const finQuote = await router.quoteRujiraFIN(fromAsset, toAsset, amount);
 
 ## Supported Assets
 
+### Native L1 Assets (10 assets)
 - **BTC** - Bitcoin (native: 8 decimals)
 - **ETH** - Ethereum (native: 18 decimals)  
-- **RUNE** - THORChain (native: 8 decimals)
-- **USDC** - USD Coin (native: 6 decimals)
-- **USDT** - Tether USD (native: 6 decimals)
-- **AVAX** - Avalanche (native: 18 decimals)
-- **ATOM** - Cosmos (native: 6 decimals)
-- **DOGE** - Dogecoin (native: 8 decimals)
 - **LTC** - Litecoin (native: 8 decimals)
 - **BCH** - Bitcoin Cash (native: 8 decimals)
+- **DOGE** - Dogecoin (native: 8 decimals)
+- **ATOM** - Cosmos (native: 6 decimals)
+- **AVAX** - Avalanche (native: 18 decimals)
 - **BNB** - BNB Chain (native: 8 decimals)
+- **XRP** - XRP Ledger (native: 6 decimals)
+- **BASE ETH** - Base (Ethereum L2) (native: 18 decimals)
+
+### THORChain Native Tokens (6 assets)
+- **RUNE** - THORChain (native: 8 decimals)
+- **TCY** - TCY token (native: 8 decimals)
+- **RUJI** - RUJI token (native: 8 decimals)
+- **AUTO** - AUTO token (native: 8 decimals)
+- **LQDY** - LQDY token (native: 8 decimals)
+- **NAMI** - NAMI token (native: 8 decimals)
+
+### Multi-Chain Tokens (11 assets)
+
+#### Ethereum ERC20 Tokens (5 assets)
+- **USDC ETH** - USD Coin on Ethereum (native: 6 decimals)
+- **USDT ETH** - Tether USD on Ethereum (native: 6 decimals)
+- **DAI** - Dai Stablecoin (native: 6 decimals)
+- **GUSD** - Gemini Dollar (native: 6 decimals)
+- **USDP** - Pax Dollar (native: 6 decimals)
+
+#### Base Chain Tokens (2 assets)
+- **USDC BASE** - USD Coin on Base (native: 6 decimals)
+- **cbBTC** - Coinbase Wrapped BTC (native: 8 decimals)
+
+#### BSC Tokens (2 assets)
+- **USDC BSC** - USD Coin on BSC (native: 6 decimals)
+- **USDT BSC** - Tether USD on BSC (native: 6 decimals)
+
+#### Avalanche Tokens (2 assets)
+- **USDC AVAX** - USD Coin on Avalanche (native: 6 decimals)
+- **USDT AVAX** - Tether USD on Avalanche (native: 6 decimals)
+
+**Total: 27 assets across 10 blockchains**
 
 ## Decimal Conversion Logic
 
@@ -290,8 +323,10 @@ import { detectFormat, convertFormat, parseAsset } from '@vultisig/assets';
 const inputs = [
   'BTC',                    // L1 format
   'BTC.BTC',               // THORChain format
-  'bitcoin-btc',           // FIN format
-  '0xA0b86a33...'         // Contract address
+  'btc-btc',               // FIN format (corrected)
+  'x/ruji',                // Special FIN format (THORChain token)
+  'thor.auto',             // Special FIN format (THORChain token)
+  '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'  // Contract address
 ];
 
 for (const input of inputs) {
