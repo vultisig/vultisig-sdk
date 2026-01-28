@@ -1,5 +1,30 @@
 /**
- * Swap module for Rujira DEX
+ * Swap module for executing market swaps on Rujira DEX
+ * 
+ * The swap module is the core of the SDK, handling market orders on FIN contracts.
+ * It provides a complete swap lifecycle from quote generation to execution.
+ * 
+ * Key features:
+ * - **Intelligent quoting**: Simulates swaps to get accurate output predictions
+ * - **Quote caching**: Reduces API calls and improves performance
+ * - **Price impact calculation**: Uses orderbook data for accurate slippage estimates
+ * - **Balance validation**: Prevents failed transactions due to insufficient funds
+ * - **Slippage protection**: Enforces minimum output requirements
+ * - **Cross-chain support**: Generates L1 deposit memos for Bitcoin, Ethereum, etc.
+ * 
+ * Quote lifecycle:
+ * 1. Discovery: Find FIN contract for the trading pair
+ * 2. Simulation: Call contract's simulate function to predict output
+ * 3. Orderbook: Fetch current market depth for price impact calculation
+ * 4. Validation: Check user balance and address format
+ * 5. Caching: Store quote for reuse within expiry window
+ * 
+ * Execution safety:
+ * - Quotes expire after 30 seconds to prevent stale price execution
+ * - Configurable slippage buffers protect against MEV and price movement
+ * - Balance validation happens both at quote time and execution time
+ * - Failed transactions are wrapped with descriptive error messages
+ * 
  * @module modules/swap
  */
 

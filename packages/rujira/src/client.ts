@@ -1,5 +1,16 @@
 /**
- * Main Rujira client
+ * Main Rujira client - Central coordination hub for all SDK operations
+ * 
+ * The RujiraClient acts as the primary entry point for interacting with Rujira DEX.
+ * It manages network connections, coordinates between modules, and handles authentication.
+ * 
+ * Key responsibilities:
+ * - Network connection management (read-only and signing clients)
+ * - Module initialization and coordination
+ * - Contract discovery and caching
+ * - Transaction signing and broadcasting
+ * - Error handling and recovery
+ * 
  * @module client
  */
 
@@ -31,20 +42,47 @@ import type {
 } from './types';
 
 /**
- * Options for RujiraClient initialization
+ * Configuration options for initializing the RujiraClient
+ * 
+ * This interface allows fine-tuning of the client's behavior across different
+ * environments and use cases. The client adapts its functionality based on
+ * whether a signer is provided (read-only vs. transactional mode).
  */
 export interface RujiraClientOptions {
-  /** Network to connect to */
+  /** 
+   * Blockchain network to connect to
+   * @default 'mainnet'
+   */
   network?: NetworkType;
-  /** Custom configuration (overrides network defaults) */
+  
+  /** 
+   * Custom configuration overrides for network settings
+   * Useful for custom endpoints, gas settings, or contract addresses
+   */
   config?: Partial<RujiraConfig>;
-  /** Signer for transactions (optional for read-only) */
+  
+  /** 
+   * Transaction signer (required for executing swaps/orders)
+   * If not provided, client operates in read-only mode (quotes only)
+   */
   signer?: RujiraSigner;
-  /** Custom RPC endpoint */
+  
+  /** 
+   * Custom RPC endpoint override
+   * Useful for load balancing or private RPC endpoints
+   */
   rpcEndpoint?: string;
-  /** Enable debug logging */
+  
+  /** 
+   * Enable verbose logging for debugging
+   * @default false
+   */
   debug?: boolean;
-  /** Swap module options (including cache settings) */
+  
+  /** 
+   * Swap module configuration (caching, quote expiry, etc.)
+   * Controls quote caching behavior and safety buffers
+   */
   swapOptions?: RujiraSwapOptions;
 }
 
@@ -98,11 +136,14 @@ export class RujiraClient {
   private debug: boolean;
 
   constructor(options: RujiraClientOptions = {}) {
-    // Build configuration
+    // Build network configuration with user overrides
+    // Network configs provide sensible defaults for each environment (mainnet/stagenet/localnet)
     const networkConfig = options.network 
       ? getNetworkConfig(options.network)
       : getNetworkConfig('mainnet');
     
+    // Merge network config with user overrides
+    // Deep merge contract addresses to preserve existing entries while allowing additions
     this.config = {
       ...networkConfig,
       ...options.config,
@@ -112,20 +153,27 @@ export class RujiraClient {
       },
     };
 
-    // Override RPC if provided
+    // Apply RPC endpoint override if provided
+    // This is common for users with custom/private RPC endpoints
     if (options.rpcEndpoint) {
       this.config.rpcEndpoint = options.rpcEndpoint;
     }
 
+    // Store authentication and debugging preferences
     this.signer = options.signer || null;
     this.debug = options.debug || false;
 
-    // Initialize modules
+    // Initialize all modules with appropriate configuration
+    // Each module receives a reference to this client for coordination
+    // Order matters here - some modules may depend on others during initialization
     this.swap = new RujiraSwap(this, options.swapOptions);
     this.orderbook = new RujiraOrderbook(this);
     this.assets = new RujiraAssets(this);
     this.deposit = new RujiraDeposit(this);
     this.withdraw = new RujiraWithdraw(this);
+    
+    // Discovery module needs independent configuration for fallback scenarios
+    // It maintains its own RPC client for contract discovery when GraphQL fails
     this.discovery = new RujiraDiscovery({
       network: options.network || 'mainnet',
       rpcEndpoint: this.config.rpcEndpoint,
@@ -134,28 +182,54 @@ export class RujiraClient {
   }
 
   /**
-   * Connect to the network
+   * Establish connection to the THORChain network
+   * 
+   * This method must be called before using the client. It creates the necessary
+   * CosmWasm clients for querying and (optionally) signing transactions.
+   * 
+   * Connection behavior:
+   * - Always creates a query client for read operations (quotes, balances, etc.)
+   * - Creates signing client only if signer was provided during initialization
+   * - Uses configured gas price for all transactions
+   * - Validates network connectivity and throws descriptive errors on failure
+   * 
+   * @throws {RujiraError} With NETWORK_ERROR code if connection fails
+   * 
+   * @example
+   * ```typescript
+   * const client = new RujiraClient({ network: 'mainnet' });
+   * await client.connect();
+   * 
+   * // Now ready for read operations
+   * const quote = await client.swap.getQuote({...});
+   * ```
    */
   async connect(): Promise<void> {
     try {
       this.log('Connecting to', this.config.rpcEndpoint);
       
-      // Create query client
+      // Create query client for read-only operations (always needed)
+      // This client can query balances, contracts, and chain state
       this.queryClient = await CosmWasmClient.connect(this.config.rpcEndpoint);
       this.log('Query client connected');
 
-      // Create signing client if signer provided
+      // Create signing client only if signer is available
+      // This enables transaction execution (swaps, orders, etc.)
       if (this.signer) {
         this.signingClient = await SigningCosmWasmClient.connectWithSigner(
           this.config.rpcEndpoint,
           this.signer,
           {
+            // Use configured gas price for all transactions
+            // This ensures consistent fee estimation across operations
             gasPrice: GasPrice.fromString(this.config.gasPrice),
           }
         );
         this.log('Signing client connected');
       }
     } catch (error) {
+      // Convert network errors to descriptive RujiraErrors
+      // This provides better error messages for common connectivity issues
       throw wrapError(error, RujiraErrorCode.NETWORK_ERROR);
     }
   }
