@@ -1,5 +1,21 @@
 /**
  * Contract discovery for Rujira SDK
+ * 
+ * The discovery module automatically finds FIN contract addresses for trading pairs
+ * by querying the Rujira GraphQL API and falling back to on-chain queries.
+ * 
+ * Why discovery is needed:
+ * - FIN contracts are deployed dynamically as new trading pairs are created
+ * - Contract addresses aren't predictable and must be discovered
+ * - The GraphQL API provides fast, indexed access to active markets
+ * - Chain fallback ensures reliability when the API is unavailable
+ * 
+ * Discovery strategy:
+ * 1. Primary: Query Rujira GraphQL API for active markets
+ * 2. Fallback: Query THORChain directly for all FIN contracts
+ * 3. Validation: Verify contracts match expected code hashes
+ * 4. Caching: Store results to avoid repeated queries
+ * 
  * @module discovery/discovery
  */
 
@@ -34,23 +50,47 @@ const FIN_CODE_HASHES = {
 };
 
 /**
- * Contract discovery service
+ * Contract discovery service for automatically finding trading pair contracts
  * 
- * Discovers FIN contract addresses via:
- * 1. Rujira GraphQL API (primary)
- * 2. On-chain query fallback
+ * The discovery service is crucial because FIN contracts are deployed dynamically
+ * as new trading pairs become available. Unlike traditional DEXs with fixed
+ * factory patterns, Rujira deploys separate FIN instances per trading pair.
+ * 
+ * Discovery mechanisms:
+ * 1. **GraphQL API (Primary)**: Fast, indexed data from Rujira's backend
+ *    - Pros: Fast, includes market metadata, always up-to-date
+ *    - Cons: Single point of failure, requires network connectivity
+ * 
+ * 2. **Chain Query (Fallback)**: Direct blockchain queries via THORNode
+ *    - Pros: Decentralized, works even if GraphQL is down
+ *    - Cons: Slower, requires multiple queries, limited metadata
+ * 
+ * Caching strategy:
+ * - Results are cached for 5 minutes by default to balance freshness vs. performance
+ * - Cache prevents duplicate concurrent requests during discovery
+ * - Cache TTL can be configured or disabled entirely
+ * 
+ * Error handling:
+ * - Network errors trigger automatic fallback to chain queries
+ * - Auth errors fail fast (no fallback) to avoid infinite loops
+ * - Unknown markets return null rather than throwing exceptions
  * 
  * @example
  * ```typescript
  * const discovery = new RujiraDiscovery({ network: 'mainnet' });
  * 
- * // Discover all markets
+ * // Discover all available markets
  * const contracts = await discovery.discoverContracts();
- * console.log(contracts.fin); // { "BTC.BTC/THOR.RUNE": "thor1...", ... }
+ * console.log(contracts.fin); // { "btc-btc/rune": "thor1...", ... }
  * 
- * // Find specific market
- * const btcRune = await discovery.findMarket('BTC.BTC', 'THOR.RUNE');
- * console.log(btcRune?.address);
+ * // Find a specific trading pair
+ * const market = await discovery.findMarket('btc-btc', 'rune');
+ * if (market) {
+ *   console.log(`BTC/RUNE trades at: ${market.address}`);
+ * }
+ * 
+ * // Get contract address directly
+ * const address = await discovery.getContractAddress('eth-eth', 'rune');
  * ```
  */
 export class RujiraDiscovery {

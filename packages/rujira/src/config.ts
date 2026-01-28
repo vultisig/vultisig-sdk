@@ -1,5 +1,27 @@
 /**
- * Network configuration for Rujira SDK
+ * Network configuration and asset metadata for Rujira SDK
+ * 
+ * This module centralizes all network-specific configuration and asset definitions.
+ * It provides environment-specific defaults while allowing customization for
+ * advanced use cases like private RPC endpoints or custom contract deployments.
+ * 
+ * Configuration hierarchy:
+ * 1. **Network defaults**: Sensible defaults for mainnet/stagenet/localnet
+ * 2. **User overrides**: Custom RPC endpoints, gas settings, contract addresses
+ * 3. **Runtime discovery**: Dynamic contract discovery for new markets
+ * 
+ * Asset metadata strategy:
+ * - Uses on-chain denomination format (lowercase, hyphen-separated)
+ * - Maintains both FIN contract precision and Cosmos bank precision
+ * - Provides fallback defaults for unknown assets
+ * - Maps denoms to human-readable tickers for UI display
+ * 
+ * Why on-chain denoms matter:
+ * - No conversion needed between SDK and smart contracts
+ * - Eliminates asset format ambiguity
+ * - Works consistently across different THORChain integrations
+ * - Simplifies debugging and transaction analysis
+ * 
  * @module config
  */
 

@@ -6,15 +6,27 @@ TypeScript SDK for integrating Vultisig with [Rujira DEX](https://rujira.network
 
 ## Asset Notation
 
-This SDK uses **on-chain denoms** directly — lowercase, hyphen-separated:
+This SDK uses **on-chain denominations** throughout for consistency and reliability:
 
-| Type | Denom Format | Example |
-|------|--------------|---------|
-| THORChain Native | `rune`, `tcy`, `ruji` | `rune` |
-| Native L1 | `chain-symbol` | `btc-btc`, `eth-eth` |
-| Secured (ERC20) | `chain-symbol-contractaddr` | `eth-usdc-0xa0b86991...` |
+| Type | Format | Examples |
+|------|--------|----------|
+| THORChain Native | `{symbol}` | `rune`, `tcy`, `ruji` |
+| Native L1 Assets | `{chain}-{symbol}` | `btc-btc`, `eth-eth`, `avax-avax` |
+| Secured Tokens | `{chain}-{symbol}-{contract}` | `eth-usdc-0xa0b86991...` |
 
-**Why?** What you write is what goes on-chain. No conversion, no confusion.
+**Benefits of on-chain denoms:**
+- ✅ **No conversion errors**: What you write is exactly what goes on-chain
+- ✅ **Consistent ecosystem**: Works with all THORChain tools and APIs
+- ✅ **Simplified debugging**: Transaction logs match SDK inputs
+- ✅ **Future-proof**: New assets follow predictable naming patterns
+
+**Quick reference**: Use `ASSETS` constants to avoid typos:
+```typescript
+import { ASSETS } from '@vultisig/rujira';
+
+console.log(ASSETS.BTC);   // 'btc-btc'
+console.log(ASSETS.USDC);  // 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+```
 
 ---
 
@@ -95,19 +107,25 @@ yarn add @vultisig/rujira
 
 ## Quick Start
 
-### Read-Only (Quotes & Discovery)
+### Read-Only Client (Quotes & Market Data)
+
+Perfect for price feeds, market analysis, or planning trades:
 
 ```typescript
 import { RujiraClient, ASSETS } from '@vultisig/rujira';
 
-const client = new RujiraClient({ network: 'mainnet' });
+// Initialize without signer for read-only operations
+const client = new RujiraClient({ 
+  network: 'mainnet',
+  debug: true  // Enable logging during development
+});
 await client.connect();
 
-// Discover all available markets
+// Discover all available trading pairs
 const markets = await client.discovery.listMarkets();
-console.log(`Found ${markets.length} trading pairs`);
+console.log(`Found ${markets.length} active markets`);
 
-// Get a swap quote
+// Get real-time swap quote
 const quote = await client.swap.getQuote({
   fromAsset: ASSETS.BTC,    // 'btc-btc'
   toAsset: ASSETS.RUNE,     // 'rune'
@@ -115,21 +133,30 @@ const quote = await client.swap.getQuote({
   slippageBps: 100          // 1% max slippage
 });
 
-console.log({
-  expectedOutput: quote.expectedOutput,
-  minimumOutput: quote.minimumOutput,
-  priceImpact: quote.priceImpact,
-  fees: quote.fees
-});
+console.log('Quote Details:');
+console.log(`Input: 0.1 BTC`);
+console.log(`Expected output: ${quote.expectedOutput} RUNE`);
+console.log(`Minimum output: ${quote.minimumOutput} RUNE`);
+console.log(`Price impact: ${quote.priceImpact}%`);
+console.log(`Total fees: ${quote.fees.total} RUNE`);
+console.log(`Quote expires: ${new Date(quote.expiresAt).toLocaleString()}`);
+
+// Check orderbook depth
+const orderbook = await client.orderbook.getBook('btc-btc', 'rune');
+console.log(`Spread: ${orderbook.spread}%`);
+console.log(`Best bid: ${orderbook.bids[0]?.price}`);
+console.log(`Best ask: ${orderbook.asks[0]?.price}`);
 ```
 
-### With Vultisig Signer (Execute Trades)
+### Full Client with Vultisig Signer (Execute Trades)
+
+For live trading with your Vultisig vault:
 
 ```typescript
 import { RujiraClient, ASSETS } from '@vultisig/rujira';
 import { VultisigRujiraProvider } from '@vultisig/rujira/signer';
 
-// Create signer from Vultisig vault
+// Create Vultisig signer from your vault
 const signer = new VultisigRujiraProvider(vault, {
   chainId: 'thorchain-1',
   addressPrefix: 'thor'
@@ -137,38 +164,91 @@ const signer = new VultisigRujiraProvider(vault, {
 
 const client = new RujiraClient({ 
   network: 'mainnet',
-  signer 
+  signer,
+  debug: false  // Disable debug logging in production
 });
 await client.connect();
 
-// Execute a swap
+console.log(`Connected as: ${await client.getAddress()}`);
+
+// Option 1: One-shot swap execution
 const result = await client.swap.executeSwap({
-  fromAsset: ASSETS.BTC,  // 'btc-btc'
-  toAsset: ASSETS.RUNE,   // 'rune'
+  fromAsset: ASSETS.BTC,     // 'btc-btc'
+  toAsset: ASSETS.RUNE,      // 'rune'
+  amount: '10000000',        // 0.1 BTC
+  destination: 'thor1...',   // Your address (optional, defaults to signer)
+  slippageBps: 100          // 1% max slippage
+});
+
+console.log(`Swap submitted: ${result.txHash}`);
+console.log(`Status: ${result.status}`);
+
+// Option 2: Quote first, then execute (for price validation)
+const quote = await client.swap.getQuote({
+  fromAsset: ASSETS.BTC,
+  toAsset: ASSETS.RUNE,
   amount: '10000000'
 });
 
-console.log(`TX Hash: ${result.txHash}`);
+// Check if quote is acceptable
+if (parseFloat(quote.priceImpact) > 2.0) {
+  console.log(`High price impact: ${quote.priceImpact}%, consider reducing amount`);
+} else {
+  const result = await client.swap.execute(quote);
+  console.log(`Trade executed: ${result.txHash}`);
+}
 
-// Wait for confirmation
-const confirmed = await client.waitForTransaction(result.txHash);
+// Monitor transaction confirmation
+try {
+  const confirmed = await client.waitForTransaction(result.txHash, 60000);
+  if (confirmed.code === 0) {
+    console.log(`✅ Transaction confirmed in block ${confirmed.height}`);
+  } else {
+    console.log(`❌ Transaction failed: ${confirmed.rawLog}`);
+  }
+} catch (error) {
+  console.log(`⏰ Transaction pending (check explorer for status)`);
+}
 ```
 
-### Cross-Chain (L1 Deposits)
+### Cross-Chain Deposits (L1 → THORChain)
 
-For swapping from external chains like Bitcoin or Ethereum:
+For swapping assets from external blockchains (Bitcoin, Ethereum, etc.) into THORChain:
 
 ```typescript
-// Build memo for L1 deposit
+// Generate deposit memo for Bitcoin → RUNE swap
 const memo = await client.swap.buildL1Memo({
-  fromAsset: ASSETS.BTC,  // 'btc-btc'
-  toAsset: ASSETS.RUNE,   // 'rune'
-  amount: '10000000',
-  destination: 'thor1abc...'
+  fromAsset: ASSETS.BTC,     // 'btc-btc'
+  toAsset: ASSETS.RUNE,      // 'rune'  
+  amount: '100000000',       // 1 BTC (8 decimals)
+  destination: 'thor1...',   // Where to send the swapped RUNE
+  slippageBps: 100          // 1% max slippage
 });
 
-// Returns: "x:thor1fin...:eyJzd2FwIjp7...}}"
-// Send BTC to THORChain vault with this memo
+console.log('Deposit memo:', memo);
+// Output: "x:thor1fin...:eyJzd2FwIjp7...}"
+
+/*
+Next steps for Bitcoin deposit:
+1. Send 1 BTC to THORChain's Bitcoin vault address
+2. Include the generated memo in the transaction
+3. THORChain will automatically execute the swap when BTC is received
+4. RUNE will be delivered to your specified destination address
+
+Vault addresses can be found at:
+- Mainnet: https://thornode.ninerealms.com/thorchain/inbound_addresses  
+- Stagenet: https://stagenet-thornode.ninerealms.com/thorchain/inbound_addresses
+*/
+
+// For Ethereum-based assets (ETH, USDC, etc.)
+const ethMemo = await client.swap.buildL1Memo({
+  fromAsset: ASSETS.ETH,     // 'eth-eth'
+  toAsset: ASSETS.USDC,      // 'eth-usdc-0xa0b86991...'
+  amount: '2000000000000000000', // 2 ETH (18 decimals)
+  destination: 'thor1...'
+});
+
+// Send ETH to THORChain's Ethereum vault with this memo
 ```
 
 ## API Reference
