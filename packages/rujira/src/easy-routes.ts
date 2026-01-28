@@ -1,16 +1,48 @@
 /**
- * Easy Swap Routes - Simple DeFi for Agents & Humans
+ * Easy Swap Routes - Simplified DeFi interface for AI agents and human developers
  * 
- * These routes are battle-tested with deep liquidity.
- * Pick a route, get a quote, swap. That's it.
+ * Easy routes abstract away the complexity of asset discovery and pair matching
+ * by providing pre-configured, battle-tested trading routes. These routes are
+ * specifically designed for high-frequency use cases like trading bots and AI agents.
+ * 
+ * Why easy routes exist:
+ * - **Simplicity**: No need to understand THORChain's asset format complexities
+ * - **Reliability**: All routes have been tested and have consistent liquidity
+ * - **Performance**: Routes are optimized for common trading patterns
+ * - **AI-friendly**: Predictable interfaces that work well with language models
+ * 
+ * Route design principles:
+ * - All cross-chain routes settle through RUNE (THORChain's native token)
+ * - Asset identifiers use on-chain denoms (lowercase, hyphen-separated)
+ * - Time estimates include L1 confirmation delays for realistic expectations
+ * - Liquidity ratings reflect actual market depth and trading volume
+ * 
+ * Usage patterns:
+ * 1. **Quick swaps**: Pick a route, provide amount and destination, execute
+ * 2. **Price comparison**: Get quotes for multiple routes and pick the best
+ * 3. **Market analysis**: Use batch quote functions to analyze all available options
+ * 4. **Cross-chain bridging**: Use L1 memo generation for external chain deposits
  * 
  * @example
  * ```typescript
- * import { EASY_ROUTES, getEasyQuote } from '@vultisig/rujira';
+ * import { EASY_ROUTES, RujiraClient } from '@vultisig/rujira';
  * 
- * // One-liner quote
- * const quote = await getEasyQuote('RUNE_TO_USDC', '100');
- * console.log(`100 RUNE → ${quote.expectedOutput} USDC`);
+ * const client = new RujiraClient({ network: 'mainnet' });
+ * await client.connect();
+ * 
+ * // Simple route execution
+ * const result = await client.swap.easySwap({
+ *   route: 'RUNE_TO_USDC',
+ *   amount: '100000000', // 1 RUNE (8 decimals)
+ *   destination: 'thor1...',
+ *   maxSlippagePercent: 1
+ * });
+ * 
+ * // Compare multiple routes
+ * const quotes = await client.swap.batchGetQuotes(
+ *   ['RUNE_TO_USDC', 'RUNE_TO_BTC', 'RUNE_TO_ETH'],
+ *   '100000000'
+ * );
  * ```
  * 
  * @module easy-routes
