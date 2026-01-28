@@ -83,8 +83,8 @@ export const MAINNET_CONFIG: RujiraConfig = {
     affiliateCodeHash: '223ea20a4463696fe32b23f845e9f90ae5c83ef0175894a4b0cec114b7dd4b26',
     // Known FIN contract instances - to be populated
     finContracts: {
-      // 'RUNE/BTC': 'thor1...',
-      // 'RUNE/ETH': 'thor1...',
+      // 'rune/btc-btc': 'thor1...',
+      // 'rune/eth-eth': 'thor1...',
     },
   },
   defaultSlippageBps: 100, // 1%
@@ -149,63 +149,89 @@ export function getNetworkConfig(network: NetworkType): RujiraConfig {
 }
 
 // ============================================================================
-// KNOWN ASSETS
+// ASSET METADATA
 // ============================================================================
 
 /**
- * Known secured assets on Rujira
- * Denoms use dash format as per contract spec (e.g., btc-btc not btc/btc)
- */
-/**
- * Secured assets on Rujira/THORChain
+ * Asset metadata for known denoms
  * 
- * IMPORTANT: These decimals are for FIN contract interaction, NOT cosmos bank storage.
- * - Cosmos bank stores all secured assets with 8 decimals
- * - FIN contracts use 6 decimals for most assets (tick precision)
- * - When converting cosmos bank balance to FIN contract amounts, divide by 100
+ * Keys are on-chain denoms (lowercase, hyphen-separated)
  * 
- * The 'finDecimals' field is what FIN contracts expect.
- * The 'chainDecimals' field is what cosmos bank uses (always 8 for secured assets).
+ * Decimals note:
+ * - 'decimals' is FIN contract precision (usually 6 for most assets)
+ * - 'chainDecimals' is Cosmos bank storage (always 8 for secured assets)
  */
-export const SECURED_ASSETS: Record<string, { denom: string; decimals: number; chainDecimals?: number }> = {
-  'THOR.RUNE': { denom: 'rune', decimals: 8, chainDecimals: 8 },
-  'BTC.BTC': { denom: 'btc-btc', decimals: 6, chainDecimals: 8 },
-  'ETH.ETH': { denom: 'eth-eth', decimals: 6, chainDecimals: 8 },
-  'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48': { denom: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', decimals: 6, chainDecimals: 8 },
-  'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7': { denom: 'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7', decimals: 6, chainDecimals: 8 },
-  'GAIA.ATOM': { denom: 'gaia-atom', decimals: 6, chainDecimals: 8 },
-  'AVAX.AVAX': { denom: 'avax-avax', decimals: 6, chainDecimals: 8 },
-  'BSC.BNB': { denom: 'bsc-bnb', decimals: 6, chainDecimals: 8 },
-  'DOGE.DOGE': { denom: 'doge-doge', decimals: 6, chainDecimals: 8 },
-  'LTC.LTC': { denom: 'ltc-ltc', decimals: 6, chainDecimals: 8 },
-  'BCH.BCH': { denom: 'bch-bch', decimals: 6, chainDecimals: 8 },
-  'THOR.RUJI': { denom: 'thor.ruji', decimals: 8, chainDecimals: 8 },
-  'THOR.TCY': { denom: 'thor.tcy', decimals: 8, chainDecimals: 8 },
+export const ASSET_METADATA: Record<string, { decimals: number; chainDecimals: number; ticker: string }> = {
+  // THORChain native
+  'rune': { decimals: 8, chainDecimals: 8, ticker: 'RUNE' },
+  'tcy': { decimals: 8, chainDecimals: 8, ticker: 'TCY' },
+  'ruji': { decimals: 8, chainDecimals: 8, ticker: 'RUJI' },
+  
+  // Native L1 assets (secured on THORChain)
+  'btc-btc': { decimals: 8, chainDecimals: 8, ticker: 'BTC' },
+  'eth-eth': { decimals: 8, chainDecimals: 8, ticker: 'ETH' },
+  'gaia-atom': { decimals: 6, chainDecimals: 8, ticker: 'ATOM' },
+  'avax-avax': { decimals: 8, chainDecimals: 8, ticker: 'AVAX' },
+  'bsc-bnb': { decimals: 8, chainDecimals: 8, ticker: 'BNB' },
+  'doge-doge': { decimals: 8, chainDecimals: 8, ticker: 'DOGE' },
+  'ltc-ltc': { decimals: 8, chainDecimals: 8, ticker: 'LTC' },
+  'bch-bch': { decimals: 8, chainDecimals: 8, ticker: 'BCH' },
+  
+  // ERC20 tokens (secured on THORChain)
+  'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': { decimals: 6, chainDecimals: 8, ticker: 'USDC' },
+  'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7': { decimals: 6, chainDecimals: 8, ticker: 'USDT' },
 };
 
 /**
- * Get asset info from asset string
- * Falls back to dynamic conversion for unknown assets
+ * Get metadata for an asset denom
+ * Falls back to sensible defaults for unknown assets
+ */
+export function getAssetMetadata(denom: string): { decimals: number; chainDecimals: number; ticker: string } {
+  const normalized = denom.toLowerCase();
+  
+  if (ASSET_METADATA[normalized]) {
+    return ASSET_METADATA[normalized];
+  }
+  
+  // Unknown asset - derive ticker from denom and use default decimals
+  const ticker = denomToTicker(denom);
+  return { decimals: 8, chainDecimals: 8, ticker };
+}
+
+/**
+ * Convert denom to short ticker for display
+ */
+function denomToTicker(denom: string): string {
+  if (denom === 'rune') return 'RUNE';
+  if (denom === 'tcy') return 'TCY';
+  if (denom === 'ruji') return 'RUJI';
+  
+  // Handle chain-asset format: btc-btc -> BTC, eth-usdc-0x... -> USDC
+  const parts = denom.split('-');
+  if (parts.length >= 2) {
+    return parts[1].toUpperCase();
+  }
+  
+  return denom.toUpperCase();
+}
+
+// ============================================================================
+// LEGACY COMPATIBILITY (deprecated, use ASSET_METADATA)
+// ============================================================================
+
+/**
+ * @deprecated Use ASSET_METADATA instead. Will be removed in v1.0.
+ */
+export const SECURED_ASSETS = ASSET_METADATA;
+
+/**
+ * @deprecated Use getAssetMetadata instead. Will be removed in v1.0.
  */
 export function getAssetInfo(asset: string): { denom: string; decimals: number } | undefined {
-  // Direct lookup
-  if (SECURED_ASSETS[asset]) {
-    return SECURED_ASSETS[asset];
+  const normalized = asset.toLowerCase();
+  const meta = ASSET_METADATA[normalized];
+  if (meta) {
+    return { denom: normalized, decimals: meta.decimals };
   }
-  
-  // Try uppercase
-  const upper = asset.toUpperCase();
-  if (SECURED_ASSETS[upper]) {
-    return SECURED_ASSETS[upper];
-  }
-  
-  // Dynamic conversion for unknown assets
-  // Convert: ETH.USDC-0X... -> eth-usdc-0x...
-  if (asset.includes('.')) {
-    const denom = asset.toLowerCase().replace('.', '-');
-    // Default to 8 decimals (common for most assets)
-    return { denom, decimals: 8 };
-  }
-  
-  return undefined;
+  return { denom: normalized, decimals: 8 };
 }

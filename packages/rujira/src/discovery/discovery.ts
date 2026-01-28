@@ -378,9 +378,9 @@ export class RujiraDiscovery {
             };
             
             if (configData.data?.denoms?.length === 2) {
-              // Convert denoms to asset format and create pair key
-              const base = this.denomToAsset(configData.data.denoms[0]);
-              const quote = this.denomToAsset(configData.data.denoms[1]);
+              // Use denoms directly (on-chain format)
+              const base = this.normalizeDenom(configData.data.denoms[0]);
+              const quote = this.normalizeDenom(configData.data.denoms[1]);
               const pairKey = `${base}/${quote}`;
               fin[pairKey] = address;
               this.log(`Discovered: ${pairKey} -> ${address.slice(0, 20)}...`);
@@ -404,70 +404,37 @@ export class RujiraDiscovery {
   }
   
   /**
-   * Convert denom to asset string
-   * e.g., "btc-btc" -> "BTC.BTC", "eth-usdc-0x..." -> "ETH.USDC-0x..."
+   * Normalize denom to lowercase
+   * Denoms are used as-is (on-chain format)
    */
-  private denomToAsset(denom: string): string {
-    if (denom === 'rune') return 'THOR.RUNE';
-    if (denom === 'tcy') return 'THOR.TCY';
-    if (denom.startsWith('thor.')) return `THOR.${denom.slice(5).toUpperCase()}`;
-    if (denom.startsWith('x/')) return `THOR.${denom.slice(2).toUpperCase()}`;
-    
-    // Handle chain-asset format like "btc-btc" or "eth-usdc-0x..."
-    const dashIndex = denom.indexOf('-');
-    if (dashIndex > 0) {
-      const chain = denom.slice(0, dashIndex).toUpperCase();
-      const asset = denom.slice(dashIndex + 1).toUpperCase();
-      return `${chain}.${asset}`;
-    }
-    
-    return denom.toUpperCase();
+  private normalizeDenom(denom: string): string {
+    return denom.toLowerCase();
   }
 
   /**
    * Transform GraphQL market response to Market type
+   * Denoms are used directly (on-chain format, lowercase, hyphen-separated)
    */
   private transformMarket(market: {
     address: string;
     denoms: { base: string; quote: string };
     config?: { tick?: string; fee_taker?: string; fee_maker?: string };
   }): Market {
-    // The API now returns asset strings directly (e.g., "BTC.BTC")
-    // rather than denoms (e.g., "btc/btc")
-    const baseAsset = market.denoms.base;
-    const quoteAsset = market.denoms.quote;
+    // Use denoms directly - no conversion needed
+    const baseDenom = market.denoms.base.toLowerCase();
+    const quoteDenom = market.denoms.quote.toLowerCase();
     
     return {
       address: market.address,
-      baseAsset,
-      quoteAsset,
-      baseDenom: this.assetToDenom(baseAsset),
-      quoteDenom: this.assetToDenom(quoteAsset),
+      baseAsset: baseDenom,
+      quoteAsset: quoteDenom,
+      baseDenom,
+      quoteDenom,
       tick: market.config?.tick || '0',
       takerFee: market.config?.fee_taker || '0.0015',
       makerFee: market.config?.fee_maker || '0.00075',
       active: true,
     };
-  }
-
-  /**
-   * Convert asset string to denom
-   * e.g., "BTC.BTC" -> "btc/btc", "THOR.RUNE" -> "rune"
-   */
-  private assetToDenom(asset: string): string {
-    if (asset === 'THOR.RUNE' || asset === 'rune') {
-      return 'rune';
-    }
-    
-    // Handle THORChain L1 assets like "BTC.BTC" -> "btc/btc"
-    if (asset.includes('.')) {
-      const [chain, symbol] = asset.split('.');
-      // Handle contract assets like "ETH.USDC-0x..."
-      const baseSymbol = symbol.split('-')[0];
-      return `${chain.toLowerCase()}/${baseSymbol.toLowerCase()}`;
-    }
-    
-    return asset.toLowerCase();
   }
 
   /**

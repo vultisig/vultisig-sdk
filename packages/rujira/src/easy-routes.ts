@@ -16,8 +16,6 @@
  * @module easy-routes
  */
 
-import { SECURED_ASSETS } from './config';
-
 // ============================================================================
 // EASY ROUTES
 // ============================================================================
@@ -25,52 +23,57 @@ import { SECURED_ASSETS } from './config';
 /**
  * Pre-configured swap routes with deep liquidity.
  * All routes go through RUNE as the settlement asset.
+ * 
+ * Asset format: On-chain denoms (lowercase, hyphen-separated)
+ * - Native L1: btc-btc, eth-eth
+ * - THORChain: rune, tcy, ruji
+ * - Secured (ERC20): eth-usdc-0xa0b86991..., eth-usdt-0xdac17f958d...
  */
 export const EASY_ROUTES = {
   // === RUNE Gateway Routes ===
   RUNE_TO_USDC: {
-    from: 'THOR.RUNE',
-    to: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+    from: 'rune',
+    to: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
     name: 'RUNE → USDC',
     description: 'Swap RUNE to USDC (Ethereum)',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   USDC_TO_RUNE: {
-    from: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
-    to: 'THOR.RUNE',
+    from: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    to: 'rune',
     name: 'USDC → RUNE',
     description: 'Swap USDC to RUNE',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   RUNE_TO_BTC: {
-    from: 'THOR.RUNE',
-    to: 'BTC.BTC',
+    from: 'rune',
+    to: 'btc-btc',
     name: 'RUNE → BTC',
     description: 'Swap RUNE to native Bitcoin',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   BTC_TO_RUNE: {
-    from: 'BTC.BTC',
-    to: 'THOR.RUNE',
+    from: 'btc-btc',
+    to: 'rune',
     name: 'BTC → RUNE',
     description: 'Swap native Bitcoin to RUNE',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   RUNE_TO_ETH: {
-    from: 'THOR.RUNE',
-    to: 'ETH.ETH',
+    from: 'rune',
+    to: 'eth-eth',
     name: 'RUNE → ETH',
     description: 'Swap RUNE to native Ethereum',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   ETH_TO_RUNE: {
-    from: 'ETH.ETH',
-    to: 'THOR.RUNE',
+    from: 'eth-eth',
+    to: 'rune',
     name: 'ETH → RUNE',
     description: 'Swap native Ethereum to RUNE',
     liquidity: 'deep' as const,
@@ -79,16 +82,16 @@ export const EASY_ROUTES = {
 
   // === Stablecoin Routes ===
   USDC_TO_USDT: {
-    from: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
-    to: 'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7',
+    from: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    to: 'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7',
     name: 'USDC → USDT',
     description: 'Swap USDC to USDT (via RUNE)',
     liquidity: 'deep' as const,
     typicalTime: '15-45 seconds',
   },
   USDT_TO_USDC: {
-    from: 'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7',
-    to: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+    from: 'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7',
+    to: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
     name: 'USDT → USDC',
     description: 'Swap USDT to USDC (via RUNE)',
     liquidity: 'deep' as const,
@@ -97,16 +100,16 @@ export const EASY_ROUTES = {
 
   // === BTC-Stable Routes ===
   BTC_TO_USDC: {
-    from: 'BTC.BTC',
-    to: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+    from: 'btc-btc',
+    to: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
     name: 'BTC → USDC',
     description: 'Swap native Bitcoin to USDC',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   USDC_TO_BTC: {
-    from: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
-    to: 'BTC.BTC',
+    from: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    to: 'btc-btc',
     name: 'USDC → BTC',
     description: 'Swap USDC to native Bitcoin',
     liquidity: 'deep' as const,
@@ -115,16 +118,16 @@ export const EASY_ROUTES = {
 
   // === ETH-Stable Routes ===
   ETH_TO_USDC: {
-    from: 'ETH.ETH',
-    to: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+    from: 'eth-eth',
+    to: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
     name: 'ETH → USDC',
     description: 'Swap ETH to USDC',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   USDC_TO_ETH: {
-    from: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
-    to: 'ETH.ETH',
+    from: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    to: 'eth-eth',
     name: 'USDC → ETH',
     description: 'Swap USDC to ETH',
     liquidity: 'deep' as const,
@@ -133,16 +136,16 @@ export const EASY_ROUTES = {
 
   // === Cross-Chain Routes ===
   BTC_TO_ETH: {
-    from: 'BTC.BTC',
-    to: 'ETH.ETH',
+    from: 'btc-btc',
+    to: 'eth-eth',
     name: 'BTC → ETH',
     description: 'Swap native Bitcoin to native Ethereum',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   ETH_TO_BTC: {
-    from: 'ETH.ETH',
-    to: 'BTC.BTC',
+    from: 'eth-eth',
+    to: 'btc-btc',
     name: 'ETH → BTC',
     description: 'Swap native Ethereum to native Bitcoin',
     liquidity: 'deep' as const,
@@ -158,27 +161,28 @@ export type EasyRoute = (typeof EASY_ROUTES)[EasyRouteName];
 // ============================================================================
 
 /**
- * Common asset identifiers - use these to avoid typos
+ * Common asset denoms - use these to avoid typos
+ * All denoms are lowercase, hyphen-separated (on-chain format)
  */
 export const ASSETS = {
   // Native chain assets
-  RUNE: 'THOR.RUNE',
-  BTC: 'BTC.BTC',
-  ETH: 'ETH.ETH',
-  AVAX: 'AVAX.AVAX',
-  ATOM: 'GAIA.ATOM',
-  DOGE: 'DOGE.DOGE',
-  LTC: 'LTC.LTC',
-  BCH: 'BCH.BCH',
-  BNB: 'BSC.BNB',
+  RUNE: 'rune',
+  BTC: 'btc-btc',
+  ETH: 'eth-eth',
+  AVAX: 'avax-avax',
+  ATOM: 'gaia-atom',
+  DOGE: 'doge-doge',
+  LTC: 'ltc-ltc',
+  BCH: 'bch-bch',
+  BNB: 'bsc-bnb',
 
   // Stablecoins (Ethereum)
-  USDC: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
-  USDT: 'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7',
+  USDC: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  USDT: 'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7',
 
   // Rujira native tokens
-  RUJI: 'THOR.RUJI',
-  TCY: 'THOR.TCY',
+  RUJI: 'ruji',
+  TCY: 'tcy',
 } as const;
 
 export type AssetName = keyof typeof ASSETS;
@@ -223,11 +227,11 @@ export function getRoute(routeName: EasyRouteName): EasyRoute {
  * Find routes for a given asset pair
  */
 export function findRoute(from: string, to: string): EasyRoute | undefined {
-  const normalizedFrom = from.toUpperCase();
-  const normalizedTo = to.toUpperCase();
+  const normalizedFrom = from.toLowerCase();
+  const normalizedTo = to.toLowerCase();
 
   for (const route of Object.values(EASY_ROUTES)) {
-    if (route.from.toUpperCase() === normalizedFrom && route.to.toUpperCase() === normalizedTo) {
+    if (route.from === normalizedFrom && route.to === normalizedTo) {
       return route;
     }
   }
@@ -238,9 +242,9 @@ export function findRoute(from: string, to: string): EasyRoute | undefined {
  * Get routes that involve a specific asset
  */
 export function routesForAsset(asset: string): EasyRoute[] {
-  const normalized = asset.toUpperCase();
+  const normalized = asset.toLowerCase();
   return Object.values(EASY_ROUTES).filter(
-    (route) => route.from.toUpperCase() === normalized || route.to.toUpperCase() === normalized
+    (route) => route.from === normalized || route.to === normalized
   );
 }
 
@@ -248,9 +252,9 @@ export function routesForAsset(asset: string): EasyRoute[] {
  * Get all routes from a specific asset
  */
 export function routesFrom(asset: string): EasyRoute[] {
-  const normalized = asset.toUpperCase();
+  const normalized = asset.toLowerCase();
   return Object.values(EASY_ROUTES).filter(
-    (route) => route.from.toUpperCase() === normalized
+    (route) => route.from === normalized
   );
 }
 
@@ -258,9 +262,9 @@ export function routesFrom(asset: string): EasyRoute[] {
  * Get all routes to a specific asset
  */
 export function routesTo(asset: string): EasyRoute[] {
-  const normalized = asset.toUpperCase();
+  const normalized = asset.toLowerCase();
   return Object.values(EASY_ROUTES).filter(
-    (route) => route.to.toUpperCase() === normalized
+    (route) => route.to === normalized
   );
 }
 
@@ -330,8 +334,9 @@ export function getRoutesSummary(): string {
   ];
 
   for (const [id, route] of Object.entries(EASY_ROUTES)) {
-    const fromShort = route.from.split('.')[1]?.split('-')[0] || route.from;
-    const toShort = route.to.split('.')[1]?.split('-')[0] || route.to;
+    // Extract readable name from denom
+    const fromShort = denomToTicker(route.from);
+    const toShort = denomToTicker(route.to);
     lines.push(`| ${id} | ${fromShort} | ${toShort} | ${route.typicalTime} |`);
   }
 
@@ -350,4 +355,22 @@ export function getRoutesSummary(): string {
   lines.push('```');
 
   return lines.join('\n');
+}
+
+/**
+ * Convert denom to short ticker for display
+ * e.g., 'btc-btc' -> 'BTC', 'eth-usdc-0x...' -> 'USDC'
+ */
+function denomToTicker(denom: string): string {
+  if (denom === 'rune') return 'RUNE';
+  if (denom === 'tcy') return 'TCY';
+  if (denom === 'ruji') return 'RUJI';
+  
+  // Handle chain-asset format: btc-btc -> BTC, eth-usdc-0x... -> USDC
+  const parts = denom.split('-');
+  if (parts.length >= 2) {
+    return parts[1].toUpperCase().split('-')[0]; // Get second part, remove contract addr
+  }
+  
+  return denom.toUpperCase();
 }
