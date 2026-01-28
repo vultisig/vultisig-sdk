@@ -60,6 +60,38 @@ console.log(ASSETS.USDC); // 'ETH.USDC-0XA0B86991...'
 
 ---
 
+## Asset Notation
+
+Rujira uses two different asset formats depending on context:
+
+| Type | SDK Format | On-Chain Denom (FIN) |
+|------|------------|----------------------|
+| Native L1 | `BTC.BTC` | `btc-btc` |
+| Native L1 | `ETH.ETH` | `eth-eth` |
+| THORChain Native | `THOR.RUNE` | `rune` |
+| Secured (ERC20) | `ETH.USDC-0xA0B8...` | `eth-usdc-0xa0b8...` |
+| Secured (ERC20) | `ETH.USDT-0xDAC1...` | `eth-usdt-0xdac1...` |
+
+**Key differences:**
+- **SDK format**: Uses `.` as chain separator, uppercase, matches THORChain asset notation
+- **On-chain denom**: Uses `-` as separator, lowercase, what FIN contracts actually expect
+
+**The SDK handles conversion automatically** — you always use the SDK format (`BTC.BTC`, `ETH.USDC-0x...`) and the SDK converts to on-chain denoms internally when querying FIN contracts.
+
+```typescript
+// You write (SDK format):
+const quote = await client.swap.getQuote({
+  fromAsset: 'BTC.BTC',
+  toAsset: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+  amount: '10000000'
+});
+
+// SDK converts to on-chain format internally:
+// btc-btc → eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+```
+
+---
+
 ## Features
 
 - 🎯 **Easy Routes** - Pre-configured swaps for common pairs
@@ -250,16 +282,18 @@ console.log(book.bids, book.asks);
 
 The SDK auto-discovers all FIN markets. As of Jan 2025:
 
-| Pair | Type |
-|------|------|
-| BTC.BTC / ETH.USDC | Major |
-| ETH.ETH / ETH.USDC | Major |
-| ETH.ETH / BTC.BTC | Major |
-| THOR.RUNE / ETH.USDC | Native |
-| THOR.TCY / BTC.BTC | Native |
-| AVAX.AVAX / ETH.USDC | Alt |
-| DOGE.DOGE / ETH.USDC | Alt |
-| ... and 20+ more | |
+| Pair (SDK Format) | On-Chain Denom Pair | Type |
+|-------------------|---------------------|------|
+| `BTC.BTC` / `ETH.USDC-0x...` | `btc-btc` / `eth-usdc-0x...` | Major |
+| `ETH.ETH` / `ETH.USDC-0x...` | `eth-eth` / `eth-usdc-0x...` | Major |
+| `ETH.ETH` / `BTC.BTC` | `eth-eth` / `btc-btc` | Major |
+| `THOR.RUNE` / `ETH.USDC-0x...` | `rune` / `eth-usdc-0x...` | Native |
+| `THOR.TCY` / `BTC.BTC` | `tcy` / `btc-btc` | Native |
+| `AVAX.AVAX` / `ETH.USDC-0x...` | `avax-avax` / `eth-usdc-0x...` | Alt |
+| `DOGE.DOGE` / `ETH.USDC-0x...` | `doge-doge` / `eth-usdc-0x...` | Alt |
+| ... and 20+ more | | |
+
+> **Note:** Secured assets (like USDC, USDT) use the format `CHAIN.SYMBOL-CONTRACT_ADDRESS` in SDK, converted to `chain-symbol-contract_address` on-chain.
 
 ## Development
 
