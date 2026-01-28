@@ -38,7 +38,22 @@ export class GraphQLClient {
   }
 
   /**
-   * Execute a GraphQL query
+   * Enhanced error class for GraphQL operations
+   */
+  static GraphQLError = class extends Error {
+    constructor(
+      message: string,
+      public readonly type: 'network' | 'server' | 'graphql' | 'timeout' | 'auth' | 'unknown',
+      public readonly status?: number,
+      public readonly graphqlErrors?: Array<{ message: string; extensions?: Record<string, unknown> }>
+    ) {
+      super(message);
+      this.name = 'GraphQLError';
+    }
+  };
+
+  /**
+   * Execute a GraphQL query with enhanced error classification
    */
   async query<T = unknown>(
     query: string,
@@ -64,16 +79,66 @@ export class GraphQLClient {
       });
 
       if (!response.ok) {
-        throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
+        // Classify HTTP errors
+        if (response.status === 401 || response.status === 403) {
+          throw new GraphQLClient.GraphQLError(
+            `Authentication failed: ${response.status} ${response.statusText}`,
+            'auth',
+            response.status
+          );
+        }
+        
+        if (response.status >= 500) {
+          throw new GraphQLClient.GraphQLError(
+            `Server error: ${response.status} ${response.statusText}`,
+            'server',
+            response.status
+          );
+        }
+        
+        throw new GraphQLClient.GraphQLError(
+          `GraphQL request failed: ${response.status} ${response.statusText}`,
+          'network',
+          response.status
+        );
       }
 
-      const result = await response.json() as { data?: T; errors?: Array<{ message: string }> };
+      const result = await response.json() as { 
+        data?: T; 
+        errors?: Array<{ 
+          message: string; 
+          extensions?: Record<string, unknown>;
+          locations?: Array<{ line: number; column: number }>;
+          path?: Array<string | number>;
+        }> 
+      };
 
       if (result.errors && result.errors.length > 0) {
-        throw new Error(`GraphQL errors: ${result.errors.map(e => e.message).join(', ')}`);
+        throw new GraphQLClient.GraphQLError(
+          `GraphQL errors: ${result.errors.map(e => e.message).join(', ')}`,
+          'graphql',
+          undefined,
+          result.errors
+        );
       }
 
       return result.data as T;
+    } catch (error) {
+      if (error instanceof GraphQLClient.GraphQLError) {
+        throw error;
+      }
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new GraphQLClient.GraphQLError(
+          `GraphQL request timed out after ${this.timeout}ms`,
+          'timeout'
+        );
+      }
+      
+      throw new GraphQLClient.GraphQLError(
+        `GraphQL request failed: ${error instanceof Error ? error.message : String(error)}`,
+        'unknown'
+      );
     } finally {
       clearTimeout(timeoutId);
     }

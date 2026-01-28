@@ -125,6 +125,8 @@ export interface SwapOptions {
   gasPrice?: string;
   /** Memo to include in transaction */
   memo?: string;
+  /** Skip balance validation (internal use) */
+  skipBalanceValidation?: boolean;
 }
 
 /**

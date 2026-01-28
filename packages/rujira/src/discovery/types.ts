@@ -40,7 +40,9 @@ export interface DiscoveredContracts {
   /** Discovery timestamp */
   discoveredAt: number;
   /** Source of discovery */
-  source: 'graphql' | 'chain' | 'cache';
+  source: 'graphql' | 'chain' | 'cache' | 'fallback-failed';
+  /** Last error message if discovery failed */
+  lastError?: string;
 }
 
 /**

@@ -209,7 +209,7 @@ export class VultisigRujiraProvider implements RujiraSigner {
       try {
         sig = this.derToRaw(sig);
       } catch (error) {
-        throw new Error(`Failed to convert DER signature to raw format: ${error.message}`);
+        throw new Error(`Failed to convert DER signature to raw format: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     
