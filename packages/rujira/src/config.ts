@@ -177,8 +177,8 @@ export function getNetworkConfig(network: NetworkType): RujiraConfig {
 export function getAssetMetadata(denom: string): { decimals: number; chainDecimals: number; ticker: string } {
   const normalized = denom.toLowerCase();
   
-  // Try to find the asset by FIN format
-  const asset = findAssetByFormat(normalized, 'fin');
+  // Try to find the asset by FIN format (single-arg signature searches all formats)
+  const asset = findAssetByFormat(normalized);
   if (asset) {
     return {
       decimals: asset.decimals.fin,
@@ -196,8 +196,8 @@ export function getAssetMetadata(denom: string): { decimals: number; chainDecima
  * Convert denom to short ticker for display using @vultisig/assets
  */
 function denomToTicker(denom: string): string {
-  // Try to find the asset by FIN format
-  const asset = findAssetByFormat(denom, 'fin');
+  // Try to find the asset by FIN format (single-arg signature searches all formats)
+  const asset = findAssetByFormat(denom);
   if (asset) {
     return asset.name.split(' ')[0].toUpperCase();
   }

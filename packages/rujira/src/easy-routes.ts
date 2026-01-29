@@ -227,7 +227,7 @@ export const ASSETS = {
 } as const;
 
 export type AssetName = keyof typeof ASSETS;
-export type Asset = (typeof ASSETS)[AssetName];
+export type EasyAsset = (typeof ASSETS)[AssetName];
 
 // ============================================================================
 // HELPER FUNCTIONS
