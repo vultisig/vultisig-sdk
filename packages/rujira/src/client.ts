@@ -287,15 +287,35 @@ export class RujiraClient {
 
   /**
    * Get all balances for an address
-   * Note: Use getBalance for specific denoms as CosmWasm client may not support getAllBalances
+   * 
+   * Note: This queries common Rujira assets. For a complete balance list,
+   * use a dedicated balance service or query specific denoms with getBalance().
    */
   async getAllBalances(address: string): Promise<Coin[]> {
     this.ensureConnected();
-    // CosmWasmClient doesn't have getAllBalances, need to use stargate client
-    // For now, return empty - would need StargateClient for full balance query
-    console.warn('getAllBalances not fully implemented - use getBalance with specific denom');
-    const runeBalance = await this.queryClient!.getBalance(address, 'rune');
-    return [runeBalance];
+    
+    // Query common Rujira assets in parallel
+    // CosmWasmClient doesn't have getAllBalances, so we query known denoms
+    const commonDenoms = [
+      'rune',                    // Native RUNE
+      'btc-btc',                 // Secured BTC
+      'eth-eth',                 // Secured ETH
+      'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
+      'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT
+    ];
+    
+    const balances = await Promise.all(
+      commonDenoms.map(async (denom) => {
+        try {
+          return await this.queryClient!.getBalance(address, denom);
+        } catch {
+          return { denom, amount: '0' };
+        }
+      })
+    );
+    
+    // Filter out zero balances
+    return balances.filter(b => b.amount !== '0');
   }
 
   // ============================================================================

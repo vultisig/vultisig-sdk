@@ -30,10 +30,10 @@
 
 import { Coin } from '@cosmjs/proto-signing';
 import { fromBech32 } from '@cosmjs/encoding';
-import { Amount, getAsset, findAssetByFormat } from '@vultisig/assets';
+import { Amount, findAssetByFormat } from '@vultisig/assets';
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
-import { getAssetInfo } from '../config';
+// Asset info now comes from @vultisig/assets
 import { calculateMinReturn, generateQuoteId } from '../utils/format';
 import type {
   QuoteParams,
@@ -77,11 +77,17 @@ export interface RujiraSwapOptions {
   cache?: QuoteCacheOptions | false;
   /** Quote expiry safety buffer in milliseconds (default: 5000) */
   quoteExpiryBufferMs?: number;
+  /** Quote TTL in milliseconds (default: 30000) */
+  quoteTtlMs?: number;
+  /** Max concurrent requests for batch operations (default: 3) */
+  batchConcurrency?: number;
 }
 
 export class RujiraSwap {
   private readonly quoteCache: QuoteCache<SwapQuote> | null;
   private readonly quoteExpiryBufferMs: number;
+  private readonly quoteTtlMs: number;
+  private readonly batchConcurrency: number;
 
   constructor(
     private readonly client: RujiraClient,
@@ -96,6 +102,10 @@ export class RujiraSwap {
     
     // Initialize quote expiry buffer (5s by default)
     this.quoteExpiryBufferMs = options.quoteExpiryBufferMs ?? 5000;
+    // Initialize quote TTL (30s by default)
+    this.quoteTtlMs = options.quoteTtlMs ?? 30000;
+    // Initialize batch concurrency (3 by default to avoid rate limits)
+    this.batchConcurrency = options.batchConcurrency ?? 3;
   }
 
   /**
@@ -236,7 +246,7 @@ export class RujiraSwap {
         total: simulation.fee,
       },
       contractAddress,
-      expiresAt: Date.now() + 30000, // 30 second expiry
+      expiresAt: Date.now() + this.quoteTtlMs,
       quoteId: generateQuoteId(),
       cachedAt: Date.now(),
       warning: priceImpactEstimated || priceImpact === null
@@ -521,29 +531,36 @@ export class RujiraSwap {
     amount: string,
     destination?: string
   ): Promise<Map<EasyRouteName, SwapQuote | null>> {
-    // Execute all quotes in parallel
-    const results = await Promise.all(
-      routes.map(async (routeName) => {
-        try {
-          const route = EASY_ROUTES[routeName];
-          if (!route) {
+    // Execute quotes with concurrency limit to avoid rate limiting
+    const results: Array<{ routeName: EasyRouteName; quote: SwapQuote | null }> = [];
+    
+    // Process in batches based on concurrency limit
+    for (let i = 0; i < routes.length; i += this.batchConcurrency) {
+      const batch = routes.slice(i, i + this.batchConcurrency);
+      const batchResults = await Promise.all(
+        batch.map(async (routeName) => {
+          try {
+            const route = EASY_ROUTES[routeName];
+            if (!route) {
+              return { routeName, quote: null };
+            }
+
+            const quote = await this.getQuote({
+              fromAsset: route.from,
+              toAsset: route.to,
+              amount,
+              destination,
+            });
+
+            return { routeName, quote };
+          } catch {
+            // On error, return null for this route
             return { routeName, quote: null };
           }
-
-          const quote = await this.getQuote({
-            fromAsset: route.from,
-            toAsset: route.to,
-            amount,
-            destination,
-          });
-
-          return { routeName, quote };
-        } catch {
-          // On error, return null for this route
-          return { routeName, quote: null };
-        }
-      })
-    );
+        })
+      );
+      results.push(...batchResults);
+    }
 
     // Build result map
     const resultMap = new Map<EasyRouteName, SwapQuote | null>();
