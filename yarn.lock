@@ -5820,6 +5820,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/cli@workspace:clients/cli"
   dependencies:
+    "@cosmjs/cosmwasm-stargate": "npm:^0.32.4"
+    "@cosmjs/encoding": "npm:^0.32.4"
+    "@cosmjs/proto-signing": "npm:^0.32.4"
+    "@cosmjs/stargate": "npm:^0.32.4"
     "@types/inquirer": "npm:^9.0.0"
     "@types/node": "npm:^22.13.10"
     "@types/tabtab": "npm:^3.0.4"
