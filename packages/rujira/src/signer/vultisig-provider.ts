@@ -31,6 +31,14 @@ export class VultisigRujiraProvider implements RujiraSigner {
   }
 
   /**
+   * Get the underlying VultisigVault for advanced operations
+   * This is needed for operations that bypass SignDirect (e.g., MsgDeposit for withdrawals)
+   */
+  getVault(): VultisigVault {
+    return this.vault;
+  }
+
+  /**
    * Get the THORChain-derived public key (not the master key!)
    * This requires preparing a dummy tx to extract the derived key from the SDK
    */
