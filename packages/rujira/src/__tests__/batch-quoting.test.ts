@@ -58,6 +58,8 @@ const createMockClient = (failingContractPatterns: string[] = []) => {
       denom: 'rune',
       amount: '1000000000',
     }),
+    // Mock persistence method (no-op for tests)
+    persistFinContracts: vi.fn().mockResolvedValue(undefined),
   };
 };
 
@@ -102,7 +104,8 @@ describe('Batch Quoting', () => {
     });
 
     it('should return null for failed routes without throwing', async () => {
-      const mockClient = createMockClient(['BTC.BTC']); // BTC routes will fail
+      // Use lowercase FIN format to match actual asset names
+      const mockClient = createMockClient(['btc-btc']); // BTC routes will fail
       const swap = new RujiraSwap(mockClient as any, { cache: false });
 
       const routes: EasyRouteName[] = ['RUNE_TO_USDC', 'RUNE_TO_BTC'];
@@ -114,7 +117,8 @@ describe('Batch Quoting', () => {
     });
 
     it('should handle all routes failing gracefully', async () => {
-      const mockClient = createMockClient(['THOR.RUNE', 'BTC.BTC', 'ETH.', 'USDC']); // All fail
+      // Use lowercase FIN format to match actual asset names
+      const mockClient = createMockClient(['rune', 'btc-btc', 'eth-', 'usdc']); // All fail
       const swap = new RujiraSwap(mockClient as any, { cache: false });
 
       const routes: EasyRouteName[] = ['RUNE_TO_USDC', 'RUNE_TO_BTC'];
@@ -205,7 +209,8 @@ describe('Batch Quoting', () => {
     });
 
     it('should handle mixed success/failure gracefully', async () => {
-      const mockClient = createMockClient(['BTC.BTC']); // BTC routes fail
+      // Use lowercase FIN format to match actual asset names
+      const mockClient = createMockClient(['btc-btc']); // BTC routes fail
       const swap = new RujiraSwap(mockClient as any, { cache: false });
 
       const quotes = await swap.getAllRouteQuotes('100000000');
@@ -231,8 +236,9 @@ describe('Batch Quoting', () => {
       expect(quote).not.toBeNull();
       expect(quote).toMatchObject({
         params: expect.objectContaining({
-          fromAsset: 'THOR.RUNE',
-          toAsset: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+          // Asset names now use lowercase FIN format
+          fromAsset: 'rune',
+          toAsset: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
           amount: '100000000',
         }),
         expectedOutput: expect.any(String),

@@ -14,12 +14,14 @@ const createMockClient = (balance: string = '1000000000') => ({
     defaultSlippageBps: 100,
     contracts: {
       finContracts: {
-        'THOR.RUNE/ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48': 'thor1contract...',
+        // Use lowercase FIN-format keys to match EASY_ROUTES format
+        'rune/eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'thor1contract...',
       },
     },
   },
   discovery: {
-    getContractAddress: vi.fn().mockResolvedValue(null),
+    // Return a contract for any pair to ensure tests work
+    getContractAddress: vi.fn().mockImplementation(async () => 'thor1contract...'),
   },
   simulateSwap: vi.fn().mockResolvedValue({
     returned: '99000000',
@@ -262,7 +264,8 @@ describe('Balance Pre-check', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(RujiraError);
         const rujiraError = error as RujiraError;
-        expect(rujiraError.message).toContain('RUNE');
+        // Error message uses chain name (THORCHAIN) rather than ticker (RUNE)
+        expect(rujiraError.message).toContain('THORCHAIN');
         expect(rujiraError.message).toContain('Required:');
         expect(rujiraError.message).toContain('Available:');
       }

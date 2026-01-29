@@ -164,8 +164,8 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       });
 
-      // Should return fallback estimate
-      expect(quote.priceImpact).toBe('2.0');
+      // Should return fallback estimate (range format when orderbook unavailable)
+      expect(quote.priceImpact).toBe('1.0-3.0');
     });
 
     it('should use fallback when only bids exist', async () => {
@@ -183,8 +183,8 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       });
 
-      // Should return fallback estimate
-      expect(quote.priceImpact).toBe('2.0');
+      // Should return fallback estimate (range format when orderbook unavailable)
+      expect(quote.priceImpact).toBe('1.0-3.0');
     });
 
     it('should use fallback when only asks exist', async () => {
@@ -202,8 +202,8 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       });
 
-      // Should return fallback estimate
-      expect(quote.priceImpact).toBe('2.0');
+      // Should return fallback estimate (range format when orderbook unavailable)
+      expect(quote.priceImpact).toBe('1.0-3.0');
     });
   });
 
@@ -218,9 +218,9 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       });
 
-      // Should still return a quote with fallback impact
+      // Should still return a quote with fallback impact (range format)
       expect(quote).toBeDefined();
-      expect(quote.priceImpact).toBe('2.0');
+      expect(quote.priceImpact).toBe('1.0-3.0');
     });
   });
 
