@@ -5,7 +5,7 @@
 
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
-import { getAssetInfo, SECURED_ASSETS } from '../config';
+import { getAsset } from '@vultisig/assets';
 import type { Coin } from '@cosmjs/proto-signing';
 
 // ============================================================================
@@ -132,9 +132,16 @@ export class RujiraWithdraw {
     // Parse asset to get chain and validate
     const { chain } = this.parseAsset(params.asset);
     
-    // Get asset info for denom
-    const assetInfo = getAssetInfo(params.asset);
-    if (!assetInfo) {
+    // Resolve FIN denom for secured asset
+    let denom = params.asset.toLowerCase().replace('.', '-');
+    try {
+      const a: any = getAsset(params.asset);
+      if (a?.formats?.fin) denom = a.formats.fin;
+    } catch {
+      // keep fallback
+    }
+
+    if (!denom) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
         `Unknown asset: ${params.asset}`
@@ -152,14 +159,14 @@ export class RujiraWithdraw {
 
     // Build funds to send
     const funds: Coin[] = [{
-      denom: assetInfo.denom,
+      denom,
       amount: params.amount,
     }];
 
     return {
       chain,
       asset: params.asset,
-      denom: assetInfo.denom,
+      denom,
       amount: params.amount,
       destination: params.l1Address,
       memo,

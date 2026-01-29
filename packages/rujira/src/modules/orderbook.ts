@@ -6,7 +6,7 @@
 import { Coin } from '@cosmjs/proto-signing';
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
-import { getAssetInfo } from '../config';
+import { getAsset } from '@vultisig/assets';
 import type {
   TradingPair,
   LimitOrderParams,
@@ -540,13 +540,23 @@ export class RujiraOrderbook {
     // This is simplified - real impl would get pair info from contract
     
     // For now, assume RUNE for buy, and lookup based on pair for sell
+    const rune = (() => {
+      try {
+        const a: any = getAsset('THOR.RUNE');
+        if (!a?.formats?.fin) return undefined;
+        return { denom: a.formats.fin, decimals: a.decimals?.fin ?? 8 };
+      } catch {
+        return undefined;
+      }
+    })();
+
     if (params.side === 'buy') {
-      return getAssetInfo('THOR.RUNE');
+      return rune;
     }
-    
+
     // For sell, we need the base asset
     // This would need proper pair resolution
-    return getAssetInfo('THOR.RUNE'); // Placeholder
+    return rune; // Placeholder
   }
 
   /**

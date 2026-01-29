@@ -5,7 +5,7 @@
 
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors';
-import { getAssetInfo, SECURED_ASSETS } from '../config';
+import { getAsset } from '@vultisig/assets';
 
 // ============================================================================
 // TYPES
@@ -179,9 +179,14 @@ export class RujiraDeposit {
     // Build the deposit memo
     const memo = this.buildDepositMemo(params.fromAsset, params.thorAddress, params.affiliate, params.affiliateBps);
 
-    // Get asset info for resulting denom
-    const assetInfo = getAssetInfo(params.fromAsset);
-    const resultingDenom = assetInfo?.denom || params.fromAsset.toLowerCase().replace('.', '-');
+    // Determine resulting secured denom on THORChain (FIN denom when known)
+    let resultingDenom = params.fromAsset.toLowerCase().replace('.', '-');
+    try {
+      const a: any = getAsset(params.fromAsset);
+      if (a?.formats?.fin) resultingDenom = a.formats.fin;
+    } catch {
+      // keep fallback
+    }
 
     // Build warning if applicable
     let warning: string | undefined;
@@ -227,9 +232,8 @@ export class RujiraDeposit {
       const balances: SecuredBalance[] = [];
 
       for (const balance of data.balances || []) {
-        // Map denom back to asset
+        // Map denom back to asset (best effort)
         const asset = this.denomToAsset(balance.denom);
-        const assetInfo = asset ? getAssetInfo(asset) : null;
         
         // THORChain secured assets always use 8 decimals for storage
         const decimals = 8;
@@ -257,13 +261,16 @@ export class RujiraDeposit {
    */
   async getBalance(thorAddress: string, asset: string): Promise<SecuredBalance | null> {
     const balances = await this.getBalances(thorAddress);
-    const assetInfo = getAssetInfo(asset);
-    
-    if (!assetInfo) {
-      return null;
+
+    let denom = asset.toLowerCase().replace('.', '-');
+    try {
+      const a: any = getAsset(asset);
+      if (a?.formats?.fin) denom = a.formats.fin;
+    } catch {
+      // keep fallback
     }
 
-    return balances.find(b => b.denom === assetInfo.denom) || null;
+    return balances.find(b => b.denom === denom) || null;
   }
 
   /**
@@ -428,14 +435,9 @@ export class RujiraDeposit {
   }
 
   private denomToAsset(denom: string): string | null {
-    // Look up in known assets
-    for (const [asset, info] of Object.entries(SECURED_ASSETS)) {
-      if (info.denom === denom) {
-        return asset;
-      }
-    }
-
-    // Try to reverse-engineer: btc-btc -> BTC.BTC
+    // Best-effort reverse mapping: btc-btc -> BTC.BTC
+    // Note: for token contracts (e.g. eth-usdc-0x...) this will still produce a reasonable
+    // THOR-style identifier like ETH.USDC-0X...
     if (denom.includes('-')) {
       const parts = denom.split('-');
       if (parts.length >= 2) {
