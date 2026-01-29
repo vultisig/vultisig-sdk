@@ -6,6 +6,22 @@
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors';
 import { getAsset } from '@vultisig/assets';
+import type { Asset } from '@vultisig/assets';
+
+/**
+ * Type guard to check if an object is a valid Asset with FIN format
+ * @internal
+ */
+function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
+  if (!obj || typeof obj !== 'object') return false;
+  const asset = obj as Partial<Asset>;
+  return (
+    typeof asset.formats === 'object' &&
+    asset.formats !== null &&
+    typeof asset.formats.fin === 'string' &&
+    asset.formats.fin.length > 0
+  );
+}
 
 // ============================================================================
 // TYPES
@@ -182,8 +198,10 @@ export class RujiraDeposit {
     // Determine resulting secured denom on THORChain (FIN denom when known)
     let resultingDenom = params.fromAsset.toLowerCase().replace('.', '-');
     try {
-      const a: any = getAsset(params.fromAsset);
-      if (a?.formats?.fin) resultingDenom = a.formats.fin;
+      const assetData = getAsset(params.fromAsset);
+      if (isFinAsset(assetData)) {
+        resultingDenom = assetData.formats.fin;
+      }
     } catch {
       // keep fallback
     }
@@ -264,8 +282,10 @@ export class RujiraDeposit {
 
     let denom = asset.toLowerCase().replace('.', '-');
     try {
-      const a: any = getAsset(asset);
-      if (a?.formats?.fin) denom = a.formats.fin;
+      const assetData = getAsset(asset);
+      if (isFinAsset(assetData)) {
+        denom = assetData.formats.fin;
+      }
     } catch {
       // keep fallback
     }
