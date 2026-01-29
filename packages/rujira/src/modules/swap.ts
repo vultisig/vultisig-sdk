@@ -238,7 +238,7 @@ export class RujiraSwap {
       expectedOutput: simulation.returned,
       minimumOutput,
       rate,
-      priceImpact: priceImpact ?? 'unknown',
+      priceImpact,
       fees: {
         network: '0', // Gas estimated at execution
         protocol: simulation.fee,
@@ -249,7 +249,7 @@ export class RujiraSwap {
       expiresAt: Date.now() + this.quoteTtlMs,
       quoteId: generateQuoteId(),
       cachedAt: Date.now(),
-      warning: priceImpactEstimated || priceImpact === null
+      warning: priceImpactEstimated || priceImpact === 'unknown'
         ? 'Price impact is estimated or unknown - orderbook data unavailable. Actual slippage may differ.'
         : undefined,
     };
@@ -630,6 +630,8 @@ export class RujiraSwap {
     if (address) {
       // Cache for future use
       this.client.config.contracts.finContracts[pairKey] = address;
+      // Best-effort persistence (if configured)
+      this.client.persistFinContracts().catch(() => undefined);
       return address;
     }
 
@@ -696,7 +698,7 @@ export class RujiraSwap {
     inputAmount: string,
     outputAmount: string,
     orderbook: OrderBook | null
-  ): string | null {
+  ): string {
     // If no orderbook data, estimate based on swap size
     if (!orderbook) {
       return this.estimatePriceImpactWithoutOrderbook(inputAmount, outputAmount);
@@ -756,7 +758,7 @@ export class RujiraSwap {
   private estimatePriceImpactWithoutOrderbook(
     inputAmount: string,
     _outputAmount: string
-  ): string | null {
+  ): string {
     const amount = BigInt(inputAmount);
     
     // For very large amounts, we can't provide a reliable estimate
@@ -765,8 +767,8 @@ export class RujiraSwap {
     const largeSwapThreshold = BigInt('1000000000000'); // 10k units base
     
     if (amount >= largeSwapThreshold) {
-      // Return null for large swaps - forces user to check conditions
-      return null;
+      // For large swaps, we can't provide a reliable estimate
+      return 'unknown';
     }
     
     // For medium amounts, provide a conservative range

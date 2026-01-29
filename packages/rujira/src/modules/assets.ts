@@ -4,7 +4,7 @@
  */
 
 import type { RujiraClient } from '../client';
-import { SECURED_ASSETS, getAssetInfo } from '../config';
+import { KNOWN_ASSETS, getAsset } from '@vultisig/assets';
 import type { RujiraAsset, TradingPair } from '../types';
 
 /**
@@ -30,47 +30,59 @@ export class RujiraAssets {
    * Get all supported assets
    */
   async getAssets(): Promise<RujiraAsset[]> {
-    // For now, return static list
-    // TODO: Query from chain/API for dynamic list
-    return Object.entries(SECURED_ASSETS).map(([asset, info]) => {
-      const parts = asset.split('.');
-      const chain = parts[0] || '';
-      const symbol = parts[1] || '';
-      const ticker = symbol.split('-')[0] || '';
-      return {
-        asset,
-        chain,
-        symbol,
-        ticker,
-        decimals: (info as { denom: string; decimals: number }).decimals,
-        type: this.getAssetType(asset),
-        denom: (info as { denom: string; decimals: number }).denom,
-      };
-    });
+    // Use @vultisig/assets registry as the source of truth.
+    // Only return assets that have a FIN denom, since those are tradable/holdable on THORChain.
+    const registry = Array.isArray(KNOWN_ASSETS)
+      ? KNOWN_ASSETS
+      : (Object.values(KNOWN_ASSETS) as unknown[]);
+
+    return (registry as any[])
+      .filter((a) => a?.formats?.fin)
+      .map((a) => {
+        const asset = a.formats?.full ?? a.ticker ?? a.name;
+        const parts = String(asset).split('.');
+        const chain = parts[0] || '';
+        const symbol = parts[1] || '';
+        const ticker = symbol.split('-')[0] || '';
+
+        return {
+          asset: String(asset),
+          chain,
+          symbol,
+          ticker,
+          decimals: a.decimals?.fin ?? 8,
+          type: this.getAssetType(String(asset)),
+          denom: a.formats.fin,
+        } as RujiraAsset;
+      });
   }
 
   /**
    * Get information about a specific asset
    */
   async getAsset(asset: string): Promise<RujiraAsset | null> {
-    const info = getAssetInfo(asset);
-    if (!info) {
-      return null;
+    let a: any;
+    try {
+      a = getAsset(asset);
+    } catch {
+      a = null;
     }
+
+    if (!a?.formats?.fin) return null;
 
     const parts = asset.split('.');
     const chain = parts[0] || '';
     const symbol = parts[1] || '';
     const ticker = symbol.split('-')[0] || '';
-    
+
     return {
       asset,
       chain,
       symbol,
       ticker,
-      decimals: info.decimals,
+      decimals: a.decimals?.fin ?? 8,
       type: this.getAssetType(asset),
-      denom: info.denom,
+      denom: a.formats.fin,
     };
   }
 
@@ -101,21 +113,36 @@ export class RujiraAssets {
    * Check if an asset is supported
    */
   isSupported(asset: string): boolean {
-    return getAssetInfo(asset) !== undefined;
+    try {
+      const a: any = getAsset(asset);
+      return Boolean(a?.formats?.fin);
+    } catch {
+      return false;
+    }
   }
 
   /**
    * Get the denom for an asset
    */
   getDenom(asset: string): string | undefined {
-    return getAssetInfo(asset)?.denom;
+    try {
+      const a: any = getAsset(asset);
+      return a?.formats?.fin;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * Get decimals for an asset
    */
   getDecimals(asset: string): number | undefined {
-    return getAssetInfo(asset)?.decimals;
+    try {
+      const a: any = getAsset(asset);
+      return a?.decimals?.fin;
+    } catch {
+      return undefined;
+    }
   }
 
   /**

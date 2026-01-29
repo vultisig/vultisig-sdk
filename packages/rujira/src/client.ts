@@ -19,7 +19,7 @@ import {
   SigningCosmWasmClient,
   ExecuteResult 
 } from '@cosmjs/cosmwasm-stargate';
-import { GasPrice } from '@cosmjs/stargate';
+import { GasPrice, StargateClient } from '@cosmjs/stargate';
 import { Coin } from '@cosmjs/proto-signing';
 
 import { 
@@ -72,6 +72,19 @@ export interface RujiraClientOptions {
    * Useful for load balancing or private RPC endpoints
    */
   rpcEndpoint?: string;
+
+  /**
+   * Optional persistence hooks for discovered FIN contracts.
+   *
+   * When the SDK discovers a new FIN contract address for a pair,
+   * it caches it in-memory in `client.config.contracts.finContracts`.
+   * Provide these hooks to persist that cache (e.g. localStorage, file, DB)
+   * and load it on startup.
+   */
+  contractCache?: {
+    load?: () => Promise<Record<string, string>> | Record<string, string>;
+    save?: (finContracts: Record<string, string>) => Promise<void> | void;
+  };
   
   /** 
    * Enable verbose logging for debugging
@@ -123,14 +136,20 @@ export class RujiraClient {
   /** Contract discovery module */
   public readonly discovery: RujiraDiscovery;
 
-  /** Query client (read-only) */
+  /** Query client (read-only, CosmWasm) */
   private queryClient: CosmWasmClient | null = null;
+
+  /** Bank/tx client (read-only, Stargate) */
+  private stargateClient: StargateClient | null = null;
   
   /** Signing client (for transactions) */
   private signingClient: SigningCosmWasmClient | null = null;
   
   /** Signer instance */
   private signer: RujiraSigner | null = null;
+
+  /** Optional persistence hooks for discovered contracts */
+  private contractCache?: RujiraClientOptions['contractCache'];
   
   /** Debug mode */
   private debug: boolean;
@@ -161,6 +180,7 @@ export class RujiraClient {
 
     // Store authentication and debugging preferences
     this.signer = options.signer || null;
+    this.contractCache = options.contractCache;
     this.debug = options.debug || false;
 
     // Initialize all modules with appropriate configuration
@@ -207,11 +227,30 @@ export class RujiraClient {
   async connect(): Promise<void> {
     try {
       this.log('Connecting to', this.config.rpcEndpoint);
+
+      // Load any persisted FIN contract discoveries before connecting.
+      // This allows the SDK to reuse prior discoveries across sessions.
+      if (this.contractCache?.load) {
+        try {
+          const loaded = await this.contractCache.load();
+          this.config.contracts.finContracts = {
+            ...this.config.contracts.finContracts,
+            ...(loaded ?? {}),
+          };
+          this.log('Loaded persisted FIN contracts:', Object.keys(loaded ?? {}).length);
+        } catch (e) {
+          this.log('Failed to load persisted FIN contracts (continuing):', e);
+        }
+      }
       
       // Create query client for read-only operations (always needed)
-      // This client can query balances, contracts, and chain state
+      // This client can query balances and smart contracts
       this.queryClient = await CosmWasmClient.connect(this.config.rpcEndpoint);
-      this.log('Query client connected');
+      this.log('CosmWasm query client connected');
+
+      // Stargate client is needed for bank module queries like getAllBalances
+      this.stargateClient = await StargateClient.connect(this.config.rpcEndpoint);
+      this.log('Stargate client connected');
 
       // Create signing client only if signer is available
       // This enables transaction execution (swaps, orders, etc.)
@@ -241,6 +280,10 @@ export class RujiraClient {
     if (this.queryClient) {
       this.queryClient.disconnect();
       this.queryClient = null;
+    }
+    if (this.stargateClient) {
+      this.stargateClient.disconnect();
+      this.stargateClient = null;
     }
     if (this.signingClient) {
       this.signingClient.disconnect();
@@ -282,40 +325,36 @@ export class RujiraClient {
    */
   async getBalance(address: string, denom: string): Promise<Coin> {
     this.ensureConnected();
+    // Prefer StargateClient for bank queries
+    if (this.stargateClient) {
+      return this.stargateClient.getBalance(address, denom);
+    }
     return this.queryClient!.getBalance(address, denom);
   }
 
   /**
    * Get all balances for an address
-   * 
-   * Note: This queries common Rujira assets. For a complete balance list,
-   * use a dedicated balance service or query specific denoms with getBalance().
    */
   async getAllBalances(address: string): Promise<Coin[]> {
     this.ensureConnected();
-    
-    // Query common Rujira assets in parallel
-    // CosmWasmClient doesn't have getAllBalances, so we query known denoms
-    const commonDenoms = [
-      'rune',                    // Native RUNE
-      'btc-btc',                 // Secured BTC
-      'eth-eth',                 // Secured ETH
-      'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
-      'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7', // USDT
-    ];
-    
-    const balances = await Promise.all(
-      commonDenoms.map(async (denom) => {
-        try {
-          return await this.queryClient!.getBalance(address, denom);
-        } catch {
-          return { denom, amount: '0' };
-        }
-      })
-    );
-    
-    // Filter out zero balances
-    return balances.filter(b => b.amount !== '0');
+
+    if (!this.stargateClient) {
+      // Should not happen since connect() initializes it, but keep a safe fallback.
+      throw new RujiraError(
+        RujiraErrorCode.NOT_CONNECTED,
+        'Stargate client not available. Call connect() first.'
+      );
+    }
+
+    return this.stargateClient.getAllBalances(address);
+  }
+
+  /**
+   * Persist the current discovered FIN contracts via configured contractCache hooks.
+   */
+  async persistFinContracts(): Promise<void> {
+    if (!this.contractCache?.save) return;
+    await this.contractCache.save(this.config.contracts.finContracts);
   }
 
   // ============================================================================
@@ -453,7 +492,7 @@ export class RujiraClient {
   // ============================================================================
 
   private ensureConnected(): void {
-    if (!this.queryClient) {
+    if (!this.queryClient || !this.stargateClient) {
       throw new RujiraError(
         RujiraErrorCode.NOT_CONNECTED,
         'Client not connected. Call connect() first.'

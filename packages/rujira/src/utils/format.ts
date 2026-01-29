@@ -3,7 +3,7 @@
  * @module utils/format
  */
 
-import { getAssetInfo } from '../config';
+import { getAsset } from '@vultisig/assets';
 import type { SwapRequest } from '../types';
 
 /**
@@ -65,12 +65,15 @@ export function formatAmount(
   asset: string,
   maxDecimals = 6
 ): string {
-  const info = getAssetInfo(asset);
-  if (!info) {
+  let decimals: number;
+  try {
+    const a: any = getAsset(asset);
+    decimals = a?.decimals?.fin ?? 8;
+  } catch {
     return baseUnits.toString();
   }
   
-  const human = fromBaseUnits(baseUnits, info.decimals);
+  const human = fromBaseUnits(baseUnits, decimals);
   const parts = human.split('.');
   const whole = parts[0] || '0';
   const fraction = parts[1] || '';
@@ -94,15 +97,18 @@ export function formatAmount(
  * @returns Base units
  */
 export function parseAmount(input: string, asset: string): string {
-  const info = getAssetInfo(asset);
-  if (!info) {
+  let decimals: number;
+  try {
+    const a: any = getAsset(asset);
+    decimals = a?.decimals?.fin ?? 8;
+  } catch {
     throw new Error(`Unknown asset: ${asset}`);
   }
   
   // Remove commas and whitespace
   const cleaned = input.replace(/[,\s]/g, '');
   
-  return toBaseUnits(cleaned, info.decimals);
+  return toBaseUnits(cleaned, decimals);
 }
 
 /**
