@@ -552,7 +552,7 @@ export class RujiraOrderbook {
     // Buy order = offer quote asset (typically RUNE)
     // Sell order = offer base asset (the asset being sold)
 
-    // Helper to get asset info from @vultisig/assets
+    // Helper to get asset info from @vultisig/assets (single-arg signature)
     const getAssetInfo = (assetId: string): { denom: string; decimals: number } | undefined => {
       const asset = findAssetByFormat(assetId);
       if (!asset?.formats?.fin) return undefined;
