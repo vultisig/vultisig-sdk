@@ -4,8 +4,7 @@
  */
 
 import type { RujiraClient } from '../client';
-import { KNOWN_ASSETS, findAssetByFormat } from '@vultisig/assets';
-import type { Asset } from '@vultisig/assets';
+import { KNOWN_ASSETS, findAssetByFormat, type Asset } from '@vultisig/assets';
 import type { RujiraAsset, TradingPair } from '../types';
 
 /**
@@ -46,7 +45,7 @@ export class RujiraAssets {
    * Get all supported assets
    */
   async getAssets(): Promise<RujiraAsset[]> {
-    return Object.values(KNOWN_ASSETS)
+    return (Object.values(KNOWN_ASSETS) as Asset[])
       .filter(isFinAsset)
       .map((asset) => ({
         asset: asset.formats.thorchain,

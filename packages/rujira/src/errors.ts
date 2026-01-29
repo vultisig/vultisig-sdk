@@ -74,9 +74,9 @@ export class RujiraError extends Error {
     this.details = details;
     this.retryable = retryable;
     
-    // Maintain proper stack trace
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, RujiraError);
+    // Maintain proper stack trace (Node.js specific)
+    if (typeof (Error as any).captureStackTrace === 'function') {
+      (Error as any).captureStackTrace(this, RujiraError);
     }
   }
 

@@ -5,7 +5,13 @@ import type {
 } from '@cosmjs/proto-signing';
 import type { RujiraSigner, VultisigVault, KeysignPayload, VultisigSignature } from './types';
 
-type SignDoc = Parameters<OfflineDirectSigner['signDirect']>[1];
+// SignDoc type matching @cosmjs/proto-signing
+interface SignDoc {
+  bodyBytes: Uint8Array;
+  authInfoBytes: Uint8Array;
+  chainId: string;
+  accountNumber: bigint;
+}
 
 const THORCHAIN_CONFIG = {
   chain: 'THORChain' as const,
