@@ -185,7 +185,7 @@ export class RujiraOrderbook {
 
     // Get asset info for the side we're offering
     // For buy orders, we offer quote asset; for sell orders, we offer base asset
-    const assetInfo = this.getOfferAsset(params);
+    const assetInfo = await this.getOfferAsset(params);
     
     if (!assetInfo) {
       throw new RujiraError(
@@ -532,31 +532,58 @@ export class RujiraOrderbook {
 
   /**
    * Get the asset info for the offer side of an order
+   * 
+   * For buy orders: we offer the quote asset (typically RUNE)
+   * For sell orders: we offer the base asset (queried from contract config)
+   * 
+   * @param params - Order parameters including pair and side
+   * @returns Asset info with denom and decimals, or undefined if not found
    */
-  private getOfferAsset(params: LimitOrderParams): { denom: string; decimals: number } | undefined {
+  private async getOfferAsset(
+    params: LimitOrderParams
+  ): Promise<{ denom: string; decimals: number } | undefined> {
     // For limit orders, we need to determine which asset we're offering
-    // Buy order = offer quote asset
-    // Sell order = offer base asset
-    // This is simplified - real impl would get pair info from contract
-    
-    // For now, assume RUNE for buy, and lookup based on pair for sell
-    const rune = (() => {
+    // Buy order = offer quote asset (typically RUNE)
+    // Sell order = offer base asset (the asset being sold)
+
+    // Helper to get asset info from @vultisig/assets
+    const getAssetInfo = (assetId: string): { denom: string; decimals: number } | undefined => {
       try {
-        const a: any = getAsset('THOR.RUNE');
-        if (!a?.formats?.fin) return undefined;
-        return { denom: a.formats.fin, decimals: a.decimals?.fin ?? 8 };
+        const asset = getAsset(assetId);
+        if (!asset?.formats?.fin) return undefined;
+        return { 
+          denom: asset.formats.fin, 
+          decimals: asset.decimals?.fin ?? 8 
+        };
       } catch {
         return undefined;
       }
-    })();
+    };
 
-    if (params.side === 'buy') {
-      return rune;
+    // If pair is a TradingPair object with base/quote info, use it directly
+    if (typeof params.pair !== 'string' && params.pair.base && params.pair.quote) {
+      const assetId = params.side === 'buy' ? params.pair.quote : params.pair.base;
+      return getAssetInfo(assetId);
     }
 
-    // For sell, we need the base asset
-    // This would need proper pair resolution
-    return rune; // Placeholder
+    // For string pair or pair without asset info, query the contract
+    const contractAddress = await this.resolveContract(
+      typeof params.pair === 'string' ? params.pair : params.pair.contractAddress
+    );
+    
+    const config = await this.getContractConfig(contractAddress);
+    
+    if (params.side === 'buy') {
+      // Buy orders offer the quote asset
+      return config.quote ? getAssetInfo(config.quote) : getAssetInfo('THOR.RUNE');
+    } else {
+      // Sell orders offer the base asset
+      if (config.base) {
+        return getAssetInfo(config.base);
+      }
+      // Fallback: if we can't determine base asset, return undefined
+      return undefined;
+    }
   }
 
   /**
