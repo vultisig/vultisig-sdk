@@ -608,6 +608,9 @@ export class RujiraSwap {
 
   /**
    * Find the FIN contract for a trading pair
+   * 
+   * Checks known contracts first, then uses discovery service.
+   * Also tries the reverse pair direction since FIN contracts are bidirectional.
    */
   private async findContract(fromAsset: string, toAsset: string): Promise<string> {
     // Check known contracts first (from config)
@@ -624,11 +627,16 @@ export class RujiraSwap {
       return knownContracts[reversePairKey];
     }
 
-    // Try discovery service
-    const address = await this.client.discovery.getContractAddress(fromAsset, toAsset);
+    // Try discovery service with primary pair direction
+    let address = await this.client.discovery.getContractAddress(fromAsset, toAsset);
+    
+    // If not found, try reverse pair direction (FIN contracts are bidirectional)
+    if (!address) {
+      address = await this.client.discovery.getContractAddress(toAsset, fromAsset);
+    }
     
     if (address) {
-      // Cache for future use
+      // Cache for future use (using primary key for consistency)
       this.client.config.contracts.finContracts[pairKey] = address;
       // Best-effort persistence (if configured)
       this.client.persistFinContracts().catch(() => undefined);
