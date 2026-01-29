@@ -11,19 +11,15 @@
  * 3. **Runtime discovery**: Dynamic contract discovery for new markets
  * 
  * Asset metadata strategy:
- * - Uses on-chain denomination format (lowercase, hyphen-separated)
- * - Maintains both FIN contract precision and Cosmos bank precision
- * - Provides fallback defaults for unknown assets
+ * - Uses @vultisig/assets for unified asset handling across all packages
+ * - Maintains compatibility with FIN contract requirements
+ * - Provides proper decimal conversion between layers
  * - Maps denoms to human-readable tickers for UI display
- * 
- * Why on-chain denoms matter:
- * - No conversion needed between SDK and smart contracts
- * - Eliminates asset format ambiguity
- * - Works consistently across different THORChain integrations
- * - Simplifies debugging and transaction analysis
  * 
  * @module config
  */
+
+import { KNOWN_ASSETS, getAsset, findAssetByFormat } from '@vultisig/assets';
 
 /**
  * Network type
@@ -171,64 +167,42 @@ export function getNetworkConfig(network: NetworkType): RujiraConfig {
 }
 
 // ============================================================================
-// ASSET METADATA
+// ASSET METADATA (using @vultisig/assets)
 // ============================================================================
 
 /**
- * Asset metadata for known denoms
- * 
- * Keys are on-chain denoms (lowercase, hyphen-separated)
- * 
- * Decimals note:
- * - 'decimals' is FIN contract precision (usually 6 for most assets)
- * - 'chainDecimals' is Cosmos bank storage (always 8 for secured assets)
- */
-export const ASSET_METADATA: Record<string, { decimals: number; chainDecimals: number; ticker: string }> = {
-  // THORChain native
-  'rune': { decimals: 8, chainDecimals: 8, ticker: 'RUNE' },
-  'tcy': { decimals: 8, chainDecimals: 8, ticker: 'TCY' },
-  'ruji': { decimals: 8, chainDecimals: 8, ticker: 'RUJI' },
-  
-  // Native L1 assets (secured on THORChain)
-  'btc-btc': { decimals: 8, chainDecimals: 8, ticker: 'BTC' },
-  'eth-eth': { decimals: 8, chainDecimals: 8, ticker: 'ETH' },
-  'gaia-atom': { decimals: 6, chainDecimals: 8, ticker: 'ATOM' },
-  'avax-avax': { decimals: 8, chainDecimals: 8, ticker: 'AVAX' },
-  'bsc-bnb': { decimals: 8, chainDecimals: 8, ticker: 'BNB' },
-  'doge-doge': { decimals: 8, chainDecimals: 8, ticker: 'DOGE' },
-  'ltc-ltc': { decimals: 8, chainDecimals: 8, ticker: 'LTC' },
-  'bch-bch': { decimals: 8, chainDecimals: 8, ticker: 'BCH' },
-  
-  // ERC20 tokens (secured on THORChain)
-  'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': { decimals: 6, chainDecimals: 8, ticker: 'USDC' },
-  'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7': { decimals: 6, chainDecimals: 8, ticker: 'USDT' },
-};
-
-/**
- * Get metadata for an asset denom
+ * Get metadata for an asset denom using @vultisig/assets registry
  * Falls back to sensible defaults for unknown assets
  */
 export function getAssetMetadata(denom: string): { decimals: number; chainDecimals: number; ticker: string } {
   const normalized = denom.toLowerCase();
   
-  if (ASSET_METADATA[normalized]) {
-    return ASSET_METADATA[normalized];
+  // Try to find the asset by FIN format
+  const asset = findAssetByFormat(normalized, 'fin');
+  if (asset) {
+    return {
+      decimals: asset.decimals.fin,
+      chainDecimals: asset.decimals.thorchain,
+      ticker: asset.name.split(' ')[0].toUpperCase()
+    };
   }
   
   // Unknown asset - derive ticker from denom and use default decimals
   const ticker = denomToTicker(denom);
-  return { decimals: 8, chainDecimals: 8, ticker };
+  return { decimals: 6, chainDecimals: 8, ticker }; // FIN default: 6 decimals
 }
 
 /**
- * Convert denom to short ticker for display
+ * Convert denom to short ticker for display using @vultisig/assets
  */
 function denomToTicker(denom: string): string {
-  if (denom === 'rune') return 'RUNE';
-  if (denom === 'tcy') return 'TCY';
-  if (denom === 'ruji') return 'RUJI';
+  // Try to find the asset by FIN format
+  const asset = findAssetByFormat(denom, 'fin');
+  if (asset) {
+    return asset.name.split(' ')[0].toUpperCase();
+  }
   
-  // Handle chain-asset format: btc-btc -> BTC, eth-usdc-0x... -> USDC
+  // Fallback to parsing denom format
   const parts = denom.split('-');
   if (parts.length >= 2) {
     return parts[1].toUpperCase();
@@ -238,22 +212,25 @@ function denomToTicker(denom: string): string {
 }
 
 // ============================================================================
-// LEGACY COMPATIBILITY (deprecated, use ASSET_METADATA)
+// LEGACY COMPATIBILITY (deprecated, use @vultisig/assets)
 // ============================================================================
 
 /**
- * @deprecated Use ASSET_METADATA instead. Will be removed in v1.0.
+ * @deprecated Use @vultisig/assets instead. Will be removed in v1.0.
  */
-export const SECURED_ASSETS = ASSET_METADATA;
+export const SECURED_ASSETS: Record<string, { decimals: number; chainDecimals: number; ticker: string }> = {};
 
 /**
- * @deprecated Use getAssetMetadata instead. Will be removed in v1.0.
+ * @deprecated Use getAsset from @vultisig/assets instead. Will be removed in v1.0.
  */
 export function getAssetInfo(asset: string): { denom: string; decimals: number } | undefined {
   const normalized = asset.toLowerCase();
-  const meta = ASSET_METADATA[normalized];
-  if (meta) {
-    return { denom: normalized, decimals: meta.decimals };
+  
+  // Try to find using @vultisig/assets
+  const assetInfo = findAssetByFormat(normalized, 'fin');
+  if (assetInfo) {
+    return { denom: normalized, decimals: assetInfo.decimals.fin };
   }
-  return { denom: normalized, decimals: 8 };
+  
+  return { denom: normalized, decimals: 6 }; // FIN default
 }

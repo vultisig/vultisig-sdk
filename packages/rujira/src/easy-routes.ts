@@ -48,6 +48,8 @@
  * @module easy-routes
  */
 
+import { KNOWN_ASSETS, getAsset } from '@vultisig/assets';
+
 // ============================================================================
 // EASY ROUTES
 // ============================================================================
@@ -57,55 +59,53 @@
  * All routes go through RUNE as the settlement asset.
  * 
  * Asset format: On-chain denoms (lowercase, hyphen-separated)
- * - Native L1: btc-btc, eth-eth
- * - THORChain: rune, tcy, ruji
- * - Secured (ERC20): eth-usdc-0xa0b86991..., eth-usdt-0xdac17f958d...
+ * Uses @vultisig/assets for unified asset handling
  */
 export const EASY_ROUTES = {
   // === RUNE Gateway Routes ===
   RUNE_TO_USDC: {
-    from: 'rune',
-    to: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    from: getAsset('rune').formats.fin,
+    to: getAsset('usdc_eth').formats.fin,
     name: 'RUNE → USDC',
     description: 'Swap RUNE to USDC (Ethereum)',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   USDC_TO_RUNE: {
-    from: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-    to: 'rune',
+    from: getAsset('usdc_eth').formats.fin,
+    to: getAsset('rune').formats.fin,
     name: 'USDC → RUNE',
     description: 'Swap USDC to RUNE',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   RUNE_TO_BTC: {
-    from: 'rune',
-    to: 'btc-btc',
+    from: getAsset('rune').formats.fin,
+    to: getAsset('btc').formats.fin,
     name: 'RUNE → BTC',
     description: 'Swap RUNE to native Bitcoin',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   BTC_TO_RUNE: {
-    from: 'btc-btc',
-    to: 'rune',
+    from: getAsset('btc').formats.fin,
+    to: getAsset('rune').formats.fin,
     name: 'BTC → RUNE',
     description: 'Swap native Bitcoin to RUNE',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   RUNE_TO_ETH: {
-    from: 'rune',
-    to: 'eth-eth',
+    from: getAsset('rune').formats.fin,
+    to: getAsset('eth').formats.fin,
     name: 'RUNE → ETH',
     description: 'Swap RUNE to native Ethereum',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   ETH_TO_RUNE: {
-    from: 'eth-eth',
-    to: 'rune',
+    from: getAsset('eth').formats.fin,
+    to: getAsset('rune').formats.fin,
     name: 'ETH → RUNE',
     description: 'Swap native Ethereum to RUNE',
     liquidity: 'deep' as const,
@@ -114,16 +114,16 @@ export const EASY_ROUTES = {
 
   // === Stablecoin Routes ===
   USDC_TO_USDT: {
-    from: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-    to: 'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7',
+    from: getAsset('usdc_eth').formats.fin,
+    to: getAsset('usdt_eth').formats.fin,
     name: 'USDC → USDT',
     description: 'Swap USDC to USDT (via RUNE)',
     liquidity: 'deep' as const,
     typicalTime: '15-45 seconds',
   },
   USDT_TO_USDC: {
-    from: 'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7',
-    to: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    from: getAsset('usdt_eth').formats.fin,
+    to: getAsset('usdc_eth').formats.fin,
     name: 'USDT → USDC',
     description: 'Swap USDT to USDC (via RUNE)',
     liquidity: 'deep' as const,
@@ -132,16 +132,16 @@ export const EASY_ROUTES = {
 
   // === BTC-Stable Routes ===
   BTC_TO_USDC: {
-    from: 'btc-btc',
-    to: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    from: getAsset('btc').formats.fin,
+    to: getAsset('usdc_eth').formats.fin,
     name: 'BTC → USDC',
     description: 'Swap native Bitcoin to USDC',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   USDC_TO_BTC: {
-    from: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-    to: 'btc-btc',
+    from: getAsset('usdc_eth').formats.fin,
+    to: getAsset('btc').formats.fin,
     name: 'USDC → BTC',
     description: 'Swap USDC to native Bitcoin',
     liquidity: 'deep' as const,
@@ -150,16 +150,16 @@ export const EASY_ROUTES = {
 
   // === ETH-Stable Routes ===
   ETH_TO_USDC: {
-    from: 'eth-eth',
-    to: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    from: getAsset('eth').formats.fin,
+    to: getAsset('usdc_eth').formats.fin,
     name: 'ETH → USDC',
     description: 'Swap ETH to USDC',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   USDC_TO_ETH: {
-    from: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-    to: 'eth-eth',
+    from: getAsset('usdc_eth').formats.fin,
+    to: getAsset('eth').formats.fin,
     name: 'USDC → ETH',
     description: 'Swap USDC to ETH',
     liquidity: 'deep' as const,
@@ -168,16 +168,16 @@ export const EASY_ROUTES = {
 
   // === Cross-Chain Routes ===
   BTC_TO_ETH: {
-    from: 'btc-btc',
-    to: 'eth-eth',
+    from: getAsset('btc').formats.fin,
+    to: getAsset('eth').formats.fin,
     name: 'BTC → ETH',
     description: 'Swap native Bitcoin to native Ethereum',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   ETH_TO_BTC: {
-    from: 'eth-eth',
-    to: 'btc-btc',
+    from: getAsset('eth').formats.fin,
+    to: getAsset('btc').formats.fin,
     name: 'ETH → BTC',
     description: 'Swap native Ethereum to native Bitcoin',
     liquidity: 'deep' as const,
@@ -194,27 +194,27 @@ export type EasyRoute = (typeof EASY_ROUTES)[EasyRouteName];
 
 /**
  * Common asset denoms - use these to avoid typos
- * All denoms are lowercase, hyphen-separated (on-chain format)
+ * All denoms are in FIN format from @vultisig/assets
  */
 export const ASSETS = {
   // Native chain assets
-  RUNE: 'rune',
-  BTC: 'btc-btc',
-  ETH: 'eth-eth',
-  AVAX: 'avax-avax',
-  ATOM: 'gaia-atom',
-  DOGE: 'doge-doge',
-  LTC: 'ltc-ltc',
-  BCH: 'bch-bch',
-  BNB: 'bsc-bnb',
+  RUNE: getAsset('rune').formats.fin,
+  BTC: getAsset('btc').formats.fin,
+  ETH: getAsset('eth').formats.fin,
+  AVAX: getAsset('avax').formats.fin,
+  ATOM: getAsset('atom').formats.fin,
+  DOGE: getAsset('doge').formats.fin,
+  LTC: getAsset('ltc').formats.fin,
+  BCH: getAsset('bch').formats.fin,
+  BNB: getAsset('bnb').formats.fin,
 
   // Stablecoins (Ethereum)
-  USDC: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-  USDT: 'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7',
+  USDC: getAsset('usdc_eth').formats.fin,
+  USDT: getAsset('usdt_eth').formats.fin,
 
   // Rujira native tokens
-  RUJI: 'ruji',
-  TCY: 'tcy',
+  RUJI: getAsset('ruji').formats.fin,
+  TCY: getAsset('tcy').formats.fin,
 } as const;
 
 export type AssetName = keyof typeof ASSETS;
@@ -391,17 +391,20 @@ export function getRoutesSummary(): string {
 
 /**
  * Convert denom to short ticker for display
- * e.g., 'btc-btc' -> 'BTC', 'eth-usdc-0x...' -> 'USDC'
+ * Uses @vultisig/assets registry for accurate ticker lookup
  */
 function denomToTicker(denom: string): string {
-  if (denom === 'rune') return 'RUNE';
-  if (denom === 'tcy') return 'TCY';
-  if (denom === 'ruji') return 'RUJI';
+  // Try to find the asset by FIN format
+  for (const asset of Object.values(KNOWN_ASSETS)) {
+    if (asset.formats.fin === denom) {
+      return asset.name.split(' ')[0].toUpperCase(); // Get first word of name
+    }
+  }
   
-  // Handle chain-asset format: btc-btc -> BTC, eth-usdc-0x... -> USDC
+  // Fallback to parsing denom format
   const parts = denom.split('-');
   if (parts.length >= 2) {
-    return parts[1].toUpperCase().split('-')[0]; // Get second part, remove contract addr
+    return parts[1].toUpperCase().split('-')[0];
   }
   
   return denom.toUpperCase();

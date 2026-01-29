@@ -30,6 +30,7 @@
 
 import { Coin } from '@cosmjs/proto-signing';
 import { fromBech32 } from '@cosmjs/encoding';
+import { Amount, getAsset, findAssetByFormat } from '@vultisig/assets';
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
 import { getAssetInfo } from '../config';
@@ -171,18 +172,18 @@ export class RujiraSwap {
       }
     }
 
-    // Get asset info
-    const fromAssetInfo = getAssetInfo(params.fromAsset);
-    const toAssetInfo = getAssetInfo(params.toAsset);
+    // Get asset info using @vultisig/assets
+    const fromAsset = findAssetByFormat(params.fromAsset, 'fin');
+    const toAsset = findAssetByFormat(params.toAsset, 'fin');
 
-    if (!fromAssetInfo) {
+    if (!fromAsset) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
         `Unknown asset: ${params.fromAsset}`
       );
     }
 
-    if (!toAssetInfo) {
+    if (!toAsset) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
         `Unknown asset: ${params.toAsset}`
@@ -194,7 +195,7 @@ export class RujiraSwap {
 
     // Simulate the swap and fetch orderbook in parallel
     const [simulation, orderbook] = await Promise.all([
-      this.client.simulateSwap(contractAddress, fromAssetInfo.denom, params.amount),
+      this.client.simulateSwap(contractAddress, fromAsset.formats.fin, params.amount),
       this.client.orderbook.getOrderBook(contractAddress).catch(() => null),
     ]);
 
@@ -283,9 +284,9 @@ export class RujiraSwap {
       await this.validateBalance(quote.params.fromAsset, quote.params.amount);
     }
 
-    // Get asset info for denom
-    const fromAssetInfo = getAssetInfo(quote.params.fromAsset);
-    if (!fromAssetInfo) {
+    // Get asset info using @vultisig/assets
+    const fromAsset = findAssetByFormat(quote.params.fromAsset, 'fin');
+    if (!fromAsset) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
         `Unknown asset: ${quote.params.fromAsset}`
@@ -308,7 +309,7 @@ export class RujiraSwap {
 
     // Build funds to send
     const funds: Coin[] = [{
-      denom: fromAssetInfo.denom,
+      denom: fromAsset.formats.fin,
       amount: quote.params.amount,
     }];
 
@@ -354,8 +355,8 @@ export class RujiraSwap {
   }> {
     const quote = await this.getQuote(params);
     
-    const fromAssetInfo = getAssetInfo(params.fromAsset);
-    if (!fromAssetInfo) {
+    const fromAsset = findAssetByFormat(params.fromAsset, 'fin');
+    if (!fromAsset) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
         `Unknown asset: ${params.fromAsset}`
@@ -377,7 +378,7 @@ export class RujiraSwap {
     };
 
     const funds: Coin[] = [{
-      denom: fromAssetInfo.denom,
+      denom: fromAsset.formats.fin,
       amount: params.amount,
     }];
 
@@ -823,45 +824,42 @@ export class RujiraSwap {
   /**
    * Validate user has sufficient balance for a swap
    *
-   * @param fromAsset - Asset identifier (e.g., "THOR.RUNE")
+   * @param fromAsset - Asset FIN format identifier
    * @param amount - Amount required in base units
    * @throws RujiraError with INSUFFICIENT_BALANCE if balance is too low
    */
   private async validateBalance(fromAsset: string, amount: string): Promise<void> {
-    // Get asset info for denom
-    const assetInfo = getAssetInfo(fromAsset);
-    if (!assetInfo) {
+    // Get asset info using @vultisig/assets
+    const asset = findAssetByFormat(fromAsset, 'fin');
+    if (!asset) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
         `Unknown asset: ${fromAsset}`
       );
     }
 
-    // Extract ticker from asset string (e.g., "THOR.RUNE" -> "RUNE")
-    const ticker = fromAsset.includes('.')
-      ? fromAsset.split('.')[1]?.split('-')[0] || fromAsset
-      : fromAsset;
+    const ticker = asset.name.split(' ')[0].toUpperCase();
 
     // Get user address
     const address = await this.client.getAddress();
 
     // Query balance
-    const balance = await this.client.getBalance(address, assetInfo.denom);
+    const balance = await this.client.getBalance(address, asset.formats.fin);
 
-    // Compare
-    const required = BigInt(amount);
-    const available = BigInt(balance.amount || '0');
+    // Compare amounts using Amount class for proper decimal handling
+    const required = Amount.fromRaw(BigInt(amount), asset, 'fin');
+    const available = Amount.fromRaw(BigInt(balance.amount || '0'), asset, 'fin');
 
-    if (available < required) {
+    if (available.raw < required.raw) {
       throw new RujiraError(
         RujiraErrorCode.INSUFFICIENT_BALANCE,
-        `Insufficient ${ticker} balance. Required: ${amount}, Available: ${balance.amount}`,
+        `Insufficient ${ticker} balance. Required: ${required.toHuman()}, Available: ${available.toHuman()}`,
         {
           asset: fromAsset,
-          denom: assetInfo.denom,
+          denom: asset.formats.fin,
           required: amount,
           available: balance.amount,
-          shortfall: (required - available).toString(),
+          shortfall: (required.raw - available.raw).toString(),
         }
       );
     }
