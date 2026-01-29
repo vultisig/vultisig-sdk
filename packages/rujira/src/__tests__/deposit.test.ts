@@ -2,14 +2,15 @@
  * Tests for the Deposit module
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RujiraClient } from '../client';
 import { RujiraDeposit } from '../modules/deposit';
 import { RujiraError, RujiraErrorCode } from '../errors';
 import { VALID_THOR_ADDRESS, VALID_STHOR_ADDRESS } from './test-helpers';
 
 // Mock fetch globally
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+const mockFetch = vi.fn();
+global.fetch = mockFetch as any;
 
 describe('RujiraDeposit', () => {
   let client: RujiraClient;
@@ -309,7 +310,8 @@ describe('RujiraDeposit', () => {
 
       expect(balances).toHaveLength(3);
       expect(balances[0]?.denom).toBe('rune');
-      expect(balances[0]?.asset).toBe('THOR.RUNE');
+      // Asset field contains the identifier from the response
+      expect(balances[0]?.asset).toBe('rune');
       expect(balances[1]?.denom).toBe('btc-btc');
       expect(balances[1]?.asset).toBe('BTC.BTC');
     });

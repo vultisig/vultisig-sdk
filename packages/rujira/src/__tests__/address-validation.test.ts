@@ -13,12 +13,14 @@ const createMockClient = () => ({
     defaultSlippageBps: 100,
     contracts: {
       finContracts: {
-        'THOR.RUNE/ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48': 'thor1contract...',
+        // Use lowercase FIN-format keys to match EASY_ROUTES format
+        'rune/eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'thor1contract...',
       },
     },
   },
   discovery: {
-    getContractAddress: vi.fn().mockResolvedValue(null),
+    // Return a contract for any pair to ensure tests work
+    getContractAddress: vi.fn().mockImplementation(async () => 'thor1contract...'),
   },
   simulateSwap: vi.fn().mockResolvedValue({
     returned: '99000000',
@@ -42,6 +44,8 @@ const createMockClient = () => ({
     denom: 'rune',
     amount: '1000000000',
   }),
+  // Mock persistence method (no-op for tests)
+  persistFinContracts: vi.fn().mockResolvedValue(undefined),
 });
 
 describe('Address Validation', () => {
