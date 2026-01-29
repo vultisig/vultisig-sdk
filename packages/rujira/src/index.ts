@@ -45,7 +45,7 @@ export type {
   EasyRouteName,
   EasyRoute,
   AssetName,
-  Asset,
+  EasyAsset,
   EasySwapRequest,
   EasyQuoteResponse,
 } from './easy-routes';

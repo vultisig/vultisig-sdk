@@ -335,7 +335,7 @@ export class RujiraClient {
   /**
    * Get all balances for an address
    */
-  async getAllBalances(address: string): Promise<Coin[]> {
+  async getAllBalances(address: string): Promise<readonly Coin[]> {
     this.ensureConnected();
 
     if (!this.stargateClient) {
