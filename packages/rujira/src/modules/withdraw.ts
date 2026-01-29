@@ -5,7 +5,7 @@
 
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
-import { getAsset } from '@vultisig/assets';
+import { findAssetByFormat } from '@vultisig/assets';
 import type { Asset } from '@vultisig/assets';
 import type { Coin } from '@cosmjs/proto-signing';
 
@@ -149,22 +149,15 @@ export class RujiraWithdraw {
     const { chain } = this.parseAsset(params.asset);
     
     // Resolve FIN denom for secured asset
-    let denom = params.asset.toLowerCase().replace('.', '-');
-    try {
-      const assetData = getAsset(params.asset);
-      if (isFinAsset(assetData)) {
-        denom = assetData.formats.fin;
-      }
-    } catch {
-      // keep fallback
-    }
-
-    if (!denom) {
+    const assetData = findAssetByFormat(params.asset);
+    if (!isFinAsset(assetData)) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
         `Unknown asset: ${params.asset}`
       );
     }
+
+    const denom = assetData.formats.fin;
 
     // Validate L1 address format
     this.validateL1Address(chain, params.l1Address);

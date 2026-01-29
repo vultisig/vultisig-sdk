@@ -3,8 +3,14 @@
  * @module utils/format
  */
 
-import { getAsset } from '@vultisig/assets';
+import { findAssetByFormat } from '@vultisig/assets';
 import type { SwapRequest } from '../types';
+
+// Helper to get decimals from asset format
+function getAssetDecimals(asset: string): number | null {
+  const found = findAssetByFormat(asset);
+  return found?.decimals.fin ?? null;
+}
 
 /**
  * Convert human-readable amount to base units
@@ -65,11 +71,8 @@ export function formatAmount(
   asset: string,
   maxDecimals = 6
 ): string {
-  let decimals: number;
-  try {
-    const a: any = getAsset(asset);
-    decimals = a?.decimals?.fin ?? 8;
-  } catch {
+  const decimals = getAssetDecimals(asset);
+  if (decimals === null) {
     return baseUnits.toString();
   }
   
@@ -97,11 +100,8 @@ export function formatAmount(
  * @returns Base units
  */
 export function parseAmount(input: string, asset: string): string {
-  let decimals: number;
-  try {
-    const a: any = getAsset(asset);
-    decimals = a?.decimals?.fin ?? 8;
-  } catch {
+  const decimals = getAssetDecimals(asset);
+  if (decimals === null) {
     throw new Error(`Unknown asset: ${asset}`);
   }
   
