@@ -27,6 +27,7 @@ import {
   executePortfolio,
   executeRename,
   executeSend,
+  executeExecute,
   executeServer,
   executeSignBytes,
   executeSwap,
@@ -477,6 +478,44 @@ program
             to,
             amount,
             tokenId: options.token,
+            memo: options.memo,
+            yes: options.yes,
+            password: options.password,
+          })
+        } catch (err: any) {
+          if (err.message === 'Transaction cancelled by user') {
+            warn('\nx Transaction cancelled')
+            return
+          }
+          throw err
+        }
+      }
+    )
+  )
+
+// Command: Execute CosmWasm contract (for Rujira FIN swaps, etc.)
+program
+  .command('execute <chain> <contract> <msg>')
+  .description('Execute a CosmWasm smart contract (THORChain, MayaChain)')
+  .option('--funds <funds>', 'Funds to send with execution (format: "denom:amount" or "denom:amount,denom2:amount2")')
+  .option('--memo <memo>', 'Transaction memo')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
+  .action(
+    withExit(
+      async (
+        chainStr: string,
+        contract: string,
+        msg: string,
+        options: { funds?: string; memo?: string; yes?: boolean; password?: string }
+      ) => {
+        const context = await init(program.opts().vault, options.password)
+        try {
+          await executeExecute(context, {
+            chain: findChainByName(chainStr) || (chainStr as Chain),
+            contract,
+            msg,
+            funds: options.funds,
             memo: options.memo,
             yes: options.yes,
             password: options.password,
