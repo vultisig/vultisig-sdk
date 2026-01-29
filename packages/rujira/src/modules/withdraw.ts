@@ -1,9 +1,17 @@
 /**
  * Withdraw module for withdrawing secured assets to L1 chains
  * 
- * Withdrawals are executed via THORChain's native MsgDeposit mechanism.
- * The SDK builds a keysign payload with isDeposit=true and the withdrawal memo,
- * then uses the Vultisig vault to sign and broadcast the transaction.
+ * This module provides:
+ * - `prepare()`: Build withdrawal parameters (memo, fees, validation)
+ * - `execute()`: Execute the withdrawal (currently limited - see note)
+ * 
+ * **IMPORTANT**: Direct execution of withdrawals via SDK is currently limited.
+ * THORChain's MsgDeposit requires Trust Wallet Core for proper encoding,
+ * which is not available in the pure JS SDK.
+ * 
+ * For withdrawals, we recommend:
+ * 1. Use `prepare()` to get withdrawal details
+ * 2. Execute via Vultisig mobile app or web wallet
  * 
  * @module modules/withdraw
  */
@@ -129,11 +137,19 @@ function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault 
 
 /**
  * THORChain account info response structure
+ * API returns: { result: { value: { account_number, sequence } } }
+ * or sometimes: { account: { account_number, sequence } }
  */
 interface AccountInfo {
-  account: {
-    account_number: string;
-    sequence: string;
+  result?: {
+    value?: {
+      account_number?: string;
+      sequence?: string;
+    };
+  };
+  account?: {
+    account_number?: string;
+    sequence?: string;
   };
 }
 
@@ -225,23 +241,25 @@ export class RujiraWithdraw {
   /**
    * Execute a prepared withdrawal via THORChain MsgDeposit
    * 
-   * This method builds a keysign payload with isDeposit=true and the withdrawal memo,
-   * then uses the Vultisig vault to sign and broadcast the transaction.
+   * Withdrawals are executed by sending a MsgDeposit with the withdrawal memo
+   * (-:ASSET:L1_ADDRESS) to THORChain. The SDK builds a keysign payload with
+   * isDeposit=true and uses the Vultisig vault's MPC signing flow.
    * 
-   * The withdrawal triggers THORChain's native withdraw mechanism:
-   * - A MsgDeposit with the memo `-:ASSET:L1_ADDRESS` is sent
-   * - THORChain processes the withdrawal and sends L1 assets to the destination
+   * This triggers THORChain's native withdrawal mechanism:
+   * - THORChain processes the MsgDeposit
+   * - Bifröst nodes execute the L1 outbound transaction
+   * - L1 tokens are sent to the destination address
    * 
    * @param prepared - Prepared withdrawal from `prepare()`
    * @returns Withdrawal result with transaction hash
-   * @throws {RujiraError} If signer is missing or doesn't support vault operations
+   * @throws {RujiraError} If signer is missing or not a VultisigRujiraProvider
    * 
    * @example
    * ```typescript
    * const prepared = await client.withdraw.prepare({
-   *   asset: 'BTC.BTC',
+   *   asset: 'ETH.USDC-0x...',
    *   amount: '1000000',
-   *   l1Address: 'bc1q...'
+   *   l1Address: '0x...'
    * });
    * 
    * const result = await client.withdraw.execute(prepared);
@@ -256,28 +274,31 @@ export class RujiraWithdraw {
       );
     }
 
-    // Get the signer and check if it's a VultisigRujiraProvider with vault access
-    const signer = this.client['signer'];
-    
+    // Get the signer from client (private access via type assertion)
+    const clientInternal = this.client as unknown as { signer: unknown };
+    const signer = clientInternal.signer;
+
+    // Validate signer has vault access (VultisigRujiraProvider)
     if (!hasVaultAccess(signer)) {
       throw new RujiraError(
         RujiraErrorCode.MISSING_SIGNER,
-        'Withdrawal execution requires a VultisigRujiraProvider signer with vault access. ' +
-        'The signer must implement getVault() to support MsgDeposit transactions.'
+        'Withdrawal requires a VultisigRujiraProvider signer with vault access. ' +
+        'Standard Cosmos signers are not supported for MsgDeposit operations.'
       );
     }
 
-    const vault = signer.getVault();
-    const senderAddress = await this.client.getAddress();
-
     try {
-      // Fetch account info for transaction parameters
-      const accountInfo = await this.getAccountInfo(senderAddress);
-
-      // Get network fee from THORNode (or use default)
-      const fee = await this.getNetworkFee();
-
-      // Build the keysign payload for the withdrawal
+      // Get the Vultisig vault
+      const vault = signer.getVault();
+      const senderAddress = await vault.address('THORChain');
+      
+      // Get account info and fee
+      const [accountInfo, fee] = await Promise.all([
+        this.getAccountInfo(senderAddress),
+        this.getNetworkFee(),
+      ]);
+      
+      // Build the keysign payload with isDeposit=true
       const keysignPayload = await this.buildWithdrawalKeysignPayload({
         vault,
         senderAddress,
@@ -285,18 +306,18 @@ export class RujiraWithdraw {
         accountInfo,
         fee,
       });
-
-      // Extract message hashes for signing
+      
+      // Extract message hashes for MPC signing
       const messageHashes = await vault.extractMessageHashes(keysignPayload);
-
-      // Sign the transaction
+      
+      // Sign with MPC
       const signature = await vault.sign({
         transaction: keysignPayload,
         chain: 'THORChain',
         messageHashes,
       });
-
-      // Broadcast the transaction
+      
+      // Broadcast the signed transaction
       const txHash = await vault.broadcastTx({
         chain: 'THORChain',
         keysignPayload,
@@ -320,8 +341,7 @@ export class RujiraWithdraw {
       throw new RujiraError(
         RujiraErrorCode.CONTRACT_ERROR,
         `Withdrawal execution failed: ${errorMsg}. ` +
-        `To withdraw manually, send ${prepared.amount} ${prepared.denom} ` +
-        `via THORChain MsgDeposit with memo: ${prepared.memo}`,
+        `To withdraw manually, use the Vultisig mobile app with memo: ${prepared.memo}`,
         { originalError: errorMsg, prepared }
       );
     }
@@ -330,8 +350,18 @@ export class RujiraWithdraw {
   /**
    * Build a keysign payload for withdrawal (MsgDeposit with isDeposit=true)
    * 
-   * This constructs the exact payload format expected by the Vultisig SDK
-   * for THORChain deposit/withdrawal transactions.
+   * KNOWN LIMITATION: The core SDK's signing inputs resolver currently maps
+   * all THORChain deposits to the native chain (THOR.X) instead of the L1 
+   * chain (ETH.X, BTC.X). This means withdrawals will fail with "insufficient funds"
+   * because the asset name is incorrect.
+   * 
+   * This implementation demonstrates the correct flow and will work once the
+   * core SDK is updated to properly handle secured L1 assets in MsgDeposit.
+   * 
+   * The approach:
+   * 1. Use prepareSignDirectTx to get a base payload with derived public key
+   * 2. Build the keysign payload with isDeposit=true
+   * 3. The SDK handles signing and broadcasting
    */
   private async buildWithdrawalKeysignPayload(params: {
     vault: VultisigVault;
@@ -342,22 +372,40 @@ export class RujiraWithdraw {
   }): Promise<KeysignPayload> {
     const { vault, senderAddress, prepared, accountInfo, fee } = params;
 
-    // Get the secured asset ticker (e.g., 'BTC' from 'BTC.BTC' or the denom)
-    const ticker = this.extractTicker(prepared.asset, prepared.denom);
+    // Parse the asset to get the L1 chain and full symbol
+    const { chain: l1Chain, symbol: fullSymbol } = this.parseAsset(prepared.asset);
+    const ticker = fullSymbol.split('-')[0] || fullSymbol;
 
-    // Build the keysign payload structure matching the protobuf schema
-    // This is compatible with iOS/Android/Windows signing
-    const keysignPayload: KeysignPayload = {
-      // Coin info - the secured asset being spent
-      coin: {
+    const basePayload = await vault.prepareSignDirectTx(
+      {
         chain: 'THORChain',
-        ticker: ticker,
+        coin: {
+          chain: 'THORChain',
+          address: senderAddress,
+          decimals: THORCHAIN_DECIMALS,
+          ticker: 'RUNE',
+        },
+        bodyBytes: Buffer.from('dummy').toString('base64'),
+        authInfoBytes: Buffer.from('dummy').toString('base64'),
+        chainId: 'thorchain-1',
+        accountNumber: accountInfo.accountNumber,
+        memo: prepared.memo,
+      },
+      { skipChainSpecificFetch: true }
+    );
+
+    const derivedPublicKey = basePayload.coin?.hexPublicKey || vault.publicKeys.ecdsa;
+
+    const keysignPayload: KeysignPayload = {
+      coin: {
+        chain: l1Chain,
+        ticker: fullSymbol,
         address: senderAddress,
-        contractAddress: '', // No contract for native assets
+        contractAddress: '',
         decimals: THORCHAIN_DECIMALS,
         priceProviderId: '',
-        isNativeToken: false, // Secured assets are not native RUNE
-        hexPublicKey: vault.publicKeys.ecdsa,
+        isNativeToken: false,
+        hexPublicKey: derivedPublicKey,
         logo: '',
       },
       
@@ -384,8 +432,8 @@ export class RujiraWithdraw {
       
       // Vault identification
       vaultPublicKeyEcdsa: vault.publicKeys.ecdsa,
-      vaultLocalPartyId: '', // Will be filled by vault
-      libType: 'GG20', // Default MPC library type
+      vaultLocalPartyId: basePayload.vaultLocalPartyId || '', // Use from base payload
+      libType: basePayload.libType || 'GG20', // Use from base payload
       
       // Empty arrays for unused fields
       utxoInfo: [],
@@ -412,9 +460,18 @@ export class RujiraWithdraw {
       
       const data = await response.json() as AccountInfo;
       
+      // Handle different API response structures
+      // Nine Realms returns: { result: { value: { account_number, sequence } } }
+      // Some nodes return: { account: { account_number, sequence } }
+      const accountData = data.result?.value || data.account;
+      
+      if (!accountData) {
+        throw new Error('Invalid account response structure');
+      }
+      
       return {
-        accountNumber: data.account.account_number || '0',
-        sequence: data.account.sequence || '0',
+        accountNumber: accountData.account_number || '0',
+        sequence: accountData.sequence || '0',
       };
     } catch (error) {
       throw new RujiraError(
