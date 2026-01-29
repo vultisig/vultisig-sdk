@@ -4,6 +4,26 @@ TypeScript SDK for integrating Vultisig with [Rujira DEX](https://rujira.network
 
 > ⚠️ **Alpha** - API may change. Not yet published to npm.
 
+## Rujira API Authentication (Recommended)
+
+Rujira's GraphQL API can **rate limit unauthenticated clients** (HTTP 429). For agentic / automated usage you should pass an API token.
+
+- Pass the token via `RujiraClientOptions.apiKey`
+- It will be sent as: `Authorization: Bearer <token>`
+
+```ts
+import { RujiraClient } from '@vultisig/rujira';
+
+const client = new RujiraClient({
+  network: 'mainnet',
+  apiKey: process.env.RUJIRA_API_KEY, // optional but recommended
+});
+
+await client.connect();
+```
+
+To obtain a token, request one from the Rujira team via official support channels.
+
 ## Asset Notation
 
 This SDK uses **on-chain denominations** throughout for consistency and reliability:
@@ -151,6 +171,8 @@ console.log(`Best ask: ${orderbook.asks[0]?.price}`);
 ### Full Client with Vultisig Signer (Execute Trades)
 
 For live trading with your Vultisig vault:
+
+- Working runnable script: `packages/rujira/examples/vultisig-fin-swap.ts`
 
 ```typescript
 import { RujiraClient, ASSETS } from '@vultisig/rujira';
