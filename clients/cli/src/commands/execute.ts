@@ -8,12 +8,6 @@
  */
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
-import { Registry } from '@cosmjs/proto-signing'
-import { MsgExecuteContract } from 'cosmjs-types/cosmwasm/wasm/v1/tx'
-import { TxBody, AuthInfo, SignDoc, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
-import { SignMode } from 'cosmjs-types/cosmos/tx/signing/v1beta1/signing'
-import { PubKey } from 'cosmjs-types/cosmos/crypto/secp256k1/keys'
-import { toBase64, fromBase64, toHex, fromHex } from '@cosmjs/encoding'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
@@ -46,18 +40,18 @@ interface ParsedFund {
 /**
  * Chain-specific configuration for Cosmos chains
  */
-const COSMOS_CHAIN_CONFIG: Record<string, { chainId: string; rpcEndpoint: string; prefix: string; denom: string }> = {
+const COSMOS_CHAIN_CONFIG: Record<string, { chainId: string; prefix: string; denom: string; gasLimit: string }> = {
   THORChain: {
     chainId: 'thorchain-1',
-    rpcEndpoint: 'https://rpc.ninerealms.com',
     prefix: 'thor',
     denom: 'rune',
+    gasLimit: '500000',
   },
   MayaChain: {
     chainId: 'mayachain-mainnet-v1',
-    rpcEndpoint: 'https://tendermint.mayachain.info',
     prefix: 'maya',
     denom: 'cacao',
+    gasLimit: '500000',
   },
 }
 
@@ -75,92 +69,6 @@ function parseFunds(fundsStr?: string): ParsedFund[] {
     }
     return { denom: denom.toLowerCase(), amount }
   })
-}
-
-/**
- * Fetch account info from chain
- */
-async function fetchAccountInfo(rpcEndpoint: string, address: string): Promise<{ accountNumber: string; sequence: string }> {
-  const response = await fetch(`${rpcEndpoint.replace(':26657', '')}/cosmos/auth/v1beta1/accounts/${address}`)
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch account info: ${response.status}`)
-  }
-  
-  const data = await response.json() as { account: { account_number: string; sequence: string } }
-  
-  return {
-    accountNumber: data.account.account_number || '0',
-    sequence: data.account.sequence || '0',
-  }
-}
-
-/**
- * Build MsgExecuteContract transaction
- */
-function buildExecuteContractTx(
-  sender: string,
-  contract: string,
-  msg: object,
-  funds: ParsedFund[],
-  memo?: string
-): { bodyBytes: Uint8Array; typeUrl: string } {
-  // Create MsgExecuteContract
-  const executeMsg: MsgExecuteContract = {
-    sender,
-    contract,
-    msg: new TextEncoder().encode(JSON.stringify(msg)),
-    funds: funds.map(f => ({ denom: f.denom, amount: f.amount })),
-  }
-
-  // Encode message
-  const msgAny = {
-    typeUrl: '/cosmwasm.wasm.v1.MsgExecuteContract',
-    value: MsgExecuteContract.encode(executeMsg).finish(),
-  }
-
-  // Build TxBody
-  const txBody = TxBody.fromPartial({
-    messages: [msgAny],
-    memo: memo || '',
-  })
-
-  return {
-    bodyBytes: TxBody.encode(txBody).finish(),
-    typeUrl: msgAny.typeUrl,
-  }
-}
-
-/**
- * Build AuthInfo for signing
- */
-function buildAuthInfo(pubKey: Uint8Array, sequence: string, gasLimit: number = 500000): Uint8Array {
-  const pubKeyProto = PubKey.fromPartial({
-    key: pubKey,
-  })
-
-  const authInfo = AuthInfo.fromPartial({
-    signerInfos: [
-      {
-        publicKey: {
-          typeUrl: '/cosmos.crypto.secp256k1.PubKey',
-          value: PubKey.encode(pubKeyProto).finish(),
-        },
-        modeInfo: {
-          single: {
-            mode: SignMode.SIGN_MODE_DIRECT,
-          },
-        },
-        sequence: BigInt(sequence),
-      },
-    ],
-    fee: {
-      amount: [{ denom: 'rune', amount: '0' }], // THORChain has no fees
-      gasLimit: BigInt(gasLimit),
-    },
-  })
-
-  return AuthInfo.encode(authInfo).finish()
 }
 
 /**
@@ -190,12 +98,12 @@ export async function executeExecute(ctx: CommandContext, params: ExecuteParams)
 }
 
 /**
- * Execute contract transaction with full flow
+ * Execute contract transaction with full flow using SignAmino
  */
 async function executeContractTransaction(
   vault: VaultBase,
   params: ExecuteParams,
-  chainConfig: { chainId: string; rpcEndpoint: string; prefix: string; denom: string },
+  chainConfig: { chainId: string; prefix: string; denom: string; gasLimit: string },
   msg: object,
   funds: ParsedFund[]
 ): Promise<TransactionResult> {
@@ -204,18 +112,6 @@ async function executeContractTransaction(
 
   const address = await vault.address(params.chain)
   
-  // Fetch account info
-  const accountInfo = await fetchAccountInfo(chainConfig.rpcEndpoint, address)
-
-  // Build transaction
-  const { bodyBytes, typeUrl } = buildExecuteContractTx(
-    address,
-    params.contract,
-    msg,
-    funds,
-    params.memo
-  )
-
   prepareSpinner.succeed('Transaction prepared')
 
   // 2. Show preview
@@ -247,7 +143,7 @@ async function executeContractTransaction(
   // Pre-unlock vault
   await ensureVaultUnlocked(vault, params.password)
 
-  // 4. Sign transaction using Vultisig MPC
+  // 4. Sign transaction using Vultisig MPC with SignAmino
   const isSecureVault = vault.type === 'secure'
   const signSpinner = createSpinner(isSecureVault ? 'Preparing secure signing session...' : 'Signing transaction...')
 
@@ -281,7 +177,7 @@ async function executeContractTransaction(
   }
 
   try {
-    // Get the chain-derived public key
+    // Build coin info for the chain
     const coin = {
       chain: params.chain,
       address,
@@ -289,18 +185,31 @@ async function executeContractTransaction(
       ticker: chainConfig.denom.toUpperCase(),
     }
 
-    // Build AuthInfo with proper public key
-    // We'll get the pubkey from the keysign payload
-    const authInfoBytes = buildAuthInfo(new Uint8Array(33), accountInfo.sequence)
+    // Build MsgExecuteContract in Amino format
+    // The type URL follows standard CosmWasm naming convention
+    const executeContractMsg = {
+      type: 'wasm/MsgExecuteContract',
+      value: JSON.stringify({
+        sender: address,
+        contract: params.contract,
+        msg: msg,
+        funds: funds.map(f => ({ denom: f.denom, amount: f.amount })),
+      }),
+    }
 
-    // Prepare signing payload using Vultisig SDK's prepareSignDirectTx
-    const keysignPayload = await vault.prepareSignDirectTx({
+    // Build fee (THORChain has zero fees for CosmWasm)
+    const fee = {
+      amount: [{ denom: chainConfig.denom, amount: '0' }],
+      gas: chainConfig.gasLimit,
+    }
+
+    // Prepare signing payload using Vultisig SDK's prepareSignAminoTx
+    const keysignPayload = await vault.prepareSignAminoTx({
       chain: params.chain,
       coin,
-      bodyBytes: toBase64(bodyBytes),
-      authInfoBytes: toBase64(authInfoBytes),
-      chainId: chainConfig.chainId,
-      accountNumber: accountInfo.accountNumber,
+      msgs: [executeContractMsg],
+      fee,
+      memo: params.memo,
     })
 
     // Extract message hashes and sign
