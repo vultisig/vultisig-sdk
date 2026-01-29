@@ -212,25 +212,7 @@ function denomToTicker(denom: string): string {
 }
 
 // ============================================================================
-// LEGACY COMPATIBILITY (deprecated, use @vultisig/assets)
+// LEGACY COMPATIBILITY
 // ============================================================================
-
-/**
- * @deprecated Use @vultisig/assets instead. Will be removed in v1.0.
- */
-export const SECURED_ASSETS: Record<string, { decimals: number; chainDecimals: number; ticker: string }> = {};
-
-/**
- * @deprecated Use getAsset from @vultisig/assets instead. Will be removed in v1.0.
- */
-export function getAssetInfo(asset: string): { denom: string; decimals: number } | undefined {
-  const normalized = asset.toLowerCase();
-  
-  // Try to find using @vultisig/assets
-  const assetInfo = findAssetByFormat(normalized, 'fin');
-  if (assetInfo) {
-    return { denom: normalized, decimals: assetInfo.decimals.fin };
-  }
-  
-  return { denom: normalized, decimals: 6 }; // FIN default
-}
+// Deprecated exports removed in favor of @vultisig/assets
+// Use: import { getAsset, findAssetByFormat } from '@vultisig/assets';
