@@ -6,7 +6,23 @@
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
 import { getAsset } from '@vultisig/assets';
+import type { Asset } from '@vultisig/assets';
 import type { Coin } from '@cosmjs/proto-signing';
+
+/**
+ * Type guard to check if an object is a valid Asset with FIN format
+ * @internal
+ */
+function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
+  if (!obj || typeof obj !== 'object') return false;
+  const asset = obj as Partial<Asset>;
+  return (
+    typeof asset.formats === 'object' &&
+    asset.formats !== null &&
+    typeof asset.formats.fin === 'string' &&
+    asset.formats.fin.length > 0
+  );
+}
 
 // ============================================================================
 // TYPES
@@ -135,8 +151,10 @@ export class RujiraWithdraw {
     // Resolve FIN denom for secured asset
     let denom = params.asset.toLowerCase().replace('.', '-');
     try {
-      const a: any = getAsset(params.asset);
-      if (a?.formats?.fin) denom = a.formats.fin;
+      const assetData = getAsset(params.asset);
+      if (isFinAsset(assetData)) {
+        denom = assetData.formats.fin;
+      }
     } catch {
       // keep fallback
     }
@@ -178,7 +196,21 @@ export class RujiraWithdraw {
 
   /**
    * Execute a prepared withdrawal
-   * Requires a signer to be configured
+   * 
+   * **⚠️ WARNING: This method is not fully implemented yet.**
+   * 
+   * Currently, this method will throw an error with instructions for manual withdrawal.
+   * Native THORChain MsgDeposit integration is pending.
+   * 
+   * To withdraw manually:
+   * 1. Use the `prepare()` method to get withdrawal details
+   * 2. Send a THORChain transaction with the memo from `prepared.memo`
+   * 3. Include the funds specified in `prepared.funds`
+   * 
+   * @experimental This method is incomplete and should not be used in production.
+   * @param prepared - Prepared withdrawal from `prepare()`
+   * @returns Withdrawal result (currently always throws)
+   * @throws {RujiraError} Always throws with manual withdrawal instructions
    */
   async execute(prepared: PreparedWithdraw): Promise<WithdrawResult> {
     if (!this.client.canSign()) {
