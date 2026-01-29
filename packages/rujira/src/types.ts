@@ -49,6 +49,24 @@ export interface TradingPair {
 }
 
 // ============================================================================
+// PRICE IMPACT TYPES
+// ============================================================================
+
+/**
+ * Structured price impact information
+ */
+export interface PriceImpact {
+  /** Exact price impact percentage (null if cannot be calculated) */
+  value: number | null;
+  /** Whether this is an estimate (true if orderbook data unavailable) */
+  estimated: boolean;
+  /** Estimated range [min, max] when exact value unavailable */
+  range?: [number, number];
+  /** Human-readable display string */
+  display: string;
+}
+
+// ============================================================================
 // QUOTE TYPES
 // ============================================================================
 
