@@ -7,9 +7,11 @@
 
 // Core types and interfaces
 export type { Asset, Layer, Quote } from './asset.js';
+import type { Layer } from './asset.js';
 
 // Amount class and conversion utilities
 export { Amount } from './amount.js';
+import { Amount } from './amount.js';
 export {
   nativeToThorchain,
   thorchainToNative,
@@ -26,6 +28,7 @@ export {
   getAllAssets,
   findAssetByFormat
 } from './registry.js';
+import { getAsset } from './registry.js';
 
 // Format converters
 export {
@@ -43,6 +46,7 @@ export {
   convertFormat,
   detectFormat
 } from './formats.js';
+import { parseAsset } from './formats.js';
 
 // Swap router
 export { SwapRouter } from './router.js';
