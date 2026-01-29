@@ -6,7 +6,7 @@
 import { Coin } from '@cosmjs/proto-signing';
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
-import { getAsset } from '@vultisig/assets';
+import { findAssetByFormat } from '@vultisig/assets';
 import type {
   TradingPair,
   LimitOrderParams,
@@ -139,7 +139,13 @@ export class RujiraOrderbook {
    * @internal
    */
   private denomToAsset(denom: string): string {
-    // Common denom mappings
+    // Try to look up in known assets first
+    const asset = findAssetByFormat(denom);
+    if (asset) {
+      return asset.formats.thorchain;
+    }
+
+    // Common denom mappings (fallback)
     const denomMap: Record<string, string> = {
       'rune': 'THOR.RUNE',
       'btc-btc': 'BTC.BTC',
@@ -548,16 +554,12 @@ export class RujiraOrderbook {
 
     // Helper to get asset info from @vultisig/assets
     const getAssetInfo = (assetId: string): { denom: string; decimals: number } | undefined => {
-      try {
-        const asset = getAsset(assetId);
-        if (!asset?.formats?.fin) return undefined;
-        return { 
-          denom: asset.formats.fin, 
-          decimals: asset.decimals?.fin ?? 8 
-        };
-      } catch {
-        return undefined;
-      }
+      const asset = findAssetByFormat(assetId);
+      if (!asset?.formats?.fin) return undefined;
+      return { 
+        denom: asset.formats.fin, 
+        decimals: asset.decimals?.fin ?? 8 
+      };
     };
 
     // If pair is a TradingPair object with base/quote info, use it directly

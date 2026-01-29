@@ -5,7 +5,7 @@
 
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors';
-import { getAsset } from '@vultisig/assets';
+import { findAssetByFormat } from '@vultisig/assets';
 import type { Asset } from '@vultisig/assets';
 
 /**
@@ -197,13 +197,9 @@ export class RujiraDeposit {
 
     // Determine resulting secured denom on THORChain (FIN denom when known)
     let resultingDenom = params.fromAsset.toLowerCase().replace('.', '-');
-    try {
-      const assetData = getAsset(params.fromAsset);
-      if (isFinAsset(assetData)) {
-        resultingDenom = assetData.formats.fin;
-      }
-    } catch {
-      // keep fallback
+    const assetData = findAssetByFormat(params.fromAsset);
+    if (isFinAsset(assetData)) {
+      resultingDenom = assetData.formats.fin;
     }
 
     // Build warning if applicable
@@ -280,16 +276,14 @@ export class RujiraDeposit {
   async getBalance(thorAddress: string, asset: string): Promise<SecuredBalance | null> {
     const balances = await this.getBalances(thorAddress);
 
-    let denom = asset.toLowerCase().replace('.', '-');
-    try {
-      const assetData = getAsset(asset);
-      if (isFinAsset(assetData)) {
-        denom = assetData.formats.fin;
-      }
-    } catch {
-      // keep fallback
+    // Try to find by FIN denom from registry
+    const assetData = findAssetByFormat(asset);
+    if (isFinAsset(assetData)) {
+      return balances.find(b => b.denom === assetData.formats.fin) || null;
     }
 
+    // Fallback to computed denom
+    const denom = asset.toLowerCase().replace('.', '-');
     return balances.find(b => b.denom === denom) || null;
   }
 
@@ -455,9 +449,13 @@ export class RujiraDeposit {
   }
 
   private denomToAsset(denom: string): string | null {
-    // Best-effort reverse mapping: btc-btc -> BTC.BTC
-    // Note: for token contracts (e.g. eth-usdc-0x...) this will still produce a reasonable
-    // THOR-style identifier like ETH.USDC-0X...
+    // Look up in known assets using FIN format
+    const asset = findAssetByFormat(denom);
+    if (asset) {
+      return asset.formats.thorchain;
+    }
+
+    // Try to reverse-engineer: btc-btc -> BTC.BTC
     if (denom.includes('-')) {
       const parts = denom.split('-');
       if (parts.length >= 2) {
