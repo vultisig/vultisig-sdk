@@ -276,15 +276,31 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
 
         const isPositive = +/^[0-9]+$/.test(amountStr) && BigInt(amountStr) > 0n
 
+        // For TCY withdrawals, use the L1 asset info from swapPayload.fromCoin
+        // instead of the THORChain coin (which would give THOR.USDC instead of ETH.USDC-0x...)
+        const assetCoin = swapPayload?.fromCoin ?? coin
+        const assetChain = assetCoin.chain as Chain
+        const assetChainId =
+          (nativeSwapChainIds as Record<string, string>)[assetChain] ??
+          nativeSwapChainIds[chain as VaultBasedCosmosChain]
+
+        // Construct full symbol with contract address for L1 tokens (e.g. USDC-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48)
+        const contractAddr =
+          'contractAddress' in assetCoin ? assetCoin.contractAddress : undefined
+        const assetSymbol =
+          contractAddr && contractAddr.trim()
+            ? `${assetCoin.ticker}-${contractAddr}`
+            : assetCoin.ticker
+
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
           asset: TW.Cosmos.Proto.THORChainAsset.create({
-            chain: nativeSwapChainIds[chain as VaultBasedCosmosChain],
-            symbol: coin.ticker,
-            ticker: coin.ticker,
+            chain: assetChainId,
+            symbol: assetSymbol,
+            ticker: assetCoin.ticker,
             synth: false,
           }),
           ...(isPositive
-            ? { amount: amountStr, decimals: new Long(coin.decimals) }
+            ? { amount: amountStr, decimals: new Long(assetCoin.decimals) }
             : {}),
         })
 
