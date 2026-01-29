@@ -48,11 +48,11 @@
  * @module easy-routes
  */
 
-import { KNOWN_ASSETS } from '@vultisig/assets';
+import { KNOWN_ASSETS, type Asset } from '@vultisig/assets';
 
 // Helper to safely get asset format (throws if asset not found)
-function getFinFormat(assetId: keyof typeof KNOWN_ASSETS): string {
-  const asset = KNOWN_ASSETS[assetId];
+function getFinFormat(assetId: string): string {
+  const asset = KNOWN_ASSETS[assetId as keyof typeof KNOWN_ASSETS];
   if (!asset) {
     throw new Error(`Unknown asset: ${assetId}`);
   }
@@ -404,7 +404,7 @@ export function getRoutesSummary(): string {
  */
 function denomToTicker(denom: string): string {
   // Try to find the asset by FIN format
-  for (const asset of Object.values(KNOWN_ASSETS)) {
+  for (const asset of Object.values(KNOWN_ASSETS) as Asset[]) {
     if (asset.formats.fin === denom) {
       return asset.name.split(' ')[0].toUpperCase(); // Get first word of name
     }
