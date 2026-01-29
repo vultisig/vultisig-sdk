@@ -19,7 +19,75 @@ export interface VultisigSignature {
   format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519';
 }
 
+/**
+ * Keysign payload structure for MPC signing
+ * 
+ * This matches the protobuf KeysignPayload schema from vultisig/keysign/v1.
+ * The payload is cross-platform compatible (iOS, Android, Windows, SDK).
+ */
 export interface KeysignPayload {
+  /** Coin information - the asset being transacted */
+  coin?: {
+    chain: string;
+    ticker: string;
+    address: string;
+    contractAddress: string;
+    decimals: number;
+    priceProviderId: string;
+    isNativeToken: boolean;
+    hexPublicKey: string;
+    logo: string;
+  };
+  
+  /** Destination address (empty for MsgDeposit) */
+  toAddress?: string;
+  
+  /** Amount in base units */
+  toAmount?: string;
+  
+  /** Blockchain-specific parameters */
+  blockchainSpecific?: {
+    case: 'thorchainSpecific' | 'utxoSpecific' | 'ethereumSpecific' | 'cosmosSpecific' | string | undefined;
+    value?: {
+      // THORChain specific fields
+      accountNumber?: bigint;
+      sequence?: bigint;
+      fee?: bigint;
+      isDeposit?: boolean;
+      transactionType?: number;
+      // Other chains have different fields
+      [key: string]: unknown;
+    };
+  };
+  
+  /** Transaction memo */
+  memo?: string;
+  
+  /** UTXO inputs (for Bitcoin-like chains) */
+  utxoInfo?: unknown[];
+  
+  /** Swap payload (for THORChain/Maya swaps) */
+  swapPayload?: { case: string | undefined; value?: unknown };
+  
+  /** Contract payload (for WASM/EVM contracts) */
+  contractPayload?: { case: string | undefined; value?: unknown };
+  
+  /** Sign data (SignAmino, SignDirect, SignSolana) */
+  signData?: { case: string | undefined; value?: unknown };
+  
+  /** Vault's ECDSA public key */
+  vaultPublicKeyEcdsa?: string;
+  
+  /** Local party ID for MPC */
+  vaultLocalPartyId?: string;
+  
+  /** MPC library type (GG20 or DKLS) */
+  libType?: string;
+  
+  /** Skip broadcast after signing */
+  skipBroadcast?: boolean;
+  
+  /** Allow additional fields for extensibility */
   [key: string]: unknown;
 }
 
