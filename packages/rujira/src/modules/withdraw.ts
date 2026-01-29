@@ -1,5 +1,10 @@
 /**
  * Withdraw module for withdrawing secured assets to L1 chains
+ * 
+ * Withdrawals are executed via THORChain's native MsgDeposit mechanism.
+ * The SDK builds a keysign payload with isDeposit=true and the withdrawal memo,
+ * then uses the Vultisig vault to sign and broadcast the transaction.
+ * 
  * @module modules/withdraw
  */
 
@@ -8,6 +13,7 @@ import { RujiraError, RujiraErrorCode } from '../errors';
 import { findAssetByFormat } from '@vultisig/assets';
 import type { Asset } from '@vultisig/assets';
 import type { Coin } from '@cosmjs/proto-signing';
+import type { VultisigVault, KeysignPayload } from '../signer/types';
 
 /**
  * Type guard to check if an object is a valid Asset with FIN format
@@ -99,8 +105,37 @@ const CHAIN_WITHDRAWAL_TIMES: Record<string, number> = {
   THOR: 0,
 };
 
-/** THORChain MsgDeposit type URL */
-const MSG_DEPOSIT_TYPE = '/types.MsgDeposit';
+/** Default fee for THORChain transactions (0.02 RUNE) */
+const DEFAULT_THORCHAIN_FEE = 2000000n;
+
+/** THORChain decimals (always 8) */
+const THORCHAIN_DECIMALS = 8;
+
+// ============================================================================
+// TYPE GUARDS
+// ============================================================================
+
+/**
+ * Check if a signer has the getVault method (VultisigRujiraProvider)
+ */
+function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault } {
+  return (
+    signer !== null &&
+    typeof signer === 'object' &&
+    'getVault' in signer &&
+    typeof (signer as { getVault?: unknown }).getVault === 'function'
+  );
+}
+
+/**
+ * THORChain account info response structure
+ */
+interface AccountInfo {
+  account: {
+    account_number: string;
+    sequence: string;
+  };
+}
 
 // ============================================================================
 // MODULE
@@ -188,22 +223,30 @@ export class RujiraWithdraw {
   }
 
   /**
-   * Execute a prepared withdrawal
+   * Execute a prepared withdrawal via THORChain MsgDeposit
    * 
-   * **⚠️ WARNING: This method is not fully implemented yet.**
+   * This method builds a keysign payload with isDeposit=true and the withdrawal memo,
+   * then uses the Vultisig vault to sign and broadcast the transaction.
    * 
-   * Currently, this method will throw an error with instructions for manual withdrawal.
-   * Native THORChain MsgDeposit integration is pending.
+   * The withdrawal triggers THORChain's native withdraw mechanism:
+   * - A MsgDeposit with the memo `-:ASSET:L1_ADDRESS` is sent
+   * - THORChain processes the withdrawal and sends L1 assets to the destination
    * 
-   * To withdraw manually:
-   * 1. Use the `prepare()` method to get withdrawal details
-   * 2. Send a THORChain transaction with the memo from `prepared.memo`
-   * 3. Include the funds specified in `prepared.funds`
-   * 
-   * @experimental This method is incomplete and should not be used in production.
    * @param prepared - Prepared withdrawal from `prepare()`
-   * @returns Withdrawal result (currently always throws)
-   * @throws {RujiraError} Always throws with manual withdrawal instructions
+   * @returns Withdrawal result with transaction hash
+   * @throws {RujiraError} If signer is missing or doesn't support vault operations
+   * 
+   * @example
+   * ```typescript
+   * const prepared = await client.withdraw.prepare({
+   *   asset: 'BTC.BTC',
+   *   amount: '1000000',
+   *   l1Address: 'bc1q...'
+   * });
+   * 
+   * const result = await client.withdraw.execute(prepared);
+   * console.log(`Withdrawal TX: ${result.txHash}`);
+   * ```
    */
   async execute(prepared: PreparedWithdraw): Promise<WithdrawResult> {
     if (!this.client.canSign()) {
@@ -213,41 +256,215 @@ export class RujiraWithdraw {
       );
     }
 
+    // Get the signer and check if it's a VultisigRujiraProvider with vault access
+    const signer = this.client['signer'];
+    
+    if (!hasVaultAccess(signer)) {
+      throw new RujiraError(
+        RujiraErrorCode.MISSING_SIGNER,
+        'Withdrawal execution requires a VultisigRujiraProvider signer with vault access. ' +
+        'The signer must implement getVault() to support MsgDeposit transactions.'
+      );
+    }
+
+    const vault = signer.getVault();
     const senderAddress = await this.client.getAddress();
 
-    // Withdrawals are done via THORChain's native withdraw mechanism
-    // This sends secured assets to THORChain which then releases L1 assets
-    
-    // The withdrawal is done by sending a MsgDeposit with the appropriate memo
-    // Format: -:ASSET:L1ADDRESS
-    
     try {
-      // For THORChain native operations, we need to use the stargate client
-      // This is a simplified version - in production would use proper THORChain tx types
-      const result = await this.client.executeContract(
-        '', // No contract - this is a native THORChain operation
-        { withdraw: prepared }, // This would be transformed to proper THORChain tx
-        prepared.funds,
-        prepared.memo
-      );
+      // Fetch account info for transaction parameters
+      const accountInfo = await this.getAccountInfo(senderAddress);
+
+      // Get network fee from THORNode (or use default)
+      const fee = await this.getNetworkFee();
+
+      // Build the keysign payload for the withdrawal
+      const keysignPayload = await this.buildWithdrawalKeysignPayload({
+        vault,
+        senderAddress,
+        prepared,
+        accountInfo,
+        fee,
+      });
+
+      // Extract message hashes for signing
+      const messageHashes = await vault.extractMessageHashes(keysignPayload);
+
+      // Sign the transaction
+      const signature = await vault.sign({
+        transaction: keysignPayload,
+        chain: 'THORChain',
+        messageHashes,
+      });
+
+      // Broadcast the transaction
+      const txHash = await vault.broadcastTx({
+        chain: 'THORChain',
+        keysignPayload,
+        signature,
+      });
 
       return {
-        txHash: result.transactionHash,
+        txHash,
         asset: prepared.asset,
         amount: prepared.amount,
         destination: prepared.destination,
         status: 'pending',
       };
     } catch (error) {
-      // For now, provide instructions for manual withdrawal
+      // Provide helpful error message with manual instructions as fallback
+      if (error instanceof RujiraError) {
+        throw error;
+      }
+      
+      const errorMsg = error instanceof Error ? error.message : String(error);
       throw new RujiraError(
         RujiraErrorCode.CONTRACT_ERROR,
-        `Withdrawal execution not yet fully implemented. ` +
+        `Withdrawal execution failed: ${errorMsg}. ` +
         `To withdraw manually, send ${prepared.amount} ${prepared.denom} ` +
-        `via THORChain with memo: ${prepared.memo}`,
-        { prepared }
+        `via THORChain MsgDeposit with memo: ${prepared.memo}`,
+        { originalError: errorMsg, prepared }
       );
     }
+  }
+
+  /**
+   * Build a keysign payload for withdrawal (MsgDeposit with isDeposit=true)
+   * 
+   * This constructs the exact payload format expected by the Vultisig SDK
+   * for THORChain deposit/withdrawal transactions.
+   */
+  private async buildWithdrawalKeysignPayload(params: {
+    vault: VultisigVault;
+    senderAddress: string;
+    prepared: PreparedWithdraw;
+    accountInfo: { accountNumber: string; sequence: string };
+    fee: bigint;
+  }): Promise<KeysignPayload> {
+    const { vault, senderAddress, prepared, accountInfo, fee } = params;
+
+    // Get the secured asset ticker (e.g., 'BTC' from 'BTC.BTC' or the denom)
+    const ticker = this.extractTicker(prepared.asset, prepared.denom);
+
+    // Build the keysign payload structure matching the protobuf schema
+    // This is compatible with iOS/Android/Windows signing
+    const keysignPayload: KeysignPayload = {
+      // Coin info - the secured asset being spent
+      coin: {
+        chain: 'THORChain',
+        ticker: ticker,
+        address: senderAddress,
+        contractAddress: '', // No contract for native assets
+        decimals: THORCHAIN_DECIMALS,
+        priceProviderId: '',
+        isNativeToken: false, // Secured assets are not native RUNE
+        hexPublicKey: vault.publicKeys.ecdsa,
+        logo: '',
+      },
+      
+      // For MsgDeposit, toAddress is empty
+      toAddress: '',
+      
+      // Amount in base units (8 decimals)
+      toAmount: prepared.amount,
+      
+      // THORChain-specific parameters with isDeposit=true
+      blockchainSpecific: {
+        case: 'thorchainSpecific',
+        value: {
+          accountNumber: BigInt(accountInfo.accountNumber),
+          sequence: BigInt(accountInfo.sequence),
+          fee: fee,
+          isDeposit: true, // CRITICAL: This triggers MsgDeposit encoding
+          transactionType: 0, // UNSPECIFIED
+        },
+      },
+      
+      // Withdrawal memo: -:ASSET:L1_ADDRESS
+      memo: prepared.memo,
+      
+      // Vault identification
+      vaultPublicKeyEcdsa: vault.publicKeys.ecdsa,
+      vaultLocalPartyId: '', // Will be filled by vault
+      libType: 'GG20', // Default MPC library type
+      
+      // Empty arrays for unused fields
+      utxoInfo: [],
+      swapPayload: { case: undefined, value: undefined },
+      contractPayload: { case: undefined, value: undefined },
+      signData: { case: undefined, value: undefined },
+    };
+
+    return keysignPayload;
+  }
+
+  /**
+   * Get THORChain account info (account number and sequence)
+   */
+  private async getAccountInfo(address: string): Promise<{ accountNumber: string; sequence: string }> {
+    try {
+      const response = await fetch(
+        `${this.thornodeUrl}/auth/accounts/${address}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json() as AccountInfo;
+      
+      return {
+        accountNumber: data.account.account_number || '0',
+        sequence: data.account.sequence || '0',
+      };
+    } catch (error) {
+      throw new RujiraError(
+        RujiraErrorCode.NETWORK_ERROR,
+        `Failed to fetch account info for ${address}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Get the current THORChain network fee
+   */
+  private async getNetworkFee(): Promise<bigint> {
+    try {
+      const response = await fetch(`${this.thornodeUrl}/thorchain/network`);
+      
+      if (response.ok) {
+        const data = await response.json() as { native_tx_fee_rune?: string };
+        if (data.native_tx_fee_rune) {
+          return BigInt(data.native_tx_fee_rune);
+        }
+      }
+    } catch {
+      // Fall back to default fee
+    }
+    
+    return DEFAULT_THORCHAIN_FEE;
+  }
+
+  /**
+   * Extract ticker from asset or denom
+   * e.g., 'BTC.BTC' -> 'BTC', 'btc/btc' -> 'BTC'
+   */
+  private extractTicker(asset: string, denom: string): string {
+    // Try to extract from asset format (CHAIN.TICKER)
+    if (asset.includes('.')) {
+      const parts = asset.split('.');
+      const tickerPart = parts[1] || '';
+      // Handle contract assets like ETH.USDC-0x...
+      return tickerPart.split('-')[0].toUpperCase();
+    }
+    
+    // Try to extract from denom format (chain/ticker or chain-ticker)
+    const denomParts = denom.split(/[\/\-]/);
+    if (denomParts.length >= 2) {
+      return (denomParts[1] || '').toUpperCase();
+    }
+    
+    // Fallback to uppercase denom
+    return denom.toUpperCase();
   }
 
   /**
