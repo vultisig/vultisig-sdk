@@ -48,7 +48,16 @@
  * @module easy-routes
  */
 
-import { KNOWN_ASSETS, getAsset } from '@vultisig/assets';
+import { KNOWN_ASSETS } from '@vultisig/assets';
+
+// Helper to safely get asset format (throws if asset not found)
+function getFinFormat(assetId: keyof typeof KNOWN_ASSETS): string {
+  const asset = KNOWN_ASSETS[assetId];
+  if (!asset) {
+    throw new Error(`Unknown asset: ${assetId}`);
+  }
+  return asset.formats.fin;
+}
 
 // ============================================================================
 // EASY ROUTES
@@ -64,48 +73,48 @@ import { KNOWN_ASSETS, getAsset } from '@vultisig/assets';
 export const EASY_ROUTES = {
   // === RUNE Gateway Routes ===
   RUNE_TO_USDC: {
-    from: getAsset('rune').formats.fin,
-    to: getAsset('usdc_eth').formats.fin,
+    from: getFinFormat('rune'),
+    to: getFinFormat('usdc_eth'),
     name: 'RUNE → USDC',
     description: 'Swap RUNE to USDC (Ethereum)',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   USDC_TO_RUNE: {
-    from: getAsset('usdc_eth').formats.fin,
-    to: getAsset('rune').formats.fin,
+    from: getFinFormat('usdc_eth'),
+    to: getFinFormat('rune'),
     name: 'USDC → RUNE',
     description: 'Swap USDC to RUNE',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   RUNE_TO_BTC: {
-    from: getAsset('rune').formats.fin,
-    to: getAsset('btc').formats.fin,
+    from: getFinFormat('rune'),
+    to: getFinFormat('btc'),
     name: 'RUNE → BTC',
     description: 'Swap RUNE to native Bitcoin',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   BTC_TO_RUNE: {
-    from: getAsset('btc').formats.fin,
-    to: getAsset('rune').formats.fin,
+    from: getFinFormat('btc'),
+    to: getFinFormat('rune'),
     name: 'BTC → RUNE',
     description: 'Swap native Bitcoin to RUNE',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   RUNE_TO_ETH: {
-    from: getAsset('rune').formats.fin,
-    to: getAsset('eth').formats.fin,
+    from: getFinFormat('rune'),
+    to: getFinFormat('eth'),
     name: 'RUNE → ETH',
     description: 'Swap RUNE to native Ethereum',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   ETH_TO_RUNE: {
-    from: getAsset('eth').formats.fin,
-    to: getAsset('rune').formats.fin,
+    from: getFinFormat('eth'),
+    to: getFinFormat('rune'),
     name: 'ETH → RUNE',
     description: 'Swap native Ethereum to RUNE',
     liquidity: 'deep' as const,
@@ -114,16 +123,16 @@ export const EASY_ROUTES = {
 
   // === Stablecoin Routes ===
   USDC_TO_USDT: {
-    from: getAsset('usdc_eth').formats.fin,
-    to: getAsset('usdt_eth').formats.fin,
+    from: getFinFormat('usdc_eth'),
+    to: getFinFormat('usdt_eth'),
     name: 'USDC → USDT',
     description: 'Swap USDC to USDT (via RUNE)',
     liquidity: 'deep' as const,
     typicalTime: '15-45 seconds',
   },
   USDT_TO_USDC: {
-    from: getAsset('usdt_eth').formats.fin,
-    to: getAsset('usdc_eth').formats.fin,
+    from: getFinFormat('usdt_eth'),
+    to: getFinFormat('usdc_eth'),
     name: 'USDT → USDC',
     description: 'Swap USDT to USDC (via RUNE)',
     liquidity: 'deep' as const,
@@ -132,16 +141,16 @@ export const EASY_ROUTES = {
 
   // === BTC-Stable Routes ===
   BTC_TO_USDC: {
-    from: getAsset('btc').formats.fin,
-    to: getAsset('usdc_eth').formats.fin,
+    from: getFinFormat('btc'),
+    to: getFinFormat('usdc_eth'),
     name: 'BTC → USDC',
     description: 'Swap native Bitcoin to USDC',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   USDC_TO_BTC: {
-    from: getAsset('usdc_eth').formats.fin,
-    to: getAsset('btc').formats.fin,
+    from: getFinFormat('usdc_eth'),
+    to: getFinFormat('btc'),
     name: 'USDC → BTC',
     description: 'Swap USDC to native Bitcoin',
     liquidity: 'deep' as const,
@@ -150,16 +159,16 @@ export const EASY_ROUTES = {
 
   // === ETH-Stable Routes ===
   ETH_TO_USDC: {
-    from: getAsset('eth').formats.fin,
-    to: getAsset('usdc_eth').formats.fin,
+    from: getFinFormat('eth'),
+    to: getFinFormat('usdc_eth'),
     name: 'ETH → USDC',
     description: 'Swap ETH to USDC',
     liquidity: 'deep' as const,
     typicalTime: '10-30 seconds',
   },
   USDC_TO_ETH: {
-    from: getAsset('usdc_eth').formats.fin,
-    to: getAsset('eth').formats.fin,
+    from: getFinFormat('usdc_eth'),
+    to: getFinFormat('eth'),
     name: 'USDC → ETH',
     description: 'Swap USDC to ETH',
     liquidity: 'deep' as const,
@@ -168,16 +177,16 @@ export const EASY_ROUTES = {
 
   // === Cross-Chain Routes ===
   BTC_TO_ETH: {
-    from: getAsset('btc').formats.fin,
-    to: getAsset('eth').formats.fin,
+    from: getFinFormat('btc'),
+    to: getFinFormat('eth'),
     name: 'BTC → ETH',
     description: 'Swap native Bitcoin to native Ethereum',
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
   ETH_TO_BTC: {
-    from: getAsset('eth').formats.fin,
-    to: getAsset('btc').formats.fin,
+    from: getFinFormat('eth'),
+    to: getFinFormat('btc'),
     name: 'ETH → BTC',
     description: 'Swap native Ethereum to native Bitcoin',
     liquidity: 'deep' as const,
@@ -198,23 +207,23 @@ export type EasyRoute = (typeof EASY_ROUTES)[EasyRouteName];
  */
 export const ASSETS = {
   // Native chain assets
-  RUNE: getAsset('rune').formats.fin,
-  BTC: getAsset('btc').formats.fin,
-  ETH: getAsset('eth').formats.fin,
-  AVAX: getAsset('avax').formats.fin,
-  ATOM: getAsset('atom').formats.fin,
-  DOGE: getAsset('doge').formats.fin,
-  LTC: getAsset('ltc').formats.fin,
-  BCH: getAsset('bch').formats.fin,
-  BNB: getAsset('bnb').formats.fin,
+  RUNE: getFinFormat('rune'),
+  BTC: getFinFormat('btc'),
+  ETH: getFinFormat('eth'),
+  AVAX: getFinFormat('avax'),
+  ATOM: getFinFormat('atom'),
+  DOGE: getFinFormat('doge'),
+  LTC: getFinFormat('ltc'),
+  BCH: getFinFormat('bch'),
+  BNB: getFinFormat('bnb'),
 
   // Stablecoins (Ethereum)
-  USDC: getAsset('usdc_eth').formats.fin,
-  USDT: getAsset('usdt_eth').formats.fin,
+  USDC: getFinFormat('usdc_eth'),
+  USDT: getFinFormat('usdt_eth'),
 
   // Rujira native tokens
-  RUJI: getAsset('ruji').formats.fin,
-  TCY: getAsset('tcy').formats.fin,
+  RUJI: getFinFormat('ruji'),
+  TCY: getFinFormat('tcy'),
 } as const;
 
 export type AssetName = keyof typeof ASSETS;

@@ -33,7 +33,6 @@ import { fromBech32 } from '@cosmjs/encoding';
 import { Amount, findAssetByFormat } from '@vultisig/assets';
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
-// Asset info now comes from @vultisig/assets
 import { calculateMinReturn, generateQuoteId } from '../utils/format';
 import type {
   QuoteParams,
@@ -182,9 +181,9 @@ export class RujiraSwap {
       }
     }
 
-    // Get asset info using @vultisig/assets
-    const fromAsset = findAssetByFormat(params.fromAsset, 'fin');
-    const toAsset = findAssetByFormat(params.toAsset, 'fin');
+    // Get asset info using @vultisig/assets (single-arg signature)
+    const fromAsset = findAssetByFormat(params.fromAsset);
+    const toAsset = findAssetByFormat(params.toAsset);
 
     if (!fromAsset) {
       throw new RujiraError(
@@ -294,8 +293,8 @@ export class RujiraSwap {
       await this.validateBalance(quote.params.fromAsset, quote.params.amount);
     }
 
-    // Get asset info using @vultisig/assets
-    const fromAsset = findAssetByFormat(quote.params.fromAsset, 'fin');
+    // Get asset info using @vultisig/assets (single-arg signature)
+    const fromAsset = findAssetByFormat(quote.params.fromAsset);
     if (!fromAsset) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
@@ -365,7 +364,7 @@ export class RujiraSwap {
   }> {
     const quote = await this.getQuote(params);
     
-    const fromAsset = findAssetByFormat(params.fromAsset, 'fin');
+    const fromAsset = findAssetByFormat(params.fromAsset);
     if (!fromAsset) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
@@ -856,8 +855,8 @@ export class RujiraSwap {
    * @throws RujiraError with INSUFFICIENT_BALANCE if balance is too low
    */
   private async validateBalance(fromAsset: string, amount: string): Promise<void> {
-    // Get asset info using @vultisig/assets
-    const asset = findAssetByFormat(fromAsset, 'fin');
+    // Get asset info using @vultisig/assets (single-arg signature)
+    const asset = findAssetByFormat(fromAsset);
     if (!asset) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
