@@ -87,6 +87,15 @@ export class GraphQLClient {
             response.status
           );
         }
+
+        if (response.status === 429) {
+          throw new GraphQLClient.GraphQLError(
+            `Rate limited by Rujira API: ${response.status} ${response.statusText}. ` +
+              `Provide an API token (RujiraClientOptions.apiKey / GraphQLClientOptions.apiKey) to increase limits.`,
+            'network',
+            response.status
+          );
+        }
         
         if (response.status >= 500) {
           throw new GraphQLClient.GraphQLError(
