@@ -6,7 +6,7 @@ import {
 import { Coin } from '@cosmjs/proto-signing';
 import { GasPrice, StargateClient } from '@cosmjs/stargate';
 
-import { getNetworkConfig, type NetworkType, type RujiraConfig } from './config.js';
+import { MAINNET_CONFIG, type RujiraConfig } from './config.js';
 import { RujiraError, RujiraErrorCode, wrapError } from './errors.js';
 import { RujiraDiscovery } from './discovery/discovery.js';
 import { RujiraAssets } from './modules/assets.js';
@@ -18,7 +18,6 @@ import type { RujiraSigner } from './signer/types.js';
 import type { BookResponse, FinQueryMsg, SimulationResponse } from './types.js';
 
 export interface RujiraClientOptions {
-  network?: NetworkType;
   config?: Partial<RujiraConfig>;
   signer?: RujiraSigner;
   rpcEndpoint?: string;
@@ -49,7 +48,7 @@ export class RujiraClient {
   private debug: boolean;
 
   constructor(options: RujiraClientOptions = {}) {
-    const networkConfig = getNetworkConfig(options.network ?? 'mainnet');
+    const networkConfig = MAINNET_CONFIG;
 
     this.config = {
       ...networkConfig,
@@ -75,7 +74,6 @@ export class RujiraClient {
     this.withdraw = new RujiraWithdraw(this);
 
     this.discovery = new RujiraDiscovery({
-      network: options.network || 'mainnet',
       rpcEndpoint: this.config.rpcEndpoint,
       debug: this.debug,
     });

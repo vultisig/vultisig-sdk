@@ -833,15 +833,13 @@ rujiraCmd
   .command('balance')
   .description('Show secured asset balances on THORChain')
   .option('--secured-only', 'Filter to secured/FIN-like denoms only')
-  .option('--network <network>', 'Network: mainnet|testnet (default: mainnet)', 'mainnet')
   .option('--rpc <url>', 'Override THORChain RPC endpoint')
   .option('--rest <url>', 'Override THORNode REST endpoint')
   .action(
-    withExit(async (options: { securedOnly?: boolean; network?: string; rpc?: string; rest?: string }) => {
+    withExit(async (options: { securedOnly?: boolean; rpc?: string; rest?: string }) => {
       const context = await init(program.opts().vault)
       await executeRujiraBalance(context, {
         securedOnly: options.securedOnly,
-        network: (options.network as any) ?? 'mainnet',
         rpcEndpoint: options.rpc,
         restEndpoint: options.rest,
       })
@@ -864,7 +862,6 @@ rujiraCmd
   .option('--amount <amount>', 'Amount in base units (optional; used for validation)', '1')
   .option('--affiliate <thorAddress>', 'Affiliate THOR address (optional)')
   .option('--affiliate-bps <bps>', 'Affiliate fee in basis points (optional)', '0')
-  .option('--network <network>', 'Network: mainnet|testnet (default: mainnet)', 'mainnet')
   .option('--rpc <url>', 'Override THORChain RPC endpoint')
   .option('--rest <url>', 'Override THORNode REST endpoint')
   .action(
@@ -874,7 +871,6 @@ rujiraCmd
         amount?: string
         affiliate?: string
         affiliateBps?: string
-        network?: string
         rpc?: string
         rest?: string
       }) => {
@@ -884,7 +880,6 @@ rujiraCmd
           amount: options.amount,
           affiliate: options.affiliate,
           affiliateBps: options.affiliateBps ? parseInt(options.affiliateBps, 10) : undefined,
-          network: (options.network as any) ?? 'mainnet',
           rpcEndpoint: options.rpc,
           restEndpoint: options.rest,
         })
@@ -899,7 +894,6 @@ rujiraCmd
   .option('--destination <thorAddress>', 'Destination THOR address (default: vault THORChain address)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--password <password>', 'Vault password for signing')
-  .option('--network <network>', 'Network: mainnet|testnet (default: mainnet)', 'mainnet')
   .option('--rpc <url>', 'Override THORChain RPC endpoint')
   .option('--rest <url>', 'Override THORNode REST endpoint')
   .action(
@@ -913,7 +907,6 @@ rujiraCmd
           destination?: string
           yes?: boolean
           password?: string
-          network?: string
           rpc?: string
           rest?: string
         }
@@ -927,7 +920,6 @@ rujiraCmd
           destination: options.destination,
           yes: options.yes,
           password: options.password,
-          network: (options.network as any) ?? 'mainnet',
           rpcEndpoint: options.rpc,
           restEndpoint: options.rest,
         })
@@ -941,7 +933,6 @@ rujiraCmd
   .option('--max-fee-bps <bps>', 'Max outbound fee as bps of amount (optional)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--password <password>', 'Vault password for signing')
-  .option('--network <network>', 'Network: mainnet|testnet (default: mainnet)', 'mainnet')
   .option('--rpc <url>', 'Override THORChain RPC endpoint')
   .option('--rest <url>', 'Override THORNode REST endpoint')
   .action(
@@ -954,7 +945,6 @@ rujiraCmd
           maxFeeBps?: string
           yes?: boolean
           password?: string
-          network?: string
           rpc?: string
           rest?: string
         }
@@ -967,7 +957,6 @@ rujiraCmd
           maxFeeBps: options.maxFeeBps ? parseInt(options.maxFeeBps, 10) : undefined,
           yes: options.yes,
           password: options.password,
-          network: (options.network as any) ?? 'mainnet',
           rpcEndpoint: options.rpc,
           restEndpoint: options.rest,
         })

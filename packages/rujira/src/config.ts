@@ -1,6 +1,9 @@
 import { findAssetByFormat } from '@vultisig/assets';
 
-export type NetworkType = 'mainnet' | 'stagenet' | 'localnet';
+/**
+ * Rujira SDK is mainnet-only.
+ */
+export type NetworkType = 'mainnet';
 
 export interface NetworkConfig {
   network: NetworkType;
@@ -51,57 +54,8 @@ export const MAINNET_CONFIG: RujiraConfig = {
   defaultSlippageBps: 100,
 };
 
-export const STAGENET_CONFIG: RujiraConfig = {
-  network: 'stagenet',
-  chainId: 'thorchain-stagenet-v2',
-  rpcEndpoint: 'https://stagenet-rpc.ninerealms.com',
-  restEndpoint: 'https://stagenet-thornode.ninerealms.com',
-  midgardEndpoint: 'https://stagenet-midgard.ninerealms.com/v2',
-  gasPrice: '0.025rune',
-  gasLimit: 500000,
-  wasmQueryGasLimit: 5_000_000,
-  addressPrefix: 'sthor',
-  contracts: {
-    finCodeId: 0,
-    finCodeHash: '',
-    bowCodeHash: '',
-    affiliateCodeHash: '',
-    finContracts: {},
-  },
-  defaultSlippageBps: 100,
-};
-
-export const LOCALNET_CONFIG: RujiraConfig = {
-  network: 'localnet',
-  chainId: 'thorchain',
-  rpcEndpoint: 'http://localhost:26657',
-  restEndpoint: 'http://localhost:1317',
-  midgardEndpoint: 'http://localhost:8080/v2',
-  gasPrice: '0.025rune',
-  gasLimit: 500000,
-  wasmQueryGasLimit: 5_000_000,
-  addressPrefix: 'thor',
-  contracts: {
-    finCodeId: 0,
-    finCodeHash: '',
-    bowCodeHash: '',
-    affiliateCodeHash: '',
-    finContracts: {},
-  },
-  defaultSlippageBps: 100,
-};
-
-export function getNetworkConfig(network: NetworkType): RujiraConfig {
-  switch (network) {
-    case 'mainnet':
-      return MAINNET_CONFIG;
-    case 'stagenet':
-      return STAGENET_CONFIG;
-    case 'localnet':
-      return LOCALNET_CONFIG;
-    default:
-      throw new Error(`Unknown network: ${network}`);
-  }
+export function getNetworkConfig(_network: NetworkType = 'mainnet'): RujiraConfig {
+  return MAINNET_CONFIG;
 }
 
 export function getAssetMetadata(denom: string): { decimals: number; chainDecimals: number; ticker: string } {

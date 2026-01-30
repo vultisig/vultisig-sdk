@@ -9,7 +9,6 @@ import { ensureVaultUnlocked } from '../core'
 import { createSpinner, info, isJsonOutput, outputJson, printResult, printTable, warn } from '../lib/output'
 
 export type RujiraBaseOptions = {
-  network?: 'mainnet' | 'testnet'
   rpcEndpoint?: string
   restEndpoint?: string
   password?: string
@@ -21,7 +20,6 @@ async function createRujiraClient(ctx: CommandContext, options: RujiraBaseOption
   const provider = new VultisigRujiraProvider(vault as any)
 
   const client = new RujiraClient({
-    network: options.network ?? 'mainnet',
     signer: provider,
     rpcEndpoint: options.rpcEndpoint,
     config: {

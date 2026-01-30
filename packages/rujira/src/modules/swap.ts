@@ -483,20 +483,20 @@ export class RujiraSwap {
 
     const trimmed = address.trim();
 
-    if (!trimmed.startsWith('thor1') && !trimmed.startsWith('sthor1')) {
+    if (!trimmed.startsWith('thor1')) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ADDRESS,
-        `Invalid destination address format: must start with 'thor1' or 'sthor1'. Got: ${address.substring(0, 10)}...`
+        `Invalid destination address format: must start with 'thor1'. Got: ${address.substring(0, 10)}...`
       );
     }
 
     try {
       const decoded = fromBech32(trimmed);
 
-      if (decoded.prefix !== 'thor' && decoded.prefix !== 'sthor') {
+      if (decoded.prefix !== 'thor') {
         throw new RujiraError(
           RujiraErrorCode.INVALID_ADDRESS,
-          `Invalid address prefix: expected 'thor' or 'sthor', got '${decoded.prefix}'`
+          `Invalid address prefix: expected 'thor', got '${decoded.prefix}'`
         );
       }
 
