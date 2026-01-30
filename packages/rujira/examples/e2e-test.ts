@@ -74,13 +74,29 @@ async function main() {
     // Get THORChain address from signer
     thorAddress = await signer.getAddress();
     
-    // Get ETH address from vault's coin data
-    const coins = vault.coins || [];
-    const ethCoin = coins.find((c: { chain: string }) => c.chain === 'Ethereum');
-    ethAddress = ethCoin?.address || '';
+    // Get ETH address from vault
+    // Note: some vault exports may not include a "coins" entry with chain === "Ethereum".
+    // Prefer SDK helpers when available, then fall back to coins array.
+    const coins = (vault as any).coins || [];
+
+    const addrFn = (vault as any).address || (vault as any).getAddress;
+    const addrMaybe = typeof addrFn === 'function'
+      ? (addrFn.call(vault, 'Ethereum') || addrFn.call(vault, 'ETH'))
+      : '';
+    const addrFromVault = addrMaybe instanceof Promise ? await addrMaybe : addrMaybe;
+
+    const ethCoin = coins.find((c: any) =>
+      (c?.chain || '').toLowerCase() === 'ethereum' ||
+      (c?.ticker || '').toLowerCase() === 'eth'
+    );
+
+    ethAddress = (addrFromVault || ethCoin?.address || '').toString();
 
     console.log(`   THORChain: ${thorAddress}`);
     console.log(`   Ethereum:  ${ethAddress || '(not available)'}`);
+    if (!ethAddress) {
+      console.log('   Debug: vault.coins =', coins);
+    }
 
     // Use the signer we already created
     client = new RujiraClient({
@@ -194,14 +210,14 @@ async function main() {
     const quote = await client.swap.getQuote({
       fromAsset: ASSETS.ETH,
       toAsset: ASSETS.USDC,
-      amount: '100000000', // 0.001 ETH in 8 decimals (THORChain format)
+      amount: '10000000', // 0.0001 ETH in 8 decimals (THORChain format)
       slippageBps: 100,
     });
 
     console.log('Swap Quote:');
     console.log(`   From: ${ASSETS.ETH}`);
     console.log(`   To: ${ASSETS.USDC}`);
-    console.log(`   Input: 0.001 ETH`);
+    console.log(`   Input: 0.0001 ETH`);
     console.log(`   Expected Output: ${quote.expectedOutput} USDC`);
     console.log(`   Minimum Output: ${quote.minimumOutput} USDC`);
     console.log(`   Price Impact: ${quote.priceImpact}%`);
