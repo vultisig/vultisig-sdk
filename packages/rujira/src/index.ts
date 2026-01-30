@@ -40,7 +40,7 @@ export {
   routesFrom,
   routesTo,
   getRoutesSummary,
-} from './easy-routes';
+} from './easy-routes.js';
 export type {
   EasyRouteName,
   EasyRoute,
@@ -48,33 +48,33 @@ export type {
   EasyAsset,
   EasySwapRequest,
   EasyQuoteResponse,
-} from './easy-routes';
+} from './easy-routes.js';
 
 // ============================================================================
 // CORE SDK
 // ============================================================================
-export * from './types';
-export * from './config';
-export * from './errors';
+export * from './types.js';
+export * from './config.js';
+export * from './errors.js';
 
 // Client exports
-export { RujiraClient } from './client';
-export type { RujiraClientOptions } from './client';
+export { RujiraClient } from './client.js';
+export type { RujiraClientOptions } from './client.js';
 
 // Module exports
-export { RujiraSwap } from './modules/swap';
-export { RujiraOrderbook } from './modules/orderbook';
-export { RujiraAssets } from './modules/assets';
+export { RujiraSwap } from './modules/swap.js';
+export { RujiraOrderbook } from './modules/orderbook.js';
+export { RujiraAssets } from './modules/assets.js';
 
 // Signer exports (for Vultisig integration)
-export { VultisigRujiraProvider } from './signer/vultisig-provider';
-export type { RujiraSigner, VultisigVault } from './signer/types';
+export { VultisigRujiraProvider } from './signer/vultisig-provider.js';
+export type { RujiraSigner, VultisigVault } from './signer/types.js';
 
 // Utility exports
-export * from './utils/format';
-export * from './utils/memo';
+export * from './utils/format.js';
+export * from './utils/memo.js';
 
 // Discovery exports
-export { RujiraDiscovery } from './discovery/discovery';
-export { GraphQLClient } from './discovery/graphql-client';
-export type { Market, DiscoveredContracts } from './discovery/types';
+export { RujiraDiscovery } from './discovery/discovery.js';
+export { GraphQLClient } from './discovery/graphql-client.js';
+export type { Market, DiscoveredContracts } from './discovery/types.js';

@@ -3,12 +3,12 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RujiraSwap } from '../modules/swap';
-import { RujiraError, RujiraErrorCode } from '../errors';
-import { EASY_ROUTES } from '../easy-routes';
-import type { EasySwapRequest } from '../easy-routes';
-import type { SwapQuote, SwapResult } from '../types';
-import { VALID_THOR_ADDRESS, VALID_THOR_ADDRESS_2 } from './test-helpers';
+import { RujiraSwap } from '../modules/swap.js';
+import { RujiraError, RujiraErrorCode } from '../errors.js';
+import { EASY_ROUTES } from '../easy-routes.js';
+import type { EasySwapRequest } from '../easy-routes.js';
+import type { SwapQuote, SwapResult } from '../types.js';
+import { VALID_THOR_ADDRESS, VALID_THOR_ADDRESS_2 } from './test-helpers.js';
 
 // Mock the client
 const createMockClient = () => ({

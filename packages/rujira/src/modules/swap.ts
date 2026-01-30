@@ -3,9 +3,9 @@ import { Coin } from '@cosmjs/proto-signing';
 import { Amount, findAssetByFormat } from '@vultisig/assets';
 import Big from 'big.js';
 
-import { EASY_ROUTES, type EasyRouteName, type EasySwapRequest } from '../easy-routes';
-import type { RujiraClient } from '../client';
-import { RujiraError, RujiraErrorCode } from '../errors';
+import { EASY_ROUTES, type EasyRouteName, type EasySwapRequest } from '../easy-routes.js';
+import type { RujiraClient } from '../client.js';
+import { RujiraError, RujiraErrorCode } from '../errors.js';
 import type {
   FinExecuteMsg,
   OrderBook,
@@ -13,9 +13,9 @@ import type {
   SwapOptions,
   SwapQuote,
   SwapResult,
-} from '../types';
-import { QuoteCache, type QuoteCacheOptions } from '../utils/cache';
-import { calculateMinReturn, generateQuoteId } from '../utils/format';
+} from '../types.js';
+import { QuoteCache, type QuoteCacheOptions } from '../utils/cache.js';
+import { calculateMinReturn, generateQuoteId } from '../utils/format.js';
 
 export interface RujiraSwapOptions {
   cache?: QuoteCacheOptions | false;

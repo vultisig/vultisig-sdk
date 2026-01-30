@@ -3,7 +3,7 @@
  * @module utils/memo
  */
 
-import type { FinExecuteMsg } from '../types';
+import type { FinExecuteMsg } from '../types.js';
 
 /**
  * Build a CosmWasm execution memo for Layer 1 deposits

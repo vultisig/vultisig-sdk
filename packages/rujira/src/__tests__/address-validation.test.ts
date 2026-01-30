@@ -3,9 +3,9 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { RujiraSwap } from '../modules/swap';
-import { RujiraError, RujiraErrorCode } from '../errors';
-import { VALID_THOR_ADDRESS, VALID_STHOR_ADDRESS } from './test-helpers';
+import { RujiraSwap } from '../modules/swap.js';
+import { RujiraError, RujiraErrorCode } from '../errors.js';
+import { VALID_THOR_ADDRESS, VALID_STHOR_ADDRESS } from './test-helpers.js';
 
 // Mock client for testing
 const createMockClient = () => ({

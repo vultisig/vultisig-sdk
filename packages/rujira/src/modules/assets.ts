@@ -3,9 +3,9 @@
  * @module modules/assets
  */
 
-import type { RujiraClient } from '../client';
+import type { RujiraClient } from '../client.js';
 import { KNOWN_ASSETS, findAssetByFormat, type Asset } from '@vultisig/assets';
-import type { RujiraAsset, TradingPair } from '../types';
+import type { RujiraAsset, TradingPair } from '../types.js';
 
 /**
  * Type guard to check if an object is a valid Asset with FIN format

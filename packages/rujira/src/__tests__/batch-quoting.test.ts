@@ -3,9 +3,9 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RujiraSwap } from '../modules/swap';
-import { EASY_ROUTES } from '../easy-routes';
-import type { EasyRouteName } from '../easy-routes';
+import { RujiraSwap } from '../modules/swap.js';
+import { EASY_ROUTES } from '../easy-routes.js';
+import type { EasyRouteName } from '../easy-routes.js';
 
 // Track which routes have been simulated
 let simulatedRoutes: string[] = [];

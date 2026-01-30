@@ -59,3 +59,18 @@ export { executeSwap, executeSwapChains, executeSwapQuote } from './swap'
 // Settings commands
 export type { AddressBookEntry, AddressBookOptions } from './settings'
 export { executeAddressBook, executeCurrency, executeServer } from './settings'
+
+// Rujira commands
+export type {
+  RujiraBalanceOptions,
+  RujiraDepositOptions,
+  RujiraSwapOptions,
+  RujiraWithdrawOptions,
+} from './rujira'
+export {
+  executeRujiraBalance,
+  executeRujiraDeposit,
+  executeRujiraRoutes,
+  executeRujiraSwap,
+  executeRujiraWithdraw,
+} from './rujira'

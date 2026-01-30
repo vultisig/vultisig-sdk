@@ -1,5 +1,5 @@
 import type { AccountData, DirectSignResponse } from '@cosmjs/proto-signing';
-import type { RujiraSigner, VultisigSignature, VultisigVault } from './types';
+import type { RujiraSigner, VultisigSignature, VultisigVault } from './types.js';
 
 interface SignDoc {
   bodyBytes: Uint8Array;

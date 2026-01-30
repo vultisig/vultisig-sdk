@@ -2,8 +2,8 @@
  * Tests for the withdraw module
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RujiraWithdraw } from '../modules/withdraw';
-import { RujiraError, RujiraErrorCode } from '../errors';
+import { RujiraWithdraw } from '../modules/withdraw.js';
+import { RujiraError, RujiraErrorCode } from '../errors.js';
 
 // Mock the RujiraClient
 const createMockClient = (options: {

@@ -4,7 +4,7 @@
  */
 
 import { findAssetByFormat } from '@vultisig/assets';
-import type { SwapRequest } from '../types';
+import type { SwapRequest } from '../types.js';
 
 // Helper to get decimals from asset format
 function getAssetDecimals(asset: string): number | null {

@@ -5809,8 +5809,8 @@ __metadata:
 
 "@vultisig/assets@file:../assets::locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira":
   version: 0.1.0
-  resolution: "@vultisig/assets@file:../assets#../assets::hash=1256a2&locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira"
-  checksum: 10c0/939575682b7a7f6859b617f38e82f190bc03b7e3f486e073c0ef4c2dd6fc7d2b32b5901008f82f9bbc8af477b0f97b5122defb5d06eb4daefe3a1b9893c7dba5
+  resolution: "@vultisig/assets@file:../assets#../assets::hash=8d31f5&locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira"
+  checksum: 10c0/da01a82eb49b5db61796898d5809dce18fdda19422cc2f76662fce5b71a90f5c13aa23de35a243aaa90fe8b31513dbcb811b960abb2f39638de67422d6c47a1e
   languageName: node
   linkType: hard
 
@@ -5835,6 +5835,7 @@ __metadata:
     "@types/node": "npm:^22.13.10"
     "@types/tabtab": "npm:^3.0.4"
     "@types/ws": "npm:^8.18.1"
+    "@vultisig/rujira": "workspace:^"
     "@vultisig/sdk": "workspace:^"
     chalk: "npm:^5.3.0"
     cli-table3: "npm:^0.6.5"
@@ -5924,7 +5925,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/rujira@workspace:packages/rujira":
+"@vultisig/rujira@workspace:^, @vultisig/rujira@workspace:packages/rujira":
   version: 0.0.0-use.local
   resolution: "@vultisig/rujira@workspace:packages/rujira"
   dependencies:
