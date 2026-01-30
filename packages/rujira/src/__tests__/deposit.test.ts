@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RujiraClient } from '../client.js';
 import { RujiraDeposit } from '../modules/deposit.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
-import { VALID_THOR_ADDRESS, VALID_STHOR_ADDRESS } from './test-helpers.js';
+import { VALID_THOR_ADDRESS } from './test-helpers.js';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -17,7 +17,7 @@ describe('RujiraDeposit', () => {
   let deposit: RujiraDeposit;
 
   beforeEach(() => {
-    client = new RujiraClient({ network: 'mainnet' });
+    client = new RujiraClient();
     deposit = client.deposit;
     mockFetch.mockReset();
   });
@@ -282,15 +282,8 @@ describe('RujiraDeposit', () => {
       ).rejects.toThrow(RujiraError);
     });
 
-    it('should accept stagenet addresses', async () => {
-      const result = await deposit.prepare({
-        fromAsset: 'BTC.BTC',
-        amount: '1000000',
-        thorAddress: VALID_STHOR_ADDRESS,
-      });
+    // mainnet-only: non-mainnet address tests removed
 
-      expect(result.memo).toContain(VALID_STHOR_ADDRESS);
-    });
   });
 
   describe('getBalances', () => {

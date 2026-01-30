@@ -5,7 +5,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { RujiraSwap } from '../modules/swap.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
-import { VALID_THOR_ADDRESS, VALID_STHOR_ADDRESS } from './test-helpers.js';
+import { VALID_THOR_ADDRESS } from './test-helpers.js';
 
 // Mock client for testing
 const createMockClient = () => ({
@@ -63,22 +63,12 @@ describe('Address Validation', () => {
       expect(result.txHash).toBe('TESTHASH123');
     });
 
-    it('should accept valid sthor1 stagenet address', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+    // mainnet-only: non-mainnet address tests removed
 
-      const result = await swap.easySwap({
-        route: 'RUNE_TO_USDC',
-        amount: '100000000',
-        destination: VALID_STHOR_ADDRESS,
-      });
-
-      expect(result.txHash).toBe('TESTHASH123');
-    });
   });
 
   describe('invalid address prefix', () => {
-    it('should reject address without thor1/sthor1 prefix', async () => {
+    it("should reject address without 'thor1' prefix", async () => {
       const mockClient = createMockClient();
       const swap = new RujiraSwap(mockClient as any, { cache: false });
 
@@ -141,20 +131,8 @@ describe('Address Validation', () => {
       });
     });
 
-    it('should reject stagenet address with invalid checksum', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+    // mainnet-only: non-mainnet address checksum test removed
 
-      await expect(
-        swap.easySwap({
-          route: 'RUNE_TO_USDC',
-          amount: '100000000',
-          destination: 'sthor1qperwt9wrnkg5k9e5gzfgjppxgnwqdwqcqrsky', // invalid checksum
-        })
-      ).rejects.toMatchObject({
-        code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
   });
 
   describe('invalid address length', () => {

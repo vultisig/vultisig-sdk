@@ -385,7 +385,7 @@ export class RujiraOrderbook {
   }
 
   private async resolveContract(pairOrContract: string): Promise<string> {
-    if (pairOrContract.startsWith('thor1') || pairOrContract.startsWith('sthor1')) {
+    if (pairOrContract.startsWith('thor1')) {
       return pairOrContract;
     }
 

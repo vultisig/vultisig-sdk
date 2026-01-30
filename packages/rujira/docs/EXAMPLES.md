@@ -34,8 +34,7 @@ import {
 ```typescript
 // Initialize client without signer for read-only operations
 const client = new RujiraClient({
-  network: 'mainnet',  // or 'stagenet' for testing
-  debug: true          // Enable logging for development
+  debug: true // Enable logging for development
 });
 
 await client.connect();
@@ -57,9 +56,8 @@ const signer = new VultisigRujiraProvider(vault, {
 
 // Initialize client with signer
 const client = new RujiraClient({
-  network: 'mainnet',
   signer,
-  debug: false  // Disable debug in production
+  debug: false // Disable debug in production
 });
 
 await client.connect();

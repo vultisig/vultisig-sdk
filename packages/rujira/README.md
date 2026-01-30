@@ -189,7 +189,6 @@ const route = EASY_ROUTES.RUNE_TO_USDC
 
 ```ts
 export interface RujiraClientOptions {
-  network?: 'mainnet' | 'stagenet'
   config?: Partial<RujiraConfig>
   signer?: RujiraSigner
   rpcEndpoint?: string

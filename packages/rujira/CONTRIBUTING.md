@@ -53,25 +53,22 @@ We welcome contributions to the Rujira SDK! This guide will help you get started
 
 ### Environment Setup
 
-For testing against live networks, you'll need:
+For testing against live networks:
 
-1. **Mainnet testing** (read-only operations):
-   ```typescript
-   const client = new RujiraClient({ 
-     network: 'mainnet',
-     debug: true 
-   });
-   ```
+```typescript
+const client = new RujiraClient({
+  debug: true,
+});
+```
 
-2. **Stagenet testing** (with transactions):
-   ```typescript
-   // You'll need stagenet RUNE for testing
-   const client = new RujiraClient({
-     network: 'stagenet',
-     signer: yourTestSigner,
-     debug: true
-   });
-   ```
+To test transactions, provide a signer:
+
+```typescript
+const client = new RujiraClient({
+  signer: yourTestSigner,
+  debug: true,
+});
+```
 
 ## Project Structure
 
@@ -497,8 +494,7 @@ We follow semantic versioning:
 
 1. **Pre-release testing**
    - All tests pass
-   - Manual testing on mainnet (read-only)
-   - Manual testing on stagenet (full functionality)
+   - Manual testing on mainnet
 
 2. **Documentation updates**
    - CHANGELOG.md updated
