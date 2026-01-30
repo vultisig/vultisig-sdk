@@ -84,7 +84,9 @@ export class BalanceService {
   async getBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const result: Record<string, Balance> = {}
 
-    for (const chain of chains) {
+    const chainsList = Array.isArray(chains) ? chains : [chains as unknown as Chain]
+
+    for (const chain of chainsList) {
       try {
         // Native balance
         result[chain] = await this.getBalance(chain)
@@ -119,7 +121,8 @@ export class BalanceService {
    */
   async updateBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     // Invalidate cache for all chains
-    for (const chain of chains) {
+    const chainsList = Array.isArray(chains) ? chains : [chains as unknown as Chain]
+    for (const chain of chainsList) {
       const key = `${chain.toLowerCase()}:native`
       await this.cacheService.invalidateScoped(key, CacheScope.BALANCE)
 
@@ -132,7 +135,7 @@ export class BalanceService {
       }
     }
 
-    return this.getBalances(chains, includeTokens)
+    return this.getBalances(chainsList, includeTokens)
   }
 
   /**
