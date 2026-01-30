@@ -5802,8 +5802,8 @@ __metadata:
 
 "@vultisig/assets@file:../assets::locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira":
   version: 0.1.0
-  resolution: "@vultisig/assets@file:../assets#../assets::hash=9f62d7&locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira"
-  checksum: 10c0/583c5263330792e28ccaea782395128190ae8f218bb736a8354a98ac345c99b5a568619469f55ca6ad0ac38e919ab71d0c08f920a52eec3e40759ebbf4208357
+  resolution: "@vultisig/assets@file:../assets#../assets::hash=b31710&locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira"
+  checksum: 10c0/d1cc5a9384bd80f0fdad8934b86b3b8c1e7b2b4f1e8299e3f8509abb1fd34c63e9b965dd6aed369856e00e018a66a5b6701c364b4e4ffad137bb0ed0db0ae6bb
   languageName: node
   linkType: hard
 

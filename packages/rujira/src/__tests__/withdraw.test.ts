@@ -64,7 +64,7 @@ describe('RujiraWithdraw', () => {
         l1Address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
       });
 
-      expect(prepared.memo).toBe('-:BTC.BTC:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh');
+      expect(prepared.memo).toBe('secure-:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh');
       expect(prepared.chain).toBe('BTC');
       expect(prepared.asset).toBe('BTC.BTC');
       expect(prepared.amount).toBe('1000000');
@@ -99,7 +99,7 @@ describe('RujiraWithdraw', () => {
         l1Address: '0x742d35Cc6634C0532925a3b844Bc9e7595f12345',
       });
 
-      expect(prepared.memo).toBe('-:ETH.ETH:0x742d35Cc6634C0532925a3b844Bc9e7595f12345');
+      expect(prepared.memo).toBe('secure-:0x742d35Cc6634C0532925a3b844Bc9e7595f12345');
       expect(prepared.chain).toBe('ETH');
       expect(prepared.estimatedTimeMinutes).toBe(5);
     });
@@ -168,7 +168,7 @@ describe('RujiraWithdraw', () => {
         denom: 'btc/btc',
         amount: '1000000',
         destination: 'bc1q...',
-        memo: '-:BTC.BTC:bc1q...',
+        memo: 'secure-:bc1q...',
         estimatedFee: '30000',
         estimatedTimeMinutes: 30,
         funds: [{ denom: 'btc/btc', amount: '1000000' }],
@@ -193,20 +193,26 @@ describe('RujiraWithdraw', () => {
         denom: 'btc/btc',
         amount: '1000000',
         destination: 'bc1q...',
-        memo: '-:BTC.BTC:bc1q...',
+        memo: 'secure-:bc1q...',
         estimatedFee: '30000',
         estimatedTimeMinutes: 30,
         funds: [{ denom: 'btc/btc', amount: '1000000' }],
       };
 
       await expect(withdraw.execute(prepared)).rejects.toThrow(
-        'Withdrawal execution requires a VultisigRujiraProvider'
+        'Withdrawal requires a VultisigRujiraProvider'
       );
     });
 
     it('should execute withdrawal with valid vault signer', async () => {
       const mockVault = {
         publicKeys: { ecdsa: 'abc123', eddsa: 'def456' },
+        address: vi.fn().mockImplementation(async (_chain: string) => 'thor1vaultaddressxyz'),
+        prepareSignDirectTx: vi.fn().mockResolvedValue({
+          coin: { hexPublicKey: 'abc123' },
+          vaultLocalPartyId: 'local-party-1',
+          libType: 'GG20',
+        }),
         extractMessageHashes: vi.fn().mockResolvedValue(['hash1']),
         sign: vi.fn().mockResolvedValue({ signature: 'sig123', format: 'ECDSA' }),
         broadcastTx: vi.fn().mockResolvedValue('tx_hash_abc'),
@@ -249,7 +255,7 @@ describe('RujiraWithdraw', () => {
         denom: 'btc/btc',
         amount: '1000000',
         destination: 'bc1q...',
-        memo: '-:BTC.BTC:bc1q...',
+        memo: 'secure-:bc1q...',
         estimatedFee: '30000',
         estimatedTimeMinutes: 30,
         funds: [{ denom: 'btc/btc', amount: '1000000' }],
@@ -269,7 +275,7 @@ describe('RujiraWithdraw', () => {
       expect(mockVault.broadcastTx).toHaveBeenCalledWith({
         chain: 'THORChain',
         keysignPayload: expect.objectContaining({
-          memo: '-:BTC.BTC:bc1q...',
+          memo: 'secure-:bc1q...',
           toAmount: '1000000',
           blockchainSpecific: expect.objectContaining({
             case: 'thorchainSpecific',
@@ -293,7 +299,7 @@ describe('RujiraWithdraw', () => {
         'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
       );
 
-      expect(memo).toBe('-:BTC.BTC:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh');
+      expect(memo).toBe('secure-:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh');
     });
 
     it('should uppercase the asset', () => {
@@ -305,7 +311,7 @@ describe('RujiraWithdraw', () => {
         '0x742d35Cc6634C0532925a3b844Bc9e7595f12345'
       );
 
-      expect(memo).toBe('-:ETH.ETH:0x742d35Cc6634C0532925a3b844Bc9e7595f12345');
+      expect(memo).toBe('secure-:0x742d35Cc6634C0532925a3b844Bc9e7595f12345');
     });
   });
 

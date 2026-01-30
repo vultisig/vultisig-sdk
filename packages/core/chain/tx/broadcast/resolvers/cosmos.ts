@@ -13,9 +13,21 @@ export const broadcastCosmosTx: BroadcastTxResolver<CosmosChain> = async ({
   const decodedTxBytes = Buffer.from(tx_bytes, 'base64')
 
   const client = await getCosmosClient(chain)
-  const { error } = await attempt(client.broadcastTx(decodedTxBytes))
+  const { data: result, error } = await attempt(client.broadcastTx(decodedTxBytes))
+
+  if (result) {
+    console.log('[DEBUG] Cosmos broadcast - code:', result.code, 'codespace:', result.codespace, 'hash:', result.transactionHash, 'rawLog:', result.rawLog)
+  }
+  if (error) {
+    console.log('[DEBUG] Cosmos broadcast error:', error)
+  }
 
   if (error && !isInError(error, 'tx already exists in cache')) {
     throw error
+  }
+
+  // Check if broadcast returned with error code
+  if (result && result.code !== 0) {
+    throw new Error(`Broadcasting transaction failed with code ${result.code} (codespace: ${result.codespace}). Log: ${result.rawLog}`)
   }
 }
