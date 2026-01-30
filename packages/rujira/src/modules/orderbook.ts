@@ -1,39 +1,36 @@
 /**
  * Orderbook module for limit orders on Rujira DEX
- * @module modules/orderbook
  */
 
 import { Coin } from '@cosmjs/proto-signing';
 import Big from 'big.js';
+import { findAssetByFormat } from '@vultisig/assets';
+
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
-import { findAssetByFormat } from '@vultisig/assets';
 import type {
-  TradingPair,
   LimitOrderParams,
   Order,
-  OrderResult,
   OrderBook,
   OrderBookEntry,
+  OrderResult,
   OrderSide,
   FinExecuteMsg,
   FinQueryMsg,
 } from '../types';
 
 /**
- * Orderbook module for managing limit orders
- * 
+ * Orderbook module for managing limit orders.
+ *
  * @example
  * ```typescript
  * const client = new RujiraClient({ network: 'mainnet', signer });
  * await client.connect();
- * 
- * // Get order book
+ *
  * const book = await client.orderbook.getOrderBook('RUNE/BTC');
  * console.log('Best bid:', book.bids[0]?.price);
  * console.log('Best ask:', book.asks[0]?.price);
- * 
- * // Place a limit order
+ *
  * const order = await client.orderbook.placeOrder({
  *   pair: 'RUNE/BTC',
  *   side: 'buy',
@@ -51,11 +48,7 @@ export class RujiraOrderbook {
    * Accepts two asset identifiers (any format supported by @vultisig/assets)
    * and resolves the FIN contract key as "<baseDenom>/<quoteDenom>".
    */
-  async getBook(
-    baseAsset: string,
-    quoteAsset: string,
-    limit = 10
-  ): Promise<OrderBook> {
+  async getBook(baseAsset: string, quoteAsset: string, limit = 10): Promise<OrderBook> {
     const base = findAssetByFormat(baseAsset);
     const quote = findAssetByFormat(quoteAsset);
 
@@ -73,37 +66,31 @@ export class RujiraOrderbook {
   }
 
   /**
-   * Get the order book for a trading pair
+   * Get the order book for a trading pair.
    *
    * @param pairOrContract - Trading pair string or contract address
    * @param limit - Maximum entries per side (default: 50)
    */
-  async getOrderBook(
-    pairOrContract: string,
-    limit = 50
-  ): Promise<OrderBook> {
+  async getOrderBook(pairOrContract: string, limit = 50): Promise<OrderBook> {
     const contractAddress = await this.resolveContract(pairOrContract);
 
-    // Fetch order book and config in parallel
     const [response, config] = await Promise.all([
       this.client.getOrderBook(contractAddress, limit),
       this.getContractConfig(contractAddress),
     ]);
 
-    // Transform response
     const bids = this.transformBookEntries(response.base, 'desc');
     const asks = this.transformBookEntries(response.quote, 'asc');
 
-    // Calculate spread: (best_ask - best_bid) / mid_price * 100
     const bestBid = bids[0]?.price ? parseFloat(bids[0].price) : 0;
     const bestAsk = asks[0]?.price ? parseFloat(asks[0].price) : 0;
     let spread = '0';
+
     if (bestBid > 0 && bestAsk > 0) {
       const midPrice = (bestAsk + bestBid) / 2;
       spread = (((bestAsk - bestBid) / midPrice) * 100).toFixed(4);
     }
 
-    // Get last price from config or best bid/ask as fallback
     const lastPrice = config.lastPrice || bids[0]?.price || asks[0]?.price || '0';
 
     return {
@@ -124,7 +111,7 @@ export class RujiraOrderbook {
   }
 
   /**
-   * Get contract configuration including pair info
+   * Get contract configuration including pair info.
    * @internal
    */
   private async getContractConfig(contractAddress: string): Promise<{
@@ -144,7 +131,6 @@ export class RujiraOrderbook {
         last_price?: string;
       }>(contractAddress, query);
 
-      // Convert denoms to asset format (e.g., "rune" -> "THOR.RUNE")
       const base = this.denomToAsset(response.denoms.base);
       const quote = this.denomToAsset(response.denoms.quote);
 
@@ -157,29 +143,28 @@ export class RujiraOrderbook {
         lastPrice: response.last_price,
       };
     } catch {
-      // If config query fails, return empty values
       return { base: '', quote: '' };
     }
   }
 
   /**
-   * Convert denom to asset identifier
+   * Convert denom to asset identifier.
    * @internal
    */
   private denomToAsset(denom: string): string {
-    // Try to look up in known assets first
     const asset = findAssetByFormat(denom);
     if (asset) {
       return asset.formats.thorchain;
     }
 
-    // Common denom mappings (fallback)
     const denomMap: Record<string, string> = {
-      'rune': 'THOR.RUNE',
+      rune: 'THOR.RUNE',
       'btc-btc': 'BTC.BTC',
       'eth-eth': 'ETH.ETH',
-      'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
-      'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7': 'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7',
+      'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48':
+        'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+      'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7':
+        'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7',
       'gaia-atom': 'GAIA.ATOM',
       'avax-avax': 'AVAX.AVAX',
       'bsc-bnb': 'BSC.BNB',
@@ -195,7 +180,6 @@ export class RujiraOrderbook {
       return denomMap[normalized];
     }
 
-    // Try to convert format: "chain-symbol" -> "CHAIN.SYMBOL"
     if (denom.includes('-')) {
       const [chain, ...rest] = denom.split('-');
       return `${chain.toUpperCase()}.${rest.join('-').toUpperCase()}`;
@@ -205,10 +189,7 @@ export class RujiraOrderbook {
   }
 
   /**
-   * Place a limit order
-   * 
-   * @param params - Order parameters
-   * @returns Order result
+   * Place a limit order.
    */
   async placeOrder(params: LimitOrderParams): Promise<OrderResult> {
     this.validateOrderParams(params);
@@ -217,10 +198,8 @@ export class RujiraOrderbook {
       typeof params.pair === 'string' ? params.pair : params.pair.contractAddress
     );
 
-    // Get asset info for the side we're offering
-    // For buy orders, we offer quote asset; for sell orders, we offer base asset
     const assetInfo = await this.getOfferAsset(params);
-    
+
     if (!assetInfo) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
@@ -228,33 +207,21 @@ export class RujiraOrderbook {
       );
     }
 
-    // Build order target
-    // Format: [Side, Price, Amount]
-    const orderTarget: [OrderSide, string, string | null] = [
-      params.side,
-      params.price,
-      params.amount,
-    ];
+    const orderTarget: [OrderSide, string, string | null] = [params.side, params.price, params.amount];
 
-    // Build execute message
     const msg: FinExecuteMsg = {
-      order: [[orderTarget], null]
+      order: [[orderTarget], null],
     };
 
-    // Calculate funds to send
-    const funds: Coin[] = [{
-      denom: assetInfo.denom,
-      amount: this.calculateOfferAmount(params),
-    }];
+    const funds: Coin[] = [
+      {
+        denom: assetInfo.denom,
+        amount: this.calculateOfferAmount(params),
+      },
+    ];
 
-    // Execute
-    const result = await this.client.executeContract(
-      contractAddress,
-      msg,
-      funds
-    );
+    const result = await this.client.executeContract(contractAddress, msg, funds);
 
-    // Build order ID (simplified - would come from events in real impl)
     const orderId = `${result.transactionHash}-0`;
 
     return {
@@ -263,9 +230,10 @@ export class RujiraOrderbook {
       order: {
         orderId,
         owner: await this.client.getAddress(),
-        pair: typeof params.pair === 'string' 
-          ? { base: '', quote: '', contractAddress, tick: '0', takerFee: '0', makerFee: '0' }
-          : params.pair,
+        pair:
+          typeof params.pair === 'string'
+            ? { base: '', quote: '', contractAddress, tick: '0', takerFee: '0', makerFee: '0' }
+            : params.pair,
         side: params.side,
         price: params.price,
         amount: params.amount,
@@ -279,43 +247,22 @@ export class RujiraOrderbook {
   }
 
   /**
-   * Cancel an open order
-   * 
-   * @param contractAddress - FIN contract address
-   * @param side - Order side
-   * @param price - Order price
+   * Cancel an open order.
    */
-  async cancelOrder(
-    contractAddress: string,
-    side: OrderSide,
-    price: string
-  ): Promise<{ txHash: string }> {
-    // To cancel, we set the amount to null (withdraw all)
-    const orderTarget: [OrderSide, string, string | null] = [
-      side,
-      price,
-      null, // null = withdraw
-    ];
+  async cancelOrder(contractAddress: string, side: OrderSide, price: string): Promise<{ txHash: string }> {
+    const orderTarget: [OrderSide, string, string | null] = [side, price, null];
 
     const msg: FinExecuteMsg = {
-      order: [[orderTarget], null]
+      order: [[orderTarget], null],
     };
 
-    const result = await this.client.executeContract(
-      contractAddress,
-      msg,
-      [] // No funds for cancel
-    );
+    const result = await this.client.executeContract(contractAddress, msg, []);
 
     return { txHash: result.transactionHash };
   }
 
   /**
-   * Get user's open orders
-   * 
-   * @param contractAddress - FIN contract address
-   * @param owner - Owner address (defaults to connected wallet)
-   * @param side - Filter by side (optional)
+   * Get user's open orders.
    */
   async getOrders(
     contractAddress: string,
@@ -324,7 +271,7 @@ export class RujiraOrderbook {
     limit = 30,
     offset = 0
   ): Promise<Order[]> {
-    const address = owner || await this.client.getAddress();
+    const address = owner || (await this.client.getAddress());
 
     const query: FinQueryMsg = {
       orders: {
@@ -332,7 +279,7 @@ export class RujiraOrderbook {
         side,
         offset,
         limit,
-      }
+      },
     };
 
     const response = await this.client.queryContract<{
@@ -348,45 +295,42 @@ export class RujiraOrderbook {
       }>;
     }>(contractAddress, query);
 
-    return response.orders.map((o: {
-      owner: string;
-      side: OrderSide;
-      price: string;
-      rate: string;
-      updated_at: string;
-      offer: string;
-      remaining: string;
-      filled: string;
-    }) => ({
-      orderId: `${address}-${o.side}-${o.price}`,
-      owner: o.owner,
-      pair: {
-        base: '',
-        quote: '',
-        contractAddress,
-        tick: '0',
-        takerFee: '0',
-        makerFee: '0',
-      },
-      side: o.side,
-      price: o.price,
-      amount: o.offer,
-      filled: o.filled,
-      remaining: o.remaining,
-      status: BigInt(o.remaining) === 0n ? 'filled' : 
-              BigInt(o.filled) > 0n ? 'partial' : 'open',
-      createdAt: parseInt(o.updated_at),
-      updatedAt: parseInt(o.updated_at),
-    }));
+    return response.orders.map(
+      (o: {
+        owner: string;
+        side: OrderSide;
+        price: string;
+        rate: string;
+        updated_at: string;
+        offer: string;
+        remaining: string;
+        filled: string;
+      }) => ({
+        orderId: `${address}-${o.side}-${o.price}`,
+        owner: o.owner,
+        pair: {
+          base: '',
+          quote: '',
+          contractAddress,
+          tick: '0',
+          takerFee: '0',
+          makerFee: '0',
+        },
+        side: o.side,
+        price: o.price,
+        amount: o.offer,
+        filled: o.filled,
+        remaining: o.remaining,
+        status:
+          BigInt(o.remaining) === 0n ? 'filled' : BigInt(o.filled) > 0n ? 'partial' : 'open',
+        createdAt: parseInt(o.updated_at),
+        updatedAt: parseInt(o.updated_at),
+      })
+    );
   }
 
   /**
-   * Get a specific order
-   * 
-   * @param contractAddress - FIN contract address
-   * @param owner - Owner address
-   * @param side - Order side
-   * @param price - Order price
+   * Get a specific order.
    */
   async getOrder(
     contractAddress: string,
@@ -395,7 +339,7 @@ export class RujiraOrderbook {
     price: string
   ): Promise<Order | null> {
     const query: FinQueryMsg = {
-      order: [owner, side, price]
+      order: [owner, side, price],
     };
 
     try {
@@ -426,8 +370,12 @@ export class RujiraOrderbook {
         amount: response.offer,
         filled: response.filled,
         remaining: response.remaining,
-        status: BigInt(response.remaining) === 0n ? 'filled' :
-                BigInt(response.filled) > 0n ? 'partial' : 'open',
+        status:
+          BigInt(response.remaining) === 0n
+            ? 'filled'
+            : BigInt(response.filled) > 0n
+              ? 'partial'
+              : 'open',
         createdAt: parseInt(response.updated_at),
         updatedAt: parseInt(response.updated_at),
       };
@@ -436,34 +384,21 @@ export class RujiraOrderbook {
     }
   }
 
-  // ============================================================================
-  // INTERNAL
-  // ============================================================================
-
-  /**
-   * Resolve contract address from pair string or address
-   */
   private async resolveContract(pairOrContract: string): Promise<string> {
-    // If it looks like an address, return it
     if (pairOrContract.startsWith('thor1') || pairOrContract.startsWith('sthor1')) {
       return pairOrContract;
     }
 
-    // Look up in known contracts
     const knownContracts = this.client.config.contracts.finContracts;
     if (knownContracts[pairOrContract]) {
       return knownContracts[pairOrContract];
     }
 
-    throw new RujiraError(
-      RujiraErrorCode.INVALID_PAIR,
-      `Unknown trading pair: ${pairOrContract}`
-    );
+    throw new RujiraError(RujiraErrorCode.INVALID_PAIR, `Unknown trading pair: ${pairOrContract}`);
   }
 
   /**
-   * Transform book entries from contract response
-   * Uses string-based decimal arithmetic to avoid floating-point precision loss
+   * Uses string-based decimal arithmetic to avoid floating-point precision loss.
    */
   private transformBookEntries(
     entries: Array<{ price: string; total: string }>,
@@ -472,11 +407,11 @@ export class RujiraOrderbook {
     const transformed = entries.map((e) => {
       const price = Big(e.price);
       const amount = Big(e.total);
-      
+
       return {
         price: e.price,
         amount: e.total,
-        total: price.mul(amount).toFixed(8), // Standardize to 8 decimals for total value
+        total: price.mul(amount).toFixed(8),
       };
     });
 
@@ -487,107 +422,54 @@ export class RujiraOrderbook {
     });
   }
 
-
-
-  /**
-   * Validate order parameters
-   */
   private validateOrderParams(params: LimitOrderParams): void {
     if (!params.price || parseFloat(params.price) <= 0) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_PRICE,
-        'Order price must be positive'
-      );
+      throw new RujiraError(RujiraErrorCode.INVALID_PRICE, 'Order price must be positive');
     }
 
     if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_AMOUNT,
-        'Order amount must be positive'
-      );
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order amount must be positive');
     }
 
     if (!['buy', 'sell'].includes(params.side)) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_AMOUNT,
-        'Order side must be "buy" or "sell"'
-      );
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order side must be "buy" or "sell"');
     }
   }
 
-  /**
-   * Get the asset info for the offer side of an order
-   * 
-   * For buy orders: we offer the quote asset (typically RUNE)
-   * For sell orders: we offer the base asset (queried from contract config)
-   * 
-   * @param params - Order parameters including pair and side
-   * @returns Asset info with denom and decimals, or undefined if not found
-   */
   private async getOfferAsset(
     params: LimitOrderParams
   ): Promise<{ denom: string; decimals: number } | undefined> {
-    // For limit orders, we need to determine which asset we're offering
-    // Buy order = offer quote asset (typically RUNE)
-    // Sell order = offer base asset (the asset being sold)
-
-    // Helper to get asset info from @vultisig/assets (single-arg signature)
     const getAssetInfo = (assetId: string): { denom: string; decimals: number } | undefined => {
       const asset = findAssetByFormat(assetId);
       if (!asset?.formats?.fin) return undefined;
-      return { 
-        denom: asset.formats.fin, 
-        decimals: asset.decimals?.fin ?? 8 
-      };
+      return { denom: asset.formats.fin, decimals: asset.decimals?.fin ?? 8 };
     };
 
-    // If pair is a TradingPair object with base/quote info, use it directly
     if (typeof params.pair !== 'string' && params.pair.base && params.pair.quote) {
       const assetId = params.side === 'buy' ? params.pair.quote : params.pair.base;
       return getAssetInfo(assetId);
     }
 
-    // For string pair or pair without asset info, query the contract
     const contractAddress = await this.resolveContract(
       typeof params.pair === 'string' ? params.pair : params.pair.contractAddress
     );
-    
+
     const config = await this.getContractConfig(contractAddress);
-    
+
     if (params.side === 'buy') {
-      // Buy orders offer the quote asset
       return config.quote ? getAssetInfo(config.quote) : getAssetInfo('THOR.RUNE');
-    } else {
-      // Sell orders offer the base asset
-      if (config.base) {
-        return getAssetInfo(config.base);
-      }
-      // Fallback: if we can't determine base asset, return undefined
-      return undefined;
     }
+
+    return config.base ? getAssetInfo(config.base) : undefined;
   }
 
-  /**
-   * Calculate offer amount for order
-   */
   private calculateOfferAmount(params: LimitOrderParams): string {
     if (params.side === 'buy') {
-      // For buy, offer = amount * price
-      // Amount is in base units (integer string)
-      // Price is decimal string (e.g. "0.25")
-      
       const amount = Big(params.amount);
       const price = Big(params.price);
-      
-      // We need to handle decimals carefully here.
-      // Usually amount is in base units (satoshis)
-      // Price is relative (Asset A / Asset B)
-      // If we assume standard 8 decimals for price precision in the matching engine:
-      
-      // offer_amount = amount * price
-      return amount.mul(price).toFixed(0, 0); // Round down (0) to be safe
+      return amount.mul(price).toFixed(0, 0);
     }
-    // For sell, offer = amount
+
     return params.amount;
   }
 }
