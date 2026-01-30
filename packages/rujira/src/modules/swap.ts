@@ -65,7 +65,7 @@ export class RujiraSwap {
       const cached = this.quoteCache.get(params.fromAsset, params.toAsset, params.amount);
       if (cached) {
         if (Date.now() >= cached.expiresAt) {
-          // fetch fresh
+          // expired; fall through to fetch
         } else if (maxStalenessMs !== undefined && cached.cachedAt) {
           const age = Date.now() - cached.cachedAt;
           if (age <= maxStalenessMs) {
@@ -109,11 +109,10 @@ export class RujiraSwap {
 
     const inputAmount = Big(params.amount);
     const outputAmount = Big(simulation.returned);
-    
-    // Rate calculation: Input / Output (scaled by 1e8)
-    // Preserving original logic: input * 1e8 / output
-    const rate = outputAmount.gt(0) 
-      ? inputAmount.mul(100000000).div(outputAmount).toFixed(0, 0) // Round down
+
+    // input * 1e8 / output
+    const rate = outputAmount.gt(0)
+      ? inputAmount.mul(100000000).div(outputAmount).toFixed(0, 0) // round down
       : '0';
 
     const priceImpact = this.calculatePriceImpact(params.amount, simulation.returned, orderbook);
