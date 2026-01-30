@@ -27,6 +27,7 @@ import {
   executePortfolio,
   executeRename,
   executeSend,
+  executeExecute,
   executeServer,
   executeSignBytes,
   executeSwap,
@@ -36,6 +37,11 @@ import {
   executeTokens,
   executeVaults,
   executeVerify,
+  executeRujiraBalance,
+  executeRujiraDeposit,
+  executeRujiraRoutes,
+  executeRujiraSwap,
+  executeRujiraWithdraw,
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
 import { findChainByName } from './interactive'
@@ -492,6 +498,44 @@ program
     )
   )
 
+// Command: Execute CosmWasm contract (for Rujira FIN swaps, etc.)
+program
+  .command('execute <chain> <contract> <msg>')
+  .description('Execute a CosmWasm smart contract (THORChain, MayaChain)')
+  .option('--funds <funds>', 'Funds to send with execution (format: "denom:amount" or "denom:amount,denom2:amount2")')
+  .option('--memo <memo>', 'Transaction memo')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
+  .action(
+    withExit(
+      async (
+        chainStr: string,
+        contract: string,
+        msg: string,
+        options: { funds?: string; memo?: string; yes?: boolean; password?: string }
+      ) => {
+        const context = await init(program.opts().vault, options.password)
+        try {
+          await executeExecute(context, {
+            chain: findChainByName(chainStr) || (chainStr as Chain),
+            contract,
+            msg,
+            funds: options.funds,
+            memo: options.memo,
+            yes: options.yes,
+            password: options.password,
+          })
+        } catch (err: any) {
+          if (err.message === 'Transaction cancelled by user') {
+            warn('\nx Transaction cancelled')
+            return
+          }
+          throw err
+        }
+      }
+    )
+  )
+
 // Command: Sign arbitrary bytes (for externally constructed transactions)
 program
   .command('sign')
@@ -775,6 +819,147 @@ program
           }
           throw err
         }
+      }
+    )
+  )
+
+// ============================================================================
+// Rujira (FIN) Commands
+// ============================================================================
+
+const rujiraCmd = program.command('rujira').description('Rujira FIN swaps + secured asset tools on THORChain')
+
+rujiraCmd
+  .command('balance')
+  .description('Show secured asset balances on THORChain')
+  .option('--secured-only', 'Filter to secured/FIN-like denoms only')
+  .option('--rpc <url>', 'Override THORChain RPC endpoint')
+  .option('--rest <url>', 'Override THORNode REST endpoint')
+  .action(
+    withExit(async (options: { securedOnly?: boolean; rpc?: string; rest?: string }) => {
+      const context = await init(program.opts().vault)
+      await executeRujiraBalance(context, {
+        securedOnly: options.securedOnly,
+        rpcEndpoint: options.rpc,
+        restEndpoint: options.rest,
+      })
+    })
+  )
+
+rujiraCmd
+  .command('routes')
+  .description('List available FIN swap routes')
+  .action(
+    withExit(async () => {
+      await executeRujiraRoutes()
+    })
+  )
+
+rujiraCmd
+  .command('deposit')
+  .description('Show deposit instructions (inbound address + memo)')
+  .option('--asset <asset>', 'L1 asset to deposit (e.g., BTC.BTC, ETH.ETH)')
+  .option('--amount <amount>', 'Amount in base units (optional; used for validation)', '1')
+  .option('--affiliate <thorAddress>', 'Affiliate THOR address (optional)')
+  .option('--affiliate-bps <bps>', 'Affiliate fee in basis points (optional)', '0')
+  .option('--rpc <url>', 'Override THORChain RPC endpoint')
+  .option('--rest <url>', 'Override THORNode REST endpoint')
+  .action(
+    withExit(
+      async (options: {
+        asset?: string
+        amount?: string
+        affiliate?: string
+        affiliateBps?: string
+        rpc?: string
+        rest?: string
+      }) => {
+        const context = await init(program.opts().vault)
+        await executeRujiraDeposit(context, {
+          asset: options.asset,
+          amount: options.amount,
+          affiliate: options.affiliate,
+          affiliateBps: options.affiliateBps ? parseInt(options.affiliateBps, 10) : undefined,
+          rpcEndpoint: options.rpc,
+          restEndpoint: options.rest,
+        })
+      }
+    )
+  )
+
+rujiraCmd
+  .command('swap <fromAsset> <toAsset> <amount>')
+  .description('Execute a FIN swap (amount in base units)')
+  .option('--slippage-bps <bps>', 'Slippage tolerance in basis points (default: 100 = 1%)', '100')
+  .option('--destination <thorAddress>', 'Destination THOR address (default: vault THORChain address)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
+  .option('--rpc <url>', 'Override THORChain RPC endpoint')
+  .option('--rest <url>', 'Override THORNode REST endpoint')
+  .action(
+    withExit(
+      async (
+        fromAsset: string,
+        toAsset: string,
+        amount: string,
+        options: {
+          slippageBps?: string
+          destination?: string
+          yes?: boolean
+          password?: string
+          rpc?: string
+          rest?: string
+        }
+      ) => {
+        const context = await init(program.opts().vault, options.password)
+        await executeRujiraSwap(context, {
+          fromAsset,
+          toAsset,
+          amount,
+          slippageBps: options.slippageBps ? parseInt(options.slippageBps, 10) : undefined,
+          destination: options.destination,
+          yes: options.yes,
+          password: options.password,
+          rpcEndpoint: options.rpc,
+          restEndpoint: options.rest,
+        })
+      }
+    )
+  )
+
+rujiraCmd
+  .command('withdraw <asset> <amount> <l1Address>')
+  .description('Withdraw secured assets to L1 (amount in base units)')
+  .option('--max-fee-bps <bps>', 'Max outbound fee as bps of amount (optional)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
+  .option('--rpc <url>', 'Override THORChain RPC endpoint')
+  .option('--rest <url>', 'Override THORNode REST endpoint')
+  .action(
+    withExit(
+      async (
+        asset: string,
+        amount: string,
+        l1Address: string,
+        options: {
+          maxFeeBps?: string
+          yes?: boolean
+          password?: string
+          rpc?: string
+          rest?: string
+        }
+      ) => {
+        const context = await init(program.opts().vault, options.password)
+        await executeRujiraWithdraw(context, {
+          asset,
+          amount,
+          l1Address,
+          maxFeeBps: options.maxFeeBps ? parseInt(options.maxFeeBps, 10) : undefined,
+          yes: options.yes,
+          password: options.password,
+          rpcEndpoint: options.rpc,
+          restEndpoint: options.rest,
+        })
       }
     )
   )

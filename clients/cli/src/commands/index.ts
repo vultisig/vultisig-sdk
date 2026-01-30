@@ -17,6 +17,10 @@ export { addToken, executeTokens, listTokens, removeToken } from './tokens'
 // Transaction commands
 export { executeSend, sendTransaction } from './transaction'
 
+// Execute command (CosmWasm contracts)
+export type { ExecuteParams } from './execute'
+export { executeExecute } from './execute'
+
 // Sign command (arbitrary bytes)
 export type { SignBytesParams, SignBytesResult } from './sign'
 export { executeSignBytes, signBytes } from './sign'
@@ -55,3 +59,18 @@ export { executeSwap, executeSwapChains, executeSwapQuote } from './swap'
 // Settings commands
 export type { AddressBookEntry, AddressBookOptions } from './settings'
 export { executeAddressBook, executeCurrency, executeServer } from './settings'
+
+// Rujira commands
+export type {
+  RujiraBalanceOptions,
+  RujiraDepositOptions,
+  RujiraSwapOptions,
+  RujiraWithdrawOptions,
+} from './rujira'
+export {
+  executeRujiraBalance,
+  executeRujiraDeposit,
+  executeRujiraRoutes,
+  executeRujiraSwap,
+  executeRujiraWithdraw,
+} from './rujira'
