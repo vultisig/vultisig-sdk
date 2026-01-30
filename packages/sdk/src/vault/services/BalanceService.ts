@@ -81,10 +81,15 @@ export class BalanceService {
   /**
    * Get balances for multiple chains
    */
-  async getBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
+  async getBalances({
+    chains,
+    includeTokens = false,
+  }: {
+    chains: Chain | Chain[]
+    includeTokens?: boolean
+  }): Promise<Record<string, Balance>> {
     const result: Record<string, Balance> = {}
-
-    const chainsList = Array.isArray(chains) ? chains : [chains as unknown as Chain]
+    const chainsList = Array.isArray(chains) ? chains : [chains]
 
     for (const chain of chainsList) {
       try {
@@ -119,9 +124,16 @@ export class BalanceService {
   /**
    * Force refresh multiple balances
    */
-  async updateBalances(chains: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
+  async updateBalances({
+    chains,
+    includeTokens = false,
+  }: {
+    chains: Chain | Chain[]
+    includeTokens?: boolean
+  }): Promise<Record<string, Balance>> {
+    const chainsList = Array.isArray(chains) ? chains : [chains]
+
     // Invalidate cache for all chains
-    const chainsList = Array.isArray(chains) ? chains : [chains as unknown as Chain]
     for (const chain of chainsList) {
       const key = `${chain.toLowerCase()}:native`
       await this.cacheService.invalidateScoped(key, CacheScope.BALANCE)
@@ -135,7 +147,7 @@ export class BalanceService {
       }
     }
 
-    return this.getBalances(chainsList, includeTokens)
+    return this.getBalances({ chains: chainsList, includeTokens })
   }
 
   /**
