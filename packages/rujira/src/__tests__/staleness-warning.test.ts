@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RujiraSwap } from '../modules/swap';
+import { RujiraSwap } from '../modules/swap.js';
 
 // Mock client for testing
 const createMockClient = () => ({

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RujiraOrderbook } from '../modules/orderbook';
+import { RujiraOrderbook } from '../modules/orderbook.js';
 
 // Mock the client
 const createMockClient = (configResponse?: object, bookResponse?: object) => ({

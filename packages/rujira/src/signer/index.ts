@@ -2,7 +2,7 @@ export {
   VultisigRujiraProvider,
   createMockSigner,
   isVultisigVault,
-} from './vultisig-provider';
+} from './vultisig-provider.js';
 
 export type {
   RujiraSigner,
@@ -14,4 +14,4 @@ export type {
   SignDirectInput,
   SigningPayload,
   SigningResult,
-} from './types';
+} from './types.js';

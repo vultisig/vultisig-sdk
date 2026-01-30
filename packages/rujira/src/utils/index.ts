@@ -3,6 +3,6 @@
  * @module utils
  */
 
-export * from './format';
-export * from './memo';
-export * from './cache';
+export * from './format.js';
+export * from './memo.js';
+export * from './cache.js';

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { QuoteCache } from '../utils/cache';
+import { QuoteCache } from '../utils/cache.js';
 
 describe('QuoteCache', () => {
   let cache: QuoteCache<string>;

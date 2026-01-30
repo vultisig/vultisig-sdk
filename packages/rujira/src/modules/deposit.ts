@@ -3,8 +3,8 @@
  * @module modules/deposit
  */
 
-import type { RujiraClient } from '../client';
-import { RujiraError, RujiraErrorCode, wrapError } from '../errors';
+import type { RujiraClient } from '../client.js';
+import { RujiraError, RujiraErrorCode, wrapError } from '../errors.js';
 import { findAssetByFormat } from '@vultisig/assets';
 import type { Asset } from '@vultisig/assets';
 

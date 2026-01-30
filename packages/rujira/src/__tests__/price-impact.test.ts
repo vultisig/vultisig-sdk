@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RujiraSwap } from '../modules/swap';
-import type { OrderBook, TradingPair } from '../types';
+import { RujiraSwap } from '../modules/swap.js';
+import type { OrderBook, TradingPair } from '../types.js';
 
 // Helper to create orderbook
 const createOrderbook = (

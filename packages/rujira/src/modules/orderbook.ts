@@ -6,8 +6,8 @@ import { Coin } from '@cosmjs/proto-signing';
 import Big from 'big.js';
 import { findAssetByFormat } from '@vultisig/assets';
 
-import type { RujiraClient } from '../client';
-import { RujiraError, RujiraErrorCode } from '../errors';
+import type { RujiraClient } from '../client.js';
+import { RujiraError, RujiraErrorCode } from '../errors.js';
 import type {
   LimitOrderParams,
   Order,
@@ -17,7 +17,7 @@ import type {
   OrderSide,
   FinExecuteMsg,
   FinQueryMsg,
-} from '../types';
+} from '../types.js';
 
 /**
  * Orderbook module for managing limit orders.

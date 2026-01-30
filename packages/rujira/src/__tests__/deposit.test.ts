@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RujiraClient } from '../client';
-import { RujiraDeposit } from '../modules/deposit';
-import { RujiraError, RujiraErrorCode } from '../errors';
-import { VALID_THOR_ADDRESS, VALID_STHOR_ADDRESS } from './test-helpers';
+import { RujiraClient } from '../client.js';
+import { RujiraDeposit } from '../modules/deposit.js';
+import { RujiraError, RujiraErrorCode } from '../errors.js';
+import { VALID_THOR_ADDRESS, VALID_STHOR_ADDRESS } from './test-helpers.js';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
