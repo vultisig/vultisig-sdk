@@ -369,17 +369,58 @@ export class RujiraClient {
     query: object
   ): Promise<T> {
     this.ensureConnected();
+
+    this.log('Query contract:', contractAddress, query);
+
+    // Primary path: query via RPC (CosmJS)
     try {
-      this.log('Query contract:', contractAddress, query);
-      const result = await this.queryClient!.queryContractSmart(
-        contractAddress,
-        query
-      );
+      const result = await this.queryClient!.queryContractSmart(contractAddress, query);
       this.log('Query result:', result);
       return result as T;
     } catch (error) {
+      // Some THORChain nodes enforce a relatively low default gas limit for wasm queries.
+      // When that happens, the RPC query fails with "out of gas".
+      // Fallback: retry via the REST/LCD endpoint with an increased gas limit.
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.toLowerCase().includes('out of gas')) {
+        try {
+          const result = await this.queryContractViaRest<T>(contractAddress, query);
+          this.log('Query result (REST fallback):', result);
+          return result;
+        } catch (fallbackError) {
+          throw wrapError(fallbackError, RujiraErrorCode.CONTRACT_ERROR);
+        }
+      }
+
       throw wrapError(error, RujiraErrorCode.CONTRACT_ERROR);
     }
+  }
+
+  /**
+   * Query a CosmWasm smart contract via LCD/REST endpoint.
+   *
+   * This is used as a fallback for chains/nodes that have a strict wasm query gas limit
+   * on the RPC path.
+   */
+  private async queryContractViaRest<T>(
+    contractAddress: string,
+    query: object
+  ): Promise<T> {
+    const encoded = Buffer.from(JSON.stringify(query)).toString('base64');
+
+    const base = this.config.restEndpoint.replace(/\/$/, '');
+    const url = `${base}/cosmwasm/wasm/v1/contract/${contractAddress}/smart/${encoded}?gas_limit=${this.config.wasmQueryGasLimit}`;
+
+    this.log('Query contract (REST):', url);
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`REST smart query failed (${res.status}): ${text || res.statusText}`);
+    }
+
+    const data = await res.json() as { data: unknown };
+    return data.data as T;
   }
 
   /**
@@ -431,7 +472,7 @@ export class RujiraClient {
    */
   async getOrderBook(
     contractAddress: string,
-    limit = 50,
+    limit = 10,
     offset = 0
   ): Promise<BookResponse> {
     const query: FinQueryMsg = {
