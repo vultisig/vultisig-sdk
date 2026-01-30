@@ -44,8 +44,10 @@ export interface NetworkConfig {
   graphqlWsEndpoint?: string;
   /** Default gas price */
   gasPrice: string;
-  /** Default gas limit */
+  /** Default gas limit (transactions) */
   gasLimit: number;
+  /** Default gas limit for CosmWasm smart queries */
+  wasmQueryGasLimit: number;
   /** Address prefix */
   addressPrefix: string;
 }
@@ -94,6 +96,7 @@ export const MAINNET_CONFIG: RujiraConfig = {
   graphqlWsEndpoint: 'wss://api.rujira.network/socket',
   gasPrice: '0.025rune',
   gasLimit: 500000,
+  wasmQueryGasLimit: 5_000_000,
   addressPrefix: 'thor',
   contracts: {
     finCodeHash: '240a0994d37b7eb80bf2273c4224c736194160353ba6ccd9ae893eeab88794b9',
@@ -119,6 +122,7 @@ export const STAGENET_CONFIG: RujiraConfig = {
   midgardEndpoint: 'https://stagenet-midgard.ninerealms.com/v2',
   gasPrice: '0.025rune',
   gasLimit: 500000,
+  wasmQueryGasLimit: 5_000_000,
   addressPrefix: 'sthor',
   contracts: {
     finCodeHash: '',
@@ -140,6 +144,7 @@ export const LOCALNET_CONFIG: RujiraConfig = {
   midgardEndpoint: 'http://localhost:8080/v2',
   gasPrice: '0.025rune',
   gasLimit: 500000,
+  wasmQueryGasLimit: 5_000_000,
   addressPrefix: 'thor',
   contracts: {
     finCodeHash: '',

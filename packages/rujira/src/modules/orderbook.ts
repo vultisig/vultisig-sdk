@@ -45,6 +45,33 @@ export class RujiraOrderbook {
   constructor(private readonly client: RujiraClient) {}
 
   /**
+   * Convenience alias used by older examples/tests.
+   *
+   * Accepts two asset identifiers (any format supported by @vultisig/assets)
+   * and resolves the FIN contract key as "<baseDenom>/<quoteDenom>".
+   */
+  async getBook(
+    baseAsset: string,
+    quoteAsset: string,
+    limit = 10
+  ): Promise<OrderBook> {
+    const base = findAssetByFormat(baseAsset);
+    const quote = findAssetByFormat(quoteAsset);
+
+    const baseDenom = base?.formats?.fin;
+    const quoteDenom = quote?.formats?.fin;
+
+    if (!baseDenom || !quoteDenom) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_ASSET,
+        `Unknown asset(s): ${baseAsset}, ${quoteAsset}`
+      );
+    }
+
+    return this.getOrderBook(`${baseDenom}/${quoteDenom}`, limit);
+  }
+
+  /**
    * Get the order book for a trading pair
    *
    * @param pairOrContract - Trading pair string or contract address
@@ -52,7 +79,7 @@ export class RujiraOrderbook {
    */
   async getOrderBook(
     pairOrContract: string,
-    limit = 50
+    limit = 10
   ): Promise<OrderBook> {
     const contractAddress = await this.resolveContract(pairOrContract);
 
