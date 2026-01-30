@@ -24,6 +24,31 @@ import type { Coin } from '@cosmjs/proto-signing';
 import type { VultisigVault, KeysignPayload } from '../signer/types';
 
 /**
+ * Map THORChain asset chain IDs to Vultisig SDK Chain values
+ * THORChain uses short IDs (ETH, BTC), SDK uses full names (Ethereum, Bitcoin)
+ */
+const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
+  'ETH': 'Ethereum',
+  'BTC': 'Bitcoin',
+  'BCH': 'BitcoinCash',
+  'DOGE': 'Dogecoin',
+  'LTC': 'Litecoin',
+  'AVAX': 'Avalanche',
+  'BSC': 'BSC',
+  'GAIA': 'Cosmos',
+  'THOR': 'THORChain',
+  'MAYA': 'MayaChain',
+  'KUJI': 'Kujira',
+  'DASH': 'Dash',
+  'ARB': 'Arbitrum',
+  'ZEC': 'Zcash',
+  'XRP': 'Ripple',
+  'BASE': 'Base',
+  'TRON': 'Tron',
+  'NOBLE': 'Noble',
+};
+
+/**
  * Type guard to check if an object is a valid Asset with FIN format
  * @internal
  */
@@ -405,8 +430,11 @@ export class RujiraWithdraw {
     const { vault, senderAddress, prepared, accountInfo, fee } = params;
 
     // Parse the asset to get the L1 chain and full symbol
-    const { chain: l1Chain, symbol: fullSymbol } = this.parseAsset(prepared.asset);
+    const { chain: thorchainChainId, symbol: fullSymbol } = this.parseAsset(prepared.asset);
     const ticker = fullSymbol.split('-')[0] || fullSymbol;
+    
+    // Convert THORChain chain ID (e.g., 'ETH') to SDK Chain value (e.g., 'Ethereum')
+    const l1Chain = THORCHAIN_TO_SDK_CHAIN[thorchainChainId] || thorchainChainId;
 
     const basePayload = await vault.prepareSignDirectTx(
       {
@@ -428,15 +456,21 @@ export class RujiraWithdraw {
 
     const derivedPublicKey = basePayload.coin?.hexPublicKey || vault.publicKeys.ecdsa;
 
+    // Extract contract address from the full symbol (e.g., USDC-0xa0b86991... -> 0xa0b86991...)
+    // Use uppercase for THORChain compatibility
+    const contractAddress = fullSymbol.includes('-') ? fullSymbol.split('-')[1]?.toUpperCase() : '';
+
     const keysignPayload: KeysignPayload = {
+      // IMPORTANT: coin.chain MUST be THORChain to route to the cosmos resolver
+      // The L1 asset info goes in swapPayload.fromCoin instead
       coin: {
-        chain: l1Chain,
-        ticker: fullSymbol,
+        chain: 'THORChain',
+        ticker: 'RUNE',
         address: senderAddress,
         contractAddress: '',
         decimals: THORCHAIN_DECIMALS,
         priceProviderId: '',
-        isNativeToken: false,
+        isNativeToken: true,
         hexPublicKey: derivedPublicKey,
         logo: '',
       },
@@ -469,7 +503,48 @@ export class RujiraWithdraw {
       
       // Empty arrays for unused fields
       utxoInfo: [],
-      swapPayload: { case: undefined, value: undefined },
+      
+      // Pass L1 asset info via swapPayload.fromCoin for THORChainAsset construction
+      // The cosmos resolver uses swapPayload.fromCoin to build the correct THORChainAsset
+      // (e.g., chain: 'Ethereum', symbol: 'USDC-0xa0b86991...', ticker: 'USDC')
+      swapPayload: {
+        case: 'thorchainSwapPayload',
+        value: {
+          fromAddress: senderAddress,
+          fromCoin: {
+            chain: l1Chain,
+            ticker: ticker,
+            contractAddress: contractAddress,
+            decimals: THORCHAIN_DECIMALS,
+            address: '',
+            priceProviderId: '',
+            isNativeToken: false,
+            hexPublicKey: '',
+            logo: '',
+          },
+          toCoin: {
+            chain: l1Chain,
+            ticker: ticker,
+            contractAddress: contractAddress,
+            decimals: THORCHAIN_DECIMALS,
+            address: prepared.destination,
+            priceProviderId: '',
+            isNativeToken: false,
+            hexPublicKey: '',
+            logo: '',
+          },
+          vaultAddress: '',
+          routerAddress: '',
+          fromAmount: prepared.amount,
+          toAmountDecimal: '0',
+          toAmountLimit: '0',
+          streamingInterval: '0',
+          streamingQuantity: '0',
+          expirationTime: BigInt(0),
+          isAffiliate: false,
+          fee: '0',
+        },
+      },
       contractPayload: { case: undefined, value: undefined },
       signData: { case: undefined, value: undefined },
     };
