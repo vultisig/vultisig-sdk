@@ -162,6 +162,63 @@ const vaultId = await sdk.createFastVaultFromSeedphrase({
 const vault = await sdk.verifyVault(vaultId, verificationCode)
 ```
 
+### 8. Send Tokens
+
+Send native tokens or ERC-20 tokens using a vault:
+
+```typescript
+// Get the sender's address
+const ethAddress = await vault.address('Ethereum');
+
+// Step 1: Prepare the transaction
+const keysignPayload = await vault.prepareSendTx({
+  coin: {
+    chain: 'Ethereum',
+    address: ethAddress,
+    decimals: 18,
+    ticker: 'ETH',
+  },
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f5bE91',
+  amount: BigInt('10000000000000'), // 0.00001 ETH in wei
+});
+
+// Step 2: Extract message hashes for signing
+const messageHashes = await vault.extractMessageHashes(keysignPayload);
+
+// Step 3: Build SigningPayload and sign
+const signingPayload = {
+  transaction: keysignPayload,
+  chain: 'Ethereum',
+  messageHashes,
+};
+const signature = await vault.sign(signingPayload);
+
+// Step 4: Broadcast the transaction
+const txHash = await vault.broadcastTx({
+  chain: 'Ethereum',
+  keysignPayload,
+  signature,
+});
+
+console.log('Transaction hash:', txHash);
+```
+
+For ERC-20 tokens, include the token contract address:
+
+```typescript
+const keysignPayload = await vault.prepareSendTx({
+  coin: {
+    chain: 'Ethereum',
+    address: ethAddress,
+    decimals: 6,
+    ticker: 'USDC',
+    id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // Token contract
+  },
+  receiver: recipientAddress,
+  amount: BigInt('1000000'), // 1 USDC (6 decimals)
+});
+```
+
 ## Supported Blockchains
 
 The SDK supports address derivation and operations for 40+ blockchain networks:
@@ -425,6 +482,56 @@ Join an existing SecureVault creation session. Auto-detects keygen vs seedphrase
 #### `vault.address(chain): Promise<string>`
 
 Derive a blockchain address for the given chain (called on Vault instance).
+
+#### `vault.balance(chain, tokenId?): Promise<Balance>`
+
+Get the balance for a chain's native token or a specific token.
+
+**Parameters:**
+
+- `chain: string` - Chain to get balance for
+- `tokenId?: string` - Optional token contract address for ERC-20/SPL tokens
+
+#### `vault.prepareSendTx(params): Promise<KeysignPayload>`
+
+Prepare a send transaction for signing.
+
+**Parameters:**
+
+- `params.coin: AccountCoin` - The coin to send (chain, address, decimals, ticker, optional id for tokens)
+- `params.receiver: string` - Recipient address
+- `params.amount: bigint` - Amount in base units (wei, satoshis, etc.)
+- `params.memo?: string` - Optional transaction memo
+- `params.feeSettings?: FeeSettings` - Optional custom fee settings
+
+#### `vault.extractMessageHashes(keysignPayload): Promise<string[]>`
+
+Extract message hashes from a prepared transaction. Required before calling `sign()`.
+
+**Parameters:**
+
+- `keysignPayload: KeysignPayload` - Payload from `prepareSendTx()`
+
+#### `vault.sign(payload, options?): Promise<Signature>`
+
+Sign a transaction using the vault's signing mode.
+
+**Parameters:**
+
+- `payload: SigningPayload` - Must include `transaction`, `chain`, and `messageHashes`
+- `options.signal?: AbortSignal` - Optional abort signal
+
+**Note:** For FastVaults, signing is automatic via VultiServer. For SecureVaults, device coordination is required.
+
+#### `vault.broadcastTx(params): Promise<string>`
+
+Broadcast a signed transaction and return the transaction hash.
+
+**Parameters:**
+
+- `params.chain: string` - Chain to broadcast on
+- `params.keysignPayload: KeysignPayload` - The prepared transaction
+- `params.signature: Signature` - The signature from `sign()`
 
 #### `addVault(file, password?): Promise<Vault>`
 
