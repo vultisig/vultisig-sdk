@@ -1640,6 +1640,46 @@ try {
 }
 ```
 
+### VULT Discount Tiers
+
+The SDK automatically applies affiliate fee discounts based on your VULT token and Thorguard NFT holdings on Ethereum. No configuration is needed - discounts are applied automatically to all swap quotes.
+
+#### Discount Tier Levels
+
+| Tier | Min VULT | Affiliate Fee |
+|------|----------|---------------|
+| None | 0 | 0.50% (50 bps) |
+| Bronze | 1,500 | 0.45% (45 bps) |
+| Silver | 3,000 | 0.40% (40 bps) |
+| Gold | 7,500 | 0.30% (30 bps) |
+| Platinum | 15,000 | 0.25% (25 bps) |
+| Diamond | 100,000 | 0.15% (15 bps) |
+| Ultimate | 1,000,000 | 0.00% (0 bps) |
+
+**Thorguard NFT Bonus:** Holders of the Thorguard NFT receive a free tier upgrade (one level higher), except for platinum tier and above.
+
+#### Checking Your Discount Tier
+
+```typescript
+// Get current discount tier based on VULT/Thorguard holdings
+const tier = await vault.getDiscountTier()
+console.log(`Current tier: ${tier ?? 'none'}`)
+// 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'ultimate' | null
+
+// Force refresh after acquiring more VULT tokens
+const updatedTier = await vault.updateDiscountTier()
+console.log(`Updated tier: ${updatedTier ?? 'none'}`)
+```
+
+#### How It Works
+
+1. When you request a swap quote, the SDK automatically fetches your VULT token balance and Thorguard NFT balance on Ethereum
+2. Your discount tier is calculated based on these holdings
+3. The reduced affiliate fee is applied to the swap quote
+4. Results are cached for 15 minutes to minimize RPC calls
+
+**Note:** The discount tier is determined automatically from your Ethereum address - you cannot manually override or set a discount tier.
+
 ---
 
 ## Configuration
@@ -2168,6 +2208,10 @@ class VaultBase {
   getTokenAllowance(coin: AccountCoin, spender: string): Promise<bigint>
   getSupportedSwapChains(): readonly Chain[]
   isSwapSupported(fromChain: Chain, toChain: Chain): boolean
+
+  // Discount Tiers (automatic VULT-based fee discounts)
+  getDiscountTier(): Promise<string | null>
+  updateDiscountTier(): Promise<string | null>
 
   // Chains & Tokens
   setChains(chains: Chain[]): Promise<void>
