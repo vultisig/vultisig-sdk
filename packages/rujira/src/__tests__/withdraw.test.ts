@@ -88,7 +88,9 @@ describe('RujiraWithdraw', () => {
             dust_threshold: '0',
             gas_rate: '50',
             gas_rate_units: 'gwei',
-            outbound_fee: '2400000000000000',
+            // THORChain `outbound_fee` is returned in 1e8 units of the chain gas asset
+            // (not wei). Keep this realistic to avoid prepare() rejecting tiny amounts.
+            outbound_fee: '9146',
           },
         ]),
       });
