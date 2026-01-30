@@ -55,3 +55,7 @@ export { executeSwap, executeSwapChains, executeSwapQuote } from './swap'
 // Settings commands
 export type { AddressBookEntry, AddressBookOptions } from './settings'
 export { executeAddressBook, executeCurrency, executeServer } from './settings'
+
+// Discount tier commands
+export type { DiscountOptions, DiscountTierInfo } from './discount'
+export { executeDiscount } from './discount'

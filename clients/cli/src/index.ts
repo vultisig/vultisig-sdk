@@ -20,6 +20,7 @@ import {
   executeCreateFromSeedphraseSecure,
   executeCreateSecure,
   executeCurrency,
+  executeDiscount,
   executeExport,
   executeImport,
   executeInfo,
@@ -563,6 +564,18 @@ program
     withExit(async () => {
       const context = await init(program.opts().vault)
       await executeServer(context)
+    })
+  )
+
+// Command: Discount tier
+program
+  .command('discount')
+  .description('Show your VULT discount tier for swap fees')
+  .option('--refresh', 'Force refresh tier from blockchain')
+  .action(
+    withExit(async (options: { refresh?: boolean }) => {
+      const context = await init(program.opts().vault)
+      await executeDiscount(context, { refresh: options.refresh })
     })
   )
 

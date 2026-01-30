@@ -282,6 +282,7 @@ export type SwapPreviewOptions = {
   toDecimals: number
   feeDecimals: number
   feeSymbol: string
+  discountTier?: string | null
 }
 
 export function displaySwapPreview(
@@ -321,6 +322,11 @@ export function displaySwapPreview(
       printResult(`    Affiliate: ${affiliateFeeFormatted} ${options.feeSymbol}`)
       if (quote.feesFiat?.affiliate) {
         printResult(`               (~$${quote.feesFiat.affiliate.toFixed(2)})`)
+      }
+      // Show discount tier if available
+      if (options.discountTier) {
+        const tierDisplay = options.discountTier.charAt(0).toUpperCase() + options.discountTier.slice(1)
+        printResult(chalk.green(`               (${tierDisplay} tier discount applied)`))
       }
     }
 

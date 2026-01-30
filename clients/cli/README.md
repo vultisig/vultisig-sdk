@@ -313,6 +313,9 @@ vultisig export
 | `swap <from> <to> <amount>` | Execute a swap |
 
 ```bash
+# Get a swap quote
+vultisig swap-quote ethereum bitcoin 0.1
+
 # Execute a swap
 vultisig swap ethereum bitcoin 0.1
 
@@ -322,6 +325,8 @@ vultisig swap ethereum bitcoin 0.1 --password mypassword
 # Skip confirmation prompt
 vultisig swap ethereum bitcoin 0.1 -y --password mypassword
 ```
+
+Swap quotes and previews show your VULT discount tier when affiliate fees are applied. See `vultisig discount` for tier details.
 
 ### Advanced Operations
 
@@ -527,7 +532,50 @@ vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"<base64-tx-bytes>","sign
 |---------|-------------|
 | `currency [code]` | View or set currency preference |
 | `server` | Check server connectivity |
+| `discount` | Show your VULT discount tier for swap fees |
 | `address-book` | Manage saved addresses |
+
+#### Discount Tiers
+
+View your VULT token holdings discount tier for reduced swap fees:
+
+```bash
+# Show current discount tier
+vultisig discount
+
+# Force refresh from blockchain
+vultisig discount --refresh
+```
+
+**Output:**
+```
++----------------------------------------+
+|          VULT Discount Tier            |
++----------------------------------------+
+
+  Current Tier:   Gold
+  Swap Fee:       30 bps (0.30%)
+  Discount:       20 bps saved
+
+  Next Tier:
+    Platinum - requires 15,000 VULT
+
+  Tip: Thorguard NFT holders get +1 tier upgrade (up to gold)
+```
+
+**Tier levels:**
+
+| Tier | VULT Required | Swap Fee | Discount |
+|------|---------------|----------|----------|
+| None | 0 | 50 bps | - |
+| Bronze | 1,500 | 45 bps | 5 bps |
+| Silver | 3,000 | 40 bps | 10 bps |
+| Gold | 7,500 | 30 bps | 20 bps |
+| Platinum | 15,000 | 25 bps | 25 bps |
+| Diamond | 100,000 | 15 bps | 35 bps |
+| Ultimate | 1,000,000 | 0 bps | 50 bps |
+
+Thorguard NFT holders receive a free tier upgrade (up to gold tier).
 
 ### CLI Management
 
