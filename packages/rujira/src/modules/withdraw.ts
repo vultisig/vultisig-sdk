@@ -429,12 +429,23 @@ export class RujiraWithdraw {
   }): Promise<KeysignPayload> {
     const { vault, senderAddress, prepared, accountInfo, fee } = params;
 
-    // Parse the asset to get the L1 chain and full symbol
+    // Parse the asset to get the L1 chain and full symbol (e.g. ETH + USDC-0x...)
     const { chain: thorchainChainId, symbol: fullSymbol } = this.parseAsset(prepared.asset);
     const ticker = fullSymbol.split('-')[0] || fullSymbol;
-    
+
     // Convert THORChain chain ID (e.g., 'ETH') to SDK Chain value (e.g., 'Ethereum')
     const l1Chain = THORCHAIN_TO_SDK_CHAIN[thorchainChainId] || thorchainChainId;
+
+    // IMPORTANT:
+    // For secured asset withdrawals, MsgDeposit must spend a THORChain-native denom
+    // (e.g. eth-usdc-0x...) and THORChain enforces that deposited coins are native.
+    //
+    // We pass the denom as the "asset" via swapPayload.fromCoin so the cosmos resolver
+    // builds a THORChainAsset with chain=THOR and symbol=<DENOM>.
+    // IMPORTANT: THORChain native denoms are case-sensitive (typically lowercase).
+    // Do NOT uppercase the denom, otherwise THORChain will reject the deposit coin
+    // as not being native.
+    const securedDenomSymbol = prepared.denom;
 
     const basePayload = await vault.prepareSignDirectTx(
       {
@@ -511,14 +522,17 @@ export class RujiraWithdraw {
         case: 'thorchainSwapPayload',
         value: {
           fromAddress: senderAddress,
+          // NOTE: this is not a swap. We piggy-back on swapPayload.fromCoin so the
+          // cosmos signing resolver constructs the MsgDeposit coin asset correctly.
+          // The asset must be THORChain-native for secured asset withdrawals.
           fromCoin: {
-            chain: l1Chain,
-            ticker: ticker,
-            contractAddress: contractAddress,
+            chain: 'THORChain',
+            ticker: securedDenomSymbol,
+            contractAddress: '',
             decimals: THORCHAIN_DECIMALS,
             address: '',
             priceProviderId: '',
-            isNativeToken: false,
+            isNativeToken: true,
             hexPublicKey: '',
             logo: '',
           },
