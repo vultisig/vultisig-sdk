@@ -4861,6 +4861,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/big.js@npm:^6.2.2":
+  version: 6.2.2
+  resolution: "@types/big.js@npm:6.2.2"
+  checksum: 10c0/8f8472dfc1ef61c492e6841e86f8b9b97e5b024136bf7964e582a6a80ba73d4dbfd6cc23ed3b9d8fea69c7f30834fffd1c88e7fb981811f5c6ca608380b5ad67
+  languageName: node
+  linkType: hard
+
 "@types/bn.js@npm:^5.1.6":
   version: 5.2.0
   resolution: "@types/bn.js@npm:5.2.0"
@@ -5802,8 +5809,8 @@ __metadata:
 
 "@vultisig/assets@file:../assets::locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira":
   version: 0.1.0
-  resolution: "@vultisig/assets@file:../assets#../assets::hash=b31710&locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira"
-  checksum: 10c0/d1cc5a9384bd80f0fdad8934b86b3b8c1e7b2b4f1e8299e3f8509abb1fd34c63e9b965dd6aed369856e00e018a66a5b6701c364b4e4ffad137bb0ed0db0ae6bb
+  resolution: "@vultisig/assets@file:../assets#../assets::hash=1256a2&locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira"
+  checksum: 10c0/939575682b7a7f6859b617f38e82f190bc03b7e3f486e073c0ef4c2dd6fc7d2b32b5901008f82f9bbc8af477b0f97b5122defb5d06eb4daefe3a1b9893c7dba5
   languageName: node
   linkType: hard
 
@@ -5924,10 +5931,12 @@ __metadata:
     "@cosmjs/cosmwasm-stargate": "npm:^0.32.4"
     "@cosmjs/proto-signing": "npm:^0.32.4"
     "@cosmjs/stargate": "npm:^0.32.4"
+    "@types/big.js": "npm:^6.2.2"
     "@types/node": "npm:^20.0.0"
     "@typescript-eslint/eslint-plugin": "npm:^8.0.0"
     "@typescript-eslint/parser": "npm:^8.0.0"
     "@vultisig/assets": "file:../assets"
+    big.js: "npm:^7.0.1"
     cosmjs-types: "npm:^0.9.0"
     eslint: "npm:^8.57.0"
     typescript: "npm:^5.5.0"
@@ -6791,6 +6800,13 @@ __metadata:
   dependencies:
     is-windows: "npm:^1.0.0"
   checksum: 10c0/7335130729d59a14b8e4753fea180ca84e287cccc20cb5f2438a95667abc5810327c414eee7b3c79ed1b5a348a40284ea872958f50caba69432c40405eb0acce
+  languageName: node
+  linkType: hard
+
+"big.js@npm:^7.0.1":
+  version: 7.0.1
+  resolution: "big.js@npm:7.0.1"
+  checksum: 10c0/2ea2c2e263db37b2d5c6ad6246408eabf13ba07776cfd92bf464db201ef9aa9aa1712accbfe97f4aba5d358567ebefe768e8a50102cde11f35ef3497ddc2747c
   languageName: node
   linkType: hard
 

@@ -4,6 +4,7 @@
  */
 
 import { Coin } from '@cosmjs/proto-signing';
+import Big from 'big.js';
 import type { RujiraClient } from '../client';
 import { RujiraError, RujiraErrorCode } from '../errors';
 import { findAssetByFormat } from '@vultisig/assets';
@@ -469,73 +470,24 @@ export class RujiraOrderbook {
     sortOrder: 'asc' | 'desc'
   ): OrderBookEntry[] {
     const transformed = entries.map((e) => {
-      // Calculate total value: price * amount using string-based decimal math
-      const total = this.multiplyDecimals(e.price, e.total);
-
+      const price = Big(e.price);
+      const amount = Big(e.total);
+      
       return {
         price: e.price,
         amount: e.total,
-        total,
+        total: price.mul(amount).toFixed(8), // Standardize to 8 decimals for total value
       };
     });
 
     return transformed.sort((a, b) => {
-      // Use string comparison for decimal sorting to avoid precision loss
-      const cmp = this.compareDecimals(a.price, b.price);
-      return sortOrder === 'asc' ? cmp : -cmp;
+      const pA = Big(a.price);
+      const pB = Big(b.price);
+      return sortOrder === 'asc' ? pA.cmp(pB) : pB.cmp(pA);
     });
   }
 
-  /**
-   * Multiply two decimal strings without floating-point precision loss
-   * Returns integer string (truncated, not rounded)
-   */
-  private multiplyDecimals(a: string, b: string): string {
-    // Parse decimal parts
-    const [aInt, aFrac = ''] = a.split('.');
-    const [bInt, bFrac = ''] = b.split('.');
-    
-    // Convert to integers by removing decimal points
-    const aScaled = BigInt(aInt + aFrac);
-    const bScaled = BigInt(bInt + bFrac);
-    
-    // Total decimal places = sum of both decimal place counts
-    const totalDecimals = aFrac.length + bFrac.length;
-    
-    // Multiply scaled integers
-    const product = aScaled * bScaled;
-    
-    // Truncate to integer (remove all decimal places)
-    if (totalDecimals === 0) {
-      return product.toString();
-    }
-    
-    const divisor = BigInt(10) ** BigInt(totalDecimals);
-    return (product / divisor).toString();
-  }
 
-  /**
-   * Compare two decimal strings
-   * Returns: -1 if a < b, 0 if equal, 1 if a > b
-   */
-  private compareDecimals(a: string, b: string): number {
-    // Normalize to same decimal places for comparison
-    const [aInt, aFrac = ''] = a.split('.');
-    const [bInt, bFrac = ''] = b.split('.');
-    
-    // Pad fractions to same length
-    const maxFracLen = Math.max(aFrac.length, bFrac.length);
-    const aPadded = aFrac.padEnd(maxFracLen, '0');
-    const bPadded = bFrac.padEnd(maxFracLen, '0');
-    
-    // Convert to BigInt for comparison
-    const aScaled = BigInt(aInt + aPadded);
-    const bScaled = BigInt(bInt + bPadded);
-    
-    if (aScaled < bScaled) return -1;
-    if (aScaled > bScaled) return 1;
-    return 0;
-  }
 
   /**
    * Validate order parameters
@@ -621,9 +573,19 @@ export class RujiraOrderbook {
   private calculateOfferAmount(params: LimitOrderParams): string {
     if (params.side === 'buy') {
       // For buy, offer = amount * price
-      const amount = BigInt(params.amount);
-      const price = BigInt(Math.floor(parseFloat(params.price) * 1e8));
-      return ((amount * price) / BigInt(1e8)).toString();
+      // Amount is in base units (integer string)
+      // Price is decimal string (e.g. "0.25")
+      
+      const amount = Big(params.amount);
+      const price = Big(params.price);
+      
+      // We need to handle decimals carefully here.
+      // Usually amount is in base units (satoshis)
+      // Price is relative (Asset A / Asset B)
+      // If we assume standard 8 decimals for price precision in the matching engine:
+      
+      // offer_amount = amount * price
+      return amount.mul(price).toFixed(0, 0); // Round down (0) to be safe
     }
     // For sell, offer = amount
     return params.amount;
