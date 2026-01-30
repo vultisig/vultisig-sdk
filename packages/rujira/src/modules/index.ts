@@ -3,11 +3,11 @@
  * @module modules
  */
 
-export { RujiraSwap } from './swap';
-export { RujiraOrderbook } from './orderbook';
-export { RujiraAssets } from './assets';
-export { RujiraDeposit } from './deposit';
-export { RujiraWithdraw } from './withdraw';
+export { RujiraSwap } from './swap.js';
+export { RujiraOrderbook } from './orderbook.js';
+export { RujiraAssets } from './assets.js';
+export { RujiraDeposit } from './deposit.js';
+export { RujiraWithdraw } from './withdraw.js';
 
 // Re-export types from deposit
 export type {
@@ -15,11 +15,11 @@ export type {
   PreparedDeposit,
   DepositParams,
   SecuredBalance,
-} from './deposit';
+} from './deposit.js';
 
 // Re-export types from withdraw
 export type {
   WithdrawParams,
   PreparedWithdraw,
   WithdrawResult,
-} from './withdraw';
+} from './withdraw.js';

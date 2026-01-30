@@ -2,9 +2,9 @@ import type { Coin } from '@cosmjs/proto-signing';
 import { findAssetByFormat } from '@vultisig/assets';
 import type { Asset } from '@vultisig/assets';
 
-import type { RujiraClient } from '../client';
-import { RujiraError, RujiraErrorCode } from '../errors';
-import type { KeysignPayload, VultisigVault } from '../signer/types';
+import type { RujiraClient } from '../client.js';
+import { RujiraError, RujiraErrorCode } from '../errors.js';
+import type { KeysignPayload, VultisigVault } from '../signer/types.js';
 
 const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
   ETH: 'Ethereum',

@@ -6,16 +6,16 @@ import {
 import { Coin } from '@cosmjs/proto-signing';
 import { GasPrice, StargateClient } from '@cosmjs/stargate';
 
-import { getNetworkConfig, type NetworkType, type RujiraConfig } from './config';
-import { RujiraError, RujiraErrorCode, wrapError } from './errors';
-import { RujiraDiscovery } from './discovery/discovery';
-import { RujiraAssets } from './modules/assets';
-import { RujiraDeposit } from './modules/deposit';
-import { RujiraOrderbook } from './modules/orderbook';
-import { RujiraSwap, type RujiraSwapOptions } from './modules/swap';
-import { RujiraWithdraw } from './modules/withdraw';
-import type { RujiraSigner } from './signer/types';
-import type { BookResponse, FinQueryMsg, SimulationResponse } from './types';
+import { getNetworkConfig, type NetworkType, type RujiraConfig } from './config.js';
+import { RujiraError, RujiraErrorCode, wrapError } from './errors.js';
+import { RujiraDiscovery } from './discovery/discovery.js';
+import { RujiraAssets } from './modules/assets.js';
+import { RujiraDeposit } from './modules/deposit.js';
+import { RujiraOrderbook } from './modules/orderbook.js';
+import { RujiraSwap, type RujiraSwapOptions } from './modules/swap.js';
+import { RujiraWithdraw } from './modules/withdraw.js';
+import type { RujiraSigner } from './signer/types.js';
+import type { BookResponse, FinQueryMsg, SimulationResponse } from './types.js';
 
 export interface RujiraClientOptions {
   network?: NetworkType;

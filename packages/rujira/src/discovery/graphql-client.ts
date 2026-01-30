@@ -1,4 +1,4 @@
-import type { GraphQLMarketsResponse } from './types';
+import type { GraphQLMarketsResponse } from './types.js';
 
 export interface GraphQLClientOptions {
   wsEndpoint?: string;

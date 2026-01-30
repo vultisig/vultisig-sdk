@@ -1,6 +1,6 @@
-import { GraphQLClient, type GraphQLClientOptions } from './graphql-client';
-import type { DiscoveredContracts, Market } from './types';
-import { MAINNET_CONFIG, STAGENET_CONFIG, type NetworkType } from '../config';
+import { GraphQLClient, type GraphQLClientOptions } from './graphql-client.js';
+import type { DiscoveredContracts, Market } from './types.js';
+import { MAINNET_CONFIG, STAGENET_CONFIG, type NetworkType } from '../config.js';
 
 export interface DiscoveryOptions {
   network?: NetworkType;

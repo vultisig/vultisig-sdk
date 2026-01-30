@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RujiraSwap } from '../modules/swap';
-import { RujiraError, RujiraErrorCode } from '../errors';
-import type { SwapQuote } from '../types';
-import { VALID_THOR_ADDRESS } from './test-helpers';
+import { RujiraSwap } from '../modules/swap.js';
+import { RujiraError, RujiraErrorCode } from '../errors.js';
+import type { SwapQuote } from '../types.js';
+import { VALID_THOR_ADDRESS } from './test-helpers.js';
 
 // Mock the client with balance checking capabilities
 const createMockClient = (balance: string = '1000000000') => ({
