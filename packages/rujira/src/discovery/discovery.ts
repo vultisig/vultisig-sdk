@@ -15,6 +15,7 @@ export class RujiraDiscovery {
   private rpcEndpoint: string;
   private cacheTtl: number;
   private debug: boolean;
+  private finCodeId: number;
   private cache: DiscoveredContracts | null = null;
   private pendingDiscovery: Promise<DiscoveredContracts> | null = null;
 
@@ -24,6 +25,7 @@ export class RujiraDiscovery {
     this.rpcEndpoint = options.rpcEndpoint || networkConfig.rpcEndpoint;
     this.cacheTtl = options.cacheTtl ?? 5 * 60 * 1000;
     this.debug = options.debug || false;
+    this.finCodeId = networkConfig.contracts.finCodeId;
 
     this.graphql = new GraphQLClient({
       httpEndpoint:
@@ -205,13 +207,12 @@ export class RujiraDiscovery {
   private async discoverViaChain(): Promise<DiscoveredContracts> {
     const fin: Record<string, string> = {};
 
-    const FIN_CODE_ID = '73';
     const baseUrl = this.rpcEndpoint.replace(':26657', '').replace('rpc', 'thornode');
     const restUrl = baseUrl.includes('thornode') ? baseUrl : 'https://thornode.ninerealms.com';
 
     try {
       const contractsResponse = await fetch(
-        `${restUrl}/cosmwasm/wasm/v1/code/${FIN_CODE_ID}/contracts`
+        `${restUrl}/cosmwasm/wasm/v1/code/${this.finCodeId}/contracts`
       );
 
       if (!contractsResponse.ok) {

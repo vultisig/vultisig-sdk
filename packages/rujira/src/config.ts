@@ -16,6 +16,7 @@ export interface NetworkConfig {
 }
 
 export interface ContractRegistry {
+  finCodeId: number;
   finCodeHash: string;
   bowCodeHash: string;
   affiliateCodeHash: string;
@@ -41,6 +42,7 @@ export const MAINNET_CONFIG: RujiraConfig = {
   wasmQueryGasLimit: 5_000_000,
   addressPrefix: 'thor',
   contracts: {
+    finCodeId: 73,
     finCodeHash: '240a0994d37b7eb80bf2273c4224c736194160353ba6ccd9ae893eeab88794b9',
     bowCodeHash: 'd77de081ae6440fd46cb4620d5fc9e285f2343f972edc0f70685a4b5f9f49536',
     affiliateCodeHash: '223ea20a4463696fe32b23f845e9f90ae5c83ef0175894a4b0cec114b7dd4b26',
@@ -60,6 +62,7 @@ export const STAGENET_CONFIG: RujiraConfig = {
   wasmQueryGasLimit: 5_000_000,
   addressPrefix: 'sthor',
   contracts: {
+    finCodeId: 0,
     finCodeHash: '',
     bowCodeHash: '',
     affiliateCodeHash: '',
@@ -79,6 +82,7 @@ export const LOCALNET_CONFIG: RujiraConfig = {
   wasmQueryGasLimit: 5_000_000,
   addressPrefix: 'thor',
   contracts: {
+    finCodeId: 0,
     finCodeHash: '',
     bowCodeHash: '',
     affiliateCodeHash: '',
