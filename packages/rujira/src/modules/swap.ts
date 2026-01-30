@@ -1,6 +1,7 @@
 import { fromBech32 } from '@cosmjs/encoding';
 import { Coin } from '@cosmjs/proto-signing';
 import { Amount, findAssetByFormat } from '@vultisig/assets';
+import Big from 'big.js';
 
 import { EASY_ROUTES, type EasyRouteName, type EasySwapRequest } from '../easy-routes';
 import type { RujiraClient } from '../client';
@@ -106,9 +107,14 @@ export class RujiraSwap {
     const slippageBps = params.slippageBps ?? this.client.config.defaultSlippageBps;
     const minimumOutput = calculateMinReturn(simulation.returned, slippageBps);
 
-    const inputAmount = BigInt(params.amount);
-    const outputAmount = BigInt(simulation.returned);
-    const rate = outputAmount > 0n ? (inputAmount * BigInt(1e8) / outputAmount).toString() : '0';
+    const inputAmount = Big(params.amount);
+    const outputAmount = Big(simulation.returned);
+    
+    // Rate calculation: Input / Output (scaled by 1e8)
+    // Preserving original logic: input * 1e8 / output
+    const rate = outputAmount.gt(0) 
+      ? inputAmount.mul(100000000).div(outputAmount).toFixed(0, 0) // Round down
+      : '0';
 
     const priceImpact = this.calculatePriceImpact(params.amount, simulation.returned, orderbook);
 
@@ -424,27 +430,29 @@ export class RujiraSwap {
       return this.estimatePriceImpactWithoutOrderbook(inputAmount);
     }
 
-    const bidPrice = parseFloat(bestBid);
-    const askPrice = parseFloat(bestAsk);
+    const bidPrice = Big(bestBid);
+    const askPrice = Big(bestAsk);
 
-    if (bidPrice <= 0 || askPrice <= 0) {
+    if (bidPrice.lte(0) || askPrice.lte(0)) {
       return '0';
     }
 
-    const midPrice = (bidPrice + askPrice) / 2;
+    const midPrice = bidPrice.plus(askPrice).div(2);
 
-    const input = parseFloat(inputAmount);
-    const output = parseFloat(outputAmount);
+    const input = Big(inputAmount);
+    const output = Big(outputAmount);
 
-    if (input <= 0 || output <= 0) {
+    if (input.lte(0) || output.lte(0)) {
       return '0';
     }
 
-    const executionPrice = output / input;
+    // execution_price = output / input
+    const executionPrice = output.div(input);
 
-    const impact = Math.abs(((executionPrice - midPrice) / midPrice) * 100);
+    // impact = abs((execution_price - midPrice) / midPrice) * 100
+    const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
 
-    if (impact > 50) {
+    if (impact.gt(50)) {
       return '50.00';
     }
 
