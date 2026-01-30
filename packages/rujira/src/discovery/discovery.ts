@@ -1,265 +1,121 @@
-/**
- * Contract discovery for Rujira SDK
- * 
- * The discovery module automatically finds FIN contract addresses for trading pairs
- * by querying the Rujira GraphQL API and falling back to on-chain queries.
- * 
- * Why discovery is needed:
- * - FIN contracts are deployed dynamically as new trading pairs are created
- * - Contract addresses aren't predictable and must be discovered
- * - The GraphQL API provides fast, indexed access to active markets
- * - Chain fallback ensures reliability when the API is unavailable
- * 
- * Discovery strategy:
- * 1. Primary: Query Rujira GraphQL API for active markets
- * 2. Fallback: Query THORChain directly for all FIN contracts
- * 3. Validation: Verify contracts match expected code hashes
- * 4. Caching: Store results to avoid repeated queries
- * 
- * @module discovery/discovery
- */
-
-import { CosmWasmClient } from '@cosmjs/cosmwasm-stargate';
 import { GraphQLClient, type GraphQLClientOptions } from './graphql-client';
-import type { Market, DiscoveredContracts } from './types';
+import type { DiscoveredContracts, Market } from './types';
 import { MAINNET_CONFIG, STAGENET_CONFIG, type NetworkType } from '../config';
 
-/**
- * Discovery options
- */
 export interface DiscoveryOptions {
-  /** Network to discover on */
   network?: NetworkType;
-  /** GraphQL client options */
   graphql?: GraphQLClientOptions;
-  /** RPC endpoint override */
   rpcEndpoint?: string;
-  /** Cache TTL in ms (default: 5 minutes, set to 0 to disable caching) */
   cacheTtl?: number;
-  /** Enable debug logging */
   debug?: boolean;
 }
 
-/**
- * Known FIN code hashes for verification
- */
-const FIN_CODE_HASHES = {
-  'v1.1': '240a0994d37b7eb80bf2273c4224c736194160353ba6ccd9ae893eeab88794b9',
-  'v1.0.1': '6eb73e0bbe8e3da2e757bff9915e96060cc36df1be46914a92bceb95e8cf7920',
-  'v1.0.0': '', // Add if known
-};
-
-/**
- * Contract discovery service for automatically finding trading pair contracts
- * 
- * The discovery service is crucial because FIN contracts are deployed dynamically
- * as new trading pairs become available. Unlike traditional DEXs with fixed
- * factory patterns, Rujira deploys separate FIN instances per trading pair.
- * 
- * Discovery mechanisms:
- * 1. **GraphQL API (Primary)**: Fast, indexed data from Rujira's backend
- *    - Pros: Fast, includes market metadata, always up-to-date
- *    - Cons: Single point of failure, requires network connectivity
- * 
- * 2. **Chain Query (Fallback)**: Direct blockchain queries via THORNode
- *    - Pros: Decentralized, works even if GraphQL is down
- *    - Cons: Slower, requires multiple queries, limited metadata
- * 
- * Caching strategy:
- * - Results are cached for 5 minutes by default to balance freshness vs. performance
- * - Cache prevents duplicate concurrent requests during discovery
- * - Cache TTL can be configured or disabled entirely
- * 
- * Error handling:
- * - Network errors trigger automatic fallback to chain queries
- * - Auth errors fail fast (no fallback) to avoid infinite loops
- * - Unknown markets return null rather than throwing exceptions
- * 
- * @example
- * ```typescript
- * const discovery = new RujiraDiscovery({ network: 'mainnet' });
- * 
- * // Discover all available markets
- * const contracts = await discovery.discoverContracts();
- * console.log(contracts.fin); // { "btc-btc/rune": "thor1...", ... }
- * 
- * // Find a specific trading pair
- * const market = await discovery.findMarket('btc-btc', 'rune');
- * if (market) {
- *   console.log(`BTC/RUNE trades at: ${market.address}`);
- * }
- * 
- * // Get contract address directly
- * const address = await discovery.getContractAddress('eth-eth', 'rune');
- * ```
- */
 export class RujiraDiscovery {
   private graphql: GraphQLClient;
   private rpcEndpoint: string;
   private cacheTtl: number;
   private debug: boolean;
   private cache: DiscoveredContracts | null = null;
-  private cosmClient: CosmWasmClient | null = null;
-  /** Pending discovery promise to prevent duplicate concurrent requests */
   private pendingDiscovery: Promise<DiscoveredContracts> | null = null;
 
   constructor(options: DiscoveryOptions = {}) {
-    const networkConfig = options.network === 'stagenet' 
-      ? STAGENET_CONFIG 
-      : MAINNET_CONFIG;
+    const networkConfig = options.network === 'stagenet' ? STAGENET_CONFIG : MAINNET_CONFIG;
 
     this.rpcEndpoint = options.rpcEndpoint || networkConfig.rpcEndpoint;
-    this.cacheTtl = options.cacheTtl ?? 5 * 60 * 1000; // 5 minutes default, allow 0
+    this.cacheTtl = options.cacheTtl ?? 5 * 60 * 1000;
     this.debug = options.debug || false;
 
-    // Initialize GraphQL client
-    // Note: Rujira uses Phoenix/Absinthe so the HTTP endpoint is /api/graphql
     this.graphql = new GraphQLClient({
-      httpEndpoint: options.network === 'stagenet'
-        ? 'https://preview-api.rujira.network/api/graphql'
-        : 'https://api.rujira.network/api/graphql',
-      wsEndpoint: options.network === 'stagenet'
-        ? 'wss://preview-api.rujira.network/socket'
-        : 'wss://api.rujira.network/socket',
+      httpEndpoint:
+        options.network === 'stagenet'
+          ? 'https://preview-api.rujira.network/api/graphql'
+          : 'https://api.rujira.network/api/graphql',
+      wsEndpoint:
+        options.network === 'stagenet'
+          ? 'wss://preview-api.rujira.network/socket'
+          : 'wss://api.rujira.network/socket',
       ...options.graphql,
     });
   }
 
-  /**
-   * Discover all FIN contracts
-   * 
-   * Uses pending promise pattern to prevent duplicate concurrent API requests.
-   * Multiple callers during discovery will share the same promise.
-   * 
-   * @param forceRefresh - Bypass cache
-   * @returns Discovered contracts
-   */
   async discoverContracts(forceRefresh = false): Promise<DiscoveredContracts> {
-    // Check cache first (unless force refresh)
     if (!forceRefresh && this.cache && this.isCacheValid()) {
       this.log('Using cached contracts');
       return this.cache;
     }
 
-    // If there's already a pending discovery, wait for it instead of starting a new one
-    // This prevents duplicate concurrent API requests
     if (this.pendingDiscovery) {
       this.log('Discovery already in progress, waiting for existing request...');
       return this.pendingDiscovery;
     }
 
     this.log('Discovering contracts...');
-
-    // Start discovery and store the promise
     this.pendingDiscovery = this.performDiscovery();
-    
+
     try {
-      const result = await this.pendingDiscovery;
-      return result;
+      return await this.pendingDiscovery;
     } finally {
-      // Clear pending promise when done (success or failure)
       this.pendingDiscovery = null;
     }
   }
 
-  /**
-   * Internal discovery implementation
-   * Separated to allow pending promise pattern in discoverContracts
-   */
   private async performDiscovery(): Promise<DiscoveredContracts> {
-    let graphqlError: unknown = null;
-    
     try {
-      // Try GraphQL first
       const contracts = await this.discoverViaGraphQL();
       this.cache = contracts;
       return contracts;
     } catch (error) {
-      graphqlError = error;
       this.log('GraphQL discovery failed, analyzing error...', error);
-      
-      // Classify GraphQL error to decide fallback strategy
-      const shouldFallback = this.shouldFallbackToChain(error);
-      
-      if (shouldFallback) {
-        this.log('Error is recoverable, trying chain query fallback...');
-        
-        try {
-          // Fallback to chain query
-          const contracts = await this.discoverViaChain();
-          this.cache = contracts;
-          return contracts;
-        } catch (chainError) {
-          this.log('Chain discovery also failed', chainError);
-          
-          // Both methods failed - throw the most informative error
-          if (error instanceof GraphQLClient.GraphQLError && error.type === 'auth') {
-            // Auth errors are critical and shouldn't return empty cache
-            throw error;
-          }
-          
-          // Return empty cache for other error types
-          return {
-            fin: {},
-            discoveredAt: Date.now(),
-            source: 'fallback-failed',
-            lastError: error instanceof Error ? error.message : String(error),
-          };
-        }
-      } else {
-        // Error is not recoverable, fail immediately
+
+      if (!this.shouldFallbackToChain(error)) {
         this.log('Error is not recoverable, failing without fallback');
         throw error;
+      }
+
+      this.log('Error is recoverable, trying chain query fallback...');
+
+      try {
+        const contracts = await this.discoverViaChain();
+        this.cache = contracts;
+        return contracts;
+      } catch (chainError) {
+        this.log('Chain discovery also failed', chainError);
+
+        if (error instanceof GraphQLClient.GraphQLError && error.type === 'auth') {
+          throw error;
+        }
+
+        return {
+          fin: {},
+          discoveredAt: Date.now(),
+          source: 'fallback-failed',
+          lastError: error instanceof Error ? error.message : String(error),
+        };
       }
     }
   }
 
-  /**
-   * Determine if we should fallback to chain query based on GraphQL error type
-   */
   private shouldFallbackToChain(error: unknown): boolean {
     if (error instanceof GraphQLClient.GraphQLError) {
       switch (error.type) {
         case 'auth':
-          // Auth errors might be due to API key issues - don't fallback
           return false;
-        case 'server':
-          // Server errors (5xx) - worth trying fallback
-          return true;
-        case 'network':
-          // Network/HTTP errors (4xx, connectivity) - try fallback
-          return true;
-        case 'timeout':
-          // Timeout - try fallback
-          return true;
-        case 'graphql':
-          // GraphQL schema/query errors - fallback unlikely to help but try anyway
-          return true;
-        case 'unknown':
-          // Unknown errors - try fallback as last resort
-          return true;
         default:
           return true;
       }
     }
-    
-    // For non-GraphQLError instances, try fallback
+
     return true;
   }
 
-  /**
-   * Find a specific market by assets
-   */
   async findMarket(baseAsset: string, quoteAsset: string): Promise<Market | null> {
     try {
-      // Try GraphQL direct query
       const market = await this.graphql.getMarket(baseAsset, quoteAsset);
-      
+
       if (market) {
         return this.transformMarket(market);
       }
 
-      // Try reverse pair
       const reverseMarket = await this.graphql.getMarket(quoteAsset, baseAsset);
       if (reverseMarket) {
         return this.transformMarket(reverseMarket);
@@ -268,14 +124,13 @@ export class RujiraDiscovery {
       return null;
     } catch (error) {
       this.log('findMarket failed', error);
-      
-      // Try from cache
+
       const contracts = await this.discoverContracts();
       const pairKey = `${baseAsset}/${quoteAsset}`;
       const reversePairKey = `${quoteAsset}/${baseAsset}`;
-      
+
       const address = contracts.fin[pairKey] || contracts.fin[reversePairKey];
-      
+
       if (address) {
         return {
           address,
@@ -294,76 +149,48 @@ export class RujiraDiscovery {
     }
   }
 
-  /**
-   * Get contract address for a trading pair
-   */
   async getContractAddress(baseAsset: string, quoteAsset: string): Promise<string | null> {
     const market = await this.findMarket(baseAsset, quoteAsset);
     return market?.address || null;
   }
 
-  /**
-   * List all available markets
-   */
   async listMarkets(): Promise<Market[]> {
     try {
       const response = await this.graphql.getMarkets();
-      return response.markets.map(m => this.transformMarket(m));
+      return response.markets.map((m) => this.transformMarket(m));
     } catch (error) {
       this.log('listMarkets failed', error);
       return [];
     }
   }
 
-  /**
-   * Clear the discovery cache
-   */
   clearCache(): void {
     this.cache = null;
   }
 
-  /**
-   * Get current cache TTL setting
-   */
   getCacheTtl(): number {
     return this.cacheTtl;
   }
 
-  /**
-   * Get cache status and age
-   */
-  getCacheStatus(): { 
-    cached: boolean; 
-    age?: number; 
-    valid: boolean; 
-    ttl: number; 
-  } {
+  getCacheStatus(): { cached: boolean; age?: number; valid: boolean; ttl: number } {
     const ttl = this.cacheTtl;
-    
+
     if (!this.cache) {
       return { cached: false, valid: false, ttl };
     }
-    
+
     const age = Date.now() - this.cache.discoveredAt;
     const valid = this.isCacheValid();
-    
+
     return { cached: true, age, valid, ttl };
   }
 
-  // ============================================================================
-  // PRIVATE METHODS
-  // ============================================================================
-
-  /**
-   * Discover contracts via GraphQL API
-   */
   private async discoverViaGraphQL(): Promise<DiscoveredContracts> {
     const response = await this.graphql.getMarkets();
-    
+
     const fin: Record<string, string> = {};
-    
+
     for (const market of response.markets) {
-      // Build pair key from denoms
       const pairKey = `${market.denoms.base}/${market.denoms.quote}`;
       fin[pairKey] = market.address;
     }
@@ -375,50 +202,41 @@ export class RujiraDiscovery {
     };
   }
 
-  /**
-   * Discover contracts via chain query (fallback)
-   * Uses THORNode REST API to query CosmWasm contracts
-   */
   private async discoverViaChain(): Promise<DiscoveredContracts> {
     const fin: Record<string, string> = {};
-    
-    // FIN contracts are deployed under code ID 73 on mainnet
+
     const FIN_CODE_ID = '73';
     const baseUrl = this.rpcEndpoint.replace(':26657', '').replace('rpc', 'thornode');
     const restUrl = baseUrl.includes('thornode') ? baseUrl : 'https://thornode.ninerealms.com';
-    
+
     try {
-      // Get all FIN contracts from code 73
       const contractsResponse = await fetch(
         `${restUrl}/cosmwasm/wasm/v1/code/${FIN_CODE_ID}/contracts`
       );
-      
+
       if (!contractsResponse.ok) {
         throw new Error(`Failed to fetch contracts: ${contractsResponse.status}`);
       }
-      
-      const contractsData = await contractsResponse.json() as { contracts: string[] };
+
+      const contractsData = (await contractsResponse.json()) as { contracts: string[] };
       this.log(`Found ${contractsData.contracts.length} FIN contracts`);
-      
-      // Query each contract's config to get the trading pair
+
       for (const address of contractsData.contracts) {
         try {
-          // Query config: base64 of {"config":{}}
           const configResponse = await fetch(
             `${restUrl}/cosmwasm/wasm/v1/contract/${address}/smart/eyJjb25maWciOnt9fQ==`
           );
-          
+
           if (configResponse.ok) {
-            const configData = await configResponse.json() as {
+            const configData = (await configResponse.json()) as {
               data: {
                 denoms: string[];
                 fee_taker: string;
                 fee_maker: string;
               };
             };
-            
+
             if (configData.data?.denoms?.length === 2) {
-              // Use denoms directly (on-chain format)
               const base = this.normalizeDenom(configData.data.denoms[0]);
               const quote = this.normalizeDenom(configData.data.denoms[1]);
               const pairKey = `${base}/${quote}`;
@@ -430,7 +248,7 @@ export class RujiraDiscovery {
           this.log(`Failed to query config for ${address}:`, e);
         }
       }
-      
+
       this.log(`Chain discovery complete: ${Object.keys(fin).length} markets`);
     } catch (error) {
       this.log('Chain discovery failed:', error);
@@ -442,28 +260,19 @@ export class RujiraDiscovery {
       source: 'chain',
     };
   }
-  
-  /**
-   * Normalize denom to lowercase
-   * Denoms are used as-is (on-chain format)
-   */
+
   private normalizeDenom(denom: string): string {
     return denom.toLowerCase();
   }
 
-  /**
-   * Transform GraphQL market response to Market type
-   * Denoms are used directly (on-chain format, lowercase, hyphen-separated)
-   */
   private transformMarket(market: {
     address: string;
     denoms: { base: string; quote: string };
     config?: { tick?: string; fee_taker?: string; fee_maker?: string };
   }): Market {
-    // Use denoms directly - no conversion needed
     const baseDenom = market.denoms.base.toLowerCase();
     const quoteDenom = market.denoms.quote.toLowerCase();
-    
+
     return {
       address: market.address,
       baseAsset: baseDenom,
@@ -477,21 +286,12 @@ export class RujiraDiscovery {
     };
   }
 
-  /**
-   * Check if cache is still valid
-   */
   private isCacheValid(): boolean {
     if (!this.cache) return false;
-    
-    // If TTL is 0, caching is disabled - always return false
     if (this.cacheTtl === 0) return false;
-    
     return Date.now() - this.cache.discoveredAt < this.cacheTtl;
   }
 
-  /**
-   * Debug logging
-   */
   private log(...args: unknown[]): void {
     if (this.debug) {
       console.log('[RujiraDiscovery]', ...args);
