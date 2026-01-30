@@ -1,9 +1,8 @@
 import { GraphQLClient, type GraphQLClientOptions } from './graphql-client.js';
 import type { DiscoveredContracts, Market } from './types.js';
-import { MAINNET_CONFIG, STAGENET_CONFIG, type NetworkType } from '../config.js';
+import { MAINNET_CONFIG } from '../config.js';
 
 export interface DiscoveryOptions {
-  network?: NetworkType;
   graphql?: GraphQLClientOptions;
   rpcEndpoint?: string;
   cacheTtl?: number;
@@ -20,22 +19,17 @@ export class RujiraDiscovery {
   private pendingDiscovery: Promise<DiscoveredContracts> | null = null;
 
   constructor(options: DiscoveryOptions = {}) {
-    const networkConfig = options.network === 'stagenet' ? STAGENET_CONFIG : MAINNET_CONFIG;
+    const networkConfig = MAINNET_CONFIG;
 
     this.rpcEndpoint = options.rpcEndpoint || networkConfig.rpcEndpoint;
     this.cacheTtl = options.cacheTtl ?? 5 * 60 * 1000;
     this.debug = options.debug || false;
     this.finCodeId = networkConfig.contracts.finCodeId;
 
+    // Mainnet-only GraphQL endpoints
     this.graphql = new GraphQLClient({
-      httpEndpoint:
-        options.network === 'stagenet'
-          ? 'https://preview-api.rujira.network/api/graphql'
-          : 'https://api.rujira.network/api/graphql',
-      wsEndpoint:
-        options.network === 'stagenet'
-          ? 'wss://preview-api.rujira.network/socket'
-          : 'wss://api.rujira.network/socket',
+      httpEndpoint: 'https://api.rujira.network/api/graphql',
+      wsEndpoint: 'wss://api.rujira.network/socket',
       ...options.graphql,
     });
   }

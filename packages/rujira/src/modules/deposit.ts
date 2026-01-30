@@ -423,11 +423,11 @@ export class RujiraDeposit {
       );
     }
 
-    // Must start with thor1 or sthor1
-    if (!address.startsWith('thor1') && !address.startsWith('sthor1')) {
+    // Mainnet-only: must start with thor1
+    if (!address.startsWith('thor1')) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ADDRESS,
-        `Invalid THORChain address: ${address}. Must start with 'thor1' or 'sthor1'`
+        `Invalid THORChain address: ${address}. Must start with 'thor1'`
       );
     }
 
