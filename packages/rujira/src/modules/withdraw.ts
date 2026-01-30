@@ -307,22 +307,54 @@ export class RujiraWithdraw {
         fee,
       });
       
-      // Extract message hashes for MPC signing
-      const messageHashes = await vault.extractMessageHashes(keysignPayload);
-      
-      // Sign with MPC
-      const signature = await vault.sign({
-        transaction: keysignPayload,
-        chain: 'THORChain',
-        messageHashes,
-      });
-      
-      // Broadcast the signed transaction
-      const txHash = await vault.broadcastTx({
-        chain: 'THORChain',
-        keysignPayload,
-        signature,
-      });
+      // Extract message hashes for MPC signing (support multiple @vultisig/core versions)
+      let messageHashes: string[];
+      if (typeof (vault as any).extractMessageHashes === 'function') {
+        messageHashes = await (vault as any).extractMessageHashes(keysignPayload);
+      } else if ((vault as any).transactionBuilder?.extractMessageHashes) {
+        messageHashes = await (vault as any).transactionBuilder.extractMessageHashes(keysignPayload);
+      } else {
+        throw new RujiraError(
+          RujiraErrorCode.SIGNING_FAILED,
+          'Vault does not support extractMessageHashes'
+        );
+      }
+
+      // Sign with MPC (support multiple @vultisig/core versions)
+      let signature: unknown;
+      if (typeof (vault as any).sign === 'function') {
+        signature = await (vault as any).sign({
+          transaction: keysignPayload,
+          chain: 'THORChain',
+          messageHashes,
+        });
+      } else {
+        throw new RujiraError(
+          RujiraErrorCode.SIGNING_FAILED,
+          'Vault does not support sign()'
+        );
+      }
+
+      // Broadcast the signed transaction (support multiple @vultisig/core versions)
+      let txHash: string;
+      if (typeof (vault as any).broadcastTx === 'function') {
+        txHash = await (vault as any).broadcastTx({
+          chain: 'THORChain',
+          keysignPayload,
+          signature,
+        });
+      } else if ((vault as any).broadcastService?.broadcastTx) {
+        txHash = await (vault as any).broadcastService.broadcastTx({
+          chain: 'THORChain',
+          keysignPayload,
+          signature,
+        });
+      } else {
+        throw new RujiraError(
+          RujiraErrorCode.BROADCAST_FAILED,
+          'Vault does not support broadcastTx()'
+        );
+      }
 
       return {
         txHash,
