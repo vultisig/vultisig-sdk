@@ -524,15 +524,18 @@ export class RujiraWithdraw {
           fromAddress: senderAddress,
           // NOTE: this is not a swap. We piggy-back on swapPayload.fromCoin so the
           // cosmos signing resolver constructs the MsgDeposit coin asset correctly.
-          // The asset must be THORChain-native for secured asset withdrawals.
+          // CRITICAL: For secured L1 asset withdrawals, chain must be the L1 chain
+          // (e.g., 'Ethereum'), NOT 'THORChain'. THORChain rejects secured assets
+          // with chain=THOR. The cosmos resolver maps this to the chainId (e.g., 'ETH')
+          // and constructs the denom as 'eth-usdc-0x...' with secured=true.
           fromCoin: {
-            chain: 'THORChain',
-            ticker: securedDenomSymbol,
-            contractAddress: '',
+            chain: l1Chain,
+            ticker: ticker,
+            contractAddress: contractAddress,
             decimals: THORCHAIN_DECIMALS,
             address: '',
             priceProviderId: '',
-            isNativeToken: true,
+            isNativeToken: fullSymbol === ticker, // native if no contract address
             hexPublicKey: '',
             logo: '',
           },
@@ -646,11 +649,17 @@ export class RujiraWithdraw {
   }
 
   /**
-   * Build withdrawal memo
-   * Format: -:ASSET:L1_ADDRESS
+   * Build withdrawal memo for secured assets
+   * Format: secure-:L1_ADDRESS
+   * 
+   * Note: For secured L1 asset withdrawals, the memo is just "secure-:L1_ADDRESS".
+   * The asset is NOT included in the memo - it's determined by the coins attached
+   * to the MsgDeposit. THORChain will unsecure the coins and send them to the L1 address.
+   * 
+   * @see https://dev.thorchain.org/concepts/secured-assets.html
    */
-  buildWithdrawMemo(asset: string, l1Address: string): string {
-    return `-:${asset.toUpperCase()}:${l1Address}`;
+  buildWithdrawMemo(_asset: string, l1Address: string): string {
+    return `secure-:${l1Address}`;
   }
 
   /**
