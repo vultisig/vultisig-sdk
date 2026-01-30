@@ -2,6 +2,7 @@
 import { fromBinary } from '@bufbuild/protobuf'
 import { Chain } from '@core/chain/Chain'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { vaultConfig } from '@core/config'
 import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -415,8 +416,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       errors.push('Vault name must be at least 2 characters long')
     }
 
-    if (name.length > 50) {
-      errors.push('Vault name cannot exceed 50 characters')
+    if (name.length > vaultConfig.maxNameLength) {
+      errors.push(`Vault name cannot exceed ${vaultConfig.maxNameLength} characters`)
     }
 
     if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
