@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useFileAdapter, useSDKAdapter } from '../../../adapters'
-import type { VaultInfo } from '../../../types'
+import type { DiscountTier, VaultInfo } from '../../../types'
 import { shortenAddress } from '../../../utils/formatting'
 import Button from '../../common/Button'
 import Input from '../../common/Input'
@@ -24,6 +24,42 @@ export default function VaultOverview({ vault, onVaultDeleted, onVaultRenamed }:
   const [exportPassword, setExportPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Discount tier state
+  const [discountTier, setDiscountTier] = useState<DiscountTier>(null)
+  const [isTierLoading, setIsTierLoading] = useState(false)
+  const [tierError, setTierError] = useState<string | null>(null)
+
+  // Fetch discount tier on mount
+  useEffect(() => {
+    const fetchTier = async () => {
+      setIsTierLoading(true)
+      setTierError(null)
+      try {
+        const tier = await sdk.getDiscountTier(vault.id)
+        setDiscountTier(tier)
+      } catch (err) {
+        setTierError(err instanceof Error ? err.message : 'Failed to fetch tier')
+      } finally {
+        setIsTierLoading(false)
+      }
+    }
+    fetchTier()
+  }, [vault.id, sdk])
+
+  // Refresh discount tier
+  const handleRefreshTier = async () => {
+    setIsTierLoading(true)
+    setTierError(null)
+    try {
+      const tier = await sdk.updateDiscountTier(vault.id)
+      setDiscountTier(tier)
+    } catch (err) {
+      setTierError(err instanceof Error ? err.message : 'Failed to refresh tier')
+    } finally {
+      setIsTierLoading(false)
+    }
+  }
 
   // Rename vault
   const handleRename = async () => {
@@ -122,6 +158,32 @@ export default function VaultOverview({ vault, onVaultDeleted, onVaultRenamed }:
             <InfoItem label="Threshold" value={`${vault.threshold} of ${vault.signerCount ?? vault.threshold}`} />
           )}
         </div>
+      </div>
+
+      {/* Discount Tier Card */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">VULT Discount Tier</h3>
+          <Button variant="secondary" size="small" onClick={handleRefreshTier} isLoading={isTierLoading}>
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            Refresh
+          </Button>
+        </div>
+
+        {tierError && <div className="text-error text-sm bg-red-50 p-3 rounded mb-4">{tierError}</div>}
+
+        <DiscountTierBadge tier={discountTier} isLoading={isTierLoading} />
+
+        <p className="text-sm text-gray-500 mt-3">
+          Your tier is based on VULT token and Thorguard NFT holdings on Ethereum. Higher tiers get lower swap fees.
+        </p>
       </div>
 
       {/* Actions Card */}
@@ -273,5 +335,38 @@ function InfoItem({
         {warning && <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Not backed up</span>}
       </p>
     </div>
+  )
+}
+
+// Helper component for displaying discount tier badge
+function DiscountTierBadge({ tier, isLoading }: { tier: DiscountTier; isLoading: boolean }) {
+  if (isLoading) {
+    return <div className="animate-pulse h-8 w-24 bg-gray-200 rounded" />
+  }
+
+  if (!tier) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-gray-500">No tier</span>
+        <span className="text-xs text-gray-400">(Hold VULT to unlock discounts)</span>
+      </div>
+    )
+  }
+
+  const tierColors: Record<string, string> = {
+    bronze: 'bg-amber-700 text-white',
+    silver: 'bg-gray-400 text-white',
+    gold: 'bg-yellow-500 text-black',
+    platinum: 'bg-slate-300 text-black',
+    diamond: 'bg-cyan-400 text-black',
+    ultimate: 'bg-gradient-to-r from-purple-500 to-pink-500 text-white',
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold capitalize ${tierColors[tier]}`}
+    >
+      {tier}
+    </span>
   )
 }
