@@ -101,8 +101,10 @@ async function main() {
   // Step 2: Prepare withdrawal
   console.log('📤 Step 2: Preparing withdrawal...\n');
   
-  // Withdraw 0.1 USDC (6 decimals = 100000)
-  const withdrawAmount = '100000'; // 0.1 USDC
+  // Withdraw 0.2 USDC (8 decimals on THORChain = 20000000)
+  // Note: THORChain uses 8 decimals for ALL assets, including USDC
+  // Outbound fee for ETH is ~9000 units, so we need more than that
+  const withdrawAmount = '20000000'; // 0.2 USDC
   
   try {
     const prepared = await client.withdraw.prepare({

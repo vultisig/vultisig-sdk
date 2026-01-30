@@ -311,7 +311,7 @@ describe('RujiraDeposit', () => {
       expect(balances).toHaveLength(3);
       expect(balances[0]?.denom).toBe('rune');
       // Asset field contains the identifier from the response
-      expect(balances[0]?.asset).toBe('rune');
+      expect(balances[0]?.asset).toBe('THOR.RUNE');
       expect(balances[1]?.denom).toBe('btc-btc');
       expect(balances[1]?.asset).toBe('BTC.BTC');
     });

@@ -287,17 +287,29 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
         // Construct full symbol with contract address for L1 tokens (e.g. USDC-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48)
         const contractAddr =
           'contractAddress' in assetCoin ? assetCoin.contractAddress : undefined
-        const assetSymbol =
-          contractAddr && contractAddr.trim()
+        
+        const isSecuredWithdraw = memo.startsWith('-:') || memo.startsWith('secure-:')
+
+        // For secured asset withdrawals, THORChain native denoms MUST be lowercase
+        // (e.g., eth-usdc-0xa0b86991... not ETH-USDC-0XA0B86991...)
+        const assetSymbol = (() => {
+          const rawSymbol = contractAddr && contractAddr.trim()
             ? `${assetCoin.ticker}-${contractAddr}`
             : assetCoin.ticker
+          return isSecuredWithdraw ? rawSymbol.toLowerCase() : rawSymbol
+        })()
+
+        // For secured withdrawals, lowercase chain and ticker as well
+        const finalChainId = isSecuredWithdraw ? assetChainId.toLowerCase() : assetChainId
+        const finalTicker = isSecuredWithdraw ? assetCoin.ticker.toLowerCase() : assetCoin.ticker
 
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
           asset: TW.Cosmos.Proto.THORChainAsset.create({
-            chain: assetChainId,
+            chain: finalChainId,
             symbol: assetSymbol,
-            ticker: assetCoin.ticker,
+            ticker: finalTicker,
             synth: false,
+            secured: isSecuredWithdraw,
           }),
           ...(isPositive
             ? { amount: amountStr, decimals: new Long(assetCoin.decimals) }
