@@ -321,7 +321,7 @@ export interface EasySwapRequest {
   route?: EasyRouteName;
   from?: string;
   to?: string;
-  /** Amount to swap (human readable, e.g., '100' for 100 RUNE) */
+  /** Amount to swap in base units (e.g., '100000000' for 1 RUNE) */
   amount: string;
   /** Destination address */
   destination: string;
