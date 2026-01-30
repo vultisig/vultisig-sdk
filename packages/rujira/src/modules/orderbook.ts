@@ -79,7 +79,7 @@ export class RujiraOrderbook {
    */
   async getOrderBook(
     pairOrContract: string,
-    limit = 10
+    limit = 50
   ): Promise<OrderBook> {
     const contractAddress = await this.resolveContract(pairOrContract);
 
