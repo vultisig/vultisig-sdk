@@ -329,14 +329,14 @@ export class RujiraDeposit {
    * Build deposit memo for L1 transaction
    */
   buildDepositMemo(
-    asset: string,
+    _asset: string,
     thorAddress: string,
     affiliate?: string,
     affiliateBps?: number
   ): string {
-    // Format: =:CHAIN.ASSET:THORADDR:AFFILIATE:BPS
-    // For native chain assets, simplify: =:CHAIN.ASSET:THORADDR
-    let memo = `=:${asset.toUpperCase()}:${thorAddress}`;
+    // Format: secure+:THORADDR for L1 → Secured deposits
+    // This mints secured assets on THORChain without swapping
+    let memo = `secure+:${thorAddress}`;
     
     if (affiliate && affiliateBps !== undefined && affiliateBps > 0) {
       memo += `:${affiliate}:${affiliateBps}`;
