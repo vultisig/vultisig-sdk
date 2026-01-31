@@ -18,10 +18,11 @@ import { VaultError, VaultErrorCode } from './VaultError'
  * FastVault - 2-of-2 MPC with VultiServer
  *
  * Fast vaults provide quick signing using 2-of-2 threshold signature scheme
- * with the VultiServer. They are always encrypted and require a password.
+ * with the VultiServer. They are typically encrypted and require a password,
+ * though imported vaults may be unencrypted.
  *
  * Key characteristics:
- * - Always encrypted (isEncrypted = true)
+ * - Typically encrypted (imported vaults may vary)
  * - 2-of-2 threshold (device + server)
  * - Only supports 'fast' signing mode
  * - Requires FastSigningService
@@ -76,7 +77,7 @@ export class FastVault extends VaultBase {
       // Ensure keyShares are loaded from vault file (lazy loading)
       await this.ensureKeySharesLoaded()
 
-      // Fast vaults are always encrypted - resolve password
+      // Resolve password for server authentication
       // resolvePassword() will throw if password not available
       const password = await this.resolvePassword()
 
@@ -146,7 +147,7 @@ export class FastVault extends VaultBase {
       // Ensure keyShares are loaded from vault file (lazy loading)
       await this.ensureKeySharesLoaded()
 
-      // Fast vaults are always encrypted - resolve password
+      // Resolve password for server authentication
       const password = await this.resolvePassword()
 
       // Sign with server coordination
@@ -186,10 +187,14 @@ export class FastVault extends VaultBase {
   /**
    * Ensure keyShares are loaded into memory
    *
-   * Fast vaults are ALWAYS encrypted, so this always:
+   * For encrypted vaults:
    * 1. Resolves password from cache or callback
    * 2. Decrypts vault file
    * 3. Loads keyShares into coreVault
+   *
+   * For unencrypted vaults (some imports):
+   * 1. Parses vault file directly
+   * 2. Loads keyShares into coreVault
    */
   protected async ensureKeySharesLoaded(): Promise<void> {
     // Check if keyShares are already loaded
@@ -210,17 +215,24 @@ export class FastVault extends VaultBase {
     // Parse vault file to get keyShares
     const container = vaultContainerFromString(this.vaultData.vultFileContent.trim())
 
-    // Fast vaults are ALWAYS encrypted - no need to check container.isEncrypted
-    // Resolve password (will throw if not available)
-    const password = await this.resolvePassword()
+    // Check if vault is encrypted - use container as source of truth since it reflects
+    // what's actually stored. Some imported fast vaults may have isEncrypted=false.
+    let vaultBase64: string
+    if (container.isEncrypted) {
+      // Resolve password (will throw if not available)
+      const password = await this.resolvePassword()
 
-    // Decrypt vault
-    const encryptedData = fromBase64(container.vault)
-    const decryptedBuffer = await decryptWithAesGcm({
-      key: password,
-      value: encryptedData,
-    })
-    const vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+      // Decrypt vault
+      const encryptedData = fromBase64(container.vault)
+      const decryptedBuffer = await decryptWithAesGcm({
+        key: password,
+        value: encryptedData,
+      })
+      vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+    } else {
+      // Vault is not encrypted - use content directly
+      vaultBase64 = container.vault
+    }
 
     // Parse inner Vault protobuf
     const vaultBinary = fromBase64(vaultBase64)
