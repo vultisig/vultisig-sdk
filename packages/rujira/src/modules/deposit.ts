@@ -23,9 +23,7 @@ function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
   );
 }
 
-// ============================================================================
 // TYPES
-// ============================================================================
 
 /**
  * THORChain inbound address response
@@ -107,9 +105,7 @@ export interface SecuredBalance {
   symbol: string;
 }
 
-// ============================================================================
 // CONSTANTS
-// ============================================================================
 
 /** Supported chains and their estimated confirmation times in minutes */
 const CHAIN_CONFIRMATION_TIMES: Record<string, number> = {
@@ -124,21 +120,8 @@ const CHAIN_CONFIRMATION_TIMES: Record<string, number> = {
   THOR: 0,    // Native, instant
 };
 
-/** Chain identifiers to their native coin */
-const CHAIN_NATIVE_ASSETS: Record<string, string> = {
-  BTC: 'BTC.BTC',
-  ETH: 'ETH.ETH',
-  BSC: 'BSC.BNB',
-  AVAX: 'AVAX.AVAX',
-  GAIA: 'GAIA.ATOM',
-  DOGE: 'DOGE.DOGE',
-  LTC: 'LTC.LTC',
-  BCH: 'BCH.BCH',
-};
 
-// ============================================================================
 // MODULE
-// ============================================================================
 
 /**
  * Deposit module for securing L1 assets on THORChain
@@ -168,9 +151,7 @@ export class RujiraDeposit {
     this.thornodeUrl = client.config.restEndpoint;
   }
 
-  // ============================================================================
   // PUBLIC API
-  // ============================================================================
 
   /**
    * Prepare a deposit transaction
@@ -374,9 +355,7 @@ export class RujiraDeposit {
     return this.isChainSupported(chain);
   }
 
-  // ============================================================================
   // INTERNAL HELPERS
-  // ============================================================================
 
   private validateDepositParams(params: DepositParams): void {
     // Validate asset
