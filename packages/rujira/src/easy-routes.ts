@@ -59,9 +59,7 @@ function getFinFormat(assetId: string): string {
   return asset.formats.fin;
 }
 
-// ============================================================================
 // EASY ROUTES
-// ============================================================================
 
 /**
  * Pre-configured swap routes with deep liquidity.
@@ -197,9 +195,7 @@ export const EASY_ROUTES = {
 export type EasyRouteName = keyof typeof EASY_ROUTES;
 export type EasyRoute = (typeof EASY_ROUTES)[EasyRouteName];
 
-// ============================================================================
 // COMMON ASSETS (shortcuts)
-// ============================================================================
 
 /**
  * Common asset denoms - use these to avoid typos
@@ -229,9 +225,7 @@ export const ASSETS = {
 export type AssetName = keyof typeof ASSETS;
 export type EasyAsset = (typeof ASSETS)[AssetName];
 
-// ============================================================================
 // HELPER FUNCTIONS
-// ============================================================================
 
 /**
  * List all available easy routes
@@ -309,9 +303,7 @@ export function routesTo(asset: string): EasyRoute[] {
   );
 }
 
-// ============================================================================
 // CONVENIENCE TYPES FOR AGENTS
-// ============================================================================
 
 /**
  * Simple swap request - all an agent needs
@@ -356,9 +348,7 @@ export interface EasyQuoteResponse {
   warning?: string;
 }
 
-// ============================================================================
 // DOCUMENTATION HELPERS
-// ============================================================================
 
 /**
  * Get a human-readable summary of all routes

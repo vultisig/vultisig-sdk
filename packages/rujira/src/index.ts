@@ -26,9 +26,7 @@
  * @packageDocumentation
  */
 
-// ============================================================================
 // EASY ROUTES - Start Here!
-// ============================================================================
 // Simple DeFi for agents and humans. Pick a route, swap.
 export {
   EASY_ROUTES,
@@ -50,9 +48,7 @@ export type {
   EasyQuoteResponse,
 } from './easy-routes.js';
 
-// ============================================================================
 // CORE SDK
-// ============================================================================
 export * from './types.js';
 export * from './config.js';
 export * from './errors.js';
