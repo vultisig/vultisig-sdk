@@ -6,6 +6,7 @@
  */
 
 export { CacheService } from './CacheService'
+export { DiscountTierService } from './DiscountTierService'
 export { FastSigningService } from './FastSigningService'
 export { FiatValueService } from './FiatValueService'
 export { PasswordCacheService } from './PasswordCacheService'

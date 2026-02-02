@@ -17,6 +17,7 @@ export type {
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
   DeviceJoinedData,
+  DiscountTier,
   EventLogEntry,
   EventType,
   ExportOptions,

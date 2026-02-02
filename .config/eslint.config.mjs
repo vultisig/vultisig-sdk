@@ -30,6 +30,9 @@ export default [
     ignores: [
       '**/node_modules',
       '**/dist',
+      '**/dist-electron',
+      '**/.rollup.cache',
+      '**/coverage',
       '**/*_pb.ts',
       '**/lib/**',
       'packages/core/**',
