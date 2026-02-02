@@ -671,7 +671,7 @@ vultisig balance --password your-password
 
 ```bash
 # List all vaults
-vultisig list
+vultisig vaults
 
 # Show vault details
 vultisig info
@@ -682,49 +682,49 @@ vultisig switch <vault-id>
 # Rename vault
 vultisig rename "New Name"
 
-# Create new fast vault
-vultisig create-fast --name "Agent Wallet" --email "agent@example.com"
+# Create new fast vault (subcommand)
+vultisig create fast --name "Agent Wallet" --email "agent@example.com" --password "secret"
 
 # Verify email code
-vultisig verify <code>
+vultisig verify <vaultId> --code <code>
 
-# Create secure vault
-vultisig create-secure --name "Secure Wallet"
+# Create secure vault (subcommand)
+vultisig create secure --name "Secure Wallet"
 
-# Join secure vault keygen
-vultisig join-secure <qr-payload>
+# Join secure vault keygen (subcommand)
+vultisig join secure --qr "vultisig://..."
 
 # Import vault from backup
-vultisig import ./backup.bak
+vultisig import ./backup.vult
 
 # Export vault
-vultisig export ./backup.bak
+vultisig export ./backup.vult
 ```
 
 ### Seedphrase Operations
 
 ```bash
-# Create fast vault from mnemonic
-vultisig create-from-seedphrase-fast --name "Imported" --email "a@b.com"
+# Create fast vault from mnemonic (subcommand)
+vultisig create-from-seedphrase fast --name "Imported" --email "a@b.com" --password "secret"
 
-# Create secure vault from mnemonic
-vultisig create-from-seedphrase-secure --name "Imported Secure"
+# Create secure vault from mnemonic (subcommand)
+vultisig create-from-seedphrase secure --name "Imported Secure"
 ```
 
 ### Balances & Addresses
 
 ```bash
 # Get all addresses
-vultisig address
-
-# Get specific chain address
-vultisig address --chain ethereum
+vultisig addresses
 
 # Check all balances
 vultisig balance
 
 # Check specific chain balance
-vultisig balance --chain ethereum
+vultisig balance ethereum
+
+# Include token balances
+vultisig balance ethereum --tokens
 
 # Get total portfolio value
 vultisig portfolio
@@ -745,46 +745,52 @@ vultisig send ethereum 0xRecipient 0.01 --memo "Payment"
 # Send ERC-20 token
 vultisig send ethereum 0xRecipient 100 --token 0xUSDC...
 
-# Sign arbitrary bytes
-vultisig sign <hex-bytes> --chain ethereum
+# Sign arbitrary bytes (base64 encoded)
+vultisig sign --chain ethereum --bytes "base64encodeddata"
 
 # Broadcast raw transaction
-vultisig broadcast <raw-tx-hex> --chain ethereum
+vultisig broadcast --chain ethereum --raw-tx <hex-encoded-tx>
 ```
 
 ### Swaps
 
 ```bash
-# Swap tokens (cross-chain)
-vultisig swap ethereum:eth bitcoin:btc 0.1
+# Swap native tokens (cross-chain)
+vultisig swap ethereum bitcoin 0.1
 
-# Get swap quote only
-vultisig swap-quote ethereum:eth bitcoin:btc 0.1
+# Swap with specific tokens
+vultisig swap ethereum bitcoin 0.1 --from-token 0xUSDC... --to-token native
+
+# Get swap quote only (no execution)
+vultisig swap-quote ethereum bitcoin 0.1
 
 # List supported swap chains
 vultisig swap-chains
+
+# Skip confirmation prompt
+vultisig swap ethereum bitcoin 0.1 --yes
 ```
 
 ### Token & Chain Management
 
 ```bash
 # List tokens for a chain
-vultisig tokens --chain ethereum
+vultisig tokens ethereum
 
-# Add custom token
-vultisig tokens add ethereum 0xAddress SYMBOL 18
+# Add custom token (with options)
+vultisig tokens ethereum --add 0xContractAddress --symbol USDC --decimals 6
 
 # Remove token
-vultisig tokens remove ethereum 0xAddress
+vultisig tokens ethereum --remove 0xContractAddress
 
 # List active chains
 vultisig chains
 
 # Add chain
-vultisig chains add solana
+vultisig chains --add solana
 
 # Remove chain
-vultisig chains remove polygon
+vultisig chains --remove polygon
 ```
 
 ### Address Book
@@ -793,11 +799,11 @@ vultisig chains remove polygon
 # List address book
 vultisig address-book
 
-# Add entry
-vultisig address-book add "Alice" 0xAddress ethereum
+# Add entry (with options)
+vultisig address-book --add --name "Alice" --address 0x... --chain ethereum
 
 # Remove entry
-vultisig address-book remove "Alice"
+vultisig address-book --remove 0x...
 ```
 
 ### Diagnostics
@@ -1177,6 +1183,15 @@ main().catch(console.error);
 
 ## Changelog
 
+- **2026-02-02**: CLI command fixes
+  - Fixed `vultisig list` → `vultisig vaults`
+  - Fixed `vultisig address` → `vultisig addresses`
+  - Fixed `vultisig create-fast` → `vultisig create fast` (subcommand)
+  - Fixed `vultisig create-secure` → `vultisig create secure`
+  - Fixed `vultisig join-secure` → `vultisig join secure`
+  - Fixed swap command format (was `chain:token`, now `<fromChain> <toChain>`)
+  - Fixed tokens/chains/address-book to use `--add`/`--remove` options
+  - Fixed sign/broadcast command option formats
 - **2026-02-02**: Critical API corrections
   - **BREAKING:** Fixed `prepareSendTx` signature - was showing wrong params
     - `chain` → `coin` (AccountCoin object)
