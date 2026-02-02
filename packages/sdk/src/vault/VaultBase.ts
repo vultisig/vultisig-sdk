@@ -842,7 +842,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async balances(chains?: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const chainsToFetch = chains || this._userChains
-    return this.balanceService.getBalances(chainsToFetch, includeTokens)
+    return this.balanceService.getBalances({ chains: chainsToFetch, includeTokens })
   }
 
   /**
@@ -857,7 +857,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async updateBalances(chains?: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const chainsToUpdate = chains || this._userChains
-    return this.balanceService.updateBalances(chainsToUpdate, includeTokens)
+    return this.balanceService.updateBalances({ chains: chainsToUpdate, includeTokens })
   }
 
   // ===== GAS ESTIMATION =====
