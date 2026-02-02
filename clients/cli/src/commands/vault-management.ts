@@ -621,7 +621,7 @@ export async function executeCreateFromSeedphraseFast(
         for (const result of chainsWithBalance) {
           info(`  ${result.chain}: ${result.balance} ${result.symbol}`)
         }
-        if (detectedPhantomPath) {
+        if (detectedUsePhantomSolanaPath) {
           info('  (Using Phantom wallet derivation path for Solana)')
         }
         info('')
@@ -789,7 +789,7 @@ export async function executeCreateFromSeedphraseSecure(
         for (const result of chainsWithBalance) {
           info(`  ${result.chain}: ${result.balance} ${result.symbol}`)
         }
-        if (detectedPhantomPath) {
+        if (detectedUsePhantomSolanaPath) {
           info('  (Using Phantom wallet derivation path for Solana)')
         }
         info('')
@@ -952,6 +952,11 @@ export type DeleteVaultOptions = {
   skipConfirmation?: boolean
 }
 
+export type FindVaultByIdOrNameInput = {
+  vaults: VaultBase[]
+  idOrName: string
+}
+
 /**
  * Execute delete vault command
  */
@@ -960,14 +965,9 @@ export async function executeDelete(ctx: CommandContext, options: DeleteVaultOpt
   let vault: VaultBase
 
   if (options.vaultId) {
-    // Find vault by ID, name, or prefix
+    // Find vault by ID, name, or prefix (throws if not found or ambiguous)
     const vaults = await ctx.sdk.listVaults()
-    const found = findVaultByIdOrName(vaults, options.vaultId)
-
-    if (!found) {
-      throw new Error(`Vault not found: "${options.vaultId}"`)
-    }
-    vault = found
+    vault = findVaultByIdOrName({ vaults, idOrName: options.vaultId })
   } else {
     // Use active vault
     vault = await ctx.ensureActiveVault()
@@ -1032,19 +1032,32 @@ export async function executeDelete(ctx: CommandContext, options: DeleteVaultOpt
 
 /**
  * Find vault by ID, name, or ID prefix
+ * Throws error if multiple vaults match (ambiguous) or if no vault is found
  */
-function findVaultByIdOrName(vaults: VaultBase[], idOrName: string): VaultBase | null {
-  // Try exact ID match first
+function findVaultByIdOrName({ vaults, idOrName }: FindVaultByIdOrNameInput): VaultBase {
+  // Try exact ID match first (unambiguous)
   const byId = vaults.find(v => v.id === idOrName)
   if (byId) return byId
 
-  // Try name match (case-insensitive)
-  const byName = vaults.find(v => v.name.toLowerCase() === idOrName.toLowerCase())
-  if (byName) return byName
+  // Collect all name matches (case-insensitive)
+  const byName = vaults.filter(v => v.name.toLowerCase() === idOrName.toLowerCase())
+  if (byName.length === 1) return byName[0]
+  if (byName.length > 1) {
+    const matches = byName.map(v => `  - ${v.name} (${v.id.slice(0, 8)}...)`).join('\n')
+    throw new Error(
+      `Multiple vaults match "${idOrName}":\n${matches}\nPlease specify the full vault ID to be more specific.`
+    )
+  }
 
-  // Try partial ID match (prefix)
-  const byPartialId = vaults.find(v => v.id.startsWith(idOrName))
-  if (byPartialId) return byPartialId
+  // Collect all prefix matches
+  const byPartialId = vaults.filter(v => v.id.startsWith(idOrName))
+  if (byPartialId.length === 1) return byPartialId[0]
+  if (byPartialId.length > 1) {
+    const matches = byPartialId.map(v => `  - ${v.name} (${v.id.slice(0, 8)}...)`).join('\n')
+    throw new Error(
+      `Multiple vaults match prefix "${idOrName}":\n${matches}\nPlease specify more characters of the vault ID.`
+    )
+  }
 
-  return null
+  throw new Error(`Vault not found: "${idOrName}"`)
 }

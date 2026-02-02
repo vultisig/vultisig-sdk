@@ -80,7 +80,7 @@ yarn preview
 3. Enter your 12 or 24-word recovery phrase
 4. Optionally enable:
    - **Discover chains with existing balances** - Scans all chains for funds
-   - **Use Phantom wallet derivation path for Solana** - Enable if your seedphrase was originally created in Phantom wallet (uses different derivation path)
+   - **Use Phantom wallet derivation path for Solana** - Enable if your seedphrase was created in Phantom wallet (uses a different derivation path)
 5. For FastVault: Enter name, email, password and complete email verification
 6. For SecureVault: Enter name, configure devices, then scan QR with mobile app
 

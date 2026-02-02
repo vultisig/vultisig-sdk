@@ -1,23 +1,33 @@
 /**
  * Discount Tier Commands - view VULT discount tier and fee savings
  */
+import {
+  baseAffiliateBps,
+  type VultDiscountTier,
+  vultDiscountTierBps,
+  vultDiscountTierMinBalances,
+} from '@vultisig/sdk'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
 import { createSpinner, info, isJsonOutput, outputJson, printResult } from '../lib/output'
 
-// Tier configuration (mirrored from @core/chain/swap/affiliate/config)
+// Derive tier configuration from core config values
 const TIER_CONFIG = {
-  none: { bps: 50, discount: 0 },
-  bronze: { bps: 45, discount: 5, minVult: 1500 },
-  silver: { bps: 40, discount: 10, minVult: 3000 },
-  gold: { bps: 30, discount: 20, minVult: 7500 },
-  platinum: { bps: 25, discount: 25, minVult: 15000 },
-  diamond: { bps: 15, discount: 35, minVult: 100000 },
-  ultimate: { bps: 0, discount: 50, minVult: 1000000 },
+  none: { bps: baseAffiliateBps, discount: 0 },
+  ...Object.fromEntries(
+    Object.entries(vultDiscountTierMinBalances).map(([tier, minVult]) => [
+      tier,
+      {
+        bps: baseAffiliateBps - vultDiscountTierBps[tier as VultDiscountTier],
+        discount: vultDiscountTierBps[tier as VultDiscountTier],
+        minVult,
+      },
+    ])
+  ),
 } as const
 
-type TierName = keyof typeof TIER_CONFIG
+type TierName = 'none' | VultDiscountTier
 
 export type DiscountOptions = {
   refresh?: boolean

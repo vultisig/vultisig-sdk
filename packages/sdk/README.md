@@ -13,7 +13,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 📱 **Cross-Platform** - Works in browsers, Node.js, and Electron (React Native coming soon)
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
 - 🔑 **Seedphrase Import** - Import existing BIP39 mnemonics with automatic chain discovery
-- 💰 **VULT Discount Tiers** - Automatic affiliate fee discounts based on VULT token holdings
+- 💰 **VULT Discount Tiers** - Automatic swap fee discounts based on VULT token holdings
 - 🌍 **WASM Integration** - High-performance cryptographic operations via WebAssembly
 
 ## Installation

@@ -815,7 +815,7 @@ console.log('Import complete:', vault.name)
 
 **Phantom Wallet Support:**
 
-If your seedphrase was originally created in Phantom wallet, enable `usePhantomSolanaPath: true` to use Phantom's non-standard Solana derivation path. When `discoverChains: true` is set, this is automatically detected based on which path has funds.
+If your seedphrase was created in Phantom wallet, enable `usePhantomSolanaPath: true` to use Phantom's non-standard Solana derivation path. When `discoverChains: true` is set, this is automatically detected based on which path has funds.
 
 ### Creating a SecureVault from Seedphrase
 
