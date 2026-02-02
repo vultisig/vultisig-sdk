@@ -226,12 +226,58 @@ const vault = await sdk.joinSecureVault(qrPayload, {
 
 ## Balance & Address Operations
 
+### Understanding Balance Format
+
+> **Critical:** Balances are returned in **base units** (satoshis, wei, etc.), NOT human-readable amounts.
+
+The `Balance` object contains:
+```typescript
+interface Balance {
+  amount: string;    // Raw balance in base units (e.g., "30558" for BTC)
+  symbol: string;    // Token symbol (e.g., "BTC")
+  decimals: number;  // Decimal places (e.g., 8 for BTC, 18 for ETH)
+  chainId: string;   // Chain identifier
+  tokenId?: string;  // Token contract address (if applicable)
+}
+```
+
+**Example: BTC balance of 0.00030558**
+- `amount`: `"30558"` (satoshis)
+- `decimals`: `8`
+- Human-readable: `30558 / 10^8 = 0.00030558 BTC`
+
+### Converting Base Units to Human-Readable
+
+```typescript
+// Helper to convert base units to human-readable
+function toHumanReadable(balance: Balance): string {
+  const amount = BigInt(balance.amount);
+  const divisor = BigInt(10 ** balance.decimals);
+  const whole = amount / divisor;
+  const fraction = amount % divisor;
+
+  // Format with proper decimal places
+  const fractionStr = fraction.toString().padStart(balance.decimals, '0');
+  return `${whole}.${fractionStr}`.replace(/\.?0+$/, '') || '0';
+}
+
+// Usage
+const balance = await vault.balance('Bitcoin');
+console.log(`Raw: ${balance.amount}`);           // "30558"
+console.log(`Human: ${toHumanReadable(balance)} ${balance.symbol}`);  // "0.00030558 BTC"
+```
+
 ### Check Balances
 
 ```typescript
 // Get all balances across chains
 const balances = await vault.balances();
-// Returns: { Bitcoin: { BTC: '0.001' }, Ethereum: { ETH: '0.5', USDC: '100' }, ... }
+// Returns Balance objects in base units:
+// { Bitcoin: { BTC: Balance }, Ethereum: { ETH: Balance, USDC: Balance }, ... }
+
+// Access a specific balance
+const btcBalance = balances.Bitcoin?.BTC;
+console.log(`BTC: ${toHumanReadable(btcBalance)} BTC`);
 
 // Refresh balances from blockchain
 await vault.refreshBalances();
@@ -1171,6 +1217,38 @@ main().catch(console.error);
 
 ---
 
+## Known Issues
+
+### Token Decimals May Default to 18
+
+If a token isn't in the SDK's token registry, its decimals default to 18 (standard ERC-20). This can cause incorrect balance display for tokens like USDC (6 decimals) or USDT (6 decimals).
+
+**Workaround:** Always specify decimals when adding tokens:
+
+```typescript
+// Explicitly set correct decimals
+await vault.addToken('Ethereum', {
+  id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  symbol: 'USDC',
+  decimals: 6,  // USDC has 6 decimals, not 18
+});
+```
+
+### Common Token Decimals Reference
+
+| Token | Decimals | Chain |
+|-------|----------|-------|
+| USDC | 6 | Ethereum, Polygon, Arbitrum, Base |
+| USDT | 6 | Ethereum, Polygon, Arbitrum |
+| DAI | 18 | Ethereum, Polygon |
+| WBTC | 8 | Ethereum |
+| BTC | 8 | Bitcoin |
+| ETH | 18 | Ethereum |
+| SOL | 9 | Solana |
+| ATOM | 6 | Cosmos |
+
+---
+
 ## Resources
 
 - **Full SDK Guide**: [docs/SDK-USERS-GUIDE.md](./docs/SDK-USERS-GUIDE.md)
@@ -1183,6 +1261,11 @@ main().catch(console.error);
 
 ## Changelog
 
+- **2026-02-02**: Balance format documentation
+  - Added "Understanding Balance Format" section explaining base units
+  - Added `toHumanReadable()` helper function for display
+  - Added "Known Issues" section documenting token decimals defaults
+  - Added common token decimals reference table
 - **2026-02-02**: CLI command fixes
   - Fixed `vultisig list` → `vultisig vaults`
   - Fixed `vultisig address` → `vultisig addresses`
