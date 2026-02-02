@@ -2,6 +2,7 @@
 import { fromBinary } from '@bufbuild/protobuf'
 import { Chain } from '@core/chain/Chain'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { vaultConfig } from '@core/config'
 import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -16,6 +17,7 @@ import type { VaultContext } from '../context/SdkContext'
 import { UniversalEventEmitter } from '../events/EventEmitter'
 import type { VaultEvents } from '../events/types'
 import { CacheScope, CacheService } from '../services/CacheService'
+import { DiscountTierService } from '../services/DiscountTierService'
 import { FiatValueService } from '../services/FiatValueService'
 import type { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
@@ -91,6 +93,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   protected rawBroadcastService: RawBroadcastService
   protected preferencesService: PreferencesService
   protected swapService: SwapService
+  protected discountTierService: DiscountTierService
 
   // Runtime state (persisted via storage)
   protected _userChains: Chain[] = []
@@ -317,12 +320,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       data => this.emit('chainAdded', data),
       data => this.emit('chainRemoved', data)
     )
+    this.discountTierService = new DiscountTierService(this.cacheService, () => this.address(Chain.Ethereum))
     this.swapService = new SwapService(
       this.coreVault,
       chain => this.address(chain),
       (event, data) => this.emit(event, data),
       this.wasmProvider,
-      this.fiatValueService
+      this.fiatValueService,
+      this.discountTierService
     )
 
     // Setup event-driven cache invalidation
@@ -415,8 +420,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       errors.push('Vault name must be at least 2 characters long')
     }
 
-    if (name.length > 50) {
-      errors.push('Vault name cannot exceed 50 characters')
+    if (name.length > vaultConfig.maxNameLength) {
+      errors.push(`Vault name cannot exceed ${vaultConfig.maxNameLength} characters`)
     }
 
     if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
@@ -1142,6 +1147,39 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async getTokenAllowance(coin: AccountCoin, spender: string): Promise<bigint> {
     return this.swapService.getAllowance(coin, spender)
+  }
+
+  /**
+   * Get the user's current VULT discount tier based on token holdings
+   *
+   * The discount tier is determined by the user's VULT token balance and
+   * Thorguard NFT ownership on Ethereum. Higher tiers get lower swap fees.
+   *
+   * @returns Discount tier ('bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'ultimate') or null
+   *
+   * @example
+   * ```typescript
+   * const tier = await vault.getDiscountTier()
+   * if (tier) {
+   *   console.log(`You have ${tier} tier - reduced swap fees!`)
+   * }
+   * ```
+   */
+  async getDiscountTier(): Promise<string | null> {
+    return this.discountTierService.getDiscountTier()
+  }
+
+  /**
+   * Force refresh the discount tier (after acquiring more VULT)
+   *
+   * Call this after the user acquires more VULT tokens or a Thorguard NFT
+   * to immediately recalculate their discount tier.
+   *
+   * @returns Updated discount tier or null
+   */
+  async updateDiscountTier(): Promise<string | null> {
+    this.discountTierService.invalidateCache()
+    return this.discountTierService.getDiscountTier()
   }
 
   // ===== TOKEN MANAGEMENT =====

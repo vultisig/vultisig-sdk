@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { useSDKAdapter } from '../../../adapters'
-import type { CoinInfo, FiatCurrency, ProgressStep, SwapQuoteResult, TokenInfo, VaultInfo } from '../../../types'
+import type {
+  CoinInfo,
+  DiscountTier,
+  FiatCurrency,
+  ProgressStep,
+  SwapQuoteResult,
+  TokenInfo,
+  VaultInfo,
+} from '../../../types'
 import Button from '../../common/Button'
 import Input from '../../common/Input'
 import Select from '../../common/Select'
@@ -41,6 +49,7 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
   })
 
   const [quote, setQuote] = useState<DisplayQuote | null>(null)
+  const [discountTier, setDiscountTier] = useState<DiscountTier>(null)
   const [isLoadingQuote, setIsLoadingQuote] = useState(false)
   const [isSwapping, setIsSwapping] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -180,6 +189,12 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
         provider: quoteResult.provider,
         raw: quoteResult,
       })
+
+      // Fetch discount tier (non-blocking)
+      sdk
+        .getDiscountTier(vault.id)
+        .then(setDiscountTier)
+        .catch(() => setDiscountTier(null))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get quote')
     } finally {
@@ -525,9 +540,15 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
                   </span>
                 </div>
                 {quote.provider && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between mb-1">
                     <span className="text-gray-600">Provider</span>
                     <span className="font-medium">{quote.provider}</span>
+                  </div>
+                )}
+                {discountTier && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Discount tier</span>
+                    <span className="font-medium capitalize">{discountTier}</span>
                   </div>
                 )}
               </div>

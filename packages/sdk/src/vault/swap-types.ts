@@ -35,6 +35,9 @@ export type CoinInput = AccountCoin | SimpleCoinInput
 
 /**
  * Parameters for getting a swap quote
+ *
+ * Affiliate fee discounts are applied automatically based on the user's
+ * VULT token and Thorguard NFT holdings on Ethereum.
  */
 export type SwapQuoteParams = {
   /** Source coin to swap from */
@@ -45,8 +48,6 @@ export type SwapQuoteParams = {
   amount: number
   /** Optional referral address for affiliate fees */
   referral?: string
-  /** Affiliate fee in basis points (e.g., 50 = 0.5%) */
-  affiliateBps?: number
   /** Optional fiat currency for fee/output conversion (e.g., 'usd', 'eur') */
   fiatCurrency?: FiatCurrency
 }
