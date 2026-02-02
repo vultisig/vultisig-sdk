@@ -71,13 +71,14 @@ export type ExportOptions = {
 
 export type Balance = {
   amount: string
+  formattedAmount: string
   decimals: number
   symbol: string
   chainId: string
   tokenId?: string
   value?: number
-  fiatValue?: number // Current fiat value in vault's currency
-  fiatCurrency?: string // Currency code (e.g., 'USD', 'EUR')
+  fiatValue?: number
+  fiatCurrency?: string
 }
 
 export type CachedBalance = {
