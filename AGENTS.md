@@ -322,31 +322,60 @@ await vault.updateValues('all');
 
 ## Sending Transactions
 
+> **Important:** The SDK requires amounts as `bigint` in base units (wei, satoshis, etc.), not human-readable strings.
+
+### Amount Conversion Helper
+
+```typescript
+// Helper to convert human-readable amounts to base units
+function toBaseUnits(amount: string, decimals: number): bigint {
+  return BigInt(Math.floor(parseFloat(amount) * Math.pow(10, decimals)));
+}
+
+// Examples:
+toBaseUnits('1.5', 18);   // 1500000000000000000n (1.5 ETH in wei)
+toBaseUnits('0.001', 8);  // 100000n (0.001 BTC in satoshis)
+toBaseUnits('100', 6);    // 100000000n (100 USDC)
+```
+
 ### Send Native Token (ETH, BTC, etc.)
 
 ```typescript
-// Prepare the transaction
+import { Chain } from '@vultisig/sdk';
+
+// 1. Get sender address and build AccountCoin
+const senderAddress = await vault.address(Chain.Ethereum);
+
+const coin = {
+  chain: Chain.Ethereum,
+  address: senderAddress,
+  decimals: 18,
+  ticker: 'ETH',
+};
+
+// 2. Prepare the transaction (amount in base units!)
 const sendPayload = await vault.prepareSendTx({
-  chain: 'Ethereum',
-  to: '0xRecipientAddress...',
-  amount: '0.01',  // In human-readable units (ETH, not wei)
+  coin,
+  receiver: '0xRecipientAddress...',
+  amount: toBaseUnits('0.01', 18),  // 0.01 ETH = 10000000000000000n wei
   memo: 'Optional memo',
 });
 
-// Extract message hashes for signing
+// 3. Extract message hashes for signing
 const messageHashes = await vault.extractMessageHashes(sendPayload);
 
-// Sign the transaction (Fast vault signs instantly)
+// 4. Sign the transaction
 const signature = await vault.sign({
-  messages: messageHashes,
-  // For Fast vaults, no additional params needed
+  transaction: sendPayload,
+  chain: Chain.Ethereum,
+  messageHashes,
 });
 
-// Broadcast to network
+// 5. Broadcast to network
 const txHash = await vault.broadcastTx({
-  chain: 'Ethereum',
-  signedTx: signature,
+  chain: Chain.Ethereum,
   keysignPayload: sendPayload,
+  signature,
 });
 
 console.log('Transaction sent:', txHash);
@@ -355,26 +384,106 @@ console.log('Transaction sent:', txHash);
 ### Send ERC-20 Token
 
 ```typescript
+const senderAddress = await vault.address(Chain.Ethereum);
+
+// For tokens, include the contract address as `id`
+const usdcCoin = {
+  chain: Chain.Ethereum,
+  address: senderAddress,
+  decimals: 6,  // USDC has 6 decimals
+  ticker: 'USDC',
+  id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',  // USDC contract
+};
+
 const sendPayload = await vault.prepareSendTx({
-  chain: 'Ethereum',
-  to: '0xRecipientAddress...',
-  amount: '100',  // 100 USDC
-  token: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',  // USDC contract
+  coin: usdcCoin,
+  receiver: '0xRecipientAddress...',
+  amount: toBaseUnits('100', 6),  // 100 USDC = 100000000n
 });
 
-// ... sign and broadcast same as above
+// ... extract hashes, sign, and broadcast same as above
 ```
 
 ### Send Bitcoin
 
 ```typescript
+const senderAddress = await vault.address(Chain.Bitcoin);
+
+const btcCoin = {
+  chain: Chain.Bitcoin,
+  address: senderAddress,
+  decimals: 8,
+  ticker: 'BTC',
+};
+
 const sendPayload = await vault.prepareSendTx({
-  chain: 'Bitcoin',
-  to: 'bc1qRecipientAddress...',
-  amount: '0.001',  // BTC
+  coin: btcCoin,
+  receiver: 'bc1qRecipientAddress...',
+  amount: toBaseUnits('0.001', 8),  // 0.001 BTC = 100000n satoshis
 });
 
-// ... sign and broadcast same as above
+// ... extract hashes, sign, and broadcast same as above
+```
+
+### Complete Send Helper (Recommended)
+
+```typescript
+/**
+ * Complete send flow wrapped in a single function
+ */
+async function sendTokens(
+  vault: VaultBase,
+  chain: Chain,
+  to: string,
+  amount: string,  // Human-readable (e.g., "0.01")
+  tokenId?: string,
+  memo?: string
+): Promise<string> {
+  // 1. Get balance info for decimals
+  const balance = await vault.balance(chain, tokenId);
+  const senderAddress = await vault.address(chain);
+
+  // 2. Build coin object
+  const coin = {
+    chain,
+    address: senderAddress,
+    decimals: balance.decimals,
+    ticker: balance.symbol,
+    id: tokenId,
+  };
+
+  // 3. Convert to base units
+  const amountBaseUnits = BigInt(
+    Math.floor(parseFloat(amount) * Math.pow(10, balance.decimals))
+  );
+
+  // 4. Prepare transaction
+  const payload = await vault.prepareSendTx({
+    coin,
+    receiver: to,
+    amount: amountBaseUnits,
+    memo,
+  });
+
+  // 5. Extract hashes and sign
+  const messageHashes = await vault.extractMessageHashes(payload);
+  const signature = await vault.sign({
+    transaction: payload,
+    chain,
+    messageHashes,
+  });
+
+  // 6. Broadcast
+  return vault.broadcastTx({
+    chain,
+    keysignPayload: payload,
+    signature,
+  });
+}
+
+// Usage:
+const txHash = await sendTokens(vault, Chain.Ethereum, '0xRecipient...', '0.5');
+const txHash2 = await sendTokens(vault, Chain.Ethereum, '0xRecipient...', '100', '0xUSDC...');
 ```
 
 ---
@@ -424,11 +533,15 @@ const swapPayload = await swapService.prepareSwap({
 
 // Sign and broadcast
 const hashes = await vault.extractMessageHashes(swapPayload);
-const sig = await vault.sign({ messages: hashes });
+const sig = await vault.sign({
+  transaction: swapPayload,
+  chain: Chain.Ethereum,
+  messageHashes: hashes,
+});
 const txHash = await vault.broadcastTx({
-  chain: 'Ethereum',
-  signedTx: sig,
+  chain: Chain.Ethereum,
   keysignPayload: swapPayload,
+  signature: sig,
 });
 ```
 
@@ -437,9 +550,11 @@ const txHash = await vault.broadcastTx({
 For depositing to THORChain's secured layer:
 
 ```typescript
+import { Chain } from '@vultisig/sdk';
+
 // Deposit L1 asset to secured layer
 // Memo format: SECURE+:thorAddress
-const thorAddress = await vault.address('THORChain');
+const thorAddress = await vault.address(Chain.THORChain);
 const depositMemo = `SECURE+:${thorAddress}`;
 
 // Get inbound address from THORNode
@@ -447,15 +562,35 @@ const inboundResponse = await fetch('https://thornode.ninerealms.com/thorchain/i
 const inbounds = await inboundResponse.json();
 const ethInbound = inbounds.find(i => i.chain === 'ETH');
 
-// Prepare L1 transaction with memo
+// Build coin object
+const senderAddress = await vault.address(Chain.Ethereum);
+const ethCoin = {
+  chain: Chain.Ethereum,
+  address: senderAddress,
+  decimals: 18,
+  ticker: 'ETH',
+};
+
+// Prepare L1 transaction with memo (amount in wei!)
 const depositPayload = await vault.prepareSendTx({
-  chain: 'Ethereum',
-  to: ethInbound.address,
-  amount: '0.01',
+  coin: ethCoin,
+  receiver: ethInbound.address,
+  amount: 10000000000000000n,  // 0.01 ETH in wei
   memo: depositMemo,
 });
 
-// Sign and broadcast...
+// Extract hashes, sign, and broadcast...
+const messageHashes = await vault.extractMessageHashes(depositPayload);
+const signature = await vault.sign({
+  transaction: depositPayload,
+  chain: Chain.Ethereum,
+  messageHashes,
+});
+const txHash = await vault.broadcastTx({
+  chain: Chain.Ethereum,
+  keysignPayload: depositPayload,
+  signature,
+});
 ```
 
 ---
@@ -710,59 +845,78 @@ async function initializeAgentWallet() {
 ### Pattern 2: Safe Transaction Sending
 
 ```typescript
-// Native token symbols by chain
-const NATIVE_TOKENS: Record<string, string> = {
-  Bitcoin: 'BTC',
-  Ethereum: 'ETH',
-  Solana: 'SOL',
-  THORChain: 'RUNE',
-  Cosmos: 'ATOM',
-  Avalanche: 'AVAX',
-  BSC: 'BNB',
-  Arbitrum: 'ETH',
-  Base: 'ETH',
-  Polygon: 'MATIC',
-  Optimism: 'ETH',
-  // ... add more as needed
-};
+import { Chain, VaultBase } from '@vultisig/sdk';
 
-async function safeSend(vault, chain: string, to: string, amount: string, tokenId?: string) {
+/**
+ * Safe send with balance check and proper error handling.
+ * Uses correct SDK API with AccountCoin and bigint amounts.
+ */
+async function safeSend(
+  vault: VaultBase,
+  chain: Chain,
+  to: string,
+  amount: string,  // Human-readable (e.g., "0.5")
+  tokenId?: string,
+  memo?: string
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
   try {
-    // 1. Check balance first
-    const nativeSymbol = NATIVE_TOKENS[chain] || chain;
-    const assetKey = tokenId || nativeSymbol;
+    // 1. Get balance and check sufficiency
+    const balance = await vault.balance(chain, tokenId);
 
-    const balances = await vault.balances();
-    const chainBalances = balances[chain] || {};
-    const assetBalance = chainBalances[assetKey] || '0';
-
-    if (parseFloat(assetBalance) < parseFloat(amount)) {
-      throw new Error(`Insufficient balance: ${assetBalance} < ${amount}`);
+    if (parseFloat(balance.amount) < parseFloat(amount)) {
+      throw new Error(`Insufficient balance: ${balance.amount} < ${amount}`);
     }
 
-    // 2. Prepare transaction
-    const payload = await vault.prepareSendTx({
+    // 2. Build AccountCoin
+    const senderAddress = await vault.address(chain);
+    const coin = {
       chain,
-      to,
-      amount,
-      ...(tokenId && { token: tokenId }),
+      address: senderAddress,
+      decimals: balance.decimals,
+      ticker: balance.symbol,
+      id: tokenId,
+    };
+
+    // 3. Convert amount to base units (bigint)
+    const amountBaseUnits = BigInt(
+      Math.floor(parseFloat(amount) * Math.pow(10, balance.decimals))
+    );
+
+    // 4. Prepare transaction
+    const payload = await vault.prepareSendTx({
+      coin,
+      receiver: to,
+      amount: amountBaseUnits,
+      memo,
     });
 
-    // 3. Sign
-    const hashes = await vault.extractMessageHashes(payload);
-    const signature = await vault.sign({ messages: hashes });
+    // 5. Extract hashes and sign
+    const messageHashes = await vault.extractMessageHashes(payload);
+    const signature = await vault.sign({
+      transaction: payload,
+      chain,
+      messageHashes,
+    });
 
-    // 4. Broadcast
+    // 6. Broadcast
     const txHash = await vault.broadcastTx({
       chain,
-      signedTx: signature,
       keysignPayload: payload,
+      signature,
     });
 
     return { success: true, txHash };
   } catch (error) {
-    return { success: false, error: error.message };
+    return { success: false, error: (error as Error).message };
   }
+}
+
+// Usage:
+const result = await safeSend(vault, Chain.Ethereum, '0xRecipient...', '0.5');
+if (result.success) {
+  console.log('TX:', result.txHash);
+} else {
+  console.error('Failed:', result.error);
 }
 ```
 
@@ -1023,6 +1177,18 @@ main().catch(console.error);
 
 ## Changelog
 
+- **2026-02-02**: Critical API corrections
+  - **BREAKING:** Fixed `prepareSendTx` signature - was showing wrong params
+    - `chain` → `coin` (AccountCoin object)
+    - `to` → `receiver`
+    - `amount: string` → `amount: bigint` (base units, not human-readable!)
+    - `token` → `coin.id`
+  - Fixed `sign()` signature - `messages` → `messageHashes`, added `transaction` and `chain`
+  - Fixed `broadcastTx()` signature - `signedTx` → `signature`
+  - Added amount conversion helper (`toBaseUnits`)
+  - Added complete `sendTokens()` helper function
+  - Fixed all code examples (send, swap, THORChain deposit)
+  - Fixed Pattern 2 (Safe Transaction Sending) with correct API
 - **2026-02-02**: Major documentation update
   - Fixed error codes to match actual implementation
   - Fixed balance access pattern in examples
