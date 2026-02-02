@@ -9,12 +9,17 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Vault Operations](#vault-operations)
+- [Seedphrase Import](#seedphrase-import)
 - [Balance & Address Operations](#balance--address-operations)
+- [Chain Management](#chain-management)
+- [Fiat Values](#fiat-values)
 - [Sending Transactions](#sending-transactions)
 - [Token Swaps](#token-swaps)
-- [CLI Alternative](#cli-alternative)
+- [Event Handling](#event-handling)
+- [CLI Reference](#cli-reference)
 - [Common Patterns](#common-patterns)
 - [Error Handling](#error-handling)
+- [SDK Lifecycle](#sdk-lifecycle)
 - [Security Notes](#security-notes)
 
 ---
@@ -133,7 +138,88 @@ const vault = await sdk.importVaultFromBackup('./vault-backup.bak', 'backup-pass
 
 ```typescript
 // Export for backup
-await vault.export('./my-vault-backup.bak', 'export-password');
+const { filename, data } = await vault.export('export-password');
+// Save `data` to file system
+```
+
+### Delete Vault
+
+```typescript
+// Delete vault from storage (irreversible!)
+await sdk.deleteVault(vault);
+
+// Clear all vaults
+await sdk.clearVaults();
+```
+
+---
+
+## Seedphrase Import
+
+Create vaults from existing BIP39 mnemonics (12 or 24 words).
+
+### Validate Seedphrase
+
+```typescript
+const isValid = sdk.validateSeedphrase('word1 word2 word3 ... word12');
+if (!isValid) {
+  throw new Error('Invalid mnemonic');
+}
+```
+
+### Create Fast Vault from Seedphrase
+
+```typescript
+const vault = await sdk.createFastVaultFromSeedphrase({
+  name: 'Imported Wallet',
+  email: 'agent@example.com',
+  password: 'secure-password',
+  seedphrase: 'abandon abandon abandon ... about',
+});
+
+// Email verification still required for Fast vaults
+const verifiedVault = await sdk.verifyVault(vault.id, 'email-code');
+```
+
+### Create Secure Vault from Seedphrase
+
+```typescript
+const { vault, sessionId } = await sdk.createSecureVaultFromSeedphrase({
+  name: 'Secure Imported',
+  password: 'secure-password',
+  seedphrase: 'abandon abandon abandon ... about',
+  devices: ['device1', 'device2'],  // Other signers
+});
+```
+
+### Discover Chains with Balances
+
+Scan which chains have funds before importing:
+
+```typescript
+await sdk.discoverChainsFromSeedphrase(
+  'abandon abandon ... about',
+  ['Bitcoin', 'Ethereum', 'Solana'],  // Chains to check
+  (chain, hasBalance) => {
+    if (hasBalance) {
+      console.log(`${chain} has funds!`);
+    }
+  }
+);
+```
+
+### Join Existing Secure Vault
+
+Join a keygen session initiated by another device:
+
+```typescript
+// QR payload from initiating device
+const qrPayload = '...scanned from QR...';
+
+const vault = await sdk.joinSecureVault(qrPayload, {
+  name: 'Joined Vault',
+  password: 'secure-password',
+});
 ```
 
 ---
@@ -152,12 +238,85 @@ await vault.refreshBalances();
 const updatedBalances = await vault.balances();
 ```
 
-### Token Discovery
+### Token Management
 
 ```typescript
-// Discover tokens on a specific chain
-const tokens = await vault.discoverTokens('Ethereum');
+// Get tokens configured for a chain
+const tokens = await vault.getTokens('Ethereum');
+
+// Add a custom token
+await vault.addToken('Ethereum', {
+  id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  symbol: 'USDC',
+  decimals: 6,
+});
+
+// Remove a token
+await vault.removeToken('Ethereum', '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
+
+// Set all tokens for a chain at once
+await vault.setTokens('Ethereum', [
+  { id: '0x...USDC', symbol: 'USDC', decimals: 6 },
+  { id: '0x...USDT', symbol: 'USDT', decimals: 6 },
+]);
 ```
+
+> **Note:** Automatic token discovery is not yet implemented. Tokens must be added manually.
+
+---
+
+## Chain Management
+
+Manage which chains are active for a vault.
+
+```typescript
+// Get active chains
+const chains = vault.chains;
+
+// Add a chain
+await vault.addChain('Solana');
+
+// Remove a chain
+await vault.removeChain('Polygon');
+
+// Set all chains at once
+await vault.setChains(['Bitcoin', 'Ethereum', 'Solana', 'THORChain']);
+
+// Reset to SDK defaults
+await vault.resetToDefaultChains();
+
+// Check supported swap chains
+const swapChains = await vault.getSupportedSwapChains();
+```
+
+---
+
+## Fiat Values
+
+Get portfolio values in fiat currency.
+
+```typescript
+// Set preferred currency
+await vault.setCurrency('USD');  // or 'EUR', 'GBP', etc.
+
+// Get value of a single asset
+const ethValueUsd = await vault.getValue('Ethereum');
+const btcValueEur = await vault.getValue('Bitcoin', undefined, 'EUR');
+
+// Get value of a specific token
+const usdcValue = await vault.getValue('Ethereum', '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
+
+// Get total portfolio value
+const totalUsd = await vault.getTotalValue('USD');
+
+// Refresh prices and get updated total
+await vault.updateTotalValue('USD');
+
+// Refresh all prices
+await vault.updateValues('all');
+```
+
+> **Note:** The SDK caches prices. Use `updateValues()` to refresh.
 
 ---
 
@@ -222,9 +381,19 @@ const sendPayload = await vault.prepareSendTx({
 
 ## Token Swaps
 
-The SDK supports swaps via THORChain.
+The SDK supports cross-chain and same-chain swaps via multiple providers:
 
-### Simple Swap (THORChain)
+| Provider | Type | Best For |
+|----------|------|----------|
+| **THORChain** | Cross-chain DEX | BTC ↔ ETH, native assets |
+| **MayaChain** | Cross-chain DEX | Alternative routes |
+| **1inch** | DEX aggregator | Same-chain EVM swaps |
+| **KyberSwap** | DEX aggregator | Same-chain EVM swaps |
+| **LiFi** | Bridge aggregator | Cross-chain EVM |
+
+The SDK automatically selects the best provider based on the route.
+
+### Simple Swap
 
 ```typescript
 // Using the swap service
@@ -291,7 +460,57 @@ const depositPayload = await vault.prepareSendTx({
 
 ---
 
-## CLI Alternative
+## Event Handling
+
+The SDK emits events for reactive agent architectures.
+
+```typescript
+// Balance updates
+vault.on('balanceUpdated', (chain, tokenId, balance) => {
+  console.log(`${chain} balance changed: ${balance}`);
+});
+
+// Transaction lifecycle
+vault.on('transactionSigned', (txHash, chain) => {
+  console.log(`Signed tx ${txHash} on ${chain}`);
+});
+
+vault.on('transactionBroadcast', (txHash, chain) => {
+  console.log(`Broadcast tx ${txHash} on ${chain}`);
+});
+
+// Signing progress (useful for UI feedback)
+vault.on('signingProgress', (step, totalSteps, message) => {
+  console.log(`Signing: ${step}/${totalSteps} - ${message}`);
+});
+
+// Error events
+vault.on('error', (error) => {
+  console.error('Vault error:', error.message);
+});
+
+// Remove listener
+vault.off('balanceUpdated', myHandler);
+
+// One-time listener
+vault.once('transactionBroadcast', (txHash) => {
+  console.log('First transaction sent!');
+});
+```
+
+### Event Types
+
+| Event | Payload | When |
+|-------|---------|------|
+| `balanceUpdated` | `(chain, tokenId, balance)` | After `updateBalance()` |
+| `transactionSigned` | `(txHash, chain)` | After `sign()` completes |
+| `transactionBroadcast` | `(txHash, chain)` | After `broadcastTx()` succeeds |
+| `signingProgress` | `(step, total, message)` | During MPC signing |
+| `error` | `(VaultError)` | On any vault error |
+
+---
+
+## CLI Reference
 
 For quick operations, use the CLI instead of writing code:
 
@@ -303,26 +522,7 @@ npm install -g @vultisig/cli
 npx @vultisig/cli --help
 ```
 
-### Common CLI Commands
-
-```bash
-# List vaults
-vultisig list
-
-# Get addresses
-vultisig address
-
-# Check balance
-vultisig balance
-
-# Send transaction
-vultisig send ethereum 0xRecipient 0.01
-
-# Swap tokens
-vultisig swap ethereum:eth bitcoin:btc 0.1
-```
-
-### CLI with Password
+### Authentication
 
 ```bash
 # Via environment variable (recommended for agents)
@@ -330,6 +530,146 @@ VAULT_PASSWORD=your-password vultisig balance
 
 # Via flag
 vultisig balance --password your-password
+```
+
+### Vault Management
+
+```bash
+# List all vaults
+vultisig list
+
+# Show vault details
+vultisig info
+
+# Switch active vault
+vultisig switch <vault-id>
+
+# Rename vault
+vultisig rename "New Name"
+
+# Create new fast vault
+vultisig create-fast --name "Agent Wallet" --email "agent@example.com"
+
+# Verify email code
+vultisig verify <code>
+
+# Create secure vault
+vultisig create-secure --name "Secure Wallet"
+
+# Join secure vault keygen
+vultisig join-secure <qr-payload>
+
+# Import vault from backup
+vultisig import ./backup.bak
+
+# Export vault
+vultisig export ./backup.bak
+```
+
+### Seedphrase Operations
+
+```bash
+# Create fast vault from mnemonic
+vultisig create-from-seedphrase-fast --name "Imported" --email "a@b.com"
+
+# Create secure vault from mnemonic
+vultisig create-from-seedphrase-secure --name "Imported Secure"
+```
+
+### Balances & Addresses
+
+```bash
+# Get all addresses
+vultisig address
+
+# Get specific chain address
+vultisig address --chain ethereum
+
+# Check all balances
+vultisig balance
+
+# Check specific chain balance
+vultisig balance --chain ethereum
+
+# Get total portfolio value
+vultisig portfolio
+
+# Set fiat currency
+vultisig currency USD
+```
+
+### Transactions
+
+```bash
+# Send native token
+vultisig send ethereum 0xRecipient 0.01
+
+# Send with memo
+vultisig send ethereum 0xRecipient 0.01 --memo "Payment"
+
+# Send ERC-20 token
+vultisig send ethereum 0xRecipient 100 --token 0xUSDC...
+
+# Sign arbitrary bytes
+vultisig sign <hex-bytes> --chain ethereum
+
+# Broadcast raw transaction
+vultisig broadcast <raw-tx-hex> --chain ethereum
+```
+
+### Swaps
+
+```bash
+# Swap tokens (cross-chain)
+vultisig swap ethereum:eth bitcoin:btc 0.1
+
+# Get swap quote only
+vultisig swap-quote ethereum:eth bitcoin:btc 0.1
+
+# List supported swap chains
+vultisig swap-chains
+```
+
+### Token & Chain Management
+
+```bash
+# List tokens for a chain
+vultisig tokens --chain ethereum
+
+# Add custom token
+vultisig tokens add ethereum 0xAddress SYMBOL 18
+
+# Remove token
+vultisig tokens remove ethereum 0xAddress
+
+# List active chains
+vultisig chains
+
+# Add chain
+vultisig chains add solana
+
+# Remove chain
+vultisig chains remove polygon
+```
+
+### Address Book
+
+```bash
+# List address book
+vultisig address-book
+
+# Add entry
+vultisig address-book add "Alice" 0xAddress ethereum
+
+# Remove entry
+vultisig address-book remove "Alice"
+```
+
+### Diagnostics
+
+```bash
+# Check server status
+vultisig server
 ```
 
 ---
@@ -370,30 +710,55 @@ async function initializeAgentWallet() {
 ### Pattern 2: Safe Transaction Sending
 
 ```typescript
-async function safeSend(vault, chain, to, amount) {
+// Native token symbols by chain
+const NATIVE_TOKENS: Record<string, string> = {
+  Bitcoin: 'BTC',
+  Ethereum: 'ETH',
+  Solana: 'SOL',
+  THORChain: 'RUNE',
+  Cosmos: 'ATOM',
+  Avalanche: 'AVAX',
+  BSC: 'BNB',
+  Arbitrum: 'ETH',
+  Base: 'ETH',
+  Polygon: 'MATIC',
+  Optimism: 'ETH',
+  // ... add more as needed
+};
+
+async function safeSend(vault, chain: string, to: string, amount: string, tokenId?: string) {
   try {
     // 1. Check balance first
+    const nativeSymbol = NATIVE_TOKENS[chain] || chain;
+    const assetKey = tokenId || nativeSymbol;
+
     const balances = await vault.balances();
-    const chainBalance = balances[chain]?.[chain] || '0';
-    
-    if (parseFloat(chainBalance) < parseFloat(amount)) {
-      throw new Error(`Insufficient balance: ${chainBalance} < ${amount}`);
+    const chainBalances = balances[chain] || {};
+    const assetBalance = chainBalances[assetKey] || '0';
+
+    if (parseFloat(assetBalance) < parseFloat(amount)) {
+      throw new Error(`Insufficient balance: ${assetBalance} < ${amount}`);
     }
-    
+
     // 2. Prepare transaction
-    const payload = await vault.prepareSendTx({ chain, to, amount });
-    
+    const payload = await vault.prepareSendTx({
+      chain,
+      to,
+      amount,
+      ...(tokenId && { token: tokenId }),
+    });
+
     // 3. Sign
     const hashes = await vault.extractMessageHashes(payload);
     const signature = await vault.sign({ messages: hashes });
-    
+
     // 4. Broadcast
     const txHash = await vault.broadcastTx({
       chain,
       signedTx: signature,
       keysignPayload: payload,
     });
-    
+
     return { success: true, txHash };
   } catch (error) {
     return { success: false, error: error.message };
@@ -425,35 +790,195 @@ async function getPortfolioValue(vault, prices) {
 
 ### Common Errors
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `Vault is locked` | Fast vault needs password | Call `vault.unlock(password)` |
-| `No vault found` | No vaults in storage | Create or import a vault first |
-| `Insufficient funds` | Balance too low | Check balance before sending |
-| `MPC timeout` | Server unreachable | Retry, check network connection |
-| `Invalid address` | Wrong address format | Verify address format for chain |
+| Error Code | Cause | Solution | Retryable |
+|------------|-------|----------|-----------|
+| `INVALID_CONFIG` | Vault locked or misconfigured | Call `vault.unlock(password)` | Yes |
+| `SIGNING_FAILED` | MPC signing process failed | Retry, check server status | Yes |
+| `NETWORK_ERROR` | Server unreachable | Retry with backoff | Yes |
+| `BROADCAST_FAILED` | Transaction rejected by network | Check tx params, gas | Maybe |
+| `BALANCE_FETCH_FAILED` | RPC endpoint issue | Retry, check chain status | Yes |
+| `GAS_ESTIMATION_FAILED` | Cannot estimate gas | Check amount, recipient | No |
+| `UNSUPPORTED_CHAIN` | Chain not supported | Use supported chain | No |
+| `ADDRESS_DERIVATION_FAILED` | Key derivation issue | Check vault integrity | No |
+| `INVALID_VAULT` | Corrupted vault data | Re-import vault | No |
 
 ### Error Handling Pattern
 
 ```typescript
-import { VaultError, StorageError } from '@vultisig/sdk';
+import { VaultError, VaultErrorCode, StorageError, StorageErrorCode } from '@vultisig/sdk';
 
 try {
-  await vault.send(...);
+  // Prepare and send transaction
+  const payload = await vault.prepareSendTx({ chain, to, amount });
+  const hashes = await vault.extractMessageHashes(payload);
+  const signature = await vault.sign({ messages: hashes });
+  const txHash = await vault.broadcastTx({ chain, signedTx: signature, keysignPayload: payload });
 } catch (error) {
   if (error instanceof VaultError) {
-    if (error.code === 'VAULT_LOCKED') {
-      await vault.unlock(password);
-      // Retry operation
-    } else if (error.code === 'INSUFFICIENT_FUNDS') {
-      console.error('Not enough balance');
+    switch (error.code) {
+      case VaultErrorCode.InvalidConfig:
+        // Vault may be locked
+        await vault.unlock(password);
+        // Retry operation
+        break;
+      case VaultErrorCode.SigningFailed:
+      case VaultErrorCode.NetworkError:
+        // Retryable - wait and retry
+        await sleep(2000);
+        // Retry operation
+        break;
+      case VaultErrorCode.BroadcastFailed:
+        console.error('Transaction rejected:', error.message);
+        break;
+      case VaultErrorCode.UnsupportedChain:
+        console.error('Chain not supported');
+        break;
+      default:
+        console.error('Vault error:', error.code, error.message);
     }
   } else if (error instanceof StorageError) {
-    console.error('Storage issue:', error.message);
+    switch (error.code) {
+      case StorageErrorCode.QuotaExceeded:
+        console.error('Storage full');
+        break;
+      case StorageErrorCode.DecryptionFailed:
+        console.error('Wrong password or corrupted data');
+        break;
+      default:
+        console.error('Storage issue:', error.message);
+    }
   } else {
     throw error;  // Unknown error
   }
 }
+```
+
+> **Note:** There is no `INSUFFICIENT_FUNDS` error code. Always check balances before sending:
+> ```typescript
+> const balance = await vault.balance(chain);
+> if (parseFloat(balance) < parseFloat(amount)) {
+>   throw new Error('Insufficient balance');
+> }
+> ```
+
+---
+
+## SDK Lifecycle
+
+Proper initialization and cleanup for long-running agents.
+
+### Initialization
+
+```typescript
+const sdk = new Vultisig({
+  onPasswordRequired: async () => process.env.VAULT_PASSWORD!,
+
+  // Optional: auto-initialize on construction
+  autoInit: true,
+
+  // Optional: configure default chains for new vaults
+  defaultChains: ['Bitcoin', 'Ethereum', 'Solana'],
+
+  // Optional: set default fiat currency
+  defaultCurrency: 'USD',
+
+  // Optional: configure cache TTLs (milliseconds)
+  cacheConfig: {
+    balance: 30000,      // Balance cache: 30s
+    address: 3600000,    // Address cache: 1hr
+    price: 60000,        // Price cache: 1min
+  },
+
+  // Optional: password cache TTL
+  passwordCache: {
+    defaultTTL: 300000,  // 5 minutes
+  },
+});
+
+// If autoInit is false (default), initialize manually
+await sdk.initialize();
+
+// Check initialization state
+console.log('Initialized:', sdk.initialized);
+```
+
+### Cleanup (Critical!)
+
+**Always dispose the SDK when done.** This:
+- Zeros passwords in memory (security)
+- Clears pending operations
+- Releases resources
+
+```typescript
+// ALWAYS call dispose when shutting down
+await sdk.dispose();
+
+// Check disposal state
+console.log('Disposed:', sdk.disposed);
+
+// After dispose, SDK is unusable
+// Create a new instance if needed
+```
+
+### Password Cache Management
+
+```typescript
+// Check if vault is unlocked
+if (!vault.isUnlocked()) {
+  await vault.unlock(password);
+}
+
+// Check time remaining on password cache
+const ttlMs = vault.getUnlockTimeRemaining();
+console.log(`Password cached for ${ttlMs / 1000}s more`);
+
+// Manually clear password from cache (security)
+vault.lock();
+```
+
+### Server Health Check
+
+```typescript
+// Check MPC server connectivity
+const status = await sdk.getServerStatus();
+if (!status.healthy) {
+  console.error('Server unavailable:', status.message);
+}
+```
+
+### Graceful Shutdown Pattern
+
+```typescript
+import { Vultisig } from '@vultisig/sdk';
+
+let sdk: Vultisig | null = null;
+
+async function main() {
+  sdk = new Vultisig({
+    onPasswordRequired: async () => process.env.VAULT_PASSWORD!,
+  });
+  await sdk.initialize();
+
+  // ... your agent logic ...
+}
+
+// Handle shutdown signals
+process.on('SIGINT', async () => {
+  console.log('Shutting down...');
+  if (sdk && !sdk.disposed) {
+    await sdk.dispose();
+  }
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  if (sdk && !sdk.disposed) {
+    await sdk.dispose();
+  }
+  process.exit(0);
+});
+
+main().catch(console.error);
 ```
 
 ---
@@ -498,4 +1023,15 @@ try {
 
 ## Changelog
 
+- **2026-02-02**: Major documentation update
+  - Fixed error codes to match actual implementation
+  - Fixed balance access pattern in examples
+  - Added seedphrase import section
+  - Added chain management section
+  - Added fiat values section
+  - Added event handling section
+  - Added SDK lifecycle section
+  - Expanded CLI reference (5 → 23+ commands)
+  - Added swap providers (THORChain, MayaChain, 1inch, KyberSwap, LiFi)
+  - Replaced non-existent `discoverTokens()` with token management docs
 - **2026-02-02**: Initial agent-focused documentation
