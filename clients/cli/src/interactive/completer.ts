@@ -15,6 +15,7 @@ const COMMANDS = [
   'vaults',
   'vault',
   'import',
+  'delete',
   'create-from-seedphrase',
   'create',
   'join',

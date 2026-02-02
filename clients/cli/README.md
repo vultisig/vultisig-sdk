@@ -218,6 +218,7 @@ vultisig -i
 | `create fast` | Create a new fast vault (server-assisted 2-of-2) |
 | `create secure` | Create a secure vault (multi-device MPC) |
 | `import <file>` | Import vault from .vult file |
+| `delete [vault]` | Delete a vault from local storage |
 | `create-from-seedphrase fast` | Import seedphrase as FastVault (2-of-2) |
 | `create-from-seedphrase secure` | Import seedphrase as SecureVault (N-of-M) |
 | `join secure` | Join an existing SecureVault creation session |
@@ -238,6 +239,24 @@ vultisig -i
 - `--password <password>` - Vault password (optional)
 - `--shares <n>` - Number of devices (default: 3)
 - `--threshold <n>` - Signing threshold (default: 2)
+
+**Delete options:**
+- `[vault]` - Vault name or ID to delete (defaults to active vault)
+- `-y, --yes` - Skip confirmation prompt
+
+```bash
+# Delete by vault name
+vultisig delete "My Wallet"
+
+# Delete by vault ID (or prefix)
+vultisig delete abc123
+
+# Delete active vault
+vultisig delete
+
+# Skip confirmation (for scripts)
+vultisig delete "Test Vault" --yes
+```
 
 **Join secure options:**
 - `--qr <payload>` - QR code payload from initiator (vultisig://...)
@@ -593,6 +612,7 @@ Thorguard NFT holders receive a free tier upgrade (up to gold tier).
 | `vaults` | List all vaults |
 | `create` | Create a new vault |
 | `import <file>` | Import vault from file |
+| `delete [name]` | Delete a vault |
 | `lock` | Lock vault (clear cached password) |
 | `unlock` | Unlock vault (cache password) |
 | `status` | Show vault status |

@@ -196,6 +196,7 @@ export function showHelp(): void {
     ['  vaults              - List all vaults'],
     ['  vault <name>        - Switch to vault'],
     ['  import <file>       - Import vault from file'],
+    ['  delete [name]       - Delete vault'],
     ['  create              - Create new vault'],
     ['  info                - Show vault details'],
     ['  export [path]       - Export vault to file'],

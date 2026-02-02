@@ -942,3 +942,109 @@ export async function executeJoinSecure(ctx: CommandContext, options: JoinSecure
     throw err
   }
 }
+
+// ============================================================================
+// Delete Vault Command
+// ============================================================================
+
+export type DeleteVaultOptions = {
+  vaultId?: string
+  skipConfirmation?: boolean
+}
+
+/**
+ * Execute delete vault command
+ */
+export async function executeDelete(ctx: CommandContext, options: DeleteVaultOptions = {}): Promise<void> {
+  // Step 1: Resolve vault to delete
+  let vault: VaultBase
+
+  if (options.vaultId) {
+    // Find vault by ID, name, or prefix
+    const vaults = await ctx.sdk.listVaults()
+    const found = findVaultByIdOrName(vaults, options.vaultId)
+
+    if (!found) {
+      throw new Error(`Vault not found: "${options.vaultId}"`)
+    }
+    vault = found
+  } else {
+    // Use active vault
+    vault = await ctx.ensureActiveVault()
+  }
+
+  // Step 2: JSON mode - skip confirmation for scripting
+  if (isJsonOutput()) {
+    const spinner = createSpinner('Deleting vault...')
+    await ctx.sdk.deleteVault(vault)
+    spinner.succeed('Vault deleted')
+
+    outputJson({
+      deleted: true,
+      vault: {
+        id: vault.id,
+        name: vault.name,
+        type: vault.type,
+      },
+    })
+    return
+  }
+
+  // Step 3: Display vault info for confirmation
+  info('\n' + chalk.bold('Vault to delete:'))
+  info(`  Name:   ${chalk.cyan(vault.name)}`)
+  info(`  Type:   ${chalk.yellow(vault.type)}`)
+  info(`  ID:     ${vault.id.slice(0, 16)}...`)
+  info(`  Chains: ${vault.chains.length}`)
+  info('')
+
+  // Step 4: Confirm deletion
+  if (!options.skipConfirmation) {
+    warn(chalk.red.bold('WARNING: This action cannot be undone!'))
+    warn('Make sure you have a backup of your vault (.vult file) before proceeding.')
+    info('')
+
+    const { confirmed } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmed',
+        message: `Are you sure you want to delete vault "${vault.name}"?`,
+        default: false,
+      },
+    ])
+
+    if (!confirmed) {
+      info('Deletion cancelled.')
+      return
+    }
+  }
+
+  // Step 5: Delete the vault
+  const spinner = createSpinner('Deleting vault...')
+
+  await ctx.sdk.deleteVault(vault)
+
+  spinner.succeed(`Vault deleted: ${vault.name}`)
+
+  success('\n+ Vault deleted successfully')
+  info(chalk.gray('\nTip: Run "vultisig vaults" to see remaining vaults'))
+}
+
+/**
+ * Find vault by ID, name, or ID prefix
+ */
+function findVaultByIdOrName(vaults: VaultBase[], idOrName: string): VaultBase | null {
+  // Try exact ID match first
+  const byId = vaults.find(v => v.id === idOrName)
+  if (byId) return byId
+
+  // Try name match (case-insensitive)
+  const byName = vaults.find(v => v.name.toLowerCase() === idOrName.toLowerCase())
+  if (byName) return byName
+
+  // Try partial ID match (prefix)
+  const byPartialId = vaults.find(v => v.id.startsWith(idOrName))
+  if (byPartialId) return byPartialId
+
+  return null
+}

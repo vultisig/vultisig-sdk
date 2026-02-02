@@ -20,6 +20,7 @@ import {
   executeCreateFromSeedphraseSecure,
   executeCreateSecure,
   executeCurrency,
+  executeDelete,
   executeDiscount,
   executeExport,
   executeImport,
@@ -686,6 +687,21 @@ program
     withExit(async () => {
       const context = await init(program.opts().vault)
       await executeInfo(context)
+    })
+  )
+
+// Command: Delete a vault
+program
+  .command('delete [vault]')
+  .description('Delete a vault from local storage')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(
+    withExit(async (vaultIdOrName: string | undefined, options: { yes?: boolean }) => {
+      const context = await init(program.opts().vault)
+      await executeDelete(context, {
+        vaultId: vaultIdOrName,
+        skipConfirmation: options.yes,
+      })
     })
   )
 

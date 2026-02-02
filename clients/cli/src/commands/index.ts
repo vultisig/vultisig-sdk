@@ -29,6 +29,7 @@ export { executeBroadcast } from './broadcast'
 export type {
   CreateFromSeedphraseFastOptions,
   CreateFromSeedphraseSecureOptions,
+  DeleteVaultOptions,
   FastVaultOptions,
   JoinSecureOptions,
   SecureVaultOptions,
@@ -38,6 +39,7 @@ export {
   executeCreateFromSeedphraseFast,
   executeCreateFromSeedphraseSecure,
   executeCreateSecure,
+  executeDelete,
   executeExport,
   executeImport,
   executeInfo,

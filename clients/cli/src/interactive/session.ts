@@ -34,6 +34,7 @@ import {
   executeCreateFromSeedphraseSecure,
   executeCreateSecure,
   executeCurrency,
+  executeDelete,
   executeExport,
   executeImport,
   executeInfo,
@@ -358,6 +359,10 @@ export class ShellSession {
         await executeRename(this.ctx, args.join(' '))
         break
 
+      case 'delete':
+        await this.deleteVault(args)
+        break
+
       // Balance commands
       case 'balance':
       case 'bal':
@@ -488,6 +493,11 @@ export class ShellSession {
     const vault = await executeImport(this.ctx, filePath)
     this.ctx.addVault(vault)
     this.eventBuffer.setupVaultListeners(vault)
+  }
+
+  private async deleteVault(args: string[]): Promise<void> {
+    const vaultIdOrName = args.join(' ') || undefined
+    await executeDelete(this.ctx, { vaultId: vaultIdOrName })
   }
 
   private async createVault(args: string[]): Promise<void> {
