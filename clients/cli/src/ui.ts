@@ -25,7 +25,7 @@ import { info, isJsonOutput, printError, printResult, printTable, warn } from '.
 
 export function displayBalance(chain: string, balance: Balance): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
-  printResult(`  Amount: ${balance.amount} ${balance.symbol}`)
+  printResult(`  Amount: ${balance.formattedAmount} ${balance.symbol}`)
   if (balance.fiatValue && balance.fiatCurrency) {
     printResult(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
   }
@@ -36,7 +36,7 @@ export function displayBalancesTable(balances: Record<string, Balance>): void {
 
   const tableData = Object.entries(balances).map(([chain, balance]) => ({
     Chain: chain,
-    Amount: balance.amount,
+    Amount: balance.formattedAmount,
     Symbol: balance.symbol,
     Value:
       balance.fiatValue && balance.fiatCurrency ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}` : 'N/A',
@@ -61,7 +61,7 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
 
   const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
     Chain: chain,
-    Amount: balance.amount,
+    Amount: balance.formattedAmount,
     Symbol: balance.symbol,
     Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
   }))
@@ -212,7 +212,7 @@ export function setupVaultEvents(vault: VaultBase): void {
   // Balance updates
   vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
     const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.amount}`))
+    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.formattedAmount}`))
   })
 
   // Transaction broadcast
