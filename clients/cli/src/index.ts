@@ -635,12 +635,14 @@ program
   .command('chains')
   .description('List and manage chains')
   .option('--add <chain>', 'Add a chain')
+  .option('--add-all', 'Add all supported chains')
   .option('--remove <chain>', 'Remove a chain')
   .action(
-    withExit(async (options: { add?: string; remove?: string }) => {
+    withExit(async (options: { add?: string; addAll?: boolean; remove?: string }) => {
       const context = await init(program.opts().vault)
       await executeChains(context, {
         add: options.add ? findChainByName(options.add) || (options.add as Chain) : undefined,
+        addAll: options.addAll,
         remove: options.remove ? findChainByName(options.remove) || (options.remove as Chain) : undefined,
       })
     })

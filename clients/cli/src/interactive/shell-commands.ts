@@ -206,7 +206,7 @@ export function showHelp(): void {
     ['  send <chain> <to> <amount> - Send transaction'],
     ['  portfolio [-c usd]  - Show portfolio value'],
     ['  addresses           - Show all addresses'],
-    ['  chains [--add/--remove] - Manage chains'],
+    ['  chains [--add/--remove/--add-all] - Manage chains'],
     ['  tokens <chain>      - Manage tokens'],
     [''],
     [chalk.bold('Swap Operations:')],

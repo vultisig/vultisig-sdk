@@ -751,9 +751,12 @@ export class ShellSession {
   private async runChains(args: string[]): Promise<void> {
     let addChain: Chain | undefined
     let removeChain: Chain | undefined
+    let addAll = false
 
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === '--add' && i + 1 < args.length) {
+      if (args[i] === '--add-all') {
+        addAll = true
+      } else if (args[i] === '--add' && i + 1 < args.length) {
         const chain = findChainByName(args[i + 1])
         if (!chain) {
           console.log(chalk.red(`Unknown chain: ${args[i + 1]}`))
@@ -774,7 +777,7 @@ export class ShellSession {
       }
     }
 
-    await executeChains(this.ctx, { add: addChain, remove: removeChain })
+    await executeChains(this.ctx, { add: addChain, remove: removeChain, addAll })
   }
 
   private async runTokens(args: string[]): Promise<void> {

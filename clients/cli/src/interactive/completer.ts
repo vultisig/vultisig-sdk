@@ -71,18 +71,22 @@ export function createCompleter(ctx: ShellContext) {
         return completeVaultName(ctx, partial)
       }
 
-      // Chain completion for chains --add/--remove
+      // Flag and chain completion for chains command
       if (command === 'chains' && parts.length >= 2) {
+        const lastPart = parts[parts.length - 1] || ''
+        const lastPartLower = lastPart.toLowerCase()
+
+        // Complete flag names when typing --
+        if (lastPartLower.startsWith('-')) {
+          const flags = ['--add', '--add-all', '--remove']
+          const matches = flags.filter(f => f.startsWith(lastPartLower))
+          return [matches.length ? matches : flags, lastPart]
+        }
+
+        // Chain completion after --add or --remove
         const flag = parts[parts.length - 2]?.toLowerCase()
         if (flag === '--add' || flag === '--remove') {
-          const partial = parts[parts.length - 1] || ''
-          return completeChainName(partial)
-        }
-        if (
-          parts[parts.length - 1]?.toLowerCase() === '--add' ||
-          parts[parts.length - 1]?.toLowerCase() === '--remove'
-        ) {
-          return completeChainName('')
+          return completeChainName(lastPart)
         }
       }
 
