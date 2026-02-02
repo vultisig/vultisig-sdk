@@ -680,13 +680,15 @@ export class ShellSession {
   }
 
   private async runBalance(args: string[]): Promise<void> {
-    const chainStr = args[0]
+    const chainStr = args.find(arg => !arg.startsWith('-'))
     const includeTokens = args.includes('-t') || args.includes('--tokens')
+    const raw = args.includes('--raw')
 
     await this.withCancellation(() =>
       executeBalance(this.ctx, {
         chain: chainStr ? findChainByName(chainStr) || (chainStr as Chain) : undefined,
         includeTokens,
+        raw,
       })
     )
   }
@@ -707,7 +709,8 @@ export class ShellSession {
       return
     }
 
-    await this.withCancellation(() => executePortfolio(this.ctx, { currency }))
+    const raw = args.includes('--raw')
+    await this.withCancellation(() => executePortfolio(this.ctx, { currency, raw }))
   }
 
   private async runSend(args: string[]): Promise<void> {

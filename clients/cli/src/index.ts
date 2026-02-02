@@ -452,12 +452,14 @@ program
   .command('balance [chain]')
   .description('Show balance for a chain or all chains')
   .option('-t, --tokens', 'Include token balances')
+  .option('--raw', 'Show raw values (wei/satoshis) for programmatic use')
   .action(
-    withExit(async (chainStr: string | undefined, options: { tokens?: boolean }) => {
+    withExit(async (chainStr: string | undefined, options: { tokens?: boolean; raw?: boolean }) => {
       const context = await init(program.opts().vault)
       await executeBalance(context, {
         chain: chainStr ? findChainByName(chainStr) || (chainStr as Chain) : undefined,
         includeTokens: options.tokens,
+        raw: options.raw,
       })
     })
   )
@@ -539,10 +541,14 @@ program
   .command('portfolio')
   .description('Show total portfolio value')
   .option('-c, --currency <currency>', 'Fiat currency (usd, eur, gbp, etc.)', 'usd')
+  .option('--raw', 'Show raw values (wei/satoshis) for programmatic use')
   .action(
-    withExit(async (options: { currency: string }) => {
+    withExit(async (options: { currency: string; raw?: boolean }) => {
       const context = await init(program.opts().vault)
-      await executePortfolio(context, { currency: options.currency.toLowerCase() as FiatCurrency })
+      await executePortfolio(context, {
+        currency: options.currency.toLowerCase() as FiatCurrency,
+        raw: options.raw,
+      })
     })
   )
 

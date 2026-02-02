@@ -11,6 +11,7 @@ import { displayBalance, displayBalancesTable, displayPortfolio } from '../ui'
 export type BalanceOptions = {
   chain?: Chain
   includeTokens?: boolean
+  raw?: boolean
 }
 
 /**
@@ -20,6 +21,7 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
   const vault = await ctx.ensureActiveVault()
 
   const spinner = createSpinner('Loading balances...')
+  const raw = options.raw ?? false
 
   if (options.chain) {
     const balance = await vault.balance(options.chain)
@@ -29,7 +31,7 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
       outputJson({ chain: options.chain, balance })
       return
     }
-    displayBalance(options.chain, balance)
+    displayBalance(options.chain, balance, raw)
   } else {
     const balances = await vault.balances(undefined, options.includeTokens)
     spinner.succeed('Balances loaded')
@@ -38,12 +40,13 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
       outputJson({ balances })
       return
     }
-    displayBalancesTable(balances)
+    displayBalancesTable(balances, raw)
   }
 }
 
 export type PortfolioOptions = {
   currency?: FiatCurrency
+  raw?: boolean
 }
 
 /**
@@ -90,5 +93,5 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
     outputJson({ portfolio, currency })
     return
   }
-  displayPortfolio(portfolio, currency)
+  displayPortfolio(portfolio, currency, options.raw ?? false)
 }
