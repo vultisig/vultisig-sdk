@@ -1,9 +1,19 @@
 ---
 name: vultisig-sdk
-description: TypeScript SDK for MPC wallet integration across 36+ blockchains
+description: TypeScript SDK for MPC wallet integration across 36+ blockchains. Use when the user wants to programmatically create MPC wallets, derive addresses, sign transactions, execute swaps, or build crypto applications with threshold signing security. Supports Bitcoin, Ethereum, Solana, and 33+ other chains.
 version: 1.0.0
 author: Vultisig
 repository: https://github.com/vultisig/vultisig-sdk
+metadata:
+  openclaw:
+    emoji: "🛡️"
+    homepage: https://github.com/vultisig/vultisig-sdk
+    requires:
+      bins:
+        - node
+        - npm
+    install:
+      npm: "@vultisig/sdk"
 tags:
   - crypto
   - wallet

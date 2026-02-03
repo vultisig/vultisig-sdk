@@ -1,9 +1,18 @@
 ---
 name: vultisig-cli
-description: MPC wallet CLI for secure multi-chain crypto operations across 36+ blockchains
+description: MPC wallet CLI for secure multi-chain crypto operations across 36+ blockchains. Use when the user wants to create MPC wallets, send crypto, swap tokens cross-chain, check balances, sign transactions, or manage multi-signature vaults. Supports Bitcoin, Ethereum, Solana, and 33+ other chains with threshold signing security.
 version: 1.0.0
 author: Vultisig
 repository: https://github.com/vultisig/vultisig-sdk
+metadata:
+  openclaw:
+    emoji: "🔐"
+    homepage: https://github.com/vultisig/vultisig-sdk
+    requires:
+      bins:
+        - vultisig
+    install:
+      npm: "@vultisig/cli"
 tags:
   - crypto
   - wallet
