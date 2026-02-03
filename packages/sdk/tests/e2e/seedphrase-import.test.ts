@@ -111,7 +111,7 @@ describe('E2E: Seedphrase Import', () => {
       console.log('🔍 Discovering chains from seedphrase...')
       const progressUpdates: ChainDiscoveryProgress[] = []
 
-      const results = await sdk.discoverChainsFromSeedphrase(
+      const { results } = await sdk.discoverChainsFromSeedphrase(
         TEST_SEEDPHRASE,
         [Chain.Bitcoin, Chain.Ethereum],
         progress => {
@@ -143,7 +143,7 @@ describe('E2E: Seedphrase Import', () => {
       }
 
       console.log('🔍 Deriving addresses for multiple chains...')
-      const results = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [
+      const { results } = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [
         Chain.Bitcoin,
         Chain.Ethereum,
         Chain.Solana,
@@ -172,7 +172,7 @@ describe('E2E: Seedphrase Import', () => {
       }
 
       console.log('🔍 Fetching Bitcoin balance...')
-      const results = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [Chain.Bitcoin])
+      const { results } = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [Chain.Bitcoin])
 
       const btcResult = results.find(r => r.chain === Chain.Bitcoin)
       expect(btcResult).toBeDefined()
@@ -195,7 +195,7 @@ describe('E2E: Seedphrase Import', () => {
       }
 
       console.log('🔍 Fetching Ethereum balance...')
-      const results = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [Chain.Ethereum])
+      const { results } = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [Chain.Ethereum])
 
       const ethResult = results.find(r => r.chain === Chain.Ethereum)
       expect(ethResult).toBeDefined()
@@ -218,7 +218,7 @@ describe('E2E: Seedphrase Import', () => {
       }
 
       console.log('🔍 Fetching THORChain balance...')
-      const results = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [Chain.THORChain])
+      const { results } = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [Chain.THORChain])
 
       const runeResult = results.find(r => r.chain === Chain.THORChain)
       expect(runeResult).toBeDefined()
@@ -241,7 +241,7 @@ describe('E2E: Seedphrase Import', () => {
       }
 
       console.log('🔍 Fetching BTC, ETH, and RUNE balances...')
-      const results = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [
+      const { results } = await sdk.discoverChainsFromSeedphrase(TEST_SEEDPHRASE, [
         Chain.Bitcoin,
         Chain.Ethereum,
         Chain.THORChain,

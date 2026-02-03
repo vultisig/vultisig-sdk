@@ -9,6 +9,8 @@ Browser-based example application demonstrating the Vultisig SDK for fast vault 
 - 📦 Import/export vault files
 - 💰 Check balances across multiple chains
 - 💸 Send transactions (fast vault: instant, secure vault: device coordination)
+- 🔄 Cross-chain swaps with automatic discount tier display
+- 🏆 VULT discount tier display and refresh
 - 📲 QR code display for mobile device pairing
 - 📊 Real-time event logging and device join tracking
 - 🎨 Modern React UI with Tailwind CSS
@@ -71,6 +73,19 @@ yarn preview
 2. Select one or more .vult files
 3. Vaults will open in separate tabs
 
+### Import from Seedphrase
+
+1. Click "Import Seedphrase"
+2. Choose vault type (FastVault or SecureVault)
+3. Enter your 12 or 24-word recovery phrase
+4. Optionally enable:
+   - **Discover chains with existing balances** - Scans all chains for funds
+   - **Use Phantom wallet derivation path for Solana** - Enable if your seedphrase was created in Phantom wallet (uses a different derivation path)
+5. For FastVault: Enter name, email, password and complete email verification
+6. For SecureVault: Enter name, configure devices, then scan QR with mobile app
+
+> **Note:** When "Discover chains" is enabled, the app automatically detects if Phantom's Solana derivation path should be used.
+
 ### Check Balances
 
 1. Select a vault from the tabs
@@ -93,6 +108,31 @@ yarn preview
 6. Device join progress shows (e.g., "2/3 devices ready")
 7. Once threshold reached, signature is generated
 8. Transaction is broadcast
+
+### View Discount Tier
+
+Your VULT discount tier is displayed in the vault Overview tab. The tier is based on your VULT token and Thorguard NFT holdings on Ethereum.
+
+**Tier Levels:**
+- **Bronze** - 1,500+ VULT (0.45% fee)
+- **Silver** - 3,000+ VULT (0.40% fee)
+- **Gold** - 7,500+ VULT (0.30% fee)
+- **Platinum** - 15,000+ VULT (0.25% fee)
+- **Diamond** - 100,000+ VULT (0.15% fee)
+- **Ultimate** - 1,000,000+ VULT (0% fee)
+
+Thorguard NFT holders receive a free tier upgrade (except platinum and above).
+
+Click "Refresh" to update your tier after acquiring more VULT tokens.
+
+### Swap Tokens
+
+1. Navigate to the Swap tab
+2. Select source and destination chains/tokens
+3. Enter amount to swap
+4. Click "Get Quote" to see estimated output and fees
+5. Your discount tier is displayed in the quote details
+6. Click "Swap" to execute the transaction
 
 ## Architecture
 

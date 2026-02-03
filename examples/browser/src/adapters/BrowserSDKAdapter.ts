@@ -7,6 +7,7 @@ import type {
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
   DeviceJoinedData,
+  DiscountTier,
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
@@ -555,6 +556,19 @@ export class BrowserSDKAdapter implements ISDKAdapter {
   async getChainList(): Promise<string[]> {
     const { SUPPORTED_CHAINS } = await import('@vultisig/sdk')
     return SUPPORTED_CHAINS as string[]
+  }
+
+  // ===== Discount Tier =====
+  async getDiscountTier(vaultId: string): Promise<DiscountTier> {
+    const vault = await this.getVault(vaultId)
+    const tier = await vault.getDiscountTier()
+    return tier as DiscountTier
+  }
+
+  async updateDiscountTier(vaultId: string): Promise<DiscountTier> {
+    const vault = await this.getVault(vaultId)
+    const tier = await vault.updateDiscountTier()
+    return tier as DiscountTier
   }
 
   // ===== Active Vault =====

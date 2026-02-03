@@ -29,6 +29,7 @@ export { executeBroadcast } from './broadcast'
 export type {
   CreateFromSeedphraseFastOptions,
   CreateFromSeedphraseSecureOptions,
+  DeleteVaultOptions,
   FastVaultOptions,
   JoinSecureOptions,
   SecureVaultOptions,
@@ -38,6 +39,7 @@ export {
   executeCreateFromSeedphraseFast,
   executeCreateFromSeedphraseSecure,
   executeCreateSecure,
+  executeDelete,
   executeExport,
   executeImport,
   executeInfo,
@@ -55,3 +57,7 @@ export { executeSwap, executeSwapChains, executeSwapQuote } from './swap'
 // Settings commands
 export type { AddressBookEntry, AddressBookOptions } from './settings'
 export { executeAddressBook, executeCurrency, executeServer } from './settings'
+
+// Discount tier commands
+export type { DiscountOptions, DiscountTierInfo } from './discount'
+export { executeDiscount } from './discount'
