@@ -1,5 +1,66 @@
 # @vultisig/cli
 
+## 0.4.0
+
+### Minor Changes
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add `vultisig delete` command to remove vaults from local storage without manually deleting files from `~/.vultisig/`. Supports deletion by vault name, ID, or ID prefix, with confirmation prompt (skippable via `--yes` flag).
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add discount command to view VULT discount tier for swap fees
+  - New `discount` command shows current tier, fee rate, and next tier requirements
+  - Support `--refresh` flag to force cache invalidation
+  - Swap quotes now display discount tier when affiliate fees are applied
+  - Updated README with discount tier documentation
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add `--add-all` flag to chains command to add all supported chains at once
+
+  New vaults start with only 5 default chains, but the SDK supports 36 chains. Users previously had to run `chains --add <chain>` 31 times to enable all chains. Now they can simply run:
+
+  ```bash
+  vultisig chains --add-all
+  ```
+
+  This works in both CLI mode and interactive shell mode.
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat: add Phantom wallet Solana derivation path support
+
+  When importing a seedphrase, the SDK now detects if the mnemonic was originally created in Phantom wallet by checking both the standard Solana BIP44 path and Phantom's non-standard path (`m/44'/501'/0'/0'`).
+
+  **SDK changes:**
+  - `discoverChainsFromSeedphrase()` now returns `ChainDiscoveryAggregate` with `results` and `usePhantomSolanaPath` flag
+  - Added `usePhantomSolanaPath` option to `createFastVaultFromSeedphrase()`, `createSecureVaultFromSeedphrase()`, and `joinSecureVault()`
+  - Auto-detection during chain discovery: uses Phantom path when it has balance and standard path doesn't
+
+  **CLI changes:**
+  - Added `--use-phantom-solana-path` flag to `create-from-seedphrase fast` and `create-from-seedphrase secure` commands
+
+  **Examples:**
+  - Added Phantom Solana path toggle checkbox in SeedphraseImporter component
+
+### Patch Changes
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Fix balance display to show human-readable amounts instead of raw values (wei/satoshis). Add `--raw` flag for programmatic use.
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - fix: address code review items across SDK and CLI
+
+  **CLI improvements:**
+  - Fix Phantom path detection message to use effective flag value
+  - Add ambiguous vault detection in delete command with descriptive error messages
+  - Refactor `findVaultByIdOrName` to use object parameter and throw on ambiguous matches
+  - Import tier config from SDK instead of hardcoding values in discount command
+
+  **SDK improvements:**
+  - Export VULT discount tier configuration for CLI consumption
+  - Add error handling in SwapService using attempt/withFallback pattern
+
+  **Documentation fixes:**
+  - Add `text` language identifier to code fence in CLI README
+  - Remove redundant "originally" word from Phantom wallet descriptions
+  - Update "affiliate fee discounts" to "swap fee discounts" terminology
+
+- Updated dependencies [[`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160), [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160), [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160), [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160), [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160), [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160)]:
+  - @vultisig/sdk@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes

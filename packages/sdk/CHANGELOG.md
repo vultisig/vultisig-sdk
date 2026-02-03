@@ -1,5 +1,67 @@
 # @vultisig/sdk
 
+## 0.4.0
+
+### Minor Changes
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat: add Phantom wallet Solana derivation path support
+
+  When importing a seedphrase, the SDK now detects if the mnemonic was originally created in Phantom wallet by checking both the standard Solana BIP44 path and Phantom's non-standard path (`m/44'/501'/0'/0'`).
+
+  **SDK changes:**
+  - `discoverChainsFromSeedphrase()` now returns `ChainDiscoveryAggregate` with `results` and `usePhantomSolanaPath` flag
+  - Added `usePhantomSolanaPath` option to `createFastVaultFromSeedphrase()`, `createSecureVaultFromSeedphrase()`, and `joinSecureVault()`
+  - Auto-detection during chain discovery: uses Phantom path when it has balance and standard path doesn't
+
+  **CLI changes:**
+  - Added `--use-phantom-solana-path` flag to `create-from-seedphrase fast` and `create-from-seedphrase secure` commands
+
+  **Examples:**
+  - Added Phantom Solana path toggle checkbox in SeedphraseImporter component
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add automatic VULT discount tier support for swap affiliate fees
+  - Add `DiscountTierService` that fetches VULT token and Thorguard NFT balances on Ethereum
+  - Automatically apply discount tiers (bronze through ultimate) to all swap quotes
+  - Add `vault.getDiscountTier()` to check current discount tier
+  - Add `vault.updateDiscountTier()` to force refresh after acquiring more VULT
+  - Remove manual `affiliateBps` parameter from swap quote params (now automatic)
+  - Cache discount tier for 15 minutes to minimize RPC calls
+
+### Patch Changes
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat(examples): add discount tier display to browser and electron examples
+  - Add `getDiscountTier()` and `updateDiscountTier()` to ISDKAdapter interface
+  - Implement discount tier methods in BrowserSDKAdapter and ElectronSDKAdapter
+  - Add VULT Discount Tier card to VaultOverview with color-coded tier badge and refresh button
+  - Display discount tier in swap quote details
+  - Update browser README with discount tier and swap documentation
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - fix: address code review items across SDK and CLI
+
+  **CLI improvements:**
+  - Fix Phantom path detection message to use effective flag value
+  - Add ambiguous vault detection in delete command with descriptive error messages
+  - Refactor `findVaultByIdOrName` to use object parameter and throw on ambiguous matches
+  - Import tier config from SDK instead of hardcoding values in discount command
+
+  **SDK improvements:**
+  - Export VULT discount tier configuration for CLI consumption
+  - Add error handling in SwapService using attempt/withFallback pattern
+
+  **Documentation fixes:**
+  - Add `text` language identifier to code fence in CLI README
+  - Remove redundant "originally" word from Phantom wallet descriptions
+  - Update "affiliate fee discounts" to "swap fee discounts" terminology
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Sync upstream changes and use core's defaultChains
+  - Import `defaultChains` from core instead of defining locally in SDK
+  - Default chains now: Bitcoin, Ethereum, THORChain, Solana, BSC
+  - Upstream: Added thor.ruji and thor.rune token metadata
+  - Upstream: Fixed commVault serialization for empty chain keys
+  - Upstream: Enhanced formatAmount with suffix support
+
+- [#84](https://github.com/vultisig/vultisig-sdk/pull/84) [`86cf505`](https://github.com/vultisig/vultisig-sdk/commit/86cf50517a528a0ef43c36b70c477adbec245160) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Use core's `vaultConfig.maxNameLength` for vault name validation instead of hardcoded value
+
 ## 0.3.0
 
 ### Minor Changes
