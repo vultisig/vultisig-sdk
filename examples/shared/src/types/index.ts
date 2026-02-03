@@ -225,6 +225,9 @@ export type BalanceResult = {
 // Fiat currency type
 export type FiatCurrency = 'usd' | 'eur' | 'gbp' | 'jpy' | 'cny' | 'aud' | 'cad' | 'chf' | 'sgd' | 'sek'
 
+// Discount tier type (based on VULT token + Thorguard NFT holdings)
+export type DiscountTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'ultimate' | null
+
 // Value result (for portfolio)
 export type ValueResult = {
   amount: string

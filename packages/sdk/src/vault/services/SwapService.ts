@@ -27,9 +27,11 @@ import { FiatCurrency } from '@core/config/FiatCurrency'
 import { buildSwapKeysignPayload } from '@core/mpc/keysign/swap/build'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { attempt, withFallback } from '@lib/utils/attempt'
 
 import type { WasmProvider } from '../../context/SdkContext'
 import { VaultEvents } from '../../events/types'
+import type { DiscountTierService } from '../../services/DiscountTierService'
 import type { FiatValueService } from '../../services/FiatValueService'
 import {
   CoinInput,
@@ -55,7 +57,8 @@ export class SwapService {
     private getAddress: (chain: Chain) => Promise<string>,
     private emitEvent: <K extends keyof VaultEvents>(event: K, data: VaultEvents[K]) => void,
     private wasmProvider: WasmProvider,
-    private fiatValueService?: FiatValueService
+    private fiatValueService?: FiatValueService,
+    private discountTierService?: DiscountTierService
   ) {}
 
   /**
@@ -67,13 +70,21 @@ export class SwapService {
       const fromCoin = await this.resolveCoinInput(params.fromCoin)
       const toCoin = await this.resolveCoinInput(params.toCoin)
 
+      // Auto-fetch discount tier from VULT/Thorguard balances (best-effort, fallback to null on error)
+      const vultDiscountTier = this.discountTierService
+        ? await withFallback(
+            attempt(() => this.discountTierService!.getDiscountTier()),
+            null
+          )
+        : null
+
       // Call core's findSwapQuote
       const quoteInput: FindSwapQuoteInput = {
         from: fromCoin,
         to: toCoin,
         amount: toChainAmount(params.amount, fromCoin.decimals),
         referral: params.referral,
-        affiliateBps: params.affiliateBps,
+        vultDiscountTier,
       }
 
       const quote = await findSwapQuote(quoteInput)
