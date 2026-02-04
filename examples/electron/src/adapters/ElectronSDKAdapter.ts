@@ -289,7 +289,7 @@ export class ElectronSDKAdapter implements ISDKAdapter {
     return window.electronAPI.joinSecureVault(qrPayload, {
       mnemonic: options.mnemonic,
       password: options.password,
-      devices: options.devices,
+      devices: options.devices ?? 2,
     })
   }
 
