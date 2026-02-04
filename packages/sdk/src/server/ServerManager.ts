@@ -140,7 +140,7 @@ export class ServerManager {
       participantsReady: 1,
     })
 
-    const serverResponse = await signWithServer({
+    await signWithServer({
       public_key: vault.publicKeys.ecdsa,
       messages,
       session: sessionId,
@@ -148,8 +148,9 @@ export class ServerManager {
       derive_path: derivePath,
       is_ecdsa: signatureAlgorithm === 'ecdsa',
       vault_password: password,
+      chain: payload.chain,
     })
-    console.log(`✅ Server acknowledged session: ${serverResponse}`)
+    console.log(`✅ Server acknowledged session: ${sessionId}`)
 
     // Step 2: Join relay session
     reportProgress({
