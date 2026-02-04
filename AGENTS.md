@@ -252,7 +252,7 @@ interface Balance {
 // Helper to convert base units to human-readable
 function toHumanReadable(balance: Balance): string {
   const amount = BigInt(balance.amount);
-  const divisor = BigInt(10 ** balance.decimals);
+  const divisor = 10n ** BigInt(balance.decimals);
   const whole = amount / divisor;
   const fraction = amount % divisor;
 
@@ -373,15 +373,30 @@ await vault.updateValues('all');
 ### Amount Conversion Helper
 
 ```typescript
-// Helper to convert human-readable amounts to base units
+// Helper to convert human-readable amounts to base units (precision-safe)
 function toBaseUnits(amount: string, decimals: number): bigint {
-  return BigInt(Math.floor(parseFloat(amount) * Math.pow(10, decimals)));
+  const s = amount.trim();
+  if (!/^[+-]?\d+(\.\d+)?$/.test(s)) throw new Error(`Invalid amount: ${amount}`);
+
+  const negative = s.startsWith('-');
+  const abs = negative ? s.slice(1) : s.replace(/^\+/, '');
+  const [whole, frac = ''] = abs.split('.');
+
+  // Pad or truncate fractional part to exactly `decimals` digits
+  const fracPadded = frac.length <= decimals
+    ? frac.padEnd(decimals, '0')
+    : frac.slice(0, decimals);
+
+  const digits = whole + fracPadded;
+  const result = BigInt(digits);
+  return negative ? -result : result;
 }
 
 // Examples:
-toBaseUnits('1.5', 18);   // 1500000000000000000n (1.5 ETH in wei)
-toBaseUnits('0.001', 8);  // 100000n (0.001 BTC in satoshis)
-toBaseUnits('100', 6);    // 100000000n (100 USDC)
+toBaseUnits('1.5', 18);                   // 1500000000000000000n (1.5 ETH in wei)
+toBaseUnits('0.001', 8);                  // 100000n (0.001 BTC in satoshis)
+toBaseUnits('100', 6);                    // 100000000n (100 USDC)
+toBaseUnits('1.123456789012345678', 18);  // 1123456789012345678n (exact)
 ```
 
 ### Send Native Token (ETH, BTC, etc.)
@@ -499,9 +514,7 @@ async function sendTokens(
   };
 
   // 3. Convert to base units
-  const amountBaseUnits = BigInt(
-    Math.floor(parseFloat(amount) * Math.pow(10, balance.decimals))
-  );
+  const amountBaseUnits = toBaseUnits(amount, balance.decimals);
 
   // 4. Prepare transaction
   const payload = await vault.prepareSendTx({
@@ -914,9 +927,12 @@ async function safeSend(
   try {
     // 1. Get balance and check sufficiency
     const balance = await vault.balance(chain, tokenId);
+    const amountBaseUnits = toBaseUnits(amount, balance.decimals);
 
-    if (parseFloat(balance.amount) < parseFloat(amount)) {
-      throw new Error(`Insufficient balance: ${balance.amount} < ${amount}`);
+    if (BigInt(balance.amount) < amountBaseUnits) {
+      throw new Error(
+        `Insufficient balance: ${balance.amount} base units < ${amountBaseUnits} base units`
+      );
     }
 
     // 2. Build AccountCoin
@@ -928,11 +944,6 @@ async function safeSend(
       ticker: balance.symbol,
       id: tokenId,
     };
-
-    // 3. Convert amount to base units (bigint)
-    const amountBaseUnits = BigInt(
-      Math.floor(parseFloat(amount) * Math.pow(10, balance.decimals))
-    );
 
     // 4. Prepare transaction
     const payload = await vault.prepareSendTx({
@@ -978,14 +989,15 @@ if (result.success) {
 async function getPortfolioValue(vault, prices) {
   const balances = await vault.balances();
   let totalUsd = 0;
-  
+
   for (const [chain, tokens] of Object.entries(balances)) {
-    for (const [token, amount] of Object.entries(tokens)) {
+    for (const [token, balance] of Object.entries(tokens)) {
+      const amount = parseFloat(balance.amount || '0');
       const price = prices[token] || 0;
-      totalUsd += parseFloat(amount) * price;
+      totalUsd += amount * price;
     }
   }
-  
+
   return totalUsd;
 }
 ```

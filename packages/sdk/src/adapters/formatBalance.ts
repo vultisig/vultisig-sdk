@@ -3,10 +3,10 @@ import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 
 import { Balance, Token } from '../types'
 
-function toHumanReadable(rawBalance: bigint, decimals: number): string {
+export function toHumanReadable(rawBalance: bigint, decimals: number): string {
   if (rawBalance === 0n) return '0'
 
-  const divisor = BigInt(10 ** decimals)
+  const divisor = 10n ** BigInt(decimals)
   const whole = rawBalance / divisor
   const fraction = rawBalance % divisor
 

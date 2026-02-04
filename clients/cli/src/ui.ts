@@ -9,7 +9,7 @@
  * import directly from './lib/output' which respects silent mode.
  */
 import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk'
-import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk'
+import { fiatCurrencyNameRecord, toHumanReadable, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 
@@ -258,23 +258,11 @@ export function setupVaultEvents(vault: VaultBase): void {
 // ============================================================================
 
 /**
- * Format bigint amount to human-readable string
+ * Format bigint amount to human-readable string.
+ * Delegates to SDK's toHumanReadable for a single source of truth.
  */
 export function formatBigintAmount(amount: bigint, decimals: number): string {
-  if (amount === 0n) return '0'
-
-  const divisor = BigInt(10 ** decimals)
-  const whole = amount / divisor
-  const fraction = amount % divisor
-
-  if (fraction === 0n) {
-    return whole.toString()
-  }
-
-  const fractionStr = fraction.toString().padStart(decimals, '0')
-  // Trim trailing zeros
-  const trimmed = fractionStr.replace(/0+$/, '')
-  return `${whole}.${trimmed}`
+  return toHumanReadable(amount, decimals)
 }
 
 /**
