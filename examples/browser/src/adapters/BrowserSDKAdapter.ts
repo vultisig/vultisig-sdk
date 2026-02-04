@@ -298,7 +298,7 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     const result = await this.sdk.joinSecureVault(qrPayload, {
       mnemonic: options.mnemonic,
       password: options.password,
-      devices: options.devices,
+      devices: options.devices ?? 2,
       onProgress: options.onProgress
         ? step => {
             const progressStep: ProgressStep = {

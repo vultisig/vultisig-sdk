@@ -41,6 +41,7 @@ export type CreateFastVaultFromSeedphraseOptions = {
   email: string
   discoverChains?: boolean
   chains?: string[]
+  usePhantomSolanaPath?: boolean
   onProgress?: (step: ProgressStep) => void
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
@@ -54,6 +55,7 @@ export type CreateSecureVaultFromSeedphraseOptions = {
   threshold?: number
   discoverChains?: boolean
   chains?: string[]
+  usePhantomSolanaPath?: boolean
   onProgress?: (step: ProgressStep) => void
   onQRCodeReady?: (qrPayload: string) => void
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
