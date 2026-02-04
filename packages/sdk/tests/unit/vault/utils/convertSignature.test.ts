@@ -104,6 +104,45 @@ describe('convertToKeysignSignatures', () => {
       expect(result[messageHashes[0]].r).toBe('0x' + originalR)
       expect(result[messageHashes[0]].s).toBe('0x' + originalS)
     })
+
+    it('should throw error for EdDSA signature with invalid length', () => {
+      const signature: Signature = {
+        signature: 'abc123', // too short - should be 128 hex chars
+        format: 'EdDSA',
+      }
+      const messageHashes = ['0xhash']
+
+      expect(() => convertToKeysignSignatures(signature, messageHashes)).toThrow(
+        'Invalid EdDSA signature length: expected 128 hex chars, got 6'
+      )
+    })
+
+    it('should throw error for EdDSA signature with 0x prefix but invalid length', () => {
+      const signature: Signature = {
+        signature: '0xabc123', // too short after stripping prefix
+        format: 'EdDSA',
+      }
+      const messageHashes = ['0xhash']
+
+      expect(() => convertToKeysignSignatures(signature, messageHashes)).toThrow(
+        'Invalid EdDSA signature length: expected 128 hex chars, got 6'
+      )
+    })
+
+    it('should handle EdDSA signature with uppercase 0X prefix', () => {
+      const rValue = 'ab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d'
+      const sValue = '7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e'
+      const signature: Signature = {
+        signature: '0X' + rValue + sValue,
+        format: 'EdDSA',
+      }
+      const messageHashes = ['0xhash']
+
+      const result = convertToKeysignSignatures(signature, messageHashes)
+
+      expect(result[messageHashes[0]].r).toBe('0x' + rValue)
+      expect(result[messageHashes[0]].s).toBe('0x' + sValue)
+    })
   })
 
   describe('Multiple signatures (UTXO)', () => {
