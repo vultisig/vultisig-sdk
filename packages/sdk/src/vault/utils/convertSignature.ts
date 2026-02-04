@@ -96,8 +96,20 @@ export function convertToKeysignSignatures(
       throw new Error('No message hash provided for signature')
     }
 
-    // Parse r and s from DER signature
-    const { r, s } = parseDerSignature(signature.signature)
+    let r: string, s: string
+
+    if (signature.format === 'EdDSA') {
+      // EdDSA: raw format r||s (each 32 bytes = 64 hex chars)
+      // These values already have correct endianness from keysign
+      const sig = signature.signature.startsWith('0x') ? signature.signature.slice(2) : signature.signature
+      r = '0x' + sig.slice(0, 64)
+      s = '0x' + sig.slice(64, 128)
+    } else {
+      // ECDSA: parse r and s from DER signature
+      const parsed = parseDerSignature(signature.signature)
+      r = parsed.r
+      s = parsed.s
+    }
 
     result[messageHash] = {
       msg: messageHash,

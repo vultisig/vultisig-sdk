@@ -31,7 +31,9 @@ export function formatSignature(
 
   // Base signature (always present)
   const signature: Signature = {
-    signature: firstSignature.der_signature,
+    // For EdDSA, store raw r||s (already has correct endianness from keysign)
+    // For ECDSA, store der_signature
+    signature: signatureAlgorithm === 'eddsa' ? firstSignature.r + firstSignature.s : firstSignature.der_signature,
     recovery: firstSignature.recovery_id ? parseInt(firstSignature.recovery_id) : undefined,
     format: signatureFormat,
   }
