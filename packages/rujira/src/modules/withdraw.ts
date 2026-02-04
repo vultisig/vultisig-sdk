@@ -3,32 +3,12 @@ import { findAssetByFormat } from '@vultisig/assets';
 import type { Asset } from '@vultisig/assets';
 
 import type { RujiraClient } from '../client.js';
+import { THORCHAIN_TO_SDK_CHAIN } from '../config.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
 import type { KeysignPayload, VultisigVault, WithdrawCapableVault } from '../signer/types.js';
 import { isWithdrawCapable } from '../signer/types.js';
 import { buildSecureRedeemMemo } from '../utils/memo.js';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
-
-const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
-  ETH: 'Ethereum',
-  BTC: 'Bitcoin',
-  BCH: 'BitcoinCash',
-  DOGE: 'Dogecoin',
-  LTC: 'Litecoin',
-  AVAX: 'Avalanche',
-  BSC: 'BSC',
-  GAIA: 'Cosmos',
-  THOR: 'THORChain',
-  MAYA: 'MayaChain',
-  KUJI: 'Kujira',
-  DASH: 'Dash',
-  ARB: 'Arbitrum',
-  ZEC: 'Zcash',
-  XRP: 'Ripple',
-  BASE: 'Base',
-  TRON: 'Tron',
-  NOBLE: 'Noble',
-};
 
 function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
   if (!obj || typeof obj !== 'object') return false;

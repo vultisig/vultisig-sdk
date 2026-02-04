@@ -54,6 +54,28 @@ export const MAINNET_CONFIG: RujiraConfig = {
   defaultSlippageBps: 100,
 };
 
+/** Maps THORChain chain identifiers to SDK chain names */
+export const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
+  ETH: 'Ethereum',
+  BTC: 'Bitcoin',
+  BCH: 'BitcoinCash',
+  DOGE: 'Dogecoin',
+  LTC: 'Litecoin',
+  AVAX: 'Avalanche',
+  BSC: 'BSC',
+  GAIA: 'Cosmos',
+  THOR: 'THORChain',
+  MAYA: 'MayaChain',
+  KUJI: 'Kujira',
+  DASH: 'Dash',
+  ARB: 'Arbitrum',
+  ZEC: 'Zcash',
+  XRP: 'Ripple',
+  BASE: 'Base',
+  TRON: 'Tron',
+  NOBLE: 'Noble',
+};
+
 export function getNetworkConfig(_network: NetworkType = 'mainnet'): RujiraConfig {
   return MAINNET_CONFIG;
 }
