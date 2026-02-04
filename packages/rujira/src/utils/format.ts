@@ -204,11 +204,17 @@ export function calculateSlippage(expected: string | bigint, actual: string | bi
 }
 
 /**
- * Generate a unique quote ID
+ * Generate a unique quote ID using cryptographic randomness.
  */
 export function generateQuoteId(): string {
   const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).slice(2, 10);
+  let random: string;
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    random = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+  } else {
+    // Fallback for environments without crypto.randomUUID
+    random = Math.random().toString(36).slice(2, 10);
+  }
   return `quote-${timestamp}-${random}`;
 }
 
