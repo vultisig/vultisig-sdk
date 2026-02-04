@@ -168,39 +168,62 @@ export function wrapError(error: unknown, defaultCode = RujiraErrorCode.NETWORK_
   if (error instanceof RujiraError) {
     return error;
   }
-  
+
   if (error instanceof Error) {
+    // 1. Check typed error classes (CosmJS TimeoutError, etc.)
+    if (error.name === 'TimeoutError' || error.constructor.name === 'TimeoutError') {
+      return new RujiraError(RujiraErrorCode.TIMEOUT, error.message, error, true);
+    }
+
+    // 2. Check error.code property (gRPC codes, Node.js error codes)
+    const errCode = (error as { code?: string | number }).code;
+    if (errCode !== undefined) {
+      if (errCode === 'ECONNREFUSED' || errCode === 'ENOTFOUND' || errCode === 'ECONNRESET') {
+        return new RujiraError(RujiraErrorCode.NETWORK_ERROR, error.message, error, true);
+      }
+      if (errCode === 'ETIMEDOUT' || errCode === 'ESOCKETTIMEDOUT') {
+        return new RujiraError(RujiraErrorCode.TIMEOUT, error.message, error, true);
+      }
+      // gRPC DEADLINE_EXCEEDED = 4
+      if (errCode === 4 || errCode === 'DEADLINE_EXCEEDED') {
+        return new RujiraError(RujiraErrorCode.TIMEOUT, error.message, error, true);
+      }
+      // gRPC NOT_FOUND = 5
+      if (errCode === 5 || errCode === 'NOT_FOUND') {
+        return new RujiraError(RujiraErrorCode.CONTRACT_NOT_FOUND, error.message, error);
+      }
+      // gRPC UNAVAILABLE = 14
+      if (errCode === 14 || errCode === 'UNAVAILABLE') {
+        return new RujiraError(RujiraErrorCode.RPC_ERROR, error.message, error, true);
+      }
+    }
+
+    // 3. String matching as last resort
     const message = error.message.toLowerCase();
-    
-    // Detect specific error types from message
+
     if (message.includes('insufficient funds') || message.includes('insufficient balance')) {
-      return new RujiraError(
-        RujiraErrorCode.INSUFFICIENT_BALANCE,
-        error.message,
-        error
-      );
+      return new RujiraError(RujiraErrorCode.INSUFFICIENT_BALANCE, error.message, error);
     }
-    
+
     if (message.includes('timeout') || message.includes('timed out')) {
-      return new RujiraError(
-        RujiraErrorCode.TIMEOUT,
-        error.message,
-        error,
-        true
-      );
+      return new RujiraError(RujiraErrorCode.TIMEOUT, error.message, error, true);
     }
-    
+
     if (message.includes('slippage') || message.includes('min_return')) {
-      return new RujiraError(
-        RujiraErrorCode.SLIPPAGE_EXCEEDED,
-        error.message,
-        error
-      );
+      return new RujiraError(RujiraErrorCode.SLIPPAGE_EXCEEDED, error.message, error);
     }
-    
+
+    if (message.includes('out of gas')) {
+      return new RujiraError(RujiraErrorCode.INSUFFICIENT_GAS, error.message, error);
+    }
+
+    if (message.includes('not found') && message.includes('contract')) {
+      return new RujiraError(RujiraErrorCode.CONTRACT_NOT_FOUND, error.message, error);
+    }
+
     return new RujiraError(defaultCode, error.message, error);
   }
-  
+
   return new RujiraError(
     defaultCode,
     String(error),
