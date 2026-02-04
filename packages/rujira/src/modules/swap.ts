@@ -35,8 +35,10 @@ export class RujiraSwap {
     options: RujiraSwapOptions = {}
   ) {
     this.quoteCache = options.cache === false ? null : new QuoteCache<SwapQuote>(options.cache);
-    this.quoteExpiryBufferMs = options.quoteExpiryBufferMs ?? 5000;
-    this.quoteTtlMs = options.quoteTtlMs ?? 30000;
+    // MPC (GG20/DKLS) signing takes 30-60s. Buffer must exceed signing time
+    // to prevent quote expiry mid-sign. TTL must exceed buffer.
+    this.quoteExpiryBufferMs = options.quoteExpiryBufferMs ?? 60000;
+    this.quoteTtlMs = options.quoteTtlMs ?? 120000;
     this.batchConcurrency = options.batchConcurrency ?? 3;
   }
 
@@ -69,19 +71,22 @@ export class RujiraSwap {
         } else if (maxStalenessMs !== undefined && cached.cachedAt) {
           const age = Date.now() - cached.cachedAt;
           if (age <= maxStalenessMs) {
-            return cached;
+            return this.recomputeMinimumOutput(cached, params.slippageBps);
           }
         } else {
           const age = cached.cachedAt ? Date.now() - cached.cachedAt : 0;
           if (age > 5000) {
-            return {
-              ...cached,
-              warning:
-                cached.warning ??
-                `Quote is ${Math.round(age / 1000)}s old. Consider refreshing for volatile markets.`,
-            };
+            return this.recomputeMinimumOutput(
+              {
+                ...cached,
+                warning:
+                  cached.warning ??
+                  `Quote is ${Math.round(age / 1000)}s old. Consider refreshing for volatile markets.`,
+              },
+              params.slippageBps
+            );
           }
-          return cached;
+          return this.recomputeMinimumOutput(cached, params.slippageBps);
         }
       }
     }
@@ -351,6 +356,17 @@ export class RujiraSwap {
   ): Promise<Map<EasyRouteName, SwapQuote | null>> {
     const allRoutes = Object.keys(EASY_ROUTES) as EasyRouteName[];
     return this.batchGetQuotes(allRoutes, amount, destination);
+  }
+
+  /**
+   * Recompute minimumOutput from cached expectedOutput using the caller's slippage.
+   * Cache stores raw simulation data; slippage-dependent values are derived per-request.
+   */
+  private recomputeMinimumOutput(quote: SwapQuote, slippageBps?: number): SwapQuote {
+    const effectiveSlippage = slippageBps ?? quote.params.slippageBps ?? this.client.config.defaultSlippageBps;
+    const minimumOutput = calculateMinReturn(quote.expectedOutput, effectiveSlippage);
+    if (minimumOutput === quote.minimumOutput) return quote;
+    return { ...quote, minimumOutput, params: { ...quote.params, slippageBps: effectiveSlippage } };
   }
 
   private async findContract(fromAsset: string, toAsset: string): Promise<string> {
