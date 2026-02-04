@@ -25,7 +25,8 @@ import { info, isJsonOutput, printError, printResult, printTable, warn } from '.
 
 export function displayBalance(chain: string, balance: Balance, raw = false): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
-  printResult(`  Amount: ${balance.formattedAmount} ${balance.symbol}`)
+  const displayAmount = raw ? balance.amount : balance.formattedAmount
+  printResult(`  Amount: ${displayAmount} ${balance.symbol}`)
   if (balance.fiatValue && balance.fiatCurrency) {
     printResult(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
   }
@@ -36,7 +37,7 @@ export function displayBalancesTable(balances: Record<string, Balance>, raw = fa
 
   const tableData = Object.entries(balances).map(([chain, balance]) => ({
     Chain: chain,
-    Amount: balance.formattedAmount,
+    Amount: raw ? balance.amount : balance.formattedAmount,
     Symbol: balance.symbol,
     Value:
       balance.fiatValue && balance.fiatCurrency ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}` : 'N/A',
@@ -61,7 +62,7 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
 
   const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
     Chain: chain,
-    Amount: balance.formattedAmount,
+    Amount: raw ? balance.amount : balance.formattedAmount,
     Symbol: balance.symbol,
     Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
   }))
