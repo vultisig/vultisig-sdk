@@ -43,6 +43,7 @@ await sdk.createFastVault(options: {
   name: string
   email: string
   password: string
+  signal?: AbortSignal
   onProgress?: (step: VaultCreationStep) => void
 }): Promise<string>
 
@@ -55,8 +56,9 @@ await sdk.createSecureVault(options: {
   devices: number
   threshold?: number
   password?: string
+  signal?: AbortSignal
   onQRCodeReady?: (qrPayload: string) => void
-  onDeviceJoined?: (deviceId: string, total: number, required: number) => void
+  onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   onProgress?: (step: VaultCreationStep) => void
 }): Promise<{ vault: SecureVault, vaultId: string, sessionId: string }>
 ```
@@ -394,7 +396,7 @@ interface VaultCreationStep {
 interface SigningOptions {
   signal?: AbortSignal
   onQRCodeReady?: (qrPayload: string) => void
-  onDeviceJoined?: (deviceId: string, total: number, required: number) => void
+  onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   onProgress?: (step: { step: string, message: string }) => void
 }
 ```

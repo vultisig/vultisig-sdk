@@ -18,7 +18,7 @@ Vultisig offers two vault types, each optimized for different use cases.
 **Properties:**
 - Threshold: 2-of-2 (fixed)
 - Encryption: Always encrypted (password required)
-- Signing: Instant (~1-2 seconds)
+- Signing: Fast (server-assisted)
 - Setup: Email verification required
 
 **Best for:**
@@ -82,12 +82,12 @@ vultisig create secure \
 | Feature | FastVault | SecureVault |
 |---------|-----------|-------------|
 | **Threshold** | 2-of-2 (fixed) | N-of-M (configurable) |
-| **Signing Speed** | Instant (~1-2s) | Requires coordination |
+| **Signing Speed** | Fast (server-assisted) | Requires device coordination |
 | **Server Dependency** | Yes (VultiServer) | No (relay only) |
 | **Password** | Required | Optional |
 | **Multi-Device** | No | Yes |
 | **Automation** | Excellent | Limited |
-| **Setup Time** | ~1 minute | ~5 minutes |
+| **Setup Time** | Quick (email verification) | Varies (device coordination) |
 | **Trust Model** | Device + Server | Distributed devices |
 
 ## Decision Matrix
