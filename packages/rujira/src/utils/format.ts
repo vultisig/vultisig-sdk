@@ -60,8 +60,9 @@ export function fromBaseUnits(baseUnits: string | bigint, decimals: number): str
 }
 
 /**
- * Format amount for display
- * 
+ * Format amount for display (truncates fractional digits).
+ * For fee displays where underestimation is harmful, use {@link formatFee} instead.
+ *
  * @param baseUnits - Amount in base units
  * @param asset - Asset identifier
  * @param maxDecimals - Maximum decimal places to show
@@ -75,21 +76,77 @@ export function formatAmount(
   if (decimals === null) {
     return baseUnits.toString();
   }
-  
+
   const human = fromBaseUnits(baseUnits, decimals);
   const parts = human.split('.');
   const whole = parts[0] || '0';
   const fraction = parts[1] || '';
-  
+
   // Truncate to maxDecimals
   const truncatedFraction = fraction.slice(0, maxDecimals);
-  
+
   // Add thousand separators to whole part
   const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  
-  return truncatedFraction 
+
+  return truncatedFraction
     ? `${formattedWhole}.${truncatedFraction}`
     : formattedWhole;
+}
+
+/**
+ * Format fee amount for display (rounds UP to avoid underestimating costs).
+ * Use this for fee/gas displays where showing less than actual is misleading.
+ *
+ * @param baseUnits - Amount in base units
+ * @param asset - Asset identifier
+ * @param maxDecimals - Maximum decimal places to show
+ */
+export function formatFee(
+  baseUnits: string | bigint,
+  asset: string,
+  maxDecimals = 6
+): string {
+  const decimals = getAssetDecimals(asset);
+  if (decimals === null) {
+    return baseUnits.toString();
+  }
+
+  const human = fromBaseUnits(baseUnits, decimals);
+  const parts = human.split('.');
+  const whole = parts[0] || '0';
+  const fraction = parts[1] || '';
+
+  if (fraction.length <= maxDecimals) {
+    const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const trimmed = fraction.replace(/0+$/, '');
+    return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole;
+  }
+
+  // Round up: if any digit beyond maxDecimals is non-zero, increment last visible digit
+  const visible = fraction.slice(0, maxDecimals);
+  const remainder = fraction.slice(maxDecimals);
+  const hasRemainder = /[1-9]/.test(remainder);
+
+  if (!hasRemainder) {
+    const trimmed = visible.replace(/0+$/, '');
+    const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole;
+  }
+
+  // Increment the visible fraction by 1 at the last position
+  const visibleNum = BigInt(visible) + 1n;
+  const roundedFraction = visibleNum.toString().padStart(maxDecimals, '0');
+
+  // Handle carry (e.g., 999 + 1 = 1000)
+  if (roundedFraction.length > maxDecimals) {
+    const carriedWhole = (BigInt(whole) + 1n).toString();
+    const formattedWhole = carriedWhole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return formattedWhole;
+  }
+
+  const trimmed = roundedFraction.replace(/0+$/, '');
+  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole;
 }
 
 /**
