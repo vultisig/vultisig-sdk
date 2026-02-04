@@ -9,7 +9,7 @@
  * import directly from './lib/output' which respects silent mode.
  */
 import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk'
-import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk'
+import { fiatCurrencyNameRecord, toHumanReadable, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 
@@ -25,7 +25,7 @@ import { info, isJsonOutput, printError, printResult, printTable, warn } from '.
 
 export function displayBalance(chain: string, balance: Balance, raw = false): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
-  const displayAmount = raw ? balance.amount : formatBalanceAmount(balance.amount, balance.decimals)
+  const displayAmount = raw ? balance.amount : balance.formattedAmount
   printResult(`  Amount: ${displayAmount} ${balance.symbol}`)
   if (balance.fiatValue && balance.fiatCurrency) {
     printResult(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
@@ -37,7 +37,7 @@ export function displayBalancesTable(balances: Record<string, Balance>, raw = fa
 
   const tableData = Object.entries(balances).map(([chain, balance]) => ({
     Chain: chain,
-    Amount: raw ? balance.amount : formatBalanceAmount(balance.amount, balance.decimals),
+    Amount: raw ? balance.amount : balance.formattedAmount,
     Symbol: balance.symbol,
     Value:
       balance.fiatValue && balance.fiatCurrency ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}` : 'N/A',
@@ -62,7 +62,7 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
 
   const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
     Chain: chain,
-    Amount: raw ? balance.amount : formatBalanceAmount(balance.amount, balance.decimals),
+    Amount: raw ? balance.amount : balance.formattedAmount,
     Symbol: balance.symbol,
     Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
   }))
@@ -213,7 +213,7 @@ export function setupVaultEvents(vault: VaultBase): void {
   // Balance updates
   vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
     const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.amount}`))
+    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.formattedAmount}`))
   })
 
   // Transaction broadcast
@@ -259,23 +259,11 @@ export function setupVaultEvents(vault: VaultBase): void {
 // ============================================================================
 
 /**
- * Format bigint amount to human-readable string
+ * Format bigint amount to human-readable string.
+ * Delegates to SDK's toHumanReadable for a single source of truth.
  */
 export function formatBigintAmount(amount: bigint, decimals: number): string {
-  if (amount === 0n) return '0'
-
-  const divisor = BigInt(10 ** decimals)
-  const whole = amount / divisor
-  const fraction = amount % divisor
-
-  if (fraction === 0n) {
-    return whole.toString()
-  }
-
-  const fractionStr = fraction.toString().padStart(decimals, '0')
-  // Trim trailing zeros
-  const trimmed = fractionStr.replace(/0+$/, '')
-  return `${whole}.${trimmed}`
+  return toHumanReadable(amount, decimals)
 }
 
 /**

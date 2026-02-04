@@ -5,7 +5,7 @@
  * Adapters do NOT contain business logic - they only transform data formats.
  */
 
-export { formatBalance } from './formatBalance'
+export { formatBalance, toHumanReadable } from './formatBalance'
 export { formatGasInfo } from './formatGasInfo'
 export { formatSignature } from './formatSignature'
 export type { ChainSigningInfo } from './getChainSigningInfo'
