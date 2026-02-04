@@ -22,6 +22,8 @@ export interface RujiraSwapOptions {
   quoteExpiryBufferMs?: number;
   quoteTtlMs?: number;
   batchConcurrency?: number;
+  /** Minimum swap amount in base units. Amounts at or below this are rejected. Default: 0 (contract enforces). */
+  dustThreshold?: string;
 }
 
 export class RujiraSwap {
@@ -29,6 +31,7 @@ export class RujiraSwap {
   private readonly quoteExpiryBufferMs: number;
   private readonly quoteTtlMs: number;
   private readonly batchConcurrency: number;
+  private readonly dustThreshold: bigint;
 
   constructor(
     private readonly client: RujiraClient,
@@ -40,6 +43,7 @@ export class RujiraSwap {
     this.quoteExpiryBufferMs = options.quoteExpiryBufferMs ?? 60000;
     this.quoteTtlMs = options.quoteTtlMs ?? 120000;
     this.batchConcurrency = options.batchConcurrency ?? 3;
+    this.dustThreshold = BigInt(options.dustThreshold ?? '0');
   }
 
   clearCache(): void {
@@ -417,6 +421,14 @@ export class RujiraSwap {
 
     if (!params.amount || BigInt(params.amount) <= 0n) {
       throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'amount must be a positive number');
+    }
+
+    if (this.dustThreshold > 0n && BigInt(params.amount) <= this.dustThreshold) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_AMOUNT,
+        `Swap amount ${params.amount} is at or below dust threshold (${this.dustThreshold}). ` +
+          `Minimum swap amount: ${(this.dustThreshold + 1n).toString()}`
+      );
     }
 
     if (params.slippageBps !== undefined) {
