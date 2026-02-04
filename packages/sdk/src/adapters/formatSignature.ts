@@ -4,6 +4,13 @@ import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
 import type { Signature } from '../types'
 
 /**
+ * Strip 0x or 0X prefix from a hex string if present
+ */
+function stripHexPrefix(value: string): string {
+  return value.startsWith('0x') || value.startsWith('0X') ? value.slice(2) : value
+}
+
+/**
  * Format core keysign signature(s) into SDK Signature type
  *
  * Handles both single-signature (EVM, Cosmos, etc.) and multi-signature (UTXO) cases.
@@ -31,7 +38,13 @@ export function formatSignature(
 
   // Base signature (always present)
   const signature: Signature = {
-    signature: firstSignature.der_signature,
+    // For EdDSA, store raw r||s (already has correct endianness from keysign)
+    // Strip any 0x prefixes to ensure clean concatenation
+    // For ECDSA, store der_signature
+    signature:
+      signatureAlgorithm === 'eddsa'
+        ? stripHexPrefix(firstSignature.r) + stripHexPrefix(firstSignature.s)
+        : firstSignature.der_signature,
     recovery: firstSignature.recovery_id ? parseInt(firstSignature.recovery_id) : undefined,
     format: signatureFormat,
   }
