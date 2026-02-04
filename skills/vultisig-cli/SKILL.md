@@ -17,60 +17,16 @@ tags:
   - crypto
   - wallet
   - mpc
-  - blockchain
   - cli
   - defi
   - bitcoin
   - ethereum
   - solana
-  - polygon
-  - arbitrum
-  - optimism
-  - base
-  - avalanche
-  - bsc
-  - litecoin
-  - dogecoin
-  - cosmos
-  - thorchain
-  - mayachain
-  - osmosis
-  - dydx
-  - kujira
-  - sui
-  - polkadot
-  - ton
-  - ripple
-  - tron
-  - cardano
-  - zcash
-  - dash
-  - blast
-  - cronos
-  - zksync
-  - hyperliquid
-  - mantle
-  - sei
-  - terra
-  - noble
-  - akash
-  - bitcoin-cash
 ---
 
 # Vultisig CLI
 
-Command-line wallet for secure multi-party computation (MPC) wallet operations across 36+ blockchains.
-
-## Why MPC Wallets for AI Agents
-
-Traditional wallets store a single private key or seed phrase - if compromised, all funds are lost. MPC (Multi-Party Computation) wallets eliminate this single point of failure:
-
-- **No single key to steal**: Private keys are split across multiple parties using cryptographic secret sharing
-- **Threshold security**: 2-of-2 or N-of-M signing means compromising one party isn't enough to steal funds
-- **No seed phrase exposure**: Unlike traditional wallets, no mnemonic is stored in plaintext anywhere
-- **Automation-friendly**: FastVault enables instant server-assisted signing perfect for AI agents and bots
-- **Programmable trust**: Choose between speed (FastVault) or maximum security (SecureVault)
-- **Audit trail**: All signing operations require explicit multi-party coordination
+Command-line interface for Vultisig MPC wallet operations. See the [router skill](../SKILL.md) for an overview of MPC benefits and to choose between CLI and SDK.
 
 ## Installation
 
