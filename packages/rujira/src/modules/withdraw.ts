@@ -417,6 +417,12 @@ export class RujiraWithdraw {
         BCH: '10000',
       };
       gasAssetOutboundFee = defaultGasFees[chain] || '0';
+      if (gasAssetOutboundFee !== '0') {
+        console.warn(
+          `[RujiraWithdraw] Using hardcoded fallback gas fee for ${chain}: ${gasAssetOutboundFee}. ` +
+            'THORNode inbound_addresses endpoint may be unreachable. Fee estimate may be stale.'
+        );
+      }
     }
 
     if (asset.toUpperCase() === `${chain}.${chain}`) {
