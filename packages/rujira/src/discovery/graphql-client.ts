@@ -5,6 +5,8 @@ export interface GraphQLClientOptions {
   httpEndpoint?: string;
   apiKey?: string;
   timeout?: number;
+  /** Max retries on transient (5xx/network) errors. Default: 3 */
+  maxRetries?: number;
 }
 
 export class GraphQLClient {
@@ -12,12 +14,17 @@ export class GraphQLClient {
   private wsEndpoint: string;
   private apiKey?: string;
   private timeout: number;
+  private maxRetries: number;
+
+  /** Backoff schedule in ms for each retry attempt */
+  private static readonly RETRY_BACKOFF_MS = [500, 1000, 2000];
 
   constructor(options: GraphQLClientOptions = {}) {
     this.httpEndpoint = options.httpEndpoint || 'https://api.rujira.network/api/graphql';
     this.wsEndpoint = options.wsEndpoint || 'wss://api.rujira.network/socket';
     this.apiKey = options.apiKey;
     this.timeout = options.timeout || 30000;
+    this.maxRetries = options.maxRetries ?? 3;
   }
 
   static GraphQLError = class extends Error {
@@ -32,7 +39,38 @@ export class GraphQLClient {
     }
   };
 
+  /** Returns true if the error type is eligible for retry (transient failures only). */
+  private static isRetryable(error: InstanceType<typeof GraphQLClient.GraphQLError>): boolean {
+    return error.type === 'server' || (error.type === 'network' && error.status !== 429);
+  }
+
   async query<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    let lastError: InstanceType<typeof GraphQLClient.GraphQLError> | undefined;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      if (attempt > 0 && lastError) {
+        const backoff = GraphQLClient.RETRY_BACKOFF_MS[attempt - 1] ?? 2000;
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+      }
+
+      try {
+        return await this.executeQuery<T>(query, variables);
+      } catch (error) {
+        if (!(error instanceof GraphQLClient.GraphQLError)) throw error;
+        lastError = error;
+
+        // Only retry on transient (5xx / network) failures
+        if (!GraphQLClient.isRetryable(error) || attempt === this.maxRetries) {
+          throw error;
+        }
+      }
+    }
+
+    // Unreachable, but satisfies TypeScript
+    throw lastError;
+  }
+
+  private async executeQuery<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
