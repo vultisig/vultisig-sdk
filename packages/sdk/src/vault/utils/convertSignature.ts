@@ -101,7 +101,15 @@ export function convertToKeysignSignatures(
     if (signature.format === 'EdDSA') {
       // EdDSA: raw format r||s (each 32 bytes = 64 hex chars)
       // These values already have correct endianness from keysign
-      const sig = signature.signature.startsWith('0x') ? signature.signature.slice(2) : signature.signature
+      const sig =
+        signature.signature.startsWith('0x') || signature.signature.startsWith('0X')
+          ? signature.signature.slice(2)
+          : signature.signature
+
+      if (sig.length !== 128) {
+        throw new Error(`Invalid EdDSA signature length: expected 128 hex chars, got ${sig.length}`)
+      }
+
       r = '0x' + sig.slice(0, 64)
       s = '0x' + sig.slice(64, 128)
     } else {

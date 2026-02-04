@@ -84,6 +84,52 @@ describe('formatSignature', () => {
       })
     })
 
+    it('should strip 0x prefix from EdDSA r and s values before concatenation', () => {
+      // When keysign returns r and s with 0x prefixes, they should be stripped
+      const rValue = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+      const sValue = '0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321'
+      const signatureResults: Record<string, KeysignSignature> = {
+        '0xmsg': {
+          msg: '0xmsg',
+          r: rValue,
+          s: sValue,
+          der_signature: 'der_unused',
+        },
+      }
+      const messages = ['0xmsg']
+      const algorithm: SignatureAlgorithm = 'eddsa'
+
+      const result = formatSignature(signatureResults, messages, algorithm)
+
+      // Should be r||s without 0x prefixes (128 hex chars total)
+      expect(result.signature).toBe(
+        '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' +
+          'fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321'
+      )
+      expect(result.signature).not.toContain('0x')
+      expect(result.signature.length).toBe(128)
+    })
+
+    it('should strip uppercase 0X prefix from EdDSA r and s values', () => {
+      const rValue = '0X1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+      const sValue = '0Xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321'
+      const signatureResults: Record<string, KeysignSignature> = {
+        '0xmsg': {
+          msg: '0xmsg',
+          r: rValue,
+          s: sValue,
+          der_signature: 'der_unused',
+        },
+      }
+      const messages = ['0xmsg']
+      const algorithm: SignatureAlgorithm = 'eddsa'
+
+      const result = formatSignature(signatureResults, messages, algorithm)
+
+      expect(result.signature).not.toContain('0X')
+      expect(result.signature.length).toBe(128)
+    })
+
     it('should format signature with recovery ID "0"', () => {
       const signatureResults: Record<string, KeysignSignature> = {
         '0xhash1': {
