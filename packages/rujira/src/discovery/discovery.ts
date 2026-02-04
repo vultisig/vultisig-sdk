@@ -216,13 +216,19 @@ export class RujiraDiscovery {
       const contractsData = (await contractsResponse.json()) as { contracts: string[] };
       this.log(`Found ${contractsData.contracts.length} FIN contracts`);
 
-      for (const address of contractsData.contracts) {
-        try {
-          const configResponse = await fetch(
-            `${restUrl}/cosmwasm/wasm/v1/contract/${address}/smart/eyJjb25maWciOnt9fQ==`
-          );
+      // Query contract configs in parallel with concurrency cap
+      const CONCURRENCY = 5;
+      const addresses = contractsData.contracts;
+      for (let i = 0; i < addresses.length; i += CONCURRENCY) {
+        const batch = addresses.slice(i, i + CONCURRENCY);
+        const results = await Promise.allSettled(
+          batch.map(async (address) => {
+            const configResponse = await fetch(
+              `${restUrl}/cosmwasm/wasm/v1/contract/${address}/smart/eyJjb25maWciOnt9fQ==`
+            );
 
-          if (configResponse.ok) {
+            if (!configResponse.ok) return null;
+
             const configData = (await configResponse.json()) as {
               data: {
                 denoms: string[];
@@ -234,13 +240,19 @@ export class RujiraDiscovery {
             if (configData.data?.denoms?.length === 2) {
               const base = this.normalizeDenom(configData.data.denoms[0]);
               const quote = this.normalizeDenom(configData.data.denoms[1]);
-              const pairKey = `${base}/${quote}`;
-              fin[pairKey] = address;
-              this.log(`Discovered: ${pairKey} -> ${address.slice(0, 20)}...`);
+              return { pairKey: `${base}/${quote}`, address };
             }
+            return null;
+          })
+        );
+
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value) {
+            fin[result.value.pairKey] = result.value.address;
+            this.log(`Discovered: ${result.value.pairKey} -> ${result.value.address.slice(0, 20)}...`);
+          } else if (result.status === 'rejected') {
+            this.log('Failed to query contract config:', result.reason);
           }
-        } catch (e) {
-          this.log(`Failed to query config for ${address}:`, e);
         }
       }
 
