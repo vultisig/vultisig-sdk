@@ -1,5 +1,16 @@
 # @vultisig/sdk
 
+## 0.4.2
+
+### Patch Changes
+
+- [#91](https://github.com/vultisig/vultisig-sdk/pull/91) [`57adaf8`](https://github.com/vultisig/vultisig-sdk/commit/57adaf8b391dc57956073b4b06efa3f7566a275a) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - fix(sdk): fix SecureVault relay signing for EdDSA chains
+  - Fix QR payload to include full transaction details using `getJoinKeysignUrl` from core
+  - Fix chainPath derivation using `getChainSigningInfo` adapter
+  - Fix EdDSA signature format: use raw r||s (128 hex chars) instead of DER encoding
+
+  Affected chains: Solana, Sui, Polkadot, TON, Cardano
+
 ## 0.4.1
 
 ### Patch Changes
