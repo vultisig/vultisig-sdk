@@ -145,7 +145,8 @@ const CHAIN_CONFIRMATION_TIMES: Record<string, number> = {
 export class RujiraDeposit {
   private thornodeUrl: string;
   private inboundCache: { data: InboundAddress[]; timestamp: number } | null = null;
-  private readonly CACHE_TTL_MS = 60000; // 1 minute cache
+  // Short TTL: inbound addresses change during vault churn
+  private readonly CACHE_TTL_MS = 15000; // 15 seconds
 
   constructor(private readonly client: RujiraClient) {
     this.thornodeUrl = client.config.restEndpoint;
@@ -278,10 +279,11 @@ export class RujiraDeposit {
 
   /**
    * Get all inbound addresses
+   * @param forceRefresh Bypass cache and fetch fresh data (use before executing deposits)
    */
-  async getInboundAddresses(): Promise<InboundAddress[]> {
-    // Check cache
-    if (this.inboundCache && Date.now() - this.inboundCache.timestamp < this.CACHE_TTL_MS) {
+  async getInboundAddresses(forceRefresh = false): Promise<InboundAddress[]> {
+    // Check cache (skip if forceRefresh)
+    if (!forceRefresh && this.inboundCache && Date.now() - this.inboundCache.timestamp < this.CACHE_TTL_MS) {
       return this.inboundCache.data;
     }
 
