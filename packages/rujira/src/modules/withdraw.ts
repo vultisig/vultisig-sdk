@@ -4,7 +4,10 @@ import type { Asset } from '@vultisig/assets';
 
 import type { RujiraClient } from '../client.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
-import type { KeysignPayload, VultisigVault } from '../signer/types.js';
+import type { KeysignPayload, VultisigVault, WithdrawCapableVault } from '../signer/types.js';
+import { isWithdrawCapable } from '../signer/types.js';
+import { buildSecureRedeemMemo } from '../utils/memo.js';
+import { thornodeRateLimiter } from '../utils/rate-limiter.js';
 
 const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
   ETH: 'Ethereum',
@@ -135,8 +138,9 @@ export class RujiraWithdraw {
             'Try a larger amount or wait for lower gas.'
         );
       }
-    } catch {
-      // ignore bigint parse issues; THORChain validates on-chain
+    } catch (error) {
+      if (error instanceof RujiraError) throw error;
+      // Ignore BigInt parse issues for non-numeric fee estimates; THORChain validates on-chain
     }
 
     const funds: Coin[] = [
@@ -180,6 +184,15 @@ export class RujiraWithdraw {
 
     try {
       const vault = signer.getVault();
+
+      if (!isWithdrawCapable(vault)) {
+        throw new RujiraError(
+          RujiraErrorCode.SIGNING_FAILED,
+          'Vault does not support withdrawal operations. ' +
+            'Required methods: extractMessageHashes, sign, broadcastTx.'
+        );
+      }
+
       const senderAddress = await vault.address('THORChain');
 
       const [accountInfo, fee] = await Promise.all([
@@ -195,48 +208,19 @@ export class RujiraWithdraw {
         fee,
       });
 
-      let messageHashes: string[];
-      if (typeof (vault as any).extractMessageHashes === 'function') {
-        messageHashes = await (vault as any).extractMessageHashes(keysignPayload);
-      } else if ((vault as any).transactionBuilder?.extractMessageHashes) {
-        messageHashes = await (vault as any).transactionBuilder.extractMessageHashes(keysignPayload);
-      } else {
-        throw new RujiraError(
-          RujiraErrorCode.SIGNING_FAILED,
-          'Vault does not support extractMessageHashes'
-        );
-      }
+      const messageHashes = await vault.extractMessageHashes(keysignPayload);
 
-      let signature: unknown;
-      if (typeof (vault as any).sign === 'function') {
-        signature = await (vault as any).sign({
-          transaction: keysignPayload,
-          chain: 'THORChain',
-          messageHashes,
-        });
-      } else {
-        throw new RujiraError(RujiraErrorCode.SIGNING_FAILED, 'Vault does not support sign()');
-      }
+      const signature = await vault.sign({
+        transaction: keysignPayload,
+        chain: 'THORChain',
+        messageHashes,
+      });
 
-      let txHash: string;
-      if (typeof (vault as any).broadcastTx === 'function') {
-        txHash = await (vault as any).broadcastTx({
-          chain: 'THORChain',
-          keysignPayload,
-          signature,
-        });
-      } else if ((vault as any).broadcastService?.broadcastTx) {
-        txHash = await (vault as any).broadcastService.broadcastTx({
-          chain: 'THORChain',
-          keysignPayload,
-          signature,
-        });
-      } else {
-        throw new RujiraError(
-          RujiraErrorCode.BROADCAST_FAILED,
-          'Vault does not support broadcastTx()'
-        );
-      }
+      const txHash = await vault.broadcastTx({
+        chain: 'THORChain',
+        keysignPayload,
+        signature,
+      });
 
       return {
         txHash,
@@ -373,7 +357,7 @@ export class RujiraWithdraw {
 
   private async getAccountInfo(address: string): Promise<{ accountNumber: string; sequence: string }> {
     try {
-      const response = await fetch(`${this.thornodeUrl}/auth/accounts/${address}`);
+      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/auth/accounts/${address}`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -401,7 +385,7 @@ export class RujiraWithdraw {
 
   private async getNetworkFee(): Promise<bigint> {
     try {
-      const response = await fetch(`${this.thornodeUrl}/thorchain/network`);
+      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/network`);
 
       if (response.ok) {
         const data = (await response.json()) as { native_tx_fee_rune?: string };
@@ -417,7 +401,7 @@ export class RujiraWithdraw {
   }
 
   buildWithdrawMemo(_asset: string, l1Address: string): string {
-    return `secure-:${l1Address}`;
+    return buildSecureRedeemMemo(l1Address);
   }
 
   estimateWithdrawTime(chain: string): number {
@@ -429,7 +413,7 @@ export class RujiraWithdraw {
 
     let gasAssetOutboundFee = '0';
     try {
-      const response = await fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
+      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
       if (response.ok) {
         const addresses = (await response.json()) as Array<{ chain: string; outbound_fee: string }>;
         const chainInfo = addresses.find((a) => a.chain === chain);
@@ -463,8 +447,8 @@ export class RujiraWithdraw {
       const gasPoolAsset = `${chain}.${chain}`;
 
       const [gasPoolResp, targetPoolResp] = await Promise.all([
-        fetch(`${this.thornodeUrl}/thorchain/pool/${gasPoolAsset}`),
-        fetch(`${this.thornodeUrl}/thorchain/pool/${asset.toUpperCase()}`),
+        thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/pool/${gasPoolAsset}`),
+        thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/pool/${asset.toUpperCase()}`),
       ]);
 
       if (!gasPoolResp.ok || !targetPoolResp.ok) {
@@ -506,7 +490,7 @@ export class RujiraWithdraw {
     const { chain } = this.parseAsset(asset);
 
     try {
-      const response = await fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
+      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
       if (response.ok) {
         const addresses = (await response.json()) as Array<{ chain: string; dust_threshold: string }>;
         const chainInfo = addresses.find((a) => a.chain === chain);
@@ -536,7 +520,7 @@ export class RujiraWithdraw {
     const { chain } = this.parseAsset(asset);
 
     try {
-      const response = await fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
+      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
       if (!response.ok) {
         return { possible: false, reason: 'Cannot reach THORNode' };
       }
@@ -593,15 +577,28 @@ export class RujiraWithdraw {
   }
 
   private validateL1Address(chain: string, address: string): void {
+    if (!address || address.trim().length === 0) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_ADDRESS,
+        `${chain} address is required`
+      );
+    }
+
+    const evmValidator = (addr: string) => /^0x[a-fA-F0-9]{40}$/.test(addr);
+
     const validators: Record<string, (addr: string) => boolean> = {
       BTC: (addr) =>
         /^(1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr) ||
         /^bc1[a-z0-9]{39,87}$/.test(addr),
-      ETH: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-      BSC: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
-      AVAX: (addr) => /^0x[a-fA-F0-9]{40}$/.test(addr),
+      ETH: evmValidator,
+      BSC: evmValidator,
+      AVAX: evmValidator,
+      BASE: evmValidator,
+      ARB: evmValidator,
       GAIA: (addr) => /^cosmos1[a-z0-9]{38}$/.test(addr),
+      NOBLE: (addr) => /^noble1[a-z0-9]{38}$/.test(addr),
       DOGE: (addr) => /^D[a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr),
+      DASH: (addr) => /^[X7][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr),
       LTC: (addr) =>
         /^[LM3][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr) ||
         /^ltc1[a-z0-9]{39,87}$/.test(addr),
@@ -609,14 +606,29 @@ export class RujiraWithdraw {
         /^(1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr) ||
         /^bitcoincash:[qp][a-z0-9]{41}$/.test(addr) ||
         /^[qp][a-z0-9]{41}$/.test(addr),
+      XRP: (addr) => /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(addr),
+      TRON: (addr) => /^T[a-zA-Z0-9]{33}$/.test(addr),
+      ZEC: (addr) =>
+        /^t1[a-km-zA-HJ-NP-Z1-9]{33}$/.test(addr) ||
+        /^t3[a-km-zA-HJ-NP-Z1-9]{33}$/.test(addr),
     };
 
     const validator = validators[chain.toUpperCase()];
-    if (validator && !validator(address)) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_ADDRESS,
-        `Invalid ${chain} address: ${address}`
-      );
+    if (validator) {
+      if (!validator(address)) {
+        throw new RujiraError(
+          RujiraErrorCode.INVALID_ADDRESS,
+          `Invalid ${chain} address: ${address}`
+        );
+      }
+    } else {
+      // Fallback: non-empty, reasonable length
+      if (address.length < 10 || address.length > 128) {
+        throw new RujiraError(
+          RujiraErrorCode.INVALID_ADDRESS,
+          `Invalid ${chain} address: expected 10-128 characters, got ${address.length}`
+        );
+      }
     }
   }
 
