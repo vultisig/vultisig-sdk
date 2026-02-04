@@ -205,20 +205,36 @@ export class RujiraDiscovery {
     const restUrl = baseUrl.includes('thornode') ? baseUrl : 'https://thornode.ninerealms.com';
 
     try {
-      const contractsResponse = await fetch(
-        `${restUrl}/cosmwasm/wasm/v1/code/${this.finCodeId}/contracts`
-      );
+      // Paginate through all contracts for this code ID
+      const PAGE_SIZE = 50;
+      const allContracts: string[] = [];
+      let nextKey: string | null = null;
 
-      if (!contractsResponse.ok) {
-        throw new Error(`Failed to fetch contracts: ${contractsResponse.status}`);
-      }
+      do {
+        let url = `${restUrl}/cosmwasm/wasm/v1/code/${this.finCodeId}/contracts?pagination.limit=${PAGE_SIZE}`;
+        if (nextKey) {
+          url += `&pagination.key=${encodeURIComponent(nextKey)}`;
+        }
 
-      const contractsData = (await contractsResponse.json()) as { contracts: string[] };
-      this.log(`Found ${contractsData.contracts.length} FIN contracts`);
+        const contractsResponse = await fetch(url);
+        if (!contractsResponse.ok) {
+          throw new Error(`Failed to fetch contracts: ${contractsResponse.status}`);
+        }
+
+        const page = (await contractsResponse.json()) as {
+          contracts: string[];
+          pagination?: { next_key: string | null };
+        };
+        allContracts.push(...page.contracts);
+        nextKey = page.pagination?.next_key || null;
+        this.log(`Fetched ${page.contracts.length} contracts (total: ${allContracts.length})`);
+      } while (nextKey);
+
+      const addresses = allContracts;
+      this.log(`Found ${addresses.length} FIN contracts total`);
 
       // Query contract configs in parallel with concurrency cap
       const CONCURRENCY = 5;
-      const addresses = contractsData.contracts;
       for (let i = 0; i < addresses.length; i += CONCURRENCY) {
         const batch = addresses.slice(i, i + CONCURRENCY);
         const results = await Promise.allSettled(
