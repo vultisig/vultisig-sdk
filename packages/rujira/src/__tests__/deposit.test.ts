@@ -23,9 +23,9 @@ describe('RujiraDeposit', () => {
   });
 
   describe('buildDepositMemo', () => {
-    it('should build basic deposit memo', () => {
+    it('should build basic deposit memo with secure+ format', () => {
       const memo = deposit.buildDepositMemo('BTC.BTC', VALID_THOR_ADDRESS);
-      expect(memo).toBe(`=:BTC.BTC:${VALID_THOR_ADDRESS}`);
+      expect(memo).toBe(`secure+:${VALID_THOR_ADDRESS}`);
     });
 
     it('should build deposit memo with affiliate', () => {
@@ -35,12 +35,12 @@ describe('RujiraDeposit', () => {
         'thor1affiliate',
         50
       );
-      expect(memo).toBe(`=:ETH.ETH:${VALID_THOR_ADDRESS}:thor1affiliate:50`);
+      expect(memo).toBe(`secure+:${VALID_THOR_ADDRESS}:thor1affiliate:50`);
     });
 
-    it('should uppercase asset in memo', () => {
+    it('should use secure+ format regardless of asset case', () => {
       const memo = deposit.buildDepositMemo('btc.btc', VALID_THOR_ADDRESS);
-      expect(memo).toBe(`=:BTC.BTC:${VALID_THOR_ADDRESS}`);
+      expect(memo).toBe(`secure+:${VALID_THOR_ADDRESS}`);
     });
 
     it('should not include affiliate if bps is 0', () => {
@@ -50,7 +50,19 @@ describe('RujiraDeposit', () => {
         'thor1affiliate',
         0
       );
-      expect(memo).toBe(`=:BTC.BTC:${VALID_THOR_ADDRESS}`);
+      expect(memo).toBe(`secure+:${VALID_THOR_ADDRESS}`);
+    });
+
+    it('should reject addresses with colon (injection prevention)', () => {
+      expect(() =>
+        deposit.buildDepositMemo('BTC.BTC', 'thor1abc:evil')
+      ).toThrow("contains ':'");
+    });
+
+    it('should reject affiliate with colon (injection prevention)', () => {
+      expect(() =>
+        deposit.buildDepositMemo('BTC.BTC', VALID_THOR_ADDRESS, 'aff:evil', 50)
+      ).toThrow("contains ':'");
     });
   });
 
@@ -163,7 +175,7 @@ describe('RujiraDeposit', () => {
 
       expect(result.chain).toBe('BTC');
       expect(result.inboundAddress).toBe('bc1qinbound...');
-      expect(result.memo).toBe(`=:BTC.BTC:${VALID_THOR_ADDRESS}`);
+      expect(result.memo).toBe(`secure+:${VALID_THOR_ADDRESS}`);
       expect(result.amount).toBe('1000000');
       expect(result.asset).toBe('BTC.BTC');
       expect(result.resultingDenom).toBe('btc-btc');
@@ -194,7 +206,7 @@ describe('RujiraDeposit', () => {
         affiliateBps: 50,
       });
 
-      expect(result.memo).toBe(`=:BTC.BTC:${VALID_THOR_ADDRESS}:thor1affiliate:50`);
+      expect(result.memo).toBe(`secure+:${VALID_THOR_ADDRESS}:thor1affiliate:50`);
     });
 
     it('should include warning for halted chain', async () => {

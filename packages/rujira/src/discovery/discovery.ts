@@ -1,6 +1,7 @@
 import { GraphQLClient, type GraphQLClientOptions } from './graphql-client.js';
 import type { DiscoveredContracts, Market } from './types.js';
 import { MAINNET_CONFIG } from '../config.js';
+import { thornodeRateLimiter } from '../utils/rate-limiter.js';
 
 export interface DiscoveryOptions {
   graphql?: GraphQLClientOptions;
@@ -216,7 +217,7 @@ export class RujiraDiscovery {
           url += `&pagination.key=${encodeURIComponent(nextKey)}`;
         }
 
-        const contractsResponse = await fetch(url);
+        const contractsResponse = await thornodeRateLimiter.fetch(url);
         if (!contractsResponse.ok) {
           throw new Error(`Failed to fetch contracts: ${contractsResponse.status}`);
         }
@@ -239,7 +240,7 @@ export class RujiraDiscovery {
         const batch = addresses.slice(i, i + CONCURRENCY);
         const results = await Promise.allSettled(
           batch.map(async (address) => {
-            const configResponse = await fetch(
+            const configResponse = await thornodeRateLimiter.fetch(
               `${restUrl}/cosmwasm/wasm/v1/contract/${address}/smart/eyJjb25maWciOnt9fQ==`
             );
 

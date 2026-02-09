@@ -16,6 +16,7 @@ import { RujiraSwap, type RujiraSwapOptions } from './modules/swap.js';
 import { RujiraWithdraw } from './modules/withdraw.js';
 import type { RujiraSigner } from './signer/types.js';
 import type { BookResponse, FinQueryMsg, SimulationResponse } from './types.js';
+import { thornodeRateLimiter } from './utils/rate-limiter.js';
 
 export interface RujiraClientOptions {
   config?: Partial<RujiraConfig>;
@@ -101,6 +102,11 @@ export class RujiraClient {
 
       this.stargateClient = await StargateClient.connect(this.config.rpcEndpoint);
       this.log('Stargate client connected');
+
+      // Validate contract config against on-chain state
+      this.validateContractConfig().catch((err) => {
+        this.log('Contract config validation failed (non-blocking):', err);
+      });
 
       if (this.signer) {
         this.signingClient = await SigningCosmWasmClient.connectWithSigner(
@@ -208,7 +214,7 @@ export class RujiraClient {
 
     this.log('Query contract (REST):', url);
 
-    const res = await fetch(url);
+    const res = await thornodeRateLimiter.fetch(url);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`REST smart query failed (${res.status}): ${text || res.statusText}`);
@@ -293,6 +299,25 @@ export class RujiraClient {
   async getBlockHeight(): Promise<number> {
     this.ensureConnected();
     return this.queryClient!.getHeight();
+  }
+
+  private async validateContractConfig(): Promise<void> {
+    try {
+      const base = this.config.restEndpoint.replace(/\/$/, '');
+      const url = `${base}/cosmwasm/wasm/v1/code/${this.config.contracts.finCodeId}/contracts?pagination.limit=1`;
+      const res = await thornodeRateLimiter.fetch(url);
+      if (!res.ok) return;
+
+      const data = (await res.json()) as { contracts?: string[] };
+      if (!data.contracts || data.contracts.length === 0) {
+        console.warn(
+          `[RujiraClient] WARNING: FIN code ID ${this.config.contracts.finCodeId} returned no contracts. ` +
+            'Contract may have been upgraded on-chain. Update SDK or config.'
+        );
+      }
+    } catch {
+      // Non-blocking: validation failure doesn't prevent operation
+    }
   }
 
   private ensureConnected(): void {

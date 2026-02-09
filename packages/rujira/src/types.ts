@@ -162,9 +162,48 @@ export interface SwapResult {
 // ORDER TYPES
 
 /**
- * Order side
+ * SDK order side - user-friendly representation.
+ *
+ * - `'buy'` = acquire base asset by offering quote asset
+ * - `'sell'` = dispose base asset to receive quote asset
  */
 export type OrderSide = 'buy' | 'sell';
+
+/**
+ * Contract order side - matches FIN contract's `Side` enum.
+ *
+ * The Rujira FIN contract uses `Side::Base` and `Side::Quote` internally.
+ * With CosmWasm's `#[cw_serde]` (which applies `#[serde(rename_all = "snake_case")]`),
+ * these serialize to `"base"` and `"quote"` in JSON.
+ *
+ * Mapping:
+ * - `'base'` = selling base asset (offers base, receives quote) = SDK `'sell'`
+ * - `'quote'` = buying base asset (offers quote, receives base) = SDK `'buy'`
+ *
+ * Verified via:
+ * - FIN contract book query returns `{ base: [...], quote: [...] }` arrays
+ * - Halborn audit (Jan 2025) references `Side::Base` in Rust source
+ * - CosmWasm snake_case serialization confirmed
+ *
+ * @internal Used for contract communication only
+ */
+export type ContractSide = 'base' | 'quote';
+
+/**
+ * Convert SDK OrderSide to contract's Side enum value.
+ * @internal
+ */
+export function toContractSide(side: OrderSide): ContractSide {
+  return side === 'buy' ? 'quote' : 'base';
+}
+
+/**
+ * Convert contract's Side enum value to SDK OrderSide.
+ * @internal
+ */
+export function fromContractSide(side: ContractSide): OrderSide {
+  return side === 'quote' ? 'buy' : 'sell';
+}
 
 /**
  * Order status
@@ -266,14 +305,17 @@ export interface OrderBook {
 
 // CONTRACT TYPES (Internal)
 
+/** Base64-encoded binary data, matching CosmWasm `Binary` type */
+export type Base64Binary = string;
+
 /**
  * FIN contract ExecuteMsg variants
  * @internal
  */
-export type FinExecuteMsg = 
+export type FinExecuteMsg =
   | { swap: SwapRequest }
   | { order: [OrderTarget[], CallbackData | null] }
-  | { arb: { then?: string } };
+  | { arb: { then?: Base64Binary } };
 
 /**
  * Swap request variants
@@ -286,10 +328,10 @@ export type SwapRequest =
   | { limit: { price: string; to?: string; callback?: CallbackData } };
 
 /**
- * Order target tuple
+ * Order target tuple - uses ContractSide for contract communication
  * @internal
  */
-export type OrderTarget = [OrderSide, string, string | null];
+export type OrderTarget = [ContractSide, string, string | null];
 
 /**
  * Callback data for contract composition
@@ -301,14 +343,14 @@ export interface CallbackData {
 }
 
 /**
- * FIN contract QueryMsg variants
+ * FIN contract QueryMsg variants - uses ContractSide for contract communication
  * @internal
  */
 export type FinQueryMsg =
   | { config: Record<string, never> }
   | { simulate: { denom: string; amount: string } }
-  | { order: [string, OrderSide, string] }
-  | { orders: { owner: string; side?: OrderSide; offset?: number; limit?: number } }
+  | { order: [string, ContractSide, string] }
+  | { orders: { owner: string; side?: ContractSide; offset?: number; limit?: number } }
   | { book: { limit?: number; offset?: number } };
 
 /**

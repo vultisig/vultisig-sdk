@@ -6,6 +6,23 @@
 import type { FinExecuteMsg } from '../types.js';
 
 /**
+ * Validate a memo component does not contain delimiter characters.
+ * THORChain memos use ':' as field separator - any ':' in user input
+ * would corrupt memo parsing and could enable injection attacks.
+ *
+ * @param value - The memo component to validate
+ * @param fieldName - Name of the field (for error messages)
+ * @throws Error if the value contains ':'
+ */
+export function validateMemoComponent(value: string, fieldName: string): void {
+  if (value.includes(':')) {
+    throw new Error(
+      `Invalid ${fieldName}: contains ':' which would corrupt memo parsing. Got: ${value}`
+    );
+  }
+}
+
+/**
  * Build a CosmWasm execution memo for Layer 1 deposits
  * 
  * Format: x:{contract}:{base64_payload}
@@ -106,40 +123,47 @@ export function buildThorSwapMemo(
   affiliate?: string,
   affiliateFee?: number
 ): string {
+  validateMemoComponent(asset, 'asset');
+  validateMemoComponent(destination, 'destination');
+  if (limit) validateMemoComponent(limit, 'limit');
+  if (affiliate) validateMemoComponent(affiliate, 'affiliate');
+
   const parts = ['=', asset, destination];
-  
+
   if (limit) {
     parts.push(limit);
-    
+
     if (affiliate && affiliateFee) {
       parts.push(affiliate);
       parts.push(affiliateFee.toString());
     }
   }
-  
+
   return parts.join(':');
 }
 
 /**
  * Build a secured asset mint memo
- * 
- * Format: S+:DESTINATION
- * 
+ *
+ * Format: secure+:DESTINATION
+ *
  * @param destination - THORChain address to receive secured asset
  */
 export function buildSecureMintMemo(destination: string): string {
-  return `S+:${destination}`;
+  validateMemoComponent(destination, 'destination');
+  return `secure+:${destination}`;
 }
 
 /**
  * Build a secured asset redeem memo
- * 
- * Format: S-:DESTINATION
- * 
+ *
+ * Format: secure-:DESTINATION
+ *
  * @param destination - L1 address to receive native asset
  */
 export function buildSecureRedeemMemo(destination: string): string {
-  return `S-:${destination}`;
+  validateMemoComponent(destination, 'destination');
+  return `secure-:${destination}`;
 }
 
 /**
@@ -169,17 +193,17 @@ export function parseMemoType(memo: string):
     };
   }
   
-  if (memo.startsWith('S+:')) {
+  if (memo.startsWith('secure+:')) {
     return {
       type: 'secure-mint',
-      destination: memo.slice(3),
+      destination: memo.slice('secure+:'.length),
     };
   }
-  
-  if (memo.startsWith('S-:')) {
+
+  if (memo.startsWith('secure-:')) {
     return {
       type: 'secure-redeem',
-      destination: memo.slice(3),
+      destination: memo.slice('secure-:'.length),
     };
   }
   

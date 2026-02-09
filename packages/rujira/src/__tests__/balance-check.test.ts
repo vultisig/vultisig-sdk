@@ -65,7 +65,7 @@ describe('Balance Pre-check', () => {
         priceImpact: '0.1',
         fees: { network: '0', protocol: '1000000', affiliate: '0', total: '1000000' },
         contractAddress: 'thor1contract...',
-        expiresAt: Date.now() + 30000,
+        expiresAt: Date.now() + 120000,
         quoteId: 'test-quote',
       };
 
@@ -91,7 +91,7 @@ describe('Balance Pre-check', () => {
         priceImpact: '0.1',
         fees: { network: '0', protocol: '1000000', affiliate: '0', total: '1000000' },
         contractAddress: 'thor1contract...',
-        expiresAt: Date.now() + 30000,
+        expiresAt: Date.now() + 120000,
         quoteId: 'test-quote',
       };
 
@@ -117,7 +117,7 @@ describe('Balance Pre-check', () => {
         priceImpact: '0.1',
         fees: { network: '0', protocol: '1000000', affiliate: '0', total: '1000000' },
         contractAddress: 'thor1contract...',
-        expiresAt: Date.now() + 30000,
+        expiresAt: Date.now() + 120000,
         quoteId: 'test-quote',
       };
 
@@ -152,7 +152,7 @@ describe('Balance Pre-check', () => {
         priceImpact: '0.1',
         fees: { network: '0', protocol: '1000000', affiliate: '0', total: '1000000' },
         contractAddress: 'thor1contract...',
-        expiresAt: Date.now() + 30000,
+        expiresAt: Date.now() + 120000,
         quoteId: 'test-quote',
       };
 
@@ -177,7 +177,7 @@ describe('Balance Pre-check', () => {
         priceImpact: '0.1',
         fees: { network: '0', protocol: '1000000', affiliate: '0', total: '1000000' },
         contractAddress: 'thor1contract...',
-        expiresAt: Date.now() + 30000,
+        expiresAt: Date.now() + 120000,
         quoteId: 'test-quote',
       };
 
@@ -254,7 +254,7 @@ describe('Balance Pre-check', () => {
         priceImpact: '0.1',
         fees: { network: '0', protocol: '1000000', affiliate: '0', total: '1000000' },
         contractAddress: 'thor1contract...',
-        expiresAt: Date.now() + 30000,
+        expiresAt: Date.now() + 120000,
         quoteId: 'test-quote',
       };
 

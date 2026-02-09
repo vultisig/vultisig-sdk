@@ -49,7 +49,10 @@ export class QuoteCache<T = unknown> {
   }
 
   /**
-   * Generate cache key from quote parameters
+   * Generate cache key from quote parameters.
+   * Slippage is intentionally excluded - callers should compute
+   * slippage-dependent values (like minimumOutput) at retrieval time
+   * from the cached expectedOutput, not at storage time.
    */
   private makeKey(fromAsset: string, toAsset: string, amount: string): string {
     return `${fromAsset}/${toAsset}/${amount}`;
