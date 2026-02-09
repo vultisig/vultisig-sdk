@@ -2,7 +2,7 @@
  * Rujira Commands - FIN swap, secured assets, deposit/withdraw helpers
  */
 
-import { RujiraClient, VultisigRujiraProvider, getRoutesSummary, listEasyRoutes } from '@vultisig/rujira'
+import { getRoutesSummary, listEasyRoutes,RujiraClient, VultisigRujiraProvider } from '@vultisig/rujira'
 
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
@@ -17,7 +17,7 @@ export type RujiraBaseOptions = {
 async function createRujiraClient(ctx: CommandContext, options: RujiraBaseOptions = {}): Promise<RujiraClient> {
   const vault = await ctx.ensureActiveVault()
 
-  const provider = new VultisigRujiraProvider(vault as any)
+  const provider = new VultisigRujiraProvider(vault)
 
   const client = new RujiraClient({
     signer: provider,

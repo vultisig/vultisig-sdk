@@ -18,7 +18,7 @@ import { confirmTransaction, displayTransactionResult } from '../ui'
 /**
  * Parameters for executing a CosmWasm contract
  */
-export interface ExecuteParams {
+export type ExecuteParams = {
   chain: Chain
   contract: string
   msg: string // JSON string
@@ -32,7 +32,7 @@ export interface ExecuteParams {
 /**
  * Parsed funds from command line
  */
-interface ParsedFund {
+type ParsedFund = {
   denom: string
   amount: string
 }

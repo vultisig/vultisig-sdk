@@ -1,56 +1,9 @@
 /**
- * Easy Swap Routes - Simplified DeFi interface for AI agents and human developers
- * 
- * Easy routes abstract away the complexity of asset discovery and pair matching
- * by providing pre-configured, battle-tested trading routes. These routes are
- * specifically designed for high-frequency use cases like trading bots and AI agents.
- * 
- * Why easy routes exist:
- * - **Simplicity**: No need to understand THORChain's asset format complexities
- * - **Reliability**: All routes have been tested and have consistent liquidity
- * - **Performance**: Routes are optimized for common trading patterns
- * - **AI-friendly**: Predictable interfaces that work well with language models
- * 
- * Route design principles:
- * - All cross-chain routes settle through RUNE (THORChain's native token)
- * - Asset identifiers use on-chain denoms (lowercase, hyphen-separated)
- * - Time estimates include L1 confirmation delays for realistic expectations
- * - Liquidity ratings reflect actual market depth and trading volume
- * 
- * Usage patterns:
- * 1. **Quick swaps**: Pick a route, provide amount and destination, execute
- * 2. **Price comparison**: Get quotes for multiple routes and pick the best
- * 3. **Market analysis**: Use batch quote functions to analyze all available options
- * 4. **Cross-chain bridging**: Use L1 memo generation for external chain deposits
- * 
- * @example
- * ```typescript
- * import { EASY_ROUTES, RujiraClient } from '@vultisig/rujira';
- * 
- * const client = new RujiraClient({ network: 'mainnet' });
- * await client.connect();
- * 
- * // Simple route execution
- * const result = await client.swap.easySwap({
- *   route: 'RUNE_TO_USDC',
- *   amount: '100000000', // 1 RUNE (8 decimals)
- *   destination: 'thor1...',
- *   maxSlippagePercent: 1
- * });
- * 
- * // Compare multiple routes
- * const quotes = await client.swap.batchGetQuotes(
- *   ['RUNE_TO_USDC', 'RUNE_TO_BTC', 'RUNE_TO_ETH'],
- *   '100000000'
- * );
- * ```
- * 
- * @module easy-routes
+ * Easy Swap Routes - Simplified DeFi interface
  */
 
 import { KNOWN_ASSETS, type Asset } from '@vultisig/assets';
 
-// Helper to safely get asset format (throws if asset not found)
 function getFinFormat(assetId: string): string {
   const asset = KNOWN_ASSETS[assetId as keyof typeof KNOWN_ASSETS];
   if (!asset) {
@@ -59,15 +12,6 @@ function getFinFormat(assetId: string): string {
   return asset.formats.fin;
 }
 
-// EASY ROUTES
-
-/**
- * Pre-configured swap routes with deep liquidity.
- * All routes go through RUNE as the settlement asset.
- * 
- * Asset format: On-chain denoms (lowercase, hyphen-separated)
- * Uses @vultisig/assets for unified asset handling
- */
 export const EASY_ROUTES = {
   // === RUNE Gateway Routes ===
   RUNE_TO_USDC: {
@@ -350,10 +294,6 @@ export interface EasyQuoteResponse {
 
 // DOCUMENTATION HELPERS
 
-/**
- * Get a human-readable summary of all routes
- * Useful for displaying to users or agents
- */
 export function getRoutesSummary(): string {
   const lines = [
     '# Easy Swap Routes',

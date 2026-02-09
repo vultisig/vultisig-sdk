@@ -97,6 +97,7 @@ export type {
   GeneralSwapQuote,
   KeygenMode,
   KeygenProgressUpdate,
+  KeysignPayload,
   NativeSwapQuote,
   OtherGasInfo,
   ReshareOptions,
@@ -133,7 +134,7 @@ export type {
   VultisigConfig,
 } from './types'
 // Swap type guards
-export { isAccountCoin, isSimpleCoinInput } from './types'
+export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 
 // ============================================================================
 // PUBLIC API - Seedphrase & Multi-Device Vault Creation
