@@ -5929,6 +5929,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/rujira@workspace:packages/rujira"
   dependencies:
+    "@bufbuild/protobuf": "npm:^2.10.2"
     "@cosmjs/cosmwasm-stargate": "npm:^0.32.4"
     "@cosmjs/proto-signing": "npm:^0.32.4"
     "@cosmjs/stargate": "npm:^0.32.4"
