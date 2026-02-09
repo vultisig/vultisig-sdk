@@ -23,7 +23,7 @@ import { info, isJsonOutput, printError, printResult, printTable, warn } from '.
 // Display Formatters
 // ============================================================================
 
-export function displayBalance(chain: string, balance: Balance, raw = false): void {
+export function displayBalance(chain: string, balance: Balance, _raw = false): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
   printResult(`  Amount: ${balance.formattedAmount} ${balance.symbol}`)
   if (balance.fiatValue && balance.fiatCurrency) {
@@ -31,7 +31,7 @@ export function displayBalance(chain: string, balance: Balance, raw = false): vo
   }
 }
 
-export function displayBalancesTable(balances: Record<string, Balance>, raw = false): void {
+export function displayBalancesTable(balances: Record<string, Balance>, _raw = false): void {
   printResult(chalk.cyan('\nPortfolio Balances:\n'))
 
   const tableData = Object.entries(balances).map(([chain, balance]) => ({
@@ -45,7 +45,7 @@ export function displayBalancesTable(balances: Record<string, Balance>, raw = fa
   printTable(tableData)
 }
 
-export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurrency, raw = false): void {
+export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurrency, _raw = false): void {
   const currencyName = fiatCurrencyNameRecord[currency]
 
   // Display total value

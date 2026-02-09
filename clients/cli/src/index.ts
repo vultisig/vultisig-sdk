@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import 'dotenv/config'
 
+import { promises as fs } from 'node:fs'
+
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
-import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
@@ -20,9 +21,9 @@ import {
   executeCreateFromSeedphraseSecure,
   executeCreateSecure,
   executeCurrency,
-  executeExecute,
   executeDelete,
   executeDiscount,
+  executeExecute,
   executeExport,
   executeImport,
   executeInfo,
