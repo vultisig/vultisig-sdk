@@ -134,6 +134,34 @@ export interface VultisigVault {
   }): Promise<string>;
 }
 
+/**
+ * Vault with full withdraw capabilities (sign + broadcast).
+ * Used by RujiraWithdraw to execute MsgDeposit-based withdrawals.
+ */
+export interface WithdrawCapableVault extends VultisigVault {
+  extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>;
+  sign(
+    payload: SigningPayload,
+    options?: { signal?: AbortSignal }
+  ): Promise<VultisigSignature>;
+  broadcastTx(params: {
+    chain: VultisigChain;
+    keysignPayload: KeysignPayload;
+    signature: VultisigSignature;
+  }): Promise<string>;
+}
+
+/**
+ * Type guard: checks if a VultisigVault satisfies WithdrawCapableVault
+ */
+export function isWithdrawCapable(vault: VultisigVault): vault is WithdrawCapableVault {
+  return (
+    typeof vault.extractMessageHashes === 'function' &&
+    typeof vault.sign === 'function' &&
+    typeof vault.broadcastTx === 'function'
+  );
+}
+
 export interface ExtendedAccountData extends AccountData {
   accountNumber?: number;
   sequence?: number;

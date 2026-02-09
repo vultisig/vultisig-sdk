@@ -15,9 +15,11 @@ import type {
   OrderBookEntry,
   OrderResult,
   OrderSide,
+  ContractSide,
   FinExecuteMsg,
   FinQueryMsg,
 } from '../types.js';
+import { toContractSide, fromContractSide } from '../types.js';
 
 /**
  * Orderbook module for managing limit orders.
@@ -207,7 +209,9 @@ export class RujiraOrderbook {
       );
     }
 
-    const orderTarget: [OrderSide, string, string | null] = [params.side, params.price, params.amount];
+    // Convert SDK side to contract's Side enum format
+    const contractSide = toContractSide(params.side);
+    const orderTarget: [ContractSide, string, string | null] = [contractSide, params.price, params.amount];
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
@@ -250,7 +254,9 @@ export class RujiraOrderbook {
    * Cancel an open order.
    */
   async cancelOrder(contractAddress: string, side: OrderSide, price: string): Promise<{ txHash: string }> {
-    const orderTarget: [OrderSide, string, string | null] = [side, price, null];
+    // Convert SDK side to contract's Side enum format
+    const contractSide = toContractSide(side);
+    const orderTarget: [ContractSide, string, string | null] = [contractSide, price, null];
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
@@ -273,10 +279,13 @@ export class RujiraOrderbook {
   ): Promise<Order[]> {
     const address = owner || (await this.client.getAddress());
 
+    // Convert SDK side to contract side for query
+    const contractSide = side ? toContractSide(side) : undefined;
+
     const query: FinQueryMsg = {
       orders: {
         owner: address,
-        side,
+        side: contractSide,
         offset,
         limit,
       },
@@ -285,7 +294,7 @@ export class RujiraOrderbook {
     const response = await this.client.queryContract<{
       orders: Array<{
         owner: string;
-        side: OrderSide;
+        side: ContractSide;
         price: string;
         rate: string;
         updated_at: string;
@@ -298,34 +307,38 @@ export class RujiraOrderbook {
     return response.orders.map(
       (o: {
         owner: string;
-        side: OrderSide;
+        side: ContractSide;
         price: string;
         rate: string;
         updated_at: string;
         offer: string;
         remaining: string;
         filled: string;
-      }) => ({
-        orderId: `${address}-${o.side}-${o.price}`,
-        owner: o.owner,
-        pair: {
-          base: '',
-          quote: '',
-          contractAddress,
-          tick: '0',
-          takerFee: '0',
-          makerFee: '0',
-        },
-        side: o.side,
-        price: o.price,
-        amount: o.offer,
-        filled: o.filled,
-        remaining: o.remaining,
-        status:
-          BigInt(o.remaining) === 0n ? 'filled' : BigInt(o.filled) > 0n ? 'partial' : 'open',
-        createdAt: parseInt(o.updated_at),
-        updatedAt: parseInt(o.updated_at),
-      })
+      }) => {
+        // Convert contract side back to SDK side
+        const sdkSide = fromContractSide(o.side);
+        return {
+          orderId: `${address}-${o.side}-${o.price}`,
+          owner: o.owner,
+          pair: {
+            base: '',
+            quote: '',
+            contractAddress,
+            tick: '0',
+            takerFee: '0',
+            makerFee: '0',
+          },
+          side: sdkSide,
+          price: o.price,
+          amount: o.offer,
+          filled: o.filled,
+          remaining: o.remaining,
+          status:
+            BigInt(o.remaining) === 0n ? 'filled' : BigInt(o.filled) > 0n ? 'partial' : 'open',
+          createdAt: parseInt(o.updated_at),
+          updatedAt: parseInt(o.updated_at),
+        };
+      }
     );
   }
 
@@ -338,14 +351,17 @@ export class RujiraOrderbook {
     side: OrderSide,
     price: string
   ): Promise<Order | null> {
+    // Convert SDK side to contract side for query
+    const contractSide = toContractSide(side);
+
     const query: FinQueryMsg = {
-      order: [owner, side, price],
+      order: [owner, contractSide, price],
     };
 
     try {
       const response = await this.client.queryContract<{
         owner: string;
-        side: OrderSide;
+        side: ContractSide;
         price: string;
         rate: string;
         updated_at: string;
@@ -354,8 +370,11 @@ export class RujiraOrderbook {
         filled: string;
       }>(contractAddress, query);
 
+      // Convert contract side back to SDK side
+      const sdkSide = fromContractSide(response.side);
+
       return {
-        orderId: `${owner}-${side}-${price}`,
+        orderId: `${owner}-${response.side}-${price}`,
         owner: response.owner,
         pair: {
           base: '',
@@ -365,7 +384,7 @@ export class RujiraOrderbook {
           takerFee: '0',
           makerFee: '0',
         },
-        side: response.side,
+        side: sdkSide,
         price: response.price,
         amount: response.offer,
         filled: response.filled,

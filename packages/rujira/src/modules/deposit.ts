@@ -7,6 +7,8 @@ import type { RujiraClient } from '../client.js';
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors.js';
 import { findAssetByFormat } from '@vultisig/assets';
 import type { Asset } from '@vultisig/assets';
+import { thornodeRateLimiter } from '../utils/rate-limiter.js';
+import { buildSecureMintMemo, validateMemoComponent } from '../utils/memo.js';
 
 /**
  * Type guard to check if an object is a valid Asset with FIN format
@@ -216,7 +218,7 @@ export class RujiraDeposit {
     this.validateThorAddress(thorAddress);
 
     try {
-      const response = await fetch(
+      const response = await thornodeRateLimiter.fetch(
         `${this.thornodeUrl}/cosmos/bank/v1beta1/balances/${thorAddress}`
       );
 
@@ -288,7 +290,7 @@ export class RujiraDeposit {
     }
 
     try {
-      const response = await fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
+      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -319,9 +321,10 @@ export class RujiraDeposit {
   ): string {
     // Format: secure+:THORADDR for L1 → Secured deposits
     // This mints secured assets on THORChain without swapping
-    let memo = `secure+:${thorAddress}`;
-    
+    let memo = buildSecureMintMemo(thorAddress);
+
     if (affiliate && affiliateBps !== undefined && affiliateBps > 0) {
+      validateMemoComponent(affiliate, 'affiliate');
       memo += `:${affiliate}:${affiliateBps}`;
     }
 
