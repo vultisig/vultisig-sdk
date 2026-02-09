@@ -282,21 +282,6 @@ export class VultisigRujiraProvider implements RujiraSigner {
   }
 }
 
-export function createMockSigner(address: string, pubKeyHex?: string): RujiraSigner {
-  const pubKey = pubKeyHex
-    ? new Uint8Array(Buffer.from(pubKeyHex.replace('0x', ''), 'hex'))
-    : new Uint8Array(33);
-
-  return {
-    async getAccounts() {
-      return [{ address, pubkey: pubKey, algo: 'secp256k1' as const }];
-    },
-    async signDirect() {
-      throw new Error('Mock signer cannot sign transactions');
-    },
-  };
-}
-
 export function isVultisigVault(vault: unknown): vault is VultisigVault {
   if (!vault || typeof vault !== 'object') return false;
   const v = vault as Record<string, unknown>;

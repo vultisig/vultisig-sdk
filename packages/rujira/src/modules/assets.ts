@@ -6,21 +6,7 @@
 import type { RujiraClient } from '../client.js';
 import { KNOWN_ASSETS, findAssetByFormat, type Asset } from '@vultisig/assets';
 import type { RujiraAsset, TradingPair } from '../types.js';
-
-/**
- * Type guard to check if an object is a valid Asset with FIN format
- * @internal
- */
-function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
-  if (!obj || typeof obj !== 'object') return false;
-  const asset = obj as Partial<Asset>;
-  return (
-    typeof asset.formats === 'object' &&
-    asset.formats !== null &&
-    typeof asset.formats.fin === 'string' &&
-    asset.formats.fin.length > 0
-  );
-}
+import { isFinAsset } from '../utils/type-guards.js';
 
 /**
  * Assets module for querying asset information
