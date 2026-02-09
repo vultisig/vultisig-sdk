@@ -1,0 +1,42 @@
+name: Deploy Vercel
+
+on:
+  workflow_call:
+    outputs:
+      url:
+        description: "Vercel deployment URL"
+        value: ${{ jobs.deploy-vercel.outputs.url }}
+  workflow_dispatch:
+
+jobs:
+  deploy-vercel:
+    name: Deploy Vercel
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - run: corepack enable
+      - run: corepack prepare yarn@4.12.0 --activate
+      - run: yarn install --immutable
+      - run: yarn build:sdk
+
+      - run: npm install -g vercel
+
+      - name: Build & Deploy
+        id: deploy
+        working-directory: ./examples/browser
+        run: |
+          yarn build
+          cp vercel.json dist/
+          DEPLOY_URL=$(vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
