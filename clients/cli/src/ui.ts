@@ -23,20 +23,20 @@ import { info, isJsonOutput, printError, printResult, printTable, warn } from '.
 // Display Formatters
 // ============================================================================
 
-export function displayBalance(chain: string, balance: Balance): void {
+export function displayBalance(chain: string, balance: Balance, raw = false): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
-  printResult(`  Amount: ${balance.amount} ${balance.symbol}`)
+  printResult(`  Amount: ${balance.formattedAmount} ${balance.symbol}`)
   if (balance.fiatValue && balance.fiatCurrency) {
     printResult(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
   }
 }
 
-export function displayBalancesTable(balances: Record<string, Balance>): void {
+export function displayBalancesTable(balances: Record<string, Balance>, raw = false): void {
   printResult(chalk.cyan('\nPortfolio Balances:\n'))
 
   const tableData = Object.entries(balances).map(([chain, balance]) => ({
     Chain: chain,
-    Amount: balance.amount,
+    Amount: balance.formattedAmount,
     Symbol: balance.symbol,
     Value:
       balance.fiatValue && balance.fiatCurrency ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}` : 'N/A',
@@ -45,7 +45,7 @@ export function displayBalancesTable(balances: Record<string, Balance>): void {
   printTable(tableData)
 }
 
-export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurrency): void {
+export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurrency, raw = false): void {
   const currencyName = fiatCurrencyNameRecord[currency]
 
   // Display total value
@@ -61,7 +61,7 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
 
   const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
     Chain: chain,
-    Amount: balance.amount,
+    Amount: balance.formattedAmount,
     Symbol: balance.symbol,
     Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
   }))
@@ -212,7 +212,7 @@ export function setupVaultEvents(vault: VaultBase): void {
   // Balance updates
   vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
     const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.amount}`))
+    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.formattedAmount}`))
   })
 
   // Transaction broadcast
@@ -260,7 +260,7 @@ export function setupVaultEvents(vault: VaultBase): void {
 /**
  * Format bigint amount to human-readable string
  */
-function formatBigintAmount(amount: bigint, decimals: number): string {
+export function formatBigintAmount(amount: bigint, decimals: number): string {
   if (amount === 0n) return '0'
 
   const divisor = BigInt(10 ** decimals)
@@ -277,11 +277,27 @@ function formatBigintAmount(amount: bigint, decimals: number): string {
   return `${whole}.${trimmed}`
 }
 
+/**
+ * Format a balance amount from raw string to human-readable format
+ * @param amount - Raw amount as string (e.g., "42250647187991393")
+ * @param decimals - Number of decimal places (e.g., 18 for ETH)
+ * @returns Formatted string (e.g., "0.042250647187991393")
+ */
+export function formatBalanceAmount(amount: string, decimals: number): string {
+  if (!amount || amount === '0') return '0'
+  try {
+    return formatBigintAmount(BigInt(amount), decimals)
+  } catch {
+    return amount
+  }
+}
+
 export type SwapPreviewOptions = {
   fromDecimals: number
   toDecimals: number
   feeDecimals: number
   feeSymbol: string
+  discountTier?: string | null
 }
 
 export function displaySwapPreview(
@@ -321,6 +337,11 @@ export function displaySwapPreview(
       printResult(`    Affiliate: ${affiliateFeeFormatted} ${options.feeSymbol}`)
       if (quote.feesFiat?.affiliate) {
         printResult(`               (~$${quote.feesFiat.affiliate.toFixed(2)})`)
+      }
+      // Show discount tier if available
+      if (options.discountTier) {
+        const tierDisplay = options.discountTier.charAt(0).toUpperCase() + options.discountTier.slice(1)
+        printResult(chalk.green(`               (${tierDisplay} tier discount applied)`))
       }
     }
 

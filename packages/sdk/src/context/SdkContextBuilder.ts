@@ -7,6 +7,7 @@
 
 import { Chain } from '@core/chain/Chain'
 
+import { DEFAULT_CHAINS } from '../constants'
 import { ServerManager } from '../server/ServerManager'
 import { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
@@ -15,11 +16,6 @@ import type { SdkConfigOptions, SdkContext } from './SdkContext'
 // Re-export SdkContext type for consumers
 export type { SdkContext } from './SdkContext'
 import { getWalletCore } from './wasmRuntime'
-
-/**
- * Default chains enabled for new vaults
- */
-const DEFAULT_CHAINS: Chain[] = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.THORChain, Chain.Ripple]
 
 /**
  * Default fiat currency

@@ -63,6 +63,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('vault:getValue', vaultId, chain, tokenId, currency),
   getTotalValue: (vaultId: string, currency?: string) => ipcRenderer.invoke('vault:getTotalValue', vaultId, currency),
 
+  // Discount tier
+  getDiscountTier: (vaultId: string) => ipcRenderer.invoke('vault:getDiscountTier', vaultId),
+  updateDiscountTier: (vaultId: string) => ipcRenderer.invoke('vault:updateDiscountTier', vaultId),
+
   // Swap
   getSupportedSwapChains: () => ipcRenderer.invoke('vault:getSupportedSwapChains'),
   isSwapSupported: (fromChain: string, toChain: string) =>

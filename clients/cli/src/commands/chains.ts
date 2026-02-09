@@ -2,6 +2,7 @@
  * Chain Commands - chains and addresses
  */
 import type { Chain } from '@vultisig/sdk'
+import { SUPPORTED_CHAINS } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
@@ -11,6 +12,7 @@ import { displayAddresses } from '../ui'
 export type ChainsOptions = {
   add?: Chain
   remove?: Chain
+  addAll?: boolean
 }
 
 /**
@@ -18,6 +20,22 @@ export type ChainsOptions = {
  */
 export async function executeChains(ctx: CommandContext, options: ChainsOptions = {}): Promise<void> {
   const vault = await ctx.ensureActiveVault()
+
+  // Handle --add-all
+  if (options.addAll) {
+    const currentCount = vault.chains.length
+    const spinner = createSpinner(`Adding all ${SUPPORTED_CHAINS.length} supported chains...`)
+    await vault.setChains([...SUPPORTED_CHAINS])
+    const addedCount = SUPPORTED_CHAINS.length - currentCount
+    spinner.succeed(`Added ${addedCount} chains (${SUPPORTED_CHAINS.length} total)`)
+
+    if (isJsonOutput()) {
+      outputJson({ chains: [...vault.chains], added: addedCount, total: SUPPORTED_CHAINS.length })
+      return
+    }
+    info(chalk.gray('\nAll supported chains are now enabled.'))
+    return
+  }
 
   if (options.add) {
     await vault.addChain(options.add)
@@ -39,7 +57,8 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
     chains.forEach((chain: Chain) => {
       printResult(`  - ${chain}`)
     })
-    info(chalk.gray('\nUse --add <chain> to add a chain or --remove <chain> to remove one'))
+    info(chalk.gray(`\n${chains.length} of ${SUPPORTED_CHAINS.length} chains enabled`))
+    info(chalk.gray('Use --add <chain>, --add-all, or --remove <chain>'))
   }
 }
 
