@@ -3,12 +3,13 @@
  * Shared constants to avoid circular dependencies
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain, defaultChains } from '@core/chain/Chain'
 
 /**
  * Default chains for new vaults
+ * Re-exported from core for backward compatibility
  */
-export const DEFAULT_CHAINS: Chain[] = [Chain.Bitcoin, Chain.Ethereum, Chain.Solana, Chain.THORChain, Chain.Ripple]
+export const DEFAULT_CHAINS: Chain[] = defaultChains
 
 /**
  * All supported chains (from Chain enum)

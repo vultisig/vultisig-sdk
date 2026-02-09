@@ -399,6 +399,22 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     return { amount: value.amount, currency: value.currency || currency || 'usd' }
   })
 
+  // === DISCOUNT TIER ===
+
+  ipcMain.handle('vault:getDiscountTier', async (_event, vaultId: string) => {
+    const sdk = getSDK()
+    const vault = await sdk.getVaultById(vaultId)
+    if (!vault) throw new Error('Vault not found')
+    return vault.getDiscountTier()
+  })
+
+  ipcMain.handle('vault:updateDiscountTier', async (_event, vaultId: string) => {
+    const sdk = getSDK()
+    const vault = await sdk.getVaultById(vaultId)
+    if (!vault) throw new Error('Vault not found')
+    return vault.updateDiscountTier()
+  })
+
   // === SWAP OPERATIONS ===
 
   ipcMain.handle('vault:getSupportedSwapChains', async () => {

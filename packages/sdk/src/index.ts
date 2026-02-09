@@ -157,3 +157,16 @@ export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'
 // QR payload parsing (for programmatic multi-device coordination)
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
+
+// ============================================================================
+// PUBLIC API - Discount Tier Configuration
+// ============================================================================
+
+// VULT discount tier config (for CLI and other consumers)
+export type { VultDiscountTier } from '@core/chain/swap/affiliate/config'
+export {
+  baseAffiliateBps,
+  vultDiscountTierBps,
+  vultDiscountTierMinBalances,
+  vultDiscountTiers,
+} from '@core/chain/swap/affiliate/config'

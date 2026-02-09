@@ -1,3 +1,4 @@
+import { vaultConfig } from '@core/config'
 import { validateEmail } from '@lib/utils/validation/validateEmail'
 
 import { ValidationResult } from '../types'
@@ -83,10 +84,10 @@ export class ValidationHelpers {
       }
     }
 
-    if (trimmedName.length > 50) {
+    if (trimmedName.length > vaultConfig.maxNameLength) {
       return {
         valid: false,
-        error: 'Vault name must be no more than 50 characters long',
+        error: `Vault name must be no more than ${vaultConfig.maxNameLength} characters long`,
       }
     }
 

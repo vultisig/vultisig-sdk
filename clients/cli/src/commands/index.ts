@@ -33,6 +33,7 @@ export { executeBroadcast } from './broadcast'
 export type {
   CreateFromSeedphraseFastOptions,
   CreateFromSeedphraseSecureOptions,
+  DeleteVaultOptions,
   FastVaultOptions,
   JoinSecureOptions,
   SecureVaultOptions,
@@ -42,6 +43,7 @@ export {
   executeCreateFromSeedphraseFast,
   executeCreateFromSeedphraseSecure,
   executeCreateSecure,
+  executeDelete,
   executeExport,
   executeImport,
   executeInfo,
@@ -74,3 +76,6 @@ export {
   executeRujiraSwap,
   executeRujiraWithdraw,
 } from './rujira'
+// Discount tier commands
+export type { DiscountOptions, DiscountTierInfo } from './discount'
+export { executeDiscount } from './discount'

@@ -21,6 +21,8 @@ import {
   executeCreateSecure,
   executeCurrency,
   executeExecute,
+  executeDelete,
+  executeDiscount,
   executeExport,
   executeImport,
   executeInfo,
@@ -275,6 +277,7 @@ createFromSeedphraseCmd
   .option('--mnemonic <words>', 'Seedphrase (12 or 24 words, space-separated)')
   .option('--discover-chains', 'Scan chains for existing balances')
   .option('--chains <chains>', 'Specific chains to enable (comma-separated)')
+  .option('--use-phantom-solana-path', 'Use Phantom wallet derivation path for Solana')
   .action(
     withExit(
       async (options: {
@@ -284,6 +287,7 @@ createFromSeedphraseCmd
         mnemonic?: string
         discoverChains?: boolean
         chains?: string
+        usePhantomSolanaPath?: boolean
       }) => {
         const context = await init(program.opts().vault)
 
@@ -315,6 +319,7 @@ createFromSeedphraseCmd
           email: options.email,
           discoverChains: options.discoverChains,
           chains,
+          usePhantomSolanaPath: options.usePhantomSolanaPath,
         })
       }
     )
@@ -331,6 +336,7 @@ createFromSeedphraseCmd
   .option('--mnemonic <words>', 'Seedphrase (12 or 24 words)')
   .option('--discover-chains', 'Scan chains for existing balances')
   .option('--chains <chains>', 'Specific chains to enable (comma-separated)')
+  .option('--use-phantom-solana-path', 'Use Phantom wallet derivation path for Solana')
   .action(
     withExit(
       async (options: {
@@ -341,6 +347,7 @@ createFromSeedphraseCmd
         mnemonic?: string
         discoverChains?: boolean
         chains?: string
+        usePhantomSolanaPath?: boolean
       }) => {
         const context = await init(program.opts().vault)
 
@@ -372,6 +379,7 @@ createFromSeedphraseCmd
           shares: parseInt(options.shares, 10),
           discoverChains: options.discoverChains,
           chains,
+          usePhantomSolanaPath: options.usePhantomSolanaPath,
         })
       }
     )
@@ -450,12 +458,14 @@ program
   .command('balance [chain]')
   .description('Show balance for a chain or all chains')
   .option('-t, --tokens', 'Include token balances')
+  .option('--raw', 'Show raw values (wei/satoshis) for programmatic use')
   .action(
-    withExit(async (chainStr: string | undefined, options: { tokens?: boolean }) => {
+    withExit(async (chainStr: string | undefined, options: { tokens?: boolean; raw?: boolean }) => {
       const context = await init(program.opts().vault)
       await executeBalance(context, {
         chain: chainStr ? findChainByName(chainStr) || (chainStr as Chain) : undefined,
         includeTokens: options.tokens,
+        raw: options.raw,
       })
     })
   )
@@ -575,10 +585,14 @@ program
   .command('portfolio')
   .description('Show total portfolio value')
   .option('-c, --currency <currency>', 'Fiat currency (usd, eur, gbp, etc.)', 'usd')
+  .option('--raw', 'Show raw values (wei/satoshis) for programmatic use')
   .action(
-    withExit(async (options: { currency: string }) => {
+    withExit(async (options: { currency: string; raw?: boolean }) => {
       const context = await init(program.opts().vault)
-      await executePortfolio(context, { currency: options.currency.toLowerCase() as FiatCurrency })
+      await executePortfolio(context, {
+        currency: options.currency.toLowerCase() as FiatCurrency,
+        raw: options.raw,
+      })
     })
   )
 
@@ -601,6 +615,18 @@ program
     withExit(async () => {
       const context = await init(program.opts().vault)
       await executeServer(context)
+    })
+  )
+
+// Command: Discount tier
+program
+  .command('discount')
+  .description('Show your VULT discount tier for swap fees')
+  .option('--refresh', 'Force refresh tier from blockchain')
+  .action(
+    withExit(async (options: { refresh?: boolean }) => {
+      const context = await init(program.opts().vault)
+      await executeDiscount(context, { refresh: options.refresh })
     })
   )
 
@@ -659,12 +685,14 @@ program
   .command('chains')
   .description('List and manage chains')
   .option('--add <chain>', 'Add a chain')
+  .option('--add-all', 'Add all supported chains')
   .option('--remove <chain>', 'Remove a chain')
   .action(
-    withExit(async (options: { add?: string; remove?: string }) => {
+    withExit(async (options: { add?: string; addAll?: boolean; remove?: string }) => {
       const context = await init(program.opts().vault)
       await executeChains(context, {
         add: options.add ? findChainByName(options.add) || (options.add as Chain) : undefined,
+        addAll: options.addAll,
         remove: options.remove ? findChainByName(options.remove) || (options.remove as Chain) : undefined,
       })
     })
@@ -711,6 +739,21 @@ program
     withExit(async () => {
       const context = await init(program.opts().vault)
       await executeInfo(context)
+    })
+  )
+
+// Command: Delete a vault
+program
+  .command('delete [vault]')
+  .description('Delete a vault from local storage')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(
+    withExit(async (vaultIdOrName: string | undefined, options: { yes?: boolean }) => {
+      const context = await init(program.opts().vault)
+      await executeDelete(context, {
+        vaultId: vaultIdOrName,
+        skipConfirmation: options.yes,
+      })
     })
   )
 

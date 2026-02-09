@@ -58,13 +58,17 @@ describe('formatSignature', () => {
       })
     })
 
-    it('should format EdDSA signature', () => {
+    it('should format EdDSA signature as raw r||s (not DER)', () => {
+      // EdDSA signatures should store r||s concatenated, not der_signature
+      // This is critical for Solana and other EdDSA chains
+      const rValue = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+      const sValue = 'fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321'
       const signatureResults: Record<string, KeysignSignature> = {
         '0xabcd1234': {
           msg: '0xabcd1234',
-          r: '0x1234567890abcdef',
-          s: '0xfedcba0987654321',
-          der_signature: '0xeddsa_sig...',
+          r: rValue,
+          s: sValue,
+          der_signature: '0xder_should_not_be_used_for_eddsa',
         },
       }
       const messages = ['0xabcd1234']
@@ -72,11 +76,58 @@ describe('formatSignature', () => {
 
       const result = formatSignature(signatureResults, messages, algorithm)
 
+      // For EdDSA, signature should be r||s concatenated
       expect(result).toEqual({
-        signature: '0xeddsa_sig...',
+        signature: rValue + sValue,
         recovery: undefined,
         format: 'EdDSA',
       })
+    })
+
+    it('should strip 0x prefix from EdDSA r and s values before concatenation', () => {
+      // When keysign returns r and s with 0x prefixes, they should be stripped
+      const rValue = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+      const sValue = '0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321'
+      const signatureResults: Record<string, KeysignSignature> = {
+        '0xmsg': {
+          msg: '0xmsg',
+          r: rValue,
+          s: sValue,
+          der_signature: 'der_unused',
+        },
+      }
+      const messages = ['0xmsg']
+      const algorithm: SignatureAlgorithm = 'eddsa'
+
+      const result = formatSignature(signatureResults, messages, algorithm)
+
+      // Should be r||s without 0x prefixes (128 hex chars total)
+      expect(result.signature).toBe(
+        '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' +
+          'fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321'
+      )
+      expect(result.signature).not.toContain('0x')
+      expect(result.signature.length).toBe(128)
+    })
+
+    it('should strip uppercase 0X prefix from EdDSA r and s values', () => {
+      const rValue = '0X1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+      const sValue = '0Xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321'
+      const signatureResults: Record<string, KeysignSignature> = {
+        '0xmsg': {
+          msg: '0xmsg',
+          r: rValue,
+          s: sValue,
+          der_signature: 'der_unused',
+        },
+      }
+      const messages = ['0xmsg']
+      const algorithm: SignatureAlgorithm = 'eddsa'
+
+      const result = formatSignature(signatureResults, messages, algorithm)
+
+      expect(result.signature).not.toContain('0X')
+      expect(result.signature.length).toBe(128)
     })
 
     it('should format signature with recovery ID "0"', () => {
@@ -449,13 +500,14 @@ describe('formatSignature', () => {
       expect(result.signature).toBe('input0_der')
     })
 
-    it('should format Solana transaction signature', () => {
+    it('should format Solana transaction signature as raw r||s', () => {
+      // Solana uses EdDSA which stores r||s concatenated (not DER)
       const signatureResults: Record<string, KeysignSignature> = {
         solana_msg_hash: {
           msg: 'solana_msg_hash',
-          r: 'solana_r',
-          s: 'solana_s',
-          der_signature: 'solana_ed25519_sig',
+          r: 'ab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d',
+          s: '7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
+          der_signature: 'der_should_not_be_used',
         },
       }
       const messages = ['solana_msg_hash']
@@ -464,7 +516,11 @@ describe('formatSignature', () => {
       const result = formatSignature(signatureResults, messages, algorithm)
 
       expect(result.format).toBe('EdDSA')
-      expect(result.signature).toBe('solana_ed25519_sig')
+      // EdDSA stores r||s concatenated
+      expect(result.signature).toBe(
+        'ab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d' +
+          '7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e'
+      )
       expect(result.recovery).toBeUndefined() // EdDSA doesn't use recovery
     })
 

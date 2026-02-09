@@ -740,7 +740,7 @@ const result = await sdk.validateSeedphrase(mnemonic, { language: 'japanese' })
 Before importing, you can scan chains to find existing balances:
 
 ```typescript
-const results = await sdk.discoverChainsFromSeedphrase(
+const { results, usePhantomSolanaPath } = await sdk.discoverChainsFromSeedphrase(
   mnemonic,
   [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain, Chain.Solana],
   (progress) => {
@@ -758,6 +758,11 @@ for (const result of results) {
     console.log(`    Balance: ${result.balance} ${result.symbol}`)
   }
 }
+
+// Phantom wallet detection (Solana only)
+if (usePhantomSolanaPath) {
+  console.log('\nDetected Phantom wallet derivation path for Solana')
+}
 ```
 
 **Progress Phases:**
@@ -765,6 +770,12 @@ for (const result of results) {
 - `deriving` - Deriving addresses for each chain
 - `fetching` - Fetching balances from blockchain
 - `complete` - Discovery finished
+
+**Phantom Wallet Detection:**
+
+When Solana is included in the discovery, the SDK automatically checks both the standard BIP44 path and Phantom wallet's non-standard derivation path (`m/44'/501'/0'/0'`). If the Phantom path has a balance but the standard path doesn't, `usePhantomSolanaPath` will be `true` and the Solana result will show the Phantom-derived address.
+
+This detection follows the logic: `usePhantomSolanaPath = phantomBalance > 0 && standardBalance === 0`
 
 ### Creating a FastVault from Seedphrase
 
@@ -783,6 +794,9 @@ const vaultId = await sdk.createFastVaultFromSeedphrase({
   // Or specify exact chains to enable
   // chains: [Chain.Bitcoin, Chain.Ethereum],
 
+  // Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true)
+  // usePhantomSolanaPath: true,
+
   // Progress callbacks
   onProgress: (step) => {
     console.log(`${step.step}: ${step.message} (${step.progress}%)`)
@@ -799,6 +813,10 @@ const vault = await sdk.verifyVault(vaultId, code)
 console.log('Import complete:', vault.name)
 ```
 
+**Phantom Wallet Support:**
+
+If your seedphrase was created in Phantom wallet, enable `usePhantomSolanaPath: true` to use Phantom's non-standard Solana derivation path. When `discoverChains: true` is set, this is automatically detected based on which path has funds.
+
 ### Creating a SecureVault from Seedphrase
 
 Import a seedphrase with multi-device MPC (N-of-M threshold):
@@ -811,6 +829,9 @@ const { vault, vaultId, sessionId } = await sdk.createSecureVaultFromSeedphrase(
   threshold: 2,    // Signing threshold
   password: 'OptionalPassword',
   discoverChains: true,
+
+  // Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true)
+  // usePhantomSolanaPath: true,
 
   onProgress: (step) => {
     console.log(`${step.step}: ${step.message}`)
@@ -1619,6 +1640,46 @@ try {
 }
 ```
 
+### VULT Discount Tiers
+
+The SDK automatically applies affiliate fee discounts based on your VULT token and Thorguard NFT holdings on Ethereum. No configuration is needed - discounts are applied automatically to all swap quotes.
+
+#### Discount Tier Levels
+
+| Tier | Min VULT | Affiliate Fee |
+|------|----------|---------------|
+| None | 0 | 0.50% (50 bps) |
+| Bronze | 1,500 | 0.45% (45 bps) |
+| Silver | 3,000 | 0.40% (40 bps) |
+| Gold | 7,500 | 0.30% (30 bps) |
+| Platinum | 15,000 | 0.25% (25 bps) |
+| Diamond | 100,000 | 0.15% (15 bps) |
+| Ultimate | 1,000,000 | 0.00% (0 bps) |
+
+**Thorguard NFT Bonus:** Holders of the Thorguard NFT receive a free tier upgrade (one level higher), except for platinum tier and above.
+
+#### Checking Your Discount Tier
+
+```typescript
+// Get current discount tier based on VULT/Thorguard holdings
+const tier = await vault.getDiscountTier()
+console.log(`Current tier: ${tier ?? 'none'}`)
+// 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'ultimate' | null
+
+// Force refresh after acquiring more VULT tokens
+const updatedTier = await vault.updateDiscountTier()
+console.log(`Updated tier: ${updatedTier ?? 'none'}`)
+```
+
+#### How It Works
+
+1. When you request a swap quote, the SDK automatically fetches your VULT token balance and Thorguard NFT balance on Ethereum
+2. Your discount tier is calculated based on these holdings
+3. The reduced affiliate fee is applied to the swap quote
+4. Results are cached for 15 minutes to minimize RPC calls
+
+**Note:** The discount tier is determined automatically from your Ethereum address - you cannot manually override or set a discount tier.
+
 ---
 
 ## Configuration
@@ -2059,7 +2120,7 @@ class Vultisig {
     mnemonic: string,
     chains?: Chain[],
     onProgress?: (progress: ChainDiscoveryProgress) => void
-  ): Promise<ChainDiscoveryResult[]>
+  ): Promise<ChainDiscoveryAggregate>  // Returns { results, usePhantomSolanaPath }
   createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<string>
   createSecureVaultFromSeedphrase(options: CreateSecureVaultFromSeedphraseOptions): Promise<{
     vault: SecureVault
@@ -2147,6 +2208,10 @@ class VaultBase {
   getTokenAllowance(coin: AccountCoin, spender: string): Promise<bigint>
   getSupportedSwapChains(): readonly Chain[]
   isSwapSupported(fromChain: Chain, toChain: Chain): boolean
+
+  // Discount Tiers (automatic VULT-based fee discounts)
+  getDiscountTier(): Promise<string | null>
+  updateDiscountTier(): Promise<string | null>
 
   // Chains & Tokens
   setChains(chains: Chain[]): Promise<void>
@@ -2364,6 +2429,12 @@ type ChainDiscoveryResult = {
   hasBalance: boolean
 }
 
+// Aggregate result from discoverChainsFromSeedphrase()
+type ChainDiscoveryAggregate = {
+  results: ChainDiscoveryResult[]
+  usePhantomSolanaPath: boolean  // True if Phantom's Solana derivation path should be used
+}
+
 type CreateFastVaultFromSeedphraseOptions = {
   mnemonic: string
   name: string
@@ -2372,6 +2443,8 @@ type CreateFastVaultFromSeedphraseOptions = {
   chains?: Chain[]
   discoverChains?: boolean
   chainsToScan?: Chain[]
+  /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
+  usePhantomSolanaPath?: boolean
   onProgress?: (step: VaultCreationStep) => void
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
@@ -2384,6 +2457,8 @@ type CreateSecureVaultFromSeedphraseOptions = {
   threshold?: number
   chains?: Chain[]
   discoverChains?: boolean
+  /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
+  usePhantomSolanaPath?: boolean
   onProgress?: (step: VaultCreationStep) => void
   onQRCodeReady?: (qrPayload: string) => void
   onDeviceJoined?: (deviceId: string, total: number, required: number) => void
@@ -2397,6 +2472,8 @@ type JoinSecureVaultOptions = {
   password?: string
   /** Number of devices */
   devices?: number
+  /** Use Phantom wallet derivation path for Solana */
+  usePhantomSolanaPath?: boolean
   /** Cancellation signal */
   signal?: AbortSignal
   /** Progress callback */

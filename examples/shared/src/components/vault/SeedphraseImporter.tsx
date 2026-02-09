@@ -29,6 +29,7 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
   const [mnemonic, setMnemonic] = useState('')
   const [validation, setValidation] = useState<SeedphraseValidation | null>(null)
   const [discoverChains, setDiscoverChains] = useState(false)
+  const [usePhantomSolanaPath, setUsePhantomSolanaPath] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -114,6 +115,7 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
         email: formData.email,
         password: formData.password,
         discoverChains,
+        usePhantomSolanaPath,
       })
 
       setVaultId(result.vaultId)
@@ -188,6 +190,7 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
         devices: formData.deviceCount,
         threshold: Math.ceil((formData.deviceCount + 1) / 2),
         discoverChains,
+        usePhantomSolanaPath,
         onProgress: progress => {
           setKeygenProgress(progress)
           if (progress.phase === 'keygen') {
@@ -226,6 +229,7 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
     setMnemonic('')
     setValidation(null)
     setDiscoverChains(false)
+    setUsePhantomSolanaPath(false)
     setFormData({
       name: '',
       email: '',
@@ -301,6 +305,17 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
         />
         Discover chains with existing balances
+      </label>
+
+      <label className="flex items-center gap-2 text-sm text-gray-700">
+        <input
+          type="checkbox"
+          checked={usePhantomSolanaPath}
+          onChange={e => setUsePhantomSolanaPath(e.target.checked)}
+          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+        />
+        Use Phantom wallet derivation path for Solana
+        <span className="text-gray-400 text-xs">(if your seedphrase was created in Phantom)</span>
       </label>
 
       {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}

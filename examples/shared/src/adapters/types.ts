@@ -7,6 +7,7 @@ import type {
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
   DeviceJoinedData,
+  DiscountTier,
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
@@ -108,6 +109,13 @@ export type ISDKAdapter = {
   getTxExplorerUrl(chain: string, txHash: string): Promise<string>
 
   getChainList(): Promise<string[]>
+
+  // ===== Discount Tier =====
+  /** Get the user's VULT discount tier based on token holdings */
+  getDiscountTier(vaultId: string): Promise<DiscountTier>
+
+  /** Invalidate cache and re-fetch the discount tier */
+  updateDiscountTier(vaultId: string): Promise<DiscountTier>
 
   // ===== Active Vault =====
   getActiveVault(): Promise<VaultInfo | null>
