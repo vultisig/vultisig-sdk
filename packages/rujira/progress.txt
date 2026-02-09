@@ -7,3 +7,14 @@
 - Stories: US-021, US-022, US-023
 
 ---
+
+## US-021: OrderSide Serialization Verification ✅
+- Queried FIN contract on THORChain mainnet
+- Discovered contract uses Side::Base and Side::Quote (not Buy/Sell)
+- Added ContractSide type and mapping functions
+- Updated orderbook.ts to use proper mapping
+- Added orderside-serialization.test.ts with unit + live tests
+- All 12 tests pass (including live verification)
+- Committed: 6a3e494
+
+---

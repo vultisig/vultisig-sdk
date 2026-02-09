@@ -406,15 +406,22 @@ export class RujiraWithdraw {
     }
 
     if (gasAssetOutboundFee === '0') {
+      // Fallback fees captured from THORNode on 2026-02-08
+      // These are only used when THORNode API is unreachable
+      // Values are in base units (8 decimals for most chains)
+      // Run LIVE_TESTS=1 to verify these against current THORNode values
       const defaultGasFees: Record<string, string> = {
-        BTC: '30000',
-        ETH: '9146',
-        BSC: '3000',
-        AVAX: '2291640',
-        GAIA: '11998200',
-        DOGE: '100000000',
-        LTC: '100000',
-        BCH: '10000',
+        BTC: '1572',
+        ETH: '12319',
+        BSC: '40318',
+        AVAX: '2845482',
+        GAIA: '13088900',
+        DOGE: '267956702',
+        LTC: '473869',
+        BCH: '48635',
+        BASE: '12324',
+        TRON: '94966900',
+        XRP: '18038300',
       };
       gasAssetOutboundFee = defaultGasFees[chain] || '0';
       if (gasAssetOutboundFee !== '0') {
