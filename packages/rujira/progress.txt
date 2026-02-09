@@ -18,3 +18,14 @@
 - Committed: 6a3e494
 
 ---
+
+## US-022: ETH Outbound Fee Verification ✅
+- Queried THORNode mainnet /thorchain/inbound_addresses
+- Found ETH fee 12319 vs hardcoded 9146 (35% stale!)
+- Updated ALL chain fees to current values
+- Added missing chains: BASE, TRON, XRP
+- Added outbound-fee.test.ts with unit + live verification
+- All fees now within 0.2% of live values
+- Committed: 3f4f0be
+
+---
