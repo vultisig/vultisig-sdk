@@ -10,6 +10,8 @@ export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
 export type { FiatCurrency } from '@core/config/FiatCurrency'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
+export type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+export { KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
 
 // Import MpcLib for use in VaultData type
