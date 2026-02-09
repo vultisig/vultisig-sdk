@@ -11,17 +11,30 @@ vi.mock('@core/mpc/utils/generateHexEncryptionKey', () => ({
   generateHexEncryptionKey: vi.fn(() => 'a'.repeat(64)),
 }))
 
-vi.mock('@core/mpc/compression/getSevenZip', () => ({
-  getSevenZip: vi.fn(() => ({
-    Compress: {
-      encode: vi.fn(() => new Uint8Array([1, 2, 3, 4])),
-    },
+// Mock getJoinKeysignUrl to return a predictable URL format
+vi.mock('@core/chain/utils/getJoinKeysignUrl', () => ({
+  getJoinKeysignUrl: vi.fn(
+    ({ vaultId, sessionId }) =>
+      `https://vultisig.com?type=SignTransaction&vault=${vaultId}&jsonData=compressed-data&session=${sessionId}`
+  ),
+}))
+
+// Mock SDK crypto module
+vi.mock('../../../src/crypto', () => ({
+  randomUUID: vi.fn(() => `test-uuid-${Math.random().toString(36).slice(2, 8)}`),
+}))
+
+// Mock getChainSigningInfo adapter
+vi.mock('../../../src/adapters/getChainSigningInfo', () => ({
+  getChainSigningInfo: vi.fn(() => ({
+    signatureAlgorithm: 'ecdsa',
+    derivePath: "m/44'/60'/0'/0/0",
+    chainPath: 'm/44/60/0/0/0',
   })),
 }))
 
-vi.mock('@core/chain/utils/protobuf/toCompressedString', () => ({
-  toCompressedString: vi.fn(() => 'compressed-base64-data'),
-}))
+// Mock WalletCore for tests
+const mockWalletCore = {} as any
 
 vi.mock('@core/chain/ChainKind', () => ({
   getChainKind: vi.fn(() => 'evm'),
@@ -106,9 +119,10 @@ describe('RelaySigningService', () => {
         vaultPublicKeyEcdsa: 'mock-public-key',
       })
 
-      expect(payload).toContain('vultisig://')
+      // Uses getJoinKeysignUrl from core which generates https://vultisig.com format
+      expect(payload).toContain('https://vultisig.com')
       expect(payload).toContain('type=SignTransaction')
-      expect(payload).toContain('tssType=Keysign')
+      expect(payload).toContain('vault=')
       expect(payload).toContain('jsonData=')
     })
 
@@ -133,9 +147,9 @@ describe('RelaySigningService', () => {
       })
 
       const url = new URL(payload)
-      expect(url.protocol).toBe('vultisig:')
+      expect(url.protocol).toBe('https:')
       expect(url.searchParams.get('type')).toBe('SignTransaction')
-      expect(url.searchParams.get('tssType')).toBe('Keysign')
+      expect(url.searchParams.get('vault')).toBe('test-ecdsa-key')
       expect(url.searchParams.get('jsonData')).toBeDefined()
     })
   })
@@ -154,9 +168,9 @@ describe('RelaySigningService', () => {
         // messageHashes missing
       }
 
-      await expect(service.signWithRelay(mockVault as any, payloadWithoutHashes as any)).rejects.toThrow(
-        'SigningPayload must include pre-computed messageHashes'
-      )
+      await expect(
+        service.signWithRelay(mockVault as any, payloadWithoutHashes as any, mockWalletCore)
+      ).rejects.toThrow('SigningPayload must include pre-computed messageHashes')
     })
 
     it('should require loaded key shares', async () => {
@@ -172,7 +186,7 @@ describe('RelaySigningService', () => {
         messageHashes: ['hash1'],
       }
 
-      await expect(service.signWithRelay(mockVaultNoKeys as any, payload as any)).rejects.toThrow(
+      await expect(service.signWithRelay(mockVaultNoKeys as any, payload as any, mockWalletCore)).rejects.toThrow(
         'Vault key shares not loaded'
       )
     })
@@ -187,10 +201,14 @@ describe('RelaySigningService', () => {
       }
 
       await expect(
-        service.signBytesWithRelay(mockVaultNoKeys as any, {
-          messageHashes: ['hash1'],
-          chain: 'Ethereum' as any,
-        })
+        service.signBytesWithRelay(
+          mockVaultNoKeys as any,
+          {
+            messageHashes: ['hash1'],
+            chain: 'Ethereum' as any,
+          },
+          mockWalletCore
+        )
       ).rejects.toThrow('Vault key shares not loaded')
     })
   })
@@ -286,7 +304,9 @@ describe('RelaySigningService vs FastSigningService', () => {
         localPartyId: 'test-party',
         vaultPublicKeyEcdsa: 'test-key',
       })
-      expect(qrPayload).toContain('Keysign')
+      // Uses getJoinKeysignUrl which includes vault ID and SignTransaction type
+      expect(qrPayload).toContain('type=SignTransaction')
+      expect(qrPayload).toContain('vault=test-key')
     })
 
     it('should use relay mode for signing', () => {

@@ -103,11 +103,14 @@ export class SecureVault extends VaultBase {
     // Ensure keyShares are loaded (will decrypt if encrypted)
     await this.ensureKeySharesLoaded()
 
+    // Get WalletCore for chain utilities
+    const walletCore = await this.wasmProvider.getWalletCore()
+
     // Create relay signing service
     const relaySigningService = new RelaySigningService()
 
     // Sign using relay service with event emission
-    const signature = await relaySigningService.signWithRelay(this.coreVault, payload, {
+    const signature = await relaySigningService.signWithRelay(this.coreVault, payload, walletCore, {
       signal: options.signal,
       onProgress: (step: SigningStep) => {
         this.emit('signingProgress', { step })
@@ -170,6 +173,9 @@ export class SecureVault extends VaultBase {
       // Ensure keyShares are loaded (will decrypt if encrypted)
       await this.ensureKeySharesLoaded()
 
+      // Get WalletCore for chain utilities
+      const walletCore = await this.wasmProvider.getWalletCore()
+
       // Create relay signing service
       const relaySigningService = new RelaySigningService()
 
@@ -180,6 +186,7 @@ export class SecureVault extends VaultBase {
           messageHashes: [messageHash],
           chain: options.chain,
         },
+        walletCore,
         {
           signal: signingOptions.signal,
           onProgress: (step: SigningStep) => {

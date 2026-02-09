@@ -1,0 +1,43 @@
+name: Sync Skills to Website
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (show changes without pushing)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  sync-skills:
+    name: Sync Skills
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          repository: vultisig/website-prod
+          token: ${{ secrets.DOCS_REPO_PAT }}
+          path: website-repo
+
+      - name: Sync skills directory
+        run: |
+          rm -rf website-repo/public/skills
+          cp -r skills website-repo/public/skills
+          cd website-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/skills/
+          if git diff --staged --quiet; then
+            echo "No changes to sync"
+          else
+            git status
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "Dry run - changes shown above, not pushing"
+            else
+              git commit -m "chore: sync skills from vultisig-sdk"
+              git push
+            fi
+          fi
