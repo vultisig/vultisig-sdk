@@ -12,23 +12,22 @@
  * 4. Execute MPC keysign when threshold reached
  * 5. Return aggregated signature
  */
-import { create, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@core/chain/Chain'
-import { getChainKind } from '@core/chain/ChainKind'
-import { type SignatureAlgorithm, signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
-import { toCompressedString } from '@core/chain/utils/protobuf/toCompressedString'
-import { getSevenZip } from '@core/mpc/compression/getSevenZip'
+import { getJoinKeysignUrl } from '@core/chain/utils/getJoinKeysignUrl'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { keysign } from '@core/mpc/keysign'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
-import { KeysignMessageSchema, KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
 import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
 import { queryUrl } from '@lib/utils/query/queryUrl'
+import type { WalletCore } from '@trustwallet/wallet-core'
 
+import { formatSignature } from '../adapters/formatSignature'
+import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../crypto'
 import type { Signature, SigningMode, SigningPayload, SigningStep } from '../types'
 
@@ -91,48 +90,31 @@ export class RelaySigningService {
 
   /**
    * Generate a QR payload URL for mobile app pairing during keysign
+   *
+   * @param params Session parameters and optional keysign payload
+   * @param params.keysignPayload Full transaction payload (coin, toAddress, toAmount, blockchainSpecific)
+   *                              If provided, mobile app can display transaction details.
+   *                              If omitted (e.g., for signBytes), creates minimal session-only payload.
    */
   async generateQRPayload(params: {
     sessionId: string
     hexEncryptionKey: string
     localPartyId: string
     vaultPublicKeyEcdsa: string
+    keysignPayload?: KeysignPayload
   }): Promise<string> {
-    // Create KeysignPayload with minimal required fields
-    const keysignPayload = create(KeysignPayloadSchema, {
-      vaultPublicKeyEcdsa: params.vaultPublicKeyEcdsa,
-      vaultLocalPartyId: params.localPartyId,
-    })
-
-    // Create KeysignMessage protobuf
-    const keysignMessage = create(KeysignMessageSchema, {
-      sessionId: params.sessionId,
+    // Use core function which handles:
+    // - Full payload serialization with all transaction details
+    // - Automatic upload to server if payload exceeds URL length limit (2048 chars)
+    // - Consistent behavior with vultisig-windows mobile apps
+    return getJoinKeysignUrl({
+      serverType: 'relay',
       serviceName: params.localPartyId,
-      encryptionKeyHex: params.hexEncryptionKey,
-      keysignPayload,
-      useVultisigRelay: true,
-      payloadId: randomUUID(),
+      sessionId: params.sessionId,
+      hexEncryptionKey: params.hexEncryptionKey,
+      payload: params.keysignPayload ? { keysign: params.keysignPayload } : undefined,
+      vaultId: params.vaultPublicKeyEcdsa,
     })
-
-    // Serialize to binary
-    const binary = toBinary(KeysignMessageSchema, keysignMessage)
-
-    // Compress with 7-zip (LZMA)
-    const sevenZip = await getSevenZip()
-    const compressedData = toCompressedString({ sevenZip, binary })
-
-    // Build the QR payload URL
-    const qrPayload = `vultisig://?type=SignTransaction&tssType=Keysign&jsonData=${encodeURIComponent(compressedData)}`
-
-    return qrPayload
-  }
-
-  /**
-   * Get signature algorithm for a chain
-   */
-  private getSignatureAlgorithm(chain: Chain): SignatureAlgorithm {
-    const kind = getChainKind(chain)
-    return signatureAlgorithms[kind]
   }
 
   /**
@@ -210,12 +192,14 @@ export class RelaySigningService {
    *
    * @param vault CoreVault with loaded key shares
    * @param payload SigningPayload with chain and messageHashes
+   * @param walletCore WalletCore instance for chain utilities
    * @param options Signing options including callbacks
    * @returns Signature result
    */
   async signWithRelay(
     vault: CoreVault,
     payload: SigningPayload,
+    walletCore: WalletCore,
     options: RelaySigningOptions = {}
   ): Promise<Signature> {
     const { signal, onProgress, onQRCodeReady, onDeviceJoined, deviceTimeout, pollInterval } = options
@@ -258,11 +242,14 @@ export class RelaySigningService {
       reportProgress('preparing', 10, 'Generating session parameters')
       const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams()
 
-      // Step 3: Get chain signing info
+      // Step 3: Get chain signing info (signature algorithm and derivation path)
       const chain = payload.chain as Chain
-      const signatureAlgorithm = this.getSignatureAlgorithm(chain)
+      const { signatureAlgorithm, chainPath } = getChainSigningInfo(
+        { chain, derivePath: payload.derivePath },
+        walletCore
+      )
 
-      // Step 4: Generate QR payload
+      // Step 4: Generate QR payload with full transaction details
       reportProgress('preparing', 20, 'Generating QR code for device pairing')
 
       const qrPayload = await this.generateQRPayload({
@@ -270,6 +257,7 @@ export class RelaySigningService {
         hexEncryptionKey,
         localPartyId,
         vaultPublicKeyEcdsa: vault.publicKeys.ecdsa,
+        keysignPayload: payload.transaction as KeysignPayload,
       })
 
       if (onQRCodeReady) {
@@ -328,7 +316,7 @@ export class RelaySigningService {
           keyShare,
           signatureAlgorithm,
           message: messageHash,
-          chainPath: '', // Will be derived from chain
+          chainPath,
           localPartyId,
           peers,
           serverUrl: this.relayUrl,
@@ -343,20 +331,14 @@ export class RelaySigningService {
       // Step 10: Format and return signature
       reportProgress('complete', 100, 'Signing complete')
 
-      // Format signature matching SDK Signature type
-      const formattedSignature: Signature = {
-        signature: signatures[0]?.der_signature || '',
-        recovery: signatures[0]?.recovery_id ? parseInt(signatures[0].recovery_id) : undefined,
-        format: signatureAlgorithm === 'ecdsa' ? 'ECDSA' : 'EdDSA',
-        signatures:
-          signatures.length > 1
-            ? signatures.map(sig => ({
-                r: sig.r,
-                s: sig.s,
-                der: sig.der_signature,
-              }))
-            : undefined,
+      // Build signature results map for formatSignature adapter
+      const signatureResults: Record<string, KeysignSignature> = {}
+      for (let i = 0; i < payload.messageHashes.length; i++) {
+        signatureResults[payload.messageHashes[i]] = signatures[i]
       }
+
+      // Use formatSignature adapter for correct ECDSA/EdDSA handling
+      const formattedSignature = formatSignature(signatureResults, payload.messageHashes, signatureAlgorithm)
 
       return formattedSignature
     } catch (error) {
@@ -370,6 +352,7 @@ export class RelaySigningService {
    *
    * @param vault CoreVault with loaded key shares
    * @param bytesOptions Options containing messageHashes and chain
+   * @param walletCore WalletCore instance for chain utilities
    * @param options Signing options including callbacks
    * @returns Signature result
    */
@@ -379,6 +362,7 @@ export class RelaySigningService {
       messageHashes: string[]
       chain: Chain
     },
+    walletCore: WalletCore,
     options: RelaySigningOptions = {}
   ): Promise<Signature> {
     const { signal, onProgress, onQRCodeReady, onDeviceJoined, deviceTimeout, pollInterval } = options
@@ -413,8 +397,8 @@ export class RelaySigningService {
       reportProgress('preparing', 10, 'Generating session parameters')
       const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams()
 
-      // Determine signature algorithm
-      const signatureAlgorithm = this.getSignatureAlgorithm(bytesOptions.chain)
+      // Determine signature algorithm and derivation path
+      const { signatureAlgorithm, chainPath } = getChainSigningInfo({ chain: bytesOptions.chain }, walletCore)
 
       // Generate QR payload
       reportProgress('preparing', 20, 'Generating QR code for device pairing')
@@ -476,7 +460,7 @@ export class RelaySigningService {
           keyShare,
           signatureAlgorithm,
           message: messageHash,
-          chainPath: '',
+          chainPath,
           localPartyId,
           peers,
           serverUrl: this.relayUrl,
@@ -490,20 +474,14 @@ export class RelaySigningService {
 
       reportProgress('complete', 100, 'Signing complete')
 
-      // Format signature
-      const formattedSignature: Signature = {
-        signature: signatures[0]?.der_signature || '',
-        recovery: signatures[0]?.recovery_id ? parseInt(signatures[0].recovery_id) : undefined,
-        format: signatureAlgorithm === 'ecdsa' ? 'ECDSA' : 'EdDSA',
-        signatures:
-          signatures.length > 1
-            ? signatures.map(sig => ({
-                r: sig.r,
-                s: sig.s,
-                der: sig.der_signature,
-              }))
-            : undefined,
+      // Build signature results map for formatSignature adapter
+      const signatureResults: Record<string, KeysignSignature> = {}
+      for (let i = 0; i < bytesOptions.messageHashes.length; i++) {
+        signatureResults[bytesOptions.messageHashes[i]] = signatures[i]
       }
+
+      // Use formatSignature adapter for correct ECDSA/EdDSA handling
+      const formattedSignature = formatSignature(signatureResults, bytesOptions.messageHashes, signatureAlgorithm)
 
       return formattedSignature
     } catch (error) {

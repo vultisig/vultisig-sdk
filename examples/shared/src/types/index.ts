@@ -41,6 +41,7 @@ export type CreateFastVaultFromSeedphraseOptions = {
   email: string
   discoverChains?: boolean
   chains?: string[]
+  usePhantomSolanaPath?: boolean
   onProgress?: (step: ProgressStep) => void
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
@@ -54,6 +55,7 @@ export type CreateSecureVaultFromSeedphraseOptions = {
   threshold?: number
   discoverChains?: boolean
   chains?: string[]
+  usePhantomSolanaPath?: boolean
   onProgress?: (step: ProgressStep) => void
   onQRCodeReady?: (qrPayload: string) => void
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
@@ -224,6 +226,9 @@ export type BalanceResult = {
 
 // Fiat currency type
 export type FiatCurrency = 'usd' | 'eur' | 'gbp' | 'jpy' | 'cny' | 'aud' | 'cad' | 'chf' | 'sgd' | 'sek'
+
+// Discount tier type (based on VULT token + Thorguard NFT holdings)
+export type DiscountTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'ultimate' | null
 
 // Value result (for portfolio)
 export type ValueResult = {

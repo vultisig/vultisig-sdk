@@ -96,6 +96,16 @@ export type ChainDiscoveryResult = {
 }
 
 /**
+ * Aggregate result from chain discovery including Phantom Solana path detection
+ */
+export type ChainDiscoveryAggregate = {
+  /** Discovery results for each chain */
+  results: ChainDiscoveryResult[]
+  /** Whether Phantom derivation path should be used for Solana (has balance on Phantom path, none on standard) */
+  usePhantomSolanaPath: boolean
+}
+
+/**
  * Options for creating a FastVault from a seedphrase (2-of-2 with VultiServer)
  */
 export type CreateFastVaultFromSeedphraseOptions = {
@@ -119,6 +129,8 @@ export type CreateFastVaultFromSeedphraseOptions = {
   onProgress?: (step: VaultCreationStep) => void
   /** Progress callback for chain discovery */
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+  /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
+  usePhantomSolanaPath?: boolean
 }
 
 /**
@@ -151,6 +163,8 @@ export type CreateSecureVaultFromSeedphraseOptions = {
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   /** Progress callback for chain discovery */
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
+  /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
+  usePhantomSolanaPath?: boolean
 }
 
 /**
@@ -173,6 +187,8 @@ export type JoinSecureVaultOptions = {
   onProgress?: (step: VaultCreationStep) => void
   /** Callback when a device joins the session */
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+  /** Use Phantom wallet derivation path for Solana (must match initiator's setting) */
+  usePhantomSolanaPath?: boolean
 }
 
 /**

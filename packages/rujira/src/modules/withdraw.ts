@@ -1,6 +1,5 @@
 import type { Coin } from '@cosmjs/proto-signing';
 import { findAssetByFormat } from '@vultisig/assets';
-import type { Asset } from '@vultisig/assets';
 
 import type { RujiraClient } from '../client.js';
 import { CHAIN_PROCESSING_TIMES } from '../config.js';
@@ -14,17 +13,7 @@ import { isWithdrawCapable } from '../signer/types.js';
 import { validateL1Address } from '../validation/address-validator.js';
 import { buildSecureRedeemMemo } from '../utils/memo.js';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
-
-function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
-  if (!obj || typeof obj !== 'object') return false;
-  const asset = obj as Partial<Asset>;
-  return (
-    typeof asset.formats === 'object' &&
-    asset.formats !== null &&
-    typeof asset.formats.fin === 'string' &&
-    asset.formats.fin.length > 0
-  );
-}
+import { isFinAsset, parseAsset } from '../utils/type-guards.js';
 
 export interface WithdrawParams {
   asset: string;
@@ -85,7 +74,7 @@ export class RujiraWithdraw {
   async prepare(params: WithdrawParams): Promise<PreparedWithdraw> {
     this.validateWithdrawParams(params);
 
-    const { chain } = this.parseAsset(params.asset);
+    const { chain } = parseAsset(params.asset);
 
     const assetData = findAssetByFormat(params.asset);
     if (!isFinAsset(assetData)) {
@@ -96,7 +85,7 @@ export class RujiraWithdraw {
 
     validateL1Address(chain, params.l1Address);
 
-    const memo = this.buildWithdrawMemo(params.asset, params.l1Address);
+    const memo = this.buildWithdrawMemo(params.l1Address);
 
     const fee = await this.estimateWithdrawFee(params.asset, params.amount);
 
@@ -251,7 +240,7 @@ export class RujiraWithdraw {
     return DEFAULT_THORCHAIN_FEE;
   }
 
-  buildWithdrawMemo(_asset: string, l1Address: string): string {
+  buildWithdrawMemo(l1Address: string): string {
     return buildSecureRedeemMemo(l1Address);
   }
 
@@ -264,7 +253,7 @@ export class RujiraWithdraw {
   }
 
   async getMinimumWithdraw(asset: string): Promise<string> {
-    const { chain } = this.parseAsset(asset);
+    const { chain } = parseAsset(asset);
 
     try {
       const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
@@ -294,7 +283,7 @@ export class RujiraWithdraw {
   }
 
   async canWithdraw(asset: string): Promise<{ possible: boolean; reason?: string }> {
-    const { chain } = this.parseAsset(asset);
+    const { chain } = parseAsset(asset);
 
     try {
       const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);

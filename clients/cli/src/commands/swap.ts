@@ -75,12 +75,16 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
   // Get native token for fee display (fees are paid in native token)
   const feeBalance = await vault.balance(options.fromChain)
 
+  // Get discount tier for display
+  const discountTier = await vault.getDiscountTier()
+
   // Use coin info from quote for accurate decimals and symbols
   displaySwapPreview(quote, String(options.amount), quote.fromCoin.ticker, quote.toCoin.ticker, {
     fromDecimals: quote.fromCoin.decimals,
     toDecimals: quote.toCoin.decimals,
     feeDecimals: feeBalance.decimals,
     feeSymbol: feeBalance.symbol,
+    discountTier,
   })
 
   info('\nTo execute this swap, use the "swap" command')
@@ -129,6 +133,9 @@ export async function executeSwap(
   // Get native token for fee display (fees are paid in native token)
   const feeBalance = await vault.balance(options.fromChain)
 
+  // Get discount tier for display
+  const discountTier = await vault.getDiscountTier()
+
   // 2. Display preview using coin info from quote for accurate decimals (skip in JSON mode)
   if (!isJsonOutput()) {
     displaySwapPreview(quote, String(options.amount), quote.fromCoin.ticker, quote.toCoin.ticker, {
@@ -136,6 +143,7 @@ export async function executeSwap(
       toDecimals: quote.toCoin.decimals,
       feeDecimals: feeBalance.decimals,
       feeSymbol: feeBalance.symbol,
+      discountTier,
     })
   }
 

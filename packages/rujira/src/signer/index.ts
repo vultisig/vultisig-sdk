@@ -1,6 +1,5 @@
 export {
   VultisigRujiraProvider,
-  createMockSigner,
   isVultisigVault,
 } from './vultisig-provider.js';
 
