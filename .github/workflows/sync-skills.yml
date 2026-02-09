@@ -1,6 +1,7 @@
 name: Sync Skills to Website
 
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       dry_run:
