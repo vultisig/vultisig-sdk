@@ -19,6 +19,7 @@ await build({
   },
   external: [
     '@vultisig/sdk',
+    '@vultisig/rujira',
     'dotenv',
     'chalk',
     'commander',
