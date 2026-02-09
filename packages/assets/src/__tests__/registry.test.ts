@@ -289,10 +289,10 @@ describe('Asset Registry', () => {
       expect(KNOWN_ASSETS.avax.decimals.native).toBe(18);
       expect(KNOWN_ASSETS.base_eth.decimals.native).toBe(18);
       
-      // Stablecoins: 6 decimals
+      // Stablecoins: native decimals vary by token
       expect(KNOWN_ASSETS.usdc_eth.decimals.native).toBe(6);
       expect(KNOWN_ASSETS.usdt_eth.decimals.native).toBe(6);
-      expect(KNOWN_ASSETS.dai.decimals.native).toBe(6);
+      expect(KNOWN_ASSETS.dai.decimals.native).toBe(18);
       
       // Other specific assets
       expect(KNOWN_ASSETS.atom.decimals.native).toBe(6);

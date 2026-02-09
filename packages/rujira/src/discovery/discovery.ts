@@ -1,6 +1,7 @@
 import { GraphQLClient, type GraphQLClientOptions } from './graphql-client.js';
 import type { DiscoveredContracts, Market } from './types.js';
 import { MAINNET_CONFIG } from '../config.js';
+import { DEFAULT_TAKER_FEE, DEFAULT_MAKER_FEE } from '../config/constants.js';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
 
 export interface DiscoveryOptions {
@@ -136,8 +137,8 @@ export class RujiraDiscovery {
           baseDenom: '',
           quoteDenom: '',
           tick: '0',
-          takerFee: '0.0015',
-          makerFee: '0.00075',
+          takerFee: DEFAULT_TAKER_FEE,
+          makerFee: DEFAULT_MAKER_FEE,
           active: true,
         };
       }
@@ -304,8 +305,8 @@ export class RujiraDiscovery {
       baseDenom,
       quoteDenom,
       tick: market.config?.tick || '0',
-      takerFee: market.config?.fee_taker || '0.0015',
-      makerFee: market.config?.fee_maker || '0.00075',
+      takerFee: market.config?.fee_taker || DEFAULT_TAKER_FEE,
+      makerFee: market.config?.fee_maker || DEFAULT_MAKER_FEE,
       active: true,
     };
   }

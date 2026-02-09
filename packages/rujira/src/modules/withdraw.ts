@@ -3,10 +3,15 @@ import { findAssetByFormat } from '@vultisig/assets';
 import type { Asset } from '@vultisig/assets';
 
 import type { RujiraClient } from '../client.js';
-import { THORCHAIN_TO_SDK_CHAIN } from '../config.js';
+import { CHAIN_PROCESSING_TIMES } from '../config.js';
+import { DEFAULT_THORCHAIN_FEE } from '../config/constants.js';
+import { parseAsset as sharedParseAsset } from '../utils/denom-conversion.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
-import type { KeysignPayload, VultisigVault, WithdrawCapableVault } from '../signer/types.js';
+import { estimateWithdrawFee } from '../services/fee-estimator.js';
+import { buildWithdrawalKeysignPayload } from '../signer/keysign-builder.js';
+import type { VultisigVault, WithdrawCapableVault } from '../signer/types.js';
 import { isWithdrawCapable } from '../signer/types.js';
+import { validateL1Address } from '../validation/address-validator.js';
 import { buildSecureRedeemMemo } from '../utils/memo.js';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
 
@@ -47,21 +52,6 @@ export interface WithdrawResult {
   destination: string;
   status: 'pending' | 'success' | 'failed';
 }
-
-const CHAIN_WITHDRAWAL_TIMES: Record<string, number> = {
-  BTC: 30,
-  ETH: 5,
-  BSC: 2,
-  AVAX: 1,
-  GAIA: 2,
-  DOGE: 20,
-  LTC: 15,
-  BCH: 20,
-  THOR: 0,
-};
-
-const DEFAULT_THORCHAIN_FEE = 2000000n;
-const THORCHAIN_DECIMALS = 8;
 
 function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault } {
   return (
@@ -104,31 +94,25 @@ export class RujiraWithdraw {
 
     const denom = assetData.formats.fin;
 
-    this.validateL1Address(chain, params.l1Address);
+    validateL1Address(chain, params.l1Address);
 
     const memo = this.buildWithdrawMemo(params.asset, params.l1Address);
 
-    const estimatedFee = await this.estimateWithdrawFee(params.asset, params.amount);
+    const fee = await this.estimateWithdrawFee(params.asset, params.amount);
 
     try {
-      if (BigInt(params.amount) <= BigInt(estimatedFee)) {
+      if (BigInt(params.amount) <= BigInt(fee)) {
         throw new RujiraError(
           RujiraErrorCode.INVALID_AMOUNT,
-          `Withdrawal amount (${params.amount}) is too small to cover estimated outbound fee (${estimatedFee}) for ${params.asset}. ` +
+          `Withdrawal amount (${params.amount}) is too small to cover estimated outbound fee (${fee}) for ${params.asset}. ` +
             'Try a larger amount or wait for lower gas.'
         );
       }
     } catch (error) {
       if (error instanceof RujiraError) throw error;
-      // Ignore BigInt parse issues for non-numeric fee estimates; THORChain validates on-chain
     }
 
-    const funds: Coin[] = [
-      {
-        denom,
-        amount: params.amount,
-      },
-    ];
+    const funds: Coin[] = [{ denom, amount: params.amount }];
 
     return {
       chain,
@@ -137,7 +121,7 @@ export class RujiraWithdraw {
       amount: params.amount,
       destination: params.l1Address,
       memo,
-      estimatedFee,
+      estimatedFee: fee,
       estimatedTimeMinutes: this.estimateWithdrawTime(chain),
       funds,
     };
@@ -180,7 +164,7 @@ export class RujiraWithdraw {
         this.getNetworkFee(),
       ]);
 
-      const keysignPayload = await this.buildWithdrawalKeysignPayload({
+      const keysignPayload = await buildWithdrawalKeysignPayload({
         vault,
         senderAddress,
         prepared,
@@ -223,118 +207,6 @@ export class RujiraWithdraw {
     }
   }
 
-  private async buildWithdrawalKeysignPayload(params: {
-    vault: VultisigVault;
-    senderAddress: string;
-    prepared: PreparedWithdraw;
-    accountInfo: { accountNumber: string; sequence: string };
-    fee: bigint;
-  }): Promise<KeysignPayload> {
-    const { vault, senderAddress, prepared, accountInfo, fee } = params;
-
-    const { chain: thorchainChainId, symbol: fullSymbol } = this.parseAsset(prepared.asset);
-    const ticker = fullSymbol.split('-')[0] || fullSymbol;
-
-    const l1Chain = THORCHAIN_TO_SDK_CHAIN[thorchainChainId] || thorchainChainId;
-
-    const basePayload = await vault.prepareSignDirectTx(
-      {
-        chain: 'THORChain',
-        coin: {
-          chain: 'THORChain',
-          address: senderAddress,
-          decimals: THORCHAIN_DECIMALS,
-          ticker: 'RUNE',
-        },
-        bodyBytes: Buffer.from('dummy').toString('base64'),
-        authInfoBytes: Buffer.from('dummy').toString('base64'),
-        chainId: 'thorchain-1',
-        accountNumber: accountInfo.accountNumber,
-        memo: prepared.memo,
-      },
-      { skipChainSpecificFetch: true }
-    );
-
-    const derivedPublicKey = basePayload.coin?.hexPublicKey || vault.publicKeys.ecdsa;
-
-    const contractAddress = fullSymbol.includes('-')
-      ? fullSymbol.split('-')[1]?.toUpperCase() || ''
-      : '';
-
-    const keysignPayload: KeysignPayload = {
-      coin: {
-        chain: 'THORChain',
-        ticker: 'RUNE',
-        address: senderAddress,
-        contractAddress: '',
-        decimals: THORCHAIN_DECIMALS,
-        priceProviderId: '',
-        isNativeToken: true,
-        hexPublicKey: derivedPublicKey,
-        logo: '',
-      },
-      toAddress: '',
-      toAmount: prepared.amount,
-      blockchainSpecific: {
-        case: 'thorchainSpecific',
-        value: {
-          accountNumber: BigInt(accountInfo.accountNumber),
-          sequence: BigInt(accountInfo.sequence),
-          fee: fee,
-          isDeposit: true,
-          transactionType: 0,
-        },
-      },
-      memo: prepared.memo,
-      vaultPublicKeyEcdsa: vault.publicKeys.ecdsa,
-      vaultLocalPartyId: basePayload.vaultLocalPartyId || '',
-      libType: basePayload.libType || 'GG20',
-      utxoInfo: [],
-      swapPayload: {
-        case: 'thorchainSwapPayload',
-        value: {
-          fromAddress: senderAddress,
-          fromCoin: {
-            chain: l1Chain,
-            ticker: ticker,
-            contractAddress: contractAddress,
-            decimals: THORCHAIN_DECIMALS,
-            address: '',
-            priceProviderId: '',
-            isNativeToken: fullSymbol === ticker,
-            hexPublicKey: '',
-            logo: '',
-          },
-          toCoin: {
-            chain: l1Chain,
-            ticker: ticker,
-            contractAddress: contractAddress,
-            decimals: THORCHAIN_DECIMALS,
-            address: prepared.destination,
-            priceProviderId: '',
-            isNativeToken: false,
-            hexPublicKey: '',
-            logo: '',
-          },
-          vaultAddress: '',
-          routerAddress: '',
-          fromAmount: prepared.amount,
-          toAmountDecimal: '0',
-          toAmountLimit: '0',
-          streamingInterval: '0',
-          streamingQuantity: '0',
-          expirationTime: BigInt(0),
-          isAffiliate: false,
-          fee: '0',
-        },
-      },
-      contractPayload: { case: undefined, value: undefined },
-      signData: { case: undefined, value: undefined },
-    };
-
-    return keysignPayload;
-  }
-
   private async getAccountInfo(address: string): Promise<{ accountNumber: string; sequence: string }> {
     try {
       const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/auth/accounts/${address}`);
@@ -344,7 +216,6 @@ export class RujiraWithdraw {
       }
 
       const data = (await response.json()) as AccountInfo;
-
       const accountData = data.result?.value || data.account;
 
       if (!accountData) {
@@ -385,98 +256,11 @@ export class RujiraWithdraw {
   }
 
   estimateWithdrawTime(chain: string): number {
-    return CHAIN_WITHDRAWAL_TIMES[chain.toUpperCase()] || 15;
+    return CHAIN_PROCESSING_TIMES[chain.toUpperCase()] || 15;
   }
 
-  async estimateWithdrawFee(asset: string, _amount: string): Promise<string> {
-    const { chain } = this.parseAsset(asset);
-
-    let gasAssetOutboundFee = '0';
-    try {
-      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
-      if (response.ok) {
-        const addresses = (await response.json()) as Array<{ chain: string; outbound_fee: string }>;
-        const chainInfo = addresses.find((a) => a.chain === chain);
-        if (chainInfo?.outbound_fee) {
-          gasAssetOutboundFee = chainInfo.outbound_fee;
-        }
-      }
-    } catch {
-      // ignore and fall back below
-    }
-
-    if (gasAssetOutboundFee === '0') {
-      // Fallback fees captured from THORNode on 2026-02-08
-      // These are only used when THORNode API is unreachable
-      // Values are in base units (8 decimals for most chains)
-      // Run LIVE_TESTS=1 to verify these against current THORNode values
-      const defaultGasFees: Record<string, string> = {
-        BTC: '1572',
-        ETH: '12319',
-        BSC: '40318',
-        AVAX: '2845482',
-        GAIA: '13088900',
-        DOGE: '267956702',
-        LTC: '473869',
-        BCH: '48635',
-        BASE: '12324',
-        TRON: '94966900',
-        XRP: '18038300',
-      };
-      gasAssetOutboundFee = defaultGasFees[chain] || '0';
-      if (gasAssetOutboundFee !== '0') {
-        console.warn(
-          `[RujiraWithdraw] Using hardcoded fallback gas fee for ${chain}: ${gasAssetOutboundFee}. ` +
-            'THORNode inbound_addresses endpoint may be unreachable. Fee estimate may be stale.'
-        );
-      }
-    }
-
-    if (asset.toUpperCase() === `${chain}.${chain}`) {
-      return gasAssetOutboundFee;
-    }
-
-    try {
-      const gasPoolAsset = `${chain}.${chain}`;
-
-      const [gasPoolResp, targetPoolResp] = await Promise.all([
-        thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/pool/${gasPoolAsset}`),
-        thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/pool/${asset.toUpperCase()}`),
-      ]);
-
-      if (!gasPoolResp.ok || !targetPoolResp.ok) {
-        return gasAssetOutboundFee;
-      }
-
-      const gasPool = (await gasPoolResp.json()) as { balance_asset: string; balance_rune: string };
-      const targetPool = (await targetPoolResp.json()) as {
-        balance_asset: string;
-        balance_rune: string;
-      };
-
-      const gasFee = BigInt(gasAssetOutboundFee);
-      const gasBalAsset = BigInt(gasPool.balance_asset);
-      const gasBalRune = BigInt(gasPool.balance_rune);
-      const tgtBalAsset = BigInt(targetPool.balance_asset);
-      const tgtBalRune = BigInt(targetPool.balance_rune);
-
-      if (
-        gasFee === 0n ||
-        gasBalAsset === 0n ||
-        gasBalRune === 0n ||
-        tgtBalAsset === 0n ||
-        tgtBalRune === 0n
-      ) {
-        return gasAssetOutboundFee;
-      }
-
-      const runeFee = (gasFee * gasBalRune) / gasBalAsset;
-      const assetFee = (runeFee * tgtBalAsset) / tgtBalRune;
-
-      return assetFee.toString();
-    } catch {
-      return gasAssetOutboundFee;
-    }
+  async estimateWithdrawFee(asset: string, amount: string): Promise<string> {
+    return estimateWithdrawFee(this.thornodeUrl, asset, amount);
   }
 
   async getMinimumWithdraw(asset: string): Promise<string> {
@@ -569,67 +353,8 @@ export class RujiraWithdraw {
     }
   }
 
-  private validateL1Address(chain: string, address: string): void {
-    if (!address || address.trim().length === 0) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_ADDRESS,
-        `${chain} address is required`
-      );
-    }
-
-    const evmValidator = (addr: string) => /^0x[a-fA-F0-9]{40}$/.test(addr);
-
-    const validators: Record<string, (addr: string) => boolean> = {
-      BTC: (addr) =>
-        /^(1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr) ||
-        /^bc1[a-z0-9]{39,87}$/.test(addr),
-      ETH: evmValidator,
-      BSC: evmValidator,
-      AVAX: evmValidator,
-      BASE: evmValidator,
-      ARB: evmValidator,
-      GAIA: (addr) => /^cosmos1[a-z0-9]{38}$/.test(addr),
-      NOBLE: (addr) => /^noble1[a-z0-9]{38}$/.test(addr),
-      DOGE: (addr) => /^D[a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr),
-      DASH: (addr) => /^[X7][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr),
-      LTC: (addr) =>
-        /^[LM3][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr) ||
-        /^ltc1[a-z0-9]{39,87}$/.test(addr),
-      BCH: (addr) =>
-        /^(1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(addr) ||
-        /^bitcoincash:[qp][a-z0-9]{41}$/.test(addr) ||
-        /^[qp][a-z0-9]{41}$/.test(addr),
-      XRP: (addr) => /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(addr),
-      TRON: (addr) => /^T[a-zA-Z0-9]{33}$/.test(addr),
-      ZEC: (addr) =>
-        /^t1[a-km-zA-HJ-NP-Z1-9]{33}$/.test(addr) ||
-        /^t3[a-km-zA-HJ-NP-Z1-9]{33}$/.test(addr),
-    };
-
-    const validator = validators[chain.toUpperCase()];
-    if (validator) {
-      if (!validator(address)) {
-        throw new RujiraError(
-          RujiraErrorCode.INVALID_ADDRESS,
-          `Invalid ${chain} address: ${address}`
-        );
-      }
-    } else {
-      // Fallback: non-empty, reasonable length
-      if (address.length < 10 || address.length > 128) {
-        throw new RujiraError(
-          RujiraErrorCode.INVALID_ADDRESS,
-          `Invalid ${chain} address: expected 10-128 characters, got ${address.length}`
-        );
-      }
-    }
-  }
-
   private parseAsset(asset: string): { chain: string; symbol: string } {
-    const parts = asset.split('.');
-    return {
-      chain: parts[0]?.toUpperCase() || '',
-      symbol: parts.slice(1).join('.') || '',
-    };
+    const parsed = sharedParseAsset(asset);
+    return { chain: parsed.chain, symbol: parsed.symbol };
   }
 }

@@ -49,6 +49,7 @@
  */
 
 import { KNOWN_ASSETS, type Asset } from '@vultisig/assets';
+import { denomToTicker } from './utils/denom-conversion.js';
 
 // Helper to safely get asset format (throws if asset not found)
 function getFinFormat(assetId: string): string {
@@ -388,23 +389,3 @@ export function getRoutesSummary(): string {
   return lines.join('\n');
 }
 
-/**
- * Convert denom to short ticker for display
- * Uses @vultisig/assets registry for accurate ticker lookup
- */
-function denomToTicker(denom: string): string {
-  // Try to find the asset by FIN format
-  for (const asset of Object.values(KNOWN_ASSETS) as Asset[]) {
-    if (asset.formats.fin === denom) {
-      return asset.name.split(' ')[0].toUpperCase(); // Get first word of name
-    }
-  }
-  
-  // Fallback to parsing denom format
-  const parts = denom.split('-');
-  if (parts.length >= 2) {
-    return parts[1].toUpperCase().split('-')[0];
-  }
-  
-  return denom.toUpperCase();
-}

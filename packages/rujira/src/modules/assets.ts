@@ -6,6 +6,8 @@
 import type { RujiraClient } from '../client.js';
 import { KNOWN_ASSETS, findAssetByFormat, type Asset } from '@vultisig/assets';
 import type { RujiraAsset, TradingPair } from '../types.js';
+import { DEFAULT_TAKER_FEE, DEFAULT_MAKER_FEE } from '../config/constants.js';
+import { parseAsset as sharedParseAsset } from '../utils/denom-conversion.js';
 
 /**
  * Type guard to check if an object is a valid Asset with FIN format
@@ -51,7 +53,7 @@ export class RujiraAssets {
         asset: asset.formats.thorchain,
         chain: asset.chain,
         symbol: asset.formats.l1,
-        ticker: asset.name.split(' ')[0].toUpperCase(),
+        ticker: asset.id.toUpperCase(),
         decimals: asset.decimals.fin,
         type: this.getAssetType(asset.formats.thorchain),
         denom: asset.formats.fin,
@@ -72,7 +74,7 @@ export class RujiraAssets {
       asset: asset.formats.thorchain,
       chain: asset.chain,
       symbol: asset.formats.l1,
-      ticker: asset.name.split(' ')[0].toUpperCase(),
+      ticker: asset.id.toUpperCase(),
       decimals: asset.decimals.fin,
       type: this.getAssetType(asset.formats.thorchain),
       denom: asset.formats.fin,
@@ -94,8 +96,8 @@ export class RujiraAssets {
         quote,
         contractAddress: address,
         tick: '0.0001', // Would come from contract config
-        takerFee: '0.0015',
-        makerFee: '0.00075',
+        takerFee: DEFAULT_TAKER_FEE,
+        makerFee: DEFAULT_MAKER_FEE,
       });
     }
 
@@ -135,19 +137,7 @@ export class RujiraAssets {
     ticker: string;
     contractAddress?: string;
   } {
-    const parts = asset.split('.');
-    const chain = parts[0] || '';
-    const rest = parts[1] || '';
-    const symbolParts = rest.split('-');
-    const ticker = symbolParts[0] || '';
-    const contractAddress = symbolParts[1];
-    
-    return {
-      chain,
-      symbol: rest,
-      ticker,
-      contractAddress: contractAddress ? `0x${contractAddress}` : undefined,
-    };
+    return sharedParseAsset(asset);
   }
 
   /**

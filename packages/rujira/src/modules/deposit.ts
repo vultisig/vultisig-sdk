@@ -4,8 +4,11 @@
  */
 
 import type { RujiraClient } from '../client.js';
+import { CHAIN_PROCESSING_TIMES } from '../config.js';
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors.js';
 import { findAssetByFormat } from '@vultisig/assets';
+import { denomToAsset as sharedDenomToAsset, extractSymbol as sharedExtractSymbol, parseAsset as sharedParseAsset } from '../utils/denom-conversion.js';
+import { fromBaseUnits } from '../utils/format.js';
 import type { Asset } from '@vultisig/assets';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
 import { buildSecureMintMemo, validateMemoComponent } from '../utils/memo.js';
@@ -107,22 +110,6 @@ export interface SecuredBalance {
   symbol: string;
 }
 
-// CONSTANTS
-
-/** Supported chains and their estimated confirmation times in minutes */
-const CHAIN_CONFIRMATION_TIMES: Record<string, number> = {
-  BTC: 30,    // ~3 confirmations
-  ETH: 5,     // ~12 confirmations
-  BSC: 2,     // Fast finality
-  AVAX: 1,    // Sub-second finality
-  GAIA: 2,    // Cosmos ~6 seconds
-  DOGE: 20,   // ~3 confirmations
-  LTC: 15,    // ~3 confirmations
-  BCH: 20,    // ~3 confirmations
-  THOR: 0,    // Native, instant
-};
-
-
 // MODULE
 
 /**
@@ -165,7 +152,7 @@ export class RujiraDeposit {
     this.validateDepositParams(params);
 
     // Parse asset to get chain
-    const { chain, symbol } = this.parseAsset(params.fromAsset);
+    const { chain, symbol } = sharedParseAsset(params.fromAsset);
 
     // Get inbound address for the chain
     const inbound = await this.getInboundAddress(chain);
@@ -231,12 +218,12 @@ export class RujiraDeposit {
 
       for (const balance of data.balances || []) {
         // Map denom back to asset (best effort)
-        const asset = this.denomToAsset(balance.denom);
+        const asset = sharedDenomToAsset(balance.denom);
         
         // THORChain secured assets always use 8 decimals for storage
         const decimals = 8;
-        const formatted = this.formatAmount(balance.amount, decimals);
-        const symbol = this.extractSymbol(asset || balance.denom);
+        const formatted = fromBaseUnits(balance.amount, decimals);
+        const symbol = sharedExtractSymbol(asset || balance.denom);
         
         balances.push({
           denom: balance.denom,
@@ -335,28 +322,28 @@ export class RujiraDeposit {
    * Estimate deposit confirmation time in minutes
    */
   estimateDepositTime(chain: string): number {
-    return CHAIN_CONFIRMATION_TIMES[chain.toUpperCase()] || 15;
+    return CHAIN_PROCESSING_TIMES[chain.toUpperCase()] || 15;
   }
 
   /**
    * Get supported chains for deposits
    */
   getSupportedChains(): string[] {
-    return Object.keys(CHAIN_CONFIRMATION_TIMES);
+    return Object.keys(CHAIN_PROCESSING_TIMES);
   }
 
   /**
    * Check if a chain is supported
    */
   isChainSupported(chain: string): boolean {
-    return chain.toUpperCase() in CHAIN_CONFIRMATION_TIMES;
+    return chain.toUpperCase() in CHAIN_PROCESSING_TIMES;
   }
 
   /**
    * Check if an asset can be deposited
    */
   canDeposit(asset: string): boolean {
-    const { chain } = this.parseAsset(asset);
+    const { chain } = sharedParseAsset(asset);
     return this.isChainSupported(chain);
   }
 
@@ -371,7 +358,7 @@ export class RujiraDeposit {
       );
     }
 
-    const { chain } = this.parseAsset(params.fromAsset);
+    const { chain } = sharedParseAsset(params.fromAsset);
     if (!this.isChainSupported(chain)) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
@@ -424,82 +411,4 @@ export class RujiraDeposit {
     }
   }
 
-  private parseAsset(asset: string): { chain: string; symbol: string } {
-    const parts = asset.split('.');
-    return {
-      chain: parts[0]?.toUpperCase() || '',
-      symbol: parts.slice(1).join('.') || '',
-    };
-  }
-
-  private denomToAsset(denom: string): string | null {
-    // Look up in known assets using FIN format
-    const asset = findAssetByFormat(denom);
-    if (asset) {
-      return asset.formats.thorchain;
-    }
-
-    // Try to reverse-engineer: btc-btc -> BTC.BTC
-    if (denom.includes('-')) {
-      const parts = denom.split('-');
-      if (parts.length >= 2) {
-        const chain = parts[0]!.toUpperCase();
-        const symbol = parts.slice(1).join('-').toUpperCase();
-        return `${chain}.${symbol}`;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Format raw amount with decimals
-   * @param amount Raw amount string
-   * @param decimals Number of decimal places
-   * @returns Formatted string (e.g., "11.93")
-   */
-  private formatAmount(amount: string, decimals: number): string {
-    const raw = BigInt(amount);
-    const divisor = BigInt(10 ** decimals);
-    const whole = raw / divisor;
-    const remainder = raw % divisor;
-    
-    if (remainder === 0n) {
-      return whole.toString();
-    }
-    
-    // Pad remainder with leading zeros if needed
-    const remainderStr = remainder.toString().padStart(decimals, '0');
-    // Trim trailing zeros
-    const trimmed = remainderStr.replace(/0+$/, '');
-    
-    return `${whole}.${trimmed}`;
-  }
-
-  /**
-   * Extract display symbol from asset or denom
-   * @param assetOrDenom Asset string (e.g., "ETH.USDC-0X...") or denom
-   * @returns Symbol (e.g., "USDC")
-   */
-  private extractSymbol(assetOrDenom: string): string {
-    // Handle full asset format: ETH.USDC-0X... -> USDC
-    if (assetOrDenom.includes('.')) {
-      const afterDot = assetOrDenom.split('.')[1] || '';
-      // Remove contract address if present
-      const symbol = afterDot.split('-')[0] || '';
-      return symbol.toUpperCase();
-    }
-    
-    // Handle denom format: eth-usdc-0x... -> USDC
-    if (assetOrDenom.includes('-')) {
-      const parts = assetOrDenom.split('-');
-      if (parts.length >= 2) {
-        // Return second part (the symbol), uppercased
-        return (parts[1] || '').toUpperCase();
-      }
-    }
-    
-    // Handle simple case: rune -> RUNE
-    return assetOrDenom.toUpperCase();
-  }
 }

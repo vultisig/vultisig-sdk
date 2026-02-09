@@ -1,4 +1,6 @@
 import { findAssetByFormat } from '@vultisig/assets';
+import { DEFAULT_GAS_PRICE } from './config/constants.js';
+import { denomToTicker } from './utils/denom-conversion.js';
 
 /**
  * Rujira SDK is mainnet-only.
@@ -40,7 +42,7 @@ export const MAINNET_CONFIG: RujiraConfig = {
   restEndpoint: 'https://thornode.ninerealms.com',
   midgardEndpoint: 'https://midgard.ninerealms.com/v2',
   graphqlWsEndpoint: 'wss://api.rujira.network/socket',
-  gasPrice: '0.025rune',
+  gasPrice: DEFAULT_GAS_PRICE,
   gasLimit: 500000,
   wasmQueryGasLimit: 5_000_000,
   addressPrefix: 'thor',
@@ -76,6 +78,19 @@ export const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
   NOBLE: 'Noble',
 };
 
+/** Estimated processing times per chain in minutes (deposit/withdrawal) */
+export const CHAIN_PROCESSING_TIMES: Record<string, number> = {
+  BTC: 30,    // ~3 confirmations
+  ETH: 5,     // ~12 confirmations
+  BSC: 2,     // Fast finality
+  AVAX: 1,    // Sub-second finality
+  GAIA: 2,    // Cosmos ~6 seconds
+  DOGE: 20,   // ~3 confirmations
+  LTC: 15,    // ~3 confirmations
+  BCH: 20,    // ~3 confirmations
+  THOR: 0,    // Native, instant
+};
+
 export function getNetworkConfig(_network: NetworkType = 'mainnet'): RujiraConfig {
   return MAINNET_CONFIG;
 }
@@ -88,7 +103,7 @@ export function getAssetMetadata(denom: string): { decimals: number; chainDecima
     return {
       decimals: asset.decimals.fin,
       chainDecimals: asset.decimals.thorchain,
-      ticker: asset.name.split(' ')[0].toUpperCase(),
+      ticker: asset.id.toUpperCase(),
     };
   }
 
@@ -96,16 +111,3 @@ export function getAssetMetadata(denom: string): { decimals: number; chainDecima
   return { decimals: 6, chainDecimals: 8, ticker };
 }
 
-function denomToTicker(denom: string): string {
-  const asset = findAssetByFormat(denom);
-  if (asset) {
-    return asset.name.split(' ')[0].toUpperCase();
-  }
-
-  const parts = denom.split('-');
-  if (parts.length >= 2) {
-    return parts[1].toUpperCase();
-  }
-
-  return denom.toUpperCase();
-}

@@ -1,4 +1,3 @@
-import { fromBech32 } from '@cosmjs/encoding';
 import { Coin } from '@cosmjs/proto-signing';
 import { Amount, findAssetByFormat } from '@vultisig/assets';
 import Big from 'big.js';
@@ -6,9 +5,9 @@ import Big from 'big.js';
 import { EASY_ROUTES, type EasyRouteName, type EasySwapRequest } from '../easy-routes.js';
 import type { RujiraClient } from '../client.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
+import { calculatePriceImpact } from '../services/price-impact.js';
 import type {
   FinExecuteMsg,
-  OrderBook,
   QuoteParams,
   SwapOptions,
   SwapQuote,
@@ -16,6 +15,7 @@ import type {
 } from '../types.js';
 import { QuoteCache, type QuoteCacheOptions } from '../utils/cache.js';
 import { calculateMinReturn, generateQuoteId } from '../utils/format.js';
+import { validateThorAddress } from '../validation/address-validator.js';
 
 export interface RujiraSwapOptions {
   cache?: QuoteCacheOptions | false;
@@ -64,7 +64,7 @@ export class RujiraSwap {
     this.validateQuoteParams(params);
 
     if (params.destination) {
-      this.validateAddress(params.destination);
+      validateThorAddress(params.destination);
     }
 
     if (!skipCache && this.quoteCache) {
@@ -124,7 +124,7 @@ export class RujiraSwap {
       ? inputAmount.mul(100000000).div(outputAmount).toFixed(0, 0) // round down
       : '0';
 
-    const priceImpact = this.calculatePriceImpact(params.amount, simulation.returned, orderbook);
+    const priceImpact = calculatePriceImpact(params.amount, simulation.returned, orderbook);
 
     const priceImpactEstimated =
       !orderbook || !orderbook.bids[0]?.price || !orderbook.asks[0]?.price;
@@ -269,7 +269,7 @@ export class RujiraSwap {
   }
 
   async easySwap(request: EasySwapRequest): Promise<SwapResult> {
-    this.validateAddress(request.destination);
+    validateThorAddress(request.destination);
 
     let fromAsset: string;
     let toAsset: string;
@@ -441,118 +441,13 @@ export class RujiraSwap {
     }
   }
 
-  private calculatePriceImpact(
-    inputAmount: string,
-    outputAmount: string,
-    orderbook: OrderBook | null
-  ): string {
-    if (!orderbook) {
-      return this.estimatePriceImpactWithoutOrderbook(inputAmount);
-    }
-
-    const bestBid = orderbook.bids[0]?.price;
-    const bestAsk = orderbook.asks[0]?.price;
-
-    if (!bestBid || !bestAsk) {
-      return this.estimatePriceImpactWithoutOrderbook(inputAmount);
-    }
-
-    const bidPrice = Big(bestBid);
-    const askPrice = Big(bestAsk);
-
-    if (bidPrice.lte(0) || askPrice.lte(0)) {
-      return '0';
-    }
-
-    const midPrice = bidPrice.plus(askPrice).div(2);
-
-    const input = Big(inputAmount);
-    const output = Big(outputAmount);
-
-    if (input.lte(0) || output.lte(0)) {
-      return '0';
-    }
-
-    // execution_price = output / input
-    const executionPrice = output.div(input);
-
-    // impact = abs((execution_price - midPrice) / midPrice) * 100
-    const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
-
-    if (impact.gt(50)) {
-      return '50.00';
-    }
-
-    return impact.toFixed(4);
-  }
-
-  private estimatePriceImpactWithoutOrderbook(inputAmount: string): string {
-    const amount = BigInt(inputAmount);
-
-    const largeSwapThreshold = BigInt('1000000000000');
-
-    if (amount >= largeSwapThreshold) {
-      return 'unknown';
-    }
-
-    const mediumSwapThreshold = BigInt('100000000000');
-
-    if (amount >= mediumSwapThreshold) {
-      return '2.0-5.0';
-    }
-
-    return '1.0-3.0';
-  }
-
-  private validateAddress(address: string): void {
-    if (!address || typeof address !== 'string') {
-      throw new RujiraError(RujiraErrorCode.INVALID_ADDRESS, 'Destination address is required');
-    }
-
-    const trimmed = address.trim();
-
-    if (!trimmed.startsWith('thor1')) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_ADDRESS,
-        `Invalid destination address format: must start with 'thor1'. Got: ${address.substring(0, 10)}...`
-      );
-    }
-
-    try {
-      const decoded = fromBech32(trimmed);
-
-      if (decoded.prefix !== 'thor') {
-        throw new RujiraError(
-          RujiraErrorCode.INVALID_ADDRESS,
-          `Invalid address prefix: expected 'thor', got '${decoded.prefix}'`
-        );
-      }
-
-      if (decoded.data.length !== 20 && decoded.data.length !== 32) {
-        throw new RujiraError(
-          RujiraErrorCode.INVALID_ADDRESS,
-          `Invalid address data length: expected 20 or 32 bytes, got ${decoded.data.length}`
-        );
-      }
-    } catch (error) {
-      if (error instanceof RujiraError) {
-        throw error;
-      }
-
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_ADDRESS,
-        `Invalid bech32 address: ${error instanceof Error ? error.message : 'checksum verification failed'}`
-      );
-    }
-  }
-
   private async validateBalance(fromAsset: string, amount: string): Promise<void> {
     const asset = findAssetByFormat(fromAsset);
     if (!asset) {
       throw new RujiraError(RujiraErrorCode.INVALID_ASSET, `Unknown asset: ${fromAsset}`);
     }
 
-    const ticker = asset.name.split(' ')[0].toUpperCase();
+    const ticker = asset.id.toUpperCase();
 
     const address = await this.client.getAddress();
 
