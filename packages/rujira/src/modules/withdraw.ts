@@ -5,6 +5,8 @@ import type { Asset } from '@vultisig/assets';
 import type { RujiraClient } from '../client.js';
 import { THORCHAIN_TO_SDK_CHAIN } from '../config.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
+import { create } from '@bufbuild/protobuf';
+import { KeysignPayloadSchema } from '@vultisig/sdk';
 import type { KeysignPayload, VultisigVault, WithdrawCapableVault } from '../signer/types.js';
 import { isWithdrawCapable } from '../signer/types.js';
 import { buildSecureRedeemMemo } from '../utils/memo.js';
@@ -261,7 +263,7 @@ export class RujiraWithdraw {
       ? fullSymbol.split('-')[1]?.toUpperCase() || ''
       : '';
 
-    const keysignPayload: KeysignPayload = {
+    const keysignPayload = create(KeysignPayloadSchema, {
       coin: {
         chain: 'THORChain',
         ticker: 'RUNE',
@@ -330,7 +332,7 @@ export class RujiraWithdraw {
       },
       contractPayload: { case: undefined, value: undefined },
       signData: { case: undefined, value: undefined },
-    };
+    });
 
     return keysignPayload;
   }

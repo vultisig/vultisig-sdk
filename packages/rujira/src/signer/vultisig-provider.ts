@@ -25,18 +25,10 @@ export class VultisigRujiraProvider implements RujiraSigner {
     this.chainId = chainId;
   }
 
-  /**
-   * Get the underlying VultisigVault for advanced operations
-   * This is needed for operations that bypass SignDirect (e.g., MsgDeposit for withdrawals)
-   */
   getVault(): VultisigVault {
     return this.vault;
   }
 
-  /**
-   * Get the THORChain-derived public key (not the master key!)
-   * This requires preparing a dummy tx to extract the derived key from the SDK
-   */
   private async getChainPublicKey(): Promise<Uint8Array> {
     if (this.cachedChainPubKey) {
       return this.cachedChainPubKey;
@@ -44,8 +36,6 @@ export class VultisigRujiraProvider implements RujiraSigner {
     
     const address = await this.getAddress();
     
-    // Prepare a dummy tx to get the chain-derived public key
-    // The SDK returns the correct derived key in keysignPayload.coin.hexPublicKey
     const keysignPayload = await this.vault.prepareSignDirectTx({
       chain: THORCHAIN_CONFIG.chain,
       coin: {
@@ -54,7 +44,6 @@ export class VultisigRujiraProvider implements RujiraSigner {
         decimals: THORCHAIN_CONFIG.decimals,
         ticker: THORCHAIN_CONFIG.ticker,
       },
-      // Dummy values - we just need the payload to extract the pubkey
       bodyBytes: Buffer.from('dummy').toString('base64'),
       authInfoBytes: Buffer.from('dummy').toString('base64'),
       chainId: this.chainId,
@@ -63,9 +52,7 @@ export class VultisigRujiraProvider implements RujiraSigner {
     
     const hexPubKey = (keysignPayload as any).coin?.hexPublicKey;
     if (!hexPubKey) {
-      // Fallback to master key (will likely fail on broadcast)
-      console.warn('VultisigRujiraProvider: Could not get chain-derived pubkey, using master key');
-      return this.hexToBytes(this.vault.publicKeys.ecdsa);
+      throw new Error(`VultisigRujiraProvider: Could not derive public key for chain ${THORCHAIN_CONFIG.chain}. Verify vault supports this chain.`);
     }
     
     this.cachedChainPubKey = this.hexToBytes(hexPubKey);
@@ -108,15 +95,13 @@ export class VultisigRujiraProvider implements RujiraSigner {
       messageHashes,
     });
 
-    // Normalize signature (convert DER to raw r+s if needed)
     const normalizedSig = this.normalizeSignature(signature);
 
-    // Use the chain-derived public key from keysignPayload, NOT the master key
-    // The keysignPayload.coin.hexPublicKey contains the THORChain-derived key
     const coinPubKey = (keysignPayload as any).coin?.hexPublicKey;
-    const pubKey = coinPubKey 
-      ? this.hexToBytes(coinPubKey)
-      : this.getPublicKeyBytes(); // Fallback to master key (will fail on THORChain)
+    if (!coinPubKey) {
+      throw new Error(`VultisigRujiraProvider: Missing public key in signed payload for ${THORCHAIN_CONFIG.chain}`);
+    }
+    const pubKey = this.hexToBytes(coinPubKey);
     
     return {
       signed: signDoc,
@@ -130,43 +115,32 @@ export class VultisigRujiraProvider implements RujiraSigner {
     };
   }
 
-  /**
-   * Convert DER signature to raw r+s format (64 bytes)
-   * DER format: 0x30 [total-len] 0x02 [r-len] [r] 0x02 [s-len] [s]
-   */
   private derToRaw(derHex: string): string {
     const der = this.hexToBytes(derHex);
     
-    // Check DER prefix
     if (der[0] !== 0x30) {
-      // Not DER format, assume it's already raw
       return derHex;
     }
     
-    let offset = 2; // Skip 0x30 and length byte
+    let offset = 2;
     
-    // Parse r
     if (der[offset] !== 0x02) throw new Error('Invalid DER: expected 0x02 for r');
     offset++;
     const rLen = der[offset++];
     let r = der.slice(offset, offset + rLen);
     offset += rLen;
     
-    // Parse s
     if (der[offset] !== 0x02) throw new Error('Invalid DER: expected 0x02 for s');
     offset++;
     const sLen = der[offset++];
     let s = der.slice(offset, offset + sLen);
     
-    // Remove leading zeros (DER uses variable length, we need fixed 32 bytes each)
     while (r.length > 32 && r[0] === 0) r = r.slice(1);
     while (s.length > 32 && s[0] === 0) s = s.slice(1);
     
-    // Pad to 32 bytes if needed
     while (r.length < 32) r = new Uint8Array([0, ...r]);
     while (s.length < 32) s = new Uint8Array([0, ...s]);
     
-    // Combine r + s (64 bytes total)
     const raw = new Uint8Array(64);
     raw.set(r, 0);
     raw.set(s, 32);
@@ -174,10 +148,6 @@ export class VultisigRujiraProvider implements RujiraSigner {
     return Buffer.from(raw).toString('hex');
   }
 
-  /**
-   * Validate and normalize signature format with stricter validation
-   * Accepts DER or raw format, returns raw r+s format
-   */
   private normalizeSignature(signature: VultisigSignature): string {
     if (!signature || typeof signature !== 'object') {
       throw new Error('Invalid signature: expected object, got ' + typeof signature);
@@ -194,26 +164,21 @@ export class VultisigRujiraProvider implements RujiraSigner {
       throw new Error('Invalid signature: empty signature string');
     }
     
-    // Strict hex format validation (with optional 0x prefix)
     const hexRegex = /^(0x)?[0-9a-fA-F]+$/;
     if (!hexRegex.test(sig)) {
       throw new Error('Invalid signature format: expected hex string, got non-hex characters');
     }
 
-    // Remove 0x prefix
     sig = sig.startsWith('0x') ? sig.slice(2) : sig;
     
-    // Check minimum length before processing
     if (sig.length < 128) {
       throw new Error(`Invalid signature length: too short, expected at least 128 hex chars, got ${sig.length}`);
     }
     
-    // Check maximum reasonable length (DER shouldn't exceed 144 chars typically)
     if (sig.length > 200) {
       throw new Error(`Invalid signature length: too long, got ${sig.length} hex chars`);
     }
     
-    // Convert DER to raw if needed
     if (sig.length > 130) {
       try {
         sig = this.derToRaw(sig);
@@ -222,14 +187,12 @@ export class VultisigRujiraProvider implements RujiraSigner {
       }
     }
     
-    // Strict final length validation (only 128 or 130 chars allowed)
     if (sig.length !== 128 && sig.length !== 130) {
       throw new Error(
         `Invalid signature length: expected exactly 128 or 130 hex chars, got ${sig.length}`
       );
     }
     
-    // Validate r and s values are not zero (would be invalid ECDSA signature)
     const rHex = sig.slice(0, 64);
     const sHex = sig.slice(64, 128);
     
@@ -237,8 +200,6 @@ export class VultisigRujiraProvider implements RujiraSigner {
       throw new Error('Invalid signature: r or s value is zero');
     }
     
-    // Validate r and s are within valid secp256k1 curve range
-    // secp256k1 order: 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
     const secp256k1Order = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141');
     const r = BigInt('0x' + rHex);
     const s = BigInt('0x' + sHex);
@@ -247,7 +208,6 @@ export class VultisigRujiraProvider implements RujiraSigner {
       throw new Error('Invalid signature: r or s value exceeds secp256k1 curve order');
     }
     
-    // Return just r+s (128 chars), strip recovery byte if present
     return sig.slice(0, 128);
   }
 

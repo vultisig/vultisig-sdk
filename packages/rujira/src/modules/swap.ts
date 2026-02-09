@@ -38,8 +38,6 @@ export class RujiraSwap {
     options: RujiraSwapOptions = {}
   ) {
     this.quoteCache = options.cache === false ? null : new QuoteCache<SwapQuote>(options.cache);
-    // MPC (GG20/DKLS) signing takes 30-60s. Buffer must exceed signing time
-    // to prevent quote expiry mid-sign. TTL must exceed buffer.
     this.quoteExpiryBufferMs = options.quoteExpiryBufferMs ?? 60000;
     this.quoteTtlMs = options.quoteTtlMs ?? 120000;
     this.batchConcurrency = options.batchConcurrency ?? 3;
@@ -119,7 +117,6 @@ export class RujiraSwap {
     const inputAmount = Big(params.amount);
     const outputAmount = Big(simulation.returned);
 
-    // input * 1e8 / output
     const rate = outputAmount.gt(0)
       ? inputAmount.mul(100000000).div(outputAmount).toFixed(0, 0) // round down
       : '0';
@@ -362,10 +359,6 @@ export class RujiraSwap {
     return this.batchGetQuotes(allRoutes, amount, destination);
   }
 
-  /**
-   * Recompute minimumOutput from cached expectedOutput using the caller's slippage.
-   * Cache stores raw simulation data; slippage-dependent values are derived per-request.
-   */
   private recomputeMinimumOutput(quote: SwapQuote, slippageBps?: number): SwapQuote {
     const effectiveSlippage = slippageBps ?? quote.params.slippageBps ?? this.client.config.defaultSlippageBps;
     const minimumOutput = calculateMinReturn(quote.expectedOutput, effectiveSlippage);
@@ -473,10 +466,8 @@ export class RujiraSwap {
       return '0';
     }
 
-    // execution_price = output / input
     const executionPrice = output.div(input);
 
-    // impact = abs((execution_price - midPrice) / midPrice) * 100
     const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
 
     if (impact.gt(50)) {

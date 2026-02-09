@@ -103,7 +103,6 @@ export class RujiraClient {
       this.stargateClient = await StargateClient.connect(this.config.rpcEndpoint);
       this.log('Stargate client connected');
 
-      // Validate contract config against on-chain state
       this.validateContractConfig().catch((err) => {
         this.log('Contract config validation failed (non-blocking):', err);
       });
