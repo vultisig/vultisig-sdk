@@ -264,8 +264,8 @@ describe('Balance Pre-check', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(RujiraError);
         const rujiraError = error as RujiraError;
-        // Error message uses chain name (THORCHAIN) rather than ticker (RUNE)
-        expect(rujiraError.message).toContain('THORCHAIN');
+        // Error message uses asset id as ticker
+        expect(rujiraError.message).toContain('RUNE');
         expect(rujiraError.message).toContain('Required:');
         expect(rujiraError.message).toContain('Available:');
       }

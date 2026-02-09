@@ -5,6 +5,8 @@
 import { Coin } from '@cosmjs/proto-signing';
 import Big from 'big.js';
 import { findAssetByFormat } from '@vultisig/assets';
+import { DEFAULT_TAKER_FEE, DEFAULT_MAKER_FEE } from '../config/constants.js';
+import { denomToAsset as sharedDenomToAsset } from '../utils/denom-conversion.js';
 
 import type { RujiraClient } from '../client.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
@@ -101,8 +103,8 @@ export class RujiraOrderbook {
         quote: config.quote,
         contractAddress,
         tick: config.tick || '0',
-        takerFee: config.takerFee || '0.0015',
-        makerFee: config.makerFee || '0.00075',
+        takerFee: config.takerFee || DEFAULT_TAKER_FEE,
+        makerFee: config.makerFee || DEFAULT_MAKER_FEE,
       },
       bids,
       asks,
@@ -154,40 +156,7 @@ export class RujiraOrderbook {
    * @internal
    */
   private denomToAsset(denom: string): string {
-    const asset = findAssetByFormat(denom);
-    if (asset) {
-      return asset.formats.thorchain;
-    }
-
-    const denomMap: Record<string, string> = {
-      rune: 'THOR.RUNE',
-      'btc-btc': 'BTC.BTC',
-      'eth-eth': 'ETH.ETH',
-      'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48':
-        'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
-      'eth-usdt-0xdac17f958d2ee523a2206206994597c13d831ec7':
-        'ETH.USDT-0XDAC17F958D2EE523A2206206994597C13D831EC7',
-      'gaia-atom': 'GAIA.ATOM',
-      'avax-avax': 'AVAX.AVAX',
-      'bsc-bnb': 'BSC.BNB',
-      'doge-doge': 'DOGE.DOGE',
-      'ltc-ltc': 'LTC.LTC',
-      'bch-bch': 'BCH.BCH',
-      'thor.ruji': 'THOR.RUJI',
-      'thor.tcy': 'THOR.TCY',
-    };
-
-    const normalized = denom.toLowerCase();
-    if (denomMap[normalized]) {
-      return denomMap[normalized];
-    }
-
-    if (denom.includes('-')) {
-      const [chain, ...rest] = denom.split('-');
-      return `${chain.toUpperCase()}.${rest.join('-').toUpperCase()}`;
-    }
-
-    return denom.toUpperCase();
+    return sharedDenomToAsset(denom) ?? denom.toUpperCase();
   }
 
   /**

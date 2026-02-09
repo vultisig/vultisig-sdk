@@ -6,19 +6,13 @@
 import { findAssetByFormat } from '@vultisig/assets';
 import type { SwapRequest } from '../types.js';
 
-// Helper to get decimals from asset format
-function getAssetDecimals(asset: string): number | null {
-  const found = findAssetByFormat(asset);
-  return found?.decimals.fin ?? null;
-}
-
 /**
  * Convert human-readable amount to base units
- * 
+ *
  * @param amount - Human readable amount (e.g., "1.5")
  * @param decimals - Number of decimals
  * @returns Base units as string
- * 
+ *
  * @example
  * ```typescript
  * toBaseUnits("1.5", 8); // "150000000"
@@ -28,23 +22,23 @@ function getAssetDecimals(asset: string): number | null {
 export function toBaseUnits(amount: string | number, decimals: number): string {
   const amountStr = amount.toString();
   const [whole, fraction = ''] = amountStr.split('.');
-  
+
   // Pad or truncate fraction to match decimals
   const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals);
-  
+
   // Combine and remove leading zeros
   const result = `${whole}${paddedFraction}`.replace(/^0+/, '') || '0';
-  
+
   return result;
 }
 
 /**
  * Convert base units to human-readable amount
- * 
+ *
  * @param baseUnits - Amount in base units
  * @param decimals - Number of decimals
  * @returns Human readable amount
- * 
+ *
  * @example
  * ```typescript
  * fromBaseUnits("150000000", 8); // "1.5"
@@ -52,10 +46,11 @@ export function toBaseUnits(amount: string | number, decimals: number): string {
  * ```
  */
 export function fromBaseUnits(baseUnits: string | bigint, decimals: number): string {
+  if (decimals === 0) return baseUnits.toString();
   const str = baseUnits.toString().padStart(decimals + 1, '0');
   const whole = str.slice(0, -decimals) || '0';
   const fraction = str.slice(-decimals).replace(/0+$/, '');
-  
+
   return fraction ? `${whole}.${fraction}` : whole;
 }
 
@@ -64,7 +59,7 @@ export function fromBaseUnits(baseUnits: string | bigint, decimals: number): str
  * For fee displays where underestimation is harmful, use {@link formatFee} instead.
  *
  * @param baseUnits - Amount in base units
- * @param asset - Asset identifier
+ * @param asset - Asset identifier (any format recognized by @vultisig/assets)
  * @param maxDecimals - Maximum decimal places to show
  */
 export function formatAmount(
@@ -72,12 +67,12 @@ export function formatAmount(
   asset: string,
   maxDecimals = 6
 ): string {
-  const decimals = getAssetDecimals(asset);
-  if (decimals === null) {
+  const found = findAssetByFormat(asset);
+  if (!found) {
     return baseUnits.toString();
   }
 
-  const human = fromBaseUnits(baseUnits, decimals);
+  const human = fromBaseUnits(baseUnits, found.decimals.fin);
   const parts = human.split('.');
   const whole = parts[0] || '0';
   const fraction = parts[1] || '';
@@ -98,7 +93,7 @@ export function formatAmount(
  * Use this for fee/gas displays where showing less than actual is misleading.
  *
  * @param baseUnits - Amount in base units
- * @param asset - Asset identifier
+ * @param asset - Asset identifier (any format recognized by @vultisig/assets)
  * @param maxDecimals - Maximum decimal places to show
  */
 export function formatFee(
@@ -106,12 +101,12 @@ export function formatFee(
   asset: string,
   maxDecimals = 6
 ): string {
-  const decimals = getAssetDecimals(asset);
-  if (decimals === null) {
+  const found = findAssetByFormat(asset);
+  if (!found) {
     return baseUnits.toString();
   }
 
-  const human = fromBaseUnits(baseUnits, decimals);
+  const human = fromBaseUnits(baseUnits, found.decimals.fin);
   const parts = human.split('.');
   const whole = parts[0] || '0';
   const fraction = parts[1] || '';
@@ -150,27 +145,8 @@ export function formatFee(
 }
 
 /**
- * Parse amount from user input
- * 
- * @param input - User input string
- * @param asset - Asset identifier
- * @returns Base units
- */
-export function parseAmount(input: string, asset: string): string {
-  const decimals = getAssetDecimals(asset);
-  if (decimals === null) {
-    throw new Error(`Unknown asset: ${asset}`);
-  }
-  
-  // Remove commas and whitespace
-  const cleaned = input.replace(/[,\s]/g, '');
-  
-  return toBaseUnits(cleaned, decimals);
-}
-
-/**
  * Calculate minimum return after slippage
- * 
+ *
  * @param expectedOutput - Expected output in base units
  * @param slippageBps - Slippage tolerance in basis points
  * @returns Minimum acceptable output
@@ -186,7 +162,7 @@ export function calculateMinReturn(
 
 /**
  * Calculate slippage percentage from expected vs actual
- * 
+ *
  * @param expected - Expected amount
  * @param actual - Actual amount received
  * @returns Slippage percentage (negative if worse than expected)
@@ -194,12 +170,12 @@ export function calculateMinReturn(
 export function calculateSlippage(expected: string | bigint, actual: string | bigint): string {
   const exp = BigInt(expected);
   const act = BigInt(actual);
-  
+
   if (exp === 0n) return '0';
-  
+
   const diff = act - exp;
   const percentage = (diff * 10000n) / exp;
-  
+
   return (Number(percentage) / 100).toFixed(2);
 }
 
@@ -220,7 +196,7 @@ export function generateQuoteId(): string {
 
 /**
  * Build a swap message from parameters
- * 
+ *
  * @param minReturn - Minimum return amount
  * @param to - Destination address (optional)
  */
@@ -240,7 +216,7 @@ export function buildSwapMsg(
 
 /**
  * Truncate string in the middle (for addresses)
- * 
+ *
  * @param str - String to truncate
  * @param startChars - Characters to show at start
  * @param endChars - Characters to show at end
@@ -258,7 +234,7 @@ export function truncateMiddle(
 
 /**
  * Format percentage for display
- * 
+ *
  * @param value - Decimal value (e.g., 0.015 for 1.5%)
  * @param decimals - Decimal places to show
  */
@@ -269,7 +245,7 @@ export function formatPercentage(value: number | string, decimals = 2): string {
 
 /**
  * Format basis points as percentage
- * 
+ *
  * @param bps - Basis points
  */
 export function bpsToPercent(bps: number): string {
@@ -278,7 +254,7 @@ export function bpsToPercent(bps: number): string {
 
 /**
  * Convert percentage to basis points
- * 
+ *
  * @param percent - Percentage (e.g., 1.5 for 1.5%)
  */
 export function percentToBps(percent: number): number {

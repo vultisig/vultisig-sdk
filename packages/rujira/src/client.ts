@@ -7,6 +7,7 @@ import { Coin } from '@cosmjs/proto-signing';
 import { GasPrice, StargateClient } from '@cosmjs/stargate';
 
 import { MAINNET_CONFIG, type RujiraConfig } from './config.js';
+import { DEFAULT_GAS_PRICE, DEFAULT_TIMEOUT_MS } from './config/constants.js';
 import { RujiraError, RujiraErrorCode, wrapError } from './errors.js';
 import { RujiraDiscovery } from './discovery/discovery.js';
 import { RujiraAssets } from './modules/assets.js';
@@ -267,7 +268,7 @@ export class RujiraClient {
 
   async waitForTransaction(
     txHash: string,
-    timeoutMs = 60000
+    timeoutMs = DEFAULT_TIMEOUT_MS
   ): Promise<{ code: number; height: number; rawLog?: string }> {
     this.ensureConnected();
 

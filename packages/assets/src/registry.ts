@@ -288,7 +288,7 @@ export const KNOWN_ASSETS: Record<string, Asset> = {
     chain: 'ethereum',
     contract: '0x6b175474e89094c44da98b954eedeac495271d0f',
     decimals: {
-      native: 6,
+      native: 18,
       thorchain: 8,
       fin: 6
     },
@@ -304,7 +304,7 @@ export const KNOWN_ASSETS: Record<string, Asset> = {
     chain: 'ethereum',
     contract: '0x056fd409e1d7a124bd7017459dfea2f387b6d5cd',
     decimals: {
-      native: 6,
+      native: 2,
       thorchain: 8,
       fin: 6
     },
@@ -320,7 +320,7 @@ export const KNOWN_ASSETS: Record<string, Asset> = {
     chain: 'ethereum',
     contract: '0x8e870d67f660d95d5be530380d0ec0bd388289e1',
     decimals: {
-      native: 6,
+      native: 18,
       thorchain: 8,
       fin: 6
     },
@@ -372,7 +372,7 @@ export const KNOWN_ASSETS: Record<string, Asset> = {
     chain: 'binance',
     contract: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
     decimals: {
-      native: 6,
+      native: 18,
       thorchain: 8,
       fin: 6
     },
@@ -388,7 +388,7 @@ export const KNOWN_ASSETS: Record<string, Asset> = {
     chain: 'binance',
     contract: '0x55d398326f99059ff775485246999027b3197955',
     decimals: {
-      native: 6,
+      native: 18,
       thorchain: 8,
       fin: 6
     },
