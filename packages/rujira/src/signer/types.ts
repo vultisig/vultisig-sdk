@@ -19,8 +19,6 @@ export interface VultisigSignature {
   format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519';
 }
 
-
-
 export interface SignDirectInput {
   chain: VultisigChain;
   coin: {

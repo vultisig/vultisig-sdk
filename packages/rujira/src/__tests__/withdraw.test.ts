@@ -297,19 +297,17 @@ describe('RujiraWithdraw', () => {
       const withdraw = new RujiraWithdraw(client);
 
       const memo = withdraw.buildWithdrawMemo(
-        'BTC.BTC',
         'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh'
       );
 
       expect(memo).toBe('secure-:bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh');
     });
 
-    it('should uppercase the asset', () => {
+    it('should build correct memo for ETH address', () => {
       const client = createMockClient();
       const withdraw = new RujiraWithdraw(client);
 
       const memo = withdraw.buildWithdrawMemo(
-        'eth.eth',
         '0x742d35Cc6634C0532925a3b844Bc9e7595f12345'
       );
 

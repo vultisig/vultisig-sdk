@@ -1,6 +1,5 @@
 import type { Coin } from '@cosmjs/proto-signing';
 import { findAssetByFormat } from '@vultisig/assets';
-import type { Asset } from '@vultisig/assets';
 
 import type { RujiraClient } from '../client.js';
 import { THORCHAIN_TO_SDK_CHAIN } from '../config.js';
@@ -11,17 +10,7 @@ import type { KeysignPayload, VultisigVault, WithdrawCapableVault } from '../sig
 import { isWithdrawCapable } from '../signer/types.js';
 import { buildSecureRedeemMemo } from '../utils/memo.js';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
-
-function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
-  if (!obj || typeof obj !== 'object') return false;
-  const asset = obj as Partial<Asset>;
-  return (
-    typeof asset.formats === 'object' &&
-    asset.formats !== null &&
-    typeof asset.formats.fin === 'string' &&
-    asset.formats.fin.length > 0
-  );
-}
+import { isFinAsset, parseAsset } from '../utils/type-guards.js';
 
 export interface WithdrawParams {
   asset: string;
@@ -97,7 +86,7 @@ export class RujiraWithdraw {
   async prepare(params: WithdrawParams): Promise<PreparedWithdraw> {
     this.validateWithdrawParams(params);
 
-    const { chain } = this.parseAsset(params.asset);
+    const { chain } = parseAsset(params.asset);
 
     const assetData = findAssetByFormat(params.asset);
     if (!isFinAsset(assetData)) {
@@ -108,9 +97,9 @@ export class RujiraWithdraw {
 
     this.validateL1Address(chain, params.l1Address);
 
-    const memo = this.buildWithdrawMemo(params.asset, params.l1Address);
+    const memo = this.buildWithdrawMemo(params.l1Address);
 
-    const estimatedFee = await this.estimateWithdrawFee(params.asset, params.amount);
+    const estimatedFee = await this.estimateWithdrawFee(params.asset);
 
     try {
       if (BigInt(params.amount) <= BigInt(estimatedFee)) {
@@ -234,7 +223,7 @@ export class RujiraWithdraw {
   }): Promise<KeysignPayload> {
     const { vault, senderAddress, prepared, accountInfo, fee } = params;
 
-    const { chain: thorchainChainId, symbol: fullSymbol } = this.parseAsset(prepared.asset);
+    const { chain: thorchainChainId, symbol: fullSymbol } = parseAsset(prepared.asset);
     const ticker = fullSymbol.split('-')[0] || fullSymbol;
 
     const l1Chain = THORCHAIN_TO_SDK_CHAIN[thorchainChainId] || thorchainChainId;
@@ -382,7 +371,7 @@ export class RujiraWithdraw {
     return DEFAULT_THORCHAIN_FEE;
   }
 
-  buildWithdrawMemo(_asset: string, l1Address: string): string {
+  buildWithdrawMemo(l1Address: string): string {
     return buildSecureRedeemMemo(l1Address);
   }
 
@@ -390,8 +379,8 @@ export class RujiraWithdraw {
     return CHAIN_WITHDRAWAL_TIMES[chain.toUpperCase()] || 15;
   }
 
-  async estimateWithdrawFee(asset: string, _amount: string): Promise<string> {
-    const { chain } = this.parseAsset(asset);
+  async estimateWithdrawFee(asset: string): Promise<string> {
+    const { chain } = parseAsset(asset);
 
     let gasAssetOutboundFee = '0';
     try {
@@ -482,7 +471,7 @@ export class RujiraWithdraw {
   }
 
   async getMinimumWithdraw(asset: string): Promise<string> {
-    const { chain } = this.parseAsset(asset);
+    const { chain } = parseAsset(asset);
 
     try {
       const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
@@ -512,7 +501,7 @@ export class RujiraWithdraw {
   }
 
   async canWithdraw(asset: string): Promise<{ possible: boolean; reason?: string }> {
-    const { chain } = this.parseAsset(asset);
+    const { chain } = parseAsset(asset);
 
     try {
       const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`);
@@ -627,11 +616,4 @@ export class RujiraWithdraw {
     }
   }
 
-  private parseAsset(asset: string): { chain: string; symbol: string } {
-    const parts = asset.split('.');
-    return {
-      chain: parts[0]?.toUpperCase() || '',
-      symbol: parts.slice(1).join('.') || '',
-    };
-  }
 }

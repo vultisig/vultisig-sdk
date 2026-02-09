@@ -6,24 +6,9 @@
 import type { RujiraClient } from '../client.js';
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors.js';
 import { findAssetByFormat } from '@vultisig/assets';
-import type { Asset } from '@vultisig/assets';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
 import { buildSecureMintMemo, validateMemoComponent } from '../utils/memo.js';
-
-/**
- * Type guard to check if an object is a valid Asset with FIN format
- * @internal
- */
-function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
-  if (!obj || typeof obj !== 'object') return false;
-  const asset = obj as Partial<Asset>;
-  return (
-    typeof asset.formats === 'object' &&
-    asset.formats !== null &&
-    typeof asset.formats.fin === 'string' &&
-    asset.formats.fin.length > 0
-  );
-}
+import { isFinAsset, parseAsset } from '../utils/type-guards.js';
 
 // TYPES
 
@@ -165,7 +150,7 @@ export class RujiraDeposit {
     this.validateDepositParams(params);
 
     // Parse asset to get chain
-    const { chain, symbol } = this.parseAsset(params.fromAsset);
+    const { chain, symbol } = parseAsset(params.fromAsset);
 
     // Get inbound address for the chain
     const inbound = await this.getInboundAddress(chain);
@@ -177,7 +162,7 @@ export class RujiraDeposit {
     }
 
     // Build the deposit memo
-    const memo = this.buildDepositMemo(params.fromAsset, params.thorAddress, params.affiliate, params.affiliateBps);
+    const memo = this.buildDepositMemo(params.thorAddress, params.affiliate, params.affiliateBps);
 
     // Determine resulting secured denom on THORChain (FIN denom when known)
     let resultingDenom = params.fromAsset.toLowerCase().replace('.', '-');
@@ -314,7 +299,6 @@ export class RujiraDeposit {
    * Build deposit memo for L1 transaction
    */
   buildDepositMemo(
-    _asset: string,
     thorAddress: string,
     affiliate?: string,
     affiliateBps?: number
@@ -356,7 +340,7 @@ export class RujiraDeposit {
    * Check if an asset can be deposited
    */
   canDeposit(asset: string): boolean {
-    const { chain } = this.parseAsset(asset);
+    const { chain } = parseAsset(asset);
     return this.isChainSupported(chain);
   }
 
@@ -371,7 +355,7 @@ export class RujiraDeposit {
       );
     }
 
-    const { chain } = this.parseAsset(params.fromAsset);
+    const { chain } = parseAsset(params.fromAsset);
     if (!this.isChainSupported(chain)) {
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
@@ -422,14 +406,6 @@ export class RujiraDeposit {
         `Invalid THORChain address length: ${address}`
       );
     }
-  }
-
-  private parseAsset(asset: string): { chain: string; symbol: string } {
-    const parts = asset.split('.');
-    return {
-      chain: parts[0]?.toUpperCase() || '',
-      symbol: parts.slice(1).join('.') || '',
-    };
   }
 
   private denomToAsset(denom: string): string | null {
