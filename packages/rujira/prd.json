@@ -15,7 +15,7 @@
         "Tests pass"
       ],
       "priority": 1,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-022",
@@ -29,7 +29,7 @@
         "Tests pass"
       ],
       "priority": 2,
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-023",
@@ -43,7 +43,7 @@
         "Tests pass when run with LIVE_TESTS=1"
       ],
       "priority": 3,
-      "passes": false
+      "passes": true
     }
   ]
 }
