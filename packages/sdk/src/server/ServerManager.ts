@@ -17,6 +17,7 @@ import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionK
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { without } from '@lib/utils/array/without'
 import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
+import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 import { getHexEncodedRandomBytes } from '@lib/utils/crypto/getHexEncodedRandomBytes'
 import { queryUrl } from '@lib/utils/query/queryUrl'
 import type { WalletCore } from '@trustwallet/wallet-core'
@@ -140,7 +141,9 @@ export class ServerManager {
       participantsReady: 1,
     })
 
-    const serverResponse = await signWithServer({
+    shouldBePresent(payload.chain, 'payload.chain')
+
+    await signWithServer({
       public_key: vault.publicKeys.ecdsa,
       messages,
       session: sessionId,
@@ -148,8 +151,9 @@ export class ServerManager {
       derive_path: derivePath,
       is_ecdsa: signatureAlgorithm === 'ecdsa',
       vault_password: password,
+      chain: payload.chain,
     })
-    console.log(`✅ Server acknowledged session: ${serverResponse}`)
+    console.log(`✅ Server acknowledged session: ${sessionId}`)
 
     // Step 2: Join relay session
     reportProgress({

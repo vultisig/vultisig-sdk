@@ -34,6 +34,7 @@ import {
   executeCreateFromSeedphraseSecure,
   executeCreateSecure,
   executeCurrency,
+  executeDelete,
   executeExport,
   executeImport,
   executeInfo,
@@ -358,6 +359,10 @@ export class ShellSession {
         await executeRename(this.ctx, args.join(' '))
         break
 
+      case 'delete':
+        await this.deleteVault(args)
+        break
+
       // Balance commands
       case 'balance':
       case 'bal':
@@ -488,6 +493,11 @@ export class ShellSession {
     const vault = await executeImport(this.ctx, filePath)
     this.ctx.addVault(vault)
     this.eventBuffer.setupVaultListeners(vault)
+  }
+
+  private async deleteVault(args: string[]): Promise<void> {
+    const vaultIdOrName = args.join(' ') || undefined
+    await executeDelete(this.ctx, { vaultId: vaultIdOrName })
   }
 
   private async createVault(args: string[]): Promise<void> {
@@ -670,13 +680,15 @@ export class ShellSession {
   }
 
   private async runBalance(args: string[]): Promise<void> {
-    const chainStr = args[0]
+    const chainStr = args.find(arg => !arg.startsWith('-'))
     const includeTokens = args.includes('-t') || args.includes('--tokens')
+    const raw = args.includes('--raw')
 
     await this.withCancellation(() =>
       executeBalance(this.ctx, {
         chain: chainStr ? findChainByName(chainStr) || (chainStr as Chain) : undefined,
         includeTokens,
+        raw,
       })
     )
   }
@@ -697,7 +709,8 @@ export class ShellSession {
       return
     }
 
-    await this.withCancellation(() => executePortfolio(this.ctx, { currency }))
+    const raw = args.includes('--raw')
+    await this.withCancellation(() => executePortfolio(this.ctx, { currency, raw }))
   }
 
   private async runSend(args: string[]): Promise<void> {
@@ -741,9 +754,12 @@ export class ShellSession {
   private async runChains(args: string[]): Promise<void> {
     let addChain: Chain | undefined
     let removeChain: Chain | undefined
+    let addAll = false
 
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === '--add' && i + 1 < args.length) {
+      if (args[i] === '--add-all') {
+        addAll = true
+      } else if (args[i] === '--add' && i + 1 < args.length) {
         const chain = findChainByName(args[i + 1])
         if (!chain) {
           console.log(chalk.red(`Unknown chain: ${args[i + 1]}`))
@@ -764,7 +780,7 @@ export class ShellSession {
       }
     }
 
-    await executeChains(this.ctx, { add: addChain, remove: removeChain })
+    await executeChains(this.ctx, { add: addChain, remove: removeChain, addAll })
   }
 
   private async runTokens(args: string[]): Promise<void> {

@@ -24,13 +24,12 @@ describe('RujiraDeposit', () => {
 
   describe('buildDepositMemo', () => {
     it('should build basic deposit memo with secure+ format', () => {
-      const memo = deposit.buildDepositMemo('BTC.BTC', VALID_THOR_ADDRESS);
+      const memo = deposit.buildDepositMemo(VALID_THOR_ADDRESS);
       expect(memo).toBe(`secure+:${VALID_THOR_ADDRESS}`);
     });
 
     it('should build deposit memo with affiliate', () => {
       const memo = deposit.buildDepositMemo(
-        'ETH.ETH',
         VALID_THOR_ADDRESS,
         'thor1affiliate',
         50
@@ -38,14 +37,13 @@ describe('RujiraDeposit', () => {
       expect(memo).toBe(`secure+:${VALID_THOR_ADDRESS}:thor1affiliate:50`);
     });
 
-    it('should use secure+ format regardless of asset case', () => {
-      const memo = deposit.buildDepositMemo('btc.btc', VALID_THOR_ADDRESS);
+    it('should use secure+ format', () => {
+      const memo = deposit.buildDepositMemo(VALID_THOR_ADDRESS);
       expect(memo).toBe(`secure+:${VALID_THOR_ADDRESS}`);
     });
 
     it('should not include affiliate if bps is 0', () => {
       const memo = deposit.buildDepositMemo(
-        'BTC.BTC',
         VALID_THOR_ADDRESS,
         'thor1affiliate',
         0
@@ -55,13 +53,13 @@ describe('RujiraDeposit', () => {
 
     it('should reject addresses with colon (injection prevention)', () => {
       expect(() =>
-        deposit.buildDepositMemo('BTC.BTC', 'thor1abc:evil')
+        deposit.buildDepositMemo('thor1abc:evil')
       ).toThrow("contains ':'");
     });
 
     it('should reject affiliate with colon (injection prevention)', () => {
       expect(() =>
-        deposit.buildDepositMemo('BTC.BTC', VALID_THOR_ADDRESS, 'aff:evil', 50)
+        deposit.buildDepositMemo(VALID_THOR_ADDRESS, 'aff:evil', 50)
       ).toThrow("contains ':'");
     });
   });

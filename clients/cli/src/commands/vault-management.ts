@@ -559,6 +559,8 @@ export type CreateFromSeedphraseFastOptions = {
   discoverChains?: boolean
   chains?: Chain[]
   signal?: AbortSignal
+  /** Use Phantom wallet derivation path for Solana */
+  usePhantomSolanaPath?: boolean
 }
 
 export type CreateFromSeedphraseSecureOptions = {
@@ -570,6 +572,8 @@ export type CreateFromSeedphraseSecureOptions = {
   discoverChains?: boolean
   chains?: Chain[]
   signal?: AbortSignal
+  /** Use Phantom wallet derivation path for Solana */
+  usePhantomSolanaPath?: boolean
 }
 
 /**
@@ -579,7 +583,7 @@ export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
   options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
-  const { mnemonic, name, password, email, discoverChains, chains, signal } = options
+  const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
 
   // 1. Validate seedphrase first
   const validateSpinner = createSpinner('Validating seedphrase...')
@@ -594,20 +598,31 @@ export async function executeCreateFromSeedphraseFast(
   validateSpinner.succeed(`Valid ${validation.wordCount}-word seedphrase`)
 
   // 2. Optional chain discovery (runs if --discover-chains is set)
+  // Track if Phantom Solana path should be used (auto-detected during discovery)
+  let detectedUsePhantomSolanaPath = usePhantomSolanaPath
   if (discoverChains) {
     const discoverSpinner = createSpinner('Discovering chains with balances...')
     try {
       // If --chains specified, only scan those; otherwise scan all
-      const discovered = await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
-        discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
-      })
+      const { results: discovered, usePhantomSolanaPath: detectedPhantomPath } =
+        await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
+          discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
+        })
       const chainsWithBalance = discovered.filter(c => c.hasBalance)
       discoverSpinner.succeed(`Found ${chainsWithBalance.length} chains with balances`)
+
+      // Use discovered Phantom path preference unless explicitly set via flag
+      if (usePhantomSolanaPath === undefined) {
+        detectedUsePhantomSolanaPath = detectedPhantomPath
+      }
 
       if (chainsWithBalance.length > 0 && !isSilent()) {
         info('\nChains with balances:')
         for (const result of chainsWithBalance) {
           info(`  ${result.chain}: ${result.balance} ${result.symbol}`)
+        }
+        if (detectedUsePhantomSolanaPath) {
+          info('  (Using Phantom wallet derivation path for Solana)')
         }
         info('')
       }
@@ -626,6 +641,7 @@ export async function executeCreateFromSeedphraseFast(
       email,
       // Don't pass discoverChains - CLI handles discovery above
       chains,
+      usePhantomSolanaPath: detectedUsePhantomSolanaPath,
       onProgress: step => {
         importSpinner.text = `${step.message} (${step.progress}%)`
       },
@@ -725,7 +741,17 @@ export async function executeCreateFromSeedphraseSecure(
   ctx: CommandContext,
   options: CreateFromSeedphraseSecureOptions
 ): Promise<VaultBase> {
-  const { mnemonic, name, password, threshold, shares: totalShares, discoverChains, chains, signal } = options
+  const {
+    mnemonic,
+    name,
+    password,
+    threshold,
+    shares: totalShares,
+    discoverChains,
+    chains,
+    signal,
+    usePhantomSolanaPath,
+  } = options
 
   // 1. Validate seedphrase first
   const validateSpinner = createSpinner('Validating seedphrase...')
@@ -740,20 +766,31 @@ export async function executeCreateFromSeedphraseSecure(
   validateSpinner.succeed(`Valid ${validation.wordCount}-word seedphrase`)
 
   // 2. Optional chain discovery (runs if --discover-chains is set)
+  // Track if Phantom Solana path should be used (auto-detected during discovery)
+  let detectedUsePhantomSolanaPath = usePhantomSolanaPath
   if (discoverChains) {
     const discoverSpinner = createSpinner('Discovering chains with balances...')
     try {
       // If --chains specified, only scan those; otherwise scan all
-      const discovered = await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
-        discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
-      })
+      const { results: discovered, usePhantomSolanaPath: detectedPhantomPath } =
+        await ctx.sdk.discoverChainsFromSeedphrase(mnemonic, chains, p => {
+          discoverSpinner.text = `Discovering: ${p.chain || 'scanning'} (${p.chainsProcessed}/${p.chainsTotal})`
+        })
       const chainsWithBalance = discovered.filter(c => c.hasBalance)
       discoverSpinner.succeed(`Found ${chainsWithBalance.length} chains with balances`)
+
+      // Use discovered Phantom path preference unless explicitly set via flag
+      if (usePhantomSolanaPath === undefined) {
+        detectedUsePhantomSolanaPath = detectedPhantomPath
+      }
 
       if (chainsWithBalance.length > 0 && !isSilent()) {
         info('\nChains with balances:')
         for (const result of chainsWithBalance) {
           info(`  ${result.chain}: ${result.balance} ${result.symbol}`)
+        }
+        if (detectedUsePhantomSolanaPath) {
+          info('  (Using Phantom wallet derivation path for Solana)')
         }
         info('')
       }
@@ -775,6 +812,7 @@ export async function executeCreateFromSeedphraseSecure(
         threshold,
         // Don't pass discoverChains - CLI handles discovery above
         chains,
+        usePhantomSolanaPath: detectedUsePhantomSolanaPath,
         onProgress: step => {
           importSpinner.text = `${step.message} (${step.progress}%)`
         },
@@ -903,4 +941,123 @@ export async function executeJoinSecure(ctx: CommandContext, options: JoinSecure
     spinner.fail('Failed to join SecureVault session')
     throw err
   }
+}
+
+// ============================================================================
+// Delete Vault Command
+// ============================================================================
+
+export type DeleteVaultOptions = {
+  vaultId?: string
+  skipConfirmation?: boolean
+}
+
+export type FindVaultByIdOrNameInput = {
+  vaults: VaultBase[]
+  idOrName: string
+}
+
+/**
+ * Execute delete vault command
+ */
+export async function executeDelete(ctx: CommandContext, options: DeleteVaultOptions = {}): Promise<void> {
+  // Step 1: Resolve vault to delete
+  let vault: VaultBase
+
+  if (options.vaultId) {
+    // Find vault by ID, name, or prefix (throws if not found or ambiguous)
+    const vaults = await ctx.sdk.listVaults()
+    vault = findVaultByIdOrName({ vaults, idOrName: options.vaultId })
+  } else {
+    // Use active vault
+    vault = await ctx.ensureActiveVault()
+  }
+
+  // Step 2: JSON mode - skip confirmation for scripting
+  if (isJsonOutput()) {
+    const spinner = createSpinner('Deleting vault...')
+    await ctx.sdk.deleteVault(vault)
+    spinner.succeed('Vault deleted')
+
+    outputJson({
+      deleted: true,
+      vault: {
+        id: vault.id,
+        name: vault.name,
+        type: vault.type,
+      },
+    })
+    return
+  }
+
+  // Step 3: Display vault info for confirmation
+  info('\n' + chalk.bold('Vault to delete:'))
+  info(`  Name:   ${chalk.cyan(vault.name)}`)
+  info(`  Type:   ${chalk.yellow(vault.type)}`)
+  info(`  ID:     ${vault.id.slice(0, 16)}...`)
+  info(`  Chains: ${vault.chains.length}`)
+  info('')
+
+  // Step 4: Confirm deletion
+  if (!options.skipConfirmation) {
+    warn(chalk.red.bold('WARNING: This action cannot be undone!'))
+    warn('Make sure you have a backup of your vault (.vult file) before proceeding.')
+    info('')
+
+    const { confirmed } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmed',
+        message: `Are you sure you want to delete vault "${vault.name}"?`,
+        default: false,
+      },
+    ])
+
+    if (!confirmed) {
+      info('Deletion cancelled.')
+      return
+    }
+  }
+
+  // Step 5: Delete the vault
+  const spinner = createSpinner('Deleting vault...')
+
+  await ctx.sdk.deleteVault(vault)
+
+  spinner.succeed(`Vault deleted: ${vault.name}`)
+
+  success('\n+ Vault deleted successfully')
+  info(chalk.gray('\nTip: Run "vultisig vaults" to see remaining vaults'))
+}
+
+/**
+ * Find vault by ID, name, or ID prefix
+ * Throws error if multiple vaults match (ambiguous) or if no vault is found
+ */
+function findVaultByIdOrName({ vaults, idOrName }: FindVaultByIdOrNameInput): VaultBase {
+  // Try exact ID match first (unambiguous)
+  const byId = vaults.find(v => v.id === idOrName)
+  if (byId) return byId
+
+  // Collect all name matches (case-insensitive)
+  const byName = vaults.filter(v => v.name.toLowerCase() === idOrName.toLowerCase())
+  if (byName.length === 1) return byName[0]
+  if (byName.length > 1) {
+    const matches = byName.map(v => `  - ${v.name} (${v.id.slice(0, 8)}...)`).join('\n')
+    throw new Error(
+      `Multiple vaults match "${idOrName}":\n${matches}\nPlease specify the full vault ID to be more specific.`
+    )
+  }
+
+  // Collect all prefix matches
+  const byPartialId = vaults.filter(v => v.id.startsWith(idOrName))
+  if (byPartialId.length === 1) return byPartialId[0]
+  if (byPartialId.length > 1) {
+    const matches = byPartialId.map(v => `  - ${v.name} (${v.id.slice(0, 8)}...)`).join('\n')
+    throw new Error(
+      `Multiple vaults match prefix "${idOrName}":\n${matches}\nPlease specify more characters of the vault ID.`
+    )
+  }
+
+  throw new Error(`Vault not found: "${idOrName}"`)
 }

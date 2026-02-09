@@ -12,21 +12,7 @@ import { fromBaseUnits } from '../utils/format.js';
 import type { Asset } from '@vultisig/assets';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
 import { buildSecureMintMemo, validateMemoComponent } from '../utils/memo.js';
-
-/**
- * Type guard to check if an object is a valid Asset with FIN format
- * @internal
- */
-function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
-  if (!obj || typeof obj !== 'object') return false;
-  const asset = obj as Partial<Asset>;
-  return (
-    typeof asset.formats === 'object' &&
-    asset.formats !== null &&
-    typeof asset.formats.fin === 'string' &&
-    asset.formats.fin.length > 0
-  );
-}
+import { isFinAsset, parseAsset } from '../utils/type-guards.js';
 
 // TYPES
 
@@ -164,7 +150,7 @@ export class RujiraDeposit {
     }
 
     // Build the deposit memo
-    const memo = this.buildDepositMemo(params.fromAsset, params.thorAddress, params.affiliate, params.affiliateBps);
+    const memo = this.buildDepositMemo(params.thorAddress, params.affiliate, params.affiliateBps);
 
     // Determine resulting secured denom on THORChain (FIN denom when known)
     let resultingDenom = params.fromAsset.toLowerCase().replace('.', '-');
@@ -301,7 +287,6 @@ export class RujiraDeposit {
    * Build deposit memo for L1 transaction
    */
   buildDepositMemo(
-    _asset: string,
     thorAddress: string,
     affiliate?: string,
     affiliateBps?: number

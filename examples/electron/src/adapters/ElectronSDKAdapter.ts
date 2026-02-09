@@ -7,6 +7,7 @@ import type {
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
   DeviceJoinedData,
+  DiscountTier,
   ExportOptions,
   FiatCurrency,
   GetSwapQuoteParams,
@@ -94,6 +95,10 @@ declare global {
       setCurrency(vaultId: string, currency: string): Promise<void>
       getValue(vaultId: string, chain: string, tokenId?: string, currency?: string): Promise<ValueResult>
       getTotalValue(vaultId: string, currency?: string): Promise<ValueResult>
+
+      // Discount tier
+      getDiscountTier(vaultId: string): Promise<DiscountTier>
+      updateDiscountTier(vaultId: string): Promise<DiscountTier>
 
       // Swap
       getSupportedSwapChains(): Promise<string[]>
@@ -284,7 +289,7 @@ export class ElectronSDKAdapter implements ISDKAdapter {
     return window.electronAPI.joinSecureVault(qrPayload, {
       mnemonic: options.mnemonic,
       password: options.password,
-      devices: options.devices,
+      devices: options.devices ?? 2,
     })
   }
 
@@ -393,6 +398,15 @@ export class ElectronSDKAdapter implements ISDKAdapter {
 
   async getChainList(): Promise<string[]> {
     return window.electronAPI.getChainList()
+  }
+
+  // ===== Discount Tier =====
+  async getDiscountTier(vaultId: string): Promise<DiscountTier> {
+    return window.electronAPI.getDiscountTier(vaultId)
+  }
+
+  async updateDiscountTier(vaultId: string): Promise<DiscountTier> {
+    return window.electronAPI.updateDiscountTier(vaultId)
   }
 
   // ===== Active Vault =====

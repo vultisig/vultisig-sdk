@@ -3,18 +3,22 @@ import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 
 import { Balance, Token } from '../types'
 
-/**
- * Convert raw bigint balance to SDK Balance format
- *
- * This adapter bridges between core's bigint balance values and SDK's
- * structured Balance type with metadata.
- *
- * @param rawBalance Raw balance as bigint from core
- * @param chain Chain identifier
- * @param tokenId Optional token contract address/identifier
- * @param tokens Optional token registry for looking up token metadata
- * @returns Formatted Balance object
- */
+function toHumanReadable(rawBalance: bigint, decimals: number): string {
+  if (rawBalance === 0n) return '0'
+
+  const divisor = BigInt(10 ** decimals)
+  const whole = rawBalance / divisor
+  const fraction = rawBalance % divisor
+
+  if (fraction === 0n) {
+    return whole.toString()
+  }
+
+  const fractionStr = fraction.toString().padStart(decimals, '0')
+  const trimmed = fractionStr.replace(/0+$/, '')
+  return `${whole}.${trimmed}`
+}
+
 export function formatBalance(
   rawBalance: bigint,
   chain: Chain,
@@ -25,18 +29,17 @@ export function formatBalance(
   let symbol: string
 
   if (tokenId) {
-    // Token balance - look up metadata from token registry
     const token = tokens?.[chain]?.find(t => t.id === tokenId)
-    decimals = token?.decimals ?? 18 // Default to 18 for ERC-20 tokens
+    decimals = token?.decimals ?? 18
     symbol = token?.symbol ?? tokenId
   } else {
-    // Native balance - use chainFeeCoin
     decimals = chainFeeCoin[chain].decimals
     symbol = chainFeeCoin[chain].ticker
   }
 
   return {
     amount: rawBalance.toString(),
+    formattedAmount: toHumanReadable(rawBalance, decimals),
     symbol,
     decimals,
     chainId: chain,

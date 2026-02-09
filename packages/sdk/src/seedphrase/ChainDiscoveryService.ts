@@ -11,7 +11,7 @@ import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { SUPPORTED_CHAINS } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'
 import { MasterKeyDeriver } from './MasterKeyDeriver'
-import type { ChainDiscoveryProgress, ChainDiscoveryResult } from './types'
+import type { ChainDiscoveryAggregate, ChainDiscoveryProgress, ChainDiscoveryResult } from './types'
 
 /**
  * Configuration for chain discovery
@@ -63,9 +63,12 @@ export class ChainDiscoveryService {
   /**
    * Discover chains with balances for a mnemonic
    *
+   * Also checks Solana's Phantom wallet derivation path and determines
+   * if it should be used (when Phantom path has balance but standard doesn't).
+   *
    * @param mnemonic - BIP39 mnemonic phrase
    * @param options - Discovery options
-   * @returns Array of discovery results for each chain
+   * @returns Aggregate result with chain discoveries and Phantom Solana path flag
    */
   async discoverChains(
     mnemonic: string,
@@ -73,7 +76,7 @@ export class ChainDiscoveryService {
       config?: ChainDiscoveryConfig
       onProgress?: (progress: ChainDiscoveryProgress) => void
     }
-  ): Promise<ChainDiscoveryResult[]> {
+  ): Promise<ChainDiscoveryAggregate> {
     const config = options?.config ?? {}
     const onProgress = options?.onProgress
     // Ensure concurrencyLimit is at least 1 to prevent infinite loop
@@ -145,6 +148,34 @@ export class ChainDiscoveryService {
       }
     }
 
+    // Check Phantom Solana path if Solana was in the scan
+    let usePhantomSolanaPath = false
+    const solanaResult = results.find(r => r.chain === Chain.Solana)
+
+    if (solanaResult) {
+      try {
+        const phantomCheck = await this.checkPhantomSolanaBalance(mnemonic, timeoutPerChain)
+        const standardBalance = BigInt(solanaResult.balance || '0')
+
+        // Use Phantom path if it has balance AND standard path has no balance
+        // This matches vultisig-windows upstream logic
+        usePhantomSolanaPath = phantomCheck.balance > 0n && standardBalance === 0n
+
+        // If Phantom has balance but standard doesn't, update the Solana result
+        if (usePhantomSolanaPath) {
+          solanaResult.address = phantomCheck.address
+          solanaResult.balance = phantomCheck.balance.toString()
+          solanaResult.hasBalance = true
+          if (!chainsWithBalance.includes(Chain.Solana)) {
+            chainsWithBalance.push(Chain.Solana)
+          }
+        }
+      } catch (error) {
+        // Phantom check failed, continue with standard path
+        console.warn('Failed to check Phantom Solana path:', error)
+      }
+    }
+
     // Report completion
     onProgress?.({
       phase: 'complete',
@@ -154,7 +185,10 @@ export class ChainDiscoveryService {
       message: `Found ${chainsWithBalance.length} chain${chainsWithBalance.length === 1 ? '' : 's'} with balance`,
     })
 
-    return results
+    return {
+      results,
+      usePhantomSolanaPath,
+    }
   }
 
   /**
@@ -227,6 +261,36 @@ export class ChainDiscoveryService {
         hasBalance: false,
       }
     }
+  }
+
+  /**
+   * Check Solana balance using Phantom wallet's derivation path
+   *
+   * Phantom uses m/44'/501'/0'/0' instead of the standard Solana BIP44 path.
+   * This helps detect wallets that were originally created in Phantom.
+   */
+  private async checkPhantomSolanaBalance(
+    mnemonic: string,
+    timeout: number
+  ): Promise<{ address: string; balance: bigint }> {
+    // Create timeout promise with cleanup
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Timeout checking Phantom Solana path')), timeout)
+    })
+
+    const checkPromise = async () => {
+      const address = await this.keyDeriver.deriveSolanaAddressWithPhantomPath(mnemonic)
+      const balance = await getCoinBalance({
+        chain: Chain.Solana,
+        address,
+      })
+      return { address, balance }
+    }
+
+    return Promise.race([checkPromise(), timeoutPromise]).finally(() => {
+      if (timeoutId) clearTimeout(timeoutId)
+    })
   }
 
   /**

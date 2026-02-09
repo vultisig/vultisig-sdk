@@ -56,19 +56,16 @@ vultisig completion fish >> ~/.config/fish/completions/vultisig.fish
 ### Create a Fast Vault
 
 ```bash
-vultisig create
+vultisig create fast --name "My Wallet" --password "mypassword" --email user@example.com
 ```
 
 You'll be prompted to:
-1. Enter a vault name
-2. Set a password (min 8 characters)
-3. Provide an email for verification
-4. Enter the verification code sent to your email
+1. Enter the verification code sent to your email
 
 ### Create a Secure Vault (Multi-Device)
 
 ```bash
-vultisig create --secure --name "Team Wallet" --shares 3
+vultisig create secure --name "Team Wallet" --shares 3
 ```
 
 This creates a secure vault with configurable N-of-M threshold:
@@ -78,12 +75,12 @@ This creates a secure vault with configurable N-of-M threshold:
 4. Vault is created and ready to use
 
 **Secure vault options:**
-- `--shares <n>` - Number of participating devices (default: 2)
-- `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
+- `--shares <n>` - Number of participating devices (default: 3)
+- `--threshold <n>` - Signing threshold (default: 2)
 
 **Example session:**
 ```bash
-$ vultisig create --secure --name "Team Wallet" --shares 3
+$ vultisig create secure --name "Team Wallet" --shares 3
 
 Creating secure vault: Team Wallet (2-of-3)
 
@@ -111,28 +108,30 @@ Import an existing wallet from a BIP39 recovery phrase (12 or 24 words):
 
 ```bash
 # FastVault import (server-assisted 2-of-2)
-vultisig import-seedphrase fast --name "Imported Wallet" --email user@example.com
+vultisig create-from-seedphrase fast --name "Imported Wallet" --email user@example.com
 
 # SecureVault import (multi-device MPC)
-vultisig import-seedphrase secure --name "Team Wallet" --shares 3
+vultisig create-from-seedphrase secure --name "Team Wallet" --shares 3
 ```
 
 **Import options:**
 - `--mnemonic <words>` - Recovery phrase (space-separated words)
 - `--discover-chains` - Scan chains for existing balances before import
 - `--chains <chains>` - Specific chains to enable (comma-separated)
+- `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
 When `--mnemonic` is not provided, you'll be prompted to enter it securely (masked input).
 
+> **Note:** Phantom wallet uses a non-standard derivation path for Solana. If your seedphrase was originally created in Phantom and you're importing Solana funds, use `--use-phantom-solana-path`. When using `--discover-chains`, this is auto-detected.
+
 **Example session:**
 ```bash
-$ vultisig import-seedphrase fast --name "My Wallet" --email user@example.com --discover-chains
+$ vultisig create-from-seedphrase fast --name "My Wallet" --email user@example.com --password "mypassword" --discover-chains
 
 Enter your 12 or 24-word recovery phrase.
 Words will be hidden as you type.
 
 Seedphrase: ************************
-Password: ********
 ✓ Valid 12-word seedphrase
 
 Discovering chains with balances...
@@ -216,11 +215,13 @@ vultisig -i
 
 | Command | Description |
 |---------|-------------|
-| `create` | Create a new fast vault (server-assisted) |
-| `create --secure` | Create a secure vault (multi-device MPC) |
+| `create fast` | Create a new fast vault (server-assisted 2-of-2) |
+| `create secure` | Create a secure vault (multi-device MPC) |
 | `import <file>` | Import vault from .vult file |
-| `import-seedphrase fast` | Import seedphrase as FastVault (2-of-2) |
-| `import-seedphrase secure` | Import seedphrase as SecureVault (N-of-M) |
+| `delete [vault]` | Delete a vault from local storage |
+| `create-from-seedphrase fast` | Import seedphrase as FastVault (2-of-2) |
+| `create-from-seedphrase secure` | Import seedphrase as SecureVault (N-of-M) |
+| `join secure` | Join an existing SecureVault creation session |
 | `export [path]` | Export vault to file |
 | `verify <vaultId>` | Verify vault with email code |
 | `vaults` | List all stored vaults |
@@ -228,28 +229,60 @@ vultisig -i
 | `rename <newName>` | Rename the active vault |
 | `info` | Show detailed vault information |
 
-**Create options:**
-- `--secure` - Create a secure vault instead of fast vault
-- `--name <name>` - Vault name
-- `--shares <n>` - Number of devices for secure vault (default: 2)
-- `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
+**Create fast options:**
+- `--name <name>` - Vault name (required)
+- `--password <password>` - Vault password (required)
+- `--email <email>` - Email for verification (required)
 
-**Import seedphrase options (fast):**
+**Create secure options:**
+- `--name <name>` - Vault name (required)
+- `--password <password>` - Vault password (optional)
+- `--shares <n>` - Number of devices (default: 3)
+- `--threshold <n>` - Signing threshold (default: 2)
+
+**Delete options:**
+- `[vault]` - Vault name or ID to delete (defaults to active vault)
+- `-y, --yes` - Skip confirmation prompt
+
+```bash
+# Delete by vault name
+vultisig delete "My Wallet"
+
+# Delete by vault ID (or prefix)
+vultisig delete abc123
+
+# Delete active vault
+vultisig delete
+
+# Skip confirmation (for scripts)
+vultisig delete "Test Vault" --yes
+```
+
+**Join secure options:**
+- `--qr <payload>` - QR code payload from initiator (vultisig://...)
+- `--qr-file <path>` - Read QR payload from file
+- `--mnemonic <words>` - Seedphrase (required for seedphrase-based sessions)
+- `--password <password>` - Vault password (optional)
+- `--devices <n>` - Total devices in session (default: 2)
+
+**Create-from-seedphrase fast options:**
 - `--name <name>` - Vault name (required)
 - `--email <email>` - Email for verification (required)
-- `--password <password>` - Vault password (required, prompted if not provided)
+- `--password <password>` - Vault password (required)
 - `--mnemonic <words>` - Recovery phrase (prompted securely if not provided)
 - `--discover-chains` - Auto-enable chains with existing balances
 - `--chains <chains>` - Specific chains to enable (comma-separated)
+- `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
-**Import seedphrase options (secure):**
+**Create-from-seedphrase secure options:**
 - `--name <name>` - Vault name (required)
-- `--shares <n>` - Number of devices (default: 2)
+- `--shares <n>` - Number of devices (default: 3)
 - `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
 - `--password <password>` - Vault password (optional)
 - `--mnemonic <words>` - Recovery phrase (prompted securely if not provided)
 - `--discover-chains` - Auto-enable chains with existing balances
 - `--chains <chains>` - Specific chains to enable (comma-separated)
+- `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
 **Export options:**
 - `[path]` - Output file or directory (defaults to SDK-generated filename in current directory)
@@ -299,6 +332,9 @@ vultisig export
 | `swap <from> <to> <amount>` | Execute a swap |
 
 ```bash
+# Get a swap quote
+vultisig swap-quote ethereum bitcoin 0.1
+
 # Execute a swap
 vultisig swap ethereum bitcoin 0.1
 
@@ -308,6 +344,8 @@ vultisig swap ethereum bitcoin 0.1 --password mypassword
 # Skip confirmation prompt
 vultisig swap ethereum bitcoin 0.1 -y --password mypassword
 ```
+
+Swap quotes and previews show your VULT discount tier when affiliate fees are applied. See `vultisig discount` for tier details.
 
 ### Advanced Operations
 
@@ -513,7 +551,50 @@ vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"<base64-tx-bytes>","sign
 |---------|-------------|
 | `currency [code]` | View or set currency preference |
 | `server` | Check server connectivity |
+| `discount` | Show your VULT discount tier for swap fees |
 | `address-book` | Manage saved addresses |
+
+#### Discount Tiers
+
+View your VULT token holdings discount tier for reduced swap fees:
+
+```bash
+# Show current discount tier
+vultisig discount
+
+# Force refresh from blockchain
+vultisig discount --refresh
+```
+
+**Output:**
+```text
++----------------------------------------+
+|          VULT Discount Tier            |
++----------------------------------------+
+
+  Current Tier:   Gold
+  Swap Fee:       30 bps (0.30%)
+  Discount:       20 bps saved
+
+  Next Tier:
+    Platinum - requires 15,000 VULT
+
+  Tip: Thorguard NFT holders get +1 tier upgrade (up to gold)
+```
+
+**Tier levels:**
+
+| Tier | VULT Required | Swap Fee | Discount |
+|------|---------------|----------|----------|
+| None | 0 | 50 bps | - |
+| Bronze | 1,500 | 45 bps | 5 bps |
+| Silver | 3,000 | 40 bps | 10 bps |
+| Gold | 7,500 | 30 bps | 20 bps |
+| Platinum | 15,000 | 25 bps | 25 bps |
+| Diamond | 100,000 | 15 bps | 35 bps |
+| Ultimate | 1,000,000 | 0 bps | 50 bps |
+
+Thorguard NFT holders receive a free tier upgrade (up to gold tier).
 
 ### CLI Management
 
@@ -528,8 +609,10 @@ vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"<base64-tx-bytes>","sign
 | Command | Description |
 |---------|-------------|
 | `vault <name>` | Switch to a different vault |
-| `create <fast\|secure>` | Create a new vault |
-| `import-seedphrase <fast\|secure>` | Import wallet from recovery phrase |
+| `vaults` | List all vaults |
+| `create` | Create a new vault |
+| `import <file>` | Import vault from file |
+| `delete [name]` | Delete a vault |
 | `lock` | Lock vault (clear cached password) |
 | `unlock` | Unlock vault (cache password) |
 | `status` | Show vault status |
@@ -732,7 +815,7 @@ Configuration is stored in `~/.vultisig/`:
 
 Create or import a vault first:
 ```bash
-vultisig create
+vultisig create fast --name "My Wallet" --password "mypassword" --email user@example.com
 # or
 vultisig import /path/to/vault.vult
 ```
