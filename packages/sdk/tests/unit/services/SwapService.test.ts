@@ -135,24 +135,27 @@ describe('SwapService', () => {
       const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
-        native: {
-          swapChain: 'THORChain' as const,
-          expected_amount_out: '1000000000',
-          expiry: Math.floor(Date.now() / 1000) + 600,
-          fees: {
-            affiliate: '0',
-            asset: 'ETH',
-            outbound: '100000',
-            total: '100000',
+        quote: {
+          native: {
+            swapChain: 'THORChain' as const,
+            expected_amount_out: '1000000000',
+            expiry: Math.floor(Date.now() / 1000) + 600,
+            fees: {
+              affiliate: '0',
+              asset: 'ETH',
+              outbound: '100000',
+              total: '100000',
+            },
+            inbound_address: '0x...',
+            memo: '=:ETH.ETH:0x...',
+            notes: '',
+            outbound_delay_blocks: 0,
+            outbound_delay_seconds: 0,
+            recommended_min_amount_in: '1000000',
+            warning: '',
           },
-          inbound_address: '0x...',
-          memo: '=:ETH.ETH:0x...',
-          notes: '',
-          outbound_delay_blocks: 0,
-          outbound_delay_seconds: 0,
-          recommended_min_amount_in: '1000000',
-          warning: '',
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
@@ -190,19 +193,22 @@ describe('SwapService', () => {
       const { getErc20Allowance } = await import('@core/chain/chains/evm/erc20/getErc20Allowance')
 
       const mockQuote = {
-        general: {
-          dstAmount: '1000000000',
-          provider: '1inch' as const,
-          tx: {
-            evm: {
-              from: '0x1234...',
-              to: '0x1111111254fb6c44bAC0beD2854e76F90643097d', // 1inch router
-              data: '0x...',
-              value: '0',
-              gasLimit: 300000n,
+        quote: {
+          general: {
+            dstAmount: '1000000000',
+            provider: '1inch' as const,
+            tx: {
+              evm: {
+                from: '0x1234...',
+                to: '0x1111111254fb6c44bAC0beD2854e76F90643097d', // 1inch router
+                data: '0x...',
+                value: '0',
+                gasLimit: 300000n,
+              },
             },
           },
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -237,18 +243,21 @@ describe('SwapService', () => {
       const { getErc20Allowance } = await import('@core/chain/chains/evm/erc20/getErc20Allowance')
 
       const mockQuote = {
-        general: {
-          dstAmount: '1000000000000000000',
-          provider: '1inch' as const,
-          tx: {
-            evm: {
-              from: '0x1234...',
-              to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
-              data: '0x...',
-              value: '0',
+        quote: {
+          general: {
+            dstAmount: '1000000000000000000',
+            provider: '1inch' as const,
+            tx: {
+              evm: {
+                from: '0x1234...',
+                to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
+                data: '0x...',
+                value: '0',
+              },
             },
           },
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -280,23 +289,26 @@ describe('SwapService', () => {
       const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
-        native: {
-          swapChain: 'THORChain' as const,
-          expected_amount_out: '500000000',
-          expiry: Math.floor(Date.now() / 1000) + 600,
-          fees: {
-            affiliate: '0',
-            asset: 'BTC',
-            outbound: '50000',
-            total: '50000',
+        quote: {
+          native: {
+            swapChain: 'THORChain' as const,
+            expected_amount_out: '500000000',
+            expiry: Math.floor(Date.now() / 1000) + 600,
+            fees: {
+              affiliate: '0',
+              asset: 'BTC',
+              outbound: '50000',
+              total: '50000',
+            },
+            memo: '=:BTC.BTC:bc1q...',
+            notes: '',
+            outbound_delay_blocks: 0,
+            outbound_delay_seconds: 0,
+            recommended_min_amount_in: '100000',
+            warning: '',
           },
-          memo: '=:BTC.BTC:bc1q...',
-          notes: '',
-          outbound_delay_blocks: 0,
-          outbound_delay_seconds: 0,
-          recommended_min_amount_in: '100000',
-          warning: '',
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
