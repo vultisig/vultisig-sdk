@@ -4,6 +4,7 @@
  */
 
 import type { FinExecuteMsg } from '../types.js';
+import { base64Decode, base64Encode } from './encoding.js';
 
 /**
  * Validate a memo component does not contain delimiter characters.
@@ -43,7 +44,7 @@ export function buildExecuteMemo(
   contractAddress: string,
   msg: object
 ): string {
-  const msgBase64 = Buffer.from(JSON.stringify(msg)).toString('base64');
+  const msgBase64 = base64Encode(JSON.stringify(msg));
   return `x:${contractAddress}:${msgBase64}`;
 }
 
@@ -74,7 +75,7 @@ export function parseExecuteMemo(memo: string): {
   }
 
   try {
-    const msg = JSON.parse(Buffer.from(msgBase64, 'base64').toString()) as object;
+    const msg = JSON.parse(base64Decode(msgBase64)) as object;
     return { contract, msg };
   } catch {
     return null;

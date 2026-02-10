@@ -47,6 +47,12 @@ export function calculatePriceImpact(
   // execution_price = output / input
   const executionPrice = output.div(input);
 
+  // Detect unit mismatch from reversed-pair contract
+  const ratio = executionPrice.div(midPrice);
+  if (ratio.gt(100) || ratio.lt(0.01)) {
+    return 'unknown';
+  }
+
   // impact = abs((execution_price - midPrice) / midPrice) * 100
   const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
 

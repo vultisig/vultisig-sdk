@@ -7,9 +7,9 @@ import { Coin } from '@cosmjs/proto-signing';
 import { GasPrice, StargateClient } from '@cosmjs/stargate';
 
 import { MAINNET_CONFIG, type RujiraConfig } from './config.js';
-import { DEFAULT_GAS_PRICE, DEFAULT_TIMEOUT_MS } from './config/constants.js';
-import { RujiraError, RujiraErrorCode, wrapError } from './errors.js';
+import { DEFAULT_TIMEOUT_MS } from './config/constants.js';
 import { RujiraDiscovery } from './discovery/discovery.js';
+import { RujiraError, RujiraErrorCode, wrapError } from './errors.js';
 import { RujiraAssets } from './modules/assets.js';
 import { RujiraDeposit } from './modules/deposit.js';
 import { RujiraOrderbook } from './modules/orderbook.js';
@@ -17,9 +17,10 @@ import { RujiraSwap, type RujiraSwapOptions } from './modules/swap.js';
 import { RujiraWithdraw } from './modules/withdraw.js';
 import type { RujiraSigner } from './signer/types.js';
 import type { BookResponse, FinQueryMsg, SimulationResponse } from './types.js';
+import { base64Encode } from './utils/encoding.js';
 import { thornodeRateLimiter } from './utils/rate-limiter.js';
 
-export interface RujiraClientOptions {
+export type RujiraClientOptions = {
   config?: Partial<RujiraConfig>;
   signer?: RujiraSigner;
   rpcEndpoint?: string;
@@ -207,7 +208,7 @@ export class RujiraClient {
     contractAddress: string,
     query: object
   ): Promise<T> {
-    const encoded = Buffer.from(JSON.stringify(query)).toString('base64');
+    const encoded = base64Encode(JSON.stringify(query));
 
     const base = this.config.restEndpoint.replace(/\/$/, '');
     const url = `${base}/cosmwasm/wasm/v1/contract/${contractAddress}/smart/${encoded}?gas_limit=${this.config.wasmQueryGasLimit}`;
