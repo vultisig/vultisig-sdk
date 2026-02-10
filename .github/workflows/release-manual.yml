@@ -17,116 +17,40 @@ on:
         required: false
         type: boolean
         default: true
+      sync_skills:
+        description: 'Sync skills to vultisig/website-prod'
+        required: false
+        type: boolean
+        default: true
       notify_discord:
         description: 'Send Discord notification'
         required: false
         type: boolean
         default: true
 
-env:
-  VERSION: ${{ inputs.version }}
-
 jobs:
   deploy-vercel:
-    name: Deploy Vercel
     if: inputs.deploy_vercel
-    runs-on: ubuntu-latest
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
-        with:
-          node-version: "20"
-
-      - run: corepack enable
-      - run: corepack prepare yarn@4.12.0 --activate
-      - run: yarn install --immutable
-      - run: yarn build:sdk
-
-      - run: npm install -g vercel
-
-      - name: Build & Deploy
-        id: deploy
-        working-directory: ./examples/browser
-        run: |
-          yarn build
-          cp vercel.json dist/
-          DEPLOY_URL=$(vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    uses: ./.github/workflows/deploy-vercel.yml
+    secrets: inherit
 
   sync-docs:
-    name: Sync Docs
     if: inputs.sync_docs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+    uses: ./.github/workflows/sync-docs.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        with:
-          repository: vultisig/docs
-          token: ${{ secrets.DOCS_REPO_PAT }}
-          path: docs-repo
-
-      - name: Sync and push
-        run: |
-          mkdir -p docs-repo/developer-docs/vultisig-sdk
-          cp packages/sdk/README.md docs-repo/developer-docs/vultisig-sdk/README.md
-          cp docs/SDK-USERS-GUIDE.md docs-repo/developer-docs/vultisig-sdk/SDK-USERS-GUIDE.md
-          cp clients/cli/README.md docs-repo/developer-docs/vultisig-sdk/CLI.md
-          cd docs-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add developer-docs/vultisig-sdk/
-          git diff --staged --quiet || git commit -m "docs: sync vultisig-sdk v$VERSION"
-          git push
+  sync-skills:
+    if: inputs.sync_skills
+    uses: ./.github/workflows/sync-skills.yml
+    secrets: inherit
 
   notify:
-    name: Discord Notify
-    needs: [deploy-vercel, sync-docs]
+    needs: [deploy-vercel, sync-docs, sync-skills]
     if: always() && inputs.notify_discord
-    runs-on: ubuntu-latest
-    steps:
-      - name: Notify Discord
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          BROWSER_URL: ${{ needs.deploy-vercel.outputs.url }}
-        run: |
-          curl -X POST "$DISCORD_WEBHOOK" \
-            -H "Content-Type: application/json" \
-            -d @- << EOF
-          {
-            "embeds": [{
-              "title": "VultisigSDK v${VERSION} Released!",
-              "color": 5814783,
-              "description": "A new version of VultisigSDK has been published to npm.",
-              "fields": [
-                {
-                  "name": "Packages",
-                  "value": "[@vultisig/sdk](https://www.npmjs.com/package/@vultisig/sdk)\n[@vultisig/cli](https://www.npmjs.com/package/@vultisig/cli)",
-                  "inline": true
-                },
-                {
-                  "name": "Version",
-                  "value": "v${VERSION}",
-                  "inline": true
-                },
-                {
-                  "name": "Installation",
-                  "value": "\`\`\`bash\nnpm install @vultisig/sdk@${VERSION}\n\`\`\`"
-                },
-                {
-                  "name": "Links",
-                  "value": "[Documentation](https://vultisig.github.io/vultisig-sdk/) | [Browser Demo](https://browser-six-sandy.vercel.app/) | [Changelog](https://github.com/vultisig/vultisig-sdk/releases) | [GitHub](https://github.com/vultisig/vultisig-sdk)"
-                }
-              ],
-              "footer": {
-                "text": "VultisigSDK - Multi-party computation wallet SDK"
-              }
-            }]
-          }
-          EOF
+    uses: ./.github/workflows/notify-discord.yml
+    with:
+      version: ${{ inputs.version }}
+      browser_url: ${{ needs.deploy-vercel.outputs.url }}
+    secrets: inherit

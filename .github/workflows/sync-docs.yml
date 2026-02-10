@@ -1,0 +1,43 @@
+name: Sync Docs
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "SDK version (e.g., 0.2.0)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SDK version (e.g., 0.2.0)"
+        required: true
+        type: string
+
+jobs:
+  sync-docs:
+    name: Sync Docs
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          repository: vultisig/docs
+          token: ${{ secrets.DOCS_REPO_PAT }}
+          path: docs-repo
+
+      - name: Sync and push
+        run: |
+          mkdir -p docs-repo/developer-docs/vultisig-sdk
+          cp packages/sdk/README.md docs-repo/developer-docs/vultisig-sdk/README.md
+          cp docs/SDK-USERS-GUIDE.md docs-repo/developer-docs/vultisig-sdk/SDK-USERS-GUIDE.md
+          cp clients/cli/README.md docs-repo/developer-docs/vultisig-sdk/CLI.md
+          cd docs-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add developer-docs/vultisig-sdk/
+          git diff --staged --quiet || git commit -m "docs: sync vultisig-sdk v$VERSION"
+          git push
