@@ -5807,14 +5807,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vultisig/assets@file:../assets::locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira":
-  version: 0.1.0
-  resolution: "@vultisig/assets@file:../assets#../assets::hash=144204&locator=%40vultisig%2Frujira%40workspace%3Apackages%2Frujira"
-  checksum: 10c0/521687e133af08d00fea96c5fc69d8f803d72a5497f232efdf4c71d77af46e2c145ff40a9a301abf48ea228ac78d6969c9e968b5a72afefd72c151bd2552fecc
-  languageName: node
-  linkType: hard
-
-"@vultisig/assets@workspace:packages/assets":
+"@vultisig/assets@workspace:*, @vultisig/assets@workspace:packages/assets":
   version: 0.0.0-use.local
   resolution: "@vultisig/assets@workspace:packages/assets"
   dependencies:
@@ -5937,7 +5930,7 @@ __metadata:
     "@types/node": "npm:^20.0.0"
     "@typescript-eslint/eslint-plugin": "npm:^8.0.0"
     "@typescript-eslint/parser": "npm:^8.0.0"
-    "@vultisig/assets": "file:../assets"
+    "@vultisig/assets": "workspace:*"
     big.js: "npm:^7.0.1"
     cosmjs-types: "npm:^0.9.0"
     eslint: "npm:^8.57.0"
