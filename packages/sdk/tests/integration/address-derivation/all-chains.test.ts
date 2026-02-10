@@ -298,8 +298,8 @@ describe('Integration: Multi-Chain Address Derivation', () => {
         await vault.address('BitcoinCash' as Chain)
         expect.unreachable('should have thrown')
       } catch (error: any) {
-        // After the match() guard, the inner error now clearly identifies the bad value
-        expect(error.originalError?.message).toMatch(/No match handler for: "BitcoinCash"/)
+        // SDK-level chain validation catches invalid enum values before they reach upstream match()
+        expect(error.message).toMatch(/Invalid chain: "BitcoinCash"/)
       }
     })
   })

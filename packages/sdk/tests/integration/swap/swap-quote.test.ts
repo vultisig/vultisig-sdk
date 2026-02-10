@@ -179,24 +179,27 @@ describe('Integration: Swap Quote', () => {
 
       // Mock THORChain quote
       const mockQuote = {
-        native: {
-          swapChain: 'THORChain' as const,
-          expected_amount_out: '5000000', // 0.05 BTC in sats
-          expiry: Math.floor(Date.now() / 1000) + 600,
-          fees: {
-            affiliate: '0',
-            asset: 'BTC',
-            outbound: '10000',
-            total: '10000',
+        quote: {
+          native: {
+            swapChain: 'THORChain' as const,
+            expected_amount_out: '5000000', // 0.05 BTC in sats
+            expiry: Math.floor(Date.now() / 1000) + 600,
+            fees: {
+              affiliate: '0',
+              asset: 'BTC',
+              outbound: '10000',
+              total: '10000',
+            },
+            inbound_address: 'bc1q...',
+            memo: '=:BTC.BTC:bc1q...',
+            notes: '',
+            outbound_delay_blocks: 0,
+            outbound_delay_seconds: 0,
+            recommended_min_amount_in: '100000000000000000',
+            warning: '',
           },
-          inbound_address: 'bc1q...',
-          memo: '=:BTC.BTC:bc1q...',
-          notes: '',
-          outbound_delay_blocks: 0,
-          outbound_delay_seconds: 0,
-          recommended_min_amount_in: '100000000000000000',
-          warning: '',
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
@@ -239,19 +242,22 @@ describe('Integration: Swap Quote', () => {
 
       // Mock 1inch quote
       const mockQuote = {
-        general: {
-          dstAmount: '1000000000000000000', // 1 ETH
-          provider: '1inch' as const,
-          tx: {
-            evm: {
-              from: '0x1234...',
-              to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
-              data: '0x...',
-              value: '0',
-              gasLimit: 300000n,
+        quote: {
+          general: {
+            dstAmount: '1000000000000000000', // 1 ETH
+            provider: '1inch' as const,
+            tx: {
+              evm: {
+                from: '0x1234...',
+                to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
+                data: '0x...',
+                value: '0',
+                gasLimit: 300000n,
+              },
             },
           },
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -351,24 +357,27 @@ describe('Integration: Swap Quote', () => {
       const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
-        native: {
-          swapChain: 'THORChain' as const,
-          expected_amount_out: '100000000', // 1 BTC
-          expiry: Math.floor(Date.now() / 1000) + 600,
-          fees: {
-            affiliate: '50000',
-            asset: 'BTC',
-            outbound: '100000',
-            total: '150000',
+        quote: {
+          native: {
+            swapChain: 'THORChain' as const,
+            expected_amount_out: '100000000', // 1 BTC
+            expiry: Math.floor(Date.now() / 1000) + 600,
+            fees: {
+              affiliate: '50000',
+              asset: 'BTC',
+              outbound: '100000',
+              total: '150000',
+            },
+            inbound_address: 'bc1q...',
+            memo: '=:BTC.BTC:bc1q...',
+            notes: '',
+            outbound_delay_blocks: 0,
+            outbound_delay_seconds: 0,
+            recommended_min_amount_in: '100000000000000000',
+            warning: 'Slippage may be high',
           },
-          inbound_address: 'bc1q...',
-          memo: '=:BTC.BTC:bc1q...',
-          notes: '',
-          outbound_delay_blocks: 0,
-          outbound_delay_seconds: 0,
-          recommended_min_amount_in: '100000000000000000',
-          warning: 'Slippage may be high',
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)

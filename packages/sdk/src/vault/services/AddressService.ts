@@ -5,6 +5,7 @@ import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
 import type { WasmProvider } from '../../context/SdkContext'
 import { CacheScope, type CacheService } from '../../services/CacheService'
+import { assertValidChain } from '../../utils/chainValidation'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -25,6 +26,7 @@ export class AddressService {
    * Uses CacheService with automatic persistent caching
    */
   async getAddress(chain: Chain): Promise<string> {
+    assertValidChain(chain)
     return this.cacheService.getOrComputeScoped(chain.toLowerCase(), CacheScope.ADDRESS, async () => {
       // Derive address (expensive WASM operation)
       try {
