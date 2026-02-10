@@ -2,8 +2,8 @@ import { Coin } from '@cosmjs/proto-signing';
 import { Amount, findAssetByFormat } from '@vultisig/assets';
 import Big from 'big.js';
 
-import { EASY_ROUTES, type EasyRouteName, type EasySwapRequest } from '../easy-routes.js';
 import type { RujiraClient } from '../client.js';
+import { EASY_ROUTES, type EasyRouteName, type EasySwapRequest } from '../easy-routes.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
 import { calculatePriceImpact } from '../services/price-impact.js';
 import type {
@@ -14,10 +14,11 @@ import type {
   SwapResult,
 } from '../types.js';
 import { QuoteCache, type QuoteCacheOptions } from '../utils/cache.js';
+import { base64Encode } from '../utils/encoding.js';
 import { calculateMinReturn, generateQuoteId } from '../utils/format.js';
 import { validateThorAddress } from '../validation/address-validator.js';
 
-export interface RujiraSwapOptions {
+export type RujiraSwapOptions = {
   cache?: QuoteCacheOptions | false;
   quoteExpiryBufferMs?: number;
   quoteTtlMs?: number;
@@ -261,7 +262,7 @@ export class RujiraSwap {
 
   async buildL1Memo(params: QuoteParams): Promise<string> {
     const { contractAddress, msg } = await this.buildTransaction(params);
-    const msgBase64 = Buffer.from(JSON.stringify(msg)).toString('base64');
+    const msgBase64 = base64Encode(JSON.stringify(msg));
     return `x:${contractAddress}:${msgBase64}`;
   }
 

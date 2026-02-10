@@ -100,7 +100,7 @@ export async function executeRujiraRoutes(): Promise<void> {
       name: r.name,
       from: r.from,
       to: r.to,
-      via: r.via,
+      liquidity: r.liquidity,
       description: r.description,
     }))
   )

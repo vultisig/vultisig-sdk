@@ -5,11 +5,12 @@
 
 import { THORCHAIN_TO_SDK_CHAIN } from '../config.js';
 import { THORCHAIN_DECIMALS } from '../config/constants.js';
-import { parseAsset } from '../utils/denom-conversion.js';
-import type { KeysignPayload, VultisigVault } from './types.js';
 import type { PreparedWithdraw } from '../modules/withdraw.js';
+import { parseAsset } from '../utils/denom-conversion.js';
+import { base64Encode } from '../utils/encoding.js';
+import type { KeysignPayload, VultisigVault } from './types.js';
 
-export interface KeysignBuildParams {
+export type KeysignBuildParams = {
   vault: VultisigVault;
   senderAddress: string;
   prepared: PreparedWithdraw;
@@ -39,8 +40,8 @@ export async function buildWithdrawalKeysignPayload(
         decimals: THORCHAIN_DECIMALS,
         ticker: 'RUNE',
       },
-      bodyBytes: Buffer.from('dummy').toString('base64'),
-      authInfoBytes: Buffer.from('dummy').toString('base64'),
+      bodyBytes: base64Encode('dummy'),
+      authInfoBytes: base64Encode('dummy'),
       chainId: 'thorchain-1',
       accountNumber: accountInfo.accountNumber,
       memo: prepared.memo,

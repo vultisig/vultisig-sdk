@@ -1,7 +1,9 @@
 import type { AccountData, DirectSignResponse } from '@cosmjs/proto-signing';
+
+import { base64Encode, bytesToBase64, hexEncode } from '../utils/encoding.js';
 import type { RujiraSigner, VultisigSignature, VultisigVault } from './types.js';
 
-interface SignDoc {
+type SignDoc = {
   bodyBytes: Uint8Array;
   authInfoBytes: Uint8Array;
   chainId: string;
@@ -44,8 +46,8 @@ export class VultisigRujiraProvider implements RujiraSigner {
         decimals: THORCHAIN_CONFIG.decimals,
         ticker: THORCHAIN_CONFIG.ticker,
       },
-      bodyBytes: Buffer.from('dummy').toString('base64'),
-      authInfoBytes: Buffer.from('dummy').toString('base64'),
+      bodyBytes: base64Encode('dummy'),
+      authInfoBytes: base64Encode('dummy'),
       chainId: this.chainId,
       accountNumber: '0',
     });
@@ -108,7 +110,7 @@ export class VultisigRujiraProvider implements RujiraSigner {
       signature: {
         pub_key: {
           type: 'tendermint/PubKeySecp256k1',
-          value: Buffer.from(pubKey).toString('base64'),
+          value: bytesToBase64(pubKey),
         },
         signature: this.hexToBase64(normalizedSig),
       },
@@ -145,7 +147,7 @@ export class VultisigRujiraProvider implements RujiraSigner {
     raw.set(r, 0);
     raw.set(s, 32);
     
-    return Buffer.from(raw).toString('hex');
+    return hexEncode(raw);
   }
 
   private normalizeSignature(signature: VultisigSignature): string {
@@ -274,11 +276,11 @@ export class VultisigRujiraProvider implements RujiraSigner {
   }
 
   private hexToBase64(hex: string): string {
-    return Buffer.from(this.hexToBytes(hex)).toString('base64');
+    return bytesToBase64(this.hexToBytes(hex));
   }
 
   private uint8ArrayToBase64(bytes: Uint8Array): string {
-    return Buffer.from(bytes).toString('base64');
+    return bytesToBase64(bytes);
   }
 }
 

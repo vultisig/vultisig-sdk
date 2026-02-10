@@ -3,7 +3,7 @@
  * @module utils/denom-conversion
  */
 
-import { findAssetByFormat, KNOWN_ASSETS, type Asset } from '@vultisig/assets';
+import { type Asset,findAssetByFormat, KNOWN_ASSETS } from '@vultisig/assets';
 
 /**
  * Convert a denom (any format) to a short ticker for display.
@@ -118,6 +118,8 @@ export function parseAsset(asset: string): {
     chain,
     symbol: rest,
     ticker,
-    contractAddress: contractAddress ? `0x${contractAddress}` : undefined,
+    contractAddress: contractAddress
+      ? `0x${contractAddress.replace(/^0[xX]/, '')}`
+      : undefined,
   };
 }

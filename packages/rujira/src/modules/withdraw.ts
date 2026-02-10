@@ -4,25 +4,25 @@ import { findAssetByFormat } from '@vultisig/assets';
 import type { RujiraClient } from '../client.js';
 import { CHAIN_PROCESSING_TIMES } from '../config.js';
 import { DEFAULT_THORCHAIN_FEE } from '../config/constants.js';
-import { parseAsset as sharedParseAsset } from '../utils/denom-conversion.js';
 import { RujiraError, RujiraErrorCode } from '../errors.js';
 import { estimateWithdrawFee } from '../services/fee-estimator.js';
 import { buildWithdrawalKeysignPayload } from '../signer/keysign-builder.js';
-import type { VultisigVault, WithdrawCapableVault } from '../signer/types.js';
+import type { VultisigVault } from '../signer/types.js';
 import { isWithdrawCapable } from '../signer/types.js';
-import { validateL1Address } from '../validation/address-validator.js';
+import { parseAsset as sharedParseAsset } from '../utils/denom-conversion.js';
 import { buildSecureRedeemMemo } from '../utils/memo.js';
 import { thornodeRateLimiter } from '../utils/rate-limiter.js';
 import { isFinAsset, parseAsset } from '../utils/type-guards.js';
+import { validateL1Address } from '../validation/address-validator.js';
 
-export interface WithdrawParams {
+export type WithdrawParams = {
   asset: string;
   amount: string;
   l1Address: string;
   maxFeeBps?: number;
 }
 
-export interface PreparedWithdraw {
+export type PreparedWithdraw = {
   chain: string;
   asset: string;
   denom: string;
@@ -34,7 +34,7 @@ export interface PreparedWithdraw {
   funds: Coin[];
 }
 
-export interface WithdrawResult {
+export type WithdrawResult = {
   txHash: string;
   asset: string;
   amount: string;
@@ -51,7 +51,7 @@ function hasVaultAccess(signer: unknown): signer is { getVault(): VultisigVault 
   );
 }
 
-interface AccountInfo {
+type AccountInfo = {
   result?: {
     value?: {
       account_number?: string;
@@ -89,16 +89,12 @@ export class RujiraWithdraw {
 
     const fee = await this.estimateWithdrawFee(params.asset, params.amount);
 
-    try {
-      if (BigInt(params.amount) <= BigInt(fee)) {
-        throw new RujiraError(
-          RujiraErrorCode.INVALID_AMOUNT,
-          `Withdrawal amount (${params.amount}) is too small to cover estimated outbound fee (${fee}) for ${params.asset}. ` +
-            'Try a larger amount or wait for lower gas.'
-        );
-      }
-    } catch (error) {
-      if (error instanceof RujiraError) throw error;
+    if (BigInt(params.amount) <= BigInt(fee)) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_AMOUNT,
+        `Withdrawal amount (${params.amount}) is too small to cover estimated outbound fee (${fee}) for ${params.asset}. ` +
+          'Try a larger amount or wait for lower gas.'
+      );
     }
 
     const funds: Coin[] = [{ denom, amount: params.amount }];
