@@ -1,6 +1,7 @@
 {
   "name": "@vultisig/rujira",
   "version": "0.1.0",
+  "type": "module",
   "description": "Rujira DEX integration for Vultisig SDK - Modular TypeScript SDK for swaps and limit orders on THORChain",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -35,7 +36,6 @@
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "dev": "tsc -w",
-    "lint": "eslint src --ext .ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -51,12 +51,9 @@
   },
   "devDependencies": {
     "@types/big.js": "^6.2.2",
-    "@types/node": "^20.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
-    "eslint": "^8.57.0",
-    "typescript": "^5.5.0",
-    "vitest": "^1.6.0"
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
   },
   "peerDependencies": {
     "@vultisig/sdk": ">=0.1.0"
@@ -89,6 +86,6 @@
     "url": "https://github.com/vultisig/vultisig-sdk/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

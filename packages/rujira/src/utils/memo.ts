@@ -3,8 +3,8 @@
  * @module utils/memo
  */
 
-import type { FinExecuteMsg } from '../types.js';
-import { base64Decode, base64Encode } from './encoding.js';
+import type { FinExecuteMsg } from '../types.js'
+import { base64Decode, base64Encode } from './encoding.js'
 
 /**
  * Validate a memo component does not contain delimiter characters.
@@ -17,21 +17,19 @@ import { base64Decode, base64Encode } from './encoding.js';
  */
 export function validateMemoComponent(value: string, fieldName: string): void {
   if (value.includes(':')) {
-    throw new Error(
-      `Invalid ${fieldName}: contains ':' which would corrupt memo parsing. Got: ${value}`
-    );
+    throw new Error(`Invalid ${fieldName}: contains ':' which would corrupt memo parsing. Got: ${value}`)
   }
 }
 
 /**
  * Build a CosmWasm execution memo for Layer 1 deposits
- * 
+ *
  * Format: x:{contract}:{base64_payload}
- * 
+ *
  * @param contractAddress - CosmWasm contract address
  * @param msg - Execute message to encode
  * @returns Formatted memo string
- * 
+ *
  * @example
  * ```typescript
  * const memo = buildExecuteMemo('thor1...fin...', {
@@ -40,77 +38,76 @@ export function validateMemoComponent(value: string, fieldName: string): void {
  * // Returns: "x:thor1...fin...:eyJzd2FwIjp7Im1pbiI6eyJtaW5fcmV0dXJuIjoiMTAwMDAwMCJ9fX0="
  * ```
  */
-export function buildExecuteMemo(
-  contractAddress: string,
-  msg: object
-): string {
-  const msgBase64 = base64Encode(JSON.stringify(msg));
-  return `x:${contractAddress}:${msgBase64}`;
+export function buildExecuteMemo(contractAddress: string, msg: object): string {
+  const msgBase64 = base64Encode(JSON.stringify(msg))
+  const memo = `x:${contractAddress}:${msgBase64}`
+  if (!validateMemoLength(memo)) {
+    throw new Error(
+      `Memo exceeds THORChain 250-char limit (${memo.length} chars). Simplify the message or use a shorter contract address.`
+    )
+  }
+  return memo
 }
 
 /**
  * Parse a CosmWasm execution memo
- * 
+ *
  * @param memo - Memo string to parse
  * @returns Parsed memo or null if invalid
  */
 export function parseExecuteMemo(memo: string): {
-  contract: string;
-  msg: object;
+  contract: string
+  msg: object
 } | null {
   if (!memo.startsWith('x:')) {
-    return null;
+    return null
   }
 
-  const parts = memo.split(':');
+  const parts = memo.split(':')
   if (parts.length !== 3) {
-    return null;
+    return null
   }
 
-  const contract = parts[1];
-  const msgBase64 = parts[2];
+  const contract = parts[1]
+  const msgBase64 = parts[2]
 
   if (!contract || !msgBase64) {
-    return null;
+    return null
   }
 
   try {
-    const msg = JSON.parse(base64Decode(msgBase64)) as object;
-    return { contract, msg };
+    const msg = JSON.parse(base64Decode(msgBase64)) as object
+    return { contract, msg }
   } catch {
-    return null;
+    return null
   }
 }
 
 /**
  * Build a swap memo for Layer 1 deposits
- * 
+ *
  * @param contractAddress - FIN contract address
  * @param minReturn - Minimum return amount
  * @param destination - Destination address (optional)
  * @returns Formatted memo
  */
-export function buildSwapMemo(
-  contractAddress: string,
-  minReturn: string,
-  destination?: string
-): string {
+export function buildSwapMemo(contractAddress: string, minReturn: string, destination?: string): string {
   const msg: FinExecuteMsg = {
     swap: {
       min: {
         min_return: minReturn,
         to: destination,
-      }
-    }
-  };
-  return buildExecuteMemo(contractAddress, msg);
+      },
+    },
+  }
+  return buildExecuteMemo(contractAddress, msg)
 }
 
 /**
  * Build a standard THORChain swap memo
- * 
+ *
  * Format: =:ASSET:DESTINATION:LIMIT:AFFILIATE:FEE
- * 
+ *
  * @param asset - Destination asset (e.g., "BTC.BTC")
  * @param destination - Destination address
  * @param limit - Minimum output (optional)
@@ -124,23 +121,27 @@ export function buildThorSwapMemo(
   affiliate?: string,
   affiliateFee?: number
 ): string {
-  validateMemoComponent(asset, 'asset');
-  validateMemoComponent(destination, 'destination');
-  if (limit) validateMemoComponent(limit, 'limit');
-  if (affiliate) validateMemoComponent(affiliate, 'affiliate');
+  validateMemoComponent(asset, 'asset')
+  validateMemoComponent(destination, 'destination')
+  if (limit) validateMemoComponent(limit, 'limit')
+  if (affiliate) validateMemoComponent(affiliate, 'affiliate')
 
-  const parts = ['=', asset, destination];
+  const parts = ['=', asset, destination]
 
   if (limit) {
-    parts.push(limit);
+    parts.push(limit)
 
     if (affiliate && affiliateFee) {
-      parts.push(affiliate);
-      parts.push(affiliateFee.toString());
+      parts.push(affiliate)
+      parts.push(affiliateFee.toString())
     }
   }
 
-  return parts.join(':');
+  const memo = parts.join(':')
+  if (!validateMemoLength(memo)) {
+    throw new Error(`Memo exceeds THORChain 250-char limit (${memo.length} chars).`)
+  }
+  return memo
 }
 
 /**
@@ -151,8 +152,8 @@ export function buildThorSwapMemo(
  * @param destination - THORChain address to receive secured asset
  */
 export function buildSecureMintMemo(destination: string): string {
-  validateMemoComponent(destination, 'destination');
-  return `secure+:${destination}`;
+  validateMemoComponent(destination, 'destination')
+  return `secure+:${destination}`
 }
 
 /**
@@ -163,69 +164,66 @@ export function buildSecureMintMemo(destination: string): string {
  * @param destination - L1 address to receive native asset
  */
 export function buildSecureRedeemMemo(destination: string): string {
-  validateMemoComponent(destination, 'destination');
-  return `secure-:${destination}`;
+  validateMemoComponent(destination, 'destination')
+  return `secure-:${destination}`
 }
 
 /**
  * Parse a THORChain memo to determine its type
  */
-export function parseMemoType(memo: string): 
+export function parseMemoType(
+  memo: string
+):
   | { type: 'swap'; asset: string; destination: string }
   | { type: 'execute'; contract: string }
   | { type: 'secure-mint'; destination: string }
   | { type: 'secure-redeem'; destination: string }
-  | { type: 'unknown' }
-{
+  | { type: 'unknown' } {
   if (memo.startsWith('=:')) {
-    const parts = memo.split(':');
+    const parts = memo.split(':')
     return {
       type: 'swap',
       asset: parts[1] || '',
       destination: parts[2] || '',
-    };
+    }
   }
-  
+
   if (memo.startsWith('x:')) {
-    const parts = memo.split(':');
+    const parts = memo.split(':')
     return {
       type: 'execute',
       contract: parts[1] || '',
-    };
+    }
   }
-  
+
   if (memo.startsWith('secure+:')) {
     return {
       type: 'secure-mint',
       destination: memo.slice('secure+:'.length),
-    };
+    }
   }
 
   if (memo.startsWith('secure-:')) {
     return {
       type: 'secure-redeem',
       destination: memo.slice('secure-:'.length),
-    };
+    }
   }
-  
-  return { type: 'unknown' };
+
+  return { type: 'unknown' }
 }
 
 /**
  * Validate memo length (THORChain has a limit)
  */
 export function validateMemoLength(memo: string, maxLength = 250): boolean {
-  return memo.length <= maxLength;
+  return memo.length <= maxLength
 }
 
 /**
  * Estimate memo length for a swap
  */
-export function estimateSwapMemoLength(
-  contractAddress: string,
-  minReturn: string,
-  destination?: string
-): number {
-  const memo = buildSwapMemo(contractAddress, minReturn, destination);
-  return memo.length;
+export function estimateSwapMemoLength(contractAddress: string, minReturn: string, destination?: string): number {
+  const memo = buildSwapMemo(contractAddress, minReturn, destination)
+  return memo.length
 }

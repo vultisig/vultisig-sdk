@@ -16,6 +16,7 @@
 10. [Type System](#type-system)
 11. [Data Flow](#data-flow)
 12. [Chain Support](#chain-support)
+13. [Rujira Package](#rujira-package)
 
 ---
 
@@ -194,6 +195,8 @@ Intelligent caching based on data mutability:
 vultisig-sdk/
 ├── packages/
 │   ├── sdk/                    # Main SDK (@vultisig/sdk)
+│   ├── rujira/                 # Rujira DEX integration (@vultisig/rujira)
+│   ├── assets/                 # Asset registry (@vultisig/assets)
 │   ├── core/                   # Upstream core library (read-only)
 │   └── lib/                    # WASM bindings (dkls, schnorr)
 ├── clients/
@@ -208,6 +211,8 @@ vultisig-sdk/
 ### Package Relationships
 
 - **`@vultisig/sdk`** - The main SDK package users install
+- **`@vultisig/rujira`** - Rujira DEX integration (FIN swaps, deposits, withdrawals on THORChain)
+- **`@vultisig/assets`** - Asset registry used by Rujira
 - **`packages/core`** - Chain implementations, MPC protocol, signing logic (synced from upstream)
 - **`packages/lib`** - WASM bindings (dkls, schnorr) - synced from upstream
 
@@ -1357,6 +1362,46 @@ Each chain kind has specific:
 | EVM        | ERC-20         | USDC, USDT, DAI |
 | Solana     | SPL            | USDC (SPL)      |
 | Cosmos     | IBC, CW20      | Various         |
+
+---
+
+## Rujira Package
+
+The `@vultisig/rujira` package provides Rujira DEX (FIN order book) integration on THORChain. It uses a modular architecture with its own signing pipeline that bridges to the SDK's MPC vault system.
+
+### Architecture
+
+```
+@vultisig/rujira
+├── client.ts              # RujiraClient - main entry point, orchestrates modules
+├── modules/               # Feature modules
+│   ├── swap.ts            # FIN market swaps (quotes + execution)
+│   ├── deposit.ts         # L1 → THORChain deposits
+│   ├── withdraw.ts        # THORChain → L1 withdrawals
+│   └── orderbook.ts       # Live market data from FIN contracts
+├── signer/
+│   └── vultisig-provider.ts  # VultisigRujiraProvider - bridges vault MPC to CosmJS
+├── discovery/             # Dynamic FIN contract discovery via GraphQL
+├── services/              # THORNode API, balance checks, fee estimation
+└── utils/                 # Caching, formatting, memo construction
+```
+
+### Signing Flow
+
+Rujira uses its own signing pipeline independent of the core cosmos resolver:
+
+1. **RujiraClient** builds CosmWasm messages (e.g., FIN swap orders)
+2. **VultisigRujiraProvider** constructs a `KeysignPayload` directly
+3. The payload is signed via the vault's MPC (`extractMessageHashes` → `sign`)
+4. Signed transaction is broadcast via `vault.broadcastTx()`
+
+This approach means Rujira does not depend on modifications to `packages/core/`.
+
+### Dependencies
+
+- `@vultisig/sdk` (peer dependency) — provides vault MPC signing
+- `@vultisig/assets` (workspace dependency) — asset registry for THORChain denominations
+- `@cosmjs/cosmwasm-stargate` — CosmWasm client for FIN contract queries
 
 ---
 

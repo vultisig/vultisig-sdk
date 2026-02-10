@@ -44,6 +44,8 @@ vultisig-sdk/
 │   │   │   ├── server/   # Fast vault server integration
 │   │   │   └── wasm/     # WASM module management
 │   │   └── tests/        # SDK test suite
+│   ├── rujira/           # Rujira DEX integration (@vultisig/rujira)
+│   ├── assets/           # Asset registry (@vultisig/assets)
 │   ├── core/             # ⚠️ UPSTREAM CODE - DO NOT EDIT
 │   │   ├── chain/        # Chain-specific implementations
 │   │   ├── mpc/          # MPC protocol implementations
@@ -112,7 +114,11 @@ yarn test:all
 | Script | Description |
 |--------|-------------|
 | `yarn build:sdk` | Build the SDK with all workspace dependencies |
+| `yarn build:rujira` | Build the Rujira package |
+| `yarn build:assets` | Build the assets registry package |
 | `yarn test` | Run SDK tests |
+| `yarn test:rujira` | Run Rujira tests |
+| `yarn test:assets` | Run assets tests |
 | `yarn test:unit` | Run unit tests only |
 | `yarn test:integration` | Run integration tests |
 | `yarn test:e2e` | Run end-to-end tests (requires vault) |
@@ -194,7 +200,7 @@ yarn changeset
 ```
 
 This will prompt you to:
-1. **Select packages** - Choose which packages your changes affect (`@vultisig/sdk`, `@vultisig/cli`, or both)
+1. **Select packages** - Choose which packages your changes affect (`@vultisig/sdk`, `@vultisig/cli`, `@vultisig/rujira`, `@vultisig/assets`)
 2. **Select bump type** - Choose the version bump:
    - `patch` - Bug fixes, minor changes (0.1.0 → 0.1.1)
    - `minor` - New features, non-breaking changes (0.1.0 → 0.2.0)
@@ -251,6 +257,8 @@ We follow [Semantic Versioning](https://semver.org/):
 |---------|-------------|
 | `@vultisig/sdk` | Main SDK library |
 | `@vultisig/cli` | Command-line interface |
+| `@vultisig/rujira` | Rujira DEX integration (FIN swaps, deposits, withdrawals) |
+| `@vultisig/assets` | Asset registry for Rujira |
 
 ## Questions?
 
