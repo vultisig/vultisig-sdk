@@ -15,6 +15,8 @@ To update upstream code: `yarn sync-and-copy`
 ```text
 packages/sdk/src/     # Main SDK source (edit here)
 packages/sdk/tests/   # Unit, integration, e2e tests
+packages/rujira/      # Rujira DEX integration (@vultisig/rujira)
+packages/assets/      # Asset registry (@vultisig/assets)
 packages/core/        # UPSTREAM - do not edit
 packages/lib/         # UPSTREAM - do not edit
 clients/cli/          # CLI workspace
@@ -27,10 +29,14 @@ examples/             # Browser, Electron examples
 # Build
 yarn build:sdk          # Full SDK build
 yarn build:fast         # Fast build (node only)
+yarn build:rujira       # Build Rujira package
+yarn build:assets       # Build assets registry
 yarn dev                # Watch mode
 
 # Test
-yarn test               # Unit tests
+yarn test               # SDK unit tests
+yarn test:rujira        # Rujira tests
+yarn test:assets        # Assets tests
 yarn test:unit:watch    # Unit tests in watch mode
 yarn test:e2e           # E2E tests (requires vault file)
 yarn test:all           # All tests
@@ -74,6 +80,8 @@ SDK builds to 5 bundles via Rollup:
 When creating changesets, use the exact package names from package.json:
 - `@vultisig/sdk` - Main SDK (packages/sdk)
 - `@vultisig/cli` - CLI tool (clients/cli)
+- `@vultisig/rujira` - Rujira DEX integration (packages/rujira)
+- `@vultisig/assets` - Asset registry (packages/assets)
 
 **Do not** use variations like `@vultisig/vultisig-sdk` or `@anthropic/vultisig-sdk`.
 

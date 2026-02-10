@@ -16,12 +16,14 @@
     "packages/assets"
   ],
   "scripts": {
-    "format": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
-    "format:check": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --check 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
-    "lint": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
-    "lint:fix": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' --fix",
+    "format": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'packages/rujira/**/*.{ts,tsx,js,jsx}' 'packages/assets/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
+    "format:check": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --check 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'packages/rujira/**/*.{ts,tsx,js,jsx}' 'packages/assets/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
+    "lint": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'packages/rujira/**/*.{js,jsx,ts,tsx}' 'packages/assets/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
+    "lint:fix": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'packages/rujira/**/*.{js,jsx,ts,tsx}' 'packages/assets/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' --fix",
     "build:sdk": "yarn workspace @vultisig/sdk build",
     "build:sdk-full": "yarn sync-and-copy && yarn workspace @vultisig/sdk build",
+    "build:assets": "yarn workspace @vultisig/assets build",
+    "build:rujira": "yarn workspace @vultisig/rujira build",
     "sync-packages": "syncpack fix-mismatches",
     "sync-and-copy": "node_modules/.bin/tsx scripts/sync-and-copy.ts",
     "typecheck": "tsc --project .config/tsconfig.json --noEmit",
@@ -41,6 +43,7 @@
     "test:e2e:swap-transactions": "yarn workspace @vultisig/sdk test:e2e:swap-transactions",
     "test:e2e:secure-signing": "yarn workspace @vultisig/sdk test:e2e:secure-signing",
     "test:rujira": "yarn workspace @vultisig/rujira test",
+    "test:assets": "yarn workspace @vultisig/assets test",
     "test:watch": "yarn workspace @vultisig/sdk test:watch",
     "test:unit:watch": "yarn workspace @vultisig/sdk test:unit:watch",
     "test:integration:watch": "yarn workspace @vultisig/sdk test:integration:watch",
@@ -48,7 +51,7 @@
     "test:changed": "yarn workspace @vultisig/sdk test:changed",
     "knip": "knip --config .config/knip.json",
     "knip:fix": "knip --config .config/knip.json --fix --allow-remove-files",
-    "check:all": "yarn lint && yarn typecheck && yarn test && yarn test:rujira && yarn knip",
+    "check:all": "yarn lint && yarn typecheck && yarn test && yarn test:rujira && yarn test:assets && yarn knip",
     "prepare": "husky",
     "cli": "yarn workspace @vultisig/cli dev",
     "cli:build": "yarn workspace @vultisig/cli build",
@@ -57,11 +60,19 @@
     "docs:watch": "typedoc --options .config/typedoc.json --watch",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "yarn workspace @vultisig/sdk npm publish --tolerate-republish && yarn workspace @vultisig/cli npm publish --tolerate-republish",
-    "release": "yarn build:sdk && yarn cli:build && yarn changeset:publish"
+    "changeset:publish": "yarn workspace @vultisig/sdk npm publish --tolerate-republish && yarn workspace @vultisig/cli npm publish --tolerate-republish && yarn workspace @vultisig/assets npm publish --tolerate-republish && yarn workspace @vultisig/rujira npm publish --tolerate-republish",
+    "release": "yarn build:assets && yarn build:rujira && yarn build:sdk && yarn cli:build && yarn changeset:publish"
   },
   "lint-staged": {
     "packages/sdk/**/*.{js,jsx,ts,tsx}": [
+      "prettier --config .config/.prettierrc --write",
+      "eslint --config .config/eslint.config.mjs --fix"
+    ],
+    "packages/rujira/**/*.{js,jsx,ts,tsx}": [
+      "prettier --config .config/.prettierrc --write",
+      "eslint --config .config/eslint.config.mjs --fix"
+    ],
+    "packages/assets/**/*.{js,jsx,ts,tsx}": [
       "prettier --config .config/.prettierrc --write",
       "eslint --config .config/eslint.config.mjs --fix"
     ],

@@ -41,8 +41,10 @@ jobs:
       - run: corepack prepare yarn@4.12.0 --activate
       - run: yarn install --immutable
 
-      - name: Build SDK and CLI
+      - name: Build all packages
         run: |
+          yarn build:assets
+          yarn build:rujira
           yarn build:sdk
           yarn cli:build
 
@@ -77,6 +79,20 @@ jobs:
           path: clients/cli/dist
           retention-days: 1
 
+      - name: Upload assets dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: assets-dist
+          path: packages/assets/dist
+          retention-days: 1
+
+      - name: Upload rujira dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: rujira-dist
+          path: packages/rujira/dist
+          retention-days: 1
+
   # ============ JOB 2: Run Tests (parallel with build) ============
   test:
     name: Run Tests
@@ -97,11 +113,20 @@ jobs:
       - run: corepack prepare yarn@4.12.0 --activate
       - run: yarn install --immutable
 
-      - name: Build SDK (required for tests)
-        run: yarn build:sdk
+      - name: Build packages (required for tests)
+        run: |
+          yarn build:assets
+          yarn build:rujira
+          yarn build:sdk
 
       - name: Run unit tests
         run: yarn test
+
+      - name: Run rujira tests
+        run: yarn test:rujira
+
+      - name: Run assets tests
+        run: yarn test:assets
 
       - name: Run lint and typecheck
         run: |
@@ -140,6 +165,18 @@ jobs:
         with:
           name: cli-dist
           path: clients/cli/dist
+
+      - name: Download assets dist
+        uses: actions/download-artifact@v4
+        with:
+          name: assets-dist
+          path: packages/assets/dist
+
+      - name: Download rujira dist
+        uses: actions/download-artifact@v4
+        with:
+          name: rujira-dist
+          path: packages/rujira/dist
 
       - name: Publish to NPM
         run: yarn changeset:publish

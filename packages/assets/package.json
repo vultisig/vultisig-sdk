@@ -2,6 +2,7 @@
   "name": "@vultisig/assets",
   "version": "0.1.0",
   "type": "module",
+  "description": "Asset registry for Vultisig Rujira DEX integration",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,7 +19,17 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  },
+  "author": "Vultisig",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
+    "directory": "packages/assets"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
