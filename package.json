@@ -28,7 +28,7 @@
     "sync-packages": "syncpack fix-mismatches",
     "sync-and-copy": "node_modules/.bin/tsx scripts/sync-and-copy.ts",
     "typecheck": "tsc --project .config/tsconfig.json --noEmit",
-    "test": "yarn workspace @vultisig/sdk test",
+    "test": "yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:assets",
     "test:all": "yarn test:unit; yarn test:integration; yarn test:e2e",
     "test:unit": "yarn workspace @vultisig/sdk test:unit",
     "test:integration": "yarn workspace @vultisig/sdk test:integration",

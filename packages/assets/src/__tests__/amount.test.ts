@@ -5,7 +5,7 @@ import { getAsset } from '../registry.js'
 
 describe('Amount', () => {
   const btc = getAsset('btc')!
-  const usdc = getAsset('usdc')!
+  const usdc = getAsset('usdc_eth')!
   const eth = getAsset('eth')!
 
   describe('creation', () => {
@@ -86,7 +86,7 @@ describe('Amount', () => {
   describe('display', () => {
     it('should display with asset symbol', () => {
       const amount = Amount.from('123.45', usdc, 'native')
-      expect(amount.toDisplay()).toBe('123.45 USDC')
+      expect(amount.toDisplay()).toBe('123.45 USDC_ETH')
     })
 
     it('should format with precision', () => {
