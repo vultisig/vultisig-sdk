@@ -31,10 +31,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Build packages
-        run: |
-          yarn build:assets
-          yarn build:sdk
-          yarn build:rujira
+        run: yarn build:all
 
       - name: Run unit tests
         run: yarn test

@@ -20,6 +20,7 @@
     "format:check": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --check 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'packages/rujira/**/*.{ts,tsx,js,jsx}' 'packages/assets/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
     "lint": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'packages/rujira/**/*.{js,jsx,ts,tsx}' 'packages/assets/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
     "lint:fix": "eslint --config .config/eslint.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'packages/rujira/**/*.{js,jsx,ts,tsx}' 'packages/assets/**/*.{js,jsx,ts,tsx}' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}' --fix",
+    "build:all": "yarn build:assets && yarn build:sdk && yarn build:rujira",
     "build:sdk": "yarn workspace @vultisig/sdk build",
     "build:sdk-full": "yarn sync-and-copy && yarn workspace @vultisig/sdk build",
     "build:assets": "yarn workspace @vultisig/assets build",
@@ -61,7 +62,7 @@
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "yarn workspace @vultisig/sdk npm publish --tolerate-republish && yarn workspace @vultisig/cli npm publish --tolerate-republish && yarn workspace @vultisig/assets npm publish --tolerate-republish && yarn workspace @vultisig/rujira npm publish --tolerate-republish",
-    "release": "yarn build:assets && yarn build:rujira && yarn build:sdk && yarn cli:build && yarn changeset:publish"
+    "release": "yarn build:all && yarn cli:build && yarn changeset:publish"
   },
   "lint-staged": {
     "packages/sdk/**/*.{js,jsx,ts,tsx}": [
