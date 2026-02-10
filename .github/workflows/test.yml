@@ -33,15 +33,8 @@ jobs:
       - name: Build packages
         run: yarn build:all
 
-      - name: Run unit tests
+      - name: Run all unit tests
         run: yarn test
-        working-directory: packages/sdk
-
-      - name: Run rujira tests
-        run: yarn test:rujira
-
-      - name: Run assets tests
-        run: yarn test:assets
 
       - name: Generate coverage report
         run: yarn test:coverage

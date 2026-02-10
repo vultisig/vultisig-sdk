@@ -188,7 +188,7 @@ describe('Asset Registry', () => {
       expect(chains).toContain('avalanche')
       expect(chains).toContain('cosmos')
       expect(chains).toContain('xrp')
-      expect(chains.length).toBe(10)
+      expect(chains.length).toBe(11)
     })
   })
 
@@ -196,9 +196,9 @@ describe('Asset Registry', () => {
     it('should return correct statistics', () => {
       const stats = getAssetStats()
       expect(stats.totalAssets).toBe(27)
-      expect(stats.supportedChains).toBe(10)
-      expect(stats.nativeAssets).toBe(11) // L1 native assets + THORChain tokens
-      expect(stats.tokenAssets).toBe(16) // ERC20 + other contract tokens
+      expect(stats.supportedChains).toBe(11)
+      expect(stats.nativeAssets).toBe(16) // L1 native assets + THORChain tokens
+      expect(stats.tokenAssets).toBe(11) // ERC20 + other contract tokens
     })
   })
 
