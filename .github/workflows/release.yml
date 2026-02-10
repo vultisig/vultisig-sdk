@@ -44,8 +44,8 @@ jobs:
       - name: Build all packages
         run: |
           yarn build:assets
-          yarn build:rujira
           yarn build:sdk
+          yarn build:rujira
           yarn cli:build
 
       - name: Get version and check if new
@@ -116,8 +116,8 @@ jobs:
       - name: Build packages (required for tests)
         run: |
           yarn build:assets
-          yarn build:rujira
           yarn build:sdk
+          yarn build:rujira
 
       - name: Run unit tests
         run: yarn test
