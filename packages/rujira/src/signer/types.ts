@@ -1,86 +1,73 @@
-import type {
-  OfflineDirectSigner,
-  AccountData,
-  DirectSignResponse
-} from '@cosmjs/proto-signing';
+import type { AccountData, DirectSignResponse, OfflineDirectSigner } from '@cosmjs/proto-signing'
 
-type SignDoc = Parameters<OfflineDirectSigner['signDirect']>[1];
+type SignDoc = Parameters<OfflineDirectSigner['signDirect']>[1]
 
-export interface RujiraSigner extends OfflineDirectSigner {
-  getAccounts(): Promise<readonly AccountData[]>;
-  signDirect(signerAddress: string, signDoc: SignDoc): Promise<DirectSignResponse>;
+export type RujiraSigner = {
+  getAccounts(): Promise<readonly AccountData[]>
+  signDirect(signerAddress: string, signDoc: SignDoc): Promise<DirectSignResponse>
+} & OfflineDirectSigner
+
+export type VultisigChain = 'THORChain' | 'MayaChain' | string
+
+export type VultisigSignature = {
+  signature: string
+  recovery?: number
+  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519'
 }
 
-export type VultisigChain = 'THORChain' | 'MayaChain' | string;
-
-export interface VultisigSignature {
-  signature: string;
-  recovery?: number;
-  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519';
-}
-
-export interface SignDirectInput {
-  chain: VultisigChain;
+export type SignDirectInput = {
+  chain: VultisigChain
   coin: {
-    chain: VultisigChain;
-    address: string;
-    decimals: number;
-    ticker: string;
-  };
-  bodyBytes: string;
-  authInfoBytes: string;
-  chainId: string;
-  accountNumber: string;
-  memo?: string;
+    chain: VultisigChain
+    address: string
+    decimals: number
+    ticker: string
+  }
+  bodyBytes: string
+  authInfoBytes: string
+  chainId: string
+  accountNumber: string
+  memo?: string
 }
 
-export interface SigningPayload {
-  transaction: KeysignPayload;
-  chain: VultisigChain;
-  messageHashes: string[];
+export type SigningPayload = {
+  transaction: KeysignPayload
+  chain: VultisigChain
+  messageHashes: string[]
 }
 
-import type { KeysignPayload } from '@vultisig/sdk';
-export type { KeysignPayload };
+import type { KeysignPayload } from '@vultisig/sdk'
+export type { KeysignPayload }
 
-export interface VultisigVault {
-  address(chain: VultisigChain): Promise<string>;
+export type VultisigVault = {
+  address(chain: VultisigChain): Promise<string>
   readonly publicKeys: {
-    readonly ecdsa: string;
-    readonly eddsa: string;
-  };
-  prepareSignDirectTx(
-    input: SignDirectInput,
-    options?: { skipChainSpecificFetch?: boolean }
-  ): Promise<KeysignPayload>;
-  extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>;
-  sign(
-    payload: SigningPayload,
-    options?: { signal?: AbortSignal }
-  ): Promise<VultisigSignature>;
+    readonly ecdsa: string
+    readonly eddsa: string
+  }
+  prepareSignDirectTx(input: SignDirectInput, options?: { skipChainSpecificFetch?: boolean }): Promise<KeysignPayload>
+  extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
+  sign(payload: SigningPayload, options?: { signal?: AbortSignal }): Promise<VultisigSignature>
   broadcastTx(params: {
-    chain: VultisigChain;
-    keysignPayload: KeysignPayload;
-    signature: VultisigSignature;
-  }): Promise<string>;
+    chain: VultisigChain
+    keysignPayload: KeysignPayload
+    signature: VultisigSignature
+  }): Promise<string>
 }
 
 /**
  * Vault with full withdraw capabilities (sign + broadcast).
  * Used by RujiraWithdraw to execute MsgDeposit-based withdrawals.
  */
-export interface WithdrawCapableVault extends VultisigVault {
-  extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>;
-  sign(
-    payload: SigningPayload,
-    options?: { signal?: AbortSignal }
-  ): Promise<VultisigSignature>;
+export type WithdrawCapableVault = {
+  extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
+  sign(payload: SigningPayload, options?: { signal?: AbortSignal }): Promise<VultisigSignature>
   broadcastTx(params: {
-    chain: VultisigChain;
-    keysignPayload: KeysignPayload;
-    signature: VultisigSignature;
-  }): Promise<string>;
-}
+    chain: VultisigChain
+    keysignPayload: KeysignPayload
+    signature: VultisigSignature
+  }): Promise<string>
+} & VultisigVault
 
 /**
  * Type guard: checks if a VultisigVault satisfies WithdrawCapableVault
@@ -90,16 +77,16 @@ export function isWithdrawCapable(vault: VultisigVault): vault is WithdrawCapabl
     typeof vault.extractMessageHashes === 'function' &&
     typeof vault.sign === 'function' &&
     typeof vault.broadcastTx === 'function'
-  );
+  )
 }
 
-export interface ExtendedAccountData extends AccountData {
-  accountNumber?: number;
-  sequence?: number;
-}
+export type ExtendedAccountData = {
+  accountNumber?: number
+  sequence?: number
+} & AccountData
 
-export interface SigningResult {
-  signedTxBytes: Uint8Array;
-  signature: Uint8Array;
-  pubKey: Uint8Array;
+export type SigningResult = {
+  signedTxBytes: Uint8Array
+  signature: Uint8Array
+  pubKey: Uint8Array
 }

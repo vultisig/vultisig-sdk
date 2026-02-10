@@ -2,26 +2,26 @@
  * Orderbook module for limit orders on Rujira DEX
  */
 
-import { Coin } from '@cosmjs/proto-signing';
-import Big from 'big.js';
-import { findAssetByFormat } from '@vultisig/assets';
-import { DEFAULT_TAKER_FEE, DEFAULT_MAKER_FEE } from '../config/constants.js';
-import { denomToAsset as sharedDenomToAsset } from '../utils/denom-conversion.js';
+import { Coin } from '@cosmjs/proto-signing'
+import { findAssetByFormat } from '@vultisig/assets'
+import Big from 'big.js'
 
-import type { RujiraClient } from '../client.js';
-import { RujiraError, RujiraErrorCode } from '../errors.js';
+import type { RujiraClient } from '../client.js'
+import { DEFAULT_MAKER_FEE, DEFAULT_TAKER_FEE } from '../config/constants.js'
+import { RujiraError, RujiraErrorCode } from '../errors.js'
 import type {
+  ContractSide,
+  FinExecuteMsg,
+  FinQueryMsg,
   LimitOrderParams,
   Order,
   OrderBook,
   OrderBookEntry,
   OrderResult,
   OrderSide,
-  ContractSide,
-  FinExecuteMsg,
-  FinQueryMsg,
-} from '../types.js';
-import { toContractSide, fromContractSide } from '../types.js';
+} from '../types.js'
+import { fromContractSide, toContractSide } from '../types.js'
+import { denomToAsset as sharedDenomToAsset } from '../utils/denom-conversion.js'
 
 /**
  * Orderbook module for managing limit orders.
@@ -53,20 +53,17 @@ export class RujiraOrderbook {
    * and resolves the FIN contract key as "<baseDenom>/<quoteDenom>".
    */
   async getBook(baseAsset: string, quoteAsset: string, limit = 10): Promise<OrderBook> {
-    const base = findAssetByFormat(baseAsset);
-    const quote = findAssetByFormat(quoteAsset);
+    const base = findAssetByFormat(baseAsset)
+    const quote = findAssetByFormat(quoteAsset)
 
-    const baseDenom = base?.formats?.fin;
-    const quoteDenom = quote?.formats?.fin;
+    const baseDenom = base?.formats?.fin
+    const quoteDenom = quote?.formats?.fin
 
     if (!baseDenom || !quoteDenom) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_ASSET,
-        `Unknown asset(s): ${baseAsset}, ${quoteAsset}`
-      );
+      throw new RujiraError(RujiraErrorCode.INVALID_ASSET, `Unknown asset(s): ${baseAsset}, ${quoteAsset}`)
     }
 
-    return this.getOrderBook(`${baseDenom}/${quoteDenom}`, limit);
+    return this.getOrderBook(`${baseDenom}/${quoteDenom}`, limit)
   }
 
   /**
@@ -76,26 +73,26 @@ export class RujiraOrderbook {
    * @param limit - Maximum entries per side (default: 50)
    */
   async getOrderBook(pairOrContract: string, limit = 50): Promise<OrderBook> {
-    const contractAddress = await this.resolveContract(pairOrContract);
+    const contractAddress = await this.resolveContract(pairOrContract)
 
     const [response, config] = await Promise.all([
       this.client.getOrderBook(contractAddress, limit),
       this.getContractConfig(contractAddress),
-    ]);
+    ])
 
-    const bids = this.transformBookEntries(response.base, 'desc');
-    const asks = this.transformBookEntries(response.quote, 'asc');
+    const bids = this.transformBookEntries(response.base, 'desc')
+    const asks = this.transformBookEntries(response.quote, 'asc')
 
-    const bestBid = bids[0]?.price ? parseFloat(bids[0].price) : 0;
-    const bestAsk = asks[0]?.price ? parseFloat(asks[0].price) : 0;
-    let spread = '0';
+    const bestBid = bids[0]?.price ? parseFloat(bids[0].price) : 0
+    const bestAsk = asks[0]?.price ? parseFloat(asks[0].price) : 0
+    let spread = '0'
 
     if (bestBid > 0 && bestAsk > 0) {
-      const midPrice = (bestAsk + bestBid) / 2;
-      spread = (((bestAsk - bestBid) / midPrice) * 100).toFixed(4);
+      const midPrice = (bestAsk + bestBid) / 2
+      spread = (((bestAsk - bestBid) / midPrice) * 100).toFixed(4)
     }
 
-    const lastPrice = config.lastPrice || bids[0]?.price || asks[0]?.price || '0';
+    const lastPrice = config.lastPrice || bids[0]?.price || asks[0]?.price || '0'
 
     return {
       pair: {
@@ -111,7 +108,7 @@ export class RujiraOrderbook {
       spread,
       lastPrice,
       timestamp: Date.now(),
-    };
+    }
   }
 
   /**
@@ -119,24 +116,24 @@ export class RujiraOrderbook {
    * @internal
    */
   private async getContractConfig(contractAddress: string): Promise<{
-    base: string;
-    quote: string;
-    tick?: string;
-    takerFee?: string;
-    makerFee?: string;
-    lastPrice?: string;
+    base: string
+    quote: string
+    tick?: string
+    takerFee?: string
+    makerFee?: string
+    lastPrice?: string
   }> {
     try {
-      const query: FinQueryMsg = { config: {} };
+      const query: FinQueryMsg = { config: {} }
       const response = await this.client.queryContract<{
-        denoms: { base: string; quote: string };
-        tick?: string;
-        fee?: { taker: string; maker: string };
-        last_price?: string;
-      }>(contractAddress, query);
+        denoms: { base: string; quote: string }
+        tick?: string
+        fee?: { taker: string; maker: string }
+        last_price?: string
+      }>(contractAddress, query)
 
-      const base = this.denomToAsset(response.denoms.base);
-      const quote = this.denomToAsset(response.denoms.quote);
+      const base = this.denomToAsset(response.denoms.base)
+      const quote = this.denomToAsset(response.denoms.quote)
 
       return {
         base,
@@ -145,9 +142,9 @@ export class RujiraOrderbook {
         takerFee: response.fee?.taker,
         makerFee: response.fee?.maker,
         lastPrice: response.last_price,
-      };
+      }
     } catch {
-      return { base: '', quote: '' };
+      return { base: '', quote: '' }
     }
   }
 
@@ -156,46 +153,43 @@ export class RujiraOrderbook {
    * @internal
    */
   private denomToAsset(denom: string): string {
-    return sharedDenomToAsset(denom) ?? denom.toUpperCase();
+    return sharedDenomToAsset(denom) ?? denom.toUpperCase()
   }
 
   /**
    * Place a limit order.
    */
   async placeOrder(params: LimitOrderParams): Promise<OrderResult> {
-    this.validateOrderParams(params);
+    this.validateOrderParams(params)
 
     const contractAddress = await this.resolveContract(
       typeof params.pair === 'string' ? params.pair : params.pair.contractAddress
-    );
+    )
 
-    const assetInfo = await this.getOfferAsset(params);
+    const assetInfo = await this.getOfferAsset(params)
 
     if (!assetInfo) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_ASSET,
-        'Could not determine offer asset for order'
-      );
+      throw new RujiraError(RujiraErrorCode.INVALID_ASSET, 'Could not determine offer asset for order')
     }
 
     // Convert SDK side to contract's Side enum format
-    const contractSide = toContractSide(params.side);
-    const orderTarget: [ContractSide, string, string | null] = [contractSide, params.price, params.amount];
+    const contractSide = toContractSide(params.side)
+    const orderTarget: [ContractSide, string, string | null] = [contractSide, params.price, params.amount]
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
-    };
+    }
 
     const funds: Coin[] = [
       {
         denom: assetInfo.denom,
         amount: this.calculateOfferAmount(params),
       },
-    ];
+    ]
 
-    const result = await this.client.executeContract(contractAddress, msg, funds);
+    const result = await this.client.executeContract(contractAddress, msg, funds)
 
-    const orderId = `${result.transactionHash}-0`;
+    const orderId = `${result.transactionHash}-0`
 
     return {
       orderId,
@@ -216,7 +210,7 @@ export class RujiraOrderbook {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       },
-    };
+    }
   }
 
   /**
@@ -224,32 +218,26 @@ export class RujiraOrderbook {
    */
   async cancelOrder(contractAddress: string, side: OrderSide, price: string): Promise<{ txHash: string }> {
     // Convert SDK side to contract's Side enum format
-    const contractSide = toContractSide(side);
-    const orderTarget: [ContractSide, string, string | null] = [contractSide, price, null];
+    const contractSide = toContractSide(side)
+    const orderTarget: [ContractSide, string, string | null] = [contractSide, price, null]
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
-    };
+    }
 
-    const result = await this.client.executeContract(contractAddress, msg, []);
+    const result = await this.client.executeContract(contractAddress, msg, [])
 
-    return { txHash: result.transactionHash };
+    return { txHash: result.transactionHash }
   }
 
   /**
    * Get user's open orders.
    */
-  async getOrders(
-    contractAddress: string,
-    owner?: string,
-    side?: OrderSide,
-    limit = 30,
-    offset = 0
-  ): Promise<Order[]> {
-    const address = owner || (await this.client.getAddress());
+  async getOrders(contractAddress: string, owner?: string, side?: OrderSide, limit = 30, offset = 0): Promise<Order[]> {
+    const address = owner || (await this.client.getAddress())
 
     // Convert SDK side to contract side for query
-    const contractSide = side ? toContractSide(side) : undefined;
+    const contractSide = side ? toContractSide(side) : undefined
 
     const query: FinQueryMsg = {
       orders: {
@@ -258,34 +246,34 @@ export class RujiraOrderbook {
         offset,
         limit,
       },
-    };
+    }
 
     const response = await this.client.queryContract<{
       orders: Array<{
-        owner: string;
-        side: ContractSide;
-        price: string;
-        rate: string;
-        updated_at: string;
-        offer: string;
-        remaining: string;
-        filled: string;
-      }>;
-    }>(contractAddress, query);
+        owner: string
+        side: ContractSide
+        price: string
+        rate: string
+        updated_at: string
+        offer: string
+        remaining: string
+        filled: string
+      }>
+    }>(contractAddress, query)
 
     return response.orders.map(
       (o: {
-        owner: string;
-        side: ContractSide;
-        price: string;
-        rate: string;
-        updated_at: string;
-        offer: string;
-        remaining: string;
-        filled: string;
+        owner: string
+        side: ContractSide
+        price: string
+        rate: string
+        updated_at: string
+        offer: string
+        remaining: string
+        filled: string
       }) => {
         // Convert contract side back to SDK side
-        const sdkSide = fromContractSide(o.side);
+        const sdkSide = fromContractSide(o.side)
         return {
           orderId: `${address}-${o.side}-${o.price}`,
           owner: o.owner,
@@ -302,45 +290,39 @@ export class RujiraOrderbook {
           amount: o.offer,
           filled: o.filled,
           remaining: o.remaining,
-          status:
-            BigInt(o.remaining) === 0n ? 'filled' : BigInt(o.filled) > 0n ? 'partial' : 'open',
+          status: BigInt(o.remaining) === 0n ? 'filled' : BigInt(o.filled) > 0n ? 'partial' : 'open',
           createdAt: parseInt(o.updated_at),
           updatedAt: parseInt(o.updated_at),
-        };
+        }
       }
-    );
+    )
   }
 
   /**
    * Get a specific order.
    */
-  async getOrder(
-    contractAddress: string,
-    owner: string,
-    side: OrderSide,
-    price: string
-  ): Promise<Order | null> {
+  async getOrder(contractAddress: string, owner: string, side: OrderSide, price: string): Promise<Order | null> {
     // Convert SDK side to contract side for query
-    const contractSide = toContractSide(side);
+    const contractSide = toContractSide(side)
 
     const query: FinQueryMsg = {
       order: [owner, contractSide, price],
-    };
+    }
 
     try {
       const response = await this.client.queryContract<{
-        owner: string;
-        side: ContractSide;
-        price: string;
-        rate: string;
-        updated_at: string;
-        offer: string;
-        remaining: string;
-        filled: string;
-      }>(contractAddress, query);
+        owner: string
+        side: ContractSide
+        price: string
+        rate: string
+        updated_at: string
+        offer: string
+        remaining: string
+        filled: string
+      }>(contractAddress, query)
 
       // Convert contract side back to SDK side
-      const sdkSide = fromContractSide(response.side);
+      const sdkSide = fromContractSide(response.side)
 
       return {
         orderId: `${owner}-${response.side}-${price}`,
@@ -358,31 +340,26 @@ export class RujiraOrderbook {
         amount: response.offer,
         filled: response.filled,
         remaining: response.remaining,
-        status:
-          BigInt(response.remaining) === 0n
-            ? 'filled'
-            : BigInt(response.filled) > 0n
-              ? 'partial'
-              : 'open',
+        status: BigInt(response.remaining) === 0n ? 'filled' : BigInt(response.filled) > 0n ? 'partial' : 'open',
         createdAt: parseInt(response.updated_at),
         updatedAt: parseInt(response.updated_at),
-      };
+      }
     } catch {
-      return null;
+      return null
     }
   }
 
   private async resolveContract(pairOrContract: string): Promise<string> {
     if (pairOrContract.startsWith('thor1')) {
-      return pairOrContract;
+      return pairOrContract
     }
 
-    const knownContracts = this.client.config.contracts.finContracts;
+    const knownContracts = this.client.config.contracts.finContracts
     if (knownContracts[pairOrContract]) {
-      return knownContracts[pairOrContract];
+      return knownContracts[pairOrContract]
     }
 
-    throw new RujiraError(RujiraErrorCode.INVALID_PAIR, `Unknown trading pair: ${pairOrContract}`);
+    throw new RujiraError(RujiraErrorCode.INVALID_PAIR, `Unknown trading pair: ${pairOrContract}`)
   }
 
   /**
@@ -392,72 +369,70 @@ export class RujiraOrderbook {
     entries: Array<{ price: string; total: string }>,
     sortOrder: 'asc' | 'desc'
   ): OrderBookEntry[] {
-    const transformed = entries.map((e) => {
-      const price = Big(e.price);
-      const amount = Big(e.total);
+    const transformed = entries.map(e => {
+      const price = Big(e.price)
+      const amount = Big(e.total)
 
       return {
         price: e.price,
         amount: e.total,
         total: price.mul(amount).toFixed(8),
-      };
-    });
+      }
+    })
 
     return transformed.sort((a, b) => {
-      const pA = Big(a.price);
-      const pB = Big(b.price);
-      return sortOrder === 'asc' ? pA.cmp(pB) : pB.cmp(pA);
-    });
+      const pA = Big(a.price)
+      const pB = Big(b.price)
+      return sortOrder === 'asc' ? pA.cmp(pB) : pB.cmp(pA)
+    })
   }
 
   private validateOrderParams(params: LimitOrderParams): void {
     if (!params.price || parseFloat(params.price) <= 0) {
-      throw new RujiraError(RujiraErrorCode.INVALID_PRICE, 'Order price must be positive');
+      throw new RujiraError(RujiraErrorCode.INVALID_PRICE, 'Order price must be positive')
     }
 
     if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order amount must be positive');
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order amount must be positive')
     }
 
     if (!['buy', 'sell'].includes(params.side)) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order side must be "buy" or "sell"');
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order side must be "buy" or "sell"')
     }
   }
 
-  private async getOfferAsset(
-    params: LimitOrderParams
-  ): Promise<{ denom: string; decimals: number } | undefined> {
+  private async getOfferAsset(params: LimitOrderParams): Promise<{ denom: string; decimals: number } | undefined> {
     const getAssetInfo = (assetId: string): { denom: string; decimals: number } | undefined => {
-      const asset = findAssetByFormat(assetId);
-      if (!asset?.formats?.fin) return undefined;
-      return { denom: asset.formats.fin, decimals: asset.decimals?.fin ?? 8 };
-    };
+      const asset = findAssetByFormat(assetId)
+      if (!asset?.formats?.fin) return undefined
+      return { denom: asset.formats.fin, decimals: asset.decimals?.fin ?? 8 }
+    }
 
     if (typeof params.pair !== 'string' && params.pair.base && params.pair.quote) {
-      const assetId = params.side === 'buy' ? params.pair.quote : params.pair.base;
-      return getAssetInfo(assetId);
+      const assetId = params.side === 'buy' ? params.pair.quote : params.pair.base
+      return getAssetInfo(assetId)
     }
 
     const contractAddress = await this.resolveContract(
       typeof params.pair === 'string' ? params.pair : params.pair.contractAddress
-    );
+    )
 
-    const config = await this.getContractConfig(contractAddress);
+    const config = await this.getContractConfig(contractAddress)
 
     if (params.side === 'buy') {
-      return config.quote ? getAssetInfo(config.quote) : getAssetInfo('THOR.RUNE');
+      return config.quote ? getAssetInfo(config.quote) : getAssetInfo('THOR.RUNE')
     }
 
-    return config.base ? getAssetInfo(config.base) : undefined;
+    return config.base ? getAssetInfo(config.base) : undefined
   }
 
   private calculateOfferAmount(params: LimitOrderParams): string {
     if (params.side === 'buy') {
-      const amount = Big(params.amount);
-      const price = Big(params.price);
-      return amount.mul(price).toFixed(0, 0);
+      const amount = Big(params.amount)
+      const price = Big(params.price)
+      return amount.mul(price).toFixed(0, 0)
     }
 
-    return params.amount;
+    return params.amount
   }
 }

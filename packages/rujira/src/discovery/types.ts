@@ -6,59 +6,59 @@
 /**
  * Market/trading pair from Rujira API
  */
-export interface Market {
+export type Market = {
   /** FIN contract address */
-  address: string;
+  address: string
   /** Base asset (e.g., "BTC.BTC") */
-  baseAsset: string;
+  baseAsset: string
   /** Quote asset (e.g., "THOR.RUNE") */
-  quoteAsset: string;
+  quoteAsset: string
   /** Base asset denom */
-  baseDenom: string;
+  baseDenom: string
   /** Quote asset denom */
-  quoteDenom: string;
+  quoteDenom: string
   /** Tick size */
-  tick: string;
+  tick: string
   /** Taker fee */
-  takerFee: string;
+  takerFee: string
   /** Maker fee */
-  makerFee: string;
+  makerFee: string
   /** Whether market is active */
-  active: boolean;
+  active: boolean
 }
 
 /**
  * Discovered contracts result
  */
-export interface DiscoveredContracts {
+export type DiscoveredContracts = {
   /** FIN contracts by pair key (e.g., "BTC.BTC/THOR.RUNE") */
-  fin: Record<string, string>;
+  fin: Record<string, string>
   /** BOW (AMM) contracts if discovered */
-  bow?: Record<string, string>;
+  bow?: Record<string, string>
   /** Other contracts */
-  other?: Record<string, string>;
+  other?: Record<string, string>
   /** Discovery timestamp */
-  discoveredAt: number;
+  discoveredAt: number
   /** Source of discovery */
-  source: 'graphql' | 'chain' | 'cache' | 'fallback-failed';
+  source: 'graphql' | 'chain' | 'cache' | 'fallback-failed'
   /** Last error message if discovery failed */
-  lastError?: string;
+  lastError?: string
 }
 
 /**
  * GraphQL market response
  */
-export interface GraphQLMarketsResponse {
+export type GraphQLMarketsResponse = {
   markets: Array<{
-    address: string;
+    address: string
     denoms: {
-      base: string;
-      quote: string;
-    };
+      base: string
+      quote: string
+    }
     config?: {
-      tick?: string;
-      fee_taker?: string;
-      fee_maker?: string;
-    };
-  }>;
+      tick?: string
+      fee_taker?: string
+      fee_maker?: string
+    }
+  }>
 }

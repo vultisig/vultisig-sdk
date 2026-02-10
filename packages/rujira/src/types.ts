@@ -9,41 +9,41 @@
  * Rujira asset representation
  * Format: "CHAIN.SYMBOL" (e.g., "THOR.RUNE", "BTC.BTC")
  */
-export interface RujiraAsset {
+export type RujiraAsset = {
   /** Full asset identifier (e.g., "THOR.RUNE") */
-  asset: string;
+  asset: string
   /** Chain identifier */
-  chain: string;
+  chain: string
   /** Symbol on the chain */
-  symbol: string;
+  symbol: string
   /** Display ticker */
-  ticker: string;
+  ticker: string
   /** Decimal places */
-  decimals: number;
+  decimals: number
   /** Asset type */
-  type: 'native' | 'secured' | 'synthetic';
+  type: 'native' | 'secured' | 'synthetic'
   /** Native denom on THORChain */
-  denom: string;
+  denom: string
   /** Contract address (for CW20 tokens) */
-  contractAddress?: string;
+  contractAddress?: string
 }
 
 /**
  * Trading pair on Rujira DEX
  */
-export interface TradingPair {
+export type TradingPair = {
   /** Base asset (e.g., "BTC.BTC") */
-  base: string;
+  base: string
   /** Quote asset (e.g., "THOR.RUNE") */
-  quote: string;
+  quote: string
   /** FIN contract address for this pair */
-  contractAddress: string;
+  contractAddress: string
   /** Tick size for price precision */
-  tick: string;
+  tick: string
   /** Taker fee (e.g., "0.0015" for 0.15%) */
-  takerFee: string;
+  takerFee: string
   /** Maker fee (e.g., "0.00075" for 0.075%) */
-  makerFee: string;
+  makerFee: string
 }
 
 // PRICE IMPACT TYPES
@@ -51,15 +51,15 @@ export interface TradingPair {
 /**
  * Structured price impact information
  */
-export interface PriceImpact {
+export type PriceImpact = {
   /** Exact price impact percentage (null if cannot be calculated) */
-  value: number | null;
+  value: number | null
   /** Whether this is an estimate (true if orderbook data unavailable) */
-  estimated: boolean;
+  estimated: boolean
   /** Estimated range [min, max] when exact value unavailable */
-  range?: [number, number];
+  range?: [number, number]
   /** Human-readable display string */
-  display: string;
+  display: string
 }
 
 // QUOTE TYPES
@@ -67,58 +67,58 @@ export interface PriceImpact {
 /**
  * Parameters for requesting a swap quote
  */
-export interface QuoteParams {
+export type QuoteParams = {
   /** Source asset (e.g., "THOR.RUNE") */
-  fromAsset: string;
+  fromAsset: string
   /** Destination asset (e.g., "BTC.BTC") */
-  toAsset: string;
+  toAsset: string
   /** Amount in base units (8 decimals) */
-  amount: string;
+  amount: string
   /** Slippage tolerance in basis points (default: 100 = 1%) */
-  slippageBps?: number;
+  slippageBps?: number
   /** Destination address (optional, defaults to sender) */
-  destination?: string;
+  destination?: string
   /** Affiliate address for fee sharing */
-  affiliate?: string;
+  affiliate?: string
   /** Affiliate fee in basis points */
-  affiliateBps?: number;
+  affiliateBps?: number
 }
 
 /**
  * Swap quote response
  */
-export interface SwapQuote {
+export type SwapQuote = {
   /** Quote parameters */
-  params: QuoteParams;
+  params: QuoteParams
   /** Expected output amount in base units */
-  expectedOutput: string;
+  expectedOutput: string
   /** Minimum output after slippage */
-  minimumOutput: string;
+  minimumOutput: string
   /** Exchange rate (output per input) */
-  rate: string;
+  rate: string
   /** Price impact percentage */
-  priceImpact: string;
+  priceImpact: string
   /** Estimated fees */
   fees: {
     /** Network/gas fee */
-    network: string;
+    network: string
     /** Protocol fee */
-    protocol: string;
+    protocol: string
     /** Affiliate fee (if applicable) */
-    affiliate: string;
+    affiliate: string
     /** Total fees */
-    total: string;
-  };
+    total: string
+  }
   /** FIN contract to execute on */
-  contractAddress: string;
+  contractAddress: string
   /** Quote expiration timestamp */
-  expiresAt: number;
+  expiresAt: number
   /** Unique quote ID for tracking */
-  quoteId: string;
+  quoteId: string
   /** When this quote was created/cached (for staleness checks) */
-  cachedAt?: number;
+  cachedAt?: number
   /** Warning message if any (e.g., stale cache, estimated price impact) */
-  warning?: string;
+  warning?: string
 }
 
 // SWAP TYPES
@@ -126,37 +126,37 @@ export interface SwapQuote {
 /**
  * Swap execution options
  */
-export interface SwapOptions {
+export type SwapOptions = {
   /** Override slippage from quote (basis points) */
-  slippageBps?: number;
+  slippageBps?: number
   /** Custom gas limit */
-  gasLimit?: number;
+  gasLimit?: number
   /** Custom gas price */
-  gasPrice?: string;
+  gasPrice?: string
   /** Memo to include in transaction */
-  memo?: string;
+  memo?: string
   /** Skip balance validation (internal use) */
-  skipBalanceValidation?: boolean;
+  skipBalanceValidation?: boolean
 }
 
 /**
  * Swap execution result
  */
-export interface SwapResult {
+export type SwapResult = {
   /** Transaction hash */
-  txHash: string;
+  txHash: string
   /** Transaction status */
-  status: 'pending' | 'success' | 'failed';
+  status: 'pending' | 'success' | 'failed'
   /** Input amount */
-  fromAmount: string;
+  fromAmount: string
   /** Actual output amount (available after confirmation) */
-  toAmount?: string;
+  toAmount?: string
   /** Fees paid */
-  fee: string;
+  fee: string
   /** Block height (available after confirmation) */
-  blockHeight?: number;
+  blockHeight?: number
   /** Timestamp */
-  timestamp: number;
+  timestamp: number
 }
 
 // ORDER TYPES
@@ -167,7 +167,7 @@ export interface SwapResult {
  * - `'buy'` = acquire base asset by offering quote asset
  * - `'sell'` = dispose base asset to receive quote asset
  */
-export type OrderSide = 'buy' | 'sell';
+export type OrderSide = 'buy' | 'sell'
 
 /**
  * Contract order side - matches FIN contract's `Side` enum.
@@ -187,14 +187,14 @@ export type OrderSide = 'buy' | 'sell';
  *
  * @internal Used for contract communication only
  */
-export type ContractSide = 'base' | 'quote';
+export type ContractSide = 'base' | 'quote'
 
 /**
  * Convert SDK OrderSide to contract's Side enum value.
  * @internal
  */
 export function toContractSide(side: OrderSide): ContractSide {
-  return side === 'buy' ? 'quote' : 'base';
+  return side === 'buy' ? 'quote' : 'base'
 }
 
 /**
@@ -202,73 +202,73 @@ export function toContractSide(side: OrderSide): ContractSide {
  * @internal
  */
 export function fromContractSide(side: ContractSide): OrderSide {
-  return side === 'quote' ? 'buy' : 'sell';
+  return side === 'quote' ? 'buy' : 'sell'
 }
 
 /**
  * Order status
  */
-export type OrderStatus = 'open' | 'partial' | 'filled' | 'cancelled';
+export type OrderStatus = 'open' | 'partial' | 'filled' | 'cancelled'
 
 /**
  * Time in force options for limit orders
  */
-export type TimeInForce = 'GTC' | 'IOC' | 'FOK';
+export type TimeInForce = 'GTC' | 'IOC' | 'FOK'
 
 /**
  * Limit order parameters
  */
-export interface LimitOrderParams {
+export type LimitOrderParams = {
   /** Trading pair */
-  pair: TradingPair | string;
+  pair: TradingPair | string
   /** Order side */
-  side: OrderSide;
+  side: OrderSide
   /** Limit price */
-  price: string;
+  price: string
   /** Order amount in base asset */
-  amount: string;
+  amount: string
   /** Time in force (default: GTC) */
-  timeInForce?: TimeInForce;
+  timeInForce?: TimeInForce
 }
 
 /**
  * Order details
  */
-export interface Order {
+export type Order = {
   /** Unique order ID */
-  orderId: string;
+  orderId: string
   /** Owner address */
-  owner: string;
+  owner: string
   /** Trading pair */
-  pair: TradingPair;
+  pair: TradingPair
   /** Order side */
-  side: OrderSide;
+  side: OrderSide
   /** Order price */
-  price: string;
+  price: string
   /** Original order amount */
-  amount: string;
+  amount: string
   /** Filled amount */
-  filled: string;
+  filled: string
   /** Remaining amount */
-  remaining: string;
+  remaining: string
   /** Order status */
-  status: OrderStatus;
+  status: OrderStatus
   /** Creation timestamp */
-  createdAt: number;
+  createdAt: number
   /** Last update timestamp */
-  updatedAt: number;
+  updatedAt: number
 }
 
 /**
  * Order result after placement
  */
-export interface OrderResult {
+export type OrderResult = {
   /** Order ID */
-  orderId: string;
+  orderId: string
   /** Transaction hash */
-  txHash: string;
+  txHash: string
   /** Order details */
-  order: Order;
+  order: Order
 }
 
 // ORDERBOOK TYPES
@@ -276,37 +276,37 @@ export interface OrderResult {
 /**
  * Order book entry
  */
-export interface OrderBookEntry {
+export type OrderBookEntry = {
   /** Price level */
-  price: string;
+  price: string
   /** Total amount at this price */
-  amount: string;
+  amount: string
   /** Total value (price * amount) */
-  total: string;
+  total: string
 }
 
 /**
  * Full order book
  */
-export interface OrderBook {
+export type OrderBook = {
   /** Trading pair */
-  pair: TradingPair;
+  pair: TradingPair
   /** Buy orders (bids) - sorted high to low */
-  bids: OrderBookEntry[];
+  bids: OrderBookEntry[]
   /** Sell orders (asks) - sorted low to high */
-  asks: OrderBookEntry[];
+  asks: OrderBookEntry[]
   /** Bid-ask spread percentage */
-  spread: string;
+  spread: string
   /** Last traded price */
-  lastPrice: string;
+  lastPrice: string
   /** Timestamp */
-  timestamp: number;
+  timestamp: number
 }
 
 // CONTRACT TYPES (Internal)
 
 /** Base64-encoded binary data, matching CosmWasm `Binary` type */
-export type Base64Binary = string;
+export type Base64Binary = string
 
 /**
  * FIN contract ExecuteMsg variants
@@ -315,7 +315,7 @@ export type Base64Binary = string;
 export type FinExecuteMsg =
   | { swap: SwapRequest }
   | { order: [OrderTarget[], CallbackData | null] }
-  | { arb: { then?: Base64Binary } };
+  | { arb: { then?: Base64Binary } }
 
 /**
  * Swap request variants
@@ -325,21 +325,21 @@ export type SwapRequest =
   | { yolo: { to?: string; callback?: CallbackData } }
   | { min: { min_return: string; to?: string; callback?: CallbackData } }
   | { exact: { exact_return: string; to?: string; callback?: CallbackData } }
-  | { limit: { price: string; to?: string; callback?: CallbackData } };
+  | { limit: { price: string; to?: string; callback?: CallbackData } }
 
 /**
  * Order target tuple - uses ContractSide for contract communication
  * @internal
  */
-export type OrderTarget = [ContractSide, string, string | null];
+export type OrderTarget = [ContractSide, string, string | null]
 
 /**
  * Callback data for contract composition
  * @internal
  */
-export interface CallbackData {
-  contract: string;
-  msg: string;
+export type CallbackData = {
+  contract: string
+  msg: string
 }
 
 /**
@@ -351,22 +351,22 @@ export type FinQueryMsg =
   | { simulate: { denom: string; amount: string } }
   | { order: [string, ContractSide, string] }
   | { orders: { owner: string; side?: ContractSide; offset?: number; limit?: number } }
-  | { book: { limit?: number; offset?: number } };
+  | { book: { limit?: number; offset?: number } }
 
 /**
  * Simulation response from FIN contract
  * @internal
  */
-export interface SimulationResponse {
-  returned: string;
-  fee: string;
+export type SimulationResponse = {
+  returned: string
+  fee: string
 }
 
 /**
  * Book response from FIN contract
  * @internal
  */
-export interface BookResponse {
-  base: Array<{ price: string; total: string }>;
-  quote: Array<{ price: string; total: string }>;
+export type BookResponse = {
+  base: Array<{ price: string; total: string }>
+  quote: Array<{ price: string; total: string }>
 }

@@ -2,10 +2,11 @@
  * Tests for destination address validation (MEDIUM-2 security fix)
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { RujiraSwap } from '../modules/swap.js';
-import { RujiraError, RujiraErrorCode } from '../errors.js';
-import { VALID_THOR_ADDRESS } from './test-helpers.js';
+import { describe, expect, it, vi } from 'vitest'
+
+import { RujiraErrorCode } from '../errors.js'
+import { RujiraSwap } from '../modules/swap.js'
+import { VALID_THOR_ADDRESS } from './test-helpers.js'
 
 // Mock client for testing
 const createMockClient = () => ({
@@ -46,31 +47,30 @@ const createMockClient = () => ({
   }),
   // Mock persistence method (no-op for tests)
   persistFinContracts: vi.fn().mockResolvedValue(undefined),
-});
+})
 
 describe('Address Validation', () => {
   describe('valid addresses', () => {
     it('should accept valid thor1 mainnet address', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       const result = await swap.easySwap({
         route: 'RUNE_TO_USDC',
         amount: '100000000',
         destination: VALID_THOR_ADDRESS,
-      });
+      })
 
-      expect(result.txHash).toBe('TESTHASH123');
-    });
+      expect(result.txHash).toBe('TESTHASH123')
+    })
 
     // mainnet-only: non-mainnet address tests removed
-
-  });
+  })
 
   describe('invalid address prefix', () => {
     it("should reject address without 'thor1' prefix", async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -80,12 +80,12 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     it('should reject Ethereum address', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -95,12 +95,12 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     it('should reject Bitcoin address', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -110,14 +110,14 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
-  });
+      })
+    })
+  })
 
   describe('invalid bech32 checksum', () => {
     it('should reject address with invalid checksum', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       // This address has valid format but wrong checksum
       await expect(
@@ -128,17 +128,16 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     // mainnet-only: non-mainnet address checksum test removed
-
-  });
+  })
 
   describe('invalid address length', () => {
     it('should reject address that is too short', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -148,12 +147,12 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     it('should reject address that is too long', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -163,14 +162,14 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
-  });
+      })
+    })
+  })
 
   describe('invalid bech32 characters', () => {
     it('should reject address with uppercase letters', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -180,12 +179,12 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     it('should reject address with invalid bech32 character "b"', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -195,12 +194,12 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     it('should reject address with invalid bech32 character "i"', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -210,12 +209,12 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     it('should reject address with invalid bech32 character "o"', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -225,14 +224,14 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
-  });
+      })
+    })
+  })
 
   describe('empty/missing address', () => {
     it('should reject empty string', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -242,12 +241,12 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     it('should reject whitespace-only string', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.easySwap({
@@ -257,14 +256,14 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
-  });
+      })
+    })
+  })
 
   describe('getQuote with destination', () => {
     it('should validate destination in getQuote when provided', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       await expect(
         swap.getQuote({
@@ -275,22 +274,22 @@ describe('Address Validation', () => {
         })
       ).rejects.toMatchObject({
         code: RujiraErrorCode.INVALID_ADDRESS,
-      });
-    });
+      })
+    })
 
     it('should allow getQuote without destination', async () => {
-      const mockClient = createMockClient();
-      const swap = new RujiraSwap(mockClient as any, { cache: false });
+      const mockClient = createMockClient()
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       // Should not throw when destination is not provided
       const quote = await swap.getQuote({
         fromAsset: 'THOR.RUNE',
         toAsset: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
         amount: '100000000',
-      });
+      })
 
-      expect(quote).toBeDefined();
-      expect(quote.expectedOutput).toBe('99000000');
-    });
-  });
-});
+      expect(quote).toBeDefined()
+      expect(quote.expectedOutput).toBe('99000000')
+    })
+  })
+})

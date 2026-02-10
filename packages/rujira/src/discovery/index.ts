@@ -4,6 +4,6 @@
  * @module discovery
  */
 
-export { RujiraDiscovery, type DiscoveryOptions } from './discovery.js';
-export { GraphQLClient, type GraphQLClientOptions } from './graphql-client.js';
-export type { Market, DiscoveredContracts } from './types.js';
+export { type DiscoveryOptions, RujiraDiscovery } from './discovery.js'
+export { GraphQLClient, type GraphQLClientOptions } from './graphql-client.js'
+export type { DiscoveredContracts, Market } from './types.js'
