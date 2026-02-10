@@ -2,6 +2,7 @@ import { Chain, CosmosChain, VaultBasedCosmosChain } from '@core/chain/Chain'
 import { cosmosFeeCoinDenom } from '@core/chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@core/chain/chains/cosmos/cosmosGasLimitRecord'
 import { getCosmosChainKind } from '@core/chain/chains/cosmos/utils/getCosmosChainKind'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@core/chain/coin/Coin'
 import { nativeSwapChainIds } from '@core/chain/swap/native/NativeSwapChain'
 import {
@@ -44,6 +45,10 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
   const signAmino = signData.case === 'signAmino' ? signData.value : undefined
   const signDirect = signData.case === 'signDirect' ? signData.value : undefined
 
+  const chainFeeDenom = cosmosFeeCoinDenom[chain]
+  const toChainFeeDenom = (denom: string): string =>
+    chainFeeCoin[chain]?.ticker === denom ? chainFeeDenom : denom
+
   const { messages, txMemo } = matchRecordUnion<
     CosmosChainSpecific,
     {
@@ -55,12 +60,13 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
       if (signDirect) {
         const bodyBytes = fromBase64(signDirect.bodyBytes)
         const txBody = TxBody.decode(bodyBytes)
+        const authInfoBytes = fromBase64(signDirect.authInfoBytes)
 
         const messages = [
           TW.Cosmos.Proto.Message.create({
             signDirectMessage: TW.Cosmos.Proto.Message.SignDirect.create({
               bodyBytes: bodyBytes,
-              authInfoBytes: fromBase64(signDirect.authInfoBytes),
+              authInfoBytes,
             }),
           }),
         ]
@@ -134,12 +140,13 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
       if (signDirect) {
         const bodyBytes = fromBase64(signDirect.bodyBytes)
         const txBody = TxBody.decode(bodyBytes)
+        const authInfoBytes = fromBase64(signDirect.authInfoBytes)
 
         const messages = [
           TW.Cosmos.Proto.Message.create({
             signDirectMessage: TW.Cosmos.Proto.Message.SignDirect.create({
               bodyBytes: bodyBytes,
-              authInfoBytes: fromBase64(signDirect.authInfoBytes),
+              authInfoBytes,
             }),
           }),
         ]
@@ -276,43 +283,15 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
 
         const isPositive = +/^[0-9]+$/.test(amountStr) && BigInt(amountStr) > 0n
 
-        // For TCY withdrawals, use the L1 asset info from swapPayload.fromCoin
-        // instead of the THORChain coin (which would give THOR.USDC instead of ETH.USDC-0x...)
-        const assetCoin = swapPayload?.fromCoin ?? coin
-        const assetChain = assetCoin.chain as Chain
-        const assetChainId =
-          (nativeSwapChainIds as Record<string, string>)[assetChain] ??
-          nativeSwapChainIds[chain as VaultBasedCosmosChain]
-
-        // Construct full symbol with contract address for L1 tokens (e.g. USDC-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48)
-        const contractAddr =
-          'contractAddress' in assetCoin ? assetCoin.contractAddress : undefined
-        
-        const isSecuredWithdraw = memo.startsWith('-:') || memo.startsWith('secure-:')
-
-        // For secured asset withdrawals, THORChain native denoms MUST be lowercase
-        // (e.g., eth-usdc-0xa0b86991... not ETH-USDC-0XA0B86991...)
-        const assetSymbol = (() => {
-          const rawSymbol = contractAddr && contractAddr.trim()
-            ? `${assetCoin.ticker}-${contractAddr}`
-            : assetCoin.ticker
-          return isSecuredWithdraw ? rawSymbol.toLowerCase() : rawSymbol
-        })()
-
-        // For secured withdrawals, lowercase chain and ticker as well
-        const finalChainId = isSecuredWithdraw ? assetChainId.toLowerCase() : assetChainId
-        const finalTicker = isSecuredWithdraw ? assetCoin.ticker.toLowerCase() : assetCoin.ticker
-
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
           asset: TW.Cosmos.Proto.THORChainAsset.create({
-            chain: finalChainId,
-            symbol: assetSymbol,
-            ticker: finalTicker,
+            chain: nativeSwapChainIds[chain as VaultBasedCosmosChain],
+            symbol: coin.ticker,
+            ticker: coin.ticker,
             synth: false,
-            secured: isSecuredWithdraw,
           }),
           ...(isPositive
-            ? { amount: amountStr, decimals: new Long(assetCoin.decimals) }
+            ? { amount: amountStr, decimals: new Long(coin.decimals) }
             : {}),
         })
 
@@ -363,7 +342,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
       if (authInfo.fee) {
         const amounts = authInfo.fee.amount.map(coin =>
           TW.Cosmos.Proto.Amount.create({
-            denom: coin.denom,
+            denom: toChainFeeDenom(coin.denom),
             amount: coin.amount,
           })
         )
@@ -380,7 +359,10 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
         gas: Long.fromString(signAmino.fee?.gas ?? '0'),
         amounts:
           signAmino.fee?.amount?.map(coin =>
-            TW.Cosmos.Proto.Amount.create(coin)
+            TW.Cosmos.Proto.Amount.create({
+              ...coin,
+              denom: toChainFeeDenom(coin.denom),
+            })
           ) ?? [],
       })
 
@@ -395,7 +377,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
       const amounts: TW.Cosmos.Proto.Amount[] = [
         TW.Cosmos.Proto.Amount.create({
           amount: gas.toString(),
-          denom: cosmosFeeCoinDenom[chain],
+          denom: chainFeeDenom,
         }),
       ]
 
