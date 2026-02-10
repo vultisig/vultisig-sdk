@@ -1,39 +1,40 @@
-import { findAssetByFormat } from '@vultisig/assets';
-import { DEFAULT_GAS_PRICE } from './config/constants.js';
-import { denomToTicker } from './utils/denom-conversion.js';
+import { findAssetByFormat } from '@vultisig/assets'
+
+import { DEFAULT_GAS_PRICE } from './config/constants.js'
+import { denomToTicker } from './utils/denom-conversion.js'
 
 /**
  * Rujira SDK is mainnet-only.
  */
-export type NetworkType = 'mainnet';
+export type NetworkType = 'mainnet'
 
-export interface NetworkConfig {
-  network: NetworkType;
-  chainId: string;
-  rpcEndpoint: string;
-  restEndpoint: string;
-  midgardEndpoint: string;
-  graphqlWsEndpoint?: string;
-  gasPrice: string;
-  gasLimit: number;
-  wasmQueryGasLimit: number;
-  addressPrefix: string;
+export type NetworkConfig = {
+  network: NetworkType
+  chainId: string
+  rpcEndpoint: string
+  restEndpoint: string
+  midgardEndpoint: string
+  graphqlWsEndpoint?: string
+  gasPrice: string
+  gasLimit: number
+  wasmQueryGasLimit: number
+  addressPrefix: string
 }
 
-export interface ContractRegistry {
-  finCodeId: number;
-  finCodeHash: string;
-  bowCodeHash: string;
-  affiliateCodeHash: string;
-  finContracts: Record<string, string>;
+export type ContractRegistry = {
+  finCodeId: number
+  finCodeHash: string
+  bowCodeHash: string
+  affiliateCodeHash: string
+  finContracts: Record<string, string>
 }
 
-export interface RujiraConfig extends NetworkConfig {
-  contracts: ContractRegistry;
-  defaultSlippageBps: number;
-  affiliateAddress?: string;
-  affiliateFeeBps?: number;
-}
+export type RujiraConfig = {
+  contracts: ContractRegistry
+  defaultSlippageBps: number
+  affiliateAddress?: string
+  affiliateFeeBps?: number
+} & NetworkConfig
 
 export const MAINNET_CONFIG: RujiraConfig = {
   network: 'mainnet',
@@ -54,7 +55,7 @@ export const MAINNET_CONFIG: RujiraConfig = {
     finContracts: {},
   },
   defaultSlippageBps: 100,
-};
+}
 
 /** Maps THORChain chain identifiers to SDK chain names */
 export const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
@@ -76,38 +77,37 @@ export const THORCHAIN_TO_SDK_CHAIN: Record<string, string> = {
   BASE: 'Base',
   TRON: 'Tron',
   NOBLE: 'Noble',
-};
+}
 
 /** Estimated processing times per chain in minutes (deposit/withdrawal) */
 export const CHAIN_PROCESSING_TIMES: Record<string, number> = {
-  BTC: 30,    // ~3 confirmations
-  ETH: 5,     // ~12 confirmations
-  BSC: 2,     // Fast finality
-  AVAX: 1,    // Sub-second finality
-  GAIA: 2,    // Cosmos ~6 seconds
-  DOGE: 20,   // ~3 confirmations
-  LTC: 15,    // ~3 confirmations
-  BCH: 20,    // ~3 confirmations
-  THOR: 0,    // Native, instant
-};
+  BTC: 30, // ~3 confirmations
+  ETH: 5, // ~12 confirmations
+  BSC: 2, // Fast finality
+  AVAX: 1, // Sub-second finality
+  GAIA: 2, // Cosmos ~6 seconds
+  DOGE: 20, // ~3 confirmations
+  LTC: 15, // ~3 confirmations
+  BCH: 20, // ~3 confirmations
+  THOR: 0, // Native, instant
+}
 
 export function getNetworkConfig(_network: NetworkType = 'mainnet'): RujiraConfig {
-  return MAINNET_CONFIG;
+  return MAINNET_CONFIG
 }
 
 export function getAssetMetadata(denom: string): { decimals: number; chainDecimals: number; ticker: string } {
-  const normalized = denom.toLowerCase();
+  const normalized = denom.toLowerCase()
 
-  const asset = findAssetByFormat(normalized);
+  const asset = findAssetByFormat(normalized)
   if (asset) {
     return {
       decimals: asset.decimals.fin,
       chainDecimals: asset.decimals.thorchain,
       ticker: asset.id.toUpperCase(),
-    };
+    }
   }
 
-  const ticker = denomToTicker(denom);
-  return { decimals: 6, chainDecimals: 8, ticker };
+  const ticker = denomToTicker(denom)
+  return { decimals: 6, chainDecimals: 8, ticker }
 }
-

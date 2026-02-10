@@ -52,6 +52,7 @@
   "devDependencies": {
     "@types/big.js": "^6.2.2",
     "@types/node": "^22.13.10",
+    "@vultisig/sdk": "workspace:*",
     "typescript": "^5.8.2",
     "vitest": "^3.0.9"
   },

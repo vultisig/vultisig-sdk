@@ -3,24 +3,25 @@
  * @module modules/assets
  */
 
-import type { RujiraClient } from '../client.js';
-import { KNOWN_ASSETS, findAssetByFormat, type Asset } from '@vultisig/assets';
-import type { RujiraAsset, TradingPair } from '../types.js';
-import { DEFAULT_TAKER_FEE, DEFAULT_MAKER_FEE } from '../config/constants.js';
-import { parseAsset as sharedParseAsset } from '../utils/denom-conversion.js';
-import { isFinAsset } from '../utils/type-guards.js';
+import { type Asset, findAssetByFormat, KNOWN_ASSETS } from '@vultisig/assets'
+
+import type { RujiraClient } from '../client.js'
+import { DEFAULT_MAKER_FEE, DEFAULT_TAKER_FEE } from '../config/constants.js'
+import type { RujiraAsset, TradingPair } from '../types.js'
+import { parseAsset as sharedParseAsset } from '../utils/denom-conversion.js'
+import { isFinAsset } from '../utils/type-guards.js'
 
 /**
  * Assets module for querying asset information
- * 
+ *
  * @example
  * ```typescript
  * const client = new RujiraClient({ network: 'mainnet' });
  * await client.connect();
- * 
+ *
  * // Get all supported assets
  * const assets = await client.assets.getAssets();
- * 
+ *
  * // Get specific asset info
  * const btc = await client.assets.getAsset('BTC.BTC');
  * console.log(`BTC decimals: ${btc.decimals}`);
@@ -33,29 +34,27 @@ export class RujiraAssets {
    * Get all supported assets
    */
   async getAssets(): Promise<RujiraAsset[]> {
-    return (Object.values(KNOWN_ASSETS) as Asset[])
-      .filter(isFinAsset)
-      .map((asset) => ({
-        asset: asset.formats.thorchain,
-        chain: asset.chain,
-        symbol: asset.formats.l1,
-        ticker: asset.id.toUpperCase(),
-        decimals: asset.decimals.fin,
-        type: this.getAssetType(asset.formats.thorchain),
-        denom: asset.formats.fin,
-      }));
+    return (Object.values(KNOWN_ASSETS) as Asset[]).filter(isFinAsset).map(asset => ({
+      asset: asset.formats.thorchain,
+      chain: asset.chain,
+      symbol: asset.formats.l1,
+      ticker: asset.id.toUpperCase(),
+      decimals: asset.decimals.fin,
+      type: this.getAssetType(asset.formats.thorchain),
+      denom: asset.formats.fin,
+    }))
   }
 
   /**
    * Get information about a specific asset
    */
   async getAsset(assetFormat: string): Promise<RujiraAsset | null> {
-    const asset = findAssetByFormat(assetFormat);
-    
+    const asset = findAssetByFormat(assetFormat)
+
     if (!isFinAsset(asset)) {
-      return null;
+      return null
     }
-    
+
     return {
       asset: asset.formats.thorchain,
       chain: asset.chain,
@@ -64,7 +63,7 @@ export class RujiraAssets {
       decimals: asset.decimals.fin,
       type: this.getAssetType(asset.formats.thorchain),
       denom: asset.formats.fin,
-    };
+    }
   }
 
   /**
@@ -72,11 +71,11 @@ export class RujiraAssets {
    */
   async getTradingPairs(): Promise<TradingPair[]> {
     // Return known pairs from config
-    const pairs: TradingPair[] = [];
-    const finContracts = this.client.config.contracts.finContracts;
+    const pairs: TradingPair[] = []
+    const finContracts = this.client.config.contracts.finContracts
 
     for (const [pairKey, address] of Object.entries(finContracts)) {
-      const [base, quote] = pairKey.split('/');
+      const [base, quote] = pairKey.split('/')
       pairs.push({
         base,
         quote,
@@ -84,53 +83,53 @@ export class RujiraAssets {
         tick: '0.0001', // Would come from contract config
         takerFee: DEFAULT_TAKER_FEE,
         makerFee: DEFAULT_MAKER_FEE,
-      });
+      })
     }
 
-    return pairs;
+    return pairs
   }
 
   /**
    * Check if an asset is supported
    */
   isSupported(asset: string): boolean {
-    const found = findAssetByFormat(asset);
-    return isFinAsset(found);
+    const found = findAssetByFormat(asset)
+    return isFinAsset(found)
   }
 
   /**
    * Get the denom for an asset
    */
   getDenom(asset: string): string | undefined {
-    const found = findAssetByFormat(asset);
-    return isFinAsset(found) ? found.formats.fin : undefined;
+    const found = findAssetByFormat(asset)
+    return isFinAsset(found) ? found.formats.fin : undefined
   }
 
   /**
    * Get decimals for an asset
    */
   getDecimals(asset: string): number | undefined {
-    const found = findAssetByFormat(asset);
-    return isFinAsset(found) ? found.decimals.fin : undefined;
+    const found = findAssetByFormat(asset)
+    return isFinAsset(found) ? found.decimals.fin : undefined
   }
 
   /**
    * Parse asset string to components
    */
   parseAsset(asset: string): {
-    chain: string;
-    symbol: string;
-    ticker: string;
-    contractAddress?: string;
+    chain: string
+    symbol: string
+    ticker: string
+    contractAddress?: string
   } {
-    return sharedParseAsset(asset);
+    return sharedParseAsset(asset)
   }
 
   /**
    * Format asset string from components
    */
   formatAsset(chain: string, symbol: string): string {
-    return `${chain}.${symbol}`;
+    return `${chain}.${symbol}`
   }
 
   // INTERNAL
@@ -140,11 +139,11 @@ export class RujiraAssets {
    */
   private getAssetType(asset: string): 'native' | 'secured' | 'synthetic' {
     if (asset === 'THOR.RUNE') {
-      return 'native';
+      return 'native'
     }
     if (asset.includes('/')) {
-      return 'synthetic';
+      return 'synthetic'
     }
-    return 'secured';
+    return 'secured'
   }
 }

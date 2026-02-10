@@ -1,86 +1,86 @@
-import { GraphQLClient, type GraphQLClientOptions } from './graphql-client.js';
-import type { DiscoveredContracts, Market } from './types.js';
-import { MAINNET_CONFIG } from '../config.js';
-import { DEFAULT_TAKER_FEE, DEFAULT_MAKER_FEE } from '../config/constants.js';
-import { thornodeRateLimiter } from '../utils/rate-limiter.js';
+import { MAINNET_CONFIG } from '../config.js'
+import { DEFAULT_MAKER_FEE, DEFAULT_TAKER_FEE } from '../config/constants.js'
+import { thornodeRateLimiter } from '../utils/rate-limiter.js'
+import { GraphQLClient, type GraphQLClientOptions } from './graphql-client.js'
+import type { DiscoveredContracts, Market } from './types.js'
 
-export interface DiscoveryOptions {
-  graphql?: GraphQLClientOptions;
-  rpcEndpoint?: string;
-  cacheTtl?: number;
-  debug?: boolean;
+export type DiscoveryOptions = {
+  graphql?: GraphQLClientOptions
+  rpcEndpoint?: string
+  cacheTtl?: number
+  debug?: boolean
 }
 
 export class RujiraDiscovery {
-  private graphql: GraphQLClient;
-  private rpcEndpoint: string;
-  private cacheTtl: number;
-  private debug: boolean;
-  private finCodeId: number;
-  private cache: DiscoveredContracts | null = null;
-  private pendingDiscovery: Promise<DiscoveredContracts> | null = null;
+  private graphql: GraphQLClient
+  private rpcEndpoint: string
+  private cacheTtl: number
+  private debug: boolean
+  private finCodeId: number
+  private cache: DiscoveredContracts | null = null
+  private pendingDiscovery: Promise<DiscoveredContracts> | null = null
 
   constructor(options: DiscoveryOptions = {}) {
-    const networkConfig = MAINNET_CONFIG;
+    const networkConfig = MAINNET_CONFIG
 
-    this.rpcEndpoint = options.rpcEndpoint || networkConfig.rpcEndpoint;
-    this.cacheTtl = options.cacheTtl ?? 5 * 60 * 1000;
-    this.debug = options.debug || false;
-    this.finCodeId = networkConfig.contracts.finCodeId;
+    this.rpcEndpoint = options.rpcEndpoint || networkConfig.rpcEndpoint
+    this.cacheTtl = options.cacheTtl ?? 5 * 60 * 1000
+    this.debug = options.debug || false
+    this.finCodeId = networkConfig.contracts.finCodeId
 
     // Mainnet-only GraphQL endpoints
     this.graphql = new GraphQLClient({
       httpEndpoint: 'https://api.rujira.network/api/graphql',
       wsEndpoint: 'wss://api.rujira.network/socket',
       ...options.graphql,
-    });
+    })
   }
 
   async discoverContracts(forceRefresh = false): Promise<DiscoveredContracts> {
     if (!forceRefresh && this.cache && this.isCacheValid()) {
-      this.log('Using cached contracts');
-      return this.cache;
+      this.log('Using cached contracts')
+      return this.cache
     }
 
     if (this.pendingDiscovery) {
-      this.log('Discovery already in progress, waiting for existing request...');
-      return this.pendingDiscovery;
+      this.log('Discovery already in progress, waiting for existing request...')
+      return this.pendingDiscovery
     }
 
-    this.log('Discovering contracts...');
-    this.pendingDiscovery = this.performDiscovery();
+    this.log('Discovering contracts...')
+    this.pendingDiscovery = this.performDiscovery()
 
     try {
-      return await this.pendingDiscovery;
+      return await this.pendingDiscovery
     } finally {
-      this.pendingDiscovery = null;
+      this.pendingDiscovery = null
     }
   }
 
   private async performDiscovery(): Promise<DiscoveredContracts> {
     try {
-      const contracts = await this.discoverViaGraphQL();
-      this.cache = contracts;
-      return contracts;
+      const contracts = await this.discoverViaGraphQL()
+      this.cache = contracts
+      return contracts
     } catch (error) {
-      this.log('GraphQL discovery failed, analyzing error...', error);
+      this.log('GraphQL discovery failed, analyzing error...', error)
 
       if (!this.shouldFallbackToChain(error)) {
-        this.log('Error is not recoverable, failing without fallback');
-        throw error;
+        this.log('Error is not recoverable, failing without fallback')
+        throw error
       }
 
-      this.log('Error is recoverable, trying chain query fallback...');
+      this.log('Error is recoverable, trying chain query fallback...')
 
       try {
-        const contracts = await this.discoverViaChain();
-        this.cache = contracts;
-        return contracts;
+        const contracts = await this.discoverViaChain()
+        this.cache = contracts
+        return contracts
       } catch (chainError) {
-        this.log('Chain discovery also failed', chainError);
+        this.log('Chain discovery also failed', chainError)
 
         if (error instanceof GraphQLClient.GraphQLError && error.type === 'auth') {
-          throw error;
+          throw error
         }
 
         return {
@@ -88,7 +88,7 @@ export class RujiraDiscovery {
           discoveredAt: Date.now(),
           source: 'fallback-failed',
           lastError: error instanceof Error ? error.message : String(error),
-        };
+        }
       }
     }
   }
@@ -97,37 +97,37 @@ export class RujiraDiscovery {
     if (error instanceof GraphQLClient.GraphQLError) {
       switch (error.type) {
         case 'auth':
-          return false;
+          return false
         default:
-          return true;
+          return true
       }
     }
 
-    return true;
+    return true
   }
 
   async findMarket(baseAsset: string, quoteAsset: string): Promise<Market | null> {
     try {
-      const market = await this.graphql.getMarket(baseAsset, quoteAsset);
+      const market = await this.graphql.getMarket(baseAsset, quoteAsset)
 
       if (market) {
-        return this.transformMarket(market);
+        return this.transformMarket(market)
       }
 
-      const reverseMarket = await this.graphql.getMarket(quoteAsset, baseAsset);
+      const reverseMarket = await this.graphql.getMarket(quoteAsset, baseAsset)
       if (reverseMarket) {
-        return this.transformMarket(reverseMarket);
+        return this.transformMarket(reverseMarket)
       }
 
-      return null;
+      return null
     } catch (error) {
-      this.log('findMarket failed', error);
+      this.log('findMarket failed', error)
 
-      const contracts = await this.discoverContracts();
-      const pairKey = `${baseAsset}/${quoteAsset}`;
-      const reversePairKey = `${quoteAsset}/${baseAsset}`;
+      const contracts = await this.discoverContracts()
+      const pairKey = `${baseAsset}/${quoteAsset}`
+      const reversePairKey = `${quoteAsset}/${baseAsset}`
 
-      const address = contracts.fin[pairKey] || contracts.fin[reversePairKey];
+      const address = contracts.fin[pairKey] || contracts.fin[reversePairKey]
 
       if (address) {
         return {
@@ -140,163 +140,163 @@ export class RujiraDiscovery {
           takerFee: DEFAULT_TAKER_FEE,
           makerFee: DEFAULT_MAKER_FEE,
           active: true,
-        };
+        }
       }
 
-      return null;
+      return null
     }
   }
 
   async getContractAddress(baseAsset: string, quoteAsset: string): Promise<string | null> {
-    const market = await this.findMarket(baseAsset, quoteAsset);
-    return market?.address || null;
+    const market = await this.findMarket(baseAsset, quoteAsset)
+    return market?.address || null
   }
 
   async listMarkets(): Promise<Market[]> {
     try {
-      const response = await this.graphql.getMarkets();
-      return response.markets.map((m) => this.transformMarket(m));
+      const response = await this.graphql.getMarkets()
+      return response.markets.map(m => this.transformMarket(m))
     } catch (error) {
-      this.log('listMarkets failed', error);
-      return [];
+      this.log('listMarkets failed', error)
+      return []
     }
   }
 
   clearCache(): void {
-    this.cache = null;
+    this.cache = null
   }
 
   getCacheTtl(): number {
-    return this.cacheTtl;
+    return this.cacheTtl
   }
 
   getCacheStatus(): { cached: boolean; age?: number; valid: boolean; ttl: number } {
-    const ttl = this.cacheTtl;
+    const ttl = this.cacheTtl
 
     if (!this.cache) {
-      return { cached: false, valid: false, ttl };
+      return { cached: false, valid: false, ttl }
     }
 
-    const age = Date.now() - this.cache.discoveredAt;
-    const valid = this.isCacheValid();
+    const age = Date.now() - this.cache.discoveredAt
+    const valid = this.isCacheValid()
 
-    return { cached: true, age, valid, ttl };
+    return { cached: true, age, valid, ttl }
   }
 
   private async discoverViaGraphQL(): Promise<DiscoveredContracts> {
-    const response = await this.graphql.getMarkets();
+    const response = await this.graphql.getMarkets()
 
-    const fin: Record<string, string> = {};
+    const fin: Record<string, string> = {}
 
     for (const market of response.markets) {
-      const pairKey = `${market.denoms.base}/${market.denoms.quote}`;
-      fin[pairKey] = market.address;
+      const pairKey = `${market.denoms.base}/${market.denoms.quote}`
+      fin[pairKey] = market.address
     }
 
     return {
       fin,
       discoveredAt: Date.now(),
       source: 'graphql',
-    };
+    }
   }
 
   private async discoverViaChain(): Promise<DiscoveredContracts> {
-    const fin: Record<string, string> = {};
+    const fin: Record<string, string> = {}
 
-    const baseUrl = this.rpcEndpoint.replace(':26657', '').replace('rpc', 'thornode');
-    const restUrl = baseUrl.includes('thornode') ? baseUrl : 'https://thornode.ninerealms.com';
+    const baseUrl = this.rpcEndpoint.replace(':26657', '').replace('rpc', 'thornode')
+    const restUrl = baseUrl.includes('thornode') ? baseUrl : 'https://thornode.ninerealms.com'
 
     try {
       // Paginate through all contracts for this code ID
-      const PAGE_SIZE = 50;
-      const allContracts: string[] = [];
-      let nextKey: string | null = null;
+      const PAGE_SIZE = 50
+      const allContracts: string[] = []
+      let nextKey: string | null = null
 
       do {
-        let url = `${restUrl}/cosmwasm/wasm/v1/code/${this.finCodeId}/contracts?pagination.limit=${PAGE_SIZE}`;
+        let url = `${restUrl}/cosmwasm/wasm/v1/code/${this.finCodeId}/contracts?pagination.limit=${PAGE_SIZE}`
         if (nextKey) {
-          url += `&pagination.key=${encodeURIComponent(nextKey)}`;
+          url += `&pagination.key=${encodeURIComponent(nextKey)}`
         }
 
-        const contractsResponse = await thornodeRateLimiter.fetch(url);
+        const contractsResponse = await thornodeRateLimiter.fetch(url)
         if (!contractsResponse.ok) {
-          throw new Error(`Failed to fetch contracts: ${contractsResponse.status}`);
+          throw new Error(`Failed to fetch contracts: ${contractsResponse.status}`)
         }
 
         const page = (await contractsResponse.json()) as {
-          contracts: string[];
-          pagination?: { next_key: string | null };
-        };
-        allContracts.push(...page.contracts);
-        nextKey = page.pagination?.next_key || null;
-        this.log(`Fetched ${page.contracts.length} contracts (total: ${allContracts.length})`);
-      } while (nextKey);
+          contracts: string[]
+          pagination?: { next_key: string | null }
+        }
+        allContracts.push(...page.contracts)
+        nextKey = page.pagination?.next_key || null
+        this.log(`Fetched ${page.contracts.length} contracts (total: ${allContracts.length})`)
+      } while (nextKey)
 
-      const addresses = allContracts;
-      this.log(`Found ${addresses.length} FIN contracts total`);
+      const addresses = allContracts
+      this.log(`Found ${addresses.length} FIN contracts total`)
 
       // Query contract configs in parallel with concurrency cap
-      const CONCURRENCY = 5;
+      const CONCURRENCY = 5
       for (let i = 0; i < addresses.length; i += CONCURRENCY) {
-        const batch = addresses.slice(i, i + CONCURRENCY);
+        const batch = addresses.slice(i, i + CONCURRENCY)
         const results = await Promise.allSettled(
-          batch.map(async (address) => {
+          batch.map(async address => {
             const configResponse = await thornodeRateLimiter.fetch(
               `${restUrl}/cosmwasm/wasm/v1/contract/${address}/smart/eyJjb25maWciOnt9fQ==`
-            );
+            )
 
-            if (!configResponse.ok) return null;
+            if (!configResponse.ok) return null
 
             const configData = (await configResponse.json()) as {
               data: {
-                denoms: string[];
-                fee_taker: string;
-                fee_maker: string;
-              };
-            };
+                denoms: string[]
+                fee_taker: string
+                fee_maker: string
+              }
+            }
 
             if (configData.data?.denoms?.length === 2) {
-              const base = this.normalizeDenom(configData.data.denoms[0]);
-              const quote = this.normalizeDenom(configData.data.denoms[1]);
-              return { pairKey: `${base}/${quote}`, address };
+              const base = this.normalizeDenom(configData.data.denoms[0])
+              const quote = this.normalizeDenom(configData.data.denoms[1])
+              return { pairKey: `${base}/${quote}`, address }
             }
-            return null;
+            return null
           })
-        );
+        )
 
         for (const result of results) {
           if (result.status === 'fulfilled' && result.value) {
-            fin[result.value.pairKey] = result.value.address;
-            this.log(`Discovered: ${result.value.pairKey} -> ${result.value.address.slice(0, 20)}...`);
+            fin[result.value.pairKey] = result.value.address
+            this.log(`Discovered: ${result.value.pairKey} -> ${result.value.address.slice(0, 20)}...`)
           } else if (result.status === 'rejected') {
-            this.log('Failed to query contract config:', result.reason);
+            this.log('Failed to query contract config:', result.reason)
           }
         }
       }
 
-      this.log(`Chain discovery complete: ${Object.keys(fin).length} markets`);
+      this.log(`Chain discovery complete: ${Object.keys(fin).length} markets`)
     } catch (error) {
-      this.log('Chain discovery failed:', error);
+      this.log('Chain discovery failed:', error)
     }
 
     return {
       fin,
       discoveredAt: Date.now(),
       source: 'chain',
-    };
+    }
   }
 
   private normalizeDenom(denom: string): string {
-    return denom.toLowerCase();
+    return denom.toLowerCase()
   }
 
   private transformMarket(market: {
-    address: string;
-    denoms: { base: string; quote: string };
-    config?: { tick?: string; fee_taker?: string; fee_maker?: string };
+    address: string
+    denoms: { base: string; quote: string }
+    config?: { tick?: string; fee_taker?: string; fee_maker?: string }
   }): Market {
-    const baseDenom = market.denoms.base.toLowerCase();
-    const quoteDenom = market.denoms.quote.toLowerCase();
+    const baseDenom = market.denoms.base.toLowerCase()
+    const quoteDenom = market.denoms.quote.toLowerCase()
 
     return {
       address: market.address,
@@ -308,18 +308,18 @@ export class RujiraDiscovery {
       takerFee: market.config?.fee_taker || DEFAULT_TAKER_FEE,
       makerFee: market.config?.fee_maker || DEFAULT_MAKER_FEE,
       active: true,
-    };
+    }
   }
 
   private isCacheValid(): boolean {
-    if (!this.cache) return false;
-    if (this.cacheTtl === 0) return false;
-    return Date.now() - this.cache.discoveredAt < this.cacheTtl;
+    if (!this.cache) return false
+    if (this.cacheTtl === 0) return false
+    return Date.now() - this.cache.discoveredAt < this.cacheTtl
   }
 
   private log(...args: unknown[]): void {
     if (this.debug) {
-      console.log('[RujiraDiscovery]', ...args);
+      console.log('[RujiraDiscovery]', ...args)
     }
   }
 }

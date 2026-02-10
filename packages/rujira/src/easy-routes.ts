@@ -2,15 +2,16 @@
  * Easy Swap Routes - Simplified DeFi interface
  */
 
-import { KNOWN_ASSETS, type Asset } from '@vultisig/assets';
-import { denomToTicker } from './utils/denom-conversion.js';
+import { KNOWN_ASSETS } from '@vultisig/assets'
+
+import { denomToTicker } from './utils/denom-conversion.js'
 
 function getFinFormat(assetId: string): string {
-  const asset = KNOWN_ASSETS[assetId as keyof typeof KNOWN_ASSETS];
+  const asset = KNOWN_ASSETS[assetId as keyof typeof KNOWN_ASSETS]
   if (!asset) {
-    throw new Error(`Unknown asset: ${assetId}`);
+    throw new Error(`Unknown asset: ${assetId}`)
   }
-  return asset.formats.fin;
+  return asset.formats.fin
 }
 
 export const EASY_ROUTES = {
@@ -135,10 +136,10 @@ export const EASY_ROUTES = {
     liquidity: 'deep' as const,
     typicalTime: '10-60 minutes (Bitcoin confirmations)',
   },
-} as const;
+} as const
 
-export type EasyRouteName = keyof typeof EASY_ROUTES;
-export type EasyRoute = (typeof EASY_ROUTES)[EasyRouteName];
+export type EasyRouteName = keyof typeof EASY_ROUTES
+export type EasyRoute = (typeof EASY_ROUTES)[EasyRouteName]
 
 // COMMON ASSETS (shortcuts)
 
@@ -165,10 +166,10 @@ export const ASSETS = {
   // Rujira native tokens
   RUJI: getFinFormat('ruji'),
   TCY: getFinFormat('tcy'),
-} as const;
+} as const
 
-export type AssetName = keyof typeof ASSETS;
-export type EasyAsset = (typeof ASSETS)[AssetName];
+export type AssetName = keyof typeof ASSETS
+export type EasyAsset = (typeof ASSETS)[AssetName]
 
 // HELPER FUNCTIONS
 
@@ -177,13 +178,13 @@ export type EasyAsset = (typeof ASSETS)[AssetName];
  * Perfect for agents to discover swap options
  */
 export function listEasyRoutes(): Array<{
-  id: EasyRouteName;
-  name: string;
-  from: string;
-  to: string;
-  description: string;
-  liquidity: string;
-  typicalTime: string;
+  id: EasyRouteName
+  name: string
+  from: string
+  to: string
+  description: string
+  liquidity: string
+  typicalTime: string
 }> {
   return Object.entries(EASY_ROUTES).map(([id, route]) => ({
     id: id as EasyRouteName,
@@ -193,59 +194,53 @@ export function listEasyRoutes(): Array<{
     description: route.description,
     liquidity: route.liquidity,
     typicalTime: route.typicalTime,
-  }));
+  }))
 }
 
 /**
  * Get a route by name
  */
 export function getRoute(routeName: EasyRouteName): EasyRoute {
-  return EASY_ROUTES[routeName];
+  return EASY_ROUTES[routeName]
 }
 
 /**
  * Find routes for a given asset pair
  */
 export function findRoute(from: string, to: string): EasyRoute | undefined {
-  const normalizedFrom = from.toLowerCase();
-  const normalizedTo = to.toLowerCase();
+  const normalizedFrom = from.toLowerCase()
+  const normalizedTo = to.toLowerCase()
 
   for (const route of Object.values(EASY_ROUTES)) {
     if (route.from === normalizedFrom && route.to === normalizedTo) {
-      return route;
+      return route
     }
   }
-  return undefined;
+  return undefined
 }
 
 /**
  * Get routes that involve a specific asset
  */
 export function routesForAsset(asset: string): EasyRoute[] {
-  const normalized = asset.toLowerCase();
-  return Object.values(EASY_ROUTES).filter(
-    (route) => route.from === normalized || route.to === normalized
-  );
+  const normalized = asset.toLowerCase()
+  return Object.values(EASY_ROUTES).filter(route => route.from === normalized || route.to === normalized)
 }
 
 /**
  * Get all routes from a specific asset
  */
 export function routesFrom(asset: string): EasyRoute[] {
-  const normalized = asset.toLowerCase();
-  return Object.values(EASY_ROUTES).filter(
-    (route) => route.from === normalized
-  );
+  const normalized = asset.toLowerCase()
+  return Object.values(EASY_ROUTES).filter(route => route.from === normalized)
 }
 
 /**
  * Get all routes to a specific asset
  */
 export function routesTo(asset: string): EasyRoute[] {
-  const normalized = asset.toLowerCase();
-  return Object.values(EASY_ROUTES).filter(
-    (route) => route.to === normalized
-  );
+  const normalized = asset.toLowerCase()
+  return Object.values(EASY_ROUTES).filter(route => route.to === normalized)
 }
 
 // CONVENIENCE TYPES FOR AGENTS
@@ -253,44 +248,44 @@ export function routesTo(asset: string): EasyRoute[] {
 /**
  * Simple swap request - all an agent needs
  */
-export interface EasySwapRequest {
+export type EasySwapRequest = {
   /** Route name (e.g., 'RUNE_TO_USDC') or custom from/to */
-  route?: EasyRouteName;
-  from?: string;
-  to?: string;
+  route?: EasyRouteName
+  from?: string
+  to?: string
   /** Amount to swap in base units (e.g., '100000000' for 1 RUNE) */
-  amount: string;
+  amount: string
   /** Destination address */
-  destination: string;
+  destination: string
   /** Max slippage in percent (default: 1%) */
-  maxSlippagePercent?: number;
+  maxSlippagePercent?: number
 }
 
 /**
  * Simple quote response
  */
-export interface EasyQuoteResponse {
+export type EasyQuoteResponse = {
   /** Input amount (human readable) */
-  inputAmount: string;
+  inputAmount: string
   /** Input asset */
-  inputAsset: string;
+  inputAsset: string
   /** Expected output (human readable) */
-  expectedOutput: string;
+  expectedOutput: string
   /** Output asset */
-  outputAsset: string;
+  outputAsset: string
   /** Slippage in percent */
-  slippagePercent: number;
+  slippagePercent: number
   /** Estimated time */
-  estimatedTime: string;
+  estimatedTime: string
   /** Fees breakdown */
   fees: {
-    network: string;
-    affiliate: string;
-  };
+    network: string
+    affiliate: string
+  }
   /** Is this a good trade? (slippage < 2%) */
-  recommended: boolean;
+  recommended: boolean
   /** Warning message if any */
-  warning?: string;
+  warning?: string
 }
 
 // DOCUMENTATION HELPERS
@@ -303,29 +298,28 @@ export function getRoutesSummary(): string {
     '',
     '| Route | From | To | Time |',
     '|-------|------|-----|------|',
-  ];
+  ]
 
   for (const [id, route] of Object.entries(EASY_ROUTES)) {
     // Extract readable name from denom
-    const fromShort = denomToTicker(route.from);
-    const toShort = denomToTicker(route.to);
-    lines.push(`| ${id} | ${fromShort} | ${toShort} | ${route.typicalTime} |`);
+    const fromShort = denomToTicker(route.from)
+    const toShort = denomToTicker(route.to)
+    lines.push(`| ${id} | ${fromShort} | ${toShort} | ${route.typicalTime} |`)
   }
 
-  lines.push('', '## Quick Start', '');
-  lines.push('```typescript');
-  lines.push("import { EASY_ROUTES, RujiraClient } from '@vultisig/rujira';");
-  lines.push('');
-  lines.push("const client = new RujiraClient({ network: 'mainnet' });");
-  lines.push('const route = EASY_ROUTES.RUNE_TO_USDC;');
-  lines.push('');
-  lines.push('const quote = await client.swap.getQuote({');
-  lines.push('  fromAsset: route.from,');
-  lines.push('  toAsset: route.to,');
-  lines.push("  amount: '10000000000' // 100 RUNE (8 decimals)");
-  lines.push('});');
-  lines.push('```');
+  lines.push('', '## Quick Start', '')
+  lines.push('```typescript')
+  lines.push("import { EASY_ROUTES, RujiraClient } from '@vultisig/rujira';")
+  lines.push('')
+  lines.push("const client = new RujiraClient({ network: 'mainnet' });")
+  lines.push('const route = EASY_ROUTES.RUNE_TO_USDC;')
+  lines.push('')
+  lines.push('const quote = await client.swap.getQuote({')
+  lines.push('  fromAsset: route.from,')
+  lines.push('  toAsset: route.to,')
+  lines.push("  amount: '10000000000' // 100 RUNE (8 decimals)")
+  lines.push('});')
+  lines.push('```')
 
-  return lines.join('\n');
+  return lines.join('\n')
 }
-

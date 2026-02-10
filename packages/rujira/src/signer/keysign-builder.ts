@@ -3,33 +3,34 @@
  * @module signer/keysign-builder
  */
 
-import { THORCHAIN_TO_SDK_CHAIN } from '../config.js';
-import { THORCHAIN_DECIMALS } from '../config/constants.js';
-import type { PreparedWithdraw } from '../modules/withdraw.js';
-import { parseAsset } from '../utils/denom-conversion.js';
-import { base64Encode } from '../utils/encoding.js';
-import type { KeysignPayload, VultisigVault } from './types.js';
+import { create } from '@bufbuild/protobuf'
+import { KeysignPayloadSchema } from '@vultisig/sdk'
+
+import { THORCHAIN_TO_SDK_CHAIN } from '../config.js'
+import { THORCHAIN_DECIMALS } from '../config/constants.js'
+import type { PreparedWithdraw } from '../modules/withdraw.js'
+import { parseAsset } from '../utils/denom-conversion.js'
+import { base64Encode } from '../utils/encoding.js'
+import type { KeysignPayload, VultisigVault } from './types.js'
 
 export type KeysignBuildParams = {
-  vault: VultisigVault;
-  senderAddress: string;
-  prepared: PreparedWithdraw;
-  accountInfo: { accountNumber: string; sequence: string };
-  fee: bigint;
+  vault: VultisigVault
+  senderAddress: string
+  prepared: PreparedWithdraw
+  accountInfo: { accountNumber: string; sequence: string }
+  fee: bigint
 }
 
 /**
  * Build a keysign payload for a withdrawal transaction.
  */
-export async function buildWithdrawalKeysignPayload(
-  params: KeysignBuildParams
-): Promise<KeysignPayload> {
-  const { vault, senderAddress, prepared, accountInfo, fee } = params;
+export async function buildWithdrawalKeysignPayload(params: KeysignBuildParams): Promise<KeysignPayload> {
+  const { vault, senderAddress, prepared, accountInfo, fee } = params
 
-  const { chain: thorchainChainId, symbol: fullSymbol } = parseAsset(prepared.asset);
-  const ticker = fullSymbol.split('-')[0] || fullSymbol;
+  const { chain: thorchainChainId, symbol: fullSymbol } = parseAsset(prepared.asset)
+  const ticker = fullSymbol.split('-')[0] || fullSymbol
 
-  const l1Chain = THORCHAIN_TO_SDK_CHAIN[thorchainChainId] || thorchainChainId;
+  const l1Chain = THORCHAIN_TO_SDK_CHAIN[thorchainChainId] || thorchainChainId
 
   const basePayload = await vault.prepareSignDirectTx(
     {
@@ -47,15 +48,13 @@ export async function buildWithdrawalKeysignPayload(
       memo: prepared.memo,
     },
     { skipChainSpecificFetch: true }
-  );
+  )
 
-  const derivedPublicKey = basePayload.coin?.hexPublicKey || vault.publicKeys.ecdsa;
+  const derivedPublicKey = basePayload.coin?.hexPublicKey || vault.publicKeys.ecdsa
 
-  const contractAddress = fullSymbol.includes('-')
-    ? fullSymbol.split('-')[1]?.toUpperCase() || ''
-    : '';
+  const contractAddress = fullSymbol.includes('-') ? fullSymbol.split('-')[1]?.toUpperCase() || '' : ''
 
-  const keysignPayload: KeysignPayload = {
+  const keysignPayload = create(KeysignPayloadSchema, {
     coin: {
       chain: 'THORChain',
       ticker: 'RUNE',
@@ -124,7 +123,7 @@ export async function buildWithdrawalKeysignPayload(
     },
     contractPayload: { case: undefined, value: undefined },
     signData: { case: undefined, value: undefined },
-  };
+  })
 
-  return keysignPayload;
+  return keysignPayload
 }

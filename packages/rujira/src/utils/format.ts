@@ -3,8 +3,9 @@
  * @module utils/format
  */
 
-import { findAssetByFormat } from '@vultisig/assets';
-import type { SwapRequest } from '../types.js';
+import { findAssetByFormat } from '@vultisig/assets'
+
+import type { SwapRequest } from '../types.js'
 
 /**
  * Convert human-readable amount to base units
@@ -20,16 +21,16 @@ import type { SwapRequest } from '../types.js';
  * ```
  */
 export function toBaseUnits(amount: string | number, decimals: number): string {
-  const amountStr = amount.toString();
-  const [whole, fraction = ''] = amountStr.split('.');
+  const amountStr = amount.toString()
+  const [whole, fraction = ''] = amountStr.split('.')
 
   // Pad or truncate fraction to match decimals
-  const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals);
+  const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals)
 
   // Combine and remove leading zeros
-  const result = `${whole}${paddedFraction}`.replace(/^0+/, '') || '0';
+  const result = `${whole}${paddedFraction}`.replace(/^0+/, '') || '0'
 
-  return result;
+  return result
 }
 
 /**
@@ -46,12 +47,12 @@ export function toBaseUnits(amount: string | number, decimals: number): string {
  * ```
  */
 export function fromBaseUnits(baseUnits: string | bigint, decimals: number): string {
-  if (decimals === 0) return baseUnits.toString();
-  const str = baseUnits.toString().padStart(decimals + 1, '0');
-  const whole = str.slice(0, -decimals) || '0';
-  const fraction = str.slice(-decimals).replace(/0+$/, '');
+  if (decimals === 0) return baseUnits.toString()
+  const str = baseUnits.toString().padStart(decimals + 1, '0')
+  const whole = str.slice(0, -decimals) || '0'
+  const fraction = str.slice(-decimals).replace(/0+$/, '')
 
-  return fraction ? `${whole}.${fraction}` : whole;
+  return fraction ? `${whole}.${fraction}` : whole
 }
 
 /**
@@ -62,30 +63,24 @@ export function fromBaseUnits(baseUnits: string | bigint, decimals: number): str
  * @param asset - Asset identifier (any format recognized by @vultisig/assets)
  * @param maxDecimals - Maximum decimal places to show
  */
-export function formatAmount(
-  baseUnits: string | bigint,
-  asset: string,
-  maxDecimals = 6
-): string {
-  const found = findAssetByFormat(asset);
+export function formatAmount(baseUnits: string | bigint, asset: string, maxDecimals = 6): string {
+  const found = findAssetByFormat(asset)
   if (!found) {
-    return baseUnits.toString();
+    return baseUnits.toString()
   }
 
-  const human = fromBaseUnits(baseUnits, found.decimals.fin);
-  const parts = human.split('.');
-  const whole = parts[0] || '0';
-  const fraction = parts[1] || '';
+  const human = fromBaseUnits(baseUnits, found.decimals.fin)
+  const parts = human.split('.')
+  const whole = parts[0] || '0'
+  const fraction = parts[1] || ''
 
   // Truncate to maxDecimals
-  const truncatedFraction = fraction.slice(0, maxDecimals);
+  const truncatedFraction = fraction.slice(0, maxDecimals)
 
   // Add thousand separators to whole part
-  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
-  return truncatedFraction
-    ? `${formattedWhole}.${truncatedFraction}`
-    : formattedWhole;
+  return truncatedFraction ? `${formattedWhole}.${truncatedFraction}` : formattedWhole
 }
 
 /**
@@ -96,52 +91,48 @@ export function formatAmount(
  * @param asset - Asset identifier (any format recognized by @vultisig/assets)
  * @param maxDecimals - Maximum decimal places to show
  */
-export function formatFee(
-  baseUnits: string | bigint,
-  asset: string,
-  maxDecimals = 6
-): string {
-  const found = findAssetByFormat(asset);
+export function formatFee(baseUnits: string | bigint, asset: string, maxDecimals = 6): string {
+  const found = findAssetByFormat(asset)
   if (!found) {
-    return baseUnits.toString();
+    return baseUnits.toString()
   }
 
-  const human = fromBaseUnits(baseUnits, found.decimals.fin);
-  const parts = human.split('.');
-  const whole = parts[0] || '0';
-  const fraction = parts[1] || '';
+  const human = fromBaseUnits(baseUnits, found.decimals.fin)
+  const parts = human.split('.')
+  const whole = parts[0] || '0'
+  const fraction = parts[1] || ''
 
   if (fraction.length <= maxDecimals) {
-    const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    const trimmed = fraction.replace(/0+$/, '');
-    return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole;
+    const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    const trimmed = fraction.replace(/0+$/, '')
+    return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole
   }
 
   // Round up: if any digit beyond maxDecimals is non-zero, increment last visible digit
-  const visible = fraction.slice(0, maxDecimals);
-  const remainder = fraction.slice(maxDecimals);
-  const hasRemainder = /[1-9]/.test(remainder);
+  const visible = fraction.slice(0, maxDecimals)
+  const remainder = fraction.slice(maxDecimals)
+  const hasRemainder = /[1-9]/.test(remainder)
 
   if (!hasRemainder) {
-    const trimmed = visible.replace(/0+$/, '');
-    const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole;
+    const trimmed = visible.replace(/0+$/, '')
+    const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole
   }
 
   // Increment the visible fraction by 1 at the last position
-  const visibleNum = BigInt(visible) + 1n;
-  const roundedFraction = visibleNum.toString().padStart(maxDecimals, '0');
+  const visibleNum = BigInt(visible) + 1n
+  const roundedFraction = visibleNum.toString().padStart(maxDecimals, '0')
 
   // Handle carry (e.g., 999 + 1 = 1000)
   if (roundedFraction.length > maxDecimals) {
-    const carriedWhole = (BigInt(whole) + 1n).toString();
-    const formattedWhole = carriedWhole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return formattedWhole;
+    const carriedWhole = (BigInt(whole) + 1n).toString()
+    const formattedWhole = carriedWhole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    return formattedWhole
   }
 
-  const trimmed = roundedFraction.replace(/0+$/, '');
-  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole;
+  const trimmed = roundedFraction.replace(/0+$/, '')
+  const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return trimmed ? `${formattedWhole}.${trimmed}` : formattedWhole
 }
 
 /**
@@ -151,13 +142,10 @@ export function formatFee(
  * @param slippageBps - Slippage tolerance in basis points
  * @returns Minimum acceptable output
  */
-export function calculateMinReturn(
-  expectedOutput: string | bigint,
-  slippageBps: number
-): string {
-  const expected = BigInt(expectedOutput);
-  const slippageAmount = (expected * BigInt(slippageBps)) / 10000n;
-  return (expected - slippageAmount).toString();
+export function calculateMinReturn(expectedOutput: string | bigint, slippageBps: number): string {
+  const expected = BigInt(expectedOutput)
+  const slippageAmount = (expected * BigInt(slippageBps)) / 10000n
+  return (expected - slippageAmount).toString()
 }
 
 /**
@@ -168,30 +156,30 @@ export function calculateMinReturn(
  * @returns Slippage percentage (negative if worse than expected)
  */
 export function calculateSlippage(expected: string | bigint, actual: string | bigint): string {
-  const exp = BigInt(expected);
-  const act = BigInt(actual);
+  const exp = BigInt(expected)
+  const act = BigInt(actual)
 
-  if (exp === 0n) return '0';
+  if (exp === 0n) return '0'
 
-  const diff = act - exp;
-  const percentage = (diff * 10000n) / exp;
+  const diff = act - exp
+  const percentage = (diff * 10000n) / exp
 
-  return (Number(percentage) / 100).toFixed(2);
+  return (Number(percentage) / 100).toFixed(2)
 }
 
 /**
  * Generate a unique quote ID using cryptographic randomness.
  */
 export function generateQuoteId(): string {
-  const timestamp = Date.now().toString(36);
-  let random: string;
+  const timestamp = Date.now().toString(36)
+  let random: string
   if (typeof globalThis.crypto?.randomUUID === 'function') {
-    random = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    random = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 12)
   } else {
     // Fallback for environments without crypto.randomUUID
-    random = Math.random().toString(36).slice(2, 10);
+    random = Math.random().toString(36).slice(2, 10)
   }
-  return `quote-${timestamp}-${random}`;
+  return `quote-${timestamp}-${random}`
 }
 
 /**
@@ -200,18 +188,15 @@ export function generateQuoteId(): string {
  * @param minReturn - Minimum return amount
  * @param to - Destination address (optional)
  */
-export function buildSwapMsg(
-  minReturn: string,
-  to?: string
-): { swap: SwapRequest } {
+export function buildSwapMsg(minReturn: string, to?: string): { swap: SwapRequest } {
   return {
     swap: {
       min: {
         min_return: minReturn,
         to,
-      }
-    }
-  };
+      },
+    },
+  }
 }
 
 /**
@@ -221,15 +206,11 @@ export function buildSwapMsg(
  * @param startChars - Characters to show at start
  * @param endChars - Characters to show at end
  */
-export function truncateMiddle(
-  str: string,
-  startChars = 8,
-  endChars = 6
-): string {
+export function truncateMiddle(str: string, startChars = 8, endChars = 6): string {
   if (str.length <= startChars + endChars) {
-    return str;
+    return str
   }
-  return `${str.slice(0, startChars)}...${str.slice(-endChars)}`;
+  return `${str.slice(0, startChars)}...${str.slice(-endChars)}`
 }
 
 /**
@@ -239,8 +220,8 @@ export function truncateMiddle(
  * @param decimals - Decimal places to show
  */
 export function formatPercentage(value: number | string, decimals = 2): string {
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  return `${(num * 100).toFixed(decimals)}%`;
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  return `${(num * 100).toFixed(decimals)}%`
 }
 
 /**
@@ -249,7 +230,7 @@ export function formatPercentage(value: number | string, decimals = 2): string {
  * @param bps - Basis points
  */
 export function bpsToPercent(bps: number): string {
-  return `${(bps / 100).toFixed(2)}%`;
+  return `${(bps / 100).toFixed(2)}%`
 }
 
 /**
@@ -258,5 +239,5 @@ export function bpsToPercent(bps: number): string {
  * @param percent - Percentage (e.g., 1.5 for 1.5%)
  */
 export function percentToBps(percent: number): number {
-  return Math.round(percent * 100);
+  return Math.round(percent * 100)
 }
