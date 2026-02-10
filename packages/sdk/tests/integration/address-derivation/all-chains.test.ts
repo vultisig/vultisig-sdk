@@ -289,6 +289,22 @@ describe('Integration: Multi-Chain Address Derivation', () => {
   })
 
   /**
+   * Reproduce BCH bug: passing enum key 'BitcoinCash' instead of enum value 'Bitcoin-Cash'
+   * BCH is the only chain where key !== value, so only BCH triggers this failure.
+   */
+  describe('BCH enum key mismatch', () => {
+    it('should fail when passing "BitcoinCash" instead of Chain.BitcoinCash ("Bitcoin-Cash")', async () => {
+      try {
+        await vault.address('BitcoinCash' as Chain)
+        expect.unreachable('should have thrown')
+      } catch (error: any) {
+        // After the match() guard, the inner error now clearly identifies the bad value
+        expect(error.originalError?.message).toMatch(/No match handler for: "BitcoinCash"/)
+      }
+    })
+  })
+
+  /**
    * Batch address derivation performance test
    */
   describe('Batch Derivation Performance', () => {
