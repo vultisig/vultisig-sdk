@@ -1,5 +1,28 @@
 # @vultisig/sdk
 
+## 0.4.3
+
+### Patch Changes
+
+- [#95](https://github.com/vultisig/vultisig-sdk/pull/95) [`182f723`](https://github.com/vultisig/vultisig-sdk/commit/182f723ec9b7c68988ac69e9a136c8d8c482c6c1) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Align SDK dependency versions with upstream core packages
+  - viem: 2.37.4 → ^2.45.1 (external - critical for consumers)
+  - @trustwallet/wallet-core: ^4.3.22 → ^4.6.0 (external)
+  - @bufbuild/protobuf: ^2.10.2 → ^2.11.0 (external)
+  - @mysten/sui: ^1.37.6 → ^2.3.0 (SUI v2 migration)
+  - @lifi/sdk: ^3.12.2 → ^3.15.5
+  - i18next: ^25.5.2 → ^25.8.4
+
+- [#95](https://github.com/vultisig/vultisig-sdk/pull/95) [`182f723`](https://github.com/vultisig/vultisig-sdk/commit/182f723ec9b7c68988ac69e9a136c8d8c482c6c1) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Fix opaque "is not a function" error when chain value doesn't match enum (e.g. BCH). match() now throws a descriptive error with the bad value and available handlers. Also fix incorrect CoinType mappings for CronosChain and Sei in MasterKeyDeriver.
+
+- [#95](https://github.com/vultisig/vultisig-sdk/pull/95) [`182f723`](https://github.com/vultisig/vultisig-sdk/commit/182f723ec9b7c68988ac69e9a136c8d8c482c6c1) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Sync upstream core and lib from vultisig-windows
+  - Solana: support multiple raw transactions in signing inputs
+  - EVM: fetch token logos from 1Inch API in metadata resolver
+  - Cosmos: normalize fee denominations with toChainFeeDenom helper
+  - Cosmos: filter out TCY autocompounder share denom from coin discovery
+  - Cosmos: add AZTEC token to Thorchain known tokens
+  - Swap: add getSwapTrackingUrl utility for block explorer URLs
+  - Remove unused getRecordSize utility
+
 ## 0.4.2
 
 ### Patch Changes
