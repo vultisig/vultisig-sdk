@@ -357,12 +357,12 @@ export class MasterKeyDeriver {
       TerraClassic: 'terra',
       Noble: 'noble',
       Akash: 'akash',
-      CronosChain: 'cronos',
+      CronosChain: 'cronosChain',
       Blast: 'blast',
       Zksync: 'zksync',
       Mantle: 'mantle',
       Zcash: 'zcash',
-      Sei: 'sei',
+      Sei: 'ethereum',
       Hyperliquid: 'ethereum', // Uses Ethereum derivation
     }
 
