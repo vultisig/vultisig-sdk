@@ -600,3 +600,13 @@ export type {
   SignAminoInput,
   SignDirectInput,
 } from './cosmos'
+
+// Token registry & chain data types
+export type { CoinPricesParams, CoinPricesResult, DiscoveredToken, FeeCoinInfo, TokenInfo } from './tokens'
+
+// Security scanning types
+export type { RiskLevel, SiteScanResult, TransactionSimulationResult, TransactionValidationResult } from './security'
+
+// Cosmos message type constants
+export type { CosmosMsgType as CosmosMsgTypeValue } from './cosmos-msg'
+export { CosmosMsgType } from './cosmos-msg'

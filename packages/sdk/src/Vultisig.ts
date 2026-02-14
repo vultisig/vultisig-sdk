@@ -1,4 +1,9 @@
+import { banxaSupportedChains } from '@core/chain/banxa'
 import { Chain } from '@core/chain/Chain'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { knownTokens, knownTokensIndex } from '@core/chain/coin/knownTokens'
+import { getCoinPrices as coreCoinPrices } from '@core/chain/coin/price/getCoinPrices'
+import { scanSiteWithBlockaid } from '@core/chain/security/blockaid/site'
 import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@core/chain/utils/isValidAddress'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
@@ -28,6 +33,8 @@ import { JoinSecureVaultService } from './services/JoinSecureVaultService'
 import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
+import type { SiteScanResult } from './types/security'
+import type { CoinPricesParams, CoinPricesResult, FeeCoinInfo, TokenInfo } from './types/tokens'
 import { createVaultBackup } from './utils/export'
 import { parseKeygenQR } from './utils/parseKeygenQR'
 import { FastVault } from './vault/FastVault'
@@ -988,5 +995,94 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   static isSecureVault(vault: VaultBase): vault is SecureVault {
     return vault.type === 'secure'
+  }
+
+  // === STATIC TOKEN REGISTRY METHODS ===
+
+  /**
+   * Get known tokens for a chain from the built-in registry.
+   * @param chain - The blockchain chain
+   * @returns Array of token metadata
+   */
+  static getKnownTokens(chain: Chain): TokenInfo[] {
+    return (knownTokens[chain] ?? []).map(coin => ({
+      chain: coin.chain,
+      contractAddress: coin.id,
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      logo: coin.logo,
+      priceProviderId: coin.priceProviderId,
+    }))
+  }
+
+  /**
+   * Look up a specific token by contract address in the known tokens registry.
+   * @param chain - The blockchain chain
+   * @param contractAddress - The token's contract address
+   * @returns Token metadata or null if not found
+   */
+  static getKnownToken(chain: Chain, contractAddress: string): TokenInfo | null {
+    const coin = knownTokensIndex[chain]?.[contractAddress.toLowerCase()]
+    if (!coin) return null
+    return {
+      chain,
+      contractAddress: coin.id,
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      logo: coin.logo,
+      priceProviderId: coin.priceProviderId,
+    }
+  }
+
+  /**
+   * Get the native fee coin info for a chain (e.g., ETH for Ethereum, BTC for Bitcoin).
+   * @param chain - The blockchain chain
+   * @returns Fee coin metadata
+   */
+  static getFeeCoin(chain: Chain): FeeCoinInfo {
+    const coin = chainFeeCoin[chain]
+    return {
+      chain,
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      logo: coin.logo,
+      priceProviderId: coin.priceProviderId,
+    }
+  }
+
+  // === STATIC PRICE METHODS ===
+
+  /**
+   * Fetch current prices for tokens by their CoinGecko IDs.
+   * @param params - Price lookup parameters
+   * @returns Map of token ID to price in fiat currency
+   */
+  static async getCoinPrices(params: CoinPricesParams): Promise<CoinPricesResult> {
+    return coreCoinPrices({
+      ids: params.ids,
+      fiatCurrency: (params.fiatCurrency ?? 'usd') as any,
+    })
+  }
+
+  // === STATIC FIAT ON-RAMP METHODS ===
+
+  /**
+   * Get the list of chains supported by Banxa fiat on-ramp.
+   * @returns Array of supported chains
+   */
+  static getBanxaSupportedChains(): Chain[] {
+    return [...banxaSupportedChains] as Chain[]
+  }
+
+  // === STATIC SECURITY METHODS ===
+
+  /**
+   * Scan a website URL for malicious content via Blockaid.
+   * @param url - The URL to scan
+   * @returns Scan result indicating if the site is malicious
+   */
+  static async scanSite(url: string): Promise<SiteScanResult> {
+    const result = await scanSiteWithBlockaid(url)
+    return { isMalicious: result === 'malicious', url }
   }
 }
