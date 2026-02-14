@@ -18,6 +18,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '100000000',
+        formattedAmount: '1',
         symbol: 'BTC',
         decimals: 8,
         chainId: Chain.Bitcoin,
@@ -30,6 +31,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '1000000000000000000',
+        formattedAmount: '1',
         symbol: 'ETH',
         decimals: 18,
         chainId: Chain.Ethereum,
@@ -42,6 +44,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '1000000000',
+        formattedAmount: '1',
         symbol: 'SOL',
         decimals: 9,
         chainId: Chain.Solana,
@@ -54,6 +57,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '100000000',
+        formattedAmount: '1',
         symbol: 'RUNE',
         decimals: 8,
         chainId: Chain.THORChain,
@@ -66,6 +70,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '1000000',
+        formattedAmount: '1',
         symbol: 'XRP',
         decimals: 6,
         chainId: Chain.Ripple,
@@ -78,7 +83,8 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '1000000000000000000',
-        symbol: 'POL', // Polygon rebranded from MATIC to POL
+        formattedAmount: '1',
+        symbol: 'POL',
         decimals: 18,
         chainId: Chain.Polygon,
         tokenId: undefined,
@@ -90,6 +96,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '0',
+        formattedAmount: '0',
         symbol: 'ETH',
         decimals: 18,
         chainId: Chain.Ethereum,
@@ -102,6 +109,7 @@ describe('formatBalance', () => {
       const result = formatBalance(largeBalance, Chain.Ethereum)
 
       expect(result.amount).toBe('999999999999999999999999')
+      expect(result.formattedAmount).toBe('999999.999999999999999999')
       expect(result.symbol).toBe('ETH')
       expect(result.decimals).toBe(18)
     })
@@ -148,6 +156,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '1000000',
+        formattedAmount: '1',
         symbol: 'USDC',
         decimals: 6,
         chainId: Chain.Ethereum,
@@ -160,6 +169,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '5000000',
+        formattedAmount: '5',
         symbol: 'USDT',
         decimals: 6,
         chainId: Chain.Ethereum,
@@ -177,6 +187,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '1000000000000000000',
+        formattedAmount: '1',
         symbol: 'DAI',
         decimals: 18,
         chainId: Chain.Ethereum,
@@ -189,6 +200,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '2000000',
+        formattedAmount: '2',
         symbol: 'USDC',
         decimals: 6,
         chainId: Chain.Polygon,
@@ -201,8 +213,9 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '1000000000000000000',
-        symbol: '0xunknowntoken123456789', // Falls back to tokenId
-        decimals: 18, // Default for unknown ERC-20
+        formattedAmount: '1',
+        symbol: '0xunknowntoken123456789',
+        decimals: 18,
         chainId: Chain.Ethereum,
         tokenId: '0xunknowntoken123456789',
       })
@@ -213,13 +226,13 @@ describe('formatBalance', () => {
         1000000n,
         Chain.Ethereum,
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-        // No tokens parameter
       )
 
       expect(result).toEqual({
         amount: '1000000',
+        formattedAmount: '0.000000000001',
         symbol: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-        decimals: 18, // Default
+        decimals: 18,
         chainId: Chain.Ethereum,
         tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       })
@@ -230,11 +243,12 @@ describe('formatBalance', () => {
         1000000n,
         Chain.Ethereum,
         '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-        {} // Empty registry
+        {}
       )
 
       expect(result).toEqual({
         amount: '1000000',
+        formattedAmount: '0.000000000001',
         symbol: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
         decimals: 18,
         chainId: Chain.Ethereum,
@@ -247,6 +261,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '0',
+        formattedAmount: '0',
         symbol: 'USDC',
         decimals: 6,
         chainId: Chain.Ethereum,
@@ -301,6 +316,7 @@ describe('formatBalance', () => {
 
       expect(result).toEqual({
         amount: '1000000',
+        formattedAmount: '1',
         symbol: 'USDC',
         decimals: 6,
         chainId: Chain.Solana,
@@ -309,9 +325,30 @@ describe('formatBalance', () => {
     })
 
     it('should handle negative-like values (should not occur but type allows)', () => {
-      // BigInt doesn't have negative in this context, but testing string conversion
       const result = formatBalance(1n, Chain.Ethereum)
       expect(result.amount).toBe('1')
+      expect(result.formattedAmount).toBe('0.000000000000000001')
+    })
+
+    it('should format fractional BTC balance correctly', () => {
+      const result = formatBalance(30558n, Chain.Bitcoin)
+      expect(result.amount).toBe('30558')
+      expect(result.formattedAmount).toBe('0.00030558')
+    })
+
+    it('should format fractional ETH balance correctly', () => {
+      const result = formatBalance(1500000000000000000n, Chain.Ethereum)
+      expect(result.amount).toBe('1500000000000000000')
+      expect(result.formattedAmount).toBe('1.5')
+    })
+
+    it('should format fractional USDC balance correctly', () => {
+      const tokens: Record<string, Token[]> = {
+        Ethereum: [{ id: '0xusdc', symbol: 'USDC', name: 'USD Coin', decimals: 6, chainId: Chain.Ethereum }],
+      }
+      const result = formatBalance(1234567n, Chain.Ethereum, '0xusdc', tokens)
+      expect(result.amount).toBe('1234567')
+      expect(result.formattedAmount).toBe('1.234567')
     })
   })
 
@@ -319,12 +356,13 @@ describe('formatBalance', () => {
     it('should return Balance type with all required fields', () => {
       const result = formatBalance(1000000n, Chain.Ethereum)
 
-      // Verify all Balance fields are present
       expect(result).toHaveProperty('amount')
+      expect(result).toHaveProperty('formattedAmount')
       expect(result).toHaveProperty('symbol')
       expect(result).toHaveProperty('decimals')
       expect(result).toHaveProperty('chainId')
       expect(typeof result.amount).toBe('string')
+      expect(typeof result.formattedAmount).toBe('string')
       expect(typeof result.symbol).toBe('string')
       expect(typeof result.decimals).toBe('number')
       expect(typeof result.chainId).toBe('string')

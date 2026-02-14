@@ -29,6 +29,10 @@ npm install @vultisig/sdk
 yarn add @vultisig/sdk
 ```
 
+### Related packages
+
+- `@vultisig/rujira` — Rujira (FIN) swaps + secured asset deposit/withdraw helpers on THORChain
+
 ## Quick Start
 
 ### Fast Vault (Server-Assisted)

@@ -47,6 +47,9 @@ Thumbs.db
 *.tmp
 *.temp
 
+temp_node_modules/
+packages/rujira/temp_node_modules/
+
 # Coverage files
 coverage/
 *.cover.out
@@ -91,3 +94,6 @@ keyshare-*.json
 # Development
 archived/
 upstream/
+
+# Local trading bot (not part of SDK)
+packages/trading-bot/

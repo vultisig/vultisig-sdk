@@ -31,11 +31,10 @@ jobs:
         run: yarn install --immutable
 
       - name: Build packages
-        run: yarn build:sdk
+        run: yarn build:all
 
-      - name: Run unit tests
+      - name: Run all unit tests
         run: yarn test
-        working-directory: packages/sdk
 
       - name: Generate coverage report
         run: yarn test:coverage
