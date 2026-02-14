@@ -1,12 +1,3 @@
-export {
-  formatTronResourceValue,
-  formatTronWithdrawalTime,
-  sunToTrx,
-  trxToSun,
-} from './formatTronResource'
+export { formatTronResourceValue, sunToTrx } from './formatTronResource'
 export { getTronAccountResources } from './getTronAccountResources'
-export type {
-  TronAccountResources,
-  TronResourceType,
-  TronUnfreezingEntry,
-} from './types'
+export type { TronAccountResources, TronResourceType } from './types'
