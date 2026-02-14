@@ -170,3 +170,21 @@ export {
   vultDiscountTierMinBalances,
   vultDiscountTiers,
 } from '@core/chain/swap/affiliate/config'
+
+// ============================================================================
+// PUBLIC API - Token Registry & Chain Data
+// ============================================================================
+
+export type { CoinPricesParams, CoinPricesResult, DiscoveredToken, FeeCoinInfo, TokenInfo } from './types'
+
+// ============================================================================
+// PUBLIC API - Security Scanning
+// ============================================================================
+
+export type { RiskLevel, SiteScanResult, TransactionSimulationResult, TransactionValidationResult } from './types'
+
+// ============================================================================
+// PUBLIC API - Cosmos Message Type Constants
+// ============================================================================
+
+export { CosmosMsgType } from './types'

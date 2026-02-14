@@ -14,6 +14,10 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
 - 🔑 **Seedphrase Import** - Import existing BIP39 mnemonics with automatic chain discovery
 - 💰 **VULT Discount Tiers** - Automatic swap fee discounts based on VULT token holdings
+- 📋 **Token Registry** - Built-in known token database, fee coin lookup, and on-chain token discovery
+- 🛡️ **Security Scanning** - Transaction validation/simulation via Blockaid, site phishing detection
+- 💵 **Price Feeds** - Fetch token prices via CoinGecko
+- 🏪 **Fiat On-Ramp** - Generate Banxa buy URLs for 23+ supported chains
 - 🌍 **WASM Integration** - High-performance cryptographic operations via WebAssembly
 
 ## Installation
@@ -161,6 +165,60 @@ const vaultId = await sdk.createFastVaultFromSeedphrase({
 
 // Verify with email code
 const vault = await sdk.verifyVault(vaultId, verificationCode)
+```
+
+### 8. Token Registry & Prices
+
+```typescript
+import { Vultisig, Chain, CosmosMsgType } from '@vultisig/sdk'
+
+// Look up known tokens (static, no vault needed)
+const tokens = Vultisig.getKnownTokens(Chain.Ethereum)
+const usdc = Vultisig.getKnownToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+
+// Get native fee coin info
+const feeCoin = Vultisig.getFeeCoin(Chain.Bitcoin) // { ticker: 'BTC', decimals: 8, ... }
+
+// Fetch prices
+const prices = await Vultisig.getCoinPrices({ ids: ['bitcoin', 'ethereum'] })
+console.log(`BTC: $${prices.bitcoin}`)
+
+// Discover tokens at vault address
+const discovered = await vault.discoverTokens(Chain.Ethereum)
+
+// Resolve token metadata (known registry → chain API fallback)
+const token = await vault.resolveToken(Chain.Ethereum, '0x...')
+
+// Cosmos message type constants
+const msgType = CosmosMsgType.MsgSend // 'cosmos-sdk/MsgSend'
+```
+
+### 9. Security Scanning
+
+```typescript
+// Scan a website for phishing (static, no vault needed)
+const siteScan = await Vultisig.scanSite('https://suspicious-site.com')
+if (siteScan.isMalicious) console.warn('Malicious site!')
+
+// Validate a transaction before signing
+const validation = await vault.validateTransaction(keysignPayload)
+if (validation?.isRisky) {
+  console.warn(`Risk: ${validation.riskLevel} - ${validation.description}`)
+}
+
+// Simulate a transaction to preview asset changes
+const simulation = await vault.simulateTransaction(keysignPayload)
+```
+
+### 10. Fiat On-Ramp (Banxa)
+
+```typescript
+// Check supported chains
+const chains = Vultisig.getBanxaSupportedChains() // 23+ chains
+
+// Generate buy URL for vault address
+const buyUrl = await vault.getBuyUrl(Chain.Bitcoin)
+if (buyUrl) window.open(buyUrl)
 ```
 
 ## Supported Blockchains
@@ -460,6 +518,62 @@ Sign arbitrary bytes with a SecureVault.
 - `options.chain: string` - Chain for signature algorithm selection
 - `options.messages: (Uint8Array | Buffer | string)[]` - Messages to sign (hex strings or bytes)
 - `signingOptions.signal?: AbortSignal` - Optional signal to cancel the operation
+
+### Static Methods (No Vault Needed)
+
+#### `Vultisig.getKnownTokens(chain): TokenInfo[]`
+
+Get all known tokens for a chain from the built-in registry.
+
+#### `Vultisig.getKnownToken(chain, contractAddress): TokenInfo | null`
+
+Look up a specific token by contract address (case-insensitive). Returns null if not found.
+
+#### `Vultisig.getFeeCoin(chain): FeeCoinInfo`
+
+Get the native fee coin info for a chain (e.g., ETH for Ethereum, BTC for Bitcoin).
+
+#### `Vultisig.getCoinPrices(params): Promise<Record<string, number>>`
+
+Fetch current token prices by CoinGecko IDs.
+
+**Parameters:**
+- `params.ids: string[]` - CoinGecko price provider IDs
+- `params.fiatCurrency?: string` - Fiat currency code (default: `'usd'`)
+
+#### `Vultisig.getBanxaSupportedChains(): Chain[]`
+
+Get the list of chains supported by the Banxa fiat on-ramp.
+
+#### `Vultisig.scanSite(url): Promise<SiteScanResult>`
+
+Scan a website URL for malicious content via Blockaid.
+
+**Returns:**
+- `isMalicious: boolean` - Whether the site is flagged as malicious
+- `url: string` - The scanned URL
+
+### Vault Methods (Token Discovery & Security)
+
+#### `vault.discoverTokens(chain): Promise<DiscoveredToken[]>`
+
+Discover tokens with non-zero balances at this vault's address. Supported: EVM (via 1inch), Solana (via Jupiter), Cosmos (via RPC).
+
+#### `vault.resolveToken(chain, contractAddress): Promise<TokenInfo>`
+
+Resolve token metadata by contract address. Checks known tokens registry first, then resolves from chain APIs.
+
+#### `vault.getBuyUrl(chain, ticker?): Promise<string | null>`
+
+Generate a Banxa fiat on-ramp URL for buying crypto to this vault's address. Returns null if chain is not supported by Banxa.
+
+#### `vault.validateTransaction(keysignPayload): Promise<TransactionValidationResult | null>`
+
+Validate a transaction for security risks before signing using Blockaid. Supported: EVM chains, Solana, Sui, Bitcoin. Returns null for unsupported chains.
+
+#### `vault.simulateTransaction(keysignPayload): Promise<TransactionSimulationResult | null>`
+
+Simulate a transaction to preview asset changes before signing. Supported: EVM chains, Solana. Returns null for unsupported chains.
 
 ### Utility Methods
 
