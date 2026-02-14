@@ -3,9 +3,9 @@
  */
 
 import { Coin } from '@cosmjs/proto-signing'
-import { findAssetByFormat } from '@vultisig/assets'
 import Big from 'big.js'
 
+import { findAssetByFormat } from '../assets/index.js'
 import type { RujiraClient } from '../client.js'
 import { DEFAULT_MAKER_FEE, DEFAULT_TAKER_FEE } from '../config/constants.js'
 import { RujiraError, RujiraErrorCode } from '../errors.js'
@@ -49,7 +49,7 @@ export class RujiraOrderbook {
   /**
    * Convenience alias used by older examples/tests.
    *
-   * Accepts two asset identifiers (any format supported by @vultisig/assets)
+   * Accepts two asset identifiers (any format supported by the asset registry)
    * and resolves the FIN contract key as "<baseDenom>/<quoteDenom>".
    */
   async getBook(baseAsset: string, quoteAsset: string, limit = 10): Promise<OrderBook> {

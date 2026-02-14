@@ -50,7 +50,7 @@ Typical flow:
 
 Notes:
 - THORChain secured balances are commonly stored with **8 decimals**.
-- This package accepts **human-friendly asset notation** like `BTC.BTC` / `ETH.ETH` and maps to FIN denoms when available via `@vultisig/assets`.
+- This package accepts **human-friendly asset notation** like `BTC.BTC` / `ETH.ETH` and maps to FIN denoms when available via the built-in asset registry.
 
 ---
 

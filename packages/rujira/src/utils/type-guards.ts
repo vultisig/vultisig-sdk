@@ -1,4 +1,4 @@
-import type { Asset } from '@vultisig/assets';
+import type { Asset } from '../assets/index.js'
 
 /**
  * Type guard to check if an object is a valid Asset with a secured FIN denom.
@@ -7,14 +7,14 @@ import type { Asset } from '@vultisig/assets';
  * @internal
  */
 export function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: string } } {
-  if (!obj || typeof obj !== 'object') return false;
-  const asset = obj as Partial<Asset>;
+  if (!obj || typeof obj !== 'object') return false
+  const asset = obj as Partial<Asset>
   return (
     typeof asset.formats === 'object' &&
     asset.formats !== null &&
     typeof asset.formats.fin === 'string' &&
     asset.formats.fin.includes('-')
-  );
+  )
 }
 
 /**
@@ -23,9 +23,9 @@ export function isFinAsset(obj: unknown): obj is Asset & { formats: { fin: strin
  * @internal
  */
 export function parseAsset(asset: string): { chain: string; symbol: string } {
-  const parts = asset.split('.');
+  const parts = asset.split('.')
   return {
     chain: parts[0]?.toUpperCase() || '',
     symbol: parts.slice(1).join('.') || '',
-  };
+  }
 }

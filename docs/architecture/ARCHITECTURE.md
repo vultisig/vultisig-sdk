@@ -195,8 +195,7 @@ Intelligent caching based on data mutability:
 vultisig-sdk/
 ├── packages/
 │   ├── sdk/                    # Main SDK (@vultisig/sdk)
-│   ├── rujira/                 # Rujira DEX integration (@vultisig/rujira)
-│   ├── assets/                 # Asset registry (@vultisig/assets)
+│   ├── rujira/                 # Rujira DEX integration (@vultisig/rujira), includes asset registry
 │   ├── core/                   # Upstream core library (read-only)
 │   └── lib/                    # WASM bindings (dkls, schnorr)
 ├── clients/
@@ -211,8 +210,7 @@ vultisig-sdk/
 ### Package Relationships
 
 - **`@vultisig/sdk`** - The main SDK package users install
-- **`@vultisig/rujira`** - Rujira DEX integration (FIN swaps, deposits, withdrawals on THORChain)
-- **`@vultisig/assets`** - Asset registry used by Rujira
+- **`@vultisig/rujira`** - Rujira DEX integration (FIN swaps, deposits, withdrawals on THORChain), includes asset registry
 - **`packages/core`** - Chain implementations, MPC protocol, signing logic (synced from upstream)
 - **`packages/lib`** - WASM bindings (dkls, schnorr) - synced from upstream
 
@@ -1400,7 +1398,6 @@ This approach means Rujira does not depend on modifications to `packages/core/`.
 ### Dependencies
 
 - `@vultisig/sdk` (peer dependency) — provides vault MPC signing
-- `@vultisig/assets` (workspace dependency) — asset registry for THORChain denominations
 - `@cosmjs/cosmwasm-stargate` — CosmWasm client for FIN contract queries
 
 ---

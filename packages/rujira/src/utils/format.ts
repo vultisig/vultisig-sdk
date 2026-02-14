@@ -3,8 +3,7 @@
  * @module utils/format
  */
 
-import { findAssetByFormat } from '@vultisig/assets'
-
+import { findAssetByFormat } from '../assets/index.js'
 import type { SwapRequest } from '../types.js'
 
 /**
@@ -60,7 +59,7 @@ export function fromBaseUnits(baseUnits: string | bigint, decimals: number): str
  * For fee displays where underestimation is harmful, use {@link formatFee} instead.
  *
  * @param baseUnits - Amount in base units
- * @param asset - Asset identifier (any format recognized by @vultisig/assets)
+ * @param asset - Asset identifier (any format recognized by the asset registry)
  * @param maxDecimals - Maximum decimal places to show
  */
 export function formatAmount(baseUnits: string | bigint, asset: string, maxDecimals = 6): string {
@@ -88,7 +87,7 @@ export function formatAmount(baseUnits: string | bigint, asset: string, maxDecim
  * Use this for fee/gas displays where showing less than actual is misleading.
  *
  * @param baseUnits - Amount in base units
- * @param asset - Asset identifier (any format recognized by @vultisig/assets)
+ * @param asset - Asset identifier (any format recognized by the asset registry)
  * @param maxDecimals - Maximum decimal places to show
  */
 export function formatFee(baseUnits: string | bigint, asset: string, maxDecimals = 6): string {

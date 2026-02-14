@@ -3,8 +3,7 @@
  * @module modules/assets
  */
 
-import { type Asset, findAssetByFormat, KNOWN_ASSETS } from '@vultisig/assets'
-
+import { type Asset, findAssetByFormat, KNOWN_ASSETS } from '../assets/index.js'
 import type { RujiraClient } from '../client.js'
 import { DEFAULT_MAKER_FEE, DEFAULT_TAKER_FEE } from '../config/constants.js'
 import type { RujiraAsset, TradingPair } from '../types.js'

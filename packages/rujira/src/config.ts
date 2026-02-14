@@ -1,5 +1,4 @@
-import { findAssetByFormat } from '@vultisig/assets'
-
+import { findAssetByFormat } from './assets/index.js'
 import { DEFAULT_GAS_PRICE } from './config/constants.js'
 import { denomToTicker } from './utils/denom-conversion.js'
 
