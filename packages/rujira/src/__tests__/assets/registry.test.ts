@@ -8,7 +8,7 @@ import {
   getAssetStats,
   getSupportedChains,
   KNOWN_ASSETS,
-} from '../registry.js'
+} from '../../assets/registry.js'
 
 describe('Asset Registry', () => {
   describe('KNOWN_ASSETS', () => {

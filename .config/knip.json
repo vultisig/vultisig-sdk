@@ -7,8 +7,7 @@
     "clients/extension/src/inpage/index.ts",
     "clients/extension/src/pages/index.tsx",
     "clients/extension/src/pages/popup.tsx",
-    "packages/rujira/src/index.ts",
-    "packages/assets/src/index.ts"
+    "packages/rujira/src/index.ts"
   ],
   "ignoreDependencies": [
     "@bufbuild/buf",

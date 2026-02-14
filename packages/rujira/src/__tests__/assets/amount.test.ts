@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { Amount } from '../amount.js'
-import { getAsset } from '../registry.js'
+import { Amount } from '../../assets/amount.js'
+import { getAsset } from '../../assets/registry.js'
 
 describe('Amount', () => {
   const btc = getAsset('btc')!

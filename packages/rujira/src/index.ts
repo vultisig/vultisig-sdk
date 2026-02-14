@@ -66,6 +66,9 @@ export { RujiraSwap } from './modules/swap.js'
 export type { RujiraSigner, VultisigVault } from './signer/types.js'
 export { VultisigRujiraProvider } from './signer/vultisig-provider.js'
 
+// Asset registry (formerly @vultisig/assets)
+export * from './assets/index.js'
+
 // Utility exports
 export * from './utils/format.js'
 export * from './utils/memo.js'

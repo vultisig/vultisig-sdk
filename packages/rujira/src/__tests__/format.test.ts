@@ -65,7 +65,7 @@ describe('fromBaseUnits', () => {
 })
 
 describe('formatFee', () => {
-  // formatFee depends on @vultisig/assets to resolve decimals.
+  // formatFee depends on the assets registry to resolve decimals.
   // For unknown assets, it returns baseUnits.toString() as fallback.
   it('returns raw value for unknown asset', () => {
     expect(formatFee('12345', 'UNKNOWN.ASSET')).toBe('12345')

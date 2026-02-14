@@ -12,8 +12,8 @@ import {
   toFinFormat,
   toL1Format,
   toThorchainFormat,
-} from '../formats.js'
-import { getAsset } from '../registry.js'
+} from '../../assets/formats.js'
+import { getAsset } from '../../assets/registry.js'
 
 describe('Format Converters', () => {
   const btc = getAsset('btc')!

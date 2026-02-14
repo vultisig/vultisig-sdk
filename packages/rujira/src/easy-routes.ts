@@ -2,8 +2,7 @@
  * Easy Swap Routes - Simplified DeFi interface
  */
 
-import { KNOWN_ASSETS } from '@vultisig/assets'
-
+import { KNOWN_ASSETS } from './assets/index.js'
 import { denomToTicker } from './utils/denom-conversion.js'
 
 function getFinFormat(assetId: string): string {
@@ -145,7 +144,7 @@ export type EasyRoute = (typeof EASY_ROUTES)[EasyRouteName]
 
 /**
  * Common asset denoms - use these to avoid typos
- * All denoms are in FIN format from @vultisig/assets
+ * All denoms are in FIN format from the asset registry
  */
 export const ASSETS = {
   // Native chain assets

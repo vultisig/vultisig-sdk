@@ -3,8 +3,7 @@
  * @module modules/deposit
  */
 
-import { findAssetByFormat } from '@vultisig/assets'
-
+import { findAssetByFormat } from '../assets/index.js'
 import type { RujiraClient } from '../client.js'
 import { CHAIN_PROCESSING_TIMES } from '../config.js'
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors.js'

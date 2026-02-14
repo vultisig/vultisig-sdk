@@ -3,7 +3,7 @@
  * @module utils/denom-conversion
  */
 
-import { type Asset,findAssetByFormat, KNOWN_ASSETS } from '@vultisig/assets';
+import { type Asset, findAssetByFormat, KNOWN_ASSETS } from '../assets/index.js'
 
 /**
  * Convert a denom (any format) to a short ticker for display.
@@ -18,25 +18,25 @@ import { type Asset,findAssetByFormat, KNOWN_ASSETS } from '@vultisig/assets';
  */
 export function denomToTicker(denom: string): string {
   // 1. Try findAssetByFormat (handles all known formats)
-  const asset = findAssetByFormat(denom);
+  const asset = findAssetByFormat(denom)
   if (asset) {
-    return asset.id.toUpperCase();
+    return asset.id.toUpperCase()
   }
 
   // 2. Try matching fin format directly against known assets
   for (const knownAsset of Object.values(KNOWN_ASSETS) as Asset[]) {
     if (knownAsset.formats.fin === denom) {
-      return knownAsset.name.split(' ')[0].toUpperCase();
+      return knownAsset.name.split(' ')[0].toUpperCase()
     }
   }
 
   // 3. Parse denom string
-  const parts = denom.split('-');
+  const parts = denom.split('-')
   if (parts.length >= 2) {
-    return (parts[1] || '').toUpperCase();
+    return (parts[1] || '').toUpperCase()
   }
 
-  return denom.toUpperCase();
+  return denom.toUpperCase()
 }
 
 /**
@@ -51,22 +51,22 @@ export function denomToTicker(denom: string): string {
  */
 export function denomToAsset(denom: string): string | null {
   // 1. Look up in asset registry
-  const asset = findAssetByFormat(denom);
+  const asset = findAssetByFormat(denom)
   if (asset) {
-    return asset.formats.thorchain;
+    return asset.formats.thorchain
   }
 
   // 2. Reverse-engineer from denom format: btc-btc -> BTC.BTC
   if (denom.includes('-')) {
-    const parts = denom.split('-');
+    const parts = denom.split('-')
     if (parts.length >= 2) {
-      const chain = (parts[0] || '').toUpperCase();
-      const symbol = parts.slice(1).join('-').toUpperCase();
-      return `${chain}.${symbol}`;
+      const chain = (parts[0] || '').toUpperCase()
+      const symbol = parts.slice(1).join('-').toUpperCase()
+      return `${chain}.${symbol}`
     }
   }
 
-  return null;
+  return null
 }
 
 /**
@@ -78,21 +78,21 @@ export function denomToAsset(denom: string): string | null {
 export function extractSymbol(assetOrDenom: string): string {
   // Handle full asset format: ETH.USDC-0X... -> USDC
   if (assetOrDenom.includes('.')) {
-    const afterDot = assetOrDenom.split('.')[1] || '';
-    const symbol = afterDot.split('-')[0] || '';
-    return symbol.toUpperCase();
+    const afterDot = assetOrDenom.split('.')[1] || ''
+    const symbol = afterDot.split('-')[0] || ''
+    return symbol.toUpperCase()
   }
 
   // Handle denom format: eth-usdc-0x... -> USDC
   if (assetOrDenom.includes('-')) {
-    const parts = assetOrDenom.split('-');
+    const parts = assetOrDenom.split('-')
     if (parts.length >= 2) {
-      return (parts[1] || '').toUpperCase();
+      return (parts[1] || '').toUpperCase()
     }
   }
 
   // Simple case: rune -> RUNE
-  return assetOrDenom.toUpperCase();
+  return assetOrDenom.toUpperCase()
 }
 
 /**
@@ -102,24 +102,22 @@ export function extractSymbol(assetOrDenom: string): string {
  * @returns Parsed components
  */
 export function parseAsset(asset: string): {
-  chain: string;
-  symbol: string;
-  ticker: string;
-  contractAddress?: string;
+  chain: string
+  symbol: string
+  ticker: string
+  contractAddress?: string
 } {
-  const parts = asset.split('.');
-  const chain = (parts[0] || '').toUpperCase();
-  const rest = parts.slice(1).join('.') || '';
-  const symbolParts = rest.split('-');
-  const ticker = symbolParts[0] || '';
-  const contractAddress = symbolParts[1];
+  const parts = asset.split('.')
+  const chain = (parts[0] || '').toUpperCase()
+  const rest = parts.slice(1).join('.') || ''
+  const symbolParts = rest.split('-')
+  const ticker = symbolParts[0] || ''
+  const contractAddress = symbolParts[1]
 
   return {
     chain,
     symbol: rest,
     ticker,
-    contractAddress: contractAddress
-      ? `0x${contractAddress.replace(/^0[xX]/, '')}`
-      : undefined,
-  };
+    contractAddress: contractAddress ? `0x${contractAddress.replace(/^0[xX]/, '')}` : undefined,
+  }
 }

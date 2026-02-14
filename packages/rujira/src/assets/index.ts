@@ -1,7 +1,7 @@
 /**
- * @vultisig/assets - Unified asset and decimal handling for THORChain layers
+ * Asset registry - Unified asset and decimal handling for THORChain layers
  *
- * This package provides a unified interface for handling assets and amounts
+ * This module provides a unified interface for handling assets and amounts
  * across three layers: native L1, THORChain, and Rujira FIN.
  */
 
