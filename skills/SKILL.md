@@ -111,12 +111,20 @@ Solana, Sui, Polkadot, TON, Ripple, Tron, Cardano
 
 Both CLI and SDK support:
 - **Create vaults**: FastVault (instant) or SecureVault (multi-device)
-- **Import/Export**: Backup and restore vaults
+- **Import/Export**: Backup and restore vaults, import from seedphrase (BIP39)
 - **Addresses**: Derive addresses for any chain
 - **Balances**: Check native and token balances
 - **Send**: Transfer crypto to any address
-- **Swap**: Cross-chain swaps via THORChain, same-chain via 1inch
+- **Swap**: Cross-chain swaps via THORChain, same-chain via 1inch and LiFi
 - **Sign**: Sign transactions or arbitrary bytes
+
+SDK-only capabilities:
+- **Token Discovery**: Look up known tokens, discover tokens at addresses
+- **Price Feeds**: Fetch token prices via CoinGecko
+- **Security Scanning**: Site scanning, transaction validation, transaction simulation
+- **Fiat On-Ramp**: Buy crypto via Banxa integration
+- **Cosmos Signing**: SignAmino and SignDirect for Cosmos dApps
+- **Event System**: Reactive updates for balances, signing, and more
 
 ## Get Started
 
