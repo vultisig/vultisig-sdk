@@ -32,6 +32,14 @@ vi.mock('@core/chain/chains/evm/erc20/getErc20Allowance', () => ({
   getErc20Allowance: vi.fn(),
 }))
 
+// Mock balance fetching (used by enriched getSwapQuote for maxSwapable calculation)
+vi.mock('@core/chain/coin/balance', () => ({
+  getCoinBalance: vi.fn().mockResolvedValue({
+    amount: 5000000000000000000n, // 5 ETH
+    decimals: 18,
+  }),
+}))
+
 vi.mock('@core/chain/swap/swapEnabledChains', () => ({
   swapEnabledChains: [
     'Ethereum',
@@ -179,24 +187,27 @@ describe('Integration: Swap Quote', () => {
 
       // Mock THORChain quote
       const mockQuote = {
-        native: {
-          swapChain: 'THORChain' as const,
-          expected_amount_out: '5000000', // 0.05 BTC in sats
-          expiry: Math.floor(Date.now() / 1000) + 600,
-          fees: {
-            affiliate: '0',
-            asset: 'BTC',
-            outbound: '10000',
-            total: '10000',
+        quote: {
+          native: {
+            swapChain: 'THORChain' as const,
+            expected_amount_out: '5000000', // 0.05 BTC in sats
+            expiry: Math.floor(Date.now() / 1000) + 600,
+            fees: {
+              affiliate: '0',
+              asset: 'BTC',
+              outbound: '10000',
+              total: '10000',
+            },
+            inbound_address: 'bc1q...',
+            memo: '=:BTC.BTC:bc1q...',
+            notes: '',
+            outbound_delay_blocks: 0,
+            outbound_delay_seconds: 0,
+            recommended_min_amount_in: '100000000000000000',
+            warning: '',
           },
-          inbound_address: 'bc1q...',
-          memo: '=:BTC.BTC:bc1q...',
-          notes: '',
-          outbound_delay_blocks: 0,
-          outbound_delay_seconds: 0,
-          recommended_min_amount_in: '100000000000000000',
-          warning: '',
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
@@ -226,11 +237,18 @@ describe('Integration: Swap Quote', () => {
       expect(quote.requiresApproval).toBe(false)
       expect(quote.fees).toBeDefined()
 
-      // Verify event was emitted
-      expect(receivedEvents).toHaveLength(1)
-      expect(receivedEvents[0].event).toBe('swapQuoteReceived')
+      // Verify balance + maxSwapable enrichment (native token: maxSwapable = balance - fee)
+      expect(quote.balance).toBeDefined()
+      expect(typeof quote.balance).toBe('bigint')
+      expect(quote.maxSwapable).toBeDefined()
+      expect(typeof quote.maxSwapable).toBe('bigint')
+      expect(quote.maxSwapable).toBeLessThanOrEqual(quote.balance)
+
+      // Verify swap quote event was emitted
+      expect(receivedEvents.some(e => e.event === 'swapQuoteReceived')).toBe(true)
 
       console.log(`✅ Quote received: ${quote.estimatedOutput} BTC via ${quote.provider}`)
+      console.log(`   Balance: ${quote.balance}, Max swapable: ${quote.maxSwapable}`)
     })
 
     it('should get swap quote with approval required for ERC-20', async () => {
@@ -239,19 +257,22 @@ describe('Integration: Swap Quote', () => {
 
       // Mock 1inch quote
       const mockQuote = {
-        general: {
-          dstAmount: '1000000000000000000', // 1 ETH
-          provider: '1inch' as const,
-          tx: {
-            evm: {
-              from: '0x1234...',
-              to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
-              data: '0x...',
-              value: '0',
-              gasLimit: 300000n,
+        quote: {
+          general: {
+            dstAmount: '1000000000000000000', // 1 ETH
+            provider: '1inch' as const,
+            tx: {
+              evm: {
+                from: '0x1234...',
+                to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
+                data: '0x...',
+                value: '0',
+                gasLimit: 300000n,
+              },
             },
           },
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -281,6 +302,10 @@ describe('Integration: Swap Quote', () => {
       expect(quote.requiresApproval).toBe(true)
       expect(quote.approvalInfo).toBeDefined()
       expect(quote.approvalInfo?.spender).toBe('0x1111111254fb6c44bAC0beD2854e76F90643097d')
+
+      // For ERC-20 tokens, maxSwapable should equal full balance (gas paid in native)
+      expect(quote.balance).toBeDefined()
+      expect(quote.maxSwapable).toBe(quote.balance)
 
       console.log(`✅ Quote requires approval for ${quote.approvalInfo?.requiredAmount} units`)
     })
@@ -351,24 +376,27 @@ describe('Integration: Swap Quote', () => {
       const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
-        native: {
-          swapChain: 'THORChain' as const,
-          expected_amount_out: '100000000', // 1 BTC
-          expiry: Math.floor(Date.now() / 1000) + 600,
-          fees: {
-            affiliate: '50000',
-            asset: 'BTC',
-            outbound: '100000',
-            total: '150000',
+        quote: {
+          native: {
+            swapChain: 'THORChain' as const,
+            expected_amount_out: '100000000', // 1 BTC
+            expiry: Math.floor(Date.now() / 1000) + 600,
+            fees: {
+              affiliate: '50000',
+              asset: 'BTC',
+              outbound: '100000',
+              total: '150000',
+            },
+            inbound_address: 'bc1q...',
+            memo: '=:BTC.BTC:bc1q...',
+            notes: '',
+            outbound_delay_blocks: 0,
+            outbound_delay_seconds: 0,
+            recommended_min_amount_in: '100000000000000000',
+            warning: 'Slippage may be high',
           },
-          inbound_address: 'bc1q...',
-          memo: '=:BTC.BTC:bc1q...',
-          notes: '',
-          outbound_delay_blocks: 0,
-          outbound_delay_seconds: 0,
-          recommended_min_amount_in: '100000000000000000',
-          warning: 'Slippage may be high',
         },
+        discounts: [],
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)

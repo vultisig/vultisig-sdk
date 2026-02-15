@@ -8,7 +8,7 @@ import qrcode from 'qrcode-terminal'
 import type { CommandContext, SendParams, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
 import { createSpinner, info, isJsonOutput, isSilent, outputJson, printResult, warn } from '../lib/output'
-import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
+import { confirmTransaction, displayTransactionPreview, displayTransactionResult, formatBigintAmount } from '../ui'
 
 // AccountCoin type from SDK internals
 type AccountCoin = {
@@ -29,7 +29,8 @@ export async function executeSend(ctx: CommandContext, params: SendParams): Prom
     throw new Error(`Invalid chain: ${params.chain}`)
   }
 
-  if (isNaN(parseFloat(params.amount)) || parseFloat(params.amount) <= 0) {
+  const isMax = params.amount === 'max'
+  if (!isMax && (isNaN(parseFloat(params.amount)) || parseFloat(params.amount) <= 0)) {
     throw new Error('Invalid amount')
   }
 
@@ -54,7 +55,21 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     id: params.tokenId,
   }
 
-  const amount = BigInt(Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals)))
+  const isMax = params.amount === 'max'
+  let amount: bigint
+  let displayAmount: string
+
+  if (isMax) {
+    const maxInfo = await vault.getMaxSendAmount({ coin, receiver: params.to, memo: params.memo })
+    amount = maxInfo.maxSendable
+    if (amount === 0n) {
+      throw new Error('Insufficient balance to cover network fees')
+    }
+    displayAmount = formatBigintAmount(amount, balance.decimals)
+  } else {
+    amount = BigInt(Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals)))
+    displayAmount = params.amount
+  }
 
   const payload = await vault.prepareSendTx({
     coin,
@@ -78,7 +93,7 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     displayTransactionPreview(
       payload.coin.address,
       params.to,
-      params.amount,
+      displayAmount,
       payload.coin.ticker,
       params.chain,
       params.memo,

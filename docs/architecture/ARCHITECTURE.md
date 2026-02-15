@@ -16,6 +16,7 @@
 10. [Type System](#type-system)
 11. [Data Flow](#data-flow)
 12. [Chain Support](#chain-support)
+13. [Rujira Package](#rujira-package)
 
 ---
 
@@ -31,6 +32,11 @@ The Vultisig SDK is a TypeScript library for creating and managing multi-chain c
 - **Balance Tracking** - Query native and token balances across all chains
 - **Address Derivation** - Generate addresses for any supported chain
 - **Gas Estimation** - Get current gas prices and fee estimates
+- **Token Registry** - Look up known tokens and native fee coins for any chain
+- **Token Discovery** - Discover tokens with balances at vault addresses
+- **Price Feeds** - Fetch current token prices via CoinGecko
+- **Security Scanning** - Validate and simulate transactions via Blockaid, scan sites for phishing
+- **Fiat On-Ramp** - Generate Banxa buy URLs for 23+ supported chains
 - **Cross-Platform** - Works in browser and Node.js (Electron, React Native coming soon)
 
 ### Architecture Overview
@@ -194,6 +200,7 @@ Intelligent caching based on data mutability:
 vultisig-sdk/
 ├── packages/
 │   ├── sdk/                    # Main SDK (@vultisig/sdk)
+│   ├── rujira/                 # Rujira DEX integration (@vultisig/rujira), includes asset registry
 │   ├── core/                   # Upstream core library (read-only)
 │   └── lib/                    # WASM bindings (dkls, schnorr)
 ├── clients/
@@ -208,6 +215,7 @@ vultisig-sdk/
 ### Package Relationships
 
 - **`@vultisig/sdk`** - The main SDK package users install
+- **`@vultisig/rujira`** - Rujira DEX integration (FIN swaps, deposits, withdrawals on THORChain), includes asset registry
 - **`packages/core`** - Chain implementations, MPC protocol, signing logic (synced from upstream)
 - **`packages/lib`** - WASM bindings (dkls, schnorr) - synced from upstream
 
@@ -242,6 +250,8 @@ packages/sdk/src/
 │   │   ├── TransactionBuilder.ts   # TX preparation
 │   │   ├── BroadcastService.ts     # TX broadcasting
 │   │   ├── PreferencesService.ts   # User preferences
+│   │   ├── TokenDiscoveryService.ts  # Token discovery & metadata resolution
+│   │   ├── SecurityService.ts     # Blockaid tx validation & simulation
 │   │   └── cosmos/                # Cosmos-specific helpers
 │   │       ├── buildCosmosPayload.ts  # SignAmino/SignDirect builders
 │   │       └── index.ts
@@ -306,7 +316,10 @@ packages/sdk/src/
 │   └── memoizeAsync.ts        # Async memoization
 │
 └── types/                     # Type definitions
-    └── index.ts               # SDK types and Core re-exports
+    ├── index.ts               # SDK types and Core re-exports
+    ├── tokens.ts              # TokenInfo, FeeCoinInfo, DiscoveredToken, CoinPrices types
+    ├── security.ts            # TransactionValidation/Simulation, SiteScanResult types
+    └── cosmos-msg.ts          # CosmosMsgType constants
 ```
 
 ---
@@ -470,6 +483,17 @@ abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   async extractMessageHashes(payload): Promise<string[]>;
   async broadcast(chain, payload, signature): Promise<string>;
 
+  // Token discovery
+  async discoverTokens(chain: Chain): Promise<DiscoveredToken[]>;
+  async resolveToken(chain: Chain, contractAddress: string): Promise<TokenInfo>;
+
+  // Fiat on-ramp
+  async getBuyUrl(chain: Chain, ticker?: string): Promise<string | null>;
+
+  // Security scanning
+  async validateTransaction(payload: KeysignPayload): Promise<TransactionValidationResult | null>;
+  async simulateTransaction(payload: KeysignPayload): Promise<TransactionSimulationResult | null>;
+
   // Abstract methods
   abstract sign(payload: SigningPayload, password?: string): Promise<Signature>;
   abstract get availableSigningModes(): SigningMode[];
@@ -588,6 +612,8 @@ Each vault contains specialized services:
 | `BroadcastService`       | Transaction broadcasting             |
 | `PreferencesService`     | User chain/token preferences         |
 | `SwapService`            | Cross-chain and DEX swap operations  |
+| `TokenDiscoveryService`  | Token discovery and metadata resolution |
+| `SecurityService`        | Blockaid transaction validation and simulation |
 
 ---
 
@@ -928,6 +954,7 @@ From `src/index.ts`:
 
 - `SUPPORTED_CHAINS` - All supported blockchain chains
 - `Chain` - Chain enum
+- `CosmosMsgType` - Cosmos message type constants (MsgSend, MsgTransferUrl, etc.)
 
 **Types:**
 
@@ -1006,6 +1033,55 @@ interface SwapPrepareResult {
   keysignPayload: KeysignPayload;
   approvalPayload?: KeysignPayload;
   quote: SwapQuoteResult;
+}
+
+// Token registry types
+interface TokenInfo {
+  chain: Chain;
+  contractAddress?: string;
+  ticker: string;
+  decimals: number;
+  logo?: string;
+  priceProviderId?: string;
+}
+
+interface FeeCoinInfo {
+  chain: Chain;
+  ticker: string;
+  decimals: number;
+  logo: string;
+  priceProviderId?: string;
+}
+
+interface DiscoveredToken {
+  chain: Chain;
+  contractAddress: string;
+  ticker: string;
+  decimals: number;
+  logo?: string;
+  balance?: string;
+}
+
+// Price feed types
+type CoinPricesParams = { ids: string[]; fiatCurrency?: string; }
+type CoinPricesResult = Record<string, number>
+
+// Security scanning types
+type TransactionValidationResult = {
+  isRisky: boolean;
+  riskLevel: 'medium' | 'high' | null;
+  description: string | undefined;
+  features: string[];
+}
+
+type TransactionSimulationResult = {
+  chainKind: 'evm' | 'solana';
+  simulation: unknown;
+}
+
+type SiteScanResult = {
+  isMalicious: boolean;
+  url: string;
 }
 ```
 
@@ -1357,6 +1433,45 @@ Each chain kind has specific:
 | EVM        | ERC-20         | USDC, USDT, DAI |
 | Solana     | SPL            | USDC (SPL)      |
 | Cosmos     | IBC, CW20      | Various         |
+
+---
+
+## Rujira Package
+
+The `@vultisig/rujira` package provides Rujira DEX (FIN order book) integration on THORChain. It uses a modular architecture with its own signing pipeline that bridges to the SDK's MPC vault system.
+
+### Architecture
+
+```
+@vultisig/rujira
+├── client.ts              # RujiraClient - main entry point, orchestrates modules
+├── modules/               # Feature modules
+│   ├── swap.ts            # FIN market swaps (quotes + execution)
+│   ├── deposit.ts         # L1 → THORChain deposits
+│   ├── withdraw.ts        # THORChain → L1 withdrawals
+│   └── orderbook.ts       # Live market data from FIN contracts
+├── signer/
+│   └── vultisig-provider.ts  # VultisigRujiraProvider - bridges vault MPC to CosmJS
+├── discovery/             # Dynamic FIN contract discovery via GraphQL
+├── services/              # THORNode API, balance checks, fee estimation
+└── utils/                 # Caching, formatting, memo construction
+```
+
+### Signing Flow
+
+Rujira uses its own signing pipeline independent of the core cosmos resolver:
+
+1. **RujiraClient** builds CosmWasm messages (e.g., FIN swap orders)
+2. **VultisigRujiraProvider** constructs a `KeysignPayload` directly
+3. The payload is signed via the vault's MPC (`extractMessageHashes` → `sign`)
+4. Signed transaction is broadcast via `vault.broadcastTx()`
+
+This approach means Rujira does not depend on modifications to `packages/core/`.
+
+### Dependencies
+
+- `@vultisig/sdk` (peer dependency) — provides vault MPC signing
+- `@cosmjs/cosmwasm-stargate` — CosmWasm client for FIN contract queries
 
 ---
 

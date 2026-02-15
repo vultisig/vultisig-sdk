@@ -1,6 +1,7 @@
 import type {
   BalanceResult,
   BroadcastParams,
+  CoinInfo,
   CreateFastVaultFromSeedphraseOptions,
   CreateFastVaultOptions,
   CreateSecureVaultFromSeedphraseOptions,
@@ -13,6 +14,7 @@ import type {
   GetSwapQuoteParams,
   JoinSecureVaultOptions,
   JoinSecureVaultResult,
+  MaxSendAmountResult,
   PrepareSwapParams,
   ProgressStep,
   SaveFileOptions,
@@ -94,6 +96,11 @@ export type ISDKAdapter = {
 
   // ===== Transactions =====
   prepareSendTx(vaultId: string, params: SendTxParams): Promise<unknown>
+
+  getMaxSendAmount(
+    vaultId: string,
+    params: { coin: CoinInfo; receiver: string; memo?: string }
+  ): Promise<MaxSendAmountResult>
 
   extractMessageHashes(vaultId: string, keysignPayload: unknown): Promise<string[]>
 

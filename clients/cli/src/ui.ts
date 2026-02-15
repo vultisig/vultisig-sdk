@@ -23,21 +23,20 @@ import { info, isJsonOutput, printError, printResult, printTable, warn } from '.
 // Display Formatters
 // ============================================================================
 
-export function displayBalance(chain: string, balance: Balance, raw = false): void {
+export function displayBalance(chain: string, balance: Balance, _raw = false): void {
   printResult(chalk.cyan(`\n${chain} Balance:`))
-  const displayAmount = raw ? balance.amount : formatBalanceAmount(balance.amount, balance.decimals)
-  printResult(`  Amount: ${displayAmount} ${balance.symbol}`)
+  printResult(`  Amount: ${balance.formattedAmount} ${balance.symbol}`)
   if (balance.fiatValue && balance.fiatCurrency) {
     printResult(`  Value:  ${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}`)
   }
 }
 
-export function displayBalancesTable(balances: Record<string, Balance>, raw = false): void {
+export function displayBalancesTable(balances: Record<string, Balance>, _raw = false): void {
   printResult(chalk.cyan('\nPortfolio Balances:\n'))
 
   const tableData = Object.entries(balances).map(([chain, balance]) => ({
     Chain: chain,
-    Amount: raw ? balance.amount : formatBalanceAmount(balance.amount, balance.decimals),
+    Amount: balance.formattedAmount,
     Symbol: balance.symbol,
     Value:
       balance.fiatValue && balance.fiatCurrency ? `${balance.fiatValue.toFixed(2)} ${balance.fiatCurrency}` : 'N/A',
@@ -46,7 +45,7 @@ export function displayBalancesTable(balances: Record<string, Balance>, raw = fa
   printTable(tableData)
 }
 
-export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurrency, raw = false): void {
+export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurrency, _raw = false): void {
   const currencyName = fiatCurrencyNameRecord[currency]
 
   // Display total value
@@ -62,7 +61,7 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
 
   const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
     Chain: chain,
-    Amount: raw ? balance.amount : formatBalanceAmount(balance.amount, balance.decimals),
+    Amount: balance.formattedAmount,
     Symbol: balance.symbol,
     Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
   }))
@@ -213,7 +212,7 @@ export function setupVaultEvents(vault: VaultBase): void {
   // Balance updates
   vault.on('balanceUpdated', ({ chain, balance, tokenId }: any) => {
     const asset = tokenId ? `${balance.symbol} token` : balance.symbol
-    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.amount}`))
+    info(chalk.blue(`i Balance updated for ${chain} (${asset}): ${balance.formattedAmount}`))
   })
 
   // Transaction broadcast

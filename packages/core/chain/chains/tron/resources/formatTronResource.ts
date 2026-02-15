@@ -5,7 +5,7 @@ const msPerDay = 86_400_000
 type FormatTronResourceValueInput = {
   available: number
   total: number
-  unit?: string
+  unit: string
 }
 
 export const formatTronResourceValue = ({

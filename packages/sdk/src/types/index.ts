@@ -10,6 +10,8 @@ export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
 export type { FiatCurrency } from '@core/config/FiatCurrency'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
+export type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+export { KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 export type { VaultKeyShares } from '@core/mpc/vault/Vault'
 
 // Import MpcLib for use in VaultData type
@@ -17,7 +19,7 @@ import type { MpcLib } from '@core/mpc/mpcLib'
 export type { MpcLib }
 
 // Import and export Chain types
-import type { CosmosChain, EvmChain, OtherChain, UtxoChain } from '@core/chain/Chain'
+export type { CosmosChain, EvmChain, OtherChain, UtxoChain } from '@core/chain/Chain'
 export type { Chain as ChainType } from '@core/chain/Chain'
 export { Chain } from '@core/chain/Chain'
 
@@ -71,13 +73,23 @@ export type ExportOptions = {
 
 export type Balance = {
   amount: string
+  formattedAmount: string
   decimals: number
   symbol: string
   chainId: string
   tokenId?: string
   value?: number
-  fiatValue?: number // Current fiat value in vault's currency
-  fiatCurrency?: string // Currency code (e.g., 'USD', 'EUR')
+  fiatValue?: number
+  fiatCurrency?: string
+}
+
+export type MaxSendAmount = {
+  /** Balance in base units (e.g., wei) */
+  balance: bigint
+  /** Estimated network fee in base units */
+  fee: bigint
+  /** Maximum sendable amount (balance - fee) */
+  maxSendable: bigint
 }
 
 export type CachedBalance = {
@@ -597,3 +609,13 @@ export type {
   SignAminoInput,
   SignDirectInput,
 } from './cosmos'
+
+// Token registry & chain data types
+export type { CoinPricesParams, CoinPricesResult, DiscoveredToken, FeeCoinInfo, TokenInfo } from './tokens'
+
+// Security scanning types
+export type { RiskLevel, SiteScanResult, TransactionSimulationResult, TransactionValidationResult } from './security'
+
+// Cosmos message type constants
+export type { CosmosMsgType as CosmosMsgTypeValue } from './cosmos-msg'
+export { CosmosMsgType } from './cosmos-msg'
