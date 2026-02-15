@@ -218,17 +218,44 @@ const configs = {
     }),
     onwarn,
   },
+  'chrome-extension': {
+    input: './src/platforms/chrome-extension/index.ts',
+    output: {
+      file: './dist/index.chrome-extension.js',
+      format: 'es',
+      sourcemap: true,
+      inlineDynamicImports: true,
+      paths: wasmPathsResolver,
+    },
+    external,
+    plugins: createPlugins({
+      preferBuiltins: false,
+      browser: true,
+      replaceOptions: {
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('chrome-extension'),
+      },
+    }),
+    onwarn,
+  },
 }
 
 // Export based on target
 let exportConfig
 if (target === 'all') {
-  exportConfig = [...configs.node, configs.browser, configs['react-native'], configs.electron]
+  exportConfig = [
+    ...configs.node,
+    configs.browser,
+    configs['react-native'],
+    configs.electron,
+    configs['chrome-extension'],
+  ]
 } else if (configs[target]) {
   const config = configs[target]
   exportConfig = Array.isArray(config) ? config : [config]
 } else {
-  throw new Error(`Unknown build target: ${target}. Available targets: node, browser, react-native, electron, all`)
+  throw new Error(
+    `Unknown build target: ${target}. Available targets: node, browser, react-native, electron, chrome-extension, all`
+  )
 }
 
 export default defineConfig(exportConfig)
