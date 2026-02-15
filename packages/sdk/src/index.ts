@@ -60,7 +60,7 @@ export type { SdkEvents, VaultEvents } from './events/types'
 // ============================================================================
 
 // Chain enums and types
-export type { Chain as ChainType } from './types'
+export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain } from './types'
 export { Chain } from './types'
 
 // Fiat currency types

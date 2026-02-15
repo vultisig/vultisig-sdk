@@ -15,6 +15,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "chrome-extension": "./dist/index.chrome-extension.js",
       "browser": "./dist/index.browser.js",
       "worker": "./dist/index.browser.js",
       "react-native": "./dist/index.react-native.js",
@@ -45,6 +46,10 @@
       "import": "./dist/index.electron-main.cjs",
       "require": "./dist/index.electron-main.cjs",
       "default": "./dist/index.electron-main.cjs"
+    },
+    "./chrome-extension": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.chrome-extension.js"
     }
   },
   "scripts": {
@@ -55,11 +60,12 @@
     "build:types": "rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
-    "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\"",
+    "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\"",
     "build:fast": "yarn clean && BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:node": "BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:browser": "BUILD_TARGET=browser rollup -c rollup.platforms.config.js",
     "build:platform:electron": "BUILD_TARGET=electron rollup -c rollup.platforms.config.js",
+    "build:platform:chrome-extension": "BUILD_TARGET=chrome-extension rollup -c rollup.platforms.config.js",
     "_____QUALITY_____": "",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "lint": "eslint --config ../../.config/eslint.config.mjs src/**/*.{ts,tsx}",
