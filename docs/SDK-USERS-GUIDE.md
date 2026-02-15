@@ -1044,6 +1044,33 @@ console.log('Max Priority Fee:', gasInfo.maxPriorityFeePerGas)
 console.log('Max Fee:', gasInfo.maxFeePerGas)
 ```
 
+### Max Send Amount
+
+Calculate the maximum amount you can send for a coin in a single call. Returns balance, estimated network fee, and max sendable amount — all in base units:
+
+```typescript
+const { balance, fee, maxSendable } = await vault.getMaxSendAmount({
+  coin: {
+    chain: Chain.Ethereum,
+    address: await vault.address(Chain.Ethereum),
+    decimals: 18,
+    ticker: 'ETH',
+  },
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+})
+
+console.log('Balance:', balance)        // e.g., 5000000000000000000n (5 ETH)
+console.log('Fee:', fee)                // e.g., 21000000000000n
+console.log('Max sendable:', maxSendable) // e.g., 4999979000000000000n
+
+// Use maxSendable as the amount for a "send max" transaction
+const keysignPayload = await vault.prepareSendTx({
+  coin,
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+  amount: maxSendable,
+})
+```
+
 ### Signing Arbitrary Bytes
 
 The `signBytes()` method allows you to sign pre-hashed data directly, giving you full control over transaction construction. This is useful when you need to:
@@ -1496,6 +1523,10 @@ console.log(`Provider: ${quote.provider}`)           // e.g., 'thorchain'
 console.log(`Output: ${quote.estimatedOutput} BTC`)  // e.g., '0.00234 BTC'
 console.log(`Expires: ${new Date(quote.expiresAt)}`)
 console.log(`Fees: ${quote.fees.total}`)
+
+// Balance + max swappable amount (included automatically)
+console.log(`Balance: ${quote.balance}`)         // Source coin balance in base units
+console.log(`Max swapable: ${quote.maxSwapable}`) // balance - network fee (native), or full balance (tokens)
 
 // Check if approval is needed (ERC-20 tokens)
 if (quote.requiresApproval) {
@@ -2398,6 +2429,7 @@ class VaultBase {
 
   // Transactions
   prepareSendTx(params: SendTxParams): Promise<KeysignPayload>
+  getMaxSendAmount(params: { coin: AccountCoin, receiver: string, memo?: string, feeSettings?: FeeSettings }): Promise<MaxSendAmount>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: SigningOptions): Promise<Signature>
   signBytes(options: SignBytesOptions, signingOptions?: SigningOptions): Promise<Signature>

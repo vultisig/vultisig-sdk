@@ -105,9 +105,10 @@ export type ResolvedCoinInfo = {
 }
 
 /**
- * Result from getSwapQuote()
+ * Internal quote result from SwapService (without balance/max info)
+ * @internal
  */
-export type SwapQuoteResult = {
+export type SwapQuoteBase = {
   /** Raw quote from core (for use with prepareSwapTx) */
   quote: SwapQuote
   /** Expected output amount (in smallest unit, e.g., wei) */
@@ -132,6 +133,16 @@ export type SwapQuoteResult = {
   fromCoin: ResolvedCoinInfo
   /** Resolved destination coin info (for display) */
   toCoin: ResolvedCoinInfo
+}
+
+/**
+ * Result from getSwapQuote() - enriched with balance and max swap info
+ */
+export type SwapQuoteResult = SwapQuoteBase & {
+  /** Source coin balance in base units */
+  balance: bigint
+  /** Maximum swappable amount in base units (balance - network fee for native coins, or full balance for tokens) */
+  maxSwapable: bigint
 }
 
 /**

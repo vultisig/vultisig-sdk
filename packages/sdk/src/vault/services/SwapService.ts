@@ -39,8 +39,8 @@ import {
   SwapApprovalInfo,
   SwapFees,
   SwapPrepareResult,
+  SwapQuoteBase,
   SwapQuoteParams,
-  SwapQuoteResult,
   SwapTxParams,
 } from '../swap-types'
 import { VaultError, VaultErrorCode } from '../VaultError'
@@ -64,7 +64,7 @@ export class SwapService {
   /**
    * Get a swap quote from the best available provider
    */
-  async getQuote(params: SwapQuoteParams): Promise<SwapQuoteResult> {
+  async getQuote(params: SwapQuoteParams): Promise<SwapQuoteBase> {
     try {
       // Resolve coin inputs to full AccountCoin
       const fromCoin = await this.resolveCoinInput(params.fromCoin)
@@ -344,7 +344,7 @@ export class SwapService {
   }
 
   /**
-   * Format quote into SwapQuoteResult
+   * Format quote into SwapQuoteBase
    */
   private async formatQuoteResult(
     swapQuote: SwapQuote,
@@ -352,7 +352,7 @@ export class SwapService {
     toCoin: AccountCoin,
     approvalInfo?: SwapApprovalInfo,
     fiatCurrency?: FiatCurrency
-  ): Promise<SwapQuoteResult> {
+  ): Promise<SwapQuoteBase> {
     const { quote: quoteData } = swapQuote
     const isNative = 'native' in quoteData
 
@@ -378,7 +378,7 @@ export class SwapService {
     }
 
     // Build base result
-    const result: SwapQuoteResult = {
+    const result: SwapQuoteBase = {
       quote: swapQuote,
       estimatedOutput,
       provider,

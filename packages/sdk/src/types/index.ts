@@ -83,6 +83,15 @@ export type Balance = {
   fiatCurrency?: string
 }
 
+export type MaxSendAmount = {
+  /** Balance in base units (e.g., wei) */
+  balance: bigint
+  /** Estimated network fee in base units */
+  fee: bigint
+  /** Maximum sendable amount (balance - fee) */
+  maxSendable: bigint
+}
+
 export type CachedBalance = {
   balance: Balance
   cachedAt: number // Unix timestamp when cached
