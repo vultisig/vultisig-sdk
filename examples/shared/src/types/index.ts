@@ -224,6 +224,13 @@ export type BalanceResult = {
   value?: number
 }
 
+// Max send amount result (serialized bigints for IPC compat)
+export type MaxSendAmountResult = {
+  balance: string
+  fee: string
+  maxSendable: string
+}
+
 // Fiat currency type
 export type FiatCurrency = 'usd' | 'eur' | 'gbp' | 'jpy' | 'cny' | 'aud' | 'cad' | 'chf' | 'sgd' | 'sek'
 

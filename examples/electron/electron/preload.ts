@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Transactions
   prepareSendTx: (vaultId: string, params: { coin: any; receiver: string; amount: string; memo?: string }) =>
     ipcRenderer.invoke('vault:prepareSendTx', vaultId, params),
+  getMaxSendAmount: (vaultId: string, params: any) => ipcRenderer.invoke('vault:getMaxSendAmount', vaultId, params),
   extractMessageHashes: (vaultId: string, keysignPayload: any) =>
     ipcRenderer.invoke('vault:extractMessageHashes', vaultId, keysignPayload),
   sign: (vaultId: string, payload: any) => ipcRenderer.invoke('vault:sign', vaultId, payload),

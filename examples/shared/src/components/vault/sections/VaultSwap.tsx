@@ -11,7 +11,6 @@ import type {
   VaultInfo,
 } from '../../../types'
 import Button from '../../common/Button'
-import Input from '../../common/Input'
 import Select from '../../common/Select'
 import Spinner from '../../common/Spinner'
 import SigningModal from '../../signing/SigningModal'
@@ -52,6 +51,7 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
   const [discountTier, setDiscountTier] = useState<DiscountTier>(null)
   const [isLoadingQuote, setIsLoadingQuote] = useState(false)
   const [isSwapping, setIsSwapping] = useState(false)
+  const [isLoadingMax, setIsLoadingMax] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
   const [result, setResult] = useState<{ txHash: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -126,6 +126,20 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
     label: chain,
   }))
 
+  const handleMaxSwap = async () => {
+    if (!formData.fromChain) return
+    setIsLoadingMax(true)
+    setError(null)
+    try {
+      const balance = await sdk.getBalance(vault.id, formData.fromChain, formData.fromTokenId || undefined)
+      setFormData(prev => ({ ...prev, amount: formatAmount(balance.amount, balance.decimals) }))
+    } catch (err: any) {
+      setError(`Failed to get balance: ${err.message}`)
+    } finally {
+      setIsLoadingMax(false)
+    }
+  }
+
   // Get quote
   const handleGetQuote = async () => {
     if (!formData.fromChain || !formData.toChain || !formData.amount) {
@@ -155,7 +169,7 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
         chain: formData.fromChain,
         address: fromAddress,
         decimals: fromToken?.decimals ?? getChainDecimals(formData.fromChain),
-        ticker: fromToken?.symbol ?? formData.fromChain,
+        ticker: fromToken?.symbol ?? getChainTicker(formData.fromChain),
         id: fromToken?.id,
       }
 
@@ -163,7 +177,7 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
         chain: formData.toChain,
         address: toAddress,
         decimals: toToken?.decimals ?? getChainDecimals(formData.toChain),
-        ticker: toToken?.symbol ?? formData.toChain,
+        ticker: toToken?.symbol ?? getChainTicker(formData.toChain),
         id: toToken?.id,
       }
 
@@ -282,7 +296,7 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
         chain: formData.fromChain,
         address: fromAddress,
         decimals: fromToken?.decimals ?? getChainDecimals(formData.fromChain),
-        ticker: fromToken?.symbol ?? formData.fromChain,
+        ticker: fromToken?.symbol ?? getChainTicker(formData.fromChain),
         id: fromToken?.id,
       }
 
@@ -290,7 +304,7 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
         chain: formData.toChain,
         address: toAddress,
         decimals: toToken?.decimals ?? getChainDecimals(formData.toChain),
-        ticker: toToken?.symbol ?? formData.toChain,
+        ticker: toToken?.symbol ?? getChainTicker(formData.toChain),
         id: toToken?.id,
       }
 
@@ -481,12 +495,23 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
                   onChange={tokenId => setFormData(prev => ({ ...prev, fromTokenId: tokenId }))}
                 />
               </div>
-              <Input
-                value={formData.amount}
-                onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                placeholder="0.0"
-                className="mt-3"
-              />
+              <div className="flex gap-2 mt-3">
+                <input
+                  type="text"
+                  value={formData.amount}
+                  onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  placeholder="0.0"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={handleMaxSwap}
+                  disabled={!formData.fromChain || isLoadingMax || isSwapping}
+                  className="px-3 py-2 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isLoadingMax ? '...' : 'Max'}
+                </button>
+              </div>
             </div>
 
             {/* Swap arrow */}
@@ -643,6 +668,32 @@ function formatAmount(amount: string | bigint, decimals: number): string {
   fractionalStr = fractionalStr.replace(/0+$/, '').slice(0, 6)
 
   return `${wholePart}.${fractionalStr}`
+}
+
+// Get native token ticker for a chain
+function getChainTicker(chain: string): string {
+  const tickerMap: Record<string, string> = {
+    Bitcoin: 'BTC',
+    'Bitcoin-Cash': 'BCH',
+    Litecoin: 'LTC',
+    Dogecoin: 'DOGE',
+    Dash: 'DASH',
+    Zcash: 'ZEC',
+    Ethereum: 'ETH',
+    Polygon: 'POL',
+    Avalanche: 'AVAX',
+    BSC: 'BNB',
+    Arbitrum: 'ETH',
+    Optimism: 'ETH',
+    Base: 'ETH',
+    Solana: 'SOL',
+    Cosmos: 'ATOM',
+    THORChain: 'RUNE',
+    MayaChain: 'CACAO',
+    Sui: 'SUI',
+    Ripple: 'XRP',
+  }
+  return tickerMap[chain] ?? chain
 }
 
 // Get native token decimals

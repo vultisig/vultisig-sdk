@@ -98,6 +98,7 @@ export type {
   KeygenMode,
   KeygenProgressUpdate,
   KeysignPayload,
+  MaxSendAmount,
   NativeSwapQuote,
   OtherGasInfo,
   ReshareOptions,

@@ -1,6 +1,7 @@
 import type {
   BalanceResult,
   BroadcastParams,
+  CoinInfo,
   CreateFastVaultFromSeedphraseOptions,
   CreateFastVaultOptions,
   CreateSecureVaultFromSeedphraseOptions,
@@ -14,6 +15,7 @@ import type {
   ISDKAdapter,
   JoinSecureVaultOptions,
   JoinSecureVaultResult,
+  MaxSendAmountResult,
   PrepareSwapParams,
   ProgressStep,
   SeedphraseValidation,
@@ -111,6 +113,7 @@ declare global {
         vaultId: string,
         params: { coin: unknown; receiver: string; amount: string; memo?: string }
       ): Promise<unknown>
+      getMaxSendAmount(vaultId: string, params: unknown): Promise<MaxSendAmountResult>
       extractMessageHashes(vaultId: string, keysignPayload: unknown): Promise<string[]>
       sign(vaultId: string, payload: unknown): Promise<unknown>
       broadcastTx(
@@ -365,6 +368,13 @@ export class ElectronSDKAdapter implements ISDKAdapter {
       amount: String(params.amount),
       memo: params.memo,
     })
+  }
+
+  async getMaxSendAmount(
+    vaultId: string,
+    params: { coin: CoinInfo; receiver: string; memo?: string }
+  ): Promise<MaxSendAmountResult> {
+    return window.electronAPI.getMaxSendAmount(vaultId, params)
   }
 
   async extractMessageHashes(vaultId: string, keysignPayload: unknown): Promise<string[]> {

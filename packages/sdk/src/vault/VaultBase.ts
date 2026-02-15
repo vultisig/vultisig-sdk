@@ -1,5 +1,6 @@
 // Core functions (functional dispatch) - Direct imports from core
 import { fromBinary } from '@bufbuild/protobuf'
+import { getMaxValue } from '@core/chain/amount/getMaxValue'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@core/chain/banxa'
 import { Chain } from '@core/chain/Chain'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
@@ -29,6 +30,7 @@ import {
   CosmosSigningOptions,
   FiatCurrency,
   GasInfoForChain,
+  MaxSendAmount,
   SignAminoInput,
   Signature,
   SignBytesOptions,
@@ -900,6 +902,33 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Get the maximum sendable amount for a coin, accounting for network fees
+   *
+   * Fetches the current balance, estimates the send fee, and calculates the
+   * maximum amount that can be sent in a single call.
+   *
+   * @returns Balance, fee, and max sendable amount (all in base units)
+   */
+  async getMaxSendAmount(params: {
+    coin: AccountCoin
+    receiver: string
+    memo?: string
+    feeSettings?: FeeSettings
+  }): Promise<MaxSendAmount> {
+    const balanceResult = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    const balance = BigInt(balanceResult.amount)
+
+    const fee = await this.transactionBuilder.estimateSendFee({
+      ...params,
+      amount: balance,
+    })
+
+    const maxSendable = getMaxValue(balance, fee)
+
+    return { balance, fee, maxSendable }
+  }
+
+  /**
    * Extract message hashes from a KeysignPayload
    */
   async extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]> {
@@ -1086,7 +1115,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * ```
    */
   async getSwapQuote(params: SwapQuoteParams): Promise<SwapQuoteResult> {
-    return this.swapService.getQuote(params)
+    const quoteResult = await this.swapService.getQuote(params)
+
+    // Enrich with balance + max swappable amount (best-effort)
+    let balance = 0n
+    let maxSwapable = 0n
+    try {
+      const resolvedFromCoin = quoteResult.fromCoin
+      const balanceResult = await this.balanceService.getBalance(resolvedFromCoin.chain, resolvedFromCoin.tokenId)
+      balance = BigInt(balanceResult.amount)
+      const isNative = !resolvedFromCoin.tokenId
+      maxSwapable = isNative ? getMaxValue(balance, quoteResult.fees.network) : balance
+    } catch {
+      // Balance enrichment is best-effort — quote is still valid without it
+    }
+
+    return { ...quoteResult, balance, maxSwapable }
   }
 
   /**

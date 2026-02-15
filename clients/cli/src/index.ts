@@ -473,8 +473,9 @@ program
 
 // Command: Send transaction
 program
-  .command('send <chain> <to> <amount>')
+  .command('send <chain> <to> [amount]')
   .description('Send tokens to an address')
+  .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('-y, --yes', 'Skip confirmation prompt')
@@ -484,15 +485,17 @@ program
       async (
         chainStr: string,
         to: string,
-        amount: string,
-        options: { token?: string; memo?: string; yes?: boolean; password?: string }
+        amount: string | undefined,
+        options: { max?: boolean; token?: string; memo?: string; yes?: boolean; password?: string }
       ) => {
+        if (!amount && !options.max) throw new Error('Provide an amount or use --max')
+        if (amount && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
         try {
           await executeSend(context, {
             chain: findChainByName(chainStr) || (chainStr as Chain),
             to,
-            amount,
+            amount: amount ?? 'max',
             tokenId: options.token,
             memo: options.memo,
             yes: options.yes,
@@ -803,8 +806,9 @@ program
 
 // Command: Get swap quote
 program
-  .command('swap-quote <fromChain> <toChain> <amount>')
+  .command('swap-quote <fromChain> <toChain> [amount]')
   .description('Get a swap quote without executing')
+  .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .action(
@@ -812,14 +816,16 @@ program
       async (
         fromChainStr: string,
         toChainStr: string,
-        amountStr: string,
-        options: { fromToken?: string; toToken?: string }
+        amountStr: string | undefined,
+        options: { max?: boolean; fromToken?: string; toToken?: string }
       ) => {
+        if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
+        if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
         await executeSwapQuote(context, {
           fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
           toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-          amount: parseFloat(amountStr),
+          amount: options.max ? 'max' : parseFloat(amountStr!),
           fromToken: options.fromToken,
           toToken: options.toToken,
         })
@@ -829,8 +835,9 @@ program
 
 // Command: Execute swap
 program
-  .command('swap <fromChain> <toChain> <amount>')
+  .command('swap <fromChain> <toChain> [amount]')
   .description('Swap tokens between chains')
+  .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
@@ -841,15 +848,24 @@ program
       async (
         fromChainStr: string,
         toChainStr: string,
-        amountStr: string,
-        options: { fromToken?: string; toToken?: string; slippage?: string; yes?: boolean; password?: string }
+        amountStr: string | undefined,
+        options: {
+          max?: boolean
+          fromToken?: string
+          toToken?: string
+          slippage?: string
+          yes?: boolean
+          password?: string
+        }
       ) => {
+        if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
+        if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
         try {
           await executeSwap(context, {
             fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
             toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-            amount: parseFloat(amountStr),
+            amount: options.max ? 'max' : parseFloat(amountStr!),
             fromToken: options.fromToken,
             toToken: options.toToken,
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,

@@ -32,6 +32,14 @@ vi.mock('@core/chain/chains/evm/erc20/getErc20Allowance', () => ({
   getErc20Allowance: vi.fn(),
 }))
 
+// Mock balance fetching (used by enriched getSwapQuote for maxSwapable calculation)
+vi.mock('@core/chain/coin/balance', () => ({
+  getCoinBalance: vi.fn().mockResolvedValue({
+    amount: 5000000000000000000n, // 5 ETH
+    decimals: 18,
+  }),
+}))
+
 vi.mock('@core/chain/swap/swapEnabledChains', () => ({
   swapEnabledChains: [
     'Ethereum',
@@ -229,11 +237,18 @@ describe('Integration: Swap Quote', () => {
       expect(quote.requiresApproval).toBe(false)
       expect(quote.fees).toBeDefined()
 
-      // Verify event was emitted
-      expect(receivedEvents).toHaveLength(1)
-      expect(receivedEvents[0].event).toBe('swapQuoteReceived')
+      // Verify balance + maxSwapable enrichment (native token: maxSwapable = balance - fee)
+      expect(quote.balance).toBeDefined()
+      expect(typeof quote.balance).toBe('bigint')
+      expect(quote.maxSwapable).toBeDefined()
+      expect(typeof quote.maxSwapable).toBe('bigint')
+      expect(quote.maxSwapable).toBeLessThanOrEqual(quote.balance)
+
+      // Verify swap quote event was emitted
+      expect(receivedEvents.some(e => e.event === 'swapQuoteReceived')).toBe(true)
 
       console.log(`✅ Quote received: ${quote.estimatedOutput} BTC via ${quote.provider}`)
+      console.log(`   Balance: ${quote.balance}, Max swapable: ${quote.maxSwapable}`)
     })
 
     it('should get swap quote with approval required for ERC-20', async () => {
@@ -287,6 +302,10 @@ describe('Integration: Swap Quote', () => {
       expect(quote.requiresApproval).toBe(true)
       expect(quote.approvalInfo).toBeDefined()
       expect(quote.approvalInfo?.spender).toBe('0x1111111254fb6c44bAC0beD2854e76F90643097d')
+
+      // For ERC-20 tokens, maxSwapable should equal full balance (gas paid in native)
+      expect(quote.balance).toBeDefined()
+      expect(quote.maxSwapable).toBe(quote.balance)
 
       console.log(`✅ Quote requires approval for ${quote.approvalInfo?.requiredAmount} units`)
     })
