@@ -14,6 +14,8 @@ import { getSevenZip } from '@core/mpc/compression/getSevenZip'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { getKeygenThreshold } from '@core/mpc/getKeygenThreshold'
+import type { KeygenOperation } from '@core/mpc/keygen/KeygenOperation'
+import type { KeygenStep } from '@core/mpc/keygen/KeygenStep'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
@@ -81,9 +83,41 @@ export type SecureVaultCreateResult = {
 }
 
 /**
+ * Parameters for performing a reshare operation via SDK.
+ * Used by extension UI where core providers manage sessions/peers.
+ */
+export type PerformReshareParams = {
+  /** Existing vault with keyshares (undefined for new device joining reshare) */
+  existingVault?: CoreVault
+  /** Keygen operation type (e.g., { reshare: 'regular' }) */
+  operation: KeygenOperation
+  /** Whether this device initiated the reshare */
+  isInitiatingDevice: boolean
+  /** Relay server URL */
+  serverUrl: string
+  /** MPC session ID */
+  sessionId: string
+  /** This device's party ID */
+  localPartyId: string
+  /** All signers participating in the reshare */
+  signers: string[]
+  /** Hex-encoded encryption key for MPC messages */
+  encryptionKeyHex: string
+  /** Vault name for the result */
+  vaultName: string
+  /** Display order for the result vault */
+  vaultOrder: number
+  /** Callback for keygen step changes (ecdsa/eddsa) */
+  onStepChange?: (step: KeygenStep) => void
+  /** Callback for DKLS inbound sequence number tracking */
+  onDklsInboundSequenceNoChange?: (n: number) => void
+}
+
+/**
  * SecureVaultCreationService
  *
  * Coordinates multi-device MPC keygen ceremony for secure vaults.
+ * Also provides reshare functionality for existing vaults.
  * Compatible with Vultisig mobile apps for device pairing.
  */
 export class SecureVaultCreationService {
@@ -433,6 +467,107 @@ export class SecureVaultCreationService {
       vault,
       vaultId,
       sessionId,
+    }
+  }
+
+  /**
+   * Run DKLS + Schnorr reshare with externally-managed session params.
+   *
+   * Used by the extension UI where core providers manage sessions/peers.
+   * Mirrors the logic from core's ReshareVaultKeygenActionProvider
+   * but runs through the SDK service layer.
+   */
+  async performReshare(params: PerformReshareParams): Promise<CoreVault> {
+    const {
+      existingVault,
+      operation,
+      isInitiatingDevice,
+      serverUrl,
+      sessionId,
+      localPartyId,
+      signers,
+      encryptionKeyHex,
+      vaultName,
+      vaultOrder,
+      onStepChange,
+      onDklsInboundSequenceNoChange,
+    } = params
+
+    // Compute old committee: existing vault's signers that are also in new signers
+    const oldParties = existingVault?.signers ?? []
+    const oldCommittee = oldParties.filter(party => signers.includes(party))
+
+    // ECDSA reshare via DKLS
+    onStepChange?.('ecdsa')
+    const dkls = new DKLS(
+      operation,
+      isInitiatingDevice,
+      serverUrl,
+      sessionId,
+      localPartyId,
+      signers,
+      oldCommittee,
+      encryptionKeyHex,
+      { onInboundSequenceNoChange: onDklsInboundSequenceNoChange }
+    )
+    const dklsResult = await dkls.startReshareWithRetry(existingVault?.keyShares.ecdsa)
+
+    // EdDSA reshare via Schnorr
+    onStepChange?.('eddsa')
+    const schnorr = new Schnorr(
+      operation,
+      isInitiatingDevice,
+      serverUrl,
+      sessionId,
+      localPartyId,
+      signers,
+      oldCommittee,
+      encryptionKeyHex,
+      new Uint8Array(0)
+    )
+    const schnorrResult = await schnorr.startReshareWithRetry(existingVault?.keyShares.eddsa)
+
+    // Signal completion to peers
+    await setKeygenComplete({
+      serverURL: serverUrl,
+      sessionId,
+      localPartyId,
+    })
+
+    await waitForKeygenComplete({
+      serverURL: serverUrl,
+      sessionId,
+      peers: without(signers, localPartyId),
+    })
+
+    // Build result vault by merging existing vault with new keys
+    const newVaultFields = {
+      publicKeys: {
+        ecdsa: dklsResult.publicKey,
+        eddsa: schnorrResult.publicKey,
+      },
+      keyShares: {
+        ecdsa: dklsResult.keyshare,
+        eddsa: schnorrResult.keyshare,
+      },
+      hexChainCode: dklsResult.chaincode,
+      signers,
+      localPartyId,
+      libType: 'DKLS' as const,
+      isBackedUp: false,
+    }
+
+    if (existingVault) {
+      return {
+        ...existingVault,
+        ...newVaultFields,
+      }
+    }
+
+    return {
+      ...newVaultFields,
+      name: vaultName,
+      order: vaultOrder,
     }
   }
 }

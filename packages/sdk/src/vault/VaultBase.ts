@@ -5,6 +5,7 @@ import { banxaSupportedChains, getBanxaBuyUrl } from '@core/chain/banxa'
 import { Chain } from '@core/chain/Chain'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { getCoinValue } from '@core/chain/coin/utils/getCoinValue'
 import { vaultConfig } from '@core/config'
 import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
@@ -860,6 +861,41 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   async balances(chains?: Chain[], includeTokens = false): Promise<Record<string, Balance>> {
     const chainsToFetch = chains || this._userChains
     return this.balanceService.getBalances({ chains: chainsToFetch, includeTokens })
+  }
+
+  /**
+   * Get balances with price and fiat value data included.
+   * Each Balance will have value (price per unit), fiatValue (total fiat),
+   * and fiatCurrency populated.
+   */
+  async balancesWithPrices(
+    chains?: Chain[],
+    includeTokens = false,
+    fiatCurrency?: FiatCurrency
+  ): Promise<Record<string, Balance>> {
+    const balances = await this.balances(chains, includeTokens)
+    const currency = (fiatCurrency ?? this._currency ?? 'usd') as FiatCurrency
+
+    const result: Record<string, Balance> = {}
+
+    for (const [key, balance] of Object.entries(balances)) {
+      const price = await this.fiatValueService.getPrice(balance.chainId as Chain, balance.tokenId, currency)
+
+      const fiatValue = getCoinValue({
+        amount: BigInt(balance.amount),
+        decimals: balance.decimals,
+        price,
+      })
+
+      result[key] = {
+        ...balance,
+        value: price,
+        fiatValue,
+        fiatCurrency: currency,
+      }
+    }
+
+    return result
   }
 
   /**
