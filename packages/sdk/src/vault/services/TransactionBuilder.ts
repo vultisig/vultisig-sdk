@@ -10,6 +10,7 @@ import { getSendFeeEstimate } from '@core/mpc/keysign/send/getSendFeeEstimate'
 import { getEncodedSigningInputs } from '@core/mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@core/mpc/keysign/tw/getKeysignTwPublicKey'
 import { getKeysignChain } from '@core/mpc/keysign/utils/getKeysignChain'
+import { toKeysignLibType } from '@core/mpc/types/utils/libType'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 
@@ -102,7 +103,7 @@ export class TransactionBuilder {
         localPartyId: this.vaultData.localPartyId,
         publicKey,
         walletCore,
-        libType: this.vaultData.libType,
+        libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
       })
 
@@ -151,7 +152,7 @@ export class TransactionBuilder {
         localPartyId: this.vaultData.localPartyId,
         publicKey,
         walletCore,
-        libType: this.vaultData.libType,
+        libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
       })
     } catch (error) {
@@ -286,7 +287,7 @@ export class TransactionBuilder {
         vaultId: this.vaultData.publicKeys.ecdsa,
         localPartyId: this.vaultData.localPartyId,
         publicKey,
-        libType: this.vaultData.libType,
+        libType: toKeysignLibType(this.vaultData),
         skipChainSpecificFetch: options?.skipChainSpecificFetch,
       })
     } catch (error) {
@@ -353,7 +354,7 @@ export class TransactionBuilder {
         vaultId: this.vaultData.publicKeys.ecdsa,
         localPartyId: this.vaultData.localPartyId,
         publicKey,
-        libType: this.vaultData.libType,
+        libType: toKeysignLibType(this.vaultData),
         skipChainSpecificFetch: options?.skipChainSpecificFetch,
       })
     } catch (error) {
