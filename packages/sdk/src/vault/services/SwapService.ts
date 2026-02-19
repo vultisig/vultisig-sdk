@@ -25,6 +25,7 @@ import { getEvmBaseFee } from '@core/chain/tx/fee/evm/baseFee'
 import { getEvmMaxPriorityFeePerGas } from '@core/chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FiatCurrency } from '@core/config/FiatCurrency'
 import { buildSwapKeysignPayload } from '@core/mpc/keysign/swap/build'
+import { toKeysignLibType } from '@core/mpc/types/utils/libType'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { attempt, withFallback } from '@lib/utils/attempt'
@@ -148,7 +149,7 @@ export class SwapService {
         localPartyId: this.vaultData.localPartyId,
         fromPublicKey,
         toPublicKey,
-        libType: this.vaultData.libType,
+        libType: toKeysignLibType(this.vaultData),
         walletCore,
       })
 

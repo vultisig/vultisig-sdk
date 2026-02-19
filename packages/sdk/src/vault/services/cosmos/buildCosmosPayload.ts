@@ -10,7 +10,7 @@ import { CosmosChain } from '@core/chain/Chain'
 import { getCosmosAccountInfo } from '@core/chain/chains/cosmos/account/getCosmosAccountInfo'
 import { cosmosGasRecord } from '@core/chain/chains/cosmos/gas'
 import { getCosmosChainKind } from '@core/chain/chains/cosmos/utils/getCosmosChainKind'
-import { MpcLib } from '@core/mpc/mpcLib'
+import { KeysignLibType } from '@core/mpc/mpcLib'
 import { toCommCoin } from '@core/mpc/types/utils/commCoin'
 import {
   CosmosSpecificSchema,
@@ -36,7 +36,7 @@ export type BuildSignAminoPayloadInput = SignAminoInput & {
   vaultId: string
   localPartyId: string
   publicKey: PublicKey
-  libType: MpcLib
+  libType: KeysignLibType
   skipChainSpecificFetch?: boolean
 }
 
@@ -47,7 +47,7 @@ export type BuildSignDirectPayloadInput = SignDirectInput & {
   vaultId: string
   localPartyId: string
   publicKey: PublicKey
-  libType: MpcLib
+  libType: KeysignLibType
   skipChainSpecificFetch?: boolean
 }
 
