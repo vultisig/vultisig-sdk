@@ -30,6 +30,7 @@ import type {
 import { FastSigningService } from './services/FastSigningService'
 import { FastVaultFromSeedphraseService } from './services/FastVaultFromSeedphraseService'
 import { JoinSecureVaultService } from './services/JoinSecureVaultService'
+import { type PerformReshareParams,SecureVaultCreationService } from './services/SecureVaultCreationService'
 import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
@@ -725,6 +726,24 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       vault,
       vaultId: result.vaultId,
     }
+  }
+
+  // === RESHARE ===
+
+  /**
+   * Perform a vault reshare with externally-managed session params.
+   *
+   * Used by the extension UI where core providers manage sessions, peers,
+   * and encryption. Runs DKLS (ECDSA) + Schnorr (EdDSA) reshare and
+   * returns the updated vault.
+   *
+   * @param params - Reshare parameters including vault, session info, and callbacks
+   * @returns Updated vault with new key shares
+   */
+  async performReshare(params: PerformReshareParams): Promise<import('@core/mpc/vault/Vault').Vault> {
+    await this.ensureInitialized()
+    const service = new SecureVaultCreationService(params.serverUrl)
+    return service.performReshare(params)
   }
 
   /**

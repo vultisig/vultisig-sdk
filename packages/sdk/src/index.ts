@@ -155,6 +155,9 @@ export type {
 } from './seedphrase'
 export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'
 
+// Reshare types
+export type { PerformReshareParams } from './services/SecureVaultCreationService'
+
 // QR payload parsing (for programmatic multi-device coordination)
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
