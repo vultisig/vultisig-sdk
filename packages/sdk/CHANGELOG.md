@@ -1,5 +1,58 @@
 # @vultisig/sdk
 
+## 0.5.0
+
+### Minor Changes
+
+- [#97](https://github.com/vultisig/vultisig-sdk/pull/97) [`cd57d64`](https://github.com/vultisig/vultisig-sdk/commit/cd57d6482e08bd6172550ec4eea0e0233abd7f76) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add max send/swap support across SDK, CLI, and example apps
+  - Add `vault.getMaxSendAmount()` returning `{ balance, fee, maxSendable }` for fee-accurate max sends
+  - Add `vault.estimateSendFee()` for gas estimation without max calculation
+  - Enrich `getSwapQuote()` with `balance` and `maxSwapable` fields
+  - CLI: Add `--max` flag to `send`, `swap`, and `swap-quote` commands
+  - Browser/Electron examples: Add "Max" button to Send and Swap screens
+  - Fix native token ticker resolution in example swap UI (was using chain name instead of ticker)
+
+- [#97](https://github.com/vultisig/vultisig-sdk/pull/97) [`ea1e8d5`](https://github.com/vultisig/vultisig-sdk/commit/ea1e8d5dd14a7273021577471e44719609f983ca) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add vault reshare support, fix secure vault creation progress steps, and add balancesWithPrices method
+  - Add `performReshare()` to Vultisig class and SecureVaultCreationService for vault reshare operations
+  - Fix secure vault creation progress mapping so QR code and device discovery UI display correctly during the waiting-for-devices phase
+  - Add `balancesWithPrices()` to VaultBase that returns balances enriched with price and fiat value data from FiatValueService
+
+- [#97](https://github.com/vultisig/vultisig-sdk/pull/97) [`3f5fdcb`](https://github.com/vultisig/vultisig-sdk/commit/3f5fdcbfbe23aa287dfbcb38e9be6c904af9caf0) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add SDK gap features for extension migration: token registry (getKnownTokens, getKnownToken, getFeeCoin), price feeds (getCoinPrices), security scanning (scanSite, validateTransaction, simulateTransaction), fiat on-ramp (getBanxaSupportedChains, getBuyUrl), token discovery (discoverTokens, resolveToken), and CosmosMsgType constants. All features use SDK-owned types decoupled from core internals.
+
+### Patch Changes
+
+- [#95](https://github.com/vultisig/vultisig-sdk/pull/95) [`bd543af`](https://github.com/vultisig/vultisig-sdk/commit/bd543af73a50a4ce431f38e3ed77511c4ef65ea7) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Align SDK dependency versions with upstream core packages
+  - viem: 2.37.4 → ^2.45.1 (external - critical for consumers)
+  - @trustwallet/wallet-core: ^4.3.22 → ^4.6.0 (external)
+  - @bufbuild/protobuf: ^2.10.2 → ^2.11.0 (external)
+  - @mysten/sui: ^1.37.6 → ^2.3.0 (SUI v2 migration)
+  - @lifi/sdk: ^3.12.2 → ^3.15.5
+  - i18next: ^25.5.2 → ^25.8.4
+
+- [#95](https://github.com/vultisig/vultisig-sdk/pull/95) [`74516fa`](https://github.com/vultisig/vultisig-sdk/commit/74516fae8dabd844c9e0793b932f6284ce9aa009) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add SDK-level chain validation to catch invalid enum values (e.g. "BitcoinCash" vs Chain.BitcoinCash) with descriptive error messages. Fix incorrect CoinType mappings for CronosChain and Sei in MasterKeyDeriver. Fix SwapService crash on general swap quotes by unwrapping SwapQuote wrapper to access the inner discriminated union.
+
+- [#97](https://github.com/vultisig/vultisig-sdk/pull/97) [`7ceab79`](https://github.com/vultisig/vultisig-sdk/commit/7ceab79e53986bfefa3f5d4cb5d25855572fbd3f) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Use KeysignLibType for keysign payloads to correctly handle seedphrase-imported vaults
+
+- [#97](https://github.com/vultisig/vultisig-sdk/pull/97) [`e172aff`](https://github.com/vultisig/vultisig-sdk/commit/e172aff35aff86d182646a521dc1e3ac9e381f60) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - fix: address PR review bugs and safety issues
+  - Fix missing ChromeExtensionPolyfills import causing build failure
+  - Fix floating-point precision loss in CLI amount parsing for high-decimal tokens
+  - Fix BigInt crash on non-integer amount strings in swap validation
+  - Fix Number exponentiation precision loss in VaultSend formatAmount
+  - Use VaultError with error codes in chain validation instead of generic Error
+  - Add chainId mismatch validation in signAndBroadcast
+  - Add hex string input validation in hexDecode
+  - Guard against empty accounts array in client getAddress
+  - Use stricter bech32 THORChain address validator in deposit module
+
+- [#95](https://github.com/vultisig/vultisig-sdk/pull/95) [`6c5c77c`](https://github.com/vultisig/vultisig-sdk/commit/6c5c77ceb49620f711285effee98b052e6aab1f8) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Sync upstream core and lib from vultisig-windows
+  - Solana: support multiple raw transactions in signing inputs
+  - EVM: fetch token logos from 1Inch API in metadata resolver
+  - Cosmos: normalize fee denominations with toChainFeeDenom helper
+  - Cosmos: filter out TCY autocompounder share denom from coin discovery
+  - Cosmos: add AZTEC token to Thorchain known tokens
+  - Swap: add getSwapTrackingUrl utility for block explorer URLs
+  - Remove unused getRecordSize utility
+
 ## 0.4.3
 
 ### Patch Changes
