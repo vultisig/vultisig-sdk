@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import 'dotenv/config'
 
+import { promises as fs } from 'node:fs'
+
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { program } from 'commander'
-import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
@@ -22,12 +23,18 @@ import {
   executeCurrency,
   executeDelete,
   executeDiscount,
+  executeExecute,
   executeExport,
   executeImport,
   executeInfo,
   executeJoinSecure,
   executePortfolio,
   executeRename,
+  executeRujiraBalance,
+  executeRujiraDeposit,
+  executeRujiraRoutes,
+  executeRujiraSwap,
+  executeRujiraWithdraw,
   executeSend,
   executeServer,
   executeSignBytes,
@@ -466,8 +473,9 @@ program
 
 // Command: Send transaction
 program
-  .command('send <chain> <to> <amount>')
+  .command('send <chain> <to> [amount]')
   .description('Send tokens to an address')
+  .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('-y, --yes', 'Skip confirmation prompt')
@@ -477,16 +485,56 @@ program
       async (
         chainStr: string,
         to: string,
-        amount: string,
-        options: { token?: string; memo?: string; yes?: boolean; password?: string }
+        amount: string | undefined,
+        options: { max?: boolean; token?: string; memo?: string; yes?: boolean; password?: string }
       ) => {
+        if (!amount && !options.max) throw new Error('Provide an amount or use --max')
+        if (amount && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
         try {
           await executeSend(context, {
             chain: findChainByName(chainStr) || (chainStr as Chain),
             to,
-            amount,
+            amount: amount ?? 'max',
             tokenId: options.token,
+            memo: options.memo,
+            yes: options.yes,
+            password: options.password,
+          })
+        } catch (err: any) {
+          if (err.message === 'Transaction cancelled by user') {
+            warn('\nx Transaction cancelled')
+            return
+          }
+          throw err
+        }
+      }
+    )
+  )
+
+// Command: Execute CosmWasm contract (for Rujira FIN swaps, etc.)
+program
+  .command('execute <chain> <contract> <msg>')
+  .description('Execute a CosmWasm smart contract (THORChain, MayaChain)')
+  .option('--funds <funds>', 'Funds to send with execution (format: "denom:amount" or "denom:amount,denom2:amount2")')
+  .option('--memo <memo>', 'Transaction memo')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
+  .action(
+    withExit(
+      async (
+        chainStr: string,
+        contract: string,
+        msg: string,
+        options: { funds?: string; memo?: string; yes?: boolean; password?: string }
+      ) => {
+        const context = await init(program.opts().vault, options.password)
+        try {
+          await executeExecute(context, {
+            chain: findChainByName(chainStr) || (chainStr as Chain),
+            contract,
+            msg,
+            funds: options.funds,
             memo: options.memo,
             yes: options.yes,
             password: options.password,
@@ -758,8 +806,9 @@ program
 
 // Command: Get swap quote
 program
-  .command('swap-quote <fromChain> <toChain> <amount>')
+  .command('swap-quote <fromChain> <toChain> [amount]')
   .description('Get a swap quote without executing')
+  .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .action(
@@ -767,14 +816,16 @@ program
       async (
         fromChainStr: string,
         toChainStr: string,
-        amountStr: string,
-        options: { fromToken?: string; toToken?: string }
+        amountStr: string | undefined,
+        options: { max?: boolean; fromToken?: string; toToken?: string }
       ) => {
+        if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
+        if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
         await executeSwapQuote(context, {
           fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
           toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-          amount: parseFloat(amountStr),
+          amount: options.max ? 'max' : parseFloat(amountStr!),
           fromToken: options.fromToken,
           toToken: options.toToken,
         })
@@ -784,8 +835,9 @@ program
 
 // Command: Execute swap
 program
-  .command('swap <fromChain> <toChain> <amount>')
+  .command('swap <fromChain> <toChain> [amount]')
   .description('Swap tokens between chains')
+  .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
@@ -796,15 +848,24 @@ program
       async (
         fromChainStr: string,
         toChainStr: string,
-        amountStr: string,
-        options: { fromToken?: string; toToken?: string; slippage?: string; yes?: boolean; password?: string }
+        amountStr: string | undefined,
+        options: {
+          max?: boolean
+          fromToken?: string
+          toToken?: string
+          slippage?: string
+          yes?: boolean
+          password?: string
+        }
       ) => {
+        if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
+        if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
         try {
           await executeSwap(context, {
             fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
             toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-            amount: parseFloat(amountStr),
+            amount: options.max ? 'max' : parseFloat(amountStr!),
             fromToken: options.fromToken,
             toToken: options.toToken,
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,
@@ -818,6 +879,147 @@ program
           }
           throw err
         }
+      }
+    )
+  )
+
+// ============================================================================
+// Rujira (FIN) Commands
+// ============================================================================
+
+const rujiraCmd = program.command('rujira').description('Rujira FIN swaps + secured asset tools on THORChain')
+
+rujiraCmd
+  .command('balance')
+  .description('Show secured asset balances on THORChain')
+  .option('--secured-only', 'Filter to secured/FIN-like denoms only')
+  .option('--rpc <url>', 'Override THORChain RPC endpoint')
+  .option('--rest <url>', 'Override THORNode REST endpoint')
+  .action(
+    withExit(async (options: { securedOnly?: boolean; rpc?: string; rest?: string }) => {
+      const context = await init(program.opts().vault)
+      await executeRujiraBalance(context, {
+        securedOnly: options.securedOnly,
+        rpcEndpoint: options.rpc,
+        restEndpoint: options.rest,
+      })
+    })
+  )
+
+rujiraCmd
+  .command('routes')
+  .description('List available FIN swap routes')
+  .action(
+    withExit(async () => {
+      await executeRujiraRoutes()
+    })
+  )
+
+rujiraCmd
+  .command('deposit')
+  .description('Show deposit instructions (inbound address + memo)')
+  .option('--asset <asset>', 'L1 asset to deposit (e.g., BTC.BTC, ETH.ETH)')
+  .option('--amount <amount>', 'Amount in base units (optional; used for validation)', '1')
+  .option('--affiliate <thorAddress>', 'Affiliate THOR address (optional)')
+  .option('--affiliate-bps <bps>', 'Affiliate fee in basis points (optional)', '0')
+  .option('--rpc <url>', 'Override THORChain RPC endpoint')
+  .option('--rest <url>', 'Override THORNode REST endpoint')
+  .action(
+    withExit(
+      async (options: {
+        asset?: string
+        amount?: string
+        affiliate?: string
+        affiliateBps?: string
+        rpc?: string
+        rest?: string
+      }) => {
+        const context = await init(program.opts().vault)
+        await executeRujiraDeposit(context, {
+          asset: options.asset,
+          amount: options.amount,
+          affiliate: options.affiliate,
+          affiliateBps: options.affiliateBps ? parseInt(options.affiliateBps, 10) : undefined,
+          rpcEndpoint: options.rpc,
+          restEndpoint: options.rest,
+        })
+      }
+    )
+  )
+
+rujiraCmd
+  .command('swap <fromAsset> <toAsset> <amount>')
+  .description('Execute a FIN swap (amount in base units)')
+  .option('--slippage-bps <bps>', 'Slippage tolerance in basis points (default: 100 = 1%)', '100')
+  .option('--destination <thorAddress>', 'Destination THOR address (default: vault THORChain address)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
+  .option('--rpc <url>', 'Override THORChain RPC endpoint')
+  .option('--rest <url>', 'Override THORNode REST endpoint')
+  .action(
+    withExit(
+      async (
+        fromAsset: string,
+        toAsset: string,
+        amount: string,
+        options: {
+          slippageBps?: string
+          destination?: string
+          yes?: boolean
+          password?: string
+          rpc?: string
+          rest?: string
+        }
+      ) => {
+        const context = await init(program.opts().vault, options.password)
+        await executeRujiraSwap(context, {
+          fromAsset,
+          toAsset,
+          amount,
+          slippageBps: options.slippageBps ? parseInt(options.slippageBps, 10) : undefined,
+          destination: options.destination,
+          yes: options.yes,
+          password: options.password,
+          rpcEndpoint: options.rpc,
+          restEndpoint: options.rest,
+        })
+      }
+    )
+  )
+
+rujiraCmd
+  .command('withdraw <asset> <amount> <l1Address>')
+  .description('Withdraw secured assets to L1 (amount in base units)')
+  .option('--max-fee-bps <bps>', 'Max outbound fee as bps of amount (optional)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--password <password>', 'Vault password for signing')
+  .option('--rpc <url>', 'Override THORChain RPC endpoint')
+  .option('--rest <url>', 'Override THORNode REST endpoint')
+  .action(
+    withExit(
+      async (
+        asset: string,
+        amount: string,
+        l1Address: string,
+        options: {
+          maxFeeBps?: string
+          yes?: boolean
+          password?: string
+          rpc?: string
+          rest?: string
+        }
+      ) => {
+        const context = await init(program.opts().vault, options.password)
+        await executeRujiraWithdraw(context, {
+          asset,
+          amount,
+          l1Address,
+          maxFeeBps: options.maxFeeBps ? parseInt(options.maxFeeBps, 10) : undefined,
+          yes: options.yes,
+          password: options.password,
+          rpcEndpoint: options.rpc,
+          restEndpoint: options.rest,
+        })
       }
     )
   )

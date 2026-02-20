@@ -10,6 +10,10 @@
 - [Creating Vaults from Seedphrase](#creating-vaults-from-seedphrase)
 - [Essential Operations](#essential-operations)
 - [Token Swaps](#token-swaps)
+- [Token Registry & Discovery](#token-registry--discovery)
+- [Price Feeds](#price-feeds)
+- [Security Scanning](#security-scanning)
+- [Fiat On-Ramp (Banxa)](#fiat-on-ramp-banxa)
 - [Configuration](#configuration)
 - [Caching System](#caching-system)
 - [Event System](#event-system)
@@ -1040,6 +1044,33 @@ console.log('Max Priority Fee:', gasInfo.maxPriorityFeePerGas)
 console.log('Max Fee:', gasInfo.maxFeePerGas)
 ```
 
+### Max Send Amount
+
+Calculate the maximum amount you can send for a coin in a single call. Returns balance, estimated network fee, and max sendable amount — all in base units:
+
+```typescript
+const { balance, fee, maxSendable } = await vault.getMaxSendAmount({
+  coin: {
+    chain: Chain.Ethereum,
+    address: await vault.address(Chain.Ethereum),
+    decimals: 18,
+    ticker: 'ETH',
+  },
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+})
+
+console.log('Balance:', balance)        // e.g., 5000000000000000000n (5 ETH)
+console.log('Fee:', fee)                // e.g., 21000000000000n
+console.log('Max sendable:', maxSendable) // e.g., 4999979000000000000n
+
+// Use maxSendable as the amount for a "send max" transaction
+const keysignPayload = await vault.prepareSendTx({
+  coin,
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
+  amount: maxSendable,
+})
+```
+
 ### Signing Arbitrary Bytes
 
 The `signBytes()` method allows you to sign pre-hashed data directly, giving you full control over transaction construction. This is useful when you need to:
@@ -1493,6 +1524,10 @@ console.log(`Output: ${quote.estimatedOutput} BTC`)  // e.g., '0.00234 BTC'
 console.log(`Expires: ${new Date(quote.expiresAt)}`)
 console.log(`Fees: ${quote.fees.total}`)
 
+// Balance + max swappable amount (included automatically)
+console.log(`Balance: ${quote.balance}`)         // Source coin balance in base units
+console.log(`Max swapable: ${quote.maxSwapable}`) // balance - network fee (native), or full balance (tokens)
+
 // Check if approval is needed (ERC-20 tokens)
 if (quote.requiresApproval) {
   console.log(`Approval needed for: ${quote.approvalInfo?.spender}`)
@@ -1679,6 +1714,205 @@ console.log(`Updated tier: ${updatedTier ?? 'none'}`)
 4. Results are cached for 15 minutes to minimize RPC calls
 
 **Note:** The discount tier is determined automatically from your Ethereum address - you cannot manually override or set a discount tier.
+
+---
+
+## Token Registry & Discovery
+
+### Looking Up Known Tokens
+
+The SDK includes a built-in registry of well-known tokens (ERC-20, SPL, etc.). These are static methods on `Vultisig` — no vault needed:
+
+```typescript
+import { Vultisig, Chain } from '@vultisig/sdk'
+
+// Get all known tokens for a chain
+const tokens = Vultisig.getKnownTokens(Chain.Ethereum)
+for (const token of tokens) {
+  console.log(`${token.ticker}: ${token.contractAddress}`)
+}
+
+// Look up a specific token by contract address (case-insensitive)
+const usdc = Vultisig.getKnownToken(
+  Chain.Ethereum,
+  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+)
+if (usdc) {
+  console.log(`${usdc.ticker} - ${usdc.decimals} decimals`)
+}
+```
+
+### Getting Native Fee Coins
+
+Every chain has a native fee coin (ETH for Ethereum, BTC for Bitcoin, etc.):
+
+```typescript
+const feeCoin = Vultisig.getFeeCoin(Chain.Bitcoin)
+console.log(`${feeCoin.ticker} - ${feeCoin.decimals} decimals`)
+// BTC - 8 decimals
+```
+
+### Discovering Tokens at a Vault Address
+
+Discover tokens with non-zero balances at your vault's address:
+
+```typescript
+// Discover ERC-20 tokens on Ethereum (uses 1inch API)
+const tokens = await vault.discoverTokens(Chain.Ethereum)
+for (const token of tokens) {
+  console.log(`${token.ticker}: balance ${token.balance}`)
+}
+
+// Also works for Solana (SPL via Jupiter) and Cosmos (IBC)
+const solTokens = await vault.discoverTokens(Chain.Solana)
+```
+
+### Resolving Token Metadata
+
+Resolve token metadata by contract address. Checks the built-in registry first (fast, no network), then falls back to chain APIs:
+
+```typescript
+// Known token → instant, no network call
+const usdc = await vault.resolveToken(
+  Chain.Ethereum,
+  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+)
+
+// Unknown token → fetches from chain API
+const customToken = await vault.resolveToken(
+  Chain.Ethereum,
+  '0x6982508145454Ce325dDbE47a25d4ec3d2311933'
+)
+console.log(`${customToken.ticker} - ${customToken.decimals} decimals`)
+```
+
+### Cosmos Message Type Constants
+
+The SDK exports `CosmosMsgType` constants for constructing Cosmos transactions:
+
+```typescript
+import { CosmosMsgType } from '@vultisig/sdk'
+
+// Amino-style type strings
+CosmosMsgType.MsgSend              // 'cosmos-sdk/MsgSend'
+CosmosMsgType.ThorchainMsgSend     // 'thorchain/MsgSend'
+CosmosMsgType.MsgExecuteContract   // 'wasm/MsgExecuteContract'
+CosmosMsgType.ThorchainMsgDeposit  // 'thorchain/MsgDeposit'
+
+// URL-style type strings (for SignDirect / protobuf)
+CosmosMsgType.MsgSendUrl              // '/cosmos.bank.v1beta1.MsgSend'
+CosmosMsgType.MsgTransferUrl          // '/ibc.applications.transfer.v1.MsgTransfer'
+CosmosMsgType.MsgExecuteContractUrl   // '/cosmwasm.wasm.v1.MsgExecuteContract'
+CosmosMsgType.ThorchainMsgDepositUrl  // '/types.MsgDeposit'
+CosmosMsgType.ThorchainMsgSendUrl     // '/types.MsgSend'
+```
+
+---
+
+## Price Feeds
+
+Fetch current token prices by their CoinGecko price provider IDs:
+
+```typescript
+import { Vultisig } from '@vultisig/sdk'
+
+// Fetch prices (static method, no vault needed)
+const prices = await Vultisig.getCoinPrices({
+  ids: ['bitcoin', 'ethereum', 'solana']
+})
+console.log(`BTC: $${prices.bitcoin}`)  // BTC: $50000
+console.log(`ETH: $${prices.ethereum}`) // ETH: $3000
+
+// Use a different fiat currency
+const eurPrices = await Vultisig.getCoinPrices({
+  ids: ['bitcoin'],
+  fiatCurrency: 'eur'
+})
+```
+
+**Tip:** Use `Vultisig.getFeeCoin(chain).priceProviderId` or `Vultisig.getKnownToken(chain, address)?.priceProviderId` to get the CoinGecko ID for a token.
+
+---
+
+## Security Scanning
+
+### Site Scanning
+
+Check if a website URL is malicious (phishing, scams) using Blockaid:
+
+```typescript
+import { Vultisig } from '@vultisig/sdk'
+
+const result = await Vultisig.scanSite('https://suspicious-site.com')
+if (result.isMalicious) {
+  console.warn('WARNING: Malicious site detected!')
+}
+```
+
+### Transaction Validation
+
+Validate a transaction for security risks before signing. Detects malicious contracts, unlimited approvals, phishing, etc.:
+
+```typescript
+// After preparing a transaction
+const keysignPayload = await vault.prepareSendTx({ coin, receiver, amount })
+
+const validation = await vault.validateTransaction(keysignPayload)
+if (validation) {
+  console.log(`Description: ${validation.description}`)
+  console.log(`Risky: ${validation.isRisky}`)
+  if (validation.isRisky) {
+    console.warn(`Risk level: ${validation.riskLevel}`) // 'medium' or 'high'
+  }
+  console.log('Features:', validation.features)
+}
+// Returns null for unsupported chains
+```
+
+**Supported chains for validation:** EVM chains, Solana, Sui, Bitcoin.
+
+### Transaction Simulation
+
+Preview asset changes before signing:
+
+```typescript
+const simulation = await vault.simulateTransaction(keysignPayload)
+if (simulation) {
+  console.log(`Chain kind: ${simulation.chainKind}`) // 'evm' or 'solana'
+  console.log('Simulation data:', simulation.simulation)
+}
+// Returns null for unsupported chains
+```
+
+**Supported chains for simulation:** EVM chains, Solana.
+
+---
+
+## Fiat On-Ramp (Banxa)
+
+Generate Banxa fiat on-ramp URLs to buy crypto directly to your vault address:
+
+```typescript
+import { Vultisig, Chain } from '@vultisig/sdk'
+
+// Check which chains Banxa supports
+const supportedChains = Vultisig.getBanxaSupportedChains()
+console.log(`Banxa supports ${supportedChains.length} chains`)
+
+// Generate a buy URL for the vault's address
+const buyUrl = await vault.getBuyUrl(Chain.Bitcoin)
+if (buyUrl) {
+  // Open in browser / webview
+  window.open(buyUrl)
+}
+
+// Specify a token ticker (e.g., buy USDC instead of ETH)
+const usdcBuyUrl = await vault.getBuyUrl(Chain.Ethereum, 'USDC')
+
+// Returns null if chain is not supported by Banxa
+const unsupported = await vault.getBuyUrl(Chain.Cosmos)
+// null — Cosmos is not in Banxa's supported chains
+```
 
 ---
 
@@ -2114,6 +2348,18 @@ class Vultisig {
   static isFastVault(vault: VaultBase): vault is FastVault
   static isSecureVault(vault: VaultBase): vault is SecureVault
 
+  // Token registry (static, no vault needed)
+  static getKnownTokens(chain: Chain): TokenInfo[]
+  static getKnownToken(chain: Chain, contractAddress: string): TokenInfo | null
+  static getFeeCoin(chain: Chain): FeeCoinInfo
+  static getBanxaSupportedChains(): Chain[]
+
+  // Price feeds (static)
+  static getCoinPrices(params: { ids: string[], fiatCurrency?: string }): Promise<Record<string, number>>
+
+  // Security (static)
+  static scanSite(url: string): Promise<SiteScanResult>
+
   // Seedphrase-based vault creation
   validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation>
   discoverChainsFromSeedphrase(
@@ -2183,6 +2429,7 @@ class VaultBase {
 
   // Transactions
   prepareSendTx(params: SendTxParams): Promise<KeysignPayload>
+  getMaxSendAmount(params: { coin: AccountCoin, receiver: string, memo?: string, feeSettings?: FeeSettings }): Promise<MaxSendAmount>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: SigningOptions): Promise<Signature>
   signBytes(options: SignBytesOptions, signingOptions?: SigningOptions): Promise<Signature>
@@ -2212,6 +2459,17 @@ class VaultBase {
   // Discount Tiers (automatic VULT-based fee discounts)
   getDiscountTier(): Promise<string | null>
   updateDiscountTier(): Promise<string | null>
+
+  // Token Discovery & Metadata
+  discoverTokens(chain: Chain): Promise<DiscoveredToken[]>
+  resolveToken(chain: Chain, contractAddress: string): Promise<TokenInfo>
+
+  // Fiat On-Ramp
+  getBuyUrl(chain: Chain, ticker?: string): Promise<string | null>
+
+  // Security Scanning
+  validateTransaction(payload: KeysignPayload): Promise<TransactionValidationResult | null>
+  simulateTransaction(payload: KeysignPayload): Promise<TransactionSimulationResult | null>
 
   // Chains & Tokens
   setChains(chains: Chain[]): Promise<void>

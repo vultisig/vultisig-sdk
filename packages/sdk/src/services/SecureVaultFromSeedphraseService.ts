@@ -263,7 +263,7 @@ export class SecureVaultFromSeedphraseService {
 
     // Step 4: Generate session parameters
     reportProgress({
-      step: 'keygen',
+      step: 'initializing',
       progress: 20,
       message: 'Generating session parameters...',
     })
@@ -275,7 +275,7 @@ export class SecureVaultFromSeedphraseService {
 
     // Step 5: Generate QR code for device pairing
     reportProgress({
-      step: 'keygen',
+      step: 'initializing',
       progress: 22,
       message: 'Generating QR code for device pairing...',
     })
@@ -296,7 +296,7 @@ export class SecureVaultFromSeedphraseService {
 
     // Step 6: Join relay session
     reportProgress({
-      step: 'keygen',
+      step: 'initializing',
       progress: 25,
       message: 'Joining relay session...',
     })
@@ -309,7 +309,7 @@ export class SecureVaultFromSeedphraseService {
 
     // Step 7: Wait for all devices
     reportProgress({
-      step: 'keygen',
+      step: 'initializing',
       progress: 30,
       message: `Waiting for ${devices} devices to join...`,
     })
@@ -324,7 +324,7 @@ export class SecureVaultFromSeedphraseService {
           onDeviceJoined(deviceId, total, required)
         }
         reportProgress({
-          step: 'keygen',
+          step: 'initializing',
           progress: 30 + Math.floor((total / required) * 15),
           message: `${total}/${required} devices joined...`,
         })

@@ -60,7 +60,7 @@ export type { SdkEvents, VaultEvents } from './events/types'
 // ============================================================================
 
 // Chain enums and types
-export type { Chain as ChainType } from './types'
+export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain } from './types'
 export { Chain } from './types'
 
 // Fiat currency types
@@ -97,6 +97,8 @@ export type {
   GeneralSwapQuote,
   KeygenMode,
   KeygenProgressUpdate,
+  KeysignPayload,
+  MaxSendAmount,
   NativeSwapQuote,
   OtherGasInfo,
   ReshareOptions,
@@ -133,7 +135,7 @@ export type {
   VultisigConfig,
 } from './types'
 // Swap type guards
-export { isAccountCoin, isSimpleCoinInput } from './types'
+export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 
 // ============================================================================
 // PUBLIC API - Seedphrase & Multi-Device Vault Creation
@@ -153,6 +155,9 @@ export type {
 } from './seedphrase'
 export { SEEDPHRASE_WORD_COUNTS, validateSeedphrase } from './seedphrase'
 
+// Reshare types
+export type { PerformReshareParams } from './services/SecureVaultCreationService'
+
 // QR payload parsing (for programmatic multi-device coordination)
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
@@ -169,3 +174,21 @@ export {
   vultDiscountTierMinBalances,
   vultDiscountTiers,
 } from '@core/chain/swap/affiliate/config'
+
+// ============================================================================
+// PUBLIC API - Token Registry & Chain Data
+// ============================================================================
+
+export type { CoinPricesParams, CoinPricesResult, DiscoveredToken, FeeCoinInfo, TokenInfo } from './types'
+
+// ============================================================================
+// PUBLIC API - Security Scanning
+// ============================================================================
+
+export type { RiskLevel, SiteScanResult, TransactionSimulationResult, TransactionValidationResult } from './types'
+
+// ============================================================================
+// PUBLIC API - Cosmos Message Type Constants
+// ============================================================================
+
+export { CosmosMsgType } from './types'

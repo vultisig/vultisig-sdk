@@ -19,6 +19,10 @@ Both vault types provide comprehensive blockchain support including Bitcoin, Eth
 - **Address Derivation**: Generate blockchain addresses using WalletCore WASM
 - **Vault Management**: Create, import, export, and manage encrypted vaults
 - **Cross-Chain Support**: Bitcoin, Ethereum, Cosmos, Solana, and 40+ blockchains
+- **Token Registry**: Built-in known token database, fee coin lookup, and on-chain token discovery
+- **Security Scanning**: Transaction validation and simulation via Blockaid, site phishing detection
+- **Price Feeds**: Fetch token prices via CoinGecko
+- **Fiat On-Ramp**: Generate Banxa buy URLs for 23+ chains
 - **TypeScript**: Full type safety and IntelliSense support
 
 ## Installation
@@ -28,6 +32,10 @@ npm install @vultisig/sdk
 # or
 yarn add @vultisig/sdk
 ```
+
+### Related packages
+
+- `@vultisig/rujira` — Rujira (FIN) swaps + secured asset deposit/withdraw helpers on THORChain
 
 ## Quick Start
 

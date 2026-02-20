@@ -1,0 +1,95 @@
+{
+  "name": "@vultisig/rujira",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Rujira DEX integration for Vultisig SDK - Modular TypeScript SDK for swaps and limit orders on THORChain",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./swap": {
+      "import": "./dist/modules/swap.js",
+      "types": "./dist/modules/swap.d.ts"
+    },
+    "./orderbook": {
+      "import": "./dist/modules/orderbook.js",
+      "types": "./dist/modules/orderbook.d.ts"
+    },
+    "./signer": {
+      "import": "./dist/signer/vultisig-provider.js",
+      "types": "./dist/signer/vultisig-provider.d.ts"
+    },
+    "./utils": {
+      "import": "./dist/utils/format.js",
+      "types": "./dist/utils/format.d.ts"
+    },
+    "./assets": {
+      "import": "./dist/assets/index.js",
+      "types": "./dist/assets/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist",
+    "dev": "tsc -w",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.10.2",
+    "@cosmjs/cosmwasm-stargate": "^0.32.4",
+    "@cosmjs/proto-signing": "^0.32.4",
+    "@cosmjs/stargate": "^0.32.4",
+    "big.js": "^7.0.1",
+    "cosmjs-types": "^0.9.0"
+  },
+  "devDependencies": {
+    "@types/big.js": "^6.2.2",
+    "@types/node": "^22.13.10",
+    "@vultisig/sdk": "workspace:*",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  },
+  "peerDependencies": {
+    "@vultisig/sdk": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@vultisig/sdk": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "vultisig",
+    "rujira",
+    "thorchain",
+    "dex",
+    "swap",
+    "defi",
+    "cosmwasm",
+    "cosmos",
+    "crypto",
+    "wallet"
+  ],
+  "author": "Vultisig",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
+    "directory": "packages/rujira"
+  },
+  "bugs": {
+    "url": "https://github.com/vultisig/vultisig-sdk/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

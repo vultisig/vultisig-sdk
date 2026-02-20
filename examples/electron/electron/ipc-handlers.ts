@@ -475,6 +475,14 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     }
   )
 
+  ipcMain.handle('vault:getMaxSendAmount', async (_event, vaultId: string, params: any) => {
+    const sdk = getSDK()
+    const vault = await sdk.getVaultById(vaultId)
+    if (!vault) throw new Error('Vault not found')
+    const result = await vault.getMaxSendAmount(params)
+    return JSON.parse(JSON.stringify(result, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
+  })
+
   ipcMain.handle('vault:extractMessageHashes', async (_event, vaultId: string, keysignPayload: any) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)

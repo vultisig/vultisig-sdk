@@ -6,7 +6,7 @@ import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
 import { createSpinner, info, isJsonOutput, outputJson, warn } from '../lib/output'
-import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult } from '../ui'
+import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult, formatBigintAmount } from '../ui'
 
 /**
  * Execute swap-chains command - list supported swap chains
@@ -30,7 +30,7 @@ export async function executeSwapChains(ctx: CommandContext): Promise<readonly C
 export type SwapQuoteOptions = {
   fromChain: Chain
   toChain: Chain
-  amount: number
+  amount: number | 'max'
   fromToken?: string
   toToken?: string
 }
@@ -41,7 +41,8 @@ export type SwapQuoteOptions = {
 export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOptions): Promise<SwapQuoteResult> {
   const vault = await ctx.ensureActiveVault()
 
-  if (isNaN(options.amount) || options.amount <= 0) {
+  const isMax = options.amount === 'max'
+  if (!isMax && (isNaN(options.amount as number) || (options.amount as number) <= 0)) {
     throw new Error('Invalid amount')
   }
 
@@ -51,22 +52,40 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
     throw new Error(`Swaps from ${options.fromChain} to ${options.toChain} are not supported`)
   }
 
+  // Resolve max to full balance
+  let resolvedAmount: number
+  if (isMax) {
+    const bal = await vault.balance(options.fromChain, options.fromToken)
+    resolvedAmount = parseFloat(bal.formattedAmount)
+    if (resolvedAmount <= 0) {
+      throw new Error('Zero balance — nothing to swap')
+    }
+  } else {
+    resolvedAmount = options.amount as number
+  }
+
   const spinner = createSpinner('Getting swap quote...')
 
   const quote = await vault.getSwapQuote({
     fromCoin: { chain: options.fromChain, token: options.fromToken },
     toCoin: { chain: options.toChain, token: options.toToken },
-    amount: options.amount,
+    amount: resolvedAmount,
     fiatCurrency: 'usd', // Request fiat conversion
   })
 
   spinner.succeed('Quote received')
 
+  // For max swaps, display the fee-adjusted amount
+  const fromAmountDisplay = isMax
+    ? `${formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)} (max)`
+    : String(resolvedAmount)
+
   if (isJsonOutput()) {
     outputJson({
       fromChain: options.fromChain,
       toChain: options.toChain,
-      amount: options.amount,
+      amount: resolvedAmount,
+      isMax,
       quote,
     })
     return quote
@@ -79,7 +98,7 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
   const discountTier = await vault.getDiscountTier()
 
   // Use coin info from quote for accurate decimals and symbols
-  displaySwapPreview(quote, String(options.amount), quote.fromCoin.ticker, quote.toCoin.ticker, {
+  displaySwapPreview(quote, fromAmountDisplay, quote.fromCoin.ticker, quote.toCoin.ticker, {
     fromDecimals: quote.fromCoin.decimals,
     toDecimals: quote.toCoin.decimals,
     feeDecimals: feeBalance.decimals,
@@ -108,7 +127,8 @@ export async function executeSwap(
 ): Promise<{ txHash: string; quote: SwapQuoteResult }> {
   const vault = await ctx.ensureActiveVault()
 
-  if (isNaN(options.amount) || options.amount <= 0) {
+  const isMax = options.amount === 'max'
+  if (!isMax && (isNaN(options.amount as number) || (options.amount as number) <= 0)) {
     throw new Error('Invalid amount')
   }
 
@@ -118,17 +138,34 @@ export async function executeSwap(
     throw new Error(`Swaps from ${options.fromChain} to ${options.toChain} are not supported`)
   }
 
+  // Resolve max to full balance
+  let resolvedAmount: number
+  if (isMax) {
+    const bal = await vault.balance(options.fromChain, options.fromToken)
+    resolvedAmount = parseFloat(bal.formattedAmount)
+    if (resolvedAmount <= 0) {
+      throw new Error('Zero balance — nothing to swap')
+    }
+  } else {
+    resolvedAmount = options.amount as number
+  }
+
   // 1. Get swap quote
   const quoteSpinner = createSpinner('Getting swap quote...')
 
   const quote = await vault.getSwapQuote({
     fromCoin: { chain: options.fromChain, token: options.fromToken },
     toCoin: { chain: options.toChain, token: options.toToken },
-    amount: options.amount,
+    amount: resolvedAmount,
     fiatCurrency: 'usd', // Request fiat conversion
   })
 
   quoteSpinner.succeed('Quote received')
+
+  // For max swaps, display the fee-adjusted amount
+  const fromAmountDisplay = isMax
+    ? `${formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)} (max)`
+    : String(resolvedAmount)
 
   // Get native token for fee display (fees are paid in native token)
   const feeBalance = await vault.balance(options.fromChain)
@@ -138,7 +175,7 @@ export async function executeSwap(
 
   // 2. Display preview using coin info from quote for accurate decimals (skip in JSON mode)
   if (!isJsonOutput()) {
-    displaySwapPreview(quote, String(options.amount), quote.fromCoin.ticker, quote.toCoin.ticker, {
+    displaySwapPreview(quote, fromAmountDisplay, quote.fromCoin.ticker, quote.toCoin.ticker, {
       fromDecimals: quote.fromCoin.decimals,
       toDecimals: quote.toCoin.decimals,
       feeDecimals: feeBalance.decimals,
@@ -162,7 +199,7 @@ export async function executeSwap(
   const { keysignPayload, approvalPayload } = await vault.prepareSwapTx({
     fromCoin: { chain: options.fromChain, token: options.fromToken },
     toCoin: { chain: options.toChain, token: options.toToken },
-    amount: options.amount,
+    amount: resolvedAmount,
     swapQuote: quote,
     autoApprove: false,
   })

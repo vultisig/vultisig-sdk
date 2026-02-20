@@ -1,7 +1,11 @@
 // Core functions (functional dispatch) - Direct imports from core
 import { fromBinary } from '@bufbuild/protobuf'
+import { getMaxValue } from '@core/chain/amount/getMaxValue'
+import { banxaSupportedChains, getBanxaBuyUrl } from '@core/chain/banxa'
 import { Chain } from '@core/chain/Chain'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { getCoinValue } from '@core/chain/coin/utils/getCoinValue'
 import { vaultConfig } from '@core/config'
 import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
@@ -27,6 +31,7 @@ import {
   CosmosSigningOptions,
   FiatCurrency,
   GasInfoForChain,
+  MaxSendAmount,
   SignAminoInput,
   Signature,
   SignBytesOptions,
@@ -37,6 +42,8 @@ import {
   Value,
   VaultData,
 } from '../types'
+import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
+import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
@@ -45,7 +52,9 @@ import { BroadcastService } from './services/BroadcastService'
 import { GasEstimationService } from './services/GasEstimationService'
 import { PreferencesService } from './services/PreferencesService'
 import { RawBroadcastService } from './services/RawBroadcastService'
+import { SecurityService } from './services/SecurityService'
 import { SwapService } from './services/SwapService'
+import { TokenDiscoveryService } from './services/TokenDiscoveryService'
 import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
 import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
@@ -94,6 +103,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   protected preferencesService: PreferencesService
   protected swapService: SwapService
   protected discountTierService: DiscountTierService
+  protected tokenDiscoveryService: TokenDiscoveryService
+  protected securityService: SecurityService
 
   // Runtime state (persisted via storage)
   protected _userChains: Chain[] = []
@@ -329,6 +340,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       this.fiatValueService,
       this.discountTierService
     )
+    this.tokenDiscoveryService = new TokenDiscoveryService(chain => this.address(chain))
+    this.securityService = new SecurityService(this.wasmProvider)
 
     // Setup event-driven cache invalidation
     this.setupCacheInvalidation()
@@ -851,6 +864,41 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Get balances with price and fiat value data included.
+   * Each Balance will have value (price per unit), fiatValue (total fiat),
+   * and fiatCurrency populated.
+   */
+  async balancesWithPrices(
+    chains?: Chain[],
+    includeTokens = false,
+    fiatCurrency?: FiatCurrency
+  ): Promise<Record<string, Balance>> {
+    const balances = await this.balances(chains, includeTokens)
+    const currency = (fiatCurrency ?? this._currency ?? 'usd') as FiatCurrency
+
+    const result: Record<string, Balance> = {}
+
+    for (const [key, balance] of Object.entries(balances)) {
+      const price = await this.fiatValueService.getPrice(balance.chainId as Chain, balance.tokenId, currency)
+
+      const fiatValue = getCoinValue({
+        amount: BigInt(balance.amount),
+        decimals: balance.decimals,
+        price,
+      })
+
+      result[key] = {
+        ...balance,
+        value: price,
+        fiatValue,
+        fiatCurrency: currency,
+      }
+    }
+
+    return result
+  }
+
+  /**
    * Force refresh balance (clear cache)
    */
   async updateBalance(chain: Chain, tokenId?: string): Promise<Balance> {
@@ -887,6 +935,33 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     feeSettings?: FeeSettings
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
+  }
+
+  /**
+   * Get the maximum sendable amount for a coin, accounting for network fees
+   *
+   * Fetches the current balance, estimates the send fee, and calculates the
+   * maximum amount that can be sent in a single call.
+   *
+   * @returns Balance, fee, and max sendable amount (all in base units)
+   */
+  async getMaxSendAmount(params: {
+    coin: AccountCoin
+    receiver: string
+    memo?: string
+    feeSettings?: FeeSettings
+  }): Promise<MaxSendAmount> {
+    const balanceResult = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    const balance = BigInt(balanceResult.amount)
+
+    const fee = await this.transactionBuilder.estimateSendFee({
+      ...params,
+      amount: balance,
+    })
+
+    const maxSendable = getMaxValue(balance, fee)
+
+    return { balance, fee, maxSendable }
   }
 
   /**
@@ -1076,7 +1151,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * ```
    */
   async getSwapQuote(params: SwapQuoteParams): Promise<SwapQuoteResult> {
-    return this.swapService.getQuote(params)
+    const quoteResult = await this.swapService.getQuote(params)
+
+    // Enrich with balance + max swappable amount (best-effort)
+    let balance = 0n
+    let maxSwapable = 0n
+    try {
+      const resolvedFromCoin = quoteResult.fromCoin
+      const balanceResult = await this.balanceService.getBalance(resolvedFromCoin.chain, resolvedFromCoin.tokenId)
+      balance = BigInt(balanceResult.amount)
+      const isNative = !resolvedFromCoin.tokenId
+      maxSwapable = isNative ? getMaxValue(balance, quoteResult.fees.network) : balance
+    } catch {
+      // Balance enrichment is best-effort — quote is still valid without it
+    }
+
+    return { ...quoteResult, balance, maxSwapable }
   }
 
   /**
@@ -1316,5 +1406,80 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Emit event
     this.emit('totalValueUpdated', { value: totalValue })
     return totalValue
+  }
+
+  // ===== FIAT ON-RAMP =====
+
+  /**
+   * Generate a Banxa fiat on-ramp URL for buying crypto
+   * with funds sent to this vault's address.
+   *
+   * Returns null if chain is not supported by Banxa.
+   *
+   * @param chain - The chain to buy on
+   * @param ticker - Token ticker (defaults to chain's native coin)
+   */
+  async getBuyUrl(chain: Chain, ticker?: string): Promise<string | null> {
+    if (!banxaSupportedChains.includes(chain as any)) {
+      return null
+    }
+    const address = await this.address(chain)
+    const coinTicker = ticker ?? chainFeeCoin[chain].ticker
+    return getBanxaBuyUrl({ address, ticker: coinTicker, chain: chain as any })
+  }
+
+  // ===== TOKEN DISCOVERY =====
+
+  /**
+   * Discover tokens with non-zero balances at this vault's address.
+   * Supported: EVM (via 1Inch), Solana (via Jupiter), Cosmos (via RPC).
+   *
+   * @param chain - The chain to scan for tokens
+   * @returns Array of discovered tokens with balance info
+   */
+  async discoverTokens(chain: Chain): Promise<DiscoveredToken[]> {
+    return this.tokenDiscoveryService.discoverTokens(chain)
+  }
+
+  /**
+   * Resolve token metadata by contract address.
+   * Checks known tokens registry first, then resolves from chain APIs.
+   * Supported: EVM, Solana, Cosmos, TRON.
+   *
+   * @param chain - The chain the token is on
+   * @param contractAddress - The token's contract address
+   * @returns Token metadata (ticker, decimals, logo, priceProviderId)
+   */
+  async resolveToken(chain: Chain, contractAddress: string): Promise<TokenInfo> {
+    return this.tokenDiscoveryService.resolveToken(chain, contractAddress)
+  }
+
+  // ===== SECURITY SCANNING =====
+
+  /**
+   * Validate a transaction for security risks before signing.
+   * Uses Blockaid to detect malicious contracts, phishing, etc.
+   *
+   * Supported: EVM chains, Solana, Sui, Bitcoin.
+   * Returns null for unsupported chains.
+   *
+   * @param keysignPayload - From prepareSendTx(), prepareSwapTx(), etc.
+   * @returns Validation result with risk level, or null if unsupported
+   */
+  async validateTransaction(keysignPayload: KeysignPayload): Promise<TransactionValidationResult | null> {
+    return this.securityService.validateTransaction(keysignPayload)
+  }
+
+  /**
+   * Simulate a transaction to preview asset changes before signing.
+   *
+   * Supported: EVM chains, Solana.
+   * Returns null for unsupported chains.
+   *
+   * @param keysignPayload - From prepareSendTx(), prepareSwapTx(), etc.
+   * @returns Simulation result, or null if unsupported
+   */
+  async simulateTransaction(keysignPayload: KeysignPayload): Promise<TransactionSimulationResult | null> {
+    return this.securityService.simulateTransaction(keysignPayload)
   }
 }
