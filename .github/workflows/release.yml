@@ -52,14 +52,19 @@ jobs:
           LOCAL_VERSION=$(node -p "require('./packages/sdk/package.json').version")
           echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
 
-          # Check if this version is already published on NPM
-          NPM_VERSION=$(npm view @vultisig/sdk version 2>/dev/null || echo "0.0.0")
+          # Check if any package still needs publishing
+          SDK_NPM=$(npm view @vultisig/sdk version 2>/dev/null || echo "0.0.0")
+          RUJIRA_NPM=$(npm view @vultisig/rujira version 2>/dev/null || echo "0.0.0")
+          RUJIRA_LOCAL=$(node -p "require('./packages/rujira/package.json').version")
 
-          if [ "$LOCAL_VERSION" = "$NPM_VERSION" ]; then
-            echo "Version $LOCAL_VERSION already published, skipping"
+          echo "SDK: local=$LOCAL_VERSION npm=$SDK_NPM"
+          echo "Rujira: local=$RUJIRA_LOCAL npm=$RUJIRA_NPM"
+
+          if [ "$LOCAL_VERSION" = "$SDK_NPM" ] && [ "$RUJIRA_LOCAL" = "$RUJIRA_NPM" ]; then
+            echo "All packages already published, skipping"
             echo "should_publish=false" >> $GITHUB_OUTPUT
           else
-            echo "New version $LOCAL_VERSION (npm has $NPM_VERSION)"
+            echo "Unpublished packages found, proceeding with publish"
             echo "should_publish=true" >> $GITHUB_OUTPUT
           fi
 
