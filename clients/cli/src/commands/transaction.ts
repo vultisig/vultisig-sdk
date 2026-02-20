@@ -67,7 +67,12 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     }
     displayAmount = formatBigintAmount(amount, balance.decimals)
   } else {
-    amount = BigInt(Math.floor(parseFloat(params.amount) * Math.pow(10, balance.decimals)))
+    const [whole, frac = ''] = params.amount.split('.')
+    if (frac.length > balance.decimals) {
+      throw new Error(`Amount has more than ${balance.decimals} decimal places`)
+    }
+    const paddedFrac = frac.padEnd(balance.decimals, '0')
+    amount = BigInt(whole || '0') * 10n ** BigInt(balance.decimals) + BigInt(paddedFrac || '0')
     displayAmount = params.amount
   }
 

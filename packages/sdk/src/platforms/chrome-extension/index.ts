@@ -31,6 +31,7 @@ import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
 import { memoizeAsync } from '../../utils/memoizeAsync'
 import { ChromeExtensionCrypto } from './crypto'
+import { ChromeExtensionPolyfills } from './polyfills'
 import { ChromeExtensionStorage } from './storage'
 
 // Configure crypto

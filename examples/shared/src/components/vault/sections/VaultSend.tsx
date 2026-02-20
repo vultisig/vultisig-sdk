@@ -400,7 +400,7 @@ function formatAmount(amount: string | bigint, decimals: number): string {
   const amountStr = typeof amount === 'bigint' ? amount.toString() : amount
   if (amountStr === '0') return '0'
   const amountBig = BigInt(amountStr)
-  const divisor = BigInt(10 ** decimals)
+  const divisor = 10n ** BigInt(decimals)
   const wholePart = amountBig / divisor
   const fractionalPart = amountBig % divisor
   if (fractionalPart === BigInt(0)) return wholePart.toString()

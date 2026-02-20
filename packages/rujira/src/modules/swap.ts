@@ -392,8 +392,12 @@ export class RujiraSwap {
       throw new RujiraError(RujiraErrorCode.INVALID_PAIR, 'Cannot swap asset to itself')
     }
 
-    if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'amount must be a positive number')
+    if (!params.amount || !/^\d+$/.test(params.amount)) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'amount must be a positive integer string in base units')
+    }
+
+    if (BigInt(params.amount) <= 0n) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'amount must be greater than zero')
     }
 
     if (this.dustThreshold > 0n && BigInt(params.amount) <= this.dustThreshold) {

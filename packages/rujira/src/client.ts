@@ -142,6 +142,9 @@ export class RujiraClient {
       throw new RujiraError(RujiraErrorCode.MISSING_SIGNER, 'No signer provided')
     }
     const accounts = await this.signer.getAccounts()
+    if (!accounts.length) {
+      throw new RujiraError(RujiraErrorCode.MISSING_SIGNER, 'Signer returned no accounts')
+    }
     return accounts[0].address
   }
 
