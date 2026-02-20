@@ -77,13 +77,6 @@ jobs:
           path: clients/cli/dist
           retention-days: 1
 
-      - name: Upload assets dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: assets-dist
-          path: packages/assets/dist
-          retention-days: 1
-
       - name: Upload rujira dist
         uses: actions/upload-artifact@v4
         with:
@@ -119,9 +112,6 @@ jobs:
 
       - name: Run rujira tests
         run: yarn test:rujira
-
-      - name: Run assets tests
-        run: yarn test:assets
 
       - name: Run lint and typecheck
         run: |
@@ -160,12 +150,6 @@ jobs:
         with:
           name: cli-dist
           path: clients/cli/dist
-
-      - name: Download assets dist
-        uses: actions/download-artifact@v4
-        with:
-          name: assets-dist
-          path: packages/assets/dist
 
       - name: Download rujira dist
         uses: actions/download-artifact@v4
