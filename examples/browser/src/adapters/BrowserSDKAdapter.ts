@@ -1,6 +1,7 @@
 import type {
   BalanceResult,
   BroadcastParams,
+  CoinInfo,
   CreateFastVaultFromSeedphraseOptions,
   CreateFastVaultOptions,
   CreateSecureVaultFromSeedphraseOptions,
@@ -14,6 +15,7 @@ import type {
   ISDKAdapter,
   JoinSecureVaultOptions,
   JoinSecureVaultResult,
+  MaxSendAmountResult,
   PrepareSwapParams,
   ProgressStep,
   SeedphraseValidation,
@@ -514,6 +516,29 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       amount: typeof params.amount === 'string' ? BigInt(params.amount) : params.amount,
       memo: params.memo,
     })
+  }
+
+  async getMaxSendAmount(
+    vaultId: string,
+    params: { coin: CoinInfo; receiver: string; memo?: string }
+  ): Promise<MaxSendAmountResult> {
+    const vault = await this.getVault(vaultId)
+    const result = await vault.getMaxSendAmount({
+      coin: {
+        chain: params.coin.chain as Chain,
+        address: params.coin.address,
+        decimals: params.coin.decimals,
+        ticker: params.coin.ticker,
+        id: params.coin.id,
+      },
+      receiver: params.receiver,
+      memo: params.memo,
+    })
+    return {
+      balance: result.balance.toString(),
+      fee: result.fee.toString(),
+      maxSendable: result.maxSendable.toString(),
+    }
   }
 
   async extractMessageHashes(vaultId: string, keysignPayload: unknown): Promise<string[]> {

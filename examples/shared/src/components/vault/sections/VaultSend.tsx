@@ -40,6 +40,8 @@ export default function VaultSend({ vault }: VaultSendProps) {
   const [signingProgress, setSigningProgress] = useState<ProgressStep | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
+  const [isLoadingMax, setIsLoadingMax] = useState(false)
+
   // Get selected token info
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null)
 
@@ -73,6 +75,33 @@ export default function VaultSend({ vault }: VaultSendProps) {
     resetSigningState()
     setIsLoading(false)
     setProgress(null)
+  }
+
+  const handleMaxSend = async () => {
+    if (!formData.chain || !formData.recipient) return
+    setIsLoadingMax(true)
+    setError(null)
+    try {
+      const address = await sdk.getAddress(vault.id, formData.chain)
+      const balance = await sdk.getBalance(vault.id, formData.chain, formData.tokenId || undefined)
+      const coin: CoinInfo = {
+        chain: formData.chain,
+        address,
+        decimals: balance.decimals,
+        ticker: balance.symbol || getChainTicker(formData.chain),
+        id: formData.tokenId || undefined,
+      }
+      const maxInfo = await sdk.getMaxSendAmount(vault.id, {
+        coin,
+        receiver: formData.recipient,
+        memo: formData.memo || undefined,
+      })
+      setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, balance.decimals) }))
+    } catch (err: any) {
+      setError(`Failed to calculate max: ${err.message}`)
+    } finally {
+      setIsLoadingMax(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,7 +159,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         chain,
         address,
         decimals: selectedToken?.decimals ?? getChainDecimals(chain),
-        ticker: selectedToken?.symbol ?? chain,
+        ticker: selectedToken?.symbol ?? getChainTicker(chain),
         id: selectedToken?.id,
       }
 
@@ -273,14 +302,30 @@ export default function VaultSend({ vault }: VaultSendProps) {
               required
             />
 
-            <Input
-              label="Amount"
-              type="text"
-              value={formData.amount}
-              onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-              placeholder="0.0"
-              required
-            />
+            <div className="mb-4">
+              <label htmlFor="send-amount" className="block text-sm font-medium text-gray-700 mb-1">
+                Amount
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="send-amount"
+                  type="text"
+                  value={formData.amount}
+                  onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  placeholder="0.0"
+                  required
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={handleMaxSend}
+                  disabled={!formData.chain || !formData.recipient || isLoadingMax || isLoading}
+                  className="px-3 py-2 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isLoadingMax ? '...' : 'Max'}
+                </button>
+              </div>
+            </div>
 
             <Input
               label="Memo (Optional)"
@@ -349,6 +394,45 @@ export default function VaultSend({ vault }: VaultSendProps) {
       </div>
     </>
   )
+}
+
+function formatAmount(amount: string | bigint, decimals: number): string {
+  const amountStr = typeof amount === 'bigint' ? amount.toString() : amount
+  if (amountStr === '0') return '0'
+  const amountBig = BigInt(amountStr)
+  const divisor = 10n ** BigInt(decimals)
+  const wholePart = amountBig / divisor
+  const fractionalPart = amountBig % divisor
+  if (fractionalPart === BigInt(0)) return wholePart.toString()
+  let fractionalStr = fractionalPart.toString().padStart(decimals, '0')
+  fractionalStr = fractionalStr.replace(/0+$/, '').slice(0, 6)
+  return `${wholePart}.${fractionalStr}`
+}
+
+// Get native token ticker for a chain
+function getChainTicker(chain: string): string {
+  const tickerMap: Record<string, string> = {
+    Bitcoin: 'BTC',
+    'Bitcoin-Cash': 'BCH',
+    Litecoin: 'LTC',
+    Dogecoin: 'DOGE',
+    Dash: 'DASH',
+    Zcash: 'ZEC',
+    Ethereum: 'ETH',
+    Polygon: 'POL',
+    Avalanche: 'AVAX',
+    BSC: 'BNB',
+    Arbitrum: 'ETH',
+    Optimism: 'ETH',
+    Base: 'ETH',
+    Solana: 'SOL',
+    Cosmos: 'ATOM',
+    THORChain: 'RUNE',
+    MayaChain: 'CACAO',
+    Sui: 'SUI',
+    Ripple: 'XRP',
+  }
+  return tickerMap[chain] ?? chain
 }
 
 // Get native token decimals for common chains

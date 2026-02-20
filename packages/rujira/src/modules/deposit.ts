@@ -1,0 +1,368 @@
+/**
+ * Deposit module for securing L1 assets on THORChain
+ * @module modules/deposit
+ */
+
+import { findAssetByFormat } from '../assets/index.js'
+import type { RujiraClient } from '../client.js'
+import { CHAIN_PROCESSING_TIMES } from '../config.js'
+import { RujiraError, RujiraErrorCode, wrapError } from '../errors.js'
+import {
+  denomToAsset as sharedDenomToAsset,
+  extractSymbol as sharedExtractSymbol,
+  parseAsset as sharedParseAsset,
+} from '../utils/denom-conversion.js'
+import { fromBaseUnits } from '../utils/format.js'
+import { buildSecureMintMemo, validateMemoComponent } from '../utils/memo.js'
+import { thornodeRateLimiter } from '../utils/rate-limiter.js'
+import { isFinAsset } from '../utils/type-guards.js'
+import { validateThorAddress as validateThorAddressStrict } from '../validation/address-validator.js'
+
+// TYPES
+
+/**
+ * THORChain inbound address response
+ */
+export type InboundAddress = {
+  chain: string
+  pub_key: string
+  address: string
+  halted: boolean
+  global_trading_paused: boolean
+  chain_trading_paused: boolean
+  chain_lp_actions_paused: boolean
+  gas_rate: string
+  gas_rate_units: string
+  outbound_tx_size: string
+  outbound_fee: string
+  dust_threshold: string
+}
+
+/**
+ * Prepared deposit transaction details
+ */
+export type PreparedDeposit = {
+  /** L1 chain to send from */
+  chain: string
+  /** Inbound vault address to send to */
+  inboundAddress: string
+  /** Memo to include in the L1 transaction */
+  memo: string
+  /** Amount to send (in L1 base units) */
+  amount: string
+  /** Asset being deposited */
+  asset: string
+  /** Resulting secured denom on THORChain */
+  resultingDenom: string
+  /** Estimated confirmation time in minutes */
+  estimatedTimeMinutes: number
+  /** Minimum amount (dust threshold) */
+  minimumAmount: string
+  /** Recommended gas rate for the L1 transaction */
+  gasRate: string
+  /** Gas rate units */
+  gasRateUnits: string
+  /** Warning if chain is halted or paused */
+  warning?: string
+}
+
+/**
+ * Deposit preparation parameters
+ */
+export type DepositParams = {
+  /** L1 asset to deposit (e.g., 'BTC.BTC', 'ETH.ETH') */
+  fromAsset: string
+  /** Amount in L1 base units */
+  amount: string
+  /** THORChain address to receive secured assets */
+  thorAddress: string
+  /** Optional: affiliate address for fee sharing */
+  affiliate?: string
+  /** Optional: affiliate fee in basis points */
+  affiliateBps?: number
+}
+
+/**
+ * Secured balance on THORChain
+ */
+export type SecuredBalance = {
+  /** Secured denom (e.g., 'btc-btc') */
+  denom: string
+  /** L1 asset (e.g., 'BTC.BTC') */
+  asset: string
+  /** Amount in base units (raw) */
+  amount: string
+  /** Human-readable amount (formatted with decimals) */
+  formatted: string
+  /** Decimal places (always 8 for THORChain secured assets) */
+  decimals: number
+  /** Symbol for display (e.g., 'BTC', 'ETH', 'USDC') */
+  symbol: string
+}
+
+// MODULE
+
+/**
+ * Deposit module for securing L1 assets on THORChain
+ *
+ * @example
+ * ```typescript
+ * const client = new RujiraClient({ network: 'mainnet' });
+ *
+ * // Prepare a BTC deposit
+ * const deposit = await client.deposit.prepare({
+ *   fromAsset: 'BTC.BTC',
+ *   amount: '1000000',  // 0.01 BTC in sats
+ *   thorAddress: 'thor1...'
+ * });
+ *
+ * // Use the returned details to send an L1 transaction
+ * console.log(`Send ${deposit.amount} to ${deposit.inboundAddress}`);
+ * console.log(`With memo: ${deposit.memo}`);
+ * ```
+ */
+export class RujiraDeposit {
+  private thornodeUrl: string
+  private inboundCache: { data: InboundAddress[]; timestamp: number } | null = null
+  // Short TTL: inbound addresses change during vault churn
+  private readonly CACHE_TTL_MS = 15000 // 15 seconds
+
+  constructor(private readonly client: RujiraClient) {
+    this.thornodeUrl = client.config.restEndpoint
+  }
+
+  // PUBLIC API
+
+  /**
+   * Prepare a deposit transaction
+   * Returns all details needed to send an L1 transaction
+   */
+  async prepare(params: DepositParams): Promise<PreparedDeposit> {
+    // Validate inputs
+    this.validateDepositParams(params)
+
+    // Parse asset to get chain
+    const { chain } = sharedParseAsset(params.fromAsset)
+
+    // Get inbound address for the chain
+    const inbound = await this.getInboundAddress(chain)
+    if (!inbound) {
+      throw new RujiraError(RujiraErrorCode.INVALID_ASSET, `No inbound address available for chain: ${chain}`)
+    }
+
+    // Build the deposit memo
+    const memo = this.buildDepositMemo(params.thorAddress, params.affiliate, params.affiliateBps)
+
+    // Determine resulting secured denom on THORChain (FIN denom when known)
+    let resultingDenom = params.fromAsset.toLowerCase().replace('.', '-')
+    const assetData = findAssetByFormat(params.fromAsset)
+    if (isFinAsset(assetData)) {
+      resultingDenom = assetData.formats.fin
+    }
+
+    // Build warning if applicable
+    let warning: string | undefined
+    if (inbound.halted) {
+      warning = `Chain ${chain} is currently halted. Deposits will not be processed.`
+    } else if (inbound.chain_trading_paused) {
+      warning = `Trading is paused for ${chain}. Deposits may be delayed.`
+    } else if (inbound.global_trading_paused) {
+      warning = 'Global trading is paused. Deposits may be delayed.'
+    }
+
+    return {
+      chain,
+      inboundAddress: inbound.address,
+      memo,
+      amount: params.amount,
+      asset: params.fromAsset,
+      resultingDenom,
+      estimatedTimeMinutes: this.estimateDepositTime(chain),
+      minimumAmount: inbound.dust_threshold,
+      gasRate: inbound.gas_rate,
+      gasRateUnits: inbound.gas_rate_units,
+      warning,
+    }
+  }
+
+  /**
+   * Get secured balances for a THORChain address
+   */
+  async getBalances(thorAddress: string): Promise<SecuredBalance[]> {
+    this.validateThorAddress(thorAddress)
+
+    try {
+      const response = await thornodeRateLimiter.fetch(
+        `${this.thornodeUrl}/cosmos/bank/v1beta1/balances/${thorAddress}`
+      )
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = (await response.json()) as { balances: Array<{ denom: string; amount: string }> }
+      const balances: SecuredBalance[] = []
+
+      for (const balance of data.balances || []) {
+        // Map denom back to asset (best effort)
+        const asset = sharedDenomToAsset(balance.denom)
+
+        // THORChain secured assets always use 8 decimals for storage
+        const decimals = 8
+        const formatted = fromBaseUnits(balance.amount, decimals)
+        const symbol = sharedExtractSymbol(asset || balance.denom)
+
+        balances.push({
+          denom: balance.denom,
+          asset: asset || balance.denom,
+          amount: balance.amount,
+          formatted,
+          decimals,
+          symbol,
+        })
+      }
+
+      return balances
+    } catch (error) {
+      throw wrapError(error, RujiraErrorCode.NETWORK_ERROR)
+    }
+  }
+
+  /**
+   * Get balance for a specific asset
+   */
+  async getBalance(thorAddress: string, asset: string): Promise<SecuredBalance | null> {
+    const balances = await this.getBalances(thorAddress)
+
+    // Try to find by FIN denom from registry
+    const assetData = findAssetByFormat(asset)
+    if (isFinAsset(assetData)) {
+      return balances.find(b => b.denom === assetData.formats.fin) || null
+    }
+
+    // Fallback to computed denom
+    const denom = asset.toLowerCase().replace('.', '-')
+    return balances.find(b => b.denom === denom) || null
+  }
+
+  /**
+   * Get inbound address for a specific chain
+   */
+  async getInboundAddress(chain: string): Promise<InboundAddress | null> {
+    const addresses = await this.getInboundAddresses()
+    return addresses.find(a => a.chain === chain.toUpperCase()) || null
+  }
+
+  /**
+   * Get all inbound addresses
+   * @param forceRefresh Bypass cache and fetch fresh data (use before executing deposits)
+   */
+  async getInboundAddresses(forceRefresh = false): Promise<InboundAddress[]> {
+    // Check cache (skip if forceRefresh)
+    if (!forceRefresh && this.inboundCache && Date.now() - this.inboundCache.timestamp < this.CACHE_TTL_MS) {
+      return this.inboundCache.data
+    }
+
+    try {
+      const response = await thornodeRateLimiter.fetch(`${this.thornodeUrl}/thorchain/inbound_addresses`)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = (await response.json()) as InboundAddress[]
+
+      // Cache the result
+      this.inboundCache = {
+        data,
+        timestamp: Date.now(),
+      }
+
+      return data
+    } catch (error) {
+      throw wrapError(error, RujiraErrorCode.NETWORK_ERROR)
+    }
+  }
+
+  /**
+   * Build deposit memo for L1 transaction
+   */
+  buildDepositMemo(thorAddress: string, affiliate?: string, affiliateBps?: number): string {
+    // Format: secure+:THORADDR for L1 → Secured deposits
+    // This mints secured assets on THORChain without swapping
+    let memo = buildSecureMintMemo(thorAddress)
+
+    if (affiliate && affiliateBps !== undefined && affiliateBps > 0) {
+      validateMemoComponent(affiliate, 'affiliate')
+      memo += `:${affiliate}:${affiliateBps}`
+    }
+
+    return memo
+  }
+
+  /**
+   * Estimate deposit confirmation time in minutes
+   */
+  estimateDepositTime(chain: string): number {
+    return CHAIN_PROCESSING_TIMES[chain.toUpperCase()] || 15
+  }
+
+  /**
+   * Get supported chains for deposits
+   */
+  getSupportedChains(): string[] {
+    return Object.keys(CHAIN_PROCESSING_TIMES)
+  }
+
+  /**
+   * Check if a chain is supported
+   */
+  isChainSupported(chain: string): boolean {
+    return chain.toUpperCase() in CHAIN_PROCESSING_TIMES
+  }
+
+  /**
+   * Check if an asset can be deposited
+   */
+  canDeposit(asset: string): boolean {
+    const { chain } = sharedParseAsset(asset)
+    return this.isChainSupported(chain)
+  }
+
+  // INTERNAL HELPERS
+
+  private validateDepositParams(params: DepositParams): void {
+    // Validate asset
+    if (!params.fromAsset || !params.fromAsset.includes('.')) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_ASSET,
+        `Invalid asset format: ${params.fromAsset}. Expected format: CHAIN.SYMBOL`
+      )
+    }
+
+    const { chain } = sharedParseAsset(params.fromAsset)
+    if (!this.isChainSupported(chain)) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_ASSET,
+        `Unsupported chain: ${chain}. Supported: ${this.getSupportedChains().join(', ')}`
+      )
+    }
+
+    // Validate amount
+    if (!params.amount || !/^\d+$/.test(params.amount)) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Amount must be a positive integer in base units')
+    }
+
+    const amountBigInt = BigInt(params.amount)
+    if (amountBigInt <= 0n) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Amount must be greater than zero')
+    }
+
+    // Validate thor address
+    this.validateThorAddress(params.thorAddress)
+  }
+
+  private validateThorAddress(address: string): void {
+    validateThorAddressStrict(address)
+  }
+}

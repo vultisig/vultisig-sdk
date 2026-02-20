@@ -25,6 +25,7 @@ import { getEvmBaseFee } from '@core/chain/tx/fee/evm/baseFee'
 import { getEvmMaxPriorityFeePerGas } from '@core/chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FiatCurrency } from '@core/config/FiatCurrency'
 import { buildSwapKeysignPayload } from '@core/mpc/keysign/swap/build'
+import { toKeysignLibType } from '@core/mpc/types/utils/libType'
 import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { attempt, withFallback } from '@lib/utils/attempt'
@@ -39,8 +40,8 @@ import {
   SwapApprovalInfo,
   SwapFees,
   SwapPrepareResult,
+  SwapQuoteBase,
   SwapQuoteParams,
-  SwapQuoteResult,
   SwapTxParams,
 } from '../swap-types'
 import { VaultError, VaultErrorCode } from '../VaultError'
@@ -64,7 +65,7 @@ export class SwapService {
   /**
    * Get a swap quote from the best available provider
    */
-  async getQuote(params: SwapQuoteParams): Promise<SwapQuoteResult> {
+  async getQuote(params: SwapQuoteParams): Promise<SwapQuoteBase> {
     try {
       // Resolve coin inputs to full AccountCoin
       const fromCoin = await this.resolveCoinInput(params.fromCoin)
@@ -148,7 +149,7 @@ export class SwapService {
         localPartyId: this.vaultData.localPartyId,
         fromPublicKey,
         toPublicKey,
-        libType: this.vaultData.libType,
+        libType: toKeysignLibType(this.vaultData),
         walletCore,
       })
 
@@ -308,7 +309,7 @@ export class SwapService {
     }
 
     // Get spender address from quote
-    const spender = this.getSpenderFromQuote(quote)
+    const spender = this.getSpenderFromQuote(quote.quote)
     if (!spender) {
       return undefined
     }
@@ -331,52 +332,55 @@ export class SwapService {
   /**
    * Extract spender address from quote
    */
-  private getSpenderFromQuote(quote: SwapQuote): string | undefined {
-    if ('general' in quote && quote.general.tx) {
-      if ('evm' in quote.general.tx) {
-        return quote.general.tx.evm.to
+  private getSpenderFromQuote(quoteData: SwapQuote['quote']): string | undefined {
+    if ('general' in quoteData && quoteData.general.tx) {
+      if ('evm' in quoteData.general.tx) {
+        return quoteData.general.tx.evm.to
       }
     }
-    if ('native' in quote && quote.native.router) {
-      return quote.native.router
+    if ('native' in quoteData && quoteData.native.router) {
+      return quoteData.native.router
     }
     return undefined
   }
 
   /**
-   * Format quote into SwapQuoteResult
+   * Format quote into SwapQuoteBase
    */
   private async formatQuoteResult(
-    quote: SwapQuote,
+    swapQuote: SwapQuote,
     fromCoin: AccountCoin,
     toCoin: AccountCoin,
     approvalInfo?: SwapApprovalInfo,
     fiatCurrency?: FiatCurrency
-  ): Promise<SwapQuoteResult> {
-    const isNative = 'native' in quote
+  ): Promise<SwapQuoteBase> {
+    const { quote: quoteData } = swapQuote
+    const isNative = 'native' in quoteData
 
     // Calculate expiry
-    const expiresIn = isNative ? quote.native.expiry * 1000 - Date.now() : DEFAULT_QUOTE_EXPIRY_MS
+    const expiresIn = isNative ? quoteData.native.expiry * 1000 - Date.now() : DEFAULT_QUOTE_EXPIRY_MS
     const expiresAt = Date.now() + Math.min(expiresIn, DEFAULT_QUOTE_EXPIRY_MS)
 
     // Extract estimated output as bigint
-    const estimatedOutput = isNative ? BigInt(quote.native.expected_amount_out) : BigInt(quote.general.dstAmount)
+    const estimatedOutput = isNative
+      ? BigInt(quoteData.native.expected_amount_out)
+      : BigInt(quoteData.general.dstAmount)
 
     // Extract provider name
-    const provider = isNative ? quote.native.swapChain.toLowerCase() : quote.general.provider
+    const provider = isNative ? quoteData.native.swapChain.toLowerCase() : quoteData.general.provider
 
     // Extract fees
-    const fees = await this.extractFees(quote, fromCoin.chain)
+    const fees = await this.extractFees(quoteData, fromCoin.chain)
 
     // Extract warnings
     const warnings: string[] = []
-    if (isNative && quote.native.warning) {
-      warnings.push(quote.native.warning)
+    if (isNative && quoteData.native.warning) {
+      warnings.push(quoteData.native.warning)
     }
 
     // Build base result
-    const result: SwapQuoteResult = {
-      quote,
+    const result: SwapQuoteBase = {
+      quote: swapQuote,
       estimatedOutput,
       provider,
       expiresAt,
@@ -432,17 +436,17 @@ export class SwapService {
   /**
    * Extract fees from quote
    */
-  private async extractFees(quote: SwapQuote, fromChain: Chain): Promise<SwapFees> {
-    if ('native' in quote) {
+  private async extractFees(quoteData: SwapQuote['quote'], fromChain: Chain): Promise<SwapFees> {
+    if ('native' in quoteData) {
       return {
-        network: BigInt(quote.native.fees.outbound),
-        affiliate: quote.native.fees.affiliate ? BigInt(quote.native.fees.affiliate) : undefined,
-        total: BigInt(quote.native.fees.total),
+        network: BigInt(quoteData.native.fees.outbound),
+        affiliate: quoteData.native.fees.affiliate ? BigInt(quoteData.native.fees.affiliate) : undefined,
+        total: BigInt(quoteData.native.fees.total),
       }
     }
 
     // General swaps
-    const { tx } = quote.general
+    const { tx } = quoteData.general
 
     // Solana has explicit fees in the quote
     if ('solana' in tx) {
