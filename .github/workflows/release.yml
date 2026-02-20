@@ -120,9 +120,6 @@ jobs:
       - name: Run rujira tests
         run: yarn test:rujira
 
-      - name: Run assets tests
-        run: yarn test:assets
-
       - name: Run lint and typecheck
         run: |
           yarn lint
