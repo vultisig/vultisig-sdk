@@ -16,6 +16,7 @@ import { fromBaseUnits } from '../utils/format.js'
 import { buildSecureMintMemo, validateMemoComponent } from '../utils/memo.js'
 import { thornodeRateLimiter } from '../utils/rate-limiter.js'
 import { isFinAsset } from '../utils/type-guards.js'
+import { validateThorAddress as validateThorAddressStrict } from '../validation/address-validator.js'
 
 // TYPES
 
@@ -362,21 +363,6 @@ export class RujiraDeposit {
   }
 
   private validateThorAddress(address: string): void {
-    if (!address) {
-      throw new RujiraError(RujiraErrorCode.INVALID_ADDRESS, 'THORChain address is required')
-    }
-
-    // Mainnet-only: must start with thor1
-    if (!address.startsWith('thor1')) {
-      throw new RujiraError(
-        RujiraErrorCode.INVALID_ADDRESS,
-        `Invalid THORChain address: ${address}. Must start with 'thor1'`
-      )
-    }
-
-    // Basic length check
-    if (address.length < 40) {
-      throw new RujiraError(RujiraErrorCode.INVALID_ADDRESS, `Invalid THORChain address length: ${address}`)
-    }
+    validateThorAddressStrict(address)
   }
 }

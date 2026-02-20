@@ -239,6 +239,10 @@ export class VultisigRujiraProvider implements RujiraSigner {
   }
 
   async signAndBroadcast(signDoc: SignDoc): Promise<string> {
+    if (signDoc.chainId !== this.chainId) {
+      throw new Error(`Chain ID mismatch: expected ${this.chainId}, got ${signDoc.chainId}`)
+    }
+
     const address = await this.getAddress()
     const keysignPayload = await this.vault.prepareSignDirectTx({
       chain: THORCHAIN_CONFIG.chain,
