@@ -10,6 +10,7 @@ import type { Chain } from '@core/chain/Chain'
 import type { ServerManager } from '../server/ServerManager'
 import type { CacheConfig } from '../services/cache-types'
 import type { PasswordCacheService } from '../services/PasswordCacheService'
+import type { PushNotificationService } from '../services/PushNotificationService'
 import type { Storage } from '../storage/types'
 
 /**
@@ -106,6 +107,11 @@ export type SdkContext = {
    * References shared WASM runtime (process singleton).
    */
   readonly wasmProvider: WasmProvider
+
+  /**
+   * Push notification service for vault signing coordination.
+   */
+  readonly pushNotificationService: PushNotificationService
 }
 
 /**
@@ -119,4 +125,5 @@ export type VaultContext = {
   readonly serverManager: ServerManager
   readonly passwordCache: PasswordCacheService
   readonly wasmProvider: WasmProvider
+  readonly pushNotificationService: PushNotificationService
 }

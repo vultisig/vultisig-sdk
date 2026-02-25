@@ -53,6 +53,7 @@ export class VaultManager {
       serverManager: this.context.serverManager,
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
+      pushNotificationService: this.context.pushNotificationService,
     }
   }
 

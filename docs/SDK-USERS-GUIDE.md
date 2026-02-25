@@ -14,6 +14,7 @@
 - [Price Feeds](#price-feeds)
 - [Security Scanning](#security-scanning)
 - [Fiat On-Ramp (Banxa)](#fiat-on-ramp-banxa)
+- [Push Notifications](#push-notifications)
 - [Configuration](#configuration)
 - [Caching System](#caching-system)
 - [Event System](#event-system)
@@ -1913,6 +1914,109 @@ const usdcBuyUrl = await vault.getBuyUrl(Chain.Ethereum, 'USDC')
 const unsupported = await vault.getBuyUrl(Chain.Cosmos)
 // null — Cosmos is not in Banxa's supported chains
 ```
+
+---
+
+## Push Notifications
+
+Coordinate multi-party signing sessions by sending push notifications to vault members. The SDK handles server communication; consumers are responsible for platform-specific push token acquisition and incoming push wiring.
+
+### Register a Device
+
+```typescript
+// Obtain a push token from your platform (APNs, FCM, Web Push)
+const token = await getMyPlatformPushToken()
+
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token,
+  deviceType: 'ios', // 'ios' | 'android' | 'web'
+})
+```
+
+### Notify Vault Members
+
+When initiating a signing session, notify other members so they can join:
+
+```typescript
+await sdk.notifications.notifyVaultMembers({
+  vaultId: vault.publicKeys.ecdsa,
+  vaultName: vault.name,
+  localPartyId: vault.localPartyId,
+  qrCodeData: keysignQrPayload, // session data for joining
+})
+```
+
+### Handle Incoming Push Notifications
+
+Register a callback, then forward raw push data from your platform's handler:
+
+```typescript
+// Register handler
+const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
+  console.log(`Signing request for vault: ${notification.vaultName}`)
+  // Use notification.qrCodeData to join the signing session
+})
+
+// In your platform's push handler (iOS delegate, FCM onMessage, service worker, etc.)
+sdk.notifications.handleIncomingPush(rawPushData)
+
+// Clean up when done
+unsubscribe()
+```
+
+### Consumer Responsibilities
+
+| Responsibility | Owner |
+|---|---|
+| Obtain push token (APNs / FCM / Web Push) | **Consumer** |
+| Register token with notification server | SDK |
+| Trigger notification to vault members | SDK |
+| Wire platform push handler to `handleIncomingPush()` | **Consumer** |
+| Parse incoming notification data | SDK |
+| Display notification to user | **Consumer** |
+| Route to signing flow using `qrCodeData` | **Consumer** |
+
+### Web Push (Browser / Extension)
+
+For web platforms, fetch the VAPID public key from the server to subscribe:
+
+```typescript
+const vapidKey = await sdk.notifications.fetchVapidPublicKey()
+const subscription = await registration.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: vapidKey,
+})
+
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: JSON.stringify(subscription.toJSON()),
+  deviceType: 'web',
+})
+```
+
+### Utility Methods
+
+```typescript
+// Check if a vault has local registration
+const registered = await sdk.notifications.isVaultRegistered(vaultId)
+
+// Check if any devices are registered on the server
+const hasRemote = await sdk.notifications.hasRemoteRegistrations(vaultId)
+
+// Remove local registration
+await sdk.notifications.unregisterVault(vaultId)
+
+// Parse notification payload manually (without invoking callbacks)
+const parsed = sdk.notifications.parseNotificationPayload(rawData)
+
+// Health check
+const healthy = await sdk.notifications.ping()
+```
+
+> **Note:** Node.js / CLI environments have no native push receive mechanism. Node consumers can use `parseNotificationPayload()` manually if they implement their own transport (e.g., WebSocket, polling).
 
 ---
 

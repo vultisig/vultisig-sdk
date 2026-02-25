@@ -395,6 +395,7 @@ export class SecureVault extends VaultBase {
         serverManager: context.serverManager,
         passwordCache: context.passwordCache,
         wasmProvider: context.wasmProvider,
+        pushNotificationService: context.pushNotificationService,
       }
 
       // Step 6: Instantiate vault

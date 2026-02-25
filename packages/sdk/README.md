@@ -221,6 +221,84 @@ const buyUrl = await vault.getBuyUrl(Chain.Bitcoin)
 if (buyUrl) window.open(buyUrl)
 ```
 
+### 11. Push Notifications
+
+Coordinate multi-party signing by notifying vault members when a signing session is initiated.
+
+```typescript
+// Step 1: Register device for vault notifications
+// Token comes from your platform's push service (APNs, FCM, or Web Push)
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: myPlatformPushToken,
+  deviceType: 'ios', // 'ios' | 'android' | 'web'
+})
+
+// Step 2: Notify other vault members when initiating a signing session
+await sdk.notifications.notifyVaultMembers({
+  vaultId: vault.publicKeys.ecdsa,
+  vaultName: vault.name,
+  localPartyId: vault.localPartyId,
+  qrCodeData: keysignQrPayload, // session data for joining
+})
+
+// Step 3: Handle incoming push notifications
+const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
+  console.log(`Signing request for vault: ${notification.vaultName}`)
+  // Use notification.qrCodeData to join the signing session
+})
+```
+
+#### Consumer Responsibilities
+
+The SDK handles server communication and state management. Your application is responsible for platform-specific push integration:
+
+| Responsibility | Owner | Details |
+|---|---|---|
+| Obtain push token | **You** | Use platform APIs (APNs, FCM, Web Push) to get a device token |
+| Register token with server | SDK | `sdk.notifications.registerDevice()` |
+| Send notification to vault members | SDK | `sdk.notifications.notifyVaultMembers()` |
+| Wire platform push handler | **You** | iOS delegate, FCM onMessage, service worker, etc. |
+| Parse incoming notification | SDK | `sdk.notifications.handleIncomingPush(data)` |
+| Display notification to user | **You** | OS notification, in-app alert, etc. |
+| Route user to signing flow | **You** | Use `qrCodeData` from the parsed notification |
+| Persist registration state | SDK | Stored automatically in SDK storage |
+
+#### Platform Setup
+
+**iOS** — Register for remote notifications, pass APNs device token:
+```typescript
+// In your AppDelegate / UNUserNotificationCenter handler:
+sdk.notifications.handleIncomingPush(notification.userInfo)
+```
+
+**Android** — Use Firebase Cloud Messaging:
+```typescript
+// In your FirebaseMessagingService.onMessageReceived:
+sdk.notifications.handleIncomingPush(remoteMessage.data)
+```
+
+**Browser / Extension** — Use Web Push API with VAPID key from the SDK:
+```typescript
+const vapidKey = await sdk.notifications.fetchVapidPublicKey()
+const subscription = await registration.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: vapidKey,
+})
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: JSON.stringify(subscription.toJSON()),
+  deviceType: 'web',
+})
+
+// In your service worker push event:
+sdk.notifications.handleIncomingPush(event.data.json())
+```
+
+**Node.js / CLI** — No native push support. Use `parseNotificationPayload()` manually if you implement your own transport.
+
 ## Supported Blockchains
 
 The SDK supports address derivation and operations for 40+ blockchain networks:
@@ -574,6 +652,62 @@ Validate a transaction for security risks before signing using Blockaid. Support
 #### `vault.simulateTransaction(keysignPayload): Promise<TransactionSimulationResult | null>`
 
 Simulate a transaction to preview asset changes before signing. Supported: EVM chains, Solana. Returns null for unsupported chains.
+
+### Push Notification Methods
+
+Accessed via `sdk.notifications`:
+
+#### `notifications.registerDevice(options): Promise<void>`
+
+Register a device to receive push notifications for a vault.
+
+**Parameters:**
+- `options.vaultId: string` - Vault ID (`publicKeys.ecdsa`)
+- `options.partyName: string` - Local party ID of the device
+- `options.token: string` - Push token from APNs, FCM, or Web Push
+- `options.deviceType: 'ios' | 'android' | 'web'` - Platform type
+
+#### `notifications.unregisterVault(vaultId): Promise<void>`
+
+Remove local push registration for a vault.
+
+#### `notifications.notifyVaultMembers(options): Promise<void>`
+
+Send a push notification to all other registered devices for a vault.
+
+**Parameters:**
+- `options.vaultId: string` - Vault ID
+- `options.vaultName: string` - Vault display name
+- `options.localPartyId: string` - Sender's party ID (excluded from recipients)
+- `options.qrCodeData: string` - Keysign session data for joining
+
+#### `notifications.onSigningRequest(handler): () => void`
+
+Register a callback for incoming signing notifications. Returns an unsubscribe function.
+
+#### `notifications.handleIncomingPush(data): void`
+
+Process raw push notification data from a platform handler. Parses and invokes registered callbacks.
+
+#### `notifications.parseNotificationPayload(data): SigningNotification | null`
+
+Parse raw push data into a typed `SigningNotification`. Returns null if data doesn't match expected format.
+
+#### `notifications.fetchVapidPublicKey(): Promise<string>`
+
+Fetch the VAPID public key for Web Push subscriptions. Only needed for `deviceType: 'web'`.
+
+#### `notifications.isVaultRegistered(vaultId): Promise<boolean>`
+
+Check if a vault is registered locally for push notifications.
+
+#### `notifications.hasRemoteRegistrations(vaultId): Promise<boolean>`
+
+Check if any devices are registered for a vault on the server.
+
+#### `notifications.ping(): Promise<boolean>`
+
+Check if the notification server is reachable.
 
 ### Utility Methods
 

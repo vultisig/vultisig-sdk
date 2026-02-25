@@ -619,3 +619,14 @@ export type { RiskLevel, SiteScanResult, TransactionSimulationResult, Transactio
 // Cosmos message type constants
 export type { CosmosMsgType as CosmosMsgTypeValue } from './cosmos-msg'
 export { CosmosMsgType } from './cosmos-msg'
+
+// Push notification types
+export type {
+  NotificationPayload,
+  NotifyVaultMembersOptions,
+  PushDeviceType,
+  PushNotificationRegistration,
+  PushToken,
+  RegisterDeviceOptions,
+  SigningNotification,
+} from './notifications'
