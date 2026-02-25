@@ -1,0 +1,325 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "vultisig-sdk",
+  "description": "Vultisig MPC wallet SDK — secure multi-chain crypto operations with threshold signing across 40+ blockchains.",
+  "version": "1.0.0",
+  "functions": [
+    {
+      "name": "create_fast_vault",
+      "description": "Create a server-assisted 2-of-2 MPC vault for autonomous operations. Returns a vault ID; call verify_vault with the emailed code to activate.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Display name for the vault" },
+          "email": { "type": "string", "description": "Email address for verification code delivery" },
+          "password": { "type": "string", "description": "Encryption password for the vault" }
+        },
+        "required": ["name", "email", "password"]
+      },
+      "returns": { "type": "string", "description": "Vault ID (ECDSA public key)" }
+    },
+    {
+      "name": "verify_vault",
+      "description": "Verify a pending vault with the email verification code. Activates the vault and returns a usable FastVault instance.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "vault_id": { "type": "string", "description": "Vault ID returned by create_fast_vault" },
+          "code": { "type": "string", "description": "6-digit verification code from email" }
+        },
+        "required": ["vault_id", "code"]
+      },
+      "returns": { "type": "object", "description": "FastVault instance" }
+    },
+    {
+      "name": "get_address",
+      "description": "Derive a blockchain address from the vault's MPC keys for a specific chain.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "chain": { "type": "string", "description": "Chain name (e.g. 'Ethereum', 'Bitcoin', 'Solana')" }
+        },
+        "required": ["chain"]
+      },
+      "returns": { "type": "string", "description": "Blockchain address" }
+    },
+    {
+      "name": "get_addresses",
+      "description": "Derive addresses for multiple chains at once. Defaults to all active chains if none specified.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "chains": { "type": "array", "items": { "type": "string" }, "description": "Chain names. Omit for all active chains." }
+        }
+      },
+      "returns": { "type": "object", "description": "Map of chain name to address string" }
+    },
+    {
+      "name": "get_balance",
+      "description": "Query the balance of a native token or specific token on a chain.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "chain": { "type": "string", "description": "Chain name (e.g. 'Ethereum')" },
+          "token_id": { "type": "string", "description": "Token contract address. Omit for native token." }
+        },
+        "required": ["chain"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "amount": { "type": "string", "description": "Raw balance in base units" },
+          "formattedAmount": { "type": "string", "description": "Human-readable balance" },
+          "decimals": { "type": "number" },
+          "symbol": { "type": "string" },
+          "fiatValue": { "type": "number", "description": "USD value if available" }
+        }
+      }
+    },
+    {
+      "name": "get_balances",
+      "description": "Query balances across multiple chains. Defaults to all active chains.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "chains": { "type": "array", "items": { "type": "string" }, "description": "Chain names. Omit for all active chains." },
+          "include_tokens": { "type": "boolean", "description": "Include custom token balances. Default false." }
+        }
+      },
+      "returns": { "type": "object", "description": "Map of chain name to Balance object" }
+    },
+    {
+      "name": "get_total_value",
+      "description": "Get total portfolio value across all active chains and tokens in fiat.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "fiat_currency": { "type": "string", "description": "Fiat currency code (e.g. 'USD', 'EUR'). Defaults to vault currency." }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "amount": { "type": "string" },
+          "currency": { "type": "string" },
+          "lastUpdated": { "type": "number" }
+        }
+      }
+    },
+    {
+      "name": "estimate_gas",
+      "description": "Get current gas prices and fee estimates for a chain.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "chain": { "type": "string", "description": "Chain name" }
+        },
+        "required": ["chain"]
+      },
+      "returns": { "type": "object", "description": "Chain-specific gas info (EvmGasInfo, UtxoGasInfo, or CosmosGasInfo)" }
+    },
+    {
+      "name": "prepare_send_tx",
+      "description": "Build an unsigned transaction for sending native tokens or ERC-20 tokens. Returns a KeysignPayload for signing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "coin": {
+            "type": "object",
+            "description": "AccountCoin with chain, address, decimals, ticker",
+            "properties": {
+              "chain": { "type": "string" },
+              "address": { "type": "string" },
+              "decimals": { "type": "number" },
+              "ticker": { "type": "string" },
+              "id": { "type": "string", "description": "Token contract address (omit for native)" }
+            },
+            "required": ["chain", "address", "decimals", "ticker"]
+          },
+          "receiver": { "type": "string", "description": "Destination address" },
+          "amount": { "type": "string", "description": "Amount in base units as bigint string" },
+          "memo": { "type": "string", "description": "Optional transaction memo" }
+        },
+        "required": ["coin", "receiver", "amount"]
+      },
+      "returns": { "type": "object", "description": "KeysignPayload for signing" }
+    },
+    {
+      "name": "sign",
+      "description": "Sign a prepared transaction using MPC threshold signing. For FastVaults, this coordinates with VultiServer automatically.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "payload": { "type": "object", "description": "KeysignPayload from prepareSendTx or prepareSwapTx" }
+        },
+        "required": ["payload"]
+      },
+      "returns": { "type": "object", "description": "Signature object" }
+    },
+    {
+      "name": "broadcast_tx",
+      "description": "Broadcast a signed transaction to the blockchain.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "chain": { "type": "string", "description": "Chain name" },
+          "keysign_payload": { "type": "object", "description": "The original KeysignPayload" },
+          "signature": { "type": "object", "description": "Signature from sign()" }
+        },
+        "required": ["chain", "keysign_payload", "signature"]
+      },
+      "returns": { "type": "string", "description": "Transaction hash" }
+    },
+    {
+      "name": "get_swap_quote",
+      "description": "Get a swap quote between two tokens, potentially across chains. Routes through THORChain, MayaChain, 1inch, LiFi, or KyberSwap.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "from_coin": {
+            "type": "object",
+            "description": "Source token. Use { chain: 'Ethereum' } for native ETH, or { chain: 'Ethereum', token: '0x...' } for ERC-20.",
+            "properties": {
+              "chain": { "type": "string" },
+              "token": { "type": "string", "description": "Token contract address. Omit for native." }
+            },
+            "required": ["chain"]
+          },
+          "to_coin": {
+            "type": "object",
+            "properties": {
+              "chain": { "type": "string" },
+              "token": { "type": "string" }
+            },
+            "required": ["chain"]
+          },
+          "amount": { "type": "number", "description": "Human-readable amount (e.g. 1.5 for 1.5 ETH)" }
+        },
+        "required": ["from_coin", "to_coin", "amount"]
+      },
+      "returns": { "type": "object", "description": "SwapQuoteResult with provider, estimated output, fees, and approval info" }
+    },
+    {
+      "name": "prepare_swap_tx",
+      "description": "Build unsigned transaction(s) for a swap. May return an approval transaction for ERC-20 tokens in addition to the swap transaction.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "from_coin": { "type": "object", "properties": { "chain": { "type": "string" }, "token": { "type": "string" } }, "required": ["chain"] },
+          "to_coin": { "type": "object", "properties": { "chain": { "type": "string" }, "token": { "type": "string" } }, "required": ["chain"] },
+          "amount": { "type": "number", "description": "Human-readable amount" },
+          "swap_quote": { "type": "object", "description": "Quote from get_swap_quote" }
+        },
+        "required": ["from_coin", "to_coin", "amount", "swap_quote"]
+      },
+      "returns": {
+        "type": "object",
+        "description": "SwapPrepareResult with keysignPayload, optional approvalPayload, and quote"
+      }
+    },
+    {
+      "name": "import_vault",
+      "description": "Import a vault from a .vult backup file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "vult_content": { "type": "string", "description": "Raw .vult file content (base64)" },
+          "password": { "type": "string", "description": "Decryption password. Required for encrypted vaults." }
+        },
+        "required": ["vult_content"]
+      },
+      "returns": { "type": "object", "description": "VaultBase instance (FastVault or SecureVault)" }
+    },
+    {
+      "name": "export_vault",
+      "description": "Export a vault to a .vult backup file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "password": { "type": "string", "description": "Encryption password. Omit for unencrypted export." }
+        }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "filename": { "type": "string", "description": "Suggested filename" },
+          "data": { "type": "string", "description": "Base64-encoded vault backup" }
+        }
+      }
+    },
+    {
+      "name": "validate_seedphrase",
+      "description": "Validate a BIP39 mnemonic seedphrase. Supports 10 languages.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mnemonic": { "type": "string", "description": "Space-separated BIP39 words" }
+        },
+        "required": ["mnemonic"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "valid": { "type": "boolean" },
+          "wordCount": { "type": "number" },
+          "error": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "create_fast_vault_from_seedphrase",
+      "description": "Create a FastVault by importing an existing seedphrase. Optionally discovers chains with existing balances.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mnemonic": { "type": "string", "description": "BIP39 seedphrase" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "password": { "type": "string" },
+          "discover_chains": { "type": "boolean", "description": "Auto-discover chains with balances. Default false." }
+        },
+        "required": ["mnemonic", "name", "email", "password"]
+      },
+      "returns": { "type": "string", "description": "Vault ID. Call verify_vault to activate." }
+    },
+    {
+      "name": "list_vaults",
+      "description": "List all stored vaults.",
+      "parameters": { "type": "object", "properties": {} },
+      "returns": { "type": "array", "description": "Array of VaultBase instances" }
+    },
+    {
+      "name": "get_tx_explorer_url",
+      "description": "Get block explorer URL for a transaction hash.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "chain": { "type": "string" },
+          "tx_hash": { "type": "string" }
+        },
+        "required": ["chain", "tx_hash"]
+      },
+      "returns": { "type": "string", "description": "Explorer URL" }
+    },
+    {
+      "name": "get_server_status",
+      "description": "Check connectivity to VultiServer (fast signing) and Message Relay (secure signing).",
+      "parameters": { "type": "object", "properties": {} },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "fastVault": { "type": "object", "properties": { "online": { "type": "boolean" }, "latency": { "type": "number" } } },
+          "messageRelay": { "type": "object", "properties": { "online": { "type": "boolean" }, "latency": { "type": "number" } } }
+        }
+      }
+    }
+  ],
+  "supported_chains": [
+    "Bitcoin", "Ethereum", "Solana", "THORChain", "Cosmos", "Avalanche", "BSC",
+    "Arbitrum", "Base", "Polygon", "Optimism", "Litecoin", "Dogecoin", "BitcoinCash",
+    "Dash", "Zcash", "MayaChain", "Osmosis", "Dydx", "Kujira", "Noble", "Terra",
+    "TerraClassic", "Akash", "Sui", "Polkadot", "TON", "Ripple", "Tron", "Cardano",
+    "Blast", "Cronos", "ZkSync", "Hyperliquid", "Mantle", "Sei"
+  ],
+  "swap_providers": ["THORChain", "MayaChain", "1inch", "LiFi", "KyberSwap"]
+}
