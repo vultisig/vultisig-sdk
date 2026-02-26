@@ -31,15 +31,18 @@ npm install @vultisig/sdk
 ### 1. Initialize the SDK
 
 ```typescript
-import { Vultisig, MemoryStorage } from '@vultisig/sdk'
+import { Vultisig } from '@vultisig/sdk'
 
-const sdk = new Vultisig({
-  storage: new MemoryStorage()
-})
+// Storage is auto-configured for your platform:
+// - Node.js/Electron: FileStorage (~/.vultisig)
+// - Browser: BrowserStorage (IndexedDB)
+const sdk = new Vultisig()
 
 // Initialize WASM modules
 await sdk.initialize()
 ```
+
+> **WARNING — Vault Persistence:** Do **not** use `MemoryStorage` in production. It is non-persistent — all vault keyshares are lost when the process exits, resulting in **permanent loss of funds**. The SDK auto-configures persistent storage for your platform. Always back up vaults with `vault.export()`.
 
 ### 2. Create a Fast Vault (Server-Assisted)
 
@@ -352,12 +355,13 @@ The SDK works with any JavaScript framework. Here's a React example:
 ### React Component Example
 
 ```typescript
-import { Vultisig, MemoryStorage } from '@vultisig/sdk'
+import { Vultisig } from '@vultisig/sdk'
 import type { VaultBase } from '@vultisig/sdk'
 import { useState, useEffect } from 'react'
 
 function VaultApp() {
-  const [sdk] = useState(() => new Vultisig({ storage: new MemoryStorage() }))
+  // BrowserStorage (IndexedDB) is used automatically in browser environments
+  const [sdk] = useState(() => new Vultisig())
   const [vault, setVault] = useState<VaultBase | null>(null)
   const [addresses, setAddresses] = useState<Record<string, string>>({})
 
