@@ -71,11 +71,13 @@ sdk.dispose()
 
 **Custom Storage (optional):**
 
+> **WARNING: `MemoryStorage` is for testing only.** It is non-persistent — all data, including vault keyshares, is permanently lost when the process exits. If you create a vault with `MemoryStorage` and do not export/back up the vault, **you will permanently lose access to any funds** stored in that vault. For production, use the default platform storage shown above or implement your own persistent `Storage` interface.
+
 ```typescript
 import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),  // Override with custom storage
+  storage: new MemoryStorage(),  // TESTING ONLY — not persistent, will lose vault data
 })
 
 await sdk.initialize()
