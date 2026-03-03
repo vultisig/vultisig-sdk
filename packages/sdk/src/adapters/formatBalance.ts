@@ -1,5 +1,6 @@
 import { Chain } from '@core/chain/Chain'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { knownTokensIndex } from '@core/chain/coin/knownTokens'
 
 import { Balance, Token } from '../types'
 
@@ -27,8 +28,10 @@ export function formatBalance(
   if (tokenId) {
     // Token balance - look up metadata from token registry
     const token = tokens?.[chain]?.find(t => t.id === tokenId)
-    decimals = token?.decimals ?? 18 // Default to 18 for ERC-20 tokens
-    symbol = token?.symbol ?? tokenId
+    // Also check known tokens index if not in user's registry
+    const knownToken = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
+    decimals = token?.decimals ?? knownToken?.decimals ?? 18 // Default to 18 for ERC-20 tokens
+    symbol = token?.symbol ?? knownToken?.ticker ?? tokenId
   } else {
     // Native balance - use chainFeeCoin
     decimals = chainFeeCoin[chain].decimals

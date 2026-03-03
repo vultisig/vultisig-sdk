@@ -14,6 +14,11 @@ export const knownCosmosTokens: Record<
       logo: 'maya',
       decimals: 4,
     },
+    aztec: {
+      ticker: 'AZTEC',
+      logo: 'aztec',
+      decimals: 4,
+    },
   },
   [Chain.TerraClassic]: {
     uusd: {
