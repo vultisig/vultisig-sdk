@@ -26,6 +26,7 @@ import type {
   SwapQuoteResult,
   SwapResult,
   TokenInfo,
+  TxStatusResult,
   ValueResult,
   VaultInfo,
 } from '../types'
@@ -108,6 +109,8 @@ export type ISDKAdapter = {
 
   broadcastTx(vaultId: string, params: BroadcastParams): Promise<string>
 
+  getTxStatus(vaultId: string, chain: string, txHash: string): Promise<TxStatusResult>
+
   // ===== Export/Misc =====
   exportVault(vaultId: string, options?: ExportOptions): Promise<string>
 
@@ -153,6 +156,12 @@ export type ISDKAdapter = {
 
   /** Subscribe to transaction broadcast events */
   onTransactionBroadcast(callback: (data: { chain: string; txHash: string }) => void): () => void
+
+  /** Subscribe to transaction confirmed events */
+  onTransactionConfirmed(callback: (data: { chain: string; txHash: string }) => void): () => void
+
+  /** Subscribe to transaction failed events */
+  onTransactionFailed(callback: (data: { chain: string; txHash: string }) => void): () => void
 
   /** Subscribe to error events */
   onError(callback: (error: Error) => void): () => void

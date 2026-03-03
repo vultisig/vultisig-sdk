@@ -155,6 +155,16 @@ export type CreateSecureVaultResult = {
   sessionId: string
 }
 
+// Transaction status
+export type TxStatusResult = {
+  status: 'pending' | 'success' | 'error'
+  receipt?: {
+    feeAmount: string
+    feeDecimals: number
+    feeTicker: string
+  }
+}
+
 // Transaction types
 export type CoinInfo = {
   chain: string

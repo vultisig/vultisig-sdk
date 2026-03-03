@@ -23,6 +23,7 @@ import type {
   SwapQuoteResult,
   SwapResult,
   TokenInfo,
+  TxStatusResult,
   ValueResult,
   VaultInfo,
 } from '@vultisig/examples-shared'
@@ -120,6 +121,7 @@ declare global {
         vaultId: string,
         params: { chain: string; keysignPayload: unknown; signature: unknown }
       ): Promise<string>
+      getTxStatus(vaultId: string, chain: string, txHash: string): Promise<TxStatusResult>
 
       // Export
       exportVault(vaultId: string, options?: { password?: string; includeSigners?: boolean }): Promise<string>
@@ -157,6 +159,8 @@ declare global {
       onBalanceUpdated(callback: (data: { chain: string; tokenId?: string }) => void): () => void
       onChainChanged(callback: (data: { chain: string; action: 'added' | 'removed' }) => void): () => void
       onTransactionBroadcast(callback: (data: { chain: string; txHash: string }) => void): () => void
+      onTransactionConfirmed(callback: (data: { chain: string; txHash: string }) => void): () => void
+      onTransactionFailed(callback: (data: { chain: string; txHash: string }) => void): () => void
       onError(callback: (data: { message: string }) => void): () => void
       onVaultChanged(callback: (data: { vault: VaultInfo | null }) => void): () => void
     }
@@ -175,6 +179,8 @@ export class ElectronSDKAdapter implements ISDKAdapter {
   private balanceUpdatedCallbacks = new Set<(data: { chain: string; tokenId?: string }) => void>()
   private chainChangedCallbacks = new Set<(data: { chain: string; action: 'added' | 'removed' }) => void>()
   private txBroadcastCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
+  private txConfirmedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
+  private txFailedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
   private errorCallbacks = new Set<(error: Error) => void>()
 
   constructor() {
@@ -205,6 +211,14 @@ export class ElectronSDKAdapter implements ISDKAdapter {
 
     window.electronAPI.onTransactionBroadcast(data => {
       this.txBroadcastCallbacks.forEach(cb => cb(data))
+    })
+
+    window.electronAPI.onTransactionConfirmed(data => {
+      this.txConfirmedCallbacks.forEach(cb => cb(data))
+    })
+
+    window.electronAPI.onTransactionFailed(data => {
+      this.txFailedCallbacks.forEach(cb => cb(data))
     })
 
     window.electronAPI.onError(({ message }) => {
@@ -393,6 +407,10 @@ export class ElectronSDKAdapter implements ISDKAdapter {
     })
   }
 
+  async getTxStatus(vaultId: string, chain: string, txHash: string): Promise<TxStatusResult> {
+    return window.electronAPI.getTxStatus(vaultId, chain, txHash)
+  }
+
   // ===== Export/Misc =====
   async exportVault(vaultId: string, options?: ExportOptions): Promise<string> {
     return window.electronAPI.exportVault(vaultId, options)
@@ -469,6 +487,16 @@ export class ElectronSDKAdapter implements ISDKAdapter {
   onTransactionBroadcast(callback: (data: { chain: string; txHash: string }) => void): () => void {
     this.txBroadcastCallbacks.add(callback)
     return () => this.txBroadcastCallbacks.delete(callback)
+  }
+
+  onTransactionConfirmed(callback: (data: { chain: string; txHash: string }) => void): () => void {
+    this.txConfirmedCallbacks.add(callback)
+    return () => this.txConfirmedCallbacks.delete(callback)
+  }
+
+  onTransactionFailed(callback: (data: { chain: string; txHash: string }) => void): () => void {
+    this.txFailedCallbacks.add(callback)
+    return () => this.txFailedCallbacks.delete(callback)
   }
 
   onError(callback: (error: Error) => void): () => void {
