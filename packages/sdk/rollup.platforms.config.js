@@ -32,6 +32,7 @@ const external = [
   /\.wasm$/,
   // wasm-bindgen generated JS must be external - bundling breaks externref tables
   /lib\/dkls\/vs_wasm/,
+  /lib\/mldsa\/vs_wasm/,
   /lib\/schnorr\/vs_schnorr_wasm/,
   'tiny-secp256k1',
   '@solana/web3.js',
@@ -47,6 +48,7 @@ const external = [
 // Converts ../../../lib/dkls/vs_wasm to ./lib/dkls/vs_wasm.js (relative to dist/)
 const wasmPathsResolver = id => {
   if (id.match(/lib\/dkls\/vs_wasm/)) return './lib/dkls/vs_wasm.js'
+  if (id.match(/lib\/mldsa\/vs_wasm/)) return './lib/mldsa/vs_wasm.js'
   if (id.match(/lib\/schnorr\/vs_schnorr_wasm/)) return './lib/schnorr/vs_schnorr_wasm.js'
   return id
 }
@@ -54,6 +56,7 @@ const wasmPathsResolver = id => {
 const wasmCopyPlugin = copy({
   targets: [
     { src: '../lib/dkls', dest: './dist/lib' },
+    { src: '../lib/mldsa', dest: './dist/lib' },
     { src: '../lib/schnorr', dest: './dist/lib' },
   ],
 })

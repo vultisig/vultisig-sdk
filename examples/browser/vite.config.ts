@@ -61,11 +61,19 @@ export default defineConfig({
         try {
           // Create lib directories
           mkdirSync(path.join(publicLibPath, 'dkls'), { recursive: true })
+          mkdirSync(path.join(publicLibPath, 'mldsa'), { recursive: true })
           mkdirSync(path.join(publicLibPath, 'schnorr'), { recursive: true })
 
           // Copy DKLS WASM files
           copyFileSync(path.join(sdkLibPath, 'dkls/vs_wasm_bg.wasm'), path.join(publicLibPath, 'dkls/vs_wasm_bg.wasm'))
           copyFileSync(path.join(sdkLibPath, 'dkls/vs_wasm.js'), path.join(publicLibPath, 'dkls/vs_wasm.js'))
+
+          // Copy ML-DSA WASM files
+          copyFileSync(
+            path.join(sdkLibPath, 'mldsa/vs_wasm_bg.wasm'),
+            path.join(publicLibPath, 'mldsa/vs_wasm_bg.wasm')
+          )
+          copyFileSync(path.join(sdkLibPath, 'mldsa/vs_wasm.js'), path.join(publicLibPath, 'mldsa/vs_wasm.js'))
 
           // Copy Schnorr WASM files
           copyFileSync(

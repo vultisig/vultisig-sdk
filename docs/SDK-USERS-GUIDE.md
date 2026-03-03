@@ -1249,6 +1249,54 @@ try {
 }
 ```
 
+### Checking Transaction Status
+
+After broadcasting, use `getTxStatus()` to check whether a transaction has been confirmed, is still pending, or has failed:
+
+```typescript
+const txHash = await vault.broadcastTx({ chain, keysignPayload, signature })
+
+// Poll for confirmation
+const checkStatus = async () => {
+  const result = await vault.getTxStatus({ chain: Chain.Ethereum, txHash })
+
+  switch (result.status) {
+    case 'success':
+      console.log(`Confirmed! Fee: ${result.receipt?.feeAmount} ${result.receipt?.feeTicker}`)
+      return true
+    case 'error':
+      console.log('Transaction failed on-chain')
+      return true
+    case 'pending':
+      console.log('Still pending...')
+      return false
+  }
+}
+```
+
+**Supported chains:** All chain families (EVM, UTXO, Cosmos, Solana, Sui, Polkadot, Ripple, Tron, Cardano, TON).
+
+**Return type (`TxStatusResult`):**
+- `status: 'pending' | 'success' | 'error'` - Current on-chain status
+- `receipt?: TxReceiptInfo` - Fee details when available:
+  - `feeAmount: bigint` - Fee paid in base units
+  - `feeDecimals: number` - Decimal places for the fee token
+  - `feeTicker: string` - Fee token symbol (e.g., "ETH", "BTC")
+
+**Error handling:**
+
+```typescript
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+
+try {
+  const result = await vault.getTxStatus({ chain, txHash })
+} catch (error) {
+  if (error instanceof VaultError && error.code === VaultErrorCode.NetworkError) {
+    console.log('RPC request failed:', error.message)
+  }
+}
+```
+
 ### Cosmos Signing (SignAmino & SignDirect)
 
 For Cosmos SDK chains (Cosmos, Osmosis, THORChain, MayaChain, Dydx, Kujira, etc.), the SDK provides two signing methods that give you full control over transaction construction:
@@ -2287,6 +2335,15 @@ vault.on('transactionSigned', ({ chain, txHash }) => {
 vault.on('transactionBroadcast', ({ chain, txHash }) => {
   console.log(`Transaction broadcast on ${chain}: ${txHash}`)
 })
+vault.on('transactionConfirmed', ({ chain, txHash, receipt }) => {
+  console.log(`Transaction confirmed on ${chain}: ${txHash}`)
+  if (receipt) {
+    console.log(`  Block: ${receipt.blockNumber}, Fee: ${receipt.fee}`)
+  }
+})
+vault.on('transactionFailed', ({ chain, txHash }) => {
+  console.log(`Transaction failed on ${chain}: ${txHash}`)
+})
 vault.on('signingProgress', ({ step, progress, message }) => {
   console.log(`Signing: ${message} (${progress}%)`)
 })
@@ -2541,6 +2598,7 @@ class VaultBase {
   signBytes(options: SignBytesOptions, signingOptions?: SigningOptions): Promise<Signature>
   broadcastTx(params: BroadcastParams): Promise<string>
   broadcastRawTx(params: { chain: Chain, rawTx: string }): Promise<string>
+  getTxStatus(params: { chain: Chain, txHash: string }): Promise<TxStatusResult>
   gas<C extends Chain>(chain: C): Promise<GasInfoForChain<C>>
 
   // Cosmos Signing (SignAmino & SignDirect)
