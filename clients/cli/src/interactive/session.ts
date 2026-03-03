@@ -46,6 +46,7 @@ import {
   executeSwapChains,
   executeSwapQuote,
   executeTokens,
+  executeTxStatus,
   executeVaults,
 } from '../commands'
 import { stopAllSpinners } from '../lib/output'
@@ -376,6 +377,10 @@ export class ShellSession {
       // Transaction
       case 'send':
         await this.runSend(args)
+        break
+
+      case 'tx-status':
+        await this.runTxStatus(args)
         break
 
       // Chain management
@@ -749,6 +754,17 @@ export class ShellSession {
       }
       throw err
     }
+  }
+
+  private async runTxStatus(args: string[]): Promise<void> {
+    if (args.length < 2) {
+      console.log(chalk.yellow('Usage: tx-status <chain> <txHash> [--no-wait]'))
+      return
+    }
+    const [chainStr, txHash, ...rest] = args
+    const chain = findChainByName(chainStr) || (chainStr as Chain)
+    const noWait = rest.includes('--no-wait')
+    await this.withCancellation(() => executeTxStatus(this.ctx, { chain, txHash, noWait }))
   }
 
   private async runChains(args: string[]): Promise<void> {
