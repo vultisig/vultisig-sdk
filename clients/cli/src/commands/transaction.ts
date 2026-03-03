@@ -2,49 +2,13 @@
  * Transaction Commands - send transactions
  */
 import type { VaultBase } from '@vultisig/sdk'
-import { Chain, Vultisig } from '@vultisig/sdk'
+import { Chain, decimalStringToBigInt, Vultisig } from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, SendParams, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
 import { createSpinner, info, isJsonOutput, isSilent, outputJson, printResult, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
-
-/**
- * Convert a decimal amount string to BigInt chain units without floating-point precision loss.
- * Uses string manipulation to avoid IEEE 754 floating-point errors that occur with large numbers.
- *
- * @param amountStr - The amount as a string (e.g., "1000000" or "100.5")
- * @param decimals - Number of decimal places for the chain/token
- * @returns BigInt representation in base units
- */
-function parseAmountToBigInt(amountStr: string, decimals: number): bigint {
-  // Remove any whitespace and handle negative sign
-  const trimmed = amountStr.trim()
-  const isNegative = trimmed.startsWith('-')
-  const absolute = isNegative ? trimmed.slice(1) : trimmed
-
-  // Split into integer and decimal parts
-  const parts = absolute.split('.')
-  const integerPart = parts[0] || '0'
-  let decimalPart = parts[1] || ''
-
-  // Pad or truncate decimal part to match expected decimals
-  if (decimalPart.length < decimals) {
-    decimalPart = decimalPart.padEnd(decimals, '0')
-  } else if (decimalPart.length > decimals) {
-    // Truncate extra decimals (floor behavior)
-    decimalPart = decimalPart.slice(0, decimals)
-  }
-
-  // Combine integer and decimal parts into a single string
-  const combined = integerPart + decimalPart
-  // Remove leading zeros but keep at least one digit
-  const normalized = combined.replace(/^0+/, '') || '0'
-
-  const result = BigInt(normalized)
-  return isNegative ? -result : result
-}
 
 // AccountCoin type from SDK internals
 type AccountCoin = {
@@ -90,7 +54,7 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     id: params.tokenId,
   }
 
-  const amount = parseAmountToBigInt(params.amount, balance.decimals)
+  const amount = decimalStringToBigInt(params.amount, balance.decimals)
 
   const payload = await vault.prepareSendTx({
     coin,

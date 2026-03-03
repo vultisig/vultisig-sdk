@@ -36,6 +36,13 @@ export {
 export { ValidationHelpers } from './utils/validation'
 
 // ============================================================================
+// PUBLIC API - BigInt Utilities
+// ============================================================================
+
+// Precision-safe decimal to BigInt conversion
+export { decimalStringToBigInt } from '@lib/utils/bigint/decimalStringToBigInt'
+
+// ============================================================================
 // PUBLIC API - Chain Configuration
 // ============================================================================
 
