@@ -27,6 +27,7 @@ export type {
   ImportSeedphraseSecureOptions,
   JoinSecureVaultOptions,
   JoinSecureVaultResult,
+  MaxSendAmountResult,
   PrepareSwapParams,
   ProgressStep,
   SaveFileOptions,
@@ -38,6 +39,7 @@ export type {
   SwapQuoteResult,
   SwapResult,
   TokenInfo,
+  TxStatusResult,
   ValueResult,
   VaultInfo,
 } from './types'

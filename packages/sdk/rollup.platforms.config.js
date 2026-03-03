@@ -38,6 +38,7 @@ const external = [
   '@solana/web3.js',
   '@cosmjs/stargate',
   '@cosmjs/amino',
+  '@cosmjs/proto-signing',
   '@bufbuild/protobuf',
   'ripple-binary-codec',
   // 7z-wasm uses Emscripten-style WASM loading - must stay external so it can find its .wasm file
@@ -96,6 +97,7 @@ const createPlugins = (platformOptions = {}) => {
         '@solana/web3.js',
         '@cosmjs/stargate',
         '@cosmjs/amino',
+        '@cosmjs/proto-signing',
       ],
       ignore: [/\.wasm$/],
     }),

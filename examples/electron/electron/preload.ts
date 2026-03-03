@@ -83,6 +83,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sign: (vaultId: string, payload: any) => ipcRenderer.invoke('vault:sign', vaultId, payload),
   broadcastTx: (vaultId: string, params: { chain: string; keysignPayload: any; signature: any }) =>
     ipcRenderer.invoke('vault:broadcastTx', vaultId, params),
+  getTxStatus: (vaultId: string, chain: string, txHash: string) =>
+    ipcRenderer.invoke('vault:getTxStatus', vaultId, chain, txHash),
 
   // Export
   exportVault: (vaultId: string, options?: { password?: string; includeSigners?: boolean }) =>
@@ -157,6 +159,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event: Electron.IpcRendererEvent, data: { chain: string; txHash: string }) => callback(data)
     ipcRenderer.on('vault:transactionBroadcast', handler)
     return () => ipcRenderer.removeListener('vault:transactionBroadcast', handler)
+  },
+  onTransactionConfirmed: (callback: (data: { chain: string; txHash: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { chain: string; txHash: string }) => callback(data)
+    ipcRenderer.on('vault:transactionConfirmed', handler)
+    return () => ipcRenderer.removeListener('vault:transactionConfirmed', handler)
+  },
+  onTransactionFailed: (callback: (data: { chain: string; txHash: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { chain: string; txHash: string }) => callback(data)
+    ipcRenderer.on('vault:transactionFailed', handler)
+    return () => ipcRenderer.removeListener('vault:transactionFailed', handler)
   },
   onError: (callback: (data: { message: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { message: string }) => callback(data)
