@@ -112,6 +112,16 @@ export class EventBuffer {
       this.handleEvent(`  TX Hash: ${txHash}`, 'info')
     })
 
+    // Transaction confirmed
+    vault.on('transactionConfirmed', ({ chain, txHash }: any) => {
+      this.handleEvent(`+ Transaction confirmed on ${chain}: ${txHash}`, 'success')
+    })
+
+    // Transaction failed
+    vault.on('transactionFailed', ({ chain, txHash }: any) => {
+      this.handleEvent(`x Transaction failed on ${chain}: ${txHash}`, 'error')
+    })
+
     // Signing progress
     vault.on('signingProgress', ({ step }: any) => {
       this.handleEvent(`i Signing: ${step}`, 'info')
@@ -203,6 +213,8 @@ export class EventBuffer {
     vault.removeAllListeners('balanceUpdated')
     vault.removeAllListeners('transactionSigned')
     vault.removeAllListeners('transactionBroadcast')
+    vault.removeAllListeners('transactionConfirmed')
+    vault.removeAllListeners('transactionFailed')
     vault.removeAllListeners('signingProgress')
     vault.removeAllListeners('chainAdded')
     vault.removeAllListeners('chainRemoved')

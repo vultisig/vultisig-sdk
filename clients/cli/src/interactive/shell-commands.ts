@@ -204,6 +204,7 @@ export function showHelp(): void {
     [chalk.bold('Wallet Operations:')],
     ['  balance [chain]     - Show balances'],
     ['  send <chain> <to> <amount> - Send transaction'],
+    ['  tx-status <chain> <txHash> - Check transaction status'],
     ['  portfolio [-c usd]  - Show portfolio value'],
     ['  addresses           - Show all addresses'],
     ['  chains [--add/--remove/--add-all] - Manage chains'],
