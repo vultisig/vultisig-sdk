@@ -6,6 +6,8 @@ import { Chain } from '@core/chain/Chain'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { getCoinValue } from '@core/chain/coin/utils/getCoinValue'
+import { getTxStatus as coreTxStatus } from '@core/chain/tx/status'
+import type { TxStatusResult } from '@core/chain/tx/status/resolver'
 import { vaultConfig } from '@core/config'
 import { FeeSettings } from '@core/mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@core/mpc/types/utils/commVault'
@@ -1120,6 +1122,51 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     } catch (error) {
       this.emit('error', error as Error)
       throw error
+    }
+  }
+
+  // ===== TRANSACTION STATUS =====
+
+  /**
+   * Check the status of a previously broadcast transaction
+   *
+   * Queries the blockchain to determine whether a transaction is pending,
+   * confirmed (success), or failed (error). Supports all chain types.
+   *
+   * @param params.chain - The blockchain the transaction was broadcast on
+   * @param params.txHash - The transaction hash to check
+   * @returns Transaction status with optional receipt info (fees paid)
+   *
+   * @example
+   * ```typescript
+   * const txHash = await vault.broadcastTx({ chain, keysignPayload, signature })
+   *
+   * // Check status
+   * const result = await vault.getTxStatus({ chain: Chain.Ethereum, txHash })
+   * if (result.status === 'success') {
+   *   console.log(`Confirmed! Fee: ${result.receipt?.feeAmount}`)
+   * }
+   * ```
+   */
+  async getTxStatus(params: { chain: Chain; txHash: string }): Promise<TxStatusResult> {
+    const { chain, txHash } = params
+
+    try {
+      const result = await coreTxStatus({ chain, hash: txHash })
+
+      if (result.status === 'success') {
+        this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })
+      } else if (result.status === 'error') {
+        this.emit('transactionFailed', { chain, txHash })
+      }
+
+      return result
+    } catch (error) {
+      throw new VaultError(
+        VaultErrorCode.NetworkError,
+        `Failed to get transaction status for ${txHash} on ${chain}: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error : undefined
+      )
     }
   }
 

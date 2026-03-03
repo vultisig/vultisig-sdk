@@ -111,6 +111,7 @@ configureCrypto(new NodeCrypto())
  * The SDK requires WASM to be configured before initialization.
  */
 import { initializeMpcLib } from '@core/mpc/lib/initialize'
+import { initializeMldsaLib } from '@core/mpc/mldsa/initializeMldsa'
 import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 
@@ -126,6 +127,7 @@ const initAllWasm = memoizeAsync(async () => {
     initWalletCore(),
     initializeMpcLib('ecdsa'), // DKLS - via core's single source of truth
     initializeMpcLib('eddsa'), // Schnorr - via core's single source of truth
+    initializeMldsaLib(), // ML-DSA - post-quantum signatures
   ])
   walletCoreInstance = walletCore
   return walletCore

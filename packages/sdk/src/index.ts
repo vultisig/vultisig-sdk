@@ -121,6 +121,8 @@ export type {
   SwapQuoteResult,
   SwapTxParams,
   Token,
+  TxReceiptInfo,
+  TxStatusResult,
   UtxoGasInfo,
   ValidationResult,
   Value,

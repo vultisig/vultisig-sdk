@@ -657,6 +657,38 @@ Validate a transaction for security risks before signing using Blockaid. Support
 
 Simulate a transaction to preview asset changes before signing. Supported: EVM chains, Solana. Returns null for unsupported chains.
 
+### Transaction Status
+
+#### `vault.getTxStatus(params): Promise<TxStatusResult>`
+
+Check the on-chain status of a previously broadcast transaction. Supports all chain types.
+
+**Parameters:**
+
+- `params.chain: Chain` - The blockchain the transaction was broadcast on
+- `params.txHash: string` - The transaction hash to check
+
+**Returns:**
+
+- `status: 'pending' | 'success' | 'error'` - Current transaction status
+- `receipt?: TxReceiptInfo` - Fee details if available (`feeAmount`, `feeDecimals`, `feeTicker`)
+
+**Example:**
+
+```typescript
+const txHash = await vault.broadcastTx({ chain, keysignPayload, signature })
+
+// Poll for confirmation
+const result = await vault.getTxStatus({ chain: Chain.Ethereum, txHash })
+if (result.status === 'success') {
+  console.log(`Confirmed! Fee: ${result.receipt?.feeAmount} ${result.receipt?.feeTicker}`)
+} else if (result.status === 'error') {
+  console.log('Transaction failed')
+}
+```
+
+Emits `transactionConfirmed` or `transactionFailed` events for terminal states.
+
 ### Push Notification Methods
 
 Accessed via `sdk.notifications`:
