@@ -2,6 +2,10 @@
 
 TypeScript SDK for multi-party computation (MPC) wallet operations. Supports 40+ blockchains with secure vault creation, address derivation, and transaction signing.
 
+## Security Tier
+
+HIGH
+
 ## Critical: Upstream Code
 
 **DO NOT EDIT** these directories - they are synced from vultisig-windows:
