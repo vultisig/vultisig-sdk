@@ -298,6 +298,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       return // Already disposed
     }
 
+    // Disconnect WebSocket if connected
+    this.context.pushNotificationService.disconnect()
+
     // Clear pending vaults (unverified vaults are discarded)
     this.pendingVaults.clear()
 

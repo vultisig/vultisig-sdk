@@ -208,4 +208,6 @@ export type {
   PushToken,
   RegisterDeviceOptions,
   SigningNotification,
+  WSConnectionState,
+  WSConnectOptions,
 } from './types/notifications'

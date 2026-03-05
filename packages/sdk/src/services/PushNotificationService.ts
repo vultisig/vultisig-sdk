@@ -12,14 +12,27 @@ import type {
   PushNotificationRegistration,
   RegisterDeviceOptions,
   SigningNotification,
+  WSConnectionState,
+  WSConnectOptions,
 } from '../types/notifications'
 
 const STORAGE_KEY = 'pushNotificationRegistrations'
 
 type RegistrationMap = Record<string, PushNotificationRegistration>
 
+/** Max reconnection delay in milliseconds */
+const MAX_RECONNECT_DELAY = 30_000
+
 export class PushNotificationService {
   private readonly handlers: Set<(notification: SigningNotification) => void> = new Set()
+
+  // WebSocket state
+  private ws: WebSocket | null = null
+  private wsState: WSConnectionState = 'disconnected'
+  private wsOptions: WSConnectOptions | null = null
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectAttempts = 0
+  private readonly stateHandlers: Set<(state: WSConnectionState) => void> = new Set()
 
   constructor(
     private readonly storage: Storage,
@@ -198,6 +211,146 @@ export class PushNotificationService {
       qrCodeData: body,
       raw,
     }
+  }
+
+  // ===== WebSocket =====
+
+  /**
+   * Derive the WebSocket URL from the REST server URL.
+   * e.g. "https://api.vultisig.com/push" → "wss://api.vultisig.com/push/ws"
+   */
+  private get wsUrl(): string {
+    const url = new URL(this.serverUrl)
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    // Ensure path ends with /ws
+    url.pathname = url.pathname.replace(/\/$/, '') + '/ws'
+    return url.toString()
+  }
+
+  /**
+   * Connect a WebSocket for real-time notification delivery.
+   * Messages are delivered through the same onSigningRequest() callbacks.
+   *
+   * Requires prior registerDevice() call — the server validates the token.
+   * Auto-reconnects on disconnection (server re-delivers pending messages within 60s TTL).
+   */
+  connect(options: WSConnectOptions): void {
+    this.disconnect()
+    this.wsOptions = options
+    this.reconnectAttempts = 0
+    this.openWebSocket()
+  }
+
+  /**
+   * Disconnect the WebSocket and stop auto-reconnect.
+   */
+  disconnect(): void {
+    if (this.wsOptions === null && !this.ws) return
+    this.wsOptions = null // Signal intentional disconnect
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    if (this.ws) {
+      // Detach onclose before closing to prevent the onclose handler from
+      // triggering reconnect or redundant state change
+      this.ws.onclose = null
+      this.ws.close()
+      this.ws = null
+    }
+    this.setWSState('disconnected')
+  }
+
+  /**
+   * Current WebSocket connection state.
+   */
+  get connectionState(): WSConnectionState {
+    return this.wsState
+  }
+
+  /**
+   * Register a callback for connection state changes.
+   * Returns an unsubscribe function.
+   */
+  onConnectionStateChange(handler: (state: WSConnectionState) => void): () => void {
+    this.stateHandlers.add(handler)
+    return () => {
+      this.stateHandlers.delete(handler)
+    }
+  }
+
+  private setWSState(state: WSConnectionState): void {
+    this.wsState = state
+    for (const handler of this.stateHandlers) {
+      handler(state)
+    }
+  }
+
+  private openWebSocket(): void {
+    this.setWSState('connecting')
+
+    const params = new URLSearchParams({
+      vault_id: this.wsOptions!.vaultId,
+      party_name: this.wsOptions!.partyName,
+      token: this.wsOptions!.token,
+    })
+
+    const ws = new WebSocket(`${this.wsUrl}?${params}`)
+    this.ws = ws
+
+    ws.onopen = () => {
+      this.reconnectAttempts = 0
+      this.setWSState('connected')
+    }
+
+    ws.onmessage = (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(typeof event.data === 'string' ? event.data : String(event.data))
+        if (msg.type === 'notification') {
+          const notification: SigningNotification = {
+            vaultName: msg.vault_name,
+            qrCodeData: msg.qr_code_data,
+            raw: {
+              title: 'Vultisig Keysign request',
+              subtitle: `Vault: ${msg.vault_name}`,
+              body: msg.qr_code_data,
+            },
+          }
+          for (const handler of this.handlers) {
+            handler(notification)
+          }
+          // ACK to prevent re-delivery on reconnect
+          ws.send(JSON.stringify({ type: 'ack', id: msg.id }))
+        }
+      } catch {
+        // Ignore malformed messages
+      }
+    }
+
+    ws.onclose = () => {
+      this.ws = null
+      if (this.wsOptions) {
+        // Unintentional disconnect — reconnect
+        this.setWSState('reconnecting')
+        this.scheduleReconnect()
+      } else {
+        this.setWSState('disconnected')
+      }
+    }
+
+    ws.onerror = () => {
+      // onclose fires after onerror — reconnect handled there
+    }
+  }
+
+  private scheduleReconnect(): void {
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), MAX_RECONNECT_DELAY)
+    this.reconnectAttempts++
+    this.reconnectTimer = setTimeout(() => {
+      if (this.wsOptions) {
+        this.openWebSocket()
+      }
+    }, delay)
   }
 
   // ===== Health =====
