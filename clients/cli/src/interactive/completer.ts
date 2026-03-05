@@ -25,6 +25,7 @@ const COMMANDS = [
   'balance',
   'bal',
   'send',
+  'tx-status',
   'portfolio',
   'addresses',
   'chains',
@@ -91,7 +92,10 @@ export function createCompleter(ctx: ShellContext) {
       }
 
       // Chain completion for balance, tokens, send, swap commands
-      if (['balance', 'bal', 'tokens', 'send', 'swap', 'swap-quote'].includes(command) && parts.length === 2) {
+      if (
+        ['balance', 'bal', 'tokens', 'send', 'swap', 'swap-quote', 'tx-status'].includes(command) &&
+        parts.length === 2
+      ) {
         const partial = parts[1] || ''
         return completeChainName(partial)
       }

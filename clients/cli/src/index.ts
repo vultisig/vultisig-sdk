@@ -43,6 +43,7 @@ import {
   executeSwapQuote,
   executeSwitch,
   executeTokens,
+  executeTxStatus,
   executeVaults,
   executeVerify,
 } from './commands'
@@ -580,6 +581,24 @@ program
       await executeBroadcast(context, {
         chain: findChainByName(options.chain) || (options.chain as Chain),
         rawTx: options.rawTx,
+      })
+    })
+  )
+
+// Command: Check transaction status
+program
+  .command('tx-status')
+  .description('Check the status of a transaction (polls until confirmed)')
+  .requiredOption('--chain <chain>', 'Target blockchain')
+  .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
+  .option('--no-wait', 'Return immediately without waiting for confirmation')
+  .action(
+    withExit(async (options: { chain: string; txHash: string; wait: boolean }) => {
+      const context = await init(program.opts().vault)
+      await executeTxStatus(context, {
+        chain: findChainByName(options.chain) || (options.chain as Chain),
+        txHash: options.txHash,
+        noWait: !options.wait,
       })
     })
   )

@@ -33,6 +33,7 @@ import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningP
 export type ServerEndpoints = {
   fastVault?: string
   messageRelay?: string
+  notification?: string
 }
 
 /**

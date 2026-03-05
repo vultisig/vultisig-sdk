@@ -124,6 +124,7 @@ SDK-only capabilities:
 - **Security Scanning**: Site scanning, transaction validation, transaction simulation
 - **Fiat On-Ramp**: Buy crypto via Banxa integration
 - **Cosmos Signing**: SignAmino and SignDirect for Cosmos dApps
+- **Push Notifications**: Register devices, notify vault members for signing, handle incoming push events
 - **Event System**: Reactive updates for balances, signing, and more
 
 ## Get Started

@@ -10,6 +10,7 @@ import { Chain } from '@core/chain/Chain'
 import { DEFAULT_CHAINS } from '../constants'
 import { ServerManager } from '../server/ServerManager'
 import { PasswordCacheService } from '../services/PasswordCacheService'
+import { PushNotificationService } from '../services/PushNotificationService'
 import type { Storage } from '../storage/types'
 import type { SdkConfigOptions, SdkContext } from './SdkContext'
 
@@ -28,6 +29,7 @@ const DEFAULT_CURRENCY = 'USD'
 export type ServerEndpoints = {
   fastVault?: string
   messageRelay?: string
+  notification?: string
 }
 
 /**
@@ -149,6 +151,10 @@ export class SdkContextBuilder {
     // Create WasmProvider (simple object wrapping the module-level getWalletCore)
     const wasmProvider = { getWalletCore }
 
+    // Create PushNotificationService with notification server URL
+    const notificationUrl = this.serverEndpoints?.notification ?? 'https://api.vultisig.com/push'
+    const pushNotificationService = new PushNotificationService(this.storage, notificationUrl)
+
     // Build immutable config
     const config: Readonly<SdkConfigOptions> = Object.freeze({
       defaultChains: this.defaultChains ?? DEFAULT_CHAINS,
@@ -164,6 +170,7 @@ export class SdkContextBuilder {
       serverManager,
       passwordCache,
       wasmProvider,
+      pushNotificationService,
     }
   }
 }

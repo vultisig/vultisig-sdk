@@ -42,10 +42,10 @@ yarn add @vultisig/sdk
 ### Fast Vault (Server-Assisted)
 
 ```typescript
-import { Vultisig, MemoryStorage } from '@vultisig/sdk'
+import { Vultisig } from '@vultisig/sdk'
 
-// Initialize SDK
-const sdk = new Vultisig({ storage: new MemoryStorage() })
+// Initialize SDK (storage is auto-configured for your platform)
+const sdk = new Vultisig()
 await sdk.initialize()
 
 // Create a fast vault (server-assisted 2-of-2)
@@ -87,6 +87,8 @@ await vault.sign(payload, {
   }
 });
 ```
+
+> **WARNING — Storage & Vault Backups:** The SDK auto-configures persistent storage for your platform (FileStorage on Node.js, BrowserStorage in browsers). Do **not** use `MemoryStorage` in production — it is non-persistent and all vault keyshares are lost when the process exits. Loss of keyshares means **permanent loss of funds**. Always back up your vaults using `vault.export()`.
 
 ## API Documentation
 

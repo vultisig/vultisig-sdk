@@ -304,6 +304,7 @@ export async function coordinateMultiPartyKeyImport(
       serverManager: params.sdkContext.serverManager,
       passwordCache: params.sdkContext.passwordCache,
       wasmProvider: params.sdkContext.wasmProvider,
+      pushNotificationService: params.sdkContext.pushNotificationService,
     }
 
     secureVaults = await Promise.all(
