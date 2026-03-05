@@ -18,6 +18,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 🛡️ **Security Scanning** - Transaction validation/simulation via Blockaid, site phishing detection
 - 💵 **Price Feeds** - Fetch token prices via CoinGecko
 - 🏪 **Fiat On-Ramp** - Generate Banxa buy URLs for 23+ supported chains
+- 🔔 **Push Notifications** - Real-time signing coordination via WebSocket or platform push (APNs, FCM, Web Push)
 - 🌍 **WASM Integration** - High-performance cryptographic operations via WebAssembly
 
 ## Installation
@@ -282,7 +283,28 @@ sdk.notifications.handleIncomingPush(notification.userInfo)
 sdk.notifications.handleIncomingPush(remoteMessage.data)
 ```
 
-**Browser / Extension** — Use Web Push API with VAPID key from the SDK:
+**Browser / Extension** — Use WebSocket for real-time delivery (no service worker needed):
+```typescript
+// Register device
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: myDeviceToken,
+  deviceType: 'web',
+})
+
+// Connect WebSocket — notifications delivered via onSigningRequest()
+sdk.notifications.connect({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: myDeviceToken,
+})
+
+// Disconnect when done (also called by sdk.dispose())
+sdk.notifications.disconnect()
+```
+
+Alternatively, use Web Push API with VAPID key:
 ```typescript
 const vapidKey = await sdk.notifications.fetchVapidPublicKey()
 const subscription = await registration.pushManager.subscribe({
@@ -300,7 +322,7 @@ await sdk.notifications.registerDevice({
 sdk.notifications.handleIncomingPush(event.data.json())
 ```
 
-**Node.js / CLI** — No native push support. Use `parseNotificationPayload()` manually if you implement your own transport.
+**Node.js / CLI** — Use WebSocket delivery (`connect()`) or `parseNotificationPayload()` manually if you implement your own transport.
 
 ## Supported Blockchains
 
@@ -740,6 +762,27 @@ Check if a vault is registered locally for push notifications.
 #### `notifications.hasRemoteRegistrations(vaultId): Promise<boolean>`
 
 Check if any devices are registered for a vault on the server.
+
+#### `notifications.connect(options): void`
+
+Open a WebSocket connection for real-time notification delivery. Messages are dispatched through `onSigningRequest()` callbacks. Auto-reconnects with exponential backoff (1s → 30s cap). Requires prior `registerDevice()` call.
+
+**Parameters:**
+- `options.vaultId: string` - Vault ID (`publicKeys.ecdsa`)
+- `options.partyName: string` - Local party ID of the device
+- `options.token: string` - Same token used for `registerDevice()`
+
+#### `notifications.disconnect(): void`
+
+Close the WebSocket connection and stop auto-reconnect. Also called automatically by `sdk.dispose()`.
+
+#### `notifications.connectionState: WSConnectionState`
+
+Current WebSocket state: `'disconnected'` | `'connecting'` | `'connected'` | `'reconnecting'`
+
+#### `notifications.onConnectionStateChange(handler): () => void`
+
+Register a callback for WebSocket connection state changes. Returns an unsubscribe function.
 
 #### `notifications.ping(): Promise<boolean>`
 

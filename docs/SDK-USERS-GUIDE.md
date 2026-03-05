@@ -2028,9 +2028,53 @@ unsubscribe()
 | Display notification to user | **Consumer** |
 | Route to signing flow using `qrCodeData` | **Consumer** |
 
+### WebSocket Real-Time Delivery
+
+For environments where platform push isn't available (browser extensions, Electron, Node.js), the SDK provides a built-in WebSocket transport. Messages are delivered through the same `onSigningRequest()` callbacks — no platform push handler wiring needed.
+
+```typescript
+// Step 1: Register device (same as platform push)
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: myDeviceToken,       // Any stable unique identifier
+  deviceType: 'web',
+})
+
+// Step 2: Connect WebSocket
+sdk.notifications.connect({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: myDeviceToken,       // Same token used for registerDevice()
+})
+
+// Step 3: Handle notifications (same callback as platform push)
+const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
+  console.log(`Signing request for vault: ${notification.vaultName}`)
+  // Use notification.qrCodeData to join the signing session
+})
+
+// Step 4: Monitor connection state (optional)
+const unsubState = sdk.notifications.onConnectionStateChange((state) => {
+  // state: 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+  console.log('WebSocket state:', state)
+})
+
+// Step 5: Disconnect when done
+sdk.notifications.disconnect()
+unsubscribe()
+unsubState()
+```
+
+**Auto-reconnect:** If the connection drops, the SDK automatically reconnects with exponential backoff (1s → 2s → 4s → ... capped at 30s). The server retains unacknowledged messages for 60 seconds and re-delivers them on reconnect — no messages are lost during brief disconnections.
+
+**ACK protocol:** The SDK automatically acknowledges each received notification so the server does not re-deliver it.
+
+**Lifecycle tip:** For browser extensions, connect when the popup opens and disconnect on close. `sdk.dispose()` calls `disconnect()` automatically.
+
 ### Web Push (Browser / Extension)
 
-For web platforms, fetch the VAPID public key from the server to subscribe:
+For web platforms using the Web Push API with service workers, fetch the VAPID public key from the server to subscribe:
 
 ```typescript
 const vapidKey = await sdk.notifications.fetchVapidPublicKey()
@@ -2047,6 +2091,8 @@ await sdk.notifications.registerDevice({
 })
 ```
 
+> **Tip:** For browser extensions, prefer WebSocket delivery (see above) over Web Push since extensions can maintain a direct connection while the popup is open.
+
 ### Utility Methods
 
 ```typescript
@@ -2062,11 +2108,15 @@ await sdk.notifications.unregisterVault(vaultId)
 // Parse notification payload manually (without invoking callbacks)
 const parsed = sdk.notifications.parseNotificationPayload(rawData)
 
+// Check WebSocket connection state
+const state = sdk.notifications.connectionState
+// 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+
 // Health check
 const healthy = await sdk.notifications.ping()
 ```
 
-> **Note:** Node.js / CLI environments have no native push receive mechanism. Node consumers can use `parseNotificationPayload()` manually if they implement their own transport (e.g., WebSocket, polling).
+> **Note:** Node.js / CLI environments have no native push receive mechanism. Use WebSocket delivery (`connect()`) or `parseNotificationPayload()` manually if you implement your own transport.
 
 ---
 

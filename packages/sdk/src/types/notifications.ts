@@ -51,3 +51,16 @@ export type SigningNotification = {
   /** Raw notification payload */
   raw: NotificationPayload
 }
+
+// ===== WebSocket types =====
+
+/** WebSocket connection lifecycle state */
+export type WSConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+
+/** Options for connecting a WebSocket for real-time notification delivery */
+export type WSConnectOptions = {
+  vaultId: string
+  partyName: string
+  /** Same push token used for registerDevice() — server validates it */
+  token: string
+}
