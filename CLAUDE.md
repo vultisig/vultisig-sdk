@@ -116,3 +116,14 @@ Specific E2E tests: `yarn test:e2e:balance`, `yarn test:e2e:signing`, etc.
 - Validation: `src/seedphrase/SeedphraseValidator.ts`
 - Languages: `src/seedphrase/languages/` (10 supported)
 - Discovery: `src/seedphrase/ChainDiscoveryService.ts`
+
+## Knowledge Base
+
+For deeper context, see [vultisig-knowledge](https://github.com/vultisig/vultisig-knowledge). Read only when needed:
+
+| Situation | Read |
+|-----------|------|
+| First time in this repo | [repos/vultisig-sdk.md](https://github.com/vultisig/vultisig-knowledge/blob/main/repos/vultisig-sdk.md) |
+| Understanding upstream (windows) | [repos/vultisig-windows.md](https://github.com/vultisig/vultisig-knowledge/blob/main/repos/vultisig-windows.md) |
+| Cross-repo gotchas | [coding/gotchas.md](https://github.com/vultisig/vultisig-knowledge/blob/main/coding/gotchas.md) (see "SDK core/ and lib/ are read-only") |
+| Unsure about conventions | [coding/patterns.md](https://github.com/vultisig/vultisig-knowledge/blob/main/coding/patterns.md) |
