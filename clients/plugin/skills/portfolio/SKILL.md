@@ -1,3 +1,7 @@
+---
+description: Show total portfolio value and per-chain token holdings for the active Vultisig vault.
+---
+
 Use the Bash tool to run:
   vultisig portfolio --silent -o json
 

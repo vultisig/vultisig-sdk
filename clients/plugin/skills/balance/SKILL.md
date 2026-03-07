@@ -1,3 +1,7 @@
+---
+description: Show token balances for all chains or a specific chain from the active Vultisig vault.
+---
+
 Use the Bash tool to run:
   vultisig balance [chain] --silent -o json
 

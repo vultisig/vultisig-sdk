@@ -1,3 +1,7 @@
+---
+description: Send native assets or tokens from a Vultisig vault to a recipient address on any supported chain.
+---
+
 Use the Bash tool to run:
   vultisig send <chain> <to> <amount> --silent -o json
 

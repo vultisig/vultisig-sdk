@@ -1,3 +1,7 @@
+---
+description: Execute a cross-chain or same-chain token swap via THORChain using the active Vultisig vault.
+---
+
 Use the Bash tool to run:
   vultisig swap <from> <to> <amount> -y --silent -o json
 

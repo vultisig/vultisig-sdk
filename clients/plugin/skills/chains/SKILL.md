@@ -1,3 +1,7 @@
+---
+description: List all blockchains supported by the Vultisig CLI, grouped by ecosystem.
+---
+
 Use the Bash tool to run:
   vultisig chains --silent -o json
 

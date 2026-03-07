@@ -1,3 +1,7 @@
+---
+description: Broadcast a hex-encoded signed transaction to the network on the specified chain.
+---
+
 Use the Bash tool to run:
   vultisig broadcast --chain <chain> --raw-tx <tx> --silent -o json
 

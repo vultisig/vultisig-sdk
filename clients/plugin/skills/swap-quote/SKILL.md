@@ -1,3 +1,7 @@
+---
+description: Get a swap quote showing expected output amount, fees, slippage, and estimated completion time.
+---
+
 Use the Bash tool to run:
   vultisig swap-quote <from> <to> <amount> --silent -o json
 

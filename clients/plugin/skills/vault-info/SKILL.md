@@ -1,3 +1,7 @@
+---
+description: Show detailed information about a vault including name, type, threshold, public keys, supported chains, and creation date.
+---
+
 Use the Bash tool to run:
   vultisig info --silent -o json
 

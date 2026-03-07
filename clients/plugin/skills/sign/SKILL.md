@@ -1,3 +1,7 @@
+---
+description: Sign arbitrary hex-encoded bytes with the vault key for a given chain using MPC signing.
+---
+
 Use the Bash tool to run:
   vultisig sign --chain <chain> --bytes <hex> --silent -o json
 

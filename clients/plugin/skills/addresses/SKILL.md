@@ -1,3 +1,6 @@
+---
+description: List wallet addresses for all chains or a specific chain from the active Vultisig vault.
+---
 Use the Bash tool to run:
   vultisig addresses --silent -o json
 

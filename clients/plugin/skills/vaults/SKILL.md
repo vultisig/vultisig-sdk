@@ -1,3 +1,7 @@
+---
+description: List all configured Vultisig vaults with their names, types (FastVault/SecureVault), and creation dates.
+---
+
 Use the Bash tool to run:
   vultisig vaults --silent -o json
 

@@ -1,3 +1,7 @@
+---
+description: List supported tokens for a specific chain, including symbols, contract addresses, and decimals.
+---
+
 Use the Bash tool to run:
   vultisig tokens <chain> --silent -o json
 

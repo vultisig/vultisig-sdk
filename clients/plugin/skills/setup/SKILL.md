@@ -1,4 +1,8 @@
-Help the user install the Vultisig CLI locally.
+---
+description: Install the Vultisig CLI and guide the user through creating or importing their first vault.
+---
+
+# Setup vultisig Skill
 
 Steps:
 1. Check if vultisig is already installed: `vultisig --version`
