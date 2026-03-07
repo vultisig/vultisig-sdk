@@ -15,3 +15,13 @@ All contributor instructions, project structure, commands, code conventions, and
 | [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Architecture & design patterns |
 | [docs/SDK-USERS-GUIDE.md](docs/SDK-USERS-GUIDE.md) | SDK usage tutorial |
 | [clients/cli/README.md](clients/cli/README.md) | CLI documentation |
+
+## Knowledge Base
+
+For deeper context beyond this file, see [vultisig-knowledge](https://github.com/vultisig/vultisig-knowledge).
+
+Key docs for this repo:
+- [repos/vultisig-sdk.md](https://github.com/vultisig/vultisig-knowledge/blob/main/repos/vultisig-sdk.md)
+- [repos/vultisig-windows.md](https://github.com/vultisig/vultisig-knowledge/blob/main/repos/vultisig-windows.md) (upstream)
+- [coding/patterns.md](https://github.com/vultisig/vultisig-knowledge/blob/main/coding/patterns.md)
+- [coding/gotchas.md](https://github.com/vultisig/vultisig-knowledge/blob/main/coding/gotchas.md) (see "SDK core/ and lib/ are read-only")

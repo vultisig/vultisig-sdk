@@ -31,7 +31,8 @@ examples/*/dist-electron/
 .idea/
 *.swp
 *.swo
-.claude/
+# .claude/ — committed (safety hooks + settings needed for agent framework)
+!.claude/
 
 # Git hooks (Husky auto-generated)
 .husky/_
