@@ -1,0 +1,12 @@
+{
+  "name": "vultisig",
+  "description": "Official Vultisig wallet plugins for Claude Code",
+  "plugins": [
+    {
+      "name": "vultisig",
+      "description": "MPC wallet management across 40+ chains",
+      "source": "https://github.com/vultisig/vultisig-sdk",
+      "path": "clients/plugin"
+    }
+  ]
+}
