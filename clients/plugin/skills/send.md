@@ -1,5 +1,5 @@
 Use the Bash tool to run:
-  vsig send <chain> <to> <amount> --silent -o json
+  vultisig send <chain> <to> <amount> --silent -o json
 
 - <chain>: the chain to send on (e.g. "ethereum", "bitcoin", "thorchain")
 - <to>: recipient address
@@ -12,4 +12,4 @@ If the user hasn't specified all three required parameters, ask for them.
 Always confirm the recipient address and amount with the user before executing.
 
 Parse the JSON output and display the transaction hash and a link to the block explorer.
-If vsig is not found, ask the user to install it: npm install -g @vultisig/cli
+If vultisig is not found, ask the user to install it: npm install -g @vultisig/cli

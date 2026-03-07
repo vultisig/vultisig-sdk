@@ -19,7 +19,7 @@ Manage your Vultisig MPC wallet directly from Claude Code — check balances, se
 
 ## Prerequisites
 
-The plugin requires the Vultisig CLI (`vsig`) to be installed locally:
+The plugin requires the Vultisig CLI (`vultisig`) to be installed locally:
 
 ```bash
 npm install -g @vultisig/cli
@@ -31,7 +31,7 @@ Use the `/vultisig:setup` skill for guided onboarding.
 
 | Skill | Description |
 |-------|-------------|
-| `/vultisig:setup` | Install vsig CLI and create your first vault |
+| `/vultisig:setup` | Install vultisig CLI and create your first vault |
 | `/vultisig:vaults` | List all configured vaults |
 | `/vultisig:vault-info` | Show detailed info for a vault |
 | `/vultisig:balance` | Check token balances |
@@ -47,4 +47,4 @@ Use the `/vultisig:setup` skill for guided onboarding.
 
 ## Security
 
-All operations are local. The plugin instructs Claude to invoke the `vsig` binary on your machine — no remote API calls are made by the plugin itself. Sensitive values like vault passwords should be passed via environment variables (e.g. `VAULT_PASSWORD`) rather than command-line arguments.
+All operations are local. The plugin instructs Claude to invoke the `vultisig` binary on your machine — no remote API calls are made by the plugin itself. Sensitive values like vault passwords should be passed via environment variables (e.g. `VAULT_PASSWORD`) rather than command-line arguments.

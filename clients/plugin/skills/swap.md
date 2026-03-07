@@ -1,5 +1,5 @@
 Use the Bash tool to run:
-  vsig swap <from> <to> <amount> -y --silent -o json
+  vultisig swap <from> <to> <amount> -y --silent -o json
 
 - <from>: source asset in "CHAIN.TICKER" format (e.g. "ETH.ETH", "BTC.BTC", "THOR.RUNE")
 - <to>: destination asset in "CHAIN.TICKER" format
@@ -13,4 +13,4 @@ If the user hasn't specified all three required parameters, ask for them.
 Always show the swap quote first and confirm with the user before executing.
 
 Parse the JSON output and display the transaction hash and status.
-If vsig is not found, ask the user to install it: npm install -g @vultisig/cli
+If vultisig is not found, ask the user to install it: npm install -g @vultisig/cli
