@@ -4,7 +4,6 @@
   "packageManager": "yarn@4.12.0",
   "workspaces": [
     "clients/cli",
-    "clients/plugin",
     "examples/*",
     "packages/sdk",
     "packages/core/chain",
