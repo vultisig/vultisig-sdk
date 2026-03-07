@@ -7,7 +7,7 @@ Manage your Vultisig MPC wallet directly from Claude Code — check balances, se
 ### From self-hosted marketplace
 
 ```bash
-/plugin marketplace add https://raw.githubusercontent.com/vultisig/vultisig-sdk/main/clients/plugin/marketplace.json
+/plugin marketplace add https://github.com/vultisig/vultisig-sdk
 /plugin install vultisig
 ```
 
