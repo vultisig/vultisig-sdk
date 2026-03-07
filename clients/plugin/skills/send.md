@@ -6,7 +6,7 @@ Use the Bash tool to run:
 - <amount>: amount in human-readable units (e.g. "0.01")
 - Add --token <ticker> to send a token other than the native asset (e.g. --token USDC).
 - Add --vault <name> if the user specified a vault.
-- Add --password <pwd> if a password was provided (prefer VAULT_PASSWORD env var).
+- If the vault is password-protected, ensure VAULT_PASSWORD is set in the environment. Never pass the password as a CLI argument.
 
 If the user hasn't specified all three required parameters, ask for them.
 Always confirm the recipient address and amount with the user before executing.

@@ -11,10 +11,39 @@ Manage your Vultisig MPC wallet directly from Claude Code — check balances, se
 /plugin install vultisig
 ```
 
-### From local monorepo path
+### From local path (manual install)
+
+The `/plugin install` command only supports marketplace installs. To test locally, copy the plugin into Claude's cache and register it manually:
 
 ```bash
-/plugin install --path clients/plugin
+# Copy plugin files into Claude's plugin cache
+mkdir -p ~/.claude/plugins/cache/local/vultisig/dev
+cp -r clients/plugin/.claude-plugin ~/.claude/plugins/cache/local/vultisig/dev/
+```
+
+Then add the entry to `~/.claude/plugins/installed_plugins.json` under `"plugins"`:
+
+```json
+"vultisig@local": [
+  {
+    "scope": "user",
+    "installPath": "/Users/<you>/.claude/plugins/cache/local/vultisig/dev",
+    "version": "dev",
+    "installedAt": "2024-01-01T00:00:00.000Z",
+    "lastUpdated": "2024-01-01T00:00:00.000Z",
+    "gitCommitSha": "local"
+  }
+]
+```
+
+And enable it in `~/.claude/settings.json`:
+
+```json
+{
+  "enabledPlugins": {
+    "vultisig@local": true
+  }
+}
 ```
 
 ## Prerequisites
@@ -47,4 +76,4 @@ Use the `/vultisig:setup` skill for guided onboarding.
 
 ## Security
 
-All operations are local. The plugin instructs Claude to invoke the `vultisig` binary on your machine — no remote API calls are made by the plugin itself. Sensitive values like vault passwords should be passed via environment variables (e.g. `VAULT_PASSWORD`) rather than command-line arguments.
+The plugin instructs Claude to invoke the `vultisig` binary on your machine — no remote API calls are made by the plugin itself. However, the `vultisig` binary may contact external services (RPC nodes, indexers, quote providers) for balance checks, swaps, and broadcasts. Sensitive values like vault passwords should be passed via environment variables (e.g. `VAULT_PASSWORD`) rather than command-line arguments.
