@@ -81,6 +81,7 @@ SDK builds to 6 bundles via Rollup:
 - Custom error classes: `VaultError`, `StorageError` with error codes
 - Event-driven: Use `UniversalEventEmitter` for progress tracking
 - PascalCase for classes, camelCase for functions/variables
+- JSDoc (`/** ... */`) on all exported functions, classes, and type definitions
 
 ## Changesets
 
