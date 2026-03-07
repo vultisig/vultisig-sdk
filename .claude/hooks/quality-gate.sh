@@ -10,13 +10,15 @@ if [ -z "$MODIFIED" ]; then
   exit 0
 fi
 
-if ! yarn lint 2>/dev/null; then
+if ! LINT_OUTPUT=$(yarn lint 2>&1); then
   echo "Quality gate: ESLint violations found" >&2
+  echo "$LINT_OUTPUT" >&2
   exit 2
 fi
 
-if ! yarn typecheck 2>/dev/null; then
+if ! TYPECHECK_OUTPUT=$(yarn typecheck 2>&1); then
   echo "Quality gate: TypeScript errors found" >&2
+  echo "$TYPECHECK_OUTPUT" >&2
   exit 2
 fi
 
