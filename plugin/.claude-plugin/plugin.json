@@ -1,0 +1,9 @@
+{
+  "name": "vultisig",
+  "description": "Manage your Vultisig MPC wallet — check balances, send tokens, swap across 40+ chains, and sign transactions directly from Claude Code.",
+  "version": "0.1.0",
+  "author": { "name": "Vultisig", "url": "https://vultisig.com" },
+  "repository": "https://github.com/vultisig/vultisig-sdk",
+  "license": "MIT",
+  "skills": "./skills"
+}
