@@ -14,8 +14,8 @@
         "name": "Vultisig",
         "url": "https://vultisig.com"
       },
-      "source": "./clients/plugin",
-      "category": "productivity",
+      "source": "./plugin",
+      "category": "cryptocurrency",
       "homepage": "https://github.com/vultisig/vultisig-sdk/tree/main/clients/plugin"
     }
   ]
