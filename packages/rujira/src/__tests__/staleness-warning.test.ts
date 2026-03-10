@@ -265,7 +265,7 @@ describe('Price Impact Warning (MEDIUM-3)', () => {
 
     expect(quote.warning).toContain('Price impact is estimated')
     expect(quote.warning).toContain('orderbook data unavailable')
-    expect(quote.priceImpact).toBe('1.0-3.0') // Range format when orderbook unavailable
+    expect(quote.priceImpact).toBe('unknown') // Unknown when orderbook unavailable
   })
 
   it('should include warning when orderbook is empty', async () => {
