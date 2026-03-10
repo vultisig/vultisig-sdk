@@ -8,14 +8,22 @@ import { RujiraSwap } from '../modules/swap.js'
 import type { OrderBook } from '../types.js'
 
 // Helper to create orderbook
-const createOrderbook = (
-  bids: Array<{ price: string; amount: string }>,
-  asks: Array<{ price: string; amount: string }>,
-  options?: { base?: string; quote?: string }
-): OrderBook => ({
+type CreateOrderbookInput = {
+  bids: Array<{ price: string; amount: string }>
+  asks: Array<{ price: string; amount: string }>
+  base?: string
+  quote?: string
+}
+
+const createOrderbook = ({
+  bids,
+  asks,
+  base = 'THOR.RUNE',
+  quote = 'BTC.BTC',
+}: CreateOrderbookInput): OrderBook => ({
   pair: {
-    base: options?.base ?? 'THOR.RUNE',
-    quote: options?.quote ?? 'BTC.BTC',
+    base,
+    quote,
     contractAddress: 'thor1contract...',
     tick: '0.00000001',
     takerFee: '0.0015',
@@ -75,7 +83,10 @@ describe('Price Impact Calculation', () => {
   describe('with orderbook data', () => {
     it('should calculate price impact using mid price', async () => {
       // Orderbook with bid=0.99, ask=1.01, mid=1.00
-      const orderbook = createOrderbook([{ price: '0.99', amount: '1000' }], [{ price: '1.01', amount: '1000' }])
+      const orderbook = createOrderbook({
+        bids: [{ price: '0.99', amount: '1000' }],
+        asks: [{ price: '1.01', amount: '1000' }],
+      })
 
       const mockClient = createMockClient(orderbook)
       // Simulate swap: input 100, output 99 => exec price = 0.99
@@ -99,7 +110,10 @@ describe('Price Impact Calculation', () => {
 
     it('should handle tight spread (low impact)', async () => {
       // Very tight spread: bid=0.9999, ask=1.0001
-      const orderbook = createOrderbook([{ price: '0.9999', amount: '1000' }], [{ price: '1.0001', amount: '1000' }])
+      const orderbook = createOrderbook({
+        bids: [{ price: '0.9999', amount: '1000' }],
+        asks: [{ price: '1.0001', amount: '1000' }],
+      })
 
       const mockClient = createMockClient(orderbook)
       // Perfect execution at mid price
@@ -122,10 +136,10 @@ describe('Price Impact Calculation', () => {
 
     it('should return actual impact for thin liquidity without capping', async () => {
       // Wide spread simulating thin liquidity
-      const orderbook = createOrderbook(
-        [{ price: '0.01', amount: '1000' }], // Very low bid
-        [{ price: '0.99', amount: '1000' }] // Normal ask
-      )
+      const orderbook = createOrderbook({
+        bids: [{ price: '0.01', amount: '1000' }], // Very low bid
+        asks: [{ price: '0.99', amount: '1000' }], // Normal ask
+      })
 
       const mockClient = createMockClient(orderbook)
       // Simulate very poor execution
@@ -150,7 +164,10 @@ describe('Price Impact Calculation', () => {
     it('should handle reversed swap direction (buying base) correctly', async () => {
       // Orderbook: pair.base='THOR.RUNE', pair.quote='BTC.BTC'
       // midPrice = 100 means 1 RUNE = 100 BTC (in orderbook convention)
-      const orderbook = createOrderbook([{ price: '99', amount: '1000' }], [{ price: '101', amount: '1000' }])
+      const orderbook = createOrderbook({
+        bids: [{ price: '99', amount: '1000' }],
+        asks: [{ price: '101', amount: '1000' }],
+      })
 
       const mockClient = createMockClient(orderbook)
       // Swap is buying base: input=BTC, output=RUNE (quote → base)
@@ -180,10 +197,10 @@ describe('Price Impact Calculation', () => {
     it('should handle small trade on deep pair (the original bug scenario)', async () => {
       // Deep pair with tight spread
       // Orderbook: base='THOR.RUNE', quote='BTC.BTC' with price ~65000 (1 RUNE = 65000 BTC)
-      const orderbook = createOrderbook(
-        [{ price: '64900', amount: '10' }], // Deep bid
-        [{ price: '65100', amount: '10' }] // Deep ask, tight spread
-      )
+      const orderbook = createOrderbook({
+        bids: [{ price: '64900', amount: '10' }], // Deep bid
+        asks: [{ price: '65100', amount: '10' }], // Deep ask, tight spread
+      })
 
       const mockClient = createMockClient(orderbook)
       // Swap: buying RUNE with BTC (input=quote, output=base)
@@ -213,7 +230,7 @@ describe('Price Impact Calculation', () => {
 
   describe('empty/partial orderbook handling', () => {
     it('should use fallback when orderbook is empty', async () => {
-      const orderbook = createOrderbook([], [])
+      const orderbook = createOrderbook({ bids: [], asks: [] })
 
       const mockClient = createMockClient(orderbook)
       const swap = new RujiraSwap(mockClient as any, { cache: false })
@@ -229,7 +246,10 @@ describe('Price Impact Calculation', () => {
     })
 
     it('should return unknown when only bids exist', async () => {
-      const orderbook = createOrderbook([{ price: '0.99', amount: '1000' }], [])
+      const orderbook = createOrderbook({
+        bids: [{ price: '0.99', amount: '1000' }],
+        asks: [],
+      })
 
       const mockClient = createMockClient(orderbook)
       const swap = new RujiraSwap(mockClient as any, { cache: false })
@@ -245,7 +265,10 @@ describe('Price Impact Calculation', () => {
     })
 
     it('should return unknown when only asks exist', async () => {
-      const orderbook = createOrderbook([], [{ price: '1.01', amount: '1000' }])
+      const orderbook = createOrderbook({
+        bids: [],
+        asks: [{ price: '1.01', amount: '1000' }],
+      })
 
       const mockClient = createMockClient(orderbook)
       const swap = new RujiraSwap(mockClient as any, { cache: false })
@@ -280,7 +303,10 @@ describe('Price Impact Calculation', () => {
 
   describe('edge cases', () => {
     it('should handle zero input amount', async () => {
-      const orderbook = createOrderbook([{ price: '0.99', amount: '1000' }], [{ price: '1.01', amount: '1000' }])
+      const orderbook = createOrderbook({
+        bids: [{ price: '0.99', amount: '1000' }],
+        asks: [{ price: '1.01', amount: '1000' }],
+      })
 
       const mockClient = createMockClient(orderbook)
       mockClient.simulateSwap.mockResolvedValue({
@@ -305,7 +331,10 @@ describe('Price Impact Calculation', () => {
     })
 
     it('should handle very large amounts', async () => {
-      const orderbook = createOrderbook([{ price: '0.99', amount: '1000' }], [{ price: '1.01', amount: '1000' }])
+      const orderbook = createOrderbook({
+        bids: [{ price: '0.99', amount: '1000' }],
+        asks: [{ price: '1.01', amount: '1000' }],
+      })
 
       const mockClient = createMockClient(orderbook)
       mockClient.simulateSwap.mockResolvedValue({
@@ -327,7 +356,10 @@ describe('Price Impact Calculation', () => {
     })
 
     it('should include priceImpact in quote response', async () => {
-      const orderbook = createOrderbook([{ price: '0.99', amount: '1000' }], [{ price: '1.01', amount: '1000' }])
+      const orderbook = createOrderbook({
+        bids: [{ price: '0.99', amount: '1000' }],
+        asks: [{ price: '1.01', amount: '1000' }],
+      })
 
       const mockClient = createMockClient(orderbook)
       const swap = new RujiraSwap(mockClient as any, { cache: false })
