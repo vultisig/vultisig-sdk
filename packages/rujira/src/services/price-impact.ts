@@ -8,24 +8,38 @@ import Big from 'big.js';
 import type { OrderBook } from '../types.js';
 
 /**
+ * Input for calculatePriceImpact function.
+ */
+export type CalculatePriceImpactInput = {
+  inputAmount: string;
+  outputAmount: string;
+  orderbook: OrderBook | null;
+  /**
+   * True when the swap direction is reversed relative to the orderbook's
+   * base/quote convention (i.e., swapping quote → base instead of base → quote).
+   */
+  reversedToOrderbook: boolean;
+};
+
+/**
  * Calculate price impact for a swap using orderbook data when available.
  *
  * The swap direction may not match the orderbook's base/quote convention:
- * - Buying base (input=quote, output=base): executionPrice ≈ 1 / midPrice
- * - Selling base (input=base, output=quote): executionPrice ≈ midPrice
+ * - Selling base (input=base, output=quote): executionPrice = output/input ≈ midPrice
+ * - Buying base (input=quote, output=base): executionPrice = input/output ≈ midPrice
  *
- * To handle both directions without needing asset metadata, we compute
- * impact in both orientations and use whichever yields the lower (more
- * plausible) result.
+ * The caller must specify `reversedToOrderbook` to indicate whether the swap
+ * is in the opposite direction of the orderbook's base/quote pair.
  *
  * Returns 'unknown' when orderbook data is unavailable or when the
  * calculation cannot determine a reliable impact value.
  */
-export function calculatePriceImpact(
-  inputAmount: string,
-  outputAmount: string,
-  orderbook: OrderBook | null
-): string {
+export function calculatePriceImpact({
+  inputAmount,
+  outputAmount,
+  orderbook,
+  reversedToOrderbook,
+}: CalculatePriceImpactInput): string {
   if (!orderbook) {
     return 'unknown';
   }
@@ -53,21 +67,14 @@ export function calculatePriceImpact(
     return '0';
   }
 
-  // execution_price = output / input
-  const executionPrice = output.div(input);
+  // Calculate execution price based on swap direction relative to orderbook:
+  // - Direct (selling base): executionPrice = output / input
+  // - Reversed (buying base): executionPrice = input / output
+  const executionPrice = reversedToOrderbook ? input.div(output) : output.div(input);
 
-  // Compute impact in both pair directions:
-  // Direct:  assumes executionPrice is in the same units as midPrice
-  // Inverse: assumes executionPrice is the reciprocal (swap direction reversed)
-  const impactDirect = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
+  const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
 
-  const inverseExecutionPrice = input.div(output);
-  const impactInverse = inverseExecutionPrice.minus(midPrice).div(midPrice).abs().mul(100);
-
-  // Use the direction that yields the lower (more plausible) impact
-  const impact = impactDirect.lt(impactInverse) ? impactDirect : impactInverse;
-
-  // If neither direction produces a reasonable result, report as unknown
+  // If impact is unreasonably high, report as unknown
   if (impact.gt(99)) {
     return 'unknown';
   }
