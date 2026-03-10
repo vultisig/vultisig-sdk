@@ -1,9 +1,9 @@
 /**
  * Execute Command - Execute CosmWasm smart contracts
- * 
+ *
  * This command enables AI agents and users to execute CosmWasm contracts on
  * Cosmos SDK chains (THORChain, MayaChain, etc.) via MPC signing.
- * 
+ *
  * Primary use case: Execute FIN swaps on Rujira DEX
  */
 import type { VaultBase } from '@vultisig/sdk'
@@ -61,7 +61,7 @@ const COSMOS_CHAIN_CONFIG: Record<string, { chainId: string; prefix: string; den
  */
 function parseFunds(fundsStr?: string): ParsedFund[] {
   if (!fundsStr) return []
-  
+
   return fundsStr.split(',').map(fund => {
     const [denom, amount] = fund.trim().split(':')
     if (!denom || !amount) {
@@ -80,7 +80,9 @@ export async function executeExecute(ctx: CommandContext, params: ExecuteParams)
   // Validate chain is supported
   const chainConfig = COSMOS_CHAIN_CONFIG[params.chain]
   if (!chainConfig) {
-    throw new Error(`Chain ${params.chain} does not support CosmWasm execute. Supported chains: ${Object.keys(COSMOS_CHAIN_CONFIG).join(', ')}`)
+    throw new Error(
+      `Chain ${params.chain} does not support CosmWasm execute. Supported chains: ${Object.keys(COSMOS_CHAIN_CONFIG).join(', ')}`
+    )
   }
 
   // Parse and validate message JSON
@@ -111,7 +113,7 @@ async function executeContractTransaction(
   const prepareSpinner = createSpinner('Preparing contract execution...')
 
   const address = await vault.address(params.chain)
-  
+
   prepareSpinner.succeed('Transaction prepared')
 
   // 2. Show preview
@@ -121,7 +123,9 @@ async function executeContractTransaction(
     info(`Chain:      ${params.chain}`)
     info(`From:       ${address}`)
     info(`Contract:   ${params.contract}`)
-    info(`Message:    ${JSON.stringify(msg, null, 2).substring(0, 200)}${JSON.stringify(msg).length > 200 ? '...' : ''}`)
+    info(
+      `Message:    ${JSON.stringify(msg, null, 2).substring(0, 200)}${JSON.stringify(msg).length > 200 ? '...' : ''}`
+    )
     if (funds.length > 0) {
       info(`Funds:      ${funds.map(f => `${f.amount} ${f.denom}`).join(', ')}`)
     }
@@ -167,13 +171,16 @@ async function executeContractTransaction(
       }
     })
 
-    vault.on('deviceJoined', ({ deviceId, totalJoined, required }: { deviceId: string; totalJoined: number; required: number }) => {
-      if (!isSilent()) {
-        signSpinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
-      } else if (!isJsonOutput()) {
-        printResult(`Device joined: ${totalJoined}/${required}`)
+    vault.on(
+      'deviceJoined',
+      ({ deviceId, totalJoined, required }: { deviceId: string; totalJoined: number; required: number }) => {
+        if (!isSilent()) {
+          signSpinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
+        } else if (!isJsonOutput()) {
+          printResult(`Device joined: ${totalJoined}/${required}`)
+        }
       }
-    })
+    )
   }
 
   try {

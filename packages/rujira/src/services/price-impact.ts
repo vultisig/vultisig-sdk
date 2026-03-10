@@ -3,81 +3,77 @@
  * @module services/price-impact
  */
 
-import Big from 'big.js';
+import Big from 'big.js'
 
-import { LARGE_SWAP_THRESHOLD } from '../config/constants.js';
-import type { OrderBook } from '../types.js';
+import { LARGE_SWAP_THRESHOLD } from '../config/constants.js'
+import type { OrderBook } from '../types.js'
 
 /**
  * Calculate price impact for a swap using orderbook data when available.
  * Falls back to heuristic estimates when orderbook data is unavailable.
  */
-export function calculatePriceImpact(
-  inputAmount: string,
-  outputAmount: string,
-  orderbook: OrderBook | null
-): string {
+export function calculatePriceImpact(inputAmount: string, outputAmount: string, orderbook: OrderBook | null): string {
   if (!orderbook) {
-    return estimatePriceImpactWithoutOrderbook(inputAmount);
+    return estimatePriceImpactWithoutOrderbook(inputAmount)
   }
 
-  const bestBid = orderbook.bids[0]?.price;
-  const bestAsk = orderbook.asks[0]?.price;
+  const bestBid = orderbook.bids[0]?.price
+  const bestAsk = orderbook.asks[0]?.price
 
   if (!bestBid || !bestAsk) {
-    return estimatePriceImpactWithoutOrderbook(inputAmount);
+    return estimatePriceImpactWithoutOrderbook(inputAmount)
   }
 
-  const bidPrice = Big(bestBid);
-  const askPrice = Big(bestAsk);
+  const bidPrice = Big(bestBid)
+  const askPrice = Big(bestAsk)
 
   if (bidPrice.lte(0) || askPrice.lte(0)) {
-    return '0';
+    return '0'
   }
 
-  const midPrice = bidPrice.plus(askPrice).div(2);
+  const midPrice = bidPrice.plus(askPrice).div(2)
 
-  const input = Big(inputAmount);
-  const output = Big(outputAmount);
+  const input = Big(inputAmount)
+  const output = Big(outputAmount)
 
   if (input.lte(0) || output.lte(0)) {
-    return '0';
+    return '0'
   }
 
   // execution_price = output / input
-  const executionPrice = output.div(input);
+  const executionPrice = output.div(input)
 
   // Detect unit mismatch from reversed-pair contract
-  const ratio = executionPrice.div(midPrice);
-  if (ratio.gt(100) || ratio.lt(0.01)) {
-    return 'unknown';
+  const ratio = executionPrice.div(midPrice)
+  if (ratio.gt(10) || ratio.lt(0.1)) {
+    return 'unknown'
   }
 
   // impact = abs((execution_price - midPrice) / midPrice) * 100
-  const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
+  const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100)
 
   if (impact.gt(50)) {
-    return '50.00';
+    return 'unknown'
   }
 
-  return impact.toFixed(4);
+  return impact.toFixed(4)
 }
 
 /**
  * Estimate price impact heuristically when orderbook data is unavailable.
  */
 function estimatePriceImpactWithoutOrderbook(inputAmount: string): string {
-  const amount = BigInt(inputAmount);
+  const amount = BigInt(inputAmount)
 
   if (amount >= LARGE_SWAP_THRESHOLD) {
-    return 'unknown';
+    return 'unknown'
   }
 
-  const mediumSwapThreshold = BigInt('100000000000');
+  const mediumSwapThreshold = BigInt('100000000000')
 
   if (amount >= mediumSwapThreshold) {
-    return '2.0-5.0';
+    return '2.0-5.0'
   }
 
-  return '1.0-3.0';
+  return '1.0-3.0'
 }

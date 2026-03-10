@@ -119,7 +119,7 @@ describe('Price Impact Calculation', () => {
       expect(parseFloat(quote.priceImpact)).toBeLessThan(0.5)
     })
 
-    it('should cap impact at 50% for thin liquidity', async () => {
+    it('should return unknown impact for thin liquidity (extreme spread)', async () => {
       // Wide spread simulating thin liquidity
       const orderbook = createOrderbook(
         [{ price: '0.01', amount: '1000' }], // Very low bid
@@ -141,8 +141,8 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       })
 
-      // Should be capped at 50%
-      expect(parseFloat(quote.priceImpact)).toBeLessThanOrEqual(50)
+      // Extreme spread/execution mismatch: report unknown rather than a misleading cap
+      expect(quote.priceImpact).toBe('unknown')
     })
   })
 
