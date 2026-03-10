@@ -10,11 +10,12 @@ import type { OrderBook } from '../types.js'
 // Helper to create orderbook
 const createOrderbook = (
   bids: Array<{ price: string; amount: string }>,
-  asks: Array<{ price: string; amount: string }>
+  asks: Array<{ price: string; amount: string }>,
+  options?: { base?: string; quote?: string }
 ): OrderBook => ({
   pair: {
-    base: 'THOR.RUNE',
-    quote: 'BTC.BTC',
+    base: options?.base ?? 'THOR.RUNE',
+    quote: options?.quote ?? 'BTC.BTC',
     contractAddress: 'thor1contract...',
     tick: '0.00000001',
     takerFee: '0.0015',
@@ -142,73 +143,71 @@ describe('Price Impact Calculation', () => {
       })
 
       // Should return actual high impact (no 50% cap) or 'unknown' for extreme cases
-      const impact = quote.priceImpact
-      if (impact !== 'unknown') {
-        expect(parseFloat(impact)).toBeGreaterThan(50)
-      }
+      expect(quote.priceImpact).not.toBe('unknown')
+      expect(parseFloat(quote.priceImpact)).toBeGreaterThan(50)
     })
 
-    it('should handle reversed swap direction (selling base) correctly', async () => {
-      // Orderbook mid price = 100 (e.g., RUNE/USDC where 1 RUNE = 100 USDC)
+    it('should handle reversed swap direction (buying base) correctly', async () => {
+      // Orderbook: pair.base='THOR.RUNE', pair.quote='BTC.BTC'
+      // midPrice = 100 means 1 RUNE = 100 BTC (in orderbook convention)
       const orderbook = createOrderbook([{ price: '99', amount: '1000' }], [{ price: '101', amount: '1000' }])
 
       const mockClient = createMockClient(orderbook)
-      // Swap is selling base: input=RUNE, output=USDC
-      // Execution price = output/input = 9900000000/100000000 = 99
-      // But if the swap direction is reversed relative to pair convention,
-      // exec price would be 1/99 ≈ 0.0101, way off from midPrice=100
-      // The fix detects this and tries the inverse direction
+      // Swap is buying base: input=BTC, output=RUNE (quote → base)
+      // This is REVERSED relative to the orderbook's base/quote
+      // Execution price = output/input = 100000000/10100000000 ≈ 0.0099
+      // midPrice = 100, so direct comparison: |0.0099 - 100| / 100 ≈ 99.99% (way off!)
+      // Inverse comparison: inverseExec = 10100000000/100000000 = 101
+      // |101 - 100| / 100 = 1% ✓
       mockClient.simulateSwap.mockResolvedValue({
-        returned: '9900000000', // 99 USDC (selling 1 RUNE at ~99 USDC)
+        returned: '100000000', // 1 RUNE
         fee: '1000000',
       })
 
       const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       const quote = await swap.getQuote({
-        fromAsset: 'THOR.RUNE',
-        toAsset: 'BTC.BTC',
-        amount: '100000000', // 1 RUNE
+        fromAsset: 'BTC.BTC', // Flipped: now buying RUNE with BTC
+        toAsset: 'THOR.RUNE',
+        amount: '10100000000', // ~101 BTC to buy 1 RUNE at midPrice ~100
       })
 
-      // Direct: exec=99, mid=100 → impact = 1% ✓
-      // Should show ~1% impact, not 50% or unknown
+      // The inverse-direction logic should detect that direct gives ~99% impact
+      // and use inverse instead, yielding ~1% impact
       expect(parseFloat(quote.priceImpact)).toBeCloseTo(1, 0)
     })
 
     it('should handle small trade on deep pair (the original bug scenario)', async () => {
-      // Deep BTC/USDC pair with tight spread
+      // Deep pair with tight spread
+      // Orderbook: base='THOR.RUNE', quote='BTC.BTC' with price ~65000 (1 RUNE = 65000 BTC)
       const orderbook = createOrderbook(
-        [{ price: '0.00001538', amount: '10000000' }], // Deep bid
-        [{ price: '0.00001542', amount: '10000000' }] // Deep ask, tight spread
+        [{ price: '64900', amount: '10' }], // Deep bid
+        [{ price: '65100', amount: '10' }] // Deep ask, tight spread
       )
 
       const mockClient = createMockClient(orderbook)
-      // Small USDC → BTC trade: $13 USDC
-      // exec_price = output/input = 200000/1300000000 ≈ 0.000000154
-      // mid_price ≈ 0.0000154
-      // Direct ratio: 0.000000154/0.0000154 = 0.01 → huge impact!
-      // Inverse: input/output = 1300000000/200000 = 6500 → also way off
-      // But inverse exec price = 6500, compared to mid = 0.0000154 → worse
-      // Direct exec price = 0.000000154, mid = 0.0000154 → ratio ~0.01
-      //
-      // Actually with different decimal precision, this would return 'unknown'
-      // which is correct — we can't compare raw base-unit amounts to market prices
+      // Swap: buying RUNE with BTC (input=quote, output=base)
+      // This tests the inverse direction path since executionPrice = output/input
+      // = 0.0002 RUNE / 13 BTC ≈ 0.00001538 (very different from midPrice ~65000)
+      // Inverse: 13 / 0.0002 = 65000 (matches midPrice!)
       mockClient.simulateSwap.mockResolvedValue({
-        returned: '200000', // ~0.002 BTC
-        fee: '1000',
+        returned: '20000', // 0.0002 RUNE (in 8-decimal base units)
+        fee: '100',
       })
 
       const swap = new RujiraSwap(mockClient as any, { cache: false })
 
       const quote = await swap.getQuote({
-        fromAsset: 'THOR.RUNE',
-        toAsset: 'BTC.BTC',
-        amount: '1300000000', // 13 USDC in 8-decimal base units
+        fromAsset: 'BTC.BTC', // Buying RUNE with BTC (quote → base)
+        toAsset: 'THOR.RUNE',
+        amount: '1300000000', // 13 BTC in 8-decimal base units
       })
 
-      // Should NOT return '50.00' — should be either accurate or 'unknown'
+      // The inverse-direction logic should yield low impact (~0.2%) not 50% or unknown
+      // Direct: |0.00001538 - 65000| / 65000 ≈ 100% (way off)
+      // Inverse: |65000 - 65000| / 65000 ≈ 0%
       expect(quote.priceImpact).not.toBe('50.00')
+      expect(parseFloat(quote.priceImpact)).toBeLessThan(5) // Should be small impact
     })
   })
 
