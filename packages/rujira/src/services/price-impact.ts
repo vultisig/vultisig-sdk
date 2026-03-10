@@ -11,8 +11,8 @@ import type { OrderBook } from '../types.js';
  * Calculate price impact for a swap using orderbook data when available.
  *
  * The swap direction may not match the orderbook's base/quote convention:
- * - Buying base (input=quote, output=base): executionPrice ≈ midPrice
- * - Selling base (input=base, output=quote): executionPrice ≈ 1/midPrice
+ * - Buying base (input=quote, output=base): executionPrice ≈ 1 / midPrice
+ * - Selling base (input=base, output=quote): executionPrice ≈ midPrice
  *
  * To handle both directions without needing asset metadata, we compute
  * impact in both orientations and use whichever yields the lower (more
