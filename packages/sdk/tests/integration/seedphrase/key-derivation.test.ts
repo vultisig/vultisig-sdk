@@ -8,7 +8,7 @@
  */
 
 import { Chain } from '@core/chain/Chain'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll,describe, expect, it } from 'vitest'
 
 import { createSdkContext, type SdkContext } from '../../../src/context/SdkContextBuilder'
 import { MasterKeyDeriver } from '../../../src/seedphrase/MasterKeyDeriver'

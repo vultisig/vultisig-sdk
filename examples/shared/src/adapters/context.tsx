@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext } from 'react'
+import { createContext, type ReactNode,useContext } from 'react'
 
 import type { IFileAdapter, ISDKAdapter } from './types'
 
@@ -53,4 +53,4 @@ export function AdapterProvider({ sdk, file, children }: AdapterProviderProps) {
 }
 
 // Export context for advanced use cases
-export { FileAdapterContext, SDKAdapterContext }
+export { FileAdapterContext,SDKAdapterContext }

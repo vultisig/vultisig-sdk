@@ -4,22 +4,22 @@
  */
 
 /** Swap amounts at or above this are considered "large" for price impact estimation. */
-export const LARGE_SWAP_THRESHOLD = BigInt('1000000000000') // 10,000 RUNE (8 dec)
+export const LARGE_SWAP_THRESHOLD = BigInt('1000000000000'); // 10,000 RUNE (8 dec)
 
 /** Default THORChain native transaction fee (in base units, 8 decimals). */
-export const DEFAULT_THORCHAIN_FEE = 2000000n // 0.02 RUNE
+export const DEFAULT_THORCHAIN_FEE = 2000000n; // 0.02 RUNE
 
 /** Default gas price for THORChain transactions. */
-export const DEFAULT_GAS_PRICE = '0.025rune'
+export const DEFAULT_GAS_PRICE = '0.025rune';
 
 /** Default timeout for waiting on transaction confirmation (ms). */
-export const DEFAULT_TIMEOUT_MS = 60000
+export const DEFAULT_TIMEOUT_MS = 60000;
 
 /** Default taker fee for FIN orderbook contracts. */
-export const DEFAULT_TAKER_FEE = '0.0015' // 0.15%
+export const DEFAULT_TAKER_FEE = '0.0015'; // 0.15%
 
 /** Default maker fee for FIN orderbook contracts. */
-export const DEFAULT_MAKER_FEE = '0.00075' // 0.075%
+export const DEFAULT_MAKER_FEE = '0.00075'; // 0.075%
 
 /**
  * Fallback outbound fees per chain (base units, 8 decimals for most chains).
@@ -38,7 +38,7 @@ export const FALLBACK_OUTBOUND_FEES: Record<string, string> = {
   BASE: '12324',
   TRON: '94966900',
   XRP: '18038300',
-}
+};
 
 /** THORChain decimal precision (8 decimals). */
-export const THORCHAIN_DECIMALS = 8
+export const THORCHAIN_DECIMALS = 8;

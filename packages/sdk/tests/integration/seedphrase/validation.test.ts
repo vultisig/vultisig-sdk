@@ -7,7 +7,7 @@
  * NOTE: Integration setup (WASM & crypto polyfills) loaded via vitest.config.ts
  */
 
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll,describe, expect, it } from 'vitest'
 
 import { createSdkContext, type SdkContext } from '../../../src/context/SdkContextBuilder'
 import { SeedphraseValidator } from '../../../src/seedphrase/SeedphraseValidator'

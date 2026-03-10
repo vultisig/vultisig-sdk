@@ -30,7 +30,7 @@ import type {
 import { FastSigningService } from './services/FastSigningService'
 import { FastVaultFromSeedphraseService } from './services/FastVaultFromSeedphraseService'
 import { JoinSecureVaultService } from './services/JoinSecureVaultService'
-import { type PerformReshareParams, SecureVaultCreationService } from './services/SecureVaultCreationService'
+import { type PerformReshareParams,SecureVaultCreationService } from './services/SecureVaultCreationService'
 import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'

@@ -222,7 +222,11 @@ describe('formatBalance', () => {
     })
 
     it('should handle token without token registry', () => {
-      const result = formatBalance(1000000n, Chain.Ethereum, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+      const result = formatBalance(
+        1000000n,
+        Chain.Ethereum,
+        '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+      )
 
       expect(result).toEqual({
         amount: '1000000',
@@ -235,7 +239,12 @@ describe('formatBalance', () => {
     })
 
     it('should handle empty token registry', () => {
-      const result = formatBalance(1000000n, Chain.Ethereum, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', {})
+      const result = formatBalance(
+        1000000n,
+        Chain.Ethereum,
+        '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        {}
+      )
 
       expect(result).toEqual({
         amount: '1000000',

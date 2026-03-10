@@ -2,7 +2,7 @@
  * Rujira Commands - FIN swap, secured assets, deposit/withdraw helpers
  */
 
-import { getRoutesSummary, listEasyRoutes, RujiraClient, VultisigRujiraProvider } from '@vultisig/rujira'
+import { getRoutesSummary, listEasyRoutes,RujiraClient, VultisigRujiraProvider } from '@vultisig/rujira'
 
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
@@ -53,7 +53,9 @@ export async function executeRujiraBalance(ctx: CommandContext, options: RujiraB
   const balances = await client.deposit.getBalances(thorAddress)
   spinner.succeed('Balances loaded')
 
-  const filtered = options.securedOnly ? balances.filter(b => b.denom.includes('-') || b.denom.includes('/')) : balances
+  const filtered = options.securedOnly
+    ? balances.filter(b => b.denom.includes('-') || b.denom.includes('/'))
+    : balances
 
   if (isJsonOutput()) {
     outputJson({ thorAddress, balances: filtered })
