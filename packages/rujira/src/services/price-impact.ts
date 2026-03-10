@@ -5,12 +5,21 @@
 
 import Big from 'big.js';
 
-import { LARGE_SWAP_THRESHOLD } from '../config/constants.js';
 import type { OrderBook } from '../types.js';
 
 /**
  * Calculate price impact for a swap using orderbook data when available.
- * Falls back to heuristic estimates when orderbook data is unavailable.
+ *
+ * The swap direction may not match the orderbook's base/quote convention:
+ * - Buying base (input=quote, output=base): executionPrice ≈ midPrice
+ * - Selling base (input=base, output=quote): executionPrice ≈ 1/midPrice
+ *
+ * To handle both directions without needing asset metadata, we compute
+ * impact in both orientations and use whichever yields the lower (more
+ * plausible) result.
+ *
+ * Returns 'unknown' when orderbook data is unavailable or when the
+ * calculation cannot determine a reliable impact value.
  */
 export function calculatePriceImpact(
   inputAmount: string,
@@ -18,14 +27,14 @@ export function calculatePriceImpact(
   orderbook: OrderBook | null
 ): string {
   if (!orderbook) {
-    return estimatePriceImpactWithoutOrderbook(inputAmount);
+    return 'unknown';
   }
 
   const bestBid = orderbook.bids[0]?.price;
   const bestAsk = orderbook.asks[0]?.price;
 
   if (!bestBid || !bestAsk) {
-    return estimatePriceImpactWithoutOrderbook(inputAmount);
+    return 'unknown';
   }
 
   const bidPrice = Big(bestBid);
@@ -47,37 +56,21 @@ export function calculatePriceImpact(
   // execution_price = output / input
   const executionPrice = output.div(input);
 
-  // Detect unit mismatch from reversed-pair contract
-  const ratio = executionPrice.div(midPrice);
-  if (ratio.gt(100) || ratio.lt(0.01)) {
+  // Compute impact in both pair directions:
+  // Direct:  assumes executionPrice is in the same units as midPrice
+  // Inverse: assumes executionPrice is the reciprocal (swap direction reversed)
+  const impactDirect = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
+
+  const inverseExecutionPrice = input.div(output);
+  const impactInverse = inverseExecutionPrice.minus(midPrice).div(midPrice).abs().mul(100);
+
+  // Use the direction that yields the lower (more plausible) impact
+  const impact = impactDirect.lt(impactInverse) ? impactDirect : impactInverse;
+
+  // If neither direction produces a reasonable result, report as unknown
+  if (impact.gt(99)) {
     return 'unknown';
-  }
-
-  // impact = abs((execution_price - midPrice) / midPrice) * 100
-  const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
-
-  if (impact.gt(50)) {
-    return '50.00';
   }
 
   return impact.toFixed(4);
-}
-
-/**
- * Estimate price impact heuristically when orderbook data is unavailable.
- */
-function estimatePriceImpactWithoutOrderbook(inputAmount: string): string {
-  const amount = BigInt(inputAmount);
-
-  if (amount >= LARGE_SWAP_THRESHOLD) {
-    return 'unknown';
-  }
-
-  const mediumSwapThreshold = BigInt('100000000000');
-
-  if (amount >= mediumSwapThreshold) {
-    return '2.0-5.0';
-  }
-
-  return '1.0-3.0';
 }

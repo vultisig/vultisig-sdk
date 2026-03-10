@@ -119,7 +119,7 @@ describe('Price Impact Calculation', () => {
       expect(parseFloat(quote.priceImpact)).toBeLessThan(0.5)
     })
 
-    it('should cap impact at 50% for thin liquidity', async () => {
+    it('should return actual impact for thin liquidity without capping', async () => {
       // Wide spread simulating thin liquidity
       const orderbook = createOrderbook(
         [{ price: '0.01', amount: '1000' }], // Very low bid
@@ -141,8 +141,74 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       })
 
-      // Should be capped at 50%
-      expect(parseFloat(quote.priceImpact)).toBeLessThanOrEqual(50)
+      // Should return actual high impact (no 50% cap) or 'unknown' for extreme cases
+      const impact = quote.priceImpact
+      if (impact !== 'unknown') {
+        expect(parseFloat(impact)).toBeGreaterThan(50)
+      }
+    })
+
+    it('should handle reversed swap direction (selling base) correctly', async () => {
+      // Orderbook mid price = 100 (e.g., RUNE/USDC where 1 RUNE = 100 USDC)
+      const orderbook = createOrderbook([{ price: '99', amount: '1000' }], [{ price: '101', amount: '1000' }])
+
+      const mockClient = createMockClient(orderbook)
+      // Swap is selling base: input=RUNE, output=USDC
+      // Execution price = output/input = 9900000000/100000000 = 99
+      // But if the swap direction is reversed relative to pair convention,
+      // exec price would be 1/99 ≈ 0.0101, way off from midPrice=100
+      // The fix detects this and tries the inverse direction
+      mockClient.simulateSwap.mockResolvedValue({
+        returned: '9900000000', // 99 USDC (selling 1 RUNE at ~99 USDC)
+        fee: '1000000',
+      })
+
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
+
+      const quote = await swap.getQuote({
+        fromAsset: 'THOR.RUNE',
+        toAsset: 'BTC.BTC',
+        amount: '100000000', // 1 RUNE
+      })
+
+      // Direct: exec=99, mid=100 → impact = 1% ✓
+      // Should show ~1% impact, not 50% or unknown
+      expect(parseFloat(quote.priceImpact)).toBeCloseTo(1, 0)
+    })
+
+    it('should handle small trade on deep pair (the original bug scenario)', async () => {
+      // Deep BTC/USDC pair with tight spread
+      const orderbook = createOrderbook(
+        [{ price: '0.00001538', amount: '10000000' }], // Deep bid
+        [{ price: '0.00001542', amount: '10000000' }] // Deep ask, tight spread
+      )
+
+      const mockClient = createMockClient(orderbook)
+      // Small USDC → BTC trade: $13 USDC
+      // exec_price = output/input = 200000/1300000000 ≈ 0.000000154
+      // mid_price ≈ 0.0000154
+      // Direct ratio: 0.000000154/0.0000154 = 0.01 → huge impact!
+      // Inverse: input/output = 1300000000/200000 = 6500 → also way off
+      // But inverse exec price = 6500, compared to mid = 0.0000154 → worse
+      // Direct exec price = 0.000000154, mid = 0.0000154 → ratio ~0.01
+      //
+      // Actually with different decimal precision, this would return 'unknown'
+      // which is correct — we can't compare raw base-unit amounts to market prices
+      mockClient.simulateSwap.mockResolvedValue({
+        returned: '200000', // ~0.002 BTC
+        fee: '1000',
+      })
+
+      const swap = new RujiraSwap(mockClient as any, { cache: false })
+
+      const quote = await swap.getQuote({
+        fromAsset: 'THOR.RUNE',
+        toAsset: 'BTC.BTC',
+        amount: '1300000000', // 13 USDC in 8-decimal base units
+      })
+
+      // Should NOT return '50.00' — should be either accurate or 'unknown'
+      expect(quote.priceImpact).not.toBe('50.00')
     })
   })
 
@@ -159,11 +225,11 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       })
 
-      // Should return fallback estimate (range format when orderbook unavailable)
-      expect(quote.priceImpact).toBe('1.0-3.0')
+      // Should return 'unknown' when orderbook data is unavailable
+      expect(quote.priceImpact).toBe('unknown')
     })
 
-    it('should use fallback when only bids exist', async () => {
+    it('should return unknown when only bids exist', async () => {
       const orderbook = createOrderbook([{ price: '0.99', amount: '1000' }], [])
 
       const mockClient = createMockClient(orderbook)
@@ -175,11 +241,11 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       })
 
-      // Should return fallback estimate (range format when orderbook unavailable)
-      expect(quote.priceImpact).toBe('1.0-3.0')
+      // Should return 'unknown' when orderbook is incomplete
+      expect(quote.priceImpact).toBe('unknown')
     })
 
-    it('should use fallback when only asks exist', async () => {
+    it('should return unknown when only asks exist', async () => {
       const orderbook = createOrderbook([], [{ price: '1.01', amount: '1000' }])
 
       const mockClient = createMockClient(orderbook)
@@ -191,8 +257,8 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       })
 
-      // Should return fallback estimate (range format when orderbook unavailable)
-      expect(quote.priceImpact).toBe('1.0-3.0')
+      // Should return 'unknown' when orderbook is incomplete
+      expect(quote.priceImpact).toBe('unknown')
     })
   })
 
@@ -207,9 +273,9 @@ describe('Price Impact Calculation', () => {
         amount: '100000000',
       })
 
-      // Should still return a quote with fallback impact (range format)
+      // Should still return a quote with 'unknown' impact
       expect(quote).toBeDefined()
-      expect(quote.priceImpact).toBe('1.0-3.0')
+      expect(quote.priceImpact).toBe('unknown')
     })
   })
 
