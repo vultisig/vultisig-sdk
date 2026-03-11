@@ -351,8 +351,8 @@ describe('Price Impact Calculation', () => {
       })
 
       // Should calculate without overflow
-      expect(parseFloat(quote.priceImpact)).toBeGreaterThanOrEqual(0)
-      expect(parseFloat(quote.priceImpact)).toBeLessThanOrEqual(50)
+      expect(quote.priceImpact).not.toBe('unknown')
+      expect(parseFloat(quote.priceImpact)).toBeCloseTo(1, 0)
     })
 
     it('should include priceImpact in quote response', async () => {

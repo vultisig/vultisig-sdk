@@ -55,7 +55,7 @@ export function calculatePriceImpact({
   const askPrice = Big(bestAsk);
 
   if (bidPrice.lte(0) || askPrice.lte(0)) {
-    return '0';
+    return 'unknown';
   }
 
   const midPrice = bidPrice.plus(askPrice).div(2);
