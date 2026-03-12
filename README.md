@@ -88,6 +88,30 @@ await vault.sign(payload, {
 });
 ```
 
+## For AI Agents
+
+Vultisig is built for autonomous AI agents. Fast Vaults give agents their own wallet with instant signing — no human approval loop.
+
+```typescript
+import { Vultisig, MemoryStorage } from '@vultisig/sdk'
+
+const sdk = new Vultisig({ storage: new MemoryStorage() })
+await sdk.initialize()
+
+// Create a wallet, verify, get address, check balance — 4 lines
+const vaultId = await sdk.createFastVault({ name: 'agent', email: 'agent@example.com', password: process.env.VAULT_PASSWORD })
+const vault = await sdk.verifyVault(vaultId, '123456')
+const address = await vault.address('Ethereum')
+const balance = await vault.balance('Ethereum')
+```
+
+**Agent resources:**
+- [AGENTS.md](./AGENTS.md) — Full agent integration reference (patterns, error handling, CLI)
+- [MCP Server](https://github.com/vultisig/mcp) — Use Vultisig as MCP tools (Claude, Cursor, etc.)
+- [SDK Users Guide](docs/SDK-USERS-GUIDE.md) — Complete API walkthrough
+- [SKILL.md](https://vultisig.com/skills/SKILL.md) — Step-by-step operating procedure for agents
+- [CLI Tool](clients/cli) — Shell-based automation with JSON output
+
 ## API Documentation
 
 API documentation is auto-generated and available at:
