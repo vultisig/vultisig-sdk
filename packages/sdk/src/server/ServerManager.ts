@@ -1,6 +1,7 @@
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { getVaultFromServer } from '@core/mpc/fast/api/getVaultFromServer'
+import { mldsaWithServer } from '@core/mpc/fast/api/mldsaWithServer'
 import { resendVaultShare } from '@core/mpc/fast/api/resendVaultShare'
 import { reshareWithServer } from '@core/mpc/fast/api/reshareWithServer'
 import { setupVaultWithServer } from '@core/mpc/fast/api/setupVaultWithServer'
@@ -9,6 +10,7 @@ import { verifyVaultEmailCode } from '@core/mpc/fast/api/verifyVaultEmailCode'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
 import { keysign } from '@core/mpc/keysign'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
+import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
@@ -411,6 +413,34 @@ export class ServerManager {
     const eddsaResult = await schnorr.startKeygenWithRetry()
     log('EdDSA keygen completed successfully')
 
+    // Check for abort before ML-DSA keygen
+    if (options.signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
+    // ML-DSA keygen
+    progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
+
+    await mldsaWithServer({
+      public_key: ecdsaResult.publicKey,
+      session_id: sessionId,
+      hex_encryption_key: hexEncryptionKey,
+      encryption_password: options.password,
+      email: options.email,
+    })
+
+    const mldsaKeygen = new MldsaKeygen(
+      true, // isInitiateDevice
+      this.config.messageRelay,
+      sessionId,
+      localPartyId,
+      devices,
+      hexEncryptionKey
+    )
+
+    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+    log('ML-DSA keygen completed successfully')
+
     // Check for abort before finalization
     if (options.signal?.aborted) {
       throw new Error('Operation aborted')
@@ -445,6 +475,8 @@ export class ServerManager {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
+      publicKeyMldsa: mldsaResult.publicKey,
+      keyShareMldsa: mldsaResult.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

@@ -202,7 +202,7 @@ export type ServerStatus = {
 }
 
 // Keygen progress types
-export type KeygenPhase = 'prepare' | 'ecdsa' | 'eddsa' | 'complete'
+export type KeygenPhase = 'prepare' | 'ecdsa' | 'eddsa' | 'mldsa' | 'complete'
 
 export type KeygenProgressUpdate = {
   phase: KeygenPhase
