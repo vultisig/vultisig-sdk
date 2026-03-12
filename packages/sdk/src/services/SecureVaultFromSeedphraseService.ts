@@ -8,7 +8,8 @@
  * 4. Wait for devices to join
  * 5. Run DKLS key import (ECDSA) for master key
  * 6. Run Schnorr key import (EdDSA) for master key
- * 7. Run per-chain key imports (DKLS or Schnorr based on chain type)
+ * 7. Run ML-DSA keygen for post-quantum key
+ * 8. Run per-chain key imports (DKLS or Schnorr based on chain type)
  * 8. Optionally discover chains with balances
  */
 import { create, toBinary } from '@bufbuild/protobuf'
@@ -19,6 +20,7 @@ import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { getKeygenThreshold } from '@core/mpc/getKeygenThreshold'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
+import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
@@ -372,7 +374,7 @@ export class SecureVaultFromSeedphraseService {
     // Step 10: EdDSA key import via Schnorr
     reportProgress({
       step: 'keygen',
-      progress: 70,
+      progress: 55,
       message: 'Importing EdDSA key...',
     })
 
@@ -391,15 +393,38 @@ export class SecureVaultFromSeedphraseService {
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
+    // Check for abort before ML-DSA keygen
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
+    // Step 11: ML-DSA keygen
+    reportProgress({
+      step: 'keygen',
+      progress: 68,
+      message: 'Generating ML-DSA keys...',
+    })
+
+    const mldsaKeygen = new MldsaKeygen(
+      true, // isInitiateDevice
+      this.relayUrl,
+      sessionId,
+      localPartyId,
+      allDevices,
+      hexEncryptionKey
+    )
+
+    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+
     // Check for abort before per-chain imports
     if (signal?.aborted) {
       throw new Error('Operation aborted')
     }
 
-    // Step 11: Per-chain key imports
+    // Step 12: Per-chain key imports
     reportProgress({
       step: 'keygen',
-      progress: 75,
+      progress: 78,
       message: 'Importing chain-specific keys...',
     })
 
@@ -490,7 +515,7 @@ export class SecureVaultFromSeedphraseService {
       console.warn('Not all peer completion signals received, proceeding with valid MPC keys')
     }
 
-    // Step 13: Build vault structure
+    // Step 14: Build vault structure
     const vault: CoreVault = {
       name,
       publicKeys: {
@@ -504,6 +529,8 @@ export class SecureVaultFromSeedphraseService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
+      publicKeyMldsa: mldsaResult.publicKey,
+      keyShareMldsa: mldsaResult.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

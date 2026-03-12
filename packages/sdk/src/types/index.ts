@@ -8,6 +8,8 @@ export type { ChainKind } from '@core/chain/ChainKind'
 export type { AccountCoin } from '@core/chain/coin/AccountCoin'
 export type { Coin } from '@core/chain/coin/Coin'
 export type { PublicKeys } from '@core/chain/publicKey/PublicKeys'
+export type { TxReceiptInfo } from '@core/chain/tx/status'
+export type { TxStatusResult } from '@core/chain/tx/status/resolver'
 export type { FiatCurrency } from '@core/config/FiatCurrency'
 export type { MpcServerType } from '@core/mpc/MpcServerType'
 export type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -200,7 +202,7 @@ export type ServerStatus = {
 }
 
 // Keygen progress types
-export type KeygenPhase = 'prepare' | 'ecdsa' | 'eddsa' | 'complete'
+export type KeygenPhase = 'prepare' | 'ecdsa' | 'eddsa' | 'mldsa' | 'complete'
 
 export type KeygenProgressUpdate = {
   phase: KeygenPhase
@@ -619,3 +621,14 @@ export type { RiskLevel, SiteScanResult, TransactionSimulationResult, Transactio
 // Cosmos message type constants
 export type { CosmosMsgType as CosmosMsgTypeValue } from './cosmos-msg'
 export { CosmosMsgType } from './cosmos-msg'
+
+// Push notification types
+export type {
+  NotificationPayload,
+  NotifyVaultMembersOptions,
+  PushDeviceType,
+  PushNotificationRegistration,
+  PushToken,
+  RegisterDeviceOptions,
+  SigningNotification,
+} from './notifications'

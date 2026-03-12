@@ -280,6 +280,7 @@ packages/sdk/src/
 │   ├── FastSigningService.ts  # Server-assisted signing
 │   ├── FiatValueService.ts    # Fiat value lookups
 │   ├── PasswordCacheService.ts # Password caching (instance-scoped)
+│   ├── PushNotificationService.ts # Push notification registration, sending, receiving
 │   ├── cache-types.ts
 │   └── index.ts
 │
@@ -709,6 +710,37 @@ Fetches fiat values for tokens/coins.
 **File:** `src/services/PasswordCacheService.ts`
 
 Caches vault passwords with configurable TTL.
+
+### PushNotificationService
+
+**File:** `src/services/PushNotificationService.ts`
+
+Manages push notification registration, sending, and receiving for multi-party signing coordination.
+
+```typescript
+class PushNotificationService {
+  // Registration
+  registerDevice(opts: RegisterDeviceOptions): Promise<void>;
+  unregisterVault(vaultId: string): Promise<void>;
+  isVaultRegistered(vaultId: string): Promise<boolean>;
+  hasRemoteRegistrations(vaultId: string): Promise<boolean>;
+  getRegistrations(): Promise<Record<string, PushNotificationRegistration>>;
+
+  // Sending
+  notifyVaultMembers(opts: NotifyVaultMembersOptions): Promise<void>;
+
+  // Receiving
+  onSigningRequest(handler: (notification: SigningNotification) => void): () => void;
+  handleIncomingPush(data: unknown): void;
+  parseNotificationPayload(data: unknown): SigningNotification | null;
+
+  // Utility
+  fetchVapidPublicKey(): Promise<string>;
+  ping(): Promise<boolean>;
+}
+```
+
+**Server:** `https://api.vultisig.com/push` — Go/Echo service with APNs (iOS), FCM (Android), and Web Push (VAPID) delivery.
 
 ### RelaySigningService
 

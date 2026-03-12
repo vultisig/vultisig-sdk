@@ -27,7 +27,12 @@ describe('CosmosMsgType', () => {
     expect(CosmosMsgType.ThorchainMsgSendUrl).toBe('/types.MsgSend')
   })
 
-  it('should have exactly 9 message types', () => {
-    expect(Object.keys(CosmosMsgType)).toHaveLength(9)
+  it('should have correct THORChain leave pool types', () => {
+    expect(CosmosMsgType.ThorchainMsgLeavePool).toBe('thorchain/MsgLeavePool')
+    expect(CosmosMsgType.ThorchainMsgLeavePoolUrl).toBe('/thorchain.v1.MsgLeavePool')
+  })
+
+  it('should have exactly 11 message types', () => {
+    expect(Object.keys(CosmosMsgType)).toHaveLength(11)
   })
 })

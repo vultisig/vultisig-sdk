@@ -546,6 +546,28 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     }
   )
 
+  ipcMain.handle('vault:getTxStatus', async (_event, vaultId: string, chain: string, txHash: string) => {
+    const sdk = getSDK()
+    const vault = await sdk.getVaultById(vaultId)
+    if (!vault) throw new Error('Vault not found')
+    const result = await vault.getTxStatus({ chain: chain as any, txHash })
+    if (result.status === 'success') {
+      _event.sender.send('vault:transactionConfirmed', { chain, txHash })
+    } else if (result.status === 'error') {
+      _event.sender.send('vault:transactionFailed', { chain, txHash })
+    }
+    return {
+      status: result.status,
+      receipt: result.receipt
+        ? {
+            feeAmount: result.receipt.feeAmount.toString(),
+            feeDecimals: result.receipt.feeDecimals,
+            feeTicker: result.receipt.feeTicker,
+          }
+        : undefined,
+    }
+  })
+
   // === EXPORT OPERATIONS ===
 
   ipcMain.handle(

@@ -124,6 +124,12 @@ const isEncrypted = sdk.isVaultEncrypted(vultContent)
 await sdk.validateSeedphrase(mnemonic)
 await sdk.discoverChainsFromSeedphrase(mnemonic, chains?, onProgress?)
 await sdk.createFastVaultFromSeedphrase({ mnemonic, name, email, password })
+
+// Push Notifications
+await sdk.notifications.registerDevice({ vaultId, partyName, token, deviceType })
+await sdk.notifications.notifyVaultMembers({ vaultId, vaultName, localPartyId, qrCodeData })
+const unsub = sdk.notifications.onSigningRequest((notification) => { /* handle */ })
+sdk.notifications.handleIncomingPush(rawPushData)
 ```
 
 ### VaultBase (Shared Vault Methods)
@@ -200,6 +206,7 @@ For full details and code examples, see the [SDK Users Guide](../../docs/SDK-USE
 | Price Feeds | CoinGecko token prices via `vault.getPrice()` | [Price Feeds](../../docs/SDK-USERS-GUIDE.md#price-feeds) |
 | Security Scanning | Site scanning, transaction validation, transaction simulation | [Security](../../docs/SDK-USERS-GUIDE.md#security-scanning) |
 | Fiat On-Ramp | Buy crypto via Banxa integration | [Fiat On-Ramp](../../docs/SDK-USERS-GUIDE.md#fiat-on-ramp-banxa) |
+| Push Notifications | Register devices, notify vault members for signing, handle incoming push | [Push Notifications](../../docs/SDK-USERS-GUIDE.md#push-notifications) |
 | Portfolio Value | Fiat valuations across all chains | [Portfolio](../../docs/SDK-USERS-GUIDE.md#portfolio-value) |
 | Password Management | Callbacks, caching, manual lock/unlock | [Password Management](../../docs/SDK-USERS-GUIDE.md#password-management) |
 | Event System | Reactive updates for balances, signing, chains, tokens | [Events](../../docs/SDK-USERS-GUIDE.md#event-system) |

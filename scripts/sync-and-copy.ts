@@ -20,6 +20,7 @@ const foldersToCopy = [
   "upstream/core/config",
   "upstream/lib/utils",
   "upstream/lib/dkls",
+  "upstream/lib/mldsa",
   "upstream/lib/schnorr",
 ];
 
