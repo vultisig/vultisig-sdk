@@ -22,6 +22,17 @@ export type CalculatePriceImpactInput = {
 };
 
 /**
+ * Safely parse a string into a Big number, returning null on failure.
+ */
+function safeBig(value: string): Big | null {
+  try {
+    return Big(value);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Calculate price impact for a swap using orderbook data when available.
  *
  * The swap direction may not match the orderbook's base/quote convention:
@@ -51,20 +62,20 @@ export function calculatePriceImpact({
     return 'unknown';
   }
 
-  const bidPrice = Big(bestBid);
-  const askPrice = Big(bestAsk);
+  const bidPrice = safeBig(bestBid);
+  const askPrice = safeBig(bestAsk);
 
-  if (bidPrice.lte(0) || askPrice.lte(0)) {
+  if (!bidPrice || !askPrice || bidPrice.lte(0) || askPrice.lte(0)) {
     return 'unknown';
   }
 
   const midPrice = bidPrice.plus(askPrice).div(2);
 
-  const input = Big(inputAmount);
-  const output = Big(outputAmount);
+  const input = safeBig(inputAmount);
+  const output = safeBig(outputAmount);
 
-  if (input.lte(0) || output.lte(0)) {
-    return '0';
+  if (!input || !output || input.lte(0) || output.lte(0)) {
+    return 'unknown';
   }
 
   // Calculate execution price based on swap direction relative to orderbook:
