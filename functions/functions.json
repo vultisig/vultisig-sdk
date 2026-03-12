@@ -137,10 +137,10 @@
             "required": ["chain", "address", "decimals", "ticker"]
           },
           "receiver": { "type": "string", "description": "Destination address" },
-          "amount": { "type": "string", "description": "Amount in base units as bigint string" },
+          "amountBaseUnits": { "type": "string", "description": "Amount in base units as bigint string (e.g. '1000000000000000000' for 1 ETH)" },
           "memo": { "type": "string", "description": "Optional transaction memo" }
         },
-        "required": ["coin", "receiver", "amount"]
+        "required": ["coin", "receiver", "amountBaseUnits"]
       },
       "returns": { "type": "object", "description": "KeysignPayload for signing" }
     },
@@ -150,7 +150,7 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "payload": { "type": "object", "description": "KeysignPayload from prepareSendTx or prepareSwapTx" }
+          "payload": { "type": "object", "description": "KeysignPayload from prepare_send_tx or prepare_swap_tx" }
         },
         "required": ["payload"]
       },

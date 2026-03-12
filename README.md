@@ -93,11 +93,13 @@ await vault.sign(payload, {
 Vultisig is built for autonomous AI agents. Fast Vaults give agents their own wallet with instant signing — no human approval loop.
 
 ```typescript
+import { Vultisig, MemoryStorage } from '@vultisig/sdk'
+
 const sdk = new Vultisig({ storage: new MemoryStorage() })
 await sdk.initialize()
 
 // Create a wallet, verify, get address, check balance — 4 lines
-const vaultId = await sdk.createFastVault({ name: 'agent', email: 'agent@example.com', password: 'pw' })
+const vaultId = await sdk.createFastVault({ name: 'agent', email: 'agent@example.com', password: process.env.VAULT_PASSWORD })
 const vault = await sdk.verifyVault(vaultId, '123456')
 const address = await vault.address('Ethereum')
 const balance = await vault.balance('Ethereum')
