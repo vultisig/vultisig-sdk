@@ -116,7 +116,18 @@ export class RujiraSwap {
       ? inputAmount.mul(100000000).div(outputAmount).toFixed(0, 0) // round down
       : '0'
 
-    const priceImpact = calculatePriceImpact(params.amount, simulation.returned, orderbook)
+    // Determine if swap direction is reversed relative to orderbook's base/quote convention
+    // Reversed = buying base (input is quote asset, output is base asset)
+    const reversedToOrderbook = orderbook
+      ? params.fromAsset === orderbook.pair.quote || params.toAsset === orderbook.pair.base
+      : false
+
+    const priceImpact = calculatePriceImpact({
+      inputAmount: params.amount,
+      outputAmount: simulation.returned,
+      orderbook,
+      reversedToOrderbook,
+    })
 
     const priceImpactEstimated = !orderbook || !orderbook.bids[0]?.price || !orderbook.asks[0]?.price
 
