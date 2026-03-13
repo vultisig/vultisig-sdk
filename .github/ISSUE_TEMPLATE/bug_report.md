@@ -1,32 +1,53 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: "[BUG]"
-labels: ""
-assignees: ""
+name: Bug Report
+about: Report a bug for agent or human resolution
+title: "[Fix] "
+labels: bug
+assignees: ''
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+<!-- Fill in the AGENT block: priority = critical|high|medium|low, size = tiny|small|medium -->
+<!-- AGENT
+type: "bugfix"
+priority: ""
+size: ""
+platform: [sdk]
+files:
+  read: []
+  write: []
+verify: ["yarn check:all"]
+-->
 
-**To Reproduce**
-Steps to reproduce the behavior:
+# [Fix] <what's broken>
 
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+## Problem
+<!-- 2-3 sentences. What's broken? Who's affected? -->
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+## Expected Behavior
+<!-- What should happen instead? -->
 
-**Desktop (please complete the following information):**
 
-- OS: [e.g. iOS]
-- Version [e.g. 22]
+## Steps to Reproduce
+1.
+2.
+3.
 
-**Additional context**
-Add any other context about the problem here.
+## Solution
+<!-- 1 paragraph. WHAT to do and WHY this approach. Leave blank if unsure. -->
+
+
+## Scope
+
+### Must Do
+- [ ] <!-- Specific fix 1 -->
+- [ ] <!-- Specific fix 2 -->
+
+### Must NOT Do
+- Don't change unrelated code
+- Don't refactor surrounding logic
+
+## Acceptance Criteria
+- [ ] `yarn check:all` succeeds
+- [ ] <!-- Specific behavior check 1 -->
+- [ ] <!-- Specific behavior check 2 -->
