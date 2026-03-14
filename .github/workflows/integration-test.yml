@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: integration-${{ github.head_ref }}
+  group: integration-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -115,7 +115,7 @@ jobs:
       - name: Run database migrations
         working-directory: agent-backend
         run: |
-          go run -tags 'postgres' github.com/pressly/goose/v3/cmd/goose@latest \
+          go run -tags 'postgres' github.com/pressly/goose/v3/cmd/goose@v3.27.0 \
             -dir internal/storage/postgres/migrations \
             postgres "$DATABASE_DSN" up
 
