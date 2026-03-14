@@ -7,7 +7,6 @@
 import { randomBytes } from 'node:crypto'
 
 import { keccak_256 } from '@noble/hashes/sha3'
-
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
 
@@ -163,13 +162,13 @@ function decodeDERSignature(der: Buffer): { r: string; s: string } {
   // INTEGER for r
   if (der[offset++] !== 0x02) throw new Error('Invalid DER: expected INTEGER for r')
   const rLen = der[offset++]
-  let rBytes = der.subarray(offset, offset + rLen)
+  const rBytes = der.subarray(offset, offset + rLen)
   offset += rLen
 
   // INTEGER for s
   if (der[offset++] !== 0x02) throw new Error('Invalid DER: expected INTEGER for s')
   const sLen = der[offset++]
-  let sBytes = der.subarray(offset, offset + sLen)
+  const sBytes = der.subarray(offset, offset + sLen)
 
   // Strip leading zero bytes (used for positive sign in DER) and pad to 32 bytes
   const r = padTo32Bytes(stripLeadingZeros(rBytes))
