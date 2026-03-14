@@ -13,6 +13,7 @@ import { CLIContext, withExit } from './adapters'
 import {
   executeAddressBook,
   executeAddresses,
+  executeAgent,
   executeBalance,
   executeBroadcast,
   executeChains,
@@ -1023,6 +1024,27 @@ rujiraCmd
       }
     )
   )
+
+// ============================================================================
+// Agent Chat Command
+// ============================================================================
+
+program
+  .command('agent')
+  .description('AI-powered chat interface for wallet operations')
+  .option('--via-agent', 'Use NDJSON pipe mode for agent-to-agent communication')
+  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--password <password>', 'Vault password for signing operations')
+  .option('--conversation <id>', 'Resume an existing conversation')
+  .action(async (options: { viaAgent?: boolean; backendUrl?: string; password?: string; conversation?: string }) => {
+    const context = await init(program.opts().vault, options.password)
+    await executeAgent(context, {
+      viaAgent: options.viaAgent,
+      backendUrl: options.backendUrl,
+      password: options.password,
+      conversationId: options.conversation,
+    })
+  })
 
 // ============================================================================
 // CLI Management Commands
