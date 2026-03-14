@@ -15,7 +15,6 @@ import type {
   GetConversationResponse,
   ListConversationsRequest,
   ListConversationsResponse,
-  SSEEvent,
   SendMessageRequest,
   SendMessageResponse,
   Suggestion,
