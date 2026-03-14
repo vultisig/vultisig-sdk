@@ -6,11 +6,11 @@
  * - TUI (human): IRC-style interactive chat
  * - Pipe (--via-agent): NDJSON over stdin/stdout for agent consumption
  */
-export { AgentClient } from './client'
 export { authenticateVault } from './auth'
+export { AgentClient } from './client'
 export { buildMessageContext, buildMinimalContext } from './context'
 export { AgentExecutor } from './executor'
+export { PipeInterface } from './pipe'
 export { AgentSession } from './session'
 export { ChatTUI } from './tui'
-export { PipeInterface } from './pipe'
-export type { AgentConfig, UICallbacks, PipeOutputEvent, PipeInputCommand } from './types'
+export type { AgentConfig, PipeInputCommand,PipeOutputEvent, UICallbacks } from './types'
