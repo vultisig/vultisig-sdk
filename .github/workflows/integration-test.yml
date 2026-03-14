@@ -220,7 +220,7 @@ jobs:
         env:
           VAULT_PASSWORD: ${{ secrets.TEST_VAULT_PASSWORD }}
         run: |
-          opencode run --model opencode/minimax-m2.5 "$(cat <<'PROMPT'
+          opencode run --model opencode/minimax-m2.5-free "$(cat <<'PROMPT'
           Read /tmp/pr-changes.txt which contains the git diff of changes to the Vultisig SDK.
 
           This is the TypeScript SDK for MPC wallet operations. Key areas:
