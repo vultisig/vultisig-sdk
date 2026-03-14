@@ -14,9 +14,8 @@ import { join } from 'node:path'
 
 import type { VaultBase } from '@vultisig/sdk'
 
-import type { SSEStreamResult } from './client'
-import { AgentClient } from './client'
 import { authenticateVault } from './auth'
+import { AgentClient } from './client'
 import { buildMessageContext } from './context'
 import { AgentExecutor } from './executor'
 import type { Action, ActionResult, AgentConfig, MessageContext, UICallbacks } from './types'
