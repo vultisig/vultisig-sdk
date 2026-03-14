@@ -5,9 +5,9 @@
  * - `vultisig agent` - Interactive TUI with IRC-style chat
  * - `vultisig agent --via-agent` - NDJSON pipe for agent-to-agent communication
  */
-import type { CommandContext } from '../core'
-import { AgentSession, ChatTUI, PipeInterface } from '../agent'
 import type { AgentConfig } from '../agent'
+import { AgentSession, ChatTUI, PipeInterface } from '../agent'
+import type { CommandContext } from '../core'
 
 export type AgentCommandOptions = {
   backendUrl?: string
