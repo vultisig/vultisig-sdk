@@ -113,7 +113,10 @@ stdoutRl.on('line', raw => {
 
 function send(cmd) {
   const line = JSON.stringify(cmd);
-  log(`[send] ${line}`);
+  const redacted = cmd.type === 'password'
+    ? JSON.stringify({ ...cmd, password: '***' })
+    : line;
+  log(`[send] ${redacted}`);
   child.stdin.write(line + '\n');
 }
 
@@ -145,7 +148,7 @@ function extractTurnInfo(events) {
   const assistants = events.filter(e => e.type === 'assistant').map(e => e.content);
   const tools = events.filter(e => e.type === 'tool_call').map(e => e.action);
   const results = events.filter(e => e.type === 'tool_result');
-  const errors = events.filter(e => e.type === 'error').map(e => e.message);
+  const errors = events.filter(e => e.type === 'error').map(e => typeof e.message === 'string' ? e.message : String(e.message ?? ''));
   const txHashes = [];
 
   // Extract tx hashes from tool results
