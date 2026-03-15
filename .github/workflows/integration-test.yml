@@ -227,16 +227,20 @@ jobs:
           - clients/cli/src/commands/ — CLI command definitions
           - packages/sdk/src/ — Core SDK (vault, signing, chains, address derivation)
 
-          Based on the changes, write a single natural-language message that a user would send to the crypto wallet AI agent to exercise the changed functionality. For example:
-          - If agent executor/signing changed: "Wrap 0.0001 ETH to WETH on Ethereum using the WETH contract at 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-          - If auth flow changed: the harness handles auth, so test post-auth operations
-          - If pipe protocol changed: test a multi-step operation that exercises the protocol
-          - If balance/chain code changed: test the specific chain's operations
+          Your job: write a single user message that would exercise the SPECIFIC functionality changed in this PR.
 
-          If no major functional changes are identified, use this fallback:
-          "Send 0.000001 ETH from my wallet to my own Ethereum address (send it back to myself)"
+          Rules:
+          1. Read the diff carefully. Identify what changed (signing flow, session handling, pipe protocol, chain support, etc.).
+          2. The test message MUST target the changed functionality. Do NOT pick an unrelated operation.
+          3. If signing/executor changed: request a transaction that requires building and signing.
+          4. If pipe protocol changed: craft a multi-step request that exercises the protocol.
+          5. If a specific chain's code changed: test that chain's operations specifically.
+          6. If auth changed: the harness handles auth, so focus on post-auth functionality.
+          7. Use small amounts (0.0001 ETH or equivalent) to minimize cost.
+          8. The message must be self-contained — the agent should execute it without follow-up questions.
+          9. Only if there are truly NO functional changes (e.g. only CI config changes), use this fallback: "Check my ETH balance on Ethereum"
 
-          Write ONLY the message to a file at /tmp/test-message.txt — no explanation, no quotes, just the raw message text.
+          Write ONLY the raw message text to /tmp/test-message.txt — no explanation, no quotes, no markdown.
           PROMPT
           )" 2>&1 | tee /tmp/opencode-formulate.log
 
