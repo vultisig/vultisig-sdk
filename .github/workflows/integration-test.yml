@@ -227,18 +227,16 @@ jobs:
           - clients/cli/src/commands/ — CLI command definitions
           - packages/sdk/src/ — Core SDK (vault, signing, chains, address derivation)
 
-          Your job: write a single user message that would exercise the SPECIFIC functionality changed in this PR.
+          Your job: write a single user message that a crypto wallet user would send to an AI agent. The message MUST request a transaction that gets built and signed — read-only queries alone are not sufficient.
 
           Rules:
           1. Read the diff carefully. Identify what changed (signing flow, session handling, pipe protocol, chain support, etc.).
           2. The test message MUST target the changed functionality. Do NOT pick an unrelated operation.
-          3. If signing/executor changed: request a transaction that requires building and signing.
-          4. If pipe protocol changed: craft a multi-step request that exercises the protocol.
-          5. If a specific chain's code changed: test that chain's operations specifically.
-          6. If auth changed: the harness handles auth, so focus on post-auth functionality.
-          7. Use small amounts (0.0001 ETH or equivalent) to minimize cost.
-          8. The message must be self-contained — the agent should execute it without follow-up questions.
-          9. Only if there are truly NO functional changes (e.g. only CI config changes), use this fallback: "Check my ETH balance on Ethereum"
+          3. Always request a WRITE operation (send, swap, wrap, deposit, etc.) — not a read-only query.
+          4. If auth changed: the harness handles auth, so focus on post-auth transaction functionality.
+          5. Use tiny amounts (0.0001 ETH or equivalent) to minimize cost.
+          6. The message must be self-contained — the agent should execute it without follow-up questions.
+          7. Fallback (only if there are truly NO functional changes): "Send 0.000001 ETH to my own Ethereum address"
 
           Write ONLY the raw message text to /tmp/test-message.txt — no explanation, no quotes, no markdown.
           PROMPT
