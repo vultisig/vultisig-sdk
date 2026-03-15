@@ -192,7 +192,7 @@ jobs:
       - name: Discover PR changes
         working-directory: vultisig-sdk
         run: |
-          BASE="origin/main"
+          BASE="origin/${{ github.event.pull_request.base.ref }}"
           {
             echo "=== Changed agent files ==="
             git diff "$BASE"...HEAD --name-status -- 'clients/cli/src/agent/*.ts' || true
