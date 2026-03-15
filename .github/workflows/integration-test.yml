@@ -2,7 +2,6 @@ name: Integration Test
 
 on:
   pull_request:
-    branches: [main]
 
 concurrency:
   group: integration-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
