@@ -192,7 +192,7 @@ function cleanup(code) {
           success: t.success,
           data: t.data,
         })),
-        tx_hashes: conversation.flatMap(t => t.tx_hashes || []),
+        tx_hashes: conversation.flatMap(t => t.txHashes || []),
       };
       console.log(JSON.stringify(output, null, 2));
       process.exit(code);
@@ -229,10 +229,16 @@ async function main() {
 
     allTxHashes.push(...info.txHashes);
 
-    // If we got a tx hash, we're done
+    // If the agent completed its work with tx hashes and no pending question, we're done.
+    // Don't break mid-flow — multi-tx operations (approve + supply) happen within one turn.
     if (info.txHashes.length > 0) {
-      log(`Transaction found: ${info.txHashes[0]}`);
-      break;
+      log(`Transaction(s) found: ${info.txHashes.join(', ')}`);
+      // Check if the agent is still working (asking a question or has more to do)
+      const lastText = (info.assistants[info.assistants.length - 1] || info.text || '').toLowerCase();
+      const isAsking = lastText.includes('?') || lastText.includes('would you') || lastText.includes('shall i');
+      if (!isAsking) {
+        break;
+      }
     }
 
     // If the agent is asking a question and we have no more followups, auto-respond
