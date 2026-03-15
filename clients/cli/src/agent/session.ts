@@ -239,6 +239,30 @@ export class AgentSession {
     // Execute non-sign actions first (add_chain, add_coin, build_tx, etc.)
     if (nonSignActions.length > 0) {
       const results = await this.executeActions(nonSignActions, ui)
+
+      // If a build_* action succeeded and produced a pending tx, auto-chain sign_tx
+      // instead of round-tripping to the backend (which may not send sign_tx back)
+      const hasBuildSuccess = results.some(
+        r => r.success && r.action.startsWith('build_')
+      )
+      if (hasBuildSuccess && this.executor.hasPendingTransaction()) {
+        process.stderr.write(`[session] build_* action produced pending tx, auto-chaining sign_tx\n`)
+        const signAction: Action = {
+          id: `tx_sign_${Date.now()}`,
+          type: 'sign_tx',
+          title: 'Sign transaction',
+          params: {},
+          auto_execute: true,
+        }
+        const signResults = await this.executeActions([signAction], ui)
+        // Report both build and sign results back to backend
+        const allResults = [...results, ...signResults]
+        for (const result of allResults) {
+          await this.processMessageLoop(null, [result], ui)
+        }
+        return
+      }
+
       if (results.length > 0) {
         for (const result of results) {
           await this.processMessageLoop(null, [result], ui)
