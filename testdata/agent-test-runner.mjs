@@ -229,22 +229,26 @@ async function main() {
 
     allTxHashes.push(...info.txHashes);
 
-    // If the agent completed its work with tx hashes and no pending question, we're done.
-    // Don't break mid-flow — multi-tx operations (approve + supply) happen within one turn.
+    // Check if the agent's work looks incomplete (e.g. approve succeeded but supply pending)
+    const lastText = (info.assistants[info.assistants.length - 1] || info.text || '').toLowerCase();
+    const looksIncomplete = lastText.includes('supply') || lastText.includes('second transaction')
+      || lastText.includes('next step') || lastText.includes('now i need')
+      || lastText.includes('deposit') || lastText.includes('let me');
+    const isAsking = lastText.includes('?') || lastText.includes('would you') || lastText.includes('shall i') || lastText.includes('confirm');
+
     if (info.txHashes.length > 0) {
       log(`Transaction(s) found: ${info.txHashes.join(', ')}`);
-      // Check if the agent is still working (asking a question or has more to do)
-      const lastText = (info.assistants[info.assistants.length - 1] || info.text || '').toLowerCase();
-      const isAsking = lastText.includes('?') || lastText.includes('would you') || lastText.includes('shall i');
-      if (!isAsking) {
+      if (!isAsking && !looksIncomplete) {
         break;
       }
-    }
-
-    // If the agent is asking a question and we have no more followups, auto-respond
-    if (messages.length === 0 && i < MAX_TURNS - 1) {
-      const lastText = (info.assistants[info.assistants.length - 1] || info.text || '').toLowerCase();
-      if (lastText.includes('?') || lastText.includes('would you') || lastText.includes('shall i') || lastText.includes('confirm')) {
+      // Agent signed a tx but work is incomplete (e.g. approve done, supply pending)
+      if (looksIncomplete && messages.length === 0 && i < MAX_TURNS - 1) {
+        log('Work looks incomplete after tx, nudging agent to continue');
+        messages.push('The approval transaction was sent. Now please continue and execute the next transaction (supply/deposit).');
+      }
+    } else if (messages.length === 0 && i < MAX_TURNS - 1) {
+      // No tx hashes yet
+      if (isAsking) {
         messages.push('Yes, proceed. Execute the transaction.');
       } else if (info.errors.length > 0 && !info.errors.every(e => e.startsWith('PASSWORD') || e.startsWith('CONFIRMATION'))) {
         log('Errors detected, stopping');
@@ -253,7 +257,6 @@ async function main() {
         log('Empty turn, stopping');
         break;
       } else {
-        // Agent finished without asking — might need a nudge
         messages.push('Continue. If the transaction is ready, sign and broadcast it.');
       }
     }
