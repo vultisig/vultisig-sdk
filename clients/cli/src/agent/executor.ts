@@ -29,9 +29,11 @@ export class AgentExecutor {
   private vault: VaultBase
   private pendingPayloads = new Map<string, StoredPayload>()
   private password: string | null = null
+  private verbose: boolean
 
-  constructor(vault: VaultBase) {
+  constructor(vault: VaultBase, verbose = false) {
     this.vault = vault
+    this.verbose = verbose
   }
 
   setPassword(password: string): void {
@@ -43,10 +45,10 @@ export class AgentExecutor {
    * This allows sign_tx to find and sign it when the backend requests signing.
    */
   storeServerTransaction(txReadyData: any): void {
-    process.stderr.write(`[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`)
+    if (this.verbose) process.stderr.write(`[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`)
     const swapTx = txReadyData.swap_tx || txReadyData.send_tx || txReadyData.tx
     if (!swapTx) {
-      process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx found in data\n`)
+      if (this.verbose) process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx found in data\n`)
       return
     }
 
@@ -59,7 +61,7 @@ export class AgentExecutor {
       timestamp: Date.now(),
     })
 
-    process.stderr.write(`[executor] Stored server tx for chain ${chain}, pendingPayloads size=${this.pendingPayloads.size}\n`)
+    if (this.verbose) process.stderr.write(`[executor] Stored server tx for chain ${chain}, pendingPayloads size=${this.pendingPayloads.size}\n`)
   }
 
   hasPendingTransaction(): boolean {
@@ -97,7 +99,7 @@ export class AgentExecutor {
   }
 
   private async dispatch(action: Action): Promise<Record<string, unknown>> {
-    process.stderr.write(`[dispatch] action.type=${action.type} action.id=${action.id}\n`)
+    if (this.verbose) process.stderr.write(`[dispatch] action.type=${action.type} action.id=${action.id}\n`)
     const params = action.params || {}
 
     switch (action.type) {
@@ -333,7 +335,7 @@ export class AgentExecutor {
   }
 
   private async buildSwapTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    process.stderr.write(`[build_swap_tx] called with params: ${JSON.stringify(params).slice(0, 500)}\n`)
+    if (this.verbose) process.stderr.write(`[build_swap_tx] called with params: ${JSON.stringify(params).slice(0, 500)}\n`)
     const fromChainName = (params.from_chain || params.chain) as string
     const toChainName = params.to_chain as string
     const fromChain = resolveChain(fromChainName)
@@ -446,7 +448,7 @@ export class AgentExecutor {
     // ABI-encode the function call
     const calldata = await encodeContractCall(functionName, typedParams || [])
 
-    process.stderr.write(`[build_contract_tx] ${functionName}(${(typedParams || []).map(p => p.type).join(',')}) on ${contractAddress} chain=${chain}\n`)
+    if (this.verbose) process.stderr.write(`[build_contract_tx] ${functionName}(${(typedParams || []).map(p => p.type).join(',')}) on ${contractAddress} chain=${chain}\n`)
 
     // Store as server-style tx and sign via the proven signServerTx path
     const serverTxData = {
@@ -476,8 +478,8 @@ export class AgentExecutor {
   // ============================================================================
 
   private async signTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    process.stderr.write(`[sign_tx] params: ${JSON.stringify(params).slice(0, 500)}\n`)
-    process.stderr.write(`[sign_tx] pendingPayloads keys: ${[...this.pendingPayloads.keys()].join(', ')}\n`)
+    if (this.verbose) process.stderr.write(`[sign_tx] params: ${JSON.stringify(params).slice(0, 500)}\n`)
+    if (this.verbose) process.stderr.write(`[sign_tx] pendingPayloads keys: ${[...this.pendingPayloads.keys()].join(', ')}\n`)
 
     // Find the pending payload
     const payloadId = (params.keysign_payload || params.payload_id || 'latest') as string
@@ -585,7 +587,7 @@ export class AgentExecutor {
     const amount = BigInt(swapTx.value || '0')
     const hasCalldata = !!(swapTx.data && swapTx.data !== '0x')
 
-    process.stderr.write(`[sign_server_tx] chain=${chain}, to=${swapTx.to}, value=${swapTx.value}, amount=${amount}, hasCalldata=${hasCalldata}\n`)
+    if (this.verbose) process.stderr.write(`[sign_server_tx] chain=${chain}, to=${swapTx.to}, value=${swapTx.value}, amount=${amount}, hasCalldata=${hasCalldata}\n`)
 
     // Unlock vault if needed
     if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
@@ -664,7 +666,7 @@ export class AgentExecutor {
     // Handle payloads array format (e.g. Polymarket: order + auth)
     const payloads = params.payloads as Array<Record<string, unknown>> | undefined
     if (payloads && Array.isArray(payloads)) {
-      process.stderr.write(`[sign_typed_data] payloads mode, ${payloads.length} items\n`)
+      if (this.verbose) process.stderr.write(`[sign_typed_data] payloads mode, ${payloads.length} items\n`)
       const signatures: Array<Record<string, unknown>> = []
 
       for (let i = 0; i < payloads.length; i++) {
@@ -673,12 +675,12 @@ export class AgentExecutor {
         // Add delay between sequential MPC signing sessions to let VultiServer
         // co-signer release the previous session before starting the next one
         if (i > 0) {
-          process.stderr.write(`[sign_typed_data] waiting 5s between MPC sessions...\n`)
+          if (this.verbose) process.stderr.write(`[sign_typed_data] waiting 5s between MPC sessions...\n`)
           await new Promise(r => setTimeout(r, 5000))
         }
         const sig = await this.signSingleTypedData(payload)
         signatures.push({ id, ...sig })
-        process.stderr.write(`[sign_typed_data] signed payload "${id}"\n`)
+        if (this.verbose) process.stderr.write(`[sign_typed_data] signed payload "${id}"\n`)
       }
 
       return {
@@ -705,10 +707,10 @@ export class AgentExecutor {
       throw new Error('sign_typed_data requires domain, types, message, and primaryType')
     }
 
-    process.stderr.write(`[sign_typed_data] primaryType=${primaryType} domain.name=${domain.name}\n`)
+    if (this.verbose) process.stderr.write(`[sign_typed_data] primaryType=${primaryType} domain.name=${domain.name}\n`)
 
     const eip712Hash = await computeEIP712Hash(domain, types, primaryType, message)
-    process.stderr.write(`[sign_typed_data] hash=${eip712Hash}\n`)
+    if (this.verbose) process.stderr.write(`[sign_typed_data] hash=${eip712Hash}\n`)
 
     // Resolve chain from domain chainId or explicit chain param
     const chainName = params.chain as string | undefined
@@ -725,7 +727,7 @@ export class AgentExecutor {
       chain,
     })
 
-    process.stderr.write(`[sign_typed_data] signed, format=${sigResult.format}, recovery=${sigResult.recovery}\n`)
+    if (this.verbose) process.stderr.write(`[sign_typed_data] signed, format=${sigResult.format}, recovery=${sigResult.recovery}\n`)
 
     const { r, s } = parseDERSignature(sigResult.signature)
     const v = (sigResult.recovery ?? 0) + 27
@@ -733,7 +735,7 @@ export class AgentExecutor {
     // 65-byte Ethereum signature: r (32 bytes) + s (32 bytes) + v (1 byte)
     const ethSignature = '0x' + r + s + v.toString(16).padStart(2, '0')
 
-    process.stderr.write(`[sign_typed_data] r=${r.slice(0, 16)}... s=${s.slice(0, 16)}... v=${v}\n`)
+    if (this.verbose) process.stderr.write(`[sign_typed_data] r=${r.slice(0, 16)}... s=${s.slice(0, 16)}... v=${v}\n`)
 
     return {
       signature: ethSignature,

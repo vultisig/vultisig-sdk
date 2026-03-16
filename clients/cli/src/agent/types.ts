@@ -17,6 +17,8 @@ export type AgentConfig = {
   viaAgent?: boolean
   /** Conversation ID to resume */
   conversationId?: string
+  /** Show detailed tool call params and debug output */
+  verbose?: boolean
 }
 
 // ============================================================================

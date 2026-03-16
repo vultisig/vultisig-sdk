@@ -35,7 +35,8 @@ export class AgentSession {
     this.vault = vault
     this.config = config
     this.client = new AgentClient(config.backendUrl)
-    this.executor = new AgentExecutor(vault)
+    this.client.verbose = !!config.verbose
+    this.executor = new AgentExecutor(vault, !!config.verbose)
     this.publicKey = vault.publicKeys.ecdsa
 
     if (config.password) {
@@ -246,7 +247,7 @@ export class AgentSession {
         r => r.success && r.action.startsWith('build_')
       )
       if (hasBuildSuccess && this.executor.hasPendingTransaction()) {
-        process.stderr.write(`[session] build_* action produced pending tx, auto-chaining sign_tx\n`)
+        if (this.config.verbose) process.stderr.write(`[session] build_* action produced pending tx, auto-chaining sign_tx\n`)
         const signAction: Action = {
           id: `tx_sign_${Date.now()}`,
           type: 'sign_tx',
@@ -273,7 +274,7 @@ export class AgentSession {
 
     // Handle transactions from tx_ready events - always sign client-side
     if (streamResult.transactions.length > 0 && this.executor.hasPendingTransaction()) {
-      process.stderr.write(`[session] ${streamResult.transactions.length} tx_ready events, signing client-side\n`)
+      if (this.config.verbose) process.stderr.write(`[session] ${streamResult.transactions.length} tx_ready events, signing client-side\n`)
       const signAction: Action = {
         id: `tx_sign_${Date.now()}`,
         type: 'sign_tx',
@@ -290,7 +291,7 @@ export class AgentSession {
       }
     } else if (backendSignActions.length > 0 && this.executor.hasPendingTransaction()) {
       // Fallback: backend sent sign_tx and we have a pending tx
-      process.stderr.write(`[session] Backend sent sign_tx action, using it\n`)
+      if (this.config.verbose) process.stderr.write(`[session] Backend sent sign_tx action, using it\n`)
       const results = await this.executeActions(backendSignActions, ui)
       if (results.length > 0) {
         for (const result of results) {
@@ -300,7 +301,7 @@ export class AgentSession {
       }
     } else if (backendSignActions.length > 0 && !this.executor.hasPendingTransaction()) {
       // Backend wants signing but we have no tx - report error back
-      process.stderr.write(`[session] Backend sent sign_tx but no pending tx, reporting error\n`)
+      if (this.config.verbose) process.stderr.write(`[session] Backend sent sign_tx but no pending tx, reporting error\n`)
       const errorResult: ActionResult = {
         action: 'sign_tx',
         action_id: backendSignActions[0].id,

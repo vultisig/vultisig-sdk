@@ -23,10 +23,12 @@ export class ChatTUI {
   private currentStreamText = ''
   private vaultName: string
   private stopped = false
+  private verbose: boolean
 
-  constructor(session: AgentSession, vaultName: string) {
+  constructor(session: AgentSession, vaultName: string, verbose = false) {
     this.session = session
     this.vaultName = vaultName
+    this.verbose = verbose
 
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -137,14 +139,22 @@ export class ChatTUI {
           process.stdout.write('\n')
           this.isStreaming = false
         }
-        const paramStr = params ? chalk.gray(` ${JSON.stringify(params).slice(0, 80)}`) : ''
-        console.log(`  ${chalk.yellow('⚡')} ${chalk.yellow(action)}${paramStr} ${chalk.gray('...')}`)
+        if (this.verbose) {
+          const paramStr = params ? chalk.gray(` ${JSON.stringify(params).slice(0, 80)}`) : ''
+          console.log(`  ${chalk.yellow('⚡')} ${chalk.yellow(action)}${paramStr} ${chalk.gray('...')}`)
+        } else {
+          console.log(`  ${chalk.yellow('⚡')} ${chalk.yellow(action)} ${chalk.gray('...')}`)
+        }
       },
 
       onToolResult: (_id: string, action: string, success: boolean, data?: Record<string, unknown>, error?: string) => {
         if (success) {
-          const summary = data ? summarizeData(data) : ''
-          console.log(`  ${chalk.green('✓')} ${chalk.green(action)}${summary ? chalk.gray(` → ${summary}`) : ''}`)
+          if (this.verbose) {
+            const summary = data ? summarizeData(data) : ''
+            console.log(`  ${chalk.green('✓')} ${chalk.green(action)}${summary ? chalk.gray(` → ${summary}`) : ''}`)
+          } else {
+            console.log(`  ${chalk.green('✓')} ${chalk.green(action)}`)
+          }
         } else {
           console.log(`  ${chalk.red('✗')} ${chalk.red(action)}: ${chalk.red(error || 'failed')}`)
         }
