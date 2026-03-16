@@ -60,9 +60,13 @@ import {
   initOutputMode,
   printResult,
   setupCompletionCommand,
+  setupUserAgent,
   warn,
 } from './lib'
 import { setupVaultEvents } from './ui'
+
+// Set User-Agent header on all outgoing fetch requests (must run before any SDK calls)
+setupUserAgent()
 
 // ============================================================================
 // Handle Shell Completion (must be checked first)
