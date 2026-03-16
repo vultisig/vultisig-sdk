@@ -670,6 +670,23 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Save this vault as a pending vault (for two-step creation flow).
+   * Persists to storage under the `pending:` prefix so it survives process restarts.
+   * The vault will be moved to regular storage after email verification.
+   */
+  async savePending(): Promise<void> {
+    // Sync runtime state to vaultData
+    const mutableData = this.vaultData as any
+    mutableData.currency = this._currency
+    mutableData.chains = this._userChains.map(c => c.toString())
+    mutableData.tokens = this._tokens
+    mutableData.lastModified = Date.now()
+
+    // Persist under pending: prefix
+    await this.storage.set(`pending:${this.vaultData.id}`, this.vaultData)
+  }
+
+  /**
    * Rename vault
    */
   async rename(newName: string): Promise<void> {
