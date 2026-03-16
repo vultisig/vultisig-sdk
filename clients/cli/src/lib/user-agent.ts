@@ -12,7 +12,12 @@ export function setupUserAgent(): void {
   const originalFetch = globalThis.fetch
 
   globalThis.fetch = (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): ReturnType<typeof fetch> => {
-    const headers = new Headers(init?.headers)
+    const headers = new Headers(input instanceof Request ? input.headers : undefined)
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => {
+        headers.set(key, value)
+      })
+    }
     if (!headers.has('User-Agent')) {
       headers.set('User-Agent', userAgent)
     }
