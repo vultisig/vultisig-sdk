@@ -14,6 +14,7 @@ export type AgentCommandOptions = {
   password?: string
   viaAgent?: boolean
   conversationId?: string
+  verbose?: boolean
 }
 
 export async function executeAgent(ctx: CommandContext, options: AgentCommandOptions): Promise<void> {
@@ -25,6 +26,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     password: options.password,
     viaAgent: options.viaAgent,
     conversationId: options.conversationId,
+    verbose: options.verbose,
   }
 
   const session = new AgentSession(vault, config)
@@ -44,7 +46,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     }
   } else {
     // Interactive TUI mode
-    const tui = new ChatTUI(session, vault.name)
+    const tui = new ChatTUI(session, vault.name, config.verbose)
     const callbacks = tui.getCallbacks()
 
     try {

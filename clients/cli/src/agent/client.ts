@@ -24,6 +24,7 @@ import type {
 export class AgentClient {
   private baseUrl: string
   private authToken: string | null = null
+  verbose = false
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
@@ -214,14 +215,14 @@ export class AgentClient {
           callbacks.onTextDelta?.(parsed.delta)
           break
         case 'tool_progress':
-          process.stderr.write(`[SSE:tool_progress] raw: ${data.slice(0, 1000)}\n`)
+          if (this.verbose) process.stderr.write(`[SSE:tool_progress] raw: ${data.slice(0, 1000)}\n`)
           callbacks.onToolProgress?.(parsed.tool, parsed.status, parsed.label)
           break
         case 'title':
           callbacks.onTitle?.(parsed.title)
           break
         case 'actions':
-          process.stderr.write(`[SSE:actions] raw: ${data.slice(0, 1000)}\n`)
+          if (this.verbose) process.stderr.write(`[SSE:actions] raw: ${data.slice(0, 1000)}\n`)
           result.actions.push(...(parsed.actions || []))
           callbacks.onActions?.(parsed.actions || [])
           break
@@ -230,7 +231,7 @@ export class AgentClient {
           callbacks.onSuggestions?.(parsed.suggestions || [])
           break
         case 'tx_ready':
-          process.stderr.write(`[SSE:tx_ready] raw: ${data.slice(0, 2000)}\n`)
+          if (this.verbose) process.stderr.write(`[SSE:tx_ready] raw: ${data.slice(0, 2000)}\n`)
           result.transactions.push(parsed)
           callbacks.onTxReady?.(parsed)
           break
