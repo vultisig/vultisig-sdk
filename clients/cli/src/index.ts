@@ -174,10 +174,11 @@ createCmd
   .requiredOption('--name <name>', 'Vault name')
   .requiredOption('--password <password>', 'Vault password')
   .requiredOption('--email <email>', 'Email for verification')
+  .option('--two-step', 'Create vault without verifying OTP (verify later with "vultisig verify")')
   .action(
-    withExit(async (options: { name: string; password: string; email: string }) => {
+    withExit(async (options: { name: string; password: string; email: string; twoStep?: boolean }) => {
       const context = await init(program.opts().vault)
-      await executeCreateFast(context, options)
+      await executeCreateFast(context, { ...options, twoStep: options.twoStep })
     })
   )
 
