@@ -3,6 +3,8 @@ name: Test Suite
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  push:
+    branches: [changeset-release/main]
 
 env:
   NODE_OPTIONS: "--max-old-space-size=4096"
