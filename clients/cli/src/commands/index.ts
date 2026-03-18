@@ -78,3 +78,7 @@ export {
 // Discount tier commands
 export type { DiscountOptions, DiscountTierInfo } from './discount'
 export { executeDiscount } from './discount'
+
+// Agent chat commands
+export type { AgentCommandOptions } from './agent'
+export { executeAgent } from './agent'
