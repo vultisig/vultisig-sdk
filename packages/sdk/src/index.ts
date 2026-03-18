@@ -121,6 +121,8 @@ export type {
   SwapQuoteResult,
   SwapTxParams,
   Token,
+  TxReceiptInfo,
+  TxStatusResult,
   UtxoGasInfo,
   ValidationResult,
   Value,
@@ -192,3 +194,20 @@ export type { RiskLevel, SiteScanResult, TransactionSimulationResult, Transactio
 // ============================================================================
 
 export { CosmosMsgType } from './types'
+
+// ============================================================================
+// PUBLIC API - Push Notifications
+// ============================================================================
+
+export { PushNotificationService } from './services/PushNotificationService'
+export type {
+  NotificationPayload,
+  NotifyVaultMembersOptions,
+  PushDeviceType,
+  PushNotificationRegistration,
+  PushToken,
+  RegisterDeviceOptions,
+  SigningNotification,
+  WSConnectionState,
+  WSConnectOptions,
+} from './types/notifications'

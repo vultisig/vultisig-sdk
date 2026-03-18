@@ -19,6 +19,7 @@ function copyWasmFiles(): { name: string; buildStart: () => void } {
       // Ensure output directories exist
       mkdirSync(distElectron, { recursive: true })
       mkdirSync(path.join(distElectron, 'lib/dkls'), { recursive: true })
+      mkdirSync(path.join(distElectron, 'lib/mldsa'), { recursive: true })
       mkdirSync(path.join(distElectron, 'lib/schnorr'), { recursive: true })
 
       // 1. secp256k1.wasm - tiny-secp256k1 uses path.join(dirName, "..", wasmFilename)
@@ -36,8 +37,12 @@ function copyWasmFiles(): { name: string; buildStart: () => void } {
         path.join(distElectron, 'wallet-core.wasm')
       )
 
-      // 3. MPC WASM files - DKLS and Schnorr (loaded via fetch polyfill)
+      // 3. MPC WASM files - DKLS, ML-DSA, and Schnorr (loaded via fetch polyfill)
       copyFileSync(path.join(sdkDist, 'lib/dkls/vs_wasm_bg.wasm'), path.join(distElectron, 'lib/dkls/vs_wasm_bg.wasm'))
+      copyFileSync(
+        path.join(sdkDist, 'lib/mldsa/vs_wasm_bg.wasm'),
+        path.join(distElectron, 'lib/mldsa/vs_wasm_bg.wasm')
+      )
       copyFileSync(
         path.join(sdkDist, 'lib/schnorr/vs_schnorr_wasm_bg.wasm'),
         path.join(distElectron, 'lib/schnorr/vs_schnorr_wasm_bg.wasm')

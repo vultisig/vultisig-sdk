@@ -14,6 +14,7 @@
 - [Price Feeds](#price-feeds)
 - [Security Scanning](#security-scanning)
 - [Fiat On-Ramp (Banxa)](#fiat-on-ramp-banxa)
+- [Push Notifications](#push-notifications)
 - [Configuration](#configuration)
 - [Caching System](#caching-system)
 - [Event System](#event-system)
@@ -70,11 +71,13 @@ sdk.dispose()
 
 **Custom Storage (optional):**
 
+> **WARNING: `MemoryStorage` is for testing only.** It is non-persistent — all data, including vault keyshares, is permanently lost when the process exits. If you create a vault with `MemoryStorage` and do not export/back up the vault, **you will permanently lose access to any funds** stored in that vault. For production, use the default platform storage shown above or implement your own persistent `Storage` interface.
+
 ```typescript
 import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),  // Override with custom storage
+  storage: new MemoryStorage(),  // TESTING ONLY — not persistent, will lose vault data
 })
 
 await sdk.initialize()
@@ -508,7 +511,7 @@ console.log('Vault ID:', vaultId);
 2. `onQRCodeReady` callback receives the QR data - display this for other devices
 3. Other participants scan the QR with the Vultisig mobile app (iOS/Android)
 4. `onDeviceJoined` fires as each device joins the session
-5. Once all devices join, MPC keygen runs automatically (DKLS for ECDSA, Schnorr for EdDSA)
+5. Once all devices join, MPC keygen runs automatically (DKLS for ECDSA, Schnorr for EdDSA, ML-DSA for post-quantum signatures)
 6. The vault is created and saved, then returned
 
 **Threshold Configuration:**
@@ -932,6 +935,7 @@ const [result1, result2, result3] = await Promise.all([promise1, promise2, promi
 2. **No Logging**: Mnemonics are never logged or persisted
 3. **HTTPS Only**: All server communication is encrypted
 4. **Input Validation**: Always validate before import to catch typos
+5. **Post-Quantum Readiness**: Vault keygen includes ML-DSA (FIPS 204) key generation alongside ECDSA (DKLS) and EdDSA (Schnorr), providing forward-looking protection against quantum threats
 
 ---
 
@@ -1242,6 +1246,54 @@ try {
     if (error.code === VaultErrorCode.BroadcastFailed) {
       console.log('Broadcast failed:', error.message)
     }
+  }
+}
+```
+
+### Checking Transaction Status
+
+After broadcasting, use `getTxStatus()` to check whether a transaction has been confirmed, is still pending, or has failed:
+
+```typescript
+const txHash = await vault.broadcastTx({ chain, keysignPayload, signature })
+
+// Poll for confirmation
+const checkStatus = async () => {
+  const result = await vault.getTxStatus({ chain: Chain.Ethereum, txHash })
+
+  switch (result.status) {
+    case 'success':
+      console.log(`Confirmed! Fee: ${result.receipt?.feeAmount} ${result.receipt?.feeTicker}`)
+      return true
+    case 'error':
+      console.log('Transaction failed on-chain')
+      return true
+    case 'pending':
+      console.log('Still pending...')
+      return false
+  }
+}
+```
+
+**Supported chains:** All chain families (EVM, UTXO, Cosmos, Solana, Sui, Polkadot, Ripple, Tron, Cardano, TON).
+
+**Return type (`TxStatusResult`):**
+- `status: 'pending' | 'success' | 'error'` - Current on-chain status
+- `receipt?: TxReceiptInfo` - Fee details when available:
+  - `feeAmount: bigint` - Fee paid in base units
+  - `feeDecimals: number` - Decimal places for the fee token
+  - `feeTicker: string` - Fee token symbol (e.g., "ETH", "BTC")
+
+**Error handling:**
+
+```typescript
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+
+try {
+  const result = await vault.getTxStatus({ chain, txHash })
+} catch (error) {
+  if (error instanceof VaultError && error.code === VaultErrorCode.NetworkError) {
+    console.log('RPC request failed:', error.message)
   }
 }
 ```
@@ -1916,6 +1968,159 @@ const unsupported = await vault.getBuyUrl(Chain.Cosmos)
 
 ---
 
+## Push Notifications
+
+Coordinate multi-party signing sessions by sending push notifications to vault members. The SDK handles server communication; consumers are responsible for platform-specific push token acquisition and incoming push wiring.
+
+### Register a Device
+
+```typescript
+// Obtain a push token from your platform (APNs, FCM, Web Push)
+const token = await getMyPlatformPushToken()
+
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token,
+  deviceType: 'ios', // 'ios' | 'android' | 'web'
+})
+```
+
+### Notify Vault Members
+
+When initiating a signing session, notify other members so they can join:
+
+```typescript
+await sdk.notifications.notifyVaultMembers({
+  vaultId: vault.publicKeys.ecdsa,
+  vaultName: vault.name,
+  localPartyId: vault.localPartyId,
+  qrCodeData: keysignQrPayload, // session data for joining
+})
+```
+
+### Handle Incoming Push Notifications
+
+Register a callback, then forward raw push data from your platform's handler:
+
+```typescript
+// Register handler
+const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
+  console.log(`Signing request for vault: ${notification.vaultName}`)
+  // Use notification.qrCodeData to join the signing session
+})
+
+// In your platform's push handler (iOS delegate, FCM onMessage, service worker, etc.)
+sdk.notifications.handleIncomingPush(rawPushData)
+
+// Clean up when done
+unsubscribe()
+```
+
+### Consumer Responsibilities
+
+| Responsibility | Owner |
+|---|---|
+| Obtain push token (APNs / FCM / Web Push) | **Consumer** |
+| Register token with notification server | SDK |
+| Trigger notification to vault members | SDK |
+| Wire platform push handler to `handleIncomingPush()` | **Consumer** |
+| Parse incoming notification data | SDK |
+| Display notification to user | **Consumer** |
+| Route to signing flow using `qrCodeData` | **Consumer** |
+
+### WebSocket Real-Time Delivery
+
+For environments where platform push isn't available (browser extensions, Electron, Node.js), the SDK provides a built-in WebSocket transport. Messages are delivered through the same `onSigningRequest()` callbacks — no platform push handler wiring needed.
+
+```typescript
+// Step 1: Register device (same as platform push)
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: myDeviceToken,       // Any stable unique identifier
+  deviceType: 'web',
+})
+
+// Step 2: Connect WebSocket
+sdk.notifications.connect({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: myDeviceToken,       // Same token used for registerDevice()
+})
+
+// Step 3: Handle notifications (same callback as platform push)
+const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
+  console.log(`Signing request for vault: ${notification.vaultName}`)
+  // Use notification.qrCodeData to join the signing session
+})
+
+// Step 4: Monitor connection state (optional)
+const unsubState = sdk.notifications.onConnectionStateChange((state) => {
+  // state: 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+  console.log('WebSocket state:', state)
+})
+
+// Step 5: Disconnect when done
+sdk.notifications.disconnect()
+unsubscribe()
+unsubState()
+```
+
+**Auto-reconnect:** If the connection drops, the SDK automatically reconnects with exponential backoff (1s → 2s → 4s → ... capped at 30s). The server retains unacknowledged messages for 60 seconds and re-delivers them on reconnect — no messages are lost during brief disconnections.
+
+**ACK protocol:** The SDK automatically acknowledges each received notification so the server does not re-deliver it.
+
+**Lifecycle tip:** For browser extensions, connect when the popup opens and disconnect on close. `sdk.dispose()` calls `disconnect()` automatically.
+
+### Web Push (Browser / Extension)
+
+For web platforms using the Web Push API with service workers, fetch the VAPID public key from the server to subscribe:
+
+```typescript
+const vapidKey = await sdk.notifications.fetchVapidPublicKey()
+const subscription = await registration.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: vapidKey,
+})
+
+await sdk.notifications.registerDevice({
+  vaultId: vault.publicKeys.ecdsa,
+  partyName: vault.localPartyId,
+  token: JSON.stringify(subscription.toJSON()),
+  deviceType: 'web',
+})
+```
+
+> **Tip:** For browser extensions, prefer WebSocket delivery (see above) over Web Push since extensions can maintain a direct connection while the popup is open.
+
+### Utility Methods
+
+```typescript
+// Check if a vault has local registration
+const registered = await sdk.notifications.isVaultRegistered(vaultId)
+
+// Check if any devices are registered on the server
+const hasRemote = await sdk.notifications.hasRemoteRegistrations(vaultId)
+
+// Remove local registration
+await sdk.notifications.unregisterVault(vaultId)
+
+// Parse notification payload manually (without invoking callbacks)
+const parsed = sdk.notifications.parseNotificationPayload(rawData)
+
+// Check WebSocket connection state
+const state = sdk.notifications.connectionState
+// 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
+
+// Health check
+const healthy = await sdk.notifications.ping()
+```
+
+> **Note:** Node.js / CLI environments have no native push receive mechanism. Use WebSocket delivery (`connect()`) or `parseNotificationPayload()` manually if you implement your own transport.
+
+---
+
 ## Configuration
 
 ### SDK Instance Configuration
@@ -2181,6 +2386,15 @@ vault.on('transactionSigned', ({ chain, txHash }) => {
 vault.on('transactionBroadcast', ({ chain, txHash }) => {
   console.log(`Transaction broadcast on ${chain}: ${txHash}`)
 })
+vault.on('transactionConfirmed', ({ chain, txHash, receipt }) => {
+  console.log(`Transaction confirmed on ${chain}: ${txHash}`)
+  if (receipt) {
+    console.log(`  Block: ${receipt.blockNumber}, Fee: ${receipt.fee}`)
+  }
+})
+vault.on('transactionFailed', ({ chain, txHash }) => {
+  console.log(`Transaction failed on ${chain}: ${txHash}`)
+})
 vault.on('signingProgress', ({ step, progress, message }) => {
   console.log(`Signing: ${message} (${progress}%)`)
 })
@@ -2372,6 +2586,7 @@ class Vultisig {
     vault: SecureVault
     vaultId: string
     sessionId: string
+    discoveredChains?: ChainDiscoveryResult[]
   }>
   joinSecureVault(qrPayload: string, options: JoinSecureVaultOptions): Promise<{
     vault: SecureVault
@@ -2435,6 +2650,7 @@ class VaultBase {
   signBytes(options: SignBytesOptions, signingOptions?: SigningOptions): Promise<Signature>
   broadcastTx(params: BroadcastParams): Promise<string>
   broadcastRawTx(params: { chain: Chain, rawTx: string }): Promise<string>
+  getTxStatus(params: { chain: Chain, txHash: string }): Promise<TxStatusResult>
   gas<C extends Chain>(chain: C): Promise<GasInfoForChain<C>>
 
   // Cosmos Signing (SignAmino & SignDirect)

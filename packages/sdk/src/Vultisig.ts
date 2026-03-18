@@ -30,7 +30,8 @@ import type {
 import { FastSigningService } from './services/FastSigningService'
 import { FastVaultFromSeedphraseService } from './services/FastVaultFromSeedphraseService'
 import { JoinSecureVaultService } from './services/JoinSecureVaultService'
-import { type PerformReshareParams,SecureVaultCreationService } from './services/SecureVaultCreationService'
+import type { PushNotificationService } from './services/PushNotificationService'
+import { type PerformReshareParams, SecureVaultCreationService } from './services/SecureVaultCreationService'
 import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
 import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep, VaultData } from './types'
@@ -116,6 +117,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   public get storage(): Storage {
     return this.context.storage
+  }
+
+  /**
+   * Push notification service for vault signing coordination.
+   * Use this to register devices, notify vault members, and handle incoming push notifications.
+   */
+  public get notifications(): PushNotificationService {
+    return this.context.pushNotificationService
   }
 
   /**
@@ -288,6 +297,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     if (this._disposed) {
       return // Already disposed
     }
+
+    // Disconnect WebSocket if connected
+    this.context.pushNotificationService.disconnect()
 
     // Clear pending vaults (unverified vaults are discarded)
     this.pendingVaults.clear()
@@ -593,6 +605,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       serverManager: this.context.serverManager,
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
+      pushNotificationService: this.context.pushNotificationService,
     }
 
     // Create FastVault from import using the factory method
@@ -657,6 +670,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       serverManager: this.context.serverManager,
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
+      pushNotificationService: this.context.pushNotificationService,
     }
 
     // Create SecureVault from import using the factory method
@@ -754,6 +768,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       serverManager: this.context.serverManager,
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
+      pushNotificationService: this.context.pushNotificationService,
     }
 
     // Create SecureVault from import

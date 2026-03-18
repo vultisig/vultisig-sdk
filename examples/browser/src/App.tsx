@@ -135,6 +135,14 @@ function App() {
       addEvent('transaction', 'vault', `Transaction broadcast on ${chain}: ${txHash.slice(0, 10)}...`)
     })
 
+    const unsubTxConfirmed = adapter.onTransactionConfirmed(({ chain, txHash }) => {
+      addEvent('success', 'vault', `Transaction confirmed on ${chain}: ${txHash.slice(0, 10)}...`)
+    })
+
+    const unsubTxFailed = adapter.onTransactionFailed(({ chain, txHash }) => {
+      addEvent('error', 'vault', `Transaction failed on ${chain}: ${txHash.slice(0, 10)}...`)
+    })
+
     const unsubError = adapter.onError(error => {
       addEvent('error', 'sdk', `Error: ${error.message}`)
     })
@@ -146,6 +154,8 @@ function App() {
       unsubBalance()
       unsubChain()
       unsubTx()
+      unsubTxConfirmed()
+      unsubTxFailed()
       unsubError()
     }
   }, [appState.sdkAdapter, addEvent])
