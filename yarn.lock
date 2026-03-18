@@ -728,6 +728,7 @@ __metadata:
     "@core/mpc": "workspace:^"
     "@cosmjs/amino": "npm:^0.38.1"
     "@cosmjs/encoding": "npm:^0.38.1"
+    "@cosmjs/proto-signing": "npm:^0.38.1"
     "@cosmjs/stargate": "npm:^0.38.1"
     "@lib/utils": "workspace:^"
     "@lifi/sdk": "npm:^3.15.5"
@@ -765,6 +766,7 @@ __metadata:
     "@core/config": "workspace:^"
     "@cosmjs/encoding": "npm:^0.38.1"
     "@lib/dkls": "workspace:^"
+    "@lib/mldsa": "workspace:^"
     "@lib/schnorr": "workspace:^"
     "@lib/utils": "workspace:^"
     "@mysten/sui": "npm:^2.3.0"
@@ -2151,6 +2153,12 @@ __metadata:
 "@lib/dkls@workspace:^, @lib/dkls@workspace:packages/lib/dkls":
   version: 0.0.0-use.local
   resolution: "@lib/dkls@workspace:packages/lib/dkls"
+  languageName: unknown
+  linkType: soft
+
+"@lib/mldsa@workspace:^, @lib/mldsa@workspace:packages/lib/mldsa":
+  version: 0.0.0-use.local
+  resolution: "@lib/mldsa@workspace:packages/lib/mldsa"
   languageName: unknown
   linkType: soft
 

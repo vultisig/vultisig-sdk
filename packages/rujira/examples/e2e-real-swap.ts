@@ -23,6 +23,8 @@ async function main() {
   // Setup
   const vultFileContent = fs.readFileSync(vultFilePath, 'utf8')
   const sdk = new Vultisig({
+    // WARNING: MemoryStorage is non-persistent (testing only). Use default
+    // platform storage in production to avoid permanent loss of vault keyshares.
     storage: new MemoryStorage(),
     onPasswordRequired: async () => password,
   })

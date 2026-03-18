@@ -6,7 +6,7 @@ TypeScript SDK for multi-party computation (MPC) wallet operations. Supports 40+
 
 **DO NOT EDIT** these directories - they are synced from vultisig-windows:
 - `packages/core/` - Chain implementations, MPC protocols
-- `packages/lib/` - Utilities, WASM bindings (dkls, schnorr)
+- `packages/lib/` - Utilities, WASM bindings (dkls, mldsa, schnorr)
 
 To update upstream code: `yarn sync-and-copy`
 
@@ -27,9 +27,11 @@ examples/             # Browser, Electron examples
 ```bash
 # Build
 yarn build:sdk          # Full SDK build
-yarn build:fast         # Fast build (node only)
 yarn build:rujira       # Build Rujira package
-yarn dev                # Watch mode
+
+# Build (workspace-level, run from packages/sdk/)
+yarn workspace @vultisig/sdk build:fast   # Fast build (node only)
+yarn workspace @vultisig/sdk dev          # Watch mode
 
 # Test
 yarn test               # SDK unit tests
@@ -52,11 +54,12 @@ yarn typecheck          # TypeScript check
 - **SecureVault**: N-of-M threshold, multi-device signing via relay, configurable encryption
 
 ### Multi-Platform Builds
-SDK builds to 5 bundles via Rollup:
+SDK builds to 6 bundles via Rollup:
 - Node.js ESM/CJS
 - Browser
 - React Native
 - Electron Main
+- Chrome Extension
 
 ### Key Entry Points
 - `Vultisig` class - Main SDK entry point

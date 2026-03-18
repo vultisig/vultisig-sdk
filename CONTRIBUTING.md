@@ -47,12 +47,13 @@ vultisig-sdk/
 │   ├── rujira/           # Rujira DEX integration (@vultisig/rujira), includes asset registry
 │   ├── core/             # ⚠️ UPSTREAM CODE - DO NOT EDIT
 │   │   ├── chain/        # Chain-specific implementations
-│   │   ├── mpc/          # MPC protocol implementations
-│   │   └── ui/           # UI components and utilities
+│   │   ├── config/       # Configuration and constants
+│   │   └── mpc/          # MPC protocol implementations
 │   └── lib/              # ⚠️ UPSTREAM CODE - DO NOT EDIT
 │       ├── utils/        # Common utilities
-│       ├── ui/           # UI library components
-│       └── dkls/         # DKLS WASM bindings
+│       ├── dkls/         # DKLS WASM bindings
+│       ├── mldsa/        # ML-DSA (post-quantum) WASM bindings
+│       └── schnorr/      # Schnorr signature WASM bindings
 ├── clients/cli/          # CLI workspace (@vultisig/cli)
 ├── examples/             # Example workspaces
 └── docs/                 # Documentation
@@ -114,10 +115,8 @@ yarn test:all
 |--------|-------------|
 | `yarn build:sdk` | Build the SDK with all workspace dependencies |
 | `yarn build:rujira` | Build the Rujira package |
-| `yarn build:assets` | Build the assets registry package |
 | `yarn test` | Run SDK tests |
 | `yarn test:rujira` | Run Rujira tests |
-| `yarn test:assets` | Run assets tests |
 | `yarn test:unit` | Run unit tests only |
 | `yarn test:integration` | Run integration tests |
 | `yarn test:e2e` | Run end-to-end tests (requires vault) |
@@ -170,10 +169,10 @@ yarn sync-and-copy
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| `build.yml` | Push to any branch | Lint, build, test, typecheck |
-| `test.yml` | Push/PR to main | Full test suite |
-| `release.yml` | Push to main | Create release PR or publish via Changesets |
-| `docs.yml` | Push to main | Generate and deploy TypeDoc to GitHub Pages |
+| `test.yml` | PR opened/updated | Unit tests, lint, typecheck, Codecov |
+| `release-pr.yml` | Push to main | Auto-creates "Version Packages" PR when changesets exist |
+| `release.yml` | Merge version PR | npm publish, GitHub release, Vercel deploy, docs sync, Discord notify |
+| `release-manual.yml` | Manual dispatch | Force-run release steps (Vercel, docs sync, Discord) |
 
 ### Automated Checks
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
+import type { ISDKAdapter } from '../../../adapters'
 import { useSDKAdapter } from '../../../adapters'
 import type { CoinInfo, ProgressStep, TokenInfo, VaultInfo } from '../../../types'
 import Button from '../../common/Button'
@@ -28,7 +29,12 @@ export default function VaultSend({ vault }: VaultSendProps) {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
-  const [result, setResult] = useState<{ txHash: string; explorerUrl?: string } | null>(null)
+  const [result, setResult] = useState<{
+    txHash: string
+    explorerUrl?: string
+    status?: 'pending' | 'success' | 'error'
+    fee?: string
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Secure vault signing state
@@ -216,6 +222,9 @@ export default function VaultSend({ vault }: VaultSendProps) {
       setResult({ txHash, explorerUrl })
       setProgress(null)
 
+      // Non-blocking: poll for confirmation in background
+      pollTxStatus(sdk, vault.id, chain, txHash, setResult)
+
       // Reset form
       setFormData(prev => ({
         ...prev,
@@ -351,11 +360,43 @@ export default function VaultSend({ vault }: VaultSendProps) {
             {result && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Transaction Sent!
+                  {result.status === 'success' ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : result.status === 'error' ? (
+                    <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                      />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                  {result.status === 'success' ? 'Transaction Confirmed!' : 'Transaction Sent!'}
                 </div>
+                {/* Confirmation status */}
+                {!result.status && (
+                  <div className="flex items-center gap-2 text-xs text-green-600 mb-2">
+                    <div className="animate-spin h-3 w-3 border border-green-600 border-t-transparent rounded-full" />
+                    Confirming...
+                  </div>
+                )}
+                {result.status === 'error' && (
+                  <div className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded mb-2">
+                    Transaction failed on-chain
+                  </div>
+                )}
+                {result.fee && (
+                  <div className="text-xs text-green-600 mb-2">
+                    <span className="font-medium">Fee:</span> {result.fee}
+                  </div>
+                )}
                 <div className="text-sm text-green-600 break-all">
                   <span className="font-medium">Hash:</span> {result.txHash}
                 </div>
@@ -459,4 +500,57 @@ function getChainDecimals(chain: string): number {
     Ripple: 6,
   }
   return decimalsMap[chain] ?? 18
+}
+
+// Format fee from raw amount + decimals
+function formatFee(amount: string, decimals: number): string {
+  if (amount === '0') return '0'
+  const amountBig = BigInt(amount)
+  const divisor = 10n ** BigInt(decimals)
+  const wholePart = amountBig / divisor
+  const fractionalPart = amountBig % divisor
+  if (fractionalPart === 0n) return wholePart.toString()
+  let fractionalStr = fractionalPart.toString().padStart(decimals, '0')
+  fractionalStr = fractionalStr.replace(/0+$/, '').slice(0, 6)
+  return `${wholePart}.${fractionalStr}`
+}
+
+// Non-blocking background poll for transaction confirmation
+type TxResultSetter = React.Dispatch<
+  React.SetStateAction<{
+    txHash: string
+    explorerUrl?: string
+    status?: 'pending' | 'success' | 'error'
+    fee?: string
+  } | null>
+>
+
+function pollTxStatus(sdk: ISDKAdapter, vaultId: string, chain: string, txHash: string, setResult: TxResultSetter) {
+  const POLL_INTERVAL = 5_000
+  const MAX_POLLS = 60
+  let polls = 0
+
+  const poll = async () => {
+    while (polls < MAX_POLLS) {
+      await new Promise(r => setTimeout(r, POLL_INTERVAL))
+      polls++
+      try {
+        const status = await sdk.getTxStatus(vaultId, chain, txHash)
+        if (status.status === 'success') {
+          const fee = status.receipt
+            ? `${formatFee(status.receipt.feeAmount, status.receipt.feeDecimals)} ${status.receipt.feeTicker}`
+            : undefined
+          setResult(prev => (prev?.txHash === txHash ? { ...prev, status: 'success', fee } : prev))
+          return
+        }
+        if (status.status === 'error') {
+          setResult(prev => (prev?.txHash === txHash ? { ...prev, status: 'error' } : prev))
+          return
+        }
+      } catch {
+        // Network error — keep trying
+      }
+    }
+  }
+  poll() // fire and forget
 }

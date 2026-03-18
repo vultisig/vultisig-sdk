@@ -10,6 +10,7 @@
     "packages/core/config",
     "packages/core/mpc",
     "packages/lib/dkls",
+    "packages/lib/mldsa",
     "packages/lib/schnorr",
     "packages/lib/utils",
     "packages/rujira"

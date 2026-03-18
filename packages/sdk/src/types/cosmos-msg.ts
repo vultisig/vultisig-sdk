@@ -14,6 +14,8 @@ export const CosmosMsgType = {
   ThorchainMsgDeposit: 'thorchain/MsgDeposit',
   ThorchainMsgDepositUrl: '/types.MsgDeposit',
   ThorchainMsgSendUrl: '/types.MsgSend',
+  ThorchainMsgLeavePool: 'thorchain/MsgLeavePool',
+  ThorchainMsgLeavePoolUrl: '/thorchain.v1.MsgLeavePool',
 } as const
 
 export type CosmosMsgType = (typeof CosmosMsgType)[keyof typeof CosmosMsgType]

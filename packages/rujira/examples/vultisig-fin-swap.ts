@@ -31,6 +31,8 @@ async function main() {
 
   // Initialize Vultisig SDK and import the vault (Fast vault flow)
   const sdk = new Vultisig({
+    // WARNING: MemoryStorage is non-persistent (testing only). Use default
+    // platform storage in production to avoid permanent loss of vault keyshares.
     storage: new MemoryStorage(),
     onPasswordRequired: async () => password,
   })

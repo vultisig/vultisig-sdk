@@ -353,6 +353,45 @@ Swap quotes and previews show your VULT discount tier when affiliate fees are ap
 |---------|-------------|
 | `sign` | Sign pre-hashed bytes for custom transactions |
 | `broadcast` | Broadcast a pre-signed raw transaction |
+| `tx-status <chain> <txHash>` | Check transaction confirmation status |
+
+#### Transaction Status
+
+Check whether a transaction has confirmed on-chain. By default, polls every 5 seconds until the transaction reaches a final state (success or error):
+
+```bash
+# Poll until confirmed (default)
+vultisig tx-status ethereum 0x9f8e7d6c...
+
+# Check current status without polling
+vultisig tx-status ethereum 0x9f8e7d6c... --no-wait
+
+# JSON output
+vultisig tx-status ethereum 0x9f8e7d6c... -o json
+```
+
+**Output:**
+```
+✓ Transaction status: success
+Status: success
+Fee: 0.00042 ETH
+Explorer: https://etherscan.io/tx/0x9f8e7d6c...
+```
+
+**JSON output:**
+```json
+{
+  "chain": "ethereum",
+  "txHash": "0x9f8e7d6c...",
+  "status": "success",
+  "receipt": {
+    "feeAmount": "420000000000000",
+    "feeDecimals": 18,
+    "feeTicker": "ETH"
+  },
+  "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+}
+```
 
 #### Signing Arbitrary Bytes
 
