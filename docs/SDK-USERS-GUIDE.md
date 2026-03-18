@@ -511,7 +511,7 @@ console.log('Vault ID:', vaultId);
 2. `onQRCodeReady` callback receives the QR data - display this for other devices
 3. Other participants scan the QR with the Vultisig mobile app (iOS/Android)
 4. `onDeviceJoined` fires as each device joins the session
-5. Once all devices join, MPC keygen runs automatically (DKLS for ECDSA, Schnorr for EdDSA)
+5. Once all devices join, MPC keygen runs automatically (DKLS for ECDSA, Schnorr for EdDSA, ML-DSA for post-quantum signatures)
 6. The vault is created and saved, then returned
 
 **Threshold Configuration:**
@@ -935,6 +935,7 @@ const [result1, result2, result3] = await Promise.all([promise1, promise2, promi
 2. **No Logging**: Mnemonics are never logged or persisted
 3. **HTTPS Only**: All server communication is encrypted
 4. **Input Validation**: Always validate before import to catch typos
+5. **Post-Quantum Readiness**: Vault keygen includes ML-DSA (FIPS 204) key generation alongside ECDSA (DKLS) and EdDSA (Schnorr), providing forward-looking protection against quantum threats
 
 ---
 
@@ -2585,6 +2586,7 @@ class Vultisig {
     vault: SecureVault
     vaultId: string
     sessionId: string
+    discoveredChains?: ChainDiscoveryResult[]
   }>
   joinSecureVault(qrPayload: string, options: JoinSecureVaultOptions): Promise<{
     vault: SecureVault

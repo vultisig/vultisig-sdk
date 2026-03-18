@@ -13,7 +13,7 @@ Both vault types provide comprehensive blockchain support including Bitcoin, Eth
 
 ## Features
 
-- **Fast Vault**: Server-assisted 2-of-2 MPC with VultiServer for instant signing
+- **Fast Vault**: Server-assisted MPC with VultiServer for instant signing (2-of-2 standard, 2-of-3 from seedphrase import)
 - **Secure Vault**: Multi-device N-of-M threshold signing with mobile device pairing
 - **QR Code Pairing**: Pair with Vultisig mobile apps for secure vault operations
 - **Address Derivation**: Generate blockchain addresses using WalletCore WASM
@@ -42,7 +42,7 @@ yarn add @vultisig/sdk
 ### Fast Vault (Server-Assisted)
 
 ```typescript
-import { Vultisig } from '@vultisig/sdk'
+import { Vultisig, Chain } from '@vultisig/sdk'
 
 // Initialize SDK (storage is auto-configured for your platform)
 const sdk = new Vultisig()
@@ -59,8 +59,8 @@ const vaultId = await sdk.createFastVault({
 const vault = await sdk.verifyVault(vaultId, "1234");
 
 // Derive addresses
-const btcAddress = await vault.address("Bitcoin");
-const ethAddress = await vault.address("Ethereum");
+const btcAddress = await vault.address(Chain.Bitcoin);
+const ethAddress = await vault.address(Chain.Ethereum);
 ```
 
 ### Secure Vault (Multi-Device)
