@@ -1,0 +1,313 @@
+name: Integration Test
+
+on:
+  pull_request:
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vultisig
+          POSTGRES_PASSWORD: vultisig
+          POSTGRES_DB: vultisig-agent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vultisig -d vultisig-agent"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_DSN: postgres://vultisig:vultisig@localhost:5432/vultisig-agent?sslmode=disable
+      REDIS_URI: redis://localhost:6379
+      JWT_SECRET: integration-test-secret-key-not-for-prod
+      AI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AI_MODEL: anthropic/claude-sonnet-4
+      AI_SUMMARY_MODEL: anthropic/claude-haiku-4.5
+      MCP_SERVER_URL: http://localhost:8888
+      VERIFIER_URL: ""
+      SERVER_PORT: "9998"
+
+    steps:
+      # ── Checkout repos ──
+      - name: Checkout vultisig-sdk (PR branch)
+        uses: actions/checkout@v4
+        with:
+          path: vultisig-sdk
+          fetch-depth: 0
+
+      - name: Checkout MCP
+        uses: actions/checkout@v4
+        with:
+          repository: vultisig/mcp
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: mcp
+
+      - name: Checkout agent-backend
+        uses: actions/checkout@v4
+        with:
+          repository: vultisig/agent-backend
+          ref: fix/agent-tool-calls
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: agent-backend
+
+      # ── Setup Go ──
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+          cache-dependency-path: |
+            mcp/go.sum
+            agent-backend/go.sum
+
+      # ── Setup Node.js ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ── Build MCP server ──
+      - name: Build MCP server
+        working-directory: mcp
+        run: CGO_ENABLED=0 go build -o ../mcp-server ./cmd/mcp-server/
+
+      # ── Start MCP server ──
+      - name: Start MCP server
+        run: |
+          ./mcp-server -http :8888 > /tmp/mcp-server.log 2>&1 &
+          echo "MCP_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8888/skills > /dev/null 2>&1; then
+              echo "MCP server ready after ${i}s"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "::error::MCP server failed to start"
+              cat /tmp/mcp-server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      # ── Run agent-backend DB migrations ──
+      - name: Run database migrations
+        working-directory: agent-backend
+        run: |
+          go run -tags 'postgres' github.com/pressly/goose/v3/cmd/goose@v3.27.0 \
+            -dir internal/storage/postgres/migrations \
+            postgres "$DATABASE_DSN" up
+
+      # ── Build and start agent-backend ──
+      - name: Build agent-backend
+        working-directory: agent-backend
+        run: go build -o ../agent-server ./cmd/server/
+
+      - name: Start agent-backend
+        run: |
+          ./agent-server > /tmp/agent-backend.log 2>&1 &
+          echo "AGENT_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9998/healthz > /dev/null 2>&1; then
+              echo "Agent-backend ready after ${i}s"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "::error::Agent-backend failed to start"
+              cat /tmp/agent-backend.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      # ── Verify MCP integration ──
+      - name: Verify MCP integration
+        run: |
+          TOOL_COUNT=$(grep -o '"mcp_tool_count":[0-9]*' /tmp/agent-backend.log | head -1 | grep -o '[0-9]*')
+          echo "MCP tools discovered: $TOOL_COUNT"
+          if [ -z "$TOOL_COUNT" ] || [ "$TOOL_COUNT" -lt 1 ]; then
+            echo "::error::Agent-backend did not discover any MCP tools"
+            exit 1
+          fi
+
+      # ── Setup vultisig-sdk CLI from PR branch ──
+      - name: Install vultisig-sdk dependencies
+        working-directory: vultisig-sdk
+        run: yarn install --frozen-lockfile
+
+      - name: Build vultisig-sdk
+        working-directory: vultisig-sdk
+        run: yarn build:all
+
+      # ── Setup test vault ──
+      - name: Setup test vault
+        run: |
+          mkdir -p ~/.vultisig
+          cp vultisig-sdk/testdata/test-vault.json ~/.vultisig/vault:023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120.json
+          echo '{"activeVaultId":"023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120"}' > ~/.vultisig/activeVaultId.json
+
+      # ── Install and configure opencode ──
+      - name: Install opencode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure opencode
+        run: |
+          mkdir -p ~/.local/share/opencode
+          echo '${{ secrets.OPENCODE_AUTH }}' > ~/.local/share/opencode/auth.json
+          mkdir -p ~/.config/opencode
+          cat > ~/.config/opencode/opencode.json <<'EOF'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "permission": {
+              "*": {
+                "*": "allow"
+              }
+            }
+          }
+          EOF
+
+      # ── Discover what changed in this PR ──
+      - name: Discover PR changes
+        working-directory: vultisig-sdk
+        run: |
+          BASE="origin/${{ github.event.pull_request.base.ref }}"
+          {
+            echo "=== Changed agent files ==="
+            git diff "$BASE"...HEAD --name-status -- 'clients/cli/src/agent/*.ts' || true
+            echo ""
+            echo "=== Changed CLI command files ==="
+            git diff "$BASE"...HEAD --name-status -- 'clients/cli/src/commands/*.ts' 'clients/cli/src/index.ts' || true
+            echo ""
+            echo "=== Changed SDK core files ==="
+            git diff "$BASE"...HEAD --name-status -- 'packages/sdk/src/**/*.ts' || true
+            echo ""
+            echo "=== Key code changes ==="
+            git diff "$BASE"...HEAD --stat || true
+            echo ""
+            echo "=== Detailed changes in agent module ==="
+            git diff "$BASE"...HEAD -- 'clients/cli/src/agent/*.ts' | head -300 || true
+            echo ""
+            echo "=== Available MCP skills ==="
+            curl -sf http://localhost:8888/skills | jq -r '.[].name'
+          } > /tmp/pr-changes.txt
+          cat /tmp/pr-changes.txt
+
+      # ── Formulate test message via opencode ──
+      - name: Formulate test via opencode
+        env:
+          VAULT_PASSWORD: ${{ secrets.TEST_VAULT_PASSWORD }}
+        run: |
+          opencode run --model opencode/minimax-m2.5-free "$(cat <<'PROMPT'
+          Read /tmp/pr-changes.txt which contains the git diff of changes to the Vultisig SDK.
+
+          This is the TypeScript SDK for MPC wallet operations. Key areas:
+          - clients/cli/src/agent/ — Agent chat mode (auth, client, executor, session, pipe protocol)
+          - clients/cli/src/commands/ — CLI command definitions
+          - packages/sdk/src/ — Core SDK (vault, signing, chains, address derivation)
+
+          Your job: write a single user message that a crypto wallet user would send to an AI agent. The message MUST request a transaction that gets built and signed — read-only queries alone are not sufficient.
+
+          Rules:
+          1. Read the diff carefully. Identify what changed (signing flow, session handling, pipe protocol, chain support, etc.).
+          2. The test message MUST target the changed functionality. Do NOT pick an unrelated operation.
+          3. Always request a WRITE operation (send, swap, wrap, deposit, etc.) — not a read-only query.
+          4. If auth changed: the harness handles auth, so focus on post-auth transaction functionality.
+          5. Use tiny amounts (0.0001 ETH or equivalent) to minimize cost.
+          6. The message must be self-contained — the agent should execute it without follow-up questions.
+          7. Fallback (only if there are truly NO functional changes): "Send 0.000001 ETH to my own Ethereum address"
+
+          Write ONLY the raw message text to /tmp/test-message.txt — no explanation, no quotes, no markdown.
+          PROMPT
+          )" 2>&1 | tee /tmp/opencode-formulate.log
+
+          echo "=== Test message ==="
+          cat /tmp/test-message.txt
+
+      # ── Run integration test ──
+      - name: Run integration test
+        working-directory: vultisig-sdk
+        env:
+          VAULT_PASSWORD: ${{ secrets.TEST_VAULT_PASSWORD }}
+        run: |
+          TEST_MSG=$(cat /tmp/test-message.txt)
+          echo "Test message: $TEST_MSG"
+
+          node testdata/agent-test-runner.mjs \
+            --message "$TEST_MSG" \
+            --vault ci_test \
+            --password "$VAULT_PASSWORD" \
+            --backend-url http://localhost:9998 \
+            --sdk-dir "$(pwd)" \
+            --timeout 600 \
+            --max-turns 10 \
+            > /tmp/test-result.json 2>/tmp/test-runner.log \
+            && EXIT_CODE=0 || EXIT_CODE=$?
+
+          echo "=== Test Runner Log ==="
+          cat /tmp/test-runner.log
+          echo ""
+          echo "=== Test Result ==="
+          cat /tmp/test-result.json
+
+          SUCCESS=$(jq -r '.success' /tmp/test-result.json)
+          TX_HASHES=$(jq -r '.tx_hashes | join(", ")' /tmp/test-result.json)
+          TOOLS=$(jq -r '.tool_calls | join(" → ")' /tmp/test-result.json)
+
+          echo "Tools used: $TOOLS"
+          echo "TX hashes: $TX_HASHES"
+
+          if [ "$SUCCESS" = "true" ] && [ -n "$TX_HASHES" ] && [ "$TX_HASHES" != "" ]; then
+            echo "✓ Integration test PASSED — tx: $TX_HASHES"
+          elif [ "$EXIT_CODE" -eq 0 ]; then
+            echo "✓ Integration test PASSED (no tx expected)"
+          else
+            echo "::error::Integration test FAILED"
+            echo "Tools: $TOOLS"
+            jq -r '.turns[-1].errors[]?' /tmp/test-result.json 2>/dev/null
+            exit 1
+          fi
+
+      # ── Cleanup ──
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== MCP Server Log ==="
+          cat /tmp/mcp-server.log || true
+          echo "=== Agent Backend Log ==="
+          cat /tmp/agent-backend.log || true
+          echo "=== OpenCode Formulate Log ==="
+          cat /tmp/opencode-formulate.log 2>/dev/null || echo "No opencode output"
+          echo "=== Test Message ==="
+          cat /tmp/test-message.txt 2>/dev/null || echo "No test message"
+          echo "=== Test Runner Log ==="
+          cat /tmp/test-runner.log 2>/dev/null || echo "No runner log"
+          echo "=== Test Result ==="
+          cat /tmp/test-result.json 2>/dev/null || echo "No result"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
+          [ -n "$MCP_PID" ] && kill "$MCP_PID" 2>/dev/null || true
