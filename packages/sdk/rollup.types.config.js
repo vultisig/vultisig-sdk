@@ -2,7 +2,6 @@ import { defineConfig } from 'rollup'
 import dts from 'rollup-plugin-dts'
 
 const dtsPluginOptions = {
-  respectExternal: true,
   compilerOptions: {
     baseUrl: '.',
     paths: {
@@ -17,12 +16,6 @@ const dtsPluginOptions = {
   },
 }
 
-const external = [
-  // Treat imports from core and lib as external to avoid type-checking them
-  /^@core\//,
-  /^@lib\//,
-]
-
 export default defineConfig([
   // Main types (platform-agnostic)
   {
@@ -32,7 +25,6 @@ export default defineConfig([
       format: 'es',
     },
     plugins: [dts(dtsPluginOptions)],
-    external,
   },
   // Node.js platform types
   {
@@ -42,6 +34,5 @@ export default defineConfig([
       format: 'es',
     },
     plugins: [dts(dtsPluginOptions)],
-    external,
   },
 ])
