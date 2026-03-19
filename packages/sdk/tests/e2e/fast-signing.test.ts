@@ -283,7 +283,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         console.log(`   EdDSA signature (Solana-specific)`)
       })
 
-      it('Polkadot: Sign native DOT transfer (EdDSA)', async () => {
+      it('Polkadot: Sign native DOT transfer (EdDSA)', async ctx => {
         console.log('\n🔐 Testing Polkadot fast signing...')
 
         const coin = {
@@ -293,11 +293,21 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           ticker: 'DOT',
         }
 
-        const keysignPayload = await vault.prepareSendTx({
-          coin,
-          receiver: TEST_RECEIVERS.Polkadot!,
-          amount: TEST_AMOUNTS.Polkadot!,
-        })
+        let keysignPayload
+        try {
+          keysignPayload = await vault.prepareSendTx({
+            coin,
+            receiver: TEST_RECEIVERS.Polkadot!,
+            amount: TEST_AMOUNTS.Polkadot!,
+          })
+        } catch (e) {
+          if ((e as Error).message?.includes('not-enough-funds')) {
+            console.log('⏭️  Polkadot signing skipped: wallet not funded with DOT')
+            ctx.skip()
+            return
+          }
+          throw e
+        }
 
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
@@ -309,7 +319,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         console.log('✅ Polkadot transaction signed successfully (NOT broadcast)')
       })
 
-      it('Sui: Sign native SUI transfer (EdDSA)', async () => {
+      it('Sui: Sign native SUI transfer (EdDSA)', async ctx => {
         console.log('\n🔐 Testing Sui fast signing...')
 
         const coin = {
@@ -319,11 +329,21 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           ticker: 'SUI',
         }
 
-        const keysignPayload = await vault.prepareSendTx({
-          coin,
-          receiver: TEST_RECEIVERS.Sui!,
-          amount: TEST_AMOUNTS.Sui!,
-        })
+        let keysignPayload
+        try {
+          keysignPayload = await vault.prepareSendTx({
+            coin,
+            receiver: TEST_RECEIVERS.Sui!,
+            amount: TEST_AMOUNTS.Sui!,
+          })
+        } catch (e) {
+          if ((e as Error).message?.includes('not-enough-funds')) {
+            console.log('⏭️  Sui signing skipped: wallet not funded with SUI')
+            ctx.skip()
+            return
+          }
+          throw e
+        }
 
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
