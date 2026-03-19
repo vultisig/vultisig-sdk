@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 0.7.0
+
+### Minor Changes
+
+- [#113](https://github.com/vultisig/vultisig-sdk/pull/113) [`da68dda`](https://github.com/vultisig/vultisig-sdk/commit/da68dda0622a024af35666bb7b7088dea4cf3cfd) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add `--two-step` flag for fast vault creation with persistent pending vault state and cross-session verification
+
 ## 0.6.0
 
 ### Minor Changes
