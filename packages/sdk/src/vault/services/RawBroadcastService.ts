@@ -2,6 +2,7 @@ import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@core/
 import { isChainOfKind } from '@core/chain/ChainKind'
 import { getCosmosClient } from '@core/chain/chains/cosmos/client'
 import { getEvmClient } from '@core/chain/chains/evm/client'
+import { bittensorRpcUrl } from '@core/chain/chains/bittensor/client'
 import { polkadotRpcUrl } from '@core/chain/chains/polkadot/client'
 import { getRippleClient } from '@core/chain/chains/ripple/client'
 import { getSolanaClient } from '@core/chain/chains/solana/client'
@@ -96,6 +97,10 @@ export class RawBroadcastService {
 
       if (chain === OtherChain.Polkadot) {
         return await this.broadcastPolkadotRawTx(rawTx)
+      }
+
+      if (chain === OtherChain.Bittensor) {
+        return await this.broadcastBittensorRawTx(rawTx)
       }
 
       if (chain === OtherChain.Ripple) {
@@ -325,6 +330,35 @@ export class RawBroadcastService {
 
     if (response.error) {
       throw new Error(`Polkadot broadcast failed: ${response.error.message}`)
+    }
+
+    return response.result
+  }
+
+  /**
+   * Broadcast a raw Bittensor transaction
+   * @param rawTx - Hex-encoded extrinsic (with or without 0x prefix)
+   */
+  private async broadcastBittensorRawTx(rawTx: string): Promise<string> {
+    const hexWithPrefix = ensureHexPrefix(rawTx)
+
+    const { data: response, error } = await attempt(
+      queryUrl<{ result: string; error?: { message: string } }>(bittensorRpcUrl, {
+        body: {
+          jsonrpc: '2.0',
+          method: 'author_submitExtrinsic',
+          params: [hexWithPrefix],
+          id: 1,
+        },
+      })
+    )
+
+    if (error) {
+      throw error
+    }
+
+    if (response.error) {
+      throw new Error(`Bittensor broadcast failed: ${response.error.message}`)
     }
 
     return response.result
