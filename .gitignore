@@ -85,6 +85,7 @@ mcp.json
 task.md
 
 # Vault files - SECURITY: NEVER commit vault files or keyshares
+vaults/
 *.vult
 **/vaults/**/*.vult
 **/keyshares/**/*.vult

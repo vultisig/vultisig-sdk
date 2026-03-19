@@ -1,5 +1,55 @@
 # @vultisig/sdk
 
+## 0.6.0
+
+### Minor Changes
+
+- [#100](https://github.com/vultisig/vultisig-sdk/pull/100) [`26d3cae`](https://github.com/vultisig/vultisig-sdk/commit/26d3cae3066a316d1e9429a2664a6b4ea18dd8a2) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add ML-DSA (post-quantum) keygen to all vault creation flows and sync CosmosMsgType
+  - Integrate ML-DSA keygen as a third step (after ECDSA + EdDSA) in SecureVaultCreationService, ServerManager, FastVaultFromSeedphraseService, and SecureVaultFromSeedphraseService
+  - Populate `publicKeyMldsa` and `keyShareMldsa` fields on created vaults
+  - Add ML-DSA step to reshare flow in SecureVaultCreationService
+  - Add `'mldsa'` to `KeygenPhase` type
+  - Add `ThorchainMsgLeavePool` and `ThorchainMsgLeavePoolUrl` to `CosmosMsgType`
+
+- [#100](https://github.com/vultisig/vultisig-sdk/pull/100) [`2ed545f`](https://github.com/vultisig/vultisig-sdk/commit/2ed545fb20f5920cb70d096076d55756cea222aa) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add push notification support for multi-party signing coordination
+
+  New `PushNotificationService` accessible via `sdk.notifications` enables the full vault notification flow:
+  - **Register**: Register devices (iOS/Android/Web) to receive push notifications for a vault
+  - **Notify**: Notify other vault members with keysign session data when initiating signing
+  - **Receive**: Handle incoming push notifications with typed callbacks and payload parsing
+
+  Platform-agnostic design — SDK handles server communication while consumers wire their platform's push infrastructure (APNs, FCM, Web Push).
+
+- [#100](https://github.com/vultisig/vultisig-sdk/pull/100) [`a2d545b`](https://github.com/vultisig/vultisig-sdk/commit/a2d545b96794cce087eb4ea8ce955db20212c926) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Sync upstream core/lib changes and add new SDK features
+  - **`getTxStatus()`**: New method on VaultBase to check transaction confirmation status across all supported chains. Emits `transactionConfirmed` and `transactionFailed` events. Supports EVM, UTXO, Cosmos, Solana, THORChain, and more.
+  - **ML-DSA (post-quantum) WASM support**: Added `@lib/mldsa` package and integrated ML-DSA WASM initialization across all platforms (browser, Node.js, Electron, Chrome extension).
+  - **Upstream sync**: Core/lib updates including Cosmos fee resolver improvements, Solana signing fixes, keygen step updates, and protobuf type regeneration.
+
+- [#100](https://github.com/vultisig/vultisig-sdk/pull/100) [`f5176ba`](https://github.com/vultisig/vultisig-sdk/commit/f5176ba4a9fda2c82b6264a958d61d5170e3d2cd) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add WebSocket real-time notification delivery to PushNotificationService
+
+  New methods on `sdk.notifications`:
+  - `connect(options)` — Open WebSocket for real-time signing notifications with auto-reconnect
+  - `disconnect()` — Close WebSocket and stop reconnect (also called by `sdk.dispose()`)
+  - `connectionState` — Current connection state (`disconnected` | `connecting` | `connected` | `reconnecting`)
+  - `onConnectionStateChange(handler)` — Subscribe to connection state changes
+
+  Messages are delivered through the existing `onSigningRequest()` callbacks. Auto-reconnects with exponential backoff (1s → 30s cap). Server retains unacked messages for 60s for reliable delivery across reconnections.
+
+### Patch Changes
+
+- [#114](https://github.com/vultisig/vultisig-sdk/pull/114) [`355c700`](https://github.com/vultisig/vultisig-sdk/commit/355c700e7caca812199fafceb3767b8b3c5fd236) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Inline all `@core/*` and `@lib/*` types into bundled `.d.ts` files so external consumers no longer get unresolved import paths. Fixes circular type resolution errors when the consuming workspace has its own `@core/*` packages.
+
+- [#100](https://github.com/vultisig/vultisig-sdk/pull/100) [`78f8bd2`](https://github.com/vultisig/vultisig-sdk/commit/78f8bd237dc3ca6f42dd268d069ed8f7902e733b) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - feat(examples): add transaction confirmation polling to example UI
+
+  Adds `getTxStatus` support to the browser and electron example apps with non-blocking
+  background polling after broadcast. The success banner shows immediately after broadcast
+  with a "Confirming..." spinner, then updates to "Transaction Confirmed!" (with fee) or
+  "Transaction failed on-chain" when the poll resolves.
+
+  Also fixes:
+  - Missing `MaxSendAmountResult` re-export from shared package
+  - `@cosmjs/proto-signing` not externalized in SDK rollup config (caused runtime crash in browser)
+
 ## 0.5.0
 
 ### Minor Changes

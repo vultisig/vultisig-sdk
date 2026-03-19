@@ -283,11 +283,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         console.log('✅ Solana transaction prepared (NOT broadcast)')
       })
 
-      it('Polkadot: Substrate-based extrinsics', async () => {
-        // TODO: Requires Polkadot funding (~$2-5)
-        // Tests Substrate framework (used by Polkadot, Kusama, parachains)
-        // Different from all other architectures - uses extrinsics, SS58 addresses
-
+      it('Polkadot: Substrate-based extrinsics', async ctx => {
         console.log('📝 Testing Polkadot extrinsic preparation...')
 
         const coin = {
@@ -297,23 +293,28 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
           ticker: 'DOT',
         }
 
-        const payload = await vault.prepareSendTx({
-          coin,
-          receiver: '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5', // Example Polkadot address (SS58)
-          amount: 147000000n, // ~0.0147 DOT (~$1 at $68/DOT)
-        })
+        try {
+          const payload = await vault.prepareSendTx({
+            coin,
+            receiver: '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5',
+            amount: 147000000n,
+          })
 
-        expect(payload).toBeDefined()
-        expect(payload.toAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{47,48}$/) // SS58 format
+          expect(payload).toBeDefined()
+          expect(payload.toAddress).toMatch(/^[1-9A-HJ-NP-Za-km-z]{47,48}$/)
 
-        console.log('✅ Polkadot extrinsic prepared (NOT broadcast)')
+          console.log('✅ Polkadot extrinsic prepared (NOT broadcast)')
+        } catch (e) {
+          if ((e as Error).message?.includes('not-enough-funds')) {
+            console.log('⏭️  Polkadot skipped: wallet not funded with DOT')
+            ctx.skip()
+            return
+          }
+          throw e
+        }
       })
 
-      it('Sui: Move VM object model', async () => {
-        // TODO: Requires Sui funding (~$2-5)
-        // Tests Move-based blockchain (different paradigm)
-        // Uses object model instead of account/UTXO model
-
+      it('Sui: Move VM object model', async ctx => {
         console.log('📝 Testing Sui Move transaction preparation...')
 
         const coin = {
@@ -323,15 +324,24 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
           ticker: 'SUI',
         }
 
-        const payload = await vault.prepareSendTx({
-          coin,
-          receiver: '0x742d35cc6634c0532925a3b844bc9e7595f0beb8000000000000000000000001', // Valid Sui address (64 hex chars)
-          amount: 312500000n, // ~0.3125 SUI (~$1 at $3.20/SUI)
-        })
+        try {
+          const payload = await vault.prepareSendTx({
+            coin,
+            receiver: '0x742d35cc6634c0532925a3b844bc9e7595f0beb8000000000000000000000001',
+            amount: 312500000n,
+          })
 
-        expect(payload).toBeDefined()
+          expect(payload).toBeDefined()
 
-        console.log('✅ Sui Move transaction prepared (NOT broadcast)')
+          console.log('✅ Sui Move transaction prepared (NOT broadcast)')
+        } catch (e) {
+          if ((e as Error).message?.includes('not-enough-funds')) {
+            console.log('⏭️  Sui skipped: wallet not funded with SUI')
+            ctx.skip()
+            return
+          }
+          throw e
+        }
       })
     })
   })
