@@ -129,7 +129,7 @@ export class ServerManager {
     // Generate session parameters
     const sessionId = randomUUID()
     const hexEncryptionKey = getHexEncodedRandomBytes(32)
-    const signingLocalPartyId = generateLocalPartyId('sdk')
+    const signingLocalPartyId = vault.localPartyId || generateLocalPartyId('sdk')
 
     console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
     console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
@@ -146,6 +146,15 @@ export class ServerManager {
 
     shouldBePresent(payload.chain, 'payload.chain')
 
+    // Register at relay BEFORE calling FastVault server
+    // (must be registered so server can find us when it joins)
+    // This matches the extension's flow order in fastVaultKeysign.ts
+    await joinMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      localPartyId: signingLocalPartyId,
+    })
+
     await signWithServer({
       public_key: vault.publicKeys.ecdsa,
       messages,
@@ -158,36 +167,7 @@ export class ServerManager {
     })
     console.log(`✅ Server acknowledged session: ${sessionId}`)
 
-    // Step 2: Join relay session
-    reportProgress({
-      step: 'coordinating',
-      progress: 40,
-      message: 'Joining relay session...',
-      mode: 'fast' as import('../types').SigningMode,
-      participantCount: 2,
-      participantsReady: 1,
-    })
-
-    await joinMpcSession({
-      serverUrl: this.config.messageRelay,
-      sessionId,
-      localPartyId: signingLocalPartyId,
-    })
-
-    // Step 2.5: Register server as participant
-    try {
-      const serverSigner = vault.signers.find((signer: string) => signer.startsWith('Server-'))
-      if (serverSigner) {
-        await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
-          body: [serverSigner],
-          responseType: 'none',
-        })
-      }
-    } catch {
-      // non-fatal
-    }
-
-    // Step 3: Wait for server to join
+    // Step 3: Wait for server to ACTUALLY join
     console.log('⏳ Waiting for server to join session...')
     reportProgress({
       step: 'coordinating',
