@@ -1,5 +1,19 @@
 # @vultisig/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- [#100](https://github.com/vultisig/vultisig-sdk/pull/100) [`2dfc9f6`](https://github.com/vultisig/vultisig-sdk/commit/2dfc9f62f6f53d2b709e9adfc57b17273b5ea109) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add `tx-status` command to check transaction confirmation status
+
+  Polls every 5 seconds until the transaction reaches a final state (success/error). Use `--no-wait` to return the current status immediately. Supports all output modes (table, JSON, silent) and the interactive shell.
+
+### Patch Changes
+
+- Updated dependencies [[`355c700`](https://github.com/vultisig/vultisig-sdk/commit/355c700e7caca812199fafceb3767b8b3c5fd236), [`78f8bd2`](https://github.com/vultisig/vultisig-sdk/commit/78f8bd237dc3ca6f42dd268d069ed8f7902e733b), [`117cd70`](https://github.com/vultisig/vultisig-sdk/commit/117cd705271305269acce5436a2845decd98dc90), [`26d3cae`](https://github.com/vultisig/vultisig-sdk/commit/26d3cae3066a316d1e9429a2664a6b4ea18dd8a2), [`2ed545f`](https://github.com/vultisig/vultisig-sdk/commit/2ed545fb20f5920cb70d096076d55756cea222aa), [`a2d545b`](https://github.com/vultisig/vultisig-sdk/commit/a2d545b96794cce087eb4ea8ce955db20212c926), [`f5176ba`](https://github.com/vultisig/vultisig-sdk/commit/f5176ba4a9fda2c82b6264a958d61d5170e3d2cd)]:
+  - @vultisig/sdk@0.6.0
+  - @vultisig/rujira@2.0.0
+
 ## 0.5.0
 
 ### Minor Changes

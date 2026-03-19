@@ -1,5 +1,19 @@
 # @vultisig/rujira
 
+## 2.0.0
+
+### Patch Changes
+
+- [#107](https://github.com/vultisig/vultisig-sdk/pull/107) [`117cd70`](https://github.com/vultisig/vultisig-sdk/commit/117cd705271305269acce5436a2845decd98dc90) Thanks [@vultisigsdkbot](https://github.com/vultisigsdkbot)! - Fix price impact calculation returning hardcoded 50% for small trades on deep pairs
+  - Remove hardcoded 50% cap on price impact values
+  - Add bidirectional price comparison to handle both swap directions correctly
+    (buying base vs selling base relative to orderbook convention)
+  - Return 'unknown' instead of guessed ranges when orderbook data is unavailable
+  - Return 'unknown' when calculated impact exceeds 99% (likely unit mismatch)
+
+- Updated dependencies [[`355c700`](https://github.com/vultisig/vultisig-sdk/commit/355c700e7caca812199fafceb3767b8b3c5fd236), [`78f8bd2`](https://github.com/vultisig/vultisig-sdk/commit/78f8bd237dc3ca6f42dd268d069ed8f7902e733b), [`26d3cae`](https://github.com/vultisig/vultisig-sdk/commit/26d3cae3066a316d1e9429a2664a6b4ea18dd8a2), [`2ed545f`](https://github.com/vultisig/vultisig-sdk/commit/2ed545fb20f5920cb70d096076d55756cea222aa), [`a2d545b`](https://github.com/vultisig/vultisig-sdk/commit/a2d545b96794cce087eb4ea8ce955db20212c926), [`f5176ba`](https://github.com/vultisig/vultisig-sdk/commit/f5176ba4a9fda2c82b6264a958d61d5170e3d2cd)]:
+  - @vultisig/sdk@0.6.0
+
 ## 1.0.0
 
 ### Minor Changes
