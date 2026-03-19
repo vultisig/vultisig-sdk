@@ -71,7 +71,6 @@ describe('TokenDiscoveryService', () => {
         ticker: 'USDC',
         decimals: 6,
         logo: 'usdc.png',
-        balance: '1000000',
       })
     })
 

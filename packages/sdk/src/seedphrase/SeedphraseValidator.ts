@@ -110,7 +110,7 @@ export class SeedphraseValidator {
     } else {
       // Explicit language specified - validate with that language
       const wordlist = getWordlist(language)
-      const isValid = validateMnemonic(normalized, wordlist)
+      const isValid = validateMnemonic(normalized, wordlist as string[])
 
       if (!isValid) {
         const invalidWords = findInvalidWords(normalized, language)
