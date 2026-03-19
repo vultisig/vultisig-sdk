@@ -1,5 +1,21 @@
 # @vultisig/cli
 
+## 0.7.0
+
+### Minor Changes
+
+- [#113](https://github.com/vultisig/vultisig-sdk/pull/113) [`da68dda`](https://github.com/vultisig/vultisig-sdk/commit/da68dda0622a024af35666bb7b7088dea4cf3cfd) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add `agent` command for AI agent chat sessions with NDJSON pipe mode (`--via-agent`) for programmatic interaction
+
+- [#113](https://github.com/vultisig/vultisig-sdk/pull/113) [`da68dda`](https://github.com/vultisig/vultisig-sdk/commit/da68dda0622a024af35666bb7b7088dea4cf3cfd) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add `--two-step` flag for fast vault creation with persistent pending vault state and cross-session verification
+
+### Patch Changes
+
+- [#113](https://github.com/vultisig/vultisig-sdk/pull/113) [`da68dda`](https://github.com/vultisig/vultisig-sdk/commit/da68dda0622a024af35666bb7b7088dea4cf3cfd) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Add User-Agent header to all CLI HTTP requests
+
+- Updated dependencies [[`da68dda`](https://github.com/vultisig/vultisig-sdk/commit/da68dda0622a024af35666bb7b7088dea4cf3cfd)]:
+  - @vultisig/sdk@0.7.0
+  - @vultisig/rujira@3.0.0
+
 ## 0.6.0
 
 ### Minor Changes
