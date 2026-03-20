@@ -23,7 +23,7 @@ jobs:
           cache: "yarn"
 
       - run: corepack enable
-      - run: corepack prepare yarn@4.12.0 --activate
+      - run: corepack prepare yarn@4.13.0 --activate
       - run: yarn install --immutable
       - run: yarn build:sdk
 

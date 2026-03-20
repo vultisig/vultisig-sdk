@@ -246,7 +246,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       hexChainCode: this.coreVault.hexChainCode,
       signers: this.coreVault.signers,
       localPartyId: this.coreVault.localPartyId,
-      createdAt: this.coreVault.createdAt,
+      createdAt: this.coreVault.createdAt ?? Date.now(),
       libType: this.coreVault.libType,
 
       // Metadata

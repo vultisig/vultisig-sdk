@@ -131,7 +131,7 @@ describe('Batch Quoting', () => {
       const mockClient = createMockClient()
       const swap = new RujiraSwap(mockClient as any, { cache: false })
 
-      const routes = ['RUNE_TO_USDC', 'UNKNOWN_ROUTE' as EasyRouteName]
+      const routes: EasyRouteName[] = ['RUNE_TO_USDC', 'UNKNOWN_ROUTE' as EasyRouteName]
       const quotes = await swap.batchGetQuotes(routes, '100000000')
 
       expect(quotes.size).toBe(2)

@@ -2,22 +2,18 @@
 
 TypeScript SDK for multi-party computation (MPC) wallet operations. Supports 40+ blockchains with secure vault creation, address derivation, and transaction signing.
 
-## Critical: Upstream Code
+## Shared Code: core & lib
 
-**DO NOT EDIT** these directories - they are synced from vultisig-windows:
-- `packages/core/` - Chain implementations, MPC protocols
-- `packages/lib/` - Utilities, WASM bindings (dkls, mldsa, schnorr)
-
-To update upstream code: `yarn sync-and-copy`
+`packages/core/` and `packages/lib/` contain chain implementations, MPC protocols, and utility libraries shared with the Windows codebase. The SDK **owns** these packages — edit them freely. The Windows repo will consume the SDK as a dependency (not the other way around).
 
 ## Project Structure
 
 ```text
-packages/sdk/src/     # Main SDK source (edit here)
+packages/sdk/src/     # Main SDK source
 packages/sdk/tests/   # Unit, integration, e2e tests
 packages/rujira/      # Rujira DEX integration (@vultisig/rujira), includes asset registry
-packages/core/        # UPSTREAM - do not edit
-packages/lib/         # UPSTREAM - do not edit
+packages/core/        # Shared chain logic, MPC protocols
+packages/lib/         # Shared utilities, WASM bindings (dkls, mldsa, schnorr)
 clients/cli/          # CLI workspace
 examples/             # Browser, Electron examples
 ```
@@ -41,10 +37,14 @@ yarn test:e2e           # E2E tests (requires vault file)
 yarn test:all           # All tests
 
 # Quality
-yarn check:all          # lint + typecheck + tests + knip
+yarn check              # typecheck + lint + knip (parallel, fast)
+yarn check:all          # check + tests
 yarn format             # Prettier
 yarn lint:fix           # ESLint auto-fix
 yarn typecheck          # TypeScript check
+
+# Dependencies
+yarn update             # Update all deps to latest (yarn + ncu + install)
 ```
 
 ## Architecture

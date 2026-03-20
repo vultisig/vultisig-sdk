@@ -21,7 +21,8 @@ import type { MpcLib } from '@core/mpc/mpcLib'
 export type { MpcLib }
 
 // Import and export Chain types
-export type { CosmosChain, EvmChain, OtherChain, UtxoChain } from '@core/chain/Chain'
+import type { CosmosChain, EvmChain, OtherChain, UtxoChain } from '@core/chain/Chain'
+export type { CosmosChain, EvmChain, OtherChain, UtxoChain }
 export type { Chain as ChainType } from '@core/chain/Chain'
 export { Chain } from '@core/chain/Chain'
 

@@ -68,7 +68,7 @@ export class JoinSecureVaultService {
       const url = `${RELAY_URL}/${sessionId}`
       const { data: allPeers, error } = await attempt(queryUrl<string[]>(url))
 
-      if (error) {
+      if (error || !allPeers) {
         await new Promise(resolve => setTimeout(resolve, checkInterval))
         continue
       }

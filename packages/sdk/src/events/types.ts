@@ -10,7 +10,7 @@ import type {
   Value,
   VaultCreationStep,
 } from '../types'
-import type { SwapQuoteResult } from '../vault/swap-types'
+import type { SwapQuoteBase } from '../vault/swap-types'
 import type { VaultBase } from '../vault/VaultBase'
 
 /**
@@ -202,7 +202,7 @@ export type VaultEvents = {
 
   /** Emitted when a swap quote is received */
   swapQuoteReceived: {
-    quote: SwapQuoteResult
+    quote: SwapQuoteBase
   }
 
   /** Emitted when ERC-20 approval is required before swap */

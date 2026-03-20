@@ -70,7 +70,7 @@ export function detectMnemonicLanguage(mnemonic: string): Bip39Language | null {
   const normalized = normalizeMnemonic(mnemonic)
 
   // Try English first as it's most common
-  if (validateMnemonic(normalized, BIP39_WORDLISTS.english)) {
+  if (validateMnemonic(normalized, BIP39_WORDLISTS.english as string[])) {
     return 'english'
   }
 
@@ -88,7 +88,7 @@ export function detectMnemonicLanguage(mnemonic: string): Bip39Language | null {
   ]
 
   for (const language of otherLanguages) {
-    if (validateMnemonic(normalized, BIP39_WORDLISTS[language])) {
+    if (validateMnemonic(normalized, BIP39_WORDLISTS[language] as string[])) {
       return language
     }
   }
