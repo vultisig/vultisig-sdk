@@ -14,6 +14,8 @@ import { join } from 'node:path'
 
 import type { VaultBase } from '@vultisig/sdk'
 
+import { cachePassword } from '../core'
+
 import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext } from './context'
@@ -40,7 +42,10 @@ export class AgentSession {
     this.publicKey = vault.publicKeys.ecdsa
 
     if (config.password) {
-      this.executor.setPassword(config.password)
+      // Cache password in CLI password manager so the vault SDK's
+      // onPasswordRequired callback finds it without prompting
+      cachePassword(vault.publicKeys.ecdsa, config.password)
+      if (config.vaultName) cachePassword(config.vaultName, config.password)
     }
   }
 
@@ -60,7 +65,9 @@ export class AgentSession {
       if (this.vault.isEncrypted) {
         const password = this.config.password || await ui.requestPassword()
         await (this.vault as any).unlock?.(password)
-        this.executor.setPassword(password)
+        // Cache for subsequent signing operations
+        cachePassword(this.publicKey, password)
+        if (this.config.vaultName) cachePassword(this.config.vaultName, password)
       }
 
       const cached = loadCachedToken(this.publicKey)
@@ -195,9 +202,6 @@ export class AgentSession {
         onTxReady: tx => {
           // Store server-built transaction so sign_tx can find it
           this.executor.storeServerTransaction(tx)
-          if (this.config.password) {
-            this.executor.setPassword(this.config.password)
-          }
         },
         onMessage: _msg => {
           // Final message received
@@ -331,7 +335,8 @@ export class AgentSession {
         if (!this.config.password) {
           try {
             const password = await ui.requestPassword()
-            this.executor.setPassword(password)
+            cachePassword(this.publicKey, password)
+            if (this.config.vaultName) cachePassword(this.config.vaultName, password)
             this.config.password = password
           } catch {
             results.push({

@@ -28,16 +28,11 @@ type StoredPayload = {
 export class AgentExecutor {
   private vault: VaultBase
   private pendingPayloads = new Map<string, StoredPayload>()
-  private password: string | null = null
   private verbose: boolean
 
   constructor(vault: VaultBase, verbose = false) {
     this.vault = vault
     this.verbose = verbose
-  }
-
-  setPassword(password: string): void {
-    this.password = password
   }
 
   /**
@@ -508,13 +503,6 @@ export class AgentExecutor {
     chain: Chain,
     payloadId: string
   ): Promise<Record<string, unknown>> {
-    // Unlock vault if needed
-    if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
-      if (this.password) {
-        await (this.vault as any).unlock?.(this.password)
-      }
-    }
-
     // Extract message hashes and sign
     const messageHashes = await this.vault.extractMessageHashes(payload)
 
@@ -589,13 +577,6 @@ export class AgentExecutor {
 
     if (this.verbose) process.stderr.write(`[sign_server_tx] chain=${chain}, to=${swapTx.to}, value=${swapTx.value}, amount=${amount}, hasCalldata=${hasCalldata}\n`)
 
-    // Unlock vault if needed
-    if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
-      if (this.password) {
-        await (this.vault as any).unlock?.(this.password)
-      }
-    }
-
     // Build keysign payload using prepareSendTx - memo field carries EVM calldata
     // For 0-value contract calls (e.g. approve), use a tiny amount to bypass the SDK's
     // refineKeysignAmount check, then patch toAmount back to "0" after building.
@@ -656,13 +637,6 @@ export class AgentExecutor {
    *   Used by Polymarket which requires signing both an Order and a ClobAuth.
    */
   private async signTypedData(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    // Unlock vault once before signing
-    if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
-      if (this.password) {
-        await (this.vault as any).unlock?.(this.password)
-      }
-    }
-
     // Handle payloads array format (e.g. Polymarket: order + auth)
     const payloads = params.payloads as Array<Record<string, unknown>> | undefined
     if (payloads && Array.isArray(payloads)) {
