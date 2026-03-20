@@ -48,30 +48,30 @@
   },
   "homepage": "https://vultisig.com",
   "dependencies": {
-    "@cosmjs/cosmwasm-stargate": "^0.32.4",
-    "@cosmjs/encoding": "^0.32.4",
-    "@cosmjs/proto-signing": "^0.32.4",
-    "@cosmjs/stargate": "^0.32.4",
-    "@noble/hashes": "^2.0.0",
+    "@cosmjs/cosmwasm-stargate": "^0.38.1",
+    "@cosmjs/encoding": "^0.38.1",
+    "@cosmjs/proto-signing": "^0.38.1",
+    "@cosmjs/stargate": "^0.38.1",
+    "@noble/hashes": "^2.0.1",
     "@vultisig/rujira": "workspace:^",
     "@vultisig/sdk": "workspace:^",
-    "chalk": "^5.3.0",
+    "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
-    "commander": "^12.0.0",
-    "dotenv": "^16.4.0",
-    "ora": "^8.0.0",
+    "commander": "^14.0.3",
+    "dotenv": "^17.3.1",
+    "ora": "^9.3.0",
     "qrcode-terminal": "^0.12.0",
     "tabtab": "^3.0.2",
-    "ws": "^8.18.3"
+    "ws": "^8.19.0"
   },
   "devDependencies": {
-    "@types/inquirer": "^9.0.0",
-    "@types/node": "^22.13.10",
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^25.5.0",
     "@types/tabtab": "^3.0.4",
     "@types/ws": "^8.18.1",
-    "esbuild": "^0.24.0",
-    "tsx": "^4.7.0",
-    "typescript": "^5.8.2"
+    "esbuild": "^0.27.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=20.0.0"

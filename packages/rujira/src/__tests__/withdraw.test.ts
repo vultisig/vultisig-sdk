@@ -22,7 +22,7 @@ const createMockClient = (
     getAddress: vi.fn().mockResolvedValue(options.address ?? 'thor1abc...'),
     signer: options.signer,
   }
-  return mockClient as unknown as Parameters<typeof RujiraWithdraw.prototype.constructor>[0]
+  return mockClient as unknown as ConstructorParameters<typeof RujiraWithdraw>[0]
 }
 
 // Mock fetch globally

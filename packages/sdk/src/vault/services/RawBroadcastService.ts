@@ -161,6 +161,7 @@ export class RawBroadcastService {
       throw error
     }
 
+    if (!txHash) throw new Error('No transaction hash returned')
     return txHash
   }
 
@@ -227,6 +228,7 @@ export class RawBroadcastService {
       throw error
     }
 
+    if (!signature) throw new Error('No transaction signature returned')
     return signature
   }
 
@@ -264,6 +266,7 @@ export class RawBroadcastService {
       throw error
     }
 
+    if (!result) throw new Error('No broadcast result returned')
     return result.transactionHash
   }
 
@@ -292,6 +295,7 @@ export class RawBroadcastService {
       throw error
     }
 
+    if (!response) throw new Error('No response returned')
     return response.result.hash
   }
 
@@ -316,6 +320,8 @@ export class RawBroadcastService {
     if (error) {
       throw error
     }
+
+    if (!response) throw new Error('No response returned')
 
     if (response.error) {
       throw new Error(`Polkadot broadcast failed: ${response.error.message}`)
@@ -353,7 +359,7 @@ export class RawBroadcastService {
       throw error
     }
 
-    // Response contains tx hash in result.tx_json.hash
+    if (!response?.result?.tx_json?.hash) throw new Error('No transaction hash returned')
     return response.result.tx_json.hash
   }
 
@@ -391,6 +397,7 @@ export class RawBroadcastService {
       throw error
     }
 
+    if (!result) throw new Error('No broadcast result returned')
     return result.digest
   }
 
@@ -412,6 +419,8 @@ export class RawBroadcastService {
     if (error) {
       throw error
     }
+
+    if (!response) throw new Error('No response returned')
 
     if (response.code && response.code !== 'SUCCESS') {
       const errorMsg = response.message || response.code
