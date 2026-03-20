@@ -15,7 +15,6 @@ import { join } from 'node:path'
 import type { VaultBase } from '@vultisig/sdk'
 
 import { cachePassword } from '../core'
-
 import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext } from './context'
