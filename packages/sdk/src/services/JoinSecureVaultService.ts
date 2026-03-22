@@ -91,7 +91,7 @@ export class JoinSecureVaultService {
       // Check if we have enough devices
       if (uniquePeers.length >= requiredDevices) {
         // Must match initiator (SecureVaultCreationService / SecureVaultFromSeedphraseService)
-        return [...uniquePeers].sort((a, b) => a.localeCompare(b))
+        return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
       }
 
       await new Promise(resolve => setTimeout(resolve, checkInterval))

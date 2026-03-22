@@ -159,7 +159,7 @@ export class SecureVaultFromSeedphraseService {
         // Check if we have enough devices
         if (uniquePeers.length >= requiredDevices) {
           // Must match JoinSecureVaultService: sorted committee so all parties use identical order
-          return [...uniquePeers].sort((a, b) => a.localeCompare(b))
+          return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
         }
 
         await new Promise(resolve => setTimeout(resolve, checkInterval))
