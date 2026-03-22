@@ -28,6 +28,7 @@ import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionK
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { without } from '@lib/utils/array/without'
 import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
+import { attempt } from '@lib/utils/attempt'
 import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { randomUUID } from '../crypto'
@@ -228,9 +229,8 @@ export class SecureVaultCreationService {
 
         // Check if we have enough devices
         if (uniquePeers.length >= requiredDevices) {
-          // Ensure local party is first in the list
-          const otherPeers = without(uniquePeers, localPartyId)
-          return [localPartyId, ...otherPeers]
+          // Must match JoinSecureVaultService: sorted committee so all parties use identical order
+          return [...uniquePeers].sort((a, b) => a.localeCompare(b))
         }
 
         await new Promise(resolve => setTimeout(resolve, checkInterval))
@@ -354,11 +354,16 @@ export class SecureVaultCreationService {
       devicesRequired: devices,
     })
 
-    await startMpcSession({
-      serverUrl: this.relayUrl,
-      sessionId,
-      devices: allDevices,
-    })
+    const { error: startErr } = await attempt(
+      startMpcSession({
+        serverUrl: this.relayUrl,
+        sessionId,
+        devices: allDevices,
+      })
+    )
+    if (startErr) {
+      console.warn('startMpcSession (create vault):', startErr)
+    }
 
     // Step 6: ECDSA keygen
     reportProgress({
