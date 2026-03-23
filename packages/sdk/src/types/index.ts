@@ -52,7 +52,9 @@ export type VaultDetails = {
   securityType: 'fast' | 'secure'
   threshold: number
   participants: number
-  chains: Array<'evm' | 'utxo' | 'cosmos' | 'solana' | 'sui' | 'polkadot' | 'bittensor' | 'ton' | 'ripple' | 'tron' | 'cardano'>
+  chains: Array<
+    'evm' | 'utxo' | 'cosmos' | 'solana' | 'sui' | 'polkadot' | 'bittensor' | 'ton' | 'ripple' | 'tron' | 'cardano'
+  >
   createdAt?: number
   isBackedUp: boolean
 }
