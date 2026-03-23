@@ -508,7 +508,7 @@ export class AgentExecutor {
   private async signSdkTx(
     payload: any,
     chain: Chain,
-    payloadId: string
+    _payloadId: string
   ): Promise<Record<string, unknown>> {
     // Unlock vault if needed
     if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
