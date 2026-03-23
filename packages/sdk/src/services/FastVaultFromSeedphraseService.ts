@@ -86,7 +86,7 @@ export class FastVaultFromSeedphraseService {
     this.validator = new SeedphraseValidator(context.wasmProvider)
     this.keyDeriver = new MasterKeyDeriver(context.wasmProvider)
     this.discoveryService = new ChainDiscoveryService(context.wasmProvider)
-    this.serverUrl = 'https://api.vultisig.com/router' // Default relay URL
+    this.serverUrl = context.serverManager.messageRelay
   }
 
   /**
