@@ -55,6 +55,11 @@ export class ServerManager {
     }
   }
 
+  /** Message relay base URL (MPC keygen / key import coordination). */
+  get messageRelay(): string {
+    return this.config.messageRelay
+  }
+
   /**
    * Verify vault with email verification code
    */
