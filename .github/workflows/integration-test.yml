@@ -11,7 +11,6 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    continue-on-error: true
 
     services:
       postgres:
@@ -48,6 +47,7 @@ jobs:
       MCP_SERVER_URL: http://localhost:8888
       VERIFIER_URL: ""
       SERVER_PORT: "9998"
+      PROTOCOL_STATE_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
     steps:
       # ── Checkout repos ──
@@ -68,7 +68,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: vultisig/agent-backend
-          ref: fix/agent-tool-calls
           token: ${{ secrets.GITHUB_TOKEN }}
           path: agent-backend
 
