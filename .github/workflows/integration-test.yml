@@ -47,6 +47,7 @@ jobs:
       MCP_SERVER_URL: http://localhost:8888
       VERIFIER_URL: ""
       SERVER_PORT: "9998"
+      PROTOCOL_STATE_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
     steps:
       # ── Checkout repos ──
