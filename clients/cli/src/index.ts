@@ -130,7 +130,7 @@ async function findVaultByNameOrId(sdk: Vultisig, nameOrId: string): Promise<Vau
   return null
 }
 
-async function init(vaultOverride?: string, unlockPassword?: string): Promise<CLIContext> {
+async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL?: number): Promise<CLIContext> {
   if (!ctx) {
     // Cache password BEFORE SDK init if provided
     // This allows the SDK's onPasswordRequired callback to find it
@@ -141,6 +141,7 @@ async function init(vaultOverride?: string, unlockPassword?: string): Promise<CL
 
     const sdk = new Vultisig({
       onPasswordRequired: createPasswordCallback(),
+      ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
     })
     await sdk.initialize()
 
@@ -1060,9 +1061,16 @@ program
   .option('--verbose', 'Show detailed tool call parameters and debug output')
   .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
   .option('--password <password>', 'Vault password for signing operations')
+  .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
   .option('--conversation <id>', 'Resume an existing conversation')
-  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; conversation?: string }) => {
-    const context = await init(program.opts().vault, options.password)
+  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; conversation?: string }) => {
+    // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
+    // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
+    const MAX_TTL = 86400000 // 24 hours
+    const passwordTTL = options.passwordTtl
+      ? parseInt(options.passwordTtl)
+      : (options.viaAgent ? MAX_TTL : undefined)
+    const context = await init(program.opts().vault, options.password, passwordTTL)
     await executeAgent(context, {
       viaAgent: options.viaAgent,
       verbose: options.verbose,
