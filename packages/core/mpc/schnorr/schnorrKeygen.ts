@@ -17,6 +17,7 @@ import { sendMpcRelayMessage } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
+import { DEFAULT_MPC_RELAY_ROUND_TIMEOUT_MS } from '../constants/defaultMpcRelayRoundTimeoutMs'
 import { combineReshareCommittee } from '../reshareCommittee'
 import { sleep } from '../sleep'
 
@@ -66,7 +67,7 @@ export class Schnorr {
     this.localUI = options?.localUI?.padEnd(64, '0')
     this.publicKey = options?.publicKey
     this.chainCode = options?.chainCode
-    this.timeoutMs = options?.timeoutMs ?? 60000 // Default to 1 minute (60000ms)
+    this.timeoutMs = options?.timeoutMs ?? DEFAULT_MPC_RELAY_ROUND_TIMEOUT_MS
   }
 
   private async processOutbound(

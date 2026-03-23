@@ -9,6 +9,7 @@ import { sendMpcRelayMessage } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
+import { DEFAULT_MPC_RELAY_ROUND_TIMEOUT_MS } from '../constants/defaultMpcRelayRoundTimeoutMs'
 import { sleep } from '../sleep'
 import { initializeMldsaLib } from './initializeMldsa'
 
@@ -49,7 +50,7 @@ export class MldsaKeygen {
     this.localPartyId = localPartyId
     this.keygenCommittee = keygenCommittee
     this.hexEncryptionKey = hexEncryptionKey
-    this.timeoutMs = options?.timeoutMs ?? 60000
+    this.timeoutMs = options?.timeoutMs ?? DEFAULT_MPC_RELAY_ROUND_TIMEOUT_MS
   }
 
   private async processOutbound(session: KeygenSession): Promise<boolean> {

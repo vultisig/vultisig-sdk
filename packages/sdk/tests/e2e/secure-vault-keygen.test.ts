@@ -161,7 +161,7 @@ describe('E2E: SecureVault Fresh Keygen (3 SDK Instances)', () => {
       const uniquePartyIds = new Set(partyIds)
       expect(uniquePartyIds.size).toBe(3)
       console.log(`   - Each SDK has unique party ID`)
-    }, 300000) // 5 minute timeout for MPC coordination
+    }, 600_000) // Multi-party keygen over public relay (several DKLS/Schnorr/ML-DSA rounds)
   })
 
   describe('Vault Verification', () => {

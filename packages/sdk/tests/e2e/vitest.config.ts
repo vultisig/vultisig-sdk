@@ -11,10 +11,13 @@ export default defineConfig({
     include: ['tests/e2e/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
 
-    // E2E tests need longer timeouts for real network calls
-    testTimeout: 60000, // 60 seconds per test
-    hookTimeout: 60000,
+    // E2E tests need longer timeouts for real network + MPC relay rounds
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
     teardownTimeout: 10000,
+
+    // MPC sessions must not share the public relay concurrently (message races / rate limits).
+    fileParallelism: false,
 
     // Enable console logs for debugging
     silent: false,
@@ -22,14 +25,12 @@ export default defineConfig({
     // Globals for test utilities
     globals: true,
 
-    // Run tests in parallel using threads pool
-    // Each test file gets its own thread with isolated module state
-    // Note: Each thread will load its own WASM instance
-    pool: 'threads',
+    // One file per fork so WASM / signing state does not accumulate across 14 suites (avoids multi-GB heap OOM).
+    pool: 'forks',
     poolOptions: {
-      threads: {
-        singleThread: false, // Enable parallel threads
-        maxThreads: 6, // Limit parallelism to avoid rate limiting
+      forks: {
+        singleFork: false,
+        maxForks: 1,
       },
     },
 

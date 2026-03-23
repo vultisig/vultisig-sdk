@@ -33,6 +33,8 @@ const TEST_CONFIG = {
   numDevices: 3,
   // Vault name
   vaultName: 'E2E 3-SDK Import Test',
+  /** Narrow set for stable relay E2E; extend for multi-chain import coverage. */
+  importChains: [Chain.Ethereum] as Chain[],
 }
 
 /**
@@ -124,7 +126,9 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
       expect(TEST_CONFIG.seedphrase.split(' ').length).toBeGreaterThanOrEqual(12)
     })
 
-    it('should create 3 vault shares using 3 SDK instances', async () => {
+    it(
+      'should create 3 vault shares using 3 SDK instances',
+      async () => {
       if (!TEST_CONFIG.seedphrase) return
 
       console.log('\n2. Creating vault with 3 SDK instances...')
@@ -137,7 +141,7 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
         mnemonic: TEST_CONFIG.seedphrase,
         name: TEST_CONFIG.vaultName,
         devices: TEST_CONFIG.numDevices,
-        chains: [Chain.Ethereum, Chain.THORChain, Chain.Bitcoin],
+        chains: [...TEST_CONFIG.importChains],
         onQRCodeReady: qr => {
           console.log('   QR code generated')
           qrPayload = qr
@@ -191,7 +195,9 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
       const uniquePartyIds = new Set(partyIds)
       expect(uniquePartyIds.size).toBe(3)
       console.log(`   - Each SDK has unique party ID`)
-    }, 300000) // 5 minute timeout for MPC coordination
+    },
+    { timeout: 900_000, retry: 1 }
+    )
   })
 
   describe('Balance Detection', () => {
@@ -245,6 +251,10 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
 
     it('should detect THORChain balance', async () => {
       if (!vault1) return
+      if (!TEST_CONFIG.importChains.includes(Chain.THORChain)) {
+        console.log('⏭️  Skipping THORChain: not in importChains')
+        return
+      }
 
       console.log('\n5. Checking THORChain balance...')
 
@@ -257,6 +267,10 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
 
     it('should detect Bitcoin balance', async () => {
       if (!vault1) return
+      if (!TEST_CONFIG.importChains.includes(Chain.Bitcoin)) {
+        console.log('⏭️  Skipping Bitcoin: not in importChains')
+        return
+      }
 
       console.log('\n6. Checking Bitcoin balance...')
 

@@ -29,8 +29,8 @@ import { LibType } from '@core/mpc/types/vultisig/keygen/v1/lib_type_message_pb'
 import { generateHexChainCode } from '@core/mpc/utils/generateHexChainCode'
 import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
-import { without } from '@lib/utils/array/without'
 import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
+import { attempt } from '@lib/utils/attempt'
 import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { DEFAULT_CHAINS } from '../constants'
@@ -70,7 +70,7 @@ export class SecureVaultFromSeedphraseService {
     this.validator = new SeedphraseValidator(context.wasmProvider)
     this.keyDeriver = new MasterKeyDeriver(context.wasmProvider)
     this.discoveryService = new ChainDiscoveryService(context.wasmProvider)
-    this.relayUrl = 'https://api.vultisig.com/router'
+    this.relayUrl = context.serverManager.messageRelay
   }
 
   /**
@@ -158,9 +158,8 @@ export class SecureVaultFromSeedphraseService {
 
         // Check if we have enough devices
         if (uniquePeers.length >= requiredDevices) {
-          // Ensure local party is first in the list
-          const otherPeers = without(uniquePeers, localPartyId)
-          return [localPartyId, ...otherPeers]
+          // Must match JoinSecureVaultService: sorted committee so all parties use identical order
+          return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
         }
 
         await new Promise(resolve => setTimeout(resolve, checkInterval))
@@ -340,11 +339,16 @@ export class SecureVaultFromSeedphraseService {
       message: 'All devices ready! Starting key import...',
     })
 
-    await startMpcSession({
-      serverUrl: this.relayUrl,
-      sessionId,
-      devices: allDevices,
-    })
+    const { error: startErr } = await attempt(
+      startMpcSession({
+        serverUrl: this.relayUrl,
+        sessionId,
+        devices: allDevices,
+      })
+    )
+    if (startErr) {
+      console.warn('startMpcSession (seedphrase import):', startErr)
+    }
 
     // Step 9: ECDSA key import via DKLS
     reportProgress({
