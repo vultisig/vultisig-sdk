@@ -4,7 +4,7 @@ import { PushNotificationService } from '../../../src/services/PushNotificationS
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import type { SigningNotification, WSConnectionState } from '../../../src/types/notifications'
 
-const SERVER_URL = 'https://api.vultisig.com/push'
+const SERVER_URL = 'https://api.vultisig.com/notification'
 
 /**
  * Mock WebSocket for testing. Simulates the browser WebSocket API.
@@ -101,7 +101,7 @@ describe('PushNotificationService', () => {
 
   describe('registerDevice', () => {
     it('should POST to /register and persist locally', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 204 }))
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 200 }))
 
       await service.registerDevice({
         vaultId: 'vault-123',
@@ -117,7 +117,7 @@ describe('PushNotificationService', () => {
           vault_id: 'vault-123',
           party_name: 'device-1',
           token: 'apns-token-abc',
-          device_type: 'ios',
+          device_type: 'apple',
         }),
       })
 
@@ -143,12 +143,29 @@ describe('PushNotificationService', () => {
         })
       ).rejects.toThrow('Failed to register device')
     })
+
+    it('should map deviceType electron to web for the server', async () => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 200 }))
+
+      await service.registerDevice({
+        vaultId: 'vault-el',
+        partyName: 'd',
+        token: 't',
+        deviceType: 'electron',
+      })
+
+      const init = fetchMock.mock.calls[0][1] as RequestInit
+      expect(JSON.parse(init.body as string).device_type).toBe('web')
+    })
   })
 
   describe('unregisterVault', () => {
-    it('should remove registration from storage', async () => {
-      // Set up a registration first
-      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 204 }))
+    it('should DELETE /unregister then remove registration from storage', async () => {
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(new Response(null, { status: 200 }))
+        .mockResolvedValueOnce(new Response(null, { status: 200 }))
+
       await service.registerDevice({
         vaultId: 'vault-123',
         partyName: 'device-1',
@@ -160,7 +177,28 @@ describe('PushNotificationService', () => {
 
       await service.unregisterVault('vault-123')
 
+      expect(fetchMock).toHaveBeenLastCalledWith(`${SERVER_URL}/unregister`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vault_id: 'vault-123', party_name: 'device-1' }),
+      })
       expect(await service.isVaultRegistered('vault-123')).toBe(false)
+    })
+
+    it('should throw and preserve local registration when server unregister fails', async () => {
+      vi.spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(new Response(null, { status: 200 }))
+        .mockResolvedValueOnce(new Response('', { status: 500, statusText: 'Internal Server Error' }))
+
+      await service.registerDevice({
+        vaultId: 'vault-123',
+        partyName: 'device-1',
+        token: 'token',
+        deviceType: 'web',
+      })
+
+      await expect(service.unregisterVault('vault-123')).rejects.toThrow('Failed to unregister from notification server')
+      expect(await service.isVaultRegistered('vault-123')).toBe(true)
     })
 
     it('should handle unregistering non-existent vault gracefully', async () => {
@@ -185,7 +223,15 @@ describe('PushNotificationService', () => {
       expect(fetch).toHaveBeenCalledWith(`${SERVER_URL}/vault/vault-123`)
     })
 
-    it('should return false on 204 response', async () => {
+    it('should return false on 404 response', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 404 }))
+
+      const result = await service.hasRemoteRegistrations('vault-123')
+
+      expect(result).toBe(false)
+    })
+
+    it('should return false on 204 response (legacy)', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 204 }))
 
       const result = await service.hasRemoteRegistrations('vault-123')
@@ -385,7 +431,7 @@ describe('PushNotificationService', () => {
         expect(MockWebSocket.instances).toHaveLength(1)
         const ws = MockWebSocket.instances[0]
         expect(ws.url).toBe(
-          'wss://api.vultisig.com/push/ws?vault_id=vault-123&party_name=device-1&token=push-token-abc'
+          'wss://api.vultisig.com/notification/ws?vault_id=vault-123&party_name=device-1&token=push-token-abc'
         )
       })
 

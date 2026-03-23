@@ -152,7 +152,7 @@ export class SdkContextBuilder {
     const wasmProvider = { getWalletCore }
 
     // Create PushNotificationService with notification server URL
-    const notificationUrl = this.serverEndpoints?.notification ?? 'https://api.vultisig.com/push'
+    const notificationUrl = this.serverEndpoints?.notification ?? 'https://api.vultisig.com/notification'
     const pushNotificationService = new PushNotificationService(this.storage, notificationUrl)
 
     // Build immutable config
