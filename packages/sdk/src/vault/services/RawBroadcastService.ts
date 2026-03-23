@@ -1,8 +1,8 @@
 import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@core/chain/Chain'
 import { isChainOfKind } from '@core/chain/ChainKind'
+import { bittensorRpcUrl } from '@core/chain/chains/bittensor/client'
 import { getCosmosClient } from '@core/chain/chains/cosmos/client'
 import { getEvmClient } from '@core/chain/chains/evm/client'
-import { bittensorRpcUrl } from '@core/chain/chains/bittensor/client'
 import { polkadotRpcUrl } from '@core/chain/chains/polkadot/client'
 import { getRippleClient } from '@core/chain/chains/ripple/client'
 import { getSolanaClient } from '@core/chain/chains/solana/client'
@@ -355,6 +355,10 @@ export class RawBroadcastService {
 
     if (error) {
       throw error
+    }
+
+    if (!response) {
+      throw new Error('Bittensor broadcast returned no response')
     }
 
     if (response.error) {
