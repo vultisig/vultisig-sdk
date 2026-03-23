@@ -11,5 +11,5 @@ export const getBittensorFeeAmount: FeeAmountResolver = ({
     'polkadotSpecific'
   )
 
-  return gas || bittensorConfig.fee
+  return gas ?? bittensorConfig.fee
 }

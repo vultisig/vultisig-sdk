@@ -41,7 +41,7 @@ export const decodeBittensorTxInput = (
 ): { callData: Uint8Array; signedExtra: Uint8Array; payload: Uint8Array } => {
   let offset = 0
 
-  const callDataLen = new DataView(data.buffer, data.byteOffset).getUint32(
+  const callDataLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(
     offset,
     true
   )
@@ -49,7 +49,7 @@ export const decodeBittensorTxInput = (
   const callData = data.slice(offset, offset + callDataLen)
   offset += callDataLen
 
-  const signedExtraLen = new DataView(data.buffer, data.byteOffset).getUint32(
+  const signedExtraLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(
     offset,
     true
   )
