@@ -83,9 +83,22 @@ export class AgentSession {
       try {
         const conv = await this.client.getConversation(this.conversationId, this.publicKey)
         this.historyMessages = conv.messages || []
-      } catch {
-        // Continue without history if fetch fails
-        this.historyMessages = []
+      } catch (err: any) {
+        // Re-authenticate on 401/403 and retry once
+        if (err.message?.includes('401') || err.message?.includes('403')) {
+          clearCachedToken(this.publicKey)
+          const auth = await authenticateVault(this.client, this.vault, this.config.password)
+          this.client.setAuthToken(auth.token)
+          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+          const conv = await this.client.getConversation(this.conversationId!, this.publicKey)
+          this.historyMessages = conv.messages || []
+        } else {
+          // Session not found or other error — reset to new conversation
+          this.conversationId = null
+          this.historyMessages = []
+          const conv = await this.client.createConversation(this.publicKey)
+          this.conversationId = conv.id
+        }
       }
     } else {
       const conv = await this.client.createConversation(this.publicKey)
@@ -372,6 +385,7 @@ export class AgentSession {
     this.cancel()
     this.cachedContext = null
     this.conversationId = null
+    this.historyMessages = []
   }
 }
 
