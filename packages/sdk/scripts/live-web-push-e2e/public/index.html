@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vultisig SDK — live Web Push E2E</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 42rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+      }
+      body.has-fixed-push-alert {
+        padding-top: 7rem;
+      }
+      button {
+        margin: 0.25rem 0.5rem 0.25rem 0;
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+      }
+      #log {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        background: #111;
+        color: #0f0;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        min-height: 6rem;
+      }
+      .warn {
+        color: #fa0;
+      }
+      .macos-callout {
+        margin: 1rem 0;
+        padding: 0.85rem 1rem;
+        background: #2a1f00;
+        border: 1px solid #c90;
+        border-radius: 6px;
+        color: #fec;
+        font-size: 0.92rem;
+      }
+      .macos-callout strong {
+        color: #fff;
+      }
+      #e2e-ws-done {
+        display: none;
+        margin: 1rem 0;
+        padding: 1rem 1.25rem;
+        background: #042;
+        border: 2px solid #0c6;
+        border-radius: 8px;
+        color: #cfe;
+        font-size: 1rem;
+      }
+      #e2e-ws-done.visible {
+        display: block;
+      }
+      #push-received-panel {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 2147483647;
+        margin: 0;
+        padding: 1rem 1.25rem 1.25rem;
+        background: linear-gradient(160deg, #1e1b4b 0%, #312e81 45%, #4c1d95 100%);
+        color: #ede9fe;
+        border-bottom: 4px solid #a78bfa;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+        font-size: 1rem;
+      }
+      #push-received-panel.visible {
+        display: block;
+      }
+      #push-received-panel h2 {
+        margin: 0 0 0.35rem;
+        font-size: 1.15rem;
+        color: #fff;
+      }
+      #push-received-panel p {
+        margin: 0 0 0.75rem;
+        line-height: 1.45;
+        max-width: 48rem;
+      }
+      #push-received-panel .panel-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      #push-received-panel button {
+        margin: 0;
+      }
+      .muted {
+        font-size: 0.88rem;
+        opacity: 0.9;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="push-received-panel" role="alert" aria-live="assertive" aria-atomic="true">
+      <h2 id="push-received-title">Web Push received</h2>
+      <p id="push-received-body"></p>
+      <p class="muted" id="push-received-hint"></p>
+      <div class="panel-actions">
+        <button type="button" id="btn-ack-inpage">Acknowledge (same as clicking a system notification)</button>
+      </div>
+    </div>
+    <h1>Live Web Push E2E (production notification server)</h1>
+    <aside class="macos-callout" aria-label="macOS notification settings">
+      <strong>macOS — if you see “zero” banners but the log says the push arrived:</strong>
+      <ul style="margin: 0.5rem 0 0 1rem; padding: 0">
+        <li>
+          In <strong>System Settings → Notifications → Google Chrome</strong>: turn <strong>Notification Centre</strong>
+          <em>on</em>, set alerts to <strong>Persistent</strong> (not only Temporary), and enable
+          <strong>Play sound</strong> while testing.
+        </li>
+        <li>
+          <strong>Chrome in the foreground often gets no Desktop banner</strong> for the active tab — macOS treats that
+          like “you are already looking at the app.” Before sending, switch to <strong>Finder</strong> or another app,
+          then click “Send test notification” (or send and then blur Chrome within a second).
+        </li>
+        <li>
+          This page always opens a <strong>purple bar at the top</strong> when a push is handled — that is real delivery
+          proof independent of the OS toast (Windows extension still uses <code>showNotification</code>; the bar mirrors
+          what your UI could show if the OS hides the toast).
+        </li>
+      </ul>
+    </aside>
+    <p>
+      <strong>How you know it worked:</strong> by default the helper exits when the <strong>service worker</strong>
+      reports the push (terminal: Web Push / push ack). That proves Web Push delivery and that
+      <code>showNotification()</code> was attempted — it does <em>not</em> guarantee you saw an OS banner (macOS
+      Chrome often hides them). The terminal may also print a <strong>WebSocket</strong> line: same server path as
+      desktop clients, useful as a <em>diagnostic</em> only. For product sign-off, follow the macOS callout and confirm a
+      visible notification, then click it (set <code>PUSH_E2E_SUCCESS=click</code> for that stricter exit).
+    </p>
+    <div id="e2e-ws-done" role="status" aria-live="polite">
+      <strong>Harness progress</strong> — push reached the service worker and/or Node saw the WebSocket payload. Check
+      the terminal for details. For visible UI verification, confirm an OS or in-page notification and click it when using
+      <code>PUSH_E2E_SUCCESS=click</code>.
+    </div>
+    <button type="button" id="btn-reg">1. Register service worker &amp; Web Push</button>
+    <button type="button" id="btn-test-os" disabled title="After step 1 — isolates macOS/Chrome vs Web Push">
+      Test system notification only
+    </button>
+    <button type="button" id="btn-send" disabled>2. Send test notification</button>
+    <div id="log"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -164,6 +164,9 @@ export type { PerformReshareParams } from './services/SecureVaultCreationService
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
 
+// Notification server vault_id (cross-platform, matches iOS)
+export { computeNotificationVaultId } from './utils/computeNotificationVaultId'
+
 // ============================================================================
 // PUBLIC API - Discount Tier Configuration
 // ============================================================================

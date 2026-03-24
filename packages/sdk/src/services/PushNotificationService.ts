@@ -9,6 +9,7 @@ import type { Storage } from '../storage/types'
 import type {
   NotificationPayload,
   NotifyVaultMembersOptions,
+  PushDeviceType,
   PushNotificationRegistration,
   RegisterDeviceOptions,
   SigningNotification,
@@ -17,6 +18,13 @@ import type {
 } from '../types/notifications'
 
 const STORAGE_KEY = 'pushNotificationRegistrations'
+
+/** Maps SDK device types to values the notification server accepts (`apple` | `android` | `web`). */
+function toServerDeviceType(deviceType: PushDeviceType): 'apple' | 'android' | 'web' {
+  if (deviceType === 'ios') return 'apple'
+  if (deviceType === 'electron') return 'web'
+  return deviceType
+}
 
 type RegistrationMap = Record<string, PushNotificationRegistration>
 
@@ -66,7 +74,7 @@ export class PushNotificationService {
         vault_id: opts.vaultId,
         party_name: opts.partyName,
         token: opts.token,
-        device_type: opts.deviceType,
+        device_type: toServerDeviceType(opts.deviceType),
       }),
     })
 
@@ -85,10 +93,30 @@ export class PushNotificationService {
   }
 
   /**
-   * Remove local registration record for a vault.
+   * Unregister from the notification server (when a local record exists) and remove local storage.
+   * Server call uses `vault_id` + `party_name` from the persisted registration; `token` is omitted
+   * so the server removes all devices for that party (see notification API).
+   *
+   * If there is no local registration, this is a no-op (server is not contacted). On non-OK HTTP
+   * responses, local state is left unchanged so the caller can retry.
    */
   async unregisterVault(vaultId: string): Promise<void> {
     const registrations = await this.getRegistrations()
+    const reg = registrations[vaultId]
+    if (reg) {
+      const response = await fetch(`${this.serverUrl}/unregister`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vault_id: vaultId,
+          party_name: reg.partyName,
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(`Failed to unregister from notification server: ${response.status} ${response.statusText}`)
+      }
+    }
+
     delete registrations[vaultId]
     if (Object.keys(registrations).length === 0) {
       await this.storage.remove(STORAGE_KEY)
@@ -112,7 +140,8 @@ export class PushNotificationService {
   async hasRemoteRegistrations(vaultId: string): Promise<boolean> {
     const response = await fetch(`${this.serverUrl}/vault/${encodeURIComponent(vaultId)}`)
     if (response.status === 200) return true
-    if (response.status === 204) return false
+    // 404 is the current server contract; 204 kept for older proxies or pre-fix deployments
+    if (response.status === 404 || response.status === 204) return false
     throw new Error(`Failed to check vault registrations: ${response.status} ${response.statusText}`)
   }
 
@@ -217,7 +246,7 @@ export class PushNotificationService {
 
   /**
    * Derive the WebSocket URL from the REST server URL.
-   * e.g. "https://api.vultisig.com/push" → "wss://api.vultisig.com/push/ws"
+   * e.g. "https://api.vultisig.com/notification" → "wss://api.vultisig.com/notification/ws"
    */
   private get wsUrl(): string {
     const url = new URL(this.serverUrl)
