@@ -9,7 +9,7 @@
 export type PushToken = string
 
 /** Device type for push notification registration */
-export type PushDeviceType = 'ios' | 'android' | 'web'
+export type PushDeviceType = 'ios' | 'android' | 'web' | 'electron'
 
 /** Options for registering a device for vault notifications */
 export type RegisterDeviceOptions = {
