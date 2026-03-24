@@ -18,7 +18,7 @@ import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext } from './context'
 import { AgentExecutor } from './executor'
-import type { Action, ActionResult, AgentConfig, MessageContext, UICallbacks } from './types'
+import type { Action, ActionResult, AgentConfig, ConversationMessage, MessageContext, UICallbacks } from './types'
 import { PASSWORD_REQUIRED_ACTIONS } from './types'
 
 export class AgentSession {
@@ -30,6 +30,7 @@ export class AgentSession {
   private publicKey: string
   private cachedContext: MessageContext | null = null
   private abortController: AbortController | null = null
+  private historyMessages: ConversationMessage[] = []
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -76,8 +77,16 @@ export class AgentSession {
     }
 
     // Create or resume conversation
-    if (this.config.conversationId) {
-      this.conversationId = this.config.conversationId
+    if (this.config.sessionId) {
+      this.conversationId = this.config.sessionId
+      // Fetch historical messages for resumed sessions
+      try {
+        const conv = await this.client.getConversation(this.conversationId, this.publicKey)
+        this.historyMessages = conv.messages || []
+      } catch {
+        // Continue without history if fetch fails
+        this.historyMessages = []
+      }
     } else {
       const conv = await this.client.createConversation(this.publicKey)
       this.conversationId = conv.id
@@ -89,6 +98,10 @@ export class AgentSession {
 
   getConversationId(): string | null {
     return this.conversationId
+  }
+
+  getHistoryMessages(): ConversationMessage[] {
+    return this.historyMessages
   }
 
   getVaultAddresses(): Record<string, string> {

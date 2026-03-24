@@ -41,6 +41,23 @@ export class PipeInterface {
     // Emit ready event
     this.emit({ type: 'ready', vault: vaultName, addresses })
 
+    // Emit session ID
+    const sessionId = this.session.getConversationId()
+    if (sessionId) {
+      this.emit({ type: 'session', id: sessionId })
+    }
+
+    // Emit historical messages if resuming a session
+    const history = this.session.getHistoryMessages()
+    if (history.length > 0) {
+      this.emit({
+        type: 'history',
+        messages: history
+          .filter(m => m.content_type !== 'action_result')
+          .map(m => ({ role: m.role, content: m.content, created_at: m.created_at })),
+      })
+    }
+
     // Collect all lines, then process them
     const lines: string[] = []
     let inputDone = false
