@@ -599,7 +599,13 @@ The SDK requires three WASM files to be available in your application's public d
 - `dkls.wasm` - ECDSA threshold signatures (DKLS protocol)
 - `schnorr.wasm` - EdDSA threshold signatures (Schnorr protocol)
 
-For bundled applications (Vite, webpack, etc.), place these files in the `public/` directory.
+These files are included in the npm package. Copy them to your public directory:
+
+```bash
+cp node_modules/@vultisig/sdk/dist/*.wasm public/
+```
+
+For Node.js and Electron, WASM files are loaded automatically from the package.
 
 ## API Reference
 
