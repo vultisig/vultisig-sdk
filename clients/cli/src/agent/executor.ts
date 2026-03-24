@@ -54,6 +54,8 @@ export class AgentExecutor {
 
     const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
 
+    // Clear stale payloads before storing the new server tx
+    this.pendingPayloads.clear()
     this.pendingPayloads.set('latest', {
       payload: { __serverTx: true, ...txReadyData },
       coin: { chain, address: '', decimals: 18, ticker: '' },
@@ -306,11 +308,10 @@ export class AgentExecutor {
     const memo = params.memo as string | undefined
     const payload = await this.vault.prepareSendTx({ coin, receiver: toAddress, amount, memo })
 
-    // Store the payload for later signing
+    // Clear stale payloads and store the new one
+    this.pendingPayloads.clear()
     const payloadId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     this.pendingPayloads.set(payloadId, { payload, coin, chain, timestamp: Date.now() })
-
-    // Also store as 'latest' for easy retrieval
     this.pendingPayloads.set('latest', { payload, coin, chain, timestamp: Date.now() })
 
     const messageHashes = await this.vault.extractMessageHashes(payload)
@@ -370,7 +371,8 @@ export class AgentExecutor {
     const chain = fromChain
     const payload = swapResult.keysignPayload
 
-    // Store the payload for signing
+    // Clear stale payloads and store the new one
+    this.pendingPayloads.clear()
     const payloadId = `swap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     this.pendingPayloads.set(payloadId, { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
     this.pendingPayloads.set('latest', { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
@@ -506,7 +508,7 @@ export class AgentExecutor {
   private async signSdkTx(
     payload: any,
     chain: Chain,
-    payloadId: string
+    _payloadId: string
   ): Promise<Record<string, unknown>> {
     // Unlock vault if needed
     if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
@@ -534,11 +536,8 @@ export class AgentExecutor {
       signature,
     })
 
-    // Clean up
-    this.pendingPayloads.delete(payloadId)
-    if (payloadId !== 'latest') {
-      this.pendingPayloads.delete('latest')
-    }
+    // Clean up all pending payloads after successful sign
+    this.pendingPayloads.clear()
 
     const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
 
@@ -631,8 +630,8 @@ export class AgentExecutor {
       signature,
     })
 
-    // Clean up
-    this.pendingPayloads.delete('latest')
+    // Clean up all pending payloads after successful sign
+    this.pendingPayloads.clear()
 
     const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
 
