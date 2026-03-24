@@ -84,22 +84,36 @@ export async function executeAgentSessionsList(ctx: CommandContext, options: Age
   const client = await createAuthenticatedClient(backendUrl, vault, options.password)
 
   const publicKey = vault.publicKeys.ecdsa
-  const result = await client.listConversations(publicKey)
+
+  // Fetch all pages (backend caps at 100 per request)
+  const PAGE_SIZE = 100
+  const allConversations: Awaited<ReturnType<typeof client.listConversations>>['conversations'] = []
+  let totalCount = 0
+  let skip = 0
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const page = await client.listConversations(publicKey, skip, PAGE_SIZE)
+    totalCount = page.total_count
+    allConversations.push(...page.conversations)
+    if (allConversations.length >= totalCount || page.conversations.length < PAGE_SIZE) break
+    skip += PAGE_SIZE
+  }
 
   if (isJsonOutput()) {
     outputJson({
-      sessions: result.conversations.map(c => ({
+      sessions: allConversations.map(c => ({
         id: c.id,
         title: c.title,
         created_at: c.created_at,
         updated_at: c.updated_at,
       })),
-      total_count: result.total_count,
+      total_count: totalCount,
     })
     return
   }
 
-  if (result.conversations.length === 0) {
+  if (allConversations.length === 0) {
     printResult('No sessions found.')
     return
   }
@@ -108,7 +122,7 @@ export async function executeAgentSessionsList(ctx: CommandContext, options: Age
     head: [chalk.cyan('ID'), chalk.cyan('Title'), chalk.cyan('Created'), chalk.cyan('Updated')],
   })
 
-  for (const conv of result.conversations) {
+  for (const conv of allConversations) {
     table.push([
       conv.id,
       conv.title || chalk.gray('(untitled)'),
@@ -118,7 +132,7 @@ export async function executeAgentSessionsList(ctx: CommandContext, options: Age
   }
 
   printResult(table.toString())
-  printResult(chalk.gray(`\n  ${result.total_count} session(s) total`))
+  printResult(chalk.gray(`\n  ${totalCount} session(s) total`))
 }
 
 export type AgentSessionsDeleteOptions = {
