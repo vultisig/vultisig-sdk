@@ -740,7 +740,7 @@ class PushNotificationService {
 }
 ```
 
-**Server:** `https://api.vultisig.com/push` — Go/Echo service with APNs (iOS), FCM (Android), and Web Push (VAPID) delivery.
+**Server:** `https://api.vultisig.com/notification` — Go/Echo service with APNs (iOS), FCM (Android), and Web Push (VAPID) delivery.
 
 ### RelaySigningService
 
