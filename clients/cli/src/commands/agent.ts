@@ -10,6 +10,7 @@
  * - `vultisig agent sessions list` - List sessions for current vault
  * - `vultisig agent sessions delete <id>` - Delete a session
  */
+import type { VaultBase } from '@vultisig/sdk'
 import chalk from 'chalk'
 import Table from 'cli-table3'
 
@@ -149,7 +150,7 @@ export async function executeAgentSessionsDelete(
 // Helpers
 // ============================================================================
 
-async function createAuthenticatedClient(backendUrl: string, vault: any, password?: string): Promise<AgentClient> {
+async function createAuthenticatedClient(backendUrl: string, vault: VaultBase, password?: string): Promise<AgentClient> {
   const client = new AgentClient(backendUrl)
   const auth = await authenticateVault(client, vault, password)
   client.setAuthToken(auth.token)
