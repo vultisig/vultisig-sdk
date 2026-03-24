@@ -495,6 +495,16 @@ export class AgentExecutor {
 
     // Server-built transaction (from tx_ready SSE event)
     if (payload.__serverTx) {
+      // Solana swaps: prefer local SDK build (vault.getSwapQuote → prepareSwapTx)
+      // since the server-built tx format doesn't match signServerTx's EVM assumptions.
+      // Falls back to signServerTx if local build fails.
+      if (chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
+        try {
+          return await this.buildAndSignSolanaSwapLocally(payload)
+        } catch (e: any) {
+          if (this.verbose) process.stderr.write(`[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`)
+        }
+      }
       return this.signServerTx(payload, chain, params)
     }
 
@@ -631,6 +641,89 @@ export class AgentExecutor {
     })
 
     // Clean up all pending payloads after successful sign
+    this.pendingPayloads.clear()
+
+    const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
+
+    return {
+      tx_hash: txHash,
+      chain: chain.toString(),
+      status: 'pending',
+      explorer_url: explorerUrl,
+    }
+  }
+
+  /**
+   * Build, sign, and broadcast a Solana swap locally using the SDK's swap flow.
+   * Uses swap params from the tx_ready event to call vault.getSwapQuote → prepareSwapTx.
+   */
+  private async buildAndSignSolanaSwapLocally(
+    serverTxData: any
+  ): Promise<Record<string, unknown>> {
+    const fromChainName = serverTxData.from_chain || serverTxData.chain || 'Solana'
+    const toChainName = serverTxData.to_chain || fromChainName
+    const fromChain = resolveChain(fromChainName)
+    const toChain = resolveChain(toChainName)
+    if (!fromChain) throw new Error(`Unknown from_chain: ${fromChainName}`)
+
+    const amountStr = serverTxData.amount as string
+    if (!amountStr) throw new Error('Missing amount in tx_ready data for local Solana swap build')
+
+    const fromToken = serverTxData.from_address as string | undefined
+    const toToken = serverTxData.to_address as string | undefined
+    const fromDecimals = serverTxData.from_decimals as number | undefined
+
+    const fromCoin = { chain: fromChain, token: fromToken || undefined }
+    const toCoin = { chain: toChain || fromChain, token: toToken || undefined }
+
+    // Convert base units to human-readable amount (vault.getSwapQuote expects human-readable)
+    const decimals = fromDecimals ?? 9 // default to SOL decimals
+    const humanAmount = Number(amountStr) / Math.pow(10, decimals)
+
+    if (this.verbose) process.stderr.write(`[solana_local_swap] from=${fromChainName} to=${toChainName} amount=${amountStr}\n`)
+
+    // Unlock vault if needed
+    if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
+      if (this.password) {
+        await (this.vault as any).unlock?.(this.password)
+      }
+    }
+
+    // Get quote and prepare swap tx via SDK (handles Jupiter, LiFi, etc.)
+    const quote = await this.vault.getSwapQuote({
+      fromCoin: fromCoin as any,
+      toCoin: toCoin as any,
+      amount: humanAmount,
+    })
+
+    const swapResult = await this.vault.prepareSwapTx({
+      fromCoin: fromCoin as any,
+      toCoin: toCoin as any,
+      amount: humanAmount,
+      swapQuote: quote,
+      autoApprove: true,
+    })
+
+    const payload = swapResult.keysignPayload
+    const chain = fromChain
+
+    const messageHashes = await this.vault.extractMessageHashes(payload)
+
+    const signature = await this.vault.sign(
+      {
+        transaction: payload,
+        chain,
+        messageHashes,
+      },
+      {}
+    )
+
+    const txHash = await this.vault.broadcastTx({
+      chain,
+      keysignPayload: payload,
+      signature,
+    })
+
     this.pendingPayloads.clear()
 
     const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
