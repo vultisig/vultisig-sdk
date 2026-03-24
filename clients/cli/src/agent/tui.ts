@@ -14,7 +14,7 @@ import * as readline from 'node:readline'
 import chalk from 'chalk'
 
 import type { AgentSession } from './session'
-import type { Suggestion, UICallbacks } from './types'
+import type { ConversationMessage, Suggestion, UICallbacks } from './types'
 
 export class ChatTUI {
   private rl: readline.Interface
@@ -43,6 +43,20 @@ export class ChatTUI {
    */
   async start(): Promise<void> {
     this.printHeader()
+
+    // Display session ID
+    const sessionId = this.session.getConversationId()
+    if (sessionId) {
+      console.log(chalk.gray(`  Session: ${sessionId}`))
+      console.log('')
+    }
+
+    // Display historical messages when resuming a session
+    const history = this.session.getHistoryMessages()
+    if (history.length > 0) {
+      this.printHistory(history)
+    }
+
     this.printHelp()
     this.showPrompt()
 
@@ -291,6 +305,32 @@ export class ChatTUI {
     console.log(chalk.bold.cyan(`  ║`) + chalk.bold(`     Vultisig Agent - ${this.vaultName}`.padEnd(38).slice(0, 38)) + chalk.bold.cyan(`║`))
     console.log(chalk.bold.cyan(`  ╚═══════════════════════════════════════╝`))
     console.log('')
+  }
+
+  private printHistory(messages: ConversationMessage[]): void {
+    console.log(chalk.gray('  ── Session History ──'))
+    console.log('')
+    for (const msg of messages) {
+      if (msg.content_type === 'action_result') continue
+      const ts = this.formatHistoryTimestamp(msg.created_at)
+      if (msg.role === 'user') {
+        console.log(`${chalk.gray(ts)} ${chalk.green.bold('You')}: ${msg.content}`)
+      } else if (msg.role === 'assistant') {
+        console.log(`${chalk.gray(ts)} ${chalk.cyan.bold('Agent')}: ${renderMarkdown(msg.content)}`)
+      }
+    }
+    console.log('')
+    console.log(chalk.gray('  ── End of History ──'))
+    console.log('')
+  }
+
+  private formatHistoryTimestamp(iso: string): string {
+    try {
+      const d = new Date(iso)
+      return `[${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}]`
+    } catch {
+      return '[--:--:--]'
+    }
   }
 
   private printHelp(): void {
