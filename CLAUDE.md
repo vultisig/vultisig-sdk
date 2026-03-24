@@ -2,22 +2,18 @@
 
 TypeScript SDK for multi-party computation (MPC) wallet operations. Supports 40+ blockchains with secure vault creation, address derivation, and transaction signing.
 
-## Critical: Upstream Code
+## Shared Code: core & lib
 
-**DO NOT EDIT** these directories - they are synced from vultisig-windows:
-- `packages/core/` - Chain implementations, MPC protocols
-- `packages/lib/` - Utilities, WASM bindings (dkls, schnorr)
-
-To update upstream code: `yarn sync-and-copy`
+`packages/core/` and `packages/lib/` contain chain implementations, MPC protocols, and utility libraries shared with the Windows codebase. The SDK **owns** these packages — edit them freely. The Windows repo will consume the SDK as a dependency (not the other way around).
 
 ## Project Structure
 
 ```text
-packages/sdk/src/     # Main SDK source (edit here)
+packages/sdk/src/     # Main SDK source
 packages/sdk/tests/   # Unit, integration, e2e tests
 packages/rujira/      # Rujira DEX integration (@vultisig/rujira), includes asset registry
-packages/core/        # UPSTREAM - do not edit
-packages/lib/         # UPSTREAM - do not edit
+packages/core/        # Shared chain logic, MPC protocols
+packages/lib/         # Shared utilities, WASM bindings (dkls, mldsa, schnorr)
 clients/cli/          # CLI workspace
 examples/             # Browser, Electron examples
 ```
@@ -27,9 +23,11 @@ examples/             # Browser, Electron examples
 ```bash
 # Build
 yarn build:sdk          # Full SDK build
-yarn build:fast         # Fast build (node only)
 yarn build:rujira       # Build Rujira package
-yarn dev                # Watch mode
+
+# Build (workspace-level, run from packages/sdk/)
+yarn workspace @vultisig/sdk build:fast   # Fast build (node only)
+yarn workspace @vultisig/sdk dev          # Watch mode
 
 # Test
 yarn test               # SDK unit tests
@@ -39,10 +37,14 @@ yarn test:e2e           # E2E tests (requires vault file)
 yarn test:all           # All tests
 
 # Quality
-yarn check:all          # lint + typecheck + tests + knip
+yarn check              # typecheck + lint + knip (parallel, fast)
+yarn check:all          # check + tests
 yarn format             # Prettier
 yarn lint:fix           # ESLint auto-fix
 yarn typecheck          # TypeScript check
+
+# Dependencies
+yarn update             # Update all deps to latest (yarn + ncu + install)
 ```
 
 ## Architecture
@@ -52,11 +54,12 @@ yarn typecheck          # TypeScript check
 - **SecureVault**: N-of-M threshold, multi-device signing via relay, configurable encryption
 
 ### Multi-Platform Builds
-SDK builds to 5 bundles via Rollup:
+SDK builds to 6 bundles via Rollup:
 - Node.js ESM/CJS
 - Browser
 - React Native
 - Electron Main
+- Chrome Extension
 
 ### Key Entry Points
 - `Vultisig` class - Main SDK entry point

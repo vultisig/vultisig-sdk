@@ -121,6 +121,8 @@ export type {
   SwapQuoteResult,
   SwapTxParams,
   Token,
+  TxReceiptInfo,
+  TxStatusResult,
   UtxoGasInfo,
   ValidationResult,
   Value,
@@ -162,6 +164,9 @@ export type { PerformReshareParams } from './services/SecureVaultCreationService
 export type { ParsedKeygenQR } from './utils/parseKeygenQR'
 export { parseKeygenQR } from './utils/parseKeygenQR'
 
+// Notification server vault_id (cross-platform, matches iOS)
+export { computeNotificationVaultId } from './utils/computeNotificationVaultId'
+
 // ============================================================================
 // PUBLIC API - Discount Tier Configuration
 // ============================================================================
@@ -192,3 +197,20 @@ export type { RiskLevel, SiteScanResult, TransactionSimulationResult, Transactio
 // ============================================================================
 
 export { CosmosMsgType } from './types'
+
+// ============================================================================
+// PUBLIC API - Push Notifications
+// ============================================================================
+
+export { PushNotificationService } from './services/PushNotificationService'
+export type {
+  NotificationPayload,
+  NotifyVaultMembersOptions,
+  PushDeviceType,
+  PushNotificationRegistration,
+  PushToken,
+  RegisterDeviceOptions,
+  SigningNotification,
+  WSConnectionState,
+  WSConnectOptions,
+} from './types/notifications'

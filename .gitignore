@@ -84,7 +84,11 @@ credentials.json
 mcp.json
 task.md
 
+# Playwright CLI (local snapshots / session artifacts)
+.playwright-cli/
+
 # Vault files - SECURITY: NEVER commit vault files or keyshares
+vaults/
 *.vult
 **/vaults/**/*.vult
 **/keyshares/**/*.vult

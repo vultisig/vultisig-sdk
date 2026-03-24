@@ -350,8 +350,8 @@ export class SecureVault extends VaultBase {
     }
 
     try {
-      // Step 1: Create SecureVaultCreationService (uses default relay URL)
-      const creationService = new SecureVaultCreationService()
+      // Step 1: Create SecureVaultCreationService (relay URL from SDK context)
+      const creationService = new SecureVaultCreationService(context.serverManager.messageRelay)
 
       // Step 2: Map progress callbacks
       const mapProgress = (step: SecureVaultCreationStep): VaultCreationStep => ({
@@ -395,6 +395,7 @@ export class SecureVault extends VaultBase {
         serverManager: context.serverManager,
         passwordCache: context.passwordCache,
         wasmProvider: context.wasmProvider,
+        pushNotificationService: context.pushNotificationService,
       }
 
       // Step 6: Instantiate vault

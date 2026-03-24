@@ -307,11 +307,11 @@ export class FiatValueService {
     const tokens = allTokens[chain] || []
 
     for (const token of tokens) {
+      if (!token.contractAddress) continue
       try {
         values[token.contractAddress] = await this.getValue(chain, token.contractAddress, fiatCurrency)
       } catch (error) {
         console.warn(`Failed to get value for token ${token.contractAddress}:`, error)
-        // Continue with other tokens
       }
     }
 

@@ -12,8 +12,10 @@ import type { Chain } from '@core/chain/Chain'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
+import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
+import { startMpcSession } from '@core/mpc/session/startMpcSession'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
 import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
@@ -28,8 +30,6 @@ import type { VaultCreationStep } from '../types'
 import type { ParsedKeygenQR } from '../utils/parseKeygenQR'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 
-const RELAY_URL = 'https://api.vultisig.com/router'
-
 /**
  * JoinSecureVaultService
  *
@@ -39,6 +39,10 @@ const RELAY_URL = 'https://api.vultisig.com/router'
 export class JoinSecureVaultService {
   private readonly validator: SeedphraseValidator
   private readonly keyDeriver: MasterKeyDeriver
+
+  private get relayUrl(): string {
+    return this.context.serverManager.messageRelay
+  }
 
   constructor(private readonly context: SdkContext) {
     this.validator = new SeedphraseValidator(context.wasmProvider)
@@ -65,10 +69,10 @@ export class JoinSecureVaultService {
         throw new Error('Operation aborted')
       }
 
-      const url = `${RELAY_URL}/${sessionId}`
+      const url = `${this.relayUrl}/${sessionId}`
       const { data: allPeers, error } = await attempt(queryUrl<string[]>(url))
 
-      if (error) {
+      if (error || !allPeers) {
         await new Promise(resolve => setTimeout(resolve, checkInterval))
         continue
       }
@@ -86,8 +90,8 @@ export class JoinSecureVaultService {
 
       // Check if we have enough devices
       if (uniquePeers.length >= requiredDevices) {
-        // Maintain consistent ordering across all parties
-        return uniquePeers.sort()
+        // Must match initiator (SecureVaultCreationService / SecureVaultFromSeedphraseService)
+        return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
       }
 
       await new Promise(resolve => setTimeout(resolve, checkInterval))
@@ -167,7 +171,7 @@ export class JoinSecureVaultService {
     })
 
     await joinMpcSession({
-      serverUrl: RELAY_URL,
+      serverUrl: this.relayUrl,
       sessionId: qrParams.sessionId,
       localPartyId,
     })
@@ -194,6 +198,19 @@ export class JoinSecureVaultService {
       }
     )
 
+    // Fresh keygen only: joiners call /start too so no one runs DKLS before the relay opens the session.
+    // (Key-import joiners must NOT call /start — only the initiator does — or import hangs.)
+    const { error: startErr } = await attempt(
+      startMpcSession({
+        serverUrl: this.relayUrl,
+        sessionId: qrParams.sessionId,
+        devices: allDevices,
+      })
+    )
+    if (startErr) {
+      console.warn('startMpcSession (join keygen):', startErr)
+    }
+
     // Step 4: ECDSA keygen via DKLS (non-initiator)
     reportProgress({
       step: 'keygen',
@@ -204,7 +221,7 @@ export class JoinSecureVaultService {
     const dkls = new DKLS(
       { create: true }, // Keygen mode
       false, // isInitiateDevice = false (joiner)
-      RELAY_URL,
+      this.relayUrl,
       qrParams.sessionId,
       localPartyId,
       allDevices,
@@ -231,7 +248,7 @@ export class JoinSecureVaultService {
     const schnorr = new Schnorr(
       { create: true }, // Keygen mode
       false, // isInitiateDevice = false (joiner)
-      RELAY_URL,
+      this.relayUrl,
       qrParams.sessionId,
       localPartyId,
       allDevices,
@@ -246,6 +263,27 @@ export class JoinSecureVaultService {
       throw new Error('Operation aborted')
     }
 
+    reportProgress({
+      step: 'keygen',
+      progress: 80,
+      message: 'Generating ML-DSA keys...',
+    })
+
+    const mldsaKeygen = new MldsaKeygen(
+      false,
+      this.relayUrl,
+      qrParams.sessionId,
+      localPartyId,
+      allDevices,
+      qrParams.hexEncryptionKey
+    )
+
+    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
     // Step 6: Signal completion
     reportProgress({
       step: 'keygen',
@@ -254,7 +292,7 @@ export class JoinSecureVaultService {
     })
 
     await setKeygenComplete({
-      serverURL: RELAY_URL,
+      serverURL: this.relayUrl,
       sessionId: qrParams.sessionId,
       localPartyId,
     })
@@ -263,7 +301,7 @@ export class JoinSecureVaultService {
     const peers = allDevices.filter(d => d !== localPartyId)
     const { error: peerCompleteError } = await attempt(
       waitForKeygenComplete({
-        serverURL: RELAY_URL,
+        serverURL: this.relayUrl,
         sessionId: qrParams.sessionId,
         peers,
       })
@@ -286,6 +324,8 @@ export class JoinSecureVaultService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
+      publicKeyMldsa: mldsaResult.publicKey,
+      keyShareMldsa: mldsaResult.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,
@@ -362,7 +402,7 @@ export class JoinSecureVaultService {
     })
 
     await joinMpcSession({
-      serverUrl: RELAY_URL,
+      serverUrl: this.relayUrl,
       sessionId: qrParams.sessionId,
       localPartyId,
     })
@@ -389,6 +429,8 @@ export class JoinSecureVaultService {
       }
     )
 
+    // Key import: only the initiator calls startMpcSession (same as mobile); joiners go straight to DKLS.
+
     // Step 6: ECDSA key import via DKLS (non-initiator)
     reportProgress({
       step: 'keygen',
@@ -399,7 +441,7 @@ export class JoinSecureVaultService {
     const dkls = new DKLS(
       { keyimport: true },
       false, // isInitiateDevice = false (joiner)
-      RELAY_URL,
+      this.relayUrl,
       qrParams.sessionId,
       localPartyId,
       allDevices,
@@ -423,7 +465,7 @@ export class JoinSecureVaultService {
     const schnorr = new Schnorr(
       { keyimport: true },
       false, // isInitiateDevice = false (joiner)
-      RELAY_URL,
+      this.relayUrl,
       qrParams.sessionId,
       localPartyId,
       allDevices,
@@ -433,6 +475,27 @@ export class JoinSecureVaultService {
     )
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, ecdsaResult.chaincode)
+
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
+    reportProgress({
+      step: 'keygen',
+      progress: 70,
+      message: 'Generating ML-DSA keys...',
+    })
+
+    const mldsaKeygen = new MldsaKeygen(
+      false,
+      this.relayUrl,
+      qrParams.sessionId,
+      localPartyId,
+      allDevices,
+      qrParams.hexEncryptionKey
+    )
+
+    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
 
     if (signal?.aborted) {
       throw new Error('Operation aborted')
@@ -469,7 +532,7 @@ export class JoinSecureVaultService {
           const chainSchnorr = new Schnorr(
             { keyimport: true },
             false,
-            RELAY_URL,
+            this.relayUrl,
             qrParams.sessionId,
             localPartyId,
             allDevices,
@@ -484,7 +547,7 @@ export class JoinSecureVaultService {
           const chainDkls = new DKLS(
             { keyimport: true },
             false,
-            RELAY_URL,
+            this.relayUrl,
             qrParams.sessionId,
             localPartyId,
             allDevices,
@@ -506,7 +569,7 @@ export class JoinSecureVaultService {
     })
 
     await setKeygenComplete({
-      serverURL: RELAY_URL,
+      serverURL: this.relayUrl,
       sessionId: qrParams.sessionId,
       localPartyId,
     })
@@ -514,7 +577,7 @@ export class JoinSecureVaultService {
     const peers = allDevices.filter(d => d !== localPartyId)
     const { error: peerCompleteError } = await attempt(
       waitForKeygenComplete({
-        serverURL: RELAY_URL,
+        serverURL: this.relayUrl,
         sessionId: qrParams.sessionId,
         peers,
       })
@@ -537,6 +600,8 @@ export class JoinSecureVaultService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
+      publicKeyMldsa: mldsaResult.publicKey,
+      keyShareMldsa: mldsaResult.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

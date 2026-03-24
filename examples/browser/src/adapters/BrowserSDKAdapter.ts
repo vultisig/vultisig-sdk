@@ -23,6 +23,7 @@ import type {
   SwapQuoteResult,
   SwapResult,
   TokenInfo,
+  TxStatusResult,
   ValueResult,
   VaultInfo,
 } from '@vultisig/examples-shared'
@@ -41,6 +42,8 @@ export class BrowserSDKAdapter implements ISDKAdapter {
   private balanceUpdatedCallbacks = new Set<(data: { chain: string; tokenId?: string }) => void>()
   private chainChangedCallbacks = new Set<(data: { chain: string; action: 'added' | 'removed' }) => void>()
   private txBroadcastCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
+  private txConfirmedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
+  private txFailedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
   private errorCallbacks = new Set<(error: Error) => void>()
   private activeVaultId: string | null = null
   private vaultCache = new Map<string, VaultBase>()
@@ -107,6 +110,14 @@ export class BrowserSDKAdapter implements ISDKAdapter {
 
     vault.on('transactionBroadcast', ({ chain, txHash }) => {
       this.txBroadcastCallbacks.forEach(cb => cb({ chain: chain as string, txHash }))
+    })
+
+    vault.on('transactionConfirmed', ({ chain, txHash }) => {
+      this.txConfirmedCallbacks.forEach(cb => cb({ chain: chain as string, txHash }))
+    })
+
+    vault.on('transactionFailed', ({ chain, txHash }) => {
+      this.txFailedCallbacks.forEach(cb => cb({ chain: chain as string, txHash }))
     })
 
     vault.on('error', error => {
@@ -560,6 +571,21 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     })
   }
 
+  async getTxStatus(vaultId: string, chain: string, txHash: string): Promise<TxStatusResult> {
+    const vault = await this.getVault(vaultId)
+    const result = await vault.getTxStatus({ chain: chain as Chain, txHash })
+    return {
+      status: result.status,
+      receipt: result.receipt
+        ? {
+            feeAmount: result.receipt.feeAmount.toString(),
+            feeDecimals: result.receipt.feeDecimals,
+            feeTicker: result.receipt.feeTicker,
+          }
+        : undefined,
+    }
+  }
+
   // ===== Export/Misc =====
   async exportVault(vaultId: string, options?: ExportOptions): Promise<string> {
     const vault = await this.getVault(vaultId)
@@ -653,6 +679,16 @@ export class BrowserSDKAdapter implements ISDKAdapter {
   onTransactionBroadcast(callback: (data: { chain: string; txHash: string }) => void): () => void {
     this.txBroadcastCallbacks.add(callback)
     return () => this.txBroadcastCallbacks.delete(callback)
+  }
+
+  onTransactionConfirmed(callback: (data: { chain: string; txHash: string }) => void): () => void {
+    this.txConfirmedCallbacks.add(callback)
+    return () => this.txConfirmedCallbacks.delete(callback)
+  }
+
+  onTransactionFailed(callback: (data: { chain: string; txHash: string }) => void): () => void {
+    this.txFailedCallbacks.add(callback)
+    return () => this.txFailedCallbacks.delete(callback)
   }
 
   onError(callback: (error: Error) => void): () => void {

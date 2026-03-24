@@ -1,7 +1,16 @@
 import type { Chain } from '@core/chain/Chain'
 
-import type { Balance, Signature, SigningPayload, SigningStep, Token, Value, VaultCreationStep } from '../types'
-import type { SwapQuoteResult } from '../vault/swap-types'
+import type {
+  Balance,
+  Signature,
+  SigningPayload,
+  SigningStep,
+  Token,
+  TxReceiptInfo,
+  Value,
+  VaultCreationStep,
+} from '../types'
+import type { SwapQuoteBase } from '../vault/swap-types'
 import type { VaultBase } from '../vault/VaultBase'
 
 /**
@@ -108,6 +117,24 @@ export type VaultEvents = {
     raw?: boolean
   }
 
+  /** Emitted when a transaction is confirmed on-chain (status: 'success') */
+  transactionConfirmed: {
+    /** The chain the transaction was confirmed on */
+    chain: Chain
+    /** The transaction hash */
+    txHash: string
+    /** Receipt info with fee details (if available) */
+    receipt?: TxReceiptInfo
+  }
+
+  /** Emitted when a transaction has failed on-chain (status: 'error') */
+  transactionFailed: {
+    /** The chain the transaction failed on */
+    chain: Chain
+    /** The transaction hash */
+    txHash: string
+  }
+
   /** Emitted when vault is saved to storage */
   saved: {
     vaultId: string
@@ -175,7 +202,7 @@ export type VaultEvents = {
 
   /** Emitted when a swap quote is received */
   swapQuoteReceived: {
-    quote: SwapQuoteResult
+    quote: SwapQuoteBase
   }
 
   /** Emitted when ERC-20 approval is required before swap */

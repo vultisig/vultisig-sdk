@@ -7,14 +7,17 @@
  * 3. Setup with VultiServer
  * 4. Run DKLS key import (ECDSA) for master key
  * 5. Run Schnorr key import (EdDSA) for master key
- * 6. Run per-chain key imports (DKLS or Schnorr based on chain type)
+ * 6. Run ML-DSA keygen for post-quantum key
+ * 7. Run per-chain key imports (DKLS or Schnorr based on chain type)
  * 7. Optionally discover chains with balances
  */
 import type { Chain } from '@core/chain/Chain'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
+import { mldsaWithServer } from '@core/mpc/fast/api/mldsaWithServer'
 import { fastVaultServerUrl } from '@core/mpc/fast/config'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
+import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
@@ -83,7 +86,7 @@ export class FastVaultFromSeedphraseService {
     this.validator = new SeedphraseValidator(context.wasmProvider)
     this.keyDeriver = new MasterKeyDeriver(context.wasmProvider)
     this.discoveryService = new ChainDiscoveryService(context.wasmProvider)
-    this.serverUrl = 'https://api.vultisig.com/router' // Default relay URL
+    this.serverUrl = context.serverManager.messageRelay
   }
 
   /**
@@ -212,7 +215,7 @@ export class FastVaultFromSeedphraseService {
     // Step 9: ECDSA key import via DKLS
     reportProgress({
       step: 'keygen',
-      progress: 45,
+      progress: 40,
       message: 'Importing ECDSA key...',
     })
 
@@ -237,7 +240,7 @@ export class FastVaultFromSeedphraseService {
     // Step 10: EdDSA key import via Schnorr
     reportProgress({
       step: 'keygen',
-      progress: 70,
+      progress: 55,
       message: 'Importing EdDSA key...',
     })
 
@@ -256,15 +259,46 @@ export class FastVaultFromSeedphraseService {
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
+    // Check for abort before ML-DSA keygen
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
+    // Step 11: ML-DSA keygen
+    reportProgress({
+      step: 'keygen',
+      progress: 68,
+      message: 'Generating ML-DSA keys...',
+    })
+
+    await mldsaWithServer({
+      public_key: ecdsaResult.publicKey,
+      session_id: sessionId,
+      hex_encryption_key: hexEncryptionKey,
+      encryption_password: password,
+      email,
+    })
+
+    const mldsaKeygen = new MldsaKeygen(
+      true, // isInitiateDevice
+      this.serverUrl,
+      sessionId,
+      localPartyId,
+      devices,
+      hexEncryptionKey
+    )
+
+    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+
     // Check for abort before per-chain imports
     if (signal?.aborted) {
       throw new Error('Operation aborted')
     }
 
-    // Step 11: Per-chain key imports
+    // Step 12: Per-chain key imports
     reportProgress({
       step: 'keygen',
-      progress: 75,
+      progress: 78,
       message: 'Importing chain-specific keys...',
     })
 
@@ -355,7 +389,7 @@ export class FastVaultFromSeedphraseService {
       console.warn('Server completion signal not received, proceeding with valid MPC keys')
     }
 
-    // Step 13: Build vault structure
+    // Step 14: Build vault structure
     const vault: CoreVault = {
       name,
       publicKeys: {
@@ -369,6 +403,8 @@ export class FastVaultFromSeedphraseService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
+      publicKeyMldsa: mldsaResult.publicKey,
+      keyShareMldsa: mldsaResult.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

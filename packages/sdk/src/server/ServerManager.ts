@@ -1,6 +1,7 @@
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { getVaultFromServer } from '@core/mpc/fast/api/getVaultFromServer'
+import { mldsaWithServer } from '@core/mpc/fast/api/mldsaWithServer'
 import { resendVaultShare } from '@core/mpc/fast/api/resendVaultShare'
 import { reshareWithServer } from '@core/mpc/fast/api/reshareWithServer'
 import { setupVaultWithServer } from '@core/mpc/fast/api/setupVaultWithServer'
@@ -9,6 +10,7 @@ import { verifyVaultEmailCode } from '@core/mpc/fast/api/verifyVaultEmailCode'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
 import { keysign } from '@core/mpc/keysign'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
+import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
@@ -33,6 +35,7 @@ import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningP
 export type ServerEndpoints = {
   fastVault?: string
   messageRelay?: string
+  notification?: string
 }
 
 /**
@@ -50,6 +53,11 @@ export class ServerManager {
       fastVault: endpoints?.fastVault || 'https://api.vultisig.com/vault',
       messageRelay: endpoints?.messageRelay || 'https://api.vultisig.com/router',
     }
+  }
+
+  /** Message relay base URL (MPC keygen / key import coordination). */
+  get messageRelay(): string {
+    return this.config.messageRelay
   }
 
   /**
@@ -126,7 +134,7 @@ export class ServerManager {
     // Generate session parameters
     const sessionId = randomUUID()
     const hexEncryptionKey = getHexEncodedRandomBytes(32)
-    const signingLocalPartyId = generateLocalPartyId('sdk')
+    const signingLocalPartyId = vault.localPartyId || generateLocalPartyId('sdk')
 
     console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
     console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
@@ -143,6 +151,15 @@ export class ServerManager {
 
     shouldBePresent(payload.chain, 'payload.chain')
 
+    // Register at relay BEFORE calling FastVault server
+    // (must be registered so server can find us when it joins)
+    // This matches the extension's flow order in fastVaultKeysign.ts
+    await joinMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      localPartyId: signingLocalPartyId,
+    })
+
     await signWithServer({
       public_key: vault.publicKeys.ecdsa,
       messages,
@@ -155,36 +172,7 @@ export class ServerManager {
     })
     console.log(`✅ Server acknowledged session: ${sessionId}`)
 
-    // Step 2: Join relay session
-    reportProgress({
-      step: 'coordinating',
-      progress: 40,
-      message: 'Joining relay session...',
-      mode: 'fast' as import('../types').SigningMode,
-      participantCount: 2,
-      participantsReady: 1,
-    })
-
-    await joinMpcSession({
-      serverUrl: this.config.messageRelay,
-      sessionId,
-      localPartyId: signingLocalPartyId,
-    })
-
-    // Step 2.5: Register server as participant
-    try {
-      const serverSigner = vault.signers.find((signer: string) => signer.startsWith('Server-'))
-      if (serverSigner) {
-        await queryUrl(`${this.config.messageRelay}/${sessionId}`, {
-          body: [serverSigner],
-          responseType: 'none',
-        })
-      }
-    } catch {
-      // non-fatal
-    }
-
-    // Step 3: Wait for server to join
+    // Step 3: Wait for server to ACTUALLY join
     console.log('⏳ Waiting for server to join session...')
     reportProgress({
       step: 'coordinating',
@@ -410,6 +398,34 @@ export class ServerManager {
     const eddsaResult = await schnorr.startKeygenWithRetry()
     log('EdDSA keygen completed successfully')
 
+    // Check for abort before ML-DSA keygen
+    if (options.signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
+    // ML-DSA keygen
+    progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
+
+    await mldsaWithServer({
+      public_key: ecdsaResult.publicKey,
+      session_id: sessionId,
+      hex_encryption_key: hexEncryptionKey,
+      encryption_password: options.password,
+      email: options.email,
+    })
+
+    const mldsaKeygen = new MldsaKeygen(
+      true, // isInitiateDevice
+      this.config.messageRelay,
+      sessionId,
+      localPartyId,
+      devices,
+      hexEncryptionKey
+    )
+
+    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+    log('ML-DSA keygen completed successfully')
+
     // Check for abort before finalization
     if (options.signal?.aborted) {
       throw new Error('Operation aborted')
@@ -444,6 +460,8 @@ export class ServerManager {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
+      publicKeyMldsa: mldsaResult.publicKey,
+      keyShareMldsa: mldsaResult.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

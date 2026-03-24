@@ -2,6 +2,7 @@ import { Chain } from '@core/chain/Chain'
 import { findCoins } from '@core/chain/coin/find'
 import { knownTokensIndex } from '@core/chain/coin/knownTokens'
 import { getTokenMetadata as coreGetTokenMetadata } from '@core/chain/coin/token/metadata'
+import { ChainWithTokenMetadataDiscovery } from '@core/chain/coin/token/metadata/chains'
 
 import type { DiscoveredToken, TokenInfo } from '../../types/tokens'
 import { VaultError, VaultErrorCode } from '../VaultError'
@@ -19,7 +20,6 @@ export class TokenDiscoveryService {
         ticker: coin.ticker,
         decimals: coin.decimals,
         logo: coin.logo,
-        balance: coin.balance?.toString(),
       }))
     } catch (error) {
       throw new VaultError(
@@ -46,7 +46,7 @@ export class TokenDiscoveryService {
 
     // Fall back to chain-specific resolver
     try {
-      const meta = await coreGetTokenMetadata({ chain, id: contractAddress })
+      const meta = await coreGetTokenMetadata({ chain: chain as ChainWithTokenMetadataDiscovery, id: contractAddress })
       return {
         chain,
         contractAddress,

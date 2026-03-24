@@ -42,6 +42,8 @@ export type FastVaultOptions = {
   password: string
   email: string
   signal?: AbortSignal
+  /** Skip OTP verification and persist vault to disk for later verification */
+  twoStep?: boolean
 }
 
 export type SecureVaultOptions = {
@@ -56,7 +58,7 @@ export type SecureVaultOptions = {
  * Create a fast vault (server-assisted 2-of-2)
  */
 export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
-  const { name, password, email, signal } = options
+  const { name, password, email, signal, twoStep } = options
 
   const spinner = createSpinner('Creating vault...')
 
@@ -66,6 +68,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
       name,
       password,
       email: email!,
+      persistPending: twoStep,
       onProgress: step => {
         spinner.text = `${step.message} (${step.progress}%)`
       },
@@ -74,6 +77,18 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
   )
 
   spinner.succeed(`Vault keys generated: ${name}`)
+
+  // Two-step mode: skip OTP verification, persist to disk and exit
+  if (twoStep) {
+    success('\n+ Vault created and saved to disk (pending verification)')
+    info(`\nVault ID: ${vaultId}`)
+    info('\nA verification code has been sent to your email.')
+    info('To complete setup, run:')
+    printResult(chalk.cyan(`  vultisig verify ${vaultId} --code <OTP>`))
+    info('\nOr to resend the verification email:')
+    printResult(chalk.cyan(`  vultisig verify ${vaultId} --resend --email ${email} --password <password>`))
+    return undefined as any
+  }
 
   // Fast vaults always require email verification
   warn('\nA verification code has been sent to your email.')
@@ -273,8 +288,9 @@ export async function executeImport(ctx: CommandContext, file: string): Promise<
 /**
  * Execute verify vault command
  *
- * Note: This command is for re-verifying a vault after initial creation failed.
- * It requires that the vault was created in the current session (pending in memory).
+ * Verifies a pending vault with an email OTP code. Works with both:
+ * - In-memory pending vaults (from interactive create in the current session)
+ * - Disk-persisted pending vaults (from --two-step create, survives process restarts)
  */
 export async function executeVerify(
   ctx: CommandContext,

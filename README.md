@@ -13,7 +13,7 @@ Both vault types provide comprehensive blockchain support including Bitcoin, Eth
 
 ## Features
 
-- **Fast Vault**: Server-assisted 2-of-2 MPC with VultiServer for instant signing
+- **Fast Vault**: Server-assisted MPC with VultiServer for instant signing (2-of-2 standard, 2-of-3 from seedphrase import)
 - **Secure Vault**: Multi-device N-of-M threshold signing with mobile device pairing
 - **QR Code Pairing**: Pair with Vultisig mobile apps for secure vault operations
 - **Address Derivation**: Generate blockchain addresses using WalletCore WASM
@@ -42,10 +42,10 @@ yarn add @vultisig/sdk
 ### Fast Vault (Server-Assisted)
 
 ```typescript
-import { Vultisig, MemoryStorage } from '@vultisig/sdk'
+import { Vultisig, Chain } from '@vultisig/sdk'
 
-// Initialize SDK
-const sdk = new Vultisig({ storage: new MemoryStorage() })
+// Initialize SDK (storage is auto-configured for your platform)
+const sdk = new Vultisig()
 await sdk.initialize()
 
 // Create a fast vault (server-assisted 2-of-2)
@@ -59,8 +59,8 @@ const vaultId = await sdk.createFastVault({
 const vault = await sdk.verifyVault(vaultId, "1234");
 
 // Derive addresses
-const btcAddress = await vault.address("Bitcoin");
-const ethAddress = await vault.address("Ethereum");
+const btcAddress = await vault.address(Chain.Bitcoin);
+const ethAddress = await vault.address(Chain.Ethereum);
 ```
 
 ### Secure Vault (Multi-Device)
@@ -111,6 +111,7 @@ const balance = await vault.balance('Ethereum')
 - [SDK Users Guide](docs/SDK-USERS-GUIDE.md) — Complete API walkthrough
 - [SKILL.md](https://vultisig.com/skills/SKILL.md) — Step-by-step operating procedure for agents
 - [CLI Tool](clients/cli) — Shell-based automation with JSON output
+> **WARNING — Storage & Vault Backups:** The SDK auto-configures persistent storage for your platform (FileStorage on Node.js, BrowserStorage in browsers). Do **not** use `MemoryStorage` in production — it is non-persistent and all vault keyshares are lost when the process exits. Loss of keyshares means **permanent loss of funds**. Always back up your vaults using `vault.export()`.
 
 ## API Documentation
 

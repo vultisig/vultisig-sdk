@@ -8,7 +8,8 @@
  * 4. Wait for devices to join
  * 5. Run DKLS key import (ECDSA) for master key
  * 6. Run Schnorr key import (EdDSA) for master key
- * 7. Run per-chain key imports (DKLS or Schnorr based on chain type)
+ * 7. Run ML-DSA keygen for post-quantum key
+ * 8. Run per-chain key imports (DKLS or Schnorr based on chain type)
  * 8. Optionally discover chains with balances
  */
 import { create, toBinary } from '@bufbuild/protobuf'
@@ -19,6 +20,7 @@ import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { getKeygenThreshold } from '@core/mpc/getKeygenThreshold'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
+import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
@@ -27,8 +29,8 @@ import { LibType } from '@core/mpc/types/vultisig/keygen/v1/lib_type_message_pb'
 import { generateHexChainCode } from '@core/mpc/utils/generateHexChainCode'
 import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
-import { without } from '@lib/utils/array/without'
 import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
+import { attempt } from '@lib/utils/attempt'
 import { queryUrl } from '@lib/utils/query/queryUrl'
 
 import { DEFAULT_CHAINS } from '../constants'
@@ -68,7 +70,7 @@ export class SecureVaultFromSeedphraseService {
     this.validator = new SeedphraseValidator(context.wasmProvider)
     this.keyDeriver = new MasterKeyDeriver(context.wasmProvider)
     this.discoveryService = new ChainDiscoveryService(context.wasmProvider)
-    this.relayUrl = 'https://api.vultisig.com/router'
+    this.relayUrl = context.serverManager.messageRelay
   }
 
   /**
@@ -156,9 +158,8 @@ export class SecureVaultFromSeedphraseService {
 
         // Check if we have enough devices
         if (uniquePeers.length >= requiredDevices) {
-          // Ensure local party is first in the list
-          const otherPeers = without(uniquePeers, localPartyId)
-          return [localPartyId, ...otherPeers]
+          // Must match JoinSecureVaultService: sorted committee so all parties use identical order
+          return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
         }
 
         await new Promise(resolve => setTimeout(resolve, checkInterval))
@@ -338,11 +339,16 @@ export class SecureVaultFromSeedphraseService {
       message: 'All devices ready! Starting key import...',
     })
 
-    await startMpcSession({
-      serverUrl: this.relayUrl,
-      sessionId,
-      devices: allDevices,
-    })
+    const { error: startErr } = await attempt(
+      startMpcSession({
+        serverUrl: this.relayUrl,
+        sessionId,
+        devices: allDevices,
+      })
+    )
+    if (startErr) {
+      console.warn('startMpcSession (seedphrase import):', startErr)
+    }
 
     // Step 9: ECDSA key import via DKLS
     reportProgress({
@@ -372,7 +378,7 @@ export class SecureVaultFromSeedphraseService {
     // Step 10: EdDSA key import via Schnorr
     reportProgress({
       step: 'keygen',
-      progress: 70,
+      progress: 55,
       message: 'Importing EdDSA key...',
     })
 
@@ -391,15 +397,38 @@ export class SecureVaultFromSeedphraseService {
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
+    // Check for abort before ML-DSA keygen
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
+    // Step 11: ML-DSA keygen
+    reportProgress({
+      step: 'keygen',
+      progress: 68,
+      message: 'Generating ML-DSA keys...',
+    })
+
+    const mldsaKeygen = new MldsaKeygen(
+      true, // isInitiateDevice
+      this.relayUrl,
+      sessionId,
+      localPartyId,
+      allDevices,
+      hexEncryptionKey
+    )
+
+    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+
     // Check for abort before per-chain imports
     if (signal?.aborted) {
       throw new Error('Operation aborted')
     }
 
-    // Step 11: Per-chain key imports
+    // Step 12: Per-chain key imports
     reportProgress({
       step: 'keygen',
-      progress: 75,
+      progress: 78,
       message: 'Importing chain-specific keys...',
     })
 
@@ -490,7 +519,7 @@ export class SecureVaultFromSeedphraseService {
       console.warn('Not all peer completion signals received, proceeding with valid MPC keys')
     }
 
-    // Step 13: Build vault structure
+    // Step 14: Build vault structure
     const vault: CoreVault = {
       name,
       publicKeys: {
@@ -504,6 +533,8 @@ export class SecureVaultFromSeedphraseService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
+      publicKeyMldsa: mldsaResult.publicKey,
+      keyShareMldsa: mldsaResult.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

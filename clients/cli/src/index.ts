@@ -13,6 +13,9 @@ import { CLIContext, withExit } from './adapters'
 import {
   executeAddressBook,
   executeAddresses,
+  executeAgent,
+  executeAgentSessionsDelete,
+  executeAgentSessionsList,
   executeBalance,
   executeBroadcast,
   executeChains,
@@ -43,6 +46,7 @@ import {
   executeSwapQuote,
   executeSwitch,
   executeTokens,
+  executeTxStatus,
   executeVaults,
   executeVerify,
 } from './commands'
@@ -60,9 +64,13 @@ import {
   initOutputMode,
   printResult,
   setupCompletionCommand,
+  setupUserAgent,
   warn,
 } from './lib'
 import { setupVaultEvents } from './ui'
+
+// Set User-Agent header on all outgoing fetch requests (must run before any SDK calls)
+setupUserAgent()
 
 // ============================================================================
 // Handle Shell Completion (must be checked first)
@@ -124,7 +132,7 @@ async function findVaultByNameOrId(sdk: Vultisig, nameOrId: string): Promise<Vau
   return null
 }
 
-async function init(vaultOverride?: string, unlockPassword?: string): Promise<CLIContext> {
+async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL?: number): Promise<CLIContext> {
   if (!ctx) {
     // Cache password BEFORE SDK init if provided
     // This allows the SDK's onPasswordRequired callback to find it
@@ -135,6 +143,7 @@ async function init(vaultOverride?: string, unlockPassword?: string): Promise<CL
 
     const sdk = new Vultisig({
       onPasswordRequired: createPasswordCallback(),
+      ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
     })
     await sdk.initialize()
 
@@ -174,10 +183,11 @@ createCmd
   .requiredOption('--name <name>', 'Vault name')
   .requiredOption('--password <password>', 'Vault password')
   .requiredOption('--email <email>', 'Email for verification')
+  .option('--two-step', 'Create vault without verifying OTP (verify later with "vultisig verify")')
   .action(
-    withExit(async (options: { name: string; password: string; email: string }) => {
+    withExit(async (options: { name: string; password: string; email: string; twoStep?: boolean }) => {
       const context = await init(program.opts().vault)
-      await executeCreateFast(context, options)
+      await executeCreateFast(context, { ...options, twoStep: options.twoStep })
     })
   )
 
@@ -580,6 +590,24 @@ program
       await executeBroadcast(context, {
         chain: findChainByName(options.chain) || (options.chain as Chain),
         rawTx: options.rawTx,
+      })
+    })
+  )
+
+// Command: Check transaction status
+program
+  .command('tx-status')
+  .description('Check the status of a transaction (polls until confirmed)')
+  .requiredOption('--chain <chain>', 'Target blockchain')
+  .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
+  .option('--no-wait', 'Return immediately without waiting for confirmation')
+  .action(
+    withExit(async (options: { chain: string; txHash: string; wait: boolean }) => {
+      const context = await init(program.opts().vault)
+      await executeTxStatus(context, {
+        chain: findChainByName(options.chain) || (options.chain as Chain),
+        txHash: options.txHash,
+        noWait: !options.wait,
       })
     })
   )
@@ -1022,6 +1050,78 @@ rujiraCmd
         })
       }
     )
+  )
+
+// ============================================================================
+// Agent Chat Command
+// ============================================================================
+
+const agentCmd = program
+  .command('agent')
+  .description('AI-powered chat interface for wallet operations')
+  .option('--via-agent', 'Use NDJSON pipe mode for agent-to-agent communication')
+  .option('--verbose', 'Show detailed tool call parameters and debug output')
+  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--password <password>', 'Vault password for signing operations')
+  .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
+  .option('--session-id <id>', 'Resume an existing session')
+  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; sessionId?: string }) => {
+    // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
+    // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
+    const MAX_TTL = 86400000 // 24 hours
+    let passwordTTL: number | undefined
+    if (options.passwordTtl) {
+      const parsed = parseInt(options.passwordTtl, 10)
+      if (Number.isNaN(parsed) || parsed < 0) {
+        throw new Error(`Invalid --password-ttl value: "${options.passwordTtl}". Expected a non-negative integer in milliseconds.`)
+      }
+      passwordTTL = parsed
+    } else if (options.viaAgent) {
+      passwordTTL = MAX_TTL
+    }
+    const context = await init(program.opts().vault, options.password, passwordTTL)
+    await executeAgent(context, {
+      viaAgent: options.viaAgent,
+      verbose: options.verbose,
+      backendUrl: options.backendUrl,
+      password: options.password,
+      sessionId: options.sessionId,
+    })
+  })
+
+// Session management subcommands
+const sessionsCmd = agentCmd.command('sessions').description('Manage agent chat sessions')
+
+sessionsCmd
+  .command('list')
+  .description('List chat sessions for the current vault')
+  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--password <password>', 'Vault password for authentication')
+  .action(
+    withExit(async (options: { backendUrl?: string; password?: string }) => {
+      const parentOpts = agentCmd.opts()
+      const context = await init(program.opts().vault, options.password || parentOpts.password)
+      await executeAgentSessionsList(context, {
+        backendUrl: options.backendUrl || parentOpts.backendUrl,
+        password: options.password || parentOpts.password,
+      })
+    })
+  )
+
+sessionsCmd
+  .command('delete <id>')
+  .description('Delete a chat session')
+  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--password <password>', 'Vault password for authentication')
+  .action(
+    withExit(async (id: string, options: { backendUrl?: string; password?: string }) => {
+      const parentOpts = agentCmd.opts()
+      const context = await init(program.opts().vault, options.password || parentOpts.password)
+      await executeAgentSessionsDelete(context, id, {
+        backendUrl: options.backendUrl || parentOpts.backendUrl,
+        password: options.password || parentOpts.password,
+      })
+    })
   )
 
 // ============================================================================

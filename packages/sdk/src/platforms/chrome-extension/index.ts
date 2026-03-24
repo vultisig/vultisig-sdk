@@ -23,6 +23,7 @@
  */
 
 import initDkls from '@lib/dkls/vs_wasm'
+import initMldsa from '@lib/mldsa/vs_wasm'
 import initSchnorr from '@lib/schnorr/vs_schnorr_wasm'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 
@@ -46,7 +47,7 @@ let walletCoreInstance: any
 const initAllWasm = memoizeAsync(async () => {
   // Extension: init() auto-fetches via import.meta.url (same as browser)
   // Requires 'wasm-unsafe-eval' in manifest.json CSP
-  const [walletCore] = await Promise.all([initWalletCore(), initDkls(), initSchnorr()])
+  const [walletCore] = await Promise.all([initWalletCore(), initDkls(), initSchnorr(), initMldsa()])
   walletCoreInstance = walletCore
   return walletCore
 })

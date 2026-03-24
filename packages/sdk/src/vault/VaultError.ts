@@ -20,6 +20,7 @@ export enum VaultErrorCode {
   GasEstimationFailed = 'GAS_ESTIMATION_FAILED',
   BroadcastFailed = 'BROADCAST_FAILED',
   CreateFailed = 'CREATE_FAILED',
+  Timeout = 'TIMEOUT',
 }
 
 /**

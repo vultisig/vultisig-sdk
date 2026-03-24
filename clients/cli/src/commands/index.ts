@@ -29,6 +29,10 @@ export { executeSignBytes, signBytes } from './sign'
 export type { BroadcastRawParams, BroadcastRawResult } from './broadcast'
 export { executeBroadcast } from './broadcast'
 
+// Transaction status command
+export type { TxStatusParams } from './tx-status'
+export { executeTxStatus } from './tx-status'
+
 // Vault management commands
 export type {
   CreateFromSeedphraseFastOptions,
@@ -63,12 +67,7 @@ export type { AddressBookEntry, AddressBookOptions } from './settings'
 export { executeAddressBook, executeCurrency, executeServer } from './settings'
 
 // Rujira commands
-export type {
-  RujiraBalanceOptions,
-  RujiraDepositOptions,
-  RujiraSwapOptions,
-  RujiraWithdrawOptions,
-} from './rujira'
+export type { RujiraBalanceOptions, RujiraDepositOptions, RujiraSwapOptions, RujiraWithdrawOptions } from './rujira'
 export {
   executeRujiraBalance,
   executeRujiraDeposit,
@@ -79,3 +78,7 @@ export {
 // Discount tier commands
 export type { DiscountOptions, DiscountTierInfo } from './discount'
 export { executeDiscount } from './discount'
+
+// Agent chat commands
+export type { AgentCommandOptions, AgentSessionsDeleteOptions, AgentSessionsListOptions } from './agent'
+export { executeAgent, executeAgentSessionsDelete, executeAgentSessionsList } from './agent'

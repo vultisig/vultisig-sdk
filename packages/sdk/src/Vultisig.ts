@@ -30,10 +30,11 @@ import type {
 import { FastSigningService } from './services/FastSigningService'
 import { FastVaultFromSeedphraseService } from './services/FastVaultFromSeedphraseService'
 import { JoinSecureVaultService } from './services/JoinSecureVaultService'
-import { type PerformReshareParams,SecureVaultCreationService } from './services/SecureVaultCreationService'
+import type { PushNotificationService } from './services/PushNotificationService'
+import { type PerformReshareParams, SecureVaultCreationService } from './services/SecureVaultCreationService'
 import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
-import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep } from './types'
+import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep, VaultData } from './types'
 import type { SiteScanResult } from './types/security'
 import type { CoinPricesParams, CoinPricesResult, FeeCoinInfo, TokenInfo } from './types/tokens'
 import { createVaultBackup } from './utils/export'
@@ -116,6 +117,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   public get storage(): Storage {
     return this.context.storage
+  }
+
+  /**
+   * Push notification service for vault signing coordination.
+   * Use this to register devices, notify vault members, and handle incoming push notifications.
+   */
+  public get notifications(): PushNotificationService {
+    return this.context.pushNotificationService
   }
 
   /**
@@ -289,6 +298,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       return // Already disposed
     }
 
+    // Disconnect WebSocket if connected
+    this.context.pushNotificationService.disconnect()
+
     // Clear pending vaults (unverified vaults are discarded)
     this.pendingVaults.clear()
 
@@ -308,7 +320,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Verify fast vault with email code and get the vault
    *
    * On successful verification, the pending vault is saved to storage, set as active,
-   * and returned. Throws an error if verification fails or if no pending vault exists.
+   * and returned. Checks both in-memory pending vaults and disk-persisted pending vaults
+   * (created with `persistPending: true`).
    *
    * @param vaultId - The vault ID to verify
    * @param code - The verification code from email
@@ -318,7 +331,19 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async verifyVault(vaultId: string, code: string): Promise<FastVault> {
     await this.ensureInitialized()
 
-    const pendingVault = this.pendingVaults.get(vaultId)
+    // Check in-memory pending vaults first, then fall back to disk
+    let pendingVault = this.pendingVaults.get(vaultId)
+    let fromDisk = false
+
+    if (!pendingVault) {
+      // Try loading from disk (two-step flow)
+      const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
+      if (pendingData) {
+        pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
+        fromDisk = true
+      }
+    }
+
     if (!pendingVault) {
       throw new VaultError(
         VaultErrorCode.InvalidVault,
@@ -335,7 +360,13 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     // Save and activate the vault
     await pendingVault.save()
     await this.vaultManager.setActiveVault(vaultId)
+
+    // Clean up pending state
     this.pendingVaults.delete(vaultId)
+    if (fromDisk) {
+      await this.context.storage.remove(`pending:${vaultId}`)
+    }
+
     this.emit('vaultChanged', { vaultId })
 
     return pendingVault
@@ -348,6 +379,28 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void> {
     await this.ensureInitialized()
     return this.context.serverManager.resendVaultVerification(options)
+  }
+
+  /**
+   * List pending vaults saved to disk (from two-step creation flow)
+   * @returns Array of vault IDs that are pending verification
+   */
+  async listPendingVaults(): Promise<string[]> {
+    await this.ensureInitialized()
+    const keys = await this.context.storage.list()
+    return keys
+      .filter(k => k.startsWith('pending:'))
+      .map(k => k.slice('pending:'.length))
+  }
+
+  /**
+   * Delete a pending vault from disk storage
+   * @param vaultId - The vault ID to remove from pending storage
+   */
+  async deletePendingVault(vaultId: string): Promise<void> {
+    await this.ensureInitialized()
+    await this.context.storage.remove(`pending:${vaultId}`)
+    this.pendingVaults.delete(vaultId)
   }
 
   /**
@@ -382,12 +435,19 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     email: string
     signal?: AbortSignal
     onProgress?: (step: VaultCreationStep) => void
+    /** Persist pending vault to disk so it survives process restarts (two-step creation) */
+    persistPending?: boolean
   }): Promise<string> {
     await this.ensureInitialized()
     const result = await FastVault.create(this.context, options)
 
     // Store vault in pending map - it will be saved after email verification succeeds
     this.pendingVaults.set(result.vaultId, result.vault)
+
+    // Optionally persist to disk for two-step creation (survives process exit)
+    if (options.persistPending) {
+      await result.vault.savePending()
+    }
 
     // Return vaultId - vault is returned from verifyVault() after successful verification
     return result.vaultId
@@ -545,6 +605,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       serverManager: this.context.serverManager,
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
+      pushNotificationService: this.context.pushNotificationService,
     }
 
     // Create FastVault from import using the factory method
@@ -609,6 +670,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       serverManager: this.context.serverManager,
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
+      pushNotificationService: this.context.pushNotificationService,
     }
 
     // Create SecureVault from import using the factory method
@@ -706,6 +768,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       serverManager: this.context.serverManager,
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
+      pushNotificationService: this.context.pushNotificationService,
     }
 
     // Create SecureVault from import
