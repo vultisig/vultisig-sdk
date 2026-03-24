@@ -37,7 +37,7 @@ export class AgentSession {
     this.config = config
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
-    this.executor = new AgentExecutor(vault, !!config.verbose)
+    this.executor = new AgentExecutor(vault, !!config.verbose, vault.publicKeys.ecdsa)
     this.publicKey = vault.publicKeys.ecdsa
 
     if (config.password) {
