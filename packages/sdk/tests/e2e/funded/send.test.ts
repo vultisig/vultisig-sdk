@@ -16,6 +16,7 @@ import { readFile } from 'fs/promises'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { Balance } from '@/types'
+
 import { VaultBase } from '../../../src/vault/VaultBase'
 import type { VaultShareData } from '../helpers/secure-vault-helpers'
 import {

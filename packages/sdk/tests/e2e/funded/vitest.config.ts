@@ -1,6 +1,6 @@
+import { config as loadDotenv } from 'dotenv'
 import { existsSync } from 'fs'
 import { resolve } from 'path'
-import { config as loadDotenv } from 'dotenv'
 import { defineConfig } from 'vitest/config'
 
 const e2eDir = resolve(__dirname, '..')

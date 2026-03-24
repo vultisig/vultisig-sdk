@@ -7,6 +7,7 @@ import type { AccountCoin } from '@core/chain/coin/AccountCoin'
 import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import type { Balance } from '@/types'
+
 import { VaultBase } from '../../../src/vault/VaultBase'
 import {
   BROADCAST_COOLDOWN_MS,
