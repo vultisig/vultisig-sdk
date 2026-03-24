@@ -1067,9 +1067,16 @@ program
     // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
     // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
     const MAX_TTL = 86400000 // 24 hours
-    const passwordTTL = options.passwordTtl
-      ? parseInt(options.passwordTtl)
-      : (options.viaAgent ? MAX_TTL : undefined)
+    let passwordTTL: number | undefined
+    if (options.passwordTtl) {
+      const parsed = parseInt(options.passwordTtl, 10)
+      if (Number.isNaN(parsed) || parsed < 0) {
+        throw new Error(`Invalid --password-ttl value: "${options.passwordTtl}". Expected a non-negative integer in milliseconds.`)
+      }
+      passwordTTL = parsed
+    } else if (options.viaAgent) {
+      passwordTTL = MAX_TTL
+    }
     const context = await init(program.opts().vault, options.password, passwordTTL)
     await executeAgent(context, {
       viaAgent: options.viaAgent,
