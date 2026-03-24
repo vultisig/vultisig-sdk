@@ -132,7 +132,15 @@ SDK-only capabilities:
 ### CLI Quick Start
 ```bash
 npm install -g @vultisig/cli
-vultisig create fast --name "bot-wallet" --email "bot@example.com" --password "SecurePass123!"
+
+# Create vault (non-interactive, --two-step skips OTP prompt)
+vultisig create fast --name "bot-wallet" --email "bot@example.com" --password "SecurePass123!" --two-step -o json
+# Returns: {"vaultId": "...", "status": "pending_verification", "verifyCommand": "..."}
+
+# Verify with email OTP
+vultisig verify <vaultId> --code 123456 -o json
+
+# Check balances
 vultisig balance -o json
 ```
 → [Full CLI Documentation](./vultisig-cli/SKILL.md)
@@ -144,12 +152,17 @@ import { Vultisig, Chain } from '@vultisig/sdk'
 const sdk = new Vultisig()
 await sdk.initialize()
 
+// Step 1: Create vault (returns vaultId, sends OTP to email)
 const vaultId = await sdk.createFastVault({
   name: 'bot-wallet',
   email: 'bot@example.com',
   password: 'SecurePass123!'
 })
-const vault = await sdk.verifyVault(vaultId, 'email-code')
+
+// Step 2: Verify with email OTP code
+const vault = await sdk.verifyVault(vaultId, '123456')
+
+// Step 3: Use the vault
 const balance = await vault.balance(Chain.Ethereum)
 ```
 → [Full SDK Documentation](./vultisig-sdk/SKILL.md)

@@ -58,7 +58,13 @@ export type SecureVaultOptions = {
  * Create a fast vault (server-assisted 2-of-2)
  */
 export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
-  const { name, password, email, signal, twoStep } = options
+  // Auto-enable two-step mode when stdin is not a TTY (non-interactive / agent context)
+  const twoStep = options.twoStep || !process.stdin.isTTY
+  const { name, password, email, signal } = options
+
+  if (!options.twoStep && twoStep) {
+    info('Non-interactive terminal detected. Using --two-step mode automatically.')
+  }
 
   const spinner = createSpinner('Creating vault...')
 
@@ -80,6 +86,17 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
 
   // Two-step mode: skip OTP verification, persist to disk and exit
   if (twoStep) {
+    if (isJsonOutput()) {
+      outputJson({
+        vaultId,
+        status: 'pending_verification',
+        message: 'Vault created. Verify with email OTP to activate.',
+        verifyCommand: `vultisig verify ${vaultId} --code <OTP>`,
+        resendCommand: `vultisig verify ${vaultId} --resend --email ${email} --password <password>`,
+      })
+      return undefined as any
+    }
+
     success('\n+ Vault created and saved to disk (pending verification)')
     info(`\nVault ID: ${vaultId}`)
     info('\nA verification code has been sent to your email.')
@@ -367,10 +384,27 @@ export async function executeVerify(
     setupVaultEvents(vault)
     await ctx.setActiveVault(vault)
 
+    if (isJsonOutput()) {
+      outputJson({
+        verified: true,
+        vault: { id: vaultId, name: vault.name, type: 'fast' },
+      })
+      return true
+    }
+
     success(`\n+ Vault "${vault.name}" is now ready to use!`)
     return true
   } catch (err: any) {
     spinner.fail('Verification failed')
+
+    if (isJsonOutput()) {
+      outputJson({
+        verified: false,
+        error: err.message || 'Verification failed. Please check the code and try again.',
+      })
+      return false
+    }
+
     error(`\n✗ ${err.message || 'Verification failed. Please check the code and try again.'}`)
     warn('\nTip: Use --resend to get a new verification code:')
     info(`  vultisig verify ${vaultId} --resend`)
