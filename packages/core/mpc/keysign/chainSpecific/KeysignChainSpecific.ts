@@ -50,8 +50,6 @@ export const chainSpecificRecord = {
 
   [Chain.Polkadot]: 'polkadotSpecific',
 
-  [Chain.Bittensor]: 'polkadotSpecific',
-
   [Chain.Ton]: 'tonSpecific',
 
   [Chain.Ripple]: 'rippleSpecific',

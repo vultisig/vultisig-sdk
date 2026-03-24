@@ -71,7 +71,6 @@ export enum OtherChain {
   Sui = 'Sui',
   Solana = 'Solana',
   Polkadot = 'Polkadot',
-  Bittensor = 'Bittensor',
   Ton = 'Ton',
   Ripple = 'Ripple',
   Tron = 'Tron',

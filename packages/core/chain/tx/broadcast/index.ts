@@ -1,7 +1,6 @@
 import { ChainKind, getChainKind } from '@core/chain/ChainKind'
 
 import { BroadcastTxResolver } from './resolver'
-import { broadcastBittensorTx } from './resolvers/bittensor'
 import { broadcastCardanoTx } from './resolvers/cardano'
 import { broadcastCosmosTx } from './resolvers/cosmos'
 import { broadcastEvmTx } from './resolvers/evm'
@@ -14,7 +13,6 @@ import { broadcastTronTx } from './resolvers/tron'
 import { broadcastUtxoTx } from './resolvers/utxo'
 
 const resolvers: Record<ChainKind, BroadcastTxResolver<any>> = {
-  bittensor: broadcastBittensorTx,
   cardano: broadcastCardanoTx,
   cosmos: broadcastCosmosTx,
   evm: broadcastEvmTx,

@@ -1,12 +1,9 @@
-import { Chain } from '@core/chain/Chain'
-
 import { getKeysignCoin } from '../utils/getKeysignCoin'
 import {
   chainSpecificRecord,
   KeysignChainSpecific,
 } from './KeysignChainSpecific'
 import { GetChainSpecificInput, GetChainSpecificResolver } from './resolver'
-import { getBittensorChainSpecific } from './resolvers/bittensor'
 import { getCardanoChainSpecific } from './resolvers/cardano'
 import { getCosmosChainSpecific } from './resolvers/cosmos'
 import { getEvmChainSpecific } from './resolvers/evm'
@@ -38,19 +35,13 @@ const resolvers: Record<
   cardano: getCardanoChainSpecific,
 }
 
-// Chains that share a proto case but need their own resolver
-const chainOverrides: Partial<Record<Chain, GetChainSpecificResolver<any>>> = {
-  [Chain.Bittensor]: getBittensorChainSpecific,
-}
-
 export const getChainSpecific = async (
   input: GetChainSpecificInput
 ): Promise<KeysignChainSpecific> => {
   const { keysignPayload } = input
   const coin = getKeysignCoin(keysignPayload)
   const chainSpecificCase = chainSpecificRecord[coin.chain]
-  const resolver = chainOverrides[coin.chain] ?? resolvers[chainSpecificCase]
-  const value = await resolver(input)
+  const value = await resolvers[chainSpecificCase](input)
 
   return { case: chainSpecificCase, value } as KeysignChainSpecific
 }

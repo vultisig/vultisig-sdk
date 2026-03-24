@@ -35,7 +35,6 @@ const chainKindRecord = {
   [OtherChain.Sui]: 'sui',
   [OtherChain.Solana]: 'solana',
   [OtherChain.Polkadot]: 'polkadot',
-  [OtherChain.Bittensor]: 'bittensor',
   [OtherChain.Ton]: 'ton',
   [OtherChain.Ripple]: 'ripple',
   [OtherChain.Tron]: 'tron',

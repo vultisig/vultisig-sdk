@@ -16,7 +16,6 @@ const preSigningOutputClasses = {
   evm: TW.TxCompiler.Proto.PreSigningOutput,
   cosmos: TW.TxCompiler.Proto.PreSigningOutput,
   polkadot: TW.TxCompiler.Proto.PreSigningOutput,
-  bittensor: TW.TxCompiler.Proto.PreSigningOutput,
   ton: TW.TxCompiler.Proto.PreSigningOutput,
   sui: TW.TxCompiler.Proto.PreSigningOutput,
   ripple: TW.TxCompiler.Proto.PreSigningOutput,

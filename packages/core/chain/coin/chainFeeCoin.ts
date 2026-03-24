@@ -133,12 +133,6 @@ const leanChainFeeCoin: Record<Chain, KnownCoinMetadata> = {
     decimals: 10,
     priceProviderId: 'polkadot',
   },
-  [Chain.Bittensor]: {
-    ticker: 'TAO',
-    logo: 'bittensor',
-    decimals: 9,
-    priceProviderId: 'bittensor',
-  },
   [Chain.Noble]: {
     ticker: 'USDC',
     logo: 'noble',

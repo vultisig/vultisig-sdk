@@ -1,16 +1,10 @@
 import { CoinKey } from '@core/chain/coin/Coin'
 import { isOneOf } from '@lib/utils/array/isOneOf'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
 import { EntityWithTicker } from '@lib/utils/entities/EntityWithTicker'
 
 import { isFeeCoin } from '../../../coin/utils/isFeeCoin'
-import {
-  nativeSwapChainIds,
-  nativeSwapChains,
-  nativeSwapEnabledChains,
-} from '../NativeSwapChain'
+import { nativeSwapChainIds, nativeSwapEnabledChains } from '../NativeSwapChain'
 
-/** Converts a coin to the asset notation used by THORChain/MayaChain swap APIs */
 export const toNativeSwapAsset = ({
   chain,
   id,
@@ -20,15 +14,16 @@ export const toNativeSwapAsset = ({
     throw new Error(`No native swap enabled chain found for ${chain}`)
   }
 
-  if (isFeeCoin({ chain, id })) {
-    const swapChainId = nativeSwapChainIds[chain]
-    return `${swapChainId}.${ticker}`
-  }
-
-  if (isOneOf(chain, nativeSwapChains)) {
-    return shouldBePresent(id)
-  }
-
   const swapChainId = nativeSwapChainIds[chain]
-  return `${swapChainId}.${ticker}-${id}`
+
+  const key = `${swapChainId}.${ticker}`
+
+  if (
+    isFeeCoin({ chain, id }) ||
+    isOneOf(chain, Object.values(nativeSwapEnabledChains))
+  ) {
+    return key
+  }
+
+  return `${key}-${id}`
 }

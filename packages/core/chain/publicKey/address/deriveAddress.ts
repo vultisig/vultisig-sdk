@@ -5,7 +5,6 @@ import {
   WalletCore,
 } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
-import { deriveBittensorAddress } from './bittensor'
 import { deriveCardanoAddress } from './cardano'
 
 type DeriveAddressInput = {
@@ -36,13 +35,6 @@ export const deriveAddress = ({
 
   if (chain === Chain.Cardano) {
     return deriveCardanoAddress({
-      publicKey,
-      walletCore,
-    })
-  }
-
-  if (chain === Chain.Bittensor) {
-    return deriveBittensorAddress({
       publicKey,
       walletCore,
     })
