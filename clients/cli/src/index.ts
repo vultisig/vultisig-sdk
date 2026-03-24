@@ -14,6 +14,8 @@ import {
   executeAddressBook,
   executeAddresses,
   executeAgent,
+  executeAgentSessionsDelete,
+  executeAgentSessionsList,
   executeBalance,
   executeBroadcast,
   executeChains,
@@ -1054,7 +1056,7 @@ rujiraCmd
 // Agent Chat Command
 // ============================================================================
 
-program
+const agentCmd = program
   .command('agent')
   .description('AI-powered chat interface for wallet operations')
   .option('--via-agent', 'Use NDJSON pipe mode for agent-to-agent communication')
@@ -1062,8 +1064,8 @@ program
   .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
   .option('--password <password>', 'Vault password for signing operations')
   .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
-  .option('--conversation <id>', 'Resume an existing conversation')
-  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; conversation?: string }) => {
+  .option('--session-id <id>', 'Resume an existing session')
+  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; sessionId?: string }) => {
     // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
     // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
     const MAX_TTL = 86400000 // 24 hours
@@ -1083,9 +1085,44 @@ program
       verbose: options.verbose,
       backendUrl: options.backendUrl,
       password: options.password,
-      conversationId: options.conversation,
+      sessionId: options.sessionId,
     })
   })
+
+// Session management subcommands
+const sessionsCmd = agentCmd.command('sessions').description('Manage agent chat sessions')
+
+sessionsCmd
+  .command('list')
+  .description('List chat sessions for the current vault')
+  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--password <password>', 'Vault password for authentication')
+  .action(
+    withExit(async (options: { backendUrl?: string; password?: string }) => {
+      const parentOpts = agentCmd.opts()
+      const context = await init(program.opts().vault, options.password || parentOpts.password)
+      await executeAgentSessionsList(context, {
+        backendUrl: options.backendUrl || parentOpts.backendUrl,
+        password: options.password || parentOpts.password,
+      })
+    })
+  )
+
+sessionsCmd
+  .command('delete <id>')
+  .description('Delete a chat session')
+  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--password <password>', 'Vault password for authentication')
+  .action(
+    withExit(async (id: string, options: { backendUrl?: string; password?: string }) => {
+      const parentOpts = agentCmd.opts()
+      const context = await init(program.opts().vault, options.password || parentOpts.password)
+      await executeAgentSessionsDelete(context, id, {
+        backendUrl: options.backendUrl || parentOpts.backendUrl,
+        password: options.password || parentOpts.password,
+      })
+    })
+  )
 
 // ============================================================================
 // CLI Management Commands

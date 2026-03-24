@@ -18,7 +18,7 @@ import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext } from './context'
 import { AgentExecutor } from './executor'
-import type { Action, ActionResult, AgentConfig, MessageContext, UICallbacks } from './types'
+import type { Action, ActionResult, AgentConfig, ConversationMessage, MessageContext, UICallbacks } from './types'
 import { PASSWORD_REQUIRED_ACTIONS } from './types'
 
 export class AgentSession {
@@ -30,6 +30,7 @@ export class AgentSession {
   private publicKey: string
   private cachedContext: MessageContext | null = null
   private abortController: AbortController | null = null
+  private historyMessages: ConversationMessage[] = []
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -76,8 +77,29 @@ export class AgentSession {
     }
 
     // Create or resume conversation
-    if (this.config.conversationId) {
-      this.conversationId = this.config.conversationId
+    if (this.config.sessionId) {
+      this.conversationId = this.config.sessionId
+      // Fetch historical messages for resumed sessions
+      try {
+        const conv = await this.client.getConversation(this.conversationId, this.publicKey)
+        this.historyMessages = conv.messages || []
+      } catch (err: any) {
+        // Re-authenticate on 401/403 and retry once
+        if (err.message?.includes('401') || err.message?.includes('403')) {
+          clearCachedToken(this.publicKey)
+          const auth = await authenticateVault(this.client, this.vault, this.config.password)
+          this.client.setAuthToken(auth.token)
+          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+          const conv = await this.client.getConversation(this.conversationId!, this.publicKey)
+          this.historyMessages = conv.messages || []
+        } else {
+          // Session not found or other error — reset to new conversation
+          this.conversationId = null
+          this.historyMessages = []
+          const conv = await this.client.createConversation(this.publicKey)
+          this.conversationId = conv.id
+        }
+      }
     } else {
       const conv = await this.client.createConversation(this.publicKey)
       this.conversationId = conv.id
@@ -89,6 +111,10 @@ export class AgentSession {
 
   getConversationId(): string | null {
     return this.conversationId
+  }
+
+  getHistoryMessages(): ConversationMessage[] {
+    return this.historyMessages
   }
 
   getVaultAddresses(): Record<string, string> {
@@ -359,6 +385,7 @@ export class AgentSession {
     this.cancel()
     this.cachedContext = null
     this.conversationId = null
+    this.historyMessages = []
   }
 }
 

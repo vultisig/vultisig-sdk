@@ -15,8 +15,8 @@ export type AgentConfig = {
   password?: string
   /** Skip TUI, use NDJSON pipe interface */
   viaAgent?: boolean
-  /** Conversation ID to resume */
-  conversationId?: string
+  /** Session ID to resume */
+  sessionId?: string
   /** Show detailed tool call params and debug output */
   verbose?: boolean
 }
@@ -310,6 +310,8 @@ export const PASSWORD_REQUIRED_ACTIONS = new Set(['sign_tx', 'sign_typed_data', 
 
 export type PipeOutputEvent =
   | { type: 'ready'; vault: string; addresses: Record<string, string> }
+  | { type: 'session'; id: string }
+  | { type: 'history'; messages: Array<{ role: string; content: string; created_at: string }> }
   | { type: 'auth'; status: 'authenticated' | 'failed'; error?: string }
   | { type: 'conversation'; id: string }
   | { type: 'text_delta'; delta: string }
