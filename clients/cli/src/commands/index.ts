@@ -80,5 +80,5 @@ export type { DiscountOptions, DiscountTierInfo } from './discount'
 export { executeDiscount } from './discount'
 
 // Agent chat commands
-export type { AgentCommandOptions } from './agent'
-export { executeAgent } from './agent'
+export type { AgentCommandOptions, AgentSessionsDeleteOptions, AgentSessionsListOptions } from './agent'
+export { executeAgent, executeAgentSessionsDelete, executeAgentSessionsList } from './agent'
