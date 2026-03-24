@@ -8,7 +8,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 🏦 **Fast Vault** - Server-assisted 2-of-2 vault for quick setup and instant signing
 - 🛡️ **Secure Vault** - Multi-device N-of-M threshold signing with mobile device pairing
 - 📲 **QR Code Pairing** - Pair with Vultisig mobile apps (iOS/Android) for vault creation and signing
-- 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 40+ blockchains
+- 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 37 blockchains
 - 🔗 **Address Derivation** - Generate addresses across multiple blockchain networks
 - 📱 **Cross-Platform** - Works in browsers, Node.js, and Electron (React Native coming soon)
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
@@ -423,7 +423,7 @@ The SDK supports address derivation and operations for 37 blockchain networks:
 | Network | Chain Value | Description |
 |---------|-------------|-------------|
 | Bitcoin | `Bitcoin` | Bitcoin mainnet |
-| Bitcoin Cash | `Bitcoin-Cash` | Bitcoin Cash |
+| Bitcoin Cash | `BitcoinCash` (`'Bitcoin-Cash'`) | Bitcoin Cash |
 | Litecoin | `Litecoin` | Litecoin mainnet |
 | Dogecoin | `Dogecoin` | Dogecoin mainnet |
 | Dash | `Dash` | Dash mainnet |
@@ -760,10 +760,18 @@ Broadcast a signed transaction. Returns the transaction hash.
 
 #### `vault.broadcastRawTx(params): Promise<string>`
 
-Broadcast a pre-built raw transaction hex string directly.
+Broadcast a pre-built raw transaction directly. Encoding depends on the chain:
+
+- **EVM & UTXO chains** — hex-encoded transaction bytes
+- **Solana** — base58 or base64 (auto-detected)
+- **Cosmos chains** — base64-encoded JSON or raw bytes
+- **TON** — base64-encoded BoC (Bag of Cells)
+- **Sui & Tron** — JSON-encoded transaction
+
+**Parameters:**
 
 - `params.chain: string` - Chain to broadcast on
-- `params.rawTx: string` - Raw transaction hex
+- `params.rawTx: string` - Raw transaction in the chain-appropriate encoding
 
 #### `vault.signBytes(options, signingOptions?): Promise<SigningResult>`
 
