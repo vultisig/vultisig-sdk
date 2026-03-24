@@ -7,8 +7,16 @@
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
+import { VaultStateStore } from '../core/VaultStateStore'
 import type { Action, ActionResult } from './types'
 import { AUTO_EXECUTE_ACTIONS, PASSWORD_REQUIRED_ACTIONS } from './types'
+
+// EVM chains that use nonce-based transaction ordering
+const EVM_CHAINS = new Set<string>([
+  'Ethereum', 'BSC', 'Polygon', 'Avalanche', 'Arbitrum',
+  'Optimism', 'Base', 'Blast', 'Zksync', 'Mantle',
+  'CronosChain', 'Hyperliquid', 'Sei',
+])
 
 type AccountCoin = {
   chain: Chain
@@ -30,10 +38,16 @@ export class AgentExecutor {
   private pendingPayloads = new Map<string, StoredPayload>()
   private password: string | null = null
   private verbose: boolean
+  private stateStore: VaultStateStore | null = null
+  /** Held chain lock release functions, keyed by chain name */
+  private chainLockReleases = new Map<string, () => Promise<void>>()
 
-  constructor(vault: VaultBase, verbose = false) {
+  constructor(vault: VaultBase, verbose = false, vaultId?: string) {
     this.vault = vault
     this.verbose = verbose
+    if (vaultId) {
+      this.stateStore = new VaultStateStore(vaultId)
+    }
   }
 
   setPassword(password: string): void {
@@ -291,47 +305,58 @@ export class AgentExecutor {
     if (!toAddress) throw new Error('Destination address is required')
     if (!amountStr) throw new Error('Amount is required')
 
-    const address = await this.vault.address(chain)
-    const balance = await this.vault.balance(chain, params.token_id as string | undefined)
+    // Acquire chain lock for EVM nonce management (released in signTx)
+    await this.acquireEvmLockIfNeeded(chain)
 
-    const coin: AccountCoin = {
-      chain,
-      address,
-      decimals: balance.decimals,
-      ticker: symbol || balance.symbol,
-      id: params.token_id as string | undefined,
-    }
+    try {
+      const address = await this.vault.address(chain)
+      const balance = await this.vault.balance(chain, params.token_id as string | undefined)
 
-    // Parse amount
-    const amount = parseAmount(amountStr, balance.decimals)
+      const coin: AccountCoin = {
+        chain,
+        address,
+        decimals: balance.decimals,
+        ticker: symbol || balance.symbol,
+        id: params.token_id as string | undefined,
+      }
 
-    const memo = params.memo as string | undefined
-    const payload = await this.vault.prepareSendTx({ coin, receiver: toAddress, amount, memo })
+      // Parse amount
+      const amount = parseAmount(amountStr, balance.decimals)
 
-    // Clear stale payloads and store the new one
-    this.pendingPayloads.clear()
-    const payloadId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    this.pendingPayloads.set(payloadId, { payload, coin, chain, timestamp: Date.now() })
-    this.pendingPayloads.set('latest', { payload, coin, chain, timestamp: Date.now() })
+      const memo = params.memo as string | undefined
+      const payload = await this.vault.prepareSendTx({ coin, receiver: toAddress, amount, memo })
 
-    const messageHashes = await this.vault.extractMessageHashes(payload)
+      // Patch EVM nonce if local state is ahead of on-chain
+      this.patchEvmNonce(chain, payload)
 
-    return {
-      keysign_payload: payloadId,
-      from_chain: chain.toString(),
-      from_symbol: coin.ticker,
-      amount: amountStr,
-      sender: address,
-      destination: toAddress,
-      memo: memo || undefined,
-      message_hashes: messageHashes,
-      tx_details: {
-        chain: chain.toString(),
-        from: address,
-        to: toAddress,
+      // Clear stale payloads and store the new one
+      this.pendingPayloads.clear()
+      const payloadId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      this.pendingPayloads.set(payloadId, { payload, coin, chain, timestamp: Date.now() })
+      this.pendingPayloads.set('latest', { payload, coin, chain, timestamp: Date.now() })
+
+      const messageHashes = await this.vault.extractMessageHashes(payload)
+
+      return {
+        keysign_payload: payloadId,
+        from_chain: chain.toString(),
+        from_symbol: coin.ticker,
         amount: amountStr,
-        symbol: coin.ticker,
-      },
+        sender: address,
+        destination: toAddress,
+        memo: memo || undefined,
+        message_hashes: messageHashes,
+        tx_details: {
+          chain: chain.toString(),
+          from: address,
+          to: toAddress,
+          amount: amountStr,
+          symbol: coin.ticker,
+        },
+      }
+    } catch (err) {
+      await this.releaseEvmLock(chain)
+      throw err
     }
   }
 
@@ -343,52 +368,63 @@ export class AgentExecutor {
     const toChain = toChainName ? resolveChain(toChainName) : null
     if (!fromChain) throw new Error(`Unknown from_chain: ${fromChainName}`)
 
-    const amountStr = params.amount as string
-    const fromSymbol = (params.from_symbol || params.from_token || '') as string
-    const toSymbol = (params.to_symbol || params.to_token || '') as string
-    const fromToken = (params.from_contract || params.from_token_id) as string | undefined
-    const toToken = (params.to_contract || params.to_token_id) as string | undefined
+    // Acquire chain lock for EVM nonce management (released in signTx)
+    await this.acquireEvmLockIfNeeded(fromChain)
 
-    const fromCoin = { chain: fromChain, token: fromToken || undefined }
-    const toCoin = { chain: toChain || fromChain, token: toToken || undefined }
+    try {
+      const amountStr = params.amount as string
+      const fromSymbol = (params.from_symbol || params.from_token || '') as string
+      const toSymbol = (params.to_symbol || params.to_token || '') as string
+      const fromToken = (params.from_contract || params.from_token_id) as string | undefined
+      const toToken = (params.to_contract || params.to_token_id) as string | undefined
 
-    // Get quote
-    const quote = await this.vault.getSwapQuote({
-      fromCoin: fromCoin as any,
-      toCoin: toCoin as any,
-      amount: parseFloat(amountStr),
-    })
+      const fromCoin = { chain: fromChain, token: fromToken || undefined }
+      const toCoin = { chain: toChain || fromChain, token: toToken || undefined }
 
-    // Prepare the actual swap transaction
-    const swapResult = await this.vault.prepareSwapTx({
-      fromCoin: fromCoin as any,
-      toCoin: toCoin as any,
-      amount: parseFloat(amountStr),
-      swapQuote: quote,
-      autoApprove: true,
-    })
+      // Get quote
+      const quote = await this.vault.getSwapQuote({
+        fromCoin: fromCoin as any,
+        toCoin: toCoin as any,
+        amount: parseFloat(amountStr),
+      })
 
-    const chain = fromChain
-    const payload = swapResult.keysignPayload
+      // Prepare the actual swap transaction
+      const swapResult = await this.vault.prepareSwapTx({
+        fromCoin: fromCoin as any,
+        toCoin: toCoin as any,
+        amount: parseFloat(amountStr),
+        swapQuote: quote,
+        autoApprove: true,
+      })
 
-    // Clear stale payloads and store the new one
-    this.pendingPayloads.clear()
-    const payloadId = `swap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    this.pendingPayloads.set(payloadId, { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
-    this.pendingPayloads.set('latest', { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
+      const chain = fromChain
+      const payload = swapResult.keysignPayload
 
-    const messageHashes = await this.vault.extractMessageHashes(payload)
+      // Patch EVM nonce if local state is ahead of on-chain
+      this.patchEvmNonce(chain, payload)
 
-    return {
-      keysign_payload: payloadId,
-      from_chain: fromChain.toString(),
-      to_chain: (toChain || fromChain).toString(),
-      from_symbol: fromSymbol,
-      to_symbol: toSymbol,
-      amount: amountStr,
-      estimated_output: (quote as any).estimatedOutput?.toString(),
-      provider: (quote as any).provider,
-      message_hashes: messageHashes,
+      // Clear stale payloads and store the new one
+      this.pendingPayloads.clear()
+      const payloadId = `swap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      this.pendingPayloads.set(payloadId, { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
+      this.pendingPayloads.set('latest', { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
+
+      const messageHashes = await this.vault.extractMessageHashes(payload)
+
+      return {
+        keysign_payload: payloadId,
+        from_chain: fromChain.toString(),
+        to_chain: (toChain || fromChain).toString(),
+        from_symbol: fromSymbol,
+        to_symbol: toSymbol,
+        amount: amountStr,
+        estimated_output: (quote as any).estimatedOutput?.toString(),
+        provider: (quote as any).provider,
+        message_hashes: messageHashes,
+      }
+    } catch (err) {
+      await this.releaseEvmLock(fromChain)
+      throw err
     }
   }
 
@@ -527,42 +563,51 @@ export class AgentExecutor {
     chain: Chain,
     _payloadId: string
   ): Promise<Record<string, unknown>> {
-    // Unlock vault if needed
-    if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
-      if (this.password) {
-        await (this.vault as any).unlock?.(this.password)
+    try {
+      // Unlock vault if needed
+      if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
+        if (this.password) {
+          await (this.vault as any).unlock?.(this.password)
+        }
       }
-    }
 
-    // Extract message hashes and sign
-    const messageHashes = await this.vault.extractMessageHashes(payload)
+      // Extract message hashes and sign
+      const messageHashes = await this.vault.extractMessageHashes(payload)
 
-    const signature = await this.vault.sign(
-      {
-        transaction: payload,
-        chain: (payload as any).coin?.chain || chain,
-        messageHashes,
-      },
-      {}
-    )
+      const signature = await this.vault.sign(
+        {
+          transaction: payload,
+          chain: (payload as any).coin?.chain || chain,
+          messageHashes,
+        },
+        {}
+      )
 
-    // Broadcast
-    const txHash = await this.vault.broadcastTx({
-      chain,
-      keysignPayload: payload,
-      signature,
-    })
+      // Broadcast
+      const txHash = await this.vault.broadcastTx({
+        chain,
+        keysignPayload: payload,
+        signature,
+      })
 
-    // Clean up all pending payloads after successful sign
-    this.pendingPayloads.clear()
+      // Record nonce after successful broadcast, then release lock
+      this.recordEvmNonceFromPayload(chain, payload, messageHashes.length)
+      await this.releaseEvmLock(chain)
 
-    const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
+      // Clean up all pending payloads after successful sign
+      this.pendingPayloads.clear()
 
-    return {
-      tx_hash: txHash,
-      chain: chain.toString(),
-      status: 'pending',
-      explorer_url: explorerUrl,
+      const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
+
+      return {
+        tx_hash: txHash,
+        chain: chain.toString(),
+        status: 'pending',
+        explorer_url: explorerUrl,
+      }
+    } catch (err) {
+      await this.releaseEvmLock(chain)
+      throw err
     }
   }
 
@@ -590,73 +635,88 @@ export class AgentExecutor {
       chain = resolveChainId(chainId) || defaultChain
     }
 
-    const address = await this.vault.address(chain)
-    const balance = await this.vault.balance(chain)
+    // Acquire chain lock for the entire prepare→sign→broadcast flow
+    await this.acquireEvmLockIfNeeded(chain)
 
-    const coin: AccountCoin = {
-      chain,
-      address,
-      decimals: (balance as any).decimals || 18,
-      ticker: (balance as any).symbol || chain.toString(),
-    }
+    try {
+      const address = await this.vault.address(chain)
+      const balance = await this.vault.balance(chain)
 
-    const amount = BigInt(swapTx.value || '0')
-    const hasCalldata = !!(swapTx.data && swapTx.data !== '0x')
-
-    if (this.verbose) process.stderr.write(`[sign_server_tx] chain=${chain}, to=${swapTx.to}, value=${swapTx.value}, amount=${amount}, hasCalldata=${hasCalldata}\n`)
-
-    // Unlock vault if needed
-    if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
-      if (this.password) {
-        await (this.vault as any).unlock?.(this.password)
-      }
-    }
-
-    // Build keysign payload using prepareSendTx - memo field carries EVM calldata
-    // For 0-value contract calls (e.g. approve), use a tiny amount to bypass the SDK's
-    // refineKeysignAmount check, then patch toAmount back to "0" after building.
-    const buildAmount = (amount === 0n && hasCalldata) ? 1n : amount
-    const keysignPayload = await this.vault.prepareSendTx({
-      coin,
-      receiver: swapTx.to,
-      amount: buildAmount,
-      memo: swapTx.data,
-    })
-
-    // Patch toAmount to actual value for 0-value contract calls
-    if (amount === 0n && hasCalldata) {
-      ;(keysignPayload as any).toAmount = '0'
-    }
-
-    // Extract message hashes and sign
-    const messageHashes = await this.vault.extractMessageHashes(keysignPayload)
-
-    const signature = await this.vault.sign(
-      {
-        transaction: keysignPayload,
+      const coin: AccountCoin = {
         chain,
-        messageHashes,
-      },
-      {}
-    )
+        address,
+        decimals: (balance as any).decimals || 18,
+        ticker: (balance as any).symbol || chain.toString(),
+      }
 
-    // Broadcast
-    const txHash = await this.vault.broadcastTx({
-      chain,
-      keysignPayload,
-      signature,
-    })
+      const amount = BigInt(swapTx.value || '0')
+      const hasCalldata = !!(swapTx.data && swapTx.data !== '0x')
 
-    // Clean up all pending payloads after successful sign
-    this.pendingPayloads.clear()
+      if (this.verbose) process.stderr.write(`[sign_server_tx] chain=${chain}, to=${swapTx.to}, value=${swapTx.value}, amount=${amount}, hasCalldata=${hasCalldata}\n`)
 
-    const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
+      // Unlock vault if needed
+      if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
+        if (this.password) {
+          await (this.vault as any).unlock?.(this.password)
+        }
+      }
 
-    return {
-      tx_hash: txHash,
-      chain: chain.toString(),
-      status: 'pending',
-      explorer_url: explorerUrl,
+      // Build keysign payload using prepareSendTx - memo field carries EVM calldata
+      // For 0-value contract calls (e.g. approve), use a tiny amount to bypass the SDK's
+      // refineKeysignAmount check, then patch toAmount back to "0" after building.
+      const buildAmount = (amount === 0n && hasCalldata) ? 1n : amount
+      const keysignPayload = await this.vault.prepareSendTx({
+        coin,
+        receiver: swapTx.to,
+        amount: buildAmount,
+        memo: swapTx.data,
+      })
+
+      // Patch toAmount to actual value for 0-value contract calls
+      if (amount === 0n && hasCalldata) {
+        ;(keysignPayload as any).toAmount = '0'
+      }
+
+      // Patch EVM nonce if local state is ahead of on-chain
+      this.patchEvmNonce(chain, keysignPayload)
+
+      // Extract message hashes and sign
+      const messageHashes = await this.vault.extractMessageHashes(keysignPayload)
+
+      const signature = await this.vault.sign(
+        {
+          transaction: keysignPayload,
+          chain,
+          messageHashes,
+        },
+        {}
+      )
+
+      // Broadcast
+      const txHash = await this.vault.broadcastTx({
+        chain,
+        keysignPayload,
+        signature,
+      })
+
+      // Record nonce after successful broadcast, then release lock
+      this.recordEvmNonceFromPayload(chain, keysignPayload, messageHashes.length)
+      await this.releaseEvmLock(chain)
+
+      // Clean up all pending payloads after successful sign
+      this.pendingPayloads.clear()
+
+      const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
+
+      return {
+        tx_hash: txHash,
+        chain: chain.toString(),
+        status: 'pending',
+        explorer_url: explorerUrl,
+      }
+    } catch (err) {
+      await this.releaseEvmLock(chain)
+      throw err
     }
   }
 
@@ -749,6 +809,73 @@ export class AgentExecutor {
       status: 'pending',
       explorer_url: explorerUrl,
     }
+  }
+
+  // ============================================================================
+  // EVM Nonce Management
+  // ============================================================================
+
+  /**
+   * Acquire chain-level file lock if the chain is EVM.
+   * Releases any previously held lock first (e.g. from an abandoned build).
+   */
+  private async acquireEvmLockIfNeeded(chain: Chain): Promise<void> {
+    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+
+    // Release any stale lock from a previous build that was never signed
+    await this.releaseEvmLock(chain)
+
+    const release = await this.stateStore.acquireChainLock(chain)
+    this.chainLockReleases.set(chain, release)
+    if (this.verbose) process.stderr.write(`[nonce] Acquired lock for ${chain}\n`)
+  }
+
+  /**
+   * Release the held chain lock (no-op if not held).
+   */
+  private async releaseEvmLock(chain: Chain): Promise<void> {
+    const release = this.chainLockReleases.get(chain)
+    if (release) {
+      await release()
+      this.chainLockReleases.delete(chain)
+      if (this.verbose) process.stderr.write(`[nonce] Released lock for ${chain}\n`)
+    }
+  }
+
+  /**
+   * Patch the EVM nonce in a keysign payload if our local state is ahead of on-chain.
+   * The payload's blockchainSpecific.ethereumSpecific.nonce was set from RPC during
+   * prepareSendTx(). If we have locally-tracked pending txs, we override with a higher value.
+   */
+  private patchEvmNonce(chain: Chain, payload: any): void {
+    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+
+    const bs = payload.blockchainSpecific
+    if (!bs || bs.case !== 'ethereumSpecific') return
+
+    const rpcNonce = bs.value.nonce as bigint
+    const nextNonce = this.stateStore.getNextEvmNonce(chain, rpcNonce)
+
+    if (nextNonce !== rpcNonce) {
+      bs.value.nonce = nextNonce
+      if (this.verbose) process.stderr.write(`[nonce] Patched ${chain} nonce: ${rpcNonce} → ${nextNonce}\n`)
+    }
+  }
+
+  /**
+   * Record the nonce(s) used after a successful broadcast.
+   * For approve+swap flows with N message hashes, the highest nonce used is base + N - 1.
+   */
+  private recordEvmNonceFromPayload(chain: Chain, payload: any, numTxs: number): void {
+    if (!this.stateStore || !EVM_CHAINS.has(chain)) return
+
+    const bs = payload.blockchainSpecific
+    if (!bs || bs.case !== 'ethereumSpecific') return
+
+    const baseNonce = bs.value.nonce as bigint
+    const highestNonce = baseNonce + BigInt(Math.max(0, numTxs - 1))
+    this.stateStore.recordEvmNonce(chain, highestNonce)
+    if (this.verbose) process.stderr.write(`[nonce] Recorded ${chain} nonce: ${highestNonce}\n`)
   }
 
   // ============================================================================
