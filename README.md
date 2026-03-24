@@ -90,12 +90,12 @@ await vault.sign(payload, {
 
 > **WARNING — Storage & Vault Backups:** The SDK auto-configures persistent storage for your platform (FileStorage on Node.js, BrowserStorage in browsers). Do **not** use `MemoryStorage` in production — it is non-persistent and all vault keyshares are lost when the process exits. Loss of keyshares means **permanent loss of funds**. Always back up your vaults using `vault.export()`.
 
-## API Documentation
+## Documentation
 
-API documentation is auto-generated and available at:
-- https://vultisig.github.io/vultisig-sdk/
-
-For detailed usage, see the [SDK Users Guide](docs/SDK-USERS-GUIDE.md).
+- [SDK API Reference & Examples](packages/sdk/README.md) — Full API docs with code examples
+- [SDK Users Guide](docs/SDK-USERS-GUIDE.md) — Detailed usage guide with advanced topics
+- [CLI Documentation](clients/cli/README.md) — Command-line interface
+- [docs.vultisig.com](https://docs.vultisig.com/developer-docs/vultisig-sdk/) — Online documentation
 
 ## Security
 

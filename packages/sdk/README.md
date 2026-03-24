@@ -8,7 +8,7 @@ A TypeScript SDK for secure multi-party computation (MPC) and blockchain operati
 - 🏦 **Fast Vault** - Server-assisted 2-of-2 vault for quick setup and instant signing
 - 🛡️ **Secure Vault** - Multi-device N-of-M threshold signing with mobile device pairing
 - 📲 **QR Code Pairing** - Pair with Vultisig mobile apps (iOS/Android) for vault creation and signing
-- 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 40+ blockchains
+- 🌐 **Multi-Chain Support** - Bitcoin, Ethereum, Solana, THORChain, and 37 blockchains
 - 🔗 **Address Derivation** - Generate addresses across multiple blockchain networks
 - 📱 **Cross-Platform** - Works in browsers, Node.js, and Electron (React Native coming soon)
 - 🔒 **Vault Management** - Import, export, encrypt, and decrypt vault keyshares
@@ -97,22 +97,94 @@ const { vault, vaultId, sessionId } = await sdk.createSecureVault({
 console.log("Vault created:", vault.name);
 ```
 
-### 5. Sign with Secure Vault
+### 5. Send a Transaction (Fast Vault)
+
+Sending a transaction is a 3-step process: **prepare → extract hashes → sign**.
 
 ```typescript
-// Signing requires coordination with other devices
-await vault.sign(transactionPayload, {
-  onQRCodeReady: (qrPayload) => {
-    // Display QR for devices to join the signing session
-    displayQRCode(qrPayload);
+// Step 1: Prepare the transaction (handles gas, nonce, UTXO selection automatically)
+const keysignPayload = await vault.prepareSendTx({
+  coin: {
+    chain: 'Ethereum',
+    address: await vault.address('Ethereum'),
+    decimals: 18,
+    ticker: 'ETH',
   },
-  onDeviceJoined: (deviceId, total, required) => {
-    console.log(`Signing: ${total}/${required} devices ready`);
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f42bE',
+  amount: 1000000000000000000n, // 1 ETH in wei (base units)
+})
+
+// Step 2: Extract message hashes
+const messageHashes = await vault.extractMessageHashes(keysignPayload)
+
+// Step 3: Sign
+const signature = await vault.sign({
+  transaction: keysignPayload,
+  chain: 'Ethereum',
+  messageHashes,
+})
+
+// Step 4 (optional): Broadcast
+const txHash = await vault.broadcastTx({
+  chain: 'Ethereum',
+  keysignPayload,
+  signature,
+})
+```
+
+For **ERC-20 tokens**, add `id` (the contract address) to the coin:
+
+```typescript
+const keysignPayload = await vault.prepareSendTx({
+  coin: {
+    chain: 'Ethereum',
+    address: await vault.address('Ethereum'),
+    decimals: 6,
+    ticker: 'USDC',
+    id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   },
-  onProgress: (step) => {
-    console.log(`Signing progress: ${step.message}`);
+  receiver: '0x...',
+  amount: 1000000n, // 1 USDC (6 decimals)
+})
+```
+
+For **Bitcoin/UTXO chains**, UTXO selection and change outputs are handled automatically:
+
+```typescript
+const keysignPayload = await vault.prepareSendTx({
+  coin: {
+    chain: 'Bitcoin',
+    address: await vault.address('Bitcoin'),
+    decimals: 8,
+    ticker: 'BTC',
+  },
+  receiver: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+  amount: 50000000n, // 0.5 BTC in satoshis
+})
+```
+
+### 5b. Sign with Secure Vault
+
+Secure vault signing uses the same prepare/sign flow, but requires device coordination via QR code:
+
+```typescript
+const keysignPayload = await vault.prepareSendTx({ /* same as above */ })
+const messageHashes = await vault.extractMessageHashes(keysignPayload)
+
+await vault.sign(
+  { transaction: keysignPayload, chain: 'Ethereum', messageHashes },
+  {
+    onQRCodeReady: (qrPayload) => {
+      displayQRCode(qrPayload); // Other devices scan this to co-sign
+    },
+    onDeviceJoined: (deviceId, total, required) => {
+      console.log(`Signing: ${total}/${required} devices ready`);
+    },
+    onProgress: (step) => {
+      console.log(`Signing progress: ${step.message}`);
+    },
   }
-});
+);
 ```
 
 ### 6. Import/Export Vaults
@@ -326,23 +398,66 @@ sdk.notifications.handleIncomingPush(event.data.json())
 
 ## Supported Blockchains
 
-The SDK supports address derivation and operations for 40+ blockchain networks:
+The SDK supports address derivation and operations for 37 blockchain networks:
 
-| Network   | Chain ID    | Description         |
-| --------- | ----------- | ------------------- |
-| Bitcoin   | `bitcoin`   | Bitcoin mainnet     |
-| Ethereum  | `ethereum`  | Ethereum mainnet    |
-| Solana    | `solana`    | Solana mainnet      |
-| THORChain | `thorchain` | THORChain mainnet   |
-| Polygon   | `polygon`   | Polygon (MATIC)     |
-| Avalanche | `avalanche` | Avalanche C-Chain   |
-| BSC       | `bsc`       | Binance Smart Chain |
-| Arbitrum  | `arbitrum`  | Arbitrum One        |
-| Optimism  | `optimism`  | Optimism mainnet    |
-| Cosmos    | `cosmos`    | Cosmos Hub          |
-| Litecoin  | `litecoin`  | Litecoin mainnet    |
-| Dogecoin  | `dogecoin`  | Dogecoin mainnet    |
-| ...       | ...         | And many more       |
+**EVM Chains**
+
+| Network | Chain Value | Description |
+|---------|-------------|-------------|
+| Ethereum | `Ethereum` | Ethereum mainnet |
+| Arbitrum | `Arbitrum` | Arbitrum One L2 |
+| Base | `Base` | Base L2 (Coinbase) |
+| Blast | `Blast` | Blast L2 |
+| Optimism | `Optimism` | Optimism L2 |
+| Zksync | `Zksync` | zkSync Era |
+| Mantle | `Mantle` | Mantle L2 |
+| Polygon | `Polygon` | Polygon (MATIC) |
+| BSC | `BSC` | BNB Smart Chain |
+| Avalanche | `Avalanche` | Avalanche C-Chain |
+| CronosChain | `CronosChain` | Cronos |
+| Hyperliquid | `Hyperliquid` | Hyperliquid L1 |
+| Sei | `Sei` | Sei EVM |
+
+**UTXO Chains**
+
+| Network | Chain Value | Description |
+|---------|-------------|-------------|
+| Bitcoin | `Bitcoin` | Bitcoin mainnet |
+| Bitcoin Cash | `BitcoinCash` (`'Bitcoin-Cash'`) | Bitcoin Cash |
+| Litecoin | `Litecoin` | Litecoin mainnet |
+| Dogecoin | `Dogecoin` | Dogecoin mainnet |
+| Dash | `Dash` | Dash mainnet |
+| Zcash | `Zcash` | Zcash mainnet |
+
+**Cosmos Chains**
+
+| Network | Chain Value | Description |
+|---------|-------------|-------------|
+| THORChain | `THORChain` | THORChain mainnet |
+| MayaChain | `MayaChain` | Maya Protocol |
+| Cosmos | `Cosmos` | Cosmos Hub |
+| Osmosis | `Osmosis` | Osmosis DEX |
+| Dydx | `Dydx` | dYdX chain |
+| Kujira | `Kujira` | Kujira chain |
+| Terra | `Terra` | Terra 2.0 |
+| TerraClassic | `TerraClassic` | Terra Classic |
+| Noble | `Noble` | Noble (USDC native) |
+| Akash | `Akash` | Akash Network |
+
+**Other Chains**
+
+| Network | Chain Value | Description |
+|---------|-------------|-------------|
+| Solana | `Solana` | Solana mainnet |
+| Sui | `Sui` | Sui mainnet |
+| Polkadot | `Polkadot` | Polkadot mainnet |
+| Bittensor | `Bittensor` | Bittensor TAO |
+| Ton | `Ton` | TON blockchain |
+| Ripple | `Ripple` | XRP Ledger |
+| Tron | `Tron` | TRON mainnet |
+| Cardano | `Cardano` | Cardano mainnet |
+
+Use `Chain` values in SDK calls: `Chain.Bitcoin`, `Chain.Ethereum`, etc.
 
 ## Vault Types
 
@@ -484,7 +599,13 @@ The SDK requires three WASM files to be available in your application's public d
 - `dkls.wasm` - ECDSA threshold signatures (DKLS protocol)
 - `schnorr.wasm` - EdDSA threshold signatures (Schnorr protocol)
 
-For bundled applications (Vite, webpack, etc.), place these files in the `public/` directory.
+These files are included in the npm package. Copy them to your public directory:
+
+```bash
+cp node_modules/@vultisig/sdk/dist/*.wasm public/
+```
+
+For Node.js and Electron, WASM files are loaded automatically from the package.
 
 ## API Reference
 
@@ -595,33 +716,76 @@ Import a vault from a backup file.
 
 #### `vault.export(password?): Promise<Blob>`
 
-Export a vault to encrypted backup format as a Blob (called on Vault instance).
+Export a vault to encrypted backup format as a Blob.
 
 #### `vault.exportAsBase64(password?): Promise<string>`
 
-Export a vault to encrypted backup format as a base64 string (called on Vault instance).
+Export a vault to encrypted backup format as a base64 string.
 
-#### `secureVault.sign(payload, options?): Promise<SigningResult>`
+### Transaction Methods
 
-Sign a transaction with a SecureVault (requires device coordination).
+#### `vault.prepareSendTx(params): Promise<KeysignPayload>`
+
+Build a transaction payload. Handles gas estimation, nonce, and UTXO selection automatically.
+
+**Parameters:**
+
+- `params.coin` - Token to send: `{ chain, address, decimals, ticker, id? }` — `id` is the contract address for tokens (ERC-20, SPL, etc.)
+- `params.receiver: string` - Recipient address
+- `params.amount: bigint` - Amount in base units (wei, satoshis, etc.)
+- `params.memo?: string` - Optional transaction memo
+- `params.feeSettings?: FeeSettings` - Optional custom fee overrides
+
+#### `vault.extractMessageHashes(keysignPayload): Promise<string[]>`
+
+Extract pre-signing message digests from a keysign payload. Required by `sign()`.
+
+#### `vault.sign(payload, options?): Promise<Signature>`
+
+Sign a transaction using MPC. Instant for Fast Vaults; requires device co-signing for Secure Vaults.
 
 **Parameters:**
 
-- `payload: SigningPayload` - Transaction data to sign
-- `options.signal?: AbortSignal` - Optional signal to cancel the signing operation
-- `options.onQRCodeReady?: (qrPayload: string) => void` - Called when QR code is ready for device pairing
-- `options.onDeviceJoined?: (deviceId: string, total: number, required: number) => void` - Called when a device joins
-- `options.onProgress?: (step: SigningStep) => void` - Called with signing progress updates
+- `payload.transaction: KeysignPayload` - From `prepareSendTx()`
+- `payload.chain: string` - Chain name
+- `payload.messageHashes: string[]` - From `extractMessageHashes()`
+- `options.signal?: AbortSignal` - Cancel the operation
+- `options.onQRCodeReady?: (qrPayload: string) => void` - QR code callback (Secure Vault)
+- `options.onDeviceJoined?: (deviceId, total, required) => void` - Device join callback
+- `options.onProgress?: (step: SigningStep) => void` - Progress updates
 
-#### `secureVault.signBytes(options, signingOptions?): Promise<SigningResult>`
+**Returns:** `{ signature, recovery?, format, signatures? }` — `signatures` array is present for UTXO chains (one per input).
 
-Sign arbitrary bytes with a SecureVault.
+#### `vault.broadcastTx(params): Promise<string>`
+
+Broadcast a signed transaction. Returns the transaction hash.
+
+- `params.chain: string` - Chain to broadcast on
+- `params.keysignPayload: KeysignPayload` - From `prepareSendTx()`
+- `params.signature: Signature` - From `sign()`
+
+#### `vault.broadcastRawTx(params): Promise<string>`
+
+Broadcast a pre-built raw transaction directly. Encoding depends on the chain:
+
+- **EVM & UTXO chains** — hex-encoded transaction bytes
+- **Solana** — base58 or base64 (auto-detected)
+- **Cosmos chains** — base64-encoded JSON or raw bytes
+- **TON** — base64-encoded BoC (Bag of Cells)
+- **Sui & Tron** — JSON-encoded transaction
 
 **Parameters:**
+
+- `params.chain: string` - Chain to broadcast on
+- `params.rawTx: string` - Raw transaction in the chain-appropriate encoding
+
+#### `vault.signBytes(options, signingOptions?): Promise<SigningResult>`
+
+Sign arbitrary bytes (not a blockchain transaction).
 
 - `options.chain: string` - Chain for signature algorithm selection
-- `options.messages: (Uint8Array | Buffer | string)[]` - Messages to sign (hex strings or bytes)
-- `signingOptions.signal?: AbortSignal` - Optional signal to cancel the operation
+- `options.messages: (Uint8Array | Buffer | string)[]` - Messages to sign
+- `signingOptions.signal?: AbortSignal` - Cancel the operation
 
 ### Static Methods (No Vault Needed)
 
