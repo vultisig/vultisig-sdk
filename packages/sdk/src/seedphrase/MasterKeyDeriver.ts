@@ -346,6 +346,7 @@ export class MasterKeyDeriver {
       BSC: 'smartChain',
       Sui: 'sui',
       Polkadot: 'polkadot',
+      Bittensor: 'polkadot',
       Ton: 'ton',
       Tron: 'tron',
       Ripple: 'xrp',
