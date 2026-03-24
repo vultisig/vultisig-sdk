@@ -123,7 +123,6 @@ export async function sendTokensThenNativeForChain(params: {
   const amount = await resolveNativeSendAmount({
     vault: sourceVault,
     chain,
-    coin,
   })
   if (amount === null || amount <= 0n) {
     logs.push({ chain, kind: 'native', skipped: 'minimal amount unavailable or below balance' })

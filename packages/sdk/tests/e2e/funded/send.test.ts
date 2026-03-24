@@ -18,6 +18,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import type { Balance } from '@/types'
 
 import { VaultBase } from '../../../src/vault/VaultBase'
+import { e2ePrepareSendSkipReason } from '../helpers/prepare-send-skip'
 import type { VaultShareData } from '../helpers/secure-vault-helpers'
 import {
   collectTokenEntries,
@@ -40,19 +41,13 @@ function secureSharePaths(): string[] {
     .filter(Boolean)
 }
 
-function canRunFastSuite(): boolean {
+function canRunSuite(): boolean {
   if (!process.env.TEST_VAULT_PATH || !process.env.TEST_VAULT_PASSWORD) return false
   const shares = secureSharePaths()
   return shares.length >= 2 && !!process.env.SECURE_VAULT_PASSWORD
 }
 
-function canRunSecureSuite(): boolean {
-  if (!process.env.TEST_VAULT_PATH || !process.env.TEST_VAULT_PASSWORD) return false
-  const shares = secureSharePaths()
-  return shares.length >= 2 && !!process.env.SECURE_VAULT_PASSWORD
-}
-
-describe.skipIf(!canRunFastSuite())('Funded E2E: Send — Fast vault', () => {
+describe.skipIf(!canRunSuite())('Funded E2E: Send — Fast vault', () => {
   let sourceVault: VaultBase
   let destSecureVault: VaultBase
   let balanceSnapshot: Record<string, Balance> = {}
@@ -96,19 +91,31 @@ describe.skipIf(!canRunFastSuite())('Funded E2E: Send — Fast vault', () => {
 
       if (!hasWork) {
         ctx.skip('no token or native balance on this chain')
+        return
       }
 
-      const logs = await sendTokensThenNativeForChain({
-        chain,
-        sourceVault,
-        balanceSnapshot,
-        receiverForChain,
-        signBroadcast: signFast,
-      })
+      let logs: Awaited<ReturnType<typeof sendTokensThenNativeForChain>>
+      try {
+        logs = await sendTokensThenNativeForChain({
+          chain,
+          sourceVault,
+          balanceSnapshot,
+          receiverForChain,
+          signBroadcast: signFast,
+        })
+      } catch (err) {
+        const skipReason = e2ePrepareSendSkipReason(err)
+        if (skipReason) {
+          ctx.skip(skipReason)
+          return
+        }
+        throw err
+      }
 
       const hashes = logs.filter(l => l.txHash).map(l => l.txHash as string)
       if (hashes.length === 0) {
         ctx.skip('nothing broadcast (fees, thresholds, or skipped token paths)')
+        return
       }
       for (const h of hashes) {
         expect(h).toBeTruthy()
@@ -118,7 +125,7 @@ describe.skipIf(!canRunFastSuite())('Funded E2E: Send — Fast vault', () => {
   })
 })
 
-describe.skipIf(!canRunSecureSuite())('Funded E2E: Send — Secure vault', () => {
+describe.skipIf(!canRunSuite())('Funded E2E: Send — Secure vault', () => {
   let sourceVault: VaultBase
   let shares: VaultShareData[] = []
   let destFastVault: VaultBase
@@ -165,19 +172,31 @@ describe.skipIf(!canRunSecureSuite())('Funded E2E: Send — Secure vault', () =>
 
       if (!hasWork) {
         ctx.skip('no token or native balance on this chain')
+        return
       }
 
-      const logs = await sendTokensThenNativeForChain({
-        chain,
-        sourceVault,
-        balanceSnapshot,
-        receiverForChain,
-        signBroadcast: signSecure,
-      })
+      let logs: Awaited<ReturnType<typeof sendTokensThenNativeForChain>>
+      try {
+        logs = await sendTokensThenNativeForChain({
+          chain,
+          sourceVault,
+          balanceSnapshot,
+          receiverForChain,
+          signBroadcast: signSecure,
+        })
+      } catch (err) {
+        const skipReason = e2ePrepareSendSkipReason(err)
+        if (skipReason) {
+          ctx.skip(skipReason)
+          return
+        }
+        throw err
+      }
 
       const hashes = logs.filter(l => l.txHash).map(l => l.txHash as string)
       if (hashes.length === 0) {
         ctx.skip('nothing broadcast (fees, thresholds, or skipped token paths)')
+        return
       }
       for (const h of hashes) {
         expect(h).toBeTruthy()

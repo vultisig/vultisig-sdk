@@ -67,6 +67,9 @@ export async function loadTestVault(): Promise<{
     },
     defaultChains: TEST_VAULT_CONFIG.testChains,
     defaultCurrency: 'usd',
+    // FastVault.sign hits the server even when the share was imported unencrypted; password may not
+    // be cached — same password as import (env or default) satisfies resolvePassword().
+    onPasswordRequired: async () => TEST_VAULT_CONFIG.password,
   })
 
   await sdk.initialize()

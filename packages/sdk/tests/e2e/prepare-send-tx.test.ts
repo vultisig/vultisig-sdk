@@ -34,6 +34,7 @@
  * - For funded tests, create your own vault and set environment variables
  */
 
+import { e2ePrepareSendSkipReason } from '@helpers/prepare-send-skip'
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -62,7 +63,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
     // ==========================================================================
 
     describe('UTXO Chains', () => {
-      it('Bitcoin: UTXO selection and SegWit addresses', async () => {
+      it('Bitcoin: UTXO selection and SegWit addresses', async ctx => {
         console.log('📝 Testing Bitcoin UTXO transaction preparation...')
 
         const coin = {
@@ -72,11 +73,21 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
           ticker: 'BTC',
         }
 
-        const payload = await vault.prepareSendTx({
-          coin,
-          receiver: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-          amount: 1000n, // ~0.00001 BTC (~$1 at $98,000/BTC)
-        })
+        let payload
+        try {
+          payload = await vault.prepareSendTx({
+            coin,
+            receiver: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+            amount: 1000n, // ~0.00001 BTC (~$1 at $98,000/BTC)
+          })
+        } catch (e) {
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
+            return
+          }
+          throw e
+        }
 
         // Validate UTXO-specific structure
         expect(payload).toBeDefined()
@@ -90,11 +101,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         console.log(`  Amount: ${payload.toAmount} satoshis (~0.00001 BTC, ~$1)`)
       })
 
-      it('Litecoin: Alternative UTXO implementation', async () => {
-        // TODO: Requires Litecoin funding (~$2-5)
-        // Tests that UTXO logic generalizes to Litecoin network
-        // Different address format (ltc1...) and network parameters
-
+      it('Litecoin: Alternative UTXO implementation', async ctx => {
         console.log('📝 Testing Litecoin UTXO transaction preparation...')
 
         const coin = {
@@ -104,11 +111,21 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
           ticker: 'LTC',
         }
 
-        const payload = await vault.prepareSendTx({
-          coin,
-          receiver: 'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9', // Valid Litecoin SegWit address (bech32)
-          amount: 100000n, // ~0.001 LTC (~$0.10 at $100/LTC)
-        })
+        let payload
+        try {
+          payload = await vault.prepareSendTx({
+            coin,
+            receiver: 'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9',
+            amount: 100000n, // ~0.001 LTC (~$0.10 at $100/LTC)
+          })
+        } catch (e) {
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
+            return
+          }
+          throw e
+        }
 
         expect(payload).toBeDefined()
         expect(payload.blockchainSpecific.case).toBe('utxoSpecific')
@@ -305,9 +322,9 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
           console.log('✅ Polkadot extrinsic prepared (NOT broadcast)')
         } catch (e) {
-          if ((e as Error).message?.includes('not-enough-funds')) {
-            console.log('⏭️  Polkadot skipped: wallet not funded with DOT')
-            ctx.skip()
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
             return
           }
           throw e
@@ -335,9 +352,9 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
 
           console.log('✅ Sui Move transaction prepared (NOT broadcast)')
         } catch (e) {
-          if ((e as Error).message?.includes('not-enough-funds')) {
-            console.log('⏭️  Sui skipped: wallet not funded with SUI')
-            ctx.skip()
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
             return
           }
           throw e
@@ -388,7 +405,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
       console.log(`  Custom Gas: 2 gwei priority, 21000 gas limit`)
     })
 
-    it('UTXO: Custom byte fee (sat/vbyte)', async () => {
+    it('UTXO: Custom byte fee (sat/vbyte)', async ctx => {
       // TODO: Combine with main Bitcoin test or create separate test
       // Tests custom fee rate for UTXO chains (Bitcoin, Litecoin, etc.)
 
@@ -401,14 +418,24 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         ticker: 'BTC',
       }
 
-      const payload = await vault.prepareSendTx({
-        coin,
-        receiver: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-        amount: 1000n, // ~0.00001 BTC (~$1 at $98,000/BTC)
-        feeSettings: {
-          byteFee: 10n, // 10 sat/vbyte (custom rate)
-        },
-      })
+      let payload
+      try {
+        payload = await vault.prepareSendTx({
+          coin,
+          receiver: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+          amount: 1000n, // ~0.00001 BTC (~$1 at $98,000/BTC)
+          feeSettings: {
+            byteFee: 10n, // 10 sat/vbyte (custom rate)
+          },
+        })
+      } catch (e) {
+        const r = e2ePrepareSendSkipReason(e)
+        if (r) {
+          ctx.skip(r)
+          return
+        }
+        throw e
+      }
 
       expect(payload).toBeDefined()
       expect(payload.toAmount).toBe('1000')
@@ -565,6 +592,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         { name: Chain.Solana, amount: 5400000n, decimals: 9 },
       ]
 
+      let prepared = 0
       for (const chain of chains) {
         const coin = {
           chain: chain.name,
@@ -583,14 +611,25 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
           return '0x742D35cC6634C0532925A3b844bc9E7595f0BEb8'
         }
 
-        await vault.prepareSendTx({
-          coin,
-          receiver: getReceiver(),
-          amount: chain.amount,
-        })
+        try {
+          await vault.prepareSendTx({
+            coin,
+            receiver: getReceiver(),
+            amount: chain.amount,
+          })
+          prepared++
+        } catch (e) {
+          if (e2ePrepareSendSkipReason(e)) {
+            console.log(`⏭️  Safety check: skipped ${chain.name} (balance/RPC cannot build send tx)`)
+            continue
+          }
+          throw e
+        }
       }
 
-      console.log(`✅ Prepared ${chains.length} transactions`)
+      expect(prepared).toBeGreaterThan(0)
+
+      console.log(`✅ Prepared ${prepared} transaction(s) (${chains.length} chain(s) attempted)`)
       console.log('✅ ZERO transactions were broadcast to the blockchain')
       console.log('✅ All operations were read-only (prepareSendTx only)')
       console.log('✅ No funds were transferred')

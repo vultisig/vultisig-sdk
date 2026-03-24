@@ -4,7 +4,6 @@
 
 import { Chain, UtxoBasedChain } from '@core/chain/Chain'
 import { getChainKind } from '@core/chain/ChainKind'
-import type { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
 import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import fs from 'fs/promises'
@@ -46,6 +45,11 @@ export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+/**
+ * Fast vault signing calls `resolvePassword()` for VultiServer auth even when the share
+ * was imported unencrypted, so the password cache may be empty — supply the same password
+ * used at import time via `onPasswordRequired`.
+ */
 export function createFundedSdk(): Vultisig {
   return new Vultisig({
     storage: new MemoryStorage(),
@@ -55,6 +59,15 @@ export function createFundedSdk(): Vultisig {
     },
     defaultChains: SCAN_CHAINS,
     defaultCurrency: 'usd',
+    onPasswordRequired: async () => {
+      const pwd = process.env.TEST_VAULT_PASSWORD
+      if (!pwd) {
+        throw new Error(
+          'Fast vault signing needs TEST_VAULT_PASSWORD when the password is not cached (e.g. unencrypted .vult). Set process.env.TEST_VAULT_PASSWORD.'
+        )
+      }
+      return pwd
+    },
   })
 }
 
@@ -127,7 +140,6 @@ export async function resolveTokenSendAmount(params: { balance: Balance }): Prom
 export async function resolveNativeSendAmount(params: {
   vault: VaultBase
   chain: Chain
-  coin: AccountCoin
 }): Promise<bigint | null> {
   const fixed = TEST_AMOUNTS[params.chain]
   if (fixed === undefined) return null

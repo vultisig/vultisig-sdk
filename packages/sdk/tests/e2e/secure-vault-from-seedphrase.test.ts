@@ -11,7 +11,8 @@
  * NO MOCKING of MPC process - uses real relay server and WASM libraries.
  *
  * Requirements:
- * - TEST_SEEDPHRASE env var with a BIP39 mnemonic that has ETH/RUNE/BTC balance
+ * - TEST_SEEDPHRASE: BIP39 mnemonic (used by balance/discovery tests when set).
+ * - Live 3-device MPC keygen (~15m+): also set E2E_SECURE_VAULT_FROM_SEEDPHRASE=1 (opt-in; skips when unset).
  *
  * WARNING: Uses a REAL seedphrase with funds. Never commit the .env file!
  */
@@ -26,6 +27,9 @@ import { Vultisig } from '../../src/Vultisig'
 /**
  * Test configuration
  */
+const RUN_SECURE_VAULT_MPC_E2E =
+  process.env.E2E_SECURE_VAULT_FROM_SEEDPHRASE === '1' && Boolean(process.env.TEST_SEEDPHRASE?.trim())
+
 const TEST_CONFIG = {
   // Seedphrase from .env (REQUIRED - must have ETH balance for tx preparation)
   seedphrase: process.env.TEST_SEEDPHRASE || '',
@@ -126,7 +130,7 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
       expect(TEST_CONFIG.seedphrase.split(' ').length).toBeGreaterThanOrEqual(12)
     })
 
-    it(
+    it.skipIf(!RUN_SECURE_VAULT_MPC_E2E)(
       'should create 3 vault shares using 3 SDK instances',
       async () => {
       if (!TEST_CONFIG.seedphrase) return
@@ -196,7 +200,7 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
       expect(uniquePartyIds.size).toBe(3)
       console.log(`   - Each SDK has unique party ID`)
     },
-    { timeout: 900_000, retry: 1 }
+    { timeout: 900_000 }
     )
   })
 
