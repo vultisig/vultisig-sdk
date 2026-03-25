@@ -12,8 +12,8 @@
  */
 
 import * as fs from 'node:fs'
-import * as path from 'node:path'
 import * as os from 'node:os'
+import * as path from 'node:path'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +29,7 @@ type EvmChainState = {
 type LockInfo = {
   pid: number
   timestamp: number
+  token?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -57,6 +58,9 @@ export class VaultStateStore {
   constructor(vaultId: string) {
     // Use first 40 hex chars of the ECDSA pubkey as dir name
     const safeId = vaultId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 40)
+    if (!safeId) {
+      throw new Error('Invalid vaultId: must contain alphanumeric characters')
+    }
     this.baseDir = path.join(os.homedir(), '.vultisig', 'vault-state', safeId)
     fs.mkdirSync(this.baseDir, { recursive: true })
   }
@@ -80,14 +84,19 @@ export class VaultStateStore {
       try {
         // Atomic exclusive create — fails with EEXIST if lock is held
         const fd = fs.openSync(lockPath, 'wx')
-        const info: LockInfo = { pid: process.pid, timestamp: Date.now() }
+        const lockToken = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const info: LockInfo = { pid: process.pid, timestamp: Date.now(), token: lockToken }
         fs.writeSync(fd, JSON.stringify(info))
         fs.closeSync(fd)
 
-        // Return the release function
+        // Return the release function — only deletes if we still own the lock
         return async () => {
           try {
-            fs.unlinkSync(lockPath)
+            const content = fs.readFileSync(lockPath, 'utf8')
+            const current: LockInfo = JSON.parse(content)
+            if (current.token === lockToken) {
+              fs.unlinkSync(lockPath)
+            }
           } catch {
             // Already released or cleaned up — fine
           }
@@ -199,13 +208,19 @@ export class VaultStateStore {
         return true
       }
     } catch {
-      // Can't read lock file — it was likely just released, or corrupted. Remove it.
+      // Can't read/parse lock file — only remove if the file is old enough
+      // to rule out a concurrent writer that hasn't finished writing yet
       try {
-        fs.unlinkSync(lockPath)
+        const stat = fs.statSync(lockPath)
+        if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
+          fs.unlinkSync(lockPath)
+          return true
+        }
       } catch {
-        // Already gone
+        // File disappeared between read and stat — treat as released
+        return true
       }
-      return true
+      return false
     }
     return false
   }
