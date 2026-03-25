@@ -285,6 +285,9 @@ export class SecureVault extends VaultBase {
 
     // Update CoreVault with keyShares
     this.coreVault.keyShares = parsedVault.keyShares
+    if (parsedVault.keyShareMldsa) {
+      this.coreVault.keyShareMldsa = parsedVault.keyShareMldsa
+    }
 
     // Emit unlocked event (even for unencrypted vaults, keyShares are now loaded)
     this.emit('unlocked', { vaultId: this.id })

@@ -269,16 +269,22 @@ export class JoinSecureVaultService {
       message: 'Generating ML-DSA keys...',
     })
 
-    const mldsaKeygen = new MldsaKeygen(
-      false,
-      this.relayUrl,
-      qrParams.sessionId,
-      localPartyId,
-      allDevices,
-      qrParams.hexEncryptionKey
-    )
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    try {
+      const mldsaKeygen = new MldsaKeygen(
+        false,
+        this.relayUrl,
+        qrParams.sessionId,
+        localPartyId,
+        allDevices,
+        qrParams.hexEncryptionKey,
+        { timeoutMs: 30000 }
+      )
 
-    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+    } catch (error) {
+      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+    }
 
     if (signal?.aborted) {
       throw new Error('Operation aborted')
@@ -324,8 +330,8 @@ export class JoinSecureVaultService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult.publicKey,
-      keyShareMldsa: mldsaResult.keyshare,
+      publicKeyMldsa: mldsaResult?.publicKey,
+      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,
@@ -486,16 +492,22 @@ export class JoinSecureVaultService {
       message: 'Generating ML-DSA keys...',
     })
 
-    const mldsaKeygen = new MldsaKeygen(
-      false,
-      this.relayUrl,
-      qrParams.sessionId,
-      localPartyId,
-      allDevices,
-      qrParams.hexEncryptionKey
-    )
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    try {
+      const mldsaKeygen = new MldsaKeygen(
+        false,
+        this.relayUrl,
+        qrParams.sessionId,
+        localPartyId,
+        allDevices,
+        qrParams.hexEncryptionKey,
+        { timeoutMs: 30000 }
+      )
 
-    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+    } catch (error) {
+      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+    }
 
     if (signal?.aborted) {
       throw new Error('Operation aborted')
@@ -600,8 +612,8 @@ export class JoinSecureVaultService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult.publicKey,
-      keyShareMldsa: mldsaResult.keyshare,
+      publicKeyMldsa: mldsaResult?.publicKey,
+      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

@@ -96,6 +96,12 @@ export class MldsaKeygen {
     start: number
   ): Promise<boolean> {
     try {
+      const elapsed = Date.now() - start
+      if (elapsed > this.timeoutMs * 2) {
+        this.isKeygenComplete = true
+        return false
+      }
+
       const parsedMessages = await getMpcRelayMessages({
         serverUrl: this.serverURL,
         localPartyId: this.localPartyId,
@@ -133,12 +139,6 @@ export class MldsaKeygen {
           messageHash: msg.hash,
           messageId: 'mldsa',
         })
-      }
-
-      const elapsed = Date.now() - start
-      if (elapsed > this.timeoutMs * 2) {
-        this.isKeygenComplete = true
-        return false
       }
 
       await sleep(100)

@@ -1,4 +1,5 @@
 import { Chain } from '@core/chain/Chain'
+import { getCoinType } from '@core/chain/coin/coinType'
 import { getTwPublicKeyType } from '@core/chain/publicKey/tw/getTwPublicKeyType'
 import { decodeSigningOutput } from '@core/chain/tw/signingOutput'
 import { broadcastTx as coreBroadcastTx } from '@core/chain/tx/broadcast'
@@ -72,7 +73,12 @@ export class BroadcastService {
       // Get public key from keysign payload
       const publicKeyData = getKeysignTwPublicKey(keysignPayload)
       const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, publicKeyType)
+      // Tron stores uncompressed public key (65 bytes), so use secp256k1Extended type
+      const coinType = getCoinType({ walletCore, chain })
+      const keyType = coinType === walletCore.CoinType.tron
+        ? walletCore.PublicKeyType.secp256k1Extended
+        : publicKeyType
+      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, keyType)
 
       // Get transaction input data (same data used during signing)
       const txInputsArray = getEncodedSigningInputs({
@@ -81,33 +87,31 @@ export class BroadcastService {
         publicKey,
       })
 
-      // Most chains have single tx input; UTXO may have multiple
-      // For now, handle the common case (single input)
       if (txInputsArray.length === 0) {
         throw new Error('No transaction inputs found in keysign payload')
       }
-      const txInputData = txInputsArray[0]
 
-      // Compile transaction (combines signatures with tx data)
-      const compiledTx = compileTx({
-        publicKey,
-        txInputData,
-        signatures: keysignSignatures,
-        chain,
-        walletCore,
-      })
+      // Broadcast all transaction inputs (e.g., approve + swap for EVM token flows).
+      // Returns the hash of the last transaction, which is typically the primary one.
+      let txHash = ''
+      for (const txInputData of txInputsArray) {
+        const compiledTx = compileTx({
+          publicKey,
+          txInputData,
+          signatures: keysignSignatures,
+          chain,
+          walletCore,
+        })
 
-      // Decode compiled bytes to SigningOutput
-      const signingOutput = decodeSigningOutput(chain, compiledTx)
+        const signingOutput = decodeSigningOutput(chain, compiledTx)
 
-      // Broadcast transaction to network
-      await coreBroadcastTx({
-        chain,
-        tx: signingOutput,
-      })
+        await coreBroadcastTx({
+          chain,
+          tx: signingOutput,
+        })
 
-      // Extract transaction hash from signing output
-      const txHash = await getTxHash({ chain, tx: signingOutput })
+        txHash = await getTxHash({ chain, tx: signingOutput })
+      }
 
       return txHash
     } catch (error) {

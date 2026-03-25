@@ -11,6 +11,7 @@ import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComple
 import { keysign } from '@core/mpc/keysign'
 import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
 import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
+import { MldsaKeysign } from '@core/mpc/mldsa/mldsaKeysign'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
 import { startMpcSession } from '@core/mpc/session/startMpcSession'
@@ -241,7 +242,42 @@ export class ServerManager {
       signatureResults[msg] = sig
     }
 
-    // Step 6: Complete - Format signature results
+    // Step 6: MLDSA signing (if vault has ML-DSA keys)
+    let mldsaSignatureHex: string | undefined
+    if (vault.keyShareMldsa) {
+      console.log('🔐 Starting MLDSA post-quantum signing...')
+      reportProgress({
+        step: 'signing',
+        progress: 80,
+        message: 'Performing ML-DSA post-quantum signing...',
+        mode: 'fast' as import('../types').SigningMode,
+        participantCount: 2,
+        participantsReady: 2,
+      })
+
+      try {
+        const mldsaKeysign = new MldsaKeysign({
+          keysignCommittee: devices,
+          serverURL: this.config.messageRelay,
+          sessionId,
+          localPartyId: signingLocalPartyId,
+          messagesToSign: messages,
+          keyShareBase64: vault.keyShareMldsa,
+          hexEncryptionKey,
+          chainPath,
+          isInitiatingDevice: true,
+        })
+        const mldsaResults = await mldsaKeysign.startKeysignWithRetry()
+        if (mldsaResults.length > 0) {
+          mldsaSignatureHex = mldsaResults[0].signature
+          console.log('✅ MLDSA signature obtained')
+        }
+      } catch (error) {
+        console.warn('⚠️ MLDSA signing failed (non-fatal):', error instanceof Error ? error.message : error)
+      }
+    }
+
+    // Step 7: Complete - Format signature results
     console.log(`🔄 Formatting signature results...`)
     reportProgress({
       step: 'complete',
@@ -253,6 +289,9 @@ export class ServerManager {
     })
 
     const signature = formatSignature(signatureResults, messages, signatureAlgorithm)
+    if (mldsaSignatureHex) {
+      signature.mldsaSignature = mldsaSignatureHex
+    }
 
     reportProgress({
       step: 'complete',
@@ -406,25 +445,30 @@ export class ServerManager {
     // ML-DSA keygen
     progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
 
-    await mldsaWithServer({
-      public_key: ecdsaResult.publicKey,
-      session_id: sessionId,
-      hex_encryption_key: hexEncryptionKey,
-      encryption_password: options.password,
-      email: options.email,
-    })
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    try {
+      await mldsaWithServer({
+        public_key: ecdsaResult.publicKey,
+        session_id: sessionId,
+        hex_encryption_key: hexEncryptionKey,
+        encryption_password: options.password,
+        email: options.email,
+      })
 
-    const mldsaKeygen = new MldsaKeygen(
-      true, // isInitiateDevice
-      this.config.messageRelay,
-      sessionId,
-      localPartyId,
-      devices,
-      hexEncryptionKey
-    )
+      const mldsaKeygen = new MldsaKeygen(
+        true, // isInitiateDevice
+        this.config.messageRelay,
+        sessionId,
+        localPartyId,
+        devices,
+        hexEncryptionKey
+      )
 
-    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-    log('ML-DSA keygen completed successfully')
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+      log('ML-DSA keygen completed successfully')
+    } catch (error) {
+      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+    }
 
     // Check for abort before finalization
     if (options.signal?.aborted) {
@@ -460,8 +504,8 @@ export class ServerManager {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult.publicKey,
-      keyShareMldsa: mldsaResult.keyshare,
+      publicKeyMldsa: mldsaResult?.publicKey,
+      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

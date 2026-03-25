@@ -118,6 +118,7 @@ globalThis.fetch = wrappedFetch as any
  * Configure crypto and WASM for E2E tests
  */
 import { initializeMpcLib } from '@core/mpc/lib/initialize'
+import { initializeMldsaLib } from '@core/mpc/mldsa/initializeMldsa'
 import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 
@@ -132,7 +133,12 @@ configureCrypto(new NodeCrypto())
 let walletCoreInstance: any
 
 const initAllWasm = memoizeAsync(async () => {
-  const [walletCore] = await Promise.all([initWalletCore(), initializeMpcLib('ecdsa'), initializeMpcLib('eddsa')])
+  const [walletCore] = await Promise.all([
+    initWalletCore(),
+    initializeMpcLib('ecdsa'),
+    initializeMpcLib('eddsa'),
+    initializeMldsaLib(),
+  ])
   walletCoreInstance = walletCore
   return walletCore
 })
