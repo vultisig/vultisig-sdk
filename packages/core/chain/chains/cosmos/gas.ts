@@ -4,7 +4,7 @@ const defaultGas = 7500n
 
 export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: defaultGas,
-  [Chain.Osmosis]: defaultGas,
+  [Chain.Osmosis]: 9000n,
   [Chain.Kujira]: defaultGas,
   [Chain.Terra]: defaultGas,
   [Chain.Dydx]: 2500000000000000n,
