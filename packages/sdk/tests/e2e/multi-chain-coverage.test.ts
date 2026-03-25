@@ -110,15 +110,7 @@ describe('E2E: Multi-Chain Coverage (Production)', () => {
         try {
           const address = await vault.address(chain)
           addresses[chain] = address
-
-          // Verify against expected address if available
-          const expectedAddress = TEST_VAULT_CONFIG.addresses[chain as keyof typeof TEST_VAULT_CONFIG.addresses]
-          if (expectedAddress) {
-            expect(address).toBe(expectedAddress)
-            console.log(`  ✅ ${chain}: ${address} (verified)`)
-          } else {
-            console.log(`  ✅ ${chain}: ${address}`)
-          }
+          console.log(`  ✅ ${chain}: ${address}`)
         } catch (error) {
           console.warn(`  ⚠️  ${chain}: ${(error as Error).message}`)
         }

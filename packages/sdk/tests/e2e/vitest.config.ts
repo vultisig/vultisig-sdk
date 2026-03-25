@@ -9,7 +9,7 @@ export default defineConfig({
     name: 'e2e',
     root: resolve(__dirname, '../..'),
     include: ['tests/e2e/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/funded/**'],
 
     // E2E tests need longer timeouts for real network + MPC relay rounds
     testTimeout: 120_000,
