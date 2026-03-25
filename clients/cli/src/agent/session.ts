@@ -18,7 +18,7 @@ import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext } from './context'
 import { AgentExecutor } from './executor'
-import type { Action, ActionResult, AgentConfig, MessageContext, UICallbacks } from './types'
+import type { Action, ActionResult, AgentConfig, ConversationMessage, MessageContext, UICallbacks } from './types'
 import { PASSWORD_REQUIRED_ACTIONS } from './types'
 
 export class AgentSession {
@@ -30,6 +30,7 @@ export class AgentSession {
   private publicKey: string
   private cachedContext: MessageContext | null = null
   private abortController: AbortController | null = null
+  private historyMessages: ConversationMessage[] = []
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -76,8 +77,29 @@ export class AgentSession {
     }
 
     // Create or resume conversation
-    if (this.config.conversationId) {
-      this.conversationId = this.config.conversationId
+    if (this.config.sessionId) {
+      this.conversationId = this.config.sessionId
+      // Fetch historical messages for resumed sessions
+      try {
+        const conv = await this.client.getConversation(this.conversationId, this.publicKey)
+        this.historyMessages = conv.messages || []
+      } catch (err: any) {
+        // Re-authenticate on 401/403 and retry once
+        if (err.message?.includes('401') || err.message?.includes('403')) {
+          clearCachedToken(this.publicKey)
+          const auth = await authenticateVault(this.client, this.vault, this.config.password)
+          this.client.setAuthToken(auth.token)
+          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+          const conv = await this.client.getConversation(this.conversationId!, this.publicKey)
+          this.historyMessages = conv.messages || []
+        } else {
+          // Session not found or other error — reset to new conversation
+          this.conversationId = null
+          this.historyMessages = []
+          const conv = await this.client.createConversation(this.publicKey)
+          this.conversationId = conv.id
+        }
+      }
     } else {
       const conv = await this.client.createConversation(this.publicKey)
       this.conversationId = conv.id
@@ -89,6 +111,10 @@ export class AgentSession {
 
   getConversationId(): string | null {
     return this.conversationId
+  }
+
+  getHistoryMessages(): ConversationMessage[] {
+    return this.historyMessages
   }
 
   getVaultAddresses(): Record<string, string> {
@@ -232,22 +258,18 @@ export class AgentSession {
       ui.onAssistantMessage(responseText)
     }
 
-    // Filter out sign_tx actions from backend - we handle signing client-side
-    // via tx_ready events to avoid timing/ordering issues
-    const nonSignActions = streamResult.actions.filter(a => a.type !== 'sign_tx')
-    const backendSignActions = streamResult.actions.filter(a => a.type === 'sign_tx')
+    // Filter out sign_tx actions — signing is handled client-side automatically
+    const actions = streamResult.actions.filter(a => a.type !== 'sign_tx')
 
-    // Execute non-sign actions first (add_chain, add_coin, build_tx, etc.)
-    if (nonSignActions.length > 0) {
-      const results = await this.executeActions(nonSignActions, ui)
+    if (actions.length > 0) {
+      const results = await this.executeActions(actions, ui)
 
-      // If a build_* action succeeded and produced a pending tx, auto-chain sign_tx
-      // instead of round-tripping to the backend (which may not send sign_tx back)
+      // If a build_* action succeeded and produced a pending tx, auto-sign client-side
       const hasBuildSuccess = results.some(
         r => r.success && r.action.startsWith('build_')
       )
       if (hasBuildSuccess && this.executor.hasPendingTransaction()) {
-        if (this.config.verbose) process.stderr.write(`[session] build_* action produced pending tx, auto-chaining sign_tx\n`)
+        if (this.config.verbose) process.stderr.write(`[session] build_* action produced pending tx, auto-signing client-side\n`)
         const signAction: Action = {
           id: `tx_sign_${Date.now()}`,
           type: 'sign_tx',
@@ -256,12 +278,13 @@ export class AgentSession {
           auto_execute: true,
         }
         const signResults = await this.executeActions([signAction], ui)
-        // Report both build and sign results back to backend
-        const allResults = [...results, ...signResults]
-        for (const result of allResults) {
-          await this.processMessageLoop(null, [result], ui)
+        // Only report the sign result — never send intermediate build results
+        // to avoid the LLM seeing "build succeeded" without a tx_hash and retrying
+        const signResult = signResults[0]
+        if (signResult) {
+          await this.processMessageLoop(null, [signResult], ui)
+          return
         }
-        return
       }
 
       if (results.length > 0) {
@@ -272,7 +295,7 @@ export class AgentSession {
       }
     }
 
-    // Handle transactions from tx_ready events - always sign client-side
+    // Handle transactions from tx_ready events (server-side builds via MCP)
     if (streamResult.transactions.length > 0 && this.executor.hasPendingTransaction()) {
       if (this.config.verbose) process.stderr.write(`[session] ${streamResult.transactions.length} tx_ready events, signing client-side\n`)
       const signAction: Action = {
@@ -289,27 +312,6 @@ export class AgentSession {
         }
         return
       }
-    } else if (backendSignActions.length > 0 && this.executor.hasPendingTransaction()) {
-      // Fallback: backend sent sign_tx and we have a pending tx
-      if (this.config.verbose) process.stderr.write(`[session] Backend sent sign_tx action, using it\n`)
-      const results = await this.executeActions(backendSignActions, ui)
-      if (results.length > 0) {
-        for (const result of results) {
-          await this.processMessageLoop(null, [result], ui)
-        }
-        return
-      }
-    } else if (backendSignActions.length > 0 && !this.executor.hasPendingTransaction()) {
-      // Backend wants signing but we have no tx - report error back
-      if (this.config.verbose) process.stderr.write(`[session] Backend sent sign_tx but no pending tx, reporting error\n`)
-      const errorResult: ActionResult = {
-        action: 'sign_tx',
-        action_id: backendSignActions[0].id,
-        success: false,
-        error: 'No pending transaction. The swap transaction data was not received.',
-      }
-      await this.processMessageLoop(null, [errorResult], ui)
-      return
     }
 
     ui.onDone()
@@ -383,6 +385,7 @@ export class AgentSession {
     this.cancel()
     this.cachedContext = null
     this.conversationId = null
+    this.historyMessages = []
   }
 }
 
