@@ -1023,7 +1023,11 @@ const swap = await vault.swap({
 })
 
 // Swap dry run
-const quote = await vault.swap({ ...swapParams, dryRun: true })
+const quote = await vault.swap({
+  fromChain: Chain.Ethereum, fromSymbol: 'ETH',
+  toChain: Chain.Bitcoin, toSymbol: 'BTC',
+  amount: '0.5', dryRun: true,
+})
 
 // Portfolio overview
 const portfolio = await vault.portfolio('usd')

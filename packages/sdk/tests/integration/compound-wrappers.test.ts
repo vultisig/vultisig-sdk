@@ -7,11 +7,10 @@
  * 3. knownTokens auto-resolve fallback with user-token priority
  * 4. Approval confirmation wait behavior in the swap flow
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-
 import { Chain } from '@core/chain/Chain'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { knownTokens } from '@core/chain/coin/knownTokens'
+import { beforeEach,describe, expect, it, vi } from 'vitest'
 
 import { VaultError, VaultErrorCode } from '../../src/vault/VaultError'
 

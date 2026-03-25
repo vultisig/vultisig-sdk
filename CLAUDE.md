@@ -66,7 +66,7 @@ SDK builds to 6 bundles via Rollup:
 - `FastVault`, `SecureVault` - Vault implementations
 - `Chain` enum - All supported chains
 - Types exported from `src/types/index.ts`
-- Compound wrappers on `VaultBase`: `signMessage()`, `allBalances()`, `portfolio()`, `send()`, `swap()` — single-call operations with human-readable amounts, dryRun support, and auto token resolution from knownTokens registry
+- Compound wrappers on `VaultBase`: `signMessage()`, `allBalances()`, `portfolio()`, `send()`, `swap()` — single-call operations with human-readable amounts, auto token resolution from knownTokens registry (`send`/`swap` support dryRun)
 
 ## Code Conventions
 

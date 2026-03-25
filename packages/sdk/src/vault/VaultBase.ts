@@ -1683,8 +1683,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         if (result.status === 'success') return
         if (result.status === 'error') throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
       } catch (e) {
-        if (e instanceof VaultError) throw e
-        // Network errors during polling are retryable
+        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
       }
       await new Promise(resolve => setTimeout(resolve, intervalMs))
     }
