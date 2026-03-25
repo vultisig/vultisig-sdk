@@ -223,6 +223,9 @@ export type SDKConfig = {
 }
 
 import type { Chain } from '@core/chain/Chain'
+import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+
+import type { SwapQuoteResult } from '../vault/swap-types'
 
 // Cache types
 export type { CacheConfig, CacheScope } from '../services/cache-types'
@@ -590,6 +593,33 @@ export type GasEstimate = {
   }
   chainId: string
 }
+
+// Compound wrapper types
+export type MessageSignature = {
+  /** Hex-encoded signature (chain-appropriate format, e.g., "0x..." for EVM) */
+  signature: string
+  /** Chain the message was signed for */
+  chain: Chain
+  /** Signature algorithm used */
+  algorithm: 'ECDSA' | 'EdDSA'
+}
+
+export type Portfolio = {
+  /** Balances with fiat values populated */
+  balances: Balance[]
+  /** Total portfolio value (human-readable, e.g., "1234.56") */
+  totalValue: string
+  /** Fiat currency used for valuation */
+  currency: string
+}
+
+export type SendResult =
+  | { dryRun: false; txHash: string; chain: Chain }
+  | { dryRun: true; fee: string; total: string; keysignPayload: KeysignPayload }
+
+export type CompoundSwapResult =
+  | { dryRun: false; txHash: string; chain: Chain; quote: SwapQuoteResult }
+  | { dryRun: true; quote: SwapQuoteResult }
 
 // Solana-specific types (now handled by core)
 // Removed - using core types directly instead of SDK wrappers
