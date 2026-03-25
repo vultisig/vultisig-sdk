@@ -140,6 +140,18 @@ export class VaultStateStore {
   }
 
   /**
+   * Clear persisted nonce state for a chain (e.g. when pending txs were evicted).
+   */
+  clearEvmState(chain: string): void {
+    const filePath = path.join(this.baseDir, `${chain}.state.json`)
+    try {
+      fs.unlinkSync(filePath)
+    } catch {
+      // Already absent
+    }
+  }
+
+  /**
    * Record that we broadcast a tx using the given nonce.
    * For approve+swap flows, pass the HIGHEST nonce used.
    *
