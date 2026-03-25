@@ -121,6 +121,33 @@ vultisig create secure \
 - **Pros**: No single point of failure, fully self-sovereign
 - **Cons**: Lost devices can lock funds (below threshold), coordination overhead
 
+## Key Shares Explained
+
+Each vault share contains cryptographic key material for multiple signature algorithms:
+
+| Algorithm | Purpose | Used By |
+|-----------|---------|---------|
+| **ECDSA** | Signing on Bitcoin, Ethereum, and most chains | All chains except EdDSA-only |
+| **EdDSA** | Signing on Solana, Polkadot, Sui, etc. | Ed25519-based chains |
+| **ML-DSA** | Post-quantum signature scheme | Future-proofing against quantum attacks |
+
+### Where Shares Are Stored
+
+- **FastVault**: Your share is in an encrypted `.vult` file on disk (at `~/.vultisig/vaults/`), decrypted with your vault password at signing time. The server's share lives on VultiServer infrastructure.
+- **SecureVault**: Each device stores its share locally. There is no central copy.
+
+### How Signing Works
+
+1. A transaction is prepared (recipient, amount, chain)
+2. The transaction is hashed into a message to sign
+3. MPC protocol runs between share holders (device ↔ server for FastVault, device ↔ device for SecureVault)
+4. Each party contributes their share to produce a valid signature — without ever revealing their share
+5. The signed transaction is broadcast to the blockchain
+
+### Key Point for Agents
+
+Vault shares are **not** the same as "wallet shares" or "pool shares." They are cryptographic key fragments. The vault's blockchain addresses are derived from the combined public key (which is safe to share). Only the private key is split into shares.
+
 ## Migration
 
 You cannot directly convert between vault types. To migrate:
