@@ -1,5 +1,19 @@
 # @vultisig/cli
 
+## 0.8.0
+
+### Minor Changes
+
+- [#127](https://github.com/vultisig/vultisig-sdk/pull/127) [`073ca14`](https://github.com/vultisig/vultisig-sdk/commit/073ca141f78fe47af857c70b2f555f50210e4916) Thanks [@RaghavSood](https://github.com/RaghavSood)! - Add agent session management: `vultisig agent sessions list` and `vultisig agent sessions delete <id>`. Display session ID and conversation history when resuming sessions with `--session-id`. Replace `--conversation` flag with `--session-id`.
+
+- [#125](https://github.com/vultisig/vultisig-sdk/pull/125) [`7677523`](https://github.com/vultisig/vultisig-sdk/commit/76775232866dccf4e1e85aa0fe0d91c2fd8fdddb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use production notification API base path `/notification` (aligned with iOS), extend `PushNotificationService` for web device registration and WebSocket flows, export `computeNotificationVaultId`, add notification mock E2E tests, and ship a `live-web-push-e2e` harness for browser Web Push verification.
+
+### Patch Changes
+
+- Updated dependencies [[`da88c6f`](https://github.com/vultisig/vultisig-sdk/commit/da88c6f06b8d74ccb5642f793e386d85ff6f30b1), [`4b29636`](https://github.com/vultisig/vultisig-sdk/commit/4b29636514edccf0980eddf5e8fffacfcb31c88f), [`7677523`](https://github.com/vultisig/vultisig-sdk/commit/76775232866dccf4e1e85aa0fe0d91c2fd8fdddb)]:
+  - @vultisig/sdk@0.8.0
+  - @vultisig/rujira@4.0.0
+
 ## 0.7.0
 
 ### Minor Changes
