@@ -128,6 +128,11 @@ export function displayVaultInfo(vault: VaultBase): void {
   printResult(chalk.bold('\nPublic Keys:'))
   printResult(`  ECDSA:         ${vault.publicKeys.ecdsa.substring(0, 20)}...`)
   printResult(`  EdDSA:         ${vault.publicKeys.eddsa.substring(0, 20)}...`)
+  if (vault.publicKeyMldsa) {
+    printResult(`  ML-DSA-44:     ${vault.publicKeyMldsa.substring(0, 20)}...`)
+  } else {
+    printResult(`  ML-DSA-44:     ${chalk.gray('Not available')}`)
+  }
   printResult(`  Chain Code:    ${vault.hexChainCode.substring(0, 20)}...\n`)
 }
 

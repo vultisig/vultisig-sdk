@@ -17,6 +17,7 @@ export async function buildMessageContext(vault: VaultBase): Promise<MessageCont
   const context: MessageContext = {
     vault_address: vault.publicKeys.ecdsa,
     vault_name: vault.name,
+    mldsa_public_key: vault.publicKeyMldsa,
   }
 
   // Gather addresses for all active chains

@@ -259,43 +259,12 @@ export class FastVaultFromSeedphraseService {
 
     const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
-    // Check for abort before ML-DSA keygen
-    if (signal?.aborted) {
-      throw new Error('Operation aborted')
-    }
-
-    // Step 11: ML-DSA keygen
-    reportProgress({
-      step: 'keygen',
-      progress: 68,
-      message: 'Generating ML-DSA keys...',
-    })
-
-    await mldsaWithServer({
-      public_key: ecdsaResult.publicKey,
-      session_id: sessionId,
-      hex_encryption_key: hexEncryptionKey,
-      encryption_password: password,
-      email,
-    })
-
-    const mldsaKeygen = new MldsaKeygen(
-      true, // isInitiateDevice
-      this.serverUrl,
-      sessionId,
-      localPartyId,
-      devices,
-      hexEncryptionKey
-    )
-
-    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-
     // Check for abort before per-chain imports
     if (signal?.aborted) {
       throw new Error('Operation aborted')
     }
 
-    // Step 12: Per-chain key imports
+    // Step 11: Per-chain key imports (before MLDSA to avoid session expiry)
     reportProgress({
       step: 'keygen',
       progress: 78,
@@ -360,7 +329,44 @@ export class FastVaultFromSeedphraseService {
       }
     }
 
-    // Step 12: Signal completion
+    // Step 12: ML-DSA keygen (non-fatal — vault can be created without post-quantum keys)
+    // Runs after chain imports to avoid session expiry from MLDSA timeouts
+    if (signal?.aborted) {
+      throw new Error('Operation aborted')
+    }
+
+    reportProgress({
+      step: 'keygen',
+      progress: 88,
+      message: 'Generating ML-DSA keys...',
+    })
+
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    try {
+      await mldsaWithServer({
+        public_key: ecdsaResult.publicKey,
+        session_id: sessionId,
+        hex_encryption_key: hexEncryptionKey,
+        encryption_password: password,
+        email,
+      })
+
+      const mldsaKeygen = new MldsaKeygen(
+        true, // isInitiateDevice
+        this.serverUrl,
+        sessionId,
+        localPartyId,
+        devices,
+        hexEncryptionKey,
+        { timeoutMs: 30000 }
+      )
+
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+    } catch (error) {
+      console.warn('ML-DSA keygen failed (non-fatal), vault will be created without post-quantum keys:', error instanceof Error ? error.message : error)
+    }
+
+    // Step 13: Signal completion
     reportProgress({
       step: 'keygen',
       progress: 90,
@@ -403,8 +409,8 @@ export class FastVaultFromSeedphraseService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult.publicKey,
-      keyShareMldsa: mldsaResult.keyshare,
+      publicKeyMldsa: mldsaResult?.publicKey,
+      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

@@ -29,6 +29,7 @@ export type SignBytesResult = {
   signature: string // Base64-encoded signature
   recovery?: number
   format: string
+  mldsaSignature?: string // Hex-encoded ML-DSA-44 post-quantum signature
 }
 
 /**
@@ -111,6 +112,7 @@ export async function signBytes(vault: VaultBase, params: SignBytesParams): Prom
       signature: sigBase64,
       recovery: signature.recovery,
       format: signature.format,
+      mldsaSignature: signature.mldsaSignature,
     }
 
     // Output result
@@ -122,6 +124,9 @@ export async function signBytes(vault: VaultBase, params: SignBytesParams): Prom
         printResult(`Recovery: ${result.recovery}`)
       }
       printResult(`Format: ${result.format}`)
+      if (result.mldsaSignature) {
+        printResult(`ML-DSA-44 Signature: ${result.mldsaSignature.substring(0, 40)}...`)
+      }
     }
 
     return result
