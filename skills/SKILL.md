@@ -119,7 +119,7 @@ Both CLI and SDK support:
 - **Sign**: Sign transactions or arbitrary bytes
 
 SDK-only capabilities:
-- **Compound Wrappers**: `send()`, `swap()`, `signMessage()`, `portfolio()` — single-call operations with human-readable amounts, dryRun, and auto token resolution
+- **Compound Wrappers**: `send()`, `swap()`, `signMessage()`, `portfolio()`, `allBalances()` — single-call operations with human-readable amounts and auto token resolution (`send`/`swap` support dryRun)
 - **Token Discovery**: Look up known tokens, discover tokens at addresses
 - **Price Feeds**: Fetch token prices via CoinGecko
 - **Security Scanning**: Site scanning, transaction validation, transaction simulation

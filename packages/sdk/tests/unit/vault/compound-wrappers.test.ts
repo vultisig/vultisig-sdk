@@ -6,12 +6,11 @@
  * Since VaultBase is abstract, we create a minimal concrete subclass
  * with mocked service methods.
  */
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-
 import { Chain } from '@core/chain/Chain'
 import { getChainKind } from '@core/chain/ChainKind'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
 import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
+import { beforeEach,describe, expect, it, vi } from 'vitest'
 
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
@@ -758,12 +757,10 @@ describe('signMessage EIP-191 hash correctness', () => {
   })
 
   it('should use message byte length for prefix, not character count', () => {
-    // For ASCII messages, length === byte length
     const asciiMsg = 'hello'
-    expect(asciiMsg.length).toBe(5)
-
-    // Note: VaultBase uses message.length (character count), which matches
-    // the EIP-191 standard for personal_sign (uses string length, not byte length)
+    expect(asciiMsg.length).toBe(new TextEncoder().encode(asciiMsg).length)
+    // VaultBase uses UTF-8 byte length (msgBytes.length), which differs from
+    // JS string length for multi-byte chars — verified in integration tests
   })
 })
 

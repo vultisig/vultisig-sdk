@@ -23,7 +23,7 @@ Both vault types provide comprehensive blockchain support including Bitcoin, Eth
 - **Security Scanning**: Transaction validation and simulation via Blockaid, site phishing detection
 - **Price Feeds**: Fetch token prices via CoinGecko
 - **Fiat On-Ramp**: Generate Banxa buy URLs for 23+ chains
-- **Compound Wrappers**: `send()`, `swap()`, `signMessage()`, `portfolio()` — single-call operations with human-readable amounts and dryRun support
+- **Compound Wrappers**: `send()`, `swap()`, `signMessage()`, `portfolio()`, `allBalances()` — single-call operations with human-readable amounts (`send`/`swap` support dryRun)
 - **TypeScript**: Full type safety and IntelliSense support
 
 ## Installation
