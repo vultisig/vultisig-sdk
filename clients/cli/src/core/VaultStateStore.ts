@@ -19,14 +19,14 @@ import * as os from 'node:os'
 // Types
 // ---------------------------------------------------------------------------
 
-interface EvmChainState {
+type EvmChainState = {
   /** The last nonce we successfully broadcast with */
   lastUsedNonce: string
   /** Epoch ms when this was recorded */
   updatedAt: number
 }
 
-interface LockInfo {
+type LockInfo = {
   pid: number
   timestamp: number
 }
