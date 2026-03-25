@@ -18,6 +18,23 @@ const EVM_CHAINS = new Set<string>([
   'CronosChain', 'Hyperliquid', 'Sei',
 ])
 
+// Public RPC endpoints for refreshing gas estimates before signing.
+// Used as fallback to ensure maxFeePerGas covers current base fee.
+const EVM_GAS_RPC: Record<string, string> = {
+  Ethereum: 'https://eth.llamarpc.com',
+  BSC: 'https://bsc-dataseed.binance.org',
+  Polygon: 'https://polygon-rpc.com',
+  Avalanche: 'https://api.avax.network/ext/bc/C/rpc',
+  Arbitrum: 'https://arb1.arbitrum.io/rpc',
+  Optimism: 'https://mainnet.optimism.io',
+  Base: 'https://mainnet.base.org',
+  Blast: 'https://rpc.blast.io',
+  Zksync: 'https://mainnet.era.zksync.io',
+  Mantle: 'https://rpc.mantle.xyz',
+  CronosChain: 'https://cronos-evm-rpc.publicnode.com',
+  Sei: 'https://evm-rpc.sei-apis.com',
+}
+
 type AccountCoin = {
   chain: Chain
   address: string
@@ -327,7 +344,7 @@ export class AgentExecutor {
       const payload = await this.vault.prepareSendTx({ coin, receiver: toAddress, amount, memo })
 
       // Patch EVM nonce if local state is ahead of on-chain
-      this.patchEvmNonce(chain, payload)
+      await this.patchEvmNonce(chain, payload)
 
       // Clear stale payloads and store the new one
       this.pendingPayloads.clear()
@@ -401,7 +418,7 @@ export class AgentExecutor {
       const payload = swapResult.keysignPayload
 
       // Patch EVM nonce if local state is ahead of on-chain
-      this.patchEvmNonce(chain, payload)
+      await this.patchEvmNonce(chain, payload)
 
       // Clear stale payloads and store the new one
       this.pendingPayloads.clear()
@@ -571,6 +588,9 @@ export class AgentExecutor {
         }
       }
 
+      // Refresh gas estimate before signing — base fee may have risen since build time
+      await this.patchEvmGas(chain, payload)
+
       // Extract message hashes and sign
       const messageHashes = await this.vault.extractMessageHashes(payload)
 
@@ -678,7 +698,10 @@ export class AgentExecutor {
       }
 
       // Patch EVM nonce if local state is ahead of on-chain
-      this.patchEvmNonce(chain, keysignPayload)
+      await this.patchEvmNonce(chain, keysignPayload)
+
+      // Refresh gas estimate — base fee may have drifted since prepareSendTx
+      await this.patchEvmGas(chain, keysignPayload)
 
       // Extract message hashes and sign
       const messageHashes = await this.vault.extractMessageHashes(keysignPayload)
@@ -846,8 +869,12 @@ export class AgentExecutor {
    * Patch the EVM nonce in a keysign payload if our local state is ahead of on-chain.
    * The payload's blockchainSpecific.ethereumSpecific.nonce was set from RPC during
    * prepareSendTx(). If we have locally-tracked pending txs, we override with a higher value.
+   *
+   * Also detects evicted txs: if local state claims a higher nonce but there are
+   * no pending txs in the mempool (pending == latest), the intermediate txs were
+   * dropped and local state is stale.
    */
-  private patchEvmNonce(chain: Chain, payload: any): void {
+  private async patchEvmNonce(chain: Chain, payload: any): Promise<void> {
     if (!this.stateStore || !EVM_CHAINS.has(chain)) return
 
     const bs = payload.blockchainSpecific
@@ -857,8 +884,103 @@ export class AgentExecutor {
     const nextNonce = this.stateStore.getNextEvmNonce(chain, rpcNonce)
 
     if (nextNonce !== rpcNonce) {
+      // Verify there are actually pending txs in the mempool before using a higher nonce.
+      // If pending nonce == confirmed nonce, all intermediate txs were evicted.
+      const pendingNonce = await this.fetchEvmPendingNonce(chain)
+      if (pendingNonce !== null && pendingNonce === rpcNonce) {
+        // No pending txs — local state is stale (txs were dropped from mempool)
+        if (this.verbose) process.stderr.write(`[nonce] Stale local state for ${chain}: local=${nextNonce}, on-chain=${rpcNonce}, no pending txs — using on-chain nonce\n`)
+        this.stateStore.clearEvmState(chain)
+        return
+      }
+
+      // Safety: if the gap is large (>3) and we couldn't verify pending txs,
+      // assume local state is stale rather than risk a large nonce gap
+      const nonceGap = nextNonce - rpcNonce
+      if (pendingNonce === null && nonceGap > 3n) {
+        if (this.verbose) process.stderr.write(`[nonce] Large nonce gap for ${chain} (${nonceGap}) and couldn't verify pending txs — using on-chain nonce ${rpcNonce}\n`)
+        this.stateStore.clearEvmState(chain)
+        return
+      }
+
       bs.value.nonce = nextNonce
       if (this.verbose) process.stderr.write(`[nonce] Patched ${chain} nonce: ${rpcNonce} → ${nextNonce}\n`)
+    }
+  }
+
+  /**
+   * Ensure the keysign payload's maxFeePerGas covers current network base fee.
+   * Re-fetches latest base fee from RPC and bumps maxFeePerGas if it's too low.
+   * Compensates for gas price drift between build time and sign time.
+   */
+  private async patchEvmGas(chain: Chain, payload: any): Promise<void> {
+    if (!EVM_CHAINS.has(chain)) return
+
+    const bs = payload.blockchainSpecific
+    if (!bs || bs.case !== 'ethereumSpecific') return
+
+    const rpcUrl = EVM_GAS_RPC[chain as string]
+    if (!rpcUrl) return
+
+    try {
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getBlockByNumber',
+          params: ['latest', false],
+          id: 1,
+        }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = await res.json() as any
+      const baseFee = BigInt(data.result?.baseFeePerGas || '0')
+      if (baseFee === 0n) return
+
+      const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
+      const currentMaxFee = BigInt(bs.value.maxFeePerGasWei || '0')
+
+      // Minimum maxFeePerGas = baseFee * 2.5 + priorityFee
+      // The 2.5x multiplier provides headroom for base fee fluctuations
+      // during the MPC signing window (15-60 seconds)
+      const minMaxFee = (baseFee * 25n) / 10n + currentPriorityFee
+
+      if (currentMaxFee < minMaxFee) {
+        bs.value.maxFeePerGasWei = minMaxFee.toString()
+        if (this.verbose) process.stderr.write(`[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${minMaxFee} (baseFee=${baseFee})\n`)
+      }
+    } catch {
+      // Non-fatal — keep the original gas estimate
+      if (this.verbose) process.stderr.write(`[gas] Failed to refresh base fee for ${chain}, keeping original\n`)
+    }
+  }
+
+  /**
+   * Fetch the pending nonce from RPC (eth_getTransactionCount with "pending" tag).
+   * Returns null if the RPC call fails (non-fatal).
+   */
+  private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
+    const rpcUrl = EVM_GAS_RPC[chain as string]
+    if (!rpcUrl) return null
+
+    try {
+      const address = await this.vault.address(chain)
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getTransactionCount',
+          params: [address, 'pending'],
+          id: 1,
+        }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = await res.json() as any
+      return BigInt(data.result || '0')
+    } catch {
+      return null
     }
   }
 
