@@ -4,7 +4,10 @@ import { getUtxoStats } from '@core/chain/chains/utxo/client/getUtxoStats'
 const byteFeeMultiplier = (value: bigint) => (value * 25n) / 10n
 
 export const getUtxoByteFee = async (chain: UtxoChain) => {
-  if (chain === UtxoChain.Zcash) return 1000n
+  // ZIP-317 requires a minimum fee of 10,000 zatoshis per ZEC transaction.
+  // Blockchair returns ~1 sat/byte which is too low. 100 sat/byte ensures
+  // typical transactions (150-250 bytes) always meet the 10,000 minimum.
+  if (chain === UtxoChain.Zcash) return 100n
 
   const {
     data: { suggested_transaction_fee_per_byte_sat },
