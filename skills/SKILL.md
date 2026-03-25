@@ -119,6 +119,7 @@ Both CLI and SDK support:
 - **Sign**: Sign transactions or arbitrary bytes
 
 SDK-only capabilities:
+- **Compound Wrappers**: `send()`, `swap()`, `signMessage()`, `portfolio()` — single-call operations with human-readable amounts, dryRun, and auto token resolution
 - **Token Discovery**: Look up known tokens, discover tokens at addresses
 - **Price Feeds**: Fetch token prices via CoinGecko
 - **Security Scanning**: Site scanning, transaction validation, transaction simulation
@@ -164,6 +165,12 @@ const vault = await sdk.verifyVault(vaultId, '123456')
 
 // Step 3: Use the vault
 const balance = await vault.balance(Chain.Ethereum)
+
+// Send, swap, sign — single calls with human-readable amounts
+await vault.send({ chain: Chain.Ethereum, to: '0x...', amount: '0.1' })
+await vault.swap({ fromChain: Chain.Ethereum, fromSymbol: 'ETH', toChain: Chain.Bitcoin, toSymbol: 'BTC', amount: '0.5' })
+const { signature } = await vault.signMessage('Login to MyDapp')
+const portfolio = await vault.portfolio('usd')
 ```
 → [Full SDK Documentation](./vultisig-sdk/SKILL.md)
 
