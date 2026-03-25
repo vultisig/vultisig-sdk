@@ -174,6 +174,8 @@ export type Signature = {
     s: string
     der: string
   }>
+  // ML-DSA-44 post-quantum signature (hex-encoded), present when vault has MLDSA keys
+  mldsaSignature?: string
 }
 
 export type FastSigningInput = {
@@ -483,6 +485,10 @@ export type VaultData = {
   // === Chain-specific keys (for seedphrase imports) ===
   readonly chainPublicKeys?: Partial<Record<string, string>>
   readonly chainKeyShares?: Partial<Record<string, string>>
+
+  // === ML-DSA-44 post-quantum keys ===
+  readonly publicKeyMldsa?: string
+  readonly keyShareMldsa?: string
 
   // === Raw Vault File (immutable after load) ===
   readonly vultFileContent: string // Set once at import/creation, regenerated on export

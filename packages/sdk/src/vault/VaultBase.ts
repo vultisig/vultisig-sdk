@@ -234,6 +234,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       folderId: parsedVault.folderId,
       chainPublicKeys: parsedVault.chainPublicKeys,
       chainKeyShares: parsedVault.chainKeyShares,
+      publicKeyMldsa: parsedVault.publicKeyMldsa,
+      keyShareMldsa: parsedVault.keyShareMldsa,
     }
 
     // Determine vault type
@@ -262,6 +264,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       // Chain-specific keys (for seedphrase imports)
       chainPublicKeys: this.coreVault.chainPublicKeys,
       chainKeyShares: this.coreVault.chainKeyShares,
+
+      // ML-DSA-44 post-quantum keys
+      publicKeyMldsa: this.coreVault.publicKeyMldsa,
+      keyShareMldsa: this.coreVault.keyShareMldsa,
 
       // User Preferences
       currency: this.config?.defaultCurrency?.toLowerCase() || 'usd',
@@ -529,6 +535,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /** Vault chain code in hexadecimal format. */
   get hexChainCode(): string {
     return this.vaultData.hexChainCode
+  }
+
+  /** ML-DSA-44 post-quantum public key (undefined if vault was created without MLDSA support). */
+  get publicKeyMldsa(): string | undefined {
+    return this.vaultData.publicKeyMldsa
   }
 
   /** List of signers participating in this vault's MPC. */

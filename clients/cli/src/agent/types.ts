@@ -106,6 +106,7 @@ export type ConversationMessage = {
 export type MessageContext = {
   vault_address?: string
   vault_name?: string
+  mldsa_public_key?: string
   balances?: BalanceInfo[]
   addresses?: Record<string, string>
   coins?: CoinInfo[]
