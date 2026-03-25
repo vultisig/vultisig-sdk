@@ -106,6 +106,12 @@ export class MldsaKeysign {
     messageId: string
   ): Promise<boolean> {
     try {
+      const elapsed = Date.now() - start
+      if (elapsed > this.timeoutMs * 2) {
+        this.isKeysignComplete = true
+        return false
+      }
+
       const parsedMessages = await getMpcRelayMessages({
         serverUrl: this.serverURL,
         localPartyId: this.localPartyId,
@@ -143,12 +149,6 @@ export class MldsaKeysign {
           messageHash: msg.hash,
           messageId,
         })
-      }
-
-      const elapsed = Date.now() - start
-      if (elapsed > this.timeoutMs * 2) {
-        this.isKeysignComplete = true
-        return false
       }
 
       await sleep(100)

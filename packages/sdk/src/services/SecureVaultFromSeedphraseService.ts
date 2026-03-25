@@ -409,16 +409,21 @@ export class SecureVaultFromSeedphraseService {
       message: 'Generating ML-DSA keys...',
     })
 
-    const mldsaKeygen = new MldsaKeygen(
-      true, // isInitiateDevice
-      this.relayUrl,
-      sessionId,
-      localPartyId,
-      allDevices,
-      hexEncryptionKey
-    )
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    try {
+      const mldsaKeygen = new MldsaKeygen(
+        true, // isInitiateDevice
+        this.relayUrl,
+        sessionId,
+        localPartyId,
+        allDevices,
+        hexEncryptionKey
+      )
 
-    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+    } catch (error) {
+      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+    }
 
     // Check for abort before per-chain imports
     if (signal?.aborted) {
@@ -533,8 +538,8 @@ export class SecureVaultFromSeedphraseService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult.publicKey,
-      keyShareMldsa: mldsaResult.keyshare,
+      publicKeyMldsa: mldsaResult?.publicKey,
+      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

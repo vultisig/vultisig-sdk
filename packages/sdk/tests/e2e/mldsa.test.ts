@@ -61,7 +61,7 @@ function signWithRetry(
   chainPath: string,
   messageHash: Uint8Array,
   partyIds: string[],
-  maxAttempts = 5
+  maxAttempts = 20
 ): { sigA: Uint8Array; sigB: Uint8Array } {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
