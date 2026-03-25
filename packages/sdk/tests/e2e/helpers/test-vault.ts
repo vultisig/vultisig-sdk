@@ -22,13 +22,6 @@ export const TEST_VAULT_CONFIG = {
   path: process.env.TEST_VAULT_PATH || resolve(__dirname, '../fixtures/test-vault.vult'),
   password: process.env.TEST_VAULT_PASSWORD || 'test-password',
 
-  // Expected vault properties (for verification)
-  addresses: {
-    Bitcoin: 'bc1qxkymttl27q3y200zngaf6r3z88a6cw365yzqf3',
-    Ethereum: '0xC190DDb708e948832FFb41CED2AB29A4a6a978DD',
-    Solana: 'DEqXP4qf9dEYB7okqYbGAmjCgPjdy7vDDZ5gFBieT99F',
-  },
-
   // Test chains to use
   testChains: [
     Chain.Bitcoin,
@@ -74,6 +67,9 @@ export async function loadTestVault(): Promise<{
     },
     defaultChains: TEST_VAULT_CONFIG.testChains,
     defaultCurrency: 'usd',
+    // FastVault.sign hits the server even when the share was imported unencrypted; password may not
+    // be cached — same password as import (env or default) satisfies resolvePassword().
+    onPasswordRequired: async () => TEST_VAULT_CONFIG.password,
   })
 
   await sdk.initialize()

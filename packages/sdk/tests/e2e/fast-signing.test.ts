@@ -25,11 +25,14 @@
  * - ✅ SAFE: No funds are transferred, all operations are signing-only
  */
 
+import { e2ePrepareSendSkipReason } from '@helpers/prepare-send-skip'
 import { createSigningPayload, TEST_AMOUNTS, TEST_RECEIVERS, validateSignatureFormat } from '@helpers/signing-helpers'
 import { loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
+import { readFile } from 'fs/promises'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { Chain, VaultBase } from '@/index'
+import { Chain, VaultBase, Vultisig } from '@/index'
+import { MemoryStorage } from '@/storage/MemoryStorage'
 
 describe('E2E: Fast Signing - Transaction Signing', () => {
   let vault: VaultBase
@@ -62,7 +65,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
     // ==========================================================================
 
     describe.concurrent('UTXO Chains', () => {
-      it('Bitcoin: Sign native BTC transfer', async () => {
+      it('Bitcoin: Sign native BTC transfer', async ctx => {
         console.log('\n🔐 Testing Bitcoin fast signing...')
 
         // 1. Prepare transaction
@@ -73,11 +76,21 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           ticker: 'BTC',
         }
 
-        const keysignPayload = await vault.prepareSendTx({
-          coin,
-          receiver: TEST_RECEIVERS.Bitcoin!,
-          amount: TEST_AMOUNTS.Bitcoin!,
-        })
+        let keysignPayload
+        try {
+          keysignPayload = await vault.prepareSendTx({
+            coin,
+            receiver: TEST_RECEIVERS.Bitcoin!,
+            amount: TEST_AMOUNTS.Bitcoin!,
+          })
+        } catch (e) {
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
+            return
+          }
+          throw e
+        }
 
         // 2. Extract message hashes
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
@@ -94,7 +107,7 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         console.log(`   Signature: ${signature.signature.substring(0, 60)}...`)
       })
 
-      it('Litecoin: Sign native LTC transfer', async () => {
+      it('Litecoin: Sign native LTC transfer', async ctx => {
         console.log('\n🔐 Testing Litecoin fast signing...')
 
         const coin = {
@@ -104,11 +117,21 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
           ticker: 'LTC',
         }
 
-        const keysignPayload = await vault.prepareSendTx({
-          coin,
-          receiver: TEST_RECEIVERS.Litecoin!,
-          amount: TEST_AMOUNTS.Litecoin!,
-        })
+        let keysignPayload
+        try {
+          keysignPayload = await vault.prepareSendTx({
+            coin,
+            receiver: TEST_RECEIVERS.Litecoin!,
+            amount: TEST_AMOUNTS.Litecoin!,
+          })
+        } catch (e) {
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
+            return
+          }
+          throw e
+        }
 
         const messageHashes = await vault.extractMessageHashes(keysignPayload)
         expect(messageHashes.length).toBeGreaterThan(0)
@@ -301,9 +324,9 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
             amount: TEST_AMOUNTS.Polkadot!,
           })
         } catch (e) {
-          if ((e as Error).message?.includes('not-enough-funds')) {
-            console.log('⏭️  Polkadot signing skipped: wallet not funded with DOT')
-            ctx.skip()
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
             return
           }
           throw e
@@ -337,9 +360,9 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
             amount: TEST_AMOUNTS.Sui!,
           })
         } catch (e) {
-          if ((e as Error).message?.includes('not-enough-funds')) {
-            console.log('⏭️  Sui signing skipped: wallet not funded with SUI')
-            ctx.skip()
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
             return
           }
           throw e
@@ -366,22 +389,22 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
     it('ECDSA signatures: correct format and structure', async () => {
       console.log('\n📝 Validating ECDSA signature format...')
 
-      // Test with Bitcoin (ECDSA chain)
+      // Ethereum: stable ECDSA path (Bitcoin prepare can skip when UTXOs/fees cannot cover the test amount).
       const coin = {
-        chain: Chain.Bitcoin,
-        address: await vault.address(Chain.Bitcoin),
-        decimals: 8,
-        ticker: 'BTC',
+        chain: Chain.Ethereum,
+        address: await vault.address(Chain.Ethereum),
+        decimals: 18,
+        ticker: 'ETH',
       }
 
       const keysignPayload = await vault.prepareSendTx({
         coin,
-        receiver: TEST_RECEIVERS.Bitcoin!,
-        amount: TEST_AMOUNTS.Bitcoin!,
+        receiver: TEST_RECEIVERS.Ethereum!,
+        amount: TEST_AMOUNTS.Ethereum!,
       })
 
       const messageHashes = await vault.extractMessageHashes(keysignPayload)
-      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Bitcoin)
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Ethereum)
       const signature = await vault.sign(signingPayload)
 
       // ECDSA-specific validations
@@ -436,32 +459,51 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
   // ============================================================================
 
   describe.concurrent('Error Handling', () => {
-    it('Rejects signing with locked vault (no cached password)', async () => {
+    it('Rejects signing with locked vault (no cached password)', async ctx => {
+      if (!vault.isEncrypted) {
+        ctx.skip('Test vault is unencrypted; lock() is a no-op for password cache')
+        return
+      }
+
+      // SDK must not set onPasswordRequired — otherwise lock()+sign() would prompt and succeed.
+      const vaultContent = await readFile(TEST_VAULT_CONFIG.path, 'utf-8')
+      const sdk = new Vultisig({
+        storage: new MemoryStorage(),
+        serverEndpoints: {
+          fastVault: process.env.VULTISIG_API_URL || 'https://api.vultisig.com/vault',
+          messageRelay: process.env.VULTISIG_ROUTER_URL || 'https://api.vultisig.com/router',
+        },
+        defaultChains: TEST_VAULT_CONFIG.testChains,
+        defaultCurrency: 'usd',
+      })
+      await sdk.initialize()
+      const v = await sdk.importVault(vaultContent, TEST_VAULT_CONFIG.password)
+      if (v.type !== 'fast') {
+        ctx.skip('Requires fast vault')
+        return
+      }
+
       const coin = {
         chain: Chain.Ethereum,
-        address: await vault.address(Chain.Ethereum),
+        address: await v.address(Chain.Ethereum),
         decimals: 18,
         ticker: 'ETH',
       }
 
-      const keysignPayload = await vault.prepareSendTx({
+      const keysignPayload = await v.prepareSendTx({
         coin,
         receiver: TEST_RECEIVERS.Ethereum!,
         amount: TEST_AMOUNTS.Ethereum!,
       })
 
-      const messageHashes = await vault.extractMessageHashes(keysignPayload)
+      const messageHashes = await v.extractMessageHashes(keysignPayload)
       const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.Ethereum)
 
-      // Lock the vault to clear the password cache
-      vault.lock()
+      v.lock()
 
-      await expect(vault.sign(signingPayload)).rejects.toThrow()
+      await expect(v.sign(signingPayload)).rejects.toThrow()
 
       console.log('✅ Correctly rejected signing with locked vault')
-
-      // Unlock vault again for subsequent tests
-      await vault.unlock(TEST_VAULT_CONFIG.password)
     })
 
     it('Rejects signing without messageHashes', async () => {
