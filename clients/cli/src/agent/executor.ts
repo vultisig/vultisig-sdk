@@ -497,12 +497,19 @@ export class AgentExecutor {
     if (payload.__serverTx) {
       // Solana swaps: prefer local SDK build (vault.getSwapQuote → prepareSwapTx)
       // since the server-built tx format doesn't match signServerTx's EVM assumptions.
-      // Falls back to signServerTx if local build fails.
+      // Only the quote/prepare phase falls back to signServerTx — once signing starts,
+      // failures must propagate to avoid double-submitting a broadcast transaction.
       if (chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
         try {
           return await this.buildAndSignSolanaSwapLocally(payload)
         } catch (e: any) {
-          if (this.verbose) process.stderr.write(`[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`)
+          // Only fall back if the error is from the quote/prepare phase (before signing).
+          // Sign/broadcast errors must propagate — retrying could double-submit on-chain.
+          if (e._phase === 'prepare') {
+            if (this.verbose) process.stderr.write(`[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`)
+          } else {
+            throw e
+          }
         }
       }
       return this.signServerTx(payload, chain, params)
@@ -661,26 +668,28 @@ export class AgentExecutor {
     serverTxData: any
   ): Promise<Record<string, unknown>> {
     const fromChainName = serverTxData.from_chain || serverTxData.chain || 'Solana'
-    const toChainName = serverTxData.to_chain || fromChainName
+    const toChainName = serverTxData.to_chain as string | undefined
     const fromChain = resolveChain(fromChainName)
-    const toChain = resolveChain(toChainName)
-    if (!fromChain) throw new Error(`Unknown from_chain: ${fromChainName}`)
+    if (!fromChain) throw Object.assign(new Error(`Unknown from_chain: ${fromChainName}`), { _phase: 'prepare' })
+
+    const toChain = toChainName ? resolveChain(toChainName) : fromChain
+    if (!toChain) throw Object.assign(new Error(`Unknown to_chain: ${toChainName}`), { _phase: 'prepare' })
 
     const amountStr = serverTxData.amount as string
-    if (!amountStr) throw new Error('Missing amount in tx_ready data for local Solana swap build')
+    if (!amountStr) throw Object.assign(new Error('Missing amount in tx_ready data for local Solana swap build'), { _phase: 'prepare' })
 
     const fromToken = serverTxData.from_address as string | undefined
     const toToken = serverTxData.to_address as string | undefined
     const fromDecimals = serverTxData.from_decimals as number | undefined
+    if (fromDecimals == null) throw Object.assign(new Error('Missing from_decimals in tx_ready data for local Solana swap build'), { _phase: 'prepare' })
 
     const fromCoin = { chain: fromChain, token: fromToken || undefined }
-    const toCoin = { chain: toChain || fromChain, token: toToken || undefined }
+    const toCoin = { chain: toChain, token: toToken || undefined }
 
     // Convert base units to human-readable amount (vault.getSwapQuote expects human-readable)
-    const decimals = fromDecimals ?? 9 // default to SOL decimals
-    const humanAmount = Number(amountStr) / Math.pow(10, decimals)
+    const humanAmount = Number(amountStr) / Math.pow(10, fromDecimals)
 
-    if (this.verbose) process.stderr.write(`[solana_local_swap] from=${fromChainName} to=${toChainName} amount=${amountStr}\n`)
+    if (this.verbose) process.stderr.write(`[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountStr}\n`)
 
     // Unlock vault if needed
     if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
@@ -689,20 +698,26 @@ export class AgentExecutor {
       }
     }
 
-    // Get quote and prepare swap tx via SDK (handles Jupiter, LiFi, etc.)
-    const quote = await this.vault.getSwapQuote({
-      fromCoin: fromCoin as any,
-      toCoin: toCoin as any,
-      amount: humanAmount,
-    })
+    // Quote and prepare phase — errors here fall back to signServerTx.
+    // Sign/broadcast errors must propagate to avoid double-submission.
+    let quote, swapResult
+    try {
+      quote = await this.vault.getSwapQuote({
+        fromCoin: fromCoin as any,
+        toCoin: toCoin as any,
+        amount: humanAmount,
+      })
 
-    const swapResult = await this.vault.prepareSwapTx({
-      fromCoin: fromCoin as any,
-      toCoin: toCoin as any,
-      amount: humanAmount,
-      swapQuote: quote,
-      autoApprove: true,
-    })
+      swapResult = await this.vault.prepareSwapTx({
+        fromCoin: fromCoin as any,
+        toCoin: toCoin as any,
+        amount: humanAmount,
+        swapQuote: quote,
+        autoApprove: true,
+      })
+    } catch (e: any) {
+      throw Object.assign(e, { _phase: 'prepare' })
+    }
 
     const payload = swapResult.keysignPayload
     const chain = fromChain
