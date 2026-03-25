@@ -553,6 +553,7 @@ export async function executeInfo(ctx: CommandContext): Promise<void> {
         publicKeys: {
           ecdsa: vault.publicKeys.ecdsa,
           eddsa: vault.publicKeys.eddsa,
+          ...(vault.publicKeyMldsa ? { mldsa: vault.publicKeyMldsa } : {}),
           chainCode: vault.hexChainCode,
         },
       },

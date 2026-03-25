@@ -241,6 +241,9 @@ export class FastVault extends VaultBase {
 
     // Update CoreVault with keyShares
     this.coreVault.keyShares = parsedVault.keyShares
+    if (parsedVault.keyShareMldsa) {
+      this.coreVault.keyShareMldsa = parsedVault.keyShareMldsa
+    }
 
     // Emit unlocked event
     this.emit('unlocked', { vaultId: this.id })
