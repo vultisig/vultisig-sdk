@@ -1,5 +1,6 @@
 import { CosmosChain } from '@core/chain/Chain'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
+import { getCoinType } from '@core/chain/coin/coinType'
 import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
 import { getTwPublicKeyType } from '@core/chain/publicKey/tw/getTwPublicKeyType'
 import { getPreSigningHashes } from '@core/chain/tx/preSigningHashes'
@@ -192,7 +193,12 @@ export class TransactionBuilder {
       // Get public key data and create WalletCore PublicKey
       const publicKeyData = getKeysignTwPublicKey(keysignPayload)
       const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, publicKeyType)
+      // Tron stores uncompressed public key (65 bytes), so use secp256k1Extended type
+      const coinType = getCoinType({ walletCore, chain })
+      const keyType = coinType === walletCore.CoinType.tron
+        ? walletCore.PublicKeyType.secp256k1Extended
+        : publicKeyType
+      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, keyType)
 
       // Get encoded signing inputs (compiled transaction data)
       const txInputsArray = getEncodedSigningInputs({
