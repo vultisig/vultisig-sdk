@@ -1,5 +1,17 @@
 # @vultisig/sdk
 
+## 0.8.0
+
+### Minor Changes
+
+- [#125](https://github.com/vultisig/vultisig-sdk/pull/125) [`7677523`](https://github.com/vultisig/vultisig-sdk/commit/76775232866dccf4e1e85aa0fe0d91c2fd8fdddb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use production notification API base path `/notification` (aligned with iOS), extend `PushNotificationService` for web device registration and WebSocket flows, export `computeNotificationVaultId`, add notification mock E2E tests, and ship a `live-web-push-e2e` harness for browser Web Push verification.
+
+### Patch Changes
+
+- [#121](https://github.com/vultisig/vultisig-sdk/pull/121) [`da88c6f`](https://github.com/vultisig/vultisig-sdk/commit/da88c6f06b8d74ccb5642f793e386d85ff6f30b1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix SecureVault join keygen/import (sorted committee, ML-DSA on joiners, relay `/start` semantics), increase default MPC relay round timeouts, use `ServerManager.messageRelay` in join/import paths, and stabilize E2E (serial files, heap, harness tweaks).
+
+- [#118](https://github.com/vultisig/vultisig-sdk/pull/118) [`4b29636`](https://github.com/vultisig/vultisig-sdk/commit/4b29636514edccf0980eddf5e8fffacfcb31c88f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable strictNullChecks, fix TypeScript check system, and update dependencies
+
 ## 0.7.0
 
 ### Minor Changes
