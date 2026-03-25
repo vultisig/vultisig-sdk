@@ -25,6 +25,7 @@ export const getPolkadotTxStatus: TxStatusResolver<
 > = async ({ hash }) => {
   const { data: response, error } = await attempt(
     queryUrl<SubscanExtrinsicResponse>(subscanExtrinsicUrl, {
+      headers: { 'X-API-Key': 'e3dd77cbcfb642aca70f1c7d539766ea' },
       body: { hash },
     })
   )
