@@ -32,6 +32,7 @@ const EVM_GAS_RPC: Record<string, string> = {
   Zksync: 'https://mainnet.era.zksync.io',
   Mantle: 'https://rpc.mantle.xyz',
   CronosChain: 'https://cronos-evm-rpc.publicnode.com',
+  Hyperliquid: 'https://rpc.hyperliquid.xyz/evm',
   Sei: 'https://evm-rpc.sei-apis.com',
 }
 
@@ -610,8 +611,13 @@ export class AgentExecutor {
         signature,
       })
 
-      // Record nonce after successful broadcast, then release lock
-      this.recordEvmNonceFromPayload(chain, payload, messageHashes.length)
+      // Record nonce best-effort — tx is already broadcast so don't
+      // convert a successful send into an error if persistence fails
+      try {
+        this.recordEvmNonceFromPayload(chain, payload, messageHashes.length)
+      } catch (nonceErr) {
+        console.warn(`[nonce] failed to persist nonce for ${chain}:`, nonceErr)
+      }
       await this.releaseEvmLock(chain)
 
       // Clean up all pending payloads after successful sign
@@ -722,8 +728,12 @@ export class AgentExecutor {
         signature,
       })
 
-      // Record nonce after successful broadcast, then release lock
-      this.recordEvmNonceFromPayload(chain, keysignPayload, messageHashes.length)
+      // Record nonce best-effort — tx is already broadcast
+      try {
+        this.recordEvmNonceFromPayload(chain, keysignPayload, messageHashes.length)
+      } catch (nonceErr) {
+        console.warn(`[nonce] failed to persist nonce for ${chain}:`, nonceErr)
+      }
       await this.releaseEvmLock(chain)
 
       // Clean up all pending payloads after successful sign
@@ -1071,7 +1081,7 @@ export class AgentExecutor {
     // Resolve chain from domain chainId or explicit chain param
     const chainName = params.chain as string | undefined
     const chainId = domain.chainId as number | string | undefined
-    let chain = Chain.Ethereum
+    let chain: Chain = Chain.Ethereum
     if (chainName) {
       chain = resolveChain(chainName) || Chain.Ethereum
     } else if (chainId) {
