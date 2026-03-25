@@ -417,7 +417,8 @@ export class SecureVaultFromSeedphraseService {
         sessionId,
         localPartyId,
         allDevices,
-        hexEncryptionKey
+        hexEncryptionKey,
+        { timeoutMs: 30000 }
       )
 
       mldsaResult = await mldsaKeygen.startKeygenWithRetry()
