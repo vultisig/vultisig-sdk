@@ -99,5 +99,8 @@ keyshare-*.json
 archived/
 upstream/
 
+# Local handoff / scratch task specs (never commit)
+tasks/
+
 # Local trading bot (not part of SDK)
 packages/trading-bot/

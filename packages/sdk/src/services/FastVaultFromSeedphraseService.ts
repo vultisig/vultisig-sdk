@@ -15,7 +15,6 @@ import type { Chain } from '@core/chain/Chain'
 import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
 import { DKLS } from '@core/mpc/dkls/dkls'
 import { mldsaWithServer } from '@core/mpc/fast/api/mldsaWithServer'
-import { fastVaultServerUrl } from '@core/mpc/fast/config'
 import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
 import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
@@ -36,26 +35,6 @@ import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
 import type { ChainDiscoveryResult, CreateFastVaultFromSeedphraseOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
-
-/**
- * Call VultiServer key import API
- */
-async function keyImportWithServer(input: {
-  name: string
-  session_id: string
-  hex_encryption_key: string
-  hex_chain_code: string
-  local_party_id: string
-  encryption_password: string
-  email: string
-  lib_type: number
-  chains: string[]
-}): Promise<void> {
-  await queryUrl(`${fastVaultServerUrl}/import`, {
-    body: input,
-    responseType: 'none',
-  })
-}
 
 /**
  * FastVaultFromSeedphraseService
@@ -81,12 +60,31 @@ export class FastVaultFromSeedphraseService {
   private readonly keyDeriver: MasterKeyDeriver
   private readonly discoveryService: ChainDiscoveryService
   private readonly serverUrl: string
+  private readonly fastVaultApiBase: string
 
   constructor(private readonly context: SdkContext) {
     this.validator = new SeedphraseValidator(context.wasmProvider)
     this.keyDeriver = new MasterKeyDeriver(context.wasmProvider)
     this.discoveryService = new ChainDiscoveryService(context.wasmProvider)
     this.serverUrl = context.serverManager.messageRelay
+    this.fastVaultApiBase = context.serverManager.fastVaultApiBase
+  }
+
+  private async keyImportWithServer(input: {
+    name: string
+    session_id: string
+    hex_encryption_key: string
+    hex_chain_code: string
+    local_party_id: string
+    encryption_password: string
+    email: string
+    lib_type: number
+    chains: string[]
+  }): Promise<void> {
+    await queryUrl(`${this.fastVaultApiBase}/import`, {
+      body: input,
+      responseType: 'none',
+    })
   }
 
   /**
@@ -171,7 +169,7 @@ export class FastVaultFromSeedphraseService {
     const serverPartyId = generateLocalPartyId('server')
 
     // Step 5: Call VultiServer key import API
-    await keyImportWithServer({
+    await this.keyImportWithServer({
       name,
       session_id: sessionId,
       hex_encryption_key: hexEncryptionKey,
@@ -329,8 +327,33 @@ export class FastVaultFromSeedphraseService {
       }
     }
 
-    // Step 12: ML-DSA keygen (non-fatal — vault can be created without post-quantum keys)
-    // Runs after chain imports to avoid session expiry from MLDSA timeouts
+    // Step 12: Signal import completion so VultiServer saves the vault backup.
+    // Must happen BEFORE MLDSA keygen — the server's import task waits for this
+    // and will timeout if MLDSA keygen runs first.
+    reportProgress({
+      step: 'keygen',
+      progress: 85,
+      message: 'Finalizing key import...',
+    })
+
+    await setKeygenComplete({
+      serverURL: this.serverUrl,
+      sessionId,
+      localPartyId,
+    })
+
+    const peers = devices.filter(d => d !== localPartyId)
+    try {
+      await waitForKeygenComplete({
+        serverURL: this.serverUrl,
+        sessionId,
+        peers,
+      })
+    } catch {
+      console.warn('Server completion signal not received, proceeding with valid MPC keys')
+    }
+
+    // Step 13: ML-DSA keygen (non-fatal — vault can be created without post-quantum keys)
     if (signal?.aborted) {
       throw new Error('Operation aborted')
     }
@@ -349,6 +372,7 @@ export class FastVaultFromSeedphraseService {
         hex_encryption_key: hexEncryptionKey,
         encryption_password: password,
         email,
+        vaultBaseUrl: this.fastVaultApiBase,
       })
 
       const mldsaKeygen = new MldsaKeygen(
@@ -364,35 +388,6 @@ export class FastVaultFromSeedphraseService {
       mldsaResult = await mldsaKeygen.startKeygenWithRetry()
     } catch (error) {
       console.warn('ML-DSA keygen failed (non-fatal), vault will be created without post-quantum keys:', error instanceof Error ? error.message : error)
-    }
-
-    // Step 13: Signal completion
-    reportProgress({
-      step: 'keygen',
-      progress: 90,
-      message: 'Finalizing key import...',
-    })
-
-    await setKeygenComplete({
-      serverURL: this.serverUrl,
-      sessionId,
-      localPartyId,
-    })
-
-    // Wait for server completion with tolerance for import flows
-    // VultiServer's /import endpoint may not signal completion the same way /create does
-    // Since MPC already succeeded (we have the keys), this is just a secondary check
-    const peers = devices.filter(d => d !== localPartyId)
-    try {
-      await waitForKeygenComplete({
-        serverURL: this.serverUrl,
-        sessionId,
-        peers,
-      })
-    } catch {
-      // For key import, if MPC succeeded but server didn't signal completion,
-      // we can proceed since we have valid keys from the completed MPC exchange
-      console.warn('Server completion signal not received, proceeding with valid MPC keys')
     }
 
     // Step 14: Build vault structure

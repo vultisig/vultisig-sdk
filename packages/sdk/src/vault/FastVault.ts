@@ -8,7 +8,15 @@ import { fromBase64 } from '@lib/utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
 import { FastSigningService } from '../services/FastSigningService'
-import type { Signature, SignBytesOptions, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
+import type {
+  Mutable,
+  Signature,
+  SignBytesOptions,
+  SigningMode,
+  SigningPayload,
+  VaultCreationStep,
+  VaultData,
+} from '../types'
 import { normalizeToHex } from '../utils/bytes'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
@@ -182,6 +190,34 @@ export class FastVault extends VaultBase {
         error as Error
       )
     }
+  }
+
+  /**
+   * Run ML-DSA-44 keygen with VultiServer for this vault (device share required).
+   * Updates in-memory vault data; persist by exporting the vault if needed.
+   * If `keyShareMldsa` is already set, returns immediately (idempotent).
+   *
+   * @param options.email Required by VultiServer (vault backup notification).
+   */
+  async addMldsaKeyMaterial(options: {
+    email: string
+    signal?: AbortSignal
+  }): Promise<void> {
+    if (this.coreVault.keyShareMldsa) {
+      return
+    }
+    await this.ensureKeySharesLoaded()
+    const password = await this.resolvePassword()
+    const result = await this.fastSigningService.addMldsaToFastVault(this.coreVault, {
+      password,
+      email: options.email,
+      signal: options.signal,
+    })
+    this.coreVault.publicKeyMldsa = result.publicKey
+    this.coreVault.keyShareMldsa = result.keyshare
+    const data = this.vaultData as unknown as Mutable<VaultData>
+    data.publicKeyMldsa = result.publicKey
+    data.keyShareMldsa = result.keyshare
   }
 
   /**

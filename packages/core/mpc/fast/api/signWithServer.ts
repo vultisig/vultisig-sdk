@@ -11,10 +11,17 @@ type Input = {
   is_ecdsa: boolean
   vault_password: string
   chain: string
+  /** When true, VultiServer runs ML-DSA keysign on the relay for this session (separate MPC from ECDSA/EdDSA). */
+  mldsa?: boolean
+  /** Override API base (e.g. `http://127.0.0.1:8080/vault` for local VultiServer). */
+  vaultBaseUrl?: string
 }
 
-export const signWithServer = async (input: Input) =>
-  queryUrl(`${fastVaultServerUrl}/sign`, {
-    body: input,
+export const signWithServer = async (input: Input) => {
+  const { vaultBaseUrl, ...body } = input
+  const base = vaultBaseUrl ?? fastVaultServerUrl
+  return queryUrl(`${base}/sign`, {
+    body,
     responseType: 'none',
   })
+}

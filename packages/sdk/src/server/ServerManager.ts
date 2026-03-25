@@ -61,12 +61,17 @@ export class ServerManager {
     return this.config.messageRelay
   }
 
+  /** FastVault HTTP API base URL (e.g. `https://api.vultisig.com/vault`). */
+  get fastVaultApiBase(): string {
+    return this.config.fastVault
+  }
+
   /**
    * Verify vault with email verification code
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
     try {
-      await verifyVaultEmailCode({ vaultId, code })
+      await verifyVaultEmailCode({ vaultId, code, vaultBaseUrl: this.config.fastVault })
       return true
     } catch {
       return false
@@ -130,7 +135,13 @@ export class ServerManager {
     }
 
     // Use SDK adapter to extract chain-specific signing information
-    const { signatureAlgorithm, derivePath, chainPath } = getChainSigningInfo(payload, walletCore)
+    const { signatureAlgorithm, derivePath: rawDerivePath, chainPath: rawChainPath } = getChainSigningInfo(payload, walletCore)
+
+    // Key import vaults store per-chain keyshares — the derivation is baked into the
+    // chain keyshare itself, so the derive path must be "m" (matching vultiserver logic).
+    const chainKeyShare = vault.chainKeyShares?.[payload.chain]
+    const derivePath = chainKeyShare ? 'm' : rawDerivePath
+    const chainPath = chainKeyShare ? 'm' : rawChainPath
 
     // Generate session parameters
     const sessionId = randomUUID()
@@ -170,6 +181,7 @@ export class ServerManager {
       is_ecdsa: signatureAlgorithm === 'ecdsa',
       vault_password: password,
       chain: payload.chain,
+      vaultBaseUrl: this.config.fastVault,
     })
     console.log(`✅ Server acknowledged session: ${sessionId}`)
 
@@ -217,7 +229,7 @@ export class ServerManager {
       participantsReady: 2,
     })
 
-    const keyShare = vault.keyShares[signatureAlgorithm]
+    const keyShare = chainKeyShare ?? vault.keyShares[signatureAlgorithm]
     if (!keyShare) {
       throw new Error(`No key share found for algorithm: ${signatureAlgorithm}`)
     }
@@ -243,6 +255,8 @@ export class ServerManager {
     }
 
     // Step 6: MLDSA signing (if vault has ML-DSA keys)
+    // VultiServer completes the relay session after ECDSA/EdDSA /sign; MLDSA needs its own session plus
+    // POST /sign with mldsa: true so the server joins the ML-DSA MPC (see vultiserver ProcessDKLSKeysign).
     let mldsaSignatureHex: string | undefined
     if (vault.keyShareMldsa) {
       console.log('🔐 Starting MLDSA post-quantum signing...')
@@ -255,25 +269,81 @@ export class ServerManager {
         participantsReady: 2,
       })
 
-      try {
-        const mldsaKeysign = new MldsaKeysign({
-          keysignCommittee: devices,
-          serverURL: this.config.messageRelay,
-          sessionId,
-          localPartyId: signingLocalPartyId,
-          messagesToSign: messages,
-          keyShareBase64: vault.keyShareMldsa,
-          hexEncryptionKey,
-          chainPath,
-          isInitiatingDevice: true,
-        })
-        const mldsaResults = await mldsaKeysign.startKeysignWithRetry()
-        if (mldsaResults.length > 0) {
-          mldsaSignatureHex = mldsaResults[0].signature
-          console.log('✅ MLDSA signature obtained')
+      // ML-DSA uses rejection sampling — the MPC protocol can complete but the
+      // signature may be rejected (norm too large). Each attempt needs a fresh
+      // relay session + server task because the server retries independently.
+      // ML-DSA-44 has ~24% success rate per attempt; 10 retries gives >93% overall success.
+      const mldsaMaxAttempts = 10
+      for (let attempt = 0; attempt < mldsaMaxAttempts; attempt++) {
+        try {
+          const mldsaSessionId = randomUUID()
+          const mldsaHexEncryptionKey = getHexEncodedRandomBytes(32)
+
+          console.log(`📡 MLDSA signing attempt ${attempt + 1}/${mldsaMaxAttempts}, session: ${mldsaSessionId}`)
+
+          await joinMpcSession({
+            serverUrl: this.config.messageRelay,
+            sessionId: mldsaSessionId,
+            localPartyId: signingLocalPartyId,
+          })
+
+          await signWithServer({
+            public_key: vault.publicKeys.ecdsa,
+            messages,
+            session: mldsaSessionId,
+            hex_encryption_key: mldsaHexEncryptionKey,
+            derive_path: derivePath,
+            is_ecdsa: signatureAlgorithm === 'ecdsa',
+            vault_password: password,
+            chain: payload.chain,
+            mldsa: true,
+            vaultBaseUrl: this.config.fastVault,
+          })
+
+          const mldsaDevices = await this.waitForPeers(
+            mldsaSessionId,
+            signingLocalPartyId,
+            signal,
+            onProgress,
+            180_000
+          )
+
+          await startMpcSession({
+            serverUrl: this.config.messageRelay,
+            sessionId: mldsaSessionId,
+            devices: mldsaDevices,
+          })
+
+          const mldsaKeysign = new MldsaKeysign({
+            keysignCommittee: mldsaDevices,
+            serverURL: this.config.messageRelay,
+            sessionId: mldsaSessionId,
+            localPartyId: signingLocalPartyId,
+            messagesToSign: messages,
+            keyShareBase64: vault.keyShareMldsa,
+            hexEncryptionKey: mldsaHexEncryptionKey,
+            chainPath,
+            isInitiatingDevice: true,
+          })
+          const mldsaResults = await mldsaKeysign.startKeysign()
+          if (mldsaResults.length > 0) {
+            mldsaSignatureHex = mldsaResults[0].signature
+            console.log('✅ MLDSA signature obtained')
+          }
+          break
+        } catch (error) {
+          if (error instanceof Error && error.message === 'Operation aborted') {
+            throw error
+          }
+          console.warn(`⚠️ MLDSA signing attempt ${attempt + 1} failed:`, error instanceof Error ? error.message : error)
+          if (attempt === mldsaMaxAttempts - 1) {
+            console.warn('⚠️ MLDSA signing exhausted all attempts (non-fatal)')
+          }
         }
-      } catch (error) {
-        console.warn('⚠️ MLDSA signing failed (non-fatal):', error instanceof Error ? error.message : error)
+      }
+
+      if (!mldsaSignatureHex) {
+        console.warn('⚠️ MLDSA signing failed after all attempts (non-fatal)')
       }
     }
 
@@ -373,6 +443,7 @@ export class ServerManager {
       encryption_password: options.password,
       email: options.email,
       lib_type: 1,
+      vaultBaseUrl: this.config.fastVault,
     })
 
     log('Joining relay session...')
@@ -453,6 +524,7 @@ export class ServerManager {
         hex_encryption_key: hexEncryptionKey,
         encryption_password: options.password,
         email: options.email,
+        vaultBaseUrl: this.config.fastVault,
       })
 
       const mldsaKeygen = new MldsaKeygen(
@@ -543,20 +615,103 @@ export class ServerManager {
     }
   }
 
+  /**
+   * Run ML-DSA-44 keygen for an existing fast vault (device share + VultiServer).
+   * Requires the vault backup for this ECDSA public key to exist on the server.
+   * Call from the device share only (`localPartyId` must not be the `Server-*` party).
+   */
+  async addMldsaToExistingFastVault(options: {
+    vault: CoreVault
+    password: string
+    email: string
+    signal?: AbortSignal
+  }): Promise<{ publicKey: string; keyshare: string }> {
+    const { vault, password, email, signal } = options
+
+    if (vault.keyShareMldsa) {
+      throw new Error('Vault already has ML-DSA key material')
+    }
+    if (!vault.publicKeys?.ecdsa) {
+      throw new Error('Vault is missing ECDSA public key')
+    }
+    if (!vault.localPartyId?.trim()) {
+      throw new Error('Vault localPartyId is required for ML-DSA keygen')
+    }
+    const localPartyId = vault.localPartyId.trim()
+    if (localPartyId.startsWith('Server-')) {
+      throw new Error(
+        'Use the device vault share for ML-DSA keygen (localPartyId must not be the server party).'
+      )
+    }
+
+    const sessionId = randomUUID()
+    const hexEncryptionKey = getHexEncodedRandomBytes(32)
+
+    await joinMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      localPartyId,
+    })
+
+    await mldsaWithServer({
+      public_key: vault.publicKeys.ecdsa,
+      session_id: sessionId,
+      hex_encryption_key: hexEncryptionKey,
+      encryption_password: password,
+      email,
+      vaultBaseUrl: this.config.fastVault,
+    })
+
+    const devices = await this.waitForPeers(sessionId, localPartyId, signal, undefined, 180_000)
+    await startMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      devices,
+    })
+
+    const mldsaKeygen = new MldsaKeygen(
+      true,
+      this.config.messageRelay,
+      sessionId,
+      localPartyId,
+      devices,
+      hexEncryptionKey,
+      { timeoutMs: 120_000 }
+    )
+    const mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+
+    await setKeygenComplete({
+      serverURL: this.config.messageRelay,
+      sessionId,
+      localPartyId,
+    })
+    const peers = devices.filter(d => d !== localPartyId)
+    try {
+      await waitForKeygenComplete({
+        serverURL: this.config.messageRelay,
+        sessionId,
+        peers,
+      })
+    } catch {
+      // Best-effort: server may have already torn down the session
+    }
+
+    return { publicKey: mldsaResult.publicKey, keyshare: mldsaResult.keyshare }
+  }
+
   // ===== Private Helper Methods =====
 
   private async waitForPeers(
     sessionId: string,
     localPartyId: string,
     signal?: AbortSignal,
-    onProgress?: (step: import('../types').SigningStep) => void
+    onProgress?: (step: import('../types').SigningStep) => void,
+    maxWaitTime = 30000
   ): Promise<string[]> {
-    const maxWaitTime = 30000
     const checkInterval = 2000
     const startTime = Date.now()
 
     while (Date.now() - startTime < maxWaitTime) {
-      // Check for abort via signal
       if (signal?.aborted) {
         throw new Error('Operation aborted')
       }

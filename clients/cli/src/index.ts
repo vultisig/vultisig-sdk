@@ -141,9 +141,14 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
       cachePassword(vaultSelector, unlockPassword)
     }
 
+    const serverEndpoints: Record<string, string> = {}
+    if (process.env.VULTISIG_API_URL) serverEndpoints.fastVault = process.env.VULTISIG_API_URL
+    if (process.env.VULTISIG_ROUTER_URL) serverEndpoints.messageRelay = process.env.VULTISIG_ROUTER_URL
+
     const sdk = new Vultisig({
       onPasswordRequired: createPasswordCallback(),
       ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
+      ...(Object.keys(serverEndpoints).length > 0 ? { serverEndpoints } : {}),
     })
     await sdk.initialize()
 
@@ -1187,8 +1192,13 @@ setupCompletionCommand(program)
 // ============================================================================
 
 async function startInteractiveMode(): Promise<void> {
+  const serverEndpoints: Record<string, string> = {}
+  if (process.env.VULTISIG_API_URL) serverEndpoints.fastVault = process.env.VULTISIG_API_URL
+  if (process.env.VULTISIG_ROUTER_URL) serverEndpoints.messageRelay = process.env.VULTISIG_ROUTER_URL
+
   const sdk = new Vultisig({
     onPasswordRequired: createPasswordCallback(),
+    ...(Object.keys(serverEndpoints).length > 0 ? { serverEndpoints } : {}),
   })
   await sdk.initialize()
 

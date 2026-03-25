@@ -8,10 +8,12 @@ type Input = {
   hex_encryption_key: string
   encryption_password: string
   email: string
+  /** Override API base (e.g. local `…/vault`). */
+  vaultBaseUrl?: string
 }
 
-export const mldsaWithServer = async (input: Input) =>
-  queryUrl(`${fastVaultServerUrl}/mldsa`, {
-    body: input,
+export const mldsaWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
+  queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/mldsa`, {
+    body,
     responseType: 'none',
   })

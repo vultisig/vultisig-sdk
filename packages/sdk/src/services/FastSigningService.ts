@@ -88,6 +88,34 @@ export class FastSigningService {
   }
 
   /**
+   * Add ML-DSA-44 key material via VultiServer + relay (existing fast vault).
+   * Use the device share only; the server must already hold the vault backup for this ECDSA public key.
+   */
+  async addMldsaToFastVault(
+    vault: CoreVault,
+    options: { password: string; email: string; signal?: AbortSignal }
+  ): Promise<{ publicKey: string; keyshare: string }> {
+    this.validateFastVault(vault)
+    if (!vault.localPartyId?.trim()) {
+      throw new Error('Vault localPartyId is required for ML-DSA keygen')
+    }
+    if (vault.localPartyId.startsWith('Server-')) {
+      throw new Error(
+        'Use the device vault share for ML-DSA keygen (localPartyId must not be the server party).'
+      )
+    }
+    if (vault.keyShareMldsa) {
+      throw new Error('Vault already has ML-DSA key material')
+    }
+    return this.serverManager.addMldsaToExistingFastVault({
+      vault,
+      password: options.password,
+      email: options.email,
+      signal: options.signal,
+    })
+  }
+
+  /**
    * Sign raw bytes with VultiServer assistance (2-of-2 threshold signing)
    *
    * Unlike signWithServer(), this method:
