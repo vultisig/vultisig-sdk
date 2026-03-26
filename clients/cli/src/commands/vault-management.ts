@@ -277,15 +277,20 @@ export async function executeCreateSecure(ctx: CommandContext, options: SecureVa
 /**
  * Execute import vault command
  */
-export async function executeImport(ctx: CommandContext, file: string): Promise<VaultBase> {
-  const { password } = await inquirer.prompt([
-    {
-      type: 'password',
-      name: 'password',
-      message: 'Enter vault password (if encrypted):',
-      mask: '*',
-    },
-  ])
+export async function executeImport(ctx: CommandContext, file: string, flagPassword?: string): Promise<VaultBase> {
+  // Password priority: --password flag > VAULT_PASSWORD env var > interactive prompt
+  let password = flagPassword || process.env.VAULT_PASSWORD || ''
+  if (!password) {
+    const answers = await inquirer.prompt([
+      {
+        type: 'password',
+        name: 'password',
+        message: 'Enter vault password (if encrypted):',
+        mask: '*',
+      },
+    ])
+    password = answers.password
+  }
 
   const spinner = createSpinner('Importing vault...')
 
@@ -528,11 +533,31 @@ export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
  */
 export async function executeSwitch(ctx: CommandContext, vaultId: string): Promise<VaultBase> {
   const spinner = createSpinner('Loading vault...')
-  const vault = await ctx.sdk.getVaultById(vaultId)
+
+  // Try exact ID match first, then name match, then ID prefix match
+  let vault = await ctx.sdk.getVaultById(vaultId)
+  if (!vault) {
+    const allVaults = await ctx.sdk.listVaults()
+    const byName = allVaults.filter(v => v.name.toLowerCase() === vaultId.toLowerCase())
+    if (byName.length === 1) {
+      vault = await ctx.sdk.getVaultById(byName[0].id)
+    } else if (byName.length > 1) {
+      spinner.fail('Ambiguous vault name')
+      throw new Error(`Multiple vaults match name "${vaultId}". Use the full vault ID instead.`)
+    } else {
+      const byPrefix = allVaults.filter(v => v.id.startsWith(vaultId))
+      if (byPrefix.length === 1) {
+        vault = await ctx.sdk.getVaultById(byPrefix[0].id)
+      } else if (byPrefix.length > 1) {
+        spinner.fail('Ambiguous vault ID prefix')
+        throw new Error(`Multiple vaults match prefix "${vaultId}". Use a longer prefix or the full ID.`)
+      }
+    }
+  }
 
   if (!vault) {
     spinner.fail('Vault not found')
-    throw new Error(`No vault found with ID: ${vaultId}`)
+    throw new Error(`No vault found matching: ${vaultId}`)
   }
 
   await ctx.setActiveVault(vault)
