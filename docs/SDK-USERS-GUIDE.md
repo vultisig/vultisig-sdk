@@ -995,9 +995,53 @@ await vault.updateBalance(Chain.Ethereum)
 await vault.updateBalances() // Refresh all chains
 ```
 
-### Preparing & Sending Transactions
+### Compound Wrappers (Recommended)
 
-Send transactions on any supported chain:
+Single-call methods that handle token resolution, amount conversion, signing, and broadcasting. Use human-readable amounts (strings, not bigints).
+
+```typescript
+// Send native token
+const result = await vault.send({ chain: Chain.Ethereum, to: '0x742d...', amount: '0.1' })
+console.log(result.txHash) // "0xabc..."
+
+// Send ERC-20 token (auto-resolved from known tokens or vault.addToken())
+await vault.send({ chain: Chain.Ethereum, to: '0x742d...', amount: '100', symbol: 'USDC' })
+
+// Dry run — preview fees without signing
+const preview = await vault.send({ chain: Chain.Ethereum, to: '0x742d...', amount: '0.1', dryRun: true })
+console.log(preview.fee, preview.total) // "0.0021", "0.1021"
+
+// Sign messages (EIP-191 for EVM chains, SHA-256 for others)
+const { signature, algorithm } = await vault.signMessage('Login to MyDapp')
+const { signature: solSig } = await vault.signMessage('verify me', Chain.Solana)
+
+// Swap tokens (handles quote, approval, and broadcast)
+const swap = await vault.swap({
+  fromChain: Chain.Ethereum, fromSymbol: 'ETH',
+  toChain: Chain.Bitcoin, toSymbol: 'BTC',
+  amount: '0.5',
+})
+
+// Swap dry run
+const quote = await vault.swap({
+  fromChain: Chain.Ethereum, fromSymbol: 'ETH',
+  toChain: Chain.Bitcoin, toSymbol: 'BTC',
+  amount: '0.5', dryRun: true,
+})
+
+// Portfolio overview
+const portfolio = await vault.portfolio('usd')
+console.log(portfolio.totalValue, portfolio.balances.length)
+
+// All balances as flat array
+const balances = await vault.allBalances()
+```
+
+**Token resolution order:** native token by default → user-configured tokens (`vault.addToken()`) → built-in known tokens registry (USDC, USDT, WBTC, etc. on all chains).
+
+### Preparing & Sending Transactions (Low-Level)
+
+For full control over transaction construction, use the atomic methods directly:
 
 ```typescript
 import { AccountCoin } from 'vultisig-sdk'
@@ -2639,10 +2683,17 @@ class VaultBase {
   // Balances
   balance(chain: Chain, tokenId?: string): Promise<Balance>
   balances(chains?: Chain[], includeTokens?: boolean): Promise<Record<string, Balance>>
+  allBalances(includeTokens?: boolean): Promise<Balance[]>
   updateBalance(chain: Chain, tokenId?: string): Promise<Balance>
   updateBalances(chains?: Chain[], includeTokens?: boolean): Promise<Record<string, Balance>>
 
-  // Transactions
+  // Compound wrappers (recommended for most use cases)
+  signMessage(message: string, chain?: Chain, options?: { signal?: AbortSignal }): Promise<MessageSignature>
+  send(params: { chain: Chain, to: string, amount: string, symbol?: string, memo?: string, dryRun?: boolean }): Promise<SendResult>
+  swap(params: { fromChain: Chain, fromSymbol: string, toChain: Chain, toSymbol: string, amount: string, dryRun?: boolean }): Promise<CompoundSwapResult>
+  portfolio(fiatCurrency?: FiatCurrency): Promise<Portfolio>
+
+  // Low-level transactions
   prepareSendTx(params: SendTxParams): Promise<KeysignPayload>
   getMaxSendAmount(params: { coin: AccountCoin, receiver: string, memo?: string, feeSettings?: FeeSettings }): Promise<MaxSendAmount>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
