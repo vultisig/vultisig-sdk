@@ -215,10 +215,11 @@ createCmd
 program
   .command('import <file>')
   .description('Import vault from .vult file')
+  .option('--password <password>', 'Password to decrypt the vault file')
   .action(
-    withExit(async (file: string) => {
+    withExit(async (file: string, options: { password?: string }) => {
       const context = await init(program.opts().vault)
-      await executeImport(context, file)
+      await executeImport(context, file, options.password)
     })
   )
 
