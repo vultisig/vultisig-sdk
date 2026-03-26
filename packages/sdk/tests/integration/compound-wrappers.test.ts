@@ -485,7 +485,7 @@ describe('waitForConfirmation behavior', () => {
         if (result.status === 'success') return
         if (result.status === 'error') throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
       } catch (e) {
-        if (e instanceof VaultError) throw e
+        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
       }
       await new Promise(resolve => setTimeout(resolve, intervalMs))
     }
@@ -566,6 +566,17 @@ describe('waitForConfirmation behavior', () => {
 
     // Should have called only once - VaultError is not retried
     expect(getTxStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('should retry through VaultError NetworkError and succeed', async () => {
+    const getTxStatus = vi.fn()
+      .mockRejectedValueOnce(new VaultError(VaultErrorCode.NetworkError, 'RPC timeout'))
+      .mockRejectedValueOnce(new VaultError(VaultErrorCode.NetworkError, 'Connection refused'))
+      .mockResolvedValueOnce({ status: 'success' })
+
+    await waitForConfirmation(getTxStatus, Chain.Ethereum, '0xNetworkRetry', 5000, 50)
+
+    expect(getTxStatus).toHaveBeenCalledTimes(3)
   })
 
   it('should throw BroadcastFailed after pending then error', async () => {
