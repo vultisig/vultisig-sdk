@@ -538,9 +538,12 @@ export async function executeSwitch(ctx: CommandContext, vaultId: string): Promi
   let vault = await ctx.sdk.getVaultById(vaultId)
   if (!vault) {
     const allVaults = await ctx.sdk.listVaults()
-    const byName = allVaults.find(v => v.name.toLowerCase() === vaultId.toLowerCase())
-    if (byName) {
-      vault = await ctx.sdk.getVaultById(byName.id)
+    const byName = allVaults.filter(v => v.name.toLowerCase() === vaultId.toLowerCase())
+    if (byName.length === 1) {
+      vault = await ctx.sdk.getVaultById(byName[0].id)
+    } else if (byName.length > 1) {
+      spinner.fail('Ambiguous vault name')
+      throw new Error(`Multiple vaults match name "${vaultId}". Use the full vault ID instead.`)
     } else {
       const byPrefix = allVaults.filter(v => v.id.startsWith(vaultId))
       if (byPrefix.length === 1) {
