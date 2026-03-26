@@ -16,7 +16,7 @@ import type { VaultBase } from '@vultisig/sdk'
 
 import { authenticateVault } from './auth'
 import { AgentClient } from './client'
-import { buildMessageContext } from './context'
+import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
 import type { Action, ActionResult, AgentConfig, ConversationMessage, MessageContext, UICallbacks } from './types'
 import { PASSWORD_REQUIRED_ACTIONS } from './types'
@@ -105,8 +105,11 @@ export class AgentSession {
       this.conversationId = conv.id
     }
 
-    // Pre-build context
-    this.cachedContext = await buildMessageContext(this.vault)
+    // Pre-build context — skip slow balance fetches in agent modes since the
+    // backend agent can query balances on demand via MCP tools.
+    this.cachedContext = (this.config.viaAgent || this.config.askMode)
+      ? await buildMinimalContext(this.vault)
+      : await buildMessageContext(this.vault)
   }
 
   getConversationId(): string | null {
@@ -138,9 +141,11 @@ export class AgentSession {
 
     this.abortController = new AbortController()
 
-    // Refresh context before each message
+    // Refresh context before each message — skip balance fetches in agent modes
     try {
-      this.cachedContext = await buildMessageContext(this.vault)
+      this.cachedContext = (this.config.viaAgent || this.config.askMode)
+        ? await buildMinimalContext(this.vault)
+        : await buildMessageContext(this.vault)
     } catch {
       // Use stale context
     }
@@ -178,6 +183,11 @@ export class AgentSession {
     const request: any = {
       public_key: this.publicKey,
       context: this.cachedContext,
+    }
+
+    // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
+    if (this.config.viaAgent || this.config.askMode) {
+      request.via_agent = true
     }
 
     if (content) {
