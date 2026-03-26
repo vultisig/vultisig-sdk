@@ -347,13 +347,13 @@ export class AgentExecutor {
       // Patch EVM nonce if local state is ahead of on-chain
       await this.patchEvmNonce(chain, payload)
 
-      // Clear stale payloads and store the new one
+      const messageHashes = await this.vault.extractMessageHashes(payload)
+
+      // Store payload only after build fully succeeds (including hash extraction)
       this.pendingPayloads.clear()
       const payloadId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       this.pendingPayloads.set(payloadId, { payload, coin, chain, timestamp: Date.now() })
       this.pendingPayloads.set('latest', { payload, coin, chain, timestamp: Date.now() })
-
-      const messageHashes = await this.vault.extractMessageHashes(payload)
 
       return {
         keysign_payload: payloadId,
@@ -421,13 +421,13 @@ export class AgentExecutor {
       // Patch EVM nonce if local state is ahead of on-chain
       await this.patchEvmNonce(chain, payload)
 
-      // Clear stale payloads and store the new one
+      const messageHashes = await this.vault.extractMessageHashes(payload)
+
+      // Store payload only after build fully succeeds (including hash extraction)
       this.pendingPayloads.clear()
       const payloadId = `swap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       this.pendingPayloads.set(payloadId, { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
       this.pendingPayloads.set('latest', { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
-
-      const messageHashes = await this.vault.extractMessageHashes(payload)
 
       return {
         keysign_payload: payloadId,
