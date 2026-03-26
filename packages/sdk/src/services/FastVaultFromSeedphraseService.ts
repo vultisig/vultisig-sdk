@@ -341,15 +341,11 @@ export class FastVaultFromSeedphraseService {
     })
 
     const peers = devices.filter(d => d !== localPartyId)
-    try {
-      await waitForKeygenComplete({
-        serverURL: this.serverUrl,
-        sessionId,
-        peers,
-      })
-    } catch {
-      console.warn('Server completion signal not received, proceeding with valid MPC keys')
-    }
+    await waitForKeygenComplete({
+      serverURL: this.serverUrl,
+      sessionId,
+      peers,
+    })
 
     // Step 12: ML-DSA keygen (non-fatal — vault can be created without post-quantum keys)
     if (signal?.aborted) {
