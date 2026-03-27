@@ -1,7 +1,7 @@
 {
   "name": "@vultisig/lib-mldsa",
   "type": "module",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "license": "MIT",
   "description": "ML-DSA WASM bindings for Vultisig",
   "repository": {

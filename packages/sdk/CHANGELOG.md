@@ -1,5 +1,36 @@
 # @vultisig/sdk
 
+## 0.9.0
+
+### Minor Changes
+
+- [#142](https://github.com/vultisig/vultisig-sdk/pull/142) [`75cf69f`](https://github.com/vultisig/vultisig-sdk/commit/75cf69f24cee843f9b508cc370c105e6339f01a8) Thanks [@realpaaao](https://github.com/realpaaao)! - Add compound wrapper methods to VaultBase: signMessage, allBalances, portfolio, send, swap. These chain existing atomic methods into single-call operations for agent-friendly DX.
+
+- [#138](https://github.com/vultisig/vultisig-sdk/pull/138) [`b8770b3`](https://github.com/vultisig/vultisig-sdk/commit/b8770b33b3c38f3bd676e16e7c26f1464bb28548) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Integrate ML-DSA-44 post-quantum signing into the SDK signing pipeline and CLI output
+
+- [#147](https://github.com/vultisig/vultisig-sdk/pull/147) [`8f2c9c6`](https://github.com/vultisig/vultisig-sdk/commit/8f2c9c6823d9e5ab0d882a5e8ba47715edaa54c8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish shared chain, MPC, config, and lib packages to npm with compiled `dist/` output, deep subpath exports, and release workflow updates. SDK declares these packages as dependencies; `@vultisig/cli` is versioned with the SDK via changesets link.
+
+### Patch Changes
+
+- [#145](https://github.com/vultisig/vultisig-sdk/pull/145) [`60c1be9`](https://github.com/vultisig/vultisig-sdk/commit/60c1be943599c1d41dd2b6110dae05a40d50f74e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix MLDSA keygen and signing for FastVault
+
+- [#140](https://github.com/vultisig/vultisig-sdk/pull/140) [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50) Thanks [@RaghavSood](https://github.com/RaghavSood)! - Increase Osmosis gas fee from 7500 to 9000 uosmo to meet the chain's minimum fee requirement
+
+- [#140](https://github.com/vultisig/vultisig-sdk/pull/140) [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50) Thanks [@RaghavSood](https://github.com/RaghavSood)! - Fix Sei EVM chain ID resolution to use 1329 instead of the default 1, which caused transaction signing failures on Sei
+
+- [#140](https://github.com/vultisig/vultisig-sdk/pull/140) [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50) Thanks [@RaghavSood](https://github.com/RaghavSood)! - Fix Tron broadcast: use secp256k1Extended key type for 65-byte uncompressed public keys, and check the Tron API response for broadcast errors instead of silently succeeding
+
+- [#140](https://github.com/vultisig/vultisig-sdk/pull/140) [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50) Thanks [@RaghavSood](https://github.com/RaghavSood)! - Remove hardcoded 1000 sat/byte Zcash fee override — use the standard UTXO fee rate lookup instead, which returns a reasonable fee that satisfies ZIP-317
+
+- Updated dependencies [[`8f2c9c6`](https://github.com/vultisig/vultisig-sdk/commit/8f2c9c6823d9e5ab0d882a5e8ba47715edaa54c8)]:
+  - @vultisig/core-chain@0.9.0
+  - @vultisig/core-config@0.9.0
+  - @vultisig/core-mpc@0.9.0
+  - @vultisig/lib-utils@0.9.0
+  - @vultisig/lib-dkls@0.9.0
+  - @vultisig/lib-mldsa@0.9.0
+  - @vultisig/lib-schnorr@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes
