@@ -1,4 +1,4 @@
-import { Minutes } from '@lib/utils/time'
+import { Minutes } from '@vultisig/lib-utils/time'
 
 export const kyberSwapTxLifespan: Minutes = 20
 

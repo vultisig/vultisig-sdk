@@ -1,6 +1,6 @@
-import { UtxoBasedChain } from '@core/chain/Chain'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { formatAmount } from '@lib/utils/formatAmount'
+import { UtxoBasedChain } from '@vultisig/core-chain/Chain'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { formatAmount } from '@vultisig/lib-utils/formatAmount'
 
 import { fromChainAmount } from '../../../amount/fromChainAmount'
 import { minUtxo } from '../minUtxo'

@@ -1,5 +1,5 @@
-import { EvmChain } from '@core/chain/Chain'
-import { getEvmClient } from '@core/chain/chains/evm/client'
+import { EvmChain } from '@vultisig/core-chain/Chain'
+import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { Address, erc721Abi } from 'viem'
 
 type GetErc721BalanceInput = {

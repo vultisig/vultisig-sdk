@@ -15,6 +15,8 @@ export type AgentConfig = {
   password?: string
   /** Skip TUI, use NDJSON pipe interface */
   viaAgent?: boolean
+  /** One-shot ask mode for AI coding agents */
+  askMode?: boolean
   /** Session ID to resume */
   sessionId?: string
   /** Show detailed tool call params and debug output */
@@ -147,6 +149,8 @@ export type SendMessageRequest = {
   tools?: ToolDefinition[]
   selected_suggestion_id?: string
   action_result?: ActionResultPayload
+  /** Signals that the caller is an AI agent; backend adjusts prompt accordingly */
+  via_agent?: boolean
 }
 
 export type ToolDefinition = {

@@ -1,26 +1,51 @@
 {
-  "name": "@core/mpc",
-  "version": "0.0.1",
-  "private": true,
+  "name": "@vultisig/core-mpc",
+  "version": "0.9.0",
+  "description": "MPC, keysign, and vault types shared across Vultisig clients",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
+    "directory": "packages/core/mpc"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../../scripts/build-shared-packages.mjs",
+    "prepack": "node ../../../scripts/build-shared-packages.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "dependencies": {
     "7z-wasm": "^1.2.0",
     "@bufbuild/protobuf": "^2.11.0",
-    "@core/chain": "workspace:^",
-    "@core/config": "workspace:^",
     "@cosmjs/encoding": "^0.38.1",
-    "@lib/dkls": "workspace:^",
-    "@lib/mldsa": "workspace:^",
-    "@lib/schnorr": "workspace:^",
-    "@lib/utils": "workspace:^",
     "@mysten/sui": "^2.8.0",
     "@noble/hashes": "^2.0.1",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.0",
+    "@vultisig/core-chain": "0.9.0",
+    "@vultisig/core-config": "0.9.0",
+    "@vultisig/lib-dkls": "0.9.0",
+    "@vultisig/lib-mldsa": "0.9.0",
+    "@vultisig/lib-schnorr": "0.9.0",
+    "@vultisig/lib-utils": "0.9.0",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
     "cosmjs-types": "^0.11.0",
     "long": "^5.3.2",
     "viem": "^2.47.4"
-  },
-  "type": "module"
+  }
 }

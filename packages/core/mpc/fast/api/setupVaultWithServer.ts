@@ -1,4 +1,4 @@
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { fastVaultServerUrl } from '../config'
 
@@ -11,10 +11,12 @@ type Input = {
   encryption_password: string
   email: string
   lib_type: number
+  /** Override API base (e.g. local `…/vault`). */
+  vaultBaseUrl?: string
 }
 
-export const setupVaultWithServer = async (input: Input) =>
-  queryUrl(`${fastVaultServerUrl}/create`, {
-    body: input,
+export const setupVaultWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
+  queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/create`, {
+    body,
     responseType: 'none',
   })

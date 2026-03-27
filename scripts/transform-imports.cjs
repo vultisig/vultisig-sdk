@@ -18,7 +18,7 @@ const filesToTransform = [
 function transformImports(content, filePath) {
   const fileDir = path.dirname(filePath);
 
-  // Transform @core/* imports
+  // Transform legacy @core/* imports (current code uses @vultisig/core-*)
   content = content.replace(
     /from ['"]@core\/([^'"]+)['"]/g,
     (match, importPath) => {
@@ -37,7 +37,7 @@ function transformImports(content, filePath) {
     },
   );
 
-  // Transform @lib/* imports
+  // Transform legacy @lib/* imports (current code uses @vultisig/lib-*)
   content = content.replace(
     /from ['"]@lib\/([^'"]+)['"]/g,
     (match, importPath) => {

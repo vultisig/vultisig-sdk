@@ -1,4 +1,4 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 
 export const thorchainLpChainCode: Partial<Record<Chain, string>> = {
   [Chain.Avalanche]: 'AVAX',

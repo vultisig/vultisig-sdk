@@ -1,4 +1,4 @@
-import { Chain, CosmosChain } from '@core/chain/Chain'
+import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
 
 import { areEqualCoins, CoinKey } from '../../coin/Coin'
 

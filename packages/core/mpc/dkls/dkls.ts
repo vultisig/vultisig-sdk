@@ -4,8 +4,8 @@ import {
   KeyImportSession,
   Keyshare,
   QcSession,
-} from '@lib/dkls/vs_wasm'
-import { base64Encode } from '@lib/utils/base64Encode'
+} from '@vultisig/lib-dkls/vs_wasm'
+import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getKeygenThreshold } from '../getKeygenThreshold'
 import { getMessageHash } from '../getMessageHash'
@@ -19,7 +19,7 @@ import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
 import { combineReshareCommittee } from '../reshareCommittee'
-import { sleep } from '../sleep'
+import { sleep } from '@vultisig/lib-utils/sleep'
 
 export class DKLS {
   private readonly keygenOperation: KeygenOperation

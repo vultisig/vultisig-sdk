@@ -1,16 +1,39 @@
 {
-  "name": "@lib/mldsa",
+  "name": "@vultisig/lib-mldsa",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.9.0",
+  "license": "MIT",
+  "description": "ML-DSA WASM bindings for Vultisig",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
+    "directory": "packages/lib/mldsa"
+  },
   "files": [
     "vs_wasm_bg.wasm",
     "vs_wasm.js",
-    "vs_wasm.d.ts"
+    "vs_wasm.d.ts",
+    "snippets"
   ],
   "main": "vs_wasm.js",
   "types": "vs_wasm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./vs_wasm.d.ts",
+      "import": "./vs_wasm.js",
+      "default": "./vs_wasm.js"
+    },
+    "./vs_wasm": {
+      "types": "./vs_wasm.d.ts",
+      "import": "./vs_wasm.js",
+      "default": "./vs_wasm.js"
+    }
+  },
   "sideEffects": [
     "./snippets/*"
   ],
-  "private": true
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

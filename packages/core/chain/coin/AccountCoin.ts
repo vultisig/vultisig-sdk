@@ -1,6 +1,6 @@
-import { CoinKey, CoinMetadata } from '@core/chain/coin/Coin'
-import { without } from '@lib/utils/array/without'
-import { pick } from '@lib/utils/record/pick'
+import { CoinKey, CoinMetadata } from '@vultisig/core-chain/coin/Coin'
+import { without } from '@vultisig/lib-utils/array/without'
+import { pick } from '@vultisig/lib-utils/record/pick'
 
 import { Chain } from '../Chain'
 

@@ -1,5 +1,21 @@
 # @vultisig/cli
 
+## 0.9.0
+
+### Minor Changes
+
+- [#140](https://github.com/vultisig/vultisig-sdk/pull/140) [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50) Thanks [@RaghavSood](https://github.com/RaghavSood)! - Add local SDK build path for Solana cross-chain swaps via tx_ready events in the agent executor
+
+### Patch Changes
+
+- [#131](https://github.com/vultisig/vultisig-sdk/pull/131) [`a5228ab`](https://github.com/vultisig/vultisig-sdk/commit/a5228ab417c815fd43030d881b710bfd745d2863) Thanks [@bornslippynuxx](https://github.com/bornslippynuxx)! - Improve CLI for AI agent one-shot usage: auto-detect non-TTY environments and enable --two-step mode automatically, add JSON output for create fast --two-step and verify --code commands, update skill docs with non-interactive workflows, vault shares explanation, Rujira reference, and expanded JSON examples
+
+- [#143](https://github.com/vultisig/vultisig-sdk/pull/143) [`fd73b67`](https://github.com/vultisig/vultisig-sdk/commit/fd73b67a2dce58cce9bc2757deb0bad64950ff38) Thanks [@neavra](https://github.com/neavra)! - Add --password flag to import command for non-interactive usage, support vault name and ID prefix matching in switch command
+
+- Updated dependencies [[`75cf69f`](https://github.com/vultisig/vultisig-sdk/commit/75cf69f24cee843f9b508cc370c105e6339f01a8), [`60c1be9`](https://github.com/vultisig/vultisig-sdk/commit/60c1be943599c1d41dd2b6110dae05a40d50f74e), [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50), [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50), [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50), [`813b160`](https://github.com/vultisig/vultisig-sdk/commit/813b16058c816853ed18a82dcc8b967047c46b50), [`b8770b3`](https://github.com/vultisig/vultisig-sdk/commit/b8770b33b3c38f3bd676e16e7c26f1464bb28548), [`8f2c9c6`](https://github.com/vultisig/vultisig-sdk/commit/8f2c9c6823d9e5ab0d882a5e8ba47715edaa54c8)]:
+  - @vultisig/sdk@0.9.0
+  - @vultisig/rujira@5.0.0
+
 ## 0.8.0
 
 ### Minor Changes

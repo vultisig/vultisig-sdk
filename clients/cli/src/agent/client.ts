@@ -21,6 +21,8 @@ import type {
   Transaction,
 } from './types'
 
+type JsonErrorBody = { error?: string }
+
 export class AgentClient {
   private baseUrl: string
   private authToken: string | null = null
@@ -45,7 +47,7 @@ export class AgentClient {
       body: JSON.stringify(req),
     })
     if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: res.statusText }))
+      const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
       throw new Error(`Auth failed (${res.status}): ${body.error || res.statusText}`)
     }
     const data = (await res.json()) as AuthTokenResponse
@@ -128,7 +130,7 @@ export class AgentClient {
     })
 
     if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: res.statusText }))
+      const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
       throw new Error(`Message failed (${res.status}): ${body.error || res.statusText}`)
     }
 
@@ -266,7 +268,7 @@ export class AgentClient {
     })
 
     if (!res.ok) {
-      const errorBody = await res.json().catch(() => ({ error: res.statusText }))
+      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
@@ -284,7 +286,7 @@ export class AgentClient {
     })
 
     if (!res.ok) {
-      const errorBody = await res.json().catch(() => ({ error: res.statusText }))
+      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
       throw new Error(`Delete failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
   }

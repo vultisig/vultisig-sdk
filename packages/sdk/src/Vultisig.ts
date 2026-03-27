@@ -1,12 +1,12 @@
-import { banxaSupportedChains } from '@core/chain/banxa'
-import { Chain } from '@core/chain/Chain'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { knownTokens, knownTokensIndex } from '@core/chain/coin/knownTokens'
-import { getCoinPrices as coreCoinPrices } from '@core/chain/coin/price/getCoinPrices'
-import { scanSiteWithBlockaid } from '@core/chain/security/blockaid/site'
-import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
-import { isValidAddress } from '@core/chain/utils/isValidAddress'
-import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
+import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
+import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
+import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
+import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
 import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
@@ -803,7 +803,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @param params - Reshare parameters including vault, session info, and callbacks
    * @returns Updated vault with new key shares
    */
-  async performReshare(params: PerformReshareParams): Promise<import('@core/mpc/vault/Vault').Vault> {
+  async performReshare(params: PerformReshareParams): Promise<import('@vultisig/core-mpc/vault/Vault').Vault> {
     await this.ensureInitialized()
     const service = new SecureVaultCreationService(params.serverUrl)
     return service.performReshare(params)

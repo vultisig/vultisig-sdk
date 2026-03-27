@@ -1,6 +1,6 @@
-import { UtxoChain } from '@core/chain/Chain'
-import { ChainAccount } from '@core/chain/ChainAccount'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { UtxoChain } from '@vultisig/core-chain/Chain'
+import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { getBlockchairBaseUrl } from './getBlockchairBaseUrl'
 

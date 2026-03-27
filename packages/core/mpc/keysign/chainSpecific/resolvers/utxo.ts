@@ -1,13 +1,13 @@
 import { create } from '@bufbuild/protobuf'
-import { UtxoChain } from '@core/chain/Chain'
-import { getUtxoByteFee } from '@core/chain/chains/utxo/fee/byteFee'
+import { UtxoChain } from '@vultisig/core-chain/Chain'
+import { getUtxoByteFee } from '@vultisig/core-chain/chains/utxo/fee/byteFee'
 import {
   byteFeeMultiplier,
   UtxoFeeSettings,
-} from '@core/chain/tx/fee/utxo/UtxoFeeSettings'
-import { UTXOSpecificSchema } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import { multiplyBigInt } from '@lib/utils/bigint/bigIntMultiplyByNumber'
-import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+} from '@vultisig/core-chain/tx/fee/utxo/UtxoFeeSettings'
+import { UTXOSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { multiplyBigInt } from '@vultisig/lib-utils/bigint/bigIntMultiplyByNumber'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../resolver'

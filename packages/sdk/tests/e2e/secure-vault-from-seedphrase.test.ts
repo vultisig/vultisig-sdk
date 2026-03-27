@@ -17,7 +17,7 @@
  * WARNING: Uses a REAL seedphrase with funds. Never commit the .env file!
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { MemoryStorage } from '../../src/storage/MemoryStorage'

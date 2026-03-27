@@ -16,8 +16,14 @@
     "jsx": "react-jsx",
     "baseUrl": "..",
     "paths": {
-      "@core/*": ["packages/core/*"],
-      "@lib/*": ["packages/lib/*"],
+      "@vultisig/core-chain/*": ["packages/core/chain/*"],
+      "@vultisig/core-mpc/*": ["packages/core/mpc/*"],
+      "@vultisig/core-config": ["packages/core/config/index.ts"],
+      "@vultisig/core-config/*": ["packages/core/config/*"],
+      "@vultisig/lib-utils/*": ["packages/lib/utils/*"],
+      "@vultisig/lib-dkls/*": ["packages/lib/dkls/*"],
+      "@vultisig/lib-mldsa/*": ["packages/lib/mldsa/*"],
+      "@vultisig/lib-schnorr/*": ["packages/lib/schnorr/*"],
       "@vultisig/sdk": ["packages/sdk/src/index.ts"]
     }
   },

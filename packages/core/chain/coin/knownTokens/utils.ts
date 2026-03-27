@@ -1,5 +1,5 @@
-import { Chain } from '@core/chain/Chain'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { CoinKey, KnownCoin, Token } from '../Coin'
 import { knownTokensIndex } from '.'

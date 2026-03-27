@@ -1,4 +1,4 @@
-import { ChainKind, getChainKind } from '@core/chain/ChainKind'
+import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { BroadcastTxResolver } from './resolver'
 import { broadcastBittensorTx } from './resolvers/bittensor'

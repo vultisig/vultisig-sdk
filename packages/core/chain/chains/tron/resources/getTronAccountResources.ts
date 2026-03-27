@@ -1,5 +1,5 @@
-import { tronRpcUrl } from '@core/chain/chains/tron/config'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { TronAccountResources, TronUnfreezingEntry } from './types'
 

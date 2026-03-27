@@ -1,7 +1,7 @@
-import { Chain } from '@core/chain/Chain'
-import { ChainKind, DeriveChainKind, getChainKind } from '@core/chain/ChainKind'
-import { getCoinType } from '@core/chain/coin/coinType'
-import { assertErrorMessage } from '@lib/utils/error/assertErrorMessage'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { ChainKind, DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import { getCoinType } from '@vultisig/core-chain/coin/coinType'
+import { assertErrorMessage } from '@vultisig/lib-utils/error/assertErrorMessage'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 
 type Input<T extends Chain = Chain> = {

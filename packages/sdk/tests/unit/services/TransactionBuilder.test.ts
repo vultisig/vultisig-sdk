@@ -1,46 +1,46 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock core functions - must be before imports
-vi.mock('@core/chain/publicKey/getPublicKey', () => ({
+vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: vi.fn(() => ({
     data: vi.fn().mockReturnValue(new Uint8Array(33)),
   })),
 }))
 
-vi.mock('@core/mpc/keysign/send/build', () => ({
+vi.mock('@vultisig/core-mpc/keysign/send/build', () => ({
   buildSendKeysignPayload: vi.fn(),
 }))
 
-vi.mock('@core/mpc/keysign/send/getSendFeeEstimate', () => ({
+vi.mock('@vultisig/core-mpc/keysign/send/getSendFeeEstimate', () => ({
   getSendFeeEstimate: vi.fn(),
 }))
 
-vi.mock('@core/chain/utils/isValidAddress', () => ({
+vi.mock('@vultisig/core-chain/utils/isValidAddress', () => ({
   isValidAddress: vi.fn().mockReturnValue(true),
 }))
 
-vi.mock('@core/chain/publicKey/tw/getTwPublicKeyType', () => ({
+vi.mock('@vultisig/core-chain/publicKey/tw/getTwPublicKeyType', () => ({
   getTwPublicKeyType: vi.fn(),
 }))
 
-vi.mock('@core/chain/tx/preSigningHashes', () => ({
+vi.mock('@vultisig/core-chain/tx/preSigningHashes', () => ({
   getPreSigningHashes: vi.fn(),
 }))
 
-vi.mock('@core/mpc/keysign/signingInputs', () => ({
+vi.mock('@vultisig/core-mpc/keysign/signingInputs', () => ({
   getEncodedSigningInputs: vi.fn(),
 }))
 
-vi.mock('@core/mpc/keysign/tw/getKeysignTwPublicKey', () => ({
+vi.mock('@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey', () => ({
   getKeysignTwPublicKey: vi.fn(),
 }))
 
-vi.mock('@core/mpc/keysign/utils/getKeysignChain', () => ({
+vi.mock('@vultisig/core-mpc/keysign/utils/getKeysignChain', () => ({
   getKeysignChain: vi.fn(),
 }))
 
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../../../src/context/SdkContext'
 import { TransactionBuilder } from '../../../src/vault/services/TransactionBuilder'
@@ -93,7 +93,7 @@ describe('TransactionBuilder', () => {
 
   describe('estimateSendFee', () => {
     it('should estimate the fee for a send transaction', async () => {
-      const { getSendFeeEstimate } = await import('@core/mpc/keysign/send/getSendFeeEstimate')
+      const { getSendFeeEstimate } = await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')
       const expectedFee = 21000000000000n // 21000 gwei
 
       vi.mocked(getSendFeeEstimate).mockResolvedValue(expectedFee)
@@ -118,7 +118,7 @@ describe('TransactionBuilder', () => {
     })
 
     it('should pass memo and feeSettings through', async () => {
-      const { getSendFeeEstimate } = await import('@core/mpc/keysign/send/getSendFeeEstimate')
+      const { getSendFeeEstimate } = await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')
       vi.mocked(getSendFeeEstimate).mockResolvedValue(50000n)
 
       await builder.estimateSendFee({
@@ -138,7 +138,7 @@ describe('TransactionBuilder', () => {
     })
 
     it('should throw VaultError when estimation fails', async () => {
-      const { getSendFeeEstimate } = await import('@core/mpc/keysign/send/getSendFeeEstimate')
+      const { getSendFeeEstimate } = await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')
       vi.mocked(getSendFeeEstimate).mockRejectedValue(new Error('Network error'))
 
       await expect(

@@ -1,5 +1,5 @@
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { tronRpcUrl } from './config'
 

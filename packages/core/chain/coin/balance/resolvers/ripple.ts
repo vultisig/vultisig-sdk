@@ -1,8 +1,8 @@
-import { getRippleAccountInfo } from '@core/chain/chains/ripple/account/info'
-import { getRippleNetworkInfo } from '@core/chain/chains/ripple/network/info'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
-import { attempt } from '@lib/utils/attempt'
-import { isInError } from '@lib/utils/error/isInError'
+import { getRippleAccountInfo } from '@vultisig/core-chain/chains/ripple/account/info'
+import { getRippleNetworkInfo } from '@vultisig/core-chain/chains/ripple/network/info'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { attempt } from '@vultisig/lib-utils/attempt'
+import { isInError } from '@vultisig/lib-utils/error/isInError'
 
 import { CoinBalanceResolver } from '../resolver'
 

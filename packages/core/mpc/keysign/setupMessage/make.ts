@@ -1,5 +1,5 @@
-import { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
-import { SignSession } from '@core/mpc/lib/signSession'
+import { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import { SignSession } from '@vultisig/core-mpc/lib/signSession'
 
 import { toMpcLibKeyshare } from '../../lib/keyshare'
 

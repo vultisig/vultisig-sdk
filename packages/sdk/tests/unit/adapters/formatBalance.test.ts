@@ -5,7 +5,7 @@
  * to SDK Balance format with proper metadata (decimals, symbol).
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
 import { formatBalance } from '../../../src/adapters/formatBalance'

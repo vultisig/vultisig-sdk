@@ -78,8 +78,38 @@ const createPlugins = (platformOptions = {}) => {
   return [
     alias({
       entries: [
-        { find: /^@core\/(.*)/, replacement: path.resolve(currentDir, '../core/$1') },
-        { find: /^@lib\/(.*)/, replacement: path.resolve(currentDir, '../lib/$1') },
+        {
+          find: /^@vultisig\/core-chain\/(.*)/,
+          replacement: `${path.resolve(currentDir, '../core/chain')}/$1`,
+        },
+        {
+          find: /^@vultisig\/core-mpc\/(.*)/,
+          replacement: `${path.resolve(currentDir, '../core/mpc')}/$1`,
+        },
+        {
+          find: /^@vultisig\/core-config$/,
+          replacement: path.resolve(currentDir, '../core/config/index.ts'),
+        },
+        {
+          find: /^@vultisig\/core-config\/(.*)/,
+          replacement: `${path.resolve(currentDir, '../core/config')}/$1`,
+        },
+        {
+          find: /^@vultisig\/lib-utils\/(.*)/,
+          replacement: `${path.resolve(currentDir, '../lib/utils')}/$1`,
+        },
+        {
+          find: /^@vultisig\/lib-dkls\/(.*)/,
+          replacement: `${path.resolve(currentDir, '../lib/dkls')}/$1`,
+        },
+        {
+          find: /^@vultisig\/lib-mldsa\/(.*)/,
+          replacement: `${path.resolve(currentDir, '../lib/mldsa')}/$1`,
+        },
+        {
+          find: /^@vultisig\/lib-schnorr\/(.*)/,
+          replacement: `${path.resolve(currentDir, '../lib/schnorr')}/$1`,
+        },
       ],
     }),
     resolve({

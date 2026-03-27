@@ -1,4 +1,4 @@
-import type { Chain } from '@core/chain/Chain'
+import type { Chain } from '@vultisig/core-chain/Chain'
 
 import type {
   Balance,

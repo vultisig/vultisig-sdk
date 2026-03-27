@@ -1,7 +1,7 @@
-import { CoinKey } from '@core/chain/coin/Coin'
-import { isOneOf } from '@lib/utils/array/isOneOf'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
-import { EntityWithTicker } from '@lib/utils/entities/EntityWithTicker'
+import { CoinKey } from '@vultisig/core-chain/coin/Coin'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { EntityWithTicker } from '@vultisig/lib-utils/entities/EntityWithTicker'
 
 import { isFeeCoin } from '../../../coin/utils/isFeeCoin'
 import {

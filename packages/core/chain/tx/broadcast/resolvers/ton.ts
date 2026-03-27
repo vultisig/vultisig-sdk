@@ -1,8 +1,8 @@
-import { OtherChain } from '@core/chain/Chain'
-import { rootApiUrl } from '@core/config'
-import { attempt } from '@lib/utils/attempt'
-import { isInError } from '@lib/utils/error/isInError'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { OtherChain } from '@vultisig/core-chain/Chain'
+import { rootApiUrl } from '@vultisig/core-config'
+import { attempt } from '@vultisig/lib-utils/attempt'
+import { isInError } from '@vultisig/lib-utils/error/isInError'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { BroadcastTxResolver } from '../resolver'
 

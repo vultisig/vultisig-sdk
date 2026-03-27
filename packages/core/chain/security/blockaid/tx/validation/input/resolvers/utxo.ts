@@ -1,4 +1,4 @@
-import { getKeysignCoin } from '@core/mpc/keysign/utils/getKeysignCoin'
+import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 
 import { UtxoChain } from '../../../../../../Chain'
 import { decodeSigningOutput } from '../../../../../../tw/signingOutput'

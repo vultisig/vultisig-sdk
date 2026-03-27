@@ -1,14 +1,14 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it, vi } from 'vitest'
 
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 // Mock the core getTxStatus function
-vi.mock('@core/chain/tx/status', () => ({
+vi.mock('@vultisig/core-chain/tx/status', () => ({
   getTxStatus: vi.fn(),
 }))
 
-import { getTxStatus as coreTxStatus } from '@core/chain/tx/status'
+import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 
 const mockCoreTxStatus = vi.mocked(coreTxStatus)
 

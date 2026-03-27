@@ -1,8 +1,8 @@
-import { EvmChain } from '@core/chain/Chain'
-import { getEvmClient } from '@core/chain/chains/evm/client'
-import { attempt } from '@lib/utils/attempt'
-import { isInError } from '@lib/utils/error/isInError'
-import { ensureHexPrefix } from '@lib/utils/hex/ensureHexPrefix'
+import { EvmChain } from '@vultisig/core-chain/Chain'
+import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
+import { attempt } from '@vultisig/lib-utils/attempt'
+import { isInError } from '@vultisig/lib-utils/error/isInError'
+import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 
 import { BroadcastTxResolver } from '../resolver'
 

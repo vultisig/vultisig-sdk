@@ -17,10 +17,10 @@
  * ```
  */
 
-import initDkls from '@lib/dkls/vs_wasm'
-import initMldsa from '@lib/mldsa/vs_wasm'
-import initSchnorr from '@lib/schnorr/vs_schnorr_wasm'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+import initDkls from '@vultisig/lib-dkls/vs_wasm'
+import initMldsa from '@vultisig/lib-mldsa/vs_wasm'
+import initSchnorr from '@vultisig/lib-schnorr/vs_schnorr_wasm'
 
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'

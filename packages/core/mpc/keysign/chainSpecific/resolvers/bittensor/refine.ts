@@ -1,12 +1,12 @@
-import { bittensorRpcUrl } from '@core/chain/chains/bittensor/client'
+import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import {
   assembleBittensorExtrinsic,
   buildBittensorSigningPayload,
-} from '@core/chain/chains/bittensor/signing/buildExtrinsic'
-import { PolkadotSpecific } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { ensureHexPrefix } from '@lib/utils/hex/ensureHexPrefix'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+} from '@vultisig/core-chain/chains/bittensor/signing/buildExtrinsic'
+import { PolkadotSpecific } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 

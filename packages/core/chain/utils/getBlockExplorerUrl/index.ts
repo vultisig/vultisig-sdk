@@ -1,6 +1,6 @@
-import { Chain } from '@core/chain/Chain'
-import { hyperliquidBlockExplorerUrl } from '@core/chain/chains/evm/chainInfo'
-import { match } from '@lib/utils/match'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { hyperliquidBlockExplorerUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
+import { match } from '@vultisig/lib-utils/match'
 
 type ChainEntity = 'address' | 'tx'
 

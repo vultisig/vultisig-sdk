@@ -5,7 +5,7 @@
  * Uses instance-scoped Vultisig with explicit dependencies.
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import fs from 'fs/promises'
 import { resolve } from 'path'
 import { expect } from 'vitest'

@@ -1,9 +1,9 @@
-import { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
-import { GeneralSwapTx } from '@core/chain/swap/general/GeneralSwapQuote'
-import { SwapQuote, SwapQuoteResult } from '@core/chain/swap/quote/SwapQuote'
-import { isOneOf } from '@lib/utils/array/isOneOf'
-import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
+import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { SwapQuote, SwapQuoteResult } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { EvmChain } from '../../Chain'
 

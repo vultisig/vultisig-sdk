@@ -1,5 +1,5 @@
-import { EvmChain } from '@core/chain/Chain'
-import { getEvmClient } from '@core/chain/chains/evm/client'
+import { EvmChain } from '@vultisig/core-chain/Chain'
+import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { erc20Abi } from 'viem'
 
 import { AccountCoinKey } from '../../../coin/AccountCoin'

@@ -1,8 +1,8 @@
-import { CosmosChain } from '@core/chain/Chain'
-import { getCosmosClient } from '@core/chain/chains/cosmos/client'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { decodeTxRaw } from '@cosmjs/proto-signing'
-import { attempt } from '@lib/utils/attempt'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 

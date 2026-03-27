@@ -5,19 +5,19 @@ import { DiscountTierService } from '../../../src/services/DiscountTierService'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 
 // Mock the core functions
-vi.mock('@core/chain/chains/evm/erc20/getErc20Balance', () => ({
+vi.mock('@vultisig/core-chain/chains/evm/erc20/getErc20Balance', () => ({
   getErc20Balance: vi.fn(),
 }))
 
-vi.mock('@core/chain/chains/evm/erc721/getErc721Balance', () => ({
+vi.mock('@vultisig/core-chain/chains/evm/erc721/getErc721Balance', () => ({
   getErc721Balance: vi.fn(),
 }))
 
-vi.mock('@core/chain/swap/affiliate', () => ({
+vi.mock('@vultisig/core-chain/swap/affiliate', () => ({
   getVultDiscountTier: vi.fn(),
 }))
 
-vi.mock('@core/chain/coin/knownTokens', () => ({
+vi.mock('@vultisig/core-chain/coin/knownTokens', () => ({
   vult: {
     id: '0xb788144DF611029C60b859DF47e79B7726C4DEBa',
     chain: 'Ethereum',
@@ -26,9 +26,9 @@ vi.mock('@core/chain/coin/knownTokens', () => ({
   },
 }))
 
-import { getErc20Balance } from '@core/chain/chains/evm/erc20/getErc20Balance'
-import { getErc721Balance } from '@core/chain/chains/evm/erc721/getErc721Balance'
-import { getVultDiscountTier } from '@core/chain/swap/affiliate'
+import { getErc20Balance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Balance'
+import { getErc721Balance } from '@vultisig/core-chain/chains/evm/erc721/getErc721Balance'
+import { getVultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 
 describe('DiscountTierService', () => {
   let service: DiscountTierService

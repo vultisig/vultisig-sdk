@@ -6,26 +6,26 @@
  */
 
 import { create } from '@bufbuild/protobuf'
-import { CosmosChain } from '@core/chain/Chain'
-import { getCosmosAccountInfo } from '@core/chain/chains/cosmos/account/getCosmosAccountInfo'
-import { cosmosGasRecord } from '@core/chain/chains/cosmos/gas'
-import { getCosmosChainKind } from '@core/chain/chains/cosmos/utils/getCosmosChainKind'
-import { KeysignLibType } from '@core/mpc/mpcLib'
-import { toCommCoin } from '@core/mpc/types/utils/commCoin'
+import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { getCosmosAccountInfo } from '@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo'
+import { cosmosGasRecord } from '@vultisig/core-chain/chains/cosmos/gas'
+import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
+import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
+import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
 import {
   CosmosSpecificSchema,
   MAYAChainSpecificSchema,
   THORChainSpecificSchema,
-} from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import { KeysignPayload, KeysignPayloadSchema } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import {
   CosmosCoinSchema,
   CosmosFeeSchema,
   CosmosMsgSchema,
   SignAminoSchema,
   SignDirectSchema,
-} from '@core/mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
-import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 
 import type { CosmosFeeInput, CosmosMsgInput, SignAminoInput, SignDirectInput } from '../../../types/cosmos'
 

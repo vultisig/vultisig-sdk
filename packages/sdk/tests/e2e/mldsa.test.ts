@@ -14,7 +14,7 @@ import initializeMldsa, {
   KeygenSession,
   Keyshare,
   SignSession,
-} from '@lib/mldsa/vs_wasm'
+} from '@vultisig/lib-mldsa/vs_wasm'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 const MLDSA_LEVEL = 44

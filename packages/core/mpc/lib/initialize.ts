@@ -1,9 +1,9 @@
-import { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
-import initializeDkls from '@lib/dkls/vs_wasm'
-import initializeSchnorr from '@lib/schnorr/vs_schnorr_wasm'
-import { prefixErrorWith } from '@lib/utils/error/prefixErrorWith'
-import { transformError } from '@lib/utils/error/transformError'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import initializeDkls from '@vultisig/lib-dkls/vs_wasm'
+import initializeSchnorr from '@vultisig/lib-schnorr/vs_schnorr_wasm'
+import { prefixErrorWith } from '@vultisig/lib-utils/error/prefixErrorWith'
+import { transformError } from '@vultisig/lib-utils/error/transformError'
+import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 
 const initialize: Record<SignatureAlgorithm, () => Promise<unknown>> = {
   ecdsa: initializeDkls,
