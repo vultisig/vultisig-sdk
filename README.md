@@ -1,10 +1,17 @@
-# VultisigSDK
+# Vultisig SDK
 
-A TypeScript SDK for multi-party computation (MPC) wallet operations, providing secure vault creation, address derivation, and transaction signing capabilities.
+The self-custodial multi-chain wallet SDK for AI agents and developers.
+
+- **Send & swap** across 40+ blockchains with human-readable amounts (`vault.send({ amount: "0.1" })`)
+- **MPC security** — keys are split across parties, no seed phrases, no single point of failure
+- **Built-in cross-chain swaps** via THORChain, 1inch, KyberSwap, and LiFi — automatic routing
+- **Portfolio tracking** with real-time balances and fiat prices
+- **Dry-run mode** for sends and swaps — preview fees and output before signing
+- **AI agent ready** — JSON output, programmatic API, designed for autonomous operation
 
 ## Overview
 
-VultisigSDK enables developers to integrate MPC wallet functionality into their applications. The SDK supports two vault types:
+Vultisig SDK enables developers and AI agents to integrate multi-chain wallet functionality into their applications. The SDK supports two vault types:
 
 - **Fast Vault**: Server-assisted 2-of-2 MPC for quick setup and instant signing
 - **Secure Vault**: Multi-device N-of-M MPC for enhanced security with configurable thresholds
