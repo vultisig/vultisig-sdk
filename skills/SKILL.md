@@ -70,6 +70,7 @@ Traditional wallets store a single private key or seed phrase. If compromised, a
 
 | Use Case | Interface | Why |
 |----------|-----------|-----|
+| **AI agent chat** | [CLI `agent ask`](./vultisig-cli/SKILL.md#agent-chat-ai-to-ai) | Natural language crypto ops, multi-turn, auto-signing |
 | Shell scripts | [CLI](./vultisig-cli/SKILL.md) | Direct commands, easy scripting |
 | Automation bots | [CLI](./vultisig-cli/SKILL.md) | Simple, pipes to jq, env vars |
 | One-off operations | [CLI](./vultisig-cli/SKILL.md) | Quick, no code needed |
@@ -79,6 +80,8 @@ Traditional wallets store a single private key or seed phrase. If compromised, a
 | Complex workflows | [SDK](./vultisig-sdk/SKILL.md) | Programmatic control |
 
 ### Quick Decision
+
+**Use Agent Ask if**: You're an AI coding agent (Claude Code, Opencode, Cursor) that needs to perform crypto operations via natural language. `agent ask` handles auth, tool execution, and MPC signing automatically.
 
 **Use CLI if**: You're writing shell scripts, need quick commands, or want JSON output piped to other tools.
 
