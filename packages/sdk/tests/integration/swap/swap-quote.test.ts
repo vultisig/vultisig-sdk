@@ -13,8 +13,8 @@
  * NOTE: Integration setup (WASM & crypto polyfills) loaded via vitest.config.ts
  */
 
-import { Chain } from '@core/chain/Chain'
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { Chain } from '@vultisig/core-chain/Chain'
+import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { createSdkContext, type SdkContext } from '../../../src/context/SdkContextBuilder'
@@ -24,23 +24,23 @@ import { FastVault } from '../../../src/vault/FastVault'
 import type { SwapQuoteResult } from '../../../src/vault/swap-types'
 
 // Mock the core swap functions
-vi.mock('@core/chain/swap/quote/findSwapQuote', () => ({
+vi.mock('@vultisig/core-chain/swap/quote/findSwapQuote', () => ({
   findSwapQuote: vi.fn(),
 }))
 
-vi.mock('@core/chain/chains/evm/erc20/getErc20Allowance', () => ({
+vi.mock('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance', () => ({
   getErc20Allowance: vi.fn(),
 }))
 
 // Mock balance fetching (used by enriched getSwapQuote for maxSwapable calculation)
-vi.mock('@core/chain/coin/balance', () => ({
+vi.mock('@vultisig/core-chain/coin/balance', () => ({
   getCoinBalance: vi.fn().mockResolvedValue({
     amount: 5000000000000000000n, // 5 ETH
     decimals: 18,
   }),
 }))
 
-vi.mock('@core/chain/swap/swapEnabledChains', () => ({
+vi.mock('@vultisig/core-chain/swap/swapEnabledChains', () => ({
   swapEnabledChains: [
     'Ethereum',
     'Bitcoin',
@@ -183,7 +183,7 @@ describe('Integration: Swap Quote', () => {
 
   describe('Quote Fetching', () => {
     it('should get swap quote for native token swap', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
       // Mock THORChain quote
       const mockQuote = {
@@ -252,8 +252,8 @@ describe('Integration: Swap Quote', () => {
     })
 
     it('should get swap quote with approval required for ERC-20', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
-      const { getErc20Allowance } = await import('@core/chain/chains/evm/erc20/getErc20Allowance')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
 
       // Mock 1inch quote
       const mockQuote = {
@@ -311,7 +311,7 @@ describe('Integration: Swap Quote', () => {
     })
 
     it('should handle quote errors gracefully', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
       vi.mocked(findSwapQuote).mockRejectedValue(new Error('No swap routes available'))
 
@@ -334,7 +334,7 @@ describe('Integration: Swap Quote', () => {
 
   describe('Token Allowance', () => {
     it('should get token allowance for ERC-20', async () => {
-      const { getErc20Allowance } = await import('@core/chain/chains/evm/erc20/getErc20Allowance')
+      const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
 
       vi.mocked(getErc20Allowance).mockResolvedValue(1000000000n) // 1000 USDC
 
@@ -373,7 +373,7 @@ describe('Integration: Swap Quote', () => {
 
   describe('Quote Result Structure', () => {
     it('should return properly formatted quote result', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
         quote: {

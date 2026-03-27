@@ -2,7 +2,7 @@
  * Seedphrase types for Vultisig SDK
  * Used for creating vaults from existing seedphrases
  */
-import type { Chain } from '@core/chain/Chain'
+import type { Chain } from '@vultisig/core-chain/Chain'
 
 import type { VaultCreationStep } from '../types'
 

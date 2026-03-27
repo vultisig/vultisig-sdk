@@ -1,4 +1,4 @@
-import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
+import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
 
 import type { Signature } from '../../types'
 

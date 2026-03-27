@@ -13,7 +13,7 @@
  * NO MOCKING of MPC process - uses real relay server and WASM libraries.
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { MemoryStorage } from '../../src/storage/MemoryStorage'

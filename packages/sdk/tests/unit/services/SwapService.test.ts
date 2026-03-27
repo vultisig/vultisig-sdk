@@ -1,24 +1,24 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock core functions - must be before imports
 // Mock findSwapQuote module
-vi.mock('@core/chain/swap/quote/findSwapQuote', () => ({
+vi.mock('@vultisig/core-chain/swap/quote/findSwapQuote', () => ({
   findSwapQuote: vi.fn(),
 }))
 
 // Mock buildSwapKeysignPayload module
-vi.mock('@core/mpc/keysign/swap/build', () => ({
+vi.mock('@vultisig/core-mpc/keysign/swap/build', () => ({
   buildSwapKeysignPayload: vi.fn(),
 }))
 
 // Mock getErc20Allowance module
-vi.mock('@core/chain/chains/evm/erc20/getErc20Allowance', () => ({
+vi.mock('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance', () => ({
   getErc20Allowance: vi.fn(),
 }))
 
 // Mock isChainOfKind to always work
-vi.mock('@core/chain/ChainKind', () => ({
+vi.mock('@vultisig/core-chain/ChainKind', () => ({
   isChainOfKind: vi.fn((chain: string, kind: string) => {
     const evmChains = ['Ethereum', 'BSC', 'Polygon', 'Avalanche', 'Base', 'Arbitrum', 'Optimism']
     if (kind === 'evm') return evmChains.includes(chain)
@@ -27,7 +27,7 @@ vi.mock('@core/chain/ChainKind', () => ({
 }))
 
 // Mock swapEnabledChains
-vi.mock('@core/chain/swap/swapEnabledChains', () => ({
+vi.mock('@vultisig/core-chain/swap/swapEnabledChains', () => ({
   swapEnabledChains: [
     'Ethereum',
     'Bitcoin',
@@ -43,7 +43,7 @@ vi.mock('@core/chain/swap/swapEnabledChains', () => ({
 }))
 
 // Mock chainFeeCoin
-vi.mock('@core/chain/coin/chainFeeCoin', () => ({
+vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
   chainFeeCoin: {
     Ethereum: { ticker: 'ETH', decimals: 18 },
     Bitcoin: { ticker: 'BTC', decimals: 8 },
@@ -62,13 +62,13 @@ vi.mock('@core/chain/coin/chainFeeCoin', () => ({
 }))
 
 // Mock getPublicKey
-vi.mock('@core/chain/publicKey/getPublicKey', () => ({
+vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: vi.fn(() => ({
     data: vi.fn().mockReturnValue(new Uint8Array(33)),
   })),
 }))
 
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../../../src/context/SdkContext'
 import type { VaultEvents } from '../../../src/events/types'
@@ -132,7 +132,7 @@ describe('SwapService', () => {
 
   describe('getQuote', () => {
     it('should fetch a swap quote for native tokens', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
         quote: {
@@ -189,8 +189,8 @@ describe('SwapService', () => {
     })
 
     it('should fetch a swap quote for ERC-20 token requiring approval', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
-      const { getErc20Allowance } = await import('@core/chain/chains/evm/erc20/getErc20Allowance')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
 
       const mockQuote = {
         quote: {
@@ -239,8 +239,8 @@ describe('SwapService', () => {
     })
 
     it('should not require approval when allowance is sufficient', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
-      const { getErc20Allowance } = await import('@core/chain/chains/evm/erc20/getErc20Allowance')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
 
       const mockQuote = {
         quote: {
@@ -286,7 +286,7 @@ describe('SwapService', () => {
     })
 
     it('should resolve simplified coin input', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
         quote: {
@@ -338,7 +338,7 @@ describe('SwapService', () => {
     })
 
     it('should handle quote errors gracefully', async () => {
-      const { findSwapQuote } = await import('@core/chain/swap/quote/findSwapQuote')
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
       vi.mocked(findSwapQuote).mockRejectedValue(new Error('No swap routes found'))
 
@@ -357,7 +357,7 @@ describe('SwapService', () => {
 
   describe('prepareSwapTx', () => {
     it('should prepare swap transaction', async () => {
-      const { buildSwapKeysignPayload } = await import('@core/mpc/keysign/swap/build')
+      const { buildSwapKeysignPayload } = await import('@vultisig/core-mpc/keysign/swap/build')
 
       const mockKeysignPayload = {
         coin: {},
@@ -475,7 +475,7 @@ describe('SwapService', () => {
     })
 
     it('should emit swapApprovalRequired when approval needed', async () => {
-      const { buildSwapKeysignPayload } = await import('@core/mpc/keysign/swap/build')
+      const { buildSwapKeysignPayload } = await import('@vultisig/core-mpc/keysign/swap/build')
 
       const mockKeysignPayload = {
         coin: {},
@@ -602,7 +602,7 @@ describe('SwapService', () => {
     })
 
     it('should fetch allowance for ERC-20 tokens', async () => {
-      const { getErc20Allowance } = await import('@core/chain/chains/evm/erc20/getErc20Allowance')
+      const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
 
       vi.mocked(getErc20Allowance).mockResolvedValue(1000000n)
 

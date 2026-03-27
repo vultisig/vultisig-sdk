@@ -1,5 +1,5 @@
-import { addQueryParams } from '@lib/utils/query/addQueryParams'
-import { getRecordKeys } from '@lib/utils/record/getRecordKeys'
+import { addQueryParams } from '@vultisig/lib-utils/query/addQueryParams'
+import { getRecordKeys } from '@vultisig/lib-utils/record/getRecordKeys'
 
 import { Chain } from '../Chain'
 import { AccountCoin } from '../coin/AccountCoin'

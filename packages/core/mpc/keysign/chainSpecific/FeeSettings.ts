@@ -1,6 +1,6 @@
-import { Chain, EvmChain, UtxoChain } from '@core/chain/Chain'
-import { DeriveChainKind } from '@core/chain/ChainKind'
-import { UtxoFeeSettings } from '@core/chain/tx/fee/utxo/UtxoFeeSettings'
+import { Chain, EvmChain, UtxoChain } from '@vultisig/core-chain/Chain'
+import { DeriveChainKind } from '@vultisig/core-chain/ChainKind'
+import { UtxoFeeSettings } from '@vultisig/core-chain/tx/fee/utxo/UtxoFeeSettings'
 
 export const feeSettingsChains = [
   ...Object.values(EvmChain),

@@ -1,5 +1,5 @@
-import { Keyshare, SignSession } from '@lib/mldsa/vs_wasm'
-import { base64Encode } from '@lib/utils/base64Encode'
+import { Keyshare, SignSession } from '@vultisig/lib-mldsa/vs_wasm'
+import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getMessageHash } from '../getMessageHash'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
@@ -8,7 +8,7 @@ import { sendMpcRelayMessage } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
-import { sleep } from '../sleep'
+import { sleep } from '@vultisig/lib-utils/sleep'
 import { initializeMldsaLib } from './initializeMldsa'
 
 const mldsaLevel = 44

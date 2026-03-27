@@ -1,4 +1,4 @@
-import { VultDiscountTier } from '@core/chain/swap/affiliate/config'
+import { VultDiscountTier } from '@vultisig/core-chain/swap/affiliate/config'
 
 type SwapDiscountType = 'vult' | 'referral'
 

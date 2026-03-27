@@ -1,18 +1,18 @@
 import { create } from '@bufbuild/protobuf'
 import { Timestamp, TimestampSchema } from '@bufbuild/protobuf/wkt'
-import { Chain } from '@core/chain/Chain'
-import { getChainKind } from '@core/chain/ChainKind'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import {
   SignatureAlgorithm,
   signatureAlgorithms,
   signingAlgorithms,
-} from '@core/chain/signing/SignatureAlgorithm'
-import { isKeyImportVault, Vault } from '@core/mpc/vault/Vault'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
-import { pick } from '@lib/utils/record/pick'
-import { recordFromKeys } from '@lib/utils/record/recordFromKeys'
-import { toEntries } from '@lib/utils/record/toEntries'
-import { convertDuration } from '@lib/utils/time/convertDuration'
+} from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import { isKeyImportVault, Vault } from '@vultisig/core-mpc/vault/Vault'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { pick } from '@vultisig/lib-utils/record/pick'
+import { recordFromKeys } from '@vultisig/lib-utils/record/recordFromKeys'
+import { toEntries } from '@vultisig/lib-utils/record/toEntries'
+import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 
 import { hasServer } from '../../devices/localPartyId'
 import {

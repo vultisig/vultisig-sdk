@@ -1,7 +1,7 @@
-import { CosmosChain } from '@core/chain/Chain'
-import { ChainAccount } from '@core/chain/ChainAccount'
-import { getCosmosClient } from '@core/chain/chains/cosmos/client'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
+import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 export const getCosmosAccountInfo = async ({
   chain,

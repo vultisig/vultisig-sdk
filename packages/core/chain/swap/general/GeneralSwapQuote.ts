@@ -1,4 +1,4 @@
-import { SwapFee } from '@core/chain/swap/SwapFee'
+import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 
 import { GeneralSwapProvider } from './GeneralSwapProvider'
 

@@ -1,4 +1,4 @@
-import { EvmChain } from '@core/chain/Chain'
+import { EvmChain } from '@vultisig/core-chain/Chain'
 import { keccak256 } from 'viem'
 
 import { TxHashResolver } from '../resolver'

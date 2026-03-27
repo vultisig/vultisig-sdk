@@ -13,13 +13,13 @@
 
 import { readFileSync, existsSync } from "fs";
 import { fromBinary } from "@bufbuild/protobuf";
-import { VaultContainerSchema } from "@core/mpc/types/vultisig/vault/v1/vault_container_pb";
-import { VaultSchema } from "@core/mpc/types/vultisig/vault/v1/vault_pb";
-import { fromBase64 } from "@lib/utils/fromBase64";
-import { decryptWithAesGcm } from "@lib/utils/encryption/aesGcm/decryptWithAesGcm";
+import { VaultContainerSchema } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb";
+import { VaultSchema } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb";
+import { fromBase64 } from "@vultisig/lib-utils/fromBase64";
+import { decryptWithAesGcm } from "@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm";
 
-import type { VaultContainer } from "@core/mpc/types/vultisig/vault/v1/vault_container_pb";
-import type { Vault } from "@core/mpc/types/vultisig/vault/v1/vault_pb";
+import type { VaultContainer } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb";
+import type { Vault } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb";
 
 type VaultInfo = {
   name: string;

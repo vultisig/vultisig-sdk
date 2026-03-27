@@ -1,4 +1,4 @@
-import { DeriveChainKind } from '@core/chain/ChainKind'
+import { DeriveChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { CosmosChain, EvmChain, OtherChain } from '../../../Chain'
 

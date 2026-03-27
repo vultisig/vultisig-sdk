@@ -1,19 +1,19 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Only mock async/network-dependent core modules
 // DO NOT mock static data modules (chainFeeCoin, knownTokens) as they have
 // transitive dependencies that break at module load time
-vi.mock('@core/chain/coin/price/getCoinPrices', () => ({
+vi.mock('@vultisig/core-chain/coin/price/getCoinPrices', () => ({
   getCoinPrices: vi.fn(),
 }))
 
-vi.mock('@core/chain/security/blockaid/site', () => ({
+vi.mock('@vultisig/core-chain/security/blockaid/site', () => ({
   scanSiteWithBlockaid: vi.fn(),
 }))
 
-import { getCoinPrices } from '@core/chain/coin/price/getCoinPrices'
-import { scanSiteWithBlockaid } from '@core/chain/security/blockaid/site'
+import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
+import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
 
 import { Vultisig } from '../../src/Vultisig'
 

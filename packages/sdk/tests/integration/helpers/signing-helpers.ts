@@ -5,7 +5,7 @@
  * and signature validation.
  */
 
-import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { expect } from 'vitest'
 
 import type { Chain, Signature, SigningPayload } from '@/types'

@@ -1,4 +1,4 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 
 import { queryBlockaid } from '../../../core/query'
 import { BlockaidSolanaSimulation } from '../api/core'

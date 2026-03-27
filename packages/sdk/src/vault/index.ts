@@ -20,7 +20,7 @@ export type { VaultConfig } from './VaultServices'
 // Use: Vultisig.isFastVault(vault) and Vultisig.isSecureVault(vault)
 
 // Re-export core vault type with alias to avoid conflict
-export type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+export type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 // Stub types for compilation - actual types come from core workspace
 export type VaultFolder = any

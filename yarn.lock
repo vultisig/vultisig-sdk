@@ -643,70 +643,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@core/chain@workspace:^, @core/chain@workspace:packages/core/chain":
-  version: 0.0.0-use.local
-  resolution: "@core/chain@workspace:packages/core/chain"
-  dependencies:
-    7z-wasm: "npm:^1.2.0"
-    "@bufbuild/protobuf": "npm:^2.11.0"
-    "@core/config": "workspace:^"
-    "@core/mpc": "workspace:^"
-    "@cosmjs/amino": "npm:^0.38.1"
-    "@cosmjs/encoding": "npm:^0.38.1"
-    "@cosmjs/proto-signing": "npm:^0.38.1"
-    "@cosmjs/stargate": "npm:^0.38.1"
-    "@lib/utils": "workspace:^"
-    "@lifi/sdk": "npm:^3.16.2"
-    "@mysten/sui": "npm:^2.8.0"
-    "@noble/hashes": "npm:^2.0.1"
-    "@polkadot/api": "npm:^16.5.4"
-    "@polkadot/util-crypto": "npm:^14.0.1"
-    "@solana/web3.js": "npm:^1.98.4"
-    "@trustwallet/wallet-core": "npm:^4.6.0"
-    bip32: "npm:^5.0.1"
-    bitcoinjs-lib: "npm:^7.0.1"
-    bs58: "npm:^6.0.0"
-    cbor-x: "npm:^1.6.4"
-    date-fns: "npm:^4.1.0"
-    ethers: "npm:^6.16.0"
-    i18next: "npm:^25.8.18"
-    tiny-secp256k1: "npm:^2.2.4"
-    viem: "npm:^2.47.4"
-    xrpl: "npm:^4.6.0"
-  languageName: unknown
-  linkType: soft
-
-"@core/config@workspace:^, @core/config@workspace:packages/core/config":
-  version: 0.0.0-use.local
-  resolution: "@core/config@workspace:packages/core/config"
-  languageName: unknown
-  linkType: soft
-
-"@core/mpc@workspace:^, @core/mpc@workspace:packages/core/mpc":
-  version: 0.0.0-use.local
-  resolution: "@core/mpc@workspace:packages/core/mpc"
-  dependencies:
-    7z-wasm: "npm:^1.2.0"
-    "@bufbuild/protobuf": "npm:^2.11.0"
-    "@core/chain": "workspace:^"
-    "@core/config": "workspace:^"
-    "@cosmjs/encoding": "npm:^0.38.1"
-    "@lib/dkls": "workspace:^"
-    "@lib/mldsa": "workspace:^"
-    "@lib/schnorr": "workspace:^"
-    "@lib/utils": "workspace:^"
-    "@mysten/sui": "npm:^2.8.0"
-    "@noble/hashes": "npm:^2.0.1"
-    "@solana/web3.js": "npm:^1.98.4"
-    "@trustwallet/wallet-core": "npm:^4.6.0"
-    bitcoinjs-lib: "npm:^7.0.1"
-    bs58: "npm:^6.0.0"
-    cosmjs-types: "npm:^0.11.0"
-    long: "npm:^5.3.2"
-    viem: "npm:^2.47.4"
-  languageName: unknown
-  linkType: soft
-
 "@cosmjs/amino@npm:^0.38.1":
   version: 0.38.1
   resolution: "@cosmjs/amino@npm:0.38.1"
@@ -1857,33 +1793,6 @@ __metadata:
   checksum: 10c0/cc7e15dc4acf6d9ef663757279600bab70533d847dcc1ab01332e9e680bd30b77cdf9ad885cc774276f51d98b05a013571c940e5b360985af5eb798dc1a2ee2b
   languageName: node
   linkType: hard
-
-"@lib/dkls@workspace:^, @lib/dkls@workspace:packages/lib/dkls":
-  version: 0.0.0-use.local
-  resolution: "@lib/dkls@workspace:packages/lib/dkls"
-  languageName: unknown
-  linkType: soft
-
-"@lib/mldsa@workspace:^, @lib/mldsa@workspace:packages/lib/mldsa":
-  version: 0.0.0-use.local
-  resolution: "@lib/mldsa@workspace:packages/lib/mldsa"
-  languageName: unknown
-  linkType: soft
-
-"@lib/schnorr@workspace:^, @lib/schnorr@workspace:packages/lib/schnorr":
-  version: 0.0.0-use.local
-  resolution: "@lib/schnorr@workspace:packages/lib/schnorr"
-  languageName: unknown
-  linkType: soft
-
-"@lib/utils@workspace:^, @lib/utils@workspace:packages/lib/utils":
-  version: 0.0.0-use.local
-  resolution: "@lib/utils@workspace:packages/lib/utils"
-  dependencies:
-    long: "npm:^5.3.2"
-    viem: "npm:^2.47.4"
-  languageName: unknown
-  linkType: soft
 
 "@lifi/sdk@npm:^3.16.2":
   version: 3.16.2
@@ -4476,6 +4385,70 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@vultisig/core-chain@npm:0.8.0, @vultisig/core-chain@workspace:packages/core/chain":
+  version: 0.0.0-use.local
+  resolution: "@vultisig/core-chain@workspace:packages/core/chain"
+  dependencies:
+    7z-wasm: "npm:^1.2.0"
+    "@bufbuild/protobuf": "npm:^2.11.0"
+    "@cosmjs/amino": "npm:^0.38.1"
+    "@cosmjs/encoding": "npm:^0.38.1"
+    "@cosmjs/proto-signing": "npm:^0.38.1"
+    "@cosmjs/stargate": "npm:^0.38.1"
+    "@lifi/sdk": "npm:^3.16.2"
+    "@mysten/sui": "npm:^2.8.0"
+    "@noble/hashes": "npm:^2.0.1"
+    "@polkadot/api": "npm:^16.5.4"
+    "@polkadot/util-crypto": "npm:^14.0.1"
+    "@solana/web3.js": "npm:^1.98.4"
+    "@trustwallet/wallet-core": "npm:^4.6.0"
+    "@vultisig/core-config": "npm:0.8.0"
+    "@vultisig/core-mpc": "npm:0.8.0"
+    "@vultisig/lib-utils": "npm:0.8.0"
+    bip32: "npm:^5.0.1"
+    bitcoinjs-lib: "npm:^7.0.1"
+    bs58: "npm:^6.0.0"
+    cbor-x: "npm:^1.6.4"
+    date-fns: "npm:^4.1.0"
+    ethers: "npm:^6.16.0"
+    i18next: "npm:^25.8.18"
+    tiny-secp256k1: "npm:^2.2.4"
+    viem: "npm:^2.47.4"
+    xrpl: "npm:^4.6.0"
+  languageName: unknown
+  linkType: soft
+
+"@vultisig/core-config@npm:0.8.0, @vultisig/core-config@workspace:packages/core/config":
+  version: 0.0.0-use.local
+  resolution: "@vultisig/core-config@workspace:packages/core/config"
+  languageName: unknown
+  linkType: soft
+
+"@vultisig/core-mpc@npm:0.8.0, @vultisig/core-mpc@workspace:packages/core/mpc":
+  version: 0.0.0-use.local
+  resolution: "@vultisig/core-mpc@workspace:packages/core/mpc"
+  dependencies:
+    7z-wasm: "npm:^1.2.0"
+    "@bufbuild/protobuf": "npm:^2.11.0"
+    "@cosmjs/encoding": "npm:^0.38.1"
+    "@mysten/sui": "npm:^2.8.0"
+    "@noble/hashes": "npm:^2.0.1"
+    "@solana/web3.js": "npm:^1.98.4"
+    "@trustwallet/wallet-core": "npm:^4.6.0"
+    "@vultisig/core-chain": "npm:0.8.0"
+    "@vultisig/core-config": "npm:0.8.0"
+    "@vultisig/lib-dkls": "npm:0.8.0"
+    "@vultisig/lib-mldsa": "npm:0.8.0"
+    "@vultisig/lib-schnorr": "npm:0.8.0"
+    "@vultisig/lib-utils": "npm:0.8.0"
+    bitcoinjs-lib: "npm:^7.0.1"
+    bs58: "npm:^6.0.0"
+    cosmjs-types: "npm:^0.11.0"
+    long: "npm:^5.3.2"
+    viem: "npm:^2.47.4"
+  languageName: unknown
+  linkType: soft
+
 "@vultisig/example-browser@workspace:examples/browser":
   version: 0.0.0-use.local
   resolution: "@vultisig/example-browser@workspace:examples/browser"
@@ -4547,6 +4520,33 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@vultisig/lib-dkls@npm:0.8.0, @vultisig/lib-dkls@workspace:packages/lib/dkls":
+  version: 0.0.0-use.local
+  resolution: "@vultisig/lib-dkls@workspace:packages/lib/dkls"
+  languageName: unknown
+  linkType: soft
+
+"@vultisig/lib-mldsa@npm:0.8.0, @vultisig/lib-mldsa@workspace:packages/lib/mldsa":
+  version: 0.0.0-use.local
+  resolution: "@vultisig/lib-mldsa@workspace:packages/lib/mldsa"
+  languageName: unknown
+  linkType: soft
+
+"@vultisig/lib-schnorr@npm:0.8.0, @vultisig/lib-schnorr@workspace:packages/lib/schnorr":
+  version: 0.0.0-use.local
+  resolution: "@vultisig/lib-schnorr@workspace:packages/lib/schnorr"
+  languageName: unknown
+  linkType: soft
+
+"@vultisig/lib-utils@npm:0.8.0, @vultisig/lib-utils@workspace:packages/lib/utils":
+  version: 0.0.0-use.local
+  resolution: "@vultisig/lib-utils@workspace:packages/lib/utils"
+  dependencies:
+    long: "npm:^5.3.2"
+    viem: "npm:^2.47.4"
+  languageName: unknown
+  linkType: soft
+
 "@vultisig/rujira@workspace:^, @vultisig/rujira@workspace:packages/rujira":
   version: 0.0.0-use.local
   resolution: "@vultisig/rujira@workspace:packages/rujira"
@@ -4597,6 +4597,13 @@ __metadata:
     "@types/chrome": "npm:^0.1.38"
     "@types/node": "npm:^25.5.0"
     "@vitest/coverage-v8": "npm:3.2.4"
+    "@vultisig/core-chain": "npm:0.8.0"
+    "@vultisig/core-config": "npm:0.8.0"
+    "@vultisig/core-mpc": "npm:0.8.0"
+    "@vultisig/lib-dkls": "npm:0.8.0"
+    "@vultisig/lib-mldsa": "npm:0.8.0"
+    "@vultisig/lib-schnorr": "npm:0.8.0"
+    "@vultisig/lib-utils": "npm:0.8.0"
     axios: "npm:^1.13.6"
     bip32: "npm:^5.0.1"
     bitcoinjs-lib: "npm:^7.0.1"

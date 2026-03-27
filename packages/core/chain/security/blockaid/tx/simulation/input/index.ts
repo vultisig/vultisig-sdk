@@ -1,10 +1,10 @@
-import { getChainKind } from '@core/chain/ChainKind'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import {
   BlockaidSimulationSupportedChainKind,
   blockaidSimulationSupportedChains,
-} from '@core/chain/security/blockaid/simulationChains'
-import { getKeysignChain } from '@core/mpc/keysign/utils/getKeysignChain'
-import { isOneOf } from '@lib/utils/array/isOneOf'
+} from '@vultisig/core-chain/security/blockaid/simulationChains'
+import { getKeysignChain } from '@vultisig/core-mpc/keysign/utils/getKeysignChain'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 
 import { BlockaidTxSimulationInput } from '../resolver'
 import {

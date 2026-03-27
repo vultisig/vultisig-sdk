@@ -43,6 +43,7 @@ jobs:
 
       - name: Build all packages
         run: |
+          yarn build:shared
           yarn build:all
           yarn cli:build
 
@@ -51,16 +52,34 @@ jobs:
         run: |
           LOCAL_VERSION=$(node -p "require('./packages/sdk/package.json').version")
           echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
+          PACKAGES=(
+            "packages/core/config"
+            "packages/lib/utils"
+            "packages/lib/dkls"
+            "packages/lib/mldsa"
+            "packages/lib/schnorr"
+            "packages/core/mpc"
+            "packages/core/chain"
+            "packages/sdk"
+            "packages/rujira"
+            "clients/cli"
+          )
 
-          # Check if any package still needs publishing
-          SDK_NPM=$(npm view @vultisig/sdk version 2>/dev/null || echo "0.0.0")
-          RUJIRA_NPM=$(npm view @vultisig/rujira version 2>/dev/null || echo "0.0.0")
-          RUJIRA_LOCAL=$(node -p "require('./packages/rujira/package.json').version")
+          SHOULD_PUBLISH=false
 
-          echo "SDK: local=$LOCAL_VERSION npm=$SDK_NPM"
-          echo "Rujira: local=$RUJIRA_LOCAL npm=$RUJIRA_NPM"
+          for PKG_PATH in "${PACKAGES[@]}"; do
+            PKG_NAME=$(node -p "require('./${PKG_PATH}/package.json').name")
+            PKG_LOCAL=$(node -p "require('./${PKG_PATH}/package.json').version")
+            PKG_NPM=$(npm view "$PKG_NAME" version 2>/dev/null || echo "0.0.0")
 
-          if [ "$LOCAL_VERSION" = "$SDK_NPM" ] && [ "$RUJIRA_LOCAL" = "$RUJIRA_NPM" ]; then
+            echo "$PKG_NAME: local=$PKG_LOCAL npm=$PKG_NPM"
+
+            if [ "$PKG_LOCAL" != "$PKG_NPM" ]; then
+              SHOULD_PUBLISH=true
+            fi
+          done
+
+          if [ "$SHOULD_PUBLISH" = false ]; then
             echo "All packages already published, skipping"
             echo "should_publish=false" >> $GITHUB_OUTPUT
           else
@@ -110,7 +129,9 @@ jobs:
       - run: yarn install --immutable
 
       - name: Build packages (required for tests)
-        run: yarn build:all
+        run: |
+          yarn build:shared
+          yarn build:all
 
       - name: Run unit tests
         run: yarn test

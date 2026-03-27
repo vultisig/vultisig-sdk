@@ -8,11 +8,11 @@
  * where all key shares are generated and stored in memory.
  */
 
-import { getKeygenThreshold } from '@core/mpc/getKeygenThreshold'
-import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
-import { startMpcSession } from '@core/mpc/session/startMpcSession'
-import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
+import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
+import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
+import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
+import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { randomUUID } from 'crypto'
 
 import type { SdkContext, VaultContext } from '../../../src/context/SdkContext'
@@ -23,12 +23,12 @@ import { SecureVault } from '../../../src/vault/SecureVault'
 
 // Dynamically import DKLS and Schnorr to avoid circular dependency issues
 const getDKLS = async () => {
-  const { DKLS } = await import('@core/mpc/dkls/dkls')
+  const { DKLS } = await import('@vultisig/core-mpc/dkls/dkls')
   return DKLS
 }
 
 const getSchnorr = async () => {
-  const { Schnorr } = await import('@core/mpc/schnorr/schnorrKeygen')
+  const { Schnorr } = await import('@vultisig/core-mpc/schnorr/schnorrKeygen')
   return Schnorr
 }
 

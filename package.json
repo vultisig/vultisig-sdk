@@ -24,6 +24,8 @@
     "build:sdk": "yarn workspace @vultisig/sdk build",
     "build:sdk-full": "yarn sync-and-copy && yarn workspace @vultisig/sdk build",
     "build:rujira": "yarn workspace @vultisig/rujira build",
+    "build:shared": "node scripts/build-shared-packages.mjs",
+    "pack:shared": "node scripts/pack-shared-packages.mjs",
     "sync-packages": "syncpack fix-mismatches",
     "sync-and-copy": "node_modules/.bin/tsx scripts/sync-and-copy.ts",
     "typecheck": "tsc --project .config/tsconfig.json --noEmit",
@@ -61,8 +63,8 @@
     "docs:watch": "typedoc --options .config/typedoc.json --watch",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "yarn workspace @vultisig/sdk npm publish --tolerate-republish && yarn workspace @vultisig/cli npm publish --tolerate-republish && yarn workspace @vultisig/rujira npm publish --tolerate-republish",
-    "release": "yarn build:all && yarn cli:build && yarn changeset:publish",
+    "changeset:publish": "yarn workspace @vultisig/core-config npm publish --tolerate-republish && yarn workspace @vultisig/lib-utils npm publish --tolerate-republish && yarn workspace @vultisig/lib-dkls npm publish --tolerate-republish && yarn workspace @vultisig/lib-mldsa npm publish --tolerate-republish && yarn workspace @vultisig/lib-schnorr npm publish --tolerate-republish && yarn workspace @vultisig/core-mpc npm publish --tolerate-republish && yarn workspace @vultisig/core-chain npm publish --tolerate-republish && yarn workspace @vultisig/sdk npm publish --tolerate-republish && yarn workspace @vultisig/rujira npm publish --tolerate-republish && yarn workspace @vultisig/cli npm publish --tolerate-republish",
+    "release": "yarn build:shared && yarn build:all && yarn cli:build && yarn changeset:publish",
     "update": "yarn set version latest && yarn dlx npm-check-updates@latest -u --workspaces --root && yarn install"
   },
   "lint-staged": {

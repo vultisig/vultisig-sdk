@@ -7,11 +7,11 @@
  * The jsonData is a compressed protobuf (KeygenMessage) containing session params.
  */
 import { fromBinary } from '@bufbuild/protobuf'
-import { Chain } from '@core/chain/Chain'
-import { getSevenZip } from '@core/mpc/compression/getSevenZip'
-import { KeygenMessageSchema } from '@core/mpc/types/vultisig/keygen/v1/keygen_message_pb'
-import { LibType } from '@core/mpc/types/vultisig/keygen/v1/lib_type_message_pb'
-import { attempt } from '@lib/utils/attempt'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getSevenZip } from '@vultisig/core-mpc/compression/getSevenZip'
+import { KeygenMessageSchema } from '@vultisig/core-mpc/types/vultisig/keygen/v1/keygen_message_pb'
+import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 /**
  * Parsed keygen QR payload

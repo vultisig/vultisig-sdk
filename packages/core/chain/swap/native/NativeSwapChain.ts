@@ -1,7 +1,7 @@
-import { Chain } from '@core/chain/Chain'
-import { cosmosRpcUrl } from '@core/chain/chains/cosmos/cosmosRpcUrl'
-import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { withoutDuplicates } from '@lib/utils/array/withoutDuplicates'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 
 export const nativeSwapChains = [Chain.THORChain, Chain.MayaChain] as const
 export type NativeSwapChain = (typeof nativeSwapChains)[number]

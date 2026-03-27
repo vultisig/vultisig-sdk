@@ -1,4 +1,3 @@
-import { Chain } from '@core/chain/Chain'
 /**
  * E2E Tests: Fiat Value Service (Production)
  *
@@ -14,6 +13,7 @@ import { Chain } from '@core/chain/Chain'
  * - See tests/e2e/SECURITY.md and .env.example for setup instructions
  */
 import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { VaultBase } from '@/index'

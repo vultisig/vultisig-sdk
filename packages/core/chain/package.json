@@ -1,17 +1,40 @@
 {
-  "name": "@core/chain",
-  "version": "0.0.1",
-  "private": true,
+  "name": "@vultisig/core-chain",
+  "version": "0.8.0",
+  "description": "Blockchain chain logic shared across Vultisig clients",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
+    "directory": "packages/core/chain"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../../scripts/build-shared-packages.mjs",
+    "prepack": "node ../../../scripts/build-shared-packages.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "dependencies": {
     "7z-wasm": "^1.2.0",
     "@bufbuild/protobuf": "^2.11.0",
-    "@core/config": "workspace:^",
-    "@core/mpc": "workspace:^",
     "@cosmjs/amino": "^0.38.1",
     "@cosmjs/encoding": "^0.38.1",
     "@cosmjs/proto-signing": "^0.38.1",
     "@cosmjs/stargate": "^0.38.1",
-    "@lib/utils": "workspace:^",
     "@lifi/sdk": "^3.16.2",
     "@mysten/sui": "^2.8.0",
     "@noble/hashes": "^2.0.1",
@@ -19,6 +42,9 @@
     "@polkadot/util-crypto": "^14.0.1",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.0",
+    "@vultisig/core-config": "0.8.0",
+    "@vultisig/core-mpc": "0.8.0",
+    "@vultisig/lib-utils": "0.8.0",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
@@ -29,6 +55,5 @@
     "tiny-secp256k1": "^2.2.4",
     "viem": "^2.47.4",
     "xrpl": "^4.6.0"
-  },
-  "type": "module"
+  }
 }

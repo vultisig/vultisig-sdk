@@ -1,5 +1,5 @@
-import { UtxoChain } from '@core/chain/Chain'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { UtxoChain } from '@vultisig/core-chain/Chain'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { getBlockchairBaseUrl } from './getBlockchairBaseUrl'
 

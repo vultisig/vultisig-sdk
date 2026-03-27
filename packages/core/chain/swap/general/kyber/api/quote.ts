@@ -1,7 +1,7 @@
-import { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { attempt } from '@lib/utils/attempt'
-import { isInError } from '@lib/utils/error/isInError'
-import { TransferDirection } from '@lib/utils/TransferDirection'
+import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { attempt } from '@vultisig/lib-utils/attempt'
+import { isInError } from '@vultisig/lib-utils/error/isInError'
+import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import { KyberSwapEnabledChain } from '../chains'
