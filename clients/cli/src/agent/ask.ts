@@ -123,6 +123,10 @@ export class AskInterface {
    * All tool calls and actions are executed automatically.
    */
   async ask(message: string): Promise<AskResult> {
+    this.responseParts = []
+    this.toolCalls = []
+    this.transactions = []
+
     const callbacks = this.getCallbacks()
     await this.session.sendMessage(message, callbacks)
 
