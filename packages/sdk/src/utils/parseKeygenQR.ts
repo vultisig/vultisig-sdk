@@ -33,6 +33,8 @@ export type ParsedKeygenQR = {
   libType: 'GG20' | 'DKLS' | 'KEYIMPORT'
   /** Whether to use Vultisig relay server */
   useVultisigRelay: boolean
+  /** Whether the initiator enabled batched TSS ceremonies. */
+  tssBatching?: boolean
 }
 
 /**
@@ -125,6 +127,9 @@ export async function parseKeygenQR(qrPayload: string): Promise<ParsedKeygenQR> 
 
   const params = new URLSearchParams(urlParts[1])
   const jsonData = params.get('jsonData')
+  const tssBatching = params.has('tssBatching')
+    ? params.get('tssBatching') === '1'
+    : undefined
 
   if (!jsonData) {
     throw new Error('Invalid QR payload: missing jsonData parameter')
@@ -153,5 +158,6 @@ export async function parseKeygenQR(qrPayload: string): Promise<ParsedKeygenQR> 
     chains: validatedChains,
     libType: libTypeToString(keygenMessage.libType),
     useVultisigRelay: keygenMessage.useVultisigRelay,
+    tssBatching,
   }
 }

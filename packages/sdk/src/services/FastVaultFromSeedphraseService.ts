@@ -14,8 +14,9 @@
 import type { Chain } from '@vultisig/core-chain/Chain'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
+import { keyImportWithServer } from '@vultisig/core-mpc/fast/api/keyImportWithServer'
 import { mldsaWithServer } from '@vultisig/core-mpc/fast/api/mldsaWithServer'
-import { fastVaultServerUrl } from '@vultisig/core-mpc/fast/config'
+import { sequentialKeyImportWithServer } from '@vultisig/core-mpc/fast/api/sequentialKeyImportWithServer'
 import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
 import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
@@ -35,29 +36,8 @@ import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
 import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
 import type { ChainDiscoveryResult, CreateFastVaultFromSeedphraseOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
+import { getChainBatchMessageIds, resolveTssBatching, TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
-
-/**
- * Call VultiServer key import API
- */
-async function keyImportWithServer(input: {
-  name: string
-  session_id: string
-  hex_encryption_key: string
-  hex_chain_code: string
-  local_party_id: string
-  encryption_password: string
-  email: string
-  lib_type: number
-  chains: string[]
-  vaultBaseUrl?: string
-}): Promise<void> {
-  const { vaultBaseUrl, ...body } = input
-  await queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/import`, {
-    body,
-    responseType: 'none',
-  })
-}
 
 /**
  * FastVaultFromSeedphraseService
@@ -104,6 +84,7 @@ export class FastVaultFromSeedphraseService {
     discoveredChains?: ChainDiscoveryResult[]
   }> {
     const { mnemonic, name, password, email, signal, onProgress, onChainDiscovery } = options
+    const tssBatching = resolveTssBatching(this.context.config, options.tssBatching)
 
     const reportProgress = (step: VaultCreationStep) => {
       if (signal?.aborted) {
@@ -172,19 +153,33 @@ export class FastVaultFromSeedphraseService {
     const localPartyId = generateLocalPartyId('sdk')
     const serverPartyId = generateLocalPartyId('server')
 
-    // Step 5: Call VultiServer key import API
-    await keyImportWithServer({
-      name,
-      session_id: sessionId,
-      hex_encryption_key: hexEncryptionKey,
-      hex_chain_code: hexChainCode,
-      local_party_id: serverPartyId,
-      encryption_password: password,
-      email,
-      lib_type: toLibType({ libType: 'DKLS', isKeyImport: true }), // KEYIMPORT (2)
-      chains: chainsToImport,
-      vaultBaseUrl: this.context.serverManager.fastVault,
-    })
+    if (tssBatching) {
+      await keyImportWithServer({
+        name,
+        session_id: sessionId,
+        hex_encryption_key: hexEncryptionKey,
+        local_party_id: serverPartyId,
+        encryption_password: password,
+        email,
+        lib_type: toLibType({ libType: 'DKLS', isKeyImport: true }),
+        chains: chainsToImport,
+        protocols: ['ecdsa', 'eddsa'],
+        vaultBaseUrl: this.context.serverManager.fastVault,
+      })
+    } else {
+      await sequentialKeyImportWithServer({
+        name,
+        session_id: sessionId,
+        hex_encryption_key: hexEncryptionKey,
+        hex_chain_code: hexChainCode,
+        local_party_id: serverPartyId,
+        encryption_password: password,
+        email,
+        lib_type: toLibType({ libType: 'DKLS', isKeyImport: true }),
+        chains: chainsToImport,
+        vaultBaseUrl: this.context.serverManager.fastVault,
+      })
+    }
 
     // Step 6: Join relay session
     reportProgress({
@@ -215,13 +210,6 @@ export class FastVaultFromSeedphraseService {
       devices,
     })
 
-    // Step 9: ECDSA key import via DKLS
-    reportProgress({
-      step: 'keygen',
-      progress: 40,
-      message: 'Importing ECDSA key...',
-    })
-
     const dkls = new DKLS(
       { keyimport: true },
       true, // isInitiateDevice
@@ -233,102 +221,204 @@ export class FastVaultFromSeedphraseService {
       hexEncryptionKey
     )
 
-    const ecdsaResult = await dkls.startKeyImportWithRetry(masterKeys.ecdsaPrivateKeyHex, hexChainCode)
-
-    // Check for abort before EdDSA key import
-    if (signal?.aborted) {
-      throw new Error('Operation aborted')
-    }
-
-    // Step 10: EdDSA key import via Schnorr
-    reportProgress({
-      step: 'keygen',
-      progress: 55,
-      message: 'Importing EdDSA key...',
-    })
-
-    const setupMessage = dkls.getSetupMessage()
-    const schnorr = new Schnorr(
-      { keyimport: true },
-      true, // isInitiateDevice
-      this.serverUrl,
-      sessionId,
-      localPartyId,
-      devices,
-      [], // oldKeygenCommittee
-      hexEncryptionKey,
-      setupMessage
-    )
-
-    const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
-
-    // Check for abort before per-chain imports
-    if (signal?.aborted) {
-      throw new Error('Operation aborted')
-    }
-
-    // Step 11: Per-chain key imports (before MLDSA to avoid session expiry)
-    reportProgress({
-      step: 'keygen',
-      progress: 78,
-      message: 'Importing chain-specific keys...',
-    })
-
     const chainPublicKeys: Partial<Record<Chain, string>> = {}
     const chainKeyShares: Partial<Record<Chain, string>> = {}
+    let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
+    let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
+    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(
+      mnemonic,
+      chainsToImport as Chain[],
+      {
+        usePhantomSolanaPath,
+      }
+    )
 
-    // Derive chain-specific private keys
-    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic, chainsToImport as Chain[], {
-      usePhantomSolanaPath,
-    })
+    if (tssBatching) {
+      reportProgress({
+        step: 'keygen',
+        progress: 40,
+        message: 'Importing ECDSA, EdDSA, and chain keys...',
+      })
 
-    // Import each chain's key via MPC
-    for (let i = 0; i < chainPrivateKeys.length; i++) {
-      // Check for abort at start of each chain import
+      const rootSchnorr = new Schnorr(
+        { keyimport: true },
+        true,
+        this.serverUrl,
+        sessionId,
+        localPartyId,
+        devices,
+        [],
+        hexEncryptionKey,
+        new Uint8Array()
+      )
+
+      const chainImportPromises = chainPrivateKeys.map(
+        async ({ chain, privateKeyHex, isEddsa }) => {
+          const ids = getChainBatchMessageIds(chain)
+          if (isEddsa) {
+            const chainSchnorr = new Schnorr(
+              { keyimport: true },
+              true,
+              this.serverUrl,
+              sessionId,
+              localPartyId,
+              devices,
+              [],
+              hexEncryptionKey,
+              new Uint8Array()
+            )
+            const result = await chainSchnorr.startKeyImportWithRetry(
+              privateKeyHex,
+              hexChainCode,
+              ids.setupMessageId,
+              ids.protocolMessageId
+            )
+            return { chain, result }
+          }
+
+          const chainDkls = new DKLS(
+            { keyimport: true },
+            true,
+            this.serverUrl,
+            sessionId,
+            localPartyId,
+            devices,
+            [],
+            hexEncryptionKey
+          )
+          const result = await chainDkls.startKeyImportWithRetry(
+            privateKeyHex,
+            hexChainCode,
+            ids.setupMessageId,
+            ids.protocolMessageId
+          )
+          return { chain, result }
+        }
+      )
+
+      const [rootEcdsa, rootEddsa, chainResults] = await Promise.all([
+        dkls.startKeyImportWithRetry(
+          masterKeys.ecdsaPrivateKeyHex,
+          hexChainCode,
+          undefined,
+          TSS_BATCH_MESSAGE_IDS.ecdsa
+        ),
+        rootSchnorr.startKeyImportWithRetry(
+          masterKeys.eddsaPrivateKeyHex,
+          hexChainCode,
+          TSS_BATCH_MESSAGE_IDS.eddsaImportSetup,
+          TSS_BATCH_MESSAGE_IDS.eddsa
+        ),
+        Promise.all(chainImportPromises),
+      ])
+
+      ecdsaResult = rootEcdsa
+      eddsaResult = rootEddsa
+      chainResults.forEach(({ chain, result }) => {
+        chainPublicKeys[chain] = result.publicKey
+        chainKeyShares[chain] = result.keyshare
+      })
+    } else {
+      reportProgress({
+        step: 'keygen',
+        progress: 40,
+        message: 'Importing ECDSA key...',
+      })
+
+      ecdsaResult = await dkls.startKeyImportWithRetry(
+        masterKeys.ecdsaPrivateKeyHex,
+        hexChainCode
+      )
+
       if (signal?.aborted) {
         throw new Error('Operation aborted')
       }
 
-      const { chain, privateKeyHex, isEddsa } = chainPrivateKeys[i]
+      reportProgress({
+        step: 'keygen',
+        progress: 55,
+        message: 'Importing EdDSA key...',
+      })
+
+      const schnorr = new Schnorr(
+        { keyimport: true },
+        true,
+        this.serverUrl,
+        sessionId,
+        localPartyId,
+        devices,
+        [],
+        hexEncryptionKey,
+        dkls.getSetupMessage()
+      )
+
+      eddsaResult = await schnorr.startKeyImportWithRetry(
+        masterKeys.eddsaPrivateKeyHex,
+        hexChainCode
+      )
+
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
 
       reportProgress({
         step: 'keygen',
-        progress: 75 + Math.floor((i / chainPrivateKeys.length) * 15),
-        message: `Importing ${chain} key (${i + 1}/${chainPrivateKeys.length})...`,
-        chainId: chain,
+        progress: 78,
+        message: 'Importing chain-specific keys...',
       })
 
-      if (isEddsa) {
-        // EdDSA chains use Schnorr
-        const chainSchnorr = new Schnorr(
-          { keyimport: true },
-          true, // isInitiateDevice
-          this.serverUrl,
-          sessionId,
-          localPartyId,
-          devices,
-          [], // oldKeygenCommittee
-          hexEncryptionKey,
-          new Uint8Array() // Empty setup for chain imports
-        )
-        const chainResult = await chainSchnorr.startKeyImportWithRetry(privateKeyHex, eddsaResult.chaincode, chain)
-        chainPublicKeys[chain] = chainResult.publicKey
-        chainKeyShares[chain] = chainResult.keyshare
-      } else {
-        // ECDSA chains use DKLS
-        const chainDkls = new DKLS(
-          { keyimport: true },
-          true, // isInitiateDevice
-          this.serverUrl,
-          sessionId,
-          localPartyId,
-          devices,
-          [], // oldKeygenCommittee
-          hexEncryptionKey
-        )
-        const chainResult = await chainDkls.startKeyImportWithRetry(privateKeyHex, ecdsaResult.chaincode, chain)
-        chainPublicKeys[chain] = chainResult.publicKey
-        chainKeyShares[chain] = chainResult.keyshare
+      for (let i = 0; i < chainPrivateKeys.length; i++) {
+        if (signal?.aborted) {
+          throw new Error('Operation aborted')
+        }
+
+        const { chain, privateKeyHex, isEddsa } = chainPrivateKeys[i]
+
+        reportProgress({
+          step: 'keygen',
+          progress: 75 + Math.floor((i / chainPrivateKeys.length) * 15),
+          message: `Importing ${chain} key (${i + 1}/${chainPrivateKeys.length})...`,
+          chainId: chain,
+        })
+
+        if (isEddsa) {
+          const chainSchnorr = new Schnorr(
+            { keyimport: true },
+            true,
+            this.serverUrl,
+            sessionId,
+            localPartyId,
+            devices,
+            [],
+            hexEncryptionKey,
+            new Uint8Array()
+          )
+          const chainResult = await chainSchnorr.startKeyImportWithRetry(
+            privateKeyHex,
+            eddsaResult.chaincode,
+            chain
+          )
+          chainPublicKeys[chain] = chainResult.publicKey
+          chainKeyShares[chain] = chainResult.keyshare
+        } else {
+          const chainDkls = new DKLS(
+            { keyimport: true },
+            true,
+            this.serverUrl,
+            sessionId,
+            localPartyId,
+            devices,
+            [],
+            hexEncryptionKey
+          )
+          const chainResult = await chainDkls.startKeyImportWithRetry(
+            privateKeyHex,
+            ecdsaResult.chaincode,
+            chain
+          )
+          chainPublicKeys[chain] = chainResult.publicKey
+          chainKeyShares[chain] = chainResult.keyshare
+        }
       }
     }
 

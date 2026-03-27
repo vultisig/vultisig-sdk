@@ -131,6 +131,8 @@ export type CreateFastVaultFromSeedphraseOptions = {
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
   /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
   usePhantomSolanaPath?: boolean
+  /** Enable batched MPC ceremonies for this import. */
+  tssBatching?: boolean
 }
 
 /**
@@ -165,6 +167,8 @@ export type CreateSecureVaultFromSeedphraseOptions = {
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
   /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
   usePhantomSolanaPath?: boolean
+  /** Enable batched MPC ceremonies for this import. */
+  tssBatching?: boolean
 }
 
 /**
@@ -189,6 +193,8 @@ export type JoinSecureVaultOptions = {
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   /** Use Phantom wallet derivation path for Solana (must match initiator's setting) */
   usePhantomSolanaPath?: boolean
+  /** Enable batched MPC ceremonies for this join flow. */
+  tssBatching?: boolean
 }
 
 /**

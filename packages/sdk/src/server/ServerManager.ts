@@ -1,6 +1,8 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
+import { batchReshareWithServer } from '@vultisig/core-mpc/fast/api/batchReshareWithServer'
+import { createVaultWithServer } from '@vultisig/core-mpc/fast/api/createVaultWithServer'
 import { getVaultFromServer } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
 import { mldsaWithServer } from '@vultisig/core-mpc/fast/api/mldsaWithServer'
 import { resendVaultShare } from '@vultisig/core-mpc/fast/api/resendVaultShare'
@@ -29,6 +31,7 @@ import { formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../crypto'
 import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
+import { TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 
 /**
  * Server endpoint configuration
@@ -357,22 +360,45 @@ export class ServerManager {
    */
   async reshareVault(
     vault: CoreVault,
-    reshareOptions: ReshareOptions & { password: string; email?: string }
+    reshareOptions: ReshareOptions & {
+      password: string
+      email?: string
+      tssBatching?: boolean
+    }
   ): Promise<CoreVault> {
-    await reshareWithServer({
-      name: vault.name,
-      session_id: randomUUID(),
-      public_key: vault.publicKeys.ecdsa,
-      hex_encryption_key: vault.hexChainCode,
-      hex_chain_code: vault.hexChainCode,
-      local_party_id: vault.localPartyId,
-      old_parties: vault.signers,
-      old_reshare_prefix: vault.resharePrefix || '',
-      encryption_password: reshareOptions.password,
-      email: reshareOptions.email,
-      reshare_type: 1,
-      lib_type: 1,
-    })
+    if (reshareOptions.tssBatching) {
+      await batchReshareWithServer({
+        name: vault.name,
+        session_id: randomUUID(),
+        public_key: vault.publicKeys.ecdsa,
+        hex_encryption_key: vault.hexChainCode,
+        hex_chain_code: vault.hexChainCode,
+        local_party_id: vault.localPartyId,
+        old_parties: vault.signers,
+        old_reshare_prefix: vault.resharePrefix || '',
+        encryption_password: reshareOptions.password,
+        email: reshareOptions.email,
+        reshare_type: 1,
+        lib_type: 1,
+        protocols: ['ecdsa', 'eddsa'],
+        vaultBaseUrl: this.config.fastVault,
+      })
+    } else {
+      await reshareWithServer({
+        name: vault.name,
+        session_id: randomUUID(),
+        public_key: vault.publicKeys.ecdsa,
+        hex_encryption_key: vault.hexChainCode,
+        hex_chain_code: vault.hexChainCode,
+        local_party_id: vault.localPartyId,
+        old_parties: vault.signers,
+        old_reshare_prefix: vault.resharePrefix || '',
+        encryption_password: reshareOptions.password,
+        email: reshareOptions.email,
+        reshare_type: 1,
+        lib_type: 1,
+      })
+    }
 
     return vault
   }
@@ -387,6 +413,7 @@ export class ServerManager {
     signal?: AbortSignal
     onLog?: (msg: string) => void
     onProgress?: (u: KeygenProgressUpdate) => void
+    tssBatching?: boolean
   }): Promise<{
     vault: CoreVault
     vaultId: string
@@ -411,16 +438,31 @@ export class ServerManager {
     // The server party ID should be consistent throughout the process
     const serverPartyId = generateLocalPartyId('server')
 
-    await setupVaultWithServer({
-      name: options.name,
-      session_id: sessionId,
-      hex_encryption_key: hexEncryptionKey,
-      hex_chain_code: hexChainCode,
-      local_party_id: serverPartyId, // Use server party ID for server communication
-      encryption_password: options.password,
-      email: options.email,
-      lib_type: 1,
-    })
+    if (options.tssBatching) {
+      await setupVaultWithServer({
+        name: options.name,
+        session_id: sessionId,
+        hex_encryption_key: hexEncryptionKey,
+        hex_chain_code: hexChainCode,
+        local_party_id: serverPartyId,
+        encryption_password: options.password,
+        email: options.email,
+        protocols: ['ecdsa', 'eddsa', 'mldsa'],
+        vaultBaseUrl: this.config.fastVault,
+      })
+    } else {
+      await createVaultWithServer({
+        name: options.name,
+        session_id: sessionId,
+        hex_encryption_key: hexEncryptionKey,
+        hex_chain_code: hexChainCode,
+        local_party_id: serverPartyId,
+        encryption_password: options.password,
+        email: options.email,
+        lib_type: 1,
+        vaultBaseUrl: this.config.fastVault,
+      })
+    }
 
     log('Joining relay session...')
 
@@ -440,82 +482,129 @@ export class ServerManager {
       devices,
     })
 
-    // Real MPC keygen - ECDSA first
-    progress({ phase: 'ecdsa', message: 'Generating ECDSA keys...' })
-
-    // Create DKLS instance for ECDSA keygen
     const dkls = new DKLS(
-      { create: true }, // KeygenOperation - creating new vault
-      true, // isInitiateDevice
+      { create: true },
+      true,
       this.config.messageRelay,
       sessionId,
-      localPartyId, // This should be the browser/client party ID
-      devices, // keygenCommittee (includes both browser and server)
-      [], // oldKeygenCommittee (empty for new vault)
+      localPartyId,
+      devices,
+      [],
       hexEncryptionKey
     )
 
-    // Run ECDSA keygen
-    const ecdsaResult = await dkls.startKeygenWithRetry()
-    log('ECDSA keygen completed successfully')
-
-    // Check for abort before EdDSA keygen
-    if (options.signal?.aborted) {
-      throw new Error('Operation aborted')
-    }
-
-    // EdDSA keygen using the same setup message
-    progress({ phase: 'eddsa', message: 'Generating EdDSA keys...' })
-
-    const setupMessage = dkls.getSetupMessage()
-    const schnorr = new Schnorr(
-      { create: true }, // KeygenOperation
-      true, // isInitiateDevice
-      this.config.messageRelay,
-      sessionId, // Use same session ID as ECDSA
-      localPartyId,
-      devices, // keygenCommittee
-      [], // oldKeygenCommittee
-      hexEncryptionKey,
-      setupMessage // Reuse setup message from DKLS
-    )
-
-    // Run EdDSA keygen
-    const eddsaResult = await schnorr.startKeygenWithRetry()
-    log('EdDSA keygen completed successfully')
-
-    // Check for abort before ML-DSA keygen
-    if (options.signal?.aborted) {
-      throw new Error('Operation aborted')
-    }
-
-    // ML-DSA keygen
-    progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
-
     let mldsaResult: { publicKey: string; keyshare: string } | undefined
-    try {
-      await mldsaWithServer({
-        public_key: ecdsaResult.publicKey,
-        session_id: sessionId,
-        hex_encryption_key: hexEncryptionKey,
-        encryption_password: options.password,
-        email: options.email,
-        vaultBaseUrl: this.config.fastVault,
+    let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
+    let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
+
+    if (options.tssBatching) {
+      progress({
+        phase: 'ecdsa',
+        message: 'Generating ECDSA, EdDSA, and ML-DSA keys...',
       })
 
-      const mldsaKeygen = new MldsaKeygen(
-        true, // isInitiateDevice
+      await dkls.prepareKeygenSetup()
+      const batchSchnorr = new Schnorr(
+        { create: true },
+        true,
         this.config.messageRelay,
         sessionId,
         localPartyId,
         devices,
-        hexEncryptionKey
+        [],
+        hexEncryptionKey,
+        dkls.getSetupMessage()
+      )
+      const batchMldsa = new MldsaKeygen(
+        true,
+        this.config.messageRelay,
+        sessionId,
+        localPartyId,
+        devices,
+        hexEncryptionKey,
+        {
+          messageId: TSS_BATCH_MESSAGE_IDS.mldsa,
+          setupMessageId: TSS_BATCH_MESSAGE_IDS.mldsaSetup,
+        }
       )
 
-      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-      log('ML-DSA keygen completed successfully')
-    } catch (error) {
-      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+      const batchMldsaPromise = batchMldsa
+        .startKeygenWithRetry()
+        .then(result => {
+          log('ML-DSA keygen completed successfully')
+          return result
+        })
+        .catch(error => {
+          console.warn(
+            'ML-DSA keygen failed (non-fatal):',
+            error instanceof Error ? error.message : error
+          )
+          return undefined
+        })
+
+      ;[ecdsaResult, eddsaResult, mldsaResult] = await Promise.all([
+        dkls.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.ecdsa),
+        batchSchnorr.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.eddsa),
+        batchMldsaPromise,
+      ])
+      log('ECDSA keygen completed successfully')
+      log('EdDSA keygen completed successfully')
+    } else {
+      progress({ phase: 'ecdsa', message: 'Generating ECDSA keys...' })
+      ecdsaResult = await dkls.startKeygenWithRetry()
+      log('ECDSA keygen completed successfully')
+
+      if (options.signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
+      progress({ phase: 'eddsa', message: 'Generating EdDSA keys...' })
+      const schnorr = new Schnorr(
+        { create: true },
+        true,
+        this.config.messageRelay,
+        sessionId,
+        localPartyId,
+        devices,
+        [],
+        hexEncryptionKey,
+        dkls.getSetupMessage()
+      )
+      eddsaResult = await schnorr.startKeygenWithRetry()
+      log('EdDSA keygen completed successfully')
+
+      if (options.signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
+      progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
+      try {
+        await mldsaWithServer({
+          public_key: ecdsaResult.publicKey,
+          session_id: sessionId,
+          hex_encryption_key: hexEncryptionKey,
+          encryption_password: options.password,
+          email: options.email,
+          vaultBaseUrl: this.config.fastVault,
+        })
+
+        const mldsaKeygen = new MldsaKeygen(
+          true,
+          this.config.messageRelay,
+          sessionId,
+          localPartyId,
+          devices,
+          hexEncryptionKey
+        )
+
+        mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+        log('ML-DSA keygen completed successfully')
+      } catch (error) {
+        console.warn(
+          'ML-DSA keygen failed (non-fatal):',
+          error instanceof Error ? error.message : error
+        )
+      }
     }
 
     // Check for abort before finalization
