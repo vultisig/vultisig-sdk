@@ -1,7 +1,7 @@
-import { getPreSigningOutput } from '@core/mpc/keysign/preSigningOutput'
-import { decodeBittensorTxInput } from '@core/mpc/keysign/signingInputs/resolvers/bittensor'
-import { without } from '@lib/utils/array/without'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { getPreSigningOutput } from '@vultisig/core-mpc/keysign/preSigningOutput'
+import { decodeBittensorTxInput } from '@vultisig/core-mpc/keysign/signingInputs/resolvers/bittensor'
+import { without } from '@vultisig/lib-utils/array/without'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { blake2AsU8a } from '@polkadot/util-crypto'
 import { WalletCore } from '@trustwallet/wallet-core'
 

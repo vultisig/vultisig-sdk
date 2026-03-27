@@ -4,9 +4,9 @@
  * Derives addresses from a mnemonic and checks for non-zero balances
  * to help users identify which chains they have funds on.
  */
-import { Chain } from '@core/chain/Chain'
-import { getCoinBalance } from '@core/chain/coin/balance'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 
 import { SUPPORTED_CHAINS } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'

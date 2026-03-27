@@ -1,6 +1,6 @@
-import { rootApiUrl } from '@core/config'
-import { attempt } from '@lib/utils/attempt'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { rootApiUrl } from '@vultisig/core-config'
+import { attempt } from '@vultisig/lib-utils/attempt'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import {
   SolanaCoingeckoTokenResponse,

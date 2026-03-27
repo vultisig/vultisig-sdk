@@ -3,16 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelaySigningService } from '../../../src/services/RelaySigningService'
 
 // Mock the core MPC modules
-vi.mock('@core/mpc/devices/localPartyId', () => ({
+vi.mock('@vultisig/core-mpc/devices/localPartyId', () => ({
   generateLocalPartyId: vi.fn((prefix: string) => `${prefix}-party-${Math.random().toString(36).slice(2, 8)}`),
 }))
 
-vi.mock('@core/mpc/utils/generateHexEncryptionKey', () => ({
+vi.mock('@vultisig/core-mpc/utils/generateHexEncryptionKey', () => ({
   generateHexEncryptionKey: vi.fn(() => 'a'.repeat(64)),
 }))
 
 // Mock getJoinKeysignUrl to return a predictable URL format
-vi.mock('@core/chain/utils/getJoinKeysignUrl', () => ({
+vi.mock('@vultisig/core-mpc/keysign/utils/getJoinKeysignUrl', () => ({
   getJoinKeysignUrl: vi.fn(
     ({ vaultId, sessionId }) =>
       `https://vultisig.com?type=SignTransaction&vault=${vaultId}&jsonData=compressed-data&session=${sessionId}`
@@ -36,11 +36,11 @@ vi.mock('../../../src/adapters/getChainSigningInfo', () => ({
 // Mock WalletCore for tests
 const mockWalletCore = {} as any
 
-vi.mock('@core/chain/ChainKind', () => ({
+vi.mock('@vultisig/core-chain/ChainKind', () => ({
   getChainKind: vi.fn(() => 'evm'),
 }))
 
-vi.mock('@core/chain/signing/SignatureAlgorithm', () => ({
+vi.mock('@vultisig/core-chain/signing/SignatureAlgorithm', () => ({
   signatureAlgorithms: {
     evm: 'ecdsa',
     utxo: 'ecdsa',

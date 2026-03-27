@@ -1,6 +1,6 @@
-import { CosmosChain } from '@core/chain/Chain'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { StargateClient } from '@cosmjs/stargate'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 
 import { tendermintRpcUrl } from './tendermintRpcUrl'
 

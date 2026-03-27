@@ -1,5 +1,5 @@
-import { Chain } from '@core/chain/Chain'
-import { ChainKind, getChainKind } from '@core/chain/ChainKind'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { TxReceiptInfo, TxStatusResolver } from './resolver'
 import { getBittensorTxStatus } from './resolvers/bittensor'

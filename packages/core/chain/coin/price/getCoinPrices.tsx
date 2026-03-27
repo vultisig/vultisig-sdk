@@ -1,7 +1,7 @@
-import { rootApiUrl } from '@core/config'
-import { FiatCurrency } from '@core/config/FiatCurrency'
-import { defaultFiatCurrency } from '@core/config/FiatCurrency'
-import { addQueryParams } from '@lib/utils/query/addQueryParams'
+import { rootApiUrl } from '@vultisig/core-config'
+import { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
+import { defaultFiatCurrency } from '@vultisig/core-config/FiatCurrency'
+import { addQueryParams } from '@vultisig/lib-utils/query/addQueryParams'
 
 import { queryCoingeickoPrices } from './queryCoingeickoPrices'
 const baseUrl = `${rootApiUrl}/coingeicko/api/v3/simple/price`

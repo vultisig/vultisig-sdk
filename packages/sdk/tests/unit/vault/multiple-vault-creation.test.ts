@@ -5,7 +5,7 @@
  * instead of creating a new one.
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createSdkContext } from '../../../src/context/SdkContextBuilder'

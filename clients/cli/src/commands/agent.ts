@@ -5,6 +5,7 @@
  * - `vultisig agent` - Interactive TUI with IRC-style chat (new session)
  * - `vultisig agent --session-id <id>` - Resume existing session
  * - `vultisig agent --via-agent` - NDJSON pipe for agent-to-agent communication
+ * - `vultisig agent ask <message>` - One-shot command for AI coding agents
  *
  * Session management:
  * - `vultisig agent sessions list` - List sessions for current vault
@@ -15,9 +16,9 @@ import chalk from 'chalk'
 import Table from 'cli-table3'
 
 import type { AgentConfig } from '../agent'
-import { AgentClient, AgentSession, authenticateVault, ChatTUI, PipeInterface } from '../agent'
+import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, PipeInterface } from '../agent'
 import type { CommandContext } from '../core'
-import { isJsonOutput, outputJson, printResult } from '../lib/output'
+import { isJsonOutput, outputJson, printResult, setSilentMode } from '../lib/output'
 
 export type AgentCommandOptions = {
   backendUrl?: string
@@ -70,6 +71,110 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
 }
 
 // ============================================================================
+// Ask Mode (one-shot for AI coding agents)
+// ============================================================================
+
+export type AgentAskOptions = {
+  backendUrl?: string
+  password?: string
+  session?: string
+  verbose?: boolean
+  json?: boolean
+}
+
+/**
+ * Send a single message to the agent and output the response.
+ * Designed for AI coding agents (Claude Code, Opencode, Cursor, etc.)
+ * that execute shell commands and read stdout.
+ *
+ * Output format (text):
+ *   session:<conversation-id>
+ *   <blank line>
+ *   <response text>
+ *
+ * Output format (--json):
+ *   {"session_id":"...","response":"...","tool_calls":[...],"transactions":[...]}
+ */
+export async function executeAgentAsk(
+  ctx: CommandContext,
+  message: string,
+  options: AgentAskOptions
+): Promise<void> {
+  // Suppress info/warn/success messages — only our structured output goes to stdout
+  setSilentMode(true)
+
+  // Redirect console.log to stderr so that SDK internals (MPC signing progress,
+  // balance updates, etc.) don't pollute our structured stdout output.
+  const originalConsoleLog = console.log
+  console.log = (...args: unknown[]) => {
+    process.stderr.write(args.map(String).join(' ') + '\n')
+  }
+
+  try {
+    const vault = await ctx.ensureActiveVault()
+
+    const config: AgentConfig = {
+      backendUrl:
+        options.backendUrl ||
+        process.env.VULTISIG_AGENT_URL ||
+        'http://localhost:9998',
+      vaultName: vault.name,
+      password: options.password,
+      sessionId: options.session,
+      verbose: options.verbose,
+      askMode: true,
+    }
+
+    const session = new AgentSession(vault, config)
+    const ask = new AskInterface(session, !!config.verbose)
+    const callbacks = ask.getCallbacks()
+
+    await session.initialize(callbacks)
+    const result = await ask.ask(message)
+
+    if (options.json) {
+      process.stdout.write(
+        JSON.stringify({
+          session_id: result.sessionId,
+          response: result.response,
+          tool_calls: result.toolCalls,
+          transactions: result.transactions,
+        }) + '\n'
+      )
+    } else {
+      // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
+      process.stdout.write(`session:${result.sessionId}\n`)
+
+      // Response text
+      if (result.response) {
+        process.stdout.write(`\n${result.response}\n`)
+      }
+
+      // Transaction hashes
+      for (const tx of result.transactions) {
+        process.stdout.write(`\ntx:${tx.chain}:${tx.hash}\n`)
+        if (tx.explorerUrl) {
+          process.stdout.write(`explorer:${tx.explorerUrl}\n`)
+        }
+      }
+    }
+  } catch (err: any) {
+    if (options.json) {
+      process.stdout.write(JSON.stringify({ error: err.message }) + '\n')
+    } else {
+      process.stderr.write(`Error: ${err.message}\n`)
+    }
+    process.exit(1)
+  } finally {
+    console.log = originalConsoleLog
+    setSilentMode(false)
+  }
+
+  // Clean exit — don't leave dangling handles
+  process.exit(0)
+}
+
+// ============================================================================
 // Session Management
 // ============================================================================
 
@@ -91,7 +196,6 @@ export async function executeAgentSessionsList(ctx: CommandContext, options: Age
   let totalCount = 0
   let skip = 0
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const page = await client.listConversations(publicKey, skip, PAGE_SIZE)
     totalCount = page.total_count

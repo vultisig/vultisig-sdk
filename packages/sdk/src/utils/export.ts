@@ -1,9 +1,9 @@
 import { create, toBinary } from '@bufbuild/protobuf'
-import { toCommVault } from '@core/mpc/types/utils/commVault'
-import { VaultContainerSchema } from '@core/mpc/types/vultisig/vault/v1/vault_container_pb'
-import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
-import { Vault } from '@core/mpc/vault/Vault'
-import { encryptWithAesGcm } from '@lib/utils/encryption/aesGcm/encryptWithAesGcm'
+import { toCommVault } from '@vultisig/core-mpc/types/utils/commVault'
+import { VaultContainerSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb'
+import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
+import { Vault } from '@vultisig/core-mpc/vault/Vault'
+import { encryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/encryptWithAesGcm'
 
 /**
  * Create vault backup data with optional password encryption

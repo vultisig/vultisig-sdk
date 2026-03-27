@@ -1,5 +1,5 @@
-import { OtherChain } from '@core/chain/Chain'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { OtherChain } from '@vultisig/core-chain/Chain'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { TokenMetadataResolver } from '../resolver'
 

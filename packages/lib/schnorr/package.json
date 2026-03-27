@@ -1,20 +1,42 @@
 {
-  "name": "@lib/schnorr",
+  "name": "@vultisig/lib-schnorr",
   "type": "module",
   "collaborators": [
     "Artem Mironov <artem.mironov@gmail.com>"
   ],
-  "version": "0.1.0",
+  "version": "0.9.0",
   "license": "SLL",
+  "description": "Schnorr WASM bindings for Vultisig",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
+    "directory": "packages/lib/schnorr"
+  },
   "files": [
     "vs_schnorr_wasm_bg.wasm",
     "vs_schnorr_wasm.js",
-    "vs_schnorr_wasm.d.ts"
+    "vs_schnorr_wasm.d.ts",
+    "snippets"
   ],
   "main": "vs_schnorr_wasm.js",
   "types": "vs_schnorr_wasm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./vs_schnorr_wasm.d.ts",
+      "import": "./vs_schnorr_wasm.js",
+      "default": "./vs_schnorr_wasm.js"
+    },
+    "./vs_schnorr_wasm": {
+      "types": "./vs_schnorr_wasm.d.ts",
+      "import": "./vs_schnorr_wasm.js",
+      "default": "./vs_schnorr_wasm.js"
+    }
+  },
   "sideEffects": [
     "./snippets/*"
   ],
-  "private": true
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

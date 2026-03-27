@@ -18,7 +18,7 @@
  * ✅ SAFE: No funds are transferred, all operations are signing-only
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { VaultBase } from '@/index'

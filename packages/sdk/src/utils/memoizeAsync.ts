@@ -1,7 +1,7 @@
 /**
  * Thread-safe async memoization utility with race condition fix
  *
- * This is a fixed version of the upstream @lib/utils/memoizeAsync
+ * This is a fixed version of the upstream @vultisig/lib-utils/memoizeAsync
  * that properly handles concurrent calls to prevent duplicate executions.
  *
  * Key Improvements:

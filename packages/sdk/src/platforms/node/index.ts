@@ -67,10 +67,10 @@ const wasmFetchPolyfill = async (input: RequestInfo | URL, init?: RequestInit): 
 globalThis.fetch = wasmFetchPolyfill as any
 
 // Now safe to import modules that may trigger WASM initialization
-import { initializeMpcLib } from '@core/mpc/lib/initialize'
-import { initializeMldsaLib } from '@core/mpc/mldsa/initializeMldsa'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+import { initializeMpcLib } from '@vultisig/core-mpc/lib/initialize'
+import { initializeMldsaLib } from '@vultisig/core-mpc/mldsa/initializeMldsa'
+import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'

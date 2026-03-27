@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "rootDir": "..",
+    "outDir": "../.shared-dist-temp",
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "baseUrl": "..",
+    "paths": {
+      "@vultisig/core-chain/*": ["packages/core/chain/*"],
+      "@vultisig/core-mpc/*": ["packages/core/mpc/*"],
+      "@vultisig/core-config": ["packages/core/config/index.ts"],
+      "@vultisig/core-config/*": ["packages/core/config/*"],
+      "@vultisig/lib-utils/*": ["packages/lib/utils/*"],
+      "@vultisig/lib-dkls/*": ["packages/lib/dkls/*"],
+      "@vultisig/lib-mldsa/*": ["packages/lib/mldsa/*"],
+      "@vultisig/lib-schnorr/*": ["packages/lib/schnorr/*"]
+    }
+  },
+  "include": [
+    "../packages/core/chain/**/*.ts",
+    "../packages/core/chain/**/*.tsx",
+    "../packages/core/mpc/**/*.ts",
+    "../packages/lib/utils/**/*.ts",
+    "../packages/core/config/**/*.ts"
+  ],
+  "exclude": [
+    "../**/node_modules",
+    "../packages/**/dist",
+    "../**/*.test.ts",
+    "../packages/core/mpc/keysign/tests/**"
+  ]
+}

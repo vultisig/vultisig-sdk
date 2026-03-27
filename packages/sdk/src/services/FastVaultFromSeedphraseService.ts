@@ -11,21 +11,21 @@
  * 7. Run per-chain key imports (DKLS or Schnorr based on chain type)
  * 7. Optionally discover chains with balances
  */
-import type { Chain } from '@core/chain/Chain'
-import { generateLocalPartyId } from '@core/mpc/devices/localPartyId'
-import { DKLS } from '@core/mpc/dkls/dkls'
-import { mldsaWithServer } from '@core/mpc/fast/api/mldsaWithServer'
-import { fastVaultServerUrl } from '@core/mpc/fast/config'
-import { setKeygenComplete, waitForKeygenComplete } from '@core/mpc/keygenComplete'
-import { MldsaKeygen } from '@core/mpc/mldsa/mldsaKeygen'
-import { Schnorr } from '@core/mpc/schnorr/schnorrKeygen'
-import { joinMpcSession } from '@core/mpc/session/joinMpcSession'
-import { startMpcSession } from '@core/mpc/session/startMpcSession'
-import { toLibType } from '@core/mpc/types/utils/libType'
-import { generateHexChainCode } from '@core/mpc/utils/generateHexChainCode'
-import { generateHexEncryptionKey } from '@core/mpc/utils/generateHexEncryptionKey'
-import { Vault as CoreVault } from '@core/mpc/vault/Vault'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import type { Chain } from '@vultisig/core-chain/Chain'
+import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
+import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
+import { mldsaWithServer } from '@vultisig/core-mpc/fast/api/mldsaWithServer'
+import { fastVaultServerUrl } from '@vultisig/core-mpc/fast/config'
+import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
+import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
+import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
+import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
+import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
+import { toLibType } from '@vultisig/core-mpc/types/utils/libType'
+import { generateHexChainCode } from '@vultisig/core-mpc/utils/generateHexChainCode'
+import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
+import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { DEFAULT_CHAINS } from '../constants'
 import type { SdkContext } from '../context/SdkContext'
@@ -50,9 +50,11 @@ async function keyImportWithServer(input: {
   email: string
   lib_type: number
   chains: string[]
+  vaultBaseUrl?: string
 }): Promise<void> {
-  await queryUrl(`${fastVaultServerUrl}/import`, {
-    body: input,
+  const { vaultBaseUrl, ...body } = input
+  await queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/import`, {
+    body,
     responseType: 'none',
   })
 }
@@ -181,6 +183,7 @@ export class FastVaultFromSeedphraseService {
       email,
       lib_type: toLibType({ libType: 'DKLS', isKeyImport: true }), // KEYIMPORT (2)
       chains: chainsToImport,
+      vaultBaseUrl: this.context.serverManager.fastVault,
     })
 
     // Step 6: Join relay session
@@ -329,8 +332,22 @@ export class FastVaultFromSeedphraseService {
       }
     }
 
+    // Signal import keygen completion so the server saves the vault backup.
+    // Must happen before MLDSA keygen because the /mldsa endpoint loads the backup.
+    await setKeygenComplete({
+      serverURL: this.serverUrl,
+      sessionId,
+      localPartyId,
+    })
+
+    const peers = devices.filter(d => d !== localPartyId)
+    await waitForKeygenComplete({
+      serverURL: this.serverUrl,
+      sessionId,
+      peers,
+    })
+
     // Step 12: ML-DSA keygen (non-fatal — vault can be created without post-quantum keys)
-    // Runs after chain imports to avoid session expiry from MLDSA timeouts
     if (signal?.aborted) {
       throw new Error('Operation aborted')
     }
@@ -343,57 +360,66 @@ export class FastVaultFromSeedphraseService {
 
     let mldsaResult: { publicKey: string; keyshare: string } | undefined
     try {
+      const mldsaSessionId = randomUUID()
+      const mldsaHexEncryptionKey = generateHexEncryptionKey()
+
+      await joinMpcSession({
+        serverUrl: this.serverUrl,
+        sessionId: mldsaSessionId,
+        localPartyId,
+      })
+
       await mldsaWithServer({
         public_key: ecdsaResult.publicKey,
-        session_id: sessionId,
-        hex_encryption_key: hexEncryptionKey,
+        session_id: mldsaSessionId,
+        hex_encryption_key: mldsaHexEncryptionKey,
         encryption_password: password,
         email,
+        vaultBaseUrl: this.context.serverManager.fastVault,
+      })
+
+      const mldsaDevices = await this.waitForPeers(mldsaSessionId, localPartyId, signal)
+
+      await startMpcSession({
+        serverUrl: this.serverUrl,
+        sessionId: mldsaSessionId,
+        devices: mldsaDevices,
       })
 
       const mldsaKeygen = new MldsaKeygen(
-        true, // isInitiateDevice
+        true,
         this.serverUrl,
-        sessionId,
+        mldsaSessionId,
         localPartyId,
-        devices,
-        hexEncryptionKey,
-        { timeoutMs: 30000 }
+        mldsaDevices,
+        mldsaHexEncryptionKey,
+        { timeoutMs: 120_000 }
       )
 
       mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+
+      await setKeygenComplete({
+        serverURL: this.serverUrl,
+        sessionId: mldsaSessionId,
+        localPartyId,
+      })
+
+      const mldsaPeers = mldsaDevices.filter(d => d !== localPartyId)
+      try {
+        await waitForKeygenComplete({ serverURL: this.serverUrl, sessionId: mldsaSessionId, peers: mldsaPeers })
+      } catch {
+        // Non-fatal — MLDSA keygen succeeded, server may not signal back
+      }
     } catch (error) {
       console.warn('ML-DSA keygen failed (non-fatal), vault will be created without post-quantum keys:', error instanceof Error ? error.message : error)
     }
 
-    // Step 13: Signal completion
+    // Step 13: Finalize
     reportProgress({
       step: 'keygen',
       progress: 90,
       message: 'Finalizing key import...',
     })
-
-    await setKeygenComplete({
-      serverURL: this.serverUrl,
-      sessionId,
-      localPartyId,
-    })
-
-    // Wait for server completion with tolerance for import flows
-    // VultiServer's /import endpoint may not signal completion the same way /create does
-    // Since MPC already succeeded (we have the keys), this is just a secondary check
-    const peers = devices.filter(d => d !== localPartyId)
-    try {
-      await waitForKeygenComplete({
-        serverURL: this.serverUrl,
-        sessionId,
-        peers,
-      })
-    } catch {
-      // For key import, if MPC succeeded but server didn't signal completion,
-      // we can proceed since we have valid keys from the completed MPC exchange
-      console.warn('Server completion signal not received, proceeding with valid MPC keys')
-    }
 
     // Step 14: Build vault structure
     const vault: CoreVault = {

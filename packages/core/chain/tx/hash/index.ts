@@ -1,5 +1,5 @@
-import { Chain } from '@core/chain/Chain'
-import { ChainKind, getChainKind } from '@core/chain/ChainKind'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { SigningOutput } from '../../tw/signingOutput'
 import { TxHashResolver } from './resolver'

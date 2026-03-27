@@ -1,5 +1,5 @@
-import { Chain } from '@core/chain/Chain'
-import { getCoinBalance } from '@core/chain/coin/balance'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 
 import { formatBalance } from '../../adapters/formatBalance'
 import { CacheScope, type CacheService } from '../../services/CacheService'

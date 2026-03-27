@@ -1,3 +1,3 @@
-import { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
+import { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
 export type PublicKeys = Record<SignatureAlgorithm, string>

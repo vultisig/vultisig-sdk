@@ -11,7 +11,7 @@
  * Requires: TEST_VAULT_PATH, TEST_VAULT_PASSWORD, SECURE_VAULT_SHARES (2+ paths), SECURE_VAULT_PASSWORD.
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { readFile } from 'fs/promises'
 import { beforeAll, describe, expect, it } from 'vitest'
 

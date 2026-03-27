@@ -1,6 +1,6 @@
-import { CosmosChain } from '@core/chain/Chain'
-import { parseCosmosSerialized } from '@core/chain/chains/cosmos/utils/parseCosmosSerialized'
-import { stripHexPrefix } from '@lib/utils/hex/stripHexPrefix'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { parseCosmosSerialized } from '@vultisig/core-chain/chains/cosmos/utils/parseCosmosSerialized'
+import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { sha256 } from 'viem'
 
 import { TxHashResolver } from '../resolver'

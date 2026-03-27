@@ -17,11 +17,11 @@
  * except for platinum or above.
  */
 
-import { Chain } from '@core/chain/Chain'
-import { getErc20Balance } from '@core/chain/chains/evm/erc20/getErc20Balance'
-import { getErc721Balance } from '@core/chain/chains/evm/erc721/getErc721Balance'
-import { vult } from '@core/chain/coin/knownTokens'
-import { getVultDiscountTier, VultDiscountTier } from '@core/chain/swap/affiliate'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getErc20Balance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Balance'
+import { getErc721Balance } from '@vultisig/core-chain/chains/evm/erc721/getErc721Balance'
+import { vult } from '@vultisig/core-chain/coin/knownTokens'
+import { getVultDiscountTier, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 
 import { CacheService } from './CacheService'
 

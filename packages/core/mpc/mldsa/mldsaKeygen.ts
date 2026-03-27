@@ -1,5 +1,5 @@
-import { KeygenSession, Keyshare } from '@lib/mldsa/vs_wasm'
-import { base64Encode } from '@lib/utils/base64Encode'
+import { KeygenSession, Keyshare } from '@vultisig/lib-mldsa/vs_wasm'
+import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getKeygenThreshold } from '../getKeygenThreshold'
 import { getMessageHash } from '../getMessageHash'
@@ -9,7 +9,7 @@ import { sendMpcRelayMessage } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
 import { waitForSetupMessage } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
-import { sleep } from '../sleep'
+import { sleep } from '@vultisig/lib-utils/sleep'
 import { initializeMldsaLib } from './initializeMldsa'
 
 const mldsaLevel = 44
@@ -77,7 +77,7 @@ export class MldsaKeygen {
             hash: getMessageHash(base64Encode(message.body)),
             sequence_no: this.sequenceNo,
           },
-          messageId: 'mldsa',
+          messageId: '',
         })
         this.sequenceNo++
       })
@@ -106,7 +106,7 @@ export class MldsaKeygen {
         serverUrl: this.serverURL,
         localPartyId: this.localPartyId,
         sessionId: this.sessionId,
-        messageId: 'mldsa',
+        messageId: '',
       })
 
       if (parsedMessages.length === 0) {
@@ -137,7 +137,7 @@ export class MldsaKeygen {
           localPartyId: this.localPartyId,
           sessionId: this.sessionId,
           messageHash: msg.hash,
-          messageId: 'mldsa',
+          messageId: '',
         })
       }
 
@@ -173,13 +173,13 @@ export class MldsaKeygen {
           serverUrl: this.serverURL,
           message: encryptedSetupMsg,
           sessionId: this.sessionId,
-          messageId: 'mldsa',
+          messageId: '',
         })
       } else {
         const encodedEncryptedSetupMsg = await waitForSetupMessage({
           serverUrl: this.serverURL,
           sessionId: this.sessionId,
-          messageId: 'mldsa',
+          messageId: '',
         })
         this.setupMessage = fromMpcServerMessage(
           encodedEncryptedSetupMsg,

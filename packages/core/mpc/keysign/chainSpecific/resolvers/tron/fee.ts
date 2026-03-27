@@ -1,5 +1,5 @@
-import { AccountCoinKey } from '@core/chain/coin/AccountCoin'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import base58 from 'bs58'
 
 type TriggerContractResponse = {

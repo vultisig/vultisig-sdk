@@ -1,6 +1,6 @@
-import { Chain } from '@core/chain/Chain'
-import { hyperliquid } from '@core/chain/chains/evm/chainInfo'
-import { getCoinType } from '@core/chain/coin/coinType'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { hyperliquid } from '@vultisig/core-chain/chains/evm/chainInfo'
+import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { sei } from 'viem/chains'
 

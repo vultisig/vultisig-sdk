@@ -1,4 +1,4 @@
-import { NameProp } from '@lib/utils/entities/props'
+import { NameProp } from '@vultisig/lib-utils/entities/props'
 
 type InitiateFileDownloadInput = {
   blob: Blob

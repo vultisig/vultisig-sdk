@@ -1,8 +1,8 @@
-import { toChainAmount } from '@core/chain/amount/toChainAmount'
-import { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { isInError } from '@lib/utils/error/isInError'
-import { queryUrl } from '@lib/utils/query/queryUrl'
-import { TransferDirection } from '@lib/utils/TransferDirection'
+import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { isInError } from '@vultisig/lib-utils/error/isInError'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { t } from 'i18next'
 
 import { chainFeeCoin } from '../../../coin/chainFeeCoin'

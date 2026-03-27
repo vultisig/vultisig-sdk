@@ -6,7 +6,7 @@
  * 
  * Primary use case: Execute FIN swaps on Rujira DEX
  */
-import type { VaultBase } from '@vultisig/sdk'
+import type { CosmosChain, VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
@@ -177,9 +177,11 @@ async function executeContractTransaction(
   }
 
   try {
+    const cosmosChain = params.chain as CosmosChain
+
     // Build coin info for the chain
     const coin = {
-      chain: params.chain,
+      chain: cosmosChain,
       address,
       decimals: 8, // THORChain uses 8 decimals
       ticker: chainConfig.denom.toUpperCase(),
@@ -205,7 +207,7 @@ async function executeContractTransaction(
 
     // Prepare signing payload using Vultisig SDK's prepareSignAminoTx
     const keysignPayload = await vault.prepareSignAminoTx({
-      chain: params.chain,
+      chain: cosmosChain,
       coin,
       msgs: [executeContractMsg],
       fee,
@@ -218,7 +220,7 @@ async function executeContractTransaction(
     const signature = await vault.sign(
       {
         transaction: keysignPayload,
-        chain: params.chain,
+        chain: cosmosChain,
         messageHashes,
       },
       { signal: params.signal }
@@ -230,7 +232,7 @@ async function executeContractTransaction(
     const broadcastSpinner = createSpinner('Broadcasting transaction...')
 
     const txHash = await vault.broadcastTx({
-      chain: params.chain,
+      chain: cosmosChain,
       keysignPayload,
       signature,
     })

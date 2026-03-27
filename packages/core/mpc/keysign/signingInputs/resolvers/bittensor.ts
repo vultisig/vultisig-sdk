@@ -1,9 +1,9 @@
 import {
   BittensorSigningParams,
   buildBittensorSigningPayload,
-} from '@core/chain/chains/bittensor/signing/buildExtrinsic'
-import { concatBytes } from '@core/chain/chains/bittensor/signing/scale'
-import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+} from '@vultisig/core-chain/chains/bittensor/signing/buildExtrinsic'
+import { concatBytes } from '@vultisig/core-chain/chains/bittensor/signing/scale'
+import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'

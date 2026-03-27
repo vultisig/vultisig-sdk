@@ -1,4 +1,4 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 
 import { SUPPORTED_CHAINS } from '../constants'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'

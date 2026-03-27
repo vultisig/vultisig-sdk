@@ -1,7 +1,7 @@
-import { KeysignLibType, MpcLib } from '@core/mpc/mpcLib'
-import { LibType } from '@core/mpc/types/vultisig/keygen/v1/lib_type_message_pb'
-import { isKeyImportVault, Vault } from '@core/mpc/vault/Vault'
-import { mirrorRecord } from '@lib/utils/record/mirrorRecord'
+import { KeysignLibType, MpcLib } from '@vultisig/core-mpc/mpcLib'
+import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
+import { isKeyImportVault, Vault } from '@vultisig/core-mpc/vault/Vault'
+import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 
 const mpcLibToLibType: Record<MpcLib, LibType> = {
   GG20: LibType.GG20,

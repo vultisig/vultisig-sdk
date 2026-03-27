@@ -1,7 +1,7 @@
-import initializeMldsa from '@lib/mldsa/vs_wasm'
-import { prefixErrorWith } from '@lib/utils/error/prefixErrorWith'
-import { transformError } from '@lib/utils/error/transformError'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
+import initializeMldsa from '@vultisig/lib-mldsa/vs_wasm'
+import { prefixErrorWith } from '@vultisig/lib-utils/error/prefixErrorWith'
+import { transformError } from '@vultisig/lib-utils/error/transformError'
+import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 
 export const initializeMldsaLib = memoizeAsync(() =>
   transformError(

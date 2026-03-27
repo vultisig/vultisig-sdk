@@ -1,4 +1,4 @@
-import { getFeeAmount } from '@core/mpc/keysign/fee'
+import { getFeeAmount } from '@vultisig/core-mpc/keysign/fee'
 
 import { buildSendKeysignPayload, BuildSendKeysignPayloadInput } from './build'
 

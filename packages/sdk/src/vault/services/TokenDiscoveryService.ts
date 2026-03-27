@@ -1,8 +1,8 @@
-import { Chain } from '@core/chain/Chain'
-import { findCoins } from '@core/chain/coin/find'
-import { knownTokensIndex } from '@core/chain/coin/knownTokens'
-import { getTokenMetadata as coreGetTokenMetadata } from '@core/chain/coin/token/metadata'
-import { ChainWithTokenMetadataDiscovery } from '@core/chain/coin/token/metadata/chains'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { findCoins } from '@vultisig/core-chain/coin/find'
+import { knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { getTokenMetadata as coreGetTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
+import { ChainWithTokenMetadataDiscovery } from '@vultisig/core-chain/coin/token/metadata/chains'
 
 import type { DiscoveredToken, TokenInfo } from '../../types/tokens'
 import { VaultError, VaultErrorCode } from '../VaultError'

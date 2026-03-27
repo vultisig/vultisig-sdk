@@ -1,7 +1,7 @@
-import { EvmChain } from '@core/chain/Chain'
-import { getEvmClient } from '@core/chain/chains/evm/client'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { attempt } from '@lib/utils/attempt'
+import { EvmChain } from '@vultisig/core-chain/Chain'
+import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 

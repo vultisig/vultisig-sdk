@@ -1,4 +1,4 @@
-import { UtxoChain } from '@core/chain/Chain'
+import { UtxoChain } from '@vultisig/core-chain/Chain'
 
 import { TxHashResolver } from '../resolver'
 

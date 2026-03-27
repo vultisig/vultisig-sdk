@@ -1,13 +1,13 @@
-import { CosmosChain } from '@core/chain/Chain'
-import { getCosmosClient } from '@core/chain/chains/cosmos/client'
-import { cosmosFeeCoinDenom } from '@core/chain/chains/cosmos/cosmosFeeCoinDenom'
-import { tcyAutoCompounderConfig } from '@core/chain/chains/cosmos/thor/tcy-autocompound/config'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { FindCoinsResolver } from '@core/chain/coin/find/resolver'
-import { getCosmosTokenMetadata } from '@core/chain/coin/token/metadata/resolvers/cosmos'
-import { without } from '@lib/utils/array/without'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
-import { attempt } from '@lib/utils/attempt'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
+import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+import { tcyAutoCompounderConfig } from '@vultisig/core-chain/chains/cosmos/thor/tcy-autocompound/config'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
+import { getCosmosTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/cosmos'
+import { without } from '@vultisig/lib-utils/array/without'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({
   address,

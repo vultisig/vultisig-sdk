@@ -1,9 +1,9 @@
-import { SignatureFormat } from '@core/chain/signing/SignatureFormat'
-import { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
-import { without } from '@lib/utils/array/without'
-import { match } from '@lib/utils/match'
-import { pick } from '@lib/utils/record/pick'
-import { recordMap } from '@lib/utils/record/recordMap'
+import { SignatureFormat } from '@vultisig/core-chain/signing/SignatureFormat'
+import { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
+import { without } from '@vultisig/lib-utils/array/without'
+import { match } from '@vultisig/lib-utils/match'
+import { pick } from '@vultisig/lib-utils/record/pick'
+import { recordMap } from '@vultisig/lib-utils/record/recordMap'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 type Input = {

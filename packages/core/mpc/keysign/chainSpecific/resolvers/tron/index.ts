@@ -1,7 +1,7 @@
 import { create } from '@bufbuild/protobuf'
-import { getTronBlockInfo } from '@core/chain/chains/tron/getTronBlockInfo'
-import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
-import { TronSpecificSchema } from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { getTronBlockInfo } from '@vultisig/core-chain/chains/tron/getTronBlockInfo'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
+import { TronSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 
 import { getKeysignAmount } from '../../../utils/getKeysignAmount'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'

@@ -1,7 +1,7 @@
-import { OtherChain } from '@core/chain/Chain'
-import { bittensorRpcUrl } from '@core/chain/chains/bittensor/client'
-import { ensureHexPrefix } from '@lib/utils/hex/ensureHexPrefix'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { OtherChain } from '@vultisig/core-chain/Chain'
+import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
+import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { BroadcastTxResolver } from '../resolver'
 
