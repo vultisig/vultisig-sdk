@@ -229,6 +229,12 @@ export class AgentSession {
           ui.onSuggestions(suggestions)
         },
         onTxReady: tx => {
+          // Skip error tx_ready events (MCP build failures)
+          const txData = tx?.swap_tx || tx?.send_tx || tx?.tx
+          if (txData?.status === 'error' || txData?.error) {
+            if (this.config.verbose) process.stderr.write(`[session] skipping error tx_ready: ${txData.error || 'unknown error'}\n`)
+            return
+          }
           // Store server-built transaction so sign_tx can find it
           this.executor.storeServerTransaction(tx)
           if (this.config.password) {
