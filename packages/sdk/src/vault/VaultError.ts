@@ -21,6 +21,7 @@ export enum VaultErrorCode {
   BroadcastFailed = 'BROADCAST_FAILED',
   CreateFailed = 'CREATE_FAILED',
   Timeout = 'TIMEOUT',
+  InvalidAmount = 'INVALID_AMOUNT',
 }
 
 /**

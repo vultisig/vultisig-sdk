@@ -3,9 +3,12 @@ import { fromBinary } from '@bufbuild/protobuf'
 import { getMaxValue } from '@core/chain/amount/getMaxValue'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@core/chain/banxa'
 import { Chain } from '@core/chain/Chain'
+import { getChainKind } from '@core/chain/ChainKind'
 import { AccountCoin } from '@core/chain/coin/AccountCoin'
 import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
+import { knownTokens } from '@core/chain/coin/knownTokens'
 import { getCoinValue } from '@core/chain/coin/utils/getCoinValue'
+import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
 import { getTxStatus as coreTxStatus } from '@core/chain/tx/status'
 import type { TxStatusResult } from '@core/chain/tx/status/resolver'
 import { vaultConfig } from '@core/config'
@@ -16,6 +19,8 @@ import { VaultSchema } from '@core/mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@core/mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@core/mpc/vault/Vault'
 import { fromBase64 } from '@lib/utils/fromBase64'
+import { sha256 } from '@noble/hashes/sha2'
+import { keccak_256 } from '@noble/hashes/sha3'
 
 import { DEFAULT_CHAINS } from '../constants'
 // SDK utilities
@@ -30,10 +35,14 @@ import type { Storage } from '../storage/types'
 // Types
 import {
   Balance,
+  CompoundSwapResult,
   CosmosSigningOptions,
   FiatCurrency,
   GasInfoForChain,
   MaxSendAmount,
+  MessageSignature,
+  Portfolio,
+  SendResult,
   SignAminoInput,
   Signature,
   SignBytesOptions,
@@ -1556,5 +1565,135 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    */
   async simulateTransaction(keysignPayload: KeysignPayload): Promise<TransactionSimulationResult | null> {
     return this.securityService.simulateTransaction(keysignPayload)
+  }
+
+  // ===== COMPOUND WRAPPER METHODS =====
+
+  /** Sign a message. EVM: EIP-191 (keccak256). Others: SHA-256. */
+  async signMessage(message: string, chain: Chain = Chain.Ethereum, options?: { signal?: AbortSignal }): Promise<MessageSignature> {
+    if (!message) throw new VaultError(VaultErrorCode.InvalidConfig, 'Message cannot be empty')
+
+    const chainKind = getChainKind(chain)
+    const algorithm = signatureAlgorithms[chainKind] === 'ecdsa' ? 'ECDSA' : 'EdDSA'
+    // EIP-191 uses UTF-8 byte length, not JS string length
+    const msgBytes = new TextEncoder().encode(message)
+    const hash = chainKind === 'evm'
+      ? keccak_256(new TextEncoder().encode(`\x19Ethereum Signed Message:\n${msgBytes.length}${message}`))
+      : sha256(msgBytes)
+
+    const sig = await this.signBytes({ data: hash, chain }, options)
+    return { signature: sig.signature.startsWith('0x') ? sig.signature : '0x' + sig.signature, chain, algorithm }
+  }
+
+  /** All balances across configured chains as a flat array. */
+  async allBalances(includeTokens = true): Promise<Balance[]> {
+    return Object.values(await this.balances(this._userChains, includeTokens))
+  }
+
+  /** Portfolio overview: balances with fiat values + total. */
+  async portfolio(fiatCurrency?: FiatCurrency): Promise<Portfolio> {
+    const currency = (fiatCurrency ?? this._currency ?? 'usd') as FiatCurrency
+    const balances = Object.values(await this.balancesWithPrices(this._userChains, true, currency))
+    const total = balances.reduce((sum, b) => sum + (b.fiatValue ?? 0), 0)
+    return { balances, totalValue: total.toFixed(2), currency }
+  }
+
+  /** Send tokens. Set dryRun for fee estimate without signing. */
+  async send(params: {
+    chain: Chain; to: string; amount: string; symbol?: string; memo?: string; dryRun?: boolean
+  }): Promise<SendResult> {
+    const { chain, to, amount, symbol, memo, dryRun } = params
+    const tokenInfo = this.resolveTokenInfo(chain, symbol)
+    const amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
+    const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
+    const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo })
+
+    if (dryRun) {
+      const fee = await this.transactionBuilder.estimateSendFee({ coin, receiver: to, amount: amountBigInt, memo })
+      return { dryRun: true, fee: this.formatUnits(fee, tokenInfo.decimals), total: this.formatUnits(amountBigInt + fee, tokenInfo.decimals), keysignPayload }
+    }
+
+    const signature = await this.sign({ transaction: keysignPayload, chain })
+    return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
+  }
+
+  /** Swap tokens. Set dryRun for quote without signing. */
+  async swap(params: {
+    fromChain: Chain; fromSymbol: string; toChain: Chain; toSymbol: string; amount: string; dryRun?: boolean
+  }): Promise<CompoundSwapResult> {
+    const { fromChain, fromSymbol, toChain, toSymbol, amount, dryRun } = params
+    const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
+    const toToken = this.resolveTokenInfo(toChain, toSymbol)
+    const [fromAddress, toAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
+    const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
+    const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
+
+    this.parseAmount(amount, fromToken.decimals) // validate before lossy Number() conversion
+    const amountNum = Number(amount) // SwapQuoteParams expects number (human-readable)
+
+    const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: amountNum })
+    if (dryRun) return { dryRun: true, quote }
+
+    const { keysignPayload, approvalPayload } = await this.prepareSwapTx({ fromCoin, toCoin, amount: amountNum, swapQuote: quote })
+    if (approvalPayload) {
+      const approvalSig = await this.sign({ transaction: approvalPayload, chain: fromChain })
+      const approvalHash = await this.broadcastTx({ chain: fromChain, keysignPayload: approvalPayload, signature: approvalSig })
+      await this.waitForConfirmation(fromChain, approvalHash)
+    }
+
+    const signature = await this.sign({ transaction: keysignPayload, chain: fromChain })
+    return { dryRun: false, txHash: await this.broadcastTx({ chain: fromChain, keysignPayload, signature }), chain: fromChain, quote }
+  }
+
+  // ===== PRIVATE HELPERS =====
+
+  private buildAccountCoin(chain: Chain, address: string, t: { ticker: string; decimals: number; contractAddress?: string }): AccountCoin {
+    return { chain, address, decimals: t.decimals, ticker: t.ticker, ...(t.contractAddress ? { id: t.contractAddress } : {}) }
+  }
+
+  private resolveTokenInfo(chain: Chain, symbol?: string): { ticker: string; decimals: number; contractAddress?: string } {
+    const native = chainFeeCoin[chain]
+    if (!symbol || symbol.toUpperCase() === native.ticker.toUpperCase()) return { ticker: native.ticker, decimals: native.decimals }
+
+    // 1. User's configured tokens
+    const token = this.getTokens(chain).find(t => t.symbol.toUpperCase() === symbol.toUpperCase())
+    if (token) return { ticker: token.symbol, decimals: token.decimals, contractAddress: token.contractAddress || token.id }
+
+    // 2. Well-known token registry (no network call)
+    const known = (knownTokens[chain] ?? []).find(t => t.ticker.toUpperCase() === symbol.toUpperCase())
+    if (known) return { ticker: known.ticker, decimals: known.decimals, contractAddress: known.id }
+
+    throw new VaultError(VaultErrorCode.InvalidConfig, `Token "${symbol}" not found on ${chain}. Add it with vault.addToken() or use a well-known token symbol.`)
+  }
+
+  private parseAmount(amount: string, decimals: number): bigint {
+    const trimmed = amount?.trim()
+    if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
+    if (isNaN(Number(trimmed)) || Number(trimmed) <= 0) throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
+    const [whole, fraction = ''] = trimmed.split('.')
+    return BigInt(whole + fraction.padEnd(decimals, '0').slice(0, decimals))
+  }
+
+  /** Poll getTxStatus until confirmed or timeout. Used for approval tx before swap. */
+  private async waitForConfirmation(chain: Chain, txHash: string, timeoutMs = 60_000, intervalMs = 3_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      try {
+        const result = await this.getTxStatus({ chain, txHash })
+        if (result.status === 'success') return
+        if (result.status === 'error') throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
+      } catch (e) {
+        if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
+      }
+      await new Promise(resolve => setTimeout(resolve, intervalMs))
+    }
+    throw new VaultError(VaultErrorCode.Timeout, `Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}`)
+  }
+
+  private formatUnits(value: bigint, decimals: number): string {
+    const str = value.toString().padStart(decimals + 1, '0')
+    const whole = str.slice(0, -decimals || undefined)
+    const fraction = decimals > 0 ? '.' + (str.slice(-decimals).replace(/0+$/, '') || '0') : ''
+    return whole + fraction
   }
 }
