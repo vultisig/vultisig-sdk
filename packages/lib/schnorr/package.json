@@ -4,7 +4,7 @@
   "collaborators": [
     "Artem Mironov <artem.mironov@gmail.com>"
   ],
-  "version": "0.8.0",
+  "version": "0.9.0",
   "license": "SLL",
   "description": "Schnorr WASM bindings for Vultisig",
   "repository": {
