@@ -110,30 +110,27 @@ export async function executeAgentAsk(
     process.stderr.write(args.map(String).join(' ') + '\n')
   }
 
-  const vault = await ctx.ensureActiveVault()
-
-  const config: AgentConfig = {
-    backendUrl:
-      options.backendUrl ||
-      process.env.VULTISIG_AGENT_URL ||
-      'http://localhost:9998',
-    vaultName: vault.name,
-    password: options.password,
-    sessionId: options.session,
-    verbose: options.verbose,
-    askMode: true,
-  }
-
-  const session = new AgentSession(vault, config)
-  const ask = new AskInterface(session, !!config.verbose)
-  const callbacks = ask.getCallbacks()
-
   try {
+    const vault = await ctx.ensureActiveVault()
+
+    const config: AgentConfig = {
+      backendUrl:
+        options.backendUrl ||
+        process.env.VULTISIG_AGENT_URL ||
+        'http://localhost:9998',
+      vaultName: vault.name,
+      password: options.password,
+      sessionId: options.session,
+      verbose: options.verbose,
+      askMode: true,
+    }
+
+    const session = new AgentSession(vault, config)
+    const ask = new AskInterface(session, !!config.verbose)
+    const callbacks = ask.getCallbacks()
+
     await session.initialize(callbacks)
     const result = await ask.ask(message)
-
-    // Restore console.log before writing output
-    console.log = originalConsoleLog
 
     if (options.json) {
       process.stdout.write(
@@ -162,13 +159,15 @@ export async function executeAgentAsk(
       }
     }
   } catch (err: any) {
-    console.log = originalConsoleLog
     if (options.json) {
       process.stdout.write(JSON.stringify({ error: err.message }) + '\n')
     } else {
       process.stderr.write(`Error: ${err.message}\n`)
     }
     process.exit(1)
+  } finally {
+    console.log = originalConsoleLog
+    setSilentMode(false)
   }
 
   // Clean exit — don't leave dangling handles
@@ -197,7 +196,6 @@ export async function executeAgentSessionsList(ctx: CommandContext, options: Age
   let totalCount = 0
   let skip = 0
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const page = await client.listConversations(publicKey, skip, PAGE_SIZE)
     totalCount = page.total_count

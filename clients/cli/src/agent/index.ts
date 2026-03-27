@@ -7,8 +7,8 @@
  * - Pipe (--via-agent): NDJSON over stdin/stdout for agent consumption
  * - Ask (agent ask): One-shot command for AI coding agents
  */
-export { AskInterface } from './ask'
 export type { AskResult } from './ask'
+export { AskInterface } from './ask'
 export { authenticateVault } from './auth'
 export { AgentClient } from './client'
 export { buildMessageContext, buildMinimalContext } from './context'
