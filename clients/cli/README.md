@@ -1,6 +1,6 @@
 # Vultisig CLI
 
-Command-line wallet for Vultisig - secure multi-party computation (MPC) wallet management across 40+ blockchains.
+Command-line wallet for Vultisig - secure multi-party computation (MPC) wallet management across 40+ blockchains. Designed for both human and AI agent use.
 
 > **Tip:** Use `vsig` as a shorthand alias for `vultisig` - all commands work with both!
 
@@ -582,6 +582,151 @@ vultisig sign --chain sui --bytes "<base64-tx-bytes>" -o json > sig.json
 
 # 3. Broadcast (requires JSON with both unsigned tx and signature)
 vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"<base64-tx-bytes>","signature":"<base64-signature-from-sig.json>"}'
+```
+
+### AI Agent Integration
+
+The CLI has first-class support for AI coding agents (Claude Code, Cursor, Opencode, etc.).
+
+#### Non-Interactive Vault Creation
+
+When running in a non-TTY environment (pipes, scripts, AI agents), the CLI **automatically** uses two-step mode — no interactive OTP prompt that would hang your agent:
+
+```bash
+# Agent runs this — auto-detects non-TTY, skips interactive prompt
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com
+
+# Returns immediately with vault ID (pending verification)
+# Vault ID: 023118...
+
+# Verify later when you have the email code
+vultisig verify 023118... --code 123456
+```
+
+You can also force two-step mode explicitly:
+
+```bash
+# Force two-step even in a TTY
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com --two-step
+
+# JSON output for machine parsing
+vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email agent@example.com --two-step -o json
+```
+
+JSON output for two-step create:
+```json
+{
+  "vaultId": "023118...",
+  "status": "pending_verification",
+  "message": "Vault created. Verify with email OTP to activate.",
+  "verifyCommand": "vultisig verify 023118... --code <OTP>",
+  "resendCommand": "vultisig verify 023118... --resend --email agent@example.com --password ..."
+}
+```
+
+#### Agent Ask (One-Shot Mode)
+
+Send a single natural-language message and get a structured response. Designed for AI-to-AI communication:
+
+```bash
+# Simple query
+vultisig agent ask "What is my ETH balance?" --password "$VAULT_PASSWORD"
+
+# Execute a transaction
+vultisig agent ask "Send 0.01 ETH to 0x742d..." --password "$VAULT_PASSWORD"
+
+# Continue a conversation (multi-turn)
+vultisig agent ask "Now swap it to USDC" --session abc123 --password "$VAULT_PASSWORD"
+
+# JSON output (for parsing)
+vultisig agent ask "Check my portfolio" --password "$VAULT_PASSWORD" --json
+```
+
+**Text output (default):**
+```
+session:abc123-def456
+
+Your ETH balance is 1.5 ETH ($3,750.00 USD).
+
+tx:ethereum:0x9f8e7d6c...
+explorer:https://etherscan.io/tx/0x9f8e7d6c...
+```
+
+**JSON output (`--json`):**
+```json
+{
+  "session_id": "abc123-def456",
+  "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
+  "tool_calls": [
+    { "action": "getBalance", "success": true, "data": { "chain": "ethereum", "balance": "1.5" } }
+  ],
+  "transactions": [
+    { "hash": "0x9f8e7d6c...", "chain": "ethereum", "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..." }
+  ]
+}
+```
+
+**Agent ask options:**
+- `--session <id>` - Continue an existing conversation
+- `--backend-url <url>` - Agent backend URL (default: http://localhost:9998)
+- `--password <password>` - Vault password for signing
+- `--verbose` - Show tool calls and debug info on stderr
+- `--json` - Output structured JSON
+
+#### Agent Chat (Interactive/Pipe Mode)
+
+For interactive TUI or piped agent-to-agent communication:
+
+```bash
+# Interactive TUI with chat interface
+vultisig agent
+
+# Pipe mode for agent-to-agent (NDJSON)
+vultisig agent --via-agent --password "$VAULT_PASSWORD"
+```
+
+**Agent chat options:**
+- `--via-agent` - NDJSON pipe mode for agent-to-agent communication (24h password cache)
+- `--verbose` - Show detailed tool call parameters
+- `--backend-url <url>` - Agent backend URL
+- `--password <password>` - Vault password
+- `--password-ttl <ms>` - Password cache TTL (default: 5min, 24h for `--via-agent`)
+- `--session-id <id>` - Resume an existing session
+
+#### Session Management
+
+```bash
+# List chat sessions for current vault
+vultisig agent sessions list
+
+# Delete a session
+vultisig agent sessions delete abc123
+```
+
+#### Agent Command Summary
+
+| Command | Description |
+|---------|-------------|
+| `agent ask <message>` | One-shot: send message, get response, exit |
+| `agent` | Interactive TUI chat interface |
+| `agent --via-agent` | NDJSON pipe mode for agent-to-agent |
+| `agent sessions list` | List chat sessions |
+| `agent sessions delete <id>` | Delete a session |
+
+#### Environment Variables for Automation
+
+```bash
+# Pre-select vault (no --vault flag needed)
+VULTISIG_VAULT=MyWallet
+
+# Vault password (avoids --password flag)
+VAULT_PASSWORD=mypassword
+
+# Multiple vault passwords
+VAULT_PASSWORDS="Vault1:pass1 Vault2:pass2"
+
+# Suppress spinners and info messages
+VULTISIG_SILENT=1
 ```
 
 ### Settings

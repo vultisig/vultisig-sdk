@@ -33,12 +33,42 @@ Both vault types provide comprehensive blockchain support including Bitcoin, Eth
 - **Compound Wrappers**: `send()`, `swap()`, `signMessage()`, `portfolio()`, `allBalances()` — single-call operations with human-readable amounts (`send`/`swap` support dryRun)
 - **TypeScript**: Full type safety and IntelliSense support
 
+## Which Interface Should I Use?
+
+The Vultisig SDK ships two interfaces. Pick the right one for your use case:
+
+| | Programmatic SDK (`@vultisig/sdk`) | CLI (`@vultisig/cli`) |
+|---|---|---|
+| **Install** | `npm install @vultisig/sdk` | `npm install -g @vultisig/cli` |
+| **Best for** | Apps, bots, monitoring scripts | AI coding agents (Claude Code, Cursor), shell scripts |
+| **Language** | TypeScript — import and call methods | Shell — run commands, parse JSON output |
+| **Vault creation** | `sdk.createFastVault()` + email verification | `vultisig create fast --two-step` (non-interactive) |
+| **Agent mode** | Build your own logic with `vault.send()`, `vault.swap()` | `vultisig agent ask "check my ETH balance"` (built-in AI agent) |
+| **Long-running** | Great — initialize WASM once, keep alive | Not ideal — each command reloads WASM |
+| **Signing** | `onPasswordRequired` callback or `vault.unlock()` | `--password` flag or `VAULT_PASSWORD` env var |
+
+**AI coding agent?** Start with the CLI — it has built-in `agent ask` for natural language, `--two-step` for non-interactive vault creation, and `--json` for machine-parseable output. See [CLI Agent Integration](clients/cli/README.md#ai-agent-integration).
+
+**Building a bot or app?** Use the programmatic SDK — initialize once, call `vault.send()` / `vault.swap()` / `vault.portfolio()` directly with full TypeScript types.
+
+**Both?** Create your vault with the CLI (`vultisig create fast --two-step`), then load it in the SDK (`sdk.listVaults()`) for long-running operations.
+
 ## Installation
+
+### Programmatic SDK
 
 ```bash
 npm install @vultisig/sdk
 # or
 yarn add @vultisig/sdk
+```
+
+### CLI
+
+```bash
+npm install -g @vultisig/cli
+# or run without installing
+npx @vultisig/cli --help
 ```
 
 ### Related packages
