@@ -11,10 +11,14 @@ type Input = {
   is_ecdsa: boolean
   vault_password: string
   chain: string
+  /** Request MLDSA signing instead of ECDSA/EdDSA. */
+  mldsa?: boolean
+  /** Override API base (e.g. local `…/vault`). */
+  vaultBaseUrl?: string
 }
 
-export const signWithServer = async (input: Input) =>
-  queryUrl(`${fastVaultServerUrl}/sign`, {
-    body: input,
+export const signWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
+  queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/sign`, {
+    body,
     responseType: 'none',
   })
