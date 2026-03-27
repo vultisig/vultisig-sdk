@@ -1,6 +1,6 @@
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { CoinKey } from '@core/chain/coin/Coin'
-import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { CoinKey } from '@vultisig/core-chain/coin/Coin'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 
 import { Chain } from '../../../Chain'
 

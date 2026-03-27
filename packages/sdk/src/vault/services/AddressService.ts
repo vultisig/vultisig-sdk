@@ -1,7 +1,7 @@
-import { Chain } from '@core/chain/Chain'
-import { deriveAddress } from '@core/chain/publicKey/address/deriveAddress'
-import { getPublicKey } from '@core/chain/publicKey/getPublicKey'
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
+import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../../context/SdkContext'
 import { CacheScope, type CacheService } from '../../services/CacheService'

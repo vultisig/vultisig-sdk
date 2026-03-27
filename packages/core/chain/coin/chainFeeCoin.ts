@@ -1,6 +1,6 @@
-import { Chain, EthereumL2Chain } from '@core/chain/Chain'
-import { KnownCoin, KnownCoinMetadata } from '@core/chain/coin/Coin'
-import { recordMap } from '@lib/utils/record/recordMap'
+import { Chain, EthereumL2Chain } from '@vultisig/core-chain/Chain'
+import { KnownCoin, KnownCoinMetadata } from '@vultisig/core-chain/coin/Coin'
+import { recordMap } from '@vultisig/lib-utils/record/recordMap'
 
 import { kujiraCoinsMigratedToThorChainMetadata } from '../chains/cosmos/thor/kujira-merge'
 

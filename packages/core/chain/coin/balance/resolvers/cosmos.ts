@@ -1,8 +1,8 @@
-import { CosmosChain } from '@core/chain/Chain'
-import { getCosmosClient } from '@core/chain/chains/cosmos/client'
-import { getCosmosWasmTokenBalanceUrl } from '@core/chain/chains/cosmos/cosmosRpcUrl'
-import { getDenom } from '@core/chain/coin/utils/getDenom'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
+import { getCosmosWasmTokenBalanceUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { getDenom } from '@vultisig/core-chain/coin/utils/getDenom'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { CoinBalanceResolver } from '../resolver'
 

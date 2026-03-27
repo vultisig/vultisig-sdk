@@ -5,8 +5,8 @@
  * These enable custom Cosmos transaction signing beyond simple transfers.
  */
 
-import type { CosmosChain } from '@core/chain/Chain'
-import type { AccountCoin } from '@core/chain/coin/AccountCoin'
+import type { CosmosChain } from '@vultisig/core-chain/Chain'
+import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 
 /**
  * Cosmos coin amount for fee specification

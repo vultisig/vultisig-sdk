@@ -9,7 +9,7 @@
  */
 
 // @ts-nocheck - Test mocks don't need to match protobuf types exactly
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { formatGasInfo } from '../../../src/adapters/formatGasInfo'

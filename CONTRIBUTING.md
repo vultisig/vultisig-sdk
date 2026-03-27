@@ -69,10 +69,13 @@ The `packages/core/` and `packages/lib/` directories contain code synced from th
 
 ### Path Aliases
 
-All imports use TypeScript path aliases:
+All imports use TypeScript path aliases (package names match `package.json` in each workspace):
 
-- `@core/*` → `packages/core/*`
-- `@lib/*` → `packages/lib/*`
+- `@vultisig/core-chain/*` → `packages/core/chain/*`
+- `@vultisig/core-mpc/*` → `packages/core/mpc/*`
+- `@vultisig/core-config` and `@vultisig/core-config/*` → `packages/core/config/*`
+- `@vultisig/lib-utils/*` → `packages/lib/utils/*`
+- `@vultisig/lib-dkls/*`, `@vultisig/lib-mldsa/*`, `@vultisig/lib-schnorr/*` → `packages/lib/<pkg>/*`
 
 ### Workspace Bundling
 
@@ -198,7 +201,7 @@ yarn changeset
 ```
 
 This will prompt you to:
-1. **Select packages** - Choose which packages your changes affect (`@vultisig/sdk`, `@vultisig/cli`, `@vultisig/rujira`)
+1. **Select packages** - Choose which packages your changes affect (`@vultisig/sdk`, `@vultisig/cli`, `@vultisig/rujira`, `@vultisig/core-chain`, `@vultisig/core-config`, `@vultisig/core-mpc`, `@vultisig/lib-utils`, `@vultisig/lib-dkls`, `@vultisig/lib-mldsa`, `@vultisig/lib-schnorr`)
 2. **Select bump type** - Choose the version bump:
    - `patch` - Bug fixes, minor changes (0.1.0 → 0.1.1)
    - `minor` - New features, non-breaking changes (0.1.0 → 0.2.0)
@@ -256,6 +259,13 @@ We follow [Semantic Versioning](https://semver.org/):
 | `@vultisig/sdk` | Main SDK library |
 | `@vultisig/cli` | Command-line interface |
 | `@vultisig/rujira` | Rujira DEX integration (FIN swaps, deposits, withdrawals, asset registry) |
+| `@vultisig/core-chain` | Shared chain logic package for first-party clients |
+| `@vultisig/core-config` | Shared config/constants package |
+| `@vultisig/core-mpc` | Shared MPC, vault, and keysign package |
+| `@vultisig/lib-utils` | Shared utility helpers package |
+| `@vultisig/lib-dkls` | DKLS WASM bindings |
+| `@vultisig/lib-mldsa` | MLDSA WASM bindings |
+| `@vultisig/lib-schnorr` | Schnorr WASM bindings |
 
 ## Questions?
 

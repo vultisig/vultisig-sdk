@@ -1,8 +1,8 @@
-import { OtherChain } from '@core/chain/Chain'
-import { getCardanoTxHash } from '@core/chain/tx/hash/resolvers/cardano'
-import { rootApiUrl } from '@core/config'
-import { extractErrorMsg } from '@lib/utils/error/extractErrorMsg'
-import { isInError } from '@lib/utils/error/isInError'
+import { OtherChain } from '@vultisig/core-chain/Chain'
+import { getCardanoTxHash } from '@vultisig/core-chain/tx/hash/resolvers/cardano'
+import { rootApiUrl } from '@vultisig/core-config'
+import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
+import { isInError } from '@vultisig/lib-utils/error/isInError'
 
 import { BroadcastTxResolver } from '../resolver'
 import { selectEncodedBytes } from './utxo'

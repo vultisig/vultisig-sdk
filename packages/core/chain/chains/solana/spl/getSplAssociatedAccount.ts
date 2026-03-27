@@ -1,4 +1,4 @@
-import { getSolanaClient } from '@core/chain/chains/solana/client'
+import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { PublicKey } from '@solana/web3.js'
 
 import { token2022ProgramId } from '../config'

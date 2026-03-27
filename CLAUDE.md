@@ -23,6 +23,8 @@ examples/             # Browser, Electron examples
 ```bash
 # Build
 yarn build:sdk          # Full SDK build
+yarn build:shared       # Compile shared @vultisig/core-* / lib-* into packages/*/dist
+yarn pack:shared        # build:shared + npm pack --dry-run for each shared package
 yarn build:rujira       # Build Rujira package
 
 # Build (workspace-level, run from packages/sdk/)
@@ -71,7 +73,7 @@ SDK builds to 6 bundles via Rollup:
 ## Code Conventions
 
 - TypeScript strict mode
-- Path aliases: `@core/*` → `packages/core/`, `@lib/*` → `packages/lib/`
+- Path aliases: `@vultisig/core-chain`, `@vultisig/core-mpc`, `@vultisig/core-config`, `@vultisig/lib-utils`, and WASM packages under `packages/lib/*` (see each package’s `package.json` name)
 - Custom error classes: `VaultError`, `StorageError` with error codes
 - Event-driven: Use `UniversalEventEmitter` for progress tracking
 - PascalCase for classes, camelCase for functions/variables
@@ -82,6 +84,7 @@ When creating changesets, use the exact package names from package.json:
 - `@vultisig/sdk` - Main SDK (packages/sdk)
 - `@vultisig/cli` - CLI tool (clients/cli)
 - `@vultisig/rujira` - Rujira DEX integration (packages/rujira)
+- `@vultisig/core-chain`, `@vultisig/core-mpc`, `@vultisig/core-config`, `@vultisig/lib-utils`, `@vultisig/lib-dkls`, `@vultisig/lib-mldsa`, `@vultisig/lib-schnorr` - Published shared libraries (lockstep version; `core-chain` / `core-mpc` reference each other and sibling libs with **exact** semver in `package.json` so `npm pack` is valid off-repo—update those literals whenever you bump the shared version)
 
 **Do not** use variations like `@vultisig/vultisig-sdk` or `@anthropic/vultisig-sdk`.
 

@@ -1,7 +1,7 @@
-import { EvmChain } from '@core/chain/Chain'
-import { rootApiUrl } from '@core/config'
-import { defaultFiatCurrency, FiatCurrency } from '@core/config/FiatCurrency'
-import { addQueryParams } from '@lib/utils/query/addQueryParams'
+import { EvmChain } from '@vultisig/core-chain/Chain'
+import { rootApiUrl } from '@vultisig/core-config'
+import { defaultFiatCurrency, FiatCurrency } from '@vultisig/core-config/FiatCurrency'
+import { addQueryParams } from '@vultisig/lib-utils/query/addQueryParams'
 
 import { queryCoingeickoPrices } from '../queryCoingeickoPrices'
 

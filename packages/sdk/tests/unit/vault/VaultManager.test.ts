@@ -19,7 +19,7 @@
  * - Error scenarios and validation
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createSdkContext } from '../../../src/context/SdkContextBuilder'
@@ -28,7 +28,7 @@ import { VaultImportError, VaultImportErrorCode } from '../../../src/vault/Vault
 import { VaultManager } from '../../../src/VaultManager'
 
 // Mock modules
-vi.mock('@lib/utils/file/initiateFileDownload', () => ({
+vi.mock('@vultisig/lib-utils/file/initiateFileDownload', () => ({
   initiateFileDownload: vi.fn(),
 }))
 

@@ -1,5 +1,5 @@
-import type { Chain } from '@core/chain/Chain'
-import { KeysignChainSpecific } from '@core/mpc/keysign/chainSpecific/KeysignChainSpecific'
+import type { Chain } from '@vultisig/core-chain/Chain'
+import { KeysignChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
 
 import { GasInfo } from '../types'
 

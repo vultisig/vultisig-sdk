@@ -1,5 +1,5 @@
-import { Chain } from '@core/chain/Chain'
-import { getCoinType } from '@core/chain/coin/coinType'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 type Input = {

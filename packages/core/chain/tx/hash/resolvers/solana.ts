@@ -1,5 +1,5 @@
-import { OtherChain } from '@core/chain/Chain'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
+import { OtherChain } from '@vultisig/core-chain/Chain'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { TxHashResolver } from '../resolver'
 

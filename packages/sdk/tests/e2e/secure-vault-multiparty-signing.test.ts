@@ -25,7 +25,6 @@
  * Only run with test vaults containing small amounts.
  */
 
-import { Chain } from '@core/chain/Chain'
 import {
   coordinateMultiPartySigning,
   generateSharedSessionParams,
@@ -36,6 +35,7 @@ import {
   verifySharesMatch,
 } from '@helpers/secure-vault-helpers'
 import { loadTestVault } from '@helpers/test-vault'
+import { Chain } from '@vultisig/core-chain/Chain'
 import fs from 'fs/promises'
 import { beforeAll, describe, expect, it } from 'vitest'
 

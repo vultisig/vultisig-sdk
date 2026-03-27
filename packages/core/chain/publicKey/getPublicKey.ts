@@ -1,8 +1,8 @@
-import { Chain } from '@core/chain/Chain'
-import { getChainKind } from '@core/chain/ChainKind'
-import { getCoinType } from '@core/chain/coin/coinType'
-import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
-import { match } from '@lib/utils/match'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { getCoinType } from '@vultisig/core-chain/coin/coinType'
+import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import { match } from '@vultisig/lib-utils/match'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getCardanoPublicKeyData } from './cardano'

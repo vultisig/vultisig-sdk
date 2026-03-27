@@ -1,4 +1,4 @@
-import { ChainKind, DeriveChainKind, getChainKind } from '@core/chain/ChainKind'
+import { ChainKind, DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { TW } from '@trustwallet/wallet-core'
 
 import { Chain } from '../Chain'

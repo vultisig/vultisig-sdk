@@ -6,10 +6,10 @@
  * Since VaultBase is abstract, we create a minimal concrete subclass
  * with mocked service methods.
  */
-import { Chain } from '@core/chain/Chain'
-import { getChainKind } from '@core/chain/ChainKind'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { beforeEach,describe, expect, it, vi } from 'vitest'
 
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'

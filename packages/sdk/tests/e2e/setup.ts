@@ -117,10 +117,10 @@ globalThis.fetch = wrappedFetch as any
 /**
  * Configure crypto and WASM for E2E tests
  */
-import { initializeMpcLib } from '@core/mpc/lib/initialize'
-import { initializeMldsaLib } from '@core/mpc/mldsa/initializeMldsa'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+import { initializeMpcLib } from '@vultisig/core-mpc/lib/initialize'
+import { initializeMldsaLib } from '@vultisig/core-mpc/mldsa/initializeMldsa'
+import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 
 import { configureWasm } from '../../src/context/wasmRuntime'
 import { configureCrypto } from '../../src/crypto'

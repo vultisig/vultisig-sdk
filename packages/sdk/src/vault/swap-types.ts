@@ -4,18 +4,18 @@
  * These types define the swap functionality exposed through VaultBase.
  */
 
-import type { Chain } from '@core/chain/Chain'
-import type { AccountCoin } from '@core/chain/coin/AccountCoin'
-import type { SwapQuote } from '@core/chain/swap/quote/SwapQuote'
-import type { FiatCurrency } from '@core/config/FiatCurrency'
-import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import type { Chain } from '@vultisig/core-chain/Chain'
+import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
+import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 // Re-export core swap types for SDK consumers
-export type { GeneralSwapProvider } from '@core/chain/swap/general/GeneralSwapProvider'
-export type { GeneralSwapQuote } from '@core/chain/swap/general/GeneralSwapQuote'
-export type { NativeSwapQuote } from '@core/chain/swap/native/NativeSwapQuote'
-export type { SwapQuote } from '@core/chain/swap/quote/SwapQuote'
-export type { FiatCurrency } from '@core/config/FiatCurrency'
+export type { GeneralSwapProvider } from '@vultisig/core-chain/swap/general/GeneralSwapProvider'
+export type { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+export type { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
+export type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 
 /**
  * Simplified coin input format

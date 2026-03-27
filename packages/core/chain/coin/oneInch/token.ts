@@ -1,5 +1,5 @@
-import { Chain } from '@core/chain/Chain'
-import { Coin } from '@core/chain/coin/Coin'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { Coin } from '@vultisig/core-chain/coin/Coin'
 
 export type OneInchToken = {
   address: string

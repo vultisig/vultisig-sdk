@@ -1,5 +1,5 @@
-import type { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
-import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
+import type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
 
 import type { Signature } from '../types'
 

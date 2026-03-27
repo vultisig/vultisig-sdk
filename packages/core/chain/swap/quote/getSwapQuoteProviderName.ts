@@ -1,4 +1,4 @@
-import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { generalSwapProviderName } from '../general/GeneralSwapProvider'
 import { SwapQuote, SwapQuoteResult } from './SwapQuote'

@@ -1,4 +1,4 @@
-import { memoize } from '@lib/utils/memoize'
+import { memoize } from '@vultisig/lib-utils/memoize'
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc'
 
 export const getSuiClient = memoize(

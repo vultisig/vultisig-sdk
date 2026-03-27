@@ -1,5 +1,5 @@
-import { Chain } from '@core/chain/Chain'
-import { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../context/SdkContext'
 import { ServerManager } from '../server/ServerManager'

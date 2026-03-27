@@ -1,4 +1,4 @@
-import { Vault } from '@core/mpc/vault/Vault'
+import { Vault } from '@vultisig/core-mpc/vault/Vault'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createVaultBackup } from '../../../src/utils/export'
@@ -14,7 +14,7 @@ vi.mock('@bufbuild/protobuf', () => ({
   }),
 }))
 
-vi.mock('@core/mpc/types/utils/commVault', () => ({
+vi.mock('@vultisig/core-mpc/types/utils/commVault', () => ({
   toCommVault: vi.fn(vault => ({
     name: vault.name,
     localPartyId: vault.localPartyId,
@@ -22,7 +22,7 @@ vi.mock('@core/mpc/types/utils/commVault', () => ({
   })),
 }))
 
-vi.mock('@lib/utils/encryption/aesGcm/encryptWithAesGcm', () => ({
+vi.mock('@vultisig/lib-utils/encryption/aesGcm/encryptWithAesGcm', () => ({
   encryptWithAesGcm: vi.fn(({ key, value }) => {
     // Return a mock encrypted value
     return Buffer.from(`encrypted_${key}_${value.toString()}`)

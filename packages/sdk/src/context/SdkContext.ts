@@ -5,7 +5,7 @@
  * Each Vultisig instance has its own isolated context.
  */
 
-import type { Chain } from '@core/chain/Chain'
+import type { Chain } from '@vultisig/core-chain/Chain'
 
 import type { ServerManager } from '../server/ServerManager'
 import type { CacheConfig } from '../services/cache-types'

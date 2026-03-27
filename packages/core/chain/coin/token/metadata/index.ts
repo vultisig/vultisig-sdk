@@ -1,4 +1,4 @@
-import { getChainKind } from '@core/chain/ChainKind'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { ChainKindWithTokenMetadataDiscovery } from './chains'
 import { TokenMetadataResolver } from './resolver'

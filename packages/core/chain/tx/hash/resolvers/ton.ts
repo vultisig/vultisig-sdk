@@ -1,4 +1,4 @@
-import { OtherChain } from '@core/chain/Chain'
+import { OtherChain } from '@vultisig/core-chain/Chain'
 
 import { TxHashResolver } from '../resolver'
 

@@ -2,9 +2,9 @@
  * Shared send logic for funded E2E: tokens first, then native (minimal amounts).
  */
 
-import { Chain } from '@core/chain/Chain'
-import type { AccountCoin } from '@core/chain/coin/AccountCoin'
-import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { Chain } from '@vultisig/core-chain/Chain'
+import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import type { Balance } from '@/types'
 

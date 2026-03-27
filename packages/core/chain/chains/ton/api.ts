@@ -1,5 +1,5 @@
-import { rootApiUrl } from '@core/config'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { rootApiUrl } from '@vultisig/core-config'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 const tonApiUrl = `${rootApiUrl}/ton`
 

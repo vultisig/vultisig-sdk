@@ -1,4 +1,4 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { configureDefaultStorage } from '../../src/context/defaultStorage'

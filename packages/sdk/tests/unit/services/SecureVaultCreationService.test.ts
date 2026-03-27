@@ -3,19 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SecureVaultCreationService } from '../../../src/services/SecureVaultCreationService'
 
 // Mock the core MPC modules
-vi.mock('@core/mpc/devices/localPartyId', () => ({
+vi.mock('@vultisig/core-mpc/devices/localPartyId', () => ({
   generateLocalPartyId: vi.fn((prefix: string) => `${prefix}-party-${Math.random().toString(36).slice(2, 8)}`),
 }))
 
-vi.mock('@core/mpc/utils/generateHexEncryptionKey', () => ({
+vi.mock('@vultisig/core-mpc/utils/generateHexEncryptionKey', () => ({
   generateHexEncryptionKey: vi.fn(() => 'a'.repeat(64)),
 }))
 
-vi.mock('@core/mpc/utils/generateHexChainCode', () => ({
+vi.mock('@vultisig/core-mpc/utils/generateHexChainCode', () => ({
   generateHexChainCode: vi.fn(() => 'b'.repeat(64)),
 }))
 
-vi.mock('@core/mpc/getKeygenThreshold', () => ({
+vi.mock('@vultisig/core-mpc/getKeygenThreshold', () => ({
   getKeygenThreshold: vi.fn((devices: number) => Math.ceil((devices + 1) / 2)),
 }))
 
@@ -205,7 +205,7 @@ describe('SecureVaultCreationService with mocked QR generation', () => {
   })
 
   // Mock the 7-zip compression for QR payload tests
-  vi.mock('@core/mpc/compression/getSevenZip', () => ({
+  vi.mock('@vultisig/core-mpc/compression/getSevenZip', () => ({
     getSevenZip: vi.fn(() => ({
       Compress: {
         encode: vi.fn(() => new Uint8Array([1, 2, 3, 4])),
@@ -213,7 +213,7 @@ describe('SecureVaultCreationService with mocked QR generation', () => {
     })),
   }))
 
-  vi.mock('@core/chain/utils/protobuf/toCompressedString', () => ({
+  vi.mock('@vultisig/core-chain/utils/protobuf/toCompressedString', () => ({
     toCompressedString: vi.fn(() => 'compressed-base64-data'),
   }))
 

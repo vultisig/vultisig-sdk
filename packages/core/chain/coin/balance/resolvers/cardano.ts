@@ -1,6 +1,6 @@
-import { OtherChain } from '@core/chain/Chain'
-import { cardanoApiUrl } from '@core/chain/chains/cardano/client/config'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { OtherChain } from '@vultisig/core-chain/Chain'
+import { cardanoApiUrl } from '@vultisig/core-chain/chains/cardano/client/config'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { CoinBalanceResolver } from '../resolver'
 

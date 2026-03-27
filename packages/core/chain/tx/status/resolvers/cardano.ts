@@ -1,4 +1,4 @@
-import { OtherChain, UtxoBasedChain } from '@core/chain/Chain'
+import { OtherChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 
 import { TxStatusResolver } from '../resolver'
 import { getUtxoTxStatus } from './utxo'

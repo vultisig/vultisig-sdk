@@ -1,8 +1,8 @@
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
-import { bigIntToHex } from '@lib/utils/bigint/bigIntToHex'
-import { stripHexPrefix } from '@lib/utils/hex/stripHexPrefix'
-import { matchDiscriminatedUnion } from '@lib/utils/matchDiscriminatedUnion'
-import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
+import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
+import { matchDiscriminatedUnion } from '@vultisig/lib-utils/matchDiscriminatedUnion'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 

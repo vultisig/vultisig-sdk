@@ -3,9 +3,9 @@
  */
 import './init-fetch-for-wasm.js'
 
-import { initializeMpcLib } from '@core/mpc/lib/initialize'
-import { memoizeAsync } from '@lib/utils/memoizeAsync'
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
+import { initializeMpcLib } from '@vultisig/core-mpc/lib/initialize'
+import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 
 import { configureWasm } from '../../src/context/wasmRuntime'
 import { configureCrypto } from '../../src/crypto'
