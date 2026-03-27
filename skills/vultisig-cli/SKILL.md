@@ -216,6 +216,79 @@ See [references/rujira.md](references/rujira.md) for detailed Rujira/secured ass
 | `tokens <chain>` | List tokens on chain |
 | `tokens <chain> --add <contract>` | Add custom token |
 
+### Agent Chat (AI-to-AI)
+
+The `agent ask` command lets AI coding agents (Claude Code, Opencode, Cursor, etc.) talk to the Vultisig agent backend for natural-language crypto operations. The agent backend has access to MCP tools for balance queries, transaction building, token lookups, swaps, and more — so the calling agent doesn't need to know chain-specific details.
+
+| Command | Description |
+|---------|-------------|
+| `agent ask "<message>"` | Send a single message, get the response |
+| `agent ask "<message>" --session <id>` | Continue an existing conversation |
+| `agent ask "<message>" --json` | Output structured JSON |
+| `agent ask "<message>" --verbose` | Show tool calls on stderr |
+| `agent sessions list` | List chat sessions for the current vault |
+| `agent sessions delete <id>` | Delete a session |
+
+#### Output Formats
+
+**Text (default):**
+```
+session:conv_abc123
+
+Your HYPE balance is 42.567 HYPE on Hyperliquid.
+```
+
+**JSON (`--json`):**
+```json
+{"session_id":"conv_abc123","response":"Your HYPE balance is ...","tool_calls":[{"action":"evm_get_balance","success":true}],"transactions":[]}
+```
+
+**Transaction output (text):**
+```
+session:conv_abc123
+
+Sent 0.01567 HYPE to 0x...
+
+tx:Hyperliquid:0xabc123...
+explorer:https://hyperliquid.xyz/tx/0xabc123...
+```
+
+#### Multi-Turn Conversations
+
+The first call returns a session ID on the first line of stdout. Pass it back with `--session` to continue the conversation:
+
+```bash
+# Turn 1: Ask a question
+RESPONSE=$(vultisig agent ask "What is my HYPE balance?" --vault t1 --password 1)
+SESSION=$(echo "$RESPONSE" | head -1 | cut -d: -f2-)
+
+# Turn 2: Use the answer in a follow-up
+vultisig agent ask "Send 0.01 HYPE to myself" --session "$SESSION" --vault t1 --password 1
+```
+
+With `--json`, extract the session ID from the JSON:
+```bash
+RESULT=$(vultisig agent ask "What is my ETH balance?" --vault t1 --password 1 --json)
+SESSION=$(echo "$RESULT" | jq -r '.session_id')
+vultisig agent ask "Send 0.001 ETH to 0x..." --session "$SESSION" --vault t1 --password 1 --json
+```
+
+#### How It Works
+
+1. The CLI authenticates with the agent backend using the vault's MPC key (no extra API keys needed)
+2. Your message is sent to the backend, which routes it to an AI model with crypto MCP tools
+3. The backend executes tool calls (balance checks, transaction building, etc.) server-side
+4. If a transaction is built, the CLI signs it locally using MPC (the server never sees the full key)
+5. The signed transaction is broadcast and the result is returned
+
+#### Notes
+
+- **No helper scripts needed** — `agent ask` handles the full lifecycle (auth, streaming, tool execution, signing)
+- **Signing is local** — transaction signing happens client-side via MPC; the backend only builds unsigned transactions
+- **Password is required for signing** — use `--password` flag; the CLI will error if a signing operation is needed without it
+- **Backend URL** defaults to `http://localhost:9998` or the `VULTISIG_AGENT_URL` environment variable
+- **stdout is clean** — all debug output, SDK logs, and MPC progress go to stderr; only the structured response goes to stdout
+
 ### Advanced Operations
 
 | Command | Description |

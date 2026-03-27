@@ -14,6 +14,7 @@ import {
   executeAddressBook,
   executeAddresses,
   executeAgent,
+  executeAgentAsk,
   executeAgentSessionsDelete,
   executeAgentSessionsList,
   executeBalance,
@@ -1089,6 +1090,40 @@ const agentCmd = program
       sessionId: options.sessionId,
     })
   })
+
+// Ask subcommand: one-shot mode for AI coding agents
+agentCmd
+  .command('ask <message>')
+  .description('Send a single message and get the response (for AI agent integration)')
+  .option('--session <id>', 'Continue an existing conversation')
+  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--password <password>', 'Vault password for signing operations')
+  .option('--verbose', 'Show tool calls and debug info on stderr')
+  .option('--json', 'Output structured JSON instead of text')
+  .action(
+    async (
+      message: string,
+      options: {
+        session?: string
+        backendUrl?: string
+        password?: string
+        verbose?: boolean
+        json?: boolean
+      }
+    ) => {
+      const parentOpts = agentCmd.opts()
+      const context = await init(
+        program.opts().vault,
+        options.password || parentOpts.password
+      )
+      await executeAgentAsk(context, message, {
+        ...options,
+        backendUrl: options.backendUrl || parentOpts.backendUrl,
+        password: options.password || parentOpts.password,
+        verbose: options.verbose || parentOpts.verbose,
+      })
+    }
+  )
 
 // Session management subcommands
 const sessionsCmd = agentCmd.command('sessions').description('Manage agent chat sessions')
