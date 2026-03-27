@@ -91,7 +91,7 @@ export async function executeAgentSessionsList(ctx: CommandContext, options: Age
   let totalCount = 0
   let skip = 0
 
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const page = await client.listConversations(publicKey, skip, PAGE_SIZE)
     totalCount = page.total_count

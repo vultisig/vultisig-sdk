@@ -15,7 +15,7 @@
  * and may fail if APIs are unavailable or rate-limited.
  */
 
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { VaultBase } from '@/index'

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock core modules BEFORE imports
-vi.mock('@core/chain/coin/find', () => ({
+vi.mock('@vultisig/core-chain/coin/find', () => ({
   findCoins: vi.fn(),
 }))
 
-vi.mock('@core/chain/coin/knownTokens', () => ({
+vi.mock('@vultisig/core-chain/coin/knownTokens', () => ({
   knownTokensIndex: {
     Ethereum: {
       '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': {
@@ -20,13 +20,13 @@ vi.mock('@core/chain/coin/knownTokens', () => ({
   },
 }))
 
-vi.mock('@core/chain/coin/token/metadata', () => ({
+vi.mock('@vultisig/core-chain/coin/token/metadata', () => ({
   getTokenMetadata: vi.fn(),
 }))
 
-import { Chain } from '@core/chain/Chain'
-import { findCoins } from '@core/chain/coin/find'
-import { getTokenMetadata } from '@core/chain/coin/token/metadata'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { findCoins } from '@vultisig/core-chain/coin/find'
+import { getTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
 
 import { TokenDiscoveryService } from '../../../../src/vault/services/TokenDiscoveryService'
 import { VaultError, VaultErrorCode } from '../../../../src/vault/VaultError'

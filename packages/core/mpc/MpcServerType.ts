@@ -1,4 +1,4 @@
-import { rootApiUrl } from '@core/config'
+import { rootApiUrl } from '@vultisig/core-config'
 
 export const mpcServerTypes = ['relay', 'local'] as const
 

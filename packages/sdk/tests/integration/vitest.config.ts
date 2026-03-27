@@ -5,8 +5,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, '../../src'),
-      '@core': resolve(__dirname, '../../../core'),
-      '@lib': resolve(__dirname, '../../../lib'),
+      '@vultisig/core-chain': resolve(__dirname, '../../../core/chain'),
+      '@vultisig/core-mpc': resolve(__dirname, '../../../core/mpc'),
+      '@vultisig/core-config': resolve(__dirname, '../../../core/config'),
+      '@vultisig/lib-utils': resolve(__dirname, '../../../lib/utils'),
+      '@vultisig/lib-dkls': resolve(__dirname, '../../../lib/dkls'),
+      '@vultisig/lib-mldsa': resolve(__dirname, '../../../lib/mldsa'),
+      '@vultisig/lib-schnorr': resolve(__dirname, '../../../lib/schnorr'),
       '@tests': resolve(__dirname, '..'),
       '@fixtures': resolve(__dirname, '../fixtures'),
       '@mocks': resolve(__dirname, './mocks'),

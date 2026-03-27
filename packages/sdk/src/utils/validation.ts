@@ -1,5 +1,5 @@
-import { vaultConfig } from '@core/config'
-import { validateEmail } from '@lib/utils/validation/validateEmail'
+import { vaultConfig } from '@vultisig/core-config'
+import { validateEmail } from '@vultisig/lib-utils/validation/validateEmail'
 
 import { ValidationResult } from '../types'
 

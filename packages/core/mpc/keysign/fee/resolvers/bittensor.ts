@@ -1,4 +1,4 @@
-import { bittensorConfig } from '@core/chain/chains/bittensor/config'
+import { bittensorConfig } from '@vultisig/core-chain/chains/bittensor/config'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { FeeAmountResolver } from '../resolver'

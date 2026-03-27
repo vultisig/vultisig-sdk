@@ -1,8 +1,8 @@
-import { Chain, OtherChain } from '@core/chain/Chain'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { rootApiUrl } from '@core/config'
-import { attempt } from '@lib/utils/attempt'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { rootApiUrl } from '@vultisig/core-config'
+import { attempt } from '@vultisig/lib-utils/attempt'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { TxStatusResolver } from '../resolver'
 

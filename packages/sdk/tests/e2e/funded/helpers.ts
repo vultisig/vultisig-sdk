@@ -2,10 +2,10 @@
  * Funded E2E helpers: minimal-amount sends, signing/broadcast.
  */
 
-import { Chain, UtxoBasedChain } from '@core/chain/Chain'
-import { getChainKind } from '@core/chain/ChainKind'
-import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
-import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { Chain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import fs from 'fs/promises'
 
 import { getChainSigningInfo } from '../../../src/adapters/getChainSigningInfo'

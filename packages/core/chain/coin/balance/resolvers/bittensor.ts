@@ -1,5 +1,5 @@
-import { bittensorRpcUrl } from '@core/chain/chains/bittensor/client'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { CoinBalanceResolver } from '../resolver'
 

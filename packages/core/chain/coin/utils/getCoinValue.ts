@@ -1,6 +1,6 @@
-import { fromChainAmount } from '@core/chain/amount/fromChainAmount'
-import { CoinAmount } from '@core/chain/coin/Coin'
-import { EntityWithPrice } from '@lib/utils/entities/EntityWithPrice'
+import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+import { CoinAmount } from '@vultisig/core-chain/coin/Coin'
+import { EntityWithPrice } from '@vultisig/lib-utils/entities/EntityWithPrice'
 
 export const getCoinValue = ({
   amount,

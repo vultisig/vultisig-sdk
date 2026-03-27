@@ -1,6 +1,36 @@
 {
-  "name": "@core/config",
-  "version": "0.0.1",
-  "private": true,
-  "type": "module"
+  "name": "@vultisig/core-config",
+  "version": "0.8.0",
+  "description": "Shared product and API configuration for Vultisig",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
+    "directory": "packages/core/config"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../../scripts/build-shared-packages.mjs",
+    "prepack": "node ../../../scripts/build-shared-packages.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
 }

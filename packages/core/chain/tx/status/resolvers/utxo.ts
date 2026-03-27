@@ -1,7 +1,7 @@
-import { UtxoBasedChain } from '@core/chain/Chain'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { attempt } from '@lib/utils/attempt'
-import { queryUrl } from '@lib/utils/query/queryUrl'
+import { UtxoBasedChain } from '@vultisig/core-chain/Chain'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { attempt } from '@vultisig/lib-utils/attempt'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { getBlockchairBaseUrl } from '../../../chains/utxo/client/getBlockchairBaseUrl'
 import { TxStatusResolver } from '../resolver'

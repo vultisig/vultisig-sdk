@@ -1,11 +1,11 @@
 import { create } from '@bufbuild/protobuf'
-import { getSuiClient } from '@core/chain/chains/sui/client'
-import { suiGasBudget } from '@core/chain/chains/sui/config'
+import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
+import { suiGasBudget } from '@vultisig/core-chain/chains/sui/config'
 import {
   SuiCoinSchema,
   SuiSpecificSchema,
-} from '@core/mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import { attempt, withFallback } from '@lib/utils/attempt'
+} from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import { type CoinStruct } from '@mysten/sui/jsonRpc'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'

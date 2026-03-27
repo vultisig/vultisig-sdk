@@ -1,7 +1,7 @@
-import { EvmChain } from '@core/chain/Chain'
-import { getEvmClient } from '@core/chain/chains/evm/client'
-import { getErc20Balance } from '@core/chain/chains/evm/erc20/getErc20Balance'
-import { isFeeCoin } from '@core/chain/coin/utils/isFeeCoin'
+import { EvmChain } from '@vultisig/core-chain/Chain'
+import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
+import { getErc20Balance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Balance'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 
 import { CoinBalanceResolver } from '../resolver'
 

@@ -1,15 +1,15 @@
-import { DeriveChainKind, getChainKind } from '@core/chain/ChainKind'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { lifiConfig } from '@core/chain/swap/general/lifi/config'
+import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 import {
   lifiSwapChainId,
   LifiSwapEnabledChain,
-} from '@core/chain/swap/general/lifi/LifiSwapEnabledChains'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
-import { match } from '@lib/utils/match'
-import { memoize } from '@lib/utils/memoize'
-import { mirrorRecord } from '@lib/utils/record/mirrorRecord'
-import { TransferDirection } from '@lib/utils/TransferDirection'
+} from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { match } from '@vultisig/lib-utils/match'
+import { memoize } from '@vultisig/lib-utils/memoize'
+import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
+import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { createConfig, getQuote } from '@lifi/sdk'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'

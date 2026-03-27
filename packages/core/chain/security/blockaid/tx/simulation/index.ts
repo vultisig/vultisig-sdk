@@ -1,5 +1,5 @@
-import { Chain } from '@core/chain/Chain'
-import { DeriveChainKind, getChainKind } from '@core/chain/ChainKind'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { BlockaidSupportedEvmChain } from '../../evmChains'
 import { BlockaidSimulationSupportedChain } from '../../simulationChains'

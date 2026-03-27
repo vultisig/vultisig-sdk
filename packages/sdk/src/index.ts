@@ -64,13 +64,13 @@ export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain }
 export { Chain } from './types'
 
 // Fiat currency types
-export type { FiatCurrency } from '@core/config/FiatCurrency'
+export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export {
   defaultFiatCurrency,
   fiatCurrencies,
   fiatCurrencyNameRecord,
   fiatCurrencySymbolRecord,
-} from '@core/config/FiatCurrency'
+} from '@vultisig/core-config/FiatCurrency'
 
 // General types
 export type {
@@ -176,13 +176,13 @@ export { computeNotificationVaultId } from './utils/computeNotificationVaultId'
 // ============================================================================
 
 // VULT discount tier config (for CLI and other consumers)
-export type { VultDiscountTier } from '@core/chain/swap/affiliate/config'
+export type { VultDiscountTier } from '@vultisig/core-chain/swap/affiliate/config'
 export {
   baseAffiliateBps,
   vultDiscountTierBps,
   vultDiscountTierMinBalances,
   vultDiscountTiers,
-} from '@core/chain/swap/affiliate/config'
+} from '@vultisig/core-chain/swap/affiliate/config'
 
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data

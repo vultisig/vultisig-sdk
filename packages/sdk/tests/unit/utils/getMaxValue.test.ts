@@ -1,4 +1,4 @@
-import { getMaxValue } from '@core/chain/amount/getMaxValue'
+import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { describe, expect, it } from 'vitest'
 
 describe('getMaxValue', () => {

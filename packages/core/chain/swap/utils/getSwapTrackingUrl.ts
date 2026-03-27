@@ -1,8 +1,8 @@
-import { Chain } from '@core/chain/Chain'
-import { getBlockExplorerUrl } from '@core/chain/utils/getBlockExplorerUrl'
-import { KeysignSwapPayload } from '@core/mpc/keysign/swap/KeysignSwapPayload'
-import { stripHexPrefix } from '@lib/utils/hex/stripHexPrefix'
-import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
+import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
+import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 type GetSwapTrackingUrlInput = {
   swapPayload: KeysignSwapPayload

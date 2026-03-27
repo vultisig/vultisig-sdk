@@ -1,6 +1,6 @@
-import { Chain } from '@core/chain/Chain'
-import { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { CoinKey } from '@core/chain/coin/Coin'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { CoinKey } from '@vultisig/core-chain/coin/Coin'
 
 import { assertKnownToken } from '../knownTokens/utils'
 

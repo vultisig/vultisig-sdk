@@ -1,5 +1,5 @@
-import { solanaConfig } from '@core/chain/chains/solana/solanaConfig'
-import { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
+import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 import Long from 'long'
 

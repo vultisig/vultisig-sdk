@@ -67,6 +67,6 @@ const foldersToCoopy = [
 **Copy process:**
 
 - Recursively copies all files and subdirectories
-- Transforms imports: `@core/chain/Chain` → `../../chain/Chain`
+- TypeScript sources are copied as-is; the Windows repo should use the same `@vultisig/*` import specifiers as this SDK (e.g. `@vultisig/core-chain/Chain`), or run a separate codemod if paths differ on that side.
 - Handles `.ts`, `.tsx`, `.js`, `.d.ts` (with transformations)
 - Handles `.wasm` files (direct copy)

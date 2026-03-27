@@ -1,9 +1,9 @@
-import type { Chain } from '@core/chain/Chain'
-import { getChainKind } from '@core/chain/ChainKind'
-import { getCoinType } from '@core/chain/coin/coinType'
-import type { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
-import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
 import type { WalletCore } from '@trustwallet/wallet-core'
+import type { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { getCoinType } from '@vultisig/core-chain/coin/coinType'
+import type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
 /**
  * Chain signing information extracted from payload and walletCore

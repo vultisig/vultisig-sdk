@@ -1,8 +1,8 @@
-import { CosmosChain } from '@core/chain/Chain'
-import { cosmosFeeCoinDenom } from '@core/chain/chains/cosmos/cosmosFeeCoinDenom'
-import type { KeysignPayload } from '@core/mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { fromBase64 } from '@cosmjs/encoding'
-import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { AuthInfo } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 
 import { getCosmosChainSpecific } from '../../signingInputs/resolvers/cosmos/chainSpecific'

@@ -1,9 +1,9 @@
 import {
   generalSwapProviderName,
   generalSwapProviders,
-} from '@core/chain/swap/general/GeneralSwapProvider'
-import { isOneOf } from '@lib/utils/array/isOneOf'
-import { matchRecordUnion } from '@lib/utils/matchRecordUnion'
+} from '@vultisig/core-chain/swap/general/GeneralSwapProvider'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { KeysignSwapPayload } from './KeysignSwapPayload'
 

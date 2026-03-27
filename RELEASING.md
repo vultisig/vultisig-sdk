@@ -27,7 +27,7 @@ This repository uses [Changesets](https://github.com/changesets/changesets) with
    - All accumulated changes since last release
 
 2. **Merge the Release PR** when ready to release - this triggers:
-   - npm publish for `@vultisig/sdk` and `@vultisig/cli`
+   - npm publish for `@vultisig/sdk`, `@vultisig/cli`, `@vultisig/rujira`, and the published shared `@vultisig/*` core/lib packages
    - Git tag creation (`vX.Y.Z`)
    - GitHub Release with auto-generated notes
    - Vercel deployment of browser example
@@ -100,9 +100,25 @@ If the automated workflow fails, you can manually release:
    git push origin "vX.Y.Z"
    ```
 
+## Published Packages
+
+The release workflow now publishes:
+
+- `@vultisig/core-chain`
+- `@vultisig/core-config`
+- `@vultisig/core-mpc`
+- `@vultisig/lib-utils`
+- `@vultisig/lib-dkls`
+- `@vultisig/lib-mldsa`
+- `@vultisig/lib-schnorr`
+- `@vultisig/sdk`
+- `@vultisig/rujira`
+- `@vultisig/cli`
+
 ## Linked Packages
 
 The following packages are versioned together (configured in `.changeset/config.json`):
+
 - `@vultisig/sdk`
 - `@vultisig/cli`
 

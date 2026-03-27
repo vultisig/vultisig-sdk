@@ -1,10 +1,10 @@
-import { fromChainAmount } from '@core/chain/amount/fromChainAmount'
-import { CoinAmount } from '@core/chain/coin/Coin'
-import { getCoinValue } from '@core/chain/coin/utils/getCoinValue'
-import { order } from '@lib/utils/array/order'
-import { splitBy } from '@lib/utils/array/splitBy'
-import { shouldBePresent } from '@lib/utils/assert/shouldBePresent'
-import { EntityWithPrice } from '@lib/utils/entities/EntityWithPrice'
+import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+import { CoinAmount } from '@vultisig/core-chain/coin/Coin'
+import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
+import { order } from '@vultisig/lib-utils/array/order'
+import { splitBy } from '@vultisig/lib-utils/array/splitBy'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { EntityWithPrice } from '@vultisig/lib-utils/entities/EntityWithPrice'
 
 export const sortCoinsByBalance = <
   T extends CoinAmount & Partial<EntityWithPrice>,

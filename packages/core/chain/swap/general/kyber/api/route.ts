@@ -1,7 +1,7 @@
-import { AccountCoin } from '@core/chain/coin/AccountCoin'
-import { addQueryParams } from '@lib/utils/query/addQueryParams'
-import { queryUrl } from '@lib/utils/query/queryUrl'
-import { TransferDirection } from '@lib/utils/TransferDirection'
+import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { addQueryParams } from '@vultisig/lib-utils/query/addQueryParams'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 import { KyberSwapEnabledChain } from '../chains'

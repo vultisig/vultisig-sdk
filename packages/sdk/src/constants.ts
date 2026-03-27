@@ -3,7 +3,7 @@
  * Shared constants to avoid circular dependencies
  */
 
-import { Chain, defaultChains } from '@core/chain/Chain'
+import { Chain, defaultChains } from '@vultisig/core-chain/Chain'
 
 /**
  * Default chains for new vaults

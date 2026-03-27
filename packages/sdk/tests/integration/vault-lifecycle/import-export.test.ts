@@ -20,8 +20,8 @@
  * NOTE: Integration setup (WASM & crypto polyfills) loaded via vitest.config.ts
  */
 
-import { Chain } from '@core/chain/Chain'
-import type { Vault as CoreVault } from '@core/mpc/vault/Vault'
+import { Chain } from '@vultisig/core-chain/Chain'
+import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'

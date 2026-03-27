@@ -1,7 +1,7 @@
-import { vult } from '@core/chain/coin/knownTokens'
-import { getLastItem } from '@lib/utils/array/getLastItem'
-import { order } from '@lib/utils/array/order'
-import { toEntries } from '@lib/utils/record/toEntries'
+import { vult } from '@vultisig/core-chain/coin/knownTokens'
+import { getLastItem } from '@vultisig/lib-utils/array/getLastItem'
+import { order } from '@vultisig/lib-utils/array/order'
+import { toEntries } from '@vultisig/lib-utils/record/toEntries'
 
 import { fromChainAmount } from '../../amount/fromChainAmount'
 import {

@@ -1,7 +1,7 @@
-import { Chain, OtherChain } from '@core/chain/Chain'
-import { getRippleClient } from '@core/chain/chains/ripple/client'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { attempt } from '@lib/utils/attempt'
+import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
+import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 

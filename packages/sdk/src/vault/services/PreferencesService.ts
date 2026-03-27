@@ -1,4 +1,4 @@
-import { Chain } from '@core/chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 
 import { DEFAULT_CHAINS } from '../../constants'
 import { type CacheService } from '../../services/CacheService'

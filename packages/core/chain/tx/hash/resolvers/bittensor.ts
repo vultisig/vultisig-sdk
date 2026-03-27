@@ -1,4 +1,4 @@
-import { OtherChain } from '@core/chain/Chain'
+import { OtherChain } from '@vultisig/core-chain/Chain'
 import { blake2AsHex } from '@polkadot/util-crypto'
 
 import { TxHashResolver } from '../resolver'

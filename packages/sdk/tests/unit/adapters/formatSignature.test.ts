@@ -6,8 +6,8 @@
  * and multi-signature (UTXO) cases.
  */
 
-import type { SignatureAlgorithm } from '@core/chain/signing/SignatureAlgorithm'
-import type { KeysignSignature } from '@core/mpc/keysign/KeysignSignature'
+import type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
 import { describe, expect, it } from 'vitest'
 
 import { formatSignature } from '../../../src/adapters/formatSignature'

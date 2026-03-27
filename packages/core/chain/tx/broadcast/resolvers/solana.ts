@@ -1,5 +1,5 @@
-import { OtherChain } from '@core/chain/Chain'
-import { getSolanaClient } from '@core/chain/chains/solana/client'
+import { OtherChain } from '@vultisig/core-chain/Chain'
+import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import base58 from 'bs58'
 
 import { BroadcastTxResolver } from '../resolver'

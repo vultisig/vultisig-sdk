@@ -1,6 +1,6 @@
-import { Chain } from '@core/chain/Chain'
-import { getChainKind } from '@core/chain/ChainKind'
-import { isOneOf } from '@lib/utils/array/isOneOf'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 
 import {
   CoinFinderChainKind,

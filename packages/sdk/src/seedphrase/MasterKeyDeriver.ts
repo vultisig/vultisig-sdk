@@ -4,10 +4,10 @@
  * Derives ECDSA (secp256k1) and EdDSA (ed25519) master keys from a mnemonic
  * for use in TSS key import. Mirrors the iOS/Windows implementation.
  */
-import type { Chain } from '@core/chain/Chain'
-import { getChainKind } from '@core/chain/ChainKind'
-import { phantomSolanaPath } from '@core/chain/publicKey/address/deriveSolanaAddressFromMnemonic'
-import { signatureAlgorithms } from '@core/chain/signing/SignatureAlgorithm'
+import type { Chain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { phantomSolanaPath } from '@vultisig/core-chain/publicKey/address/deriveSolanaAddressFromMnemonic'
+import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
 import type { WasmProvider } from '../context/SdkContext'
 import { clampThenUniformScalar } from '../crypto/ed25519ScalarClamp'

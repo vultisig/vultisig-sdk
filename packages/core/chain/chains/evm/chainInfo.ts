@@ -1,9 +1,9 @@
-import { EvmChain } from '@core/chain/Chain'
-import { chainFeeCoin } from '@core/chain/coin/chainFeeCoin'
-import { rootApiUrl } from '@core/config'
-import { numberToHex } from '@lib/utils/hex/numberToHex'
-import { mirrorRecord } from '@lib/utils/record/mirrorRecord'
-import { recordMap } from '@lib/utils/record/recordMap'
+import { EvmChain } from '@vultisig/core-chain/Chain'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { rootApiUrl } from '@vultisig/core-config'
+import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
+import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
+import { recordMap } from '@vultisig/lib-utils/record/recordMap'
 import { Chain as ViemChain, defineChain } from 'viem'
 import {
   arbitrum,
