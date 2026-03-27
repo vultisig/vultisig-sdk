@@ -212,11 +212,17 @@ describe('ServerManager — TSS batching wiring', () => {
       await mgr.reshareVault(minimalVault as never, { password: 'pw', tssBatching: false })
       expect(reshareWithServerMock).toHaveBeenCalledTimes(1)
       expect(batchReshareMock).not.toHaveBeenCalled()
+      expect(
+        (reshareWithServerMock.mock.calls[0][0] as { vaultBaseUrl: string }).vaultBaseUrl
+      ).toBe(fastVault)
 
       vi.clearAllMocks()
       await mgr.reshareVault(minimalVault as never, { password: 'pw' })
       expect(reshareWithServerMock).toHaveBeenCalledTimes(1)
       expect(batchReshareMock).not.toHaveBeenCalled()
+      expect(
+        (reshareWithServerMock.mock.calls[0][0] as { vaultBaseUrl: string }).vaultBaseUrl
+      ).toBe(fastVault)
     })
   })
 })

@@ -397,6 +397,7 @@ export class ServerManager {
         email: reshareOptions.email,
         reshare_type: 1,
         lib_type: 1,
+        vaultBaseUrl: this.config.fastVault,
       })
     }
 

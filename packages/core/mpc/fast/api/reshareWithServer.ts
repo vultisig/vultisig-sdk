@@ -15,10 +15,12 @@ type Input = {
   email?: string
   reshare_type?: number
   lib_type?: number
+  /** Override API base (e.g. local `…/vault`). */
+  vaultBaseUrl?: string
 }
 
-export const reshareWithServer = async (input: Input) =>
-  queryUrl(`${fastVaultServerUrl}/reshare`, {
-    body: input,
+export const reshareWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
+  queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/reshare`, {
+    body,
     responseType: 'none',
   })
