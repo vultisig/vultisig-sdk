@@ -1,10 +1,17 @@
-# VultisigSDK
+# Vultisig SDK
 
-A TypeScript SDK for multi-party computation (MPC) wallet operations, providing secure vault creation, address derivation, and transaction signing capabilities.
+The self-custodial multi-chain wallet SDK for AI agents and developers.
+
+- **Send & swap** across 40+ blockchains with human-readable amounts (`vault.send({ amount: "0.1" })`)
+- **MPC security** — keys are split across parties, no seed phrases, no single point of failure
+- **Built-in cross-chain swaps** via THORChain, 1inch, KyberSwap, and LiFi — automatic routing
+- **Portfolio tracking** with real-time balances and fiat prices
+- **Dry-run mode** for sends and swaps — preview fees and output before signing
+- **AI agent ready** — JSON output, programmatic API, designed for autonomous operation
 
 ## Overview
 
-VultisigSDK enables developers to integrate MPC wallet functionality into their applications. The SDK supports two vault types:
+Vultisig SDK enables developers and AI agents to integrate multi-chain wallet functionality into their applications. The SDK supports two vault types:
 
 - **Fast Vault**: Server-assisted 2-of-2 MPC for quick setup and instant signing
 - **Secure Vault**: Multi-device N-of-M MPC for enhanced security with configurable thresholds
@@ -26,12 +33,42 @@ Both vault types provide comprehensive blockchain support including Bitcoin, Eth
 - **Compound Wrappers**: `send()`, `swap()`, `signMessage()`, `portfolio()`, `allBalances()` — single-call operations with human-readable amounts (`send`/`swap` support dryRun)
 - **TypeScript**: Full type safety and IntelliSense support
 
+## Which Interface Should I Use?
+
+The Vultisig SDK ships two interfaces. Pick the right one for your use case:
+
+| | Programmatic SDK (`@vultisig/sdk`) | CLI (`@vultisig/cli`) |
+|---|---|---|
+| **Install** | `npm install @vultisig/sdk` | `npm install -g @vultisig/cli` |
+| **Best for** | Apps, bots, monitoring scripts | AI coding agents (Claude Code, Cursor), shell scripts |
+| **Language** | TypeScript — import and call methods | Shell — run commands, parse JSON output |
+| **Vault creation** | `sdk.createFastVault()` + email verification | `vultisig create fast --two-step` (non-interactive) |
+| **Agent mode** | Build your own logic with `vault.send()`, `vault.swap()` | `vultisig agent ask "check my ETH balance"` (built-in AI agent) |
+| **Long-running** | Great — initialize WASM once, keep alive | Not ideal — each command reloads WASM |
+| **Signing** | `onPasswordRequired` callback or `vault.unlock()` | `--password` flag or `VAULT_PASSWORD` env var |
+
+**AI coding agent?** Start with the CLI — it has built-in `agent ask` for natural language, `--two-step` for non-interactive vault creation, and `--json` for machine-parseable output. See [CLI Agent Integration](clients/cli/README.md#ai-agent-integration).
+
+**Building a bot or app?** Use the programmatic SDK — initialize once, call `vault.send()` / `vault.swap()` / `vault.portfolio()` directly with full TypeScript types.
+
+**Both?** Create your vault with the CLI (`vultisig create fast --two-step`), then load it in the SDK (`sdk.listVaults()`) for long-running operations.
+
 ## Installation
+
+### Programmatic SDK
 
 ```bash
 npm install @vultisig/sdk
 # or
 yarn add @vultisig/sdk
+```
+
+### CLI
+
+```bash
+npm install -g @vultisig/cli
+# or run without installing
+npx @vultisig/cli --help
 ```
 
 ### Related packages
@@ -109,6 +146,139 @@ await vault.sign(payload, {
 - [SDK Users Guide](docs/SDK-USERS-GUIDE.md) — Detailed usage guide with advanced topics
 - [CLI Documentation](clients/cli/README.md) — Command-line interface
 - [docs.vultisig.com](https://docs.vultisig.com/developer-docs/vultisig-sdk/) — Online documentation
+
+## Type Reference
+
+All compound methods live on `VaultBase` (inherited by `FastVault` and `SecureVault`).
+
+### Balance
+
+```typescript
+type Balance = {
+  amount: string           // Raw amount in base units (as string)
+  formattedAmount: string  // Human-readable (e.g., "1.5")
+  decimals: number         // Token decimal places
+  symbol: string           // Token symbol (e.g., "ETH", "BTC")
+  chainId: string          // Chain identifier
+  tokenId?: string         // Token contract address (if not native coin)
+  value?: number           // Price per unit in fiat (populated by portfolio)
+  fiatValue?: number       // Total fiat value (populated by portfolio)
+  fiatCurrency?: string    // Fiat currency code (e.g., "USD")
+}
+```
+
+### Portfolio
+
+```typescript
+await vault.portfolio("usd")
+
+type Portfolio = {
+  balances: Balance[]   // Balances with fiat values populated
+  totalValue: string    // Total portfolio value (human-readable, e.g., "1234.56")
+  currency: string      // Fiat currency used (e.g., "usd")
+}
+```
+
+### Send
+
+```typescript
+// Execute
+const result = await vault.send({ chain: Chain.Ethereum, to: "0x...", amount: "0.1" })
+// result.txHash -> "0xabc..."
+
+// Dry run (estimate fees without signing)
+const preview = await vault.send({ chain: Chain.Ethereum, to: "0x...", amount: "0.1", dryRun: true })
+// preview.fee -> "0.00042"
+// preview.total -> "0.10042"
+
+type SendResult =
+  | { dryRun: false; txHash: string; chain: Chain }
+  | { dryRun: true; fee: string; total: string; keysignPayload: KeysignPayload }
+```
+
+**Full send params:** `{ chain, to, amount, symbol?, memo?, dryRun? }`
+- Omit `symbol` for native token (ETH, BTC). Set it for ERC-20s (e.g., `"USDC"`).
+
+### Swap
+
+```typescript
+// Dry run (get quote)
+const quote = await vault.swap({
+  fromChain: Chain.Ethereum, fromSymbol: "ETH",
+  toChain: Chain.Ethereum, toSymbol: "USDC",
+  amount: "0.5", dryRun: true
+})
+// quote.quote.provider -> "1inch"
+// quote.quote.estimatedOutput -> bigint (base units)
+// quote.quote.fees -> fee breakdown
+
+// Execute
+const result = await vault.swap({
+  fromChain: Chain.Ethereum, fromSymbol: "ETH",
+  toChain: Chain.Bitcoin, toSymbol: "BTC",
+  amount: "0.5"
+})
+// result.txHash -> "0xabc..."
+
+type CompoundSwapResult =
+  | { dryRun: false; txHash: string; chain: Chain; quote: SwapQuoteResult }
+  | { dryRun: true; quote: SwapQuoteResult }
+
+type SwapQuoteResult = {
+  quote: SwapQuote               // Raw quote from provider
+  estimatedOutput: bigint        // Output amount in base units
+  estimatedOutputFiat?: number   // Output in fiat
+  provider: string               // "thorchain", "1inch", "kyber", "li.fi", "maya"
+  expiresAt: number              // Quote expiry (ms)
+  requiresApproval: boolean      // ERC-20 approval needed?
+  approvalInfo?: SwapApprovalInfo // Approval details (when required)
+  fees: SwapFees                 // Fee breakdown (base units)
+  feesFiat?: SwapFeesFiat        // Fee breakdown in fiat
+  warnings: string[]             // Provider warnings
+  fromCoin: ResolvedCoinInfo     // Source coin details
+  toCoin: ResolvedCoinInfo       // Destination coin details
+  balance: bigint                // Source balance (base units)
+  maxSwapable: bigint            // Max swappable (base units)
+}
+```
+
+### Sign Message
+
+```typescript
+const { signature, chain, algorithm } = await vault.signMessage("Hello World")
+
+type MessageSignature = {
+  signature: string        // Hex-encoded (e.g., "0x..." for EVM)
+  chain: Chain             // Chain used for signing
+  algorithm: 'ECDSA' | 'EdDSA'
+}
+```
+
+### Vault Loading
+
+```typescript
+// List all vaults
+const vaults: VaultBase[] = await sdk.listVaults()
+
+// Find by name (listVaults + filter)
+const vault = vaults.find(v => v.name === 'MyVault')
+
+// By ID
+const vault: VaultBase | null = await sdk.getVaultById("vault-id")
+
+// Active vault
+const vault: VaultBase | null = await sdk.getActiveVault()
+```
+
+### Which Balance Method to Use
+
+| Need | Method | Returns |
+|------|--------|---------|
+| One chain, native coin | `vault.balance(chain)` | `Balance` |
+| One chain, specific token | `vault.balance(chain, tokenId)` | `Balance` |
+| Multiple specific chains | `vault.balances(chains, includeTokens?)` | `Record<string, Balance>` |
+| All configured chains | `vault.allBalances(includeTokens?)` | `Balance[]` |
+| Full portfolio with fiat | `vault.portfolio("usd")` | `Portfolio` |
 
 ## Security
 
