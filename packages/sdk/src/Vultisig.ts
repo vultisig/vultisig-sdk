@@ -220,7 +220,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   private ensureNotDisposed(): void {
     if (this._disposed) {
-      throw new Error(
+      throw new VaultError(
+        VaultErrorCode.InvalidVault,
         "Vultisig instance has been disposed. Create a new instance.",
       );
     }
@@ -301,8 +302,10 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       } catch (error) {
         // Reset promise on error so initialization can be retried
         this.initializationPromise = undefined;
-        throw new Error(
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
           "Failed to initialize SDK: " + (error as Error).message,
+          error as Error,
         );
       }
     })();
@@ -361,7 +364,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Check in-memory pending vaults first, then fall back to disk
     let pendingVault = this.pendingVaults.get(vaultId);
-    let fromDisk = false;
 
     if (!pendingVault) {
       // Try loading from disk (two-step flow)
@@ -372,7 +374,6 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
         pendingVault = this.vaultManager.createVaultInstance(
           pendingData,
         ) as FastVault;
-        fromDisk = true;
       }
     }
 
@@ -396,11 +397,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     await pendingVault.save();
     await this.vaultManager.setActiveVault(vaultId);
 
-    // Clean up pending state
+    // Clean up pending state (always remove storage entry to prevent verified vaults appearing in listPendingVaults)
     this.pendingVaults.delete(vaultId);
-    if (fromDisk) {
-      await this.context.storage.remove(`pending:${vaultId}`);
-    }
+    await this.context.storage.remove(`pending:${vaultId}`);
 
     this.emit("vaultChanged", { vaultId });
 
@@ -479,6 +478,24 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     email: string;
     signal?: AbortSignal;
     onProgress?: (step: VaultCreationStep) => void;
+    persistPending?: boolean;
+    skipVerification: true;
+  }): Promise<FastVault>;
+  async createFastVault(options: {
+    name: string;
+    password: string;
+    email: string;
+    signal?: AbortSignal;
+    onProgress?: (step: VaultCreationStep) => void;
+    persistPending?: boolean;
+    skipVerification?: false;
+  }): Promise<string>;
+  async createFastVault(options: {
+    name: string;
+    password: string;
+    email: string;
+    signal?: AbortSignal;
+    onProgress?: (step: VaultCreationStep) => void;
     /** Persist pending vault to disk so it survives process restarts (two-step creation) */
     persistPending?: boolean;
     /**
@@ -495,6 +512,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       // Save and activate directly, bypassing email verification
       await result.vault.save();
       await this.vaultManager.setActiveVault(result.vaultId);
+      // Register in pendingVaults so verifyVault() can still complete server-side verification if needed
+      this.pendingVaults.set(result.vaultId, result.vault);
       this.emit("vaultChanged", { vaultId: result.vaultId });
       return result.vault;
     }
@@ -1110,7 +1129,10 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       });
 
       if (!isValid) {
-        throw new Error(`Invalid address for ${entry.chain}: ${entry.address}`);
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          `Invalid address for ${entry.chain}: ${entry.address}`,
+        );
       }
     }
 
