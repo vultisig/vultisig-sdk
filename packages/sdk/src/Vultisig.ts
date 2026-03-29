@@ -1,23 +1,29 @@
-import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
-import { Chain } from '@vultisig/core-chain/Chain'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
-import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
-import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
-import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
-import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
-import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
+import { banxaSupportedChains } from "@vultisig/core-chain/banxa";
+import { Chain } from "@vultisig/core-chain/Chain";
+import { chainFeeCoin } from "@vultisig/core-chain/coin/chainFeeCoin";
+import {
+  knownTokens,
+  knownTokensIndex,
+} from "@vultisig/core-chain/coin/knownTokens";
+import { getCoinPrices as coreCoinPrices } from "@vultisig/core-chain/coin/price/getCoinPrices";
+import { scanSiteWithBlockaid } from "@vultisig/core-chain/security/blockaid/site";
+import { getBlockExplorerUrl } from "@vultisig/core-chain/utils/getBlockExplorerUrl";
+import { isValidAddress } from "@vultisig/core-chain/utils/isValidAddress";
+import { vaultContainerFromString } from "@vultisig/core-mpc/vault/utils/vaultContainerFromString";
 
-import { AddressBookManager } from './AddressBookManager'
-import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
-import { getDefaultStorage } from './context/defaultStorage'
-import type { VaultContext } from './context/SdkContext'
-import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
-import { SdkContextBuilder, type SdkContextBuilderOptions } from './context/SdkContextBuilder'
-import { UniversalEventEmitter } from './events/EventEmitter'
-import type { SdkEvents } from './events/types'
-import { ChainDiscoveryService } from './seedphrase/ChainDiscoveryService'
-import { SeedphraseValidator } from './seedphrase/SeedphraseValidator'
+import { AddressBookManager } from "./AddressBookManager";
+import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from "./constants";
+import { getDefaultStorage } from "./context/defaultStorage";
+import type { VaultContext } from "./context/SdkContext";
+import type { SdkConfigOptions, SdkContext } from "./context/SdkContext";
+import {
+  SdkContextBuilder,
+  type SdkContextBuilderOptions,
+} from "./context/SdkContextBuilder";
+import { UniversalEventEmitter } from "./events/EventEmitter";
+import type { SdkEvents } from "./events/types";
+import { ChainDiscoveryService } from "./seedphrase/ChainDiscoveryService";
+import { SeedphraseValidator } from "./seedphrase/SeedphraseValidator";
 import type {
   ChainDiscoveryAggregate,
   ChainDiscoveryProgress,
@@ -26,49 +32,63 @@ import type {
   CreateSecureVaultFromSeedphraseOptions,
   JoinSecureVaultOptions,
   SeedphraseValidation,
-} from './seedphrase/types'
-import { FastSigningService } from './services/FastSigningService'
-import { FastVaultFromSeedphraseService } from './services/FastVaultFromSeedphraseService'
-import { JoinSecureVaultService } from './services/JoinSecureVaultService'
-import type { PushNotificationService } from './services/PushNotificationService'
-import { type PerformReshareParams, SecureVaultCreationService } from './services/SecureVaultCreationService'
-import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
-import type { Storage } from './storage/types'
-import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep, VaultData } from './types'
-import type { SiteScanResult } from './types/security'
-import type { CoinPricesParams, CoinPricesResult, FeeCoinInfo, TokenInfo } from './types/tokens'
-import { createVaultBackup } from './utils/export'
-import { parseKeygenQR } from './utils/parseKeygenQR'
-import { FastVault } from './vault/FastVault'
-import { SecureVault } from './vault/SecureVault'
-import { VaultBase } from './vault/VaultBase'
-import { VaultError, VaultErrorCode } from './vault/VaultError'
-import { VaultManager } from './VaultManager'
+} from "./seedphrase/types";
+import { FastSigningService } from "./services/FastSigningService";
+import { FastVaultFromSeedphraseService } from "./services/FastVaultFromSeedphraseService";
+import { JoinSecureVaultService } from "./services/JoinSecureVaultService";
+import type { PushNotificationService } from "./services/PushNotificationService";
+import {
+  type PerformReshareParams,
+  SecureVaultCreationService,
+} from "./services/SecureVaultCreationService";
+import { SecureVaultFromSeedphraseService } from "./services/SecureVaultFromSeedphraseService";
+import type { Storage } from "./storage/types";
+import {
+  AddressBook,
+  AddressBookEntry,
+  ServerStatus,
+  VaultCreationStep,
+  VaultData,
+} from "./types";
+import type { SiteScanResult } from "./types/security";
+import type {
+  CoinPricesParams,
+  CoinPricesResult,
+  FeeCoinInfo,
+  TokenInfo,
+} from "./types/tokens";
+import { createVaultBackup } from "./utils/export";
+import { parseKeygenQR } from "./utils/parseKeygenQR";
+import { FastVault } from "./vault/FastVault";
+import { SecureVault } from "./vault/SecureVault";
+import { VaultBase } from "./vault/VaultBase";
+import { VaultError, VaultErrorCode } from "./vault/VaultError";
+import { VaultManager } from "./VaultManager";
 
 // Re-export constants
-export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
+export { DEFAULT_CHAINS, SUPPORTED_CHAINS };
 
 /**
  * Configuration options for Vultisig SDK
  */
 export type VultisigConfig = {
   /** Storage implementation (optional - uses platform default if not provided) */
-  storage?: Storage
+  storage?: Storage;
   /** Optional server endpoints override */
-  serverEndpoints?: SdkContextBuilderOptions['serverEndpoints']
+  serverEndpoints?: SdkContextBuilderOptions["serverEndpoints"];
   /** Default chains for new vaults */
-  defaultChains?: Chain[]
+  defaultChains?: Chain[];
   /** Default fiat currency */
-  defaultCurrency?: string
+  defaultCurrency?: string;
   /** Cache configuration */
-  cacheConfig?: SdkConfigOptions['cacheConfig']
+  cacheConfig?: SdkConfigOptions["cacheConfig"];
   /** Password cache configuration */
-  passwordCache?: SdkConfigOptions['passwordCache']
+  passwordCache?: SdkConfigOptions["passwordCache"];
   /** Callback for password requests */
-  onPasswordRequired?: SdkConfigOptions['onPasswordRequired']
+  onPasswordRequired?: SdkConfigOptions["onPasswordRequired"];
   /** Auto-initialize on construction */
-  autoInit?: boolean
-}
+  autoInit?: boolean;
+};
 
 /**
  * Main Vultisig class providing secure multi-party computation and blockchain operations
@@ -94,29 +114,29 @@ export type VultisigConfig = {
  * ```
  */
 export class Vultisig extends UniversalEventEmitter<SdkEvents> {
-  private _initialized = false
-  private _disposed = false
-  private initializationPromise?: Promise<void>
+  private _initialized = false;
+  private _disposed = false;
+  private initializationPromise?: Promise<void>;
 
   // Instance-scoped context with all dependencies
-  private readonly context: SdkContext
+  private readonly context: SdkContext;
 
   // Module managers
-  private readonly addressBookManager: AddressBookManager
-  private readonly vaultManager: VaultManager
+  private readonly addressBookManager: AddressBookManager;
+  private readonly vaultManager: VaultManager;
 
   // Pending vaults awaiting email verification (not yet persisted to storage)
-  private readonly pendingVaults: Map<string, FastVault> = new Map()
+  private readonly pendingVaults: Map<string, FastVault> = new Map();
 
   // Chain and currency configuration
-  private _defaultChains: Chain[]
-  private _defaultCurrency: string
+  private _defaultChains: Chain[];
+  private _defaultCurrency: string;
 
   /**
    * Get the storage instance for this SDK
    */
   public get storage(): Storage {
-    return this.context.storage
+    return this.context.storage;
   }
 
   /**
@@ -124,35 +144,35 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Use this to register devices, notify vault members, and handle incoming push notifications.
    */
   public get notifications(): PushNotificationService {
-    return this.context.pushNotificationService
+    return this.context.pushNotificationService;
   }
 
   /**
    * Check if SDK is initialized
    */
   get initialized(): boolean {
-    return this._initialized
+    return this._initialized;
   }
 
   /**
    * Check if SDK has been disposed
    */
   get disposed(): boolean {
-    return this._disposed
+    return this._disposed;
   }
 
   /**
    * Get default chains configuration
    */
   get defaultChains(): Chain[] {
-    return [...this._defaultChains]
+    return [...this._defaultChains];
   }
 
   /**
    * Get default currency
    */
   get defaultCurrency(): string {
-    return this._defaultCurrency
+    return this._defaultCurrency;
   }
 
   /**
@@ -161,10 +181,10 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @param config - Configuration options (storage uses platform default if not provided)
    */
   constructor(config: VultisigConfig = {}) {
-    super()
+    super();
 
     // Use provided storage or platform default
-    const storage = config.storage ?? getDefaultStorage()
+    const storage = config.storage ?? getDefaultStorage();
 
     // Build SdkContext from config
     const builder = new SdkContextBuilder().withStorage(storage).withConfig({
@@ -173,25 +193,25 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       cacheConfig: config.cacheConfig,
       passwordCache: config.passwordCache,
       onPasswordRequired: config.onPasswordRequired,
-    })
+    });
 
     if (config.serverEndpoints) {
-      builder.withServerEndpoints(config.serverEndpoints)
+      builder.withServerEndpoints(config.serverEndpoints);
     }
 
-    this.context = builder.build()
+    this.context = builder.build();
 
     // Initialize chain and currency configuration
-    this._defaultChains = config.defaultChains ?? DEFAULT_CHAINS
-    this._defaultCurrency = config.defaultCurrency ?? 'USD'
+    this._defaultChains = config.defaultChains ?? DEFAULT_CHAINS;
+    this._defaultCurrency = config.defaultCurrency ?? "USD";
 
     // Initialize module managers with context dependencies
-    this.addressBookManager = new AddressBookManager(this.context.storage)
-    this.vaultManager = new VaultManager(this.context)
+    this.addressBookManager = new AddressBookManager(this.context.storage);
+    this.vaultManager = new VaultManager(this.context);
 
     // Auto-initialization
     if (config.autoInit) {
-      this.initialize().catch(err => this.emit('error', err))
+      this.initialize().catch((err) => this.emit("error", err));
     }
   }
 
@@ -200,7 +220,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   private ensureNotDisposed(): void {
     if (this._disposed) {
-      throw new Error('Vultisig instance has been disposed. Create a new instance.')
+      throw new Error(
+        "Vultisig instance has been disposed. Create a new instance.",
+      );
     }
   }
 
@@ -211,9 +233,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   private async loadConfigFromStorage(): Promise<void> {
     try {
       // Load default currency
-      const storedCurrency = await this.context.storage.get<string>('config:defaultCurrency')
+      const storedCurrency = await this.context.storage.get<string>(
+        "config:defaultCurrency",
+      );
       if (storedCurrency) {
-        this._defaultCurrency = storedCurrency
+        this._defaultCurrency = storedCurrency;
       }
     } catch {
       // Ignore errors when loading currency (use constructor default)
@@ -221,9 +245,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     try {
       // Load default chains
-      const storedChains = await this.context.storage.get<Chain[]>('config:defaultChains')
+      const storedChains = await this.context.storage.get<Chain[]>(
+        "config:defaultChains",
+      );
       if (storedChains) {
-        this._defaultChains = storedChains
+        this._defaultChains = storedChains;
       }
     } catch {
       // Ignore errors when loading chains (use constructor default)
@@ -234,9 +260,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Internal auto-initialization helper
    */
   private async ensureInitialized(): Promise<void> {
-    this.ensureNotDisposed()
+    this.ensureNotDisposed();
     if (!this.initialized) {
-      await this.initialize()
+      await this.initialize();
     }
   }
 
@@ -248,38 +274,40 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Thread-safe: Multiple concurrent calls will share the same initialization promise
    */
   async initialize(): Promise<void> {
-    this.ensureNotDisposed()
+    this.ensureNotDisposed();
 
     // Already initialized
-    if (this.initialized) return
+    if (this.initialized) return;
 
     // Initialization in progress - return existing promise to prevent duplicate initialization
     if (this.initializationPromise) {
-      return this.initializationPromise
+      return this.initializationPromise;
     }
 
     // Start new initialization
     this.initializationPromise = (async () => {
       try {
         // Initialize WASM (WalletCore, DKLS, Schnorr) via context's WasmProvider
-        await this.context.wasmProvider.getWalletCore()
+        await this.context.wasmProvider.getWalletCore();
 
         // Load configuration from storage
-        await this.loadConfigFromStorage()
+        await this.loadConfigFromStorage();
 
         // Initialize managers
-        await this.addressBookManager.init()
-        await this.vaultManager.init()
+        await this.addressBookManager.init();
+        await this.vaultManager.init();
 
-        this._initialized = true
+        this._initialized = true;
       } catch (error) {
         // Reset promise on error so initialization can be retried
-        this.initializationPromise = undefined
-        throw new Error('Failed to initialize SDK: ' + (error as Error).message)
+        this.initializationPromise = undefined;
+        throw new Error(
+          "Failed to initialize SDK: " + (error as Error).message,
+        );
       }
-    })()
+    })();
 
-    return this.initializationPromise
+    return this.initializationPromise;
   }
 
   /**
@@ -295,23 +323,23 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   dispose(): void {
     if (this._disposed) {
-      return // Already disposed
+      return; // Already disposed
     }
 
     // Disconnect WebSocket if connected
-    this.context.pushNotificationService.disconnect()
+    this.context.pushNotificationService.disconnect();
 
     // Clear pending vaults (unverified vaults are discarded)
-    this.pendingVaults.clear()
+    this.pendingVaults.clear();
 
     // Destroy password cache (zeros passwords in memory)
-    this.context.passwordCache.destroy()
+    this.context.passwordCache.destroy();
 
     // Mark as disposed
-    this._disposed = true
+    this._disposed = true;
 
     // Emit disposed event
-    this.emit('disposed', {})
+    this.emit("disposed", {});
   }
 
   // === VAULT LIFECYCLE ===
@@ -329,56 +357,67 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @throws VaultError if verification fails or no pending vault found
    */
   async verifyVault(vaultId: string, code: string): Promise<FastVault> {
-    await this.ensureInitialized()
+    await this.ensureInitialized();
 
     // Check in-memory pending vaults first, then fall back to disk
-    let pendingVault = this.pendingVaults.get(vaultId)
-    let fromDisk = false
+    let pendingVault = this.pendingVaults.get(vaultId);
+    let fromDisk = false;
 
     if (!pendingVault) {
       // Try loading from disk (two-step flow)
-      const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
+      const pendingData = await this.context.storage.get<VaultData>(
+        `pending:${vaultId}`,
+      );
       if (pendingData) {
-        pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
-        fromDisk = true
+        pendingVault = this.vaultManager.createVaultInstance(
+          pendingData,
+        ) as FastVault;
+        fromDisk = true;
       }
     }
 
     if (!pendingVault) {
       throw new VaultError(
         VaultErrorCode.InvalidVault,
-        'No pending vault found for this ID. Create a vault first with createFastVault().'
-      )
+        "No pending vault found for this ID. Create a vault first with createFastVault().",
+      );
     }
 
-    const success = await this.context.serverManager.verifyVault(vaultId, code)
+    const success = await this.context.serverManager.verifyVault(vaultId, code);
 
     if (!success) {
-      throw new VaultError(VaultErrorCode.InvalidConfig, 'Verification failed. Check the code and try again.')
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        "Verification failed. Check the code and try again.",
+      );
     }
 
     // Save and activate the vault
-    await pendingVault.save()
-    await this.vaultManager.setActiveVault(vaultId)
+    await pendingVault.save();
+    await this.vaultManager.setActiveVault(vaultId);
 
     // Clean up pending state
-    this.pendingVaults.delete(vaultId)
+    this.pendingVaults.delete(vaultId);
     if (fromDisk) {
-      await this.context.storage.remove(`pending:${vaultId}`)
+      await this.context.storage.remove(`pending:${vaultId}`);
     }
 
-    this.emit('vaultChanged', { vaultId })
+    this.emit("vaultChanged", { vaultId });
 
-    return pendingVault
+    return pendingVault;
   }
 
   /**
    * Resend vault verification email
    * Requires email and password to authenticate with the server
    */
-  async resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void> {
-    await this.ensureInitialized()
-    return this.context.serverManager.resendVaultVerification(options)
+  async resendVaultVerification(options: {
+    vaultId: string;
+    email: string;
+    password: string;
+  }): Promise<void> {
+    await this.ensureInitialized();
+    return this.context.serverManager.resendVaultVerification(options);
   }
 
   /**
@@ -386,11 +425,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Array of vault IDs that are pending verification
    */
   async listPendingVaults(): Promise<string[]> {
-    await this.ensureInitialized()
-    const keys = await this.context.storage.list()
+    await this.ensureInitialized();
+    const keys = await this.context.storage.list();
     return keys
-      .filter(k => k.startsWith('pending:'))
-      .map(k => k.slice('pending:'.length))
+      .filter((k) => k.startsWith("pending:"))
+      .map((k) => k.slice("pending:".length));
   }
 
   /**
@@ -398,9 +437,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @param vaultId - The vault ID to remove from pending storage
    */
   async deletePendingVault(vaultId: string): Promise<void> {
-    await this.ensureInitialized()
-    await this.context.storage.remove(`pending:${vaultId}`)
-    this.pendingVaults.delete(vaultId)
+    await this.ensureInitialized();
+    await this.context.storage.remove(`pending:${vaultId}`);
+    this.pendingVaults.delete(vaultId);
   }
 
   /**
@@ -409,8 +448,13 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * The vault is created in memory but NOT persisted until email verification succeeds.
    * Call `verifyVault()` with the email code to complete creation and get the vault.
    *
+   * When `skipVerification` is `true`, the vault is saved and returned immediately without
+   * email verification. Intended for AI agents and automation where email access is unavailable.
+   * **Security note:** Skipping verification transfers responsibility for local keyshare
+   * security to the caller. VultiServer may still require verification to authorize signing.
+   *
    * @param options - Vault creation options
-   * @returns Vault ID (call verifyVault with this ID to get the vault)
+   * @returns Vault ID when `skipVerification` is false/unset; `FastVault` when `skipVerification` is true
    *
    * @example
    * ```typescript
@@ -430,27 +474,41 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * ```
    */
   async createFastVault(options: {
-    name: string
-    password: string
-    email: string
-    signal?: AbortSignal
-    onProgress?: (step: VaultCreationStep) => void
+    name: string;
+    password: string;
+    email: string;
+    signal?: AbortSignal;
+    onProgress?: (step: VaultCreationStep) => void;
     /** Persist pending vault to disk so it survives process restarts (two-step creation) */
-    persistPending?: boolean
-  }): Promise<string> {
-    await this.ensureInitialized()
-    const result = await FastVault.create(this.context, options)
+    persistPending?: boolean;
+    /**
+     * Skip email verification and return the vault directly.
+     * For AI agents/automation only. Caller is responsible for keyshare security.
+     * Note: VultiServer may still require verification to authorize signing operations.
+     */
+    skipVerification?: boolean;
+  }): Promise<string | FastVault> {
+    await this.ensureInitialized();
+    const result = await FastVault.create(this.context, options);
+
+    if (options.skipVerification) {
+      // Save and activate directly, bypassing email verification
+      await result.vault.save();
+      await this.vaultManager.setActiveVault(result.vaultId);
+      this.emit("vaultChanged", { vaultId: result.vaultId });
+      return result.vault;
+    }
 
     // Store vault in pending map - it will be saved after email verification succeeds
-    this.pendingVaults.set(result.vaultId, result.vault)
+    this.pendingVaults.set(result.vaultId, result.vault);
 
     // Optionally persist to disk for two-step creation (survives process exit)
     if (options.persistPending) {
-      await result.vault.savePending()
+      await result.vault.savePending();
     }
 
     // Return vaultId - vault is returned from verifyVault() after successful verification
-    return result.vaultId
+    return result.vaultId;
   }
 
   /**
@@ -473,28 +531,32 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * ```
    */
   async createSecureVault(options: {
-    name: string
-    password: string
-    devices: number
-    threshold?: number
-    signal?: AbortSignal
-    onProgress?: (step: VaultCreationStep) => void
-    onQRCodeReady?: (qrPayload: string) => void
-    onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+    name: string;
+    password: string;
+    devices: number;
+    threshold?: number;
+    signal?: AbortSignal;
+    onProgress?: (step: VaultCreationStep) => void;
+    onQRCodeReady?: (qrPayload: string) => void;
+    onDeviceJoined?: (
+      deviceId: string,
+      totalJoined: number,
+      required: number,
+    ) => void;
   }): Promise<{
-    vault: SecureVault
-    vaultId: string
-    sessionId: string
+    vault: SecureVault;
+    vaultId: string;
+    sessionId: string;
   }> {
-    await this.ensureInitialized()
-    const result = await SecureVault.create(this.context, options)
+    await this.ensureInitialized();
+    const result = await SecureVault.create(this.context, options);
 
     // Store the vault and set as active
-    await result.vault.save()
-    await this.vaultManager.setActiveVault(result.vaultId)
+    await result.vault.save();
+    await this.vaultManager.setActiveVault(result.vaultId);
 
-    this.emit('vaultChanged', { vaultId: result.vaultId })
-    return result
+    this.emit("vaultChanged", { vaultId: result.vaultId });
+    return result;
   }
 
   // === SEEDPHRASE IMPORT ===
@@ -516,9 +578,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * ```
    */
   async validateSeedphrase(mnemonic: string): Promise<SeedphraseValidation> {
-    await this.ensureInitialized()
-    const validator = new SeedphraseValidator(this.context.wasmProvider)
-    return validator.validate(mnemonic)
+    await this.ensureInitialized();
+    const validator = new SeedphraseValidator(this.context.wasmProvider);
+    return validator.validate(mnemonic);
   }
 
   /**
@@ -551,14 +613,16 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async discoverChainsFromSeedphrase(
     mnemonic: string,
     chains?: Chain[],
-    onProgress?: (progress: ChainDiscoveryProgress) => void
+    onProgress?: (progress: ChainDiscoveryProgress) => void,
   ): Promise<ChainDiscoveryAggregate> {
-    await this.ensureInitialized()
-    const discoveryService = new ChainDiscoveryService(this.context.wasmProvider)
+    await this.ensureInitialized();
+    const discoveryService = new ChainDiscoveryService(
+      this.context.wasmProvider,
+    );
     return discoveryService.discoverChains(mnemonic, {
       config: { chains },
       onProgress,
-    })
+    });
   }
 
   /**
@@ -587,16 +651,21 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * const vault = await sdk.verifyVault(vaultId, code)
    * ```
    */
-  async createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<string> {
-    await this.ensureInitialized()
-    const service = new FastVaultFromSeedphraseService(this.context)
-    const result = await service.createFromSeedphrase(options)
+  async createFastVaultFromSeedphrase(
+    options: CreateFastVaultFromSeedphraseOptions,
+  ): Promise<string> {
+    await this.ensureInitialized();
+    const service = new FastVaultFromSeedphraseService(this.context);
+    const result = await service.createFromSeedphrase(options);
 
     // Create backup file from CoreVault
-    const vultContent = await createVaultBackup(result.vault, options.password)
+    const vultContent = await createVaultBackup(result.vault, options.password);
 
     // Create FastSigningService
-    const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
+    const fastSigningService = new FastSigningService(
+      this.context.serverManager,
+      this.context.wasmProvider,
+    );
 
     // Build VaultContext from SdkContext
     const vaultContext: VaultContext = {
@@ -606,24 +675,35 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
       pushNotificationService: this.context.pushNotificationService,
-    }
+    };
 
     // Create FastVault from import using the factory method
-    const vault = FastVault.fromImport(result.vaultId, vultContent, result.vault, fastSigningService, vaultContext)
+    const vault = FastVault.fromImport(
+      result.vaultId,
+      vultContent,
+      result.vault,
+      fastSigningService,
+      vaultContext,
+    );
 
     // Set imported chains as active (use explicit chains or discovered chains with balances)
-    const chainsToSet = options.chains ?? result.discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? []
+    const chainsToSet =
+      options.chains ??
+      result.discoveredChains
+        ?.filter((c) => c.hasBalance)
+        .map((c) => c.chain) ??
+      [];
     if (chainsToSet.length > 0) {
-      await vault.setChains(chainsToSet)
+      await vault.setChains(chainsToSet);
     }
 
     // Cache password for unlocking
-    this.context.passwordCache.set(result.vaultId, options.password)
+    this.context.passwordCache.set(result.vaultId, options.password);
 
     // Store in pending vaults - will be saved after email verification
-    this.pendingVaults.set(result.vaultId, vault)
+    this.pendingVaults.set(result.vaultId, vault);
 
-    return result.vaultId
+    return result.vaultId;
   }
 
   /**
@@ -650,18 +730,23 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * console.log('Vault created:', result.vaultId)
    * ```
    */
-  async createSecureVaultFromSeedphrase(options: CreateSecureVaultFromSeedphraseOptions): Promise<{
-    vault: SecureVault
-    vaultId: string
-    sessionId: string
-    discoveredChains?: ChainDiscoveryResult[]
+  async createSecureVaultFromSeedphrase(
+    options: CreateSecureVaultFromSeedphraseOptions,
+  ): Promise<{
+    vault: SecureVault;
+    vaultId: string;
+    sessionId: string;
+    discoveredChains?: ChainDiscoveryResult[];
   }> {
-    await this.ensureInitialized()
-    const service = new SecureVaultFromSeedphraseService(this.context)
-    const result = await service.createFromSeedphrase(options)
+    await this.ensureInitialized();
+    const service = new SecureVaultFromSeedphraseService(this.context);
+    const result = await service.createFromSeedphrase(options);
 
     // Create backup file from CoreVault (use password if provided, empty string otherwise)
-    const vultContent = await createVaultBackup(result.vault, options.password || '')
+    const vultContent = await createVaultBackup(
+      result.vault,
+      options.password || "",
+    );
 
     // Build VaultContext from SdkContext
     const vaultContext: VaultContext = {
@@ -671,34 +756,44 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
       pushNotificationService: this.context.pushNotificationService,
-    }
+    };
 
     // Create SecureVault from import using the factory method
-    const vault = SecureVault.fromImport(result.vaultId, vultContent, result.vault, vaultContext)
+    const vault = SecureVault.fromImport(
+      result.vaultId,
+      vultContent,
+      result.vault,
+      vaultContext,
+    );
 
     // Set imported chains as active (use explicit chains or discovered chains with balances)
-    const chainsToSet = options.chains ?? result.discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? []
+    const chainsToSet =
+      options.chains ??
+      result.discoveredChains
+        ?.filter((c) => c.hasBalance)
+        .map((c) => c.chain) ??
+      [];
     if (chainsToSet.length > 0) {
-      await vault.setChains(chainsToSet)
+      await vault.setChains(chainsToSet);
     }
 
     // Cache password if provided
     if (options.password) {
-      this.context.passwordCache.set(result.vaultId, options.password)
+      this.context.passwordCache.set(result.vaultId, options.password);
     }
 
     // Save the vault and set as active
-    await vault.save()
-    await this.vaultManager.setActiveVault(result.vaultId)
+    await vault.save();
+    await this.vaultManager.setActiveVault(result.vaultId);
 
-    this.emit('vaultChanged', { vaultId: result.vaultId })
+    this.emit("vaultChanged", { vaultId: result.vaultId });
 
     return {
       vault,
       vaultId: result.vaultId,
       sessionId: result.sessionId,
       discoveredChains: result.discoveredChains,
-    }
+    };
   }
 
   /**
@@ -744,22 +839,25 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async joinSecureVault(
     qrPayload: string,
-    options: JoinSecureVaultOptions
+    options: JoinSecureVaultOptions,
   ): Promise<{
-    vault: SecureVault
-    vaultId: string
+    vault: SecureVault;
+    vaultId: string;
   }> {
-    await this.ensureInitialized()
+    await this.ensureInitialized();
 
     // Parse QR payload
-    const qrParams = await parseKeygenQR(qrPayload)
+    const qrParams = await parseKeygenQR(qrPayload);
 
     // Create join service and execute (auto-detects keygen vs from-seedphrase)
-    const joinService = new JoinSecureVaultService(this.context)
-    const result = await joinService.join(qrParams, options)
+    const joinService = new JoinSecureVaultService(this.context);
+    const result = await joinService.join(qrParams, options);
 
     // Create backup file from CoreVault
-    const vultContent = await createVaultBackup(result.vault, options.password || '')
+    const vultContent = await createVaultBackup(
+      result.vault,
+      options.password || "",
+    );
 
     // Build VaultContext from SdkContext
     const vaultContext: VaultContext = {
@@ -769,26 +867,31 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       passwordCache: this.context.passwordCache,
       wasmProvider: this.context.wasmProvider,
       pushNotificationService: this.context.pushNotificationService,
-    }
+    };
 
     // Create SecureVault from import
-    const vault = SecureVault.fromImport(result.vaultId, vultContent, result.vault, vaultContext)
+    const vault = SecureVault.fromImport(
+      result.vaultId,
+      vultContent,
+      result.vault,
+      vaultContext,
+    );
 
     // Cache password if provided
     if (options.password) {
-      this.context.passwordCache.set(result.vaultId, options.password)
+      this.context.passwordCache.set(result.vaultId, options.password);
     }
 
     // Save the vault and set as active
-    await vault.save()
-    await this.vaultManager.setActiveVault(result.vaultId)
+    await vault.save();
+    await this.vaultManager.setActiveVault(result.vaultId);
 
-    this.emit('vaultChanged', { vaultId: result.vaultId })
+    this.emit("vaultChanged", { vaultId: result.vaultId });
 
     return {
       vault,
       vaultId: result.vaultId,
-    }
+    };
   }
 
   // === RESHARE ===
@@ -803,10 +906,12 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @param params - Reshare parameters including vault, session info, and callbacks
    * @returns Updated vault with new key shares
    */
-  async performReshare(params: PerformReshareParams): Promise<import('@vultisig/core-mpc/vault/Vault').Vault> {
-    await this.ensureInitialized()
-    const service = new SecureVaultCreationService(params.serverUrl)
-    return service.performReshare(params)
+  async performReshare(
+    params: PerformReshareParams,
+  ): Promise<import("@vultisig/core-mpc/vault/Vault").Vault> {
+    await this.ensureInitialized();
+    const service = new SecureVaultCreationService(params.serverUrl);
+    return service.performReshare(params);
   }
 
   /**
@@ -827,8 +932,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * ```
    */
   isVaultEncrypted(vultContent: string): boolean {
-    const container = vaultContainerFromString(vultContent.trim())
-    return container.isEncrypted
+    const container = vaultContainerFromString(vultContent.trim());
+    return container.isEncrypted;
   }
 
   /**
@@ -844,14 +949,17 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * const vault = await sdk.importVault(vultContent, 'password123')
    * ```
    */
-  async importVault(vultContent: string, password?: string): Promise<VaultBase> {
-    await this.ensureInitialized()
-    const vault = await this.vaultManager.importVault(vultContent, password)
+  async importVault(
+    vultContent: string,
+    password?: string,
+  ): Promise<VaultBase> {
+    await this.ensureInitialized();
+    const vault = await this.vaultManager.importVault(vultContent, password);
 
     // VaultManager already handles storage, just emit event
-    this.emit('vaultChanged', { vaultId: vault.id })
+    this.emit("vaultChanged", { vaultId: vault.id });
 
-    return vault
+    return vault;
   }
 
   /**
@@ -868,33 +976,33 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * ```
    */
   async listVaults(): Promise<VaultBase[]> {
-    await this.ensureInitialized()
-    return this.vaultManager.listVaults()
+    await this.ensureInitialized();
+    return this.vaultManager.listVaults();
   }
 
   /**
    * Delete vault from storage (clears active if needed)
    */
   async deleteVault(vault: VaultBase): Promise<void> {
-    await this.ensureInitialized()
-    const vaultId = vault.id
+    await this.ensureInitialized();
+    const vaultId = vault.id;
 
     // Delete from VaultManager (which handles all storage)
-    await this.vaultManager.deleteVault(vaultId)
+    await this.vaultManager.deleteVault(vaultId);
 
     // Emit event with empty vaultId to indicate no active vault
-    this.emit('vaultChanged', { vaultId: '' })
+    this.emit("vaultChanged", { vaultId: "" });
   }
 
   /**
    * Clear all stored vaults
    */
   async clearVaults(): Promise<void> {
-    await this.ensureInitialized()
-    await this.vaultManager.clearVaults()
-    await this.storage.clear()
-    this.addressBookManager.clear()
-    this.emit('vaultChanged', { vaultId: '' })
+    await this.ensureInitialized();
+    await this.vaultManager.clearVaults();
+    await this.storage.clear();
+    this.addressBookManager.clear();
+    this.emit("vaultChanged", { vaultId: "" });
   }
 
   // === ACTIVE VAULT MANAGEMENT ===
@@ -904,22 +1012,22 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @param vault - Vault to set as active, or null to clear active vault
    */
   async setActiveVault(vault: VaultBase | null): Promise<void> {
-    await this.vaultManager.setActiveVault(vault?.id ?? null)
-    this.emit('vaultChanged', { vaultId: vault?.id ?? '' })
+    await this.vaultManager.setActiveVault(vault?.id ?? null);
+    this.emit("vaultChanged", { vaultId: vault?.id ?? "" });
   }
 
   /**
    * Get current active vault
    */
   async getActiveVault(): Promise<VaultBase | null> {
-    return this.vaultManager.getActiveVault()
+    return this.vaultManager.getActiveVault();
   }
 
   /**
    * Check if there's an active vault
    */
   async hasActiveVault(): Promise<boolean> {
-    return this.vaultManager.hasActiveVault()
+    return this.vaultManager.hasActiveVault();
   }
 
   /**
@@ -929,7 +1037,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Vault instance or null if not found
    */
   async getVaultById(vaultId: string): Promise<VaultBase | null> {
-    return this.vaultManager.getVaultById(vaultId)
+    return this.vaultManager.getVaultById(vaultId);
   }
 
   // === GLOBAL CONFIGURATION ===
@@ -938,8 +1046,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Set global default currency
    */
   async setDefaultCurrency(currency: string): Promise<void> {
-    this._defaultCurrency = currency
-    await this.storage.set('config:defaultCurrency', currency)
+    this._defaultCurrency = currency;
+    await this.storage.set("config:defaultCurrency", currency);
   }
 
   // === CHAIN OPERATIONS ===
@@ -948,8 +1056,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Set SDK-level default chains for new vaults
    */
   async setDefaultChains(chains: Chain[]): Promise<void> {
-    this._defaultChains = chains
-    await this.storage.set('config:defaultChains', chains)
+    this._defaultChains = chains;
+    await this.storage.set("config:defaultChains", chains);
   }
 
   // === FILE OPERATIONS ===
@@ -963,7 +1071,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns true if encrypted, false otherwise
    */
   async isVaultContentEncrypted(vultContent: string): Promise<boolean> {
-    return this.vaultManager.isVaultContentEncrypted(vultContent)
+    return this.vaultManager.isVaultContentEncrypted(vultContent);
   }
 
   // === SERVER STATUS ===
@@ -972,7 +1080,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Check server connectivity
    */
   async getServerStatus(): Promise<ServerStatus> {
-    return this.context.serverManager.checkServerStatus()
+    return this.context.serverManager.checkServerStatus();
   }
 
   // === ADDRESS BOOK (GLOBAL) ===
@@ -981,7 +1089,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Get address book entries
    */
   async getAddressBook(chain?: Chain): Promise<AddressBook> {
-    return this.addressBookManager.getAddressBook(chain)
+    return this.addressBookManager.getAddressBook(chain);
   }
 
   /**
@@ -992,35 +1100,41 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async addAddressBookEntry(entries: AddressBookEntry[]): Promise<void> {
     // Validate all addresses before adding
-    const walletCore = await this.context.wasmProvider.getWalletCore()
+    const walletCore = await this.context.wasmProvider.getWalletCore();
 
     for (const entry of entries) {
       const isValid = isValidAddress({
         chain: entry.chain,
         address: entry.address,
         walletCore,
-      })
+      });
 
       if (!isValid) {
-        throw new Error(`Invalid address for ${entry.chain}: ${entry.address}`)
+        throw new Error(`Invalid address for ${entry.chain}: ${entry.address}`);
       }
     }
 
-    return this.addressBookManager.addAddressBookEntry(entries)
+    return this.addressBookManager.addAddressBookEntry(entries);
   }
 
   /**
    * Remove address book entries
    */
-  async removeAddressBookEntry(addresses: Array<{ chain: Chain; address: string }>): Promise<void> {
-    return this.addressBookManager.removeAddressBookEntry(addresses)
+  async removeAddressBookEntry(
+    addresses: Array<{ chain: Chain; address: string }>,
+  ): Promise<void> {
+    return this.addressBookManager.removeAddressBookEntry(addresses);
   }
 
   /**
    * Update address book entry name
    */
-  async updateAddressBookEntry(chain: Chain, address: string, name: string): Promise<void> {
-    return this.addressBookManager.updateAddressBookEntry(chain, address, name)
+  async updateAddressBookEntry(
+    chain: Chain,
+    address: string,
+    name: string,
+  ): Promise<void> {
+    return this.addressBookManager.updateAddressBookEntry(chain, address, name);
   }
 
   // === CONVENIENCE GETTERS ===
@@ -1029,14 +1143,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Get the configuration for this SDK instance
    */
   get config() {
-    return this.context.config
+    return this.context.config;
   }
 
   /**
    * Get the WASM provider for this SDK instance
    */
   get wasmProvider() {
-    return this.context.wasmProvider
+    return this.context.wasmProvider;
   }
 
   // === STATIC UTILITY METHODS ===
@@ -1048,7 +1162,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns The block explorer URL for the transaction
    */
   static getTxExplorerUrl(chain: Chain, txHash: string): string {
-    return getBlockExplorerUrl({ chain, entity: 'tx', value: txHash })
+    return getBlockExplorerUrl({ chain, entity: "tx", value: txHash });
   }
 
   /**
@@ -1058,7 +1172,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns The block explorer URL for the address
    */
   static getAddressExplorerUrl(chain: Chain, address: string): string {
-    return getBlockExplorerUrl({ chain, entity: 'address', value: address })
+    return getBlockExplorerUrl({ chain, entity: "address", value: address });
   }
 
   /**
@@ -1067,7 +1181,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns true if the vault is a FastVault
    */
   static isFastVault(vault: VaultBase): vault is FastVault {
-    return vault.type === 'fast'
+    return vault.type === "fast";
   }
 
   /**
@@ -1076,7 +1190,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns true if the vault is a SecureVault
    */
   static isSecureVault(vault: VaultBase): vault is SecureVault {
-    return vault.type === 'secure'
+    return vault.type === "secure";
   }
 
   // === STATIC TOKEN REGISTRY METHODS ===
@@ -1087,14 +1201,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Array of token metadata
    */
   static getKnownTokens(chain: Chain): TokenInfo[] {
-    return (knownTokens[chain] ?? []).map(coin => ({
+    return (knownTokens[chain] ?? []).map((coin) => ({
       chain: coin.chain,
       contractAddress: coin.id,
       ticker: coin.ticker,
       decimals: coin.decimals,
       logo: coin.logo,
       priceProviderId: coin.priceProviderId,
-    }))
+    }));
   }
 
   /**
@@ -1103,9 +1217,12 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @param contractAddress - The token's contract address
    * @returns Token metadata or null if not found
    */
-  static getKnownToken(chain: Chain, contractAddress: string): TokenInfo | null {
-    const coin = knownTokensIndex[chain]?.[contractAddress.toLowerCase()]
-    if (!coin) return null
+  static getKnownToken(
+    chain: Chain,
+    contractAddress: string,
+  ): TokenInfo | null {
+    const coin = knownTokensIndex[chain]?.[contractAddress.toLowerCase()];
+    if (!coin) return null;
     return {
       chain,
       contractAddress: coin.id,
@@ -1113,7 +1230,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       decimals: coin.decimals,
       logo: coin.logo,
       priceProviderId: coin.priceProviderId,
-    }
+    };
   }
 
   /**
@@ -1122,14 +1239,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Fee coin metadata
    */
   static getFeeCoin(chain: Chain): FeeCoinInfo {
-    const coin = chainFeeCoin[chain]
+    const coin = chainFeeCoin[chain];
     return {
       chain,
       ticker: coin.ticker,
       decimals: coin.decimals,
       logo: coin.logo,
       priceProviderId: coin.priceProviderId,
-    }
+    };
   }
 
   // === STATIC PRICE METHODS ===
@@ -1139,11 +1256,13 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @param params - Price lookup parameters
    * @returns Map of token ID to price in fiat currency
    */
-  static async getCoinPrices(params: CoinPricesParams): Promise<CoinPricesResult> {
+  static async getCoinPrices(
+    params: CoinPricesParams,
+  ): Promise<CoinPricesResult> {
     return coreCoinPrices({
       ids: params.ids,
-      fiatCurrency: (params.fiatCurrency ?? 'usd') as any,
-    })
+      fiatCurrency: (params.fiatCurrency ?? "usd") as any,
+    });
   }
 
   // === STATIC FIAT ON-RAMP METHODS ===
@@ -1153,7 +1272,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Array of supported chains
    */
   static getBanxaSupportedChains(): Chain[] {
-    return [...banxaSupportedChains] as Chain[]
+    return [...banxaSupportedChains] as Chain[];
   }
 
   // === STATIC SECURITY METHODS ===
@@ -1164,7 +1283,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Scan result indicating if the site is malicious
    */
   static async scanSite(url: string): Promise<SiteScanResult> {
-    const result = await scanSiteWithBlockaid(url)
-    return { isMalicious: result === 'malicious', url }
+    const result = await scanSiteWithBlockaid(url);
+    return { isMalicious: result === "malicious", url };
   }
 }
