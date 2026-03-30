@@ -668,7 +668,7 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
 
 **Agent ask options:**
 - `--session <id>` - Continue an existing conversation
-- `--backend-url <url>` - Agent backend URL (default: http://localhost:9998)
+- `--backend-url <url>` - Agent backend URL (default: https://abe.vultisig.com)
 - `--password <password>` - Vault password for signing
 - `--verbose` - Show tool calls and debug info on stderr
 - `--json` - Output structured JSON
