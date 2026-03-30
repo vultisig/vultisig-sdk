@@ -32,7 +32,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
   const vault = await ctx.ensureActiveVault()
 
   const config: AgentConfig = {
-    backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'http://localhost:9998',
+    backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com',
     vaultName: vault.name,
     password: options.password,
     viaAgent: options.viaAgent,
@@ -117,7 +117,7 @@ export async function executeAgentAsk(
       backendUrl:
         options.backendUrl ||
         process.env.VULTISIG_AGENT_URL ||
-        'http://localhost:9998',
+        'https://abe.vultisig.com',
       vaultName: vault.name,
       password: options.password,
       sessionId: options.session,
@@ -185,7 +185,7 @@ export type AgentSessionsListOptions = {
 
 export async function executeAgentSessionsList(ctx: CommandContext, options: AgentSessionsListOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
-  const backendUrl = options.backendUrl || process.env.VULTISIG_AGENT_URL || 'http://localhost:9998'
+  const backendUrl = options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com'
   const client = await createAuthenticatedClient(backendUrl, vault, options.password)
 
   const publicKey = vault.publicKeys.ecdsa
@@ -250,7 +250,7 @@ export async function executeAgentSessionsDelete(
   options: AgentSessionsDeleteOptions
 ): Promise<void> {
   const vault = await ctx.ensureActiveVault()
-  const backendUrl = options.backendUrl || process.env.VULTISIG_AGENT_URL || 'http://localhost:9998'
+  const backendUrl = options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com'
   const client = await createAuthenticatedClient(backendUrl, vault, options.password)
 
   const publicKey = vault.publicKeys.ecdsa
