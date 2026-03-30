@@ -437,6 +437,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     onProgress?: (step: VaultCreationStep) => void
     /** Persist pending vault to disk so it survives process restarts (two-step creation) */
     persistPending?: boolean
+    /** Enable batched MPC ceremonies for this vault creation. */
+    tssBatching?: boolean
   }): Promise<string> {
     await this.ensureInitialized()
     const result = await FastVault.create(this.context, options)
@@ -481,6 +483,8 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     onProgress?: (step: VaultCreationStep) => void
     onQRCodeReady?: (qrPayload: string) => void
     onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+    /** Enable batched MPC ceremonies for this vault creation. */
+    tssBatching?: boolean
   }): Promise<{
     vault: SecureVault
     vaultId: string

@@ -10,13 +10,14 @@ type Input = {
   local_party_id: string
   encryption_password: string
   email: string
-  lib_type: number
+  protocols: string[]
+  public_key?: string
   /** Override API base (e.g. local `…/vault`). */
   vaultBaseUrl?: string
 }
 
 export const setupVaultWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
-  queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/create`, {
+  queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/batch/keygen`, {
     body,
     responseType: 'none',
   })

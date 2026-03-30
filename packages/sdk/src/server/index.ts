@@ -11,8 +11,12 @@
  */
 
 // Re-export core fast vault API functions directly
+export { batchReshareWithServer } from '@vultisig/core-mpc/fast/api/batchReshareWithServer'
+export { createVaultWithServer } from '@vultisig/core-mpc/fast/api/createVaultWithServer'
 export { getVaultFromServer } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
+export { keyImportWithServer } from '@vultisig/core-mpc/fast/api/keyImportWithServer'
 export { reshareWithServer } from '@vultisig/core-mpc/fast/api/reshareWithServer'
+export { sequentialKeyImportWithServer } from '@vultisig/core-mpc/fast/api/sequentialKeyImportWithServer'
 export { setupVaultWithServer } from '@vultisig/core-mpc/fast/api/setupVaultWithServer'
 export { signWithServer } from '@vultisig/core-mpc/fast/api/signWithServer'
 export { verifyVaultEmailCode } from '@vultisig/core-mpc/fast/api/verifyVaultEmailCode'

@@ -279,6 +279,7 @@ export class FastVault extends VaultBase {
       email: string
       signal?: AbortSignal
       onProgress?: (step: VaultCreationStep) => void
+      tssBatching?: boolean
     }
   ): Promise<{
     vault: FastVault
@@ -305,6 +306,7 @@ export class FastVault extends VaultBase {
         email: options.email,
         password: options.password,
         signal: options.signal,
+        tssBatching: options.tssBatching ?? context.config.tssBatching,
         onProgress: update => {
           // Map server progress updates to vault creation progress
           let progress = 10
@@ -312,6 +314,8 @@ export class FastVault extends VaultBase {
             progress = 35 // 20-50% range
           } else if (update.phase === 'eddsa') {
             progress = 65 // 50-80% range
+          } else if (update.phase === 'mldsa') {
+            progress = 80
           }
 
           reportProgress({
