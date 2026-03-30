@@ -287,12 +287,18 @@ jobs:
               else all(.error // "" | test("not-enough-funds|insufficient"))
               end
           ' /tmp/test-result.json 2>/dev/null || echo "false")
+          # Tools may all succeed (e.g. balance check) while the assistant refuses to build/sign (low balance)
+          AGENT_REFUSED_LOW_BALANCE=$(jq -r '
+            [.turns[].assistants[]?]
+            | join(" ")
+            | test("insufficient|not enough|Cannot execute|cannot proceed|cannot build|deposit more"; "i")
+          ' /tmp/test-result.json 2>/dev/null || echo "false")
 
           if [ "$SUCCESS" = "true" ] && [ -n "$TX_HASHES" ] && [ "$TX_HASHES" != "" ]; then
             echo "✓ Integration test PASSED — tx: $TX_HASHES"
           elif [ "$EXIT_CODE" -eq 0 ]; then
             echo "✓ Integration test PASSED (no tx expected)"
-          elif [ "$TOOL_COUNT" -gt 0 ] && [ "$ONLY_FUNDS_ERROR" = "true" ]; then
+          elif [ "$TOOL_COUNT" -gt 0 ] && { [ "$ONLY_FUNDS_ERROR" = "true" ] || [ "$AGENT_REFUSED_LOW_BALANCE" = "true" ]; }; then
             echo "✓ Integration test PASSED (agent worked correctly, wallet has insufficient funds)"
           else
             echo "::error::Integration test FAILED"

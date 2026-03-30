@@ -65,6 +65,13 @@ export type SdkConfigOptions = {
    * @returns Promise resolving to the password
    */
   onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
+
+  /**
+   * Enable batched MPC ceremonies (parallel ECDSA/EdDSA/ML-DSA where supported).
+   *
+   * Defaults to false so consumers can roll out batching deliberately.
+   */
+  tssBatching?: boolean
 }
 
 /**

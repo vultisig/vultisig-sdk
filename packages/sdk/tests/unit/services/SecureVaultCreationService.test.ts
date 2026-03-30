@@ -261,6 +261,39 @@ describe('SecureVaultCreationService with mocked QR generation', () => {
       expect(url.searchParams.get('tssType')).toBe('Keygen')
       expect(url.searchParams.get('jsonData')).toBeDefined()
     })
+
+    it('appends tssBatching=1 when initiator enables batching', async () => {
+      const payload = await service.generateQRPayload({
+        sessionId: 'session-abc',
+        hexEncryptionKey: 'x'.repeat(64),
+        hexChainCode: 'y'.repeat(64),
+        localPartyId: 'party-xyz',
+        vaultName: 'Vault Name',
+        tssBatching: true,
+      })
+      expect(new URL(payload).searchParams.get('tssBatching')).toBe('1')
+    })
+
+    it('omits tssBatching when false or undefined so joiners default to non-batch', async () => {
+      const without = await service.generateQRPayload({
+        sessionId: 'session-abc',
+        hexEncryptionKey: 'x'.repeat(64),
+        hexChainCode: 'y'.repeat(64),
+        localPartyId: 'party-xyz',
+        vaultName: 'Vault Name',
+      })
+      expect(without).not.toContain('tssBatching')
+
+      const explicitOff = await service.generateQRPayload({
+        sessionId: 'session-abc',
+        hexEncryptionKey: 'x'.repeat(64),
+        hexChainCode: 'y'.repeat(64),
+        localPartyId: 'party-xyz',
+        vaultName: 'Vault Name',
+        tssBatching: false,
+      })
+      expect(explicitOff).not.toContain('tssBatching')
+    })
   })
 })
 

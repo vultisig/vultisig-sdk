@@ -32,6 +32,7 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { randomUUID } from '../crypto'
+import { TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 
 /**
  * Progress step during secure vault creation
@@ -74,6 +75,8 @@ export type SecureVaultCreateOptions = {
   onQRCodeReady?: (qrPayload: string) => void
   /** Callback when a device joins the session */
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+  /** Enable batched MPC ceremonies for this vault creation. */
+  tssBatching?: boolean
 }
 
 /**
@@ -114,6 +117,8 @@ export type PerformReshareParams = {
   onStepChange?: (step: KeygenStep) => void
   /** Callback for DKLS inbound sequence number tracking */
   onDklsInboundSequenceNoChange?: (n: number) => void
+  /** Enable batched MPC ceremonies for this reshare. */
+  tssBatching?: boolean
 }
 
 /**
@@ -167,6 +172,7 @@ export class SecureVaultCreationService {
     hexChainCode: string
     localPartyId: string
     vaultName: string
+    tssBatching?: boolean
   }): Promise<string> {
     // Create KeygenMessage protobuf
     const keygenMessage = create(KeygenMessageSchema, {
@@ -187,7 +193,8 @@ export class SecureVaultCreationService {
     const compressedData = toCompressedString({ sevenZip, binary })
 
     // Build URL for mobile app
-    const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${encodeURIComponent(compressedData)}`
+    const tssBatchingParam = params.tssBatching ? '&tssBatching=1' : ''
+    const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${encodeURIComponent(compressedData)}${tssBatchingParam}`
 
     return qrPayload
   }
@@ -249,7 +256,16 @@ export class SecureVaultCreationService {
    * @returns Created vault, vault ID, and session ID
    */
   async createVault(options: SecureVaultCreateOptions): Promise<SecureVaultCreateResult> {
-    const { name, devices, threshold: customThreshold, signal, onProgress, onQRCodeReady, onDeviceJoined } = options
+    const {
+      name,
+      devices,
+      threshold: customThreshold,
+      signal,
+      onProgress,
+      onQRCodeReady,
+      onDeviceJoined,
+      tssBatching,
+    } = options
 
     const reportProgress = (step: SecureVaultCreationStep) => {
       if (signal?.aborted) {
@@ -291,6 +307,7 @@ export class SecureVaultCreationService {
       hexChainCode,
       localPartyId,
       vaultName: name,
+      tssBatching,
     })
 
     // Notify QR is ready via callback
@@ -365,14 +382,6 @@ export class SecureVaultCreationService {
       console.warn('startMpcSession (create vault):', startErr)
     }
 
-    // Step 6: ECDSA keygen
-    reportProgress({
-      step: 'keygen_ecdsa',
-      progress: 45,
-      message: 'Generating ECDSA keys...',
-      sessionId,
-    })
-
     const dkls = new DKLS(
       { create: true },
       true, // isInitiateDevice
@@ -384,64 +393,123 @@ export class SecureVaultCreationService {
       hexEncryptionKey
     )
 
-    const ecdsaResult = await dkls.startKeygenWithRetry()
-
-    // Check for abort before EdDSA keygen
-    if (signal?.aborted) {
-      throw new Error('Operation aborted')
-    }
-
-    // Step 7: EdDSA keygen
-    reportProgress({
-      step: 'keygen_eddsa',
-      progress: 60,
-      message: 'Generating EdDSA keys...',
-      sessionId,
-    })
-
-    const setupMessage = dkls.getSetupMessage()
-    const schnorr = new Schnorr(
-      { create: true },
-      true,
-      this.relayUrl,
-      sessionId,
-      localPartyId,
-      allDevices,
-      [],
-      hexEncryptionKey,
-      setupMessage
-    )
-
-    const eddsaResult = await schnorr.startKeygenWithRetry()
-
-    // Check for abort before ML-DSA keygen
-    if (signal?.aborted) {
-      throw new Error('Operation aborted')
-    }
-
-    // Step 8: ML-DSA keygen
-    reportProgress({
-      step: 'keygen_mldsa',
-      progress: 75,
-      message: 'Generating ML-DSA keys...',
-      sessionId,
-    })
-
     let mldsaResult: { publicKey: string; keyshare: string } | undefined
-    try {
-      const mldsaKeygen = new MldsaKeygen(
-        true, // isInitiateDevice
+    let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
+    let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
+
+    if (tssBatching) {
+      reportProgress({
+        step: 'keygen_ecdsa',
+        progress: 45,
+        message: 'Generating ECDSA, EdDSA, and ML-DSA keys...',
+        sessionId,
+      })
+
+      await dkls.prepareKeygenSetup()
+      const schnorr = new Schnorr(
+        { create: true },
+        true,
+        this.relayUrl,
+        sessionId,
+        localPartyId,
+        allDevices,
+        [],
+        hexEncryptionKey,
+        dkls.getSetupMessage()
+      )
+      const batchMldsa = new MldsaKeygen(
+        true,
         this.relayUrl,
         sessionId,
         localPartyId,
         allDevices,
         hexEncryptionKey,
-        { timeoutMs: 30000 }
+        {
+          timeoutMs: 30000,
+          messageId: TSS_BATCH_MESSAGE_IDS.mldsa,
+          setupMessageId: TSS_BATCH_MESSAGE_IDS.mldsaSetup,
+        }
       )
 
-      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-    } catch (error) {
-      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+      const batchMldsaPromise = batchMldsa
+        .startKeygenWithRetry()
+        .catch(error => {
+          console.warn(
+            'ML-DSA keygen failed (non-fatal):',
+            error instanceof Error ? error.message : error
+          )
+          return undefined
+        })
+
+      ;[ecdsaResult, eddsaResult, mldsaResult] = await Promise.all([
+        dkls.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.ecdsa),
+        schnorr.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.eddsa),
+        batchMldsaPromise,
+      ])
+    } else {
+      reportProgress({
+        step: 'keygen_ecdsa',
+        progress: 45,
+        message: 'Generating ECDSA keys...',
+        sessionId,
+      })
+
+      ecdsaResult = await dkls.startKeygenWithRetry()
+
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
+      reportProgress({
+        step: 'keygen_eddsa',
+        progress: 60,
+        message: 'Generating EdDSA keys...',
+        sessionId,
+      })
+
+      const schnorr = new Schnorr(
+        { create: true },
+        true,
+        this.relayUrl,
+        sessionId,
+        localPartyId,
+        allDevices,
+        [],
+        hexEncryptionKey,
+        dkls.getSetupMessage()
+      )
+
+      eddsaResult = await schnorr.startKeygenWithRetry()
+
+      if (signal?.aborted) {
+        throw new Error('Operation aborted')
+      }
+
+      reportProgress({
+        step: 'keygen_mldsa',
+        progress: 75,
+        message: 'Generating ML-DSA keys...',
+        sessionId,
+      })
+
+      try {
+        const mldsaKeygen = new MldsaKeygen(
+          true,
+          this.relayUrl,
+          sessionId,
+          localPartyId,
+          allDevices,
+          hexEncryptionKey,
+          { timeoutMs: 30000 }
+        )
+
+        mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+      } catch (error) {
+        console.warn(
+          'ML-DSA keygen failed (non-fatal):',
+          error instanceof Error ? error.message : error
+        )
+      }
     }
 
     // Check for abort before finalization
@@ -530,14 +598,13 @@ export class SecureVaultCreationService {
       vaultOrder,
       onStepChange,
       onDklsInboundSequenceNoChange,
+      tssBatching,
     } = params
 
     // Compute old committee: existing vault's signers that are also in new signers
     const oldParties = existingVault?.signers ?? []
     const oldCommittee = oldParties.filter(party => signers.includes(party))
 
-    // ECDSA reshare via DKLS
-    onStepChange?.('ecdsa')
     const dkls = new DKLS(
       operation,
       isInitiatingDevice,
@@ -549,10 +616,6 @@ export class SecureVaultCreationService {
       encryptionKeyHex,
       { onInboundSequenceNoChange: onDklsInboundSequenceNoChange }
     )
-    const dklsResult = await dkls.startReshareWithRetry(existingVault?.keyShares.ecdsa)
-
-    // EdDSA reshare via Schnorr
-    onStepChange?.('eddsa')
     const schnorr = new Schnorr(
       operation,
       isInitiatingDevice,
@@ -564,7 +627,32 @@ export class SecureVaultCreationService {
       encryptionKeyHex,
       new Uint8Array(0)
     )
-    const schnorrResult = await schnorr.startReshareWithRetry(existingVault?.keyShares.eddsa)
+
+    let dklsResult: { publicKey: string; keyshare: string; chaincode: string }
+    let schnorrResult: { publicKey: string; keyshare: string; chaincode: string }
+
+    if (tssBatching) {
+      onStepChange?.('ecdsa')
+      onStepChange?.('eddsa')
+      ;[dklsResult, schnorrResult] = await Promise.all([
+        dkls.startReshareWithRetry(
+          existingVault?.keyShares.ecdsa,
+          TSS_BATCH_MESSAGE_IDS.ecdsa
+        ),
+        schnorr.startReshareWithRetry(
+          existingVault?.keyShares.eddsa,
+          TSS_BATCH_MESSAGE_IDS.eddsa
+        ),
+      ])
+    } else {
+      onStepChange?.('ecdsa')
+      dklsResult = await dkls.startReshareWithRetry(existingVault?.keyShares.ecdsa)
+
+      onStepChange?.('eddsa')
+      schnorrResult = await schnorr.startReshareWithRetry(
+        existingVault?.keyShares.eddsa
+      )
+    }
 
     // ML-DSA keygen (fresh keygen during reshare)
     onStepChange?.('mldsa')

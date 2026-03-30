@@ -339,6 +339,8 @@ export class SecureVault extends VaultBase {
       onQRCodeReady?: (qrPayload: string) => void
       /** Callback when a device joins the session */
       onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+      /** Enable batched MPC ceremonies for this vault creation. */
+      tssBatching?: boolean
     }
   ): Promise<{
     vault: SecureVault
@@ -359,7 +361,10 @@ export class SecureVault extends VaultBase {
       // Step 2: Map progress callbacks
       const mapProgress = (step: SecureVaultCreationStep): VaultCreationStep => ({
         step:
-          step.step === 'keygen_ecdsa' || step.step === 'keygen_eddsa' || step.step === 'finalizing'
+          step.step === 'keygen_ecdsa' ||
+          step.step === 'keygen_eddsa' ||
+          step.step === 'keygen_mldsa' ||
+          step.step === 'finalizing'
             ? 'keygen'
             : step.step === 'complete'
               ? 'complete'
@@ -378,6 +383,7 @@ export class SecureVault extends VaultBase {
         onProgress: step => reportProgress(mapProgress(step)),
         onQRCodeReady: options.onQRCodeReady,
         onDeviceJoined: options.onDeviceJoined,
+        tssBatching: options.tssBatching ?? context.config.tssBatching,
       })
 
       // Step 4: Generate .vult backup file

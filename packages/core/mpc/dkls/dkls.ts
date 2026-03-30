@@ -39,6 +39,7 @@ export class DKLS {
   private inboundSequenceNo: number = 0
   private cache: Record<string, string> = {}
   private setupMessage: Uint8Array = new Uint8Array()
+  private pendingKeyImportSession: KeyImportInitiator | null = null
   private readonly localUI?: string
   private readonly publicKey?: string
   private readonly chainCode?: string
@@ -75,7 +76,8 @@ export class DKLS {
   }
 
   private async processOutbound(
-    session: KeygenSession | QcSession | KeyImportInitiator | KeyImportSession
+    session: KeygenSession | QcSession | KeyImportInitiator | KeyImportSession,
+    messageId?: string
   ): Promise<boolean> {
     try {
       const message = session.outputMessage()
@@ -85,7 +87,7 @@ export class DKLS {
           return true
         } else {
           await sleep(100)
-          return await this.processOutbound(session)
+          return await this.processOutbound(session, messageId)
         }
       }
       console.log('outbound message:', message)
@@ -105,32 +107,35 @@ export class DKLS {
           serverUrl: this.serverURL,
           message: relayMessage,
           sessionId: this.sessionId,
+          messageId,
         })
         this.sequenceNo++
       })
       await sleep(100)
-      return await this.processOutbound(session)
+      return await this.processOutbound(session, messageId)
     } catch (error) {
       console.error('processOutbound error:', error)
       await sleep(100)
-      return await this.processOutbound(session)
+      return await this.processOutbound(session, messageId)
     }
   }
 
   private async processInbound(
     session: KeygenSession | QcSession | KeyImportInitiator | KeyImportSession,
-    start: number
+    start: number,
+    messageId?: string
   ): Promise<boolean> {
     try {
       const parsedMessages = await getMpcRelayMessages({
         serverUrl: this.serverURL,
         localPartyId: this.localPartyId,
         sessionId: this.sessionId,
+        messageId,
       })
       if (parsedMessages.length === 0) {
         // no message to download, backoff for 100ms
         await sleep(100)
-        return await this.processInbound(session, start)
+        return await this.processInbound(session, start, messageId)
       }
       for (const msg of parsedMessages) {
         const cacheKey = `${msg.session_id}-${msg.from}-${msg.hash}`
@@ -159,6 +164,7 @@ export class DKLS {
           localPartyId: this.localPartyId,
           sessionId: this.sessionId,
           messageHash: msg.hash,
+          messageId,
         })
       }
       const end = Date.now()
@@ -168,49 +174,69 @@ export class DKLS {
         return false
       }
       await sleep(100)
-      return await this.processInbound(session, start)
+      return await this.processInbound(session, start, messageId)
     } catch (error) {
       console.error('processInbound error:', error)
       await sleep(100)
-      return await this.processInbound(session, start)
+      return await this.processInbound(session, start, messageId)
     }
   }
 
-  private async startKeygen(attempt: number) {
+  public async prepareKeygenSetup(): Promise<void> {
+    if (this.setupMessage.length > 0) {
+      return
+    }
+    if (this.isInitiateDevice) {
+      const threshold = getKeygenThreshold(this.keygenCommittee.length)
+      this.setupMessage = KeygenSession.setup(
+        undefined,
+        threshold,
+        this.keygenCommittee
+      )
+      const encryptedSetupMsg = toMpcServerMessage(
+        this.setupMessage,
+        this.hexEncryptionKey
+      )
+
+      await uploadMpcSetupMessage({
+        serverUrl: this.serverURL,
+        message: encryptedSetupMsg,
+        sessionId: this.sessionId,
+      })
+      console.log('uploaded setup message successfully')
+      return
+    }
+
+    const encodedEncryptedSetupMsg = await waitForSetupMessage({
+      serverUrl: this.serverURL,
+      sessionId: this.sessionId,
+    })
+    this.setupMessage = fromMpcServerMessage(
+      encodedEncryptedSetupMsg,
+      this.hexEncryptionKey
+    )
+  }
+
+  private async startKeygen(attempt: number, messageId?: string) {
     console.log('startKeygen attempt:', attempt)
     console.log('session id:', this.sessionId)
     this.isKeygenComplete = false
     this.inboundSequenceNo = 0
     this.onInboundSequenceNoChange?.(this.inboundSequenceNo)
     try {
-      if (this.isInitiateDevice && attempt === 0) {
-        const threshold = getKeygenThreshold(this.keygenCommittee.length)
-        this.setupMessage = KeygenSession.setup(
-          undefined,
-          threshold,
-          this.keygenCommittee
-        )
-        // upload setup message to server
-        const encryptedSetupMsg = toMpcServerMessage(
-          this.setupMessage,
-          this.hexEncryptionKey
-        )
-
-        await uploadMpcSetupMessage({
-          serverUrl: this.serverURL,
-          message: encryptedSetupMsg,
-          sessionId: this.sessionId,
-        })
-        console.log('uploaded setup message successfully')
-      } else {
-        const encodedEncryptedSetupMsg = await waitForSetupMessage({
-          serverUrl: this.serverURL,
-          sessionId: this.sessionId,
-        })
-        this.setupMessage = fromMpcServerMessage(
-          encodedEncryptedSetupMsg,
-          this.hexEncryptionKey
-        )
+      if (this.setupMessage.length === 0) {
+        if (this.isInitiateDevice && attempt === 0) {
+          await this.prepareKeygenSetup()
+        } else {
+          const encodedEncryptedSetupMsg = await waitForSetupMessage({
+            serverUrl: this.serverURL,
+            sessionId: this.sessionId,
+          })
+          this.setupMessage = fromMpcServerMessage(
+            encodedEncryptedSetupMsg,
+            this.hexEncryptionKey
+          )
+        }
       }
       let session: KeygenSession | KeyImportInitiator
       if ('create' in this.keygenOperation) {
@@ -231,8 +257,8 @@ export class DKLS {
         throw new Error('Invalid keygen operation')
       }
       const start = Date.now()
-      const outbound = this.processOutbound(session)
-      const inbound = this.processInbound(session, start)
+      const outbound = this.processOutbound(session, messageId)
+      const inbound = this.processInbound(session, start, messageId)
       const [, inboundResult] = await Promise.all([outbound, inbound])
       if (inboundResult) {
         const keyShare = session.finish()
@@ -252,11 +278,11 @@ export class DKLS {
     }
   }
 
-  public async startKeygenWithRetry() {
+  public async startKeygenWithRetry(messageId?: string) {
     await initializeMpcLib('ecdsa')
     for (let i = 0; i < 3; i++) {
       try {
-        const result = await this.startKeygen(i)
+        const result = await this.startKeygen(i, messageId)
         return result
       } catch (error) {
         console.error('DKLS keygen error:', error)
@@ -270,7 +296,8 @@ export class DKLS {
 
   private async startReshare(
     dklsKeyshare: string | undefined,
-    attempt: number
+    attempt: number,
+    messageId?: string
   ) {
     console.log('startReshare dkls, attempt:', attempt)
     this.isKeygenComplete = false
@@ -337,8 +364,8 @@ export class DKLS {
 
       try {
         const start = Date.now()
-        const outbound = this.processOutbound(session)
-        const inbound = this.processInbound(session, start)
+        const outbound = this.processOutbound(session, messageId)
+        const inbound = this.processInbound(session, start, messageId)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
           const keyShare = session.finish()
@@ -364,11 +391,14 @@ export class DKLS {
     }
   }
 
-  public async startReshareWithRetry(keyshare: string | undefined) {
+  public async startReshareWithRetry(
+    keyshare: string | undefined,
+    messageId?: string
+  ) {
     await initializeMpcLib('ecdsa')
     for (let i = 0; i < 3; i++) {
       try {
-        const result = await this.startReshare(keyshare, i)
+        const result = await this.startReshare(keyshare, i, messageId)
         return result
       } catch (error) {
         console.error('DKLS reshare error:', error)
@@ -376,47 +406,90 @@ export class DKLS {
     }
     throw new Error('DKLS reshare failed')
   }
+
+  public async prepareKeyImportSetup(
+    hexPrivateKey: string,
+    hexChainCode: string,
+    messageId?: string
+  ): Promise<void> {
+    if (!this.isInitiateDevice) {
+      return
+    }
+
+    const threshold = getKeygenThreshold(this.keygenCommittee.length)
+    const privateKey = Buffer.from(hexPrivateKey, 'hex')
+    const chainCode = Buffer.from(hexChainCode, 'hex')
+
+    this.pendingKeyImportSession = new KeyImportInitiator(
+      Uint8Array.from(privateKey),
+      Uint8Array.from(chainCode),
+      threshold,
+      this.keygenCommittee
+    )
+    this.setupMessage = this.pendingKeyImportSession.setup
+
+    const encryptedSetupMsg = toMpcServerMessage(
+      this.setupMessage,
+      this.hexEncryptionKey
+    )
+
+    await uploadMpcSetupMessage({
+      serverUrl: this.serverURL,
+      message: encryptedSetupMsg,
+      sessionId: this.sessionId,
+      messageId,
+    })
+    console.log('uploaded setup message successfully')
+  }
+
   private async startKeyImport(
     hexPrivateKey: string,
     hexChainCode: string,
     attempt: number,
-    additionalHeader?: string
+    setupMessageId?: string,
+    protocolMessageId?: string
   ) {
     console.log('startKeyImport attempt:', attempt)
     this.isKeygenComplete = false
     try {
       let session: KeyImportInitiator | KeyImportSession | null = null
       if (this.isInitiateDevice) {
-        const threshold = getKeygenThreshold(this.keygenCommittee.length)
-        const privateKey = Buffer.from(hexPrivateKey, 'hex')
-        const chainCode = Buffer.from(hexChainCode, 'hex')
+        if (attempt === 0 && this.pendingKeyImportSession) {
+          const pendingSession = this.pendingKeyImportSession
+          session = pendingSession
+          this.setupMessage = pendingSession.setup
+          this.pendingKeyImportSession = null
+        } else {
+          const threshold = getKeygenThreshold(this.keygenCommittee.length)
+          const privateKey = Buffer.from(hexPrivateKey, 'hex')
+          const chainCode = Buffer.from(hexChainCode, 'hex')
 
-        const keyImportSession = new KeyImportInitiator(
-          Uint8Array.from(privateKey),
-          Uint8Array.from(chainCode),
-          threshold,
-          this.keygenCommittee
-        )
-        this.setupMessage = keyImportSession.setup
-        session = keyImportSession
-        // upload setup message to server
-        const encryptedSetupMsg = toMpcServerMessage(
-          this.setupMessage,
-          this.hexEncryptionKey
-        )
+          const keyImportSession = new KeyImportInitiator(
+            Uint8Array.from(privateKey),
+            Uint8Array.from(chainCode),
+            threshold,
+            this.keygenCommittee
+          )
+          this.setupMessage = keyImportSession.setup
+          session = keyImportSession
+          const encryptedSetupMsg = toMpcServerMessage(
+            this.setupMessage,
+            this.hexEncryptionKey
+          )
 
-        await uploadMpcSetupMessage({
-          serverUrl: this.serverURL,
-          message: encryptedSetupMsg,
-          sessionId: this.sessionId,
-          messageId: additionalHeader,
-        })
-        console.log('uploaded setup message successfully')
+          await uploadMpcSetupMessage({
+            serverUrl: this.serverURL,
+            message: encryptedSetupMsg,
+            sessionId: this.sessionId,
+            messageId: setupMessageId,
+          })
+          console.log('uploaded setup message successfully')
+        }
       } else {
         const encodedEncryptedSetupMsg = await waitForSetupMessage({
           serverUrl: this.serverURL,
           sessionId: this.sessionId,
-          messageId: additionalHeader,
+          messageId: setupMessageId,
         })
         this.setupMessage = fromMpcServerMessage(
           encodedEncryptedSetupMsg,
@@ -433,9 +506,10 @@ export class DKLS {
       if (session === null) {
         throw new Error('DKLS key import session is null')
       }
+      const exchangeMessageId = protocolMessageId
       const start = Date.now()
-      const outbound = this.processOutbound(session)
-      const inbound = this.processInbound(session, start)
+      const outbound = this.processOutbound(session, exchangeMessageId)
+      const inbound = this.processInbound(session, start, exchangeMessageId)
       const [, inboundResult] = await Promise.all([outbound, inbound])
       if (inboundResult) {
         const keyShare = session.finish()
@@ -458,7 +532,8 @@ export class DKLS {
   public async startKeyImportWithRetry(
     privateKey: string,
     chainCode: string,
-    additionalHeader?: string
+    setupMessageId?: string,
+    protocolMessageId?: string
   ) {
     await initializeMpcLib('ecdsa')
     for (let i = 0; i < 3; i++) {
@@ -467,7 +542,8 @@ export class DKLS {
           privateKey,
           chainCode,
           i,
-          additionalHeader
+          setupMessageId,
+          protocolMessageId
         )
         return result
       } catch (error) {
