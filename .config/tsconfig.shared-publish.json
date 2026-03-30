@@ -31,6 +31,7 @@
     "../packages/core/chain/**/*.tsx",
     "../packages/core/mpc/**/*.ts",
     "../packages/lib/utils/**/*.ts",
+    "../packages/lib/utils/**/*.tsx",
     "../packages/core/config/**/*.ts"
   ],
   "exclude": [

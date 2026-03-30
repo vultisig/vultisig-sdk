@@ -11,6 +11,7 @@ import { getCardanoSigningInputs } from './resolvers/cardano'
 import { getCosmosSigningInputs } from './resolvers/cosmos'
 import { getEvmSigningInputs } from './resolvers/evm'
 import { getPolkadotSigningInputs } from './resolvers/polkadot'
+import { getQbtcSigningInputs } from './resolvers/qbtc'
 import { getRippleSigningInputs } from './resolvers/ripple'
 import { getSolanaSigningInputs } from './resolvers/solana'
 import { getSuiSigningInputs } from './resolvers/sui'
@@ -30,6 +31,7 @@ const resolvers: Record<ChainKind, SigningInputsResolver<any>> = {
   cosmos: getCosmosSigningInputs,
   evm: getEvmSigningInputs,
   polkadot: getPolkadotSigningInputs,
+  qbtc: getQbtcSigningInputs,
   ripple: getRippleSigningInputs,
   solana: getSolanaSigningInputs,
   sui: getSuiSigningInputs,
@@ -45,7 +47,7 @@ export const getEncodedSigningInputs = (input: Input): Uint8Array[] => {
   const signingInputs = resolvers[chainKind](input as any)
 
   // Bittensor returns pre-encoded Uint8Array (custom extrinsic builder, not TW proto)
-  if (chainKind === 'bittensor') {
+  if (chainKind === 'bittensor' || chainKind === 'qbtc') {
     return signingInputs as unknown as Uint8Array[]
   }
 

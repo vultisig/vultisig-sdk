@@ -6,6 +6,7 @@ import { getCardanoCoinBalance } from './resolvers/cardano'
 import { getCosmosCoinBalance } from './resolvers/cosmos'
 import { getEvmCoinBalance } from './resolvers/evm'
 import { getPolkadotCoinBalance } from './resolvers/polkadot'
+import { getQbtcCoinBalance } from './resolvers/qbtc'
 import { getRippleCoinBalance } from './resolvers/ripple'
 import { getSolanaCoinBalance } from './resolvers/solana'
 import { getSuiCoinBalance } from './resolvers/sui'
@@ -25,6 +26,7 @@ const resolvers: Record<ChainKind, CoinBalanceResolver<any>> = {
   solana: getSolanaCoinBalance,
   tron: getTronCoinBalance,
   cardano: getCardanoCoinBalance,
+  qbtc: getQbtcCoinBalance,
 }
 
 export const getCoinBalance: CoinBalanceResolver = async input =>

@@ -6,6 +6,7 @@ import { broadcastCardanoTx } from './resolvers/cardano'
 import { broadcastCosmosTx } from './resolvers/cosmos'
 import { broadcastEvmTx } from './resolvers/evm'
 import { broadcastPolkadotTx } from './resolvers/polkadot'
+import { broadcastQbtcTx } from './resolvers/qbtc'
 import { broadcastRippleTx } from './resolvers/ripple'
 import { broadcastSolanaTx } from './resolvers/solana'
 import { broadcastSuiTx } from './resolvers/sui'
@@ -19,6 +20,7 @@ const resolvers: Record<ChainKind, BroadcastTxResolver<any>> = {
   cosmos: broadcastCosmosTx,
   evm: broadcastEvmTx,
   polkadot: broadcastPolkadotTx,
+  qbtc: broadcastQbtcTx,
   ripple: broadcastRippleTx,
   solana: broadcastSolanaTx,
   sui: broadcastSuiTx,

@@ -40,6 +40,7 @@ const chainKindRecord = {
   [OtherChain.Ripple]: 'ripple',
   [OtherChain.Tron]: 'tron',
   [OtherChain.Cardano]: 'cardano',
+  [OtherChain.QBTC]: 'qbtc',
 } as const
 
 export type ChainKind = (typeof chainKindRecord)[Chain]

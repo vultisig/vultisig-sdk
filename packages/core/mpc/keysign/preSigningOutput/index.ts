@@ -22,6 +22,7 @@ const preSigningOutputClasses = {
   ripple: TW.TxCompiler.Proto.PreSigningOutput,
   tron: TW.TxCompiler.Proto.PreSigningOutput,
   cardano: TW.TxCompiler.Proto.PreSigningOutput,
+  qbtc: TW.TxCompiler.Proto.PreSigningOutput,
 } as const satisfies Record<ChainKind, unknown>
 
 type PreSigningOutput<T extends ChainKind> = InstanceType<

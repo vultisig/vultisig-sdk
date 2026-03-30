@@ -1,8 +1,8 @@
-import { create } from '@bufbuild/protobuf'
-import { UtxoInfoSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/utxo_info_pb'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { cardanoApiUrl } from '../client/config'
+
+import type { ChainPlainUtxo } from '../../utxo/tx/ChainPlainUtxo'
 
 type CardanoUtxoResponse = Array<{
   tx_hash: string
@@ -10,7 +10,9 @@ type CardanoUtxoResponse = Array<{
   value: string
 }>
 
-export const getCardanoUtxos = async (address: string) => {
+export const getCardanoUtxos = async (
+  address: string
+): Promise<ChainPlainUtxo[]> => {
   const url = `${cardanoApiUrl}/address_utxos`
 
   const utxos = await queryUrl<CardanoUtxoResponse>(url, {
@@ -19,11 +21,9 @@ export const getCardanoUtxos = async (address: string) => {
     },
   })
 
-  return utxos.map(({ tx_hash, tx_index, value }) =>
-    create(UtxoInfoSchema, {
-      hash: tx_hash,
-      amount: BigInt(value),
-      index: tx_index,
-    })
-  )
+  return utxos.map(({ tx_hash, tx_index, value }) => ({
+    hash: tx_hash,
+    amount: BigInt(value),
+    index: tx_index,
+  }))
 }

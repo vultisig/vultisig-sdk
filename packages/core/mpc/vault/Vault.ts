@@ -1,9 +1,12 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { PublicKeys } from '@vultisig/core-chain/publicKey/PublicKeys'
-import { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
+import { signingAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { MpcLib } from '@vultisig/core-mpc/mpcLib'
 
-export type VaultKeyShares = Record<SignatureAlgorithm, string>
+export type VaultKeyShares = Record<
+  (typeof signingAlgorithms)[number],
+  string
+>
 
 export type VaultAllKeyShares = {
   keyShares: VaultKeyShares
@@ -30,6 +33,8 @@ export type Vault = {
   chainKeyShares?: Partial<Record<Chain, string>>
   publicKeyMldsa?: string
   keyShareMldsa?: string
+  /** Zcash Sapling key material (legacy / storage). */
+  saplingExtras?: string
 }
 
 export const getVaultId = (vault: Vault): string => vault.publicKeys.ecdsa

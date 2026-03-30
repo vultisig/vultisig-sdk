@@ -13,6 +13,7 @@ export const signingInputClasses = {
   ton: TW.TheOpenNetwork.Proto.SigningInput,
   tron: TW.Tron.Proto.SigningInput,
   utxo: TW.Bitcoin.Proto.SigningInput,
+  qbtc: TW.Cosmos.Proto.SigningInput,
 } as const satisfies Record<ChainKind, unknown>
 
 export type SigningInput<T extends ChainKind> = InstanceType<

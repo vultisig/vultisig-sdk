@@ -19,10 +19,21 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./dist/*.js"
+    "./FiatCurrency": {
+      "types": "./dist/FiatCurrency.d.ts",
+      "import": "./dist/FiatCurrency.js",
+      "default": "./dist/FiatCurrency.js"
+    },
+    "./package.json": "./package.json",
+    "./password": {
+      "types": "./dist/password.d.ts",
+      "import": "./dist/password.js",
+      "default": "./dist/password.js"
+    },
+    "./vault": {
+      "types": "./dist/vault.d.ts",
+      "import": "./dist/vault.js",
+      "default": "./dist/vault.js"
     }
   },
   "scripts": {

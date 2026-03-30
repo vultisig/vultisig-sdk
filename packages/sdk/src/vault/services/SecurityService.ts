@@ -1,10 +1,10 @@
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getTxBlockaidSimulation } from '@vultisig/core-chain/security/blockaid/tx/simulation'
-import { getBlockaidTxSimulationInput } from '@vultisig/core-chain/security/blockaid/tx/simulation/input'
 import { getTxBlockaidValidation } from '@vultisig/core-chain/security/blockaid/tx/validation'
 import { parseBlockaidValidation } from '@vultisig/core-chain/security/blockaid/tx/validation/api/core'
-import { getBlockaidTxValidationInput } from '@vultisig/core-chain/security/blockaid/tx/validation/input'
 import { getKeysignChain } from '@vultisig/core-mpc/keysign/utils/getKeysignChain'
+import { getBlockaidTxSimulationInput } from '@vultisig/core-mpc/security/blockaid/tx/simulation/input'
+import { getBlockaidTxValidationInput } from '@vultisig/core-mpc/security/blockaid/tx/validation/input'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import type { VaultContext } from '../../context/SdkContext'
