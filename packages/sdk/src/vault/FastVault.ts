@@ -1,18 +1,25 @@
-import { fromBinary } from '@bufbuild/protobuf'
-import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
-import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
-import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
-import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
-import { decryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm'
-import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
+import { fromBinary } from "@bufbuild/protobuf";
+import { fromCommVault } from "@vultisig/core-mpc/types/utils/commVault";
+import { VaultSchema } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb";
+import { vaultContainerFromString } from "@vultisig/core-mpc/vault/utils/vaultContainerFromString";
+import { Vault as CoreVault } from "@vultisig/core-mpc/vault/Vault";
+import { decryptWithAesGcm } from "@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm";
+import { fromBase64 } from "@vultisig/lib-utils/fromBase64";
 
-import type { SdkContext, VaultContext } from '../context/SdkContext'
-import { FastSigningService } from '../services/FastSigningService'
-import type { Signature, SignBytesOptions, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
-import { normalizeToHex } from '../utils/bytes'
-import { createVaultBackup } from '../utils/export'
-import { VaultBase } from './VaultBase'
-import { VaultError, VaultErrorCode } from './VaultError'
+import type { SdkContext, VaultContext } from "../context/SdkContext";
+import { FastSigningService } from "../services/FastSigningService";
+import type {
+  Signature,
+  SignBytesOptions,
+  SigningMode,
+  SigningPayload,
+  VaultCreationStep,
+  VaultData,
+} from "../types";
+import { normalizeToHex } from "../utils/bytes";
+import { createVaultBackup } from "../utils/export";
+import { VaultBase } from "./VaultBase";
+import { VaultError, VaultErrorCode } from "./VaultError";
 
 /**
  * FastVault - 2-of-2 MPC with VultiServer
@@ -28,8 +35,8 @@ import { VaultError, VaultErrorCode } from './VaultError'
  * - Requires FastSigningService
  */
 export class FastVault extends VaultBase {
-  private readonly fastSigningService: FastSigningService
-  private readonly context: VaultContext
+  private readonly fastSigningService: FastSigningService;
+  private readonly context: VaultContext;
 
   /**
    * Private constructor - use FastVault.create() or FastVault.fromStorage() instead.
@@ -41,26 +48,26 @@ export class FastVault extends VaultBase {
     vultFileContent: string,
     fastSigningService: FastSigningService,
     context: VaultContext,
-    parsedVaultData?: CoreVault
+    parsedVaultData?: CoreVault,
   ) {
-    super(vaultId, name, vultFileContent, context, parsedVaultData)
+    super(vaultId, name, vultFileContent, context, parsedVaultData);
 
-    this.fastSigningService = fastSigningService
-    this.context = context
+    this.fastSigningService = fastSigningService;
+    this.context = context;
   }
 
   /**
    * Fast vaults only support 'fast' signing mode
    */
   get availableSigningModes(): SigningMode[] {
-    return ['fast']
+    return ["fast"];
   }
 
   /**
    * Fast vaults always use 2-of-2 threshold (device + server)
    */
   get threshold(): number {
-    return 2
+    return 2;
   }
 
   /**
@@ -72,40 +79,43 @@ export class FastVault extends VaultBase {
    * @param options - Optional parameters including abort signal
    * @returns Signature from server coordination
    */
-  async sign(payload: SigningPayload, options?: { signal?: AbortSignal }): Promise<Signature> {
+  async sign(
+    payload: SigningPayload,
+    options?: { signal?: AbortSignal },
+  ): Promise<Signature> {
     try {
       // Ensure keyShares are loaded from vault file (lazy loading)
-      await this.ensureKeySharesLoaded()
+      await this.ensureKeySharesLoaded();
 
       // Resolve password for server authentication
       // resolvePassword() will throw if password not available
-      const password = await this.resolvePassword()
+      const password = await this.resolvePassword();
 
       // Sign with server coordination
       const signature = await this.fastSigningService.signWithServer(
         this.coreVault,
         payload,
         password,
-        step => this.emit('signingProgress', { step }),
-        options?.signal
-      )
+        (step) => this.emit("signingProgress", { step }),
+        options?.signal,
+      );
 
       // Emit transaction signed event (serves as completion event)
-      this.emit('transactionSigned', { signature, payload })
+      this.emit("transactionSigned", { signature, payload });
 
-      return signature
+      return signature;
     } catch (error) {
-      this.emit('error', error as Error)
+      this.emit("error", error as Error);
 
       if (error instanceof VaultError) {
-        throw error
+        throw error;
       }
 
       throw new VaultError(
         VaultErrorCode.SigningFailed,
         `Fast signing failed: ${(error as Error).message}`,
-        error as Error
-      )
+        error as Error,
+      );
     }
   }
 
@@ -139,16 +149,19 @@ export class FastVault extends VaultBase {
    * })
    * ```
    */
-  async signBytes(options: SignBytesOptions, signingOptions?: { signal?: AbortSignal }): Promise<Signature> {
+  async signBytes(
+    options: SignBytesOptions,
+    signingOptions?: { signal?: AbortSignal },
+  ): Promise<Signature> {
     try {
       // Normalize input to hex string
-      const messageHash = normalizeToHex(options.data)
+      const messageHash = normalizeToHex(options.data);
 
       // Ensure keyShares are loaded from vault file (lazy loading)
-      await this.ensureKeySharesLoaded()
+      await this.ensureKeySharesLoaded();
 
       // Resolve password for server authentication
-      const password = await this.resolvePassword()
+      const password = await this.resolvePassword();
 
       // Sign with server coordination
       const signature = await this.fastSigningService.signBytesWithServer(
@@ -158,29 +171,33 @@ export class FastVault extends VaultBase {
           chain: options.chain,
         },
         password,
-        step => this.emit('signingProgress', { step }),
-        signingOptions?.signal
-      )
+        (step) => this.emit("signingProgress", { step }),
+        signingOptions?.signal,
+      );
 
       // Emit signing complete event
-      this.emit('transactionSigned', {
+      this.emit("transactionSigned", {
         signature,
-        payload: { chain: options.chain, transaction: null, messageHashes: [messageHash] },
-      })
+        payload: {
+          chain: options.chain,
+          transaction: null,
+          messageHashes: [messageHash],
+        },
+      });
 
-      return signature
+      return signature;
     } catch (error) {
-      this.emit('error', error as Error)
+      this.emit("error", error as Error);
 
       if (error instanceof VaultError) {
-        throw error
+        throw error;
       }
 
       throw new VaultError(
         VaultErrorCode.SigningFailed,
         `signBytes failed: ${(error as Error).message}`,
-        error as Error
-      )
+        error as Error,
+      );
     }
   }
 
@@ -204,49 +221,57 @@ export class FastVault extends VaultBase {
       this.coreVault.keyShares.eddsa &&
       this.coreVault.keyShares.eddsa.length > 0
     ) {
-      return // Already loaded
+      return; // Already loaded
     }
 
     // Check if vault file content is available
-    if (!this.vaultData.vultFileContent || this.vaultData.vultFileContent.trim().length === 0) {
-      throw new VaultError(VaultErrorCode.InvalidVault, 'Vault file content is empty. Cannot load keyShares.')
+    if (
+      !this.vaultData.vultFileContent ||
+      this.vaultData.vultFileContent.trim().length === 0
+    ) {
+      throw new VaultError(
+        VaultErrorCode.InvalidVault,
+        "Vault file content is empty. Cannot load keyShares.",
+      );
     }
 
     // Parse vault file to get keyShares
-    const container = vaultContainerFromString(this.vaultData.vultFileContent.trim())
+    const container = vaultContainerFromString(
+      this.vaultData.vultFileContent.trim(),
+    );
 
     // Check if vault is encrypted - use container as source of truth since it reflects
     // what's actually stored. Some imported fast vaults may have isEncrypted=false.
-    let vaultBase64: string
+    let vaultBase64: string;
     if (container.isEncrypted) {
       // Resolve password (will throw if not available)
-      const password = await this.resolvePassword()
+      const password = await this.resolvePassword();
 
       // Decrypt vault
-      const encryptedData = fromBase64(container.vault)
+      const encryptedData = fromBase64(container.vault);
       const decryptedBuffer = await decryptWithAesGcm({
         key: password,
         value: encryptedData,
-      })
-      vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+      });
+      vaultBase64 = Buffer.from(decryptedBuffer).toString("base64");
     } else {
       // Vault is not encrypted - use content directly
-      vaultBase64 = container.vault
+      vaultBase64 = container.vault;
     }
 
     // Parse inner Vault protobuf
-    const vaultBinary = fromBase64(vaultBase64)
-    const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
-    const parsedVault = fromCommVault(vaultProtobuf)
+    const vaultBinary = fromBase64(vaultBase64);
+    const vaultProtobuf = fromBinary(VaultSchema, vaultBinary);
+    const parsedVault = fromCommVault(vaultProtobuf);
 
     // Update CoreVault with keyShares
-    this.coreVault.keyShares = parsedVault.keyShares
+    this.coreVault.keyShares = parsedVault.keyShares;
     if (parsedVault.keyShareMldsa) {
-      this.coreVault.keyShareMldsa = parsedVault.keyShareMldsa
+      this.coreVault.keyShareMldsa = parsedVault.keyShareMldsa;
     }
 
     // Emit unlocked event
-    this.emit('unlocked', { vaultId: this.id })
+    this.emit("unlocked", { vaultId: this.id });
   }
 
   /**
@@ -274,68 +299,74 @@ export class FastVault extends VaultBase {
   static async create(
     context: SdkContext,
     options: {
-      name: string
-      password: string
-      email: string
-      signal?: AbortSignal
-      onProgress?: (step: VaultCreationStep) => void
-    }
+      name: string;
+      password: string;
+      email: string;
+      signal?: AbortSignal;
+      onProgress?: (step: VaultCreationStep) => void;
+    },
   ): Promise<{
-    vault: FastVault
-    vaultId: string
-    verificationRequired: true
+    vault: FastVault;
+    vaultId: string;
+    verificationRequired: true;
   }> {
     const reportProgress = (step: VaultCreationStep) => {
       if (options.signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
-      options.onProgress?.(step)
-    }
+      options.onProgress?.(step);
+    };
 
     try {
       // Step 1: Create vault on server with MPC keygen
       reportProgress({
-        step: 'keygen',
+        step: "keygen",
         progress: 10,
-        message: 'Starting key generation',
-      })
+        message: "Starting key generation",
+      });
 
       const result = await context.serverManager.createFastVault({
         name: options.name,
         email: options.email,
         password: options.password,
         signal: options.signal,
-        onProgress: update => {
+        onProgress: (update) => {
           // Map server progress updates to vault creation progress
-          let progress = 10
-          if (update.phase === 'ecdsa') {
-            progress = 35 // 20-50% range
-          } else if (update.phase === 'eddsa') {
-            progress = 65 // 50-80% range
+          let progress = 10;
+          if (update.phase === "ecdsa") {
+            progress = 35; // 20-50% range
+          } else if (update.phase === "eddsa") {
+            progress = 65; // 50-80% range
           }
 
           reportProgress({
-            step: 'keygen',
+            step: "keygen",
             progress: Math.round(progress),
-            message: update.message || 'Generating keys...',
-          })
+            message: update.message || "Generating keys...",
+          });
         },
-      })
+      });
 
       // Step 2: Derive vault ID from public key
-      const vaultId = result.vault.publicKeys.ecdsa
+      const vaultId = result.vault.publicKeys.ecdsa;
 
       // Step 3: Generate .vult backup file
       reportProgress({
-        step: 'complete',
+        step: "complete",
         progress: 85,
-        message: 'Creating backup file',
-      })
+        message: "Creating backup file",
+      });
 
-      const vultContent = await createVaultBackup(result.vault, options.password)
+      const vultContent = await createVaultBackup(
+        result.vault,
+        options.password,
+      );
 
       // Step 4: Create FastSigningService
-      const fastSigningService = new FastSigningService(context.serverManager, context.wasmProvider)
+      const fastSigningService = new FastSigningService(
+        context.serverManager,
+        context.wasmProvider,
+      );
 
       // Step 5: Build VaultContext from SdkContext
       const vaultContext: VaultContext = {
@@ -345,14 +376,14 @@ export class FastVault extends VaultBase {
         passwordCache: context.passwordCache,
         wasmProvider: context.wasmProvider,
         pushNotificationService: context.pushNotificationService,
-      }
+      };
 
       // Step 6: Instantiate vault
       reportProgress({
-        step: 'complete',
+        step: "complete",
         progress: 90,
-        message: 'Creating vault instance',
-      })
+        message: "Creating vault instance",
+      });
 
       const vaultInstance = new FastVault(
         vaultId,
@@ -360,33 +391,37 @@ export class FastVault extends VaultBase {
         vultContent,
         fastSigningService,
         vaultContext,
-        result.vault // Pre-parsed vault data
-      )
+        result.vault, // Pre-parsed vault data
+      );
 
       // Step 7: Cache password
-      context.passwordCache.set(vaultId, options.password)
+      context.passwordCache.set(vaultId, options.password);
 
       // Note: Vault is NOT saved here - it remains in memory until email verification succeeds.
       // The Vultisig.verifyVault() method will save the vault after successful verification.
 
       // Step 8: Complete
       reportProgress({
-        step: 'complete',
+        step: "complete",
         progress: 100,
-        message: 'Vault created successfully',
-      })
+        message: "Vault created successfully",
+      });
 
       return {
         vault: vaultInstance,
         vaultId: result.vaultId,
         verificationRequired: true,
-      }
+      };
     } catch (error) {
       // Wrap errors with context
       if (error instanceof Error) {
-        throw new VaultError(VaultErrorCode.CreateFailed, `Failed to create fast vault: ${error.message}`, error)
+        throw new VaultError(
+          VaultErrorCode.CreateFailed,
+          `Failed to create fast vault: ${error.message}`,
+          error,
+        );
       }
-      throw error
+      throw error;
     }
   }
 
@@ -405,9 +440,16 @@ export class FastVault extends VaultBase {
     vultContent: string,
     parsedVault: CoreVault,
     fastSigningService: FastSigningService,
-    context: VaultContext
+    context: VaultContext,
   ): FastVault {
-    return new FastVault(vaultId, parsedVault.name, vultContent, fastSigningService, context, parsedVault)
+    return new FastVault(
+      vaultId,
+      parsedVault.name,
+      vultContent,
+      fastSigningService,
+      context,
+      parsedVault,
+    );
   }
 
   /**
@@ -417,43 +459,52 @@ export class FastVault extends VaultBase {
    * @param fastSigningService - Fast signing service instance
    * @param context - Vault context with dependencies
    */
-  static fromStorage(vaultData: VaultData, fastSigningService: FastSigningService, context: VaultContext): FastVault {
+  static fromStorage(
+    vaultData: VaultData,
+    fastSigningService: FastSigningService,
+    context: VaultContext,
+  ): FastVault {
     // Validate vault type
-    if (vaultData.type !== 'fast') {
-      throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create FastVault from ${vaultData.type} vault data`)
+    if (vaultData.type !== "fast") {
+      throw new VaultError(
+        VaultErrorCode.InvalidVault,
+        `Cannot create FastVault from ${vaultData.type} vault data`,
+      );
     }
 
     // Use the constructor with stored vult file content
     const vault = new FastVault(
       vaultData.id,
       vaultData.name,
-      vaultData.vultFileContent || '',
+      vaultData.vultFileContent || "",
       fastSigningService,
-      context
-    )
+      context,
+    );
 
     // Override constructor defaults with stored preferences from VaultData
     if (vaultData.chains && vaultData.chains.length > 0) {
-      ;(vault as any)._userChains = vaultData.chains.map((c: string) => c as any)
+      (vault as any)._userChains = vaultData.chains.map(
+        (c: string) => c as any,
+      );
     }
     if (vaultData.currency) {
-      ;(vault as any)._currency = vaultData.currency
+      (vault as any)._currency = vaultData.currency;
     }
     if (vaultData.tokens && Object.keys(vaultData.tokens).length > 0) {
-      ;(vault as any)._tokens = vaultData.tokens
+      (vault as any)._tokens = vaultData.tokens;
     }
 
     // Override vaultData to ensure all stored fields are preserved
-    ;(vault as any).vaultData = vaultData
+    (vault as any).vaultData = vaultData;
 
     // CRITICAL: Update coreVault with stored identity fields
-    vault.coreVault.publicKeys = vaultData.publicKeys
-    vault.coreVault.hexChainCode = vaultData.hexChainCode
-    vault.coreVault.signers = [...vaultData.signers]
-    vault.coreVault.localPartyId = vaultData.localPartyId
-    vault.coreVault.libType = vaultData.libType
-    vault.coreVault.createdAt = vaultData.createdAt
+    vault.coreVault.publicKeys = vaultData.publicKeys;
+    vault.coreVault.hexChainCode = vaultData.hexChainCode;
+    vault.coreVault.signers = [...vaultData.signers];
+    vault.coreVault.localPartyId = vaultData.localPartyId;
+    vault.coreVault.libType = vaultData.libType;
+    vault.coreVault.createdAt = vaultData.createdAt;
 
-    return vault
+    return vault;
   }
 }

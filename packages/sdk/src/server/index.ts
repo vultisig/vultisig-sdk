@@ -11,22 +11,25 @@
  */
 
 // Re-export core fast vault API functions directly
-export { getVaultFromServer } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
-export { reshareWithServer } from '@vultisig/core-mpc/fast/api/reshareWithServer'
-export { setupVaultWithServer } from '@vultisig/core-mpc/fast/api/setupVaultWithServer'
-export { signWithServer } from '@vultisig/core-mpc/fast/api/signWithServer'
-export { verifyVaultEmailCode } from '@vultisig/core-mpc/fast/api/verifyVaultEmailCode'
+export { getVaultFromServer } from "@vultisig/core-mpc/fast/api/getVaultFromServer";
+export { reshareWithServer } from "@vultisig/core-mpc/fast/api/reshareWithServer";
+export { setupVaultWithServer } from "@vultisig/core-mpc/fast/api/setupVaultWithServer";
+export { signWithServer } from "@vultisig/core-mpc/fast/api/signWithServer";
+export { verifyVaultEmailCode } from "@vultisig/core-mpc/fast/api/verifyVaultEmailCode";
 
 // Re-export core relay functions directly
-export { deleteMpcRelayMessage } from '@vultisig/core-mpc/message/relay/delete'
-export { getMpcRelayMessages } from '@vultisig/core-mpc/message/relay/get'
-export { sendMpcRelayMessage } from '@vultisig/core-mpc/message/relay/send'
-export { waitForSetupMessage } from '@vultisig/core-mpc/message/setup/get'
-export { uploadMpcSetupMessage } from '@vultisig/core-mpc/message/setup/upload'
-export { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
+export { deleteMpcRelayMessage } from "@vultisig/core-mpc/message/relay/delete";
+export { getMpcRelayMessages } from "@vultisig/core-mpc/message/relay/get";
+export { sendMpcRelayMessage } from "@vultisig/core-mpc/message/relay/send";
+export { waitForSetupMessage } from "@vultisig/core-mpc/message/setup/get";
+export { uploadMpcSetupMessage } from "@vultisig/core-mpc/message/setup/upload";
+export { joinMpcSession } from "@vultisig/core-mpc/session/joinMpcSession";
 
 // Re-export message server functions
-export { fromMpcServerMessage, toMpcServerMessage } from '@vultisig/core-mpc/message/server'
+export {
+  fromMpcServerMessage,
+  toMpcServerMessage,
+} from "@vultisig/core-mpc/message/server";
 
 // Re-export types
-export type { MpcRelayMessage } from '@vultisig/core-mpc/message/relay'
+export type { MpcRelayMessage } from "@vultisig/core-mpc/message/relay";

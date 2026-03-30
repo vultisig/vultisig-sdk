@@ -8,27 +8,30 @@
  *
  * The mode is auto-detected from the QR payload's libType field.
  */
-import type { Chain } from '@vultisig/core-chain/Chain'
-import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
-import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
-import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
-import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
-import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
-import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
-import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
-import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
-import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { attempt } from '@vultisig/lib-utils/attempt'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import type { Chain } from "@vultisig/core-chain/Chain";
+import { generateLocalPartyId } from "@vultisig/core-mpc/devices/localPartyId";
+import { DKLS } from "@vultisig/core-mpc/dkls/dkls";
+import {
+  setKeygenComplete,
+  waitForKeygenComplete,
+} from "@vultisig/core-mpc/keygenComplete";
+import { MldsaKeygen } from "@vultisig/core-mpc/mldsa/mldsaKeygen";
+import { Schnorr } from "@vultisig/core-mpc/schnorr/schnorrKeygen";
+import { joinMpcSession } from "@vultisig/core-mpc/session/joinMpcSession";
+import { startMpcSession } from "@vultisig/core-mpc/session/startMpcSession";
+import { Vault as CoreVault } from "@vultisig/core-mpc/vault/Vault";
+import { withoutDuplicates } from "@vultisig/lib-utils/array/withoutDuplicates";
+import { shouldBePresent } from "@vultisig/lib-utils/assert/shouldBePresent";
+import { attempt } from "@vultisig/lib-utils/attempt";
+import { queryUrl } from "@vultisig/lib-utils/query/queryUrl";
 
-import type { SdkContext } from '../context/SdkContext'
-import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
-import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
-import type { JoinSecureVaultOptions } from '../seedphrase/types'
-import type { VaultCreationStep } from '../types'
-import type { ParsedKeygenQR } from '../utils/parseKeygenQR'
-import { VaultError, VaultErrorCode } from '../vault/VaultError'
+import type { SdkContext } from "../context/SdkContext";
+import { MasterKeyDeriver } from "../seedphrase/MasterKeyDeriver";
+import { SeedphraseValidator } from "../seedphrase/SeedphraseValidator";
+import type { JoinSecureVaultOptions } from "../seedphrase/types";
+import type { VaultCreationStep } from "../types";
+import type { ParsedKeygenQR } from "../utils/parseKeygenQR";
+import { VaultError, VaultErrorCode } from "../vault/VaultError";
 
 /**
  * JoinSecureVaultService
@@ -37,16 +40,16 @@ import { VaultError, VaultErrorCode } from '../vault/VaultError'
  * Supports both fresh keygen and from-seedphrase modes.
  */
 export class JoinSecureVaultService {
-  private readonly validator: SeedphraseValidator
-  private readonly keyDeriver: MasterKeyDeriver
+  private readonly validator: SeedphraseValidator;
+  private readonly keyDeriver: MasterKeyDeriver;
 
   private get relayUrl(): string {
-    return this.context.serverManager.messageRelay
+    return this.context.serverManager.messageRelay;
   }
 
   constructor(private readonly context: SdkContext) {
-    this.validator = new SeedphraseValidator(context.wasmProvider)
-    this.keyDeriver = new MasterKeyDeriver(context.wasmProvider)
+    this.validator = new SeedphraseValidator(context.wasmProvider);
+    this.keyDeriver = new MasterKeyDeriver(context.wasmProvider);
   }
 
   /**
@@ -57,50 +60,54 @@ export class JoinSecureVaultService {
     localPartyId: string,
     requiredDevices: number,
     signal?: AbortSignal,
-    onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+    onDeviceJoined?: (
+      deviceId: string,
+      totalJoined: number,
+      required: number,
+    ) => void,
   ): Promise<string[]> {
-    const maxWaitTime = 300000 // 5 minutes
-    const checkInterval = 2000
-    const startTime = Date.now()
-    let lastJoinedCount = 0
+    const maxWaitTime = 300000; // 5 minutes
+    const checkInterval = 2000;
+    const startTime = Date.now();
+    let lastJoinedCount = 0;
 
     while (Date.now() - startTime < maxWaitTime) {
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
 
-      const url = `${this.relayUrl}/${sessionId}`
-      const { data: allPeers, error } = await attempt(queryUrl<string[]>(url))
+      const url = `${this.relayUrl}/${sessionId}`;
+      const { data: allPeers, error } = await attempt(queryUrl<string[]>(url));
 
       if (error || !allPeers) {
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
-        continue
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
+        continue;
       }
 
-      const uniquePeers = withoutDuplicates(allPeers)
+      const uniquePeers = withoutDuplicates(allPeers);
 
       // Notify about new devices
       if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
-        const newDevices = uniquePeers.slice(lastJoinedCount)
+        const newDevices = uniquePeers.slice(lastJoinedCount);
         for (const device of newDevices) {
-          onDeviceJoined(device, uniquePeers.length, requiredDevices)
+          onDeviceJoined(device, uniquePeers.length, requiredDevices);
         }
-        lastJoinedCount = uniquePeers.length
+        lastJoinedCount = uniquePeers.length;
       }
 
       // Check if we have enough devices
       if (uniquePeers.length >= requiredDevices) {
         // Must match initiator (SecureVaultCreationService / SecureVaultFromSeedphraseService)
-        return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
       }
 
-      await new Promise(resolve => setTimeout(resolve, checkInterval))
+      await new Promise((resolve) => setTimeout(resolve, checkInterval));
     }
 
     throw new VaultError(
       VaultErrorCode.NetworkError,
-      `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`
-    )
+      `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`,
+    );
   }
 
   /**
@@ -113,24 +120,24 @@ export class JoinSecureVaultService {
    */
   async join(
     qrParams: ParsedKeygenQR,
-    options: JoinSecureVaultOptions
+    options: JoinSecureVaultOptions,
   ): Promise<{
-    vault: CoreVault
-    vaultId: string
+    vault: CoreVault;
+    vaultId: string;
   }> {
     // Route based on libType
-    if (qrParams.libType === 'KEYIMPORT') {
+    if (qrParams.libType === "KEYIMPORT") {
       // From-seedphrase mode - mnemonic required
       if (!options.mnemonic) {
         throw new VaultError(
           VaultErrorCode.InvalidConfig,
-          'Mnemonic is required for joining a seedphrase-based vault creation session'
-        )
+          "Mnemonic is required for joining a seedphrase-based vault creation session",
+        );
       }
-      return this.joinFromSeedphrase(qrParams, options)
+      return this.joinFromSeedphrase(qrParams, options);
     } else {
       // Fresh keygen mode - no mnemonic needed
-      return this.joinKeygen(qrParams, options)
+      return this.joinKeygen(qrParams, options);
     }
   }
 
@@ -139,49 +146,49 @@ export class JoinSecureVaultService {
    */
   private async joinKeygen(
     qrParams: ParsedKeygenQR,
-    options: JoinSecureVaultOptions
+    options: JoinSecureVaultOptions,
   ): Promise<{ vault: CoreVault; vaultId: string }> {
-    const { signal, onProgress, onDeviceJoined } = options
+    const { signal, onProgress, onDeviceJoined } = options;
     const requiredDevices = shouldBePresent(
       options.devices,
-      'devices count is required when joining a SecureVault session'
-    )
+      "devices count is required when joining a SecureVault session",
+    );
 
     const reportProgress = (step: VaultCreationStep) => {
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
-      onProgress?.(step)
-    }
+      onProgress?.(step);
+    };
 
     // Step 1: Generate local party ID
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 10,
-      message: 'Generating party ID...',
-    })
+      message: "Generating party ID...",
+    });
 
-    const localPartyId = generateLocalPartyId('sdk')
+    const localPartyId = generateLocalPartyId("sdk");
 
     // Step 2: Join relay session
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 15,
-      message: 'Joining session...',
-    })
+      message: "Joining session...",
+    });
 
     await joinMpcSession({
       serverUrl: this.relayUrl,
       sessionId: qrParams.sessionId,
       localPartyId,
-    })
+    });
 
     // Step 3: Wait for all devices
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 20,
       message: `Waiting for ${requiredDevices} devices to join...`,
-    })
+    });
 
     const allDevices = await this.waitForPeers(
       qrParams.sessionId,
@@ -189,14 +196,14 @@ export class JoinSecureVaultService {
       requiredDevices,
       signal,
       (deviceId, total, required) => {
-        onDeviceJoined?.(deviceId, total, required)
+        onDeviceJoined?.(deviceId, total, required);
         reportProgress({
-          step: 'keygen',
+          step: "keygen",
           progress: 20 + Math.floor((total / required) * 20),
           message: `${total}/${required} devices joined...`,
-        })
-      }
-    )
+        });
+      },
+    );
 
     // Fresh keygen only: joiners call /start too so no one runs DKLS before the relay opens the session.
     // (Key-import joiners must NOT call /start — only the initiator does — or import hangs.)
@@ -205,18 +212,18 @@ export class JoinSecureVaultService {
         serverUrl: this.relayUrl,
         sessionId: qrParams.sessionId,
         devices: allDevices,
-      })
-    )
+      }),
+    );
     if (startErr) {
-      console.warn('startMpcSession (join keygen):', startErr)
+      console.warn("startMpcSession (join keygen):", startErr);
     }
 
     // Step 4: ECDSA keygen via DKLS (non-initiator)
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 45,
-      message: 'Generating ECDSA key...',
-    })
+      message: "Generating ECDSA key...",
+    });
 
     const dkls = new DKLS(
       { create: true }, // Keygen mode
@@ -226,24 +233,24 @@ export class JoinSecureVaultService {
       localPartyId,
       allDevices,
       [], // oldKeygenCommittee
-      qrParams.hexEncryptionKey
-    )
+      qrParams.hexEncryptionKey,
+    );
 
-    const ecdsaResult = await dkls.startKeygenWithRetry()
+    const ecdsaResult = await dkls.startKeygenWithRetry();
 
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // Step 5: EdDSA keygen via Schnorr (non-initiator)
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 70,
-      message: 'Generating EdDSA key...',
-    })
+      message: "Generating EdDSA key...",
+    });
 
     // Get setupMessage from DKLS (required for Schnorr keygen)
-    const setupMessage = dkls.getSetupMessage()
+    const setupMessage = dkls.getSetupMessage();
 
     const schnorr = new Schnorr(
       { create: true }, // Keygen mode
@@ -254,22 +261,22 @@ export class JoinSecureVaultService {
       allDevices,
       [], // oldKeygenCommittee
       qrParams.hexEncryptionKey,
-      setupMessage
-    )
+      setupMessage,
+    );
 
-    const eddsaResult = await schnorr.startKeygenWithRetry()
+    const eddsaResult = await schnorr.startKeygenWithRetry();
 
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 80,
-      message: 'Generating ML-DSA keys...',
-    })
+      message: "Generating ML-DSA keys...",
+    });
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined;
     try {
       const mldsaKeygen = new MldsaKeygen(
         false,
@@ -278,42 +285,47 @@ export class JoinSecureVaultService {
         localPartyId,
         allDevices,
         qrParams.hexEncryptionKey,
-        { timeoutMs: 30000 }
-      )
+        { timeoutMs: 30000 },
+      );
 
-      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry();
     } catch (error) {
-      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+      console.warn(
+        "ML-DSA keygen failed (non-fatal):",
+        error instanceof Error ? error.message : error,
+      );
     }
 
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // Step 6: Signal completion
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 90,
-      message: 'Finalizing keygen...',
-    })
+      message: "Finalizing keygen...",
+    });
 
     await setKeygenComplete({
       serverURL: this.relayUrl,
       sessionId: qrParams.sessionId,
       localPartyId,
-    })
+    });
 
     // Wait for peer completion with tolerance
-    const peers = allDevices.filter(d => d !== localPartyId)
+    const peers = allDevices.filter((d) => d !== localPartyId);
     const { error: peerCompleteError } = await attempt(
       waitForKeygenComplete({
         serverURL: this.relayUrl,
         sessionId: qrParams.sessionId,
         peers,
-      })
-    )
+      }),
+    );
     if (peerCompleteError) {
-      console.warn('Not all peer completion signals received, proceeding with valid MPC keys')
+      console.warn(
+        "Not all peer completion signals received, proceeding with valid MPC keys",
+      );
     }
 
     // Step 7: Build vault structure
@@ -332,22 +344,22 @@ export class JoinSecureVaultService {
       },
       publicKeyMldsa: mldsaResult?.publicKey,
       keyShareMldsa: mldsaResult?.keyshare,
-      libType: 'DKLS',
+      libType: "DKLS",
       isBackedUp: false,
       order: 0,
       createdAt: Date.now(),
-    }
+    };
 
     reportProgress({
-      step: 'complete',
+      step: "complete",
       progress: 100,
-      message: 'Keygen complete!',
-    })
+      message: "Keygen complete!",
+    });
 
     return {
       vault,
       vaultId: vault.publicKeys.ecdsa,
-    }
+    };
   }
 
   /**
@@ -355,70 +367,73 @@ export class JoinSecureVaultService {
    */
   private async joinFromSeedphrase(
     qrParams: ParsedKeygenQR,
-    options: JoinSecureVaultOptions
+    options: JoinSecureVaultOptions,
   ): Promise<{ vault: CoreVault; vaultId: string }> {
-    const { mnemonic, signal, onProgress, onDeviceJoined } = options
+    const { mnemonic, signal, onProgress, onDeviceJoined } = options;
     const requiredDevices = shouldBePresent(
       options.devices,
-      'devices count is required when joining a SecureVault session'
-    )
+      "devices count is required when joining a SecureVault session",
+    );
 
     const reportProgress = (step: VaultCreationStep) => {
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
-      onProgress?.(step)
-    }
+      onProgress?.(step);
+    };
 
     // Step 1: Validate mnemonic
     reportProgress({
-      step: 'initializing',
+      step: "initializing",
       progress: 5,
-      message: 'Validating seedphrase...',
-    })
+      message: "Validating seedphrase...",
+    });
 
-    const validation = await this.validator.validate(mnemonic!)
+    const validation = await this.validator.validate(mnemonic!);
     if (!validation.valid) {
-      throw new VaultError(VaultErrorCode.InvalidConfig, `Invalid mnemonic: ${validation.error}`)
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Invalid mnemonic: ${validation.error}`,
+      );
     }
 
     // Step 2: Derive master keys
     reportProgress({
-      step: 'initializing',
+      step: "initializing",
       progress: 10,
-      message: 'Deriving master keys...',
-    })
+      message: "Deriving master keys...",
+    });
 
-    const masterKeys = await this.keyDeriver.deriveMasterKeys(mnemonic!)
+    const masterKeys = await this.keyDeriver.deriveMasterKeys(mnemonic!);
 
     // Step 3: Generate local party ID
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 15,
-      message: 'Generating party ID...',
-    })
+      message: "Generating party ID...",
+    });
 
-    const localPartyId = generateLocalPartyId('sdk')
+    const localPartyId = generateLocalPartyId("sdk");
 
     // Step 4: Join relay session
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 20,
-      message: 'Joining session...',
-    })
+      message: "Joining session...",
+    });
 
     await joinMpcSession({
       serverUrl: this.relayUrl,
       sessionId: qrParams.sessionId,
       localPartyId,
-    })
+    });
 
     // Step 5: Wait for all devices
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 25,
       message: `Waiting for ${requiredDevices} devices to join...`,
-    })
+    });
 
     const allDevices = await this.waitForPeers(
       qrParams.sessionId,
@@ -426,23 +441,23 @@ export class JoinSecureVaultService {
       requiredDevices,
       signal,
       (deviceId, total, required) => {
-        onDeviceJoined?.(deviceId, total, required)
+        onDeviceJoined?.(deviceId, total, required);
         reportProgress({
-          step: 'keygen',
+          step: "keygen",
           progress: 25 + Math.floor((total / required) * 15),
           message: `${total}/${required} devices joined...`,
-        })
-      }
-    )
+        });
+      },
+    );
 
     // Key import: only the initiator calls startMpcSession (same as mobile); joiners go straight to DKLS.
 
     // Step 6: ECDSA key import via DKLS (non-initiator)
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 45,
-      message: 'Importing ECDSA key...',
-    })
+      message: "Importing ECDSA key...",
+    });
 
     const dkls = new DKLS(
       { keyimport: true },
@@ -452,21 +467,24 @@ export class JoinSecureVaultService {
       localPartyId,
       allDevices,
       [], // oldKeygenCommittee
-      qrParams.hexEncryptionKey
-    )
+      qrParams.hexEncryptionKey,
+    );
 
-    const ecdsaResult = await dkls.startKeyImportWithRetry(masterKeys.ecdsaPrivateKeyHex, qrParams.hexChainCode)
+    const ecdsaResult = await dkls.startKeyImportWithRetry(
+      masterKeys.ecdsaPrivateKeyHex,
+      qrParams.hexChainCode,
+    );
 
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // Step 7: EdDSA key import via Schnorr (non-initiator)
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 65,
-      message: 'Importing EdDSA key...',
-    })
+      message: "Importing EdDSA key...",
+    });
 
     const schnorr = new Schnorr(
       { keyimport: true },
@@ -477,22 +495,25 @@ export class JoinSecureVaultService {
       allDevices,
       [], // oldKeygenCommittee
       qrParams.hexEncryptionKey,
-      new Uint8Array() // setupMessage - will be fetched from initiator
-    )
+      new Uint8Array(), // setupMessage - will be fetched from initiator
+    );
 
-    const eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, ecdsaResult.chaincode)
+    const eddsaResult = await schnorr.startKeyImportWithRetry(
+      masterKeys.eddsaPrivateKeyHex,
+      ecdsaResult.chaincode,
+    );
 
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 70,
-      message: 'Generating ML-DSA keys...',
-    })
+      message: "Generating ML-DSA keys...",
+    });
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined;
     try {
       const mldsaKeygen = new MldsaKeygen(
         false,
@@ -501,44 +522,50 @@ export class JoinSecureVaultService {
         localPartyId,
         allDevices,
         qrParams.hexEncryptionKey,
-        { timeoutMs: 30000 }
-      )
+        { timeoutMs: 30000 },
+      );
 
-      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry();
     } catch (error) {
-      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+      console.warn(
+        "ML-DSA keygen failed (non-fatal):",
+        error instanceof Error ? error.message : error,
+      );
     }
 
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // Step 8: Per-chain key imports (if chains specified in QR)
-    const chainPublicKeys: Partial<Record<Chain, string>> = {}
-    const chainKeyShares: Partial<Record<Chain, string>> = {}
+    const chainPublicKeys: Partial<Record<Chain, string>> = {};
+    const chainKeyShares: Partial<Record<Chain, string>> = {};
 
     if (qrParams.chains && qrParams.chains.length > 0) {
       reportProgress({
-        step: 'keygen',
+        step: "keygen",
         progress: 75,
-        message: 'Importing chain-specific keys...',
-      })
+        message: "Importing chain-specific keys...",
+      });
 
-      const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic!, qrParams.chains as Chain[])
+      const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(
+        mnemonic!,
+        qrParams.chains as Chain[],
+      );
 
       for (let i = 0; i < chainPrivateKeys.length; i++) {
         if (signal?.aborted) {
-          throw new Error('Operation aborted')
+          throw new Error("Operation aborted");
         }
 
-        const { chain, privateKeyHex, isEddsa } = chainPrivateKeys[i]
+        const { chain, privateKeyHex, isEddsa } = chainPrivateKeys[i];
 
         reportProgress({
-          step: 'keygen',
+          step: "keygen",
           progress: 75 + Math.floor((i / chainPrivateKeys.length) * 15),
           message: `Importing ${chain} key (${i + 1}/${chainPrivateKeys.length})...`,
           chainId: chain,
-        })
+        });
 
         if (isEddsa) {
           const chainSchnorr = new Schnorr(
@@ -550,11 +577,15 @@ export class JoinSecureVaultService {
             allDevices,
             [],
             qrParams.hexEncryptionKey,
-            new Uint8Array()
-          )
-          const chainResult = await chainSchnorr.startKeyImportWithRetry(privateKeyHex, eddsaResult.chaincode, chain)
-          chainPublicKeys[chain] = chainResult.publicKey
-          chainKeyShares[chain] = chainResult.keyshare
+            new Uint8Array(),
+          );
+          const chainResult = await chainSchnorr.startKeyImportWithRetry(
+            privateKeyHex,
+            eddsaResult.chaincode,
+            chain,
+          );
+          chainPublicKeys[chain] = chainResult.publicKey;
+          chainKeyShares[chain] = chainResult.keyshare;
         } else {
           const chainDkls = new DKLS(
             { keyimport: true },
@@ -564,38 +595,44 @@ export class JoinSecureVaultService {
             localPartyId,
             allDevices,
             [],
-            qrParams.hexEncryptionKey
-          )
-          const chainResult = await chainDkls.startKeyImportWithRetry(privateKeyHex, ecdsaResult.chaincode, chain)
-          chainPublicKeys[chain] = chainResult.publicKey
-          chainKeyShares[chain] = chainResult.keyshare
+            qrParams.hexEncryptionKey,
+          );
+          const chainResult = await chainDkls.startKeyImportWithRetry(
+            privateKeyHex,
+            ecdsaResult.chaincode,
+            chain,
+          );
+          chainPublicKeys[chain] = chainResult.publicKey;
+          chainKeyShares[chain] = chainResult.keyshare;
         }
       }
     }
 
     // Step 9: Signal completion
     reportProgress({
-      step: 'keygen',
+      step: "keygen",
       progress: 95,
-      message: 'Finalizing key import...',
-    })
+      message: "Finalizing key import...",
+    });
 
     await setKeygenComplete({
       serverURL: this.relayUrl,
       sessionId: qrParams.sessionId,
       localPartyId,
-    })
+    });
 
-    const peers = allDevices.filter(d => d !== localPartyId)
+    const peers = allDevices.filter((d) => d !== localPartyId);
     const { error: peerCompleteError } = await attempt(
       waitForKeygenComplete({
         serverURL: this.relayUrl,
         sessionId: qrParams.sessionId,
         peers,
-      })
-    )
+      }),
+    );
     if (peerCompleteError) {
-      console.warn('Not all peer completion signals received, proceeding with valid MPC keys')
+      console.warn(
+        "Not all peer completion signals received, proceeding with valid MPC keys",
+      );
     }
 
     // Step 10: Build vault structure
@@ -614,23 +651,23 @@ export class JoinSecureVaultService {
       },
       publicKeyMldsa: mldsaResult?.publicKey,
       keyShareMldsa: mldsaResult?.keyshare,
-      libType: 'DKLS',
+      libType: "DKLS",
       isBackedUp: false,
       order: 0,
       createdAt: Date.now(),
       chainPublicKeys,
       chainKeyShares,
-    }
+    };
 
     reportProgress({
-      step: 'complete',
+      step: "complete",
       progress: 100,
-      message: 'Key import complete!',
-    })
+      message: "Key import complete!",
+    });
 
     return {
       vault,
       vaultId: vault.publicKeys.ecdsa,
-    }
+    };
   }
 }

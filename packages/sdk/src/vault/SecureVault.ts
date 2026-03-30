@@ -1,15 +1,18 @@
-import { fromBinary } from '@bufbuild/protobuf'
-import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
-import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
-import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
-import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
-import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
-import { decryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm'
-import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
+import { fromBinary } from "@bufbuild/protobuf";
+import { getKeygenThreshold } from "@vultisig/core-mpc/getKeygenThreshold";
+import { fromCommVault } from "@vultisig/core-mpc/types/utils/commVault";
+import { VaultSchema } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb";
+import { vaultContainerFromString } from "@vultisig/core-mpc/vault/utils/vaultContainerFromString";
+import { Vault as CoreVault } from "@vultisig/core-mpc/vault/Vault";
+import { decryptWithAesGcm } from "@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm";
+import { fromBase64 } from "@vultisig/lib-utils/fromBase64";
 
-import type { SdkContext, VaultContext } from '../context/SdkContext'
-import { RelaySigningService } from '../services/RelaySigningService'
-import { SecureVaultCreationService, type SecureVaultCreationStep } from '../services/SecureVaultCreationService'
+import type { SdkContext, VaultContext } from "../context/SdkContext";
+import { RelaySigningService } from "../services/RelaySigningService";
+import {
+  SecureVaultCreationService,
+  type SecureVaultCreationStep,
+} from "../services/SecureVaultCreationService";
 import type {
   Signature,
   SignBytesOptions,
@@ -18,11 +21,11 @@ import type {
   SigningStep,
   VaultCreationStep,
   VaultData,
-} from '../types'
-import { normalizeToHex } from '../utils/bytes'
-import { createVaultBackup } from '../utils/export'
-import { VaultBase } from './VaultBase'
-import { VaultError, VaultErrorCode } from './VaultError'
+} from "../types";
+import { normalizeToHex } from "../utils/bytes";
+import { createVaultBackup } from "../utils/export";
+import { VaultBase } from "./VaultBase";
+import { VaultError, VaultErrorCode } from "./VaultError";
 
 /**
  * SecureVault - Multi-device MPC vault
@@ -40,7 +43,7 @@ import { VaultError, VaultErrorCode } from './VaultError'
  *       without relay server (requires LocalSigningService)
  */
 export class SecureVault extends VaultBase {
-  private readonly context: VaultContext
+  private readonly context: VaultContext;
 
   /**
    * Private constructor - use SecureVault.create() or SecureVault.fromStorage() instead.
@@ -51,10 +54,10 @@ export class SecureVault extends VaultBase {
     name: string,
     vultFileContent: string,
     context: VaultContext,
-    parsedVaultData?: CoreVault
+    parsedVaultData?: CoreVault,
   ) {
-    super(vaultId, name, vultFileContent, context, parsedVaultData)
-    this.context = context
+    super(vaultId, name, vultFileContent, context, parsedVaultData);
+    this.context = context;
   }
 
   /**
@@ -62,7 +65,7 @@ export class SecureVault extends VaultBase {
    * Local signing mode is planned for future implementation.
    */
   get availableSigningModes(): SigningMode[] {
-    return ['relay']
+    return ["relay"];
   }
 
   /**
@@ -70,7 +73,7 @@ export class SecureVault extends VaultBase {
    * Example: 2 signers → threshold of 2, 3 signers → threshold of 2
    */
   get threshold(): number {
-    return getKeygenThreshold(this.coreVault.signers.length)
+    return getKeygenThreshold(this.coreVault.signers.length);
   }
 
   /**
@@ -95,48 +98,57 @@ export class SecureVault extends VaultBase {
   async sign(
     payload: SigningPayload,
     options: {
-      signal?: AbortSignal
-      onQRCodeReady?: (qrPayload: string) => void
-      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
-    } = {}
+      signal?: AbortSignal;
+      onQRCodeReady?: (qrPayload: string) => void;
+      onDeviceJoined?: (
+        deviceId: string,
+        totalJoined: number,
+        required: number,
+      ) => void;
+    } = {},
   ): Promise<Signature> {
     // Ensure keyShares are loaded (will decrypt if encrypted)
-    await this.ensureKeySharesLoaded()
+    await this.ensureKeySharesLoaded();
 
     // Get WalletCore for chain utilities
-    const walletCore = await this.wasmProvider.getWalletCore()
+    const walletCore = await this.wasmProvider.getWalletCore();
 
     // Create relay signing service
-    const relaySigningService = new RelaySigningService()
+    const relaySigningService = new RelaySigningService();
 
     // Sign using relay service with event emission
-    const signature = await relaySigningService.signWithRelay(this.coreVault, payload, walletCore, {
-      signal: options.signal,
-      onProgress: (step: SigningStep) => {
-        this.emit('signingProgress', { step })
+    const signature = await relaySigningService.signWithRelay(
+      this.coreVault,
+      payload,
+      walletCore,
+      {
+        signal: options.signal,
+        onProgress: (step: SigningStep) => {
+          this.emit("signingProgress", { step });
+        },
+        onQRCodeReady: (qrPayload) => {
+          this.emit("qrCodeReady", {
+            qrPayload,
+            action: "keysign",
+            sessionId: "",
+          });
+          if (options.onQRCodeReady) {
+            options.onQRCodeReady(qrPayload);
+          }
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          this.emit("deviceJoined", { deviceId, totalJoined, required });
+          if (options.onDeviceJoined) {
+            options.onDeviceJoined(deviceId, totalJoined, required);
+          }
+        },
       },
-      onQRCodeReady: qrPayload => {
-        this.emit('qrCodeReady', {
-          qrPayload,
-          action: 'keysign',
-          sessionId: '',
-        })
-        if (options.onQRCodeReady) {
-          options.onQRCodeReady(qrPayload)
-        }
-      },
-      onDeviceJoined: (deviceId, totalJoined, required) => {
-        this.emit('deviceJoined', { deviceId, totalJoined, required })
-        if (options.onDeviceJoined) {
-          options.onDeviceJoined(deviceId, totalJoined, required)
-        }
-      },
-    })
+    );
 
     // Emit completion event
-    this.emit('transactionSigned', { signature, payload })
+    this.emit("transactionSigned", { signature, payload });
 
-    return signature
+    return signature;
   }
 
   /**
@@ -161,23 +173,27 @@ export class SecureVault extends VaultBase {
   async signBytes(
     options: SignBytesOptions,
     signingOptions: {
-      signal?: AbortSignal
-      onQRCodeReady?: (qrPayload: string) => void
-      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
-    } = {}
+      signal?: AbortSignal;
+      onQRCodeReady?: (qrPayload: string) => void;
+      onDeviceJoined?: (
+        deviceId: string,
+        totalJoined: number,
+        required: number,
+      ) => void;
+    } = {},
   ): Promise<Signature> {
     try {
       // Normalize input to hex string
-      const messageHash = normalizeToHex(options.data)
+      const messageHash = normalizeToHex(options.data);
 
       // Ensure keyShares are loaded (will decrypt if encrypted)
-      await this.ensureKeySharesLoaded()
+      await this.ensureKeySharesLoaded();
 
       // Get WalletCore for chain utilities
-      const walletCore = await this.wasmProvider.getWalletCore()
+      const walletCore = await this.wasmProvider.getWalletCore();
 
       // Create relay signing service
-      const relaySigningService = new RelaySigningService()
+      const relaySigningService = new RelaySigningService();
 
       // Sign using relay service with event emission
       const signature = await relaySigningService.signBytesWithRelay(
@@ -190,46 +206,50 @@ export class SecureVault extends VaultBase {
         {
           signal: signingOptions.signal,
           onProgress: (step: SigningStep) => {
-            this.emit('signingProgress', { step })
+            this.emit("signingProgress", { step });
           },
-          onQRCodeReady: qrPayload => {
-            this.emit('qrCodeReady', {
+          onQRCodeReady: (qrPayload) => {
+            this.emit("qrCodeReady", {
               qrPayload,
-              action: 'keysign',
-              sessionId: '',
-            })
+              action: "keysign",
+              sessionId: "",
+            });
             if (signingOptions.onQRCodeReady) {
-              signingOptions.onQRCodeReady(qrPayload)
+              signingOptions.onQRCodeReady(qrPayload);
             }
           },
           onDeviceJoined: (deviceId, totalJoined, required) => {
-            this.emit('deviceJoined', { deviceId, totalJoined, required })
+            this.emit("deviceJoined", { deviceId, totalJoined, required });
             if (signingOptions.onDeviceJoined) {
-              signingOptions.onDeviceJoined(deviceId, totalJoined, required)
+              signingOptions.onDeviceJoined(deviceId, totalJoined, required);
             }
           },
-        }
-      )
+        },
+      );
 
       // Emit signing complete event
-      this.emit('transactionSigned', {
+      this.emit("transactionSigned", {
         signature,
-        payload: { chain: options.chain, transaction: null, messageHashes: [messageHash] },
-      })
+        payload: {
+          chain: options.chain,
+          transaction: null,
+          messageHashes: [messageHash],
+        },
+      });
 
-      return signature
+      return signature;
     } catch (error) {
-      this.emit('error', error as Error)
+      this.emit("error", error as Error);
 
       if (error instanceof VaultError) {
-        throw error
+        throw error;
       }
 
       throw new VaultError(
         VaultErrorCode.SigningFailed,
         `signBytes failed: ${(error as Error).message}`,
-        error as Error
-      )
+        error as Error,
+      );
     }
   }
 
@@ -248,49 +268,57 @@ export class SecureVault extends VaultBase {
       this.coreVault.keyShares.eddsa &&
       this.coreVault.keyShares.eddsa.length > 0
     ) {
-      return // Already loaded
+      return; // Already loaded
     }
 
     // Check if vault file content is available
-    if (!this.vaultData.vultFileContent || this.vaultData.vultFileContent.trim().length === 0) {
-      throw new VaultError(VaultErrorCode.InvalidVault, 'Vault file content is empty. Cannot load keyShares.')
+    if (
+      !this.vaultData.vultFileContent ||
+      this.vaultData.vultFileContent.trim().length === 0
+    ) {
+      throw new VaultError(
+        VaultErrorCode.InvalidVault,
+        "Vault file content is empty. Cannot load keyShares.",
+      );
     }
 
     // Parse vault file to get keyShares
-    const container = vaultContainerFromString(this.vaultData.vultFileContent.trim())
+    const container = vaultContainerFromString(
+      this.vaultData.vultFileContent.trim(),
+    );
 
-    let vaultBase64: string
+    let vaultBase64: string;
 
     // Check encryption status at call site
     if (this.vaultData.isEncrypted) {
       // Get password and decrypt
-      const password = await this.resolvePassword()
+      const password = await this.resolvePassword();
 
-      const encryptedData = fromBase64(container.vault)
+      const encryptedData = fromBase64(container.vault);
       const decryptedBuffer = await decryptWithAesGcm({
         key: password,
         value: encryptedData,
-      })
+      });
 
-      vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+      vaultBase64 = Buffer.from(decryptedBuffer).toString("base64");
     } else {
       // No decryption needed
-      vaultBase64 = container.vault
+      vaultBase64 = container.vault;
     }
 
     // Parse inner Vault protobuf
-    const vaultBinary = fromBase64(vaultBase64)
-    const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
-    const parsedVault = fromCommVault(vaultProtobuf)
+    const vaultBinary = fromBase64(vaultBase64);
+    const vaultProtobuf = fromBinary(VaultSchema, vaultBinary);
+    const parsedVault = fromCommVault(vaultProtobuf);
 
     // Update CoreVault with keyShares
-    this.coreVault.keyShares = parsedVault.keyShares
+    this.coreVault.keyShares = parsedVault.keyShares;
     if (parsedVault.keyShareMldsa) {
-      this.coreVault.keyShareMldsa = parsedVault.keyShareMldsa
+      this.coreVault.keyShareMldsa = parsedVault.keyShareMldsa;
     }
 
     // Emit unlocked event (even for unencrypted vaults, keyShares are now loaded)
-    this.emit('unlocked', { vaultId: this.id })
+    this.emit("unlocked", { vaultId: this.id });
   }
 
   /**
@@ -324,49 +352,59 @@ export class SecureVault extends VaultBase {
     context: SdkContext,
     options: {
       /** Vault name */
-      name: string
+      name: string;
       /** Optional password for vault encryption (secure vaults can be unencrypted) */
-      password?: string
+      password?: string;
       /** Total number of devices participating (including this one) */
-      devices: number
+      devices: number;
       /** Signing threshold - defaults to 2/3 majority (ceil(devices*2/3)) */
-      threshold?: number
+      threshold?: number;
       /** AbortSignal for cancellation */
-      signal?: AbortSignal
+      signal?: AbortSignal;
       /** Progress callback */
-      onProgress?: (step: VaultCreationStep) => void
+      onProgress?: (step: VaultCreationStep) => void;
       /** Callback when QR code is ready for display */
-      onQRCodeReady?: (qrPayload: string) => void
+      onQRCodeReady?: (qrPayload: string) => void;
       /** Callback when a device joins the session */
-      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
-    }
+      onDeviceJoined?: (
+        deviceId: string,
+        totalJoined: number,
+        required: number,
+      ) => void;
+    },
   ): Promise<{
-    vault: SecureVault
-    vaultId: string
-    sessionId: string
+    vault: SecureVault;
+    vaultId: string;
+    sessionId: string;
   }> {
     const reportProgress = (step: VaultCreationStep) => {
       if (options.signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
-      options.onProgress?.(step)
-    }
+      options.onProgress?.(step);
+    };
 
     try {
       // Step 1: Create SecureVaultCreationService (relay URL from SDK context)
-      const creationService = new SecureVaultCreationService(context.serverManager.messageRelay)
+      const creationService = new SecureVaultCreationService(
+        context.serverManager.messageRelay,
+      );
 
       // Step 2: Map progress callbacks
-      const mapProgress = (step: SecureVaultCreationStep): VaultCreationStep => ({
+      const mapProgress = (
+        step: SecureVaultCreationStep,
+      ): VaultCreationStep => ({
         step:
-          step.step === 'keygen_ecdsa' || step.step === 'keygen_eddsa' || step.step === 'finalizing'
-            ? 'keygen'
-            : step.step === 'complete'
-              ? 'complete'
-              : 'initializing',
+          step.step === "keygen_ecdsa" ||
+          step.step === "keygen_eddsa" ||
+          step.step === "finalizing"
+            ? "keygen"
+            : step.step === "complete"
+              ? "complete"
+              : "initializing",
         progress: step.progress,
         message: step.message,
-      })
+      });
 
       // Step 3: Run multi-device keygen ceremony
       const result = await creationService.createVault({
@@ -375,21 +413,21 @@ export class SecureVault extends VaultBase {
         devices: options.devices,
         threshold: options.threshold,
         signal: options.signal,
-        onProgress: step => reportProgress(mapProgress(step)),
+        onProgress: (step) => reportProgress(mapProgress(step)),
         onQRCodeReady: options.onQRCodeReady,
         onDeviceJoined: options.onDeviceJoined,
-      })
+      });
 
       // Step 4: Generate .vult backup file
       reportProgress({
-        step: 'complete',
+        step: "complete",
         progress: 92,
-        message: 'Creating backup file',
-      })
+        message: "Creating backup file",
+      });
 
       const vultContent = options.password
         ? await createVaultBackup(result.vault, options.password)
-        : await createVaultBackup(result.vault)
+        : await createVaultBackup(result.vault);
 
       // Step 5: Build VaultContext from SdkContext
       const vaultContext: VaultContext = {
@@ -399,46 +437,50 @@ export class SecureVault extends VaultBase {
         passwordCache: context.passwordCache,
         wasmProvider: context.wasmProvider,
         pushNotificationService: context.pushNotificationService,
-      }
+      };
 
       // Step 6: Instantiate vault
       reportProgress({
-        step: 'complete',
+        step: "complete",
         progress: 96,
-        message: 'Creating vault instance',
-      })
+        message: "Creating vault instance",
+      });
 
       const vaultInstance = new SecureVault(
         result.vaultId,
         result.vault.name,
         vultContent,
         vaultContext,
-        result.vault // Pre-parsed vault data
-      )
+        result.vault, // Pre-parsed vault data
+      );
 
       // Step 7: Cache password if provided
       if (options.password) {
-        context.passwordCache.set(result.vaultId, options.password)
+        context.passwordCache.set(result.vaultId, options.password);
       }
 
       // Step 8: Complete
       reportProgress({
-        step: 'complete',
+        step: "complete",
         progress: 100,
-        message: 'Secure vault created successfully',
-      })
+        message: "Secure vault created successfully",
+      });
 
       return {
         vault: vaultInstance,
         vaultId: result.vaultId,
         sessionId: result.sessionId,
-      }
+      };
     } catch (error) {
       // Wrap errors with context
       if (error instanceof Error) {
-        throw new VaultError(VaultErrorCode.CreateFailed, `Failed to create secure vault: ${error.message}`, error)
+        throw new VaultError(
+          VaultErrorCode.CreateFailed,
+          `Failed to create secure vault: ${error.message}`,
+          error,
+        );
       }
-      throw error
+      throw error;
     }
   }
 
@@ -451,8 +493,19 @@ export class SecureVault extends VaultBase {
    * @param context - Vault context with dependencies
    * @internal Used by VaultManager.importVault()
    */
-  static fromImport(vaultId: string, vultContent: string, parsedVault: CoreVault, context: VaultContext): SecureVault {
-    return new SecureVault(vaultId, parsedVault.name, vultContent, context, parsedVault)
+  static fromImport(
+    vaultId: string,
+    vultContent: string,
+    parsedVault: CoreVault,
+    context: VaultContext,
+  ): SecureVault {
+    return new SecureVault(
+      vaultId,
+      parsedVault.name,
+      vultContent,
+      context,
+      parsedVault,
+    );
   }
 
   /**
@@ -463,35 +516,45 @@ export class SecureVault extends VaultBase {
    */
   static fromStorage(vaultData: VaultData, context: VaultContext): SecureVault {
     // Validate vault type
-    if (vaultData.type !== 'secure') {
-      throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create SecureVault from ${vaultData.type} vault data`)
+    if (vaultData.type !== "secure") {
+      throw new VaultError(
+        VaultErrorCode.InvalidVault,
+        `Cannot create SecureVault from ${vaultData.type} vault data`,
+      );
     }
 
     // Use the constructor with stored vult file content
-    const vault = new SecureVault(vaultData.id, vaultData.name, vaultData.vultFileContent || '', context)
+    const vault = new SecureVault(
+      vaultData.id,
+      vaultData.name,
+      vaultData.vultFileContent || "",
+      context,
+    );
 
     // Override constructor defaults with stored preferences from VaultData
     if (vaultData.chains && vaultData.chains.length > 0) {
-      ;(vault as any)._userChains = vaultData.chains.map((c: string) => c as any)
+      (vault as any)._userChains = vaultData.chains.map(
+        (c: string) => c as any,
+      );
     }
     if (vaultData.currency) {
-      ;(vault as any)._currency = vaultData.currency
+      (vault as any)._currency = vaultData.currency;
     }
     if (vaultData.tokens && Object.keys(vaultData.tokens).length > 0) {
-      ;(vault as any)._tokens = vaultData.tokens
+      (vault as any)._tokens = vaultData.tokens;
     }
 
     // Override vaultData to ensure all stored fields are preserved
-    ;(vault as any).vaultData = vaultData
+    (vault as any).vaultData = vaultData;
 
     // CRITICAL: Update coreVault with stored identity fields
-    vault.coreVault.publicKeys = vaultData.publicKeys
-    vault.coreVault.hexChainCode = vaultData.hexChainCode
-    vault.coreVault.signers = [...vaultData.signers]
-    vault.coreVault.localPartyId = vaultData.localPartyId
-    vault.coreVault.libType = vaultData.libType
-    vault.coreVault.createdAt = vaultData.createdAt
+    vault.coreVault.publicKeys = vaultData.publicKeys;
+    vault.coreVault.hexChainCode = vaultData.hexChainCode;
+    vault.coreVault.signers = [...vaultData.signers];
+    vault.coreVault.localPartyId = vaultData.localPartyId;
+    vault.coreVault.libType = vaultData.libType;
+    vault.coreVault.createdAt = vaultData.createdAt;
 
-    return vault
+    return vault;
   }
 }

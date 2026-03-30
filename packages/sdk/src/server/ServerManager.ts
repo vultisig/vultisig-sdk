@@ -1,43 +1,52 @@
-import type { WalletCore } from '@trustwallet/wallet-core'
-import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
-import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
-import { getVaultFromServer } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
-import { mldsaWithServer } from '@vultisig/core-mpc/fast/api/mldsaWithServer'
-import { resendVaultShare } from '@vultisig/core-mpc/fast/api/resendVaultShare'
-import { reshareWithServer } from '@vultisig/core-mpc/fast/api/reshareWithServer'
-import { setupVaultWithServer } from '@vultisig/core-mpc/fast/api/setupVaultWithServer'
-import { signWithServer } from '@vultisig/core-mpc/fast/api/signWithServer'
-import { verifyVaultEmailCode } from '@vultisig/core-mpc/fast/api/verifyVaultEmailCode'
-import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
-import { keysign } from '@vultisig/core-mpc/keysign'
-import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
-import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
-import { MldsaKeysign } from '@vultisig/core-mpc/mldsa/mldsaKeysign'
-import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
-import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
-import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
-import { generateHexChainCode } from '@vultisig/core-mpc/utils/generateHexChainCode'
-import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
-import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
-import { without } from '@vultisig/lib-utils/array/without'
-import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { getHexEncodedRandomBytes } from '@vultisig/lib-utils/crypto/getHexEncodedRandomBytes'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import type { WalletCore } from "@trustwallet/wallet-core";
+import { generateLocalPartyId } from "@vultisig/core-mpc/devices/localPartyId";
+import { DKLS } from "@vultisig/core-mpc/dkls/dkls";
+import { getVaultFromServer } from "@vultisig/core-mpc/fast/api/getVaultFromServer";
+import { mldsaWithServer } from "@vultisig/core-mpc/fast/api/mldsaWithServer";
+import { resendVaultShare } from "@vultisig/core-mpc/fast/api/resendVaultShare";
+import { reshareWithServer } from "@vultisig/core-mpc/fast/api/reshareWithServer";
+import { setupVaultWithServer } from "@vultisig/core-mpc/fast/api/setupVaultWithServer";
+import { signWithServer } from "@vultisig/core-mpc/fast/api/signWithServer";
+import { verifyVaultEmailCode } from "@vultisig/core-mpc/fast/api/verifyVaultEmailCode";
+import {
+  setKeygenComplete,
+  waitForKeygenComplete,
+} from "@vultisig/core-mpc/keygenComplete";
+import { keysign } from "@vultisig/core-mpc/keysign";
+import type { KeysignSignature } from "@vultisig/core-mpc/keysign/KeysignSignature";
+import { MldsaKeygen } from "@vultisig/core-mpc/mldsa/mldsaKeygen";
+import { MldsaKeysign } from "@vultisig/core-mpc/mldsa/mldsaKeysign";
+import { Schnorr } from "@vultisig/core-mpc/schnorr/schnorrKeygen";
+import { joinMpcSession } from "@vultisig/core-mpc/session/joinMpcSession";
+import { startMpcSession } from "@vultisig/core-mpc/session/startMpcSession";
+import { generateHexChainCode } from "@vultisig/core-mpc/utils/generateHexChainCode";
+import { generateHexEncryptionKey } from "@vultisig/core-mpc/utils/generateHexEncryptionKey";
+import { Vault as CoreVault } from "@vultisig/core-mpc/vault/Vault";
+import { without } from "@vultisig/lib-utils/array/without";
+import { withoutDuplicates } from "@vultisig/lib-utils/array/withoutDuplicates";
+import { shouldBePresent } from "@vultisig/lib-utils/assert/shouldBePresent";
+import { getHexEncodedRandomBytes } from "@vultisig/lib-utils/crypto/getHexEncodedRandomBytes";
+import { queryUrl } from "@vultisig/lib-utils/query/queryUrl";
 
-import { formatSignature } from '../adapters/formatSignature'
-import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
-import { randomUUID } from '../crypto'
-import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
+import { formatSignature } from "../adapters/formatSignature";
+import { getChainSigningInfo } from "../adapters/getChainSigningInfo";
+import { randomUUID } from "../crypto";
+import {
+  KeygenProgressUpdate,
+  ReshareOptions,
+  ServerStatus,
+  Signature,
+  SigningPayload,
+} from "../types";
 
 /**
  * Server endpoint configuration
  */
 export type ServerEndpoints = {
-  fastVault?: string
-  messageRelay?: string
-  notification?: string
-}
+  fastVault?: string;
+  messageRelay?: string;
+  notification?: string;
+};
 
 /**
  * ServerManager coordinates all server communications
@@ -45,25 +54,26 @@ export type ServerEndpoints = {
  */
 export class ServerManager {
   private config: {
-    fastVault: string
-    messageRelay: string
-  }
+    fastVault: string;
+    messageRelay: string;
+  };
 
   constructor(endpoints?: ServerEndpoints) {
     this.config = {
-      fastVault: endpoints?.fastVault || 'https://api.vultisig.com/vault',
-      messageRelay: endpoints?.messageRelay || 'https://api.vultisig.com/router',
-    }
+      fastVault: endpoints?.fastVault || "https://api.vultisig.com/vault",
+      messageRelay:
+        endpoints?.messageRelay || "https://api.vultisig.com/router",
+    };
   }
 
   /** Message relay base URL (MPC keygen / key import coordination). */
   get messageRelay(): string {
-    return this.config.messageRelay
+    return this.config.messageRelay;
   }
 
   /** FastVault API base URL. */
   get fastVault(): string {
-    return this.config.fastVault
+    return this.config.fastVault;
   }
 
   /**
@@ -71,10 +81,14 @@ export class ServerManager {
    */
   async verifyVault(vaultId: string, code: string): Promise<boolean> {
     try {
-      await verifyVaultEmailCode({ vaultId, code, vaultBaseUrl: this.config.fastVault })
-      return true
+      await verifyVaultEmailCode({
+        vaultId,
+        code,
+        vaultBaseUrl: this.config.fastVault,
+      });
+      return true;
     } catch {
-      return false
+      return false;
     }
   }
 
@@ -82,12 +96,16 @@ export class ServerManager {
    * Resend vault verification email
    * Uses POST /vault/resend with public_key_ecdsa, email, password
    */
-  async resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void> {
+  async resendVaultVerification(options: {
+    vaultId: string;
+    email: string;
+    password: string;
+  }): Promise<void> {
     await resendVaultShare({
       public_key_ecdsa: options.vaultId,
       email: options.email,
       password: options.password,
-    })
+    });
   }
 
   /**
@@ -96,12 +114,15 @@ export class ServerManager {
    * NOTE: The core getVaultFromServer currently returns minimal data.
    * This needs to be updated to properly retrieve and decrypt the vault data.
    */
-  async getVaultFromServer(vaultId: string, password: string): Promise<CoreVault> {
-    const result = await getVaultFromServer({ vaultId, password })
+  async getVaultFromServer(
+    vaultId: string,
+    password: string,
+  ): Promise<CoreVault> {
+    const result = await getVaultFromServer({ vaultId, password });
 
     // TODO: Properly convert/decrypt the vault data from server response
     // Currently the core function returns { password } which is incomplete
-    return result as unknown as CoreVault
+    return result as unknown as CoreVault;
   }
 
   /**
@@ -117,50 +138,63 @@ export class ServerManager {
    * @returns Formatted signature
    */
   async coordinateFastSigning(options: {
-    vault: CoreVault
-    messages: string[]
-    password: string
-    payload: SigningPayload
-    walletCore: WalletCore
-    signal?: AbortSignal
-    onProgress?: (step: import('../types').SigningStep) => void
+    vault: CoreVault;
+    messages: string[];
+    password: string;
+    payload: SigningPayload;
+    walletCore: WalletCore;
+    signal?: AbortSignal;
+    onProgress?: (step: import("../types").SigningStep) => void;
   }): Promise<Signature> {
-    const { vault, messages, password, payload, walletCore, signal, onProgress } = options
-    const reportProgress = (step: import('../types').SigningStep) => {
+    const {
+      vault,
+      messages,
+      password,
+      payload,
+      walletCore,
+      signal,
+      onProgress,
+    } = options;
+    const reportProgress = (step: import("../types").SigningStep) => {
       // Check for abort via signal
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
-      onProgress?.(step)
-    }
+      onProgress?.(step);
+    };
 
     // Use SDK adapter to extract chain-specific signing information
-    const { signatureAlgorithm, derivePath: rawDerivePath, chainPath: rawChainPath } = getChainSigningInfo(payload, walletCore)
+    const {
+      signatureAlgorithm,
+      derivePath: rawDerivePath,
+      chainPath: rawChainPath,
+    } = getChainSigningInfo(payload, walletCore);
 
     // Key import vaults store chain-specific keyshares; derive path must be 'm'
-    const hasChainKeyShare = !!vault.chainKeyShares?.[payload.chain]
-    const derivePath = hasChainKeyShare ? 'm' : rawDerivePath
-    const chainPath = hasChainKeyShare ? 'm' : rawChainPath
+    const hasChainKeyShare = !!vault.chainKeyShares?.[payload.chain];
+    const derivePath = hasChainKeyShare ? "m" : rawDerivePath;
+    const chainPath = hasChainKeyShare ? "m" : rawChainPath;
 
     // Generate session parameters
-    const sessionId = randomUUID()
-    const hexEncryptionKey = getHexEncodedRandomBytes(32)
-    const signingLocalPartyId = vault.localPartyId || generateLocalPartyId('sdk')
+    const sessionId = randomUUID();
+    const hexEncryptionKey = getHexEncodedRandomBytes(32);
+    const signingLocalPartyId =
+      vault.localPartyId || generateLocalPartyId("sdk");
 
-    console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
-    console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
+    console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`);
+    console.log(`📡 Calling FastVault API with session ID: ${sessionId}`);
 
     // Step 1: Coordinating - Call FastVault API
     reportProgress({
-      step: 'coordinating',
+      step: "coordinating",
       progress: 30,
-      message: 'Connecting to VultiServer...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Connecting to VultiServer...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 1,
-    })
+    });
 
-    shouldBePresent(payload.chain, 'payload.chain')
+    shouldBePresent(payload.chain, "payload.chain");
 
     // Register at relay BEFORE calling FastVault server
     // (must be registered so server can find us when it joins)
@@ -169,7 +203,7 @@ export class ServerManager {
       serverUrl: this.config.messageRelay,
       sessionId,
       localPartyId: signingLocalPartyId,
-    })
+    });
 
     await signWithServer({
       public_key: vault.publicKeys.ecdsa,
@@ -177,67 +211,74 @@ export class ServerManager {
       session: sessionId,
       hex_encryption_key: hexEncryptionKey,
       derive_path: derivePath,
-      is_ecdsa: signatureAlgorithm === 'ecdsa',
+      is_ecdsa: signatureAlgorithm === "ecdsa",
       vault_password: password,
       chain: payload.chain,
       vaultBaseUrl: this.config.fastVault,
-    })
-    console.log(`✅ Server acknowledged session: ${sessionId}`)
+    });
+    console.log(`✅ Server acknowledged session: ${sessionId}`);
 
     // Step 3: Wait for server to ACTUALLY join
-    console.log('⏳ Waiting for server to join session...')
+    console.log("⏳ Waiting for server to join session...");
     reportProgress({
-      step: 'coordinating',
+      step: "coordinating",
       progress: 50,
-      message: 'Waiting for all participants...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Waiting for all participants...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 1,
-    })
+    });
 
-    const devices = await this.waitForPeers(sessionId, signingLocalPartyId, signal, onProgress)
-    const peers = devices.filter(device => device !== signingLocalPartyId)
-    console.log(`✅ All participants ready: [${devices.join(', ')}]`)
+    const devices = await this.waitForPeers(
+      sessionId,
+      signingLocalPartyId,
+      signal,
+      onProgress,
+    );
+    const peers = devices.filter((device) => device !== signingLocalPartyId);
+    console.log(`✅ All participants ready: [${devices.join(", ")}]`);
 
     reportProgress({
-      step: 'coordinating',
+      step: "coordinating",
       progress: 60,
-      message: 'All participants ready, starting MPC session...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "All participants ready, starting MPC session...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 2,
-    })
+    });
 
     // Step 4: Start MPC session
-    console.log('📡 Starting MPC session with devices list...')
+    console.log("📡 Starting MPC session with devices list...");
     await startMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
-    })
-    console.log('✅ MPC session started')
+    });
+    console.log("✅ MPC session started");
 
     // Step 5: Signing - Perform MPC keysign
-    console.log('🔐 Starting MPC keysign process...')
+    console.log("🔐 Starting MPC keysign process...");
     reportProgress({
-      step: 'signing',
+      step: "signing",
       progress: 70,
-      message: 'Performing cryptographic signing...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Performing cryptographic signing...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 2,
-    })
+    });
 
-    const chainKeyShare = vault.chainKeyShares?.[payload.chain]
-    const keyShare = chainKeyShare ?? vault.keyShares[signatureAlgorithm]
+    const chainKeyShare = vault.chainKeyShares?.[payload.chain];
+    const keyShare = chainKeyShare ?? vault.keyShares[signatureAlgorithm];
     if (!keyShare) {
-      throw new Error(`No key share found for algorithm: ${signatureAlgorithm}`)
+      throw new Error(
+        `No key share found for algorithm: ${signatureAlgorithm}`,
+      );
     }
 
     // Sign all messages (UTXO can have multiple, EVM typically has one)
-    const signatureResults: Record<string, KeysignSignature> = {}
+    const signatureResults: Record<string, KeysignSignature> = {};
     for (const msg of messages) {
-      console.log(`🔏 Signing message: ${msg}`)
+      console.log(`🔏 Signing message: ${msg}`);
       const sig = await keysign({
         keyShare,
         signatureAlgorithm,
@@ -249,55 +290,59 @@ export class ServerManager {
         sessionId,
         hexEncryptionKey,
         isInitiatingDevice: true,
-      })
-      console.log(`✅ Signature obtained for message`)
-      signatureResults[msg] = sig
+      });
+      console.log(`✅ Signature obtained for message`);
+      signatureResults[msg] = sig;
     }
 
     // Step 6: MLDSA signing (if vault has ML-DSA keys)
-    let mldsaSignatureHex: string | undefined
+    let mldsaSignatureHex: string | undefined;
     if (vault.keyShareMldsa) {
       reportProgress({
-        step: 'signing',
+        step: "signing",
         progress: 80,
-        message: 'Performing ML-DSA post-quantum signing...',
-        mode: 'fast' as import('../types').SigningMode,
+        message: "Performing ML-DSA post-quantum signing...",
+        mode: "fast" as import("../types").SigningMode,
         participantCount: 2,
         participantsReady: 2,
-      })
+      });
 
-      const mldsaMaxAttempts = 10
+      const mldsaMaxAttempts = 10;
       for (let attempt = 0; attempt < mldsaMaxAttempts; attempt++) {
         try {
-          const mldsaSessionId = randomUUID()
-          const mldsaHexEncryptionKey = getHexEncodedRandomBytes(32)
+          const mldsaSessionId = randomUUID();
+          const mldsaHexEncryptionKey = getHexEncodedRandomBytes(32);
 
           await joinMpcSession({
             serverUrl: this.config.messageRelay,
             sessionId: mldsaSessionId,
             localPartyId: signingLocalPartyId,
-          })
+          });
 
           await signWithServer({
             public_key: vault.publicKeys.ecdsa,
             messages,
             session: mldsaSessionId,
             hex_encryption_key: mldsaHexEncryptionKey,
-            derive_path: 'm',
+            derive_path: "m",
             is_ecdsa: true,
             vault_password: password,
             chain: payload.chain,
             mldsa: true,
             vaultBaseUrl: this.config.fastVault,
-          })
+          });
 
-          const mldsaDevices = await this.waitForPeers(mldsaSessionId, signingLocalPartyId, signal)
+          const mldsaDevices = await this.waitForPeers(
+            mldsaSessionId,
+            signingLocalPartyId,
+            signal,
+          );
 
           await startMpcSession({
             serverUrl: this.config.messageRelay,
             sessionId: mldsaSessionId,
             devices: mldsaDevices,
-          })
+          });
 
           const mldsaKeysign = new MldsaKeysign({
             keysignCommittee: mldsaDevices,
@@ -307,49 +352,56 @@ export class ServerManager {
             messagesToSign: messages,
             keyShareBase64: vault.keyShareMldsa,
             hexEncryptionKey: mldsaHexEncryptionKey,
-            chainPath: 'm',
+            chainPath: "m",
             isInitiatingDevice: true,
-          })
+          });
 
-          const mldsaResults = await mldsaKeysign.startKeysign()
+          const mldsaResults = await mldsaKeysign.startKeysign();
           if (mldsaResults.length > 0) {
-            mldsaSignatureHex = mldsaResults[0].signature
+            mldsaSignatureHex = mldsaResults[0].signature;
           }
-          break
+          break;
         } catch (error) {
           if (attempt === mldsaMaxAttempts - 1) {
-            console.warn('MLDSA signing failed after all attempts:', error instanceof Error ? error.message : error)
+            console.warn(
+              "MLDSA signing failed after all attempts:",
+              error instanceof Error ? error.message : error,
+            );
           }
         }
       }
     }
 
     // Step 7: Complete - Format signature results
-    console.log(`🔄 Formatting signature results...`)
+    console.log(`🔄 Formatting signature results...`);
     reportProgress({
-      step: 'complete',
+      step: "complete",
       progress: 90,
-      message: 'Formatting signature...',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Formatting signature...",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 2,
-    })
+    });
 
-    const signature = formatSignature(signatureResults, messages, signatureAlgorithm)
+    const signature = formatSignature(
+      signatureResults,
+      messages,
+      signatureAlgorithm,
+    );
     if (mldsaSignatureHex) {
-      signature.mldsaSignature = mldsaSignatureHex
+      signature.mldsaSignature = mldsaSignatureHex;
     }
 
     reportProgress({
-      step: 'complete',
+      step: "complete",
       progress: 100,
-      message: 'Signature complete',
-      mode: 'fast' as import('../types').SigningMode,
+      message: "Signature complete",
+      mode: "fast" as import("../types").SigningMode,
       participantCount: 2,
       participantsReady: 2,
-    })
+    });
 
-    return signature
+    return signature;
   }
 
   /**
@@ -357,7 +409,7 @@ export class ServerManager {
    */
   async reshareVault(
     vault: CoreVault,
-    reshareOptions: ReshareOptions & { password: string; email?: string }
+    reshareOptions: ReshareOptions & { password: string; email?: string },
   ): Promise<CoreVault> {
     await reshareWithServer({
       name: vault.name,
@@ -367,49 +419,49 @@ export class ServerManager {
       hex_chain_code: vault.hexChainCode,
       local_party_id: vault.localPartyId,
       old_parties: vault.signers,
-      old_reshare_prefix: vault.resharePrefix || '',
+      old_reshare_prefix: vault.resharePrefix || "",
       encryption_password: reshareOptions.password,
       email: reshareOptions.email,
       reshare_type: 1,
       lib_type: 1,
-    })
+    });
 
-    return vault
+    return vault;
   }
 
   /**
    * Create a Fast Vault
    */
   async createFastVault(options: {
-    name: string
-    email: string
-    password: string
-    signal?: AbortSignal
-    onLog?: (msg: string) => void
-    onProgress?: (u: KeygenProgressUpdate) => void
+    name: string;
+    email: string;
+    password: string;
+    signal?: AbortSignal;
+    onLog?: (msg: string) => void;
+    onProgress?: (u: KeygenProgressUpdate) => void;
   }): Promise<{
-    vault: CoreVault
-    vaultId: string
-    verificationRequired: boolean
+    vault: CoreVault;
+    vaultId: string;
+    verificationRequired: boolean;
   }> {
     // Generate session parameters using core MPC utilities
-    const sessionId = randomUUID()
-    const hexEncryptionKey = generateHexEncryptionKey()
-    const hexChainCode = generateHexChainCode()
-    const localPartyId = generateLocalPartyId('sdk')
+    const sessionId = randomUUID();
+    const hexEncryptionKey = generateHexEncryptionKey();
+    const hexChainCode = generateHexChainCode();
+    const localPartyId = generateLocalPartyId("sdk");
 
-    const log = options.onLog || (() => {})
+    const log = options.onLog || (() => {});
     const progress = (update: KeygenProgressUpdate) => {
       if (options.signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
-      options.onProgress?.(update)
-    }
+      options.onProgress?.(update);
+    };
 
-    log('Creating vault on FastVault server...')
+    log("Creating vault on FastVault server...");
 
     // The server party ID should be consistent throughout the process
-    const serverPartyId = generateLocalPartyId('server')
+    const serverPartyId = generateLocalPartyId("server");
 
     await setupVaultWithServer({
       name: options.name,
@@ -420,28 +472,32 @@ export class ServerManager {
       encryption_password: options.password,
       email: options.email,
       lib_type: 1,
-    })
+    });
 
-    log('Joining relay session...')
+    log("Joining relay session...");
 
     await joinMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       localPartyId,
-    })
+    });
 
-    log('Waiting for server and starting MPC session...')
+    log("Waiting for server and starting MPC session...");
 
-    const devices = await this.waitForPeers(sessionId, localPartyId, options.signal)
+    const devices = await this.waitForPeers(
+      sessionId,
+      localPartyId,
+      options.signal,
+    );
 
     await startMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
-    })
+    });
 
     // Real MPC keygen - ECDSA first
-    progress({ phase: 'ecdsa', message: 'Generating ECDSA keys...' })
+    progress({ phase: "ecdsa", message: "Generating ECDSA keys..." });
 
     // Create DKLS instance for ECDSA keygen
     const dkls = new DKLS(
@@ -452,22 +508,22 @@ export class ServerManager {
       localPartyId, // This should be the browser/client party ID
       devices, // keygenCommittee (includes both browser and server)
       [], // oldKeygenCommittee (empty for new vault)
-      hexEncryptionKey
-    )
+      hexEncryptionKey,
+    );
 
     // Run ECDSA keygen
-    const ecdsaResult = await dkls.startKeygenWithRetry()
-    log('ECDSA keygen completed successfully')
+    const ecdsaResult = await dkls.startKeygenWithRetry();
+    log("ECDSA keygen completed successfully");
 
     // Check for abort before EdDSA keygen
     if (options.signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // EdDSA keygen using the same setup message
-    progress({ phase: 'eddsa', message: 'Generating EdDSA keys...' })
+    progress({ phase: "eddsa", message: "Generating EdDSA keys..." });
 
-    const setupMessage = dkls.getSetupMessage()
+    const setupMessage = dkls.getSetupMessage();
     const schnorr = new Schnorr(
       { create: true }, // KeygenOperation
       true, // isInitiateDevice
@@ -477,22 +533,22 @@ export class ServerManager {
       devices, // keygenCommittee
       [], // oldKeygenCommittee
       hexEncryptionKey,
-      setupMessage // Reuse setup message from DKLS
-    )
+      setupMessage, // Reuse setup message from DKLS
+    );
 
     // Run EdDSA keygen
-    const eddsaResult = await schnorr.startKeygenWithRetry()
-    log('EdDSA keygen completed successfully')
+    const eddsaResult = await schnorr.startKeygenWithRetry();
+    log("EdDSA keygen completed successfully");
 
     // Check for abort before ML-DSA keygen
     if (options.signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // ML-DSA keygen
-    progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
+    progress({ phase: "mldsa", message: "Generating ML-DSA keys..." });
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined;
     try {
       await mldsaWithServer({
         public_key: ecdsaResult.publicKey,
@@ -501,7 +557,7 @@ export class ServerManager {
         encryption_password: options.password,
         email: options.email,
         vaultBaseUrl: this.config.fastVault,
-      })
+      });
 
       const mldsaKeygen = new MldsaKeygen(
         true, // isInitiateDevice
@@ -509,18 +565,21 @@ export class ServerManager {
         sessionId,
         localPartyId,
         devices,
-        hexEncryptionKey
-      )
+        hexEncryptionKey,
+      );
 
-      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-      log('ML-DSA keygen completed successfully')
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry();
+      log("ML-DSA keygen completed successfully");
     } catch (error) {
-      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+      console.warn(
+        "ML-DSA keygen failed (non-fatal):",
+        error instanceof Error ? error.message : error,
+      );
     }
 
     // Check for abort before finalization
     if (options.signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // Signal keygen completion to all participants
@@ -528,15 +587,15 @@ export class ServerManager {
       serverURL: this.config.messageRelay,
       sessionId,
       localPartyId,
-    })
+    });
 
     // Wait for all participants to complete
-    const peers = devices.filter(d => d !== localPartyId)
+    const peers = devices.filter((d) => d !== localPartyId);
     await waitForKeygenComplete({
       serverURL: this.config.messageRelay,
       sessionId,
       peers,
-    })
+    });
 
     // Create real vault from keygen results
     const vault: CoreVault = {
@@ -554,19 +613,19 @@ export class ServerManager {
       },
       publicKeyMldsa: mldsaResult?.publicKey,
       keyShareMldsa: mldsaResult?.keyshare,
-      libType: 'DKLS',
+      libType: "DKLS",
       isBackedUp: false,
       order: 0,
       createdAt: Date.now(),
-    }
+    };
 
-    progress({ phase: 'complete', message: 'Vault created successfully' })
+    progress({ phase: "complete", message: "Vault created successfully" });
 
     return {
       vault,
       vaultId: vault.publicKeys.ecdsa,
       verificationRequired: true,
-    }
+    };
   }
 
   /**
@@ -574,21 +633,25 @@ export class ServerManager {
    */
   async checkServerStatus(): Promise<ServerStatus> {
     const [fastVaultStatus, relayStatus] = await Promise.allSettled([
-      this.pingServer(this.config.fastVault, '/'),
-      this.pingServer(this.config.messageRelay, '/ping'),
-    ])
+      this.pingServer(this.config.fastVault, "/"),
+      this.pingServer(this.config.messageRelay, "/ping"),
+    ]);
 
     return {
       fastVault: {
-        online: fastVaultStatus.status === 'fulfilled',
-        latency: fastVaultStatus.status === 'fulfilled' ? fastVaultStatus.value : undefined,
+        online: fastVaultStatus.status === "fulfilled",
+        latency:
+          fastVaultStatus.status === "fulfilled"
+            ? fastVaultStatus.value
+            : undefined,
       },
       messageRelay: {
-        online: relayStatus.status === 'fulfilled',
-        latency: relayStatus.status === 'fulfilled' ? relayStatus.value : undefined,
+        online: relayStatus.status === "fulfilled",
+        latency:
+          relayStatus.status === "fulfilled" ? relayStatus.value : undefined,
       },
       timestamp: Date.now(),
-    }
+    };
   }
 
   // ===== Private Helper Methods =====
@@ -597,62 +660,66 @@ export class ServerManager {
     sessionId: string,
     localPartyId: string,
     signal?: AbortSignal,
-    onProgress?: (step: import('../types').SigningStep) => void
+    onProgress?: (step: import("../types").SigningStep) => void,
   ): Promise<string[]> {
-    const maxWaitTime = 30000
-    const checkInterval = 2000
-    const startTime = Date.now()
+    const maxWaitTime = 30000;
+    const checkInterval = 2000;
+    const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitTime) {
       // Check for abort via signal
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
 
       try {
-        const url = `${this.config.messageRelay}/${sessionId}`
-        const allPeers = await queryUrl<string[]>(url)
-        const uniquePeers = withoutDuplicates(allPeers)
-        const otherPeers = without(uniquePeers, localPartyId)
+        const url = `${this.config.messageRelay}/${sessionId}`;
+        const allPeers = await queryUrl<string[]>(url);
+        const uniquePeers = withoutDuplicates(allPeers);
+        const otherPeers = without(uniquePeers, localPartyId);
 
         // Report progress
         onProgress?.({
-          step: 'coordinating',
+          step: "coordinating",
           progress: 50,
-          message: 'Waiting for server...',
-          mode: 'fast' as import('../types').SigningMode,
+          message: "Waiting for server...",
+          mode: "fast" as import("../types").SigningMode,
           participantCount: 2,
           participantsReady: uniquePeers.length,
-        })
+        });
 
         if (otherPeers.length > 0) {
-          return [localPartyId, ...otherPeers]
+          return [localPartyId, ...otherPeers];
         }
 
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
       } catch (error) {
         // Re-throw abort errors
-        if (error instanceof Error && error.message === 'Operation aborted') {
-          throw error
+        if (error instanceof Error && error.message === "Operation aborted") {
+          throw error;
         }
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
       }
     }
 
-    throw new Error('Timeout waiting for peers to join session')
+    throw new Error("Timeout waiting for peers to join session");
   }
 
-  private async pingServer(baseUrl: string, endpoint = '/ping', timeout = 5000): Promise<number> {
-    const start = Date.now()
+  private async pingServer(
+    baseUrl: string,
+    endpoint = "/ping",
+    timeout = 5000,
+  ): Promise<number> {
+    const start = Date.now();
 
     try {
       await fetch(`${baseUrl}${endpoint}`, {
-        method: 'GET',
+        method: "GET",
         signal: AbortSignal.timeout(timeout),
-      })
-      return Date.now() - start
+      });
+      return Date.now() - start;
     } catch (error) {
-      throw new Error(`Server ping failed: ${error}`)
+      throw new Error(`Server ping failed: ${error}`);
     }
   }
 }

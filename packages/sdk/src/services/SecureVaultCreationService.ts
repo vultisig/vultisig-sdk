@@ -8,82 +8,89 @@
  * 4. Runs DKLS (ECDSA) + Schnorr (EdDSA) + ML-DSA keygen
  */
 
-import { create, toBinary } from '@bufbuild/protobuf'
-import { toCompressedString } from '@vultisig/core-chain/utils/protobuf/toCompressedString'
-import { getSevenZip } from '@vultisig/core-mpc/compression/getSevenZip'
-import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
-import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
-import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
-import type { KeygenOperation } from '@vultisig/core-mpc/keygen/KeygenOperation'
-import type { KeygenStep } from '@vultisig/core-mpc/keygen/KeygenStep'
-import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
-import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
-import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
-import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
-import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
-import { KeygenMessageSchema } from '@vultisig/core-mpc/types/vultisig/keygen/v1/keygen_message_pb'
-import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
-import { generateHexChainCode } from '@vultisig/core-mpc/utils/generateHexChainCode'
-import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
-import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
-import { without } from '@vultisig/lib-utils/array/without'
-import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
-import { attempt } from '@vultisig/lib-utils/attempt'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { create, toBinary } from "@bufbuild/protobuf";
+import { toCompressedString } from "@vultisig/core-chain/utils/protobuf/toCompressedString";
+import { getSevenZip } from "@vultisig/core-mpc/compression/getSevenZip";
+import { generateLocalPartyId } from "@vultisig/core-mpc/devices/localPartyId";
+import { DKLS } from "@vultisig/core-mpc/dkls/dkls";
+import { getKeygenThreshold } from "@vultisig/core-mpc/getKeygenThreshold";
+import type { KeygenOperation } from "@vultisig/core-mpc/keygen/KeygenOperation";
+import type { KeygenStep } from "@vultisig/core-mpc/keygen/KeygenStep";
+import {
+  setKeygenComplete,
+  waitForKeygenComplete,
+} from "@vultisig/core-mpc/keygenComplete";
+import { MldsaKeygen } from "@vultisig/core-mpc/mldsa/mldsaKeygen";
+import { Schnorr } from "@vultisig/core-mpc/schnorr/schnorrKeygen";
+import { joinMpcSession } from "@vultisig/core-mpc/session/joinMpcSession";
+import { startMpcSession } from "@vultisig/core-mpc/session/startMpcSession";
+import { KeygenMessageSchema } from "@vultisig/core-mpc/types/vultisig/keygen/v1/keygen_message_pb";
+import { LibType } from "@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb";
+import { generateHexChainCode } from "@vultisig/core-mpc/utils/generateHexChainCode";
+import { generateHexEncryptionKey } from "@vultisig/core-mpc/utils/generateHexEncryptionKey";
+import { Vault as CoreVault } from "@vultisig/core-mpc/vault/Vault";
+import { without } from "@vultisig/lib-utils/array/without";
+import { withoutDuplicates } from "@vultisig/lib-utils/array/withoutDuplicates";
+import { attempt } from "@vultisig/lib-utils/attempt";
+import { queryUrl } from "@vultisig/lib-utils/query/queryUrl";
 
-import { randomUUID } from '../crypto'
+import { randomUUID } from "../crypto";
 
 /**
  * Progress step during secure vault creation
  */
 export type SecureVaultCreationStep = {
   step:
-    | 'initializing'
-    | 'generating_qr'
-    | 'waiting_for_devices'
-    | 'keygen_ecdsa'
-    | 'keygen_eddsa'
-    | 'keygen_mldsa'
-    | 'finalizing'
-    | 'complete'
-  progress: number
-  message: string
-  sessionId?: string
-  qrPayload?: string
-  devicesJoined?: number
-  devicesRequired?: number
-}
+    | "initializing"
+    | "generating_qr"
+    | "waiting_for_devices"
+    | "keygen_ecdsa"
+    | "keygen_eddsa"
+    | "keygen_mldsa"
+    | "finalizing"
+    | "complete";
+  progress: number;
+  message: string;
+  sessionId?: string;
+  qrPayload?: string;
+  devicesJoined?: number;
+  devicesRequired?: number;
+};
 
 /**
  * Options for creating a secure vault
  */
 export type SecureVaultCreateOptions = {
   /** Vault name */
-  name: string
+  name: string;
   /** Optional password for vault encryption */
-  password?: string
+  password?: string;
   /** Total number of devices participating (including this one) */
-  devices: number
+  devices: number;
   /** Signing threshold - defaults to 2/3 majority (ceil(devices*2/3)) */
-  threshold?: number
+  threshold?: number;
   /** AbortSignal for cancellation */
-  signal?: AbortSignal
+  signal?: AbortSignal;
   /** Progress callback */
-  onProgress?: (step: SecureVaultCreationStep) => void
+  onProgress?: (step: SecureVaultCreationStep) => void;
   /** Callback when QR code payload is ready for display */
-  onQRCodeReady?: (qrPayload: string) => void
+  onQRCodeReady?: (qrPayload: string) => void;
   /** Callback when a device joins the session */
-  onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
-}
+  onDeviceJoined?: (
+    deviceId: string,
+    totalJoined: number,
+    required: number,
+  ) => void;
+};
 
 /**
  * Result of secure vault creation
  */
 export type SecureVaultCreateResult = {
-  vault: CoreVault
-  vaultId: string
-  sessionId: string
-}
+  vault: CoreVault;
+  vaultId: string;
+  sessionId: string;
+};
 
 /**
  * Parameters for performing a reshare operation via SDK.
@@ -91,30 +98,30 @@ export type SecureVaultCreateResult = {
  */
 export type PerformReshareParams = {
   /** Existing vault with keyshares (undefined for new device joining reshare) */
-  existingVault?: CoreVault
+  existingVault?: CoreVault;
   /** Keygen operation type (e.g., { reshare: 'regular' }) */
-  operation: KeygenOperation
+  operation: KeygenOperation;
   /** Whether this device initiated the reshare */
-  isInitiatingDevice: boolean
+  isInitiatingDevice: boolean;
   /** Relay server URL */
-  serverUrl: string
+  serverUrl: string;
   /** MPC session ID */
-  sessionId: string
+  sessionId: string;
   /** This device's party ID */
-  localPartyId: string
+  localPartyId: string;
   /** All signers participating in the reshare */
-  signers: string[]
+  signers: string[];
   /** Hex-encoded encryption key for MPC messages */
-  encryptionKeyHex: string
+  encryptionKeyHex: string;
   /** Vault name for the result */
-  vaultName: string
+  vaultName: string;
   /** Display order for the result vault */
-  vaultOrder: number
+  vaultOrder: number;
   /** Callback for keygen step changes (ecdsa/eddsa) */
-  onStepChange?: (step: KeygenStep) => void
+  onStepChange?: (step: KeygenStep) => void;
   /** Callback for DKLS inbound sequence number tracking */
-  onDklsInboundSequenceNoChange?: (n: number) => void
-}
+  onDklsInboundSequenceNoChange?: (n: number) => void;
+};
 
 /**
  * SecureVaultCreationService
@@ -124,10 +131,10 @@ export type PerformReshareParams = {
  * Compatible with Vultisig mobile apps for device pairing.
  */
 export class SecureVaultCreationService {
-  private readonly relayUrl: string
+  private readonly relayUrl: string;
 
-  constructor(relayUrl: string = 'https://api.vultisig.com/router') {
-    this.relayUrl = relayUrl
+  constructor(relayUrl: string = "https://api.vultisig.com/router") {
+    this.relayUrl = relayUrl;
   }
 
   /**
@@ -135,24 +142,24 @@ export class SecureVaultCreationService {
    * Uses 2/3 majority formula - e.g., 2-of-2, 2-of-3, 3-of-4
    */
   calculateThreshold(devices: number): number {
-    return getKeygenThreshold(devices)
+    return getKeygenThreshold(devices);
   }
 
   /**
    * Generate session parameters for keygen ceremony
    */
   generateSessionParams(): {
-    sessionId: string
-    hexEncryptionKey: string
-    hexChainCode: string
-    localPartyId: string
+    sessionId: string;
+    hexEncryptionKey: string;
+    hexChainCode: string;
+    localPartyId: string;
   } {
     return {
       sessionId: randomUUID(),
       hexEncryptionKey: generateHexEncryptionKey(),
       hexChainCode: generateHexChainCode(),
-      localPartyId: generateLocalPartyId('sdk'),
-    }
+      localPartyId: generateLocalPartyId("sdk"),
+    };
   }
 
   /**
@@ -162,11 +169,11 @@ export class SecureVaultCreationService {
    * vultisig://?type=NewVault&tssType=Keygen&jsonData=<compressed_base64>
    */
   async generateQRPayload(params: {
-    sessionId: string
-    hexEncryptionKey: string
-    hexChainCode: string
-    localPartyId: string
-    vaultName: string
+    sessionId: string;
+    hexEncryptionKey: string;
+    hexChainCode: string;
+    localPartyId: string;
+    vaultName: string;
   }): Promise<string> {
     // Create KeygenMessage protobuf
     const keygenMessage = create(KeygenMessageSchema, {
@@ -177,19 +184,19 @@ export class SecureVaultCreationService {
       useVultisigRelay: true,
       vaultName: params.vaultName,
       libType: LibType.DKLS,
-    })
+    });
 
     // Serialize to binary
-    const binary = toBinary(KeygenMessageSchema, keygenMessage)
+    const binary = toBinary(KeygenMessageSchema, keygenMessage);
 
     // Compress with 7-zip (LZMA)
-    const sevenZip = await getSevenZip()
-    const compressedData = toCompressedString({ sevenZip, binary })
+    const sevenZip = await getSevenZip();
+    const compressedData = toCompressedString({ sevenZip, binary });
 
     // Build URL for mobile app
-    const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${encodeURIComponent(compressedData)}`
+    const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${encodeURIComponent(compressedData)}`;
 
-    return qrPayload
+    return qrPayload;
   }
 
   /**
@@ -200,46 +207,52 @@ export class SecureVaultCreationService {
     localPartyId: string,
     requiredDevices: number,
     signal?: AbortSignal,
-    onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+    onDeviceJoined?: (
+      deviceId: string,
+      totalJoined: number,
+      required: number,
+    ) => void,
   ): Promise<string[]> {
-    const maxWaitTime = 300000 // 5 minutes for multi-device setup
-    const checkInterval = 2000
-    const startTime = Date.now()
-    let lastJoinedCount = 0
+    const maxWaitTime = 300000; // 5 minutes for multi-device setup
+    const checkInterval = 2000;
+    const startTime = Date.now();
+    let lastJoinedCount = 0;
 
     while (Date.now() - startTime < maxWaitTime) {
       // Check for abort
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
 
       try {
-        const url = `${this.relayUrl}/${sessionId}`
-        const allPeers = await queryUrl<string[]>(url)
-        const uniquePeers = withoutDuplicates(allPeers)
+        const url = `${this.relayUrl}/${sessionId}`;
+        const allPeers = await queryUrl<string[]>(url);
+        const uniquePeers = withoutDuplicates(allPeers);
 
         // Notify about new devices
         if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
-          const newDevices = uniquePeers.slice(lastJoinedCount)
+          const newDevices = uniquePeers.slice(lastJoinedCount);
           for (const device of newDevices) {
-            onDeviceJoined(device, uniquePeers.length, requiredDevices)
+            onDeviceJoined(device, uniquePeers.length, requiredDevices);
           }
-          lastJoinedCount = uniquePeers.length
+          lastJoinedCount = uniquePeers.length;
         }
 
         // Check if we have enough devices
         if (uniquePeers.length >= requiredDevices) {
           // Must match JoinSecureVaultService: sorted committee so all parties use identical order
-          return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+          return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
         }
 
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
       } catch {
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
+        await new Promise((resolve) => setTimeout(resolve, checkInterval));
       }
     }
 
-    throw new Error(`Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`)
+    throw new Error(
+      `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`,
+    );
   }
 
   /**
@@ -248,42 +261,53 @@ export class SecureVaultCreationService {
    * @param options - Vault creation options
    * @returns Created vault, vault ID, and session ID
    */
-  async createVault(options: SecureVaultCreateOptions): Promise<SecureVaultCreateResult> {
-    const { name, devices, threshold: customThreshold, signal, onProgress, onQRCodeReady, onDeviceJoined } = options
+  async createVault(
+    options: SecureVaultCreateOptions,
+  ): Promise<SecureVaultCreateResult> {
+    const {
+      name,
+      devices,
+      threshold: customThreshold,
+      signal,
+      onProgress,
+      onQRCodeReady,
+      onDeviceJoined,
+    } = options;
 
     const reportProgress = (step: SecureVaultCreationStep) => {
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw new Error("Operation aborted");
       }
-      onProgress?.(step)
-    }
-    const threshold = customThreshold || this.calculateThreshold(devices)
+      onProgress?.(step);
+    };
+    const threshold = customThreshold || this.calculateThreshold(devices);
 
     // Validate inputs
     if (devices < 2) {
-      throw new Error('Secure vaults require at least 2 devices')
+      throw new Error("Secure vaults require at least 2 devices");
     }
     if (threshold > devices) {
-      throw new Error('Threshold cannot exceed number of devices')
+      throw new Error("Threshold cannot exceed number of devices");
     }
 
     // Step 1: Initialize
     reportProgress({
-      step: 'initializing',
+      step: "initializing",
       progress: 5,
-      message: 'Generating session parameters...',
-    })
+      message: "Generating session parameters...",
+    });
 
-    const sessionParams = this.generateSessionParams()
-    const { sessionId, hexEncryptionKey, hexChainCode, localPartyId } = sessionParams
+    const sessionParams = this.generateSessionParams();
+    const { sessionId, hexEncryptionKey, hexChainCode, localPartyId } =
+      sessionParams;
 
     // Step 2: Generate QR code
     reportProgress({
-      step: 'generating_qr',
+      step: "generating_qr",
       progress: 10,
-      message: 'Generating QR code for device pairing...',
+      message: "Generating QR code for device pairing...",
       sessionId,
-    })
+    });
 
     const qrPayload = await this.generateQRPayload({
       sessionId,
@@ -291,37 +315,37 @@ export class SecureVaultCreationService {
       hexChainCode,
       localPartyId,
       vaultName: name,
-    })
+    });
 
     // Notify QR is ready via callback
     if (onQRCodeReady) {
-      onQRCodeReady(qrPayload)
+      onQRCodeReady(qrPayload);
     }
 
     reportProgress({
-      step: 'generating_qr',
+      step: "generating_qr",
       progress: 15,
-      message: 'QR code ready - waiting for devices to scan...',
+      message: "QR code ready - waiting for devices to scan...",
       sessionId,
       qrPayload,
-    })
+    });
 
     // Step 3: Join relay session
     await joinMpcSession({
       serverUrl: this.relayUrl,
       sessionId,
       localPartyId,
-    })
+    });
 
     // Step 4: Wait for all devices
     reportProgress({
-      step: 'waiting_for_devices',
+      step: "waiting_for_devices",
       progress: 20,
       message: `Waiting for ${devices} devices to join...`,
       sessionId,
       devicesJoined: 1,
       devicesRequired: devices,
-    })
+    });
 
     const allDevices = await this.waitForPeers(
       sessionId,
@@ -331,47 +355,47 @@ export class SecureVaultCreationService {
       (deviceId, total, required) => {
         // Notify via callback
         if (onDeviceJoined) {
-          onDeviceJoined(deviceId, total, required)
+          onDeviceJoined(deviceId, total, required);
         }
         reportProgress({
-          step: 'waiting_for_devices',
+          step: "waiting_for_devices",
           progress: 20 + Math.floor((total / required) * 20),
           message: `${total}/${required} devices joined...`,
           sessionId,
           devicesJoined: total,
           devicesRequired: required,
-        })
-      }
-    )
+        });
+      },
+    );
 
     // Step 5: Start MPC session
     reportProgress({
-      step: 'waiting_for_devices',
+      step: "waiting_for_devices",
       progress: 40,
-      message: 'All devices ready! Starting keygen ceremony...',
+      message: "All devices ready! Starting keygen ceremony...",
       sessionId,
       devicesJoined: devices,
       devicesRequired: devices,
-    })
+    });
 
     const { error: startErr } = await attempt(
       startMpcSession({
         serverUrl: this.relayUrl,
         sessionId,
         devices: allDevices,
-      })
-    )
+      }),
+    );
     if (startErr) {
-      console.warn('startMpcSession (create vault):', startErr)
+      console.warn("startMpcSession (create vault):", startErr);
     }
 
     // Step 6: ECDSA keygen
     reportProgress({
-      step: 'keygen_ecdsa',
+      step: "keygen_ecdsa",
       progress: 45,
-      message: 'Generating ECDSA keys...',
+      message: "Generating ECDSA keys...",
       sessionId,
-    })
+    });
 
     const dkls = new DKLS(
       { create: true },
@@ -381,25 +405,25 @@ export class SecureVaultCreationService {
       localPartyId,
       allDevices,
       [], // oldKeygenCommittee (empty for new vault)
-      hexEncryptionKey
-    )
+      hexEncryptionKey,
+    );
 
-    const ecdsaResult = await dkls.startKeygenWithRetry()
+    const ecdsaResult = await dkls.startKeygenWithRetry();
 
     // Check for abort before EdDSA keygen
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // Step 7: EdDSA keygen
     reportProgress({
-      step: 'keygen_eddsa',
+      step: "keygen_eddsa",
       progress: 60,
-      message: 'Generating EdDSA keys...',
+      message: "Generating EdDSA keys...",
       sessionId,
-    })
+    });
 
-    const setupMessage = dkls.getSetupMessage()
+    const setupMessage = dkls.getSetupMessage();
     const schnorr = new Schnorr(
       { create: true },
       true,
@@ -409,25 +433,25 @@ export class SecureVaultCreationService {
       allDevices,
       [],
       hexEncryptionKey,
-      setupMessage
-    )
+      setupMessage,
+    );
 
-    const eddsaResult = await schnorr.startKeygenWithRetry()
+    const eddsaResult = await schnorr.startKeygenWithRetry();
 
     // Check for abort before ML-DSA keygen
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // Step 8: ML-DSA keygen
     reportProgress({
-      step: 'keygen_mldsa',
+      step: "keygen_mldsa",
       progress: 75,
-      message: 'Generating ML-DSA keys...',
+      message: "Generating ML-DSA keys...",
       sessionId,
-    })
+    });
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined;
     try {
       const mldsaKeygen = new MldsaKeygen(
         true, // isInitiateDevice
@@ -436,40 +460,43 @@ export class SecureVaultCreationService {
         localPartyId,
         allDevices,
         hexEncryptionKey,
-        { timeoutMs: 30000 }
-      )
+        { timeoutMs: 30000 },
+      );
 
-      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry();
     } catch (error) {
-      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+      console.warn(
+        "ML-DSA keygen failed (non-fatal):",
+        error instanceof Error ? error.message : error,
+      );
     }
 
     // Check for abort before finalization
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new Error("Operation aborted");
     }
 
     // Step 9: Signal completion
     reportProgress({
-      step: 'finalizing',
+      step: "finalizing",
       progress: 88,
-      message: 'Finalizing vault creation...',
+      message: "Finalizing vault creation...",
       sessionId,
-    })
+    });
 
     await setKeygenComplete({
       serverURL: this.relayUrl,
       sessionId,
       localPartyId,
-    })
+    });
 
     // Wait for all peers to complete
-    const peers = allDevices.filter(d => d !== localPartyId)
+    const peers = allDevices.filter((d) => d !== localPartyId);
     await waitForKeygenComplete({
       serverURL: this.relayUrl,
       sessionId,
       peers,
-    })
+    });
 
     // Step 10: Create vault object
     const vault: CoreVault = {
@@ -487,26 +514,26 @@ export class SecureVaultCreationService {
       },
       publicKeyMldsa: mldsaResult?.publicKey,
       keyShareMldsa: mldsaResult?.keyshare,
-      libType: 'DKLS',
+      libType: "DKLS",
       isBackedUp: false,
       order: 0,
       createdAt: Date.now(),
-    }
+    };
 
-    const vaultId = vault.publicKeys.ecdsa
+    const vaultId = vault.publicKeys.ecdsa;
 
     reportProgress({
-      step: 'complete',
+      step: "complete",
       progress: 100,
-      message: 'Secure vault created successfully!',
+      message: "Secure vault created successfully!",
       sessionId,
-    })
+    });
 
     return {
       vault,
       vaultId,
       sessionId,
-    }
+    };
   }
 
   /**
@@ -530,14 +557,14 @@ export class SecureVaultCreationService {
       vaultOrder,
       onStepChange,
       onDklsInboundSequenceNoChange,
-    } = params
+    } = params;
 
     // Compute old committee: existing vault's signers that are also in new signers
-    const oldParties = existingVault?.signers ?? []
-    const oldCommittee = oldParties.filter(party => signers.includes(party))
+    const oldParties = existingVault?.signers ?? [];
+    const oldCommittee = oldParties.filter((party) => signers.includes(party));
 
     // ECDSA reshare via DKLS
-    onStepChange?.('ecdsa')
+    onStepChange?.("ecdsa");
     const dkls = new DKLS(
       operation,
       isInitiatingDevice,
@@ -547,12 +574,14 @@ export class SecureVaultCreationService {
       signers,
       oldCommittee,
       encryptionKeyHex,
-      { onInboundSequenceNoChange: onDklsInboundSequenceNoChange }
-    )
-    const dklsResult = await dkls.startReshareWithRetry(existingVault?.keyShares.ecdsa)
+      { onInboundSequenceNoChange: onDklsInboundSequenceNoChange },
+    );
+    const dklsResult = await dkls.startReshareWithRetry(
+      existingVault?.keyShares.ecdsa,
+    );
 
     // EdDSA reshare via Schnorr
-    onStepChange?.('eddsa')
+    onStepChange?.("eddsa");
     const schnorr = new Schnorr(
       operation,
       isInitiatingDevice,
@@ -562,13 +591,15 @@ export class SecureVaultCreationService {
       signers,
       oldCommittee,
       encryptionKeyHex,
-      new Uint8Array(0)
-    )
-    const schnorrResult = await schnorr.startReshareWithRetry(existingVault?.keyShares.eddsa)
+      new Uint8Array(0),
+    );
+    const schnorrResult = await schnorr.startReshareWithRetry(
+      existingVault?.keyShares.eddsa,
+    );
 
     // ML-DSA keygen (fresh keygen during reshare)
-    onStepChange?.('mldsa')
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
+    onStepChange?.("mldsa");
+    let mldsaResult: { publicKey: string; keyshare: string } | undefined;
     try {
       const mldsaKeygen = new MldsaKeygen(
         isInitiatingDevice,
@@ -577,11 +608,14 @@ export class SecureVaultCreationService {
         localPartyId,
         signers,
         encryptionKeyHex,
-        { timeoutMs: 30000 }
-      )
-      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
+        { timeoutMs: 30000 },
+      );
+      mldsaResult = await mldsaKeygen.startKeygenWithRetry();
     } catch (error) {
-      console.warn('ML-DSA keygen failed (non-fatal):', error instanceof Error ? error.message : error)
+      console.warn(
+        "ML-DSA keygen failed (non-fatal):",
+        error instanceof Error ? error.message : error,
+      );
     }
 
     // Signal completion to peers
@@ -589,13 +623,13 @@ export class SecureVaultCreationService {
       serverURL: serverUrl,
       sessionId,
       localPartyId,
-    })
+    });
 
     await waitForKeygenComplete({
       serverURL: serverUrl,
       sessionId,
       peers: without(signers, localPartyId),
-    })
+    });
 
     // Build result vault by merging existing vault with new keys
     const newVaultFields = {
@@ -612,21 +646,21 @@ export class SecureVaultCreationService {
       hexChainCode: dklsResult.chaincode,
       signers,
       localPartyId,
-      libType: 'DKLS' as const,
+      libType: "DKLS" as const,
       isBackedUp: false,
-    }
+    };
 
     if (existingVault) {
       return {
         ...existingVault,
         ...newVaultFields,
-      }
+      };
     }
 
     return {
       ...newVaultFields,
       name: vaultName,
       order: vaultOrder,
-    }
+    };
   }
 }

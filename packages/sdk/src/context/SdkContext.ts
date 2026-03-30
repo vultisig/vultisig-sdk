@@ -5,13 +5,13 @@
  * Each Vultisig instance has its own isolated context.
  */
 
-import type { Chain } from '@vultisig/core-chain/Chain'
+import type { Chain } from "@vultisig/core-chain/Chain";
 
-import type { ServerManager } from '../server/ServerManager'
-import type { CacheConfig } from '../services/cache-types'
-import type { PasswordCacheService } from '../services/PasswordCacheService'
-import type { PushNotificationService } from '../services/PushNotificationService'
-import type { Storage } from '../storage/types'
+import type { ServerManager } from "../server/ServerManager";
+import type { CacheConfig } from "../services/cache-types";
+import type { PasswordCacheService } from "../services/PasswordCacheService";
+import type { PushNotificationService } from "../services/PushNotificationService";
+import type { Storage } from "../storage/types";
 
 /**
  * WasmProvider - Abstraction for WASM module access
@@ -25,8 +25,8 @@ export type WasmProvider = {
    * Lazy loads all WASM modules (WalletCore, DKLS, Schnorr) on first access.
    * Thread-safe: concurrent calls share the same initialization promise.
    */
-  getWalletCore(): Promise<any>
-}
+  getWalletCore(): Promise<any>;
+};
 
 /**
  * SDK Configuration Options
@@ -37,24 +37,24 @@ export type SdkConfigOptions = {
   /**
    * Default blockchain chains to enable for new vaults
    */
-  defaultChains?: Chain[]
+  defaultChains?: Chain[];
 
   /**
    * Default fiat currency for balance displays (e.g., 'USD', 'EUR')
    */
-  defaultCurrency?: string
+  defaultCurrency?: string;
 
   /**
    * Cache configuration for balance/price data
    */
-  cacheConfig?: CacheConfig
+  cacheConfig?: CacheConfig;
 
   /**
    * Password cache configuration
    */
   passwordCache?: {
-    defaultTTL?: number // milliseconds (0 = disabled)
-  }
+    defaultTTL?: number; // milliseconds (0 = disabled)
+  };
 
   /**
    * Callback to prompt user for vault password when needed.
@@ -64,8 +64,8 @@ export type SdkConfigOptions = {
    * @param vaultName - The vault name for display
    * @returns Promise resolving to the password
    */
-  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
-}
+  onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>;
+};
 
 /**
  * SDK Context - Internal dependency container
@@ -84,35 +84,35 @@ export type SdkContext = {
    * Storage backend for vault persistence.
    * Each instance has its own storage (or namespaced access).
    */
-  readonly storage: Storage
+  readonly storage: Storage;
 
   /**
    * SDK configuration options.
    */
-  readonly config: Readonly<SdkConfigOptions>
+  readonly config: Readonly<SdkConfigOptions>;
 
   /**
    * Server manager for VultiServer communication.
    */
-  readonly serverManager: ServerManager
+  readonly serverManager: ServerManager;
 
   /**
    * Password cache service for secure password caching.
    * Isolated per instance for security.
    */
-  readonly passwordCache: PasswordCacheService
+  readonly passwordCache: PasswordCacheService;
 
   /**
    * WASM provider for cryptographic operations.
    * References shared WASM runtime (process singleton).
    */
-  readonly wasmProvider: WasmProvider
+  readonly wasmProvider: WasmProvider;
 
   /**
    * Push notification service for vault signing coordination.
    */
-  readonly pushNotificationService: PushNotificationService
-}
+  readonly pushNotificationService: PushNotificationService;
+};
 
 /**
  * Vault Context - Subset of SdkContext for vault operations
@@ -120,10 +120,10 @@ export type SdkContext = {
  * Passed to vault instances and their services.
  */
 export type VaultContext = {
-  readonly storage: Storage
-  readonly config: Readonly<SdkConfigOptions>
-  readonly serverManager: ServerManager
-  readonly passwordCache: PasswordCacheService
-  readonly wasmProvider: WasmProvider
-  readonly pushNotificationService: PushNotificationService
-}
+  readonly storage: Storage;
+  readonly config: Readonly<SdkConfigOptions>;
+  readonly serverManager: ServerManager;
+  readonly passwordCache: PasswordCacheService;
+  readonly wasmProvider: WasmProvider;
+  readonly pushNotificationService: PushNotificationService;
+};
