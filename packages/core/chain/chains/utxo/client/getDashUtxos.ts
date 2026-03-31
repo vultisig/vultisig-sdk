@@ -2,7 +2,7 @@ import { rootApiUrl } from '@vultisig/core-config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { minUtxo } from '../minUtxo'
-import { Chain } from '../../../Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import type { ChainPlainUtxo } from '../tx/ChainPlainUtxo'
 
 type DashAddressUtxo = {
