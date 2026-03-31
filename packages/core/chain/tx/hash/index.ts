@@ -21,6 +21,7 @@ const hashHandlers: Record<ChainKind, TxHashResolver<any>> = {
   cosmos: getCosmosTxHash,
   evm: getEvmTxHash,
   polkadot: getPolkadotTxHash,
+  qbtc: getCosmosTxHash,
   ripple: getRippleTxHash,
   solana: getSolanaTxHash,
   sui: getSuiTxHash,

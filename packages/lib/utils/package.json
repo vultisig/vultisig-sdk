@@ -14,10 +14,631 @@
     "dist"
   ],
   "exports": {
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./dist/*.js"
+    "./array/getLastItem": {
+      "types": "./dist/array/getLastItem/index.d.ts",
+      "import": "./dist/array/getLastItem/index.js",
+      "default": "./dist/array/getLastItem/index.js"
+    },
+    "./array/groupItems": {
+      "types": "./dist/array/groupItems/index.d.ts",
+      "import": "./dist/array/groupItems/index.js",
+      "default": "./dist/array/groupItems/index.js"
+    },
+    "./array/haveSameContent": {
+      "types": "./dist/array/haveSameContent/index.d.ts",
+      "import": "./dist/array/haveSameContent/index.js",
+      "default": "./dist/array/haveSameContent/index.js"
+    },
+    "./array/isEmpty": {
+      "types": "./dist/array/isEmpty/index.d.ts",
+      "import": "./dist/array/isEmpty/index.js",
+      "default": "./dist/array/isEmpty/index.js"
+    },
+    "./array/isOneOf": {
+      "types": "./dist/array/isOneOf.d.ts",
+      "import": "./dist/array/isOneOf.js",
+      "default": "./dist/array/isOneOf.js"
+    },
+    "./array/order": {
+      "types": "./dist/array/order/index.d.ts",
+      "import": "./dist/array/order/index.js",
+      "default": "./dist/array/order/index.js"
+    },
+    "./array/range": {
+      "types": "./dist/array/range/index.d.ts",
+      "import": "./dist/array/range/index.js",
+      "default": "./dist/array/range/index.js"
+    },
+    "./array/splitBy": {
+      "types": "./dist/array/splitBy/index.d.ts",
+      "import": "./dist/array/splitBy/index.js",
+      "default": "./dist/array/splitBy/index.js"
+    },
+    "./array/sum": {
+      "types": "./dist/array/sum/index.d.ts",
+      "import": "./dist/array/sum/index.js",
+      "default": "./dist/array/sum/index.js"
+    },
+    "./array/toBatches": {
+      "types": "./dist/array/toBatches/index.d.ts",
+      "import": "./dist/array/toBatches/index.js",
+      "default": "./dist/array/toBatches/index.js"
+    },
+    "./array/toggleInclusion": {
+      "types": "./dist/array/toggleInclusion.d.ts",
+      "import": "./dist/array/toggleInclusion.js",
+      "default": "./dist/array/toggleInclusion.js"
+    },
+    "./array/updateAtIndex": {
+      "types": "./dist/array/updateAtIndex.d.ts",
+      "import": "./dist/array/updateAtIndex.js",
+      "default": "./dist/array/updateAtIndex.js"
+    },
+    "./array/without": {
+      "types": "./dist/array/without/index.d.ts",
+      "import": "./dist/array/without/index.js",
+      "default": "./dist/array/without/index.js"
+    },
+    "./array/withoutDuplicates": {
+      "types": "./dist/array/withoutDuplicates/index.d.ts",
+      "import": "./dist/array/withoutDuplicates/index.js",
+      "default": "./dist/array/withoutDuplicates/index.js"
+    },
+    "./assert/shouldBeDefined": {
+      "types": "./dist/assert/shouldBeDefined/index.d.ts",
+      "import": "./dist/assert/shouldBeDefined/index.js",
+      "default": "./dist/assert/shouldBeDefined/index.js"
+    },
+    "./assert/shouldBePresent": {
+      "types": "./dist/assert/shouldBePresent/index.d.ts",
+      "import": "./dist/assert/shouldBePresent/index.js",
+      "default": "./dist/assert/shouldBePresent/index.js"
+    },
+    "./attempt": {
+      "types": "./dist/attempt.d.ts",
+      "import": "./dist/attempt.js",
+      "default": "./dist/attempt.js"
+    },
+    "./base64Encode": {
+      "types": "./dist/base64Encode.d.ts",
+      "import": "./dist/base64Encode.js",
+      "default": "./dist/base64Encode.js"
+    },
+    "./bigint/bigIntMax": {
+      "types": "./dist/bigint/bigIntMax.d.ts",
+      "import": "./dist/bigint/bigIntMax.js",
+      "default": "./dist/bigint/bigIntMax.js"
+    },
+    "./bigint/bigIntMultiplyByNumber": {
+      "types": "./dist/bigint/bigIntMultiplyByNumber.d.ts",
+      "import": "./dist/bigint/bigIntMultiplyByNumber.js",
+      "default": "./dist/bigint/bigIntMultiplyByNumber.js"
+    },
+    "./bigint/bigIntSum": {
+      "types": "./dist/bigint/bigIntSum.d.ts",
+      "import": "./dist/bigint/bigIntSum.js",
+      "default": "./dist/bigint/bigIntSum.js"
+    },
+    "./bigint/bigIntToDecimalString": {
+      "types": "./dist/bigint/bigIntToDecimalString.d.ts",
+      "import": "./dist/bigint/bigIntToDecimalString.js",
+      "default": "./dist/bigint/bigIntToDecimalString.js"
+    },
+    "./bigint/bigIntToHex": {
+      "types": "./dist/bigint/bigIntToHex.d.ts",
+      "import": "./dist/bigint/bigIntToHex.js",
+      "default": "./dist/bigint/bigIntToHex.js"
+    },
+    "./bigint/bigIntToNumber": {
+      "types": "./dist/bigint/bigIntToNumber.d.ts",
+      "import": "./dist/bigint/bigIntToNumber.js",
+      "default": "./dist/bigint/bigIntToNumber.js"
+    },
+    "./bigint/decimalStringToBigInt": {
+      "types": "./dist/bigint/decimalStringToBigInt.d.ts",
+      "import": "./dist/bigint/decimalStringToBigInt.js",
+      "default": "./dist/bigint/decimalStringToBigInt.js"
+    },
+    "./capitalizeFirstLetter": {
+      "types": "./dist/capitalizeFirstLetter.d.ts",
+      "import": "./dist/capitalizeFirstLetter.js",
+      "default": "./dist/capitalizeFirstLetter.js"
+    },
+    "./crypto/getHexEncodedRandomBytes": {
+      "types": "./dist/crypto/getHexEncodedRandomBytes.d.ts",
+      "import": "./dist/crypto/getHexEncodedRandomBytes.js",
+      "default": "./dist/crypto/getHexEncodedRandomBytes.js"
+    },
+    "./debounce": {
+      "types": "./dist/debounce.d.ts",
+      "import": "./dist/debounce.js",
+      "default": "./dist/debounce.js"
+    },
+    "./degreesToRadians": {
+      "types": "./dist/degreesToRadians.d.ts",
+      "import": "./dist/degreesToRadians.js",
+      "default": "./dist/degreesToRadians.js"
+    },
+    "./encryption/aesGcm/AesGcmInput": {
+      "types": "./dist/encryption/aesGcm/AesGcmInput.d.ts",
+      "import": "./dist/encryption/aesGcm/AesGcmInput.js",
+      "default": "./dist/encryption/aesGcm/AesGcmInput.js"
+    },
+    "./encryption/aesGcm/decryptWithAesGcm": {
+      "types": "./dist/encryption/aesGcm/decryptWithAesGcm.d.ts",
+      "import": "./dist/encryption/aesGcm/decryptWithAesGcm.js",
+      "default": "./dist/encryption/aesGcm/decryptWithAesGcm.js"
+    },
+    "./encryption/aesGcm/encryptWithAesGcm": {
+      "types": "./dist/encryption/aesGcm/encryptWithAesGcm.d.ts",
+      "import": "./dist/encryption/aesGcm/encryptWithAesGcm.js",
+      "default": "./dist/encryption/aesGcm/encryptWithAesGcm.js"
+    },
+    "./encryption/config": {
+      "types": "./dist/encryption/config.d.ts",
+      "import": "./dist/encryption/config.js",
+      "default": "./dist/encryption/config.js"
+    },
+    "./enforceRange": {
+      "types": "./dist/enforceRange.d.ts",
+      "import": "./dist/enforceRange.js",
+      "default": "./dist/enforceRange.js"
+    },
+    "./entities/Dimensions": {
+      "types": "./dist/entities/Dimensions.d.ts",
+      "import": "./dist/entities/Dimensions.js",
+      "default": "./dist/entities/Dimensions.js"
+    },
+    "./entities/EntityWithAmount": {
+      "types": "./dist/entities/EntityWithAmount.d.ts",
+      "import": "./dist/entities/EntityWithAmount.js",
+      "default": "./dist/entities/EntityWithAmount.js"
+    },
+    "./entities/EntityWithLogo": {
+      "types": "./dist/entities/EntityWithLogo.d.ts",
+      "import": "./dist/entities/EntityWithLogo.js",
+      "default": "./dist/entities/EntityWithLogo.js"
+    },
+    "./entities/EntityWithOrder": {
+      "types": "./dist/entities/EntityWithOrder.d.ts",
+      "import": "./dist/entities/EntityWithOrder.js",
+      "default": "./dist/entities/EntityWithOrder.js"
+    },
+    "./entities/EntityWithPrice": {
+      "types": "./dist/entities/EntityWithPrice.d.ts",
+      "import": "./dist/entities/EntityWithPrice.js",
+      "default": "./dist/entities/EntityWithPrice.js"
+    },
+    "./entities/EntityWithTicker": {
+      "types": "./dist/entities/EntityWithTicker.d.ts",
+      "import": "./dist/entities/EntityWithTicker.js",
+      "default": "./dist/entities/EntityWithTicker.js"
+    },
+    "./entities/Entry": {
+      "types": "./dist/entities/Entry.d.ts",
+      "import": "./dist/entities/Entry.js",
+      "default": "./dist/entities/Entry.js"
+    },
+    "./entities/props": {
+      "types": "./dist/entities/props/index.d.ts",
+      "import": "./dist/entities/props/index.js",
+      "default": "./dist/entities/props/index.js"
+    },
+    "./entities/ValueTransition": {
+      "types": "./dist/entities/ValueTransition.d.ts",
+      "import": "./dist/entities/ValueTransition.js",
+      "default": "./dist/entities/ValueTransition.js"
+    },
+    "./error/assertErrorMessage": {
+      "types": "./dist/error/assertErrorMessage.d.ts",
+      "import": "./dist/error/assertErrorMessage.js",
+      "default": "./dist/error/assertErrorMessage.js"
+    },
+    "./error/extractErrorMsg": {
+      "types": "./dist/error/extractErrorMsg/index.d.ts",
+      "import": "./dist/error/extractErrorMsg/index.js",
+      "default": "./dist/error/extractErrorMsg/index.js"
+    },
+    "./error/isInError": {
+      "types": "./dist/error/isInError.d.ts",
+      "import": "./dist/error/isInError.js",
+      "default": "./dist/error/isInError.js"
+    },
+    "./error/NoDataError": {
+      "types": "./dist/error/NoDataError.d.ts",
+      "import": "./dist/error/NoDataError.js",
+      "default": "./dist/error/NoDataError.js"
+    },
+    "./error/NotImplementedError": {
+      "types": "./dist/error/NotImplementedError.d.ts",
+      "import": "./dist/error/NotImplementedError.js",
+      "default": "./dist/error/NotImplementedError.js"
+    },
+    "./error/prefixErrorWith": {
+      "types": "./dist/error/prefixErrorWith.d.ts",
+      "import": "./dist/error/prefixErrorWith.js",
+      "default": "./dist/error/prefixErrorWith.js"
+    },
+    "./error/transformError": {
+      "types": "./dist/error/transformError.d.ts",
+      "import": "./dist/error/transformError.js",
+      "default": "./dist/error/transformError.js"
+    },
+    "./fetch/assertFetchResponse": {
+      "types": "./dist/fetch/assertFetchResponse.d.ts",
+      "import": "./dist/fetch/assertFetchResponse.js",
+      "default": "./dist/fetch/assertFetchResponse.js"
+    },
+    "./file/initiateFileDownload": {
+      "types": "./dist/file/initiateFileDownload.d.ts",
+      "import": "./dist/file/initiateFileDownload.js",
+      "default": "./dist/file/initiateFileDownload.js"
+    },
+    "./file/readFileAsArrayBuffer": {
+      "types": "./dist/file/readFileAsArrayBuffer.d.ts",
+      "import": "./dist/file/readFileAsArrayBuffer.js",
+      "default": "./dist/file/readFileAsArrayBuffer.js"
+    },
+    "./formatAmount": {
+      "types": "./dist/formatAmount.d.ts",
+      "import": "./dist/formatAmount.js",
+      "default": "./dist/formatAmount.js"
+    },
+    "./formatDataToHex": {
+      "types": "./dist/formatDataToHex.d.ts",
+      "import": "./dist/formatDataToHex.js",
+      "default": "./dist/formatDataToHex.js"
+    },
+    "./formatWalletAddress": {
+      "types": "./dist/formatWalletAddress.d.ts",
+      "import": "./dist/formatWalletAddress.js",
+      "default": "./dist/formatWalletAddress.js"
+    },
+    "./fromBase64": {
+      "types": "./dist/fromBase64.d.ts",
+      "import": "./dist/fromBase64.js",
+      "default": "./dist/fromBase64.js"
+    },
+    "./getDiscriminatedUnionValue": {
+      "types": "./dist/getDiscriminatedUnionValue.d.ts",
+      "import": "./dist/getDiscriminatedUnionValue.js",
+      "default": "./dist/getDiscriminatedUnionValue.js"
+    },
+    "./hex/ensureHexPrefix": {
+      "types": "./dist/hex/ensureHexPrefix.d.ts",
+      "import": "./dist/hex/ensureHexPrefix.js",
+      "default": "./dist/hex/ensureHexPrefix.js"
+    },
+    "./hex/hexToNumber": {
+      "types": "./dist/hex/hexToNumber.d.ts",
+      "import": "./dist/hex/hexToNumber.js",
+      "default": "./dist/hex/hexToNumber.js"
+    },
+    "./hex/numberToHex": {
+      "types": "./dist/hex/numberToHex.d.ts",
+      "import": "./dist/hex/numberToHex.js",
+      "default": "./dist/hex/numberToHex.js"
+    },
+    "./hex/stripHexPrefix": {
+      "types": "./dist/hex/stripHexPrefix.d.ts",
+      "import": "./dist/hex/stripHexPrefix.js",
+      "default": "./dist/hex/stripHexPrefix.js"
+    },
+    "./hexToBytes": {
+      "types": "./dist/hexToBytes.d.ts",
+      "import": "./dist/hexToBytes.js",
+      "default": "./dist/hexToBytes.js"
+    },
+    "./match": {
+      "types": "./dist/match.d.ts",
+      "import": "./dist/match.js",
+      "default": "./dist/match.js"
+    },
+    "./matchDiscriminatedUnion": {
+      "types": "./dist/matchDiscriminatedUnion.d.ts",
+      "import": "./dist/matchDiscriminatedUnion.js",
+      "default": "./dist/matchDiscriminatedUnion.js"
+    },
+    "./matchRecordUnion": {
+      "types": "./dist/matchRecordUnion.d.ts",
+      "import": "./dist/matchRecordUnion.js",
+      "default": "./dist/matchRecordUnion.js"
+    },
+    "./math/maxBigInt": {
+      "types": "./dist/math/maxBigInt/index.d.ts",
+      "import": "./dist/math/maxBigInt/index.js",
+      "default": "./dist/math/maxBigInt/index.js"
+    },
+    "./math/minBigInt": {
+      "types": "./dist/math/minBigInt/index.d.ts",
+      "import": "./dist/math/minBigInt/index.js",
+      "default": "./dist/math/minBigInt/index.js"
+    },
+    "./memoize": {
+      "types": "./dist/memoize.d.ts",
+      "import": "./dist/memoize.js",
+      "default": "./dist/memoize.js"
+    },
+    "./memoizeAsync": {
+      "types": "./dist/memoizeAsync.d.ts",
+      "import": "./dist/memoizeAsync.js",
+      "default": "./dist/memoizeAsync.js"
+    },
+    "./order/config": {
+      "types": "./dist/order/config.d.ts",
+      "import": "./dist/order/config.js",
+      "default": "./dist/order/config.js"
+    },
+    "./order/getLastItemOrder": {
+      "types": "./dist/order/getLastItemOrder.d.ts",
+      "import": "./dist/order/getLastItemOrder.js",
+      "default": "./dist/order/getLastItemOrder.js"
+    },
+    "./order/getNewOrder": {
+      "types": "./dist/order/getNewOrder.d.ts",
+      "import": "./dist/order/getNewOrder.js",
+      "default": "./dist/order/getNewOrder.js"
+    },
+    "./order/Order": {
+      "types": "./dist/order/Order.d.ts",
+      "import": "./dist/order/Order.js",
+      "default": "./dist/order/Order.js"
+    },
+    "./package.json": "./package.json",
+    "./pair/getPairComplement": {
+      "types": "./dist/pair/getPairComplement.d.ts",
+      "import": "./dist/pair/getPairComplement.js",
+      "default": "./dist/pair/getPairComplement.js"
+    },
+    "./pipe": {
+      "types": "./dist/pipe.d.ts",
+      "import": "./dist/pipe.js",
+      "default": "./dist/pipe.js"
+    },
+    "./promise/asyncFallbackChain": {
+      "types": "./dist/promise/asyncFallbackChain/index.d.ts",
+      "import": "./dist/promise/asyncFallbackChain/index.js",
+      "default": "./dist/promise/asyncFallbackChain/index.js"
+    },
+    "./promise/chainPromises": {
+      "types": "./dist/promise/chainPromises.d.ts",
+      "import": "./dist/promise/chainPromises.js",
+      "default": "./dist/promise/chainPromises.js"
+    },
+    "./promise/coalesceInFlight": {
+      "types": "./dist/promise/coalesceInFlight.d.ts",
+      "import": "./dist/promise/coalesceInFlight.js",
+      "default": "./dist/promise/coalesceInFlight.js"
+    },
+    "./promise/ignorePromiseOutcome": {
+      "types": "./dist/promise/ignorePromiseOutcome.d.ts",
+      "import": "./dist/promise/ignorePromiseOutcome.js",
+      "default": "./dist/promise/ignorePromiseOutcome.js"
+    },
+    "./promise/isPromise": {
+      "types": "./dist/promise/isPromise.d.ts",
+      "import": "./dist/promise/isPromise.js",
+      "default": "./dist/promise/isPromise.js"
+    },
+    "./query/addQueryParams": {
+      "types": "./dist/query/addQueryParams.d.ts",
+      "import": "./dist/query/addQueryParams.js",
+      "default": "./dist/query/addQueryParams.js"
+    },
+    "./query/getRawQueryParams": {
+      "types": "./dist/query/getRawQueryParams.d.ts",
+      "import": "./dist/query/getRawQueryParams.js",
+      "default": "./dist/query/getRawQueryParams.js"
+    },
+    "./query/queryUrl": {
+      "types": "./dist/query/queryUrl.d.ts",
+      "import": "./dist/query/queryUrl.js",
+      "default": "./dist/query/queryUrl.js"
+    },
+    "./query/retry": {
+      "types": "./dist/query/retry.d.ts",
+      "import": "./dist/query/retry.js",
+      "default": "./dist/query/retry.js"
+    },
+    "./randomInRange": {
+      "types": "./dist/randomInRange.d.ts",
+      "import": "./dist/randomInRange.js",
+      "default": "./dist/randomInRange.js"
+    },
+    "./record/areEqualRecords": {
+      "types": "./dist/record/areEqualRecords.d.ts",
+      "import": "./dist/record/areEqualRecords.js",
+      "default": "./dist/record/areEqualRecords.js"
+    },
+    "./record/assertField": {
+      "types": "./dist/record/assertField.d.ts",
+      "import": "./dist/record/assertField.js",
+      "default": "./dist/record/assertField.js"
+    },
+    "./record/getRecordKeys": {
+      "types": "./dist/record/getRecordKeys/index.d.ts",
+      "import": "./dist/record/getRecordKeys/index.js",
+      "default": "./dist/record/getRecordKeys/index.js"
+    },
+    "./record/haveEqualFields": {
+      "types": "./dist/record/haveEqualFields/index.d.ts",
+      "import": "./dist/record/haveEqualFields/index.js",
+      "default": "./dist/record/haveEqualFields/index.js"
+    },
+    "./record/isRecordEmpty": {
+      "types": "./dist/record/isRecordEmpty.d.ts",
+      "import": "./dist/record/isRecordEmpty.js",
+      "default": "./dist/record/isRecordEmpty.js"
+    },
+    "./record/makeRecord": {
+      "types": "./dist/record/makeRecord/index.d.ts",
+      "import": "./dist/record/makeRecord/index.js",
+      "default": "./dist/record/makeRecord/index.js"
+    },
+    "./record/mergeRecords": {
+      "types": "./dist/record/mergeRecords.d.ts",
+      "import": "./dist/record/mergeRecords.js",
+      "default": "./dist/record/mergeRecords.js"
+    },
+    "./record/mirrorRecord": {
+      "types": "./dist/record/mirrorRecord/index.d.ts",
+      "import": "./dist/record/mirrorRecord/index.js",
+      "default": "./dist/record/mirrorRecord/index.js"
+    },
+    "./record/omit": {
+      "types": "./dist/record/omit/index.d.ts",
+      "import": "./dist/record/omit/index.js",
+      "default": "./dist/record/omit/index.js"
+    },
+    "./record/pick": {
+      "types": "./dist/record/pick.d.ts",
+      "import": "./dist/record/pick.js",
+      "default": "./dist/record/pick.js"
+    },
+    "./record/recordFromItems": {
+      "types": "./dist/record/recordFromItems.d.ts",
+      "import": "./dist/record/recordFromItems.js",
+      "default": "./dist/record/recordFromItems.js"
+    },
+    "./record/recordFromKeys": {
+      "types": "./dist/record/recordFromKeys.d.ts",
+      "import": "./dist/record/recordFromKeys.js",
+      "default": "./dist/record/recordFromKeys.js"
+    },
+    "./record/recordMap": {
+      "types": "./dist/record/recordMap.d.ts",
+      "import": "./dist/record/recordMap.js",
+      "default": "./dist/record/recordMap.js"
+    },
+    "./record/sortRecordKeysAlphabetically": {
+      "types": "./dist/record/sortRecordKeysAlphabetically.d.ts",
+      "import": "./dist/record/sortRecordKeysAlphabetically.js",
+      "default": "./dist/record/sortRecordKeysAlphabetically.js"
+    },
+    "./record/toEntries": {
+      "types": "./dist/record/toEntries.d.ts",
+      "import": "./dist/record/toEntries.js",
+      "default": "./dist/record/toEntries.js"
+    },
+    "./record/union/getRecordUnionKey": {
+      "types": "./dist/record/union/getRecordUnionKey.d.ts",
+      "import": "./dist/record/union/getRecordUnionKey.js",
+      "default": "./dist/record/union/getRecordUnionKey.js"
+    },
+    "./record/union/getRecordUnionValue": {
+      "types": "./dist/record/union/getRecordUnionValue.d.ts",
+      "import": "./dist/record/union/getRecordUnionValue.js",
+      "default": "./dist/record/union/getRecordUnionValue.js"
+    },
+    "./record/withoutUndefinedFields": {
+      "types": "./dist/record/withoutUndefinedFields.d.ts",
+      "import": "./dist/record/withoutUndefinedFields.js",
+      "default": "./dist/record/withoutUndefinedFields.js"
+    },
+    "./sleep": {
+      "types": "./dist/sleep.d.ts",
+      "import": "./dist/sleep.js",
+      "default": "./dist/sleep.js"
+    },
+    "./string/areLowerCaseEqual": {
+      "types": "./dist/string/areLowerCaseEqual.d.ts",
+      "import": "./dist/string/areLowerCaseEqual.js",
+      "default": "./dist/string/areLowerCaseEqual.js"
+    },
+    "./string/normalizeNonEmptyString": {
+      "types": "./dist/string/normalizeNonEmptyString.d.ts",
+      "import": "./dist/string/normalizeNonEmptyString.js",
+      "default": "./dist/string/normalizeNonEmptyString.js"
+    },
+    "./string/truncate": {
+      "types": "./dist/string/truncate.d.ts",
+      "import": "./dist/string/truncate.js",
+      "default": "./dist/string/truncate.js"
+    },
+    "./time": {
+      "types": "./dist/time/index.d.ts",
+      "import": "./dist/time/index.js",
+      "default": "./dist/time/index.js"
+    },
+    "./time/convertDuration": {
+      "types": "./dist/time/convertDuration.d.ts",
+      "import": "./dist/time/convertDuration.js",
+      "default": "./dist/time/convertDuration.js"
+    },
+    "./time/DurationUnit": {
+      "types": "./dist/time/DurationUnit.d.ts",
+      "import": "./dist/time/DurationUnit.js",
+      "default": "./dist/time/DurationUnit.js"
+    },
+    "./toCamelCase": {
+      "types": "./dist/toCamelCase.d.ts",
+      "import": "./dist/toCamelCase.js",
+      "default": "./dist/toCamelCase.js"
+    },
+    "./toPercents": {
+      "types": "./dist/toPercents.d.ts",
+      "import": "./dist/toPercents.js",
+      "default": "./dist/toPercents.js"
+    },
+    "./TransferDirection": {
+      "types": "./dist/TransferDirection.d.ts",
+      "import": "./dist/TransferDirection.js",
+      "default": "./dist/TransferDirection.js"
+    },
+    "./types/Defined": {
+      "types": "./dist/types/Defined.d.ts",
+      "import": "./dist/types/Defined.js",
+      "default": "./dist/types/Defined.js"
+    },
+    "./types/Exact": {
+      "types": "./dist/types/Exact.d.ts",
+      "import": "./dist/types/Exact.js",
+      "default": "./dist/types/Exact.js"
+    },
+    "./types/Method": {
+      "types": "./dist/types/Method.d.ts",
+      "import": "./dist/types/Method.js",
+      "default": "./dist/types/Method.js"
+    },
+    "./types/RequiredFields": {
+      "types": "./dist/types/RequiredFields.d.ts",
+      "import": "./dist/types/RequiredFields.js",
+      "default": "./dist/types/RequiredFields.js"
+    },
+    "./types/Resolver": {
+      "types": "./dist/types/Resolver.d.ts",
+      "import": "./dist/types/Resolver.js",
+      "default": "./dist/types/Resolver.js"
+    },
+    "./types/Result": {
+      "types": "./dist/types/Result.d.ts",
+      "import": "./dist/types/Result.js",
+      "default": "./dist/types/Result.js"
+    },
+    "./types/WithoutUndefinedFields": {
+      "types": "./dist/types/WithoutUndefinedFields.d.ts",
+      "import": "./dist/types/WithoutUndefinedFields.js",
+      "default": "./dist/types/WithoutUndefinedFields.js"
+    },
+    "./url/baseDomain": {
+      "types": "./dist/url/baseDomain.d.ts",
+      "import": "./dist/url/baseDomain.js",
+      "default": "./dist/url/baseDomain.js"
+    },
+    "./url/host": {
+      "types": "./dist/url/host.d.ts",
+      "import": "./dist/url/host.js",
+      "default": "./dist/url/host.js"
+    },
+    "./validation/url": {
+      "types": "./dist/validation/url.d.ts",
+      "import": "./dist/validation/url.js",
+      "default": "./dist/validation/url.js"
+    },
+    "./validation/validateEmail": {
+      "types": "./dist/validation/validateEmail/index.d.ts",
+      "import": "./dist/validation/validateEmail/index.js",
+      "default": "./dist/validation/validateEmail/index.js"
     }
   },
   "scripts": {

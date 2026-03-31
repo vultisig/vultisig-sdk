@@ -12,6 +12,7 @@ import { getCosmosChainSpecific } from './resolvers/cosmos'
 import { getEvmChainSpecific } from './resolvers/evm'
 import { getMayaChainSpecific } from './resolvers/maya'
 import { getPolkadotChainSpecific } from './resolvers/polkadot'
+import { getQbtcChainSpecific } from './resolvers/qbtc'
 import { getRippleChainSpecific } from './resolvers/ripple'
 import { getSolanaChainSpecific } from './resolvers/solana'
 import { getSuiChainSpecific } from './resolvers/sui'
@@ -41,6 +42,7 @@ const resolvers: Record<
 // Chains that share a proto case but need their own resolver
 const chainOverrides: Partial<Record<Chain, GetChainSpecificResolver<any>>> = {
   [Chain.Bittensor]: getBittensorChainSpecific,
+  [Chain.QBTC]: getQbtcChainSpecific,
 }
 
 export const getChainSpecific = async (

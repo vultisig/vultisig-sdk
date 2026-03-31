@@ -25,6 +25,12 @@ export const getPublicKey = ({
   publicKeys,
   chainPublicKeys,
 }: Input) => {
+  if (chain === Chain.QBTC) {
+    throw new Error(
+      'QBTC uses MLDSA; use vault.publicKeyMldsa and deriveQbtcAddress instead of WalletCore public keys'
+    )
+  }
+
   const coinType = getCoinType({
     walletCore,
     chain,
@@ -54,6 +60,9 @@ export const getPublicKey = ({
           path: walletCore.CoinTypeExt.derivationPath(coinType),
         }),
       eddsa: () => publicKeys.eddsa,
+      mldsa: () => {
+        throw new Error('MLDSA public key is not derived via ECDSA/EdDSA paths')
+      },
     })
 
   const publicKeyData =

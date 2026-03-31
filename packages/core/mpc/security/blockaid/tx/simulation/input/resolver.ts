@@ -1,0 +1,27 @@
+import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { Resolver } from '@vultisig/lib-utils/types/Resolver'
+import { WalletCore } from '@trustwallet/wallet-core'
+
+import { BlockaidSimulationSupportedChain } from '@vultisig/core-chain/security/blockaid/simulationChains'
+import { BlockaidTxSimulationInput } from '@vultisig/core-chain/security/blockaid/tx/simulation/resolver'
+
+export type BlockaidTxSimulationInputResolverInput<
+  T extends BlockaidSimulationSupportedChain = BlockaidSimulationSupportedChain,
+> = {
+  payload: KeysignPayload
+  walletCore: WalletCore
+  chain: T
+  raw?: string[]
+}
+
+export type BlockaidTxSimulationInputResolver<
+  T extends BlockaidSimulationSupportedChain = BlockaidSimulationSupportedChain,
+> = Resolver<
+  {
+    payload: KeysignPayload
+    walletCore: WalletCore
+    chain: T
+    raw?: string[]
+  },
+  BlockaidTxSimulationInput['data'] | null
+>

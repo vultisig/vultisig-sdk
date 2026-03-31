@@ -200,6 +200,12 @@ const leanChainFeeCoin: Record<Chain, KnownCoinMetadata> = {
     decimals: 18,
     priceProviderId: 'sei-network',
   },
+  [Chain.QBTC]: {
+    ticker: 'QBTC',
+    logo: 'qbtc',
+    decimals: 6,
+    priceProviderId: 'qbtc-testnet',
+  },
 }
 
 export const chainFeeCoin: Record<Chain, KnownCoin> = recordMap(

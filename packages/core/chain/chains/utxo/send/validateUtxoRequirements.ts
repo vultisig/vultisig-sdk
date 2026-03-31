@@ -9,12 +9,23 @@ type Input = {
   amount: bigint
   balance: bigint
   chain: UtxoBasedChain
+  /**
+   * When set (native fee coin), change after send is `balance - amount - fee`.
+   * Omit when the fee is paid from a different balance.
+   */
+  fee?: bigint
+  /**
+   * Skip dust/change validation when the fee is not yet known (avoids false positives).
+   */
+  skipDustCheck?: boolean
 }
 
 export const validateUtxoRequirements = ({
   amount,
   balance,
   chain,
+  fee,
+  skipDustCheck,
 }: Input): string | undefined => {
   const { decimals, ticker } = chainFeeCoin[chain]
 
@@ -26,7 +37,12 @@ export const validateUtxoRequirements = ({
     return `Minimum send amount is ${formattedAmount}. ${chain} requires this to prevent spam.`
   }
 
-  const remainingBalance = balance - amount
+  if (skipDustCheck) {
+    return
+  }
+
+  const remainingBalance =
+    fee != null ? balance - amount - fee : balance - amount
 
   if (remainingBalance === 0n) {
     return

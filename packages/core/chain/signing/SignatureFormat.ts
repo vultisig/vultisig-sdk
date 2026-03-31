@@ -14,4 +14,5 @@ export const signatureFormats: Record<ChainKind, SignatureFormat> = {
   ripple: 'rawWithRecoveryId',
   tron: 'rawWithRecoveryId',
   cardano: 'raw',
+  qbtc: 'raw',
 }

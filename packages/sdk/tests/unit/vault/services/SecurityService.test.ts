@@ -9,7 +9,7 @@ vi.mock('@vultisig/core-chain/security/blockaid/tx/simulation', () => ({
   getTxBlockaidSimulation: vi.fn(),
 }))
 
-vi.mock('@vultisig/core-chain/security/blockaid/tx/simulation/input', () => ({
+vi.mock('@vultisig/core-mpc/security/blockaid/tx/simulation/input', () => ({
   getBlockaidTxSimulationInput: vi.fn(),
 }))
 
@@ -21,7 +21,7 @@ vi.mock('@vultisig/core-chain/security/blockaid/tx/validation/api/core', () => (
   parseBlockaidValidation: vi.fn(),
 }))
 
-vi.mock('@vultisig/core-chain/security/blockaid/tx/validation/input', () => ({
+vi.mock('@vultisig/core-mpc/security/blockaid/tx/validation/input', () => ({
   getBlockaidTxValidationInput: vi.fn(),
 }))
 
@@ -31,11 +31,11 @@ vi.mock('@vultisig/core-mpc/keysign/utils/getKeysignChain', () => ({
 
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getTxBlockaidSimulation } from '@vultisig/core-chain/security/blockaid/tx/simulation'
-import { getBlockaidTxSimulationInput } from '@vultisig/core-chain/security/blockaid/tx/simulation/input'
 import { getTxBlockaidValidation } from '@vultisig/core-chain/security/blockaid/tx/validation'
 import { parseBlockaidValidation } from '@vultisig/core-chain/security/blockaid/tx/validation/api/core'
-import { getBlockaidTxValidationInput } from '@vultisig/core-chain/security/blockaid/tx/validation/input'
 import { getKeysignChain } from '@vultisig/core-mpc/keysign/utils/getKeysignChain'
+import { getBlockaidTxSimulationInput } from '@vultisig/core-mpc/security/blockaid/tx/simulation/input'
+import { getBlockaidTxValidationInput } from '@vultisig/core-mpc/security/blockaid/tx/validation/input'
 
 import { SecurityService } from '../../../../src/vault/services/SecurityService'
 

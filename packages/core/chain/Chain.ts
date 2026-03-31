@@ -76,6 +76,8 @@ export enum OtherChain {
   Ripple = 'Ripple',
   Tron = 'Tron',
   Cardano = 'Cardano',
+  /** Post-quantum testnet (Cosmos SDK + MLDSA); not supported by WalletCore signing. */
+  QBTC = 'QBTC',
 }
 
 export const Chain = {

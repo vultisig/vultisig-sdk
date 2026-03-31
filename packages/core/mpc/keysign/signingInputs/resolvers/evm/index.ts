@@ -3,7 +3,7 @@ import {
   getEvmTwFeeFields,
   GetEvmTwFeeFieldsInput,
 } from '@vultisig/core-chain/chains/evm/tx/fee/tw/getEvmTwFeeFields'
-import { incrementKeysignPayloadNonce } from '@vultisig/core-chain/chains/evm/tx/incrementKeysignPayloadNonce'
+import { incrementKeysignPayloadNonce } from './incrementKeysignPayloadNonce'
 import { getEvmTwChainId } from '@vultisig/core-chain/chains/evm/tx/tw/getEvmTwChainId'
 import { getEvmTwNonce } from '@vultisig/core-chain/chains/evm/tx/tw/getEvmTwNonce'
 import { toEvmTwAmount } from '@vultisig/core-chain/chains/evm/tx/tw/toEvmTwAmount'
