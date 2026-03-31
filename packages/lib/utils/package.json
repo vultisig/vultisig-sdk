@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/lib-utils",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Shared utilities for Vultisig core packages",
   "license": "MIT",
   "repository": {
