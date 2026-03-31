@@ -42,8 +42,8 @@ jobs:
       REDIS_URI: redis://localhost:6379
       JWT_SECRET: integration-test-secret-key-not-for-prod
       AI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      AI_MODEL: minimax/minimax-m2.5:free
-      AI_SUMMARY_MODEL: minimax/minimax-m2.5:free
+      AI_MODEL: nvidia/nemotron-3-super-120b-a12b:free
+      AI_SUMMARY_MODEL: nvidia/nemotron-3-super-120b-a12b:free
       MCP_SERVER_URL: http://localhost:8888
       VERIFIER_URL: ""
       SERVER_PORT: "9998"
