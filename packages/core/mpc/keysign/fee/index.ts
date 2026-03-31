@@ -10,6 +10,7 @@ import { getCardanoFeeAmount } from './resolvers/cardano'
 import { getCosmosFeeAmount } from './resolvers/cosmos'
 import { getEvmFeeAmount } from './resolvers/evm'
 import { getPolkadotFeeAmount } from './resolvers/polkadot'
+import { getQbtcFeeAmount } from './resolvers/qbtc'
 import { getRippleFeeAmount } from './resolvers/ripple'
 import { getSolanaFeeAmount } from './resolvers/solana'
 import { getSuiFeeAmount } from './resolvers/sui'
@@ -29,6 +30,7 @@ const resolvers: Record<ChainKind, FeeAmountResolver> = {
   cosmos: getCosmosFeeAmount,
   evm: getEvmFeeAmount,
   polkadot: getPolkadotFeeAmount,
+  qbtc: getQbtcFeeAmount,
   ripple: getRippleFeeAmount,
   solana: getSolanaFeeAmount,
   sui: getSuiFeeAmount,

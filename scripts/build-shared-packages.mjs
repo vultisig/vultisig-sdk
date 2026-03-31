@@ -5,16 +5,33 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 import { fixDistEsmRelativeImports } from './fix-dist-esm-relative-imports.mjs'
+import { applySharedExports } from './generate-shared-exports.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
 const emitRoot = path.join(repoRoot, '.shared-dist-temp', 'packages')
 
 const syncTargets = [
-  { from: 'core/chain', to: 'packages/core/chain/dist' },
-  { from: 'core/mpc', to: 'packages/core/mpc/dist' },
-  { from: 'lib/utils', to: 'packages/lib/utils/dist' },
-  { from: 'core/config', to: 'packages/core/config/dist' },
+  {
+    from: 'core/chain',
+    to: 'packages/core/chain/dist',
+    packageJson: 'packages/core/chain/package.json',
+  },
+  {
+    from: 'core/mpc',
+    to: 'packages/core/mpc/dist',
+    packageJson: 'packages/core/mpc/package.json',
+  },
+  {
+    from: 'lib/utils',
+    to: 'packages/lib/utils/dist',
+    packageJson: 'packages/lib/utils/package.json',
+  },
+  {
+    from: 'core/config',
+    to: 'packages/core/config/dist',
+    packageJson: 'packages/core/config/package.json',
+  },
 ]
 
 const tsc = spawnSync('yarn', ['exec', 'tsc', '--project', '.config/tsconfig.shared-publish.json'], {
@@ -26,7 +43,7 @@ if (tsc.status !== 0) {
   process.exit(tsc.status ?? 1)
 }
 
-for (const { from, to } of syncTargets) {
+for (const { from, to, packageJson } of syncTargets) {
   const src = path.join(emitRoot, from)
   const dest = path.join(repoRoot, to)
 
@@ -38,6 +55,7 @@ for (const { from, to } of syncTargets) {
   rmSync(dest, { recursive: true, force: true })
   cpSync(src, dest, { recursive: true })
   fixDistEsmRelativeImports(dest)
+  applySharedExports(path.join(repoRoot, packageJson), dest)
 }
 
 console.log('Shared packages synced to packages/*/dist')

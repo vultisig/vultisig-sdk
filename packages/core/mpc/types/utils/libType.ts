@@ -6,6 +6,7 @@ import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 const mpcLibToLibType: Record<MpcLib, LibType> = {
   GG20: LibType.GG20,
   DKLS: LibType.DKLS,
+  KeyImport: LibType.KEYIMPORT,
 }
 
 const libTypeToKeysignLibType: Record<LibType, KeysignLibType> = {
@@ -14,14 +15,10 @@ const libTypeToKeysignLibType: Record<LibType, KeysignLibType> = {
   [LibType.KEYIMPORT]: 'KeyImport',
 }
 
-export const fromLibType = (libType: LibType): MpcLib => {
-  if (libType === LibType.KEYIMPORT) {
-    return 'DKLS'
-  }
-  return mirrorRecord(mpcLibToLibType)[libType]
-}
+export const fromLibType = (libType: LibType): MpcLib =>
+  mirrorRecord(mpcLibToLibType)[libType]
 
-type ToLibTypeInput = {
+export type ToLibTypeInput = {
   libType: MpcLib
   isKeyImport?: boolean
 }

@@ -1,0 +1,41 @@
+import { Chain } from '@vultisig/core-chain/Chain'
+import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
+import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
+
+import { KeysignSwapPayload } from '../../keysign/swap/KeysignSwapPayload'
+
+type GetSwapTrackingUrlInput = {
+  swapPayload: KeysignSwapPayload
+  txHash: string
+  sourceChain: Chain
+}
+
+export const getSwapTrackingUrl = ({
+  swapPayload,
+  txHash,
+  sourceChain,
+}: GetSwapTrackingUrlInput): string => {
+  return matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
+    native: ({ chain }) => {
+      if (chain === Chain.THORChain) {
+        return `https://runescan.io/tx/${stripHexPrefix(txHash)}`
+      }
+      return getBlockExplorerUrl({
+        chain,
+        entity: 'tx',
+        value: txHash,
+      })
+    },
+    general: ({ provider }) => {
+      if (provider === 'li.fi') {
+        return `https://scan.li.fi/tx/${txHash}`
+      }
+      return getBlockExplorerUrl({
+        chain: sourceChain,
+        entity: 'tx',
+        value: txHash,
+      })
+    },
+  })
+}

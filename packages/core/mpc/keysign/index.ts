@@ -182,28 +182,39 @@ export const keysign = async ({
   }
 
   const signature = session.finish()
-  const [rawR, rawS] = [signature.slice(0, 32), signature.slice(32, 64)]
-  const [r, s] = [rawR, rawS]
-    .map(value => Buffer.from(value))
-    .map(value =>
-      match(signatureAlgorithm, {
-        ecdsa: () => value,
-        eddsa: () => value.reverse(),
-      })
-    )
-    .map(value => value.toString('hex'))
 
-  const derSignature = encodeDERSignature(rawR, rawS)
-  const result: KeysignSignature = withoutUndefinedFields({
-    msg: Buffer.from(message, 'hex').toString('base64'),
-    r,
-    s,
-    recovery_id: match(signatureAlgorithm, {
-      ecdsa: () => signature[64].toString(16).padStart(2, '0'),
-      eddsa: () => undefined,
-    }),
-    der_signature: Buffer.from(derSignature).toString('hex'),
-  })
+  const result: KeysignSignature =
+    signatureAlgorithm === 'mldsa'
+      ? withoutUndefinedFields({
+          msg: Buffer.from(message, 'hex').toString('base64'),
+          r: '',
+          s: '',
+          der_signature: Buffer.from(signature).toString('hex'),
+        })
+      : (() => {
+          const [rawR, rawS] = [signature.slice(0, 32), signature.slice(32, 64)]
+          const [r, s] = [rawR, rawS]
+            .map(value => Buffer.from(value))
+            .map(value =>
+              match(signatureAlgorithm, {
+                ecdsa: () => value,
+                eddsa: () => value.reverse(),
+              })
+            )
+            .map(value => value.toString('hex'))
+
+          const derSignature = encodeDERSignature(rawR, rawS)
+          return withoutUndefinedFields({
+            msg: Buffer.from(message, 'hex').toString('base64'),
+            r,
+            s,
+            recovery_id: match(signatureAlgorithm, {
+              ecdsa: () => signature[64].toString(16).padStart(2, '0'),
+              eddsa: () => undefined,
+            }),
+            der_signature: Buffer.from(derSignature).toString('hex'),
+          })
+        })()
 
   ignorePromiseOutcome(
     transformError(

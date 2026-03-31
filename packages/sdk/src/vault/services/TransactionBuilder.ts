@@ -1,9 +1,8 @@
-import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
-import { getPreSigningHashes } from '@vultisig/core-chain/tx/preSigningHashes'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
@@ -11,9 +10,11 @@ import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEs
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
 import { getKeysignChain } from '@vultisig/core-mpc/keysign/utils/getKeysignChain'
+import { getPreSigningHashes } from '@vultisig/core-mpc/tx/preSigningHashes'
 import { toKeysignLibType } from '@vultisig/core-mpc/types/utils/libType'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import type { WasmProvider } from '../../context/SdkContext'
 import type { CosmosSigningOptions, SignAminoInput, SignDirectInput } from '../../types/cosmos'
@@ -86,13 +87,15 @@ export class TransactionBuilder {
         )
       }
 
-      // Get public key for the coin's chain
-      const publicKey = getPublicKey({
-        chain: params.coin.chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
+      const isQbtc = params.coin.chain === Chain.QBTC
+      const publicKey = isQbtc
+        ? null
+        : getPublicKey({
+            chain: params.coin.chain,
+            walletCore,
+            publicKeys: this.vaultData.publicKeys,
+            hexChainCode: this.vaultData.hexChainCode,
+          })
 
       // Build the keysign payload using core function
       const keysignPayload = await buildSendKeysignPayload({
@@ -103,6 +106,12 @@ export class TransactionBuilder {
         vaultId: this.vaultData.publicKeys.ecdsa,
         localPartyId: this.vaultData.localPartyId,
         publicKey,
+        hexPublicKeyOverride: isQbtc
+          ? shouldBePresent(
+              this.vaultData.publicKeyMldsa,
+              'Vault MLDSA public key required for QBTC send'
+            )
+          : undefined,
         walletCore,
         libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
@@ -137,12 +146,15 @@ export class TransactionBuilder {
     try {
       const walletCore = await this.wasmProvider.getWalletCore()
 
-      const publicKey = getPublicKey({
-        chain: params.coin.chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
+      const isQbtc = params.coin.chain === Chain.QBTC
+      const publicKey = isQbtc
+        ? null
+        : getPublicKey({
+            chain: params.coin.chain,
+            walletCore,
+            publicKeys: this.vaultData.publicKeys,
+            hexChainCode: this.vaultData.hexChainCode,
+          })
 
       return await getSendFeeEstimate({
         coin: params.coin,
@@ -152,6 +164,12 @@ export class TransactionBuilder {
         vaultId: this.vaultData.publicKeys.ecdsa,
         localPartyId: this.vaultData.localPartyId,
         publicKey,
+        hexPublicKeyOverride: isQbtc
+          ? shouldBePresent(
+              this.vaultData.publicKeyMldsa,
+              'Vault MLDSA public key required for QBTC fee estimate'
+            )
+          : undefined,
         walletCore,
         libType: toKeysignLibType(this.vaultData),
         feeSettings: params.feeSettings,
@@ -190,15 +208,19 @@ export class TransactionBuilder {
       // Get chain from keysign payload
       const chain = getKeysignChain(keysignPayload)
 
-      // Get public key data and create WalletCore PublicKey
-      const publicKeyData = getKeysignTwPublicKey(keysignPayload)
-      const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-      // Tron stores uncompressed public key (65 bytes), so use secp256k1Extended type
-      const coinType = getCoinType({ walletCore, chain })
-      const keyType = coinType === walletCore.CoinType.tron
-        ? walletCore.PublicKeyType.secp256k1Extended
-        : publicKeyType
-      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, keyType)
+      const publicKey =
+        chain === Chain.QBTC
+          ? undefined
+          : (() => {
+              const publicKeyData = getKeysignTwPublicKey(keysignPayload)
+              const publicKeyType = getTwPublicKeyType({ walletCore, chain })
+              const coinType = getCoinType({ walletCore, chain })
+              const keyType =
+                coinType === walletCore.CoinType.tron
+                  ? walletCore.PublicKeyType.secp256k1Extended
+                  : publicKeyType
+              return walletCore.PublicKey.createWithData(publicKeyData, keyType)
+            })()
 
       // Get encoded signing inputs (compiled transaction data)
       const txInputsArray = getEncodedSigningInputs({

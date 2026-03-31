@@ -17,4 +17,9 @@ export const getTwPublicKeyType = ({ walletCore, chain }: Input) =>
       chain === Chain.Cardano
         ? walletCore.PublicKeyType.ed25519Cardano
         : walletCore.PublicKeyType.ed25519,
+    mldsa: () => {
+      throw new Error(
+        `${chain} uses MLDSA; WalletCore does not expose an MLDSA public key type`
+      )
+    },
   })

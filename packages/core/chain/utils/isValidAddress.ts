@@ -1,3 +1,4 @@
+import { fromBech32 } from '@cosmjs/encoding'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { WalletCore } from '@trustwallet/wallet-core'
@@ -16,6 +17,15 @@ export const isValidAddress = ({ chain, address, walletCore }: Input) => {
 
   if (chain === Chain.Bittensor) {
     return walletCore.AnyAddress.isValidSS58(address, coinType, 42)
+  }
+
+  if (chain === Chain.QBTC) {
+    try {
+      const { prefix } = fromBech32(address.trim())
+      return prefix === 'qbtc'
+    } catch {
+      return false
+    }
   }
 
   if (chain === Chain.MayaChain) {

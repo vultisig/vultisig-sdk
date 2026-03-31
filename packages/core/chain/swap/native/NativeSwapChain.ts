@@ -1,6 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
-import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 
 export const nativeSwapChains = [Chain.THORChain, Chain.MayaChain] as const
@@ -76,10 +75,9 @@ export const nativeSwapChainIds: Record<NativeSwapEnabledChain, string> = {
   [Chain.Noble]: 'NOBLE',
 }
 
-type NativeSwapPayloadCase = Extract<
-  NonNullable<KeysignPayload['swapPayload']['case']>,
-  'thorchainSwapPayload' | 'mayachainSwapPayload'
->
+type NativeSwapPayloadCase =
+  | 'thorchainSwapPayload'
+  | 'mayachainSwapPayload'
 
 export const nativeSwapPayloadCase: Record<
   NativeSwapChain,

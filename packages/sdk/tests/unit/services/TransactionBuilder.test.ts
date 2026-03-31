@@ -24,7 +24,7 @@ vi.mock('@vultisig/core-chain/publicKey/tw/getTwPublicKeyType', () => ({
   getTwPublicKeyType: vi.fn(),
 }))
 
-vi.mock('@vultisig/core-chain/tx/preSigningHashes', () => ({
+vi.mock('@vultisig/core-mpc/tx/preSigningHashes', () => ({
   getPreSigningHashes: vi.fn(),
 }))
 

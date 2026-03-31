@@ -14,10 +14,931 @@
     "dist"
   ],
   "exports": {
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "import": "./dist/*.js",
-      "default": "./dist/*.js"
+    "./chains/cosmos/qbtc/QBTCHelper": {
+      "types": "./dist/chains/cosmos/qbtc/QBTCHelper.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/QBTCHelper.js",
+      "default": "./dist/chains/cosmos/qbtc/QBTCHelper.js"
+    },
+    "./compression/getSevenZip": {
+      "types": "./dist/compression/getSevenZip.d.ts",
+      "import": "./dist/compression/getSevenZip.js",
+      "default": "./dist/compression/getSevenZip.js"
+    },
+    "./constants/defaultMpcRelayRoundTimeoutMs": {
+      "types": "./dist/constants/defaultMpcRelayRoundTimeoutMs.d.ts",
+      "import": "./dist/constants/defaultMpcRelayRoundTimeoutMs.js",
+      "default": "./dist/constants/defaultMpcRelayRoundTimeoutMs.js"
+    },
+    "./derSignature": {
+      "types": "./dist/derSignature.d.ts",
+      "import": "./dist/derSignature.js",
+      "default": "./dist/derSignature.js"
+    },
+    "./devices/localPartyId": {
+      "types": "./dist/devices/localPartyId.d.ts",
+      "import": "./dist/devices/localPartyId.js",
+      "default": "./dist/devices/localPartyId.js"
+    },
+    "./devices/MpcDevice": {
+      "types": "./dist/devices/MpcDevice.d.ts",
+      "import": "./dist/devices/MpcDevice.js",
+      "default": "./dist/devices/MpcDevice.js"
+    },
+    "./dkls/dkls": {
+      "types": "./dist/dkls/dkls.d.ts",
+      "import": "./dist/dkls/dkls.js",
+      "default": "./dist/dkls/dkls.js"
+    },
+    "./fast/api/batchReshareWithServer": {
+      "types": "./dist/fast/api/batchReshareWithServer.d.ts",
+      "import": "./dist/fast/api/batchReshareWithServer.js",
+      "default": "./dist/fast/api/batchReshareWithServer.js"
+    },
+    "./fast/api/checkVaultExistsOnServer": {
+      "types": "./dist/fast/api/checkVaultExistsOnServer.d.ts",
+      "import": "./dist/fast/api/checkVaultExistsOnServer.js",
+      "default": "./dist/fast/api/checkVaultExistsOnServer.js"
+    },
+    "./fast/api/createVaultWithServer": {
+      "types": "./dist/fast/api/createVaultWithServer.d.ts",
+      "import": "./dist/fast/api/createVaultWithServer.js",
+      "default": "./dist/fast/api/createVaultWithServer.js"
+    },
+    "./fast/api/getVaultFromServer": {
+      "types": "./dist/fast/api/getVaultFromServer.d.ts",
+      "import": "./dist/fast/api/getVaultFromServer.js",
+      "default": "./dist/fast/api/getVaultFromServer.js"
+    },
+    "./fast/api/keyImportWithServer": {
+      "types": "./dist/fast/api/keyImportWithServer.d.ts",
+      "import": "./dist/fast/api/keyImportWithServer.js",
+      "default": "./dist/fast/api/keyImportWithServer.js"
+    },
+    "./fast/api/migrateWithServer": {
+      "types": "./dist/fast/api/migrateWithServer.d.ts",
+      "import": "./dist/fast/api/migrateWithServer.js",
+      "default": "./dist/fast/api/migrateWithServer.js"
+    },
+    "./fast/api/mldsaWithServer": {
+      "types": "./dist/fast/api/mldsaWithServer.d.ts",
+      "import": "./dist/fast/api/mldsaWithServer.js",
+      "default": "./dist/fast/api/mldsaWithServer.js"
+    },
+    "./fast/api/resendVaultShare": {
+      "types": "./dist/fast/api/resendVaultShare.d.ts",
+      "import": "./dist/fast/api/resendVaultShare.js",
+      "default": "./dist/fast/api/resendVaultShare.js"
+    },
+    "./fast/api/reshareWithServer": {
+      "types": "./dist/fast/api/reshareWithServer.d.ts",
+      "import": "./dist/fast/api/reshareWithServer.js",
+      "default": "./dist/fast/api/reshareWithServer.js"
+    },
+    "./fast/api/sequentialKeyImportWithServer": {
+      "types": "./dist/fast/api/sequentialKeyImportWithServer.d.ts",
+      "import": "./dist/fast/api/sequentialKeyImportWithServer.js",
+      "default": "./dist/fast/api/sequentialKeyImportWithServer.js"
+    },
+    "./fast/api/setupVaultWithServer": {
+      "types": "./dist/fast/api/setupVaultWithServer.d.ts",
+      "import": "./dist/fast/api/setupVaultWithServer.js",
+      "default": "./dist/fast/api/setupVaultWithServer.js"
+    },
+    "./fast/api/signWithServer": {
+      "types": "./dist/fast/api/signWithServer.d.ts",
+      "import": "./dist/fast/api/signWithServer.js",
+      "default": "./dist/fast/api/signWithServer.js"
+    },
+    "./fast/api/verifyVaultEmailCode": {
+      "types": "./dist/fast/api/verifyVaultEmailCode.d.ts",
+      "import": "./dist/fast/api/verifyVaultEmailCode.js",
+      "default": "./dist/fast/api/verifyVaultEmailCode.js"
+    },
+    "./fast/config": {
+      "types": "./dist/fast/config.d.ts",
+      "import": "./dist/fast/config.js",
+      "default": "./dist/fast/config.js"
+    },
+    "./getKeygenThreshold": {
+      "types": "./dist/getKeygenThreshold.d.ts",
+      "import": "./dist/getKeygenThreshold.js",
+      "default": "./dist/getKeygenThreshold.js"
+    },
+    "./getMessageHash": {
+      "types": "./dist/getMessageHash.d.ts",
+      "import": "./dist/getMessageHash.js",
+      "default": "./dist/getMessageHash.js"
+    },
+    "./keygen/KeygenOperation": {
+      "types": "./dist/keygen/KeygenOperation.d.ts",
+      "import": "./dist/keygen/KeygenOperation.js",
+      "default": "./dist/keygen/KeygenOperation.js"
+    },
+    "./keygen/KeygenStep": {
+      "types": "./dist/keygen/KeygenStep.d.ts",
+      "import": "./dist/keygen/KeygenStep.js",
+      "default": "./dist/keygen/KeygenStep.js"
+    },
+    "./keygen/KeygenType": {
+      "types": "./dist/keygen/KeygenType.d.ts",
+      "import": "./dist/keygen/KeygenType.js",
+      "default": "./dist/keygen/KeygenType.js"
+    },
+    "./keygen/ReshareType": {
+      "types": "./dist/keygen/ReshareType.d.ts",
+      "import": "./dist/keygen/ReshareType.js",
+      "default": "./dist/keygen/ReshareType.js"
+    },
+    "./keygen/server/uploadPayloadToServer": {
+      "types": "./dist/keygen/server/uploadPayloadToServer.d.ts",
+      "import": "./dist/keygen/server/uploadPayloadToServer.js",
+      "default": "./dist/keygen/server/uploadPayloadToServer.js"
+    },
+    "./keygenComplete": {
+      "types": "./dist/keygenComplete.d.ts",
+      "import": "./dist/keygenComplete.js",
+      "default": "./dist/keygenComplete.js"
+    },
+    "./keysign": {
+      "types": "./dist/keysign/index.d.ts",
+      "import": "./dist/keysign/index.js",
+      "default": "./dist/keysign/index.js"
+    },
+    "./keysign/chainSpecific": {
+      "types": "./dist/keysign/chainSpecific/index.d.ts",
+      "import": "./dist/keysign/chainSpecific/index.js",
+      "default": "./dist/keysign/chainSpecific/index.js"
+    },
+    "./keysign/chainSpecific/FeeSettings": {
+      "types": "./dist/keysign/chainSpecific/FeeSettings.d.ts",
+      "import": "./dist/keysign/chainSpecific/FeeSettings.js",
+      "default": "./dist/keysign/chainSpecific/FeeSettings.js"
+    },
+    "./keysign/chainSpecific/KeysignChainSpecific": {
+      "types": "./dist/keysign/chainSpecific/KeysignChainSpecific.d.ts",
+      "import": "./dist/keysign/chainSpecific/KeysignChainSpecific.js",
+      "default": "./dist/keysign/chainSpecific/KeysignChainSpecific.js"
+    },
+    "./keysign/chainSpecific/resolver": {
+      "types": "./dist/keysign/chainSpecific/resolver.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolver.js",
+      "default": "./dist/keysign/chainSpecific/resolver.js"
+    },
+    "./keysign/chainSpecific/resolvers/bittensor": {
+      "types": "./dist/keysign/chainSpecific/resolvers/bittensor/index.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/bittensor/index.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/bittensor/index.js"
+    },
+    "./keysign/chainSpecific/resolvers/bittensor/refine": {
+      "types": "./dist/keysign/chainSpecific/resolvers/bittensor/refine.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/bittensor/refine.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/bittensor/refine.js"
+    },
+    "./keysign/chainSpecific/resolvers/cardano": {
+      "types": "./dist/keysign/chainSpecific/resolvers/cardano.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/cardano.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/cardano.js"
+    },
+    "./keysign/chainSpecific/resolvers/cosmos": {
+      "types": "./dist/keysign/chainSpecific/resolvers/cosmos.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/cosmos.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/cosmos.js"
+    },
+    "./keysign/chainSpecific/resolvers/evm": {
+      "types": "./dist/keysign/chainSpecific/resolvers/evm.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/evm.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/evm.js"
+    },
+    "./keysign/chainSpecific/resolvers/maya": {
+      "types": "./dist/keysign/chainSpecific/resolvers/maya.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/maya.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/maya.js"
+    },
+    "./keysign/chainSpecific/resolvers/polkadot": {
+      "types": "./dist/keysign/chainSpecific/resolvers/polkadot/index.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/polkadot/index.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/polkadot/index.js"
+    },
+    "./keysign/chainSpecific/resolvers/polkadot/refine": {
+      "types": "./dist/keysign/chainSpecific/resolvers/polkadot/refine.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/polkadot/refine.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/polkadot/refine.js"
+    },
+    "./keysign/chainSpecific/resolvers/qbtc": {
+      "types": "./dist/keysign/chainSpecific/resolvers/qbtc.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/qbtc.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/qbtc.js"
+    },
+    "./keysign/chainSpecific/resolvers/ripple": {
+      "types": "./dist/keysign/chainSpecific/resolvers/ripple.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/ripple.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/ripple.js"
+    },
+    "./keysign/chainSpecific/resolvers/solana": {
+      "types": "./dist/keysign/chainSpecific/resolvers/solana/index.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/solana/index.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/solana/index.js"
+    },
+    "./keysign/chainSpecific/resolvers/solana/refine": {
+      "types": "./dist/keysign/chainSpecific/resolvers/solana/refine.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/solana/refine.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/solana/refine.js"
+    },
+    "./keysign/chainSpecific/resolvers/sui": {
+      "types": "./dist/keysign/chainSpecific/resolvers/sui/index.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/sui/index.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/sui/index.js"
+    },
+    "./keysign/chainSpecific/resolvers/sui/refine": {
+      "types": "./dist/keysign/chainSpecific/resolvers/sui/refine.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/sui/refine.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/sui/refine.js"
+    },
+    "./keysign/chainSpecific/resolvers/thor": {
+      "types": "./dist/keysign/chainSpecific/resolvers/thor.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/thor.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/thor.js"
+    },
+    "./keysign/chainSpecific/resolvers/ton": {
+      "types": "./dist/keysign/chainSpecific/resolvers/ton/index.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/ton/index.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/ton/index.js"
+    },
+    "./keysign/chainSpecific/resolvers/tron": {
+      "types": "./dist/keysign/chainSpecific/resolvers/tron/index.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/tron/index.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/tron/index.js"
+    },
+    "./keysign/chainSpecific/resolvers/tron/fee": {
+      "types": "./dist/keysign/chainSpecific/resolvers/tron/fee.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/tron/fee.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/tron/fee.js"
+    },
+    "./keysign/chainSpecific/resolvers/utxo": {
+      "types": "./dist/keysign/chainSpecific/resolvers/utxo.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/utxo.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/utxo.js"
+    },
+    "./keysign/circleWithdraw/build": {
+      "types": "./dist/keysign/circleWithdraw/build.d.ts",
+      "import": "./dist/keysign/circleWithdraw/build.js",
+      "default": "./dist/keysign/circleWithdraw/build.js"
+    },
+    "./keysign/cosigner": {
+      "types": "./dist/keysign/cosigner.d.ts",
+      "import": "./dist/keysign/cosigner.js",
+      "default": "./dist/keysign/cosigner.js"
+    },
+    "./keysign/error": {
+      "types": "./dist/keysign/error.d.ts",
+      "import": "./dist/keysign/error.js",
+      "default": "./dist/keysign/error.js"
+    },
+    "./keysign/fee": {
+      "types": "./dist/keysign/fee/index.d.ts",
+      "import": "./dist/keysign/fee/index.js",
+      "default": "./dist/keysign/fee/index.js"
+    },
+    "./keysign/fee/resolver": {
+      "types": "./dist/keysign/fee/resolver.d.ts",
+      "import": "./dist/keysign/fee/resolver.js",
+      "default": "./dist/keysign/fee/resolver.js"
+    },
+    "./keysign/fee/resolvers/bittensor": {
+      "types": "./dist/keysign/fee/resolvers/bittensor.d.ts",
+      "import": "./dist/keysign/fee/resolvers/bittensor.js",
+      "default": "./dist/keysign/fee/resolvers/bittensor.js"
+    },
+    "./keysign/fee/resolvers/cardano": {
+      "types": "./dist/keysign/fee/resolvers/cardano.d.ts",
+      "import": "./dist/keysign/fee/resolvers/cardano.js",
+      "default": "./dist/keysign/fee/resolvers/cardano.js"
+    },
+    "./keysign/fee/resolvers/cosmos": {
+      "types": "./dist/keysign/fee/resolvers/cosmos.d.ts",
+      "import": "./dist/keysign/fee/resolvers/cosmos.js",
+      "default": "./dist/keysign/fee/resolvers/cosmos.js"
+    },
+    "./keysign/fee/resolvers/evm": {
+      "types": "./dist/keysign/fee/resolvers/evm.d.ts",
+      "import": "./dist/keysign/fee/resolvers/evm.js",
+      "default": "./dist/keysign/fee/resolvers/evm.js"
+    },
+    "./keysign/fee/resolvers/evm/getEvmFeeQuote": {
+      "types": "./dist/keysign/fee/resolvers/evm/getEvmFeeQuote.d.ts",
+      "import": "./dist/keysign/fee/resolvers/evm/getEvmFeeQuote.js",
+      "default": "./dist/keysign/fee/resolvers/evm/getEvmFeeQuote.js"
+    },
+    "./keysign/fee/resolvers/polkadot": {
+      "types": "./dist/keysign/fee/resolvers/polkadot.d.ts",
+      "import": "./dist/keysign/fee/resolvers/polkadot.js",
+      "default": "./dist/keysign/fee/resolvers/polkadot.js"
+    },
+    "./keysign/fee/resolvers/qbtc": {
+      "types": "./dist/keysign/fee/resolvers/qbtc.d.ts",
+      "import": "./dist/keysign/fee/resolvers/qbtc.js",
+      "default": "./dist/keysign/fee/resolvers/qbtc.js"
+    },
+    "./keysign/fee/resolvers/ripple": {
+      "types": "./dist/keysign/fee/resolvers/ripple.d.ts",
+      "import": "./dist/keysign/fee/resolvers/ripple.js",
+      "default": "./dist/keysign/fee/resolvers/ripple.js"
+    },
+    "./keysign/fee/resolvers/solana": {
+      "types": "./dist/keysign/fee/resolvers/solana.d.ts",
+      "import": "./dist/keysign/fee/resolvers/solana.js",
+      "default": "./dist/keysign/fee/resolvers/solana.js"
+    },
+    "./keysign/fee/resolvers/sui": {
+      "types": "./dist/keysign/fee/resolvers/sui.d.ts",
+      "import": "./dist/keysign/fee/resolvers/sui.js",
+      "default": "./dist/keysign/fee/resolvers/sui.js"
+    },
+    "./keysign/fee/resolvers/ton": {
+      "types": "./dist/keysign/fee/resolvers/ton.d.ts",
+      "import": "./dist/keysign/fee/resolvers/ton.js",
+      "default": "./dist/keysign/fee/resolvers/ton.js"
+    },
+    "./keysign/fee/resolvers/tron": {
+      "types": "./dist/keysign/fee/resolvers/tron.d.ts",
+      "import": "./dist/keysign/fee/resolvers/tron.js",
+      "default": "./dist/keysign/fee/resolvers/tron.js"
+    },
+    "./keysign/fee/resolvers/utxo": {
+      "types": "./dist/keysign/fee/resolvers/utxo.d.ts",
+      "import": "./dist/keysign/fee/resolvers/utxo.js",
+      "default": "./dist/keysign/fee/resolvers/utxo.js"
+    },
+    "./keysign/keysignPayload/KeysignMessagePayload": {
+      "types": "./dist/keysign/keysignPayload/KeysignMessagePayload.d.ts",
+      "import": "./dist/keysign/keysignPayload/KeysignMessagePayload.js",
+      "default": "./dist/keysign/keysignPayload/KeysignMessagePayload.js"
+    },
+    "./keysign/KeysignResult": {
+      "types": "./dist/keysign/KeysignResult.d.ts",
+      "import": "./dist/keysign/KeysignResult.js",
+      "default": "./dist/keysign/KeysignResult.js"
+    },
+    "./keysign/KeysignSignature": {
+      "types": "./dist/keysign/KeysignSignature.d.ts",
+      "import": "./dist/keysign/KeysignSignature.js",
+      "default": "./dist/keysign/KeysignSignature.js"
+    },
+    "./keysign/preSigningOutput": {
+      "types": "./dist/keysign/preSigningOutput/index.d.ts",
+      "import": "./dist/keysign/preSigningOutput/index.js",
+      "default": "./dist/keysign/preSigningOutput/index.js"
+    },
+    "./keysign/referral/build": {
+      "types": "./dist/keysign/referral/build.d.ts",
+      "import": "./dist/keysign/referral/build.js",
+      "default": "./dist/keysign/referral/build.js"
+    },
+    "./keysign/refine/amount": {
+      "types": "./dist/keysign/refine/amount.d.ts",
+      "import": "./dist/keysign/refine/amount.js",
+      "default": "./dist/keysign/refine/amount.js"
+    },
+    "./keysign/refine/utxo": {
+      "types": "./dist/keysign/refine/utxo.d.ts",
+      "import": "./dist/keysign/refine/utxo.js",
+      "default": "./dist/keysign/refine/utxo.js"
+    },
+    "./keysign/send/build": {
+      "types": "./dist/keysign/send/build.d.ts",
+      "import": "./dist/keysign/send/build.js",
+      "default": "./dist/keysign/send/build.js"
+    },
+    "./keysign/send/getSendFeeEstimate": {
+      "types": "./dist/keysign/send/getSendFeeEstimate.d.ts",
+      "import": "./dist/keysign/send/getSendFeeEstimate.js",
+      "default": "./dist/keysign/send/getSendFeeEstimate.js"
+    },
+    "./keysign/setupMessage/make": {
+      "types": "./dist/keysign/setupMessage/make.d.ts",
+      "import": "./dist/keysign/setupMessage/make.js",
+      "default": "./dist/keysign/setupMessage/make.js"
+    },
+    "./keysign/signingInputs": {
+      "types": "./dist/keysign/signingInputs/index.d.ts",
+      "import": "./dist/keysign/signingInputs/index.js",
+      "default": "./dist/keysign/signingInputs/index.js"
+    },
+    "./keysign/signingInputs/core": {
+      "types": "./dist/keysign/signingInputs/core.d.ts",
+      "import": "./dist/keysign/signingInputs/core.js",
+      "default": "./dist/keysign/signingInputs/core.js"
+    },
+    "./keysign/signingInputs/resolver": {
+      "types": "./dist/keysign/signingInputs/resolver.d.ts",
+      "import": "./dist/keysign/signingInputs/resolver.js",
+      "default": "./dist/keysign/signingInputs/resolver.js"
+    },
+    "./keysign/signingInputs/resolvers/bittensor": {
+      "types": "./dist/keysign/signingInputs/resolvers/bittensor.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/bittensor.js",
+      "default": "./dist/keysign/signingInputs/resolvers/bittensor.js"
+    },
+    "./keysign/signingInputs/resolvers/cardano": {
+      "types": "./dist/keysign/signingInputs/resolvers/cardano.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/cardano.js",
+      "default": "./dist/keysign/signingInputs/resolvers/cardano.js"
+    },
+    "./keysign/signingInputs/resolvers/cosmos": {
+      "types": "./dist/keysign/signingInputs/resolvers/cosmos/index.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/cosmos/index.js",
+      "default": "./dist/keysign/signingInputs/resolvers/cosmos/index.js"
+    },
+    "./keysign/signingInputs/resolvers/cosmos/chainSpecific": {
+      "types": "./dist/keysign/signingInputs/resolvers/cosmos/chainSpecific.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/cosmos/chainSpecific.js",
+      "default": "./dist/keysign/signingInputs/resolvers/cosmos/chainSpecific.js"
+    },
+    "./keysign/signingInputs/resolvers/cosmos/coinAmount": {
+      "types": "./dist/keysign/signingInputs/resolvers/cosmos/coinAmount.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/cosmos/coinAmount.js",
+      "default": "./dist/keysign/signingInputs/resolvers/cosmos/coinAmount.js"
+    },
+    "./keysign/signingInputs/resolvers/evm": {
+      "types": "./dist/keysign/signingInputs/resolvers/evm/index.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/evm/index.js",
+      "default": "./dist/keysign/signingInputs/resolvers/evm/index.js"
+    },
+    "./keysign/signingInputs/resolvers/evm/erc20": {
+      "types": "./dist/keysign/signingInputs/resolvers/evm/erc20.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/evm/erc20.js",
+      "default": "./dist/keysign/signingInputs/resolvers/evm/erc20.js"
+    },
+    "./keysign/signingInputs/resolvers/evm/incrementKeysignPayloadNonce": {
+      "types": "./dist/keysign/signingInputs/resolvers/evm/incrementKeysignPayloadNonce.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/evm/incrementKeysignPayloadNonce.js",
+      "default": "./dist/keysign/signingInputs/resolvers/evm/incrementKeysignPayloadNonce.js"
+    },
+    "./keysign/signingInputs/resolvers/polkadot": {
+      "types": "./dist/keysign/signingInputs/resolvers/polkadot.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/polkadot.js",
+      "default": "./dist/keysign/signingInputs/resolvers/polkadot.js"
+    },
+    "./keysign/signingInputs/resolvers/qbtc": {
+      "types": "./dist/keysign/signingInputs/resolvers/qbtc.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/qbtc.js",
+      "default": "./dist/keysign/signingInputs/resolvers/qbtc.js"
+    },
+    "./keysign/signingInputs/resolvers/ripple": {
+      "types": "./dist/keysign/signingInputs/resolvers/ripple.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/ripple.js",
+      "default": "./dist/keysign/signingInputs/resolvers/ripple.js"
+    },
+    "./keysign/signingInputs/resolvers/solana": {
+      "types": "./dist/keysign/signingInputs/resolvers/solana/index.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/solana/index.js",
+      "default": "./dist/keysign/signingInputs/resolvers/solana/index.js"
+    },
+    "./keysign/signingInputs/resolvers/solana/send": {
+      "types": "./dist/keysign/signingInputs/resolvers/solana/send.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/solana/send.js",
+      "default": "./dist/keysign/signingInputs/resolvers/solana/send.js"
+    },
+    "./keysign/signingInputs/resolvers/sui": {
+      "types": "./dist/keysign/signingInputs/resolvers/sui.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/sui.js",
+      "default": "./dist/keysign/signingInputs/resolvers/sui.js"
+    },
+    "./keysign/signingInputs/resolvers/ton": {
+      "types": "./dist/keysign/signingInputs/resolvers/ton/index.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/ton/index.js",
+      "default": "./dist/keysign/signingInputs/resolvers/ton/index.js"
+    },
+    "./keysign/signingInputs/resolvers/ton/jetton": {
+      "types": "./dist/keysign/signingInputs/resolvers/ton/jetton.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/ton/jetton.js",
+      "default": "./dist/keysign/signingInputs/resolvers/ton/jetton.js"
+    },
+    "./keysign/signingInputs/resolvers/ton/native": {
+      "types": "./dist/keysign/signingInputs/resolvers/ton/native.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/ton/native.js",
+      "default": "./dist/keysign/signingInputs/resolvers/ton/native.js"
+    },
+    "./keysign/signingInputs/resolvers/tron": {
+      "types": "./dist/keysign/signingInputs/resolvers/tron.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/tron.js",
+      "default": "./dist/keysign/signingInputs/resolvers/tron.js"
+    },
+    "./keysign/signingInputs/resolvers/utxo": {
+      "types": "./dist/keysign/signingInputs/resolvers/utxo.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/utxo.js",
+      "default": "./dist/keysign/signingInputs/resolvers/utxo.js"
+    },
+    "./keysign/swap/build": {
+      "types": "./dist/keysign/swap/build.d.ts",
+      "import": "./dist/keysign/swap/build.js",
+      "default": "./dist/keysign/swap/build.js"
+    },
+    "./keysign/swap/getKeysignSwapPayload": {
+      "types": "./dist/keysign/swap/getKeysignSwapPayload.d.ts",
+      "import": "./dist/keysign/swap/getKeysignSwapPayload.js",
+      "default": "./dist/keysign/swap/getKeysignSwapPayload.js"
+    },
+    "./keysign/swap/getKeysignSwapProviderName": {
+      "types": "./dist/keysign/swap/getKeysignSwapProviderName.d.ts",
+      "import": "./dist/keysign/swap/getKeysignSwapProviderName.js",
+      "default": "./dist/keysign/swap/getKeysignSwapProviderName.js"
+    },
+    "./keysign/swap/KeysignSwapPayload": {
+      "types": "./dist/keysign/swap/KeysignSwapPayload.d.ts",
+      "import": "./dist/keysign/swap/KeysignSwapPayload.js",
+      "default": "./dist/keysign/swap/KeysignSwapPayload.js"
+    },
+    "./keysign/tw/getKeysignTwPublicKey": {
+      "types": "./dist/keysign/tw/getKeysignTwPublicKey.d.ts",
+      "import": "./dist/keysign/tw/getKeysignTwPublicKey.js",
+      "default": "./dist/keysign/tw/getKeysignTwPublicKey.js"
+    },
+    "./keysign/tw/toTwAddress": {
+      "types": "./dist/keysign/tw/toTwAddress.d.ts",
+      "import": "./dist/keysign/tw/toTwAddress.js",
+      "default": "./dist/keysign/tw/toTwAddress.js"
+    },
+    "./keysign/utils/getJoinKeysignUrl": {
+      "types": "./dist/keysign/utils/getJoinKeysignUrl.d.ts",
+      "import": "./dist/keysign/utils/getJoinKeysignUrl.js",
+      "default": "./dist/keysign/utils/getJoinKeysignUrl.js"
+    },
+    "./keysign/utils/getKeysignAmount": {
+      "types": "./dist/keysign/utils/getKeysignAmount.d.ts",
+      "import": "./dist/keysign/utils/getKeysignAmount.js",
+      "default": "./dist/keysign/utils/getKeysignAmount.js"
+    },
+    "./keysign/utils/getKeysignChain": {
+      "types": "./dist/keysign/utils/getKeysignChain.d.ts",
+      "import": "./dist/keysign/utils/getKeysignChain.js",
+      "default": "./dist/keysign/utils/getKeysignChain.js"
+    },
+    "./keysign/utils/getKeysignCoin": {
+      "types": "./dist/keysign/utils/getKeysignCoin.d.ts",
+      "import": "./dist/keysign/utils/getKeysignCoin.js",
+      "default": "./dist/keysign/utils/getKeysignCoin.js"
+    },
+    "./keysign/utils/resolvePolkadotToAddress": {
+      "types": "./dist/keysign/utils/resolvePolkadotToAddress.d.ts",
+      "import": "./dist/keysign/utils/resolvePolkadotToAddress.js",
+      "default": "./dist/keysign/utils/resolvePolkadotToAddress.js"
+    },
+    "./keysign/utxo/getKeysignUtxoInfo": {
+      "types": "./dist/keysign/utxo/getKeysignUtxoInfo.d.ts",
+      "import": "./dist/keysign/utxo/getKeysignUtxoInfo.js",
+      "default": "./dist/keysign/utxo/getKeysignUtxoInfo.js"
+    },
+    "./keysignComplete": {
+      "types": "./dist/keysignComplete.d.ts",
+      "import": "./dist/keysignComplete.js",
+      "default": "./dist/keysignComplete.js"
+    },
+    "./lib/initialize": {
+      "types": "./dist/lib/initialize.d.ts",
+      "import": "./dist/lib/initialize.js",
+      "default": "./dist/lib/initialize.js"
+    },
+    "./lib/keyshare": {
+      "types": "./dist/lib/keyshare.d.ts",
+      "import": "./dist/lib/keyshare.js",
+      "default": "./dist/lib/keyshare.js"
+    },
+    "./lib/signSession": {
+      "types": "./dist/lib/signSession.d.ts",
+      "import": "./dist/lib/signSession.js",
+      "default": "./dist/lib/signSession.js"
+    },
+    "./message/relay": {
+      "types": "./dist/message/relay/index.d.ts",
+      "import": "./dist/message/relay/index.js",
+      "default": "./dist/message/relay/index.js"
+    },
+    "./message/relay/delete": {
+      "types": "./dist/message/relay/delete.d.ts",
+      "import": "./dist/message/relay/delete.js",
+      "default": "./dist/message/relay/delete.js"
+    },
+    "./message/relay/get": {
+      "types": "./dist/message/relay/get.d.ts",
+      "import": "./dist/message/relay/get.js",
+      "default": "./dist/message/relay/get.js"
+    },
+    "./message/relay/send": {
+      "types": "./dist/message/relay/send.d.ts",
+      "import": "./dist/message/relay/send.js",
+      "default": "./dist/message/relay/send.js"
+    },
+    "./message/server": {
+      "types": "./dist/message/server.d.ts",
+      "import": "./dist/message/server.js",
+      "default": "./dist/message/server.js"
+    },
+    "./message/setup/ensure": {
+      "types": "./dist/message/setup/ensure.d.ts",
+      "import": "./dist/message/setup/ensure.js",
+      "default": "./dist/message/setup/ensure.js"
+    },
+    "./message/setup/get": {
+      "types": "./dist/message/setup/get.d.ts",
+      "import": "./dist/message/setup/get.js",
+      "default": "./dist/message/setup/get.js"
+    },
+    "./message/setup/upload": {
+      "types": "./dist/message/setup/upload.d.ts",
+      "import": "./dist/message/setup/upload.js",
+      "default": "./dist/message/setup/upload.js"
+    },
+    "./mldsa/initializeMldsa": {
+      "types": "./dist/mldsa/initializeMldsa.d.ts",
+      "import": "./dist/mldsa/initializeMldsa.js",
+      "default": "./dist/mldsa/initializeMldsa.js"
+    },
+    "./mldsa/mldsaKeygen": {
+      "types": "./dist/mldsa/mldsaKeygen.d.ts",
+      "import": "./dist/mldsa/mldsaKeygen.js",
+      "default": "./dist/mldsa/mldsaKeygen.js"
+    },
+    "./mldsa/mldsaKeysign": {
+      "types": "./dist/mldsa/mldsaKeysign.d.ts",
+      "import": "./dist/mldsa/mldsaKeysign.js",
+      "default": "./dist/mldsa/mldsaKeysign.js"
+    },
+    "./mpcLib": {
+      "types": "./dist/mpcLib.d.ts",
+      "import": "./dist/mpcLib.js",
+      "default": "./dist/mpcLib.js"
+    },
+    "./MpcServerType": {
+      "types": "./dist/MpcServerType.d.ts",
+      "import": "./dist/MpcServerType.js",
+      "default": "./dist/MpcServerType.js"
+    },
+    "./package.json": "./package.json",
+    "./reshareCommittee": {
+      "types": "./dist/reshareCommittee.d.ts",
+      "import": "./dist/reshareCommittee.js",
+      "default": "./dist/reshareCommittee.js"
+    },
+    "./schnorr/schnorrKeygen": {
+      "types": "./dist/schnorr/schnorrKeygen.d.ts",
+      "import": "./dist/schnorr/schnorrKeygen.js",
+      "default": "./dist/schnorr/schnorrKeygen.js"
+    },
+    "./security/blockaid/tx/simulation/input": {
+      "types": "./dist/security/blockaid/tx/simulation/input/index.d.ts",
+      "import": "./dist/security/blockaid/tx/simulation/input/index.js",
+      "default": "./dist/security/blockaid/tx/simulation/input/index.js"
+    },
+    "./security/blockaid/tx/simulation/input/resolver": {
+      "types": "./dist/security/blockaid/tx/simulation/input/resolver.d.ts",
+      "import": "./dist/security/blockaid/tx/simulation/input/resolver.js",
+      "default": "./dist/security/blockaid/tx/simulation/input/resolver.js"
+    },
+    "./security/blockaid/tx/simulation/input/resolvers/evm": {
+      "types": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.d.ts",
+      "import": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.js",
+      "default": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.js"
+    },
+    "./security/blockaid/tx/simulation/input/resolvers/solana": {
+      "types": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.d.ts",
+      "import": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.js",
+      "default": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.js"
+    },
+    "./security/blockaid/tx/utils/getCompiledTxsForBlockaidInput": {
+      "types": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.d.ts",
+      "import": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.js",
+      "default": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.js"
+    },
+    "./security/blockaid/tx/validation/input": {
+      "types": "./dist/security/blockaid/tx/validation/input/index.d.ts",
+      "import": "./dist/security/blockaid/tx/validation/input/index.js",
+      "default": "./dist/security/blockaid/tx/validation/input/index.js"
+    },
+    "./security/blockaid/tx/validation/input/resolver": {
+      "types": "./dist/security/blockaid/tx/validation/input/resolver.d.ts",
+      "import": "./dist/security/blockaid/tx/validation/input/resolver.js",
+      "default": "./dist/security/blockaid/tx/validation/input/resolver.js"
+    },
+    "./security/blockaid/tx/validation/input/resolvers/evm": {
+      "types": "./dist/security/blockaid/tx/validation/input/resolvers/evm.d.ts",
+      "import": "./dist/security/blockaid/tx/validation/input/resolvers/evm.js",
+      "default": "./dist/security/blockaid/tx/validation/input/resolvers/evm.js"
+    },
+    "./security/blockaid/tx/validation/input/resolvers/solana": {
+      "types": "./dist/security/blockaid/tx/validation/input/resolvers/solana.d.ts",
+      "import": "./dist/security/blockaid/tx/validation/input/resolvers/solana.js",
+      "default": "./dist/security/blockaid/tx/validation/input/resolvers/solana.js"
+    },
+    "./security/blockaid/tx/validation/input/resolvers/sui": {
+      "types": "./dist/security/blockaid/tx/validation/input/resolvers/sui.d.ts",
+      "import": "./dist/security/blockaid/tx/validation/input/resolvers/sui.js",
+      "default": "./dist/security/blockaid/tx/validation/input/resolvers/sui.js"
+    },
+    "./security/blockaid/tx/validation/input/resolvers/utxo": {
+      "types": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.d.ts",
+      "import": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.js",
+      "default": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.js"
+    },
+    "./session/joinMpcSession": {
+      "types": "./dist/session/joinMpcSession.d.ts",
+      "import": "./dist/session/joinMpcSession.js",
+      "default": "./dist/session/joinMpcSession.js"
+    },
+    "./session/startMpcSession": {
+      "types": "./dist/session/startMpcSession.d.ts",
+      "import": "./dist/session/startMpcSession.js",
+      "default": "./dist/session/startMpcSession.js"
+    },
+    "./swap/native/utils/nativeSwapQuoteToSwapPayload": {
+      "types": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.d.ts",
+      "import": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.js",
+      "default": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.js"
+    },
+    "./swap/utils/getSwapTrackingUrl": {
+      "types": "./dist/swap/utils/getSwapTrackingUrl.d.ts",
+      "import": "./dist/swap/utils/getSwapTrackingUrl.js",
+      "default": "./dist/swap/utils/getSwapTrackingUrl.js"
+    },
+    "./tx/compile/compileTx": {
+      "types": "./dist/tx/compile/compileTx.d.ts",
+      "import": "./dist/tx/compile/compileTx.js",
+      "default": "./dist/tx/compile/compileTx.js"
+    },
+    "./tx/preSigningHashes": {
+      "types": "./dist/tx/preSigningHashes/index.d.ts",
+      "import": "./dist/tx/preSigningHashes/index.js",
+      "default": "./dist/tx/preSigningHashes/index.js"
+    },
+    "./tx/signature/generateSignature": {
+      "types": "./dist/tx/signature/generateSignature.d.ts",
+      "import": "./dist/tx/signature/generateSignature.js",
+      "default": "./dist/tx/signature/generateSignature.js"
+    },
+    "./types/plugin/constraint_pb": {
+      "types": "./dist/types/plugin/constraint_pb.d.ts",
+      "import": "./dist/types/plugin/constraint_pb.js",
+      "default": "./dist/types/plugin/constraint_pb.js"
+    },
+    "./types/plugin/parameter_constraint_pb": {
+      "types": "./dist/types/plugin/parameter_constraint_pb.d.ts",
+      "import": "./dist/types/plugin/parameter_constraint_pb.js",
+      "default": "./dist/types/plugin/parameter_constraint_pb.js"
+    },
+    "./types/plugin/policy_pb": {
+      "types": "./dist/types/plugin/policy_pb.d.ts",
+      "import": "./dist/types/plugin/policy_pb.js",
+      "default": "./dist/types/plugin/policy_pb.js"
+    },
+    "./types/plugin/recipe_specification_pb": {
+      "types": "./dist/types/plugin/recipe_specification_pb.d.ts",
+      "import": "./dist/types/plugin/recipe_specification_pb.js",
+      "default": "./dist/types/plugin/recipe_specification_pb.js"
+    },
+    "./types/plugin/resource_pb": {
+      "types": "./dist/types/plugin/resource_pb.d.ts",
+      "import": "./dist/types/plugin/resource_pb.js",
+      "default": "./dist/types/plugin/resource_pb.js"
+    },
+    "./types/plugin/rule_pb": {
+      "types": "./dist/types/plugin/rule_pb.d.ts",
+      "import": "./dist/types/plugin/rule_pb.js",
+      "default": "./dist/types/plugin/rule_pb.js"
+    },
+    "./types/utils/commCoin": {
+      "types": "./dist/types/utils/commCoin.d.ts",
+      "import": "./dist/types/utils/commCoin.js",
+      "default": "./dist/types/utils/commCoin.js"
+    },
+    "./types/utils/commVault": {
+      "types": "./dist/types/utils/commVault.d.ts",
+      "import": "./dist/types/utils/commVault.js",
+      "default": "./dist/types/utils/commVault.js"
+    },
+    "./types/utils/libType": {
+      "types": "./dist/types/utils/libType.d.ts",
+      "import": "./dist/types/utils/libType.js",
+      "default": "./dist/types/utils/libType.js"
+    },
+    "./types/utils/tssType": {
+      "types": "./dist/types/utils/tssType.d.ts",
+      "import": "./dist/types/utils/tssType.js",
+      "default": "./dist/types/utils/tssType.js"
+    },
+    "./types/vultisig/keygen/v1/keygen_message_pb": {
+      "types": "./dist/types/vultisig/keygen/v1/keygen_message_pb.d.ts",
+      "import": "./dist/types/vultisig/keygen/v1/keygen_message_pb.js",
+      "default": "./dist/types/vultisig/keygen/v1/keygen_message_pb.js"
+    },
+    "./types/vultisig/keygen/v1/lib_type_message_pb": {
+      "types": "./dist/types/vultisig/keygen/v1/lib_type_message_pb.d.ts",
+      "import": "./dist/types/vultisig/keygen/v1/lib_type_message_pb.js",
+      "default": "./dist/types/vultisig/keygen/v1/lib_type_message_pb.js"
+    },
+    "./types/vultisig/keygen/v1/reshare_message_pb": {
+      "types": "./dist/types/vultisig/keygen/v1/reshare_message_pb.d.ts",
+      "import": "./dist/types/vultisig/keygen/v1/reshare_message_pb.js",
+      "default": "./dist/types/vultisig/keygen/v1/reshare_message_pb.js"
+    },
+    "./types/vultisig/keygen/v1/single_keygen_message_pb": {
+      "types": "./dist/types/vultisig/keygen/v1/single_keygen_message_pb.d.ts",
+      "import": "./dist/types/vultisig/keygen/v1/single_keygen_message_pb.js",
+      "default": "./dist/types/vultisig/keygen/v1/single_keygen_message_pb.js"
+    },
+    "./types/vultisig/keygen/v1/single_keygen_type_pb": {
+      "types": "./dist/types/vultisig/keygen/v1/single_keygen_type_pb.d.ts",
+      "import": "./dist/types/vultisig/keygen/v1/single_keygen_type_pb.js",
+      "default": "./dist/types/vultisig/keygen/v1/single_keygen_type_pb.js"
+    },
+    "./types/vultisig/keysign/v1/1inch_swap_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/1inch_swap_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/1inch_swap_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/1inch_swap_payload_pb.js"
+    },
+    "./types/vultisig/keysign/v1/blockchain_specific_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/blockchain_specific_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/blockchain_specific_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/blockchain_specific_pb.js"
+    },
+    "./types/vultisig/keysign/v1/coin_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/coin_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/coin_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/coin_pb.js"
+    },
+    "./types/vultisig/keysign/v1/custom_message_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/custom_message_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/custom_message_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/custom_message_payload_pb.js"
+    },
+    "./types/vultisig/keysign/v1/erc20_approve_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/erc20_approve_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/erc20_approve_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/erc20_approve_payload_pb.js"
+    },
+    "./types/vultisig/keysign/v1/keysign_message_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/keysign_message_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/keysign_message_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/keysign_message_pb.js"
+    },
+    "./types/vultisig/keysign/v1/kyberswap_swap_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/kyberswap_swap_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/kyberswap_swap_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/kyberswap_swap_payload_pb.js"
+    },
+    "./types/vultisig/keysign/v1/thorchain_swap_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/thorchain_swap_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/thorchain_swap_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/thorchain_swap_payload_pb.js"
+    },
+    "./types/vultisig/keysign/v1/tron_contract_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/tron_contract_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/tron_contract_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/tron_contract_payload_pb.js"
+    },
+    "./types/vultisig/keysign/v1/utxo_info_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/utxo_info_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/utxo_info_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/utxo_info_pb.js"
+    },
+    "./types/vultisig/keysign/v1/wasm_execute_contract_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb.js"
+    },
+    "./types/vultisig/vault/v1/vault_container_pb": {
+      "types": "./dist/types/vultisig/vault/v1/vault_container_pb.d.ts",
+      "import": "./dist/types/vultisig/vault/v1/vault_container_pb.js",
+      "default": "./dist/types/vultisig/vault/v1/vault_container_pb.js"
+    },
+    "./types/vultisig/vault/v1/vault_pb": {
+      "types": "./dist/types/vultisig/vault/v1/vault_pb.d.ts",
+      "import": "./dist/types/vultisig/vault/v1/vault_pb.js",
+      "default": "./dist/types/vultisig/vault/v1/vault_pb.js"
+    },
+    "./utils/ed25519ScalarClamp": {
+      "types": "./dist/utils/ed25519ScalarClamp.d.ts",
+      "import": "./dist/utils/ed25519ScalarClamp.js",
+      "default": "./dist/utils/ed25519ScalarClamp.js"
+    },
+    "./utils/generateHexChainCode": {
+      "types": "./dist/utils/generateHexChainCode.d.ts",
+      "import": "./dist/utils/generateHexChainCode.js",
+      "default": "./dist/utils/generateHexChainCode.js"
+    },
+    "./utils/generateHexEncryptionKey": {
+      "types": "./dist/utils/generateHexEncryptionKey.d.ts",
+      "import": "./dist/utils/generateHexEncryptionKey.js",
+      "default": "./dist/utils/generateHexEncryptionKey.js"
+    },
+    "./vault/utils/vaultContainerFromString": {
+      "types": "./dist/vault/utils/vaultContainerFromString.d.ts",
+      "import": "./dist/vault/utils/vaultContainerFromString.js",
+      "default": "./dist/vault/utils/vaultContainerFromString.js"
+    },
+    "./vault/Vault": {
+      "types": "./dist/vault/Vault.d.ts",
+      "import": "./dist/vault/Vault.js",
+      "default": "./dist/vault/Vault.js"
     }
   },
   "scripts": {

@@ -7,6 +7,7 @@ import { getCardanoTxStatus } from './resolvers/cardano'
 import { getCosmosTxStatus } from './resolvers/cosmos'
 import { getEvmTxStatus } from './resolvers/evm'
 import { getPolkadotTxStatus } from './resolvers/polkadot'
+import { getQbtcTxStatus } from './resolvers/qbtc'
 import { getRippleTxStatus } from './resolvers/ripple'
 import { getSolanaTxStatus } from './resolvers/solana'
 import { getSuiTxStatus } from './resolvers/sui'
@@ -20,6 +21,7 @@ const statusHandlers: Record<ChainKind, TxStatusResolver<any>> = {
   cosmos: getCosmosTxStatus,
   evm: getEvmTxStatus,
   polkadot: getPolkadotTxStatus,
+  qbtc: getQbtcTxStatus,
   ripple: getRippleTxStatus,
   solana: getSolanaTxStatus,
   sui: getSuiTxStatus,

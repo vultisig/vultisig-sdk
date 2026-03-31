@@ -20,7 +20,9 @@ export type BuildSendKeysignPayloadInput = {
   memo?: string
   vaultId: string
   localPartyId: string
-  publicKey: PublicKey
+  publicKey: PublicKey | null
+  /** When `publicKey` is null (e.g. MLDSA-only chain), supply raw hex for `coin.hexPublicKey`. */
+  hexPublicKeyOverride?: string
   libType: KeysignLibType
   walletCore: WalletCore
   feeSettings?: FeeSettings
@@ -34,14 +36,24 @@ export const buildSendKeysignPayload = async ({
   vaultId,
   localPartyId,
   publicKey,
+  hexPublicKeyOverride,
   walletCore,
   libType,
   feeSettings,
 }: BuildSendKeysignPayloadInput) => {
+  const hexPublicKey =
+    hexPublicKeyOverride ??
+    (publicKey
+      ? Buffer.from(publicKey.data()).toString('hex')
+      : undefined)
+  if (!hexPublicKey) {
+    throw new Error('buildSendKeysignPayload requires publicKey or hexPublicKeyOverride')
+  }
+
   let keysignPayload = create(KeysignPayloadSchema, {
     coin: toCommCoin({
       ...coin,
-      hexPublicKey: Buffer.from(publicKey.data()).toString('hex'),
+      hexPublicKey,
     }),
     toAddress: receiver,
     toAmount: amount.toString(),
@@ -60,19 +72,21 @@ export const buildSendKeysignPayload = async ({
 
   const balance = await getCoinBalance(coin)
 
-  keysignPayload = refineKeysignAmount({
-    keysignPayload,
-    walletCore,
-    publicKey,
-    balance,
-  })
-
-  if (isChainOfKind(coin.chain, 'utxo')) {
-    keysignPayload = refineKeysignUtxo({
+  if (publicKey) {
+    keysignPayload = refineKeysignAmount({
       keysignPayload,
       walletCore,
       publicKey,
+      balance,
     })
+
+    if (isChainOfKind(coin.chain, 'utxo')) {
+      keysignPayload = refineKeysignUtxo({
+        keysignPayload,
+        walletCore,
+        publicKey,
+      })
+    }
   }
 
   return keysignPayload
