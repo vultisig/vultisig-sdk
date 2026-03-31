@@ -706,6 +706,22 @@ export class AgentExecutor {
       // Patch EVM nonce if local state is ahead of on-chain
       await this.patchEvmNonce(chain, keysignPayload)
 
+      // If the server provided a gas_limit, use it — the MCP server's estimate
+      // is more accurate for complex DeFi calls (e.g. Pendle router ~1.2M gas)
+      // that the SDK's prepareSendTx may underestimate.
+      if (swapTx.gas_limit) {
+        const bs = (keysignPayload as any).blockchainSpecific
+        if (bs?.case === 'ethereumSpecific' && bs.value?.gasLimit) {
+          const serverGas = swapTx.gas_limit.toString()
+          const currentGas = bs.value.gasLimit.toString()
+          // Use the higher of server estimate and SDK estimate
+          if (BigInt(serverGas) > BigInt(currentGas)) {
+            bs.value.gasLimit = serverGas
+            if (this.verbose) process.stderr.write(`[gas] Using server gas_limit: ${serverGas} (was ${currentGas})\n`)
+          }
+        }
+      }
+
       // Refresh gas estimate — base fee may have drifted since prepareSendTx
       await this.patchEvmGas(chain, keysignPayload)
 
