@@ -1063,7 +1063,7 @@ const agentCmd = program
   .description('AI-powered chat interface for wallet operations')
   .option('--via-agent', 'Use NDJSON pipe mode for agent-to-agent communication')
   .option('--verbose', 'Show detailed tool call parameters and debug output')
-  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--backend-url <url>', 'Agent backend URL (default: https://abe.vultisig.com)')
   .option('--password <password>', 'Vault password for signing operations')
   .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
   .option('--session-id <id>', 'Resume an existing session')
@@ -1096,7 +1096,7 @@ agentCmd
   .command('ask <message>')
   .description('Send a single message and get the response (for AI agent integration)')
   .option('--session <id>', 'Continue an existing conversation')
-  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--backend-url <url>', 'Agent backend URL (default: https://abe.vultisig.com)')
   .option('--password <password>', 'Vault password for signing operations')
   .option('--verbose', 'Show tool calls and debug info on stderr')
   .option('--json', 'Output structured JSON instead of text')
@@ -1131,7 +1131,7 @@ const sessionsCmd = agentCmd.command('sessions').description('Manage agent chat 
 sessionsCmd
   .command('list')
   .description('List chat sessions for the current vault')
-  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--backend-url <url>', 'Agent backend URL (default: https://abe.vultisig.com)')
   .option('--password <password>', 'Vault password for authentication')
   .action(
     withExit(async (options: { backendUrl?: string; password?: string }) => {
@@ -1147,7 +1147,7 @@ sessionsCmd
 sessionsCmd
   .command('delete <id>')
   .description('Delete a chat session')
-  .option('--backend-url <url>', 'Agent backend URL (default: http://localhost:9998)')
+  .option('--backend-url <url>', 'Agent backend URL (default: https://abe.vultisig.com)')
   .option('--password <password>', 'Vault password for authentication')
   .action(
     withExit(async (id: string, options: { backendUrl?: string; password?: string }) => {
