@@ -4385,7 +4385,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:0.10.0, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:1.0.0, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -4402,8 +4402,8 @@ __metadata:
     "@polkadot/util-crypto": "npm:^14.0.1"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.0"
-    "@vultisig/core-config": "npm:0.9.0"
-    "@vultisig/lib-utils": "npm:0.9.0"
+    "@vultisig/core-config": "npm:0.9.1"
+    "@vultisig/lib-utils": "npm:0.9.1"
     bip32: "npm:^5.0.1"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
@@ -4417,13 +4417,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-config@npm:0.9.0, @vultisig/core-config@workspace:packages/core/config":
+"@vultisig/core-config@npm:0.9.1, @vultisig/core-config@workspace:packages/core/config":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-config@workspace:packages/core/config"
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-mpc@npm:0.10.0, @vultisig/core-mpc@workspace:packages/core/mpc":
+"@vultisig/core-mpc@npm:1.0.0, @vultisig/core-mpc@workspace:packages/core/mpc":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-mpc@workspace:packages/core/mpc"
   dependencies:
@@ -4434,12 +4434,12 @@ __metadata:
     "@noble/hashes": "npm:^2.0.1"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.0"
-    "@vultisig/core-chain": "npm:0.10.0"
-    "@vultisig/core-config": "npm:0.9.0"
+    "@vultisig/core-chain": "npm:1.0.0"
+    "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"
-    "@vultisig/lib-utils": "npm:0.9.0"
+    "@vultisig/lib-utils": "npm:0.9.1"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
     cosmjs-types: "npm:^0.11.0"
@@ -4537,7 +4537,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/lib-utils@npm:0.9.0, @vultisig/lib-utils@workspace:packages/lib/utils":
+"@vultisig/lib-utils@npm:0.9.1, @vultisig/lib-utils@workspace:packages/lib/utils":
   version: 0.0.0-use.local
   resolution: "@vultisig/lib-utils@workspace:packages/lib/utils"
   dependencies:
@@ -4562,7 +4562,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:^3.0.9"
   peerDependencies:
-    "@vultisig/sdk": ">=0.10.0"
+    "@vultisig/sdk": ">=0.11.0"
   peerDependenciesMeta:
     "@vultisig/sdk":
       optional: true
@@ -4596,13 +4596,13 @@ __metadata:
     "@types/chrome": "npm:^0.1.38"
     "@types/node": "npm:^25.5.0"
     "@vitest/coverage-v8": "npm:3.2.4"
-    "@vultisig/core-chain": "npm:0.10.0"
-    "@vultisig/core-config": "npm:0.9.0"
-    "@vultisig/core-mpc": "npm:0.10.0"
+    "@vultisig/core-chain": "npm:1.0.0"
+    "@vultisig/core-config": "npm:0.9.1"
+    "@vultisig/core-mpc": "npm:1.0.0"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"
-    "@vultisig/lib-utils": "npm:0.9.0"
+    "@vultisig/lib-utils": "npm:0.9.1"
     axios: "npm:^1.13.6"
     bip32: "npm:^5.0.1"
     bitcoinjs-lib: "npm:^7.0.1"
