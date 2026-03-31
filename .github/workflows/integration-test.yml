@@ -10,10 +10,212 @@ concurrency:
 jobs:
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vultisig
+          POSTGRES_PASSWORD: vultisig
+          POSTGRES_DB: vultisig-agent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vultisig -d vultisig-agent"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_DSN: postgres://vultisig:vultisig@localhost:5432/vultisig-agent?sslmode=disable
+      REDIS_URI: redis://localhost:6379
+      JWT_SECRET: integration-test-secret-key-not-for-prod
+      AI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      AI_MODEL: minimax/minimax-m2.5-free
+      AI_SUMMARY_MODEL: minimax/minimax-m2.5-free
+      MCP_SERVER_URL: http://localhost:8888
+      VERIFIER_URL: ""
+      SERVER_PORT: "9998"
+      PROTOCOL_STATE_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
     steps:
-      - name: Integration temporarily skipped
+      # ── Checkout repos ──
+      - name: Checkout vultisig-sdk (PR branch)
+        uses: actions/checkout@v4
+        with:
+          path: vultisig-sdk
+          fetch-depth: 0
+
+      - name: Checkout agent-backend
+        uses: actions/checkout@v4
+        with:
+          repository: vultisig/agent-backend
+          ref: main
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          path: agent-backend
+
+      - name: Checkout MCP
+        uses: actions/checkout@v4
+        with:
+          repository: vultisig/mcp
+          ref: main
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          path: mcp
+
+      # ── Setup Go ──
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+          cache-dependency-path: |
+            mcp/go.sum
+            agent-backend/go.sum
+
+      # ── Setup Node.js ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ── Build MCP server ──
+      - name: Build MCP server
+        working-directory: mcp
+        run: CGO_ENABLED=0 go build -o ../mcp-server ./cmd/mcp-server/
+
+      # ── Start MCP server ──
+      - name: Start MCP server
         run: |
-          echo "::notice::Full integration (MCP + agent-backend + opencode) is skipped: vultisig/agent-backend is not available."
-          echo "Restore the previous workflow when the backend repo exists again."
+          ./mcp-server -http :8888 > /tmp/mcp-server.log 2>&1 &
+          echo "MCP_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8888/skills > /dev/null 2>&1; then
+              echo "MCP server ready after ${i}s"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "::error::MCP server failed to start"
+              cat /tmp/mcp-server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      # ── Run agent-backend DB migrations ──
+      - name: Run database migrations
+        working-directory: agent-backend
+        run: |
+          go run -tags 'postgres' github.com/pressly/goose/v3/cmd/goose@v3.27.0 \
+            -dir internal/storage/postgres/migrations \
+            postgres "$DATABASE_DSN" up
+
+      # ── Build and start agent-backend ──
+      - name: Build agent-backend
+        working-directory: agent-backend
+        run: go build -o ../agent-server ./cmd/server/
+
+      - name: Start agent-backend
+        run: |
+          ./agent-server > /tmp/agent-backend.log 2>&1 &
+          echo "AGENT_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9998/healthz > /dev/null 2>&1; then
+              echo "Agent-backend ready after ${i}s"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "::error::Agent-backend failed to start"
+              cat /tmp/agent-backend.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      # ── Verify MCP integration ──
+      - name: Verify MCP integration
+        run: |
+          TOOL_COUNT=$(grep -o '"mcp_tool_count":[0-9]*' /tmp/agent-backend.log | head -1 | grep -o '[0-9]*')
+          echo "MCP tools discovered: $TOOL_COUNT"
+          if [ -z "$TOOL_COUNT" ] || [ "$TOOL_COUNT" -lt 1 ]; then
+            echo "::error::Agent-backend did not discover any MCP tools"
+            exit 1
+          fi
+
+          SKILL_COUNT=$(grep -o '"skill_count":[0-9]*' /tmp/agent-backend.log | head -1 | grep -o '[0-9]*')
+          echo "MCP skills discovered: $SKILL_COUNT"
+          if [ -z "$SKILL_COUNT" ] || [ "$SKILL_COUNT" -lt 1 ]; then
+            echo "::error::Agent-backend did not discover any MCP skills"
+            exit 1
+          fi
+
+      # ── Build vultisig-sdk from PR branch ──
+      - name: Install vultisig-sdk dependencies
+        working-directory: vultisig-sdk
+        run: yarn install --frozen-lockfile
+
+      - name: Build vultisig-sdk
+        working-directory: vultisig-sdk
+        run: yarn build:all
+
+      # ── Setup test vault ──
+      - name: Setup test vault
+        run: |
+          mkdir -p ~/.vultisig
+          cp agent-backend/testdata/test-vault.json ~/.vultisig/vault:023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120.json
+          echo '{"activeVaultId":"023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120"}' > ~/.vultisig/activeVaultId.json
+
+      # ── Run integration test ──
+      - name: Run integration test
+        working-directory: vultisig-sdk
+        env:
+          VAULT_PASSWORD: ${{ secrets.TEST_VAULT_PASSWORD }}
+        run: |
+          RESPONSE=$(npx tsx clients/cli/src/index.ts \
+            --vault ci_test \
+            agent ask \
+            --password "$VAULT_PASSWORD" \
+            --backend-url http://localhost:9998 \
+            "What is 2+2?" 2>&1) \
+            && EXIT_CODE=0 || EXIT_CODE=$?
+
+          echo "=== CLI Response ==="
+          echo "$RESPONSE"
+
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "::error::CLI command failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+
+          # Check that we got a non-error response (should contain "4" somewhere)
+          if echo "$RESPONSE" | grep -qi "error\|failed\|exception\|panic"; then
+            echo "::error::Response contains error indicators"
+            exit 1
+          fi
+
+          echo "Integration test PASSED"
+
+      # ── Cleanup ──
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== MCP Server Log ==="
+          cat /tmp/mcp-server.log || true
+          echo "=== Agent Backend Log ==="
+          cat /tmp/agent-backend.log || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
+          [ -n "$MCP_PID" ] && kill "$MCP_PID" 2>/dev/null || true
