@@ -4,7 +4,8 @@
 
 cd "$CLAUDE_PROJECT_DIR" || exit 0
 
-MODIFIED=$(git diff --name-only --diff-filter=ACMR HEAD 2>/dev/null | grep -E '\.(ts|tsx)$' || true)
+MODIFIED=$(git diff --name-only --diff-filter=ACMR origin/main...HEAD 2>/dev/null | grep -E '\.(ts|tsx)$' || true)
+MODIFIED+=$(git diff --name-only --diff-filter=ACMR HEAD 2>/dev/null | grep -E '\.(ts|tsx)$' || true)
 
 if [ -z "$MODIFIED" ]; then
   exit 0

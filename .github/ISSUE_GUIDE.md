@@ -41,8 +41,8 @@ _How to fill the Vultisig issue template so agents AND humans produce great resu
 
 ## Key Rules for This Repo
 
-- **DO NOT** reference `packages/core/` or `packages/lib/` in `files.write` — those are upstream mirrors
-- SDK code lives in `packages/sdk/src/` — that's where edits go
+- SDK **owns** `packages/core/` and `packages/lib/` — edit them as needed for chain logic and shared utilities
+- SDK-level code lives in `packages/sdk/src/` and consumes logic from `packages/core/`
 - Use `yarn check:all` as the verify command (covers lint + typecheck + test + knip)
 
 ---
@@ -51,7 +51,7 @@ _How to fill the Vultisig issue template so agents AND humans produce great resu
 
 - [ ] Title starts with a verb
 - [ ] Size is tiny/small/medium (never large)
-- [ ] files.write only references packages/sdk/ (not core/ or lib/)
+- [ ] files.write references the correct package (sdk/, core/, or lib/)
 - [ ] At least 2 anti-goals in Must NOT Do
 - [ ] Every acceptance criterion is command-runnable
 - [ ] verify has at least 1 command
