@@ -21,12 +21,14 @@ const microLamportsPerLamport = 1_000_000n
 type RefineSolanaChainSpecificInput = {
   keysignPayload: KeysignPayload
   chainSpecific: SolanaSpecific
+  priorityFeePrice: number
   walletCore: WalletCore
 }
 
 export const refineSolanaChainSpecific = async ({
   keysignPayload,
   chainSpecific,
+  priorityFeePrice,
   walletCore,
 }: RefineSolanaChainSpecificInput): Promise<SolanaSpecific> => {
   const coin = getKeysignCoin(keysignPayload)
@@ -72,8 +74,7 @@ export const refineSolanaChainSpecific = async ({
   const rentExemptionFee = await getRentExemptionFee()
 
   const priorityFeeAmount =
-    (BigInt(solanaConfig.priorityFeePrice) *
-      BigInt(solanaConfig.priorityFeeLimit)) /
+    (BigInt(priorityFeePrice) * BigInt(solanaConfig.priorityFeeLimit)) /
     microLamportsPerLamport
 
   const totalFee = baseFee + rentExemptionFee + priorityFeeAmount
