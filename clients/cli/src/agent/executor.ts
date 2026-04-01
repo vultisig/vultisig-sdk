@@ -59,6 +59,8 @@ export class AgentExecutor {
   private stateStore: VaultStateStore | null = null
   /** Held chain lock release functions, keyed by chain name */
   private chainLockReleases = new Map<string, () => Promise<void>>()
+  /** Backend client for resolving calldata_id references. */
+  private backendClient: { getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }> } | null = null
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string) {
     this.vault = vault
@@ -70,6 +72,10 @@ export class AgentExecutor {
 
   setPassword(password: string): void {
     this.password = password
+  }
+
+  setBackendClient(client: { getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }> }): void {
+    this.backendClient = client
   }
 
   /**
@@ -447,6 +453,17 @@ export class AgentExecutor {
   }
 
   private async buildTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    // Resolve calldata_id → actual data before any other checks
+    if (params.calldata_id && !params.data && this.backendClient) {
+      const id = params.calldata_id as string
+      if (this.verbose) process.stderr.write(`[executor] resolving calldata_id ${id}\n`)
+      const entry = await this.backendClient.getCalldata(id)
+      params = { ...params, data: entry.data }
+      if (!params.to && entry.to) params = { ...params, to: entry.to }
+      delete (params as Record<string, unknown>).calldata_id
+      if (this.verbose) process.stderr.write(`[executor] calldata_id resolved, data len=${entry.data.length}\n`)
+    }
+
     // EVM contract call with function_name + typed params (e.g. from build_custom_tx)
     if (params.function_name && params.contract_address) {
       return this.buildContractCallTx(params)
@@ -481,6 +498,16 @@ export class AgentExecutor {
         has_calldata: true,
         message: 'Transaction built. Ready to sign.',
       }
+    }
+
+    // If we got here with contract_address but no function_name or data,
+    // the params are incomplete for a contract call.
+    if (params.contract_address && !params.function_name) {
+      const provided = Object.keys(params).join(', ')
+      throw new Error(
+        `build_custom_tx requires function_name and params for contract calls. ` +
+        `Got: ${provided}. Missing: function_name, params.`
+      )
     }
 
     // Fallback to simple send for native transfers
