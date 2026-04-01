@@ -83,9 +83,11 @@ export class Keyshare {
   }
 
   static fromBytes(bytes: Uint8Array): Keyshare {
-    // Eagerly load native handle to make keyId() and publicKey() available synchronously
     const b64 = toBase64(bytes)
     const handleId = ExpoMpc.loadKeyshare(b64)
+    if (typeof handleId !== 'number') {
+      throw new Error(`[dkls-adapter] loadKeyshare returned ${typeof handleId} (${String(handleId)}) instead of number. Native module may not be updated.`)
+    }
     const keyIdB64 = ExpoMpc.getKeyshareKeyId(handleId)
     return new Keyshare(
       handleId,
@@ -255,13 +257,18 @@ export class SignSession {
   private _handleId: number
 
   constructor(setup: Uint8Array, id: string, share: Keyshare) {
-    // All native calls are now sync — create session eagerly
     const keyshareHandle = (share as any)._handleId >= 0 ? (share as any)._handleId : ExpoMpc.loadKeyshare(toBase64(share.toBytes()))
+    if (typeof keyshareHandle !== 'number') {
+      throw new Error(`[dkls-adapter] SignSession: keyshareHandle is ${typeof keyshareHandle} (${String(keyshareHandle)}), expected number`)
+    }
     this._handleId = ExpoMpc.createSignSession(
       toBase64(setup),
       id,
       keyshareHandle
     )
+    if (typeof this._handleId !== 'number') {
+      throw new Error(`[dkls-adapter] createSignSession returned ${typeof this._handleId}, expected number`)
+    }
   }
 
   static setup(
