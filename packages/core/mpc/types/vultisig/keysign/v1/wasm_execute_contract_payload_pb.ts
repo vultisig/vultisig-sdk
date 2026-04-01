@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file vultisig/keysign/v1/wasm_execute_contract_payload.proto.
  */
 export const file_vultisig_keysign_v1_wasm_execute_contract_payload: GenFile = /*@__PURE__*/
-  fileDesc("Cjd2dWx0aXNpZy9rZXlzaWduL3YxL3dhc21fZXhlY3V0ZV9jb250cmFjdF9wYXlsb2FkLnByb3RvEhN2dWx0aXNpZy5rZXlzaWduLnYxIisKCkNvc21vc0NvaW4SDQoFZGVub20YASABKAkSDgoGYW1vdW50GAIgASgJIq8BCglDb3Ntb3NGZWUSLwoGYW1vdW50GAEgAygLMh8udnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NDb2luEgsKA2dhcxgCIAEoCRISCgVwYXllchgDIAEoCUgAiAEBEhQKB2dyYW50ZXIYBCABKAlIAYgBARIWCglmZWVfcGF5ZXIYBSABKAlIAogBAUIICgZfcGF5ZXJCCgoIX2dyYW50ZXJCDAoKX2ZlZV9wYXllciIoCglDb3Ntb3NNc2cSDAoEdHlwZRgBIAEoCRINCgV2YWx1ZRgCIAEoCSJmCglTaWduQW1pbm8SKwoDZmVlGAEgASgLMh4udnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NGZWUSLAoEbXNncxgCIAMoCzIeLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29zbW9zTXNnImMKClNpZ25EaXJlY3QSEgoKYm9keV9ieXRlcxgBIAEoCRIXCg9hdXRoX2luZm9fYnl0ZXMYAiABKAkSEAoIY2hhaW5faWQYAyABKAkSFgoOYWNjb3VudF9udW1iZXIYBCABKAkiJgoKU2lnblNvbGFuYRIYChByYXdfdHJhbnNhY3Rpb25zGAEgAygJIkoKClRvbk1lc3NhZ2USCgoCdG8YASABKAkSDgoGYW1vdW50GAIgASgJEhQKB3BheWxvYWQYAyABKAlIAIgBAUIKCghfcGF5bG9hZCJACgdTaWduVG9uEjUKDHRvbl9tZXNzYWdlcxgCIAMoCzIfLnZ1bHRpc2lnLmtleXNpZ24udjEuVG9uTWVzc2FnZSKTAQoaV2FzbUV4ZWN1dGVDb250cmFjdFBheWxvYWQSFgoOc2VuZGVyX2FkZHJlc3MYASABKAkSGAoQY29udHJhY3RfYWRkcmVzcxgCIAEoCRITCgtleGVjdXRlX21zZxgDIAEoCRIuCgVjb2lucxgEIAMoCzIfLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29zbW9zQ29pbkJUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM");
+  fileDesc("Cjd2dWx0aXNpZy9rZXlzaWduL3YxL3dhc21fZXhlY3V0ZV9jb250cmFjdF9wYXlsb2FkLnByb3RvEhN2dWx0aXNpZy5rZXlzaWduLnYxIisKCkNvc21vc0NvaW4SDQoFZGVub20YASABKAkSDgoGYW1vdW50GAIgASgJIq8BCglDb3Ntb3NGZWUSLwoGYW1vdW50GAEgAygLMh8udnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NDb2luEgsKA2dhcxgCIAEoCRISCgVwYXllchgDIAEoCUgAiAEBEhQKB2dyYW50ZXIYBCABKAlIAYgBARIWCglmZWVfcGF5ZXIYBSABKAlIAogBAUIICgZfcGF5ZXJCCgoIX2dyYW50ZXJCDAoKX2ZlZV9wYXllciIoCglDb3Ntb3NNc2cSDAoEdHlwZRgBIAEoCRINCgV2YWx1ZRgCIAEoCSJmCglTaWduQW1pbm8SKwoDZmVlGAEgASgLMh4udnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NGZWUSLAoEbXNncxgCIAMoCzIeLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29zbW9zTXNnImMKClNpZ25EaXJlY3QSEgoKYm9keV9ieXRlcxgBIAEoCRIXCg9hdXRoX2luZm9fYnl0ZXMYAiABKAkSEAoIY2hhaW5faWQYAyABKAkSFgoOYWNjb3VudF9udW1iZXIYBCABKAkiJgoKU2lnblNvbGFuYRIYChByYXdfdHJhbnNhY3Rpb25zGAEgAygJIkoKClRvbk1lc3NhZ2USCgoCdG8YASABKAkSDgoGYW1vdW50GAIgASgJEhQKB3BheWxvYWQYAyABKAlIAIgBAUIKCghfcGF5bG9hZCJACgdTaWduVG9uEjUKDHRvbl9tZXNzYWdlcxgCIAMoCzIfLnZ1bHRpc2lnLmtleXNpZ24udjEuVG9uTWVzc2FnZSKTAQoaV2FzbUV4ZWN1dGVDb250cmFjdFBheWxvYWQSFgoOc2VuZGVyX2FkZHJlc3MYASABKAkSGAoQY29udHJhY3RfYWRkcmVzcxgCIAEoCRITCgtleGVjdXRlX21zZxgDIAEoCRIuCgVjb2lucxgEIAMoCzIfLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29zbW9zQ29pbiLPAQoMQml0Y29pbklucHV0EgwKBGhhc2gYASABKAkSDQoFaW5kZXgYAiABKA0SDgoGYW1vdW50GAMgASgDEhYKDnNjcmlwdF9wdWJfa2V5GAQgASgJEhMKC3NjcmlwdF90eXBlGAUgASgJEhQKDHNpZ2hhc2hfdHlwZRgGIAEoDRIPCgdpc19vdXJzGAcgASgIEhoKDXJlZGVlbV9zY3JpcHQYCCABKAlIAIgBARIQCghzZXF1ZW5jZRgJIAEoDUIQCg5fcmVkZWVtX3NjcmlwdCKLAQoNQml0Y29pbk91dHB1dBIOCgZhbW91bnQYASABKAMSDwoHYWRkcmVzcxgCIAEoCRIbCg5vcF9yZXR1cm5fZGF0YRgDIAEoCUgAiAEBEhYKDnNjcmlwdF9wdWJfa2V5GAQgASgJEhEKCWlzX2NoYW5nZRgFIAEoCEIRCg9fb3BfcmV0dXJuX2RhdGEimAEKC1NpZ25CaXRjb2luEg8KB3ZlcnNpb24YASABKA0SEAoIbG9ja3RpbWUYAiABKA0SMQoGaW5wdXRzGAMgAygLMiEudnVsdGlzaWcua2V5c2lnbi52MS5CaXRjb2luSW5wdXQSMwoHb3V0cHV0cxgEIAMoCzIiLnZ1bHRpc2lnLmtleXNpZ24udjEuQml0Y29pbk91dHB1dEJUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM");
 
 /**
  * @generated from message vultisig.keysign.v1.CosmosCoin
@@ -241,4 +241,176 @@ export type WasmExecuteContractPayload = Message<"vultisig.keysign.v1.WasmExecut
  */
 export const WasmExecuteContractPayloadSchema: GenMessage<WasmExecuteContractPayload> = /*@__PURE__*/
   messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 8);
+
+/**
+ * A single Bitcoin transaction input decomposed from a PSBT.
+ * Contains all data needed for sighash computation and verification.
+ *
+ * @generated from message vultisig.keysign.v1.BitcoinInput
+ */
+export type BitcoinInput = Message<"vultisig.keysign.v1.BitcoinInput"> & {
+  /**
+   * Previous txid (hex, big-endian)
+   *
+   * @generated from field: string hash = 1;
+   */
+  hash: string;
+
+  /**
+   * Previous output index (vout)
+   *
+   * @generated from field: uint32 index = 2;
+   */
+  index: number;
+
+  /**
+   * Satoshis (from witness UTXO)
+   *
+   * @generated from field: int64 amount = 3;
+   */
+  amount: bigint;
+
+  /**
+   * Hex scriptPubKey of the UTXO being spent
+   *
+   * @generated from field: string script_pub_key = 4;
+   */
+  scriptPubKey: string;
+
+  /**
+   * "p2wpkh", "p2pkh", "p2tr", "p2sh-p2wpkh"
+   *
+   * @generated from field: string script_type = 5;
+   */
+  scriptType: string;
+
+  /**
+   * BIP-143/341 sighash flag (default SIGHASH_ALL=1)
+   *
+   * @generated from field: uint32 sighash_type = 6;
+   */
+  sighashType: number;
+
+  /**
+   * Whether this device signs this input
+   *
+   * @generated from field: bool is_ours = 7;
+   */
+  isOurs: boolean;
+
+  /**
+   * For P2SH-P2WPKH: hex redeem script
+   *
+   * @generated from field: optional string redeem_script = 8;
+   */
+  redeemScript?: string;
+
+  /**
+   * nSequence (default 0xFFFFFFFF)
+   *
+   * @generated from field: uint32 sequence = 9;
+   */
+  sequence: number;
+};
+
+/**
+ * Describes the message vultisig.keysign.v1.BitcoinInput.
+ * Use `create(BitcoinInputSchema)` to create a new message.
+ */
+export const BitcoinInputSchema: GenMessage<BitcoinInput> = /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 9);
+
+/**
+ * A single Bitcoin transaction output decomposed from a PSBT.
+ *
+ * @generated from message vultisig.keysign.v1.BitcoinOutput
+ */
+export type BitcoinOutput = Message<"vultisig.keysign.v1.BitcoinOutput"> & {
+  /**
+   * Satoshis
+   *
+   * @generated from field: int64 amount = 1;
+   */
+  amount: bigint;
+
+  /**
+   * Decoded address (empty for OP_RETURN)
+   *
+   * @generated from field: string address = 2;
+   */
+  address: string;
+
+  /**
+   * Hex data if OP_RETURN
+   *
+   * @generated from field: optional string op_return_data = 3;
+   */
+  opReturnData?: string;
+
+  /**
+   * Hex output scriptPubKey
+   *
+   * @generated from field: string script_pub_key = 4;
+   */
+  scriptPubKey: string;
+
+  /**
+   * Whether output is change back to sender
+   *
+   * @generated from field: bool is_change = 5;
+   */
+  isChange: boolean;
+};
+
+/**
+ * Describes the message vultisig.keysign.v1.BitcoinOutput.
+ * Use `create(BitcoinOutputSchema)` to create a new message.
+ */
+export const BitcoinOutputSchema: GenMessage<BitcoinOutput> = /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 10);
+
+/**
+ * Structured PSBT representation for Bitcoin dApp signing.
+ * Decomposes a BIP-174 PSBT into verifiable fields so co-signing
+ * devices can display transaction details and compute exact sighashes
+ * without receiving an opaque blob.
+ *
+ * @generated from message vultisig.keysign.v1.SignBitcoin
+ */
+export type SignBitcoin = Message<"vultisig.keysign.v1.SignBitcoin"> & {
+  /**
+   * Transaction version (typically 1 or 2)
+   *
+   * @generated from field: uint32 version = 1;
+   */
+  version: number;
+
+  /**
+   * Transaction locktime
+   *
+   * @generated from field: uint32 locktime = 2;
+   */
+  locktime: number;
+
+  /**
+   * All inputs in exact PSBT order
+   *
+   * @generated from field: repeated vultisig.keysign.v1.BitcoinInput inputs = 3;
+   */
+  inputs: BitcoinInput[];
+
+  /**
+   * All outputs in exact PSBT order
+   *
+   * @generated from field: repeated vultisig.keysign.v1.BitcoinOutput outputs = 4;
+   */
+  outputs: BitcoinOutput[];
+};
+
+/**
+ * Describes the message vultisig.keysign.v1.SignBitcoin.
+ * Use `create(SignBitcoinSchema)` to create a new message.
+ */
+export const SignBitcoinSchema: GenMessage<SignBitcoin> = /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 11);
 

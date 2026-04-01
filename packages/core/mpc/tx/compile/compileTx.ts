@@ -13,9 +13,13 @@ import { getQBTCSignedTransaction } from '../../chains/cosmos/qbtc/QBTCHelper'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
 import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bittensor'
-import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import {
+  KeysignPayload,
+  KeysignPayloadSchema,
+} from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getPreSigningHashes } from '../preSigningHashes'
 import { generateSignature } from '../signature/generateSignature'
+import { compileSignBitcoinTx } from './compileSignBitcoinTx'
 
 type Input = {
   publicKey: PublicKey
@@ -23,6 +27,7 @@ type Input = {
   signatures: Record<string, KeysignSignature>
   chain: Chain
   walletCore: WalletCore
+  keysignPayload?: KeysignPayload
 }
 
 export const compileTx = ({
@@ -31,7 +36,17 @@ export const compileTx = ({
   signatures: keysignSignatures,
   chain,
   walletCore,
+  keysignPayload,
 }: Input) => {
+  // PSBT signing: build raw signed tx from SignBitcoin fields + MPC signatures
+  if (keysignPayload?.signData.case === 'signBitcoin') {
+    return compileSignBitcoinTx(
+      keysignPayload.signData.value,
+      keysignSignatures,
+      publicKey
+    )
+  }
+
   if (chain === Chain.QBTC) {
     const keysignPayload = fromBinary(KeysignPayloadSchema, txInputData)
     const cosmosSpecific = getBlockchainSpecificValue(
