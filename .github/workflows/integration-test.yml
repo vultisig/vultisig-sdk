@@ -10,7 +10,7 @@ concurrency:
 jobs:
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -175,34 +175,140 @@ jobs:
           cp agent-backend/testdata/test-vault.json ~/.vultisig/vault:023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120.json
           echo '{"activeVaultId":"023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120"}' > ~/.vultisig/activeVaultId.json
 
-      # ── Run integration test ──
+      # ── Install and configure opencode ──
+      - name: Install opencode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure opencode
+        run: |
+          mkdir -p ~/.local/share/opencode
+          echo '${{ secrets.OPENCODE_AUTH }}' > ~/.local/share/opencode/auth.json
+          mkdir -p ~/.config/opencode
+          cat > ~/.config/opencode/opencode.json <<'EOF'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "permission": {
+              "*": {
+                "*": "allow"
+              }
+            }
+          }
+          EOF
+
+      # ── Discover what changed in this PR ──
+      - name: Discover PR changes
+        working-directory: vultisig-sdk
+        run: |
+          BASE="origin/${{ github.event.pull_request.base.ref }}"
+          {
+            echo "=== Changed CLI agent files ==="
+            git diff "$BASE"...HEAD --name-status -- 'clients/cli/src/agent/*.ts' 'clients/cli/src/commands/agent.ts' || true
+            echo ""
+            echo "=== Changed SDK core files ==="
+            git diff "$BASE"...HEAD --name-status -- 'packages/sdk/src/**/*.ts' || true
+            echo ""
+            echo "=== Changed chain/signing files ==="
+            git diff "$BASE"...HEAD --name-status -- 'packages/sdk-chains/src/**/*.ts' || true
+            echo ""
+            echo "=== Key code changes ==="
+            git diff "$BASE"...HEAD --stat || true
+            echo ""
+            echo "=== Detailed changes in CLI agent ==="
+            git diff "$BASE"...HEAD -- 'clients/cli/src/agent/*.ts' | head -200 || true
+            echo ""
+            echo "=== Detailed changes in SDK ==="
+            git diff "$BASE"...HEAD -- 'packages/sdk/src/**/*.ts' 'packages/sdk-chains/src/**/*.ts' | head -200 || true
+          } > /tmp/pr-changes.txt
+          cat /tmp/pr-changes.txt
+
+      # ── Run integration test via opencode ──
       - name: Run integration test
         working-directory: vultisig-sdk
         env:
           VAULT_PASSWORD: ${{ secrets.TEST_VAULT_PASSWORD }}
         run: |
-          RESPONSE=$(npx tsx clients/cli/src/index.ts \
-            --vault ci_test \
-            agent ask \
+          opencode run "$(cat <<'PROMPT'
+          You are an integration test runner for the Vultisig crypto wallet SDK.
+
+          ## What you have
+
+          A local stack is running:
+          - Agent backend at http://localhost:9998
+          - MCP server at http://localhost:8888 (crypto tools + skills)
+          - A test vault named "ci_test" is configured
+          - The vultisig-sdk has been built from the PR branch
+
+          ## Your tool: vultisig agent ask
+
+          You can invoke the Vultisig CLI to send messages to the AI agent:
+
+          ```bash
+          npx tsx clients/cli/src/index.ts --vault ci_test agent ask \
             --password "$VAULT_PASSWORD" \
             --backend-url http://localhost:9998 \
-            "What is 2+2?" 2>&1) \
-            && EXIT_CODE=0 || EXIT_CODE=$?
+            --json \
+            "<your message>"
+          ```
 
-          echo "=== CLI Response ==="
-          echo "$RESPONSE"
+          The --json flag returns structured output:
+          ```json
+          {
+            "session_id": "uuid",
+            "response": "agent's text response",
+            "tool_calls": [{"action": "tool_name", "success": true, "data": {...}}],
+            "transactions": [{"hash": "0x...", "chain": "Ethereum", "explorerUrl": "..."}]
+          }
+          ```
 
-          if [ "$EXIT_CODE" -ne 0 ]; then
-            echo "::error::CLI command failed with exit code $EXIT_CODE"
+          To continue a conversation (multi-turn), add --session <session_id>:
+          ```bash
+          npx tsx clients/cli/src/index.ts --vault ci_test agent ask \
+            --password "$VAULT_PASSWORD" \
+            --backend-url http://localhost:9998 \
+            --json \
+            --session "<session_id from previous call>" \
+            "<follow-up message>"
+          ```
+
+          ## Your task
+
+          1. Read /tmp/pr-changes.txt to understand what changed in this PR to the vultisig-sdk.
+          2. Based on the changes, design a test that exercises the modified functionality.
+             - If CLI agent changes (ask mode, session handling, tool execution): test the agent flow with a crypto operation.
+             - If SDK chain/signing changes: ask the agent to perform a transaction on the affected chain.
+             - If only build/config/CI changes: ask the agent to perform a simple send to verify the full stack works.
+             - Fallback: "Send 0.000001 ETH to my own Ethereum address"
+          3. Execute the test by running `vultisig agent ask` commands. Parse the JSON output.
+          4. If the agent's response indicates it needs more information or asks a follow-up question, continue the conversation using --session with the session_id from the previous response.
+          5. Evaluate the result:
+             - If the changes warrant a transaction: verify tool_calls were made and transactions array is non-empty.
+             - If the changes are infra-only: verify the agent responded without errors.
+          6. Write the final verdict to /tmp/test-verdict.txt:
+             - First line: PASS or FAIL
+             - Remaining lines: brief explanation
+
+          ## Important
+          - Use tiny amounts (0.000001 ETH, 0.001 USDC) to minimize cost.
+          - The test vault has funds on Ethereum, Arbitrum, Base, BSC, THORChain, Bitcoin, and Solana.
+          - Do NOT skip running the actual vultisig commands — you must execute them and check the output.
+          - If a command fails or returns an error, try to diagnose from the output and retry once with a corrected prompt before marking as FAIL.
+          PROMPT
+          )" 2>&1 | tee /tmp/opencode-test.log
+
+          echo "=== Test Verdict ==="
+          if [ ! -f /tmp/test-verdict.txt ]; then
+            echo "::error::opencode did not write /tmp/test-verdict.txt"
             exit 1
           fi
+          cat /tmp/test-verdict.txt
 
-          # Check that we got a non-error response (should contain "4" somewhere)
-          if echo "$RESPONSE" | grep -qi "error\|failed\|exception\|panic"; then
-            echo "::error::Response contains error indicators"
+          VERDICT=$(head -1 /tmp/test-verdict.txt)
+          if [ "$VERDICT" != "PASS" ]; then
+            echo "::error::Integration test FAILED"
             exit 1
           fi
-
           echo "Integration test PASSED"
 
       # ── Cleanup ──
@@ -213,6 +319,10 @@ jobs:
           cat /tmp/mcp-server.log || true
           echo "=== Agent Backend Log ==="
           cat /tmp/agent-backend.log || true
+          echo "=== OpenCode Test Log ==="
+          cat /tmp/opencode-test.log 2>/dev/null || echo "No opencode output"
+          echo "=== Test Verdict ==="
+          cat /tmp/test-verdict.txt 2>/dev/null || echo "No verdict"
 
       - name: Cleanup
         if: always()
