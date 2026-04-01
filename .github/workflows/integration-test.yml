@@ -10,10 +10,314 @@ concurrency:
 jobs:
   integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vultisig
+          POSTGRES_PASSWORD: vultisig
+          POSTGRES_DB: vultisig-agent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vultisig -d vultisig-agent"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+
+    # Only non-secret config at job level
+    env:
+      DATABASE_DSN: postgres://vultisig:vultisig@localhost:5432/vultisig-agent?sslmode=disable
+      REDIS_URI: redis://localhost:6379
+      JWT_SECRET: integration-test-secret-key-not-for-prod
+      AI_MODEL: nvidia/nemotron-3-super-120b-a12b:free
+      AI_SUMMARY_MODEL: nvidia/nemotron-3-super-120b-a12b:free
+      MCP_SERVER_URL: http://localhost:8888
+      VERIFIER_URL: ""
+      SERVER_PORT: "9998"
+      PROTOCOL_STATE_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
     steps:
-      - name: Integration temporarily skipped
+      # ── Checkout repos ──
+      - name: Checkout vultisig-sdk (PR branch)
+        uses: actions/checkout@v4
+        with:
+          path: vultisig-sdk
+          fetch-depth: 0
+
+      - name: Checkout agent-backend
+        uses: actions/checkout@v4
+        with:
+          repository: vultisig/agent-backend
+          ref: main
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          path: agent-backend
+
+      - name: Checkout MCP
+        uses: actions/checkout@v4
+        with:
+          repository: vultisig/mcp
+          ref: main
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          path: mcp
+
+      # ── Setup Go ──
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+          cache: true
+          cache-dependency-path: |
+            mcp/go.sum
+            agent-backend/go.sum
+
+      # ── Setup Node.js ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ── Build MCP server ──
+      - name: Build MCP server
+        working-directory: mcp
+        run: CGO_ENABLED=0 go build -o ../mcp-server ./cmd/mcp-server/
+
+      # ── Start MCP server ──
+      - name: Start MCP server
         run: |
-          echo "::notice::Full integration (MCP + agent-backend + opencode) is skipped: vultisig/agent-backend is not available."
-          echo "Restore the previous workflow when the backend repo exists again."
+          ./mcp-server -http :8888 > /tmp/mcp-server.log 2>&1 &
+          echo "MCP_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8888/skills > /dev/null 2>&1; then
+              echo "MCP server ready after ${i}s"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "::error::MCP server failed to start"
+              cat /tmp/mcp-server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      # ── Run agent-backend DB migrations ──
+      - name: Run database migrations
+        working-directory: agent-backend
+        run: |
+          go run -tags 'postgres' github.com/pressly/goose/v3/cmd/goose@v3.27.0 \
+            -dir internal/storage/postgres/migrations \
+            postgres "$DATABASE_DSN" up
+
+      # ── Build and start agent-backend ──
+      - name: Build agent-backend
+        working-directory: agent-backend
+        run: go build -o ../agent-server ./cmd/server/
+
+      - name: Start agent-backend
+        env:
+          AI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          ./agent-server > /tmp/agent-backend.log 2>&1 &
+          echo "AGENT_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9998/healthz > /dev/null 2>&1; then
+              echo "Agent-backend ready after ${i}s"
+              break
+            fi
+            if [ "$i" = "30" ]; then
+              echo "::error::Agent-backend failed to start"
+              cat /tmp/agent-backend.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      # ── Verify MCP integration ──
+      - name: Verify MCP integration
+        run: |
+          TOOL_COUNT=$(grep -o '"mcp_tool_count":[0-9]*' /tmp/agent-backend.log | head -1 | grep -o '[0-9]*')
+          echo "MCP tools discovered: $TOOL_COUNT"
+          if [ -z "$TOOL_COUNT" ] || [ "$TOOL_COUNT" -lt 1 ]; then
+            echo "::error::Agent-backend did not discover any MCP tools"
+            exit 1
+          fi
+
+          SKILL_COUNT=$(grep -o '"skill_count":[0-9]*' /tmp/agent-backend.log | head -1 | grep -o '[0-9]*')
+          echo "MCP skills discovered: $SKILL_COUNT"
+          if [ -z "$SKILL_COUNT" ] || [ "$SKILL_COUNT" -lt 1 ]; then
+            echo "::error::Agent-backend did not discover any MCP skills"
+            exit 1
+          fi
+
+      # ── Build vultisig-sdk from PR branch ──
+      - name: Install vultisig-sdk dependencies
+        working-directory: vultisig-sdk
+        run: yarn install --frozen-lockfile
+
+      - name: Build vultisig-sdk
+        working-directory: vultisig-sdk
+        run: yarn build:all
+
+      # ── Setup test vault ──
+      - name: Setup test vault
+        run: |
+          mkdir -p ~/.vultisig
+          cp agent-backend/testdata/test-vault.json ~/.vultisig/vault:023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120.json
+          echo '{"activeVaultId":"023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120"}' > ~/.vultisig/activeVaultId.json
+
+      # ── Install opencode ──
+      - name: Install opencode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # ── Discover what changed in this PR ──
+      - name: Discover PR changes
+        working-directory: vultisig-sdk
+        run: |
+          BASE="origin/${{ github.event.pull_request.base.ref }}"
+          {
+            echo "=== Changed CLI agent files ==="
+            git diff "$BASE"...HEAD --name-status -- 'clients/cli/src/agent/*.ts' 'clients/cli/src/commands/agent.ts' || true
+            echo ""
+            echo "=== Changed SDK core files ==="
+            git diff "$BASE"...HEAD --name-status -- 'packages/sdk/src/**/*.ts' || true
+            echo ""
+            echo "=== Changed chain/signing files ==="
+            git diff "$BASE"...HEAD --name-status -- 'packages/sdk-chains/src/**/*.ts' || true
+            echo ""
+            echo "=== Key code changes ==="
+            git diff "$BASE"...HEAD --stat || true
+            echo ""
+            echo "=== Detailed changes in CLI agent ==="
+            git diff "$BASE"...HEAD -- 'clients/cli/src/agent/*.ts' | head -200 || true
+            echo ""
+            echo "=== Detailed changes in SDK ==="
+            git diff "$BASE"...HEAD -- 'packages/sdk/src/**/*.ts' 'packages/sdk-chains/src/**/*.ts' | head -200 || true
+          } > /tmp/pr-changes.txt
+          cat /tmp/pr-changes.txt
+
+      # ── Run integration test via opencode ──
+      - name: Run integration test
+        working-directory: vultisig-sdk
+        env:
+          VAULT_PASSWORD: ${{ secrets.TEST_VAULT_PASSWORD }}
+          OPENCODE_AUTH: ${{ secrets.OPENCODE_AUTH }}
+        run: |
+          # Configure opencode (scoped to this step only)
+          mkdir -p ~/.local/share/opencode
+          echo "$OPENCODE_AUTH" > ~/.local/share/opencode/auth.json
+          mkdir -p ~/.config/opencode
+          cat > ~/.config/opencode/opencode.json <<'OCEOF'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "permission": {
+              "*": {
+                "*": "allow"
+              }
+            }
+          }
+          OCEOF
+
+          opencode run "$(cat <<'PROMPT'
+          You are an integration test runner for the Vultisig crypto wallet SDK.
+
+          ## What you have
+
+          A local stack is running:
+          - Agent backend at http://localhost:9998
+          - MCP server at http://localhost:8888 (crypto tools + skills)
+          - A test vault named "ci_test" is configured
+          - The vultisig-sdk has been built from the PR branch
+
+          ## Your tool: vultisig agent ask
+
+          You can invoke the Vultisig CLI to send messages to the AI agent:
+
+          ```bash
+          npx tsx clients/cli/src/index.ts --vault ci_test agent ask \
+            --password "$VAULT_PASSWORD" \
+            --backend-url http://localhost:9998 \
+            --json \
+            "<your message>"
+          ```
+
+          The --json flag returns structured output:
+          ```json
+          {
+            "session_id": "uuid",
+            "response": "agent's text response",
+            "tool_calls": [{"action": "tool_name", "success": true, "data": {...}}],
+            "transactions": [{"hash": "0x...", "chain": "Ethereum", "explorerUrl": "..."}]
+          }
+          ```
+
+          To continue a conversation (multi-turn), add --session <session_id>:
+          ```bash
+          npx tsx clients/cli/src/index.ts --vault ci_test agent ask \
+            --password "$VAULT_PASSWORD" \
+            --backend-url http://localhost:9998 \
+            --json \
+            --session "<session_id from previous call>" \
+            "<follow-up message>"
+          ```
+
+          ## Your task
+
+          1. Read /tmp/pr-changes.txt to understand what changed in this PR to the vultisig-sdk.
+          2. Based on the changes, design a test that exercises the modified functionality.
+             - If CLI agent changes (ask mode, session handling, tool execution): test the agent flow with a crypto operation.
+             - If SDK chain/signing changes: ask the agent to perform a transaction on the affected chain.
+             - If only build/config/CI changes: ask the agent to perform a simple send to verify the full stack works.
+             - Fallback: "Send 0.000001 ETH to my own Ethereum address"
+          3. Execute the test by running `vultisig agent ask` commands.
+          4. If the agent's response indicates it needs more information or asks a follow-up question, continue the conversation using --session with the session_id from the previous response.
+          5. Save the FINAL JSON output (from the last `agent ask` call) to /tmp/test-result.json.
+
+          ## Important
+          - Use tiny amounts (0.000001 ETH, 0.001 USDC) to minimize cost.
+          - The test vault has funds on Ethereum, Arbitrum, Base, BSC, THORChain, Bitcoin, and Solana.
+          - Do NOT skip running the actual vultisig commands — you must execute them and check the output.
+          - If a command fails or returns an error, try to diagnose from the output and retry once with a corrected prompt.
+          - You MUST save the final JSON result to /tmp/test-result.json.
+          PROMPT
+          )" 2>&1 | tee /tmp/opencode-test.log
+
+          # Clean up opencode credentials immediately
+          rm -f ~/.local/share/opencode/auth.json
+
+      # ── Verify result with repo-owned script ──
+      - name: Verify test result
+        run: bash vultisig-sdk/testdata/verify-result.sh /tmp/test-result.json
+
+      # ── Cleanup ──
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== MCP Server Log ==="
+          cat /tmp/mcp-server.log || true
+          echo "=== Agent Backend Log ==="
+          cat /tmp/agent-backend.log || true
+          echo "=== OpenCode Test Log ==="
+          cat /tmp/opencode-test.log 2>/dev/null || echo "No opencode output"
+          echo "=== Test Result ==="
+          cat /tmp/test-result.json 2>/dev/null || echo "No result"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.local/share/opencode/auth.json 2>/dev/null || true
+          [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
+          [ -n "$MCP_PID" ] && kill "$MCP_PID" 2>/dev/null || true
