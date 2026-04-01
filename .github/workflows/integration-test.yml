@@ -37,11 +37,11 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
+    # Only non-secret config at job level
     env:
       DATABASE_DSN: postgres://vultisig:vultisig@localhost:5432/vultisig-agent?sslmode=disable
       REDIS_URI: redis://localhost:6379
       JWT_SECRET: integration-test-secret-key-not-for-prod
-      AI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       AI_MODEL: nvidia/nemotron-3-super-120b-a12b:free
       AI_SUMMARY_MODEL: nvidia/nemotron-3-super-120b-a12b:free
       MCP_SERVER_URL: http://localhost:8888
@@ -126,6 +126,8 @@ jobs:
         run: go build -o ../agent-server ./cmd/server/
 
       - name: Start agent-backend
+        env:
+          AI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           ./agent-server > /tmp/agent-backend.log 2>&1 &
           echo "AGENT_PID=$!" >> "$GITHUB_ENV"
@@ -175,27 +177,11 @@ jobs:
           cp agent-backend/testdata/test-vault.json ~/.vultisig/vault:023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120.json
           echo '{"activeVaultId":"023118028f9e87a0a6a10e84e26d2d8147ea8cb0d00aaf0d91b2ca512fba033120"}' > ~/.vultisig/activeVaultId.json
 
-      # ── Install and configure opencode ──
+      # ── Install opencode ──
       - name: Install opencode
         run: |
           curl -fsSL https://opencode.ai/install | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Configure opencode
-        run: |
-          mkdir -p ~/.local/share/opencode
-          echo '${{ secrets.OPENCODE_AUTH }}' > ~/.local/share/opencode/auth.json
-          mkdir -p ~/.config/opencode
-          cat > ~/.config/opencode/opencode.json <<'EOF'
-          {
-            "$schema": "https://opencode.ai/config.json",
-            "permission": {
-              "*": {
-                "*": "allow"
-              }
-            }
-          }
-          EOF
 
       # ── Discover what changed in this PR ──
       - name: Discover PR changes
@@ -228,7 +214,23 @@ jobs:
         working-directory: vultisig-sdk
         env:
           VAULT_PASSWORD: ${{ secrets.TEST_VAULT_PASSWORD }}
+          OPENCODE_AUTH: ${{ secrets.OPENCODE_AUTH }}
         run: |
+          # Configure opencode (scoped to this step only)
+          mkdir -p ~/.local/share/opencode
+          echo "$OPENCODE_AUTH" > ~/.local/share/opencode/auth.json
+          mkdir -p ~/.config/opencode
+          cat > ~/.config/opencode/opencode.json <<'OCEOF'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "permission": {
+              "*": {
+                "*": "allow"
+              }
+            }
+          }
+          OCEOF
+
           opencode run "$(cat <<'PROMPT'
           You are an integration test runner for the Vultisig crypto wallet SDK.
 
@@ -280,36 +282,25 @@ jobs:
              - If SDK chain/signing changes: ask the agent to perform a transaction on the affected chain.
              - If only build/config/CI changes: ask the agent to perform a simple send to verify the full stack works.
              - Fallback: "Send 0.000001 ETH to my own Ethereum address"
-          3. Execute the test by running `vultisig agent ask` commands. Parse the JSON output.
+          3. Execute the test by running `vultisig agent ask` commands.
           4. If the agent's response indicates it needs more information or asks a follow-up question, continue the conversation using --session with the session_id from the previous response.
-          5. Evaluate the result:
-             - If the changes warrant a transaction: verify tool_calls were made and transactions array is non-empty.
-             - If the changes are infra-only: verify the agent responded without errors.
-          6. Write the final verdict to /tmp/test-verdict.txt:
-             - First line: PASS or FAIL
-             - Remaining lines: brief explanation
+          5. Save the FINAL JSON output (from the last `agent ask` call) to /tmp/test-result.json.
 
           ## Important
           - Use tiny amounts (0.000001 ETH, 0.001 USDC) to minimize cost.
           - The test vault has funds on Ethereum, Arbitrum, Base, BSC, THORChain, Bitcoin, and Solana.
           - Do NOT skip running the actual vultisig commands — you must execute them and check the output.
-          - If a command fails or returns an error, try to diagnose from the output and retry once with a corrected prompt before marking as FAIL.
+          - If a command fails or returns an error, try to diagnose from the output and retry once with a corrected prompt.
+          - You MUST save the final JSON result to /tmp/test-result.json.
           PROMPT
           )" 2>&1 | tee /tmp/opencode-test.log
 
-          echo "=== Test Verdict ==="
-          if [ ! -f /tmp/test-verdict.txt ]; then
-            echo "::error::opencode did not write /tmp/test-verdict.txt"
-            exit 1
-          fi
-          cat /tmp/test-verdict.txt
+          # Clean up opencode credentials immediately
+          rm -f ~/.local/share/opencode/auth.json
 
-          VERDICT=$(head -1 /tmp/test-verdict.txt)
-          if [ "$VERDICT" != "PASS" ]; then
-            echo "::error::Integration test FAILED"
-            exit 1
-          fi
-          echo "Integration test PASSED"
+      # ── Verify result with repo-owned script ──
+      - name: Verify test result
+        run: bash vultisig-sdk/testdata/verify-result.sh /tmp/test-result.json
 
       # ── Cleanup ──
       - name: Show logs on failure
@@ -321,11 +312,12 @@ jobs:
           cat /tmp/agent-backend.log || true
           echo "=== OpenCode Test Log ==="
           cat /tmp/opencode-test.log 2>/dev/null || echo "No opencode output"
-          echo "=== Test Verdict ==="
-          cat /tmp/test-verdict.txt 2>/dev/null || echo "No verdict"
+          echo "=== Test Result ==="
+          cat /tmp/test-result.json 2>/dev/null || echo "No result"
 
       - name: Cleanup
         if: always()
         run: |
+          rm -f ~/.local/share/opencode/auth.json 2>/dev/null || true
           [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
           [ -n "$MCP_PID" ] && kill "$MCP_PID" 2>/dev/null || true
