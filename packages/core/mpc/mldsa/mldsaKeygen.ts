@@ -54,7 +54,9 @@ export class MldsaKeygen {
     this.keygenCommittee = keygenCommittee
     this.hexEncryptionKey = hexEncryptionKey
     this.timeoutMs = options?.timeoutMs ?? 60000
-    this.messageId = options?.messageId ?? 'mldsa'
+    // Empty string matches VultiServer keygen relay routing (ProcessCreateMldsa / classic keygen).
+    // TSS batching passes explicit ids (e.g. p-mldsa / p-mldsa-setup) via options.
+    this.messageId = options?.messageId ?? ''
     this.setupMessageId = options?.setupMessageId ?? this.messageId
   }
 
