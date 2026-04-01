@@ -10,6 +10,7 @@ import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 import { refineSolanaChainSpecific } from './refine'
+import { getDynamicPriorityFeePrice } from '@vultisig/core-chain/chains/solana/getDynamicPriorityFeePrice'
 
 export const getSolanaChainSpecific: GetChainSpecificResolver<
   'solanaSpecific'
@@ -18,11 +19,16 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<
   const receiver = shouldBePresent(keysignPayload.toAddress)
   const client = getSolanaClient()
 
+  const priorityFeePrice = await withFallback(
+    attempt(getDynamicPriorityFeePrice()),
+    solanaConfig.priorityFeePrice
+  )
+
   const recentBlockHash = (await client.getLatestBlockhash()).blockhash
 
   const chainSpecific = create(SolanaSpecificSchema, {
     recentBlockHash,
-    priorityFee: solanaConfig.priorityFeePrice.toString(),
+    priorityFee: priorityFeePrice.toString(),
     computeLimit: solanaConfig.priorityFeeLimit.toString(),
   })
 
@@ -49,6 +55,7 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<
       refineSolanaChainSpecific({
         keysignPayload,
         chainSpecific,
+        priorityFeePrice,
         walletCore,
       })
     ),

@@ -324,6 +324,11 @@
       "import": "./dist/chains/solana/client.js",
       "default": "./dist/chains/solana/client.js"
     },
+    "./chains/solana/getDynamicPriorityFeePrice": {
+      "types": "./dist/chains/solana/getDynamicPriorityFeePrice.d.ts",
+      "import": "./dist/chains/solana/getDynamicPriorityFeePrice.js",
+      "default": "./dist/chains/solana/getDynamicPriorityFeePrice.js"
+    },
     "./chains/solana/config": {
       "types": "./dist/chains/solana/config.d.ts",
       "import": "./dist/chains/solana/config.js",

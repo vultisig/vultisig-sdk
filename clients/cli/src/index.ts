@@ -11,6 +11,7 @@ import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
 import {
+  executeAddPostQuantumKeys,
   executeAddressBook,
   executeAddresses,
   executeAgent,
@@ -208,6 +209,22 @@ createCmd
         password: options.password,
         threshold: parseInt(options.threshold, 10),
         shares: parseInt(options.shares, 10),
+      })
+    })
+  )
+
+// Command: Add ML-DSA post-quantum keys to active fast vault
+program
+  .command('add-mldsa')
+  .description('Add ML-DSA (post-quantum) keys to the active fast vault (VultiServer /mldsa)')
+  .requiredOption('--email <email>', 'Email registered on the vault')
+  .option('--password <password>', 'Vault password (otherwise prompted or from cache)')
+  .action(
+    withExit(async (options: { email: string; password?: string }) => {
+      const context = await init(program.opts().vault)
+      await executeAddPostQuantumKeys(context, {
+        email: options.email,
+        password: options.password,
       })
     })
   )
