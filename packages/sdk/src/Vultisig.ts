@@ -34,7 +34,14 @@ import type { PushNotificationService } from './services/PushNotificationService
 import { type PerformReshareParams, SecureVaultCreationService } from './services/SecureVaultCreationService'
 import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
-import { AddressBook, AddressBookEntry, ServerStatus, VaultCreationStep, VaultData } from './types'
+import {
+  AddressBook,
+  AddressBookEntry,
+  KeygenProgressUpdate,
+  ServerStatus,
+  VaultCreationStep,
+  VaultData,
+} from './types'
 import type { SiteScanResult } from './types/security'
 import type { CoinPricesParams, CoinPricesResult, FeeCoinInfo, TokenInfo } from './types/tokens'
 import { createVaultBackup } from './utils/export'
@@ -427,6 +434,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    *
    * // Now use the vault
    * const address = await vault.address(Chain.Bitcoin)
+   *
+   * // Optional: add ML-DSA post-quantum keys later (VultiServer POST /mldsa)
+   * await sdk.addPostQuantumKeysToFastVault(vault, { email: 'user@example.com', password: '...' })
    * ```
    */
   async createFastVault(options: {
@@ -453,6 +463,23 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Return vaultId - vault is returned from verifyVault() after successful verification
     return result.vaultId
+  }
+
+  /**
+   * Add ML-DSA-44 post-quantum keys to an existing fast vault (VultiServer `/mldsa` + relay).
+   * Initial fast vault creation only generates ECDSA and EdDSA; use this when PQ signing is required.
+   */
+  async addPostQuantumKeysToFastVault(
+    vault: FastVault,
+    options: {
+      email: string
+      password?: string
+      signal?: AbortSignal
+      onProgress?: (update: KeygenProgressUpdate) => void
+    }
+  ): Promise<void> {
+    await this.ensureInitialized()
+    await vault.addPostQuantumKeys(options)
   }
 
   /**
