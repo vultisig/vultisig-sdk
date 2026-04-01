@@ -30,7 +30,13 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../crypto'
-import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
+import {
+  KeygenProgressUpdate,
+  ReshareOptions,
+  ServerStatus,
+  Signature,
+  SigningPayload,
+} from '../types'
 import { TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 
 /**
@@ -448,7 +454,7 @@ export class ServerManager {
         local_party_id: serverPartyId,
         encryption_password: options.password,
         email: options.email,
-        protocols: ['ecdsa', 'eddsa', 'mldsa'],
+        protocols: ['ecdsa', 'eddsa'],
         vaultBaseUrl: this.config.fastVault,
       })
     } else {
@@ -494,14 +500,13 @@ export class ServerManager {
       hexEncryptionKey
     )
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
     let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
     let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
 
     if (options.tssBatching) {
       progress({
         phase: 'ecdsa',
-        message: 'Generating ECDSA, EdDSA, and ML-DSA keys...',
+        message: 'Generating ECDSA and EdDSA keys...',
       })
 
       await dkls.prepareKeygenSetup()
@@ -516,37 +521,10 @@ export class ServerManager {
         hexEncryptionKey,
         dkls.getSetupMessage()
       )
-      const batchMldsa = new MldsaKeygen(
-        true,
-        this.config.messageRelay,
-        sessionId,
-        localPartyId,
-        devices,
-        hexEncryptionKey,
-        {
-          messageId: TSS_BATCH_MESSAGE_IDS.mldsa,
-          setupMessageId: TSS_BATCH_MESSAGE_IDS.mldsaSetup,
-        }
-      )
 
-      const batchMldsaPromise = batchMldsa
-        .startKeygenWithRetry()
-        .then(result => {
-          log('ML-DSA keygen completed successfully')
-          return result
-        })
-        .catch(error => {
-          console.warn(
-            'ML-DSA keygen failed (non-fatal):',
-            error instanceof Error ? error.message : error
-          )
-          return undefined
-        })
-
-      ;[ecdsaResult, eddsaResult, mldsaResult] = await Promise.all([
+      ;[ecdsaResult, eddsaResult] = await Promise.all([
         dkls.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.ecdsa),
         batchSchnorr.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.eddsa),
-        batchMldsaPromise,
       ])
       log('ECDSA keygen completed successfully')
       log('EdDSA keygen completed successfully')
@@ -573,39 +551,6 @@ export class ServerManager {
       )
       eddsaResult = await schnorr.startKeygenWithRetry()
       log('EdDSA keygen completed successfully')
-
-      if (options.signal?.aborted) {
-        throw new Error('Operation aborted')
-      }
-
-      progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
-      try {
-        await mldsaWithServer({
-          public_key: ecdsaResult.publicKey,
-          session_id: sessionId,
-          hex_encryption_key: hexEncryptionKey,
-          encryption_password: options.password,
-          email: options.email,
-          vaultBaseUrl: this.config.fastVault,
-        })
-
-        const mldsaKeygen = new MldsaKeygen(
-          true,
-          this.config.messageRelay,
-          sessionId,
-          localPartyId,
-          devices,
-          hexEncryptionKey
-        )
-
-        mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-        log('ML-DSA keygen completed successfully')
-      } catch (error) {
-        console.warn(
-          'ML-DSA keygen failed (non-fatal):',
-          error instanceof Error ? error.message : error
-        )
-      }
     }
 
     // Check for abort before finalization
@@ -642,8 +587,6 @@ export class ServerManager {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult?.publicKey,
-      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,
@@ -657,6 +600,91 @@ export class ServerManager {
       vaultId: vault.publicKeys.ecdsa,
       verificationRequired: true,
     }
+  }
+
+  /**
+   * Run ML-DSA (post-quantum) keygen with VultiServer for an existing fast vault.
+   *
+   * VultiServer does not add ML-DSA during initial vault creation; call this after the vault
+   * backup exists on the server (typically after ECDSA/EdDSA keygen has completed).
+   *
+   * @see {@link https://github.com/vultisig/vultiserver} `POST /mldsa` — `ProcessCreateMldsa`
+   */
+  async addPostQuantumKeysToFastVault(options: {
+    vault: CoreVault
+    email: string
+    password: string
+    signal?: AbortSignal
+    onLog?: (msg: string) => void
+    onProgress?: (u: KeygenProgressUpdate) => void
+  }): Promise<{ publicKey: string; keyshare: string }> {
+    const { vault, email, password, signal } = options
+    const log = options.onLog ?? (() => {})
+    const progress = options.onProgress ?? (() => {})
+
+    if (vault.publicKeyMldsa || vault.keyShareMldsa) {
+      throw new Error('Vault already has ML-DSA keys')
+    }
+
+    const sessionId = randomUUID()
+    const hexEncryptionKey = generateHexEncryptionKey()
+    const localPartyId = vault.localPartyId
+
+    progress({ phase: 'mldsa', message: 'Requesting ML-DSA key from VultiServer...' })
+    log('Joining relay for ML-DSA session...')
+
+    await joinMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      localPartyId,
+    })
+
+    await mldsaWithServer({
+      public_key: vault.publicKeys.ecdsa,
+      session_id: sessionId,
+      hex_encryption_key: hexEncryptionKey,
+      encryption_password: password,
+      email,
+      vaultBaseUrl: this.config.fastVault,
+    })
+
+    const devices = await this.waitForPeers(sessionId, localPartyId, signal)
+
+    await startMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      devices,
+    })
+
+    progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
+
+    const mldsaKeygen = new MldsaKeygen(
+      true,
+      this.config.messageRelay,
+      sessionId,
+      localPartyId,
+      devices,
+      hexEncryptionKey,
+      { timeoutMs: 120_000 }
+    )
+
+    const result = await mldsaKeygen.startKeygenWithRetry()
+    log('ML-DSA keygen completed successfully')
+
+    await setKeygenComplete({
+      serverURL: this.config.messageRelay,
+      sessionId,
+      localPartyId,
+    })
+
+    const peers = devices.filter(d => d !== localPartyId)
+    await waitForKeygenComplete({
+      serverURL: this.config.messageRelay,
+      sessionId,
+      peers,
+    })
+
+    return result
   }
 
   /**

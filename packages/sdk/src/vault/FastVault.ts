@@ -8,7 +8,15 @@ import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
 import { FastSigningService } from '../services/FastSigningService'
-import type { Signature, SignBytesOptions, SigningMode, SigningPayload, VaultCreationStep, VaultData } from '../types'
+import type {
+  KeygenProgressUpdate,
+  Signature,
+  SignBytesOptions,
+  SigningMode,
+  SigningPayload,
+  VaultCreationStep,
+  VaultData,
+} from '../types'
 import { normalizeToHex } from '../utils/bytes'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
@@ -241,12 +249,53 @@ export class FastVault extends VaultBase {
 
     // Update CoreVault with keyShares
     this.coreVault.keyShares = parsedVault.keyShares
+    if (parsedVault.publicKeyMldsa) {
+      this.coreVault.publicKeyMldsa = parsedVault.publicKeyMldsa
+    }
     if (parsedVault.keyShareMldsa) {
       this.coreVault.keyShareMldsa = parsedVault.keyShareMldsa
     }
 
     // Emit unlocked event
     this.emit('unlocked', { vaultId: this.id })
+  }
+
+  /**
+   * Add ML-DSA-44 (post-quantum) keys via VultiServer (`POST /mldsa` + relay keygen).
+   * Requires the vault backup to exist on the server (after initial fast vault keygen).
+   */
+  async addPostQuantumKeys(options: {
+    email: string
+    password?: string
+    signal?: AbortSignal
+    onProgress?: (update: KeygenProgressUpdate) => void
+  }): Promise<void> {
+    if (this.coreVault.publicKeyMldsa || this.coreVault.keyShareMldsa) {
+      throw new VaultError(VaultErrorCode.InvalidConfig, 'Vault already has ML-DSA keys')
+    }
+
+    await this.ensureKeySharesLoaded()
+    const password = options.password ?? (await this.resolvePassword())
+
+    const result = await this.context.serverManager.addPostQuantumKeysToFastVault({
+      vault: this.coreVault,
+      email: options.email,
+      password,
+      signal: options.signal,
+      onProgress: options.onProgress,
+    })
+
+    this.coreVault.publicKeyMldsa = result.publicKey
+    this.coreVault.keyShareMldsa = result.keyshare
+    ;(this.vaultData as { publicKeyMldsa?: string }).publicKeyMldsa = result.publicKey
+    ;(this.vaultData as { keyShareMldsa?: string }).keyShareMldsa = result.keyshare
+    ;(this.vaultData as { vultFileContent: string }).vultFileContent = await createVaultBackup(
+      this.coreVault,
+      password
+    )
+
+    await this.save()
+    this.emit('postQuantumKeysAdded', { vaultId: this.id })
   }
 
   /**
@@ -311,11 +360,9 @@ export class FastVault extends VaultBase {
           // Map server progress updates to vault creation progress
           let progress = 10
           if (update.phase === 'ecdsa') {
-            progress = 35 // 20-50% range
+            progress = 40
           } else if (update.phase === 'eddsa') {
-            progress = 65 // 50-80% range
-          } else if (update.phase === 'mldsa') {
-            progress = 80
+            progress = 70
           }
 
           reportProgress({
