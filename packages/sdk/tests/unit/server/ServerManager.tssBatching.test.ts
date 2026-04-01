@@ -146,7 +146,7 @@ describe('ServerManager — TSS batching wiring', () => {
         protocols: string[]
       }
       expect(arg.vaultBaseUrl).toBe(fastVault)
-      expect(arg.protocols).toEqual(['ecdsa', 'eddsa', 'mldsa'])
+      expect(arg.protocols).toEqual(['ecdsa', 'eddsa'])
     })
 
     it('calls createVaultWithServer when tssBatching is false or omitted', async () => {

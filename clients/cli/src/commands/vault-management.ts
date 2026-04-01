@@ -2,6 +2,7 @@
  * Vault Management Commands - create, import, export, verify, switch, rename, info, vaults
  */
 import type { Chain, VaultBase } from '@vultisig/sdk'
+import { FastVault } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
 import inquirer from 'inquirer'
@@ -414,6 +415,50 @@ export async function executeVerify(
     warn('\nTip: Use --resend to get a new verification code:')
     info(`  vultisig verify ${vaultId} --resend`)
     return false
+  }
+}
+
+export type AddPostQuantumKeysOptions = {
+  email: string
+  password?: string
+  signal?: AbortSignal
+}
+
+/**
+ * Add ML-DSA (post-quantum) keys to the active fast vault via VultiServer POST /mldsa.
+ */
+export async function executeAddPostQuantumKeys(
+  ctx: CommandContext,
+  options: AddPostQuantumKeysOptions
+): Promise<void> {
+  const vault = await ctx.ensureActiveVault()
+  if (!(vault instanceof FastVault)) {
+    error('add-mldsa is only supported for fast vaults.')
+    throw new Error('Not a fast vault')
+  }
+
+  const spinner = createSpinner('Adding ML-DSA keys...')
+  try {
+    let password = options.password
+    if (password === undefined) {
+      password = await ctx.getPassword(vault.id, vault.name)
+    }
+
+    await ctx.sdk.addPostQuantumKeysToFastVault(vault, {
+      email: options.email,
+      password,
+      signal: options.signal,
+      onProgress: u => {
+        if (u.message) {
+          spinner.text = u.message
+        }
+      },
+    })
+    spinner.succeed('ML-DSA keys added. Vault file updated — export a backup if needed.')
+    success('Post-quantum signing is now available for this vault (where supported).')
+  } catch (e) {
+    spinner.fail('Failed to add ML-DSA keys')
+    throw e
   }
 }
 
