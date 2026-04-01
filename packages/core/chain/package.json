@@ -369,6 +369,11 @@
       "import": "./dist/chains/thorchain/ruji/services/fetchStakeView.js",
       "default": "./dist/chains/thorchain/ruji/services/fetchStakeView.js"
     },
+    "./chains/ton/address": {
+      "types": "./dist/chains/ton/address.d.ts",
+      "import": "./dist/chains/ton/address.js",
+      "default": "./dist/chains/ton/address.js"
+    },
     "./chains/ton/account/getTonAccountInfo": {
       "types": "./dist/chains/ton/account/getTonAccountInfo.d.ts",
       "import": "./dist/chains/ton/account/getTonAccountInfo.js",
