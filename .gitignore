@@ -97,3 +97,4 @@ upstream/
 
 # Local trading bot (not part of SDK)
 packages/trading-bot/
+.beads/
