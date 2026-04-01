@@ -324,15 +324,15 @@
       "import": "./dist/chains/solana/client.js",
       "default": "./dist/chains/solana/client.js"
     },
-    "./chains/solana/getDynamicPriorityFeePrice": {
-      "types": "./dist/chains/solana/getDynamicPriorityFeePrice.d.ts",
-      "import": "./dist/chains/solana/getDynamicPriorityFeePrice.js",
-      "default": "./dist/chains/solana/getDynamicPriorityFeePrice.js"
-    },
     "./chains/solana/config": {
       "types": "./dist/chains/solana/config.d.ts",
       "import": "./dist/chains/solana/config.js",
       "default": "./dist/chains/solana/config.js"
+    },
+    "./chains/solana/getDynamicPriorityFeePrice": {
+      "types": "./dist/chains/solana/getDynamicPriorityFeePrice.d.ts",
+      "import": "./dist/chains/solana/getDynamicPriorityFeePrice.js",
+      "default": "./dist/chains/solana/getDynamicPriorityFeePrice.js"
     },
     "./chains/solana/solanaConfig": {
       "types": "./dist/chains/solana/solanaConfig.d.ts",
@@ -369,11 +369,6 @@
       "import": "./dist/chains/thorchain/ruji/services/fetchStakeView.js",
       "default": "./dist/chains/thorchain/ruji/services/fetchStakeView.js"
     },
-    "./chains/ton/address": {
-      "types": "./dist/chains/ton/address.d.ts",
-      "import": "./dist/chains/ton/address.js",
-      "default": "./dist/chains/ton/address.js"
-    },
     "./chains/ton/account/getTonAccountInfo": {
       "types": "./dist/chains/ton/account/getTonAccountInfo.d.ts",
       "import": "./dist/chains/ton/account/getTonAccountInfo.js",
@@ -383,6 +378,11 @@
       "types": "./dist/chains/ton/account/getTonBalance.d.ts",
       "import": "./dist/chains/ton/account/getTonBalance.js",
       "default": "./dist/chains/ton/account/getTonBalance.js"
+    },
+    "./chains/ton/address": {
+      "types": "./dist/chains/ton/address.d.ts",
+      "import": "./dist/chains/ton/address.js",
+      "default": "./dist/chains/ton/address.js"
     },
     "./chains/ton/api": {
       "types": "./dist/chains/ton/api.d.ts",
@@ -433,6 +433,11 @@
       "types": "./dist/chains/utxo/client/getBlockchairBaseUrl.d.ts",
       "import": "./dist/chains/utxo/client/getBlockchairBaseUrl.js",
       "default": "./dist/chains/utxo/client/getBlockchairBaseUrl.js"
+    },
+    "./chains/utxo/client/getDashUtxos": {
+      "types": "./dist/chains/utxo/client/getDashUtxos.d.ts",
+      "import": "./dist/chains/utxo/client/getDashUtxos.js",
+      "default": "./dist/chains/utxo/client/getDashUtxos.js"
     },
     "./chains/utxo/client/getUtxoAddressInfo": {
       "types": "./dist/chains/utxo/client/getUtxoAddressInfo.d.ts",

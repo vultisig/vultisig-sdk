@@ -26,6 +26,8 @@ import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 import initDkls from '@vultisig/lib-dkls/vs_wasm'
 import initMldsa from '@vultisig/lib-mldsa/vs_wasm'
 import initSchnorr from '@vultisig/lib-schnorr/vs_schnorr_wasm'
+import { configureMpc } from '@vultisig/mpc-types'
+import { WasmMpcEngine } from '@vultisig/mpc-wasm'
 
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
@@ -34,6 +36,9 @@ import { memoizeAsync } from '../../utils/memoizeAsync'
 import { ChromeExtensionCrypto } from './crypto'
 import { ChromeExtensionPolyfills } from './polyfills'
 import { ChromeExtensionStorage } from './storage'
+
+// Configure MPC engine
+configureMpc(new WasmMpcEngine())
 
 // Configure crypto
 configureCrypto(new ChromeExtensionCrypto())
