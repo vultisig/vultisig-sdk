@@ -166,6 +166,10 @@ jobs:
         working-directory: vultisig-sdk
         run: yarn install --frozen-lockfile
 
+      - name: Build shared packages
+        working-directory: vultisig-sdk
+        run: yarn build:shared
+
       - name: Build vultisig-sdk
         working-directory: vultisig-sdk
         run: yarn build:all

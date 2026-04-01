@@ -71,6 +71,8 @@ import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 import { initializeMpcLib } from '@vultisig/core-mpc/lib/initialize'
 import { initializeMldsaLib } from '@vultisig/core-mpc/mldsa/initializeMldsa'
 import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
+import { configureMpc } from '@vultisig/mpc-types'
+import { WasmMpcEngine } from '@vultisig/mpc-wasm'
 
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
@@ -78,6 +80,9 @@ import { configureCrypto } from '../../crypto'
 import { NodeCrypto } from './crypto'
 import { NodePolyfills } from './polyfills'
 import { FileStorage } from './storage'
+
+// Configure MPC engine
+configureMpc(new WasmMpcEngine())
 
 // Configure crypto
 configureCrypto(new NodeCrypto())

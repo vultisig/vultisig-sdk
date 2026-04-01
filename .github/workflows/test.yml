@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+      - name: Build shared packages
+        run: yarn build:shared
+
       - name: Build packages
         run: yarn build:all
 
@@ -78,6 +81,9 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --immutable
+
+      - name: Build shared packages
+        run: yarn build:shared
 
       - name: Run ESLint
         run: yarn lint

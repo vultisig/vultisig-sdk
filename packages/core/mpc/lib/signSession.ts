@@ -1,17 +1,35 @@
 import { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
-import { SignSession as DklsSignSession } from '@vultisig/lib-dkls/vs_wasm'
-import { SignSession as MldsaSignSession } from '@vultisig/lib-mldsa'
-import { SignSession as SchnorrSignSession } from '@vultisig/lib-schnorr/vs_schnorr_wasm'
+import { getMpcEngine } from '@vultisig/mpc-types'
 
 import { toMpcLibKeyshare } from './keyshare'
 
-export const SignSession: Record<
-  SignatureAlgorithm,
-  typeof DklsSignSession | typeof SchnorrSignSession | typeof MldsaSignSession
-> = {
-  ecdsa: DklsSignSession,
-  eddsa: SchnorrSignSession,
-  mldsa: MldsaSignSession,
+const getEngineKey = (algo: SignatureAlgorithm): 'dkls' | 'schnorr' =>
+  algo === 'eddsa' ? 'schnorr' : 'dkls'  // mldsa uses dkls engine
+
+type SignSessionMethods = {
+  setup: (
+    keyId: Uint8Array,
+    chainPath: string,
+    messageHash: Uint8Array | null | undefined,
+    partyIds: string[]
+  ) => Uint8Array
+  setupMessageHash: (setupMsg: Uint8Array) => Uint8Array | undefined
+}
+
+const dklsMethods: SignSessionMethods = {
+  setup: (...args) => getMpcEngine().dkls.signSetup(...args),
+  setupMessageHash: (setupMsg) => getMpcEngine().dkls.signSetupMessageHash(setupMsg),
+}
+
+export const SignSession: Record<SignatureAlgorithm, SignSessionMethods> = {
+  ecdsa: dklsMethods,
+  mldsa: dklsMethods,
+  eddsa: {
+    setup: (keyId, chainPath, messageHash, partyIds) =>
+      getMpcEngine().schnorr.signSetup(keyId, chainPath, messageHash as Uint8Array, partyIds),
+    setupMessageHash: (setupMsg) =>
+      getMpcEngine().schnorr.signSetupMessageHash(setupMsg),
+  },
 }
 
 type MakeSignSessionInput = {
@@ -21,13 +39,19 @@ type MakeSignSessionInput = {
   signatureAlgorithm: SignatureAlgorithm
 }
 
-export const makeSignSession = ({
+export const makeSignSession = async ({
   setupMessage,
   localPartyId,
   keyShare,
   signatureAlgorithm,
 }: MakeSignSessionInput) => {
-  const ks = toMpcLibKeyshare({ keyShare, signatureAlgorithm })
-  const Session = SignSession[signatureAlgorithm]
-  return new Session(setupMessage, localPartyId, ks as never)
+  const engineKey = getEngineKey(signatureAlgorithm)
+  return getMpcEngine()[engineKey].createSignSession(
+    setupMessage,
+    localPartyId,
+    toMpcLibKeyshare({
+      keyShare,
+      signatureAlgorithm,
+    })
+  )
 }

@@ -66,7 +66,7 @@ export const keysign = async ({
     hexEncryptionKey,
     isInitiatingDevice,
   })
-  const session = makeSignSession({
+  const session = await makeSignSession({
     setupMessage,
     localPartyId,
     keyShare,
