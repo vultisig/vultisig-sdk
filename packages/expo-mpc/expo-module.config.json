@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ExpoMpcModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.mpc.ExpoMpcModule"]
+  }
+}

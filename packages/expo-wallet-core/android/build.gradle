@@ -1,0 +1,32 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.walletcore'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.walletcore"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+repositories {
+  maven {
+    url = uri("https://maven.pkg.github.com/trustwallet/wallet-core")
+    credentials {
+      username = System.getenv("GITHUB_USER") ?: ""
+      password = System.getenv("GITHUB_TOKEN") ?: ""
+    }
+  }
+}
+
+dependencies {
+  implementation "com.trustwallet:wallet-core:4.2.9"
+}

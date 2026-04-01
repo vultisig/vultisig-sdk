@@ -186,16 +186,67 @@ const configs = {
       format: 'es',
       sourcemap: true,
       inlineDynamicImports: true,
-      paths: wasmPathsResolver,
     },
-    external,
-    plugins: createPlugins({
-      preferBuiltins: false,
-      replaceOptions: {
-        'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'),
-        'typeof window': JSON.stringify('undefined'),
-      },
-    }),
+    // RN-specific externals: no WASM patterns (adapters are bundled), add RN deps
+    external: [
+      ...external.filter(e => !(e instanceof RegExp && (e.source.includes('dkls') || e.source.includes('schnorr') || e.source.includes('.wasm')))),
+      '@vultisig/expo-mpc',
+      '@vultisig/expo-wallet-core',
+      'expo-crypto',
+      '@react-native-async-storage/async-storage',
+      /^@noble\//,
+      /^@trustwallet\//,
+    ],
+    plugins: [
+      // RN-specific aliases: redirect WASM imports to native adapters
+      // Order matters: WASM-specific overrides must come before the generic @lib catch-all
+      alias({
+        entries: [
+          { find: /^@core\/(.*)/, replacement: path.resolve(currentDir, '../core/$1') },
+          { find: /^@lib\/dkls\/vs_wasm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/dkls-adapter.ts') },
+          { find: /^@lib\/schnorr\/vs_schnorr_wasm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/schnorr-adapter.ts') },
+          // Also catch relative imports from core (../../../lib/dkls/vs_wasm)
+          { find: /\.\.\/.*lib\/dkls\/vs_wasm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/dkls-adapter.ts') },
+          { find: /\.\.\/.*lib\/schnorr\/vs_schnorr_wasm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/schnorr-adapter.ts') },
+          // RN polyfills: replace Node.js crypto with pure JS implementations
+          // These must come BEFORE the @lib catch-all
+          { find: /^@lib\/utils\/encryption\/aesGcm\/encryptWithAesGcm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts') },
+          { find: /^@lib\/utils\/encryption\/aesGcm\/decryptWithAesGcm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts') },
+          // Also catch relative imports from core (../../lib/utils/...)
+          { find: /\.\.\/.*lib\/utils\/encryption\/aesGcm\/encryptWithAesGcm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts') },
+          { find: /\.\.\/.*lib\/utils\/encryption\/aesGcm\/decryptWithAesGcm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts') },
+          // getMessageHash: both @core/mpc/getMessageHash and relative ../getMessageHash
+          { find: /^@core\/mpc\/getMessageHash$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts') },
+          { find: /\.\/getMessageHash$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts') },
+          { find: /^@lib\/(.*)/, replacement: path.resolve(currentDir, '../lib/$1') },
+        ],
+      }),
+      resolve({
+        preferBuiltins: false,
+        extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+        exportConditions: ['module', 'import', 'default'],
+        skip: [
+          'axios', 'viem', 'zod', 'uuid',
+          '@trustwallet/wallet-core', 'tiny-secp256k1',
+          '@solana/web3.js', '@cosmjs/stargate', '@cosmjs/amino',
+        ],
+      }),
+      replace({ preventAssignment: true, 'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'), 'typeof window': JSON.stringify('undefined') }),
+      esbuild({
+        include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
+        exclude: ['**/*.test.*', '**/*.stories.*', '**/node_modules/**'],
+        target: 'es2021',
+        minify: false,
+        tsconfig: './tsconfig.json',
+      }),
+      json(),
+      commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
+      terser({
+        format: { comments: false },
+        compress: { passes: 1, drop_debugger: true },
+        mangle: { keep_fnames: true, keep_classnames: true },
+      }),
+    ],
     onwarn,
   },
   electron: {

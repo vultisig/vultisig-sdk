@@ -12,7 +12,9 @@
     "packages/lib/dkls",
     "packages/lib/schnorr",
     "packages/lib/utils",
-    "packages/rujira"
+    "packages/rujira",
+    "packages/expo-mpc",
+    "packages/expo-wallet-core"
   ],
   "scripts": {
     "format": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'packages/rujira/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",

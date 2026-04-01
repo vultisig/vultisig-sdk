@@ -1,0 +1,3 @@
+# Binary frameworks (too large for git, copied via scripts/copy-frameworks.sh)
+ios/Frameworks/*.xcframework
+android/libs/*.aar

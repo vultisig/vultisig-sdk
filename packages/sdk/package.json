@@ -60,12 +60,13 @@
     "build:types": "rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
-    "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\"",
+    "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\" \"yarn build:platform:react-native\"",
     "build:fast": "yarn clean && BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:node": "BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:browser": "BUILD_TARGET=browser rollup -c rollup.platforms.config.js",
     "build:platform:electron": "BUILD_TARGET=electron rollup -c rollup.platforms.config.js",
     "build:platform:chrome-extension": "BUILD_TARGET=chrome-extension rollup -c rollup.platforms.config.js",
+    "build:platform:react-native": "BUILD_TARGET=react-native rollup -c rollup.platforms.config.js",
     "_____QUALITY_____": "",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "lint": "eslint --config ../../.config/eslint.config.mjs src/**/*.{ts,tsx}",
@@ -149,6 +150,7 @@
     "ethers": "^6.15.0",
     "i18next": "^25.8.4",
     "i18next-http-backend": "^3.0.2",
+    "js-md5": "^0.8.3",
     "node-fetch": "^3.3.2",
     "tiny-secp256k1": "^2.2.4",
     "uuid": "^13.0.0",
@@ -156,6 +158,26 @@
     "ws": "^8.18.0",
     "xrpl": "^4.4.1",
     "zod": "^4.1.5"
+  },
+  "peerDependencies": {
+    "@react-native-async-storage/async-storage": ">=2.0.0",
+    "@vultisig/expo-mpc": ">=0.1.0",
+    "@vultisig/expo-wallet-core": ">=0.1.0",
+    "expo-crypto": ">=13.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-async-storage/async-storage": {
+      "optional": true
+    },
+    "@vultisig/expo-mpc": {
+      "optional": true
+    },
+    "@vultisig/expo-wallet-core": {
+      "optional": true
+    },
+    "expo-crypto": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@rollup/plugin-alias": "^6.0.0",

@@ -1,0 +1,16 @@
+{
+  "name": "@vultisig/expo-mpc",
+  "version": "0.1.0",
+  "description": "Expo native module for Vultisig MPC (DKLS + Schnorr) threshold signing",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "copy-frameworks": "bash scripts/copy-frameworks.sh"
+  },
+  "peerDependencies": {
+    "expo": ">=51.0.0"
+  },
+  "devDependencies": {
+    "expo": ">=51.0.0"
+  }
+}
