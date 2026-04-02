@@ -3,7 +3,8 @@ import base58 from 'bs58'
 
 const JITO_BLOCK_ENGINE_URL = 'https://mainnet.block-engine.jito.wtf'
 
-const JITO_TIP_ACCOUNTS = [
+/** Fallback tip accounts if getTipAccounts RPC is unavailable */
+const FALLBACK_TIP_ACCOUNTS = [
   '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
   'HFqU5x63VTqvQss8hp11i4bVqkfRtQ7NmXwkiCKDmpu',
   'Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY',
@@ -13,6 +14,43 @@ const JITO_TIP_ACCOUNTS = [
   'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL',
   '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
 ]
+
+let tipAccountsCache: { accounts: string[]; timestamp: number } | null = null
+const TIP_ACCOUNTS_CACHE_TTL_MS = 60_000
+
+/**
+ * Fetch dynamic tip accounts from JITO Block Engine.
+ * These can change — always prefer fetched values over hardcoded fallbacks.
+ */
+export async function fetchTipAccounts(): Promise<string[]> {
+  if (
+    tipAccountsCache &&
+    Date.now() - tipAccountsCache.timestamp < TIP_ACCOUNTS_CACHE_TTL_MS
+  ) {
+    return tipAccountsCache.accounts
+  }
+
+  const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getTipAccounts',
+      params: [],
+    }),
+  })
+
+  const data = await response.json()
+  if (data.error || !data.result?.length) {
+    throw new Error(
+      `JITO getTipAccounts failed: ${JSON.stringify(data.error ?? 'empty result')}`
+    )
+  }
+
+  tipAccountsCache = { accounts: data.result, timestamp: Date.now() }
+  return data.result
+}
 
 export type TipFloorData = {
   landed_tips_25th_percentile: number
@@ -26,9 +64,17 @@ export type TipFloorData = {
 let tipFloorCache: { data: TipFloorData; timestamp: number } | null = null
 const TIP_FLOOR_CACHE_TTL_MS = 10_000
 
+/**
+ * Get a random JITO tip account. Uses cached dynamic accounts if available,
+ * falls back to hardcoded list. Call fetchTipAccounts() to warm the cache.
+ */
 export function getRandomTipAccount(): PublicKey {
-  const idx = Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length)
-  return new PublicKey(JITO_TIP_ACCOUNTS[idx])
+  const accounts =
+    tipAccountsCache && Date.now() - tipAccountsCache.timestamp < TIP_ACCOUNTS_CACHE_TTL_MS
+      ? tipAccountsCache.accounts
+      : FALLBACK_TIP_ACCOUNTS
+  const idx = Math.floor(Math.random() * accounts.length)
+  return new PublicKey(accounts[idx])
 }
 
 export async function getTipFloor(): Promise<TipFloorData> {
