@@ -7,7 +7,7 @@ import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-import { sendJitoBundleTransaction, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
+import { sendBundle, sendJitoBundleTransaction, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
@@ -1125,15 +1125,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Broadcast a Solana transaction as a JITO bundle.
-   * Uses JITO's sendTransaction with bundleOnly=true for revert protection,
-   * which wraps the single signed tx as a bundle without needing a separate tip tx.
+   * Broadcast Solana transaction(s) as a JITO bundle.
    *
-   * Note: Full multi-tx bundles (main tx + tip tx) require a second MPC signing
-   * round for the tip transaction. The signBytes API doesn't currently support
-   * raw Solana message signing through the fast vault server. This will be
-   * implemented when the MPC server supports arbitrary EdDSA message signing.
-   * For now, bundleOnly=true provides atomic execution + revert protection.
+   * Multi-tx case (split swaps): All compiled transactions are submitted as a
+   * single atomic JITO bundle via sendBundle. This ensures all-or-nothing
+   * execution — critical for split swaps where partial execution leaves funds
+   * in an intermediate state. All message hashes are already signed in one MPC
+   * session via the keysign payload.
+   *
+   * Single-tx case: Uses JITO sendTransaction with bundleOnly=true for revert
+   * protection (failed tx not included on-chain) + MEV protection.
    */
   private async broadcastSolanaJitoBundle(params: {
     chain: Chain
@@ -1142,28 +1143,40 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }): Promise<string> {
     const { chain, keysignPayload, signature } = params
 
-    // Compile the main transaction (get signed bytes without broadcasting)
+    // Compile all signed transactions (may be multiple for split swaps)
     const compiledTxs = await this.broadcastService.compileTxOnly({ chain, keysignPayload, signature })
     if (compiledTxs.length === 0) {
       throw new VaultError(VaultErrorCode.BroadcastFailed, 'No compiled transactions')
     }
 
-    const mainTx = compiledTxs[compiledTxs.length - 1]
-    const mainTxBytes = base58.decode(mainTx.signingOutput.encoded)
+    const allTxBytes = compiledTxs.map(tx => base58.decode(tx.signingOutput.encoded))
+    const primaryTx = compiledTxs[compiledTxs.length - 1]
 
-    // Submit via JITO sendTransaction with bundleOnly=true
-    // This provides: atomic execution, revert protection (failed tx not on-chain),
-    // and MEV protection (private mempool). No tip tx needed.
+    if (allTxBytes.length > 1) {
+      // Multi-tx: submit as atomic JITO bundle (max 5 txs)
+      try {
+        await sendBundle(allTxBytes)
+        return primaryTx.txHash
+      } catch {
+        // Fallback: broadcast sequentially via jito_send
+        for (const txBytes of allTxBytes) {
+          await sendJitoTransaction(txBytes)
+        }
+        return primaryTx.txHash
+      }
+    }
+
+    // Single tx: use bundleOnly=true for revert protection + MEV protection
     try {
-      await sendJitoBundleTransaction(mainTxBytes)
+      await sendJitoBundleTransaction(allTxBytes[0])
     } catch {
       // Fallback: try regular jito_send
       try {
-        await sendJitoTransaction(mainTxBytes)
+        await sendJitoTransaction(allTxBytes[0])
       } catch {
         // Final fallback: standard RPC
         const client = getSolanaClient()
-        await client.sendRawTransaction(mainTxBytes, {
+        await client.sendRawTransaction(allTxBytes[0], {
           skipPreflight: false,
           preflightCommitment: 'confirmed',
           maxRetries: 3,
@@ -1171,13 +1184,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       }
     }
 
-    // Broadcast any preceding txs (e.g. approvals) via jito_send
-    for (let i = 0; i < compiledTxs.length - 1; i++) {
-      const prevTxBytes = base58.decode(compiledTxs[i].signingOutput.encoded)
-      await sendJitoTransaction(prevTxBytes).catch(() => {})
-    }
-
-    return mainTx.txHash
+    return primaryTx.txHash
   }
 
   /**
