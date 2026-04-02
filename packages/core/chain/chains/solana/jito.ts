@@ -2,6 +2,23 @@ import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js'
 import base58 from 'bs58'
 
 const JITO_BLOCK_ENGINE_URL = 'https://mainnet.block-engine.jito.wtf'
+const JITO_HTTP_TIMEOUT_MS = 8_000
+
+async function jitoFetch(url: string, body: unknown): Promise<any> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), JITO_HTTP_TIMEOUT_MS)
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    return response.json()
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 /** Fallback tip accounts if getTipAccounts RPC is unavailable */
 const FALLBACK_TIP_ACCOUNTS = [
@@ -30,18 +47,12 @@ export async function fetchTipAccounts(): Promise<string[]> {
     return tipAccountsCache.accounts
   }
 
-  const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getTipAccounts',
-      params: [],
-    }),
+  const data = await jitoFetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'getTipAccounts',
+    params: [],
   })
-
-  const data = await response.json()
   if (data.error || !data.result?.length) {
     throw new Error(
       `JITO getTipAccounts failed: ${JSON.stringify(data.error ?? 'empty result')}`
@@ -85,9 +96,17 @@ export async function getTipFloor(): Promise<TipFloorData> {
     return tipFloorCache.data
   }
 
-  const response = await fetch(
-    'https://bundles-api-rest.jito.wtf/api/v1/bundles/tip_floor'
-  )
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), JITO_HTTP_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(
+      'https://bundles-api-rest.jito.wtf/api/v1/bundles/tip_floor',
+      { signal: controller.signal }
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
   if (!response.ok) {
     throw new Error(`Failed to fetch JITO tip floor: ${response.status}`)
   }
@@ -155,21 +174,12 @@ export async function sendJitoTransaction(
 ): Promise<string> {
   const encoded = base58.encode(rawTransaction)
 
-  const response = await fetch(
-    `${JITO_BLOCK_ENGINE_URL}/api/v1/transactions`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'sendTransaction',
-        params: [encoded, { encoding: 'base58' }],
-      }),
-    }
-  )
-
-  const data = await response.json()
+  const data = await jitoFetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/transactions`, {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'sendTransaction',
+    params: [encoded, { encoding: 'base58' }],
+  })
   if (data.error) {
     throw new Error(
       `JITO sendTransaction failed: ${JSON.stringify(data.error)}`
@@ -183,18 +193,12 @@ export async function sendBundle(
 ): Promise<string> {
   const encoded = signedTransactions.map(tx => base58.encode(tx))
 
-  const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'sendBundle',
-      params: [encoded],
-    }),
+  const data = await jitoFetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'sendBundle',
+    params: [encoded],
   })
-
-  const data = await response.json()
   if (data.error) {
     throw new Error(`JITO sendBundle failed: ${JSON.stringify(data.error)}`)
   }
@@ -211,18 +215,12 @@ export interface BundleStatus {
 export async function getBundleStatus(
   bundleId: string
 ): Promise<BundleStatus> {
-  const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getBundleStatuses',
-      params: [[bundleId]],
-    }),
+  const data = await jitoFetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'getBundleStatuses',
+    params: [[bundleId]],
   })
-
-  const data = await response.json()
   if (data.error) {
     throw new Error(
       `JITO getBundleStatuses failed: ${JSON.stringify(data.error)}`
@@ -235,12 +233,12 @@ export async function getBundleStatus(
   }
 
   const s = statuses[0]
+  const isLanded =
+    s.confirmation_status === 'finalized' ||
+    s.confirmation_status === 'confirmed'
+
   return {
-    status:
-      s.confirmation_status === 'finalized' ||
-      s.confirmation_status === 'confirmed'
-        ? 'landed'
-        : 'pending',
+    status: s.err ? 'failed' : isLanded ? 'landed' : 'pending',
     slot: s.slot,
     confirmationStatus: s.confirmation_status,
     err: s.err ? JSON.stringify(s.err) : undefined,
