@@ -71,10 +71,10 @@ interface ExpoMpcNativeModuleType {
   ): boolean
 
   /**
-   * Finish a keygen session and return the keyshare handle.
-   * Must be called after inputMessage returns true.
+   * Finish a keygen session and return the keyshare data.
+   * Returns { publicKey, chainCode, keyshare } as base64 strings.
    */
-  finishKeygen(sessionHandle: number): Promise<number>
+  finishKeygen(sessionHandle: number): Promise<{ publicKey: string; chainCode: string; keyshare: string }>
 
   /** Free a keygen session handle. */
   freeKeygenSession(sessionHandle: number): void
@@ -255,9 +255,10 @@ interface ExpoMpcNativeModuleType {
   ): boolean
 
   /**
-   * Finish a Schnorr keygen session and return the keyshare handle.
+   * Finish a Schnorr keygen session and return the keyshare data.
+   * Returns { publicKey, keyshare } as base64 strings.
    */
-  finishSchnorrKeygen(sessionHandle: number): Promise<number>
+  finishSchnorrKeygen(sessionHandle: number): Promise<{ publicKey: string; keyshare: string }>
 
   /** Free a Schnorr keygen session handle. */
   freeSchnorrKeygenSession(sessionHandle: number): void
