@@ -55,7 +55,6 @@
     "**/*.stories.tsx",
     "../**/node_modules",
     "../**/dist",
-    "../../upstream/**/*",
     "../../archived/**/*",
     "src/runtime/utils/electron.ts"
   ]

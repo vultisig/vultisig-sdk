@@ -315,7 +315,7 @@ export class MasterKeyDeriver {
       hdWallet.getExtendedPrivateKey(walletCore.Purpose.bip44, btcCoinType, walletCore.HDVersion.xprv)
 
       // For now, return empty - the chain code is provided by DKLS keygen
-      // This matches how vultisig-windows handles seedphrase import
+      // Consistent with other Vultisig seedphrase import flows
       return ''
     } catch {
       return ''

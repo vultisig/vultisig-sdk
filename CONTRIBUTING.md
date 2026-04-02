@@ -45,11 +45,11 @@ vultisig-sdk/
 │   │   │   └── wasm/     # WASM module management
 │   │   └── tests/        # SDK test suite
 │   ├── rujira/           # Rujira DEX integration (@vultisig/rujira), includes asset registry
-│   ├── core/             # ⚠️ UPSTREAM CODE - DO NOT EDIT
+│   ├── core/             # Shared chain, MPC, config (@vultisig/core-*)
 │   │   ├── chain/        # Chain-specific implementations
 │   │   ├── config/       # Configuration and constants
 │   │   └── mpc/          # MPC protocol implementations
-│   └── lib/              # ⚠️ UPSTREAM CODE - DO NOT EDIT
+│   └── lib/              # Shared utilities and WASM (@vultisig/lib-*)
 │       ├── utils/        # Common utilities
 │       ├── dkls/         # DKLS WASM bindings
 │       ├── mldsa/        # ML-DSA (post-quantum) WASM bindings
@@ -59,13 +59,9 @@ vultisig-sdk/
 └── docs/                 # Documentation
 ```
 
-### Upstream Code Warning
+### Shared core and lib
 
-The `packages/core/` and `packages/lib/` directories contain code synced from the [vultisig-windows](https://github.com/vultisig/vultisig-windows) repository. **These directories should NEVER be modified directly.**
-
-- ❌ **Do NOT** edit files in `packages/core/` or `packages/lib/`
-- ✅ **Do** make changes in the upstream vultisig-windows repository
-- ✅ **Do** sync changes using `yarn sync-and-copy` after upstream updates
+`packages/core/` and `packages/lib/` are **maintained in this repository** and published as `@vultisig/core-*` and `@vultisig/lib-*`. The Windows desktop and extension consume those packages; they are not copied in from another repo. See [docs/shared-core-lib.md](docs/shared-core-lib.md).
 
 ### Path Aliases
 
@@ -127,7 +123,7 @@ yarn test:all
 | `yarn lint:fix` | Auto-fix linting issues |
 | `yarn format` | Format code with Prettier |
 | `yarn typecheck` | Run TypeScript type checking |
-| `yarn sync-and-copy` | Sync latest code from vultisig-windows |
+| `yarn build:shared` | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages |
 | `yarn docs` | Generate TypeDoc API documentation |
 
 ## Pull Request Process
@@ -154,17 +150,9 @@ Use clear, descriptive commit messages:
 
 ## Important Notes
 
-### Upstream Code
+### WASM artifacts
 
-The `packages/core/` and `packages/lib/` directories contain upstream code from the Vultisig mobile apps. **Do not modify these directly** - they are synced via the `sync-and-copy` script.
-
-### WASM Files
-
-WASM binaries are bundled with the SDK. If you need to update them, use:
-
-```bash
-yarn sync-and-copy
-```
+WASM binaries ship with `packages/lib/*` and are bundled into `@vultisig/sdk`. Rebuild the relevant lib package (see its `package.json` and any Rust/build docs in that folder), then run `yarn build:shared` from the repo root so distributables stay in sync.
 
 ## CI/CD
 
