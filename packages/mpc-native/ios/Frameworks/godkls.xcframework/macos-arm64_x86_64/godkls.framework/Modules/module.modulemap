@@ -1,4 +1,4 @@
-framework  module "godkls" {
+framework module godkls {
     header "godkls.h"
     
     export *

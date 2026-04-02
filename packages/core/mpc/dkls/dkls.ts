@@ -257,19 +257,23 @@ export class DKLS {
       } else {
         throw new Error('Invalid keygen operation')
       }
-      const start = Date.now()
-      const outbound = this.processOutbound(session, messageId)
-      const inbound = this.processInbound(session, start, messageId)
-      const [, inboundResult] = await Promise.all([outbound, inbound])
-      if (inboundResult) {
-        const keyShare = session.finish()
-        return {
-          keyshare: base64Encode(keyShare.toBytes()),
-          publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
-          chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+      try {
+        const start = Date.now()
+        const outbound = this.processOutbound(session, messageId)
+        const inbound = this.processInbound(session, start, messageId)
+        const [, inboundResult] = await Promise.all([outbound, inbound])
+        if (inboundResult) {
+          const keyShare = await session.finish()
+          return {
+            keyshare: base64Encode(keyShare.toBytes()),
+            publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
+            chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+          }
         }
+        throw new Error('DKLS keygen failed')
+      } finally {
+        session.free?.()
       }
-      throw new Error('DKLS keygen failed')
     } catch (error) {
       if (error instanceof Error) {
         console.error('DKLS keygen error:', error)
@@ -370,7 +374,7 @@ export class DKLS {
         const inbound = this.processInbound(session, start, messageId)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
-          const keyShare = session.finish()
+          const keyShare = await session.finish()
           if (keyShare === undefined) {
             throw new Error('keyshare is null, dkls reshare failed')
           }
@@ -510,20 +514,24 @@ export class DKLS {
       if (session === null) {
         throw new Error('DKLS key import session is null')
       }
-      const exchangeMessageId = protocolMessageId
-      const start = Date.now()
-      const outbound = this.processOutbound(session, exchangeMessageId)
-      const inbound = this.processInbound(session, start, exchangeMessageId)
-      const [, inboundResult] = await Promise.all([outbound, inbound])
-      if (inboundResult) {
-        const keyShare = session.finish()
-        return {
-          keyshare: base64Encode(keyShare.toBytes()),
-          publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
-          chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+      try {
+        const exchangeMessageId = protocolMessageId
+        const start = Date.now()
+        const outbound = this.processOutbound(session, exchangeMessageId)
+        const inbound = this.processInbound(session, start, exchangeMessageId)
+        const [, inboundResult] = await Promise.all([outbound, inbound])
+        if (inboundResult) {
+          const keyShare = await session.finish()
+          return {
+            keyshare: base64Encode(keyShare.toBytes()),
+            publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
+            chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+          }
         }
+        throw new Error('DKLS key import failed')
+      } finally {
+        session.free?.()
       }
-      throw new Error('DKLS key import failed')
     } catch (error) {
       if (error instanceof Error) {
         console.error('DKLS key import error:', error)

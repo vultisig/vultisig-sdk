@@ -12,10 +12,10 @@
     "expo-module.config.json"
   ],
   "peerDependencies": {
-    "expo": ">=51.0.0"
+    "expo": "^51.0.0"
   },
   "devDependencies": {
-    "expo": ">=51.0.0"
+    "expo": "^51.0.0"
   },
   "dependencies": {
     "@vultisig/mpc-types": "workspace:*"

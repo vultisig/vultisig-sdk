@@ -259,7 +259,7 @@ interface ExpoMpcNativeModuleType {
    * Finish a Schnorr keygen session and return the keyshare data.
    * Returns { publicKey, keyshare } as base64 strings.
    */
-  finishSchnorrKeygen(sessionHandle: number): Promise<{ publicKey: string; keyshare: string }>
+  finishSchnorrKeygen(sessionHandle: number): Promise<{ publicKey: string; chainCode: string; keyshare: string }>
 
   /** Free a Schnorr keygen session handle. */
   freeSchnorrKeygenSession(sessionHandle: number): void

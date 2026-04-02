@@ -1,4 +1,4 @@
-framework  module "goschnorr" {
+framework module goschnorr {
     header "goschnorr.h"
     
     export *

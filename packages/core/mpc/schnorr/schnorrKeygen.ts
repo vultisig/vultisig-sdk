@@ -208,7 +208,7 @@ export class Schnorr {
       const inbound = this.processInbound(session, start, messageId)
       const [, inboundResult] = await Promise.all([outbound, inbound])
       if (inboundResult) {
-        const keyShare = session.finish()
+        const keyShare = await session.finish()
         return {
           keyshare: base64Encode(keyShare.toBytes()),
           publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
@@ -314,7 +314,7 @@ export class Schnorr {
         const inbound = this.processInbound(session, start, messageId)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
-          const finalKeyShare = session.finish()
+          const finalKeyShare = await session.finish()
           if (finalKeyShare === undefined) {
             throw new Error('keyshare is null, schnorr reshare failed')
           }
@@ -457,7 +457,7 @@ export class Schnorr {
       const inbound = this.processInbound(session, start, exchangeMessageId)
       const [, inboundResult] = await Promise.all([outbound, inbound])
       if (inboundResult) {
-        const keyShare = session.finish()
+        const keyShare = await session.finish()
         return {
           keyshare: base64Encode(keyShare.toBytes()),
           publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),

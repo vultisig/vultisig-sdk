@@ -34,7 +34,7 @@ export interface MpcSession<TResult> {
   /** Feed an inbound message. Returns `true` if the session is complete. */
   inputMessage(msg: Uint8Array): boolean
   /** Finish the session and return the result. Call only after {@link inputMessage} returns `true`. */
-  finish(): TResult
+  finish(): TResult | Promise<TResult>
   /** Release native/WASM resources. Optional because some runtimes handle this via GC. */
   free?(): void
 }
