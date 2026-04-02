@@ -230,6 +230,7 @@ const configs = {
       '@vultisig/mpc-types',
       '@vultisig/mpc-native',
       '@vultisig/mpc-wasm',
+      '@vultisig/walletcore-native',
       '@react-native-async-storage/async-storage',
       /^@noble\//,
     ],
