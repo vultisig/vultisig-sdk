@@ -1,0 +1,3 @@
+# Prebuilt native frameworks (downloaded via scripts/download-frameworks.sh)
+ios/Frameworks/*.xcframework
+!ios/Frameworks/.gitkeep
