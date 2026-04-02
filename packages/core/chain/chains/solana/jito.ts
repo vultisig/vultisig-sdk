@@ -4,7 +4,12 @@ import base58 from 'bs58'
 const JITO_BLOCK_ENGINE_URL = 'https://mainnet.block-engine.jito.wtf'
 const JITO_HTTP_TIMEOUT_MS = 8_000
 
-async function jitoFetch(url: string, body: unknown): Promise<any> {
+type JitoRpcResponse<T = unknown> = {
+  result: T
+  error?: { code: number; message: string }
+}
+
+async function jitoFetch<T = unknown>(url: string, body: unknown): Promise<JitoRpcResponse<T>> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), JITO_HTTP_TIMEOUT_MS)
   try {
