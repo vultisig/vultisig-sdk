@@ -105,29 +105,30 @@ export function maybeSplitOversizedSolanaSwap(
  * Build a JITO tip instruction in TrustWallet proto format.
  * This is a SystemProgram.transfer to a JITO tip account.
  */
+/**
+ * Mutates `accountKeys` in place — new keys (system program, tip account)
+ * are appended so that `buildSigningInputFromInstructions` sees them.
+ */
 function buildProtoTipInstruction(
   fromAddress: string,
   tipAddress: string,
   lamports: number,
-  existingAccountKeys: string[],
+  accountKeys: string[],
 ): TW.Solana.Proto.RawMessage.IInstruction {
   const systemProgramId = '11111111111111111111111111111111'
 
-  // Find or add account indices
-  const accounts = [...existingAccountKeys]
-
   const findOrAddIndex = (key: string): number => {
-    let idx = accounts.indexOf(key)
+    let idx = accountKeys.indexOf(key)
     if (idx === -1) {
-      idx = accounts.length
-      accounts.push(key)
+      idx = accountKeys.length
+      accountKeys.push(key)
     }
     return idx
   }
 
-  const programIdIndex = findOrAddIndex(systemProgramId)
-  const fromIndex = findOrAddIndex(fromAddress)
-  const tipIndex = findOrAddIndex(tipAddress)
+  const programIdIdx = findOrAddIndex(systemProgramId)
+  const fromIdx = findOrAddIndex(fromAddress)
+  const tipIdx = findOrAddIndex(tipAddress)
 
   // SystemProgram.transfer instruction data: [2, 0, 0, 0] + lamports as u64 LE
   const data = new Uint8Array(12)
@@ -138,8 +139,8 @@ function buildProtoTipInstruction(
   view.setUint32(8, Math.floor(lamports / 0x100000000), true)
 
   return {
-    programId: programIdIndex,
-    accounts: [fromIndex, tipIndex],
+    programId: programIdIdx,
+    accounts: [fromIdx, tipIdx],
     programData: data,
   }
 }

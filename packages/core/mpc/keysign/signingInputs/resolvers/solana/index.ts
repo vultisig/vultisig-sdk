@@ -70,7 +70,10 @@ export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({
         // If the transaction exceeds Solana's 1232-byte limit, split into
         // two transactions with a JITO tip on the second. Both get signed
         // in the same MPC session and broadcast as an atomic JITO bundle.
-        const signerAddress = keysignPayload.coin?.address ?? ''
+        const signerAddress = keysignPayload.coin?.address
+        if (!signerAddress) {
+          throw new Error('Cannot prepare Solana swap: signer address missing from keysign payload')
+        }
         return maybeSplitOversizedSolanaSwap(
           transaction,
           recentBlockHash,

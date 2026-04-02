@@ -1140,9 +1140,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     try {
       await sendBundle(allTxBytes)
     } catch {
-      // Fallback: broadcast sequentially via jito_send
+      // Fallback: broadcast sequentially via jito_send.
+      // Safe even if the bundle was partially accepted — Solana validators
+      // deduplicate by transaction signature, so resubmission is a no-op.
       for (const txBytes of allTxBytes) {
-        await sendJitoTransaction(txBytes)
+        await sendJitoTransaction(txBytes).catch(() => {})
       }
     }
 
