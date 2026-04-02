@@ -6654,6 +6654,7 @@ __metadata:
     "@mysten/sui": "npm:^2.8.0"
     "@noble/hashes": "npm:^2.0.1"
     "@polkadot/api": "npm:^16.5.4"
+    "@polkadot/util": "npm:^14.0.1"
     "@polkadot/util-crypto": "npm:^14.0.1"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.0"

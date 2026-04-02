@@ -4,7 +4,7 @@
  * Supports all 10 BIP39 languages: English, Japanese, Korean, Spanish,
  * Chinese (Simplified/Traditional), French, Italian, Czech, Portuguese.
  *
- * Adapted from vultisig-windows: core/ui/vault/import/seedphrase/utils/validateMnemonic.ts
+ * Multi-language BIP39 validation aligned with other Vultisig products.
  */
 import { validateMnemonic } from '@scure/bip39'
 
