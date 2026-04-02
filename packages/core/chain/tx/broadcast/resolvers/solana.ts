@@ -12,7 +12,10 @@ export const broadcastSolanaTx: BroadcastTxResolver<
   OtherChain.Solana
 > = async ({ tx: { encoded }, broadcastHint }) => {
   const rawTransaction = base58.decode(encoded)
-  const hint: BroadcastHint = (broadcastHint as BroadcastHint) ?? 'standard'
+  // Default to jito_send for all Solana transactions (free MEV protection).
+  // When the MCP broadcast_hint is threaded through, this default only applies
+  // to SDK-internal flows (send, swap) that don't pass a hint yet.
+  const hint: BroadcastHint = (broadcastHint as BroadcastHint) ?? 'jito_send'
 
   switch (hint) {
     case 'jito_send':

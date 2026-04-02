@@ -1087,8 +1087,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Broadcast a signed transaction to the blockchain network
    */
-  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<string> {
-    const { chain, keysignPayload, signature } = params
+  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature; broadcastHint?: string }): Promise<string> {
+    const { chain, keysignPayload, signature, broadcastHint } = params
 
     try {
       // Delegate to BroadcastService
@@ -1096,6 +1096,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         chain,
         keysignPayload,
         signature,
+        broadcastHint,
       })
 
       // Emit success event
