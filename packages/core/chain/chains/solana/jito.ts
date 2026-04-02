@@ -55,6 +55,24 @@ export async function getTipFloor(): Promise<TipFloorData> {
   return data
 }
 
+/** Default tip when tip floor data is unavailable (10,000 lamports ≈ $0.002) */
+const DEFAULT_TIP_LAMPORTS = 10_000
+
+/**
+ * Synchronous version: returns cached tip floor if warm, otherwise default.
+ * Use this in synchronous code paths (e.g., signing input resolvers).
+ */
+export function getRecommendedTipLamportsSync(): number {
+  if (
+    tipFloorCache &&
+    Date.now() - tipFloorCache.timestamp < TIP_FLOOR_CACHE_TTL_MS
+  ) {
+    const tipSol = tipFloorCache.data.ema_landed_tips_50th_percentile
+    return Math.max(Math.ceil(tipSol * 1_000_000_000), 1_000)
+  }
+  return DEFAULT_TIP_LAMPORTS
+}
+
 export async function getRecommendedTipLamports(): Promise<number> {
   try {
     const tipFloor = await getTipFloor()

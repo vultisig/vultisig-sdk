@@ -7,7 +7,7 @@ import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-import { sendBundle, sendJitoBundleTransaction, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
+import { getTipFloor, sendBundle, sendJitoBundleTransaction, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
@@ -1709,6 +1709,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({ fromCoin, toCoin, amount: amountNum, swapQuote: quote })
+
+    // Pre-warm JITO tip floor cache for Solana swaps. The signing input resolver
+    // may need to split oversized transactions and add a tip instruction — it runs
+    // synchronously, so the cache must be warm before sign() is called.
+    if (fromChain === Chain.Solana) {
+      await getTipFloor().catch(() => {}) // Best-effort, falls back to default if unavailable
+    }
+
     if (approvalPayload) {
       const approvalSig = await this.sign({ transaction: approvalPayload, chain: fromChain })
       const approvalHash = await this.broadcastTx({ chain: fromChain, keysignPayload: approvalPayload, signature: approvalSig })

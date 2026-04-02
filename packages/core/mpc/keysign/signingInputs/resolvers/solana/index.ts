@@ -8,6 +8,7 @@ import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { getKeysignChain } from '../../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../../resolver'
 import { getSolanaSendSigningInput } from './send'
+import { maybeSplitOversizedSolanaSwap } from './splitOversizedTransaction'
 
 export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({
   keysignPayload,
@@ -66,19 +67,16 @@ export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({
           throw new Error("Can't decode swap transaction")
         }
 
-        if (transaction.legacy) {
-          transaction.legacy.recentBlockhash = recentBlockHash
-        } else if (transaction.v0) {
-          transaction.v0.recentBlockhash = recentBlockHash
-        }
-
-        const signingInput = TW.Solana.Proto.SigningInput.create({
-          v0Msg: true,
-          recentBlockhash: recentBlockHash,
-          rawMessage: transaction,
-        })
-
-        return [signingInput]
+        // If the transaction exceeds Solana's 1232-byte limit, split into
+        // two transactions with a JITO tip on the second. Both get signed
+        // in the same MPC session and broadcast as an atomic JITO bundle.
+        const signerAddress = keysignPayload.coin?.address ?? ''
+        return maybeSplitOversizedSolanaSwap(
+          transaction,
+          recentBlockHash,
+          data,
+          signerAddress,
+        )
       },
     })
   }
