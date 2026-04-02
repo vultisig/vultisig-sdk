@@ -1,5 +1,6 @@
 ---
 "@vultisig/sdk": minor
+"@vultisig/core-chain": minor
 ---
 
-Add ML-DSA fast signing for QBTC, MLDSA `Signature` formatting, broadcast conversion for MLDSA signatures, QBTC e2e keysign coverage, and `scripts/add-mldsa-to-vault.ts` helper.
+Add full QBTC (post-quantum Bitcoin) send support: MLDSA fast signing, address derivation, broadcast via Cosmos REST, funded e2e send test, and `scripts/add-mldsa-to-vault.ts` helper. Switch QBTC core resolvers from dead Tendermint RPC to vultisig Cosmos REST API.

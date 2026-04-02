@@ -70,15 +70,21 @@ export class BroadcastService {
       // Convert SDK Signature to KeysignSignature format
       const keysignSignatures = convertToKeysignSignatures(signature, messageHashes)
 
-      // Get public key from keysign payload
-      const publicKeyData = getKeysignTwPublicKey(keysignPayload)
-      const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-      // Tron stores uncompressed public key (65 bytes), so use secp256k1Extended type
-      const coinType = getCoinType({ walletCore, chain })
-      const keyType = coinType === walletCore.CoinType.tron
-        ? walletCore.PublicKeyType.secp256k1Extended
-        : publicKeyType
-      const publicKey = walletCore.PublicKey.createWithData(publicKeyData, keyType)
+      // QBTC uses MLDSA — WalletCore public keys are not applicable.
+      // getEncodedSigningInputs and compileTx both have dedicated QBTC branches
+      // that skip WalletCore entirely.
+      const isQbtc = chain === Chain.QBTC
+
+      let publicKey: import('@trustwallet/wallet-core/dist/src/wallet-core').PublicKey | undefined
+      if (!isQbtc) {
+        const publicKeyData = getKeysignTwPublicKey(keysignPayload)
+        const publicKeyType = getTwPublicKeyType({ walletCore, chain })
+        const coinType = getCoinType({ walletCore, chain })
+        const keyType = coinType === walletCore.CoinType.tron
+          ? walletCore.PublicKeyType.secp256k1Extended
+          : publicKeyType
+        publicKey = walletCore.PublicKey.createWithData(publicKeyData, keyType)
+      }
 
       // Get transaction input data (same data used during signing)
       const txInputsArray = getEncodedSigningInputs({
@@ -96,7 +102,7 @@ export class BroadcastService {
       let txHash = ''
       for (const txInputData of txInputsArray) {
         const compiledTx = compileTx({
-          publicKey,
+          publicKey: publicKey as any,
           txInputData,
           signatures: keysignSignatures,
           chain,
