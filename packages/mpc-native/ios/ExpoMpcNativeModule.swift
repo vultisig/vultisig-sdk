@@ -254,23 +254,39 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 keyId"])
             }
             var keyIdBytes = Array(keyIdData)
-            var keyIdSlice = goSliceFromArray(keyIdBytes)
             var chainPathBytes = Array(chainPath.utf8)
-            var chainPathSlice = goSliceFromArray(chainPathBytes)
-            let idsBytes = encodeIds(ids)
-            var idsSlice = goSliceFromArray(idsBytes)
+            var idsBytes = encodeIds(ids)
             var setupBuf = tss_buffer(ptr: nil, len: 0)
 
+            let err: lib_error
             if let hashB64 = messageHashB64, let hashData = Data(base64Encoded: hashB64) {
                 var hashBytes = Array(hashData)
-                var hashSlice = goSliceFromArray(hashBytes)
-                let err = dkls_sign_setupmsg_new(&keyIdSlice, &chainPathSlice, &hashSlice, &idsSlice, &setupBuf)
-                try checkDklsError(err, "dkls_sign_setupmsg_new")
+                err = keyIdBytes.withUnsafeMutableBufferPointer { keyBp in
+                    var keyIdSlice = go_slice(ptr: keyBp.baseAddress, len: UInt(keyBp.count), cap: UInt(keyBp.count))
+                    return chainPathBytes.withUnsafeMutableBufferPointer { cpBp in
+                        var cpSlice = go_slice(ptr: cpBp.baseAddress, len: UInt(cpBp.count), cap: UInt(cpBp.count))
+                        return hashBytes.withUnsafeMutableBufferPointer { hBp in
+                            var hashSlice = go_slice(ptr: hBp.baseAddress, len: UInt(hBp.count), cap: UInt(hBp.count))
+                            return idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                                var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                                return dkls_sign_setupmsg_new(&keyIdSlice, &cpSlice, &hashSlice, &idsSlice, &setupBuf)
+                            }
+                        }
+                    }
+                }
             } else {
-                var emptySlice = go_slice(ptr: nil, len: 0, cap: 0)
-                let err = dkls_sign_setupmsg_new(&keyIdSlice, &chainPathSlice, &emptySlice, &idsSlice, &setupBuf)
-                try checkDklsError(err, "dkls_sign_setupmsg_new")
+                err = keyIdBytes.withUnsafeMutableBufferPointer { keyBp in
+                    var keyIdSlice = go_slice(ptr: keyBp.baseAddress, len: UInt(keyBp.count), cap: UInt(keyBp.count))
+                    return chainPathBytes.withUnsafeMutableBufferPointer { cpBp in
+                        var cpSlice = go_slice(ptr: cpBp.baseAddress, len: UInt(cpBp.count), cap: UInt(cpBp.count))
+                        return idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                            var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                            return dkls_sign_setupmsg_new(&keyIdSlice, &cpSlice, nil, &idsSlice, &setupBuf)
+                        }
+                    }
+                }
             }
+            try checkDklsError(err, "dkls_sign_setupmsg_new")
 
             let data = tssBufferToData(setupBuf)
             tss_buffer_free(&setupBuf)
@@ -536,22 +552,33 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 private key"])
             }
             var pkBytes = Array(pkData)
-            var pkSlice = goSliceFromArray(pkBytes)
-            let idsBytes = encodeIds(ids)
-            var idsSlice = goSliceFromArray(idsBytes)
+            var idsBytes = encodeIds(ids)
             var setupBuf = tss_buffer(ptr: nil, len: 0)
             var handle = Handle(_0: 0)
 
+            let err: lib_error
             if let ccB64 = rootChainCodeB64, let ccData = Data(base64Encoded: ccB64) {
                 var ccBytes = Array(ccData)
-                var ccSlice = goSliceFromArray(ccBytes)
-                let err = dkls_key_import_initiator_new(&pkSlice, &ccSlice, UInt8(threshold), &idsSlice, &setupBuf, &handle)
-                try checkDklsError(err, "dkls_key_import_initiator_new")
+                err = pkBytes.withUnsafeMutableBufferPointer { pkBp in
+                    var pkSlice = go_slice(ptr: pkBp.baseAddress, len: UInt(pkBp.count), cap: UInt(pkBp.count))
+                    return ccBytes.withUnsafeMutableBufferPointer { ccBp in
+                        var ccSlice = go_slice(ptr: ccBp.baseAddress, len: UInt(ccBp.count), cap: UInt(ccBp.count))
+                        return idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                            var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                            return dkls_key_import_initiator_new(&pkSlice, &ccSlice, UInt8(threshold), &idsSlice, &setupBuf, &handle)
+                        }
+                    }
+                }
             } else {
-                var emptySlice = go_slice(ptr: nil, len: 0, cap: 0)
-                let err = dkls_key_import_initiator_new(&pkSlice, &emptySlice, UInt8(threshold), &idsSlice, &setupBuf, &handle)
-                try checkDklsError(err, "dkls_key_import_initiator_new")
+                err = pkBytes.withUnsafeMutableBufferPointer { pkBp in
+                    var pkSlice = go_slice(ptr: pkBp.baseAddress, len: UInt(pkBp.count), cap: UInt(pkBp.count))
+                    return idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                        var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                        return dkls_key_import_initiator_new(&pkSlice, nil, UInt8(threshold), &idsSlice, &setupBuf, &handle)
+                    }
+                }
             }
+            try checkDklsError(err, "dkls_key_import_initiator_new")
 
             let setupData = tssBufferToData(setupBuf)
             tss_buffer_free(&setupBuf)
@@ -987,22 +1014,33 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 private key"])
             }
             var pkBytes = Array(pkData)
-            var pkSlice = goSliceFromArray(pkBytes)
-            let idsBytes = encodeIds(ids)
-            var idsSlice = goSliceFromArray(idsBytes)
+            var idsBytes = encodeIds(ids)
             var setupBuf = tss_buffer(ptr: nil, len: 0)
             var handle = Handle(_0: 0)
 
+            let err: schnorr_lib_error
             if let ccB64 = rootChainCodeB64, let ccData = Data(base64Encoded: ccB64) {
                 var ccBytes = Array(ccData)
-                var ccSlice = goSliceFromArray(ccBytes)
-                let err = schnorr_key_import_initiator_new(&pkSlice, &ccSlice, UInt8(threshold), &idsSlice, &setupBuf, &handle)
-                try checkSchnorrError(err, "schnorr_key_import_initiator_new")
+                err = pkBytes.withUnsafeMutableBufferPointer { pkBp in
+                    var pkSlice = go_slice(ptr: pkBp.baseAddress, len: UInt(pkBp.count), cap: UInt(pkBp.count))
+                    return ccBytes.withUnsafeMutableBufferPointer { ccBp in
+                        var ccSlice = go_slice(ptr: ccBp.baseAddress, len: UInt(ccBp.count), cap: UInt(ccBp.count))
+                        return idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                            var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                            return schnorr_key_import_initiator_new(&pkSlice, &ccSlice, UInt8(threshold), &idsSlice, &setupBuf, &handle)
+                        }
+                    }
+                }
             } else {
-                var emptySlice = go_slice(ptr: nil, len: 0, cap: 0)
-                let err = schnorr_key_import_initiator_new(&pkSlice, &emptySlice, UInt8(threshold), &idsSlice, &setupBuf, &handle)
-                try checkSchnorrError(err, "schnorr_key_import_initiator_new")
+                err = pkBytes.withUnsafeMutableBufferPointer { pkBp in
+                    var pkSlice = go_slice(ptr: pkBp.baseAddress, len: UInt(pkBp.count), cap: UInt(pkBp.count))
+                    return idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                        var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                        return schnorr_key_import_initiator_new(&pkSlice, nil, UInt8(threshold), &idsSlice, &setupBuf, &handle)
+                    }
+                }
             }
+            try checkSchnorrError(err, "schnorr_key_import_initiator_new")
 
             let setupData = tssBufferToData(setupBuf)
             tss_buffer_free(&setupBuf)
