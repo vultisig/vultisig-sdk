@@ -12,7 +12,6 @@ Pod::Spec.new do |s|
   s.swift_version  = '5.4'
   s.source_files   = '*.swift'
 
-  s.vendored_frameworks = 'Frameworks/WalletCore.xcframework', 'Frameworks/SwiftProtobuf.xcframework'
-
   s.dependency 'ExpoModulesCore'
+  s.dependency 'TrustWalletCore'
 end
