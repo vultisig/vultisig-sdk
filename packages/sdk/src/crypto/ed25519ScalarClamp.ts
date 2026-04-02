@@ -5,7 +5,7 @@
  * the Schnorr TSS protocol. It ensures the scalar is in the correct form
  * for Ed25519 operations.
  *
- * Copied from vultisig-windows: core/mpc/utils/ed25519ScalarClamp.ts
+ * Shared Ed25519 / Schnorr TSS import clamping used across Vultisig clients.
  */
 import { sha512 } from '@noble/hashes/sha2'
 
