@@ -73,8 +73,8 @@ class ExpoMpcNativeModule : Module() {
 
         AsyncFunction("finishKeygen") { sessionHandle: Long ->
             val keyshareHandle = Godkls.dklsKeygenSessionFinish(sessionHandle)
-            val publicKey = encode(Godkls.dklsKeysharePublicKey(keyshareHandle))
-            val chainCode = encode(Godkls.dklsKeyshareChaincode(keyshareHandle))
+            val publicKey = encodeHex(Godkls.dklsKeysharePublicKey(keyshareHandle))
+            val chainCode = encodeHex(Godkls.dklsKeyshareChaincode(keyshareHandle))
             val keyshare = encode(Godkls.dklsKeyshareToBytes(keyshareHandle))
             Godkls.dklsKeyshareFree(keyshareHandle)
             mapOf("publicKey" to publicKey, "chainCode" to chainCode, "keyshare" to keyshare)
@@ -304,7 +304,7 @@ class ExpoMpcNativeModule : Module() {
 
         AsyncFunction("finishSchnorrKeygen") { sessionHandle: Long ->
             val keyshareHandle = Goschnorr.schnorrKeygenSessionFinish(sessionHandle)
-            val publicKey = encode(Goschnorr.schnorrKeysharePublicKey(keyshareHandle))
+            val publicKey = encodeHex(Goschnorr.schnorrKeysharePublicKey(keyshareHandle))
             val keyshare = encode(Goschnorr.schnorrKeyshareToBytes(keyshareHandle))
             Goschnorr.schnorrKeyshareFree(keyshareHandle)
             mapOf("publicKey" to publicKey, "keyshare" to keyshare)
@@ -494,6 +494,9 @@ class ExpoMpcNativeModule : Module() {
 
     private fun encode(bytes: ByteArray): String =
         Base64.encodeToString(bytes, Base64.NO_WRAP)
+
+    private fun encodeHex(bytes: ByteArray): String =
+        bytes.joinToString("") { "%02x".format(it) }
 
     private fun decode(b64: String): ByteArray =
         Base64.decode(b64, Base64.NO_WRAP)
