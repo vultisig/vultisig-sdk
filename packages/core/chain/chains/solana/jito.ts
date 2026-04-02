@@ -52,7 +52,7 @@ export async function fetchTipAccounts(): Promise<string[]> {
     return tipAccountsCache.accounts
   }
 
-  const data = await jitoFetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
+  const data = await jitoFetch<string[]>(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
     jsonrpc: '2.0',
     id: 1,
     method: 'getTipAccounts',
@@ -179,7 +179,7 @@ export async function sendJitoTransaction(
 ): Promise<string> {
   const encoded = base58.encode(rawTransaction)
 
-  const data = await jitoFetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/transactions`, {
+  const data = await jitoFetch<string>(`${JITO_BLOCK_ENGINE_URL}/api/v1/transactions`, {
     jsonrpc: '2.0',
     id: 1,
     method: 'sendTransaction',
@@ -198,7 +198,7 @@ export async function sendBundle(
 ): Promise<string> {
   const encoded = signedTransactions.map(tx => base58.encode(tx))
 
-  const data = await jitoFetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
+  const data = await jitoFetch<string>(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
     jsonrpc: '2.0',
     id: 1,
     method: 'sendBundle',
@@ -220,7 +220,12 @@ export interface BundleStatus {
 export async function getBundleStatus(
   bundleId: string
 ): Promise<BundleStatus> {
-  const data = await jitoFetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
+  type BundleStatusEntry = {
+    confirmation_status?: string
+    slot?: number
+    err?: unknown
+  }
+  const data = await jitoFetch<{ value: BundleStatusEntry[] }>(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
     jsonrpc: '2.0',
     id: 1,
     method: 'getBundleStatuses',
