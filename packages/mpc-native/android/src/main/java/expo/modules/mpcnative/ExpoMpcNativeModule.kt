@@ -72,7 +72,12 @@ class ExpoMpcNativeModule : Module() {
         }
 
         AsyncFunction("finishKeygen") { sessionHandle: Long ->
-            Godkls.dklsKeygenSessionFinish(sessionHandle)
+            val keyshareHandle = Godkls.dklsKeygenSessionFinish(sessionHandle)
+            val publicKey = encode(Godkls.dklsKeysharePublicKey(keyshareHandle))
+            val chainCode = encode(Godkls.dklsKeyshareChaincode(keyshareHandle))
+            val keyshare = encode(Godkls.dklsKeyshareToBytes(keyshareHandle))
+            Godkls.dklsKeyshareFree(keyshareHandle)
+            mapOf("publicKey" to publicKey, "chainCode" to chainCode, "keyshare" to keyshare)
         }
 
         Function("freeKeygenSession") { sessionHandle: Long ->
@@ -298,7 +303,11 @@ class ExpoMpcNativeModule : Module() {
         }
 
         AsyncFunction("finishSchnorrKeygen") { sessionHandle: Long ->
-            Goschnorr.schnorrKeygenSessionFinish(sessionHandle)
+            val keyshareHandle = Goschnorr.schnorrKeygenSessionFinish(sessionHandle)
+            val publicKey = encode(Goschnorr.schnorrKeysharePublicKey(keyshareHandle))
+            val keyshare = encode(Goschnorr.schnorrKeyshareToBytes(keyshareHandle))
+            Goschnorr.schnorrKeyshareFree(keyshareHandle)
+            mapOf("publicKey" to publicKey, "keyshare" to keyshare)
         }
 
         Function("freeSchnorrKeygenSession") { sessionHandle: Long ->
