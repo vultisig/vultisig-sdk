@@ -224,15 +224,23 @@ const configs = {
       sourcemap: true,
       inlineDynamicImports: true,
     },
-    // RN-specific externals: add RN deps, keep WASM external patterns
+    // RN externals: only native modules and deps the app must provide.
+    // Everything else (chain logic, @noble/*, @polkadot/*, @cosmjs/*) is INLINED.
     external: [
-      ...external,
       '@vultisig/mpc-types',
       '@vultisig/mpc-native',
       '@vultisig/mpc-wasm',
       '@vultisig/walletcore-native',
       '@react-native-async-storage/async-storage',
-      /^@noble\//,
+      '@trustwallet/wallet-core',
+      'axios',
+      'viem',
+      'zod',
+      'uuid',
+      /\.wasm$/,
+      /lib\/dkls\/vs_wasm/,
+      /lib\/mldsa\/vs_wasm/,
+      /lib\/schnorr\/vs_schnorr_wasm/,
     ],
     plugins: [
       alias({
