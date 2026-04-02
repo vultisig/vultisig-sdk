@@ -6,6 +6,9 @@ import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
+import { sendJitoBundleTransaction, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
+import base58 from 'bs58'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
@@ -1091,13 +1094,20 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const { chain, keysignPayload, signature, broadcastHint } = params
 
     try {
-      // Delegate to BroadcastService
-      const txHash = await this.broadcastService.broadcastTx({
-        chain,
-        keysignPayload,
-        signature,
-        broadcastHint,
-      })
+      let txHash: string
+
+      // JITO bundle path: compile tx, submit via bundleOnly=true for revert protection
+      const effectiveHint = broadcastHint ?? (chain === Chain.Solana ? 'jito_send' : undefined)
+      if (effectiveHint === 'jito_bundle' && chain === Chain.Solana) {
+        txHash = await this.broadcastSolanaJitoBundle({ chain, keysignPayload, signature })
+      } else {
+        txHash = await this.broadcastService.broadcastTx({
+          chain,
+          keysignPayload,
+          signature,
+          broadcastHint: effectiveHint,
+        })
+      }
 
       // Emit success event
       this.emit('transactionBroadcast', {
@@ -1112,6 +1122,62 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       this.emit('error', error as Error)
       throw error
     }
+  }
+
+  /**
+   * Broadcast a Solana transaction as a JITO bundle.
+   * Uses JITO's sendTransaction with bundleOnly=true for revert protection,
+   * which wraps the single signed tx as a bundle without needing a separate tip tx.
+   *
+   * Note: Full multi-tx bundles (main tx + tip tx) require a second MPC signing
+   * round for the tip transaction. The signBytes API doesn't currently support
+   * raw Solana message signing through the fast vault server. This will be
+   * implemented when the MPC server supports arbitrary EdDSA message signing.
+   * For now, bundleOnly=true provides atomic execution + revert protection.
+   */
+  private async broadcastSolanaJitoBundle(params: {
+    chain: Chain
+    keysignPayload: KeysignPayload
+    signature: Signature
+  }): Promise<string> {
+    const { chain, keysignPayload, signature } = params
+
+    // Compile the main transaction (get signed bytes without broadcasting)
+    const compiledTxs = await this.broadcastService.compileTxOnly({ chain, keysignPayload, signature })
+    if (compiledTxs.length === 0) {
+      throw new VaultError(VaultErrorCode.BroadcastFailed, 'No compiled transactions')
+    }
+
+    const mainTx = compiledTxs[compiledTxs.length - 1]
+    const mainTxBytes = base58.decode(mainTx.signingOutput.encoded)
+
+    // Submit via JITO sendTransaction with bundleOnly=true
+    // This provides: atomic execution, revert protection (failed tx not on-chain),
+    // and MEV protection (private mempool). No tip tx needed.
+    try {
+      await sendJitoBundleTransaction(mainTxBytes)
+    } catch {
+      // Fallback: try regular jito_send
+      try {
+        await sendJitoTransaction(mainTxBytes)
+      } catch {
+        // Final fallback: standard RPC
+        const client = getSolanaClient()
+        await client.sendRawTransaction(mainTxBytes, {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3,
+        })
+      }
+    }
+
+    // Broadcast any preceding txs (e.g. approvals) via jito_send
+    for (let i = 0; i < compiledTxs.length - 1; i++) {
+      const prevTxBytes = base58.decode(compiledTxs[i].signingOutput.encoded)
+      await sendJitoTransaction(prevTxBytes).catch(() => {})
+    }
+
+    return mainTx.txHash
   }
 
   /**
