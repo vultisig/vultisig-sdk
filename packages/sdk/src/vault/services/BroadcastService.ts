@@ -102,7 +102,7 @@ export class BroadcastService {
       let txHash = ''
       for (const txInputData of txInputsArray) {
         const compiledTx = compileTx({
-          publicKey: publicKey as any,
+          publicKey,
           txInputData,
           signatures: keysignSignatures,
           chain,

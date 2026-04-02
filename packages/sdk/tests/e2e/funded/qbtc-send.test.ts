@@ -26,7 +26,7 @@ describe.skipIf(!canRun())('Funded E2E: QBTC Send — Fast vault (MLDSA)', () =>
     process.stderr.write(`[qbtc fast] address: ${qbtcAddress}\n`)
   }, 120_000)
 
-  it('sends qBTC to self (MLDSA signing + Tendermint broadcast)', async ctx => {
+  it('sends qBTC to self (MLDSA signing + Cosmos REST broadcast)', async ctx => {
     const balance = await vault.balance(Chain.QBTC)
     if (BigInt(balance.amount) === 0n) {
       ctx.skip('no QBTC balance')
