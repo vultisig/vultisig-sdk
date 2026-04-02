@@ -6,7 +6,7 @@ import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
-import { fetchTipAccounts, getTipFloor, sendBundle, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
+import { sendBundle, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
@@ -1096,7 +1096,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       let txHash: string
 
       // For Solana, check if the signing produced multiple transactions
-      // (oversized tx was auto-split). If so, bundle them atomically via JITO.
+      // (e.g. from signSolana.rawTransactions). If so, bundle them atomically via JITO.
       if (chain === Chain.Solana) {
         const compiledTxs = await this.broadcastService.compileTxOnly({ chain, keysignPayload, signature })
         if (compiledTxs.length > 1) {
@@ -1673,18 +1673,6 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({ fromCoin, toCoin, amount: amountNum, swapQuote: quote })
-
-    // Pre-warm JITO tip floor cache for Solana swaps. The signing input resolver
-    // may need to split oversized transactions and add a tip instruction — it runs
-    // synchronously, so the cache must be warm before sign() is called.
-    if (fromChain === Chain.Solana) {
-      // Pre-warm JITO caches so the synchronous signing resolver has fresh data
-      await Promise.all([
-        getTipFloor().catch(() => {}),
-        fetchTipAccounts().catch(() => {}),
-      ])
-    }
-
     if (approvalPayload) {
       const approvalSig = await this.sign({ transaction: approvalPayload, chain: fromChain })
       const approvalHash = await this.broadcastTx({ chain: fromChain, keysignPayload: approvalPayload, signature: approvalSig })
