@@ -107,7 +107,7 @@ export class RelaySigningService {
     // Use core function which handles:
     // - Full payload serialization with all transaction details
     // - Automatic upload to server if payload exceeds URL length limit (2048 chars)
-    // - Consistent behavior with vultisig-windows mobile apps
+    // - Consistent behavior with other Vultisig relay clients
     return getJoinKeysignUrl({
       serverType: 'relay',
       serviceName: params.localPartyId,

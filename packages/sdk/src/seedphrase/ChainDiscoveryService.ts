@@ -158,7 +158,7 @@ export class ChainDiscoveryService {
         const standardBalance = BigInt(solanaResult.balance || '0')
 
         // Use Phantom path if it has balance AND standard path has no balance
-        // This matches vultisig-windows upstream logic
+        // Phantom vs standard Solana path heuristic used across Vultisig apps
         usePhantomSolanaPath = phantomCheck.balance > 0n && standardBalance === 0n
 
         // If Phantom has balance but standard doesn't, update the Solana result
