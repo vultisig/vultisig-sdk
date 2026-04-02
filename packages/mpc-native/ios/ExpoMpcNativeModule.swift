@@ -42,6 +42,20 @@ private func encodeIds(_ ids: [String]) -> [UInt8] {
     return result
 }
 
+private func dataFromHex(_ hex: String) -> Data? {
+    var data = Data()
+    var temp = ""
+    for c in hex {
+        temp.append(c)
+        if temp.count == 2 {
+            guard let byte = UInt8(temp, radix: 16) else { return nil }
+            data.append(byte)
+            temp = ""
+        }
+    }
+    return temp.isEmpty ? data : nil
+}
+
 private func checkDklsError(_ err: lib_error, _ context: String) throws {
     guard err == LIB_OK else {
         throw NSError(
@@ -547,9 +561,9 @@ public class ExpoMpcNativeModule: Module {
         // DKLS — Key Import
         // =====================================================================
 
-        Function("createDklsKeyImportInitiator") { (privateKeyB64: String, rootChainCodeB64: String?, threshold: Int, ids: [String]) -> [String: Any] in
-            guard let pkData = Data(base64Encoded: privateKeyB64) else {
-                throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 private key"])
+        Function("createDklsKeyImportInitiator") { (privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: [String]) -> [String: Any] in
+            guard let pkData = dataFromHex(privateKeyHex) else {
+                throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid hex private key"])
             }
             var pkBytes = Array(pkData)
             var idsBytes = encodeIds(ids)
@@ -557,7 +571,7 @@ public class ExpoMpcNativeModule: Module {
             var handle = Handle(_0: 0)
 
             let err: lib_error
-            if let ccB64 = rootChainCodeB64, let ccData = Data(base64Encoded: ccB64) {
+            if let ccHex = rootChainCodeHex, let ccData = dataFromHex(ccHex) {
                 var ccBytes = Array(ccData)
                 err = pkBytes.withUnsafeMutableBufferPointer { pkBp in
                     var pkSlice = go_slice(ptr: pkBp.baseAddress, len: UInt(pkBp.count), cap: UInt(pkBp.count))
@@ -584,7 +598,7 @@ public class ExpoMpcNativeModule: Module {
             tss_buffer_free(&setupBuf)
             return [
                 "sessionHandle": Int(handle._0),
-                "setupBase64": setupData.base64EncodedString()
+                "setupMessage": setupData.base64EncodedString()
             ]
         }
 
@@ -1009,9 +1023,9 @@ public class ExpoMpcNativeModule: Module {
         // Schnorr — Key Import
         // =====================================================================
 
-        Function("createSchnorrKeyImportInitiator") { (privateKeyB64: String, rootChainCodeB64: String?, threshold: Int, ids: [String]) -> [String: Any] in
-            guard let pkData = Data(base64Encoded: privateKeyB64) else {
-                throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 private key"])
+        Function("createSchnorrKeyImportInitiator") { (privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: [String]) -> [String: Any] in
+            guard let pkData = dataFromHex(privateKeyHex) else {
+                throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid hex private key"])
             }
             var pkBytes = Array(pkData)
             var idsBytes = encodeIds(ids)
@@ -1019,7 +1033,7 @@ public class ExpoMpcNativeModule: Module {
             var handle = Handle(_0: 0)
 
             let err: schnorr_lib_error
-            if let ccB64 = rootChainCodeB64, let ccData = Data(base64Encoded: ccB64) {
+            if let ccHex = rootChainCodeHex, let ccData = dataFromHex(ccHex) {
                 var ccBytes = Array(ccData)
                 err = pkBytes.withUnsafeMutableBufferPointer { pkBp in
                     var pkSlice = go_slice(ptr: pkBp.baseAddress, len: UInt(pkBp.count), cap: UInt(pkBp.count))
@@ -1046,7 +1060,7 @@ public class ExpoMpcNativeModule: Module {
             tss_buffer_free(&setupBuf)
             return [
                 "sessionHandle": Int(handle._0),
-                "setupBase64": setupData.base64EncodedString()
+                "setupMessage": setupData.base64EncodedString()
             ]
         }
 

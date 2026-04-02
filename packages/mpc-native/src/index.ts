@@ -28,6 +28,12 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 function fromBase64(b64: string): Uint8Array {
   const binary = atob(b64)
   const bytes = new Uint8Array(binary.length)
@@ -331,13 +337,13 @@ class NativeDklsEngine implements DklsEngine {
     partyIds: string[]
   ): { session: MpcSession<MpcKeyshare>; setup: Uint8Array } {
     const result = ExpoMpcNative.createDklsKeyImportInitiator(
-      toBase64(privateKey),
-      rootChainCode ? toBase64(rootChainCode) : null,
+      toHex(privateKey),
+      rootChainCode ? toHex(rootChainCode) : null,
       threshold,
       partyIds
     )
     const session = this._makeKeygenSession(result.sessionHandle)
-    return { session, setup: fromBase64(result.setupBase64) }
+    return { session, setup: fromBase64(result.setupMessage) }
   }
 
   async createKeyImportSession(
@@ -541,13 +547,13 @@ class NativeSchnorrEngine implements SchnorrEngine {
     partyIds: string[]
   ): { session: MpcSession<MpcKeyshare>; setup: Uint8Array } {
     const result = ExpoMpcNative.createSchnorrKeyImportInitiator(
-      toBase64(privateKey),
-      rootChainCode ? toBase64(rootChainCode) : null,
+      toHex(privateKey),
+      rootChainCode ? toHex(rootChainCode) : null,
       threshold,
       partyIds
     )
     const session = this._makeKeygenSession(result.sessionHandle)
-    return { session, setup: fromBase64(result.setupBase64) }
+    return { session, setup: fromBase64(result.setupMessage) }
   }
 
   async createKeyImportSession(
