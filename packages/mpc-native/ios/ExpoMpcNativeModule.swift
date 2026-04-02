@@ -753,7 +753,8 @@ public class ExpoMpcNativeModule: Module {
             tss_buffer_free(&ksBuf)
 
             // Free the handle after extracting all data
-            schnorr_keyshare_free(&keyshareHandle)
+            // Schnorr keyshares use the same free as DKLS in the C API
+            dkls_keyshare_free(&keyshareHandle)
 
             return [
                 "publicKey": publicKey,
