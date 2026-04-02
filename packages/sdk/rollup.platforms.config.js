@@ -224,19 +224,36 @@ const configs = {
       sourcemap: true,
       inlineDynamicImports: true,
     },
-    // RN externals: only native modules and deps the app must provide.
+    // RN externals: native modules, Node builtins, and deps that can't run on RN.
     // Everything else (chain logic, @noble/*, @polkadot/*, @cosmjs/*) is INLINED.
     external: [
+      // SDK native modules
       '@vultisig/mpc-types',
       '@vultisig/mpc-native',
       '@vultisig/mpc-wasm',
       '@vultisig/walletcore-native',
       '@react-native-async-storage/async-storage',
       '@trustwallet/wallet-core',
+      // Node builtins (can't run on RN)
+      'crypto',
+      'buffer',
+      'util',
+      'stream',
+      'url',
+      'fs',
+      'fs/promises',
+      'path',
+      'os',
+      // Deps that use Node.js or WASM loading
+      'tiny-secp256k1',
+      '7z-wasm',
+      'electron',
+      // Network/serialization deps (app provides its own)
       'axios',
       'viem',
       'zod',
       'uuid',
+      // WASM binaries
       /\.wasm$/,
       /lib\/dkls\/vs_wasm/,
       /lib\/mldsa\/vs_wasm/,
