@@ -4,23 +4,23 @@ import WalletCore
 // MARK: - Handle Management
 
 private var nextHandle: Int = 1
-private var publicKeys: [Int: WalletCore.PublicKey] = [:]
-private var privateKeys: [Int: WalletCore.PrivateKey] = [:]
-private var hdWallets: [Int: WalletCore.HDWallet] = [:]
+private var publicKeys: [Int: PublicKey] = [:]
+private var privateKeys: [Int: PrivateKey] = [:]
+private var hdWallets: [Int: HDWallet] = [:]
 
-private func storePublicKey(_ pk: WalletCore.PublicKey) -> Int {
+private func storePublicKey(_ pk: PublicKey) -> Int {
     let h = nextHandle; nextHandle += 1
     publicKeys[h] = pk
     return h
 }
 
-private func storePrivateKey(_ pk: WalletCore.PrivateKey) -> Int {
+private func storePrivateKey(_ pk: PrivateKey) -> Int {
     let h = nextHandle; nextHandle += 1
     privateKeys[h] = pk
     return h
 }
 
-private func storeHDWallet(_ w: WalletCore.HDWallet) -> Int {
+private func storeHDWallet(_ w: HDWallet) -> Int {
     let h = nextHandle; nextHandle += 1
     hdWallets[h] = w
     return h
@@ -28,24 +28,24 @@ private func storeHDWallet(_ w: WalletCore.HDWallet) -> Int {
 
 // MARK: - CoinType mapping
 
-private func coinTypeFromValue(_ value: Int) -> WalletCore.CoinType {
-    return WalletCore.CoinType(rawValue: UInt32(value)) ?? .bitcoin
+private func coinTypeFromValue(_ value: Int) -> CoinType {
+    return CoinType(rawValue: UInt32(value)) ?? .bitcoin
 }
 
-private func publicKeyTypeFromValue(_ value: Int) -> WalletCore.PublicKeyType {
-    return WalletCore.PublicKeyType(rawValue: UInt32(value)) ?? .secp256k1
+private func publicKeyTypeFromValue(_ value: Int) -> PublicKeyType {
+    return PublicKeyType(rawValue: UInt32(value)) ?? .secp256k1
 }
 
-private func curveFromValue(_ value: Int) -> WalletCore.Curve {
-    return WalletCore.Curve(rawValue: UInt32(value)) ?? .secp256k1
+private func curveFromValue(_ value: Int) -> Curve {
+    return Curve(rawValue: UInt32(value)) ?? .secp256k1
 }
 
-private func purposeFromValue(_ value: Int) -> WalletCore.Purpose {
-    return WalletCore.Purpose(rawValue: UInt32(value)) ?? .bip44
+private func purposeFromValue(_ value: Int) -> Purpose {
+    return Purpose(rawValue: UInt32(value)) ?? .bip44
 }
 
-private func hdVersionFromValue(_ value: Int) -> WalletCore.HDVersion {
-    return WalletCore.HDVersion(rawValue: UInt32(value)) ?? .none
+private func hdVersionFromValue(_ value: Int) -> HDVersion {
+    return HDVersion(rawValue: UInt32(value)) ?? .none
 }
 
 // MARK: - Module
@@ -60,7 +60,7 @@ public class ExpoWalletCoreModule: Module {
 
         Function("coinTypeValue") { (name: String) -> Int in
             // Map string name to CoinType raw value
-            let mapping: [String: WalletCore.CoinType] = [
+            let mapping: [String: CoinType] = [
                 "bitcoin": .bitcoin, "litecoin": .litecoin, "dogecoin": .dogecoin,
                 "dash": .dash, "ethereum": .ethereum, "cosmos": .cosmos,
                 "zcash": .zcash, "ripple": .xrp, "xrp": .xrp,
@@ -98,12 +98,12 @@ public class ExpoWalletCoreModule: Module {
 
         Function("chainId") { (coinType: Int) -> String in
             let ct = coinTypeFromValue(coinType)
-            return ct.chainId()
+            return ct.chainId
         }
 
         Function("ss58Prefix") { (coinType: Int) -> Int in
             let ct = coinTypeFromValue(coinType)
-            return Int(ct.ss58Prefix())
+            return Int(ct.ss58Prefix)
         }
 
         // =====================================================================
@@ -115,7 +115,7 @@ public class ExpoWalletCoreModule: Module {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 data"])
             }
             let pkType = publicKeyTypeFromValue(typeValue)
-            guard let pk = WalletCore.PublicKey(data: data, type: pkType) else {
+            guard let pk = PublicKey(data: data, type: pkType) else {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create PublicKey"])
             }
             return storePublicKey(pk)
@@ -166,23 +166,22 @@ public class ExpoWalletCoreModule: Module {
 
         Function("anyAddressIsValid") { (address: String, coinType: Int) -> Bool in
             let ct = coinTypeFromValue(coinType)
-            return WalletCore.AnyAddress.isValid(string: address, coin: ct)
+            return AnyAddress.isValid(string: address, coin: ct)
         }
 
         Function("anyAddressIsValidBech32") { (address: String, coinType: Int, hrp: String) -> Bool in
             let ct = coinTypeFromValue(coinType)
-            return WalletCore.AnyAddress.isValidBech32(string: address, coin: ct, hrp: hrp)
+            return AnyAddress.isValidBech32(string: address, coin: ct, hrp: hrp)
         }
 
         Function("anyAddressIsValidSS58") { (address: String, coinType: Int, ss58Prefix: Int) -> Bool in
             let ct = coinTypeFromValue(coinType)
-            return WalletCore.AnyAddress(string: address, coin: ct, hrp: "") != nil
-            // SS58 validation — use general validation with coin type
+            return AnyAddress.isValidSS58(string: address, coin: ct, ss58Prefix: UInt32(ss58Prefix))
         }
 
         Function("anyAddressCreateWithString") { (address: String, coinType: Int) -> String in
             let ct = coinTypeFromValue(coinType)
-            guard let addr = WalletCore.AnyAddress(string: address, coin: ct) else {
+            guard let addr = AnyAddress(string: address, coin: ct) else {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid address"])
             }
             return addr.description
@@ -193,15 +192,13 @@ public class ExpoWalletCoreModule: Module {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid PublicKey handle"])
             }
             let ct = coinTypeFromValue(coinType)
-            guard let addr = WalletCore.AnyAddress(publicKey: pk, coin: ct, hrp: hrp) else {
-                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create Bech32 address"])
-            }
+            let addr = AnyAddress(publicKey: pk, coin: ct, hrp: hrp)
             return addr.description
         }
 
         Function("anyAddressData") { (address: String, coinType: Int) -> String in
             let ct = coinTypeFromValue(coinType)
-            guard let addr = WalletCore.AnyAddress(string: address, coin: ct) else {
+            guard let addr = AnyAddress(string: address, coin: ct) else {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid address"])
             }
             return addr.data.base64EncodedString()
@@ -216,7 +213,7 @@ public class ExpoWalletCoreModule: Module {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 data"])
             }
             let ct = coinTypeFromValue(coinType)
-            let result = WalletCore.TransactionCompiler.preImageHashes(coin: ct, txInputData: txData)
+            let result = TransactionCompiler.preImageHashes(coinType: ct, txInputData: txData)
             return result.base64EncodedString()
         }
 
@@ -240,8 +237,8 @@ public class ExpoWalletCoreModule: Module {
                 }
             }
 
-            let result = WalletCore.TransactionCompiler.compileWithSignatures(
-                coin: ct,
+            let result = TransactionCompiler.compileWithSignatures(
+                coinType: ct,
                 txInputData: txData,
                 signatures: signatures,
                 publicKeys: pubkeys
@@ -258,7 +255,7 @@ public class ExpoWalletCoreModule: Module {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 data"])
             }
             let ct = coinTypeFromValue(coinType)
-            let result = WalletCore.AnySigner.plan(input: txData, coin: ct)
+            let result = AnySigner.nativePlan(data: txData, coin: ct)
             return result.base64EncodedString()
         }
 
@@ -267,7 +264,7 @@ public class ExpoWalletCoreModule: Module {
         // =====================================================================
 
         Function("hdWalletCreate") { (mnemonic: String, passphrase: String) -> Int in
-            guard let wallet = WalletCore.HDWallet(mnemonic: mnemonic, passphrase: passphrase) else {
+            guard let wallet = HDWallet(mnemonic: mnemonic, passphrase: passphrase) else {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid mnemonic"])
             }
             return storeHDWallet(wallet)
@@ -327,7 +324,7 @@ public class ExpoWalletCoreModule: Module {
         // =====================================================================
 
         Function("privateKeyCreate") { () -> Int in
-            let key = WalletCore.PrivateKey()
+            let key = PrivateKey()
             return storePrivateKey(key)
         }
 
@@ -388,7 +385,7 @@ public class ExpoWalletCoreModule: Module {
 
         Function("bech32Encode") { (hrp: String, dataBase64: String) -> String in
             guard let data = Data(base64Encoded: dataBase64) else { return "" }
-            return WalletCore.Bech32.encode(hrp: hrp, data: data)
+            return Bech32.encode(hrp: hrp, data: data)
         }
 
         // =====================================================================
@@ -397,25 +394,25 @@ public class ExpoWalletCoreModule: Module {
 
         Function("bitcoinScriptBuildPayToWitnessPubkeyHash") { (hashBase64: String) -> String in
             guard let hash = Data(base64Encoded: hashBase64) else { return "" }
-            let script = WalletCore.BitcoinScript.buildPayToWitnessPubkeyHash(hash: hash)
+            let script = BitcoinScript.buildPayToWitnessPubkeyHash(hash: hash)
             return script.data.base64EncodedString()
         }
 
         Function("bitcoinScriptBuildPayToPublicKeyHash") { (hashBase64: String) -> String in
             guard let hash = Data(base64Encoded: hashBase64) else { return "" }
-            let script = WalletCore.BitcoinScript.buildPayToPublicKeyHash(hash: hash)
+            let script = BitcoinScript.buildPayToPublicKeyHash(hash: hash)
             return script.data.base64EncodedString()
         }
 
         Function("bitcoinScriptLockScriptForAddress") { (address: String, coinType: Int) -> String in
             let ct = coinTypeFromValue(coinType)
-            let script = WalletCore.BitcoinScript.lockScriptForAddress(address: address, coin: ct)
+            let script = BitcoinScript.lockScriptForAddress(address: address, coin: ct)
             return script.data.base64EncodedString()
         }
 
         Function("bitcoinScriptHashTypeForCoin") { (coinType: Int) -> Int in
             let ct = coinTypeFromValue(coinType)
-            return Int(WalletCore.BitcoinScript.hashTypeForCoin(coinType: ct))
+            return Int(BitcoinScript.hashTypeForCoin(coinType: ct))
         }
 
         // =====================================================================
@@ -425,8 +422,8 @@ public class ExpoWalletCoreModule: Module {
         Function("ethereumAbiEncode") { (functionName: String, params: String) -> String in
             // Simplified ABI encoding — full implementation would need param types
             // For now, create the function and encode with no params
-            let fn = WalletCore.EthereumAbiFunction(name: functionName)
-            let encoded = WalletCore.EthereumAbi.encode(fn: fn)
+            let fn = EthereumAbiFunction(name: functionName)
+            let encoded = EthereumAbi.encode(fn: fn)
             return encoded.base64EncodedString()
         }
 
@@ -435,7 +432,10 @@ public class ExpoWalletCoreModule: Module {
         // =====================================================================
 
         Function("tonAddressToUserFriendly") { (address: String) -> String in
-            return WalletCore.TONAddressConverter.toUserFriendly(address: address)
+            guard let result = TONAddressConverter.toUserFriendly(address: address, bounceable: false, testnet: false) else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert TON address"])
+            }
+            return result
         }
 
         // =====================================================================
@@ -443,10 +443,11 @@ public class ExpoWalletCoreModule: Module {
         // =====================================================================
 
         Function("solanaAddressDefaultTokenAddress") { (address: String, tokenMintAddress: String) -> String in
-            guard let solAddr = WalletCore.SolanaAddress(string: address) else {
-                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid Solana address"])
+            guard let solAddr = SolanaAddress(string: address),
+                  let tokenAddr = solAddr.defaultTokenAddress(tokenMintAddress: tokenMintAddress) else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid Solana address or token mint"])
             }
-            return solAddr.defaultTokenAddress(tokenMintAddress: tokenMintAddress)
+            return tokenAddr
         }
     }
 }
