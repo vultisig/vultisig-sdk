@@ -26,13 +26,6 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * - Broadcasts transactions to the network
  * - Extracts transaction hashes from signing outputs
  */
-export type CompiledTxResult = {
-  /** Raw signed transaction bytes (base58-encoded string from SigningOutput) */
-  signingOutput: any
-  /** Transaction hash */
-  txHash: string
-}
-
 export class BroadcastService {
   constructor(
     private extractMessageHashes: (keysignPayload: KeysignPayload) => Promise<string[]>,
@@ -64,38 +57,6 @@ export class BroadcastService {
    * console.log(`Transaction: ${txHash}`)
    * ```
    */
-  /**
-   * Compile signed transactions without broadcasting.
-   * Used by JITO bundle flow to get raw signed tx bytes before bundling.
-   */
-  async compileTxOnly(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<CompiledTxResult[]> {
-    const { chain, keysignPayload, signature } = params
-    const walletCore = await this.wasmProvider.getWalletCore()
-    const messageHashes = await this.extractMessageHashes(keysignPayload)
-    const keysignSignatures = convertToKeysignSignatures(signature, messageHashes)
-    const publicKeyData = getKeysignTwPublicKey(keysignPayload)
-    const publicKeyType = getTwPublicKeyType({ walletCore, chain })
-    const coinType = getCoinType({ walletCore, chain })
-    const keyType = coinType === walletCore.CoinType.tron
-      ? walletCore.PublicKeyType.secp256k1Extended
-      : publicKeyType
-    const publicKey = walletCore.PublicKey.createWithData(publicKeyData, keyType)
-
-    const txInputsArray = getEncodedSigningInputs({ keysignPayload, walletCore, publicKey })
-    if (txInputsArray.length === 0) {
-      throw new Error('No transaction inputs found in keysign payload')
-    }
-
-    const results: CompiledTxResult[] = []
-    for (const txInputData of txInputsArray) {
-      const compiled = compileTx({ publicKey, txInputData, signatures: keysignSignatures, chain, walletCore })
-      const signingOutput = decodeSigningOutput(chain, compiled)
-      const txHash = await getTxHash({ chain, tx: signingOutput })
-      results.push({ signingOutput, txHash })
-    }
-    return results
-  }
-
   async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<string> {
     const { chain, keysignPayload, signature } = params
 
