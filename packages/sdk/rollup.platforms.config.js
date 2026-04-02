@@ -244,8 +244,7 @@ const configs = {
       'fs/promises',
       'path',
       'os',
-      // Deps that use Node.js or WASM loading
-      'tiny-secp256k1',
+      // Deps that use Node.js or WASM loading (shimmed via alias)
       '7z-wasm',
       'electron',
       // Network/serialization deps (app provides its own)
@@ -267,6 +266,8 @@ const configs = {
           { find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/decryptWithAesGcm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts') },
           { find: /^@vultisig\/core-mpc\/getMessageHash$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts') },
           { find: /\.\.\/getMessageHash$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts') },
+          // Shims for packages that use WASM/Node.js and can't run on RN
+          { find: /^tiny-secp256k1$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts') },
           // Resolve workspace packages to source TS for bundling
           { find: /^@vultisig\/core-chain\/(.*)/, replacement: path.resolve(currentDir, '../core/chain/$1') },
           { find: /^@vultisig\/core-mpc\/(.*)/, replacement: path.resolve(currentDir, '../core/mpc/$1') },
