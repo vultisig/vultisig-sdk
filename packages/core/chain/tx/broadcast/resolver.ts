@@ -7,6 +7,7 @@ export type BroadcastTxResolver<T extends Chain = Chain> = Resolver<
   {
     chain: T
     tx: SigningOutput<T>
+    broadcastHint?: string
   },
   Promise<unknown>
 >
