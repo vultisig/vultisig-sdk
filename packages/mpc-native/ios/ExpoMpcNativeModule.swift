@@ -209,21 +209,21 @@ public class ExpoMpcNativeModule: Module {
             let err = dkls_keygen_session_finish(session, &keyshareHandle)
             try checkDklsError(err, "dkls_keygen_session_finish")
 
-            // Extract public key
+            // Extract public key (hex-encoded, matching old expo-dkls API)
             var pkBuf = tss_buffer(ptr: nil, len: 0)
             let pkErr = dkls_keyshare_public_key(keyshareHandle, &pkBuf)
             try checkDklsError(pkErr, "dkls_keyshare_public_key")
-            let publicKey = tssBufferToData(pkBuf).base64EncodedString()
+            let publicKey = tssBufferToData(pkBuf).map { String(format: "%02x", $0) }.joined()
             tss_buffer_free(&pkBuf)
 
-            // Extract chain code
+            // Extract chain code (hex-encoded)
             var ccBuf = tss_buffer(ptr: nil, len: 0)
             let ccErr = dkls_keyshare_chaincode(keyshareHandle, &ccBuf)
             try checkDklsError(ccErr, "dkls_keyshare_chaincode")
-            let chainCode = tssBufferToData(ccBuf).base64EncodedString()
+            let chainCode = tssBufferToData(ccBuf).map { String(format: "%02x", $0) }.joined()
             tss_buffer_free(&ccBuf)
 
-            // Serialize keyshare to bytes
+            // Serialize keyshare to bytes (base64-encoded for storage)
             var ksBuf = tss_buffer(ptr: nil, len: 0)
             let ksErr = dkls_keyshare_to_bytes(keyshareHandle, &ksBuf)
             try checkDklsError(ksErr, "dkls_keyshare_to_bytes")
@@ -676,22 +676,19 @@ public class ExpoMpcNativeModule: Module {
             let err = schnorr_keygen_session_finish(session, &keyshareHandle)
             try checkSchnorrError(err, "schnorr_keygen_session_finish")
 
-            // Extract public key
+            // Extract public key (hex-encoded, matching old expo-dkls API)
             var pkBuf = tss_buffer(ptr: nil, len: 0)
             let pkErr = schnorr_keyshare_public_key(keyshareHandle, &pkBuf)
             try checkSchnorrError(pkErr, "schnorr_keyshare_public_key")
-            let publicKey = tssBufferToData(pkBuf).base64EncodedString()
+            let publicKey = tssBufferToData(pkBuf).map { String(format: "%02x", $0) }.joined()
             tss_buffer_free(&pkBuf)
 
-            // Serialize keyshare to bytes
+            // Serialize keyshare to bytes (base64-encoded for storage)
             var ksBuf = tss_buffer(ptr: nil, len: 0)
             let ksErr = schnorr_keyshare_to_bytes(keyshareHandle, &ksBuf)
             try checkSchnorrError(ksErr, "schnorr_keyshare_to_bytes")
             let keyshare = tssBufferToData(ksBuf).base64EncodedString()
             tss_buffer_free(&ksBuf)
-
-            // Free the handle
-            schnorr_keyshare_free(&keyshareHandle)
 
             return [
                 "publicKey": publicKey,
