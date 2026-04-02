@@ -29,11 +29,11 @@ export function isTransactionOversized(base64Data: string): boolean {
  * within the size limit.
  */
 export function maybeSplitOversizedSolanaSwap(
-  transaction: TW.Solana.Proto.RawMessage,
+  transaction: TW.Solana.Proto.IRawMessage,
   recentBlockHash: string,
   base64Data: string,
   signerAddress: string,
-): TW.Solana.Proto.ISigningInput[] {
+): TW.Solana.Proto.SigningInput[] {
   if (!isTransactionOversized(base64Data)) {
     // Not oversized — return single signing input as-is
     if (transaction.legacy) {
@@ -154,7 +154,7 @@ function buildSigningInputFromInstructions(
   header: TW.Solana.Proto.RawMessage.IMessageHeader | null | undefined,
   addressTableLookups: TW.Solana.Proto.RawMessage.IMessageAddressTableLookup[],
   recentBlockHash: string,
-): TW.Solana.Proto.ISigningInput {
+): TW.Solana.Proto.SigningInput {
   const rawMessage = TW.Solana.Proto.RawMessage.create({
     v0: TW.Solana.Proto.RawMessage.MessageV0.create({
       header: header
