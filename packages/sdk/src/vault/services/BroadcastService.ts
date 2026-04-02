@@ -96,8 +96,8 @@ export class BroadcastService {
     return results
   }
 
-  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature; broadcastHint?: string }): Promise<string> {
-    const { chain, keysignPayload, signature, broadcastHint } = params
+  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<string> {
+    const { chain, keysignPayload, signature } = params
 
     try {
       // Get WalletCore instance via WasmProvider
@@ -147,7 +147,6 @@ export class BroadcastService {
         await coreBroadcastTx({
           chain,
           tx: signingOutput,
-          broadcastHint,
         })
 
         txHash = await getTxHash({ chain, tx: signingOutput })

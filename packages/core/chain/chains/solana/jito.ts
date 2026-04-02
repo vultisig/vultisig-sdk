@@ -14,9 +14,7 @@ const JITO_TIP_ACCOUNTS = [
   '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
 ]
 
-export type BroadcastHint = 'standard' | 'jito_send' | 'jito_bundle'
-
-export interface TipFloorData {
+export type TipFloorData = {
   landed_tips_25th_percentile: number
   landed_tips_50th_percentile: number
   landed_tips_75th_percentile: number
@@ -103,44 +101,8 @@ export async function buildTipTransaction(opts: {
 }
 
 /**
- * Submit a single signed transaction via JITO's sendTransaction with bundleOnly=true.
- * This wraps the tx as a single-transaction bundle providing:
- * - Revert protection (failed tx not included on-chain, no wasted gas)
- * - MEV protection (private mempool)
- * - Atomic execution
- * Requires a tip instruction in the transaction (minimum 1000 lamports).
- */
-export async function sendJitoBundleTransaction(
-  rawTransaction: Uint8Array
-): Promise<string> {
-  const encoded = base58.encode(rawTransaction)
-
-  const response = await fetch(
-    `${JITO_BLOCK_ENGINE_URL}/api/v1/transactions?bundleOnly=true`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'sendTransaction',
-        params: [encoded, { encoding: 'base58' }],
-      }),
-    }
-  )
-
-  const data = await response.json()
-  if (data.error) {
-    throw new Error(
-      `JITO bundleOnly sendTransaction failed: ${JSON.stringify(data.error)}`
-    )
-  }
-  return data.result
-}
-
-/**
  * Submit a single signed transaction via JITO's sendTransaction endpoint.
- * Provides MEV protection without requiring a full bundle or tip.
+ * Provides free MEV protection (private mempool) without requiring a bundle or tip.
  */
 export async function sendJitoTransaction(
   rawTransaction: Uint8Array

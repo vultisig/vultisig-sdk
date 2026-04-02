@@ -6,8 +6,7 @@ import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
-import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-import { getTipFloor, sendBundle, sendJitoBundleTransaction, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
+import { getTipFloor, sendBundle, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
@@ -1090,23 +1089,24 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Broadcast a signed transaction to the blockchain network
    */
-  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature; broadcastHint?: string }): Promise<string> {
-    const { chain, keysignPayload, signature, broadcastHint } = params
+  async broadcastTx(params: { chain: Chain; keysignPayload: KeysignPayload; signature: Signature }): Promise<string> {
+    const { chain, keysignPayload, signature } = params
 
     try {
       let txHash: string
 
-      // JITO bundle path: compile tx, submit via bundleOnly=true for revert protection
-      const effectiveHint = broadcastHint ?? (chain === Chain.Solana ? 'jito_send' : undefined)
-      if (effectiveHint === 'jito_bundle' && chain === Chain.Solana) {
-        txHash = await this.broadcastSolanaJitoBundle({ chain, keysignPayload, signature })
+      // For Solana, check if the signing produced multiple transactions
+      // (oversized tx was auto-split). If so, bundle them atomically via JITO.
+      if (chain === Chain.Solana) {
+        const compiledTxs = await this.broadcastService.compileTxOnly({ chain, keysignPayload, signature })
+        if (compiledTxs.length > 1) {
+          txHash = await this.broadcastSolanaJitoBundle(compiledTxs)
+        } else {
+          // Single tx — use normal broadcast (routes through JITO sendTransaction)
+          txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature })
+        }
       } else {
-        txHash = await this.broadcastService.broadcastTx({
-          chain,
-          keysignPayload,
-          signature,
-          broadcastHint: effectiveHint,
-        })
+        txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature })
       }
 
       // Emit success event
@@ -1127,60 +1127,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   /**
    * Broadcast Solana transaction(s) as a JITO bundle.
    *
-   * Multi-tx case (split swaps): All compiled transactions are submitted as a
-   * single atomic JITO bundle via sendBundle. This ensures all-or-nothing
-   * execution — critical for split swaps where partial execution leaves funds
-   * in an intermediate state. All message hashes are already signed in one MPC
-   * session via the keysign payload.
-   *
-   * Single-tx case: Uses JITO sendTransaction with bundleOnly=true for revert
-   * protection (failed tx not included on-chain) + MEV protection.
+   * Submits multiple compiled signed Solana transactions as a single atomic
+   * JITO bundle via sendBundle. Ensures all-or-nothing execution — critical
+   * for split swaps where partial execution leaves funds in an intermediate state.
    */
-  private async broadcastSolanaJitoBundle(params: {
-    chain: Chain
-    keysignPayload: KeysignPayload
-    signature: Signature
-  }): Promise<string> {
-    const { chain, keysignPayload, signature } = params
-
-    // Compile all signed transactions (may be multiple for split swaps)
-    const compiledTxs = await this.broadcastService.compileTxOnly({ chain, keysignPayload, signature })
-    if (compiledTxs.length === 0) {
-      throw new VaultError(VaultErrorCode.BroadcastFailed, 'No compiled transactions')
-    }
-
+  private async broadcastSolanaJitoBundle(
+    compiledTxs: import('./services/BroadcastService').CompiledTxResult[],
+  ): Promise<string> {
     const allTxBytes = compiledTxs.map(tx => base58.decode(tx.signingOutput.encoded))
     const primaryTx = compiledTxs[compiledTxs.length - 1]
 
-    if (allTxBytes.length > 1) {
-      // Multi-tx: submit as atomic JITO bundle (max 5 txs)
-      try {
-        await sendBundle(allTxBytes)
-        return primaryTx.txHash
-      } catch {
-        // Fallback: broadcast sequentially via jito_send
-        for (const txBytes of allTxBytes) {
-          await sendJitoTransaction(txBytes)
-        }
-        return primaryTx.txHash
-      }
-    }
-
-    // Single tx: use bundleOnly=true for revert protection + MEV protection
     try {
-      await sendJitoBundleTransaction(allTxBytes[0])
+      await sendBundle(allTxBytes)
     } catch {
-      // Fallback: try regular jito_send
-      try {
-        await sendJitoTransaction(allTxBytes[0])
-      } catch {
-        // Final fallback: standard RPC
-        const client = getSolanaClient()
-        await client.sendRawTransaction(allTxBytes[0], {
-          skipPreflight: false,
-          preflightCommitment: 'confirmed',
-          maxRetries: 3,
-        })
+      // Fallback: broadcast sequentially via jito_send
+      for (const txBytes of allTxBytes) {
+        await sendJitoTransaction(txBytes)
       }
     }
 
