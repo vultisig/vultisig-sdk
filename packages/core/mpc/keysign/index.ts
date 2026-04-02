@@ -181,7 +181,7 @@ export const keysign = async ({
     throw error
   }
 
-  const signature = session.finish()
+  const signature = await session.finish()
 
   const result: KeysignSignature =
     signatureAlgorithm === 'mldsa'

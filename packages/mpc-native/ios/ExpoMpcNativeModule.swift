@@ -4,23 +4,34 @@ import goschnorr
 
 // MARK: - Helpers
 
-private func goSlice(_ data: Data) -> go_slice {
-    return data.withUnsafeBytes { ptr in
+/// ARC-managed buffer that pins bytes in stable heap memory for Go FFI calls.
+/// The pointer remains valid as long as this object is in scope (reference counted).
+/// Always assign to a local variable to prevent premature deallocation:
+///   `let pin = PinnedSlice(bytes); var slice = pin.slice`
+private class PinnedSlice {
+    private let buffer: UnsafeMutableBufferPointer<UInt8>
+
+    init(_ arr: [UInt8]) {
+        buffer = .allocate(capacity: max(arr.count, 1))
+        if !arr.isEmpty {
+            _ = buffer.initialize(from: arr)
+        }
+    }
+
+    convenience init(_ data: Data) {
+        self.init(Array(data))
+    }
+
+    var slice: go_slice {
         go_slice(
-            ptr: ptr.baseAddress?.assumingMemoryBound(to: UInt8.self),
-            len: UInt(data.count),
-            cap: UInt(data.count)
+            ptr: buffer.baseAddress,
+            len: UInt(buffer.count),
+            cap: UInt(buffer.count)
         )
     }
-}
 
-private func goSliceFromArray(_ arr: [UInt8]) -> go_slice {
-    return arr.withUnsafeBufferPointer { ptr in
-        go_slice(
-            ptr: ptr.baseAddress,
-            len: UInt(arr.count),
-            cap: UInt(arr.count)
-        )
+    deinit {
+        buffer.deallocate()
     }
 }
 
@@ -138,9 +149,9 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
+            let _pinId = PinnedSlice(idBytes); var idSlice = _pinId.slice
             var handle = Handle(_0: 0)
             let oldKs = Handle(_0: Int32(keyshareHandle))
 
@@ -157,15 +168,15 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 input"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
+            let _pinId = PinnedSlice(idBytes); var idSlice = _pinId.slice
             var pkBytes = Array(pkData)
-            var pkSlice = goSliceFromArray(pkBytes)
+            let _pinPk = PinnedSlice(pkBytes); var pkSlice = _pinPk.slice
             var ccBytes = Array(chainCodeData)
-            var ccSlice = goSliceFromArray(ccBytes)
+            let _pinCc = PinnedSlice(ccBytes); var ccSlice = _pinCc.slice
             var secBytes = Array(secretData)
-            var secSlice = goSliceFromArray(secBytes)
+            let _pinSec = PinnedSlice(secBytes); var secSlice = _pinSec.slice
             var handle = Handle(_0: 0)
 
             let err = dkls_key_migration_session_from_setup(&setupSlice, &idSlice, &pkSlice, &ccSlice, &secSlice, &handle)
@@ -192,7 +203,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var receiverBuf = tss_buffer(ptr: nil, len: 0)
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -208,7 +219,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var finished: Int32 = 0
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -310,7 +321,7 @@ public class ExpoMpcNativeModule: Module {
         Function("dklsDecodeMessage") { (setupB64: String) -> String? in
             guard let setupData = Data(base64Encoded: setupB64) else { return nil }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var msgBuf = tss_buffer(ptr: nil, len: 0)
             let err = dkls_decode_message(&setupSlice, &msgBuf)
             guard err == LIB_OK, msgBuf.ptr != nil, msgBuf.len > 0 else { return nil }
@@ -322,7 +333,7 @@ public class ExpoMpcNativeModule: Module {
         Function("dklsDecodeKeyId") { (setupB64: String) -> String? in
             guard let setupData = Data(base64Encoded: setupB64) else { return nil }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var keyIdBuf = tss_buffer(ptr: nil, len: 0)
             let err = dkls_decode_key_id(&setupSlice, &keyIdBuf)
             guard err == LIB_OK, keyIdBuf.ptr != nil, keyIdBuf.len > 0 else { return nil }
@@ -336,9 +347,9 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
+            let _pinId = PinnedSlice(idBytes); var idSlice = _pinId.slice
             let ks = Handle(_0: Int32(keyshareHandle))
             var handle = Handle(_0: 0)
 
@@ -362,7 +373,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var receiverBuf = tss_buffer(ptr: nil, len: 0)
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -378,7 +389,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var finished: UInt32 = 0
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -411,7 +422,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 keyshare"])
             }
             var bytes = Array(data)
-            var slice = goSliceFromArray(bytes)
+            let _pinBytes = PinnedSlice(bytes); var slice = _pinBytes.slice
             var handle = Handle(_0: 0)
             let err = dkls_keyshare_from_bytes(&slice, &handle)
             try checkDklsError(err, "dkls_keyshare_from_bytes")
@@ -474,11 +485,11 @@ public class ExpoMpcNativeModule: Module {
             }
             let ks = Handle(_0: Int32(keyshareHandle))
             let idsBytes = encodeIds(ids)
-            var idsSlice = goSliceFromArray(idsBytes)
+            let _pinIds = PinnedSlice(idsBytes); var idsSlice = _pinIds.slice
             var oldBytes = Array(oldData)
-            var oldSlice = goSliceFromArray(oldBytes)
+            let _pinOld = PinnedSlice(oldBytes); var oldSlice = _pinOld.slice
             var newBytes = Array(newData)
-            var newSlice = goSliceFromArray(newBytes)
+            let _pinNew = PinnedSlice(newBytes); var newSlice = _pinNew.slice
             var setupBuf = tss_buffer(ptr: nil, len: 0)
 
             let err = dkls_qc_setupmsg_new(ks, &idsSlice, &oldSlice, UInt32(newThreshold), &newSlice, &setupBuf)
@@ -493,9 +504,9 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
+            let _pinId = PinnedSlice(idBytes); var idSlice = _pinId.slice
             let ks = Handle(_0: Int32(keyshareHandle ?? -1))
             var handle = Handle(_0: 0)
 
@@ -519,7 +530,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var receiverBuf = tss_buffer(ptr: nil, len: 0)
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -535,7 +546,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var finished: Int32 = 0
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -548,7 +559,10 @@ public class ExpoMpcNativeModule: Module {
             var keyshareHandle = Handle(_0: 0)
             let session = Handle(_0: Int32(sessionHandle))
             let err = dkls_qc_session_finish(session, &keyshareHandle)
-            if err != LIB_OK { return -1 }
+            if err != LIB_OK {
+                NSLog("ExpoMpcNative: finishQc returned error %d (old party / no keyshare)", err.rawValue)
+                return -1
+            }
             return Int(keyshareHandle._0)
         }
 
@@ -607,9 +621,9 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
+            let _pinId = PinnedSlice(idBytes); var idSlice = _pinId.slice
             var handle = Handle(_0: 0)
 
             let err = dkls_key_importer_new(&setupSlice, &idSlice, &handle)
@@ -686,7 +700,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var receiverBuf = tss_buffer(ptr: nil, len: 0)
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -702,7 +716,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var finished: Int32 = 0
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -724,6 +738,13 @@ public class ExpoMpcNativeModule: Module {
             let publicKey = tssBufferToData(pkBuf).map { String(format: "%02x", $0) }.joined()
             tss_buffer_free(&pkBuf)
 
+            // Extract chain code (hex-encoded)
+            var ccBuf = tss_buffer(ptr: nil, len: 0)
+            let ccErr = schnorr_keyshare_chaincode(keyshareHandle, &ccBuf)
+            try checkSchnorrError(ccErr, "schnorr_keyshare_chaincode")
+            let chainCode = tssBufferToData(ccBuf).map { String(format: "%02x", $0) }.joined()
+            tss_buffer_free(&ccBuf)
+
             // Serialize keyshare to bytes (base64-encoded for storage)
             var ksBuf = tss_buffer(ptr: nil, len: 0)
             let ksErr = schnorr_keyshare_to_bytes(keyshareHandle, &ksBuf)
@@ -731,8 +752,12 @@ public class ExpoMpcNativeModule: Module {
             let keyshare = tssBufferToData(ksBuf).base64EncodedString()
             tss_buffer_free(&ksBuf)
 
+            // Free the handle after extracting all data
+            schnorr_keyshare_free(&keyshareHandle)
+
             return [
                 "publicKey": publicKey,
+                "chainCode": chainCode,
                 "keyshare": keyshare
             ]
         }
@@ -752,13 +777,13 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 input"])
             }
             var keyIdBytes = Array(keyIdData)
-            var keyIdSlice = goSliceFromArray(keyIdBytes)
+            let _pinKeyId = PinnedSlice(keyIdBytes); var keyIdSlice = _pinKeyId.slice
             var chainPathBytes = Array(chainPath.utf8)
-            var chainPathSlice = goSliceFromArray(chainPathBytes)
+            let _pinChainPath = PinnedSlice(chainPathBytes); var chainPathSlice = _pinChainPath.slice
             var hashBytes = Array(hashData)
-            var hashSlice = goSliceFromArray(hashBytes)
+            let _pinHash = PinnedSlice(hashBytes); var hashSlice = _pinHash.slice
             let idsBytes = encodeIds(ids)
-            var idsSlice = goSliceFromArray(idsBytes)
+            let _pinIds = PinnedSlice(idsBytes); var idsSlice = _pinIds.slice
             var setupBuf = tss_buffer(ptr: nil, len: 0)
 
             let err = schnorr_sign_setupmsg_new(&keyIdSlice, &chainPathSlice, &hashSlice, &idsSlice, &setupBuf)
@@ -771,7 +796,7 @@ public class ExpoMpcNativeModule: Module {
         Function("schnorrDecodeMessage") { (setupB64: String) -> String? in
             guard let setupData = Data(base64Encoded: setupB64) else { return nil }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var msgBuf = tss_buffer(ptr: nil, len: 0)
             let err = schnorr_decode_message(&setupSlice, &msgBuf)
             guard err.rawValue == 0, msgBuf.ptr != nil, msgBuf.len > 0 else { return nil }
@@ -783,7 +808,7 @@ public class ExpoMpcNativeModule: Module {
         Function("schnorrDecodeKeyId") { (setupB64: String) -> String? in
             guard let setupData = Data(base64Encoded: setupB64) else { return nil }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var keyIdBuf = tss_buffer(ptr: nil, len: 0)
             let err = schnorr_decode_key_id(&setupSlice, &keyIdBuf)
             guard err.rawValue == 0, keyIdBuf.ptr != nil, keyIdBuf.len > 0 else { return nil }
@@ -797,9 +822,9 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
+            let _pinId = PinnedSlice(idBytes); var idSlice = _pinId.slice
             let ks = Handle(_0: Int32(keyshareHandle))
             var handle = Handle(_0: 0)
 
@@ -823,7 +848,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var receiverBuf = tss_buffer(ptr: nil, len: 0)
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -839,7 +864,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var finished: UInt32 = 0
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -872,7 +897,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 keyshare"])
             }
             var bytes = Array(data)
-            var slice = goSliceFromArray(bytes)
+            let _pinBytes = PinnedSlice(bytes); var slice = _pinBytes.slice
             var handle = Handle(_0: 0)
             let err = schnorr_keyshare_from_bytes(&slice, &handle)
             try checkSchnorrError(err, "schnorr_keyshare_from_bytes")
@@ -936,11 +961,11 @@ public class ExpoMpcNativeModule: Module {
             }
             let ks = Handle(_0: Int32(keyshareHandle))
             let idsBytes = encodeIds(ids)
-            var idsSlice = goSliceFromArray(idsBytes)
+            let _pinIds = PinnedSlice(idsBytes); var idsSlice = _pinIds.slice
             var oldBytes = Array(oldData)
-            var oldSlice = goSliceFromArray(oldBytes)
+            let _pinOld = PinnedSlice(oldBytes); var oldSlice = _pinOld.slice
             var newBytes = Array(newData)
-            var newSlice = goSliceFromArray(newBytes)
+            let _pinNew = PinnedSlice(newBytes); var newSlice = _pinNew.slice
             var setupBuf = tss_buffer(ptr: nil, len: 0)
 
             let err = schnorr_qc_setupmsg_new(ks, &idsSlice, &oldSlice, UInt32(newThreshold), &newSlice, &setupBuf)
@@ -955,9 +980,9 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
+            let _pinId = PinnedSlice(idBytes); var idSlice = _pinId.slice
             let ks = Handle(_0: Int32(keyshareHandle ?? -1))
             var handle = Handle(_0: 0)
 
@@ -981,7 +1006,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var receiverBuf = tss_buffer(ptr: nil, len: 0)
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -997,7 +1022,7 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 message"])
             }
             var msgBytes = Array(msgData)
-            var msgSlice = goSliceFromArray(msgBytes)
+            let _pinMsg = PinnedSlice(msgBytes); var msgSlice = _pinMsg.slice
             var finished: Int32 = 0
             let session = Handle(_0: Int32(sessionHandle))
 
@@ -1010,7 +1035,10 @@ public class ExpoMpcNativeModule: Module {
             var keyshareHandle = Handle(_0: 0)
             let session = Handle(_0: Int32(sessionHandle))
             let err = schnorr_qc_session_finish(session, &keyshareHandle)
-            if err.rawValue != 0 { return -1 }
+            if err.rawValue != 0 {
+                NSLog("ExpoMpcNative: finishSchnorrQc returned error %d (old party / no keyshare)", err.rawValue)
+                return -1
+            }
             return Int(keyshareHandle._0)
         }
 
@@ -1069,9 +1097,9 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
+            let _pinSetup = PinnedSlice(setupBytes); var setupSlice = _pinSetup.slice
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
+            let _pinId = PinnedSlice(idBytes); var idSlice = _pinId.slice
             var handle = Handle(_0: 0)
 
             let err = schnorr_key_importer_new(&setupSlice, &idSlice, &handle)

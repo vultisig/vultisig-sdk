@@ -228,6 +228,7 @@ class ExpoMpcNativeModule : Module() {
             try {
                 Godkls.dklsQcSessionFinish(sessionHandle)
             } catch (e: Exception) {
+                android.util.Log.w("ExpoMpcNative", "finishQc: old party (no keyshare) or error: ${e.message}")
                 -1L
             }
         }
@@ -240,9 +241,9 @@ class ExpoMpcNativeModule : Module() {
         // DKLS — Key Import
         // =====================================================================
 
-        Function("createDklsKeyImportInitiator") { privateKeyB64: String, rootChainCodeB64: String?, threshold: Int, ids: List<String> ->
-            val pkBytes = decode(privateKeyB64)
-            val ccBytes = if (rootChainCodeB64 != null) decode(rootChainCodeB64) else null
+        Function("createDklsKeyImportInitiator") { privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: List<String> ->
+            val pkBytes = decodeHex(privateKeyHex)
+            val ccBytes = if (rootChainCodeHex != null) decodeHex(rootChainCodeHex) else null
             val idsBytes = encodeIds(ids)
             val result = Godkls.dklsKeyImportInitiatorNew(pkBytes, ccBytes, threshold.toLong(), idsBytes)
             mapOf(
@@ -305,9 +306,10 @@ class ExpoMpcNativeModule : Module() {
         AsyncFunction("finishSchnorrKeygen") { sessionHandle: Long ->
             val keyshareHandle = Goschnorr.schnorrKeygenSessionFinish(sessionHandle)
             val publicKey = encodeHex(Goschnorr.schnorrKeysharePublicKey(keyshareHandle))
+            val chainCode = encodeHex(Goschnorr.schnorrKeyshareChaincode(keyshareHandle))
             val keyshare = encode(Goschnorr.schnorrKeyshareToBytes(keyshareHandle))
             Goschnorr.schnorrKeyshareFree(keyshareHandle)
-            mapOf("publicKey" to publicKey, "keyshare" to keyshare)
+            mapOf("publicKey" to publicKey, "chainCode" to chainCode, "keyshare" to keyshare)
         }
 
         Function("freeSchnorrKeygenSession") { sessionHandle: Long ->
@@ -458,6 +460,7 @@ class ExpoMpcNativeModule : Module() {
             try {
                 Goschnorr.schnorrQcSessionFinish(sessionHandle)
             } catch (e: Exception) {
+                android.util.Log.w("ExpoMpcNative", "finishSchnorrQc: old party (no keyshare) or error: ${e.message}")
                 -1L
             }
         }
@@ -470,9 +473,9 @@ class ExpoMpcNativeModule : Module() {
         // Schnorr — Key Import
         // =====================================================================
 
-        Function("createSchnorrKeyImportInitiator") { privateKeyB64: String, rootChainCodeB64: String?, threshold: Int, ids: List<String> ->
-            val pkBytes = decode(privateKeyB64)
-            val ccBytes = if (rootChainCodeB64 != null) decode(rootChainCodeB64) else null
+        Function("createSchnorrKeyImportInitiator") { privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: List<String> ->
+            val pkBytes = decodeHex(privateKeyHex)
+            val ccBytes = if (rootChainCodeHex != null) decodeHex(rootChainCodeHex) else null
             val idsBytes = encodeIds(ids)
             val result = Goschnorr.schnorrKeyImportInitiatorNew(pkBytes, ccBytes, threshold.toLong(), idsBytes)
             mapOf(
@@ -500,6 +503,9 @@ class ExpoMpcNativeModule : Module() {
 
     private fun decode(b64: String): ByteArray =
         Base64.decode(b64, Base64.NO_WRAP)
+
+    private fun decodeHex(hex: String): ByteArray =
+        hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
     private fun encodeIds(ids: List<String>): ByteArray {
         val result = mutableListOf<Byte>()

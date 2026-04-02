@@ -3,8 +3,15 @@ import { getMpcEngine } from '@vultisig/mpc-types'
 
 import { toMpcLibKeyshare } from './keyshare'
 
-const getEngineKey = (algo: SignatureAlgorithm): 'dkls' | 'schnorr' =>
-  algo === 'eddsa' ? 'schnorr' : 'dkls'  // mldsa uses dkls engine
+const getEngineKey = (algo: SignatureAlgorithm): 'dkls' | 'schnorr' => {
+  if (algo === 'mldsa') {
+    throw new Error(
+      'MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine. ' +
+      'Route MLDSA signing through packages/core/mpc/mldsa/ instead.'
+    )
+  }
+  return algo === 'eddsa' ? 'schnorr' : 'dkls'
+}
 
 type SignSessionMethods = {
   setup: (
@@ -21,12 +28,29 @@ const dklsMethods: SignSessionMethods = {
   setupMessageHash: (setupMsg) => getMpcEngine().dkls.signSetupMessageHash(setupMsg),
 }
 
+const mldsaNotSupported: SignSessionMethods = {
+  setup: () => {
+    throw new Error(
+      'MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine.'
+    )
+  },
+  setupMessageHash: () => {
+    throw new Error(
+      'MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine.'
+    )
+  },
+}
+
 export const SignSession: Record<SignatureAlgorithm, SignSessionMethods> = {
   ecdsa: dklsMethods,
-  mldsa: dklsMethods,
+  mldsa: mldsaNotSupported,
   eddsa: {
-    setup: (keyId, chainPath, messageHash, partyIds) =>
-      getMpcEngine().schnorr.signSetup(keyId, chainPath, messageHash as Uint8Array, partyIds),
+    setup: (keyId, chainPath, messageHash, partyIds) => {
+      if (!messageHash) {
+        throw new Error('EdDSA signing requires a message hash')
+      }
+      return getMpcEngine().schnorr.signSetup(keyId, chainPath, messageHash, partyIds)
+    },
     setupMessageHash: (setupMsg) =>
       getMpcEngine().schnorr.signSetupMessageHash(setupMsg),
   },
