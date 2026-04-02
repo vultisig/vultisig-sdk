@@ -12,7 +12,6 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
-import { broadcastTx as coreBroadcastSolanaTx } from '@vultisig/core-chain/tx/broadcast'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 import { vaultConfig } from '@vultisig/core-config'
@@ -1096,15 +1095,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     try {
       let txHash: string
 
+      // For Solana, check if the signing produced multiple transactions
+      // (oversized tx was auto-split). If so, bundle them atomically via JITO.
       if (chain === Chain.Solana) {
-        // Compile once, then decide: multi-tx → JITO bundle, single-tx → normal broadcast.
-        // Normal broadcast for Solana routes through JITO sendTransaction (free MEV protection).
         const compiledTxs = await this.broadcastService.compileTxOnly({ chain, keysignPayload, signature })
         if (compiledTxs.length > 1) {
           txHash = await this.broadcastSolanaJitoBundle(compiledTxs)
         } else {
-          await coreBroadcastSolanaTx({ chain, tx: compiledTxs[0].signingOutput })
-          txHash = compiledTxs[0].txHash
+          // Single tx — use normal broadcast (routes through JITO sendTransaction)
+          txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature })
         }
       } else {
         txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature })
@@ -1133,7 +1132,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * for split swaps where partial execution leaves funds in an intermediate state.
    */
   private async broadcastSolanaJitoBundle(
-    compiledTxs: { signingOutput: { encoded: string }; txHash: string }[],
+    compiledTxs: import('./services/BroadcastService').CompiledTxResult[],
   ): Promise<string> {
     const allTxBytes = compiledTxs.map(tx => base58.decode(tx.signingOutput.encoded))
     const primaryTx = compiledTxs[compiledTxs.length - 1]
@@ -1673,10 +1672,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({ fromCoin, toCoin, amount: amountNum, swapQuote: quote })
 
-    // Pre-warm JITO caches for Solana swaps. The signing input resolver may
-    // split oversized transactions and needs tip data — it runs synchronously,
-    // so caches must be warm before sign() is called.
+    // Pre-warm JITO tip floor cache for Solana swaps. The signing input resolver
+    // may need to split oversized transactions and add a tip instruction — it runs
+    // synchronously, so the cache must be warm before sign() is called.
     if (fromChain === Chain.Solana) {
+      // Pre-warm JITO caches so the synchronous signing resolver has fresh data
       await Promise.all([
         getTipFloor().catch(() => {}),
         fetchTipAccounts().catch(() => {}),

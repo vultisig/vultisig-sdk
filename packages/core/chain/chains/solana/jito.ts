@@ -1,4 +1,4 @@
-import { PublicKey } from '@solana/web3.js'
+import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js'
 import base58 from 'bs58'
 
 const JITO_BLOCK_ENGINE_URL = 'https://mainnet.block-engine.jito.wtf'
@@ -14,13 +14,6 @@ const FALLBACK_TIP_ACCOUNTS = [
   'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL',
   '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
 ]
-
-/** Default tip when tip floor data is unavailable (10,000 lamports ≈ $0.002) */
-const DEFAULT_TIP_LAMPORTS = 10_000
-
-// ---------------------------------------------------------------------------
-// Tip account cache (fetched via getTipAccounts RPC, 60s TTL)
-// ---------------------------------------------------------------------------
 
 let tipAccountsCache: { accounts: string[]; timestamp: number } | null = null
 const TIP_ACCOUNTS_CACHE_TTL_MS = 60_000
@@ -59,25 +52,7 @@ export async function fetchTipAccounts(): Promise<string[]> {
   return data.result
 }
 
-/**
- * Get a random JITO tip account. Uses cached dynamic accounts if available,
- * falls back to hardcoded list. Call fetchTipAccounts() to warm the cache.
- */
-export function getRandomTipAccount(): PublicKey {
-  const accounts =
-    tipAccountsCache &&
-    Date.now() - tipAccountsCache.timestamp < TIP_ACCOUNTS_CACHE_TTL_MS
-      ? tipAccountsCache.accounts
-      : FALLBACK_TIP_ACCOUNTS
-  const idx = Math.floor(Math.random() * accounts.length)
-  return new PublicKey(accounts[idx])
-}
-
-// ---------------------------------------------------------------------------
-// Tip floor cache (fetched via REST API, 10s TTL)
-// ---------------------------------------------------------------------------
-
-type TipFloorData = {
+export type TipFloorData = {
   landed_tips_25th_percentile: number
   landed_tips_50th_percentile: number
   landed_tips_75th_percentile: number
@@ -88,6 +63,19 @@ type TipFloorData = {
 
 let tipFloorCache: { data: TipFloorData; timestamp: number } | null = null
 const TIP_FLOOR_CACHE_TTL_MS = 10_000
+
+/**
+ * Get a random JITO tip account. Uses cached dynamic accounts if available,
+ * falls back to hardcoded list. Call fetchTipAccounts() to warm the cache.
+ */
+export function getRandomTipAccount(): PublicKey {
+  const accounts =
+    tipAccountsCache && Date.now() - tipAccountsCache.timestamp < TIP_ACCOUNTS_CACHE_TTL_MS
+      ? tipAccountsCache.accounts
+      : FALLBACK_TIP_ACCOUNTS
+  const idx = Math.floor(Math.random() * accounts.length)
+  return new PublicKey(accounts[idx])
+}
 
 export async function getTipFloor(): Promise<TipFloorData> {
   if (
@@ -111,10 +99,12 @@ export async function getTipFloor(): Promise<TipFloorData> {
   return data
 }
 
+/** Default tip when tip floor data is unavailable (10,000 lamports ≈ $0.002) */
+const DEFAULT_TIP_LAMPORTS = 10_000
+
 /**
- * Get recommended tip in lamports. Uses cached tip floor if warm (EMA 50th
- * percentile), otherwise returns a conservative default. Synchronous — safe
- * to call from signing input resolvers. Warm the cache with getTipFloor().
+ * Synchronous version: returns cached tip floor if warm, otherwise default.
+ * Use this in synchronous code paths (e.g., signing input resolvers).
  */
 export function getRecommendedTipLamportsSync(): number {
   if (
@@ -127,9 +117,34 @@ export function getRecommendedTipLamportsSync(): number {
   return DEFAULT_TIP_LAMPORTS
 }
 
-// ---------------------------------------------------------------------------
-// Transaction submission
-// ---------------------------------------------------------------------------
+export async function getRecommendedTipLamports(): Promise<number> {
+  try {
+    const tipFloor = await getTipFloor()
+    // Use EMA 50th percentile — smoothed, avoids spikes from one-off whale tips
+    const tipSol = tipFloor.ema_landed_tips_50th_percentile
+    return Math.max(Math.ceil(tipSol * 1_000_000_000), 1_000)
+  } catch {
+    // Fallback: conservative default if tip floor API is unavailable
+    return 100_000 // 0.0001 SOL
+  }
+}
+
+export async function buildTipTransaction(opts: {
+  fromPubkey: PublicKey
+  tipLamports: number
+  recentBlockhash: string
+}): Promise<Transaction> {
+  return new Transaction({
+    recentBlockhash: opts.recentBlockhash,
+    feePayer: opts.fromPubkey,
+  }).add(
+    SystemProgram.transfer({
+      fromPubkey: opts.fromPubkey,
+      toPubkey: getRandomTipAccount(),
+      lamports: opts.tipLamports,
+    })
+  )
+}
 
 /**
  * Submit a single signed transaction via JITO's sendTransaction endpoint.
@@ -163,10 +178,6 @@ export async function sendJitoTransaction(
   return data.result
 }
 
-/**
- * Submit a bundle of up to 5 signed transactions for atomic sequential execution.
- * All transactions must be fully signed. The tip instruction should be in the last tx.
- */
 export async function sendBundle(
   signedTransactions: Uint8Array[]
 ): Promise<string> {
@@ -188,4 +199,50 @@ export async function sendBundle(
     throw new Error(`JITO sendBundle failed: ${JSON.stringify(data.error)}`)
   }
   return data.result
+}
+
+export interface BundleStatus {
+  status: 'pending' | 'landed' | 'failed' | 'invalid'
+  slot?: number
+  confirmationStatus?: string
+  err?: string
+}
+
+export async function getBundleStatus(
+  bundleId: string
+): Promise<BundleStatus> {
+  const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getBundleStatuses',
+      params: [[bundleId]],
+    }),
+  })
+
+  const data = await response.json()
+  if (data.error) {
+    throw new Error(
+      `JITO getBundleStatuses failed: ${JSON.stringify(data.error)}`
+    )
+  }
+
+  const statuses = data.result?.value
+  if (!statuses || statuses.length === 0) {
+    return { status: 'pending' }
+  }
+
+  const s = statuses[0]
+  return {
+    status:
+      s.confirmation_status === 'finalized' ||
+      s.confirmation_status === 'confirmed'
+        ? 'landed'
+        : 'pending',
+    slot: s.slot,
+    confirmationStatus: s.confirmation_status,
+    err: s.err ? JSON.stringify(s.err) : undefined,
+  }
 }

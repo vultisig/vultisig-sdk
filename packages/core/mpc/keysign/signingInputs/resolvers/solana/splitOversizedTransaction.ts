@@ -15,7 +15,7 @@ const SOLANA_MAX_TX_SIZE = 1232
  * an oversized serialized transaction. We use a conservative heuristic:
  * if the base64 source data exceeds the limit, the transaction is oversized.
  */
-function isTransactionOversized(base64Data: string): boolean {
+export function isTransactionOversized(base64Data: string): boolean {
   const bytes = Buffer.from(base64Data, 'base64')
   return bytes.length > SOLANA_MAX_TX_SIZE
 }
