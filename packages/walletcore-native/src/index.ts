@@ -7,6 +7,122 @@
 import ExpoWalletCore from './ExpoWalletCoreModule'
 
 // ---------------------------------------------------------------------------
+// Types — matches the subset of @trustwallet/wallet-core's WalletCore interface
+// that the SDK actually uses.
+// ---------------------------------------------------------------------------
+
+export interface NativePublicKeyInstance {
+  readonly _handle: number
+  data(): Uint8Array
+  uncompressed(): NativePublicKeyInstance
+  compressed(): NativePublicKeyInstance
+  verify(signature: Uint8Array, message: Uint8Array): boolean
+  verifyAsDER(signature: Uint8Array, message: Uint8Array): boolean
+  delete(): void
+}
+
+export interface NativePrivateKeyInstance {
+  readonly _handle: number
+  data(): Uint8Array
+  getPublicKeySecp256k1(compressed: boolean): NativePublicKeyInstance
+  getPublicKeyEd25519(): NativePublicKeyInstance
+  delete(): void
+}
+
+export interface NativeHDWalletInstance {
+  readonly _handle: number
+  getMasterKey(curve: number): NativePrivateKeyInstance
+  getKeyForCoin(coinType: number): NativePrivateKeyInstance
+  getKey(coinType: number, derivationPath: string): NativePrivateKeyInstance
+  getAddressForCoin(coinType: number): string
+  getExtendedPrivateKey(purpose: number, coinType: number, version: number): string
+  delete(): void
+}
+
+export interface NativeDataVectorInstance {
+  readonly items: string[]
+  add(data: Uint8Array): void
+}
+
+export interface NativeAnyAddressInstance {
+  description(): string
+  data(): Uint8Array
+}
+
+/** Subset of @trustwallet/wallet-core's WalletCore interface provided natively. */
+export interface WalletCoreLike {
+  CoinType: Record<string, number>
+  PublicKeyType: Record<string, number>
+  Curve: Record<string, number>
+  Purpose: Record<string, number>
+  HDVersion: Record<string, number>
+
+  CoinTypeExt: {
+    derivationPath(coinType: number): string
+    deriveAddressFromPublicKey(coinType: number, publicKey: NativePublicKeyInstance): string
+    chainId(coinType: number): string
+    ss58Prefix(coinType: number): number
+  }
+
+  PublicKey: {
+    createWithData(data: Uint8Array | Buffer, type: number): NativePublicKeyInstance
+  }
+
+  AnyAddress: {
+    isValid(address: string, coinType: number): boolean
+    isValidBech32(address: string, coinType: number, hrp: string): boolean
+    isValidSS58(address: string, coinType: number, ss58Prefix: number): boolean
+    createWithString(address: string, coinType: number): NativeAnyAddressInstance
+    createBech32WithPublicKey(publicKey: NativePublicKeyInstance, coinType: number, hrp: string): NativeAnyAddressInstance
+  }
+
+  TransactionCompiler: {
+    preImageHashes(coinType: number, txInputData: Uint8Array): Uint8Array
+    compileWithSignatures(coinType: number, txInputData: Uint8Array, signatures: NativeDataVectorInstance, publicKeys: NativeDataVectorInstance): Uint8Array
+  }
+
+  DataVector: {
+    create(): NativeDataVectorInstance
+  }
+
+  HDWallet: {
+    createWithMnemonic(mnemonic: string, passphrase?: string): NativeHDWalletInstance
+  }
+
+  PrivateKey: {
+    create(): NativePrivateKeyInstance
+  }
+
+  AnySigner: {
+    plan(txInputData: Uint8Array, coinType: number): Uint8Array
+  }
+
+  HexCoding: {
+    decode(hex: string): Uint8Array
+    encode(data: Uint8Array): string
+  }
+
+  Bech32: {
+    encode(hrp: string, data: Uint8Array): string
+  }
+
+  BitcoinScript: {
+    buildPayToWitnessPubkeyHash(hash: Uint8Array): { data(): Uint8Array }
+    buildPayToPublicKeyHash(hash: Uint8Array): { data(): Uint8Array }
+    lockScriptForAddress(address: string, coinType: number): { data(): Uint8Array }
+    hashTypeForCoin(coinType: number): number
+  }
+
+  TONAddressConverter: {
+    toUserFriendly(address: string): string
+  }
+
+  SolanaAddress: {
+    createWithString(address: string): { defaultTokenAddress(tokenMintAddress: string): string }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers — base64 <-> Uint8Array
 // ---------------------------------------------------------------------------
 
@@ -131,7 +247,7 @@ const HDVersionValues: Record<string, number> = {
 // NativePublicKey — wraps a native handle
 // ---------------------------------------------------------------------------
 
-class NativePublicKey {
+class NativePublicKey implements NativePublicKeyInstance {
   readonly _handle: number
 
   constructor(handle: number) {
@@ -143,13 +259,11 @@ class NativePublicKey {
   }
 
   uncompressed(): NativePublicKey {
-    const handle = ExpoWalletCore.publicKeyUncompressed(this._handle)
-    return new NativePublicKey(handle)
+    return new NativePublicKey(ExpoWalletCore.publicKeyUncompressed(this._handle))
   }
 
   compressed(): NativePublicKey {
-    const handle = ExpoWalletCore.publicKeyCompressed(this._handle)
-    return new NativePublicKey(handle)
+    return new NativePublicKey(ExpoWalletCore.publicKeyCompressed(this._handle))
   }
 
   verify(signature: Uint8Array, message: Uint8Array): boolean {
@@ -169,7 +283,7 @@ class NativePublicKey {
 // NativePrivateKey — wraps a native handle
 // ---------------------------------------------------------------------------
 
-class NativePrivateKey {
+class NativePrivateKey implements NativePrivateKeyInstance {
   readonly _handle: number
 
   constructor(handle: number) {
@@ -181,13 +295,11 @@ class NativePrivateKey {
   }
 
   getPublicKeySecp256k1(compressed: boolean): NativePublicKey {
-    const handle = ExpoWalletCore.privateKeyGetPublicKeySecp256k1(this._handle, compressed)
-    return new NativePublicKey(handle)
+    return new NativePublicKey(ExpoWalletCore.privateKeyGetPublicKeySecp256k1(this._handle, compressed))
   }
 
   getPublicKeyEd25519(): NativePublicKey {
-    const handle = ExpoWalletCore.privateKeyGetPublicKeyEd25519(this._handle)
-    return new NativePublicKey(handle)
+    return new NativePublicKey(ExpoWalletCore.privateKeyGetPublicKeyEd25519(this._handle))
   }
 
   delete(): void {
@@ -199,7 +311,7 @@ class NativePrivateKey {
 // NativeHDWallet — wraps a native handle
 // ---------------------------------------------------------------------------
 
-class NativeHDWallet {
+class NativeHDWallet implements NativeHDWalletInstance {
   readonly _handle: number
 
   constructor(handle: number) {
@@ -207,18 +319,15 @@ class NativeHDWallet {
   }
 
   getMasterKey(curve: number): NativePrivateKey {
-    const handle = ExpoWalletCore.hdWalletGetMasterKey(this._handle, curve)
-    return new NativePrivateKey(handle)
+    return new NativePrivateKey(ExpoWalletCore.hdWalletGetMasterKey(this._handle, curve))
   }
 
   getKeyForCoin(coinType: number): NativePrivateKey {
-    const handle = ExpoWalletCore.hdWalletGetKeyForCoin(this._handle, coinType)
-    return new NativePrivateKey(handle)
+    return new NativePrivateKey(ExpoWalletCore.hdWalletGetKeyForCoin(this._handle, coinType))
   }
 
   getKey(coinType: number, derivationPath: string): NativePrivateKey {
-    const handle = ExpoWalletCore.hdWalletGetKey(this._handle, coinType, derivationPath)
-    return new NativePrivateKey(handle)
+    return new NativePrivateKey(ExpoWalletCore.hdWalletGetKey(this._handle, coinType, derivationPath))
   }
 
   getAddressForCoin(coinType: number): string {
@@ -227,14 +336,6 @@ class NativeHDWallet {
 
   getExtendedPrivateKey(purpose: number, coinType: number, version: number): string {
     return ExpoWalletCore.hdWalletGetExtendedPrivateKey(this._handle, purpose, coinType, version)
-  }
-
-  getPublicKeyEd25519(): NativePublicKey {
-    // Get master key for ed25519 curve, then extract public key
-    const masterKey = this.getMasterKey(CurveValues.ed25519)
-    const pubKey = masterKey.getPublicKeyEd25519()
-    masterKey.delete()
-    return pubKey
   }
 
   delete(): void {
@@ -246,8 +347,8 @@ class NativeHDWallet {
 // NativeDataVector — wraps signature/pubkey arrays
 // ---------------------------------------------------------------------------
 
-class NativeDataVector {
-  readonly items: string[] = [] // base64 items
+class NativeDataVector implements NativeDataVectorInstance {
+  readonly items: string[] = []
 
   add(data: Uint8Array): void {
     this.items.push(toBase64(data))
@@ -258,9 +359,9 @@ class NativeDataVector {
 // NativeAnyAddress — wraps address results
 // ---------------------------------------------------------------------------
 
-class NativeAnyAddress {
-  private _description: string
-  private _data: string | null
+class NativeAnyAddress implements NativeAnyAddressInstance {
+  private readonly _description: string
+  private readonly _data: string | null
 
   constructor(description: string, data: string | null = null) {
     this._description = description
@@ -272,10 +373,7 @@ class NativeAnyAddress {
   }
 
   data(): Uint8Array {
-    if (this._data) {
-      return fromBase64(this._data)
-    }
-    return new Uint8Array(0)
+    return this._data ? fromBase64(this._data) : new Uint8Array(0)
   }
 }
 
@@ -284,14 +382,14 @@ class NativeAnyAddress {
 // ---------------------------------------------------------------------------
 
 export class NativeWalletCore {
-  private static instance: any = null
+  private static instance: WalletCoreLike | null = null
 
-  static getInstance(): any {
+  static getInstance(): WalletCoreLike {
     if (NativeWalletCore.instance) {
       return NativeWalletCore.instance
     }
 
-    const wc: any = {
+    const wc: WalletCoreLike = {
       // --- CoinType enum ---
       CoinType: { ...CoinTypeValues },
 
