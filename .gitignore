@@ -99,6 +99,7 @@ keyshare-*.json
 
 # Development
 archived/
+# Obsolete local clone from removed sync-and-copy workflow (safe to delete)
 upstream/
 
 # Local trading bot (not part of SDK)
