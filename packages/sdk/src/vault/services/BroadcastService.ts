@@ -26,7 +26,7 @@ import { VaultError, VaultErrorCode } from '../VaultError'
  * - Broadcasts transactions to the network
  * - Extracts transaction hashes from signing outputs
  */
-export interface CompiledTxResult {
+export type CompiledTxResult = {
   /** Raw signed transaction bytes (base58-encoded string from SigningOutput) */
   signingOutput: any
   /** Transaction hash */

@@ -8,7 +8,6 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { sendJitoBundleTransaction, sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
-import base58 from 'bs58'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
@@ -24,6 +23,7 @@ import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
+import base58 from 'bs58'
 
 import { DEFAULT_CHAINS } from '../constants'
 // SDK utilities
