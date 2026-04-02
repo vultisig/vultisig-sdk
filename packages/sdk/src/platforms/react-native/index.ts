@@ -16,8 +16,14 @@ configureMpc(new NativeMpcEngine())
 // Register native WalletCore as the WalletCore provider
 configureWasm(async () => NativeWalletCore.getInstance())
 
-// Chain enum and types (pure constants, no Node.js deps)
+// Chain enum and types
 export { Chain } from '@vultisig/core-chain/Chain'
+
+// Address derivation and chain utilities
+export { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
+export { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+export { getCoinType } from '@vultisig/core-chain/coin/coinType'
+export { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
