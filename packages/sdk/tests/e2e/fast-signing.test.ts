@@ -378,6 +378,48 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
         console.log('✅ Sui transaction signed successfully (NOT broadcast)')
       })
     })
+
+    describe.concurrent('Post-Quantum Chains', () => {
+      it('QBTC: Sign native qBTC transfer (MLDSA)', async ctx => {
+        if (!vault.publicKeyMldsa) {
+          ctx.skip('Vault has no MLDSA keys — run add-mldsa-to-vault first')
+          return
+        }
+
+        const address = await vault.address(Chain.QBTC)
+        const coin = {
+          chain: Chain.QBTC,
+          address,
+          decimals: 8,
+          ticker: 'QBTC',
+        }
+
+        let keysignPayload
+        try {
+          keysignPayload = await vault.prepareSendTx({
+            coin,
+            receiver: address,
+            amount: TEST_AMOUNTS.QBTC!,
+          })
+        } catch (e) {
+          const r = e2ePrepareSendSkipReason(e)
+          if (r) {
+            ctx.skip(r)
+            return
+          }
+          throw e
+        }
+
+        const messageHashes = await vault.extractMessageHashes(keysignPayload)
+        expect(messageHashes.length).toBeGreaterThan(0)
+
+        const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.QBTC)
+        const signature = await vault.sign(signingPayload)
+
+        validateSignatureFormat(signature, Chain.QBTC, 'MLDSA')
+        console.log('✅ QBTC transaction signed successfully (NOT broadcast)')
+      })
+    })
   })
 
   // ============================================================================
@@ -450,6 +492,48 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
       expect(signature.signature.length).toBeGreaterThan(100)
 
       console.log('✅ EdDSA signature format validation passed')
+    })
+
+    it('MLDSA signatures: correct format and structure', async ctx => {
+      if (!vault.publicKeyMldsa) {
+        ctx.skip('Vault has no MLDSA keys')
+        return
+      }
+
+      const address = await vault.address(Chain.QBTC)
+      const coin = {
+        chain: Chain.QBTC,
+        address,
+        decimals: 8,
+        ticker: 'QBTC',
+      }
+
+      let keysignPayload
+      try {
+        keysignPayload = await vault.prepareSendTx({
+          coin,
+          receiver: address,
+          amount: TEST_AMOUNTS.QBTC!,
+        })
+      } catch (e) {
+        const r = e2ePrepareSendSkipReason(e)
+        if (r) {
+          ctx.skip(r)
+          return
+        }
+        throw e
+      }
+
+      const messageHashes = await vault.extractMessageHashes(keysignPayload)
+      const signingPayload = createSigningPayload(keysignPayload, messageHashes, Chain.QBTC)
+      const signature = await vault.sign(signingPayload)
+
+      expect(signature.format).toBe('MLDSA')
+      expect(signature.signature).toBeDefined()
+      expect(signature.signature).toMatch(/^[0-9a-f]+$/i)
+      expect(signature.signature.length).toBeGreaterThan(100)
+
+      console.log('✅ MLDSA signature format validation passed')
     })
   })
 
