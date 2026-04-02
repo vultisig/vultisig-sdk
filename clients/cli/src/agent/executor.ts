@@ -1211,8 +1211,11 @@ export class AgentExecutor {
  */
 async function encodeContractCall(functionName: string, params: Array<{ type: string; value: string }>): Promise<string> {
   // Build the function signature: e.g. "approve(address,uint256)"
+  // Strip existing parens if the LLM passed a full signature like "approve(address,uint256)"
+  // to avoid doubling: "approve(address,uint256)(address,uint256)"
+  const baseName = functionName.includes('(') ? functionName.split('(')[0] : functionName
   const types = params.map(p => p.type)
-  const sig = `${functionName}(${types.join(',')})`
+  const sig = `${baseName}(${types.join(',')})`
 
   // Compute 4-byte selector via keccak256
   const selector = await keccak256Selector(sig)
