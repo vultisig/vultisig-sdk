@@ -96,6 +96,17 @@ public class ExpoWalletCoreModule: Module {
             return ct.deriveAddressFromPublicKey(publicKey: pk)
         }
 
+        // Debug: derive SUI address directly from hex key
+        Function("debugDeriveSuiAddress") { (hexKey: String) -> String in
+            guard let keyData = Data(hexString: hexKey),
+                  let pk = PublicKey(data: keyData, type: .ed25519) else {
+                return "ERROR: invalid key"
+            }
+            let addr = CoinType.sui.deriveAddressFromPublicKey(publicKey: pk)
+            let pkHex = pk.data.map { String(format: "%02x", $0) }.joined()
+            return "addr=\(addr) pkHex=\(pkHex) pkLen=\(pk.data.count)"
+        }
+
         Function("chainId") { (coinType: Int) -> String in
             let ct = coinTypeFromValue(coinType)
             return ct.chainId
@@ -286,6 +297,25 @@ public class ExpoWalletCoreModule: Module {
             let ct = coinTypeFromValue(coinType)
             let key = wallet.getKeyForCoin(coin: ct)
             return storePrivateKey(key)
+        }
+
+        Function("hdWalletGetKeyDerivation") { (handle: Int, coinType: Int, derivationValue: Int) -> Int in
+            guard let wallet = hdWallets[handle] else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid HDWallet handle"])
+            }
+            let ct = coinTypeFromValue(coinType)
+            let derivation = Derivation(rawValue: UInt32(derivationValue)) ?? .default
+            let key = wallet.getKeyDerivation(coin: ct, derivation: derivation)
+            return storePrivateKey(key)
+        }
+
+        Function("hdWalletGetAddressDerivation") { (handle: Int, coinType: Int, derivationValue: Int) -> String in
+            guard let wallet = hdWallets[handle] else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid HDWallet handle"])
+            }
+            let ct = coinTypeFromValue(coinType)
+            let derivation = Derivation(rawValue: UInt32(derivationValue)) ?? .default
+            return wallet.getAddressDerivation(coin: ct, derivation: derivation)
         }
 
         Function("hdWalletGetKey") { (handle: Int, coinType: Int, derivationPath: String) -> Int in
