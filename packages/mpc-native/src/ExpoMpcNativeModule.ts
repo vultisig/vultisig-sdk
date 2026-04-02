@@ -196,14 +196,15 @@ interface ExpoMpcNativeModuleType {
 
   /**
    * Create a DKLS key import initiator session.
-   * Returns { sessionHandle, setupBase64 }.
+   * Private key and chain code are hex-encoded.
+   * Returns { sessionHandle, setupMessage }.
    */
   createDklsKeyImportInitiator(
-    privateKeyBase64: string,
-    rootChainCodeBase64: string | null,
+    privateKeyHex: string,
+    rootChainCodeHex: string | null,
     threshold: number,
     ids: string[]
-  ): { sessionHandle: number; setupBase64: string }
+  ): { sessionHandle: number; setupMessage: string }
 
   /**
    * Create a DKLS key import session (non-initiator).
@@ -380,14 +381,15 @@ interface ExpoMpcNativeModuleType {
 
   /**
    * Create a Schnorr key import initiator session.
-   * Returns { sessionHandle, setupBase64 }.
+   * Private key and chain code are hex-encoded.
+   * Returns { sessionHandle, setupMessage }.
    */
   createSchnorrKeyImportInitiator(
-    privateKeyBase64: string,
-    rootChainCodeBase64: string | null,
+    privateKeyHex: string,
+    rootChainCodeHex: string | null,
     threshold: number,
     ids: string[]
-  ): { sessionHandle: number; setupBase64: string }
+  ): { sessionHandle: number; setupMessage: string }
 
   /**
    * Create a Schnorr key import session (non-initiator).
