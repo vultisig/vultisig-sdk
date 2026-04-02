@@ -74,19 +74,26 @@ public class ExpoMpcNativeModule: Module {
 
         Function("dklsKeygenSetup") { (threshold: Int, keyIdB64: String?, ids: [String]) -> String in
             var setupBuf = tss_buffer(ptr: nil, len: 0)
-            let idsBytes = encodeIds(ids)
-            var idsSlice = goSliceFromArray(idsBytes)
+            var idsBytes = encodeIds(ids)
 
+            let err: lib_error
             if let keyIdB64 = keyIdB64, let keyIdData = Data(base64Encoded: keyIdB64) {
                 var keyIdBytes = Array(keyIdData)
-                var keyIdSlice = goSliceFromArray(keyIdBytes)
-                let err = dkls_keygen_setupmsg_new(UInt32(threshold), &keyIdSlice, &idsSlice, &setupBuf)
-                try checkDklsError(err, "dkls_keygen_setupmsg_new")
+                err = idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                    var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                    return keyIdBytes.withUnsafeMutableBufferPointer { keyBp in
+                        var keyIdSlice = go_slice(ptr: keyBp.baseAddress, len: UInt(keyBp.count), cap: UInt(keyBp.count))
+                        return dkls_keygen_setupmsg_new(UInt32(threshold), &keyIdSlice, &idsSlice, &setupBuf)
+                    }
+                }
             } else {
-                var emptySlice = go_slice(ptr: nil, len: 0, cap: 0)
-                let err = dkls_keygen_setupmsg_new(UInt32(threshold), &emptySlice, &idsSlice, &setupBuf)
-                try checkDklsError(err, "dkls_keygen_setupmsg_new")
+                // Pass nil for keyId — the C function expects a null pointer when no key ID
+                err = idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                    var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                    return dkls_keygen_setupmsg_new(UInt32(threshold), nil, &idsSlice, &setupBuf)
+                }
             }
+            try checkDklsError(err, "dkls_keygen_setupmsg_new")
 
             let data = tssBufferToData(setupBuf)
             tss_buffer_free(&setupBuf)
@@ -98,12 +105,16 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
             var handle = Handle(_0: 0)
 
-            let err = dkls_keygen_session_from_setup(&setupSlice, &idSlice, &handle)
+            let err = setupBytes.withUnsafeMutableBufferPointer { setupBp in
+                var setupSlice = go_slice(ptr: setupBp.baseAddress, len: UInt(setupBp.count), cap: UInt(setupBp.count))
+                return idBytes.withUnsafeMutableBufferPointer { idBp in
+                    var idSlice = go_slice(ptr: idBp.baseAddress, len: UInt(idBp.count), cap: UInt(idBp.count))
+                    return dkls_keygen_session_from_setup(&setupSlice, &idSlice, &handle)
+                }
+            }
             try checkDklsError(err, "dkls_keygen_session_from_setup")
             return Int(handle._0)
         }
@@ -192,12 +203,41 @@ public class ExpoMpcNativeModule: Module {
             return finished != 0
         }
 
-        AsyncFunction("finishKeygen") { (sessionHandle: Int) -> Int in
+        AsyncFunction("finishKeygen") { (sessionHandle: Int) -> [String: String] in
             var keyshareHandle = Handle(_0: 0)
             let session = Handle(_0: Int32(sessionHandle))
             let err = dkls_keygen_session_finish(session, &keyshareHandle)
             try checkDklsError(err, "dkls_keygen_session_finish")
-            return Int(keyshareHandle._0)
+
+            // Extract public key
+            var pkBuf = tss_buffer(ptr: nil, len: 0)
+            let pkErr = dkls_keyshare_public_key(keyshareHandle, &pkBuf)
+            try checkDklsError(pkErr, "dkls_keyshare_public_key")
+            let publicKey = tssBufferToData(pkBuf).base64EncodedString()
+            tss_buffer_free(&pkBuf)
+
+            // Extract chain code
+            var ccBuf = tss_buffer(ptr: nil, len: 0)
+            let ccErr = dkls_keyshare_chaincode(keyshareHandle, &ccBuf)
+            try checkDklsError(ccErr, "dkls_keyshare_chaincode")
+            let chainCode = tssBufferToData(ccBuf).base64EncodedString()
+            tss_buffer_free(&ccBuf)
+
+            // Serialize keyshare to bytes
+            var ksBuf = tss_buffer(ptr: nil, len: 0)
+            let ksErr = dkls_keyshare_to_bytes(keyshareHandle, &ksBuf)
+            try checkDklsError(ksErr, "dkls_keyshare_to_bytes")
+            let keyshare = tssBufferToData(ksBuf).base64EncodedString()
+            tss_buffer_free(&ksBuf)
+
+            // Free the handle
+            dkls_keyshare_free(&keyshareHandle)
+
+            return [
+                "publicKey": publicKey,
+                "chainCode": chainCode,
+                "keyshare": keyshare
+            ]
         }
 
         Function("freeKeygenSession") { (sessionHandle: Int) in
@@ -542,19 +582,25 @@ public class ExpoMpcNativeModule: Module {
 
         Function("schnorrKeygenSetup") { (threshold: Int, keyIdB64: String?, ids: [String]) -> String in
             var setupBuf = tss_buffer(ptr: nil, len: 0)
-            let idsBytes = encodeIds(ids)
-            var idsSlice = goSliceFromArray(idsBytes)
+            var idsBytes = encodeIds(ids)
 
+            let err: schnorr_lib_error
             if let keyIdB64 = keyIdB64, let keyIdData = Data(base64Encoded: keyIdB64) {
                 var keyIdBytes = Array(keyIdData)
-                var keyIdSlice = goSliceFromArray(keyIdBytes)
-                let err = schnorr_keygen_setupmsg_new(UInt32(threshold), &keyIdSlice, &idsSlice, &setupBuf)
-                try checkSchnorrError(err, "schnorr_keygen_setupmsg_new")
+                err = idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                    var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                    return keyIdBytes.withUnsafeMutableBufferPointer { keyBp in
+                        var keyIdSlice = go_slice(ptr: keyBp.baseAddress, len: UInt(keyBp.count), cap: UInt(keyBp.count))
+                        return schnorr_keygen_setupmsg_new(UInt32(threshold), &keyIdSlice, &idsSlice, &setupBuf)
+                    }
+                }
             } else {
-                var emptySlice = go_slice(ptr: nil, len: 0, cap: 0)
-                let err = schnorr_keygen_setupmsg_new(UInt32(threshold), &emptySlice, &idsSlice, &setupBuf)
-                try checkSchnorrError(err, "schnorr_keygen_setupmsg_new")
+                err = idsBytes.withUnsafeMutableBufferPointer { idsBp in
+                    var idsSlice = go_slice(ptr: idsBp.baseAddress, len: UInt(idsBp.count), cap: UInt(idsBp.count))
+                    return schnorr_keygen_setupmsg_new(UInt32(threshold), nil, &idsSlice, &setupBuf)
+                }
             }
+            try checkSchnorrError(err, "schnorr_keygen_setupmsg_new")
 
             let data = tssBufferToData(setupBuf)
             tss_buffer_free(&setupBuf)
@@ -566,12 +612,16 @@ public class ExpoMpcNativeModule: Module {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base64 setup"])
             }
             var setupBytes = Array(setupData)
-            var setupSlice = goSliceFromArray(setupBytes)
             var idBytes = Array(localPartyId.utf8)
-            var idSlice = goSliceFromArray(idBytes)
             var handle = Handle(_0: 0)
 
-            let err = schnorr_keygen_session_from_setup(&setupSlice, &idSlice, &handle)
+            let err = setupBytes.withUnsafeMutableBufferPointer { setupBp in
+                var setupSlice = go_slice(ptr: setupBp.baseAddress, len: UInt(setupBp.count), cap: UInt(setupBp.count))
+                return idBytes.withUnsafeMutableBufferPointer { idBp in
+                    var idSlice = go_slice(ptr: idBp.baseAddress, len: UInt(idBp.count), cap: UInt(idBp.count))
+                    return schnorr_keygen_session_from_setup(&setupSlice, &idSlice, &handle)
+                }
+            }
             try checkSchnorrError(err, "schnorr_keygen_session_from_setup")
             return Int(handle._0)
         }
@@ -620,12 +670,33 @@ public class ExpoMpcNativeModule: Module {
             return finished != 0
         }
 
-        AsyncFunction("finishSchnorrKeygen") { (sessionHandle: Int) -> Int in
+        AsyncFunction("finishSchnorrKeygen") { (sessionHandle: Int) -> [String: String] in
             var keyshareHandle = Handle(_0: 0)
             let session = Handle(_0: Int32(sessionHandle))
             let err = schnorr_keygen_session_finish(session, &keyshareHandle)
             try checkSchnorrError(err, "schnorr_keygen_session_finish")
-            return Int(keyshareHandle._0)
+
+            // Extract public key
+            var pkBuf = tss_buffer(ptr: nil, len: 0)
+            let pkErr = schnorr_keyshare_public_key(keyshareHandle, &pkBuf)
+            try checkSchnorrError(pkErr, "schnorr_keyshare_public_key")
+            let publicKey = tssBufferToData(pkBuf).base64EncodedString()
+            tss_buffer_free(&pkBuf)
+
+            // Serialize keyshare to bytes
+            var ksBuf = tss_buffer(ptr: nil, len: 0)
+            let ksErr = schnorr_keyshare_to_bytes(keyshareHandle, &ksBuf)
+            try checkSchnorrError(ksErr, "schnorr_keyshare_to_bytes")
+            let keyshare = tssBufferToData(ksBuf).base64EncodedString()
+            tss_buffer_free(&ksBuf)
+
+            // Free the handle
+            schnorr_keyshare_free(&keyshareHandle)
+
+            return [
+                "publicKey": publicKey,
+                "keyshare": keyshare
+            ]
         }
 
         Function("freeSchnorrKeygenSession") { (sessionHandle: Int) in
