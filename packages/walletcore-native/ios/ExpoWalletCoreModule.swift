@@ -74,7 +74,7 @@ public class ExpoWalletCoreModule: Module {
                 "zksync": .zksync, "osmosis": .osmosis,
                 "terraV2": .terraV2, "terra": .terra,
                 "noble": .noble, "kujira": .kujira,
-                "dydx": .dydx, "akash": .akash, "mantle": .mantle,
+                "dydx": .dydx, "akash": .akash, "mantle": .mantle, "sei": .sei,
             ]
             return Int(mapping[name]?.rawValue ?? 0)
         }
@@ -94,17 +94,6 @@ public class ExpoWalletCoreModule: Module {
             }
             let ct = coinTypeFromValue(coinType)
             return ct.deriveAddressFromPublicKey(publicKey: pk)
-        }
-
-        // Debug: derive SUI address directly from hex key
-        Function("debugDeriveSuiAddress") { (hexKey: String) -> String in
-            guard let keyData = Data(hexString: hexKey),
-                  let pk = PublicKey(data: keyData, type: .ed25519) else {
-                return "ERROR: invalid key"
-            }
-            let addr = CoinType.sui.deriveAddressFromPublicKey(publicKey: pk)
-            let pkHex = pk.data.map { String(format: "%02x", $0) }.joined()
-            return "addr=\(addr) pkHex=\(pkHex) pkLen=\(pk.data.count)"
         }
 
         Function("chainId") { (coinType: Int) -> String in

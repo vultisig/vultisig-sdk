@@ -63,13 +63,13 @@ const CoinTypeValues: Record<string, number> = {
   blast: 10081457,
   zksync: 10000324,
   osmosis: 10000118,
-  terraV2: 10000118, // same underlying
-  noble: 10000118,
-  kujira: 10000118,
-  dydx: 10000118,
-  akash: 10000118,
-  mantle: 10005000,
-  sei: 60, // EVM chain
+  terraV2: 10000330,
+  noble: 18000118,
+  kujira: 70000118,
+  dydx: 22000118,
+  akash: 17000118,
+  mantle: 5000,
+  sei: 19000118,
 }
 
 // ---------------------------------------------------------------------------

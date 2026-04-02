@@ -113,6 +113,12 @@ interface ExpoWalletCoreModuleType {
   /** Get the key for a specific coin. Returns a PrivateKey handle. */
   hdWalletGetKeyForCoin(handle: number, coinType: number): number
 
+  /** Get a key with a specific Derivation enum value. Returns a PrivateKey handle. */
+  hdWalletGetKeyDerivation(handle: number, coinType: number, derivationValue: number): number
+
+  /** Get address with a specific Derivation enum value. */
+  hdWalletGetAddressDerivation(handle: number, coinType: number, derivationValue: number): string
+
   /** Get a key for a specific derivation path. Returns a PrivateKey handle. */
   hdWalletGetKey(handle: number, coinType: number, derivationPath: string): number
 
