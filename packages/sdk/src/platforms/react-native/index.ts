@@ -20,9 +20,9 @@ configureWasm(async () => NativeWalletCore.getInstance())
 export { Chain } from '@vultisig/core-chain/Chain'
 
 // Address derivation and chain utilities
+export { getCoinType } from '@vultisig/core-chain/coin/coinType'
 export { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
 export { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
-export { getCoinType } from '@vultisig/core-chain/coin/coinType'
 export { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
