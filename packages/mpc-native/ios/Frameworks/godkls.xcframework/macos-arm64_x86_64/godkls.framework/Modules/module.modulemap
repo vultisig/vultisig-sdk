@@ -1,5 +1,3 @@
-framework module godkls {
-    header "godkls.h"
-    
-    export *
-}
+version https://git-lfs.github.com/spec/v1
+oid sha256:e3a2405bf9d39a3574cbf2866d77ff8dbdfb6f0a2ba0f1a763ccc2399aa83f3b
+size 67
