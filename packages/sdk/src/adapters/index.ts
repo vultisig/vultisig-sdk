@@ -7,6 +7,6 @@
 
 export { formatBalance } from './formatBalance'
 export { formatGasInfo } from './formatGasInfo'
-export { formatSignature } from './formatSignature'
+export { formatMldsaSignature, formatSignature } from './formatSignature'
 export type { ChainSigningInfo } from './getChainSigningInfo'
 export { getChainSigningInfo } from './getChainSigningInfo'
