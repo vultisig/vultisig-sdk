@@ -504,8 +504,10 @@ class ExpoMpcNativeModule : Module() {
     private fun decode(b64: String): ByteArray =
         Base64.decode(b64, Base64.NO_WRAP)
 
-    private fun decodeHex(hex: String): ByteArray =
-        hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+    private fun decodeHex(hex: String): ByteArray {
+        require(hex.length % 2 == 0) { "Hex string must have even length, got ${hex.length}" }
+        return hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+    }
 
     private fun encodeIds(ids: List<String>): ByteArray {
         val result = mutableListOf<Byte>()
