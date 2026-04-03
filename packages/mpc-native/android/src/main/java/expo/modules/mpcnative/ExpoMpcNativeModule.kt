@@ -248,7 +248,7 @@ class ExpoMpcNativeModule : Module() {
             val result = Godkls.dklsKeyImportInitiatorNew(pkBytes, ccBytes, threshold.toLong(), idsBytes)
             mapOf(
                 "sessionHandle" to result.handle,
-                "setupBase64" to encode(result.setupMsg)
+                "setupMessage" to encode(result.setupMsg)
             )
         }
 
@@ -480,7 +480,7 @@ class ExpoMpcNativeModule : Module() {
             val result = Goschnorr.schnorrKeyImportInitiatorNew(pkBytes, ccBytes, threshold.toLong(), idsBytes)
             mapOf(
                 "sessionHandle" to result.handle,
-                "setupBase64" to encode(result.setupMsg)
+                "setupMessage" to encode(result.setupMsg)
             )
         }
 
