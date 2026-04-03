@@ -1091,8 +1091,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const { chain, keysignPayload, signature } = params
 
     try {
-      // Solana broadcasts route through JITO sendTransaction (free MEV protection)
-      // via the Solana broadcast resolver. All other chains use standard RPC.
+      // Delegate to BroadcastService
       const txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature })
 
       // Emit success event
