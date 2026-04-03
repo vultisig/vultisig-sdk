@@ -173,6 +173,9 @@ class WasmSchnorrEngine implements SchnorrEngine {
   }
 
   signSetup(keyId: Uint8Array, chainPath: string, messageHash: Uint8Array | null | undefined, partyIds: string[]): Uint8Array {
+    if (!messageHash) {
+      throw new Error('Schnorr (EdDSA) signing requires a message hash')
+    }
     return SchnorrSignSession.setup(keyId, chainPath, messageHash, partyIds)
   }
 
