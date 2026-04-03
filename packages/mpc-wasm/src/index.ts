@@ -172,7 +172,7 @@ class WasmSchnorrEngine implements SchnorrEngine {
     return wrapSession(session, s => wrapKeyshare(s.finish()))
   }
 
-  signSetup(keyId: Uint8Array, chainPath: string, messageHash: Uint8Array, partyIds: string[]): Uint8Array {
+  signSetup(keyId: Uint8Array, chainPath: string, messageHash: Uint8Array | null | undefined, partyIds: string[]): Uint8Array {
     return SchnorrSignSession.setup(keyId, chainPath, messageHash, partyIds)
   }
 

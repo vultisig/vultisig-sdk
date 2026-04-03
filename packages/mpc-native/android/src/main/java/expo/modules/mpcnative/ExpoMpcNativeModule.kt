@@ -56,6 +56,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Godkls.dklsKeygenSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -103,6 +104,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Godkls.dklsDecodeMessage(setupBytes)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -113,6 +115,7 @@ class ExpoMpcNativeModule : Module() {
                 val keyId = Godkls.dklsDecodeKeyId(setupBytes)
                 if (keyId != null && keyId.isNotEmpty()) encode(keyId) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -128,6 +131,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Godkls.dklsSignSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -209,6 +213,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Godkls.dklsQcSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -288,6 +293,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Goschnorr.schnorrKeygenSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -335,6 +341,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Goschnorr.schnorrDecodeMessage(setupBytes)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -345,6 +352,7 @@ class ExpoMpcNativeModule : Module() {
                 val keyId = Goschnorr.schnorrDecodeKeyId(setupBytes)
                 if (keyId != null && keyId.isNotEmpty()) encode(keyId) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -360,6 +368,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Goschnorr.schnorrSignSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -441,6 +450,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Goschnorr.schnorrQcSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
+                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }

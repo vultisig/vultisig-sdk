@@ -108,7 +108,7 @@ interface SessionOps<TResult> {
   outputMessage(handle: number): string | null
   messageReceiver(handle: number, msgBase64: string, index: number): string
   inputMessage(handle: number, msgBase64: string): boolean
-  finish(handle: number): TResult
+  finish(handle: number): TResult | Promise<TResult>
   free(handle: number): void
 }
 
@@ -143,7 +143,7 @@ class NativeSession<TResult> implements MpcSession<TResult> {
     return this.ops.inputMessage(this.handle, toBase64(msg))
   }
 
-  finish(): TResult {
+  finish(): TResult | Promise<TResult> {
     return this.ops.finish(this.handle)
   }
 
@@ -180,13 +180,10 @@ class NativeDklsEngine implements DklsEngine {
       messageReceiver: (h, m, i) =>
         ExpoMpcNative.keygenSessionMessageReceiver(h, m, i),
       inputMessage: (h, m) => ExpoMpcNative.keygenSessionInputMessage(h, m),
-      finish: () => {
-        // finishKeygen is async in the native module, but MpcSession.finish()
-        // is sync. This session is created by createKeygenSession which
-        // handles the async lifecycle at the engine level.
-        throw new Error(
-          'DKLS keygen finish is async. Use the engine-level createKeygenSession which handles this.'
-        )
+      finish: async (h) => {
+        const result = await ExpoMpcNative.finishKeygen(h)
+        const ksHandle = ExpoMpcNative.dklsKeyshareFromBytes(result.keyshare)
+        return new NativeKeyshare(ksHandle, fromBase64(result.keyshare), 'dkls')
       },
       free: (h) => ExpoMpcNative.freeKeygenSession(h),
     })
@@ -375,16 +372,10 @@ class NativeDklsEngine implements DklsEngine {
       messageReceiver: (h, m, i) =>
         ExpoMpcNative.keygenSessionMessageReceiver(h, m, i),
       inputMessage: (h, m) => ExpoMpcNative.keygenSessionInputMessage(h, m),
-      finish: () => {
-        // finishKeygen is async in the native module, but MpcSession.finish()
-        // is sync per the MpcSession interface contract. Callers that need
-        // keygen finish should use the engine-level createKeygenSession which
-        // handles the async lifecycle. This path is only reachable from
-        // key-import initiator sessions where the session handle was already
-        // resolved synchronously.
-        throw new Error(
-          'DKLS keygen finish is async. Use the engine-level createKeygenSession which handles this.'
-        )
+      finish: async (h) => {
+        const result = await ExpoMpcNative.finishKeygen(h)
+        const ksHandle = ExpoMpcNative.dklsKeyshareFromBytes(result.keyshare)
+        return new NativeKeyshare(ksHandle, fromBase64(result.keyshare), 'dkls')
       },
       free: (h) => ExpoMpcNative.freeKeygenSession(h),
     })
@@ -421,13 +412,10 @@ class NativeSchnorrEngine implements SchnorrEngine {
         ExpoMpcNative.schnorrKeygenSessionMessageReceiver(h, m, i),
       inputMessage: (h, m) =>
         ExpoMpcNative.schnorrKeygenSessionInputMessage(h, m),
-      finish: () => {
-        // finishSchnorrKeygen is async in the native module, but
-        // MpcSession.finish() is sync. This session is created by
-        // createKeygenSession which handles the async lifecycle.
-        throw new Error(
-          'Schnorr keygen finish is async. Use the engine-level createKeygenSession which handles this.'
-        )
+      finish: async (h) => {
+        const result = await ExpoMpcNative.finishSchnorrKeygen(h)
+        const ksHandle = ExpoMpcNative.schnorrKeyshareFromBytes(result.keyshare)
+        return new NativeKeyshare(ksHandle, fromBase64(result.keyshare), 'schnorr')
       },
       free: (h) => ExpoMpcNative.freeSchnorrKeygenSession(h),
     })
@@ -586,14 +574,10 @@ class NativeSchnorrEngine implements SchnorrEngine {
         ExpoMpcNative.schnorrKeygenSessionMessageReceiver(h, m, i),
       inputMessage: (h, m) =>
         ExpoMpcNative.schnorrKeygenSessionInputMessage(h, m),
-      finish: () => {
-        // finishSchnorrKeygen is async in the native module, but
-        // MpcSession.finish() is sync per the interface contract. Callers
-        // that need keygen finish should use the engine-level
-        // createKeygenSession which handles the async lifecycle.
-        throw new Error(
-          'Schnorr keygen finish is async. Use the engine-level createKeygenSession which handles this.'
-        )
+      finish: async (h) => {
+        const result = await ExpoMpcNative.finishSchnorrKeygen(h)
+        const ksHandle = ExpoMpcNative.schnorrKeyshareFromBytes(result.keyshare)
+        return new NativeKeyshare(ksHandle, fromBase64(result.keyshare), 'schnorr')
       },
       free: (h) => ExpoMpcNative.freeSchnorrKeygenSession(h),
     })
