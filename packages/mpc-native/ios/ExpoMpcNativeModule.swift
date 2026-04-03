@@ -10,8 +10,10 @@ import goschnorr
 ///   `let pin = PinnedSlice(bytes); var slice = pin.slice`
 private class PinnedSlice {
     private let buffer: UnsafeMutableBufferPointer<UInt8>
+    private let originalCount: Int
 
     init(_ arr: [UInt8]) {
+        originalCount = arr.count
         buffer = .allocate(capacity: max(arr.count, 1))
         if !arr.isEmpty {
             _ = buffer.initialize(from: arr)
@@ -25,8 +27,8 @@ private class PinnedSlice {
     var slice: go_slice {
         go_slice(
             ptr: buffer.baseAddress,
-            len: UInt(buffer.count),
-            cap: UInt(buffer.count)
+            len: UInt(originalCount),
+            cap: UInt(originalCount)
         )
     }
 
