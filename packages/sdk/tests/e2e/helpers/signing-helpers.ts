@@ -47,7 +47,7 @@ export function createSigningPayload(
  *
  * @param signature - Signature returned from vault.sign()
  * @param chain - Chain that was signed
- * @param expectFormat - Expected signature format ('ECDSA' or 'EdDSA')
+ * @param expectFormat - Expected signature format (ECDSA, EdDSA, Ed25519, or MLDSA)
  *
  * @example
  * ```typescript
@@ -58,7 +58,7 @@ export function createSigningPayload(
 export function validateSignatureFormat(
   signature: Signature,
   chain: Chain,
-  expectFormat: 'ECDSA' | 'EdDSA' | 'Ed25519'
+  expectFormat: 'ECDSA' | 'EdDSA' | 'Ed25519' | 'MLDSA'
 ): void {
   // Basic signature validation
   expect(signature).toBeDefined()
@@ -78,9 +78,12 @@ export function validateSignatureFormat(
     expect(typeof signature.recovery).toBe('number')
   }
 
-  // EdDSA signatures typically don't have recovery ID
   if (expectFormat === 'EdDSA' || expectFormat === 'Ed25519') {
     // Recovery ID is optional for EdDSA
+  }
+
+  if (expectFormat === 'MLDSA') {
+    expect(signature.recovery).toBeUndefined()
   }
 }
 
@@ -99,6 +102,7 @@ export const TEST_AMOUNTS: Partial<Record<Chain, bigint>> = {
   Cosmos: 167000n, // ~0.167 ATOM (~$1 at $6/ATOM)
   Polkadot: 147000000n, // ~0.0147 DOT (~$1 at $68/DOT)
   Sui: 312500000n, // ~0.3125 SUI (~$1 at $3.20/SUI)
+  QBTC: 1000n, // 0.00001 qBTC (8 decimals, like BTC)
 }
 
 /**
