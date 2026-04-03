@@ -7545,14 +7545,14 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-native@workspace:packages/mpc-native"
   dependencies:
-    "@vultisig/mpc-types": "workspace:*"
+    "@vultisig/mpc-types": "workspace:^0.1.0"
     expo: "npm:^51.0.0"
   peerDependencies:
     expo: ^51.0.0
   languageName: unknown
   linkType: soft
 
-"@vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:packages/mpc-types":
+"@vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.1.0, @vultisig/mpc-types@workspace:packages/mpc-types":
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   languageName: unknown
