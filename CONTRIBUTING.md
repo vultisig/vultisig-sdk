@@ -171,6 +171,7 @@ Every PR runs:
 - ESLint + Prettier formatting
 - TypeScript type checking
 - Unit tests (387+ tests)
+- Integration tests (`yarn test:integration` — same suite as CI job "Integration Tests (Vitest)")
 - SDK build verification
 
 Pre-commit hooks (via Husky) run lint-staged on changed files.
