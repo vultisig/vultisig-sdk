@@ -577,6 +577,11 @@ public class ExpoMpcNativeModule: Module {
         // DKLS — Key Import
         // =====================================================================
 
+        // NOTE: Platform input format inconsistency — privateKey and rootChainCode
+        // are passed as hex strings on iOS (matching the dataFromHex helper below)
+        // but as Base64 strings on Android. The TypeScript layer in index.ts uses
+        // toHex() for both platforms to align with this iOS expectation.
+        // TODO: Unify both platforms to accept Base64 for consistency.
         Function("createDklsKeyImportInitiator") { (privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: [String]) -> [String: Any] in
             guard let pkData = dataFromHex(privateKeyHex) else {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid hex private key"])
@@ -755,8 +760,7 @@ public class ExpoMpcNativeModule: Module {
             tss_buffer_free(&ksBuf)
 
             // Free the handle after extracting all data
-            // Schnorr keyshares use the same free as DKLS in the C API
-            dkls_keyshare_free(&keyshareHandle)
+            schnorr_keyshare_free(&keyshareHandle)
 
             return [
                 "publicKey": publicKey,
@@ -948,9 +952,8 @@ public class ExpoMpcNativeModule: Module {
         }
 
         Function("freeSchnorrKeyshare") { (handle: Int) in
-            // Schnorr keyshares use the same free as DKLS in the C API
             var ks = Handle(_0: Int32(handle))
-            dkls_keyshare_free(&ks)
+            schnorr_keyshare_free(&ks)
         }
 
         // =====================================================================
@@ -1054,6 +1057,11 @@ public class ExpoMpcNativeModule: Module {
         // Schnorr — Key Import
         // =====================================================================
 
+        // NOTE: Platform input format inconsistency — privateKey and rootChainCode
+        // are passed as hex strings on iOS (matching the dataFromHex helper below)
+        // but as Base64 strings on Android. The TypeScript layer in index.ts uses
+        // toHex() for both platforms to align with this iOS expectation.
+        // TODO: Unify both platforms to accept Base64 for consistency.
         Function("createSchnorrKeyImportInitiator") { (privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: [String]) -> [String: Any] in
             guard let pkData = dataFromHex(privateKeyHex) else {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid hex private key"])

@@ -5,6 +5,11 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import wallet.core.jni.*
 
 class ExpoWalletCoreModule : Module() {
+    // NOTE: nextHandle and the key/wallet maps are accessed from the Expo module
+    // dispatch thread. Expo modules run function handlers on a single background
+    // serial queue, so concurrent mutation is not expected. If this assumption
+    // ever changes (e.g. concurrent async functions are introduced), these maps
+    // must be protected with a lock or replaced with thread-safe collections.
     private var nextHandle = 1
     private val publicKeys = mutableMapOf<Int, PublicKey>()
     private val privateKeys = mutableMapOf<Int, PrivateKey>()
@@ -99,6 +104,10 @@ class ExpoWalletCoreModule : Module() {
         }
 
         Function("anyAddressIsValidSS58") { address: String, coinType: Int, _ss58Prefix: Int ->
+            // TODO: The Trust Wallet Core Android JNI binding does not expose an SS58-prefix
+            // overload on AnyAddress. Falling back to the generic isValid check, which uses
+            // the coin's default SS58 prefix. Pass the _ss58Prefix argument here once the
+            // binding provides AnyAddress.isValidSS58(address, coinType, ss58Prefix).
             AnyAddress.isValid(address, CoinType.createFromValue(coinType))
         }
 
@@ -204,6 +213,10 @@ class ExpoWalletCoreModule : Module() {
 
         // HexCoding
         Function("hexDecode") { hex: String ->
+            require(hex.length % 2 == 0) { "Hex string must have even length, got ${hex.length}" }
+            require(hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+                "Hex string contains non-hex characters"
+            }
             val bytes = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
             android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         }
@@ -242,6 +255,10 @@ class ExpoWalletCoreModule : Module() {
         }
 
         // EthereumAbi
+        // TODO: _params is currently unused — full ABI encoding requires parsing param
+        // types and values from the string and adding them to the EthereumAbiFunction.
+        // This encodes only the 4-byte function selector. A complete implementation
+        // should accept a structured param list (e.g. JSON) and call fn.addParam*().
         Function("ethereumAbiEncode") { functionName: String, _params: String ->
             val fn = EthereumAbiFunction(functionName)
             val encoded = EthereumAbi.encode(fn)

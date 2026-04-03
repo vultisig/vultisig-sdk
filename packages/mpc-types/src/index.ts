@@ -314,7 +314,15 @@ export interface SchnorrEngine {
 // Top-level engine
 // ---------------------------------------------------------------------------
 
-/** The pluggable MPC engine. Each platform provides its own implementation. */
+/**
+ * The pluggable MPC engine. Each platform provides its own implementation.
+ *
+ * This interface intentionally has no `mldsa` field. MLDSA (Dilithium) signing
+ * uses a dedicated path (`packages/core/mpc/mldsa/`) and must never be routed
+ * through the DKLS or Schnorr engines. Implementations must not add an `mldsa`
+ * property that aliases `dkls` — {@link configureMpc} will throw if it detects
+ * that aliasing.
+ */
 export interface MpcEngine {
   /** Initialize the engine (load WASM, verify native module, etc.). Must be called before any operations. */
   initialize(): Promise<void>

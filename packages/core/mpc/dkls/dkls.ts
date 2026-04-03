@@ -480,18 +480,23 @@ export class DKLS {
           )
           this.setupMessage = keyImportResult.setup
           session = keyImportResult.session
-          const encryptedSetupMsg = toMpcServerMessage(
-            this.setupMessage,
-            this.hexEncryptionKey
-          )
-
-          await uploadMpcSetupMessage({
-            serverUrl: this.serverURL,
-            message: encryptedSetupMsg,
-            sessionId: this.sessionId,
-            messageId: setupMessageId,
-          })
-          console.log('uploaded setup message successfully')
+          try {
+            const encryptedSetupMsg = toMpcServerMessage(
+              this.setupMessage,
+              this.hexEncryptionKey
+            )
+            await uploadMpcSetupMessage({
+              serverUrl: this.serverURL,
+              message: encryptedSetupMsg,
+              sessionId: this.sessionId,
+              messageId: setupMessageId,
+            })
+            console.log('uploaded setup message successfully')
+          } catch (uploadError) {
+            session.free?.()
+            session = null
+            throw uploadError
+          }
         }
       } else {
         const encodedEncryptedSetupMsg = await waitForSetupMessage({
@@ -509,6 +514,8 @@ export class DKLS {
           session = await engine.createKeyImportSession(this.setupMessage, this.localPartyId)
         }
       } else {
+        // Free any already-created initiator session before throwing.
+        session?.free?.()
         throw new Error('Invalid keygen operation')
       }
       if (session === null) {

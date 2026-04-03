@@ -3,6 +3,11 @@ import WalletCore
 
 // MARK: - Handle Management
 
+// NOTE: These module-level variables are accessed from the Expo module dispatch
+// thread. Expo modules serialize function handler calls onto a single background
+// serial queue, so concurrent mutation is not expected. If this assumption ever
+// changes (e.g. concurrent AsyncFunction calls are added), access to nextHandle
+// and the maps below must be protected with a DispatchQueue or a lock.
 private var nextHandle: Int = 1
 private var publicKeys: [Int: PublicKey] = [:]
 private var privateKeys: [Int: PrivateKey] = [:]
@@ -29,23 +34,33 @@ private func storeHDWallet(_ w: HDWallet) -> Int {
 // MARK: - CoinType mapping
 
 private func coinTypeFromValue(_ value: Int) -> CoinType {
-    return CoinType(rawValue: UInt32(value)) ?? .bitcoin
+    let result = CoinType(rawValue: UInt32(value))
+    assert(result != nil, "coinTypeFromValue: unrecognised raw value \(value), falling back to .bitcoin")
+    return result ?? .bitcoin
 }
 
 private func publicKeyTypeFromValue(_ value: Int) -> PublicKeyType {
-    return PublicKeyType(rawValue: UInt32(value)) ?? .secp256k1
+    let result = PublicKeyType(rawValue: UInt32(value))
+    assert(result != nil, "publicKeyTypeFromValue: unrecognised raw value \(value), falling back to .secp256k1")
+    return result ?? .secp256k1
 }
 
 private func curveFromValue(_ value: Int) -> Curve {
-    return Curve(rawValue: UInt32(value)) ?? .secp256k1
+    let result = Curve(rawValue: UInt32(value))
+    assert(result != nil, "curveFromValue: unrecognised raw value \(value), falling back to .secp256k1")
+    return result ?? .secp256k1
 }
 
 private func purposeFromValue(_ value: Int) -> Purpose {
-    return Purpose(rawValue: UInt32(value)) ?? .bip44
+    let result = Purpose(rawValue: UInt32(value))
+    assert(result != nil, "purposeFromValue: unrecognised raw value \(value), falling back to .bip44")
+    return result ?? .bip44
 }
 
 private func hdVersionFromValue(_ value: Int) -> HDVersion {
-    return HDVersion(rawValue: UInt32(value)) ?? .none
+    let result = HDVersion(rawValue: UInt32(value))
+    assert(result != nil, "hdVersionFromValue: unrecognised raw value \(value), falling back to .none")
+    return result ?? .none
 }
 
 // MARK: - Module
@@ -379,6 +394,13 @@ public class ExpoWalletCoreModule: Module {
         // =====================================================================
 
         Function("hexDecode") { (hex: String) -> String in
+            guard hex.count % 2 == 0 else {
+                throw NSError(
+                    domain: "ExpoWalletCore",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Hex string must have even length, got \(hex.count)"]
+                )
+            }
             var data = Data()
             var temp = ""
             for c in hex.lowercased() {
@@ -439,8 +461,10 @@ public class ExpoWalletCoreModule: Module {
         // =====================================================================
 
         Function("ethereumAbiEncode") { (functionName: String, params: String) -> String in
-            // Simplified ABI encoding — full implementation would need param types
-            // For now, create the function and encode with no params
+            // TODO: params is currently unused — full ABI encoding requires parsing param
+            // types and values from the string and adding them to the EthereumAbiFunction.
+            // This encodes only the 4-byte function selector. A complete implementation
+            // should accept a structured param list (e.g. JSON) and call fn.addParam*().
             let fn = EthereumAbiFunction(name: functionName)
             let encoded = EthereumAbi.encode(fn: fn)
             return encoded.base64EncodedString()

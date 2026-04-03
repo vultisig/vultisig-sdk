@@ -148,6 +148,8 @@ function fromBase64(b64: string): Uint8Array {
 
 // ---------------------------------------------------------------------------
 // CoinType enum — numeric values matching TrustWallet's CoinType
+// Values sourced from TrustWallet wallet-core v4.2.9:
+// https://github.com/trustwallet/wallet-core/blob/v4.2.9/include/TrustWalletCore/TWCoinType.h
 // ---------------------------------------------------------------------------
 
 const CoinTypeValues: Record<string, number> = {
@@ -245,6 +247,13 @@ const HDVersionValues: Record<string, number> = {
 
 // ---------------------------------------------------------------------------
 // NativePublicKey — wraps a native handle
+//
+// NOTE: This class does NOT use automatic cleanup via FinalizationRegistry.
+// The native handle allocated on the C++ side must be released explicitly by
+// calling delete() when the instance is no longer needed. Failure to do so
+// will leak native memory. A FinalizationRegistry could be used to register
+// a fallback cleanup callback, but garbage-collection timing is non-deterministic
+// and should not be relied upon for timely resource reclamation.
 // ---------------------------------------------------------------------------
 
 class NativePublicKey implements NativePublicKeyInstance {
@@ -281,6 +290,13 @@ class NativePublicKey implements NativePublicKeyInstance {
 
 // ---------------------------------------------------------------------------
 // NativePrivateKey — wraps a native handle
+//
+// NOTE: This class does NOT use automatic cleanup via FinalizationRegistry.
+// The native handle allocated on the C++ side must be released explicitly by
+// calling delete() when the instance is no longer needed. Failure to do so
+// will leak native memory. A FinalizationRegistry could be used to register
+// a fallback cleanup callback, but garbage-collection timing is non-deterministic
+// and should not be relied upon for timely resource reclamation.
 // ---------------------------------------------------------------------------
 
 class NativePrivateKey implements NativePrivateKeyInstance {
@@ -309,6 +325,13 @@ class NativePrivateKey implements NativePrivateKeyInstance {
 
 // ---------------------------------------------------------------------------
 // NativeHDWallet — wraps a native handle
+//
+// NOTE: This class does NOT use automatic cleanup via FinalizationRegistry.
+// The native handle allocated on the C++ side must be released explicitly by
+// calling delete() when the instance is no longer needed. Failure to do so
+// will leak native memory. A FinalizationRegistry could be used to register
+// a fallback cleanup callback, but garbage-collection timing is non-deterministic
+// and should not be relied upon for timely resource reclamation.
 // ---------------------------------------------------------------------------
 
 class NativeHDWallet implements NativeHDWalletInstance {

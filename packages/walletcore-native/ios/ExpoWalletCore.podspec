@@ -6,7 +6,7 @@ Pod::Spec.new do |s|
   s.homepage       = 'https://github.com/vultisig/vultisig-sdk'
   s.license        = 'MIT'
   s.author         = 'Vultisig'
-  s.source         = { git: '' }
+  s.source         = { git: 'https://github.com/vultisig/vultisig-sdk.git' }
 
   s.platform       = :ios, '15.1'
   s.swift_version  = '5.4'
