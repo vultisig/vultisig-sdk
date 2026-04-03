@@ -304,14 +304,17 @@ class NativeDklsEngine implements DklsEngine {
     localPartyId: string,
     keyshare: MpcKeyshare | null
   ): MpcSession<MpcKeyshare | undefined> {
-    const ksHandle = keyshare
-      ? this._ensureNativeKeyshare(keyshare).handle
-      : null
+    const nativeKs = keyshare ? this._ensureNativeKeyshare(keyshare) : null
+    const isTemporary = keyshare !== null && !(keyshare instanceof NativeKeyshare && keyshare.kind === 'dkls')
     const handle = ExpoMpcNative.createQcSession(
       toBase64(setup),
       localPartyId,
-      ksHandle
+      nativeKs ? nativeKs.handle : null
     )
+    // Free temporary handle after Go has copied the data during session creation
+    if (isTemporary && nativeKs) {
+      nativeKs.free()
+    }
     return new NativeSession<MpcKeyshare | undefined>(handle, {
       outputMessage: (h) => ExpoMpcNative.qcSessionOutputMessage(h),
       messageReceiver: (h, m, i) =>
@@ -504,14 +507,17 @@ class NativeSchnorrEngine implements SchnorrEngine {
     localPartyId: string,
     keyshare: MpcKeyshare | null
   ): MpcSession<MpcKeyshare | undefined> {
-    const ksHandle = keyshare
-      ? this._ensureNativeKeyshare(keyshare).handle
-      : null
+    const nativeKs = keyshare ? this._ensureNativeKeyshare(keyshare) : null
+    const isTemporary = keyshare !== null && !(keyshare instanceof NativeKeyshare && keyshare.kind === 'schnorr')
     const handle = ExpoMpcNative.createSchnorrQcSession(
       toBase64(setup),
       localPartyId,
-      ksHandle
+      nativeKs ? nativeKs.handle : null
     )
+    // Free temporary handle after Go has copied the data during session creation
+    if (isTemporary && nativeKs) {
+      nativeKs.free()
+    }
     return new NativeSession<MpcKeyshare | undefined>(handle, {
       outputMessage: (h) => ExpoMpcNative.schnorrQcSessionOutputMessage(h),
       messageReceiver: (h, m, i) =>
