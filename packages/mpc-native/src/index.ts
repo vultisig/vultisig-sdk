@@ -195,13 +195,16 @@ class NativeDklsEngine implements DklsEngine {
     oldKeyshare: MpcKeyshare
   ): MpcSession<MpcKeyshare> {
     const nativeKs = this._ensureNativeKeyshare(oldKeyshare)
-    // Note: the native session takes ownership of the keyshare handle,
-    // so we do not free it here even if it was a temporary conversion.
+    const isTemporary = !(oldKeyshare instanceof NativeKeyshare && oldKeyshare.kind === 'dkls')
     const handle = ExpoMpcNative.createKeygenRefreshSession(
       toBase64(setup),
       localPartyId,
       nativeKs.handle
     )
+    // Free temporary handle after Go has copied the data during session creation
+    if (isTemporary) {
+      nativeKs.free()
+    }
     return this._makeKeygenSession(handle)
   }
 
@@ -253,11 +256,16 @@ class NativeDklsEngine implements DklsEngine {
     keyshare: MpcKeyshare
   ): MpcSession<Uint8Array> {
     const nativeKs = this._ensureNativeKeyshare(keyshare)
+    const isTemporary = !(keyshare instanceof NativeKeyshare && keyshare.kind === 'dkls')
     const handle = ExpoMpcNative.createSignSession(
       toBase64(setup),
       localPartyId,
       nativeKs.handle
     )
+    // Free temporary handle after Go has copied the data during session creation
+    if (isTemporary) {
+      nativeKs.free()
+    }
     return new NativeSession<Uint8Array>(handle, {
       outputMessage: (h) => ExpoMpcNative.signSessionOutputMessage(h),
       messageReceiver: (h, m, i) =>
@@ -455,11 +463,16 @@ class NativeSchnorrEngine implements SchnorrEngine {
     keyshare: MpcKeyshare
   ): MpcSession<Uint8Array> {
     const nativeKs = this._ensureNativeKeyshare(keyshare)
+    const isTemporary = !(keyshare instanceof NativeKeyshare && keyshare.kind === 'schnorr')
     const handle = ExpoMpcNative.createSchnorrSignSession(
       toBase64(setup),
       localPartyId,
       nativeKs.handle
     )
+    // Free temporary handle after Go has copied the data during session creation
+    if (isTemporary) {
+      nativeKs.free()
+    }
     return new NativeSession<Uint8Array>(handle, {
       outputMessage: (h) => ExpoMpcNative.schnorrSignSessionOutputMessage(h),
       messageReceiver: (h, m, i) =>
