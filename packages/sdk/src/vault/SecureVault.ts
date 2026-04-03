@@ -497,6 +497,8 @@ export class SecureVault extends VaultBase {
     vault.coreVault.localPartyId = vaultData.localPartyId
     vault.coreVault.libType = vaultData.libType
     vault.coreVault.createdAt = vaultData.createdAt
+    vault.coreVault.publicKeyMldsa = vaultData.publicKeyMldsa
+    vault.coreVault.keyShareMldsa = vaultData.keyShareMldsa
 
     return vault
   }

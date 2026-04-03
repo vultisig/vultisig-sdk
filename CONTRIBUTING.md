@@ -98,7 +98,7 @@ yarn format
 # Run unit tests
 yarn test:unit
 
-# Run integration tests
+# Run integration tests (same suite as CI job "Integration Tests (Vitest)")
 yarn test:integration
 
 # Run e2e tests (requires vault file)

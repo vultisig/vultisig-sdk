@@ -81,7 +81,12 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
   Ripple: addr => /^r[a-zA-Z0-9]{24,34}$/.test(addr),
   Tron: addr => /^T[a-zA-Z0-9]{33}$/.test(addr),
   Cardano: addr => /^addr1[a-z0-9]{53,}$/.test(addr),
+  QBTC: addr => /^qbtc1[a-z0-9]{38,}$/.test(addr),
 }
+
+/** Deterministic hex pubkey for QBTC (ML-DSA); deriveQbtcAddress only hashes bytes — no chain signing. */
+const MOCK_MLDSA_PUBLIC_KEY_HEX =
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 
 describe('Integration: Multi-Chain Address Derivation', () => {
   let sdk: Vultisig
@@ -128,6 +133,8 @@ describe('Integration: Multi-Chain Address Derivation', () => {
         ecdsa: 'mock_ecdsa_keyshare',
         eddsa: 'mock_eddsa_keyshare',
       },
+      publicKeyMldsa: MOCK_MLDSA_PUBLIC_KEY_HEX,
+      keyShareMldsa: 'mock_mldsa_keyshare',
       resharePrefix: '',
       libType: 'GG20',
       createdAt: now,
@@ -140,6 +147,8 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       // Identity (readonly fields)
       publicKeys: mockVaultData.publicKeys,
       hexChainCode: mockVaultData.hexChainCode,
+      publicKeyMldsa: mockVaultData.publicKeyMldsa,
+      keyShareMldsa: mockVaultData.keyShareMldsa,
       signers: mockVaultData.signers,
       localPartyId: mockVaultData.localPartyId,
       createdAt: now,
