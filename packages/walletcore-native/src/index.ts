@@ -577,3 +577,4 @@ export class NativeWalletCore {
 
 // Re-export the raw native module for direct access
 export { default as ExpoWalletCore } from './ExpoWalletCoreModule'
+// trigger
