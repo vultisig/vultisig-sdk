@@ -18,7 +18,7 @@ import { getPreSigningHashes } from '../preSigningHashes'
 import { generateSignature } from '../signature/generateSignature'
 
 type Input = {
-  publicKey: PublicKey
+  publicKey?: PublicKey
   txInputData: Uint8Array
   signatures: Record<string, KeysignSignature>
   chain: Chain
@@ -54,6 +54,10 @@ export const compileTx = ({
     return TW.Cosmos.Proto.SigningOutput.encode(
       TW.Cosmos.Proto.SigningOutput.create({ serialized })
     ).finish()
+  }
+
+  if (!publicKey) {
+    throw new Error(`publicKey is required for ${chain} transaction compilation`)
   }
 
   const hashes = getPreSigningHashes({

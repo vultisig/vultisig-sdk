@@ -98,7 +98,15 @@ export function convertToKeysignSignatures(
 
     let r: string, s: string
 
-    if (signature.format === 'EdDSA') {
+    if (signature.format === 'MLDSA') {
+      const raw = signature.mldsaSignature ?? signature.signature
+      result[messageHash] = {
+        msg: messageHash,
+        r: '',
+        s: '',
+        der_signature: raw,
+      }
+    } else if (signature.format === 'EdDSA') {
       // EdDSA: raw format r||s (each 32 bytes = 64 hex chars)
       // These values already have correct endianness from keysign
       const sig =
@@ -112,19 +120,27 @@ export function convertToKeysignSignatures(
 
       r = '0x' + sig.slice(0, 64)
       s = '0x' + sig.slice(64, 128)
+
+      result[messageHash] = {
+        msg: messageHash,
+        r,
+        s,
+        der_signature: signature.signature,
+        recovery_id: signature.recovery?.toString(),
+      }
     } else {
       // ECDSA: parse r and s from DER signature
       const parsed = parseDerSignature(signature.signature)
       r = parsed.r
       s = parsed.s
-    }
 
-    result[messageHash] = {
-      msg: messageHash,
-      r,
-      s,
-      der_signature: signature.signature,
-      recovery_id: signature.recovery?.toString(),
+      result[messageHash] = {
+        msg: messageHash,
+        r,
+        s,
+        der_signature: signature.signature,
+        recovery_id: signature.recovery?.toString(),
+      }
     }
   }
 
