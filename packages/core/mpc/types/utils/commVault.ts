@@ -6,8 +6,9 @@ import {
   SignatureAlgorithm,
   signatureAlgorithms,
   signingAlgorithms,
+
 } from '@vultisig/core-chain/signing/SignatureAlgorithm'
-import { isKeyImportVault, Vault } from '@vultisig/core-mpc/vault/Vault'
+import { Vault } from '@vultisig/core-mpc/vault/Vault'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { recordFromKeys } from '@vultisig/lib-utils/record/recordFromKeys'
@@ -64,20 +65,17 @@ export const toCommVault = (vault: Vault): CommVault =>
       ),
       ...(vault.publicKeyMldsa && vault.keyShareMldsa
         ? [
-            create(Vault_KeyShareSchema, {
-              publicKey: vault.publicKeyMldsa,
-              keyshare: vault.keyShareMldsa,
-            }),
-          ]
+          create(Vault_KeyShareSchema, {
+            publicKey: vault.publicKeyMldsa,
+            keyshare: vault.keyShareMldsa,
+          }),
+        ]
         : []),
     ],
     publicKeyEcdsa: vault.publicKeys.ecdsa,
     publicKeyEddsa: vault.publicKeys.eddsa,
     publicKeyMldsa44: vault.publicKeyMldsa ?? '',
-    libType: toLibType({
-      libType: vault.libType,
-      isKeyImport: isKeyImportVault(vault),
-    }),
+    libType: toLibType(vault.libType),
     chainPublicKeys: toEntries(vault.chainPublicKeys ?? {}).map(
       ({ key, value }) =>
         create(Vault_ChainPublicKeySchema, {
@@ -137,9 +135,9 @@ export const fromCommVault = (vault: CommVault): Vault => {
   const publicKeyMldsa = vault.publicKeyMldsa44 || undefined
   const keyShareMldsa = vault.publicKeyMldsa44
     ? shouldBePresent(
-        vault.keyShares.find(ks => ks.publicKey === vault.publicKeyMldsa44),
-        `keyshare for MLDSA public key ${vault.publicKeyMldsa44}`
-      ).keyshare
+      vault.keyShares.find(ks => ks.publicKey === vault.publicKeyMldsa44),
+      `keyshare for MLDSA public key ${vault.publicKeyMldsa44}`
+    ).keyshare
     : undefined
 
   vault.keyShares.forEach(keyShare => {
