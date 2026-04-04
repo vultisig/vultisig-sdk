@@ -40,6 +40,9 @@ export const compileTx = ({
 }: Input) => {
   // PSBT signing: build raw signed tx from SignBitcoin fields + MPC signatures
   if (keysignPayload?.signData.case === 'signBitcoin') {
+    if (!publicKey) {
+      throw new Error('publicKey is required for SignBitcoin compilation')
+    }
     return compileSignBitcoinTx(
       keysignPayload.signData.value,
       keysignSignatures,
