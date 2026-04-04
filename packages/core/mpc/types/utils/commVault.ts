@@ -3,10 +3,9 @@ import { Timestamp, TimestampSchema } from '@bufbuild/protobuf/wkt'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import {
-  SignatureAlgorithm,
   signatureAlgorithms,
+  SignatureAlgorithm,
   signingAlgorithms,
-
 } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { Vault } from '@vultisig/core-mpc/vault/Vault'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
