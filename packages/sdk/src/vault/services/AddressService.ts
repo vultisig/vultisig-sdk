@@ -1,5 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
+import { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
@@ -30,6 +31,13 @@ export class AddressService {
     return this.cacheService.getOrComputeScoped(chain.toLowerCase(), CacheScope.ADDRESS, async () => {
       // Derive address (expensive WASM operation)
       try {
+        if (chain === Chain.QBTC) {
+          if (!this.vaultData.publicKeyMldsa) {
+            throw new Error('Vault has no MLDSA public key (required for QBTC address derivation)')
+          }
+          return deriveQbtcAddress(this.vaultData.publicKeyMldsa)
+        }
+
         const walletCore = await this.wasmProvider.getWalletCore()
 
         const publicKey = getPublicKey({

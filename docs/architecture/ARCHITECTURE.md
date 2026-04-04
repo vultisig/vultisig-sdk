@@ -201,8 +201,8 @@ vultisig-sdk/
 ├── packages/
 │   ├── sdk/                    # Main SDK (@vultisig/sdk)
 │   ├── rujira/                 # Rujira DEX integration (@vultisig/rujira), includes asset registry
-│   ├── core/                   # Upstream core library (read-only)
-│   └── lib/                    # WASM bindings (dkls, schnorr)
+│   ├── core/                   # Shared chain, MPC, config (source of truth in this monorepo)
+│   └── lib/                    # WASM bindings (dkls, mldsa, schnorr) and utilities
 ├── clients/
 │   └── cli/                    # CLI application
 ├── examples/
@@ -216,8 +216,10 @@ vultisig-sdk/
 
 - **`@vultisig/sdk`** - The main SDK package users install
 - **`@vultisig/rujira`** - Rujira DEX integration (FIN swaps, deposits, withdrawals on THORChain), includes asset registry
-- **`packages/core`** - Chain implementations, MPC protocol, signing logic (synced from upstream)
-- **`packages/lib`** - WASM bindings (dkls, schnorr) - synced from upstream
+- **`packages/core`** - Chain implementations, MPC protocol, signing logic (owned here; published as `@vultisig/core-*`)
+- **`packages/lib`** - WASM bindings (dkls, mldsa, schnorr) and helpers (published as `@vultisig/lib-*`)
+
+See also [Shared `packages/core` and `packages/lib`](../shared-core-lib.md) for how this relates to first-party clients.
 
 ---
 

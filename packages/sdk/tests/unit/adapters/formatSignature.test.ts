@@ -10,7 +10,7 @@ import type { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureA
 import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
 import { describe, expect, it } from 'vitest'
 
-import { formatSignature } from '../../../src/adapters/formatSignature'
+import { formatMldsaSignature, formatSignature } from '../../../src/adapters/formatSignature'
 
 describe('formatSignature', () => {
   describe('Single Signature Cases (EVM, Cosmos, etc.)', () => {
@@ -373,6 +373,35 @@ describe('formatSignature', () => {
       expect(() => {
         formatSignature(signatureResults, messages, invalidAlgorithm)
       }).toThrow('Unknown signature algorithm: unknown')
+    })
+
+    it('should throw when algorithm is mldsa (use formatMldsaSignature instead)', () => {
+      const signatureResults: Record<string, KeysignSignature> = {
+        msg: {
+          msg: 'msg',
+          r: 'r',
+          s: 's',
+          der_signature: 'der',
+        },
+      }
+      const messages = ['msg']
+
+      expect(() => {
+        formatSignature(signatureResults, messages, 'mldsa')
+      }).toThrow('formatSignature does not support mldsa')
+    })
+  })
+
+  describe('formatMldsaSignature', () => {
+    it('should format MLDSA hex with stripped 0x prefix', () => {
+      const result = formatMldsaSignature('0xABcd12')
+
+      expect(result).toEqual({
+        signature: 'ABcd12',
+        format: 'MLDSA',
+        mldsaSignature: 'ABcd12',
+      })
+      expect(result.recovery).toBeUndefined()
     })
   })
 

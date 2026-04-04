@@ -7,18 +7,17 @@
  * 3. Setup with VultiServer
  * 4. Run DKLS key import (ECDSA) for master key
  * 5. Run Schnorr key import (EdDSA) for master key
- * 6. Run ML-DSA keygen for post-quantum key
- * 7. Run per-chain key imports (DKLS or Schnorr based on chain type)
+ * 6. Run per-chain key imports (DKLS or Schnorr based on chain type)
  * 7. Optionally discover chains with balances
+ *
+ * ML-DSA post-quantum keys are not generated here; use `FastVault.addPostQuantumKeys` / VultiServer `POST /mldsa` after the vault exists on the server.
  */
 import type { Chain } from '@vultisig/core-chain/Chain'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
 import { keyImportWithServer } from '@vultisig/core-mpc/fast/api/keyImportWithServer'
-import { mldsaWithServer } from '@vultisig/core-mpc/fast/api/mldsaWithServer'
 import { sequentialKeyImportWithServer } from '@vultisig/core-mpc/fast/api/sequentialKeyImportWithServer'
 import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
-import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
 import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
@@ -423,7 +422,6 @@ export class FastVaultFromSeedphraseService {
     }
 
     // Signal import keygen completion so the server saves the vault backup.
-    // Must happen before MLDSA keygen because the /mldsa endpoint loads the backup.
     await setKeygenComplete({
       serverURL: this.serverUrl,
       sessionId,
@@ -437,81 +435,14 @@ export class FastVaultFromSeedphraseService {
       peers,
     })
 
-    // Step 12: ML-DSA keygen (non-fatal — vault can be created without post-quantum keys)
-    if (signal?.aborted) {
-      throw new Error('Operation aborted')
-    }
-
-    reportProgress({
-      step: 'keygen',
-      progress: 88,
-      message: 'Generating ML-DSA keys...',
-    })
-
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
-    try {
-      const mldsaSessionId = randomUUID()
-      const mldsaHexEncryptionKey = generateHexEncryptionKey()
-
-      await joinMpcSession({
-        serverUrl: this.serverUrl,
-        sessionId: mldsaSessionId,
-        localPartyId,
-      })
-
-      await mldsaWithServer({
-        public_key: ecdsaResult.publicKey,
-        session_id: mldsaSessionId,
-        hex_encryption_key: mldsaHexEncryptionKey,
-        encryption_password: password,
-        email,
-        vaultBaseUrl: this.context.serverManager.fastVault,
-      })
-
-      const mldsaDevices = await this.waitForPeers(mldsaSessionId, localPartyId, signal)
-
-      await startMpcSession({
-        serverUrl: this.serverUrl,
-        sessionId: mldsaSessionId,
-        devices: mldsaDevices,
-      })
-
-      const mldsaKeygen = new MldsaKeygen(
-        true,
-        this.serverUrl,
-        mldsaSessionId,
-        localPartyId,
-        mldsaDevices,
-        mldsaHexEncryptionKey,
-        { timeoutMs: 120_000 }
-      )
-
-      mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-
-      await setKeygenComplete({
-        serverURL: this.serverUrl,
-        sessionId: mldsaSessionId,
-        localPartyId,
-      })
-
-      const mldsaPeers = mldsaDevices.filter(d => d !== localPartyId)
-      try {
-        await waitForKeygenComplete({ serverURL: this.serverUrl, sessionId: mldsaSessionId, peers: mldsaPeers })
-      } catch {
-        // Non-fatal — MLDSA keygen succeeded, server may not signal back
-      }
-    } catch (error) {
-      console.warn('ML-DSA keygen failed (non-fatal), vault will be created without post-quantum keys:', error instanceof Error ? error.message : error)
-    }
-
-    // Step 13: Finalize
+    // Step 12: Finalize
     reportProgress({
       step: 'keygen',
       progress: 90,
       message: 'Finalizing key import...',
     })
 
-    // Step 14: Build vault structure
+    // Step 13: Build vault structure
     const vault: CoreVault = {
       name,
       publicKeys: {
@@ -525,8 +456,6 @@ export class FastVaultFromSeedphraseService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult?.publicKey,
-      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

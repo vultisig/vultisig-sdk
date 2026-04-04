@@ -18,14 +18,29 @@ function stripHexPrefix(value: string): string {
  *
  * @param signatureResults - Map of message hashes to KeysignSignatures from core keysign
  * @param messages - Original message hashes that were signed (in order)
- * @param signatureAlgorithm - Signature algorithm used (ecdsa or eddsa)
+ * @param signatureAlgorithm - ECDSA or EdDSA from keysign (not `mldsa`; use {@link formatMldsaSignature} for ML-DSA-only results)
  * @returns SDK Signature format with optional multi-signature support
  */
+export function formatMldsaSignature(mldsaHex: string): Signature {
+  const signature = stripHexPrefix(mldsaHex)
+  return {
+    signature,
+    format: 'MLDSA',
+    mldsaSignature: signature,
+  }
+}
+
 export function formatSignature(
   signatureResults: Record<string, KeysignSignature>,
   messages: string[],
   signatureAlgorithm: SignatureAlgorithm
 ): Signature {
+  if (signatureAlgorithm === 'mldsa') {
+    throw new Error(
+      'formatSignature does not support mldsa; use formatMldsaSignature() with the ML-DSA signing result'
+    )
+  }
+
   const firstMessage = messages[0]
   const firstSignature = signatureResults[firstMessage]
 

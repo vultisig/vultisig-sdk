@@ -309,6 +309,16 @@
       "import": "./dist/chains/polkadot/config.js",
       "default": "./dist/chains/polkadot/config.js"
     },
+    "./chains/polkadot/dapp/constructSigningPayload": {
+      "types": "./dist/chains/polkadot/dapp/constructSigningPayload.d.ts",
+      "import": "./dist/chains/polkadot/dapp/constructSigningPayload.js",
+      "default": "./dist/chains/polkadot/dapp/constructSigningPayload.js"
+    },
+    "./chains/polkadot/dapp/PolkadotSignerPayload": {
+      "types": "./dist/chains/polkadot/dapp/PolkadotSignerPayload.d.ts",
+      "import": "./dist/chains/polkadot/dapp/PolkadotSignerPayload.js",
+      "default": "./dist/chains/polkadot/dapp/PolkadotSignerPayload.js"
+    },
     "./chains/ripple/account/info": {
       "types": "./dist/chains/ripple/account/info.d.ts",
       "import": "./dist/chains/ripple/account/info.js",
@@ -333,6 +343,11 @@
       "types": "./dist/chains/solana/config.d.ts",
       "import": "./dist/chains/solana/config.js",
       "default": "./dist/chains/solana/config.js"
+    },
+    "./chains/solana/getDynamicPriorityFeePrice": {
+      "types": "./dist/chains/solana/getDynamicPriorityFeePrice.d.ts",
+      "import": "./dist/chains/solana/getDynamicPriorityFeePrice.js",
+      "default": "./dist/chains/solana/getDynamicPriorityFeePrice.js"
     },
     "./chains/solana/solanaConfig": {
       "types": "./dist/chains/solana/solanaConfig.d.ts",
@@ -433,6 +448,11 @@
       "types": "./dist/chains/utxo/client/getBlockchairBaseUrl.d.ts",
       "import": "./dist/chains/utxo/client/getBlockchairBaseUrl.js",
       "default": "./dist/chains/utxo/client/getBlockchairBaseUrl.js"
+    },
+    "./chains/utxo/client/getDashUtxos": {
+      "types": "./dist/chains/utxo/client/getDashUtxos.d.ts",
+      "import": "./dist/chains/utxo/client/getDashUtxos.js",
+      "default": "./dist/chains/utxo/client/getDashUtxos.js"
     },
     "./chains/utxo/client/getUtxoAddressInfo": {
       "types": "./dist/chains/utxo/client/getUtxoAddressInfo.d.ts",
@@ -1460,6 +1480,7 @@
     "@mysten/sui": "^2.8.0",
     "@noble/hashes": "^2.0.1",
     "@polkadot/api": "^16.5.4",
+    "@polkadot/util": "^14.0.1",
     "@polkadot/util-crypto": "^14.0.1",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.0",
