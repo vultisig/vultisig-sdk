@@ -27,10 +27,16 @@ import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { getHexEncodedRandomBytes } from '@vultisig/lib-utils/crypto/getHexEncodedRandomBytes'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { formatSignature } from '../adapters/formatSignature'
+import { formatMldsaSignature, formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../crypto'
-import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
+import {
+  KeygenProgressUpdate,
+  ReshareOptions,
+  ServerStatus,
+  Signature,
+  SigningPayload,
+} from '../types'
 import { TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 
 /**
@@ -165,6 +171,45 @@ export class ServerManager {
 
     shouldBePresent(payload.chain, 'payload.chain')
 
+    if (signatureAlgorithm === 'mldsa') {
+      if (!vault.keyShareMldsa) {
+        throw new Error('No MLDSA key share found in vault (required for QBTC and other MLDSA chains)')
+      }
+
+      reportProgress({
+        step: 'coordinating',
+        progress: 30,
+        message: 'Connecting for ML-DSA signing...',
+        mode: 'fast' as import('../types').SigningMode,
+        participantCount: 2,
+        participantsReady: 1,
+      })
+
+      const mldsaHex = await this.runMldsaFastSigningSession({
+        vault,
+        messages,
+        password,
+        chain: payload.chain,
+        signingLocalPartyId,
+        signal,
+      })
+
+      if (!mldsaHex) {
+        throw new Error('MLDSA signing failed')
+      }
+
+      reportProgress({
+        step: 'complete',
+        progress: 100,
+        message: 'Signature complete',
+        mode: 'fast' as import('../types').SigningMode,
+        participantCount: 2,
+        participantsReady: 2,
+      })
+
+      return formatMldsaSignature(mldsaHex)
+    }
+
     // Register at relay BEFORE calling FastVault server
     // (must be registered so server can find us when it joins)
     // This matches the extension's flow order in fastVaultKeysign.ts
@@ -257,7 +302,6 @@ export class ServerManager {
       signatureResults[msg] = sig
     }
 
-    // Step 6: MLDSA signing (if vault has ML-DSA keys)
     let mldsaSignatureHex: string | undefined
     if (vault.keyShareMldsa) {
       reportProgress({
@@ -269,62 +313,14 @@ export class ServerManager {
         participantsReady: 2,
       })
 
-      const mldsaMaxAttempts = 10
-      for (let attempt = 0; attempt < mldsaMaxAttempts; attempt++) {
-        try {
-          const mldsaSessionId = randomUUID()
-          const mldsaHexEncryptionKey = getHexEncodedRandomBytes(32)
-
-          await joinMpcSession({
-            serverUrl: this.config.messageRelay,
-            sessionId: mldsaSessionId,
-            localPartyId: signingLocalPartyId,
-          })
-
-          await signWithServer({
-            public_key: vault.publicKeys.ecdsa,
-            messages,
-            session: mldsaSessionId,
-            hex_encryption_key: mldsaHexEncryptionKey,
-            derive_path: 'm',
-            is_ecdsa: true,
-            vault_password: password,
-            chain: payload.chain,
-            mldsa: true,
-            vaultBaseUrl: this.config.fastVault,
-          })
-
-          const mldsaDevices = await this.waitForPeers(mldsaSessionId, signingLocalPartyId, signal)
-
-          await startMpcSession({
-            serverUrl: this.config.messageRelay,
-            sessionId: mldsaSessionId,
-            devices: mldsaDevices,
-          })
-
-          const mldsaKeysign = new MldsaKeysign({
-            keysignCommittee: mldsaDevices,
-            serverURL: this.config.messageRelay,
-            sessionId: mldsaSessionId,
-            localPartyId: signingLocalPartyId,
-            messagesToSign: messages,
-            keyShareBase64: vault.keyShareMldsa,
-            hexEncryptionKey: mldsaHexEncryptionKey,
-            chainPath: 'm',
-            isInitiatingDevice: true,
-          })
-
-          const mldsaResults = await mldsaKeysign.startKeysign()
-          if (mldsaResults.length > 0) {
-            mldsaSignatureHex = mldsaResults[0].signature
-          }
-          break
-        } catch (error) {
-          if (attempt === mldsaMaxAttempts - 1) {
-            console.warn('MLDSA signing failed after all attempts:', error instanceof Error ? error.message : error)
-          }
-        }
-      }
+      mldsaSignatureHex = await this.runMldsaFastSigningSession({
+        vault,
+        messages,
+        password,
+        chain: payload.chain,
+        signingLocalPartyId,
+        signal,
+      })
     }
 
     // Step 7: Complete - Format signature results
@@ -448,7 +444,7 @@ export class ServerManager {
         local_party_id: serverPartyId,
         encryption_password: options.password,
         email: options.email,
-        protocols: ['ecdsa', 'eddsa', 'mldsa'],
+        protocols: ['ecdsa', 'eddsa'],
         vaultBaseUrl: this.config.fastVault,
       })
     } else {
@@ -494,14 +490,13 @@ export class ServerManager {
       hexEncryptionKey
     )
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
     let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
     let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
 
     if (options.tssBatching) {
       progress({
         phase: 'ecdsa',
-        message: 'Generating ECDSA, EdDSA, and ML-DSA keys...',
+        message: 'Generating ECDSA and EdDSA keys...',
       })
 
       await dkls.prepareKeygenSetup()
@@ -516,37 +511,10 @@ export class ServerManager {
         hexEncryptionKey,
         dkls.getSetupMessage()
       )
-      const batchMldsa = new MldsaKeygen(
-        true,
-        this.config.messageRelay,
-        sessionId,
-        localPartyId,
-        devices,
-        hexEncryptionKey,
-        {
-          messageId: TSS_BATCH_MESSAGE_IDS.mldsa,
-          setupMessageId: TSS_BATCH_MESSAGE_IDS.mldsaSetup,
-        }
-      )
 
-      const batchMldsaPromise = batchMldsa
-        .startKeygenWithRetry()
-        .then(result => {
-          log('ML-DSA keygen completed successfully')
-          return result
-        })
-        .catch(error => {
-          console.warn(
-            'ML-DSA keygen failed (non-fatal):',
-            error instanceof Error ? error.message : error
-          )
-          return undefined
-        })
-
-      ;[ecdsaResult, eddsaResult, mldsaResult] = await Promise.all([
+      ;[ecdsaResult, eddsaResult] = await Promise.all([
         dkls.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.ecdsa),
         batchSchnorr.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.eddsa),
-        batchMldsaPromise,
       ])
       log('ECDSA keygen completed successfully')
       log('EdDSA keygen completed successfully')
@@ -573,39 +541,6 @@ export class ServerManager {
       )
       eddsaResult = await schnorr.startKeygenWithRetry()
       log('EdDSA keygen completed successfully')
-
-      if (options.signal?.aborted) {
-        throw new Error('Operation aborted')
-      }
-
-      progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
-      try {
-        await mldsaWithServer({
-          public_key: ecdsaResult.publicKey,
-          session_id: sessionId,
-          hex_encryption_key: hexEncryptionKey,
-          encryption_password: options.password,
-          email: options.email,
-          vaultBaseUrl: this.config.fastVault,
-        })
-
-        const mldsaKeygen = new MldsaKeygen(
-          true,
-          this.config.messageRelay,
-          sessionId,
-          localPartyId,
-          devices,
-          hexEncryptionKey
-        )
-
-        mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-        log('ML-DSA keygen completed successfully')
-      } catch (error) {
-        console.warn(
-          'ML-DSA keygen failed (non-fatal):',
-          error instanceof Error ? error.message : error
-        )
-      }
     }
 
     // Check for abort before finalization
@@ -642,8 +577,6 @@ export class ServerManager {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult?.publicKey,
-      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,
@@ -657,6 +590,91 @@ export class ServerManager {
       vaultId: vault.publicKeys.ecdsa,
       verificationRequired: true,
     }
+  }
+
+  /**
+   * Run ML-DSA (post-quantum) keygen with VultiServer for an existing fast vault.
+   *
+   * VultiServer does not add ML-DSA during initial vault creation; call this after the vault
+   * backup exists on the server (typically after ECDSA/EdDSA keygen has completed).
+   *
+   * @see {@link https://github.com/vultisig/vultiserver} `POST /mldsa` — `ProcessCreateMldsa`
+   */
+  async addPostQuantumKeysToFastVault(options: {
+    vault: CoreVault
+    email: string
+    password: string
+    signal?: AbortSignal
+    onLog?: (msg: string) => void
+    onProgress?: (u: KeygenProgressUpdate) => void
+  }): Promise<{ publicKey: string; keyshare: string }> {
+    const { vault, email, password, signal } = options
+    const log = options.onLog ?? (() => {})
+    const progress = options.onProgress ?? (() => {})
+
+    if (vault.publicKeyMldsa || vault.keyShareMldsa) {
+      throw new Error('Vault already has ML-DSA keys')
+    }
+
+    const sessionId = randomUUID()
+    const hexEncryptionKey = generateHexEncryptionKey()
+    const localPartyId = vault.localPartyId
+
+    progress({ phase: 'mldsa', message: 'Requesting ML-DSA key from VultiServer...' })
+    log('Joining relay for ML-DSA session...')
+
+    await joinMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      localPartyId,
+    })
+
+    await mldsaWithServer({
+      public_key: vault.publicKeys.ecdsa,
+      session_id: sessionId,
+      hex_encryption_key: hexEncryptionKey,
+      encryption_password: password,
+      email,
+      vaultBaseUrl: this.config.fastVault,
+    })
+
+    const devices = await this.waitForPeers(sessionId, localPartyId, signal)
+
+    await startMpcSession({
+      serverUrl: this.config.messageRelay,
+      sessionId,
+      devices,
+    })
+
+    progress({ phase: 'mldsa', message: 'Generating ML-DSA keys...' })
+
+    const mldsaKeygen = new MldsaKeygen(
+      true,
+      this.config.messageRelay,
+      sessionId,
+      localPartyId,
+      devices,
+      hexEncryptionKey,
+      { timeoutMs: 120_000 }
+    )
+
+    const result = await mldsaKeygen.startKeygenWithRetry()
+    log('ML-DSA keygen completed successfully')
+
+    await setKeygenComplete({
+      serverURL: this.config.messageRelay,
+      sessionId,
+      localPartyId,
+    })
+
+    const peers = devices.filter(d => d !== localPartyId)
+    await waitForKeygenComplete({
+      serverURL: this.config.messageRelay,
+      sessionId,
+      peers,
+    })
+
+    return result
   }
 
   /**
@@ -682,6 +700,76 @@ export class ServerManager {
   }
 
   // ===== Private Helper Methods =====
+
+  private async runMldsaFastSigningSession(options: {
+    vault: CoreVault
+    messages: string[]
+    password: string
+    chain: string
+    signingLocalPartyId: string
+    signal?: AbortSignal
+  }): Promise<string | undefined> {
+    const { vault, messages, password, chain, signingLocalPartyId, signal } = options
+    const keyShareMldsa = shouldBePresent(vault.keyShareMldsa, 'vault.keyShareMldsa')
+
+    const mldsaMaxAttempts = 10
+    for (let attempt = 0; attempt < mldsaMaxAttempts; attempt++) {
+      try {
+        const mldsaSessionId = randomUUID()
+        const mldsaHexEncryptionKey = getHexEncodedRandomBytes(32)
+
+        await joinMpcSession({
+          serverUrl: this.config.messageRelay,
+          sessionId: mldsaSessionId,
+          localPartyId: signingLocalPartyId,
+        })
+
+        await signWithServer({
+          public_key: vault.publicKeys.ecdsa,
+          messages,
+          session: mldsaSessionId,
+          hex_encryption_key: mldsaHexEncryptionKey,
+          derive_path: 'm',
+          is_ecdsa: true,
+          vault_password: password,
+          chain,
+          mldsa: true,
+          vaultBaseUrl: this.config.fastVault,
+        })
+
+        const mldsaDevices = await this.waitForPeers(mldsaSessionId, signingLocalPartyId, signal)
+
+        await startMpcSession({
+          serverUrl: this.config.messageRelay,
+          sessionId: mldsaSessionId,
+          devices: mldsaDevices,
+        })
+
+        const mldsaKeysign = new MldsaKeysign({
+          keysignCommittee: mldsaDevices,
+          serverURL: this.config.messageRelay,
+          sessionId: mldsaSessionId,
+          localPartyId: signingLocalPartyId,
+          messagesToSign: messages,
+          keyShareBase64: keyShareMldsa,
+          hexEncryptionKey: mldsaHexEncryptionKey,
+          chainPath: 'm',
+          isInitiatingDevice: true,
+        })
+
+        const mldsaResults = await mldsaKeysign.startKeysign()
+        if (mldsaResults.length > 0) {
+          return mldsaResults[0].signature
+        }
+      } catch (error) {
+        if (attempt === mldsaMaxAttempts - 1) {
+          console.warn('MLDSA signing failed after all attempts:', error instanceof Error ? error.message : error)
+        }
+      }
+    }
+
+    return undefined
+  }
 
   private async waitForPeers(
     sessionId: string,

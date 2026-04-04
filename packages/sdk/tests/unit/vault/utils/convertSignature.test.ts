@@ -195,6 +195,56 @@ describe('convertToKeysignSignatures', () => {
     })
   })
 
+  describe('Single signature (MLDSA)', () => {
+    it('should pass MLDSA signature through to der_signature without DER parsing', () => {
+      const mldsaHex = 'abcdef1234567890'.repeat(32)
+      const signature: Signature = {
+        signature: mldsaHex,
+        format: 'MLDSA',
+        mldsaSignature: mldsaHex,
+      }
+      const messageHashes = ['0xdeadbeef1234567890abcdef1234567890abcdef1234567890abcdef12345678']
+
+      const result = convertToKeysignSignatures(signature, messageHashes)
+
+      expect(result).toHaveProperty(messageHashes[0])
+      expect(result[messageHashes[0]]).toMatchObject({
+        msg: messageHashes[0],
+        r: '',
+        s: '',
+        der_signature: mldsaHex,
+      })
+      expect(result[messageHashes[0]].recovery_id).toBeUndefined()
+    })
+
+    it('should use mldsaSignature field when present', () => {
+      const mldsaHex = 'ff'.repeat(200)
+      const signature: Signature = {
+        signature: 'other-value',
+        format: 'MLDSA',
+        mldsaSignature: mldsaHex,
+      }
+      const messageHashes = ['0xhash']
+
+      const result = convertToKeysignSignatures(signature, messageHashes)
+
+      expect(result[messageHashes[0]].der_signature).toBe(mldsaHex)
+    })
+
+    it('should fall back to signature field when mldsaSignature is absent', () => {
+      const mldsaHex = 'aa'.repeat(200)
+      const signature: Signature = {
+        signature: mldsaHex,
+        format: 'MLDSA',
+      }
+      const messageHashes = ['0xhash']
+
+      const result = convertToKeysignSignatures(signature, messageHashes)
+
+      expect(result[messageHashes[0]].der_signature).toBe(mldsaHex)
+    })
+  })
+
   describe('Error handling', () => {
     it('should throw error when message hash is missing for single signature', () => {
       const signature: Signature = {

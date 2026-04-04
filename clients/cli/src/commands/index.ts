@@ -35,6 +35,7 @@ export { executeTxStatus } from './tx-status'
 
 // Vault management commands
 export type {
+  AddPostQuantumKeysOptions,
   CreateFromSeedphraseFastOptions,
   CreateFromSeedphraseSecureOptions,
   DeleteVaultOptions,
@@ -43,6 +44,7 @@ export type {
   SecureVaultOptions,
 } from './vault-management'
 export {
+  executeAddPostQuantumKeys,
   executeCreateFast,
   executeCreateFromSeedphraseFast,
   executeCreateFromSeedphraseSecure,

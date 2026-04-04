@@ -1,44 +1,52 @@
-import { StargateClient } from '@cosmjs/stargate'
 import { Chain } from '@vultisig/core-chain/Chain'
-import { qbtcTendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/qbtc/tendermintRpcUrl'
+import { qbtcRestUrl } from '@vultisig/core-chain/chains/cosmos/qbtc/tendermintRpcUrl'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { decodeTxRaw } from '@cosmjs/proto-signing'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
+type TxResponse = {
+  tx?: {
+    auth_info?: {
+      fee?: {
+        amount?: Array<{ denom: string; amount: string }>
+      }
+    }
+  }
+  tx_response: {
+    code: number
+    txhash: string
+    gas_used: string
+    gas_wanted: string
+  }
+}
+
 export const getQbtcTxStatus: TxStatusResolver<typeof Chain.QBTC> = async ({
   hash,
 }) => {
-  const client = await StargateClient.connect(qbtcTendermintRpcUrl)
+  const url = `${qbtcRestUrl}/cosmos/tx/v1beta1/txs/${hash}`
+  const { data, error } = await attempt(async () => {
+    const resp = await fetch(url)
+    if (!resp.ok) throw new Error(`${resp.status}`)
+    return resp.json() as Promise<TxResponse>
+  })
 
-  const { data: tx, error } = await attempt(client.getTx(hash))
-
-  if (error || !tx) {
+  if (error || !data?.tx_response) {
     return { status: 'pending' }
   }
 
-  const status = tx.code === 0 ? 'success' : 'error'
+  const txResp = data.tx_response
+  const status = txResp.code === 0 ? 'success' : 'error'
   const feeCoin = chainFeeCoin[Chain.QBTC]
 
   const receipt = (() => {
-    const gasUsed = tx.gasUsed
-    const gasWanted = tx.gasWanted
-    if (gasUsed == null || gasWanted == null || gasWanted === 0n) {
-      return undefined
-    }
-    const { data: decoded } = attempt(() => decodeTxRaw(tx.tx))
-    if (!decoded) {
-      return undefined
-    }
-    const fee = decoded.authInfo?.fee
-    const maxFeeAmount =
-      fee?.amount?.[0]?.amount != null ? BigInt(fee.amount[0].amount) : 0n
-    const actualFee =
-      maxFeeAmount > 0n ? (maxFeeAmount * gasUsed) / gasWanted : 0n
-    if (actualFee === 0n) {
-      return undefined
-    }
+    const gasUsed = BigInt(txResp.gas_used || '0')
+    const gasWanted = BigInt(txResp.gas_wanted || '0')
+    if (gasUsed === 0n || gasWanted === 0n) return undefined
+    const maxFeeAmount = data.tx?.auth_info?.fee?.amount?.[0]?.amount
+    if (!maxFeeAmount) return undefined
+    const actualFee = (BigInt(maxFeeAmount) * gasUsed) / gasWanted
+    if (actualFee === 0n) return undefined
     return {
       feeAmount: actualFee,
       feeDecimals: feeCoin.decimals,

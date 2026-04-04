@@ -1,5 +1,6 @@
 import { ChainAccount } from '../../../ChainAccount'
-import { UtxoChain } from '../../../Chain'
+import { Chain, UtxoChain } from '../../../Chain'
+import { getDashUtxos } from '../client/getDashUtxos'
 import { getUtxoAddressInfo } from '../client/getUtxoAddressInfo'
 
 import { minUtxo } from '../minUtxo'
@@ -11,6 +12,10 @@ export type { ChainPlainUtxo } from './ChainPlainUtxo'
 export const getUtxos = async (
   account: ChainAccount<UtxoChain>
 ): Promise<ChainPlainUtxo[]> => {
+  if (account.chain === Chain.Dash) {
+    return getDashUtxos(account.address)
+  }
+
   const { data } = await getUtxoAddressInfo(account)
 
   const { utxo } = data[account.address]

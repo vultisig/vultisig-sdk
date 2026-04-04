@@ -26,6 +26,56 @@ export const usdc: Token<CoinKey> & KnownCoinMetadata = {
 }
 
 const leanTokens: Partial<LeanChainTokensRecord> = {
+  [Chain.Ton]: {
+    EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs: {
+      ticker: 'USDT',
+      logo: 'usdt',
+      decimals: 6,
+      priceProviderId: 'tether',
+    },
+    EQAvlWFDxGF2lXm67y4yzC17wYKD9A0guwPkMs1gOsM__NOT: {
+      ticker: 'NOT',
+      logo: 'not',
+      decimals: 9,
+      priceProviderId: 'notcoin',
+    },
+    EQCvxJy4eG8hyHBFsZ7eePxrRsUQSFE_jpptRAYBmcG_DOGS: {
+      ticker: 'DOGS',
+      logo: 'dogs',
+      decimals: 9,
+      priceProviderId: 'dogs-2',
+    },
+    'EQD-cvR0Nz6XAyRBvbhz-abTrRC6sI5tvHvvpeQraV9UAAD7': {
+      ticker: 'CATI',
+      logo: 'cati',
+      decimals: 9,
+      priceProviderId: 'catizen',
+    },
+    'EQAJ8uWd7EBqsmpSWaRdf_I-8R8-XHwh3gsNKhy-UrdrPcUo': {
+      ticker: 'HMSTR',
+      logo: 'hmstr',
+      decimals: 9,
+      priceProviderId: 'hamster-kombat',
+    },
+    EQA2kCVNwVsil2EM2mB0SkXytxCqQjS4mttjDpnXmwG9T6bO: {
+      ticker: 'STON',
+      logo: 'ston',
+      decimals: 9,
+      priceProviderId: 'ston-2',
+    },
+    'EQDNhy-nxYFgUqzfUzImBEP67JqsyMIcyk2S5_RwNNEYku0k': {
+      ticker: 'stTON',
+      logo: 'https://storage.googleapis.com/milkcreek/tokens/stTON.png',
+      decimals: 9,
+      priceProviderId: 'bemo-staked-ton',
+    },
+    EQC98_qAmNEptUtPc7W6xdHh_ZHrBUFpw5Ft_IzNU20QAJav: {
+      ticker: 'tsTON',
+      logo: 'tston',
+      decimals: 9,
+      priceProviderId: 'tonstakers',
+    },
+  },
   [Chain.Tron]: {
     TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t: {
       ticker: 'USDT',
@@ -40,6 +90,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       logo: 'https://static.jup.ag/jup/icon.png',
       decimals: 6,
       priceProviderId: 'jupiter-exchange-solana',
+    },
+    USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA: {
+      ticker: 'USDS',
+      logo: 'usds',
+      decimals: 6,
+      priceProviderId: 'usds',
     },
   },
   [Chain.Ethereum]: {
@@ -91,6 +147,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       logo: 'dai',
       decimals: 18,
       priceProviderId: 'dai',
+    },
+    '0xdC035D45d973E3EC169d2276DDab16f1e407384F': {
+      ticker: 'USDS',
+      logo: 'usds',
+      decimals: 18,
+      priceProviderId: 'usds',
     },
     '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': {
       ticker: 'WETH',
@@ -271,6 +333,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 18,
       priceProviderId: 'dai',
     },
+    '0x820C137fa70C8691f0e44dC420a5e53c168921Dc': {
+      ticker: 'USDS',
+      logo: 'usds',
+      decimals: 18,
+      priceProviderId: 'usds',
+    },
     '0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c': {
       ticker: 'rETH',
       logo: 'reth',
@@ -362,6 +430,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       logo: 'dai',
       decimals: 18,
       priceProviderId: 'dai',
+    },
+    '0x6491c05A82219b8D1479057361ff1654749b876b': {
+      ticker: 'USDS',
+      logo: 'usds',
+      decimals: 18,
+      priceProviderId: 'usds',
     },
     '0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0': {
       ticker: 'UNI',

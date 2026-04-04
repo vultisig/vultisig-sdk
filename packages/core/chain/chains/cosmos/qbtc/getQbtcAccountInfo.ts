@@ -1,20 +1,45 @@
-import { StargateClient } from '@cosmjs/stargate'
-import { qbtcTendermintRpcUrl } from '@vultisig/core-chain/chains/cosmos/qbtc/tendermintRpcUrl'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { qbtcRestUrl } from '@vultisig/core-chain/chains/cosmos/qbtc/tendermintRpcUrl'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+
+type AccountResponse = {
+  account: {
+    address: string
+    account_number: string
+    sequence: string
+  }
+}
+
+type BlockResponse = {
+  block: {
+    header: {
+      height: string
+      time: string
+    }
+  }
+}
 
 export const getQbtcAccountInfo = async ({ address }: { address: string }) => {
-  const client = await StargateClient.connect(qbtcTendermintRpcUrl)
-  const accountInfo = shouldBePresent(await client.getAccount(address))
-  const block = await client.getBlock()
-  const blockTimestampStr = block.header.time
+  const [accountData, blockData] = await Promise.all([
+    queryUrl<AccountResponse>(
+      `${qbtcRestUrl}/cosmos/auth/v1beta1/accounts/${address}`
+    ),
+    queryUrl<BlockResponse>(
+      `${qbtcRestUrl}/cosmos/base/tendermint/v1beta1/blocks/latest`
+    ),
+  ])
+
+  const accountNumber = Number(accountData.account.account_number)
+  const sequence = Number(accountData.account.sequence)
+  const blockTimestampStr = blockData.block.header.time
   const blockTimestampNs =
     BigInt(new Date(blockTimestampStr).getTime()) * 1_000_000n
-
   const timeoutNs = blockTimestampNs + 600_000_000_000n
-  const latestBlock = `${block.header.height}_${timeoutNs}`
+  const latestBlock = `${blockData.block.header.height}_${timeoutNs}`
 
   return {
-    ...accountInfo,
+    address,
+    accountNumber,
+    sequence,
     latestBlock,
   }
 }
