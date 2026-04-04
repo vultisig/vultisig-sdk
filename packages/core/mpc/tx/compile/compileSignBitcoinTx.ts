@@ -40,11 +40,21 @@ export const compileSignBitcoinTx = (
     const indexBuf = Buffer.alloc(4)
     indexBuf.writeUInt32LE(input.index)
     parts.push(indexBuf)
-    // scriptSig (empty for segwit P2WPKH)
-    parts.push(Buffer.from([0x00]))
+    // scriptSig: empty for native P2WPKH, redeemScript push for P2SH-P2WPKH
+    if (input.scriptType === 'p2sh-p2wpkh' && input.redeemScript) {
+      const redeemScriptBuf = Buffer.from(input.redeemScript, 'hex')
+      const scriptSig = Buffer.concat([
+        Buffer.from([redeemScriptBuf.length]),
+        redeemScriptBuf,
+      ])
+      parts.push(writeVarInt(scriptSig.length))
+      parts.push(scriptSig)
+    } else {
+      parts.push(Buffer.from([0x00]))
+    }
     // Sequence
     const seqBuf = Buffer.alloc(4)
-    seqBuf.writeUInt32LE(input.sequence || 0xffffffff)
+    seqBuf.writeUInt32LE(input.sequence ?? 0xffffffff)
     parts.push(seqBuf)
   }
 
@@ -80,7 +90,7 @@ export const compileSignBitcoinTx = (
     }
 
     const derSig = Buffer.from(sig.der_signature, 'hex')
-    const sighashByte = input.sighashType || 1
+    const sighashByte = input.sighashType ?? 1
     const sigWithHashType = Buffer.concat([derSig, Buffer.from([sighashByte])])
 
     // P2WPKH witness: 2 items — [signature+hashtype, pubkey]
@@ -111,7 +121,7 @@ export const compileSignBitcoinTx = (
     const sig = signatures[hashHex]
 
     const derSig = Buffer.from(sig.der_signature, 'hex')
-    const sighashByte = input.sighashType || 1
+    const sighashByte = input.sighashType ?? 1
     const sigWithHashType = Buffer.concat([derSig, Buffer.from([sighashByte])])
 
     return {

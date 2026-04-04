@@ -15,7 +15,10 @@ import {
 } from 'bitcoinjs-lib'
 
 /** Detect the script type from a scriptPubKey buffer. */
-const detectScriptType = (scriptPubKey: Buffer): string => {
+const detectScriptType = (
+  scriptPubKey: Buffer,
+  redeemScript?: Uint8Array
+): string => {
   if (scriptPubKey.length === 22 && scriptPubKey[0] === 0x00 && scriptPubKey[1] === 0x14) {
     return 'p2wpkh'
   }
@@ -25,7 +28,17 @@ const detectScriptType = (scriptPubKey: Buffer): string => {
   if (scriptPubKey.length === 34 && scriptPubKey[0] === 0x51 && scriptPubKey[1] === 0x20) {
     return 'p2tr'
   }
-  if (scriptPubKey.length === 23 && scriptPubKey[0] === 0xa9) {
+  // Only classify as p2sh-p2wpkh when the redeemScript is a valid P2WPKH witness program
+  const redeem = redeemScript ? Buffer.from(redeemScript) : undefined
+  if (
+    scriptPubKey.length === 23 &&
+    scriptPubKey[0] === 0xa9 &&
+    scriptPubKey[1] === 0x14 &&
+    scriptPubKey[22] === 0x87 &&
+    redeem?.length === 22 &&
+    redeem[0] === 0x00 &&
+    redeem[1] === 0x14
+  ) {
     return 'p2sh-p2wpkh'
   }
   return 'unknown'
@@ -89,7 +102,7 @@ export const buildSignBitcoinFromPsbt = ({
       )
     }
 
-    const scriptType = detectScriptType(scriptPubKey)
+    const scriptType = detectScriptType(scriptPubKey, inputData.redeemScript)
 
     // If any input has BIP32 derivation, use it to determine ownership.
     // Otherwise (e.g. simple PSBTs without derivation paths), assume all inputs are ours.

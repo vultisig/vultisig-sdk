@@ -161,7 +161,7 @@ export class FastVaultFromSeedphraseService {
         local_party_id: serverPartyId,
         encryption_password: password,
         email,
-        lib_type: toLibType({ libType: 'DKLS', isKeyImport: true }),
+        lib_type: toLibType('KeyImport'),
         chains: chainsToImport,
         protocols: ['ecdsa', 'eddsa'],
         vaultBaseUrl: this.context.serverManager.fastVault,
@@ -175,7 +175,7 @@ export class FastVaultFromSeedphraseService {
         local_party_id: serverPartyId,
         encryption_password: password,
         email,
-        lib_type: toLibType({ libType: 'DKLS', isKeyImport: true }),
+        lib_type: toLibType('KeyImport'),
         chains: chainsToImport,
         vaultBaseUrl: this.context.serverManager.fastVault,
       })

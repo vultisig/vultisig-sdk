@@ -45,6 +45,7 @@ export const getCompiledTxsForBlockaidInput = ({
       walletCore,
       txInputData,
       chain,
+      keysignPayload: payload,
     })
 
     const signatures = walletCore.DataVector.create()

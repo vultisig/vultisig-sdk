@@ -75,6 +75,7 @@ export const compileTx = ({
     walletCore,
     txInputData,
     chain,
+    keysignPayload,
   })
 
   const chainKind = getChainKind(chain)

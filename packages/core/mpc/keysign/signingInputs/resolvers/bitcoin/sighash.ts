@@ -68,7 +68,7 @@ export const computeBip143Sighashes = (
 
   // hashSequence = double_SHA256(all sequences serialized)
   const sequenceData = Buffer.concat(
-    inputs.map(inp => writeUInt32LE(inp.sequence || 0xffffffff))
+    inputs.map(inp => writeUInt32LE(inp.sequence ?? 0xffffffff))
   )
   const hashSequence = hash256(sequenceData)
 
@@ -91,11 +91,17 @@ export const computeBip143Sighashes = (
     if (input.scriptType === 'p2wpkh') {
       scriptCode = p2wpkhScriptCode(scriptPubKey)
     } else if (input.scriptType === 'p2sh-p2wpkh') {
-      // For P2SH-P2WPKH, the redeemScript is a P2WPKH script.
-      // The scriptCode is derived from the P2WPKH within the redeemScript.
-      const redeemScript = input.redeemScript
-        ? Buffer.from(input.redeemScript, 'hex')
-        : scriptPubKey
+      if (!input.redeemScript) {
+        throw new Error('P2SH-P2WPKH inputs require redeemScript')
+      }
+      const redeemScript = Buffer.from(input.redeemScript, 'hex')
+      if (
+        redeemScript.length !== 22 ||
+        redeemScript[0] !== 0x00 ||
+        redeemScript[1] !== 0x14
+      ) {
+        throw new Error('Unsupported redeemScript for p2sh-p2wpkh')
+      }
       scriptCode = p2wpkhScriptCode(redeemScript)
     } else {
       throw new Error(
@@ -103,7 +109,13 @@ export const computeBip143Sighashes = (
       )
     }
 
-    const sighashType = input.sighashType || 1 // SIGHASH_ALL
+    const sighashType = input.sighashType ?? 1 // SIGHASH_ALL
+    const baseType = sighashType & 0x1f
+    const anyoneCanPay = (sighashType & 0x80) !== 0
+
+    if (baseType !== 0x01 || anyoneCanPay) {
+      throw new Error(`Unsupported sighash type for BIP-143: ${sighashType}`)
+    }
 
     // BIP-143 preimage:
     // version || hashPrevouts || hashSequence || outpoint || scriptCode || value || sequence || hashOutputs || locktime || sighashType
@@ -115,7 +127,7 @@ export const computeBip143Sighashes = (
       outpoint,
       scriptCode,
       writeInt64LE(input.amount),
-      writeUInt32LE(input.sequence || 0xffffffff),
+      writeUInt32LE(input.sequence ?? 0xffffffff),
       hashOutputs,
       writeUInt32LE(locktime),
       writeUInt32LE(sighashType),
