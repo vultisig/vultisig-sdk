@@ -19,6 +19,9 @@ async function jitoFetch<T = unknown>(url: string, body: unknown): Promise<JitoR
       body: JSON.stringify(body),
       signal: controller.signal,
     })
+    if (!response.ok) {
+      throw new Error(`JITO request failed: ${response.status} ${response.statusText}`)
+    }
     return response.json()
   } finally {
     clearTimeout(timeout)
@@ -106,7 +109,7 @@ export async function getTipFloor(): Promise<TipFloorData> {
   let response: Response
   try {
     response = await fetch(
-      'https://bundles-api-rest.jito.wtf/api/v1/bundles/tip_floor',
+      'https://bundles.jito.wtf/api/v1/bundles/tip_floor',
       { signal: controller.signal }
     )
   } finally {
@@ -149,7 +152,7 @@ export async function getRecommendedTipLamports(): Promise<number> {
     return Math.max(Math.ceil(tipSol * 1_000_000_000), 1_000)
   } catch {
     // Fallback: conservative default if tip floor API is unavailable
-    return 100_000 // 0.0001 SOL
+    return DEFAULT_TIP_LAMPORTS
   }
 }
 
