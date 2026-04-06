@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises'
 import { Vultisig } from '@vultisig/sdk'
 import inquirer from 'inquirer'
 
-import { loadConfig, saveConfig } from '../core/config'
+import { loadConfig, saveConfig } from '../core/config-store'
 import { clearCredentials, getServerPassword, setDecryptionPassword, setServerPassword } from '../core/credential-store'
 import { discoverVaultFiles, SEARCH_DIRS } from '../core/vault-discovery'
 
