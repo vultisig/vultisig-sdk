@@ -1,0 +1,2 @@
+# Override root-level bin/ ignore — this package has source in bin/
+!bin/
