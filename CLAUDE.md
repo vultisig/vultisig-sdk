@@ -93,6 +93,7 @@ When creating changesets, use the exact package names from package.json:
 - **Unit**: `tests/unit/` - Fast, isolated (vitest)
 - **Integration**: `tests/integration/` - Service layer
 - **E2E**: `tests/e2e/` - Full workflows, requires real vault file
+- **Core / shared lib**: colocated `*.test.ts` under `packages/core/` and `packages/lib/` — `yarn test` runs these via `yarn test:core` (Vitest, `.config/vitest.core.config.ts`; no separate build required)
 
 Specific E2E tests: `yarn test:e2e:balance`, `yarn test:e2e:signing`, etc.
 
