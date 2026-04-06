@@ -320,9 +320,28 @@ export type PipeOutputEvent =
   | { type: 'auth'; status: 'authenticated' | 'failed'; error?: string }
   | { type: 'conversation'; id: string }
   | { type: 'text_delta'; delta: string }
-  | { type: 'tool_call'; id: string; action: string; params?: Record<string, unknown>; status: 'running' | 'done' | 'error' }
-  | { type: 'tool_result'; id: string; action: string; success: boolean; data?: Record<string, unknown>; error?: string }
-  | { type: 'tx_status'; tx_hash: string; chain: string; status: 'pending' | 'confirmed' | 'failed'; explorer_url?: string }
+  | {
+      type: 'tool_call'
+      id: string
+      action: string
+      params?: Record<string, unknown>
+      status: 'running' | 'done' | 'error'
+    }
+  | {
+      type: 'tool_result'
+      id: string
+      action: string
+      success: boolean
+      data?: Record<string, unknown>
+      error?: string
+    }
+  | {
+      type: 'tx_status'
+      tx_hash: string
+      chain: string
+      status: 'pending' | 'confirmed' | 'failed'
+      explorer_url?: string
+    }
   | { type: 'assistant'; content: string }
   | { type: 'suggestions'; suggestions: Suggestion[] }
   | { type: 'error'; message: string }

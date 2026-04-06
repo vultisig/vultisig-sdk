@@ -36,9 +36,7 @@ export function formatSignature(
   signatureAlgorithm: SignatureAlgorithm
 ): Signature {
   if (signatureAlgorithm === 'mldsa') {
-    throw new Error(
-      'formatSignature does not support mldsa; use formatMldsaSignature() with the ML-DSA signing result'
-    )
+    throw new Error('formatSignature does not support mldsa; use formatMldsaSignature() with the ML-DSA signing result')
   }
 
   const firstMessage = messages[0]

@@ -580,23 +580,15 @@ export class SecureVaultCreationService {
       onStepChange?.('ecdsa')
       onStepChange?.('eddsa')
       ;[dklsResult, schnorrResult] = await Promise.all([
-        dkls.startReshareWithRetry(
-          existingVault?.keyShares.ecdsa,
-          TSS_BATCH_MESSAGE_IDS.ecdsa
-        ),
-        schnorr.startReshareWithRetry(
-          existingVault?.keyShares.eddsa,
-          TSS_BATCH_MESSAGE_IDS.eddsa
-        ),
+        dkls.startReshareWithRetry(existingVault?.keyShares.ecdsa, TSS_BATCH_MESSAGE_IDS.ecdsa),
+        schnorr.startReshareWithRetry(existingVault?.keyShares.eddsa, TSS_BATCH_MESSAGE_IDS.eddsa),
       ])
     } else {
       onStepChange?.('ecdsa')
       dklsResult = await dkls.startReshareWithRetry(existingVault?.keyShares.ecdsa)
 
       onStepChange?.('eddsa')
-      schnorrResult = await schnorr.startReshareWithRetry(
-        existingVault?.keyShares.eddsa
-      )
+      schnorrResult = await schnorr.startReshareWithRetry(existingVault?.keyShares.eddsa)
     }
 
     // Signal completion to peers

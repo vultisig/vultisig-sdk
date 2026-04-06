@@ -109,8 +109,11 @@ async function serveStatic(pathname: string, res: ServerResponse): Promise<boole
   const file = join(PUBLIC_DIR, safe)
   try {
     const data = await readFile(file)
-    const type =
-      safe.endsWith('.html') ? 'text/html' : safe.endsWith('.js') ? 'application/javascript' : 'application/octet-stream'
+    const type = safe.endsWith('.html')
+      ? 'text/html'
+      : safe.endsWith('.js')
+        ? 'application/javascript'
+        : 'application/octet-stream'
     res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8` })
     res.end(data)
     return true
@@ -122,10 +125,7 @@ async function serveStatic(pathname: string, res: ServerResponse): Promise<boole
 async function main(): Promise<void> {
   loadDotenv()
 
-  const notificationUrl = (process.env.NOTIFICATION_URL || 'https://api.vultisig.com/notification').replace(
-    /\/$/,
-    ''
-  )
+  const notificationUrl = (process.env.NOTIFICATION_URL || 'https://api.vultisig.com/notification').replace(/\/$/, '')
   const { vaultId, notifyVaultName, sdk: vaultSdk } = await resolveVault()
   const browserPartyName =
     process.env.PUSH_E2E_BROWSER_PARTY?.trim() || `sdk-live-e2e-browser-${Date.now().toString(36)}`
@@ -295,7 +295,9 @@ async function main(): Promise<void> {
   console.log('  1. Open the URL, click “Register…”, allow notifications (needed for Web Push in the browser).')
   console.log('  2. Click “Send test notification”.')
   console.log('  3. Product check: you should see an OS or in-page notification; click it (mode: click).')
-  console.log('  4. Default mode (push): helper exits when the service worker reports the push (poll GET /api/verification).')
+  console.log(
+    '  4. Default mode (push): helper exits when the service worker reports the push (poll GET /api/verification).'
+  )
   console.log('     WebSocket lines above are diagnostic only unless PUSH_E2E_SUCCESS=ws.')
   console.log('Press Ctrl+C to stop and unregister this browser from the server.')
   console.log('')
@@ -324,7 +326,9 @@ async function main(): Promise<void> {
     if (verification.lastSwShowNotificationOk === true) {
       console.log('   Service worker reports showNotification() succeeded (OS UI may still be hidden on macOS).')
     } else if (verification.lastSwShowNotificationOk === false) {
-      console.log('   Service worker reports showNotification() failed — check DevTools → Application → Service Workers.')
+      console.log(
+        '   Service worker reports showNotification() failed — check DevTools → Application → Service Workers.'
+      )
     }
     if (verification.lastPushTitle) {
       console.log(`   Title: ${verification.lastPushTitle}`)
@@ -371,7 +375,9 @@ async function main(): Promise<void> {
       if (doneWs) {
         clearInterval(t)
         console.log('')
-        console.log('✅ PUSH_E2E_SUCCESS=ws — exiting on WebSocket only (diagnostic; not sufficient for visible-notification sign-off).')
+        console.log(
+          '✅ PUSH_E2E_SUCCESS=ws — exiting on WebSocket only (diagnostic; not sufficient for visible-notification sign-off).'
+        )
         console.log('')
         void shutdown(0)
         resolve()

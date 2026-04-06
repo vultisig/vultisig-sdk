@@ -368,13 +368,9 @@ export class SecureVaultFromSeedphraseService {
     const chainKeyShares: Partial<Record<Chain, string>> = {}
     let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
     let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
-    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(
-      mnemonic,
-      chainsToImport as Chain[],
-      {
-        usePhantomSolanaPath,
-      }
-    )
+    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic, chainsToImport as Chain[], {
+      usePhantomSolanaPath,
+    })
 
     if (tssBatching) {
       reportProgress({
@@ -468,10 +464,7 @@ export class SecureVaultFromSeedphraseService {
         message: 'Importing ECDSA key...',
       })
 
-      ecdsaResult = await dkls.startKeyImportWithRetry(
-        masterKeys.ecdsaPrivateKeyHex,
-        hexChainCode
-      )
+      ecdsaResult = await dkls.startKeyImportWithRetry(masterKeys.ecdsaPrivateKeyHex, hexChainCode)
 
       if (signal?.aborted) {
         throw new Error('Operation aborted')
@@ -495,10 +488,7 @@ export class SecureVaultFromSeedphraseService {
         dkls.getSetupMessage()
       )
 
-      eddsaResult = await schnorr.startKeyImportWithRetry(
-        masterKeys.eddsaPrivateKeyHex,
-        hexChainCode
-      )
+      eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
       if (signal?.aborted) {
         throw new Error('Operation aborted')
@@ -536,11 +526,7 @@ export class SecureVaultFromSeedphraseService {
             hexEncryptionKey,
             new Uint8Array()
           )
-          const chainResult = await chainSchnorr.startKeyImportWithRetry(
-            privateKeyHex,
-            eddsaResult.chaincode,
-            chain
-          )
+          const chainResult = await chainSchnorr.startKeyImportWithRetry(privateKeyHex, eddsaResult.chaincode, chain)
           chainPublicKeys[chain] = chainResult.publicKey
           chainKeyShares[chain] = chainResult.keyshare
         } else {
@@ -554,11 +540,7 @@ export class SecureVaultFromSeedphraseService {
             [],
             hexEncryptionKey
           )
-          const chainResult = await chainDkls.startKeyImportWithRetry(
-            privateKeyHex,
-            ecdsaResult.chaincode,
-            chain
-          )
+          const chainResult = await chainDkls.startKeyImportWithRetry(privateKeyHex, ecdsaResult.chaincode, chain)
           chainPublicKeys[chain] = chainResult.publicKey
           chainKeyShares[chain] = chainResult.keyshare
         }

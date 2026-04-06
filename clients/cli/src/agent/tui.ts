@@ -197,7 +197,8 @@ export class ChatTUI {
       },
 
       onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
-        const statusIcon = status === 'confirmed' ? chalk.green('✓') : status === 'failed' ? chalk.red('✗') : chalk.yellow('⏳')
+        const statusIcon =
+          status === 'confirmed' ? chalk.green('✓') : status === 'failed' ? chalk.red('✗') : chalk.yellow('⏳')
         console.log(`  ${statusIcon} ${chalk.bold('TX')} [${chain}]: ${txHash.slice(0, 12)}...${txHash.slice(-8)}`)
         if (explorerUrl) {
           console.log(`     ${chalk.blue.underline(explorerUrl)}`)
@@ -302,7 +303,11 @@ export class ChatTUI {
   private printHeader(): void {
     console.log('')
     console.log(chalk.bold.cyan(`  ╔═══════════════════════════════════════╗`))
-    console.log(chalk.bold.cyan(`  ║`) + chalk.bold(`     Vultisig Agent - ${this.vaultName}`.padEnd(38).slice(0, 38)) + chalk.bold.cyan(`║`))
+    console.log(
+      chalk.bold.cyan(`  ║`) +
+        chalk.bold(`     Vultisig Agent - ${this.vaultName}`.padEnd(38).slice(0, 38)) +
+        chalk.bold.cyan(`║`)
+    )
     console.log(chalk.bold.cyan(`  ╚═══════════════════════════════════════╝`))
     console.log('')
   }
@@ -361,17 +366,19 @@ export class ChatTUI {
  * Convert basic markdown to terminal-styled text using chalk.
  */
 function renderMarkdown(text: string): string {
-  return text
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/g, (_m, p1) => chalk.bold(p1))
-    .replace(/__(.+?)__/g, (_m, p1) => chalk.bold(p1))
-    // Italic: *text* or _text_ (but not inside words like contract_address)
-    .replace(/(?<!\w)\*([^*]+?)\*(?!\w)/g, (_m, p1) => chalk.italic(p1))
-    .replace(/(?<!\w)_([^_]+?)_(?!\w)/g, (_m, p1) => chalk.italic(p1))
-    // Inline code: `text`
-    .replace(/`([^`]+?)`/g, (_m, p1) => chalk.cyan(p1))
-    // Links: [text](url)
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, p1, p2) => `${p1} ${chalk.blue.underline(`(${p2})`)}`)
+  return (
+    text
+      // Bold: **text** or __text__
+      .replace(/\*\*(.+?)\*\*/g, (_m, p1) => chalk.bold(p1))
+      .replace(/__(.+?)__/g, (_m, p1) => chalk.bold(p1))
+      // Italic: *text* or _text_ (but not inside words like contract_address)
+      .replace(/(?<!\w)\*([^*]+?)\*(?!\w)/g, (_m, p1) => chalk.italic(p1))
+      .replace(/(?<!\w)_([^_]+?)_(?!\w)/g, (_m, p1) => chalk.italic(p1))
+      // Inline code: `text`
+      .replace(/`([^`]+?)`/g, (_m, p1) => chalk.cyan(p1))
+      // Links: [text](url)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, p1, p2) => `${p1} ${chalk.blue.underline(`(${p2})`)}`)
+  )
 }
 
 function summarizeData(data: Record<string, unknown>): string {
