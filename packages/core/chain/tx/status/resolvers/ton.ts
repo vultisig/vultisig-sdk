@@ -7,11 +7,8 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { TxStatusResolver } from '../resolver'
 
 type TonTransaction = {
-  transaction_id: {
-    hash: string
-  }
-  out_msgs: Array<unknown>
-  fee?: string
+  hash: string
+  total_fees: string
   description?: {
     aborted?: boolean
     compute_ph?: {
@@ -21,24 +18,23 @@ type TonTransaction = {
 }
 
 type TonTransactionsResponse = {
-  ok: boolean
-  result: Array<TonTransaction>
+  transactions: Array<TonTransaction>
 }
 
 export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({
   hash,
 }) => {
-  const url = `${rootApiUrl}/ton/v2/getTransactions?hash=${hash}`
+  const url = `${rootApiUrl}/ton/v3/transactionsByMessage?msg_hash=${hash}&direction=in&limit=1`
 
   const { data: response, error } = await attempt(
     queryUrl<TonTransactionsResponse>(url)
   )
 
-  if (error || !response || !response.ok || response.result.length === 0) {
+  if (error || !response || response.transactions.length === 0) {
     return { status: 'pending' }
   }
 
-  const tx = response.result[0]
+  const tx = response.transactions[0]
 
   // Check if transaction was aborted
   if (tx.description?.aborted) {
@@ -54,14 +50,14 @@ export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({
   const status = success ? 'success' : 'error'
 
   const feeCoin = chainFeeCoin[Chain.Ton]
-  const feeStr = tx.fee
+  const feeStr = tx.total_fees
   const receipt =
     feeStr != null && feeStr !== ''
       ? {
-          feeAmount: BigInt(feeStr),
-          feeDecimals: feeCoin.decimals,
-          feeTicker: feeCoin.ticker,
-        }
+        feeAmount: BigInt(feeStr),
+        feeDecimals: feeCoin.decimals,
+        feeTicker: feeCoin.ticker,
+      }
       : undefined
 
   return { status, receipt }
