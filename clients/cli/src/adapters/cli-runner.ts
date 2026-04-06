@@ -1,22 +1,13 @@
-/**
- * CLI Runner - Wraps command execution for CLI mode
- *
- * Provides:
- * - Error handling with process exit
- * - Consistent exit codes
- * - Cleanup on completion
- */
+// CLI Runner - Wraps command execution with typed error handling and exit codes
+
 import { classifyError, toErrorJson, VsigError } from '../core/errors'
 import { isJsonOutput, printError } from '../lib/output'
 import type { CLIContext } from './cli-context'
 
-/**
- * Wrap a command handler with CLI exit behavior
- * - Exits with code 0 on success
- * - On VsigError: uses typed exitCode
- * - On unknown Error: classifies via classifyError(), then exits with typed code
- * - In JSON mode: outputs structured error JSON
- */
+// Wrap a command handler with CLI exit behavior
+// On VsigError: uses typed exitCode
+// On unknown Error: classifies via classifyError(), then exits with typed code
+// In JSON mode: outputs structured error JSON
 export function withExit<T extends any[]>(handler: (...args: T) => Promise<void>): (...args: T) => Promise<void> {
   return async (...args: T) => {
     try {
