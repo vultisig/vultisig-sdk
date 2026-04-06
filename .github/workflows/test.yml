@@ -45,14 +45,17 @@ jobs:
         run: yarn test:coverage
         working-directory: packages/sdk
 
-      # fail_ci_if_error: true — upload or API errors fail the job; re-run the workflow if Codecov is temporarily unavailable.
+      # Fork PRs and repos without CODECOV_TOKEN cannot tokenless-upload; do not fail the job then.
+      # When secrets.CODECOV_TOKEN is set, upload errors fail the job (strict).
       - name: Upload coverage to Codecov
+        continue-on-error: ${{ secrets.CODECOV_TOKEN == '' }}
         uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v4
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./packages/sdk/coverage/lcov.info
           flags: unittests
           name: codecov-umbrella
-          fail_ci_if_error: true
+          fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
 
       - name: Archive coverage report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

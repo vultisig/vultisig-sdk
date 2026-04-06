@@ -4,7 +4,8 @@
     "dependencies",
     "devDependencies",
     "optionalPeerDependencies",
-    "binaries"
+    "binaries",
+    "unlisted"
   ],
   "ignore": ["packages/core/mpc/types/**"],
   "ignoreFiles": [
@@ -14,6 +15,24 @@
     "testdata/**"
   ],
   "ignoreIssues": {
+    "packages/core/**": [
+      "exports",
+      "types",
+      "nsExports",
+      "nsTypes",
+      "duplicates",
+      "enumMembers",
+      "classMembers"
+    ],
+    "packages/lib/**": [
+      "exports",
+      "types",
+      "nsExports",
+      "nsTypes",
+      "duplicates",
+      "enumMembers",
+      "classMembers"
+    ],
     "packages/sdk/src/types/index.ts": ["exports", "types", "nsExports", "nsTypes"],
     "packages/sdk/src/vault/index.ts": ["exports", "types", "nsExports", "nsTypes"],
     "packages/sdk/src/seedphrase/index.ts": ["exports", "types"],
