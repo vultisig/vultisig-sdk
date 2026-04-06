@@ -18,6 +18,9 @@ import {
   executeAgentAsk,
   executeAgentSessionsDelete,
   executeAgentSessionsList,
+  executeAuthLogout,
+  executeAuthSetup,
+  executeAuthStatus,
   executeBalance,
   executeBroadcast,
   executeChains,
@@ -1299,6 +1302,57 @@ program
       } else {
         printResult(chalk.green(`You're on the latest version (${result.currentVersion})`))
       }
+    })
+  )
+
+// ============================================================================
+// Auth Commands (keyring credential management)
+// ============================================================================
+
+const authCmd = program.command('auth').description('Manage keyring-stored vault credentials')
+
+authCmd
+  .command('setup')
+  .description('Discover .vult files, prompt for passwords, and store credentials in the OS keyring')
+  .option('--vault-file <path>', 'Path to a specific .vult file')
+  .option('--non-interactive', 'Fail instead of prompting (use env vars)')
+  .action(
+    withExit(async (options: { vaultFile?: string; nonInteractive?: boolean }) => {
+      const result = await executeAuthSetup({
+        vaultFile: options.vaultFile,
+        nonInteractive: options.nonInteractive,
+      })
+      printResult(chalk.green(`Vault "${result.vaultName}" (${result.vaultId}) credentials stored in keyring.`))
+    })
+  )
+
+authCmd
+  .command('status')
+  .description('List configured vaults and their keyring credential status')
+  .action(
+    withExit(async () => {
+      const vaults = await executeAuthStatus()
+      if (vaults.length === 0) {
+        printResult('No vaults configured. Run: vsig auth setup')
+        return
+      }
+      for (const v of vaults) {
+        const status = v.hasCredentials ? chalk.green('authenticated') : chalk.red('no credentials')
+        printResult(`  ${v.name} (${v.id}) - ${status}`)
+        printResult(`    File: ${v.filePath}`)
+      }
+    })
+  )
+
+authCmd
+  .command('logout')
+  .description('Clear keyring credentials for a vault')
+  .option('--vault-id <id>', 'Specific vault ID to clear')
+  .option('--all', 'Clear credentials for all configured vaults')
+  .action(
+    withExit(async (options: { vaultId?: string; all?: boolean }) => {
+      await executeAuthLogout({ vaultId: options.vaultId, all: options.all })
+      printResult(chalk.green('Credentials cleared.'))
     })
   )
 

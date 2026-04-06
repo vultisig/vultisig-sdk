@@ -59,6 +59,7 @@
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "dotenv": "^17.3.1",
+    "keytar": "^7.9.0",
     "ora": "^9.3.0",
     "qrcode-terminal": "^0.12.0",
     "tabtab": "^3.0.2",

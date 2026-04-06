@@ -81,6 +81,9 @@ export {
 export type { DiscountOptions, DiscountTierInfo } from './discount'
 export { executeDiscount } from './discount'
 
+// Auth commands (keyring credential management)
+export { executeAuthLogout, executeAuthSetup, executeAuthStatus } from './auth'
+
 // Agent chat commands
 export type {
   AgentAskOptions,

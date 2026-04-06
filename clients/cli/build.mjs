@@ -24,6 +24,7 @@ await build({
     'chalk',
     'commander',
     'inquirer',
+    'keytar',
     'ora',
     'cli-table3',
     'tabtab',
