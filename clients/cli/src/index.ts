@@ -53,6 +53,7 @@ import {
   executeVerify,
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
+import { getVaultEntry } from './core/config-store'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
 import {
@@ -134,6 +135,51 @@ async function findVaultByNameOrId(sdk: Vultisig, nameOrId: string): Promise<Vau
   return null
 }
 
+async function restorePersistedState(vault: VaultBase): Promise<void> {
+  try {
+    const entry = await getVaultEntry(vault.id)
+    if (!entry) return
+
+    // Restore extra chains
+    if (entry.extraChains?.length) {
+      for (const chainName of entry.extraChains) {
+        const chain = chainName as Chain
+        if (!vault.chains.includes(chain)) {
+          try {
+            await vault.addChain(chain)
+          } catch {
+            // Skip invalid chains silently
+          }
+        }
+      }
+    }
+
+    // Restore persisted tokens
+    if (entry.tokens) {
+      for (const [chainName, tokens] of Object.entries(entry.tokens)) {
+        const chain = chainName as Chain
+        for (const t of tokens) {
+          try {
+            await vault.addToken(chain, {
+              id: t.contractAddress || t.id,
+              symbol: t.symbol,
+              name: t.symbol,
+              decimals: t.decimals,
+              contractAddress: t.contractAddress,
+              chainId: chainName,
+              isNative: false,
+            })
+          } catch {
+            // Skip tokens that fail to add
+          }
+        }
+      }
+    }
+  } catch {
+    // Config read failure is non-fatal
+  }
+}
+
 async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL?: number): Promise<CLIContext> {
   if (!ctx) {
     // Cache password BEFORE SDK init if provided
@@ -166,6 +212,7 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
     if (vault) {
       await ctx.setActiveVault(vault)
       setupVaultEvents(vault)
+      await restorePersistedState(vault)
     }
   }
   return ctx
@@ -814,6 +861,7 @@ program
   .description('List and manage tokens for a chain')
   .option('--add <contractAddress>', 'Add a token by contract address')
   .option('--remove <tokenId>', 'Remove a token by ID')
+  .option('--discover', 'Auto-discover tokens with balances on the chain')
   .option('--symbol <symbol>', 'Token symbol (for --add)')
   .option('--name <name>', 'Token name (for --add)')
   .option('--decimals <decimals>', 'Token decimals (for --add)', '18')
@@ -821,13 +869,21 @@ program
     withExit(
       async (
         chainStr: string,
-        options: { add?: string; remove?: string; symbol?: string; name?: string; decimals?: string }
+        options: {
+          add?: string
+          remove?: string
+          discover?: boolean
+          symbol?: string
+          name?: string
+          decimals?: string
+        }
       ) => {
         const context = await init(program.opts().vault)
         await executeTokens(context, {
           chain: findChainByName(chainStr) || (chainStr as Chain),
           add: options.add,
           remove: options.remove,
+          discover: options.discover,
           symbol: options.symbol,
           name: options.name,
           decimals: options.decimals ? parseInt(options.decimals, 10) : undefined,
@@ -1084,29 +1140,40 @@ const agentCmd = program
   .option('--password <password>', 'Vault password for signing operations')
   .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
   .option('--session-id <id>', 'Resume an existing session')
-  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; sessionId?: string }) => {
-    // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
-    // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
-    const MAX_TTL = 86400000 // 24 hours
-    let passwordTTL: number | undefined
-    if (options.passwordTtl) {
-      const parsed = parseInt(options.passwordTtl, 10)
-      if (Number.isNaN(parsed) || parsed < 0) {
-        throw new Error(`Invalid --password-ttl value: "${options.passwordTtl}". Expected a non-negative integer in milliseconds.`)
+  .action(
+    async (options: {
+      viaAgent?: boolean
+      verbose?: boolean
+      backendUrl?: string
+      password?: string
+      passwordTtl?: string
+      sessionId?: string
+    }) => {
+      // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
+      // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
+      const MAX_TTL = 86400000 // 24 hours
+      let passwordTTL: number | undefined
+      if (options.passwordTtl) {
+        const parsed = parseInt(options.passwordTtl, 10)
+        if (Number.isNaN(parsed) || parsed < 0) {
+          throw new Error(
+            `Invalid --password-ttl value: "${options.passwordTtl}". Expected a non-negative integer in milliseconds.`
+          )
+        }
+        passwordTTL = parsed
+      } else if (options.viaAgent) {
+        passwordTTL = MAX_TTL
       }
-      passwordTTL = parsed
-    } else if (options.viaAgent) {
-      passwordTTL = MAX_TTL
+      const context = await init(program.opts().vault, options.password, passwordTTL)
+      await executeAgent(context, {
+        viaAgent: options.viaAgent,
+        verbose: options.verbose,
+        backendUrl: options.backendUrl,
+        password: options.password,
+        sessionId: options.sessionId,
+      })
     }
-    const context = await init(program.opts().vault, options.password, passwordTTL)
-    await executeAgent(context, {
-      viaAgent: options.viaAgent,
-      verbose: options.verbose,
-      backendUrl: options.backendUrl,
-      password: options.password,
-      sessionId: options.sessionId,
-    })
-  })
+  )
 
 // Ask subcommand: one-shot mode for AI coding agents
 agentCmd
@@ -1129,10 +1196,7 @@ agentCmd
       }
     ) => {
       const parentOpts = agentCmd.opts()
-      const context = await init(
-        program.opts().vault,
-        options.password || parentOpts.password
-      )
+      const context = await init(program.opts().vault, options.password || parentOpts.password)
       await executeAgentAsk(context, message, {
         ...options,
         backendUrl: options.backendUrl || parentOpts.backendUrl,

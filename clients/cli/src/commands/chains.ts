@@ -6,6 +6,7 @@ import { SUPPORTED_CHAINS } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
+import { ensureVaultEntry, persistExtraChains } from '../core/config-store'
 import { createSpinner, info, isJsonOutput, outputJson, printResult, success } from '../lib/output'
 import { displayAddresses } from '../ui'
 
@@ -29,6 +30,9 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
     const addedCount = SUPPORTED_CHAINS.length - currentCount
     spinner.succeed(`Added ${addedCount} chains (${SUPPORTED_CHAINS.length} total)`)
 
+    await ensureVaultEntry(vault.id, vault.name, '')
+    await persistExtraChains(vault.id, [...vault.chains].map(String))
+
     if (isJsonOutput()) {
       outputJson({ chains: [...vault.chains], added: addedCount, total: SUPPORTED_CHAINS.length })
       return
@@ -42,9 +46,15 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
     success(`\n+ Added chain: ${options.add}`)
     const address = await vault.address(options.add)
     info(`Address: ${address}`)
+
+    await ensureVaultEntry(vault.id, vault.name, '')
+    await persistExtraChains(vault.id, [...vault.chains].map(String))
   } else if (options.remove) {
     await vault.removeChain(options.remove)
     success(`\n+ Removed chain: ${options.remove}`)
+
+    await ensureVaultEntry(vault.id, vault.name, '')
+    await persistExtraChains(vault.id, [...vault.chains].map(String))
   } else {
     const chains = vault.chains
 

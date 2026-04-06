@@ -12,7 +12,7 @@ export { executeAddresses, executeChains } from './chains'
 
 // Token commands
 export type { AddTokenOptions, TokensOptions } from './tokens'
-export { addToken, executeTokens, listTokens, removeToken } from './tokens'
+export { addToken, discoverTokens, executeTokens, listTokens, removeToken } from './tokens'
 
 // Transaction commands
 export { executeSend, sendTransaction } from './transaction'
@@ -82,5 +82,10 @@ export type { DiscountOptions, DiscountTierInfo } from './discount'
 export { executeDiscount } from './discount'
 
 // Agent chat commands
-export type { AgentAskOptions, AgentCommandOptions, AgentSessionsDeleteOptions, AgentSessionsListOptions } from './agent'
+export type {
+  AgentAskOptions,
+  AgentCommandOptions,
+  AgentSessionsDeleteOptions,
+  AgentSessionsListOptions,
+} from './agent'
 export { executeAgent, executeAgentAsk, executeAgentSessionsDelete, executeAgentSessionsList } from './agent'
