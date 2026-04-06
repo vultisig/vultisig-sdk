@@ -5,7 +5,7 @@ import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
-import type { CommandContext, SendParams, TransactionResult } from '../core'
+import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
 import { createSpinner, info, isJsonOutput, isSilent, outputJson, printResult, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult, formatBigintAmount } from '../ui'
@@ -22,7 +22,10 @@ type AccountCoin = {
 /**
  * Execute send command - send tokens to an address
  */
-export async function executeSend(ctx: CommandContext, params: SendParams): Promise<TransactionResult> {
+export async function executeSend(
+  ctx: CommandContext,
+  params: SendParams
+): Promise<TransactionResult | SendDryRunResult> {
   const vault = await ctx.ensureActiveVault()
 
   if (!Object.values(Chain).includes(params.chain)) {
@@ -40,7 +43,10 @@ export async function executeSend(ctx: CommandContext, params: SendParams): Prom
 /**
  * Send transaction with full flow: prepare -> confirm -> sign -> broadcast
  */
-export async function sendTransaction(vault: VaultBase, params: SendParams): Promise<TransactionResult> {
+export async function sendTransaction(
+  vault: VaultBase,
+  params: SendParams
+): Promise<TransactionResult | SendDryRunResult> {
   // 1. Prepare transaction
   const prepareSpinner = createSpinner('Preparing transaction...')
 
@@ -74,6 +80,34 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     const paddedFrac = frac.padEnd(balance.decimals, '0')
     amount = BigInt(whole || '0') * 10n ** BigInt(balance.decimals) + BigInt(paddedFrac || '0')
     displayAmount = params.amount
+  }
+
+  // Dry-run: return preview without signing or broadcasting
+  if (params.dryRun) {
+    prepareSpinner.succeed('Dry-run complete')
+    const hasInsufficientBalance = amount > BigInt(balance.amount)
+    const result: SendDryRunResult = {
+      dryRun: true,
+      chain: params.chain,
+      to: params.to,
+      amount: displayAmount,
+      symbol: balance.symbol,
+      balance: balance.formattedAmount,
+    }
+    if (hasInsufficientBalance) {
+      result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
+    }
+    if (isJsonOutput()) {
+      outputJson(result)
+    } else {
+      info(`\nDry-run preview:`)
+      info(`  Chain:   ${result.chain}`)
+      info(`  To:      ${result.to}`)
+      info(`  Amount:  ${result.amount} ${result.symbol}`)
+      info(`  Balance: ${result.balance} ${result.symbol}`)
+      if (result.warning) warn(`  Warning: ${result.warning}`)
+    }
+    return result
   }
 
   const payload = await vault.prepareSendTx({

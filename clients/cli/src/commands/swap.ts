@@ -111,9 +111,24 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
   return quote
 }
 
+export type SwapDryRunResult = {
+  dryRun: true
+  fromChain: string
+  fromToken: string
+  toChain: string
+  toToken: string
+  inputAmount: string
+  estimatedOutput: string
+  provider: string
+  estimatedOutputFiat?: number
+  requiresApproval?: boolean
+  warnings?: string[]
+}
+
 export type SwapOptions = {
   slippage?: number
   yes?: boolean // Skip confirmation prompt
+  dryRun?: boolean // Preview swap without signing/broadcasting
   password?: string // Vault password for signing
   signal?: AbortSignal // Optional abort signal for cancellation
 } & SwapQuoteOptions
@@ -124,7 +139,7 @@ export type SwapOptions = {
 export async function executeSwap(
   ctx: CommandContext,
   options: SwapOptions
-): Promise<{ txHash: string; quote: SwapQuoteResult }> {
+): Promise<{ txHash: string; quote: SwapQuoteResult } | SwapDryRunResult> {
   const vault = await ctx.ensureActiveVault()
 
   const isMax = options.amount === 'max'
@@ -166,6 +181,42 @@ export async function executeSwap(
   const fromAmountDisplay = isMax
     ? `${formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)} (max)`
     : String(resolvedAmount)
+
+  // Dry-run: return preview without signing or broadcasting
+  if (options.dryRun) {
+    const estimatedOutput = formatBigintAmount(quote.estimatedOutput, quote.toCoin.decimals)
+    const result: SwapDryRunResult = {
+      dryRun: true,
+      fromChain: String(options.fromChain),
+      fromToken: quote.fromCoin.ticker,
+      toChain: String(options.toChain),
+      toToken: quote.toCoin.ticker,
+      inputAmount: fromAmountDisplay,
+      estimatedOutput,
+      provider: quote.provider,
+    }
+    if (quote.estimatedOutputFiat != null) {
+      result.estimatedOutputFiat = parseFloat(quote.estimatedOutputFiat.toFixed(2))
+    }
+    if (quote.requiresApproval) {
+      result.requiresApproval = true
+    }
+    if (quote.warnings && quote.warnings.length > 0) {
+      result.warnings = [...quote.warnings]
+    }
+    if (isJsonOutput()) {
+      outputJson(result)
+    } else {
+      info(`\nDry-run preview:`)
+      info(`  From:             ${result.inputAmount} ${result.fromToken} (${result.fromChain})`)
+      info(`  To:               ${result.estimatedOutput} ${result.toToken} (${result.toChain})`)
+      info(`  Provider:         ${result.provider}`)
+      if (result.estimatedOutputFiat != null) info(`  Est. value (USD): $${result.estimatedOutputFiat}`)
+      if (result.requiresApproval) info(`  Requires approval: yes`)
+      if (result.warnings?.length) result.warnings.forEach(w => warn(`  Warning: ${w}`))
+    }
+    return result
+  }
 
   // Get native token for fee display (fees are paid in native token)
   const feeBalance = await vault.balance(options.fromChain)

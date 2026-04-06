@@ -40,6 +40,7 @@ import {
   executeRujiraRoutes,
   executeRujiraSwap,
   executeRujiraWithdraw,
+  executeSchema,
   executeSend,
   executeServer,
   executeSignBytes,
@@ -554,6 +555,7 @@ program
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
+  .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--password <password>', 'Vault password for signing')
   .action(
@@ -562,7 +564,7 @@ program
         chainStr: string,
         to: string,
         amount: string | undefined,
-        options: { max?: boolean; token?: string; memo?: string; yes?: boolean; password?: string }
+        options: { max?: boolean; token?: string; memo?: string; dryRun?: boolean; yes?: boolean; password?: string }
       ) => {
         if (!amount && !options.max) throw new Error('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
@@ -574,6 +576,7 @@ program
             amount: amount ?? 'max',
             tokenId: options.token,
             memo: options.memo,
+            dryRun: options.dryRun,
             yes: options.yes,
             password: options.password,
           })
@@ -944,6 +947,7 @@ program
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
+  .option('--dry-run', 'Preview swap without signing or broadcasting')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--password <password>', 'Vault password for signing')
   .action(
@@ -957,6 +961,7 @@ program
           fromToken?: string
           toToken?: string
           slippage?: string
+          dryRun?: boolean
           yes?: boolean
           password?: string
         }
@@ -972,6 +977,7 @@ program
             fromToken: options.fromToken,
             toToken: options.toToken,
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,
+            dryRun: options.dryRun,
             yes: options.yes,
             password: options.password,
           })
@@ -1298,6 +1304,12 @@ program
 
 // Setup completion command
 setupCompletionCommand(program)
+
+// Schema discovery (hidden, for machine clients)
+program
+  .command('schema', { hidden: true })
+  .description('Output machine-readable command schema')
+  .action(() => executeSchema(program))
 
 // ============================================================================
 // Interactive Mode

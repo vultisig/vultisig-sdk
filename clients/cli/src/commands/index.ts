@@ -61,7 +61,7 @@ export {
 } from './vault-management'
 
 // Swap commands
-export type { SwapOptions, SwapQuoteOptions } from './swap'
+export type { SwapDryRunResult, SwapOptions, SwapQuoteOptions } from './swap'
 export { executeSwap, executeSwapChains, executeSwapQuote } from './swap'
 
 // Settings commands
@@ -89,3 +89,6 @@ export type {
   AgentSessionsListOptions,
 } from './agent'
 export { executeAgent, executeAgentAsk, executeAgentSessionsDelete, executeAgentSessionsList } from './agent'
+
+// Schema discovery command (hidden)
+export { executeSchema } from './schema'
