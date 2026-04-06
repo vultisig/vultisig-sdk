@@ -36,9 +36,7 @@ export function withExit<T extends any[]>(handler: (...args: T) => Promise<void>
   }
 }
 
-/**
- * Run a command with context and automatic cleanup
- */
+// Run a command with context and automatic cleanup
 export async function runCommand<T>(ctx: CLIContext, handler: () => Promise<T>): Promise<T> {
   try {
     return await handler()
