@@ -6,13 +6,16 @@
  * - Consistent exit codes
  * - Cleanup on completion
  */
-import { isJsonOutput, outputJsonError, printError } from '../lib/output'
+import { classifyError, toErrorJson, VsigError } from '../core/errors'
+import { isJsonOutput, printError } from '../lib/output'
 import type { CLIContext } from './cli-context'
 
 /**
  * Wrap a command handler with CLI exit behavior
  * - Exits with code 0 on success
- * - Exits with code 1 on error (or custom exitCode)
+ * - On VsigError: uses typed exitCode
+ * - On unknown Error: classifies via classifyError(), then exits with typed code
+ * - In JSON mode: outputs structured error JSON
  */
 export function withExit<T extends any[]>(handler: (...args: T) => Promise<void>): (...args: T) => Promise<void> {
   return async (...args: T) => {
@@ -20,19 +23,24 @@ export function withExit<T extends any[]>(handler: (...args: T) => Promise<void>
       await handler(...args)
       process.exit(0)
     } catch (err: any) {
-      const exitCode = err.exitCode ?? 1
+      const classified =
+        err instanceof VsigError
+          ? err
+          : err instanceof Error
+            ? classifyError(err)
+            : classifyError(new Error(String(err)))
 
-      // In JSON mode, output structured error
       if (isJsonOutput()) {
-        outputJsonError(err.message, err.code ?? 'GENERAL_ERROR')
-        process.exit(exitCode)
+        process.stdout.write(`${JSON.stringify(toErrorJson(classified))}\n`)
+        process.exit(classified.exitCode)
       }
 
-      if (err.exitCode !== undefined) {
-        process.exit(err.exitCode)
+      printError(`\nx ${classified.message}`)
+      if (classified.hint) printError(`  hint: ${classified.hint}`)
+      if (classified.suggestions?.length) {
+        for (const s of classified.suggestions) printError(`  - ${s}`)
       }
-      printError(`\nx ${err.message}`)
-      process.exit(1)
+      process.exit(classified.exitCode)
     }
   }
 }
