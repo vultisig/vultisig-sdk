@@ -48,7 +48,7 @@ function privateAdd(d: Uint8Array, tweak: Uint8Array): Uint8Array | null {
   try {
     const dN = BigInt('0x' + Buffer.from(d).toString('hex'))
     const tN = BigInt('0x' + Buffer.from(tweak).toString('hex'))
-    let sum = (dN + tN) % secp256k1.CURVE.n
+    const sum = (dN + tN) % secp256k1.CURVE.n
     if (sum === 0n) return null
     const hex = sum.toString(16).padStart(64, '0')
     return Buffer.from(hex, 'hex')
@@ -81,4 +81,4 @@ const ecc = {
 }
 
 export default ecc
-export { isPoint, isPrivate, pointFromScalar, pointAddScalar, privateAdd, sign, verify }
+export { isPoint, isPrivate, pointAddScalar, pointFromScalar, privateAdd, sign, verify }
