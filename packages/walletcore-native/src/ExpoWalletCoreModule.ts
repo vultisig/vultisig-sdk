@@ -75,6 +75,9 @@ interface ExpoWalletCoreModuleType {
   /** Create a Bech32 address from a public key. Returns the description string. */
   anyAddressCreateBech32WithPublicKey(publicKeyHandle: number, coinType: number, hrp: string): string
 
+  /** Create a Bech32 address from a string address. Returns the description string. */
+  anyAddressCreateBech32(address: string, coinType: number, hrp: string): string
+
   /** Get the raw data of an address. Returns base64. */
   anyAddressData(address: string, coinType: number): string
 
@@ -194,6 +197,16 @@ interface ExpoWalletCoreModuleType {
 
   /** Encode an ABI function call. Returns base64. */
   ethereumAbiEncode(functionName: string, params: string): string
+
+  /** Encode a typed data message (EIP-712). Returns hex string. */
+  ethereumAbiEncodeTyped(messageJson: string): string
+
+  // ---------------------------------------------------------------------------
+  // Mnemonic
+  // ---------------------------------------------------------------------------
+
+  /** Check if a mnemonic phrase is valid. */
+  mnemonicIsValid(mnemonic: string): boolean
 
   // ---------------------------------------------------------------------------
   // TONAddressConverter

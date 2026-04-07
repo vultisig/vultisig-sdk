@@ -211,6 +211,14 @@ public class ExpoWalletCoreModule: Module {
             return addr.description
         }
 
+        Function("anyAddressCreateBech32") { (address: String, coinType: Int, hrp: String) -> String in
+            let ct = coinTypeFromValue(coinType)
+            guard let addr = AnyAddress(string: address, coin: ct, hrp: hrp) else {
+                throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid bech32 address"])
+            }
+            return addr.description
+        }
+
         Function("anyAddressData") { (address: String, coinType: Int) -> String in
             let ct = coinTypeFromValue(coinType)
             guard let addr = AnyAddress(string: address, coin: ct) else {
@@ -468,6 +476,19 @@ public class ExpoWalletCoreModule: Module {
             let fn = EthereumAbiFunction(name: functionName)
             let encoded = EthereumAbi.encode(fn: fn)
             return encoded.base64EncodedString()
+        }
+
+        Function("ethereumAbiEncodeTyped") { (messageJson: String) -> String in
+            let encoded = EthereumAbi.encodeTyped(messageJson: messageJson)
+            return encoded.map { String(format: "%02x", $0) }.joined()
+        }
+
+        // =====================================================================
+        // Mnemonic
+        // =====================================================================
+
+        Function("mnemonicIsValid") { (mnemonic: String) -> Bool in
+            return Mnemonic.isValid(mnemonic: mnemonic)
         }
 
         // =====================================================================

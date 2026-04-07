@@ -120,6 +120,10 @@ class ExpoWalletCoreModule : Module() {
             AnyAddress(pk, CoinType.createFromValue(coinType), hrp).description()
         }
 
+        Function("anyAddressCreateBech32") { address: String, coinType: Int, hrp: String ->
+            AnyAddress(address, CoinType.createFromValue(coinType), hrp).description()
+        }
+
         Function("anyAddressData") { address: String, coinType: Int ->
             val addr = AnyAddress(address, CoinType.createFromValue(coinType))
             android.util.Base64.encodeToString(addr.data(), android.util.Base64.NO_WRAP)
@@ -263,6 +267,17 @@ class ExpoWalletCoreModule : Module() {
             val fn = EthereumAbiFunction(functionName)
             val encoded = EthereumAbi.encode(fn)
             android.util.Base64.encodeToString(encoded, android.util.Base64.NO_WRAP)
+        }
+
+        // EthereumAbi — typed encoding
+        Function("ethereumAbiEncodeTyped") { messageJson: String ->
+            val encoded = EthereumAbi.encodeTyped(messageJson)
+            encoded.joinToString("") { "%02x".format(it) }
+        }
+
+        // Mnemonic
+        Function("mnemonicIsValid") { mnemonic: String ->
+            Mnemonic.isValid(mnemonic)
         }
 
         // TONAddressConverter

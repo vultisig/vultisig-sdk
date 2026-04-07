@@ -74,6 +74,7 @@ export interface WalletCoreLike {
     isValidSS58(address: string, coinType: number, ss58Prefix: number): boolean
     createWithString(address: string, coinType: number): NativeAnyAddressInstance
     createBech32WithPublicKey(publicKey: NativePublicKeyInstance, coinType: number, hrp: string): NativeAnyAddressInstance
+    createBech32(address: string, coinType: number, hrp: string): NativeAnyAddressInstance
   }
 
   TransactionCompiler: {
@@ -115,6 +116,14 @@ export interface WalletCoreLike {
 
   TONAddressConverter: {
     toUserFriendly(address: string): string
+  }
+
+  EthereumAbi: {
+    encodeTyped(messageJson: string): string
+  }
+
+  Mnemonic: {
+    isValid(mnemonic: string): boolean
   }
 
   SolanaAddress: {
@@ -480,6 +489,10 @@ export class NativeWalletCore {
           )
           return new NativeAnyAddress(desc)
         },
+        createBech32(address: string, coinType: number, hrp: string): NativeAnyAddress {
+          const desc = ExpoWalletCore.anyAddressCreateBech32(address, coinType, hrp)
+          return new NativeAnyAddress(desc)
+        },
       },
 
       // --- TransactionCompiler ---
@@ -576,6 +589,20 @@ export class NativeWalletCore {
       TONAddressConverter: {
         toUserFriendly(address: string): string {
           return ExpoWalletCore.tonAddressToUserFriendly(address)
+        },
+      },
+
+      // --- EthereumAbi ---
+      EthereumAbi: {
+        encodeTyped(messageJson: string): string {
+          return ExpoWalletCore.ethereumAbiEncodeTyped(messageJson)
+        },
+      },
+
+      // --- Mnemonic ---
+      Mnemonic: {
+        isValid(mnemonic: string): boolean {
+          return ExpoWalletCore.mnemonicIsValid(mnemonic)
         },
       },
 

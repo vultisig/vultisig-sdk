@@ -42,13 +42,17 @@ android {
 repositories {
     mavenCentral()
     maven {
-        url = uri("https://maven.pkg.github.com/nicktomlin/wallet-core-fork")
-        // NOTE: GITHUB_USER and GITHUB_TOKEN must be set in the environment.
-        // These are not validated here — missing or incorrect values will
-        // produce a 401 at dependency resolution time rather than at configuration.
+        url = uri("https://maven.pkg.github.com/trustwallet/wallet-core")
         credentials {
-            username = System.getenv("GITHUB_USER") ?: ""
-            password = System.getenv("GITHUB_TOKEN") ?: ""
+            username = System.getenv("GITHUB_USER")
+                ?: System.getenv("GITHUB_ACTOR")
+                ?: "token"
+            password = System.getenv("GITHUB_TOKEN")
+                ?: System.getenv("GH_TOKEN")
+                ?: ""
+        }
+        content {
+            includeGroup("com.trustwallet")
         }
     }
 }
@@ -56,8 +60,7 @@ repositories {
 dependencies {
     implementation project(':expo-modules-core')
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${safeExtGet('kotlinVersion', '1.8.10')}"
-    // TODO: Bump this pinned version when a newer Trust Wallet Core release is validated.
-    implementation 'com.trustwallet:wallet-core-kotlin:4.2.9'
+    implementation 'com.trustwallet:wallet-core:4.3.22'
 }
 
 def safeExtGet(prop, fallback) {
