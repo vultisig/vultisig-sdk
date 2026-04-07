@@ -23,7 +23,7 @@ function toBase64(bytes: Uint8Array): string {
   // React Native supports btoa but it requires a binary string
   let binary = ''
   for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
+    binary += String.fromCharCode(bytes[i]!)
   }
   return btoa(binary)
 }
