@@ -91,6 +91,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 6,
       priceProviderId: 'jupiter-exchange-solana',
     },
+    USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA: {
+      ticker: 'USDS',
+      logo: 'usds',
+      decimals: 6,
+      priceProviderId: 'usds',
+    },
   },
   [Chain.Ethereum]: {
     [vult.id]: omit(vult, 'id', 'chain'),
@@ -141,6 +147,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       logo: 'dai',
       decimals: 18,
       priceProviderId: 'dai',
+    },
+    '0xdC035D45d973E3EC169d2276DDab16f1e407384F': {
+      ticker: 'USDS',
+      logo: 'usds',
+      decimals: 18,
+      priceProviderId: 'usds',
     },
     '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': {
       ticker: 'WETH',
@@ -321,6 +333,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 18,
       priceProviderId: 'dai',
     },
+    '0x820C137fa70C8691f0e44dC420a5e53c168921Dc': {
+      ticker: 'USDS',
+      logo: 'usds',
+      decimals: 18,
+      priceProviderId: 'usds',
+    },
     '0xB6fe221Fe9EeF5aBa221c348bA20A1Bf5e73624c': {
       ticker: 'rETH',
       logo: 'reth',
@@ -412,6 +430,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       logo: 'dai',
       decimals: 18,
       priceProviderId: 'dai',
+    },
+    '0x6491c05A82219b8D1479057361ff1654749b876b': {
+      ticker: 'USDS',
+      logo: 'usds',
+      decimals: 18,
+      priceProviderId: 'usds',
     },
     '0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0': {
       ticker: 'UNI',

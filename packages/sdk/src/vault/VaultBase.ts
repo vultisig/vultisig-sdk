@@ -36,6 +36,7 @@ import type { Storage } from '../storage/types'
 import {
   Balance,
   CompoundSwapResult,
+  ContractCallResult,
   CosmosSigningOptions,
   FiatCurrency,
   GasInfoForChain,
@@ -53,6 +54,7 @@ import {
   Value,
   VaultData,
 } from '../types'
+import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
 import { createVaultBackup } from '../utils/export'
@@ -977,6 +979,31 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Prepare a contract call transaction keysign payload (EVM chains only).
+   *
+   * Encodes the function call via ABI and builds a keysign payload with the
+   * calldata. Supports zero-value calls (approvals, governance, etc.).
+   *
+   * @example
+   * ```typescript
+   * const payload = await vault.prepareContractCallTx({
+   *   chain: Chain.Polygon,
+   *   contractAddress: '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
+   *   abi: parseAbi(['function setApprovalForAll(address,bool)']),
+   *   functionName: 'setApprovalForAll',
+   *   args: ['0xC5d563A36AE78145C45a50134d48A1215220f80a', true],
+   *   senderAddress: await vault.address(Chain.Polygon),
+   * })
+   * const signature = await vault.sign({ transaction: payload, chain: Chain.Polygon })
+   * const txHash = await vault.broadcastTx({ chain: Chain.Polygon, keysignPayload: payload, signature })
+   * ```
+   */
+  async prepareContractCallTx(params: Omit<ContractCallTxParams, 'senderAddress'> & { senderAddress?: string }): Promise<KeysignPayload> {
+    const senderAddress = params.senderAddress ?? await this.address(params.chain)
+    return this.transactionBuilder.prepareContractCallTx({ ...params, senderAddress })
+  }
+
+  /**
    * Get the maximum sendable amount for a coin, accounting for network fees
    *
    * Fetches the current balance, estimates the send fee, and calculates the
@@ -1643,6 +1670,40 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     const signature = await this.sign({ transaction: keysignPayload, chain: fromChain })
     return { dryRun: false, txHash: await this.broadcastTx({ chain: fromChain, keysignPayload, signature }), chain: fromChain, quote }
+  }
+
+  /**
+   * Call an EVM smart contract function. Set dryRun for payload without signing.
+   *
+   * @example
+   * ```typescript
+   * // ERC-1155 setApprovalForAll
+   * const result = await vault.contractCall({
+   *   chain: Chain.Polygon,
+   *   contractAddress: '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
+   *   abi: parseAbi(['function setApprovalForAll(address operator, bool approved)']),
+   *   functionName: 'setApprovalForAll',
+   *   args: ['0xC5d563A36AE78145C45a50134d48A1215220f80a', true],
+   * })
+   * ```
+   */
+  async contractCall(params: {
+    chain: Chain
+    contractAddress: string
+    abi: readonly unknown[]
+    functionName: string
+    args?: readonly unknown[]
+    value?: bigint
+    dryRun?: boolean
+  }): Promise<ContractCallResult> {
+    const { dryRun, ...txParams } = params
+    const keysignPayload = await this.prepareContractCallTx(txParams)
+
+    if (dryRun) return { dryRun: true, keysignPayload }
+
+    const { chain } = params
+    const signature = await this.sign({ transaction: keysignPayload, chain })
+    return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
   }
 
   // ===== PRIVATE HELPERS =====
