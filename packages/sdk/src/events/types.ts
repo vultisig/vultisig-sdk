@@ -140,6 +140,11 @@ export type VaultEvents = {
     vaultId: string
   }
 
+  /** Emitted when ML-DSA post-quantum keys are added to a fast vault */
+  postQuantumKeysAdded: {
+    vaultId: string
+  }
+
   /** Emitted when vault is deleted from storage */
   deleted: {
     vaultId: string

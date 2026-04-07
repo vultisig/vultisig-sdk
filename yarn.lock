@@ -4399,6 +4399,7 @@ __metadata:
     "@mysten/sui": "npm:^2.8.0"
     "@noble/hashes": "npm:^2.0.1"
     "@polkadot/api": "npm:^16.5.4"
+    "@polkadot/util": "npm:^14.0.1"
     "@polkadot/util-crypto": "npm:^14.0.1"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.0"
@@ -4423,7 +4424,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-mpc@npm:1.0.0, @vultisig/core-mpc@workspace:packages/core/mpc":
+"@vultisig/core-mpc@npm:1.0.1, @vultisig/core-mpc@workspace:packages/core/mpc":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-mpc@workspace:packages/core/mpc"
   dependencies:
@@ -4562,7 +4563,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:^3.0.9"
   peerDependencies:
-    "@vultisig/sdk": ">=0.11.0"
+    "@vultisig/sdk": ">=0.12.0"
   peerDependenciesMeta:
     "@vultisig/sdk":
       optional: true
@@ -4598,7 +4599,7 @@ __metadata:
     "@vitest/coverage-v8": "npm:3.2.4"
     "@vultisig/core-chain": "npm:1.0.0"
     "@vultisig/core-config": "npm:0.9.1"
-    "@vultisig/core-mpc": "npm:1.0.0"
+    "@vultisig/core-mpc": "npm:1.0.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"

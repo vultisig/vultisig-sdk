@@ -167,7 +167,7 @@ export type BroadcastRawTxParams = {
 export type Signature = {
   signature: string
   recovery?: number
-  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519'
+  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519' | 'MLDSA'
   // For UTXO chains with multiple inputs, includes all signatures
   signatures?: Array<{
     r: string
@@ -640,6 +640,9 @@ export type {
   SwapTxParams,
 } from '../vault/swap-types'
 export { isAccountCoin, isSimpleCoinInput } from '../vault/swap-types'
+
+// Contract call types
+export type { ContractCallResult, ContractCallTxParams } from './contractCall'
 
 // Cosmos signing types
 export type {

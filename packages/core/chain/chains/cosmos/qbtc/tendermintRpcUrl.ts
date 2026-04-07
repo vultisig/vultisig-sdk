@@ -1,5 +1,4 @@
-/**
- * Tendermint HTTP RPC for QBTC testnet (`chainID` in signing matches `qbtc-testnet`).
- * Replace with your infra URL if this default is unreachable.
- */
-export const qbtcTendermintRpcUrl = 'https://qbtc-testnet-rpc.publicnode.com:443'
+export const qbtcRestUrl = 'https://api.vultisig.com/qbtc-rpc'
+
+/** @deprecated Use {@link qbtcRestUrl} — Tendermint RPC is no longer used for QBTC. */
+export const qbtcTendermintRpcUrl = qbtcRestUrl
