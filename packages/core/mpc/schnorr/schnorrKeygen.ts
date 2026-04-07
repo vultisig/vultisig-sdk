@@ -1,10 +1,4 @@
-import {
-  KeygenSession,
-  KeyImportInitiator,
-  KeyImportSession,
-  Keyshare,
-  QcSession,
-} from '@vultisig/lib-schnorr/vs_schnorr_wasm'
+import { getMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mpc-types'
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getKeygenThreshold } from '../getKeygenThreshold'
@@ -33,7 +27,10 @@ export class Schnorr {
   private sequenceNo: number = 0
   private cache: Record<string, string> = {}
   private setupMessage: Uint8Array = new Uint8Array()
-  private pendingKeyImportSession: KeyImportInitiator | null = null
+  private pendingKeyImportSession: {
+    session: MpcSession<MpcKeyshare>
+    setup: Uint8Array
+  } | null = null
   private readonly localUI?: string
   private readonly publicKey?: string
   private readonly chainCode?: string
@@ -71,7 +68,7 @@ export class Schnorr {
   }
 
   private async processOutbound(
-    session: KeygenSession | QcSession | KeyImportInitiator | KeyImportSession,
+    session: MpcSession<unknown>,
     messageId?: string
   ): Promise<boolean> {
     try {
@@ -117,7 +114,7 @@ export class Schnorr {
   }
 
   private async processInbound(
-    session: KeygenSession | QcSession | KeyImportInitiator | KeyImportSession,
+    session: MpcSession<unknown>,
     start: number,
     messageId?: string
   ): Promise<boolean> {
@@ -185,14 +182,18 @@ export class Schnorr {
     console.log('session id:', this.sessionId)
     this.isKeygenComplete = false
     try {
-      let session: KeygenSession
+      const engine = getMpcEngine().schnorr
+      let session: MpcSession<MpcKeyshare>
       if ('create' in this.keygenOperation) {
-        session = new KeygenSession(this.setupMessage, this.localPartyId)
+        session = await engine.createKeygenSession(this.setupMessage, this.localPartyId)
       } else if (
         'reshare' in this.keygenOperation &&
         this.keygenOperation.reshare === 'migrate'
       ) {
-        session = KeygenSession.migrate(
+        if (!engine.createMigrateSession) {
+          throw new Error('schnorr engine does not support createMigrateSession')
+        }
+        session = await engine.createMigrateSession(
           this.setupMessage,
           this.localPartyId,
           Buffer.from(this.localUI || '', 'hex'),
@@ -207,7 +208,7 @@ export class Schnorr {
       const inbound = this.processInbound(session, start, messageId)
       const [, inboundResult] = await Promise.all([outbound, inbound])
       if (inboundResult) {
-        const keyShare = session.finish()
+        const keyShare = await session.finish()
         return {
           keyshare: base64Encode(keyShare.toBytes()),
           publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
@@ -244,9 +245,10 @@ export class Schnorr {
   ) {
     console.log('startReshare schnorr, attempt:', attempt)
     this.isKeygenComplete = false
-    let localKeyshare: Keyshare | null = null
+    const engine = getMpcEngine().schnorr
+    let localKeyshare: MpcKeyshare | null = null
     if (rawSchnorrKeyshare !== undefined && rawSchnorrKeyshare.length > 0) {
-      localKeyshare = Keyshare.fromBytes(
+      localKeyshare = engine.keyshareFromBytes(
         Buffer.from(rawSchnorrKeyshare, 'base64')
       )
     }
@@ -270,7 +272,7 @@ export class Schnorr {
             keygenCommittee: this.keygenCommittee,
             oldKeygenCommittee: this.oldKeygenCommittee,
           })
-        setupMessage = QcSession.setup(
+        setupMessage = engine.reshareSetup(
           localKeyshare,
           allCommittee,
           new Uint8Array(oldCommitteeIdx),
@@ -300,7 +302,7 @@ export class Schnorr {
           this.hexEncryptionKey
         )
       }
-      const session = new QcSession(
+      const session = await engine.createReshareSession(
         setupMessage,
         this.localPartyId,
         localKeyshare
@@ -312,7 +314,7 @@ export class Schnorr {
         const inbound = this.processInbound(session, start, messageId)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
-          const finalKeyShare = session.finish()
+          const finalKeyShare = await session.finish()
           if (finalKeyShare === undefined) {
             throw new Error('keyshare is null, schnorr reshare failed')
           }
@@ -326,7 +328,7 @@ export class Schnorr {
           }
         }
       } finally {
-        session.free()
+        session.free?.()
       }
     } catch (error) {
       console.error('schnorr reshare error:', error)
@@ -360,15 +362,17 @@ export class Schnorr {
       return
     }
 
+    const engine = getMpcEngine().schnorr
     const privateKey = Buffer.from(hexPrivateKey, 'hex')
     const chainCode = Buffer.from(hexChainCode, 'hex')
-    this.pendingKeyImportSession = new KeyImportInitiator(
+    const importResult = await engine.createKeyImportInitiator(
       Uint8Array.from(privateKey),
       Uint8Array.from(chainCode),
       getKeygenThreshold(this.keygenCommittee.length),
       this.keygenCommittee
     )
-    this.setupMessage = this.pendingKeyImportSession.setup
+    this.pendingKeyImportSession = importResult
+    this.setupMessage = importResult.setup
 
     const encryptedSetupMsg = toMpcServerMessage(
       this.setupMessage,
@@ -394,25 +398,26 @@ export class Schnorr {
     console.log('startKeyImport schnorr, attempt:', attempt)
     this.isKeygenComplete = false
     try {
-      let session: KeyImportSession | KeyImportInitiator | null = null
+      const engine = getMpcEngine().schnorr
+      let session: MpcSession<MpcKeyshare> | null = null
       const effectiveSetupId = setupMessageId ?? 'eddsa_key_import'
       if (this.isInitiateDevice) {
         if (attempt === 0 && this.pendingKeyImportSession) {
           const pendingSession = this.pendingKeyImportSession
-          session = pendingSession
+          session = pendingSession.session
           this.setupMessage = pendingSession.setup
           this.pendingKeyImportSession = null
         } else {
           const privateKey = Buffer.from(hexPrivateKey, 'hex')
           const chainCode = Buffer.from(hexChainCode, 'hex')
-          const initiatorSession = new KeyImportInitiator(
+          const importResult = await engine.createKeyImportInitiator(
             Uint8Array.from(privateKey),
             Uint8Array.from(chainCode),
             getKeygenThreshold(this.keygenCommittee.length),
             this.keygenCommittee
           )
-          this.setupMessage = initiatorSession.setup
-          session = initiatorSession
+          this.setupMessage = importResult.setup
+          session = importResult.session
           const encryptedSetupMsg = toMpcServerMessage(
             this.setupMessage,
             this.hexEncryptionKey
@@ -438,7 +443,7 @@ export class Schnorr {
       }
       if ('keyimport' in this.keygenOperation) {
         if (!this.isInitiateDevice) {
-          session = new KeyImportSession(this.setupMessage, this.localPartyId)
+          session = await engine.createKeyImportSession(this.setupMessage, this.localPartyId)
         }
       } else {
         throw new Error('invalid keygen type')
@@ -452,7 +457,7 @@ export class Schnorr {
       const inbound = this.processInbound(session, start, exchangeMessageId)
       const [, inboundResult] = await Promise.all([outbound, inbound])
       if (inboundResult) {
-        const keyShare = session.finish()
+        const keyShare = await session.finish()
         return {
           keyshare: base64Encode(keyShare.toBytes()),
           publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
