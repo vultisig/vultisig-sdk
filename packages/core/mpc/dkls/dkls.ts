@@ -1,10 +1,4 @@
-import {
-  KeygenSession,
-  KeyImportInitiator,
-  KeyImportSession,
-  Keyshare,
-  QcSession,
-} from '@vultisig/lib-dkls/vs_wasm'
+import { getMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mpc-types'
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getKeygenThreshold } from '../getKeygenThreshold'
@@ -39,7 +33,10 @@ export class DKLS {
   private inboundSequenceNo: number = 0
   private cache: Record<string, string> = {}
   private setupMessage: Uint8Array = new Uint8Array()
-  private pendingKeyImportSession: KeyImportInitiator | null = null
+  private pendingKeyImportSession: {
+    session: MpcSession<MpcKeyshare>
+    setup: Uint8Array
+  } | null = null
   private readonly localUI?: string
   private readonly publicKey?: string
   private readonly chainCode?: string
@@ -76,7 +73,7 @@ export class DKLS {
   }
 
   private async processOutbound(
-    session: KeygenSession | QcSession | KeyImportInitiator | KeyImportSession,
+    session: MpcSession<unknown>,
     messageId?: string
   ): Promise<boolean> {
     try {
@@ -121,7 +118,7 @@ export class DKLS {
   }
 
   private async processInbound(
-    session: KeygenSession | QcSession | KeyImportInitiator | KeyImportSession,
+    session: MpcSession<unknown>,
     start: number,
     messageId?: string
   ): Promise<boolean> {
@@ -188,7 +185,7 @@ export class DKLS {
     }
     if (this.isInitiateDevice) {
       const threshold = getKeygenThreshold(this.keygenCommittee.length)
-      this.setupMessage = KeygenSession.setup(
+      this.setupMessage = getMpcEngine().dkls.keygenSetup(
         undefined,
         threshold,
         this.keygenCommittee
@@ -238,14 +235,18 @@ export class DKLS {
           )
         }
       }
-      let session: KeygenSession | KeyImportInitiator
+      const engine = getMpcEngine().dkls
+      let session: MpcSession<MpcKeyshare>
       if ('create' in this.keygenOperation) {
-        session = new KeygenSession(this.setupMessage, this.localPartyId)
+        session = await engine.createKeygenSession(this.setupMessage, this.localPartyId)
       } else if (
         'reshare' in this.keygenOperation &&
         this.keygenOperation.reshare === 'migrate'
       ) {
-        session = KeygenSession.migrate(
+        if (!engine.createMigrateSession) {
+          throw new Error('DKLS engine does not support migration')
+        }
+        session = await engine.createMigrateSession(
           this.setupMessage,
           this.localPartyId,
           Buffer.from(this.localUI || '', 'hex'),
@@ -256,19 +257,23 @@ export class DKLS {
       } else {
         throw new Error('Invalid keygen operation')
       }
-      const start = Date.now()
-      const outbound = this.processOutbound(session, messageId)
-      const inbound = this.processInbound(session, start, messageId)
-      const [, inboundResult] = await Promise.all([outbound, inbound])
-      if (inboundResult) {
-        const keyShare = session.finish()
-        return {
-          keyshare: base64Encode(keyShare.toBytes()),
-          publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
-          chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+      try {
+        const start = Date.now()
+        const outbound = this.processOutbound(session, messageId)
+        const inbound = this.processInbound(session, start, messageId)
+        const [, inboundResult] = await Promise.all([outbound, inbound])
+        if (inboundResult) {
+          const keyShare = await session.finish()
+          return {
+            keyshare: base64Encode(keyShare.toBytes()),
+            publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
+            chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+          }
         }
+        throw new Error('DKLS keygen failed')
+      } finally {
+        session.free?.()
       }
-      throw new Error('DKLS keygen failed')
     } catch (error) {
       if (error instanceof Error) {
         console.error('DKLS keygen error:', error)
@@ -303,9 +308,10 @@ export class DKLS {
     this.isKeygenComplete = false
     this.inboundSequenceNo = 0
     this.onInboundSequenceNoChange?.(this.inboundSequenceNo)
-    let localKeyshare: Keyshare | null = null
+    const engine = getMpcEngine().dkls
+    let localKeyshare: MpcKeyshare | null = null
     if (dklsKeyshare !== undefined && dklsKeyshare.length > 0) {
-      localKeyshare = Keyshare.fromBytes(Buffer.from(dklsKeyshare, 'base64'))
+      localKeyshare = engine.keyshareFromBytes(Buffer.from(dklsKeyshare, 'base64'))
     }
     try {
       let setupMessage: Uint8Array = new Uint8Array()
@@ -327,7 +333,7 @@ export class DKLS {
           })
         const newCommitteeIdxUint8 = new Uint8Array(newCommitteeIdx)
         const oldCommitteeIdxUint8 = new Uint8Array(oldCommitteeIdx)
-        setupMessage = QcSession.setup(
+        setupMessage = engine.reshareSetup(
           localKeyshare,
           allCommittee,
           oldCommitteeIdxUint8,
@@ -356,7 +362,7 @@ export class DKLS {
           this.hexEncryptionKey
         )
       }
-      const session = new QcSession(
+      const session = await engine.createReshareSession(
         setupMessage,
         this.localPartyId,
         localKeyshare
@@ -368,7 +374,7 @@ export class DKLS {
         const inbound = this.processInbound(session, start, messageId)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
-          const keyShare = session.finish()
+          const keyShare = await session.finish()
           if (keyShare === undefined) {
             throw new Error('keyshare is null, dkls reshare failed')
           }
@@ -380,7 +386,7 @@ export class DKLS {
         }
         throw new Error('DKLS reshare failed')
       } finally {
-        session.free()
+        session.free?.()
       }
     } catch (error) {
       console.error('DKLS reshare error:', error)
@@ -420,13 +426,14 @@ export class DKLS {
     const privateKey = Buffer.from(hexPrivateKey, 'hex')
     const chainCode = Buffer.from(hexChainCode, 'hex')
 
-    this.pendingKeyImportSession = new KeyImportInitiator(
+    const keyImportResult = await getMpcEngine().dkls.createKeyImportInitiator(
       Uint8Array.from(privateKey),
       Uint8Array.from(chainCode),
       threshold,
       this.keygenCommittee
     )
-    this.setupMessage = this.pendingKeyImportSession.setup
+    this.pendingKeyImportSession = keyImportResult
+    this.setupMessage = keyImportResult.setup
 
     const encryptedSetupMsg = toMpcServerMessage(
       this.setupMessage,
@@ -451,12 +458,13 @@ export class DKLS {
   ) {
     console.log('startKeyImport attempt:', attempt)
     this.isKeygenComplete = false
+    const engine = getMpcEngine().dkls
     try {
-      let session: KeyImportInitiator | KeyImportSession | null = null
+      let session: MpcSession<MpcKeyshare> | null = null
       if (this.isInitiateDevice) {
         if (attempt === 0 && this.pendingKeyImportSession) {
           const pendingSession = this.pendingKeyImportSession
-          session = pendingSession
+          session = pendingSession.session
           this.setupMessage = pendingSession.setup
           this.pendingKeyImportSession = null
         } else {
@@ -464,14 +472,14 @@ export class DKLS {
           const privateKey = Buffer.from(hexPrivateKey, 'hex')
           const chainCode = Buffer.from(hexChainCode, 'hex')
 
-          const keyImportSession = new KeyImportInitiator(
+          const keyImportResult = await engine.createKeyImportInitiator(
             Uint8Array.from(privateKey),
             Uint8Array.from(chainCode),
             threshold,
             this.keygenCommittee
           )
-          this.setupMessage = keyImportSession.setup
-          session = keyImportSession
+          this.setupMessage = keyImportResult.setup
+          session = keyImportResult.session
           const encryptedSetupMsg = toMpcServerMessage(
             this.setupMessage,
             this.hexEncryptionKey
@@ -498,7 +506,7 @@ export class DKLS {
       }
       if ('keyimport' in this.keygenOperation) {
         if (!this.isInitiateDevice) {
-          session = new KeyImportSession(this.setupMessage, this.localPartyId)
+          session = await engine.createKeyImportSession(this.setupMessage, this.localPartyId)
         }
       } else {
         throw new Error('Invalid keygen operation')
@@ -506,20 +514,24 @@ export class DKLS {
       if (session === null) {
         throw new Error('DKLS key import session is null')
       }
-      const exchangeMessageId = protocolMessageId
-      const start = Date.now()
-      const outbound = this.processOutbound(session, exchangeMessageId)
-      const inbound = this.processInbound(session, start, exchangeMessageId)
-      const [, inboundResult] = await Promise.all([outbound, inbound])
-      if (inboundResult) {
-        const keyShare = session.finish()
-        return {
-          keyshare: base64Encode(keyShare.toBytes()),
-          publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
-          chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+      try {
+        const exchangeMessageId = protocolMessageId
+        const start = Date.now()
+        const outbound = this.processOutbound(session, exchangeMessageId)
+        const inbound = this.processInbound(session, start, exchangeMessageId)
+        const [, inboundResult] = await Promise.all([outbound, inbound])
+        if (inboundResult) {
+          const keyShare = await session.finish()
+          return {
+            keyshare: base64Encode(keyShare.toBytes()),
+            publicKey: Buffer.from(keyShare.publicKey()).toString('hex'),
+            chaincode: Buffer.from(keyShare.rootChainCode()).toString('hex'),
+          }
         }
+        throw new Error('DKLS key import failed')
+      } finally {
+        session.free?.()
       }
-      throw new Error('DKLS key import failed')
     } catch (error) {
       if (error instanceof Error) {
         console.error('DKLS key import error:', error)

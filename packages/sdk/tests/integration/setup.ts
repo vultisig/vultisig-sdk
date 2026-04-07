@@ -114,8 +114,13 @@ import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 import { initializeMpcLib } from '@vultisig/core-mpc/lib/initialize'
 import { initializeMldsaLib } from '@vultisig/core-mpc/mldsa/initializeMldsa'
 import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
+import { configureMpc } from '@vultisig/mpc-types'
+import { WasmMpcEngine } from '@vultisig/mpc-wasm'
 
 import { configureWasm } from '../../src/context/wasmRuntime'
+
+// Configure MPC engine for integration tests (same as Node.js platform entry point)
+configureMpc(new WasmMpcEngine())
 
 // Process-wide memoized WASM initialization
 let walletCoreInstance: any
