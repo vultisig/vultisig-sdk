@@ -213,6 +213,7 @@ export {
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
+  findSwapQuote,
   resolve4ByteSelector,
   resolveEns,
   searchToken,
