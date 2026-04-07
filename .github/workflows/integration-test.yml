@@ -1,11 +1,14 @@
-name: Integration Test
+# Full-stack agentic smoke test (OpenCode + agent-backend + MCP + funded test vault).
+# Intentionally manual-only: depends on org secrets, cross-repo checkouts, and LLM behavior — not suitable as a required PR gate.
+# Deterministic SDK coverage runs in "Test Suite" → job "Integration Tests (Vitest)" (`yarn test:integration`).
+name: Integration Test (agentic stack)
 
 on:
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: integration-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: integration-agentic-${{ github.workflow }}-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   integration:
@@ -51,7 +54,7 @@ jobs:
 
     steps:
       # ── Checkout repos ──
-      - name: Checkout vultisig-sdk (PR branch)
+      - name: Checkout vultisig-sdk
         uses: actions/checkout@v4
         with:
           path: vultisig-sdk
@@ -162,9 +165,15 @@ jobs:
           fi
 
       # ── Build vultisig-sdk from PR branch ──
+      - name: Enable Corepack (vultisig-sdk)
+        working-directory: vultisig-sdk
+        run: |
+          corepack enable
+          corepack prepare yarn@4.13.0 --activate
+
       - name: Install vultisig-sdk dependencies
         working-directory: vultisig-sdk
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
 
       - name: Build shared packages
         working-directory: vultisig-sdk
@@ -187,11 +196,18 @@ jobs:
           curl -fsSL https://opencode.ai/install | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # ── Discover what changed in this PR ──
+      # ── Discover what changed (PR base when present, else main) ──
       - name: Discover PR changes
         working-directory: vultisig-sdk
         run: |
-          BASE="origin/${{ github.event.pull_request.base.ref }}"
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+          if [ -n "$BASE_REF" ]; then
+            BASE="origin/$BASE_REF"
+            git fetch origin "$BASE_REF" 2>/dev/null || true
+          else
+            BASE="origin/main"
+            git fetch origin main 2>/dev/null || true
+          fi
           {
             echo "=== Changed CLI agent files ==="
             git diff "$BASE"...HEAD --name-status -- 'clients/cli/src/agent/*.ts' 'clients/cli/src/commands/agent.ts' || true

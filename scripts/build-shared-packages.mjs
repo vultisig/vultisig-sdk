@@ -47,7 +47,13 @@ const syncTargets = [
 const tsc = spawnSync('yarn', ['exec', 'tsc', '--project', '.config/tsconfig.shared-publish.json'], {
   cwd: repoRoot,
   stdio: 'inherit',
+  shell: true,
 })
+
+if (tsc.error) {
+  console.error('Failed to spawn tsc:', tsc.error.message)
+  process.exit(1)
+}
 
 if (tsc.status !== 0) {
   process.exit(tsc.status ?? 1)
