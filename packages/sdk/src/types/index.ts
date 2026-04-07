@@ -641,6 +641,9 @@ export type {
 } from '../vault/swap-types'
 export { isAccountCoin, isSimpleCoinInput } from '../vault/swap-types'
 
+// Contract call types
+export type { ContractCallResult, ContractCallTxParams } from './contractCall'
+
 // Cosmos signing types
 export type {
   CosmosCoinAmount,

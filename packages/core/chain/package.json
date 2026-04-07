@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -109,6 +109,11 @@
       "import": "./dist/chains/cosmos/client.js",
       "default": "./dist/chains/cosmos/client.js"
     },
+    "./chains/cosmos/computeCosmosTxReceiptFeeAmount": {
+      "types": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.d.ts",
+      "import": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js",
+      "default": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js"
+    },
     "./chains/cosmos/cosmosFeeCoinDenom": {
       "types": "./dist/chains/cosmos/cosmosFeeCoinDenom.d.ts",
       "import": "./dist/chains/cosmos/cosmosFeeCoinDenom.js",
@@ -148,6 +153,11 @@
       "types": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
+    },
+    "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
+      "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
+      "import": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js",
+      "default": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js"
     },
     "./chains/cosmos/tendermintRpcUrl": {
       "types": "./dist/chains/cosmos/tendermintRpcUrl.d.ts",
