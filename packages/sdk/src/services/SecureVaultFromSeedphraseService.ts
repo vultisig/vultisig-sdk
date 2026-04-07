@@ -8,8 +8,7 @@
  * 4. Wait for devices to join
  * 5. Run DKLS key import (ECDSA) for master key
  * 6. Run Schnorr key import (EdDSA) for master key
- * 7. Run ML-DSA keygen for post-quantum key
- * 8. Run per-chain key imports (DKLS or Schnorr based on chain type)
+ * 7. Run per-chain key imports (DKLS or Schnorr based on chain type)
  * 8. Optionally discover chains with balances
  */
 import { create, toBinary } from '@bufbuild/protobuf'
@@ -20,7 +19,6 @@ import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
 import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
 import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
-import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
 import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
@@ -366,7 +364,6 @@ export class SecureVaultFromSeedphraseService {
       hexEncryptionKey
     )
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
     const chainPublicKeys: Partial<Record<Chain, string>> = {}
     const chainKeyShares: Partial<Record<Chain, string>> = {}
     let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
@@ -383,7 +380,7 @@ export class SecureVaultFromSeedphraseService {
       reportProgress({
         step: 'keygen',
         progress: 50,
-        message: 'Importing ECDSA, EdDSA, ML-DSA, and chain keys...',
+        message: 'Importing ECDSA, EdDSA, and chain keys...',
       })
 
       const rootSchnorr = new Schnorr(
@@ -396,19 +393,6 @@ export class SecureVaultFromSeedphraseService {
         [],
         hexEncryptionKey,
         new Uint8Array()
-      )
-      const batchMldsa = new MldsaKeygen(
-        true,
-        this.relayUrl,
-        sessionId,
-        localPartyId,
-        allDevices,
-        hexEncryptionKey,
-        {
-          timeoutMs: 30000,
-          messageId: TSS_BATCH_MESSAGE_IDS.mldsa,
-          setupMessageId: TSS_BATCH_MESSAGE_IDS.mldsaSetup,
-        }
       )
       const chainImportPromises = chainPrivateKeys.map(
         async ({ chain, privateKeyHex, isEddsa }) => {
@@ -453,17 +437,8 @@ export class SecureVaultFromSeedphraseService {
           return { chain, result }
         }
       )
-      const batchMldsaPromise = batchMldsa
-        .startKeygenWithRetry()
-        .catch(error => {
-          console.warn(
-            'ML-DSA keygen failed (non-fatal):',
-            error instanceof Error ? error.message : error
-          )
-          return undefined
-        })
 
-      const [rootEcdsa, rootEddsa, batchMldsaResult, chainResults] =
+      const [rootEcdsa, rootEddsa, chainResults] =
         await Promise.all([
           dkls.startKeyImportWithRetry(
             masterKeys.ecdsaPrivateKeyHex,
@@ -477,13 +452,11 @@ export class SecureVaultFromSeedphraseService {
             TSS_BATCH_MESSAGE_IDS.eddsaImportSetup,
             TSS_BATCH_MESSAGE_IDS.eddsa
           ),
-          batchMldsaPromise,
           Promise.all(chainImportPromises),
         ])
 
       ecdsaResult = rootEcdsa
       eddsaResult = rootEddsa
-      mldsaResult = batchMldsaResult
       chainResults.forEach(({ chain, result }) => {
         chainPublicKeys[chain] = result.publicKey
         chainKeyShares[chain] = result.keyshare
@@ -533,36 +506,7 @@ export class SecureVaultFromSeedphraseService {
 
       reportProgress({
         step: 'keygen',
-        progress: 68,
-        message: 'Generating ML-DSA keys...',
-      })
-
-      try {
-        const mldsaKeygen = new MldsaKeygen(
-          true,
-          this.relayUrl,
-          sessionId,
-          localPartyId,
-          allDevices,
-          hexEncryptionKey,
-          { timeoutMs: 30000 }
-        )
-
-        mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-      } catch (error) {
-        console.warn(
-          'ML-DSA keygen failed (non-fatal):',
-          error instanceof Error ? error.message : error
-        )
-      }
-
-      if (signal?.aborted) {
-        throw new Error('Operation aborted')
-      }
-
-      reportProgress({
-        step: 'keygen',
-        progress: 78,
+        progress: 65,
         message: 'Importing chain-specific keys...',
       })
 
@@ -575,7 +519,7 @@ export class SecureVaultFromSeedphraseService {
 
         reportProgress({
           step: 'keygen',
-          progress: 75 + Math.floor((i / chainPrivateKeys.length) * 15),
+          progress: 65 + Math.floor((i / chainPrivateKeys.length) * 25),
           message: `Importing ${chain} key (${i + 1}/${chainPrivateKeys.length})...`,
           chainId: chain,
         })
@@ -664,8 +608,6 @@ export class SecureVaultFromSeedphraseService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult?.publicKey,
-      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,
