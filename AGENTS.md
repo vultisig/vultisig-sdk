@@ -52,7 +52,7 @@ When using `agent ask` or `--via-agent`, the agent backend can execute these act
 |--------|-------------|
 | `get_balances` | Fetch balances for all chains |
 | `get_portfolio` | Multi-chain portfolio with fiat values |
-| `get_market_price` | Token price lookup |
+| `get_market_price` | Token price lookup (backend-side) |
 | `search_token` | Search token registry |
 | `build_send_tx` | Build a send transaction |
 | `build_swap_tx` | Build a swap transaction |
@@ -67,7 +67,7 @@ When using `agent ask` or `--via-agent`, the agent backend can execute these act
 | `get_address_book` | List saved addresses |
 | `build_tx` | Build a generic transaction |
 | `list_vaults` | List available vaults |
-| `thorchain_query` | Query THORChain state |
+| `thorchain_query` | Query THORChain state (backend-side) |
 
 ## Key Resources
 

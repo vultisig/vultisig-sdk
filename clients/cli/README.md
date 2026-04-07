@@ -726,7 +726,7 @@ The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Desig
 **Example session:**
 
 ```bash
-$ echo '{"type":"message","content":"What is my ETH balance?"}' | vultisig agent --via-agent --password mypass --vault t1
+echo '{"type":"message","content":"What is my ETH balance?"}' | vultisig agent --via-agent --password mypass --vault t1
 ```
 
 ```json

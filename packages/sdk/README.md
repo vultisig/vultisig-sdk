@@ -968,7 +968,7 @@ Get vault metadata and information.
 
 ## Error Handling
 
-The SDK uses typed errors with machine-readable codes. Always check `error.code` instead of parsing message strings:
+The SDK primarily uses typed errors with machine-readable codes. Check `error.code` for programmatic handling, with a fallback for unexpected errors:
 
 ```typescript
 import { VaultError, VaultErrorCode } from '@vultisig/sdk'
@@ -995,6 +995,9 @@ try {
     }
     // Access the underlying error if needed
     if (error.originalError) console.error('Caused by:', error.originalError)
+  } else {
+    // Some internal paths may throw plain errors
+    console.error('Unexpected error:', (error as Error).message)
   }
 }
 ```
@@ -1080,7 +1083,7 @@ vault.on('balanceUpdated', ({ chain, balance }) => {
 | Event | Payload | When |
 |-------|---------|------|
 | `balanceUpdated` | `{ chain, balance, tokenId? }` | Balance fetched or changed |
-| `valuesUpdated` | `{ chain }` | Fiat values recalculated |
+| `valuesUpdated` | `{ chain: Chain \| 'all' }` | Fiat values recalculated |
 | `totalValueUpdated` | `{ value }` | Portfolio total recalculated |
 | `transactionSigned` | `{ signature, payload }` | Transaction signed |
 | `transactionBroadcast` | `{ chain, txHash, keysignPayload?, raw? }` | Transaction sent to network |
