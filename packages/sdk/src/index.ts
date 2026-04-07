@@ -203,6 +203,22 @@ export type { RiskLevel, SiteScanResult, TransactionSimulationResult, Transactio
 export { CosmosMsgType } from './types'
 
 // ============================================================================
+// PUBLIC API - Tools (vault-free chain utilities)
+// ============================================================================
+
+export {
+  abiDecode,
+  abiEncode,
+  evmCall,
+  evmCheckAllowance,
+  evmTxInfo,
+  resolve4ByteSelector,
+  resolveEns,
+  searchToken,
+  VerifierClient,
+} from './tools'
+
+// ============================================================================
 // PUBLIC API - Push Notifications
 // ============================================================================
 
