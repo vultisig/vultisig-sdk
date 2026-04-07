@@ -35,23 +35,48 @@ type DeriveAddressFromKeysResult = {
 export const deriveAddressFromKeys = async (
   input: DeriveAddressFromKeysInput
 ): Promise<DeriveAddressFromKeysResult> => {
-  const walletCore = await getWalletCore()
+  if (!input.ecdsaPublicKey || !input.eddsaPublicKey) {
+    throw new Error('Both ecdsaPublicKey and eddsaPublicKey are required')
+  }
+  if (!input.hexChainCode) {
+    throw new Error('hexChainCode is required for address derivation')
+  }
 
-  const publicKey = getPublicKey({
-    chain: input.chain,
-    walletCore,
-    hexChainCode: input.hexChainCode,
-    publicKeys: {
-      ecdsa: input.ecdsaPublicKey,
-      eddsa: input.eddsaPublicKey,
-    },
-  })
+  let walletCore: Awaited<ReturnType<typeof getWalletCore>>
+  try {
+    walletCore = await getWalletCore()
+  } catch (err) {
+    throw new Error(
+      `Failed to initialize WalletCore for address derivation: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
 
-  const address = deriveAddress({
-    chain: input.chain,
-    publicKey,
-    walletCore,
-  })
+  let publicKey: ReturnType<typeof getPublicKey>
+  try {
+    publicKey = getPublicKey({
+      chain: input.chain,
+      walletCore,
+      hexChainCode: input.hexChainCode,
+      publicKeys: {
+        ecdsa: input.ecdsaPublicKey,
+        eddsa: input.eddsaPublicKey,
+      },
+    })
+  } catch (err) {
+    throw new Error(
+      `Failed to derive public key for ${input.chain}: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
 
-  return { chain: input.chain, address }
+  try {
+    const address = deriveAddress({
+      chain: input.chain,
+      publicKey,
+      walletCore,
+    })
+
+    return { chain: input.chain, address }
+  } catch (err) {
+    throw new Error(`Failed to derive address for ${input.chain}: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }

@@ -206,6 +206,7 @@ export { CosmosMsgType } from './types'
 // PUBLIC API - Tools (vault-free chain utilities)
 // ============================================================================
 
+export type { FindSwapQuoteParams } from './tools'
 export {
   abiDecode,
   abiEncode,
