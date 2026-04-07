@@ -1,3 +1,6 @@
+// Address derivation
+export { deriveAddressFromKeys } from './address'
+
 // EVM utilities
 export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
 

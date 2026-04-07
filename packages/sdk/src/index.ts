@@ -209,6 +209,7 @@ export { CosmosMsgType } from './types'
 export {
   abiDecode,
   abiEncode,
+  deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
