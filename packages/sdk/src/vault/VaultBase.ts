@@ -1119,11 +1119,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     try {
       // Delegate to BroadcastService
-      const txHash = await this.broadcastService.broadcastTx({
-        chain,
-        keysignPayload,
-        signature,
-      })
+      const txHash = await this.broadcastService.broadcastTx({ chain, keysignPayload, signature })
 
       // Emit success event
       this.emit('transactionBroadcast', {
