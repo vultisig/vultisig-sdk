@@ -693,6 +693,55 @@ vultisig agent --via-agent --password "$VAULT_PASSWORD"
 - `--password-ttl <ms>` - Password cache TTL (default: 5min, 24h for `--via-agent`)
 - `--session-id <id>` - Resume an existing session
 
+#### Pipe Protocol (`--via-agent`)
+
+The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Designed for AI agent orchestrators that need programmatic wallet control.
+
+**Input commands** (send on stdin):
+
+| Type | Fields | Purpose |
+|------|--------|---------|
+| `message` | `content: string` | Send a natural-language message |
+| `confirm` | `confirmed: boolean` | Respond to a confirmation request |
+| `password` | `password: string` | Provide vault password when requested |
+
+**Output events** (emitted on stdout):
+
+| Type | Fields | When |
+|------|--------|------|
+| `ready` | `vault, addresses` | Session initialized, addresses for all chains |
+| `session` | `id` | Conversation ID for resuming later |
+| `history` | `messages[]` | Previous messages when resuming a session |
+| `auth` | `status, error?` | Authentication result (`authenticated` or `failed`) |
+| `conversation` | `id` | Conversation created or resumed |
+| `text_delta` | `delta` | Streaming text chunk from the agent |
+| `tool_call` | `id, action, params?, status` | Action started (`running`) |
+| `tool_result` | `id, action, success, data?, error?` | Action completed |
+| `tx_status` | `tx_hash, chain, status, explorer_url?` | Transaction broadcast/confirmed/failed |
+| `assistant` | `content` | Full assistant response |
+| `suggestions` | `suggestions[]` | Suggested follow-up actions |
+| `error` | `message` | Error (includes `PASSWORD_REQUIRED` and `CONFIRMATION_REQUIRED` signals) |
+| `done` | `{}` | Response cycle complete |
+
+**Example session:**
+
+```bash
+$ echo '{"type":"message","content":"What is my ETH balance?"}' | vultisig agent --via-agent --password mypass --vault t1
+```
+
+```json
+{"type":"ready","vault":"t1","addresses":{"Ethereum":"0xabc...","Bitcoin":"bc1q..."}}
+{"type":"session","id":"conv_abc123"}
+{"type":"tool_call","id":"mcp-get_balances","action":"get_balances","status":"running"}
+{"type":"tool_result","id":"mcp-get_balances","action":"get_balances","success":true}
+{"type":"text_delta","delta":"Your ETH"}
+{"type":"text_delta","delta":" balance is 1.5 ETH."}
+{"type":"assistant","content":"Your ETH balance is 1.5 ETH ($3,750.00 USD)."}
+{"type":"done"}
+```
+
+When the agent needs a password mid-session (e.g. for signing), it emits `{"type":"error","message":"PASSWORD_REQUIRED"}`. Respond with `{"type":"password","password":"..."}` on stdin.
+
 #### Session Management
 
 ```bash

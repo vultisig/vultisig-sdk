@@ -968,24 +968,166 @@ Get vault metadata and information.
 
 ## Error Handling
 
-The SDK throws descriptive errors that you can catch and handle:
+The SDK uses typed errors with machine-readable codes. Always check `error.code` instead of parsing message strings:
 
 ```typescript
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+
 try {
-  const vault = await sdk.createFastVault({
-    name: "Test Vault",
-    email: "invalid-email",
-    password: "123",
-  });
+  const result = await vault.send({ chain: 'Ethereum', to: '0x...', amount: '0.5' })
 } catch (error) {
-  if (error.message.includes("email")) {
-    console.error("Invalid email address");
-  } else if (error.message.includes("password")) {
-    console.error("Password too weak");
-  } else {
-    console.error("Vault creation failed:", error);
+  if (error instanceof VaultError) {
+    switch (error.code) {
+      case VaultErrorCode.BalanceFetchFailed:
+        console.error('Could not fetch balance — check RPC connectivity')
+        break
+      case VaultErrorCode.GasEstimationFailed:
+        console.error('Gas estimation failed — network may be congested')
+        break
+      case VaultErrorCode.BroadcastFailed:
+        console.error('Broadcast rejected:', error.message)
+        break
+      case VaultErrorCode.InvalidAmount:
+        console.error('Invalid amount:', error.message)
+        break
+      default:
+        console.error(`[${error.code}] ${error.message}`)
+    }
+    // Access the underlying error if needed
+    if (error.originalError) console.error('Caused by:', error.originalError)
   }
 }
+```
+
+### Error Codes
+
+#### `VaultErrorCode`
+
+| Code | When |
+|------|------|
+| `INVALID_CONFIG` | SDK or vault configuration is invalid |
+| `SIGNING_FAILED` | MPC signing round failed |
+| `NOT_IMPLEMENTED` | Feature not yet available for this chain |
+| `ADDRESS_DERIVATION_FAILED` | Could not derive address from public keys |
+| `WALLET_CORE_NOT_INITIALIZED` | WASM modules not loaded — call `sdk.initialize()` first |
+| `UNSUPPORTED_CHAIN` | Chain not supported by this operation |
+| `CHAIN_NOT_SUPPORTED` | Chain not enabled on this vault |
+| `NETWORK_ERROR` | RPC or server request failed |
+| `INVALID_VAULT` | Vault data is corrupted or incomplete |
+| `INVALID_PUBLIC_KEY` | Public key format is invalid |
+| `INVALID_CHAIN_CODE` | Chain code missing or malformed |
+| `BALANCE_FETCH_FAILED` | Balance query failed (RPC timeout, rate limit) |
+| `UNSUPPORTED_TOKEN` | Token not recognized or not supported on this chain |
+| `GAS_ESTIMATION_FAILED` | Could not estimate gas fees |
+| `BROADCAST_FAILED` | Transaction rejected by the network |
+| `CREATE_FAILED` | Vault creation failed (server error, keygen failure) |
+| `TIMEOUT` | Operation timed out |
+| `INVALID_AMOUNT` | Amount is zero, negative, NaN, or exceeds balance |
+
+#### `VaultImportErrorCode`
+
+| Code | When |
+|------|------|
+| `INVALID_FILE_FORMAT` | File is not a valid vault backup |
+| `PASSWORD_REQUIRED` | Vault file is encrypted — provide a password |
+| `INVALID_PASSWORD` | Wrong password for encrypted vault |
+| `CORRUPTED_DATA` | Vault data failed integrity check |
+| `UNSUPPORTED_FORMAT` | Vault format version not supported |
+
+```typescript
+import { VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
+
+try {
+  const vault = await sdk.addVault(file, password)
+} catch (error) {
+  if (error instanceof VaultImportError) {
+    if (error.code === VaultImportErrorCode.INVALID_PASSWORD) {
+      console.error('Wrong password')
+    }
+  }
+}
+```
+
+## Events
+
+The SDK emits typed events for state changes. Use `vault.on()` to subscribe:
+
+```typescript
+// Track transaction lifecycle
+vault.on('transactionBroadcast', ({ chain, txHash }) => {
+  console.log(`Broadcast on ${chain}: ${txHash}`)
+})
+vault.on('transactionConfirmed', ({ chain, txHash, receipt }) => {
+  console.log(`Confirmed: ${txHash} (fee: ${receipt?.feeAmount} ${receipt?.feeTicker})`)
+})
+vault.on('transactionFailed', ({ chain, txHash }) => {
+  console.error(`Failed: ${txHash}`)
+})
+
+// Monitor signing progress
+vault.on('signingProgress', ({ step }) => {
+  console.log(`Signing: ${step.message}`)
+})
+
+// React to balance changes
+vault.on('balanceUpdated', ({ chain, balance }) => {
+  console.log(`${chain} balance updated`)
+})
+```
+
+### Vault Events
+
+| Event | Payload | When |
+|-------|---------|------|
+| `balanceUpdated` | `{ chain, balance, tokenId? }` | Balance fetched or changed |
+| `valuesUpdated` | `{ chain }` | Fiat values recalculated |
+| `totalValueUpdated` | `{ value }` | Portfolio total recalculated |
+| `transactionSigned` | `{ signature, payload }` | Transaction signed |
+| `transactionBroadcast` | `{ chain, txHash, keysignPayload?, raw? }` | Transaction sent to network |
+| `transactionConfirmed` | `{ chain, txHash, receipt? }` | Transaction confirmed on-chain |
+| `transactionFailed` | `{ chain, txHash }` | Transaction failed on-chain |
+| `signingProgress` | `{ step }` | Signing phase update |
+| `chainAdded` | `{ chain }` | Chain enabled on vault |
+| `chainRemoved` | `{ chain }` | Chain removed from vault |
+| `tokenAdded` | `{ chain, token }` | Token added |
+| `tokenRemoved` | `{ chain, tokenId }` | Token removed |
+| `renamed` | `{ oldName, newName }` | Vault renamed |
+| `saved` | `{ vaultId }` | Vault persisted to storage |
+| `unlocked` | `{ vaultId }` | Encrypted vault unlocked |
+| `locked` | `{}` | Vault locked |
+| `loaded` | `{ vaultId }` | Vault loaded from storage |
+| `deleted` | `{ vaultId }` | Vault deleted from storage |
+| `postQuantumKeysAdded` | `{ vaultId }` | ML-DSA post-quantum keys added (fast vault) |
+| `error` | `Error` | Vault-level error |
+
+### Secure Vault Events
+
+| Event | Payload | When |
+|-------|---------|------|
+| `qrCodeReady` | `{ qrPayload, action, sessionId }` | QR code ready for device pairing |
+| `deviceJoined` | `{ deviceId, totalJoined, required }` | Device joined signing/keygen session |
+| `allDevicesReady` | `{ devices, sessionId }` | All required devices connected |
+| `keygenProgress` | `{ phase, round?, message? }` | Keygen phase update (`'ecdsa'` → `'eddsa'` → `'complete'`) |
+
+### Swap Events
+
+| Event | Payload | When |
+|-------|---------|------|
+| `swapQuoteReceived` | `{ quote }` | Swap quote fetched |
+| `swapApprovalRequired` | `{ token, spender, amount, currentAllowance }` | ERC-20 approval needed before swap |
+| `swapApprovalGranted` | `{ token, txHash }` | Approval transaction confirmed |
+| `swapPrepared` | `{ provider, fromAmount, toAmountExpected, requiresApproval }` | Swap transaction ready for signing |
+
+### SDK Events
+
+Listen on the SDK instance for global state changes:
+
+```typescript
+sdk.on('vaultChanged', ({ vaultId }) => console.log(`Active vault: ${vaultId}`))
+sdk.on('vaultCreationProgress', ({ step, vault }) => console.log(step.message))
+sdk.on('vaultCreationComplete', ({ vault }) => console.log(`Created: ${vault.name}`))
+sdk.on('disposed', () => console.log('SDK disposed'))
+sdk.on('error', (error) => console.error('SDK error:', error))
 ```
 
 ## Examples
