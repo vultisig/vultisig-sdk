@@ -1084,7 +1084,8 @@ const agentCmd = program
   .option('--password <password>', 'Vault password for signing operations')
   .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
   .option('--session-id <id>', 'Resume an existing session')
-  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; sessionId?: string }) => {
+  .option('--notification-url <url>', 'Notification service URL for push notifications')
+  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; sessionId?: string; notificationUrl?: string }) => {
     // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
     // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
     const MAX_TTL = 86400000 // 24 hours
@@ -1105,6 +1106,7 @@ const agentCmd = program
       backendUrl: options.backendUrl,
       password: options.password,
       sessionId: options.sessionId,
+      notificationUrl: options.notificationUrl,
     })
   })
 

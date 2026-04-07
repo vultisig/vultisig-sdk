@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-import type { VaultBase } from '@vultisig/sdk'
+import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
 import { authenticateVault } from './auth'
 import { AgentClient } from './client'
@@ -31,6 +31,7 @@ export class AgentSession {
   private cachedContext: MessageContext | null = null
   private abortController: AbortController | null = null
   private historyMessages: ConversationMessage[] = []
+  private pushService: PushNotificationService | null = null
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -113,6 +114,40 @@ export class AgentSession {
     this.cachedContext = (this.config.viaAgent || this.config.askMode)
       ? await buildMinimalContext(this.vault)
       : await buildMessageContext(this.vault)
+
+    // Connect to notification service for real-time push delivery
+    if (this.config.notificationUrl && ui.onNotification) {
+      try {
+        // Polyfill WebSocket for Node.js (PushNotificationService uses the global)
+        if (!globalThis.WebSocket) {
+          const { WebSocket } = await import('ws')
+          globalThis.WebSocket = WebSocket as any
+        }
+
+        const token = `cli-${Date.now()}`
+        this.pushService = new PushNotificationService(new MemoryStorage(), this.config.notificationUrl)
+
+        await this.pushService.registerDevice({
+          vaultId: this.publicKey,
+          partyName: 'cli-agent',
+          token,
+          deviceType: 'electron',
+        })
+
+        this.pushService.onSigningRequest(notification => {
+          // vaultName carries "title\nbody", qrCodeData carries the deeplink
+          ui.onNotification?.(notification.vaultName, notification.qrCodeData)
+        })
+
+        this.pushService.connect({
+          vaultId: this.publicKey,
+          partyName: 'cli-agent',
+          token,
+        })
+      } catch {
+        // Non-fatal — notifications are optional
+      }
+    }
   }
 
   getConversationId(): string | null {
@@ -402,6 +437,8 @@ export class AgentSession {
    */
   dispose(): void {
     this.cancel()
+    this.pushService?.disconnect()
+    this.pushService = null
     this.cachedContext = null
     this.conversationId = null
     this.historyMessages = []

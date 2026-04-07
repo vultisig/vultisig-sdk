@@ -21,6 +21,8 @@ export type AgentConfig = {
   sessionId?: string
   /** Show detailed tool call params and debug output */
   verbose?: boolean
+  /** Notification service URL for push notifications (empty = disabled) */
+  notificationUrl?: string
 }
 
 // ============================================================================
@@ -346,6 +348,7 @@ export type UICallbacks = {
   onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => void
   onError: (message: string) => void
   onDone: () => void
+  onNotification?: (title: string, body: string) => void
   requestPassword: () => Promise<string>
   requestConfirmation: (message: string) => Promise<boolean>
 }

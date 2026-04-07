@@ -26,6 +26,7 @@ export type AgentCommandOptions = {
   viaAgent?: boolean
   sessionId?: string
   verbose?: boolean
+  notificationUrl?: string
 }
 
 export async function executeAgent(ctx: CommandContext, options: AgentCommandOptions): Promise<void> {
@@ -38,6 +39,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     viaAgent: options.viaAgent,
     sessionId: options.sessionId,
     verbose: options.verbose,
+    notificationUrl: options.notificationUrl || process.env.VULTISIG_NOTIFICATION_URL || '',
   }
 
   const session = new AgentSession(vault, config)
