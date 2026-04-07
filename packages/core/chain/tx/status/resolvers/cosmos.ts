@@ -46,7 +46,7 @@ export const getCosmosTxStatus: TxStatusResolver<CosmosChain> = async ({
 
     const actualFee = computeCosmosTxReceiptFeeAmount({
       gasUsed,
-      gasWantedFromTx: tx.gasWanted,
+      gasWantedFromTx: tx.gasWanted ?? 0n,
       feeGasLimit: fee?.gasLimit ?? 0n,
       maxFeeAmount,
     })
