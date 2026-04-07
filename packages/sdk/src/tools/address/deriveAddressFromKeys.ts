@@ -35,8 +35,8 @@ type DeriveAddressFromKeysResult = {
 export const deriveAddressFromKeys = async (
   input: DeriveAddressFromKeysInput
 ): Promise<DeriveAddressFromKeysResult> => {
-  if (!input.ecdsaPublicKey || !input.eddsaPublicKey) {
-    throw new Error('Both ecdsaPublicKey and eddsaPublicKey are required')
+  if (!input.ecdsaPublicKey && !input.eddsaPublicKey) {
+    throw new Error('At least one public key (ecdsaPublicKey or eddsaPublicKey) is required')
   }
   if (!input.hexChainCode) {
     throw new Error('hexChainCode is required for address derivation')
