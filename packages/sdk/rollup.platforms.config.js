@@ -237,15 +237,39 @@ const configs = {
       alias({
         entries: [
           // Polyfills for Node.js crypto (must come before generic package aliases)
-          { find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/encryptWithAesGcm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts') },
-          { find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/decryptWithAesGcm$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts') },
-          { find: /^@vultisig\/core-mpc\/getMessageHash$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts') },
-          { find: /\.\.\/getMessageHash$/, replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts') },
+          {
+            find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/encryptWithAesGcm$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts'),
+          },
+          {
+            find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/decryptWithAesGcm$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts'),
+          },
+          {
+            find: /^@vultisig\/core-mpc\/getMessageHash$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+          },
+          {
+            find: /\.\.\/getMessageHash$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+          },
           // Resolve workspace packages to source TS for bundling
-          { find: /^@vultisig\/core-chain\/(.*)/, replacement: path.resolve(currentDir, '../core/chain/$1') },
-          { find: /^@vultisig\/core-mpc\/(.*)/, replacement: path.resolve(currentDir, '../core/mpc/$1') },
-          { find: /^@vultisig\/core-config(.*)/, replacement: path.resolve(currentDir, '../core/config$1') },
-          { find: /^@vultisig\/lib-utils\/(.*)/, replacement: path.resolve(currentDir, '../lib/utils/$1') },
+          {
+            find: /^@vultisig\/core-chain\/(.*)/,
+            replacement: path.resolve(currentDir, '../core/chain/$1'),
+          },
+          {
+            find: /^@vultisig\/core-mpc\/(.*)/,
+            replacement: path.resolve(currentDir, '../core/mpc/$1'),
+          },
+          {
+            find: /^@vultisig\/core-config(.*)/,
+            replacement: path.resolve(currentDir, '../core/config$1'),
+          },
+          {
+            find: /^@vultisig\/lib-utils\/(.*)/,
+            replacement: path.resolve(currentDir, '../lib/utils/$1'),
+          },
         ],
       }),
       resolve({
@@ -253,12 +277,22 @@ const configs = {
         extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
         exportConditions: ['module', 'import', 'default'],
         skip: [
-          'axios', 'viem', 'zod', 'uuid',
-          '@trustwallet/wallet-core', 'tiny-secp256k1',
-          '@solana/web3.js', '@cosmjs/stargate', '@cosmjs/amino',
+          'axios',
+          'viem',
+          'zod',
+          'uuid',
+          '@trustwallet/wallet-core',
+          'tiny-secp256k1',
+          '@solana/web3.js',
+          '@cosmjs/stargate',
+          '@cosmjs/amino',
         ],
       }),
-      replace({ preventAssignment: true, 'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'), 'typeof window': JSON.stringify('undefined') }),
+      replace({
+        preventAssignment: true,
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'),
+        'typeof window': JSON.stringify('undefined'),
+      }),
       esbuild({
         include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
         exclude: ['**/*.test.*', '**/node_modules/**'],
