@@ -53,6 +53,9 @@ jobs:
           LOCAL_VERSION=$(node -p "require('./packages/sdk/package.json').version")
           echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
           PACKAGES=(
+            "packages/mpc-types"
+            "packages/mpc-wasm"
+            "packages/mpc-native"
             "packages/core/config"
             "packages/lib/utils"
             "packages/lib/dkls"
@@ -154,6 +157,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          lfs: true
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

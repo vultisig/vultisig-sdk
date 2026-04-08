@@ -23,7 +23,11 @@
       "@vultisig/lib-utils/*": ["packages/lib/utils/*"],
       "@vultisig/lib-dkls/*": ["packages/lib/dkls/*"],
       "@vultisig/lib-mldsa/*": ["packages/lib/mldsa/*"],
-      "@vultisig/lib-schnorr/*": ["packages/lib/schnorr/*"]
+      "@vultisig/lib-schnorr/*": ["packages/lib/schnorr/*"],
+      "@vultisig/mpc-types": ["packages/mpc-types/src/index.ts"],
+      "@vultisig/mpc-types/*": ["packages/mpc-types/src/*"],
+      "@vultisig/mpc-wasm": ["packages/mpc-wasm/src/index.ts"],
+      "@vultisig/mpc-wasm/*": ["packages/mpc-wasm/src/*"]
     }
   },
   "include": [
@@ -32,7 +36,9 @@
     "../packages/core/mpc/**/*.ts",
     "../packages/lib/utils/**/*.ts",
     "../packages/lib/utils/**/*.tsx",
-    "../packages/core/config/**/*.ts"
+    "../packages/core/config/**/*.ts",
+    "../packages/mpc-types/src/**/*.ts",
+    "../packages/mpc-wasm/src/**/*.ts"
   ],
   "exclude": [
     "../**/node_modules",
