@@ -998,8 +998,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * const txHash = await vault.broadcastTx({ chain: Chain.Polygon, keysignPayload: payload, signature })
    * ```
    */
-  async prepareContractCallTx(params: Omit<ContractCallTxParams, 'senderAddress'> & { senderAddress?: string }): Promise<KeysignPayload> {
-    const senderAddress = params.senderAddress ?? await this.address(params.chain)
+  async prepareContractCallTx(
+    params: Omit<ContractCallTxParams, 'senderAddress'> & { senderAddress?: string }
+  ): Promise<KeysignPayload> {
+    const senderAddress = params.senderAddress ?? (await this.address(params.chain))
     return this.transactionBuilder.prepareContractCallTx({ ...params, senderAddress })
   }
 
@@ -1593,16 +1595,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== COMPOUND WRAPPER METHODS =====
 
   /** Sign a message. EVM: EIP-191 (keccak256). Others: SHA-256. */
-  async signMessage(message: string, chain: Chain = Chain.Ethereum, options?: { signal?: AbortSignal }): Promise<MessageSignature> {
+  async signMessage(
+    message: string,
+    chain: Chain = Chain.Ethereum,
+    options?: { signal?: AbortSignal }
+  ): Promise<MessageSignature> {
     if (!message) throw new VaultError(VaultErrorCode.InvalidConfig, 'Message cannot be empty')
 
     const chainKind = getChainKind(chain)
     const algorithm = signatureAlgorithms[chainKind] === 'ecdsa' ? 'ECDSA' : 'EdDSA'
     // EIP-191 uses UTF-8 byte length, not JS string length
     const msgBytes = new TextEncoder().encode(message)
-    const hash = chainKind === 'evm'
-      ? keccak_256(new TextEncoder().encode(`\x19Ethereum Signed Message:\n${msgBytes.length}${message}`))
-      : sha256(msgBytes)
+    const hash =
+      chainKind === 'evm'
+        ? keccak_256(new TextEncoder().encode(`\x19Ethereum Signed Message:\n${msgBytes.length}${message}`))
+        : sha256(msgBytes)
 
     const sig = await this.signBytes({ data: hash, chain }, options)
     return { signature: sig.signature.startsWith('0x') ? sig.signature : '0x' + sig.signature, chain, algorithm }
@@ -1623,7 +1630,12 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   /** Send tokens. Set dryRun for fee estimate without signing. */
   async send(params: {
-    chain: Chain; to: string; amount: string; symbol?: string; memo?: string; dryRun?: boolean
+    chain: Chain
+    to: string
+    amount: string
+    symbol?: string
+    memo?: string
+    dryRun?: boolean
   }): Promise<SendResult> {
     const { chain, to, amount, symbol, memo, dryRun } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
@@ -1633,7 +1645,12 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     if (dryRun) {
       const fee = await this.transactionBuilder.estimateSendFee({ coin, receiver: to, amount: amountBigInt, memo })
-      return { dryRun: true, fee: this.formatUnits(fee, tokenInfo.decimals), total: this.formatUnits(amountBigInt + fee, tokenInfo.decimals), keysignPayload }
+      return {
+        dryRun: true,
+        fee: this.formatUnits(fee, tokenInfo.decimals),
+        total: this.formatUnits(amountBigInt + fee, tokenInfo.decimals),
+        keysignPayload,
+      }
     }
 
     const signature = await this.sign({ transaction: keysignPayload, chain })
@@ -1642,7 +1659,12 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   /** Swap tokens. Set dryRun for quote without signing. */
   async swap(params: {
-    fromChain: Chain; fromSymbol: string; toChain: Chain; toSymbol: string; amount: string; dryRun?: boolean
+    fromChain: Chain
+    fromSymbol: string
+    toChain: Chain
+    toSymbol: string
+    amount: string
+    dryRun?: boolean
   }): Promise<CompoundSwapResult> {
     const { fromChain, fromSymbol, toChain, toSymbol, amount, dryRun } = params
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
@@ -1657,15 +1679,29 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: amountNum })
     if (dryRun) return { dryRun: true, quote }
 
-    const { keysignPayload, approvalPayload } = await this.prepareSwapTx({ fromCoin, toCoin, amount: amountNum, swapQuote: quote })
+    const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
+      fromCoin,
+      toCoin,
+      amount: amountNum,
+      swapQuote: quote,
+    })
     if (approvalPayload) {
       const approvalSig = await this.sign({ transaction: approvalPayload, chain: fromChain })
-      const approvalHash = await this.broadcastTx({ chain: fromChain, keysignPayload: approvalPayload, signature: approvalSig })
+      const approvalHash = await this.broadcastTx({
+        chain: fromChain,
+        keysignPayload: approvalPayload,
+        signature: approvalSig,
+      })
       await this.waitForConfirmation(fromChain, approvalHash)
     }
 
     const signature = await this.sign({ transaction: keysignPayload, chain: fromChain })
-    return { dryRun: false, txHash: await this.broadcastTx({ chain: fromChain, keysignPayload, signature }), chain: fromChain, quote }
+    return {
+      dryRun: false,
+      txHash: await this.broadcastTx({ chain: fromChain, keysignPayload, signature }),
+      chain: fromChain,
+      quote,
+    }
   }
 
   /**
@@ -1704,41 +1740,66 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
   // ===== PRIVATE HELPERS =====
 
-  private buildAccountCoin(chain: Chain, address: string, t: { ticker: string; decimals: number; contractAddress?: string }): AccountCoin {
-    return { chain, address, decimals: t.decimals, ticker: t.ticker, ...(t.contractAddress ? { id: t.contractAddress } : {}) }
+  private buildAccountCoin(
+    chain: Chain,
+    address: string,
+    t: { ticker: string; decimals: number; contractAddress?: string }
+  ): AccountCoin {
+    return {
+      chain,
+      address,
+      decimals: t.decimals,
+      ticker: t.ticker,
+      ...(t.contractAddress ? { id: t.contractAddress } : {}),
+    }
   }
 
-  private resolveTokenInfo(chain: Chain, symbol?: string): { ticker: string; decimals: number; contractAddress?: string } {
+  private resolveTokenInfo(
+    chain: Chain,
+    symbol?: string
+  ): { ticker: string; decimals: number; contractAddress?: string } {
     const native = chainFeeCoin[chain]
-    if (!symbol || symbol.toUpperCase() === native.ticker.toUpperCase()) return { ticker: native.ticker, decimals: native.decimals }
+    if (!symbol || symbol.toUpperCase() === native.ticker.toUpperCase())
+      return { ticker: native.ticker, decimals: native.decimals }
 
     // 1. User's configured tokens
     const token = this.getTokens(chain).find(t => t.symbol.toUpperCase() === symbol.toUpperCase())
-    if (token) return { ticker: token.symbol, decimals: token.decimals, contractAddress: token.contractAddress || token.id }
+    if (token)
+      return { ticker: token.symbol, decimals: token.decimals, contractAddress: token.contractAddress || token.id }
 
     // 2. Well-known token registry (no network call)
     const known = (knownTokens[chain] ?? []).find(t => t.ticker.toUpperCase() === symbol.toUpperCase())
     if (known) return { ticker: known.ticker, decimals: known.decimals, contractAddress: known.id }
 
-    throw new VaultError(VaultErrorCode.InvalidConfig, `Token "${symbol}" not found on ${chain}. Add it with vault.addToken() or use a well-known token symbol.`)
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `Token "${symbol}" not found on ${chain}. Add it with vault.addToken() or use a well-known token symbol.`
+    )
   }
 
   private parseAmount(amount: string, decimals: number): bigint {
     const trimmed = amount?.trim()
     if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
-    if (isNaN(Number(trimmed)) || Number(trimmed) <= 0) throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
+    if (isNaN(Number(trimmed)) || Number(trimmed) <= 0)
+      throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
     const [whole, fraction = ''] = trimmed.split('.')
     return BigInt(whole + fraction.padEnd(decimals, '0').slice(0, decimals))
   }
 
   /** Poll getTxStatus until confirmed or timeout. Used for approval tx before swap. */
-  private async waitForConfirmation(chain: Chain, txHash: string, timeoutMs = 60_000, intervalMs = 3_000): Promise<void> {
+  private async waitForConfirmation(
+    chain: Chain,
+    txHash: string,
+    timeoutMs = 60_000,
+    intervalMs = 3_000
+  ): Promise<void> {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
       try {
         const result = await this.getTxStatus({ chain, txHash })
         if (result.status === 'success') return
-        if (result.status === 'error') throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
+        if (result.status === 'error')
+          throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
       } catch (e) {
         if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
       }

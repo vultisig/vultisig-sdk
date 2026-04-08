@@ -27,10 +27,7 @@ import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
 import type { JoinSecureVaultOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
 import type { ParsedKeygenQR } from '../utils/parseKeygenQR'
-import {
-  getChainBatchMessageIds,
-  TSS_BATCH_MESSAGE_IDS,
-} from '../utils/tssBatching'
+import { getChainBatchMessageIds, TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 
 /**
@@ -477,37 +474,13 @@ export class JoinSecureVaultService {
       )
       const chainPrivateKeys =
         qrParams.chains && qrParams.chains.length > 0
-          ? await this.keyDeriver.deriveChainPrivateKeys(
-              mnemonic!,
-              qrParams.chains as Chain[]
-            )
+          ? await this.keyDeriver.deriveChainPrivateKeys(mnemonic!, qrParams.chains as Chain[])
           : []
 
-      const chainImportPromises = chainPrivateKeys.map(
-        async ({ chain, privateKeyHex, isEddsa }) => {
-          const ids = getChainBatchMessageIds(chain)
-          if (isEddsa) {
-            const chainSchnorr = new Schnorr(
-              { keyimport: true },
-              false,
-              this.relayUrl,
-              qrParams.sessionId,
-              localPartyId,
-              allDevices,
-              [],
-              qrParams.hexEncryptionKey,
-              new Uint8Array()
-            )
-            const result = await chainSchnorr.startKeyImportWithRetry(
-              privateKeyHex,
-              qrParams.hexChainCode,
-              ids.setupMessageId,
-              ids.protocolMessageId
-            )
-            return { chain, result }
-          }
-
-          const chainDkls = new DKLS(
+      const chainImportPromises = chainPrivateKeys.map(async ({ chain, privateKeyHex, isEddsa }) => {
+        const ids = getChainBatchMessageIds(chain)
+        if (isEddsa) {
+          const chainSchnorr = new Schnorr(
             { keyimport: true },
             false,
             this.relayUrl,
@@ -515,9 +488,10 @@ export class JoinSecureVaultService {
             localPartyId,
             allDevices,
             [],
-            qrParams.hexEncryptionKey
+            qrParams.hexEncryptionKey,
+            new Uint8Array()
           )
-          const result = await chainDkls.startKeyImportWithRetry(
+          const result = await chainSchnorr.startKeyImportWithRetry(
             privateKeyHex,
             qrParams.hexChainCode,
             ids.setupMessageId,
@@ -525,7 +499,25 @@ export class JoinSecureVaultService {
           )
           return { chain, result }
         }
-      )
+
+        const chainDkls = new DKLS(
+          { keyimport: true },
+          false,
+          this.relayUrl,
+          qrParams.sessionId,
+          localPartyId,
+          allDevices,
+          [],
+          qrParams.hexEncryptionKey
+        )
+        const result = await chainDkls.startKeyImportWithRetry(
+          privateKeyHex,
+          qrParams.hexChainCode,
+          ids.setupMessageId,
+          ids.protocolMessageId
+        )
+        return { chain, result }
+      })
 
       const [rootEcdsa, rootEddsa, chainResults] = await Promise.all([
         dkls.startKeyImportWithRetry(
@@ -556,10 +548,7 @@ export class JoinSecureVaultService {
         message: 'Importing ECDSA key...',
       })
 
-      ecdsaResult = await dkls.startKeyImportWithRetry(
-        masterKeys.ecdsaPrivateKeyHex,
-        qrParams.hexChainCode
-      )
+      ecdsaResult = await dkls.startKeyImportWithRetry(masterKeys.ecdsaPrivateKeyHex, qrParams.hexChainCode)
 
       if (signal?.aborted) {
         throw new Error('Operation aborted')
@@ -583,10 +572,7 @@ export class JoinSecureVaultService {
         new Uint8Array()
       )
 
-      eddsaResult = await schnorr.startKeyImportWithRetry(
-        masterKeys.eddsaPrivateKeyHex,
-        ecdsaResult.chaincode
-      )
+      eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, ecdsaResult.chaincode)
 
       if (signal?.aborted) {
         throw new Error('Operation aborted')
@@ -599,10 +585,7 @@ export class JoinSecureVaultService {
           message: 'Importing chain-specific keys...',
         })
 
-        const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(
-          mnemonic!,
-          qrParams.chains as Chain[]
-        )
+        const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic!, qrParams.chains as Chain[])
 
         for (let i = 0; i < chainPrivateKeys.length; i++) {
           if (signal?.aborted) {
@@ -630,11 +613,7 @@ export class JoinSecureVaultService {
               qrParams.hexEncryptionKey,
               new Uint8Array()
             )
-            const chainResult = await chainSchnorr.startKeyImportWithRetry(
-              privateKeyHex,
-              eddsaResult.chaincode,
-              chain
-            )
+            const chainResult = await chainSchnorr.startKeyImportWithRetry(privateKeyHex, eddsaResult.chaincode, chain)
             chainPublicKeys[chain] = chainResult.publicKey
             chainKeyShares[chain] = chainResult.keyshare
           } else {
@@ -648,11 +627,7 @@ export class JoinSecureVaultService {
               [],
               qrParams.hexEncryptionKey
             )
-            const chainResult = await chainDkls.startKeyImportWithRetry(
-              privateKeyHex,
-              ecdsaResult.chaincode,
-              chain
-            )
+            const chainResult = await chainDkls.startKeyImportWithRetry(privateKeyHex, ecdsaResult.chaincode, chain)
             chainPublicKeys[chain] = chainResult.publicKey
             chainKeyShares[chain] = chainResult.keyshare
           }

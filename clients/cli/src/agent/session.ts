@@ -59,7 +59,7 @@ export class AgentSession {
     try {
       // Unlock vault first if encrypted
       if (this.vault.isEncrypted) {
-        const password = this.config.password || await ui.requestPassword()
+        const password = this.config.password || (await ui.requestPassword())
         await (this.vault as any).unlock?.(password)
         this.executor.setPassword(password)
       }
@@ -110,9 +110,10 @@ export class AgentSession {
 
     // Pre-build context — skip slow balance fetches in agent modes since the
     // backend agent can query balances on demand via MCP tools.
-    this.cachedContext = (this.config.viaAgent || this.config.askMode)
-      ? await buildMinimalContext(this.vault)
-      : await buildMessageContext(this.vault)
+    this.cachedContext =
+      this.config.viaAgent || this.config.askMode
+        ? await buildMinimalContext(this.vault)
+        : await buildMessageContext(this.vault)
   }
 
   getConversationId(): string | null {
@@ -146,9 +147,10 @@ export class AgentSession {
 
     // Refresh context before each message — skip balance fetches in agent modes
     try {
-      this.cachedContext = (this.config.viaAgent || this.config.askMode)
-        ? await buildMinimalContext(this.vault)
-        : await buildMessageContext(this.vault)
+      this.cachedContext =
+        this.config.viaAgent || this.config.askMode
+          ? await buildMinimalContext(this.vault)
+          : await buildMessageContext(this.vault)
     } catch {
       // Use stale context
     }
@@ -235,7 +237,8 @@ export class AgentSession {
           // Skip error tx_ready events (MCP build failures)
           const txData = tx?.swap_tx || tx?.send_tx || tx?.tx
           if (txData?.status === 'error' || txData?.error) {
-            if (this.config.verbose) process.stderr.write(`[session] skipping error tx_ready: ${txData.error || 'unknown error'}\n`)
+            if (this.config.verbose)
+              process.stderr.write(`[session] skipping error tx_ready: ${txData.error || 'unknown error'}\n`)
             return
           }
           // Store server-built transaction so sign_tx can find it
@@ -256,9 +259,7 @@ export class AgentSession {
 
     // Emit the full assistant message
     // Backend may send text via text_delta events (fullText) or a single message event
-    const responseText = streamResult.fullText
-      || (streamResult.message as any)?.content
-      || ''
+    const responseText = streamResult.fullText || (streamResult.message as any)?.content || ''
 
     // Check if the response text contains inline tool calls (XML format from the model)
     const inlineActions = parseInlineToolCalls(responseText)
@@ -284,11 +285,10 @@ export class AgentSession {
       const results = await this.executeActions(actions, ui)
 
       // If a build_* action succeeded and produced a pending tx, auto-sign client-side
-      const hasBuildSuccess = results.some(
-        r => r.success && r.action.startsWith('build_')
-      )
+      const hasBuildSuccess = results.some(r => r.success && r.action.startsWith('build_'))
       if (hasBuildSuccess && this.executor.hasPendingTransaction()) {
-        if (this.config.verbose) process.stderr.write(`[session] build_* action produced pending tx, auto-signing client-side\n`)
+        if (this.config.verbose)
+          process.stderr.write(`[session] build_* action produced pending tx, auto-signing client-side\n`)
         const signAction: Action = {
           id: `tx_sign_${Date.now()}`,
           type: 'sign_tx',
@@ -316,7 +316,8 @@ export class AgentSession {
 
     // Handle transactions from tx_ready events (server-side builds via MCP)
     if (streamResult.transactions.length > 0 && this.executor.hasPendingTransaction()) {
-      if (this.config.verbose) process.stderr.write(`[session] ${streamResult.transactions.length} tx_ready events, signing client-side\n`)
+      if (this.config.verbose)
+        process.stderr.write(`[session] ${streamResult.transactions.length} tx_ready events, signing client-side\n`)
       const signAction: Action = {
         id: `tx_sign_${Date.now()}`,
         type: 'sign_tx',
@@ -494,7 +495,11 @@ function loadCachedToken(publicKey: string): string | null {
   if (now >= expiresMs - 60_000) {
     // Expired or about to expire - clean it up
     delete store[publicKey]
-    try { writeTokenStore(store) } catch { /* ignore */ }
+    try {
+      writeTokenStore(store)
+    } catch {
+      /* ignore */
+    }
     return null
   }
 
@@ -504,11 +509,19 @@ function loadCachedToken(publicKey: string): string | null {
 function saveCachedToken(publicKey: string, token: string, expiresAt: number): void {
   const store = readTokenStore()
   store[publicKey] = { token, expiresAt }
-  try { writeTokenStore(store) } catch { /* ignore */ }
+  try {
+    writeTokenStore(store)
+  } catch {
+    /* ignore */
+  }
 }
 
 function clearCachedToken(publicKey: string): void {
   const store = readTokenStore()
   delete store[publicKey]
-  try { writeTokenStore(store) } catch { /* ignore */ }
+  try {
+    writeTokenStore(store)
+  } catch {
+    /* ignore */
+  }
 }

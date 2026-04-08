@@ -368,13 +368,9 @@ export class SecureVaultFromSeedphraseService {
     const chainKeyShares: Partial<Record<Chain, string>> = {}
     let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
     let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
-    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(
-      mnemonic,
-      chainsToImport as Chain[],
-      {
-        usePhantomSolanaPath,
-      }
-    )
+    const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic, chainsToImport as Chain[], {
+      usePhantomSolanaPath,
+    })
 
     if (tssBatching) {
       reportProgress({
@@ -394,31 +390,10 @@ export class SecureVaultFromSeedphraseService {
         hexEncryptionKey,
         new Uint8Array()
       )
-      const chainImportPromises = chainPrivateKeys.map(
-        async ({ chain, privateKeyHex, isEddsa }) => {
-          const ids = getChainBatchMessageIds(chain)
-          if (isEddsa) {
-            const chainSchnorr = new Schnorr(
-              { keyimport: true },
-              true,
-              this.relayUrl,
-              sessionId,
-              localPartyId,
-              allDevices,
-              [],
-              hexEncryptionKey,
-              new Uint8Array()
-            )
-            const result = await chainSchnorr.startKeyImportWithRetry(
-              privateKeyHex,
-              hexChainCode,
-              ids.setupMessageId,
-              ids.protocolMessageId
-            )
-            return { chain, result }
-          }
-
-          const chainDkls = new DKLS(
+      const chainImportPromises = chainPrivateKeys.map(async ({ chain, privateKeyHex, isEddsa }) => {
+        const ids = getChainBatchMessageIds(chain)
+        if (isEddsa) {
+          const chainSchnorr = new Schnorr(
             { keyimport: true },
             true,
             this.relayUrl,
@@ -426,9 +401,10 @@ export class SecureVaultFromSeedphraseService {
             localPartyId,
             allDevices,
             [],
-            hexEncryptionKey
+            hexEncryptionKey,
+            new Uint8Array()
           )
-          const result = await chainDkls.startKeyImportWithRetry(
+          const result = await chainSchnorr.startKeyImportWithRetry(
             privateKeyHex,
             hexChainCode,
             ids.setupMessageId,
@@ -436,24 +412,41 @@ export class SecureVaultFromSeedphraseService {
           )
           return { chain, result }
         }
-      )
 
-      const [rootEcdsa, rootEddsa, chainResults] =
-        await Promise.all([
-          dkls.startKeyImportWithRetry(
-            masterKeys.ecdsaPrivateKeyHex,
-            hexChainCode,
-            undefined,
-            TSS_BATCH_MESSAGE_IDS.ecdsa
-          ),
-          rootSchnorr.startKeyImportWithRetry(
-            masterKeys.eddsaPrivateKeyHex,
-            hexChainCode,
-            TSS_BATCH_MESSAGE_IDS.eddsaImportSetup,
-            TSS_BATCH_MESSAGE_IDS.eddsa
-          ),
-          Promise.all(chainImportPromises),
-        ])
+        const chainDkls = new DKLS(
+          { keyimport: true },
+          true,
+          this.relayUrl,
+          sessionId,
+          localPartyId,
+          allDevices,
+          [],
+          hexEncryptionKey
+        )
+        const result = await chainDkls.startKeyImportWithRetry(
+          privateKeyHex,
+          hexChainCode,
+          ids.setupMessageId,
+          ids.protocolMessageId
+        )
+        return { chain, result }
+      })
+
+      const [rootEcdsa, rootEddsa, chainResults] = await Promise.all([
+        dkls.startKeyImportWithRetry(
+          masterKeys.ecdsaPrivateKeyHex,
+          hexChainCode,
+          undefined,
+          TSS_BATCH_MESSAGE_IDS.ecdsa
+        ),
+        rootSchnorr.startKeyImportWithRetry(
+          masterKeys.eddsaPrivateKeyHex,
+          hexChainCode,
+          TSS_BATCH_MESSAGE_IDS.eddsaImportSetup,
+          TSS_BATCH_MESSAGE_IDS.eddsa
+        ),
+        Promise.all(chainImportPromises),
+      ])
 
       ecdsaResult = rootEcdsa
       eddsaResult = rootEddsa
@@ -468,10 +461,7 @@ export class SecureVaultFromSeedphraseService {
         message: 'Importing ECDSA key...',
       })
 
-      ecdsaResult = await dkls.startKeyImportWithRetry(
-        masterKeys.ecdsaPrivateKeyHex,
-        hexChainCode
-      )
+      ecdsaResult = await dkls.startKeyImportWithRetry(masterKeys.ecdsaPrivateKeyHex, hexChainCode)
 
       if (signal?.aborted) {
         throw new Error('Operation aborted')
@@ -495,10 +485,7 @@ export class SecureVaultFromSeedphraseService {
         dkls.getSetupMessage()
       )
 
-      eddsaResult = await schnorr.startKeyImportWithRetry(
-        masterKeys.eddsaPrivateKeyHex,
-        hexChainCode
-      )
+      eddsaResult = await schnorr.startKeyImportWithRetry(masterKeys.eddsaPrivateKeyHex, hexChainCode)
 
       if (signal?.aborted) {
         throw new Error('Operation aborted')
@@ -536,11 +523,7 @@ export class SecureVaultFromSeedphraseService {
             hexEncryptionKey,
             new Uint8Array()
           )
-          const chainResult = await chainSchnorr.startKeyImportWithRetry(
-            privateKeyHex,
-            eddsaResult.chaincode,
-            chain
-          )
+          const chainResult = await chainSchnorr.startKeyImportWithRetry(privateKeyHex, eddsaResult.chaincode, chain)
           chainPublicKeys[chain] = chainResult.publicKey
           chainKeyShares[chain] = chainResult.keyshare
         } else {
@@ -554,11 +537,7 @@ export class SecureVaultFromSeedphraseService {
             [],
             hexEncryptionKey
           )
-          const chainResult = await chainDkls.startKeyImportWithRetry(
-            privateKeyHex,
-            ecdsaResult.chaincode,
-            chain
-          )
+          const chainResult = await chainDkls.startKeyImportWithRetry(privateKeyHex, ecdsaResult.chaincode, chain)
           chainPublicKeys[chain] = chainResult.publicKey
           chainKeyShares[chain] = chainResult.keyshare
         }
