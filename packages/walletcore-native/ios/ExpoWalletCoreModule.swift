@@ -409,16 +409,28 @@ public class ExpoWalletCoreModule: Module {
                     userInfo: [NSLocalizedDescriptionKey: "Hex string must have even length, got \(hex.count)"]
                 )
             }
+            let allowed = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+            guard hex.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+                throw NSError(
+                    domain: "ExpoWalletCore",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Hex string contains non-hex characters"]
+                )
+            }
             var data = Data()
-            var temp = ""
-            for c in hex.lowercased() {
-                temp.append(c)
-                if temp.count == 2 {
-                    if let byte = UInt8(temp, radix: 16) {
-                        data.append(byte)
-                    }
-                    temp = ""
+            var index = hex.startIndex
+            while index < hex.endIndex {
+                let nextIndex = hex.index(index, offsetBy: 2)
+                let byteString = hex[index..<nextIndex]
+                guard let byte = UInt8(byteString, radix: 16) else {
+                    throw NSError(
+                        domain: "ExpoWalletCore",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "Hex string contains non-hex characters"]
+                    )
                 }
+                data.append(byte)
+                index = nextIndex
             }
             return data.base64EncodedString()
         }
