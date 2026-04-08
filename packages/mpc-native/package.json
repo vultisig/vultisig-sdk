@@ -19,5 +19,8 @@
   },
   "dependencies": {
     "@vultisig/mpc-types": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

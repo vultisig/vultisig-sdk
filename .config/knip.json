@@ -1,14 +1,70 @@
 {
-  "ignore": ["packages/core/mpc/types/**"],
-  "ignoreBinaries": ["tsx"],
-  "entry": [
-    "packages/rujira/src/index.ts"
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "exclude": [
+    "dependencies",
+    "devDependencies",
+    "optionalPeerDependencies",
+    "binaries",
+    "unlisted"
   ],
-  "ignoreDependencies": [
-    "@bufbuild/buf",
-    "@bufbuild/protoc-gen-es",
-    "@types/chrome",
-    "@fontsource/montserrat",
-    "@fontsource/roboto-mono"
-  ]
+  "ignore": ["packages/core/mpc/types/**"],
+  "ignoreFiles": [
+    "packages/core/**",
+    "packages/lib/**",
+    "scripts/**",
+    "testdata/**"
+  ],
+  "ignoreIssues": {
+    "packages/core/**": [
+      "exports",
+      "types",
+      "nsExports",
+      "nsTypes",
+      "duplicates",
+      "enumMembers",
+      "classMembers"
+    ],
+    "packages/lib/**": [
+      "exports",
+      "types",
+      "nsExports",
+      "nsTypes",
+      "duplicates",
+      "enumMembers",
+      "classMembers"
+    ],
+    "packages/sdk/src/types/index.ts": ["exports", "types", "nsExports", "nsTypes"],
+    "packages/sdk/src/vault/index.ts": ["exports", "types", "nsExports", "nsTypes"],
+    "packages/sdk/src/seedphrase/index.ts": ["exports", "types"],
+    "packages/sdk/src/storage/types.ts": ["enumMembers"]
+  },
+  "treatConfigHintsAsErrors": false,
+  "workspaces": {
+    "packages/sdk": {
+      "project": ["tsconfig.json"],
+      "vitest": {
+        "config": [
+          "tests/unit/vitest.config.ts",
+          "tests/integration/vitest.config.ts",
+          "tests/e2e/vitest.config.ts",
+          "tests/e2e/funded/vitest.config.ts"
+        ]
+      }
+    },
+    "clients/cli": {
+      "project": ["tsconfig.json"]
+    },
+    "packages/rujira": {
+      "project": ["tsconfig.json"]
+    },
+    "examples/browser": {
+      "project": ["tsconfig.json"]
+    },
+    "examples/electron": {
+      "project": ["tsconfig.json"]
+    },
+    "examples/shared": {
+      "project": ["tsconfig.json"]
+    }
+  }
 }

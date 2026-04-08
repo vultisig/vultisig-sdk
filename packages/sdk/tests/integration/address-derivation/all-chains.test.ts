@@ -91,8 +91,7 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
 }
 
 /** Deterministic hex pubkey for QBTC (ML-DSA); deriveQbtcAddress only hashes bytes — no chain signing. */
-const MOCK_MLDSA_PUBLIC_KEY_HEX =
-  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const MOCK_MLDSA_PUBLIC_KEY_HEX = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 
 /** Base64 VaultContainer (unencrypted) wrapping a Vault protobuf that includes ML-DSA fields. */
 function buildUnencryptedVultBase64(params: {
@@ -261,8 +260,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       ecdsa: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
       eddsa: 'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
     }
-    const legacyHexChainCode =
-      '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+    const legacyHexChainCode = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
 
     it('FastVault.fromStorage preserves constructor-parsed ML-DSA when VaultData omits them', async () => {
       const now = Date.now()

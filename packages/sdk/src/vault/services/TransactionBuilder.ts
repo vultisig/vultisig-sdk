@@ -17,7 +17,7 @@ import { toKeysignLibType } from '@vultisig/core-mpc/types/utils/libType'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { type Abi,encodeFunctionData } from 'viem'
+import { type Abi, encodeFunctionData } from 'viem'
 
 import type { WasmProvider } from '../../context/SdkContext'
 import type { ContractCallTxParams } from '../../types/contractCall'
@@ -111,10 +111,7 @@ export class TransactionBuilder {
         localPartyId: this.vaultData.localPartyId,
         publicKey,
         hexPublicKeyOverride: isQbtc
-          ? shouldBePresent(
-              this.vaultData.publicKeyMldsa,
-              'Vault MLDSA public key required for QBTC send'
-            )
+          ? shouldBePresent(this.vaultData.publicKeyMldsa, 'Vault MLDSA public key required for QBTC send')
           : undefined,
         walletCore,
         libType: toKeysignLibType(this.vaultData),
@@ -169,10 +166,7 @@ export class TransactionBuilder {
         localPartyId: this.vaultData.localPartyId,
         publicKey,
         hexPublicKeyOverride: isQbtc
-          ? shouldBePresent(
-              this.vaultData.publicKeyMldsa,
-              'Vault MLDSA public key required for QBTC fee estimate'
-            )
+          ? shouldBePresent(this.vaultData.publicKeyMldsa, 'Vault MLDSA public key required for QBTC fee estimate')
           : undefined,
         walletCore,
         libType: toKeysignLibType(this.vaultData),
@@ -295,9 +289,7 @@ export class TransactionBuilder {
               const publicKeyType = getTwPublicKeyType({ walletCore, chain })
               const coinType = getCoinType({ walletCore, chain })
               const keyType =
-                coinType === walletCore.CoinType.tron
-                  ? walletCore.PublicKeyType.secp256k1Extended
-                  : publicKeyType
+                coinType === walletCore.CoinType.tron ? walletCore.PublicKeyType.secp256k1Extended : publicKeyType
               return walletCore.PublicKey.createWithData(publicKeyData, keyType)
             })()
 

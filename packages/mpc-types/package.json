@@ -18,5 +18,8 @@
       "default": "./dist/runtime.js"
     }
   },
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }
