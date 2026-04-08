@@ -51,6 +51,20 @@ const GHOST_VAULTS: Record<string, string> = {
 
 const GHOST_CREDIT_CONTRACT = 'thor1ekkt8wfls055t7f7yznj07j0s4mtndkq546swutzv2de7sfcxptq27duyt'
 
+function assertPositiveAmount(amount: string | undefined, label: string): void {
+  if (!amount) {
+    throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount is required`)
+  }
+  try {
+    if (BigInt(amount) <= 0n) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount must be positive`)
+    }
+  } catch (e) {
+    if (e instanceof RujiraError) throw e
+    throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount is not a valid integer: ${amount}`)
+  }
+}
+
 // Types
 
 export type GhostVaultInfo = {
@@ -224,9 +238,7 @@ export class RujiraGhost {
   buildDeposit(params: { denom: string; amount: string }): GhostTransactionParams {
     const address = this.resolveVault(params.denom)
 
-    if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Deposit amount must be positive')
-    }
+    assertPositiveAmount(params.amount, 'Deposit')
 
     return {
       contractAddress: address,
@@ -242,9 +254,7 @@ export class RujiraGhost {
   buildWithdraw(params: { denom: string; receiptAmount: string }): GhostTransactionParams {
     const address = this.resolveVault(params.denom)
 
-    if (!params.receiptAmount || BigInt(params.receiptAmount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Withdraw amount must be positive')
-    }
+    assertPositiveAmount(params.receiptAmount, 'Withdraw')
 
     // Receipt token denom is typically the vault-specific token
     // The user sends receipt tokens as funds
@@ -278,9 +288,7 @@ export class RujiraGhost {
    * Build borrow transaction via credit account dispatch.
    */
   buildBorrow(params: { creditAccount: string; denom: string; amount: string }): GhostCreditTransactionParams {
-    if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Borrow amount must be positive')
-    }
+    assertPositiveAmount(params.amount, 'Borrow')
     return {
       contractAddress: GHOST_CREDIT_CONTRACT,
       executeMsg: {
@@ -297,9 +305,7 @@ export class RujiraGhost {
    * Build repay transaction via credit account dispatch.
    */
   buildRepay(params: { creditAccount: string; denom: string; amount: string }): GhostCreditTransactionParams {
-    if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Repay amount must be positive')
-    }
+    assertPositiveAmount(params.amount, 'Repay')
     return {
       contractAddress: GHOST_CREDIT_CONTRACT,
       executeMsg: {

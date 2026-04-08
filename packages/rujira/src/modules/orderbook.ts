@@ -23,6 +23,7 @@ import type {
 } from '../types.js'
 import { fromContractSide, toContractSide } from '../types.js'
 import { denomToAsset as sharedDenomToAsset } from '../utils/denom-conversion.js'
+import { isPositiveBigInt } from '../utils/format.js'
 
 /**
  * Orderbook module for managing limit orders.
@@ -442,8 +443,8 @@ export class RujiraOrderbook {
       throw new RujiraError(RujiraErrorCode.INVALID_PRICE, 'Order price must be positive')
     }
 
-    if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order amount must be positive')
+    if (!params.amount || !isPositiveBigInt(params.amount)) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order amount must be a positive integer string')
     }
 
     if (!['buy', 'sell'].includes(params.side)) {

@@ -19,6 +19,20 @@ const BOND_DENOM = 'x/ruji'
 const BOND_DECIMALS = 8
 const REVENUE_DECIMALS = 6
 
+function assertPositiveAmount(amount: string | undefined, label: string): void {
+  if (!amount) {
+    throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount is required`)
+  }
+  try {
+    if (BigInt(amount) <= 0n) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount must be positive`)
+    }
+  } catch (e) {
+    if (e instanceof RujiraError) throw e
+    throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount is not a valid integer: ${amount}`)
+  }
+}
+
 // Types
 
 export type StakingPosition = {
@@ -162,9 +176,7 @@ export class RujiraStaking {
    * Returns the contract address, execute message, and funds needed for signing.
    */
   buildStake(params: StakeParams): StakeTransactionParams {
-    if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Stake amount must be positive')
-    }
+    assertPositiveAmount(params.amount, 'Stake')
 
     return {
       contractAddress: STAKING_CONTRACT,
@@ -177,9 +189,7 @@ export class RujiraStaking {
    * Build unstake (withdraw) transaction parameters.
    */
   buildUnstake(params: UnstakeParams): StakeTransactionParams {
-    if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Unstake amount must be positive')
-    }
+    assertPositiveAmount(params.amount, 'Unstake')
 
     return {
       contractAddress: STAKING_CONTRACT,
