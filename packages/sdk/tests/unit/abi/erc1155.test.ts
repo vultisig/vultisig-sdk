@@ -1,7 +1,7 @@
 import { encodeFunctionData } from 'viem'
 import { describe, expect, it } from 'vitest'
 
-import { ERC20_ABI,ERC1155_ABI } from '../../../src/abi'
+import { ERC20_ABI, ERC1155_ABI } from '../../../src/abi'
 
 describe('ERC-1155 ABI', () => {
   it('should export setApprovalForAll', () => {
