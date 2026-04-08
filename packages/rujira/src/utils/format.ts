@@ -240,3 +240,14 @@ export function bpsToPercent(bps: number): string {
 export function percentToBps(percent: number): number {
   return Math.round(percent * 100)
 }
+
+/**
+ * Check if a string is a valid positive BigInt.
+ */
+export function isPositiveBigInt(value: string): boolean {
+  try {
+    return BigInt(value) > 0n
+  } catch {
+    return false
+  }
+}

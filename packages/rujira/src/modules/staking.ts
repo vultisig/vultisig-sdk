@@ -8,7 +8,7 @@ import type { Coin } from '@cosmjs/proto-signing'
 import type { RujiraClient } from '../client.js'
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors.js'
 import { base64Encode } from '../utils/encoding.js'
-import { fromBaseUnits } from '../utils/format.js'
+import { fromBaseUnits, isPositiveBigInt } from '../utils/format.js'
 import { validateThorAddress } from '../validation/address-validator.js'
 
 // Constants
@@ -18,20 +18,6 @@ const STAKING_GRAPHQL_URL = 'https://api.vultisig.com/ruji/api/graphql'
 const BOND_DENOM = 'x/ruji'
 const BOND_DECIMALS = 8
 const REVENUE_DECIMALS = 6
-
-function assertPositiveAmount(amount: string | undefined, label: string): void {
-  if (!amount) {
-    throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount is required`)
-  }
-  try {
-    if (BigInt(amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount must be positive`)
-    }
-  } catch (e) {
-    if (e instanceof RujiraError) throw e
-    throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, `${label} amount is not a valid integer: ${amount}`)
-  }
-}
 
 // Types
 
@@ -176,7 +162,9 @@ export class RujiraStaking {
    * Returns the contract address, execute message, and funds needed for signing.
    */
   buildStake(params: StakeParams): StakeTransactionParams {
-    assertPositiveAmount(params.amount, 'Stake')
+    if (!params.amount || !isPositiveBigInt(params.amount)) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Stake amount must be positive')
+    }
 
     return {
       contractAddress: STAKING_CONTRACT,
@@ -189,7 +177,9 @@ export class RujiraStaking {
    * Build unstake (withdraw) transaction parameters.
    */
   buildUnstake(params: UnstakeParams): StakeTransactionParams {
-    assertPositiveAmount(params.amount, 'Unstake')
+    if (!params.amount || !isPositiveBigInt(params.amount)) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Unstake amount must be positive')
+    }
 
     return {
       contractAddress: STAKING_CONTRACT,
