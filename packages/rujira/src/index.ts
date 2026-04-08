@@ -59,8 +59,10 @@ export { RujiraClient } from './client.js'
 
 // Module exports
 export { RujiraAssets } from './modules/assets.js'
+export type { GhostTransactionParams, GhostVaultInfo, GhostVaultStatus } from './modules/ghost.js'
+export { RujiraGhost } from './modules/ghost.js'
 export { RujiraOrderbook } from './modules/orderbook.js'
-export type { StakeParams, StakeTransactionParams,StakingPosition, UnstakeParams } from './modules/staking.js'
+export type { StakeParams, StakeTransactionParams, StakingPosition, UnstakeParams } from './modules/staking.js'
 export { RujiraStaking } from './modules/staking.js'
 export { RujiraSwap } from './modules/swap.js'
 

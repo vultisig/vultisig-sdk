@@ -22,6 +22,10 @@
       "import": "./dist/modules/staking.js",
       "types": "./dist/modules/staking.d.ts"
     },
+    "./ghost": {
+      "import": "./dist/modules/ghost.js",
+      "types": "./dist/modules/ghost.d.ts"
+    },
     "./signer": {
       "import": "./dist/signer/vultisig-provider.js",
       "types": "./dist/signer/vultisig-provider.d.ts"
