@@ -217,7 +217,6 @@ export class RujiraOrderbook {
    * Cancel an open order.
    */
   async cancelOrder(contractAddress: string, side: OrderSide, price: string): Promise<{ txHash: string }> {
-    // Convert SDK side to contract's Side enum format
     const contractSide = toContractSide(side)
     const orderTarget: [ContractSide, string, string | null] = [contractSide, price, null]
 
@@ -228,6 +227,56 @@ export class RujiraOrderbook {
     const result = await this.client.executeContract(contractAddress, msg, [])
 
     return { txHash: result.transactionHash }
+  }
+
+  /**
+   * Build a limit order transaction without executing.
+   * Returns contract address, message, and funds for external signing.
+   */
+  async buildPlaceOrder(params: LimitOrderParams): Promise<{
+    contractAddress: string
+    msg: FinExecuteMsg
+    funds: Coin[]
+  }> {
+    this.validateOrderParams(params)
+
+    const contractAddress = await this.resolveContract(
+      typeof params.pair === 'string' ? params.pair : params.pair.contractAddress
+    )
+
+    const assetInfo = await this.getOfferAsset(params)
+    if (!assetInfo) {
+      throw new RujiraError(RujiraErrorCode.INVALID_ASSET, 'Could not determine offer asset for order')
+    }
+
+    const contractSide = toContractSide(params.side)
+    const orderTarget: [ContractSide, string, string | null] = [contractSide, params.price, params.amount]
+
+    const msg: FinExecuteMsg = {
+      order: [[orderTarget], null],
+    }
+
+    const funds: Coin[] = [{ denom: assetInfo.denom, amount: this.calculateOfferAmount(params) }]
+
+    return { contractAddress, msg, funds }
+  }
+
+  /**
+   * Build a cancel order transaction without executing.
+   */
+  buildCancelOrder(
+    contractAddress: string,
+    side: OrderSide,
+    price: string
+  ): { contractAddress: string; msg: FinExecuteMsg; funds: Coin[] } {
+    const contractSide = toContractSide(side)
+    const orderTarget: [ContractSide, string, string | null] = [contractSide, price, null]
+
+    return {
+      contractAddress,
+      msg: { order: [[orderTarget], null] },
+      funds: [],
+    }
   }
 
   /**
