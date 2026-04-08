@@ -92,7 +92,7 @@ class ExpoWalletCoreModule : Module() {
             pk.verifyAsDER(sig, msg)
         }
 
-        Function("freePublicKey") { handle: Int -> publicKeys.remove(handle) }
+        Function("freePublicKey") { handle: Int -> publicKeys.remove(handle); Unit }
 
         // AnyAddress
         Function("anyAddressIsValid") { address: String, coinType: Int ->
@@ -193,7 +193,7 @@ class ExpoWalletCoreModule : Module() {
             )
         }
 
-        Function("freeHDWallet") { handle: Int -> hdWallets.remove(handle) }
+        Function("freeHDWallet") { handle: Int -> hdWallets.remove(handle); Unit }
 
         // PrivateKey
         Function("privateKeyCreate") { -> storePrivateKey(PrivateKey()) }
@@ -213,7 +213,7 @@ class ExpoWalletCoreModule : Module() {
             storePublicKey(key.getPublicKeyEd25519())
         }
 
-        Function("freePrivateKey") { handle: Int -> privateKeys.remove(handle) }
+        Function("freePrivateKey") { handle: Int -> privateKeys.remove(handle); Unit }
 
         // HexCoding
         Function("hexDecode") { hex: String ->

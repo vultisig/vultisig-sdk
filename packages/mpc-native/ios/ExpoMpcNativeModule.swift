@@ -577,11 +577,9 @@ public class ExpoMpcNativeModule: Module {
         // DKLS — Key Import
         // =====================================================================
 
-        // NOTE: Platform input format inconsistency — privateKey and rootChainCode
-        // are passed as hex strings on iOS (matching the dataFromHex helper below)
-        // but as Base64 strings on Android. The TypeScript layer in index.ts uses
-        // toHex() for both platforms to align with this iOS expectation.
-        // TODO: Unify both platforms to accept Base64 for consistency.
+        // NOTE: Both iOS and Android accept hex strings for privateKey and
+        // rootChainCode. iOS uses dataFromHex(), Android uses decodeHex().
+        // The TypeScript layer in index.ts passes toHex() for both platforms.
         Function("createDklsKeyImportInitiator") { (privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: [String]) -> [String: Any] in
             guard let pkData = dataFromHex(privateKeyHex) else {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid hex private key"])
@@ -1057,11 +1055,9 @@ public class ExpoMpcNativeModule: Module {
         // Schnorr — Key Import
         // =====================================================================
 
-        // NOTE: Platform input format inconsistency — privateKey and rootChainCode
-        // are passed as hex strings on iOS (matching the dataFromHex helper below)
-        // but as Base64 strings on Android. The TypeScript layer in index.ts uses
-        // toHex() for both platforms to align with this iOS expectation.
-        // TODO: Unify both platforms to accept Base64 for consistency.
+        // NOTE: Both iOS and Android accept hex strings for privateKey and
+        // rootChainCode. iOS uses dataFromHex(), Android uses decodeHex().
+        // The TypeScript layer in index.ts passes toHex() for both platforms.
         Function("createSchnorrKeyImportInitiator") { (privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: [String]) -> [String: Any] in
             guard let pkData = dataFromHex(privateKeyHex) else {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid hex private key"])
