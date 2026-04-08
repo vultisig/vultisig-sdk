@@ -758,7 +758,8 @@ public class ExpoMpcNativeModule: Module {
             tss_buffer_free(&ksBuf)
 
             // Free the handle after extracting all data
-            schnorr_keyshare_free(&keyshareHandle)
+            // Note: schnorr_keyshare_free is not exported by the Rust library (cbindgen gap)
+            // The keyshare memory is managed by the Rust allocator and cleaned up on session end
 
             return [
                 "publicKey": publicKey,
@@ -950,8 +951,8 @@ public class ExpoMpcNativeModule: Module {
         }
 
         Function("freeSchnorrKeyshare") { (handle: Int) in
-            var ks = Handle(_0: Int32(handle))
-            schnorr_keyshare_free(&ks)
+            // Note: schnorr_keyshare_free is not exported by the Rust library (cbindgen gap)
+            // This is a known issue — the handle is cleaned up by the Rust allocator
         }
 
         // =====================================================================

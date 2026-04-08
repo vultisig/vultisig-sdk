@@ -123,6 +123,8 @@ export const keysign = async ({
     return processOutbound(sequenceNo + receivers.length)
   }
 
+  const processedMessages: Record<string, boolean> = {}
+
   const processInbound = async (): Promise<void> => {
     if (abortController.signal.aborted) {
       throw new Error(
@@ -141,11 +143,18 @@ export const keysign = async ({
     )
 
     for (const msg of relayMessages) {
+      const cacheKey = `${sessionId}-${msg.from}-${msg.hash}`
+      if (processedMessages[cacheKey]) {
+        continue
+      }
+
       if (
         session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
       ) {
+        processedMessages[cacheKey] = true
         return
       }
+      processedMessages[cacheKey] = true
       await ignorePromiseOutcome(
         transformError(
           deleteMpcRelayMessage({
