@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-import type { WasmProvider } from '../../../src/context/WasmProvider'
+import type { WasmProvider } from '../../../src/context/SdkContext'
 import { MasterKeyDeriver } from '../../../src/seedphrase/MasterKeyDeriver'
 
 // Track which public key method was called

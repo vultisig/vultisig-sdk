@@ -10,11 +10,7 @@
  * Messages are exchanged synchronously between two sessions in-process.
  */
 
-import initializeMldsa, {
-  KeygenSession,
-  Keyshare,
-  SignSession,
-} from '@vultisig/lib-mldsa/vs_wasm'
+import initializeMldsa, { KeygenSession, Keyshare, SignSession } from '@vultisig/lib-mldsa/vs_wasm'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 const MLDSA_LEVEL = 44
@@ -68,13 +64,7 @@ function signWithRetry(
       const ksA = Keyshare.fromBytes(new Uint8Array(keyshareABytes))
       const ksB = Keyshare.fromBytes(new Uint8Array(keyshareBBytes))
 
-      const setupMsg = SignSession.setup(
-        MLDSA_LEVEL,
-        keyId,
-        chainPath,
-        messageHash,
-        partyIds
-      )
+      const setupMsg = SignSession.setup(MLDSA_LEVEL, keyId, chainPath, messageHash, partyIds)
 
       const sA = new SignSession(setupMsg, partyIds[0], ksA)
       const sB = new SignSession(setupMsg, partyIds[1], ksB)
@@ -142,28 +132,17 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
   it('should perform 2-of-2 threshold signing', () => {
     expect(keyshareABytes).toBeDefined()
 
-    const messageHash = Buffer.from(
-      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      'hex'
-    )
+    const messageHash = Buffer.from('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 'hex')
     const chainPath = 'm/44/0/0/0'
     const keyId = Buffer.from(keyIdHex, 'hex')
 
     // Verify setup message structure
-    const setupMsg = SignSession.setup(
-      MLDSA_LEVEL,
-      keyId,
-      chainPath,
-      messageHash,
-      parties
-    )
+    const setupMsg = SignSession.setup(MLDSA_LEVEL, keyId, chainPath, messageHash, parties)
     expect(setupMsg).toBeInstanceOf(Uint8Array)
 
     const extractedHash = SignSession.setupMessageHash(setupMsg)
     expect(extractedHash).toBeDefined()
-    expect(Buffer.from(extractedHash!).toString('hex')).toBe(
-      messageHash.toString('hex')
-    )
+    expect(Buffer.from(extractedHash!).toString('hex')).toBe(messageHash.toString('hex'))
 
     const extractedKeyId = SignSession.setupKeyId(setupMsg)
     expect(extractedKeyId).toBeDefined()
@@ -191,24 +170,14 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
   })
 
   it('should sign the same message multiple times', () => {
-    const messageHash = Buffer.from(
-      'deadbeef00000000000000000000000000000000000000000000000000000001',
-      'hex'
-    )
+    const messageHash = Buffer.from('deadbeef00000000000000000000000000000000000000000000000000000001', 'hex')
     const chainPath = 'm/44/0/0/0'
     const keyId = Buffer.from(keyIdHex, 'hex')
 
     const signatures: string[] = []
 
     for (let i = 0; i < 2; i++) {
-      const { sigA } = signWithRetry(
-        keyshareABytes,
-        keyshareBBytes,
-        keyId,
-        chainPath,
-        messageHash,
-        parties
-      )
+      const { sigA } = signWithRetry(keyshareABytes, keyshareBBytes, keyId, chainPath, messageHash, parties)
       signatures.push(Buffer.from(sigA).toString('hex'))
     }
 
@@ -259,10 +228,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
     expect(Buffer.from(restoredB.publicKey()).toString('hex')).toBe(publicKeyHex)
     expect(Buffer.from(restoredA.keyId()).toString('hex')).toBe(keyIdHex)
 
-    const messageHash = Buffer.from(
-      'feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface',
-      'hex'
-    )
+    const messageHash = Buffer.from('feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface', 'hex')
 
     const { sigA } = signWithRetry(
       keyshareABytes,
@@ -283,14 +249,9 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
 
     // Verify base64 round-trip produces same bytes
     const roundTripA = Buffer.from(base64A, 'base64')
-    expect(Buffer.from(roundTripA).toString('hex')).toBe(
-      Buffer.from(keyshareABytes).toString('hex')
-    )
+    expect(Buffer.from(roundTripA).toString('hex')).toBe(Buffer.from(keyshareABytes).toString('hex'))
 
-    const messageHash = Buffer.from(
-      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-      'hex'
-    )
+    const messageHash = Buffer.from('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', 'hex')
 
     const { sigA, sigB } = signWithRetry(
       roundTripA,
@@ -301,9 +262,7 @@ describe('MLDSA (ML-DSA-44) Keygen & Signing', () => {
       parties
     )
 
-    expect(Buffer.from(sigA).toString('hex')).toBe(
-      Buffer.from(sigB).toString('hex')
-    )
+    expect(Buffer.from(sigA).toString('hex')).toBe(Buffer.from(sigB).toString('hex'))
 
     console.log(`   Base64 keyshare round-trip + signing: OK`)
     console.log(`   Base64 keyshare A size: ${base64A.length} chars`)

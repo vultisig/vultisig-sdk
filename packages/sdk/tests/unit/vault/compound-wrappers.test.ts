@@ -10,7 +10,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
-import { beforeEach,describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
@@ -100,12 +100,26 @@ function createMockVault() {
     signBytes: vi.fn().mockResolvedValue(mockSignature),
     address: vi.fn().mockResolvedValue('0xSenderAddress'),
     balances: vi.fn().mockResolvedValue({
-      'ETH': { amount: '1000000000000000000', formattedAmount: '1.0', decimals: 18, symbol: 'ETH', chainId: 'Ethereum' },
-      'BTC': { amount: '100000000', formattedAmount: '1.0', decimals: 8, symbol: 'BTC', chainId: 'Bitcoin' },
+      ETH: { amount: '1000000000000000000', formattedAmount: '1.0', decimals: 18, symbol: 'ETH', chainId: 'Ethereum' },
+      BTC: { amount: '100000000', formattedAmount: '1.0', decimals: 8, symbol: 'BTC', chainId: 'Bitcoin' },
     }),
     balancesWithPrices: vi.fn().mockResolvedValue({
-      'ETH': { amount: '1000000000000000000', formattedAmount: '1.0', decimals: 18, symbol: 'ETH', chainId: 'Ethereum', fiatValue: 3000 },
-      'BTC': { amount: '100000000', formattedAmount: '1.0', decimals: 8, symbol: 'BTC', chainId: 'Bitcoin', fiatValue: 60000 },
+      ETH: {
+        amount: '1000000000000000000',
+        formattedAmount: '1.0',
+        decimals: 18,
+        symbol: 'ETH',
+        chainId: 'Ethereum',
+        fiatValue: 3000,
+      },
+      BTC: {
+        amount: '100000000',
+        formattedAmount: '1.0',
+        decimals: 8,
+        symbol: 'BTC',
+        chainId: 'Bitcoin',
+        fiatValue: 60000,
+      },
     }),
     getTotalValue: vi.fn().mockResolvedValue({ amount: '63000.00', currency: 'usd', lastUpdated: Date.now() }),
     prepareSendTx: vi.fn().mockResolvedValue(mockKeysignPayload),
@@ -281,9 +295,7 @@ describe('resolveTokenInfo (private helper)', () => {
 
   it('should resolve token case-insensitively', () => {
     const tokens = {
-      [Chain.Ethereum]: [
-        { symbol: 'USDC', decimals: 6, contractAddress: '0xA0b86991' },
-      ],
+      [Chain.Ethereum]: [{ symbol: 'USDC', decimals: 6, contractAddress: '0xA0b86991' }],
     }
     const result = resolveTokenInfo(Chain.Ethereum, 'usdc', tokens)
     expect(result.ticker).toBe('USDC')
@@ -291,9 +303,7 @@ describe('resolveTokenInfo (private helper)', () => {
 
   it('should use token.id as contractAddress fallback', () => {
     const tokens = {
-      [Chain.Ethereum]: [
-        { symbol: 'WETH', decimals: 18, id: '0xC02aaA39' },
-      ],
+      [Chain.Ethereum]: [{ symbol: 'WETH', decimals: 18, id: '0xC02aaA39' }],
     }
     const result = resolveTokenInfo(Chain.Ethereum, 'WETH', tokens)
     expect(result.contractAddress).toBe('0xC02aaA39')
@@ -491,9 +501,7 @@ describe('send', () => {
 
   it('should resolve ERC-20 token from user tokens', () => {
     const tokens = {
-      [Chain.Ethereum]: [
-        { symbol: 'USDC', decimals: 6, contractAddress: '0xA0b86991' },
-      ],
+      [Chain.Ethereum]: [{ symbol: 'USDC', decimals: 6, contractAddress: '0xA0b86991' }],
     }
     const result = resolveTokenInfo(Chain.Ethereum, 'USDC', tokens)
     expect(result.ticker).toBe('USDC')
@@ -587,9 +595,7 @@ describe('send', () => {
 
   it('should include contractAddress in coin for ERC-20 sends', () => {
     const tokens = {
-      [Chain.Ethereum]: [
-        { symbol: 'USDC', decimals: 6, contractAddress: '0xA0b86991' },
-      ],
+      [Chain.Ethereum]: [{ symbol: 'USDC', decimals: 6, contractAddress: '0xA0b86991' }],
     }
     const tokenInfo = resolveTokenInfo(Chain.Ethereum, 'USDC', tokens)
 

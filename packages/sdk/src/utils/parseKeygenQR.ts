@@ -127,9 +127,7 @@ export async function parseKeygenQR(qrPayload: string): Promise<ParsedKeygenQR> 
 
   const params = new URLSearchParams(urlParts[1])
   const jsonData = params.get('jsonData')
-  const tssBatching = params.has('tssBatching')
-    ? params.get('tssBatching') === '1'
-    : undefined
+  const tssBatching = params.has('tssBatching') ? params.get('tssBatching') === '1' : undefined
 
   if (!jsonData) {
     throw new Error('Invalid QR payload: missing jsonData parameter')
