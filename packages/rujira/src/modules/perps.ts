@@ -197,28 +197,27 @@ export class RujiraPerps {
   }
 
   /**
-   * Build update TP/SL transaction.
+   * Build update take profit transaction.
    */
-  buildUpdateTpSl(params: {
-    market: string
-    positionId: string
-    takeProfit?: string
-    stopLoss?: string | 'remove'
-  }): PerpsTransactionParams {
-    const msgs: object[] = []
-    if (params.takeProfit !== undefined) {
-      msgs.push({ update_position_take_profit_price: { id: params.positionId, price: params.takeProfit } })
-    }
-    if (params.stopLoss !== undefined) {
-      msgs.push({ update_position_stop_loss_price: { id: params.positionId, stop_loss: params.stopLoss } })
-    }
-
-    // Levana contracts process one message at a time
-    const msg = msgs[0] ?? { update_position_take_profit_price: { id: params.positionId, price: params.takeProfit } }
-
+  buildUpdateTakeProfit(params: { market: string; positionId: string; price: string }): PerpsTransactionParams {
     return {
       contractAddress: params.market,
-      executeMsg: msg,
+      executeMsg: { update_position_take_profit_price: { id: params.positionId, price: params.price } },
+      funds: [],
+    }
+  }
+
+  /**
+   * Build update stop loss transaction.
+   */
+  buildUpdateStopLoss(params: {
+    market: string
+    positionId: string
+    stopLoss: string | 'remove'
+  }): PerpsTransactionParams {
+    return {
+      contractAddress: params.market,
+      executeMsg: { update_position_stop_loss_price: { id: params.positionId, stop_loss: params.stopLoss } },
       funds: [],
     }
   }
