@@ -61,10 +61,7 @@ export async function authenticateVault(
         process.stderr.write(`  Retry ${attempt}/${maxAttempts}...\n`)
       }
 
-      const signature = await vault.signBytes(
-        { data: Buffer.from(messageHash), chain: Chain.Ethereum },
-        {}
-      )
+      const signature = await vault.signBytes({ data: Buffer.from(messageHash), chain: Chain.Ethereum }, {})
 
       // Format signature as 65-byte hex (r + s + v)
       const sigHex = formatSignature65(signature.signature, signature.recovery ?? 0)

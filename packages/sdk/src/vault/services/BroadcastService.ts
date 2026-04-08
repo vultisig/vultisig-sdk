@@ -80,9 +80,8 @@ export class BroadcastService {
         const publicKeyData = getKeysignTwPublicKey(keysignPayload)
         const publicKeyType = getTwPublicKeyType({ walletCore, chain })
         const coinType = getCoinType({ walletCore, chain })
-        const keyType = coinType === walletCore.CoinType.tron
-          ? walletCore.PublicKeyType.secp256k1Extended
-          : publicKeyType
+        const keyType =
+          coinType === walletCore.CoinType.tron ? walletCore.PublicKeyType.secp256k1Extended : publicKeyType
         publicKey = walletCore.PublicKey.createWithData(publicKeyData, keyType)
       }
 

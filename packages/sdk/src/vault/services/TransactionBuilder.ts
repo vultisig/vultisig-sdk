@@ -1,5 +1,7 @@
 import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
@@ -15,8 +17,10 @@ import { toKeysignLibType } from '@vultisig/core-mpc/types/utils/libType'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { type Abi, encodeFunctionData } from 'viem'
 
 import type { WasmProvider } from '../../context/SdkContext'
+import type { ContractCallTxParams } from '../../types/contractCall'
 import type { CosmosSigningOptions, SignAminoInput, SignDirectInput } from '../../types/cosmos'
 import { VaultError, VaultErrorCode } from '../VaultError'
 import { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from './cosmos/buildCosmosPayload'
@@ -107,10 +111,7 @@ export class TransactionBuilder {
         localPartyId: this.vaultData.localPartyId,
         publicKey,
         hexPublicKeyOverride: isQbtc
-          ? shouldBePresent(
-              this.vaultData.publicKeyMldsa,
-              'Vault MLDSA public key required for QBTC send'
-            )
+          ? shouldBePresent(this.vaultData.publicKeyMldsa, 'Vault MLDSA public key required for QBTC send')
           : undefined,
         walletCore,
         libType: toKeysignLibType(this.vaultData),
@@ -165,10 +166,7 @@ export class TransactionBuilder {
         localPartyId: this.vaultData.localPartyId,
         publicKey,
         hexPublicKeyOverride: isQbtc
-          ? shouldBePresent(
-              this.vaultData.publicKeyMldsa,
-              'Vault MLDSA public key required for QBTC fee estimate'
-            )
+          ? shouldBePresent(this.vaultData.publicKeyMldsa, 'Vault MLDSA public key required for QBTC fee estimate')
           : undefined,
         walletCore,
         libType: toKeysignLibType(this.vaultData),
@@ -178,6 +176,81 @@ export class TransactionBuilder {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Failed to estimate send fee: ${(error as Error).message}`,
+        error as Error
+      )
+    }
+  }
+
+  /**
+   * Prepare a contract call transaction keysign payload for EVM chains.
+   *
+   * Encodes the function call via ABI and builds a native-coin keysign payload
+   * with the calldata as memo. This supports zero-value calls (approvals,
+   * governance votes, etc.) and value-bearing calls.
+   *
+   * @param params - Contract call parameters
+   * @param params.chain - EVM chain to call on
+   * @param params.contractAddress - Target contract address
+   * @param params.abi - Contract ABI (or fragment array)
+   * @param params.functionName - Function to call
+   * @param params.args - Function arguments
+   * @param params.value - Native token value to send with call (default: 0n)
+   * @param params.senderAddress - Sender address (derived from vault)
+   * @param params.feeSettings - Optional custom fee settings
+   *
+   * @returns A KeysignPayload ready to be signed with the sign() method
+   *
+   * @example
+   * ```typescript
+   * const payload = await transactionBuilder.prepareContractCallTx({
+   *   chain: Chain.Polygon,
+   *   contractAddress: '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045',
+   *   abi: [{ name: 'setApprovalForAll', type: 'function', inputs: [...], outputs: [] }],
+   *   functionName: 'setApprovalForAll',
+   *   args: ['0xC5d563A36AE78145C45a50134d48A1215220f80a', true],
+   *   senderAddress: '0x...',
+   * })
+   * ```
+   */
+  async prepareContractCallTx(params: ContractCallTxParams): Promise<KeysignPayload> {
+    const { chain, contractAddress, abi, functionName, args, value = 0n, senderAddress, feeSettings } = params
+
+    if (!isChainOfKind(chain, 'evm')) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `prepareContractCallTx only supports EVM chains. Got: ${chain}`
+      )
+    }
+
+    try {
+      const calldata = encodeFunctionData({
+        abi: abi as Abi,
+        functionName,
+        args: args ?? [],
+      })
+
+      // Use native fee coin so the signing input resolver takes the Transfer
+      // path (which passes memo as tx data), not the ERC20Transfer path.
+      const native = chainFeeCoin[chain]
+      const coin: AccountCoin = {
+        chain,
+        address: senderAddress,
+        decimals: native.decimals,
+        ticker: native.ticker,
+      }
+
+      return await this.prepareSendTx({
+        coin,
+        receiver: contractAddress,
+        amount: value,
+        memo: calldata,
+        feeSettings,
+      })
+    } catch (error) {
+      if (error instanceof VaultError) throw error
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Failed to prepare contract call: ${(error as Error).message}`,
         error as Error
       )
     }
@@ -216,9 +289,7 @@ export class TransactionBuilder {
               const publicKeyType = getTwPublicKeyType({ walletCore, chain })
               const coinType = getCoinType({ walletCore, chain })
               const keyType =
-                coinType === walletCore.CoinType.tron
-                  ? walletCore.PublicKeyType.secp256k1Extended
-                  : publicKeyType
+                coinType === walletCore.CoinType.tron ? walletCore.PublicKeyType.secp256k1Extended : publicKeyType
               return walletCore.PublicKey.createWithData(publicKeyData, keyType)
             })()
 

@@ -66,7 +66,7 @@ export const keysign = async ({
     hexEncryptionKey,
     isInitiatingDevice,
   })
-  const session = makeSignSession({
+  const session = await makeSignSession({
     setupMessage,
     localPartyId,
     keyShare,
@@ -181,7 +181,7 @@ export const keysign = async ({
     throw error
   }
 
-  const signature = session.finish()
+  const signature = await session.finish()
 
   const result: KeysignSignature =
     signatureAlgorithm === 'mldsa'

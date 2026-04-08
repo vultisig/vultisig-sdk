@@ -16,14 +16,20 @@
  * NOTE: Integration setup (WASM & crypto polyfills) loaded via vitest.config.ts
  */
 
+import { create, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
+import { VaultContainerSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb'
+import { Vault_KeyShareSchema, VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { createSdkContext, type SdkContext } from '../../../src/context/SdkContextBuilder'
 import { FastSigningService } from '../../../src/services/FastSigningService'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
+import type { VaultData } from '../../../src/types'
 import { FastVault } from '../../../src/vault/FastVault'
+import { SecureVault } from '../../../src/vault/SecureVault'
 import { Vultisig } from '../../../src/Vultisig'
 
 /**
@@ -81,6 +87,62 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
   Ripple: addr => /^r[a-zA-Z0-9]{24,34}$/.test(addr),
   Tron: addr => /^T[a-zA-Z0-9]{33}$/.test(addr),
   Cardano: addr => /^addr1[a-z0-9]{53,}$/.test(addr),
+  QBTC: addr => /^qbtc1[a-z0-9]{38,}$/.test(addr),
+}
+
+/** Deterministic hex pubkey for QBTC (ML-DSA); deriveQbtcAddress only hashes bytes — no chain signing. */
+const MOCK_MLDSA_PUBLIC_KEY_HEX = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+
+/** Base64 VaultContainer (unencrypted) wrapping a Vault protobuf that includes ML-DSA fields. */
+function buildUnencryptedVultBase64(params: {
+  name: string
+  publicKeys: { ecdsa: string; eddsa: string }
+  signers: string[]
+  hexChainCode: string
+  localPartyId: string
+  publicKeyMldsa44: string
+  keyShareMldsa: string
+  ecdsaShare: string
+  eddsaShare: string
+}): string {
+  const inner = create(VaultSchema, {
+    name: params.name,
+    publicKeyEcdsa: params.publicKeys.ecdsa,
+    publicKeyEddsa: params.publicKeys.eddsa,
+    signers: params.signers,
+    hexChainCode: params.hexChainCode,
+    localPartyId: params.localPartyId,
+    resharePrefix: '',
+    libType: LibType.GG20,
+    publicKeyMldsa44: params.publicKeyMldsa44,
+    keyShares: [
+      create(Vault_KeyShareSchema, {
+        publicKey: params.publicKeys.ecdsa,
+        keyshare: params.ecdsaShare,
+      }),
+      create(Vault_KeyShareSchema, {
+        publicKey: params.publicKeys.eddsa,
+        keyshare: params.eddsaShare,
+      }),
+      create(Vault_KeyShareSchema, {
+        publicKey: params.publicKeyMldsa44,
+        keyshare: params.keyShareMldsa,
+      }),
+    ],
+    chainPublicKeys: [],
+  })
+  const innerB64 = Buffer.from(toBinary(VaultSchema, inner)).toString('base64')
+  const container = create(VaultContainerSchema, {
+    version: 1n,
+    vault: innerB64,
+    isEncrypted: false,
+  })
+  return Buffer.from(toBinary(VaultContainerSchema, container)).toString('base64')
+}
+
+/** Read `coreVault` in tests (field is protected on vault classes). */
+function coreVaultOf(vault: FastVault | SecureVault): CoreVault {
+  return (vault as unknown as { coreVault: CoreVault }).coreVault
 }
 
 describe('Integration: Multi-Chain Address Derivation', () => {
@@ -128,6 +190,8 @@ describe('Integration: Multi-Chain Address Derivation', () => {
         ecdsa: 'mock_ecdsa_keyshare',
         eddsa: 'mock_eddsa_keyshare',
       },
+      publicKeyMldsa: MOCK_MLDSA_PUBLIC_KEY_HEX,
+      keyShareMldsa: 'mock_mldsa_keyshare',
       resharePrefix: '',
       libType: 'GG20',
       createdAt: now,
@@ -140,6 +204,8 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       // Identity (readonly fields)
       publicKeys: mockVaultData.publicKeys,
       hexChainCode: mockVaultData.hexChainCode,
+      publicKeyMldsa: mockVaultData.publicKeyMldsa,
+      keyShareMldsa: mockVaultData.keyShareMldsa,
       signers: mockVaultData.signers,
       localPartyId: mockVaultData.localPartyId,
       createdAt: now,
@@ -170,6 +236,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       serverManager: context.serverManager,
       passwordCache: context.passwordCache,
       wasmProvider: context.wasmProvider,
+      pushNotificationService: context.pushNotificationService,
     }
 
     vault = FastVault.fromStorage(vaultData, fastSigningService, vaultContext)
@@ -181,6 +248,127 @@ describe('Integration: Multi-Chain Address Derivation', () => {
   afterAll(() => {
     sdk?.dispose()
     context.passwordCache.destroy()
+  })
+
+  /**
+   * Legacy storage may omit `publicKeyMldsa` / `keyShareMldsa` on VaultData while the
+   * unencrypted `.vult` payload still carries ML-DSA; fromStorage must not clobber
+   * values already parsed in the constructor.
+   */
+  describe('Legacy storage: ML-DSA only in .vult file', () => {
+    const legacyPublicKeys = {
+      ecdsa: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
+      eddsa: 'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
+    }
+    const legacyHexChainCode = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+
+    it('FastVault.fromStorage preserves constructor-parsed ML-DSA when VaultData omits them', async () => {
+      const now = Date.now()
+      const vultFileContent = buildUnencryptedVultBase64({
+        name: 'Legacy Fast',
+        publicKeys: legacyPublicKeys,
+        signers: ['test-device', 'Server-1'],
+        hexChainCode: legacyHexChainCode,
+        localPartyId: 'test-device',
+        publicKeyMldsa44: MOCK_MLDSA_PUBLIC_KEY_HEX,
+        keyShareMldsa: 'mock_mldsa_keyshare',
+        ecdsaShare: 'mock_ecdsa_keyshare',
+        eddsaShare: 'mock_eddsa_keyshare',
+      })
+
+      const vaultData: VaultData = {
+        publicKeys: legacyPublicKeys,
+        hexChainCode: legacyHexChainCode,
+        signers: ['test-device', 'Server-1'],
+        localPartyId: 'test-device',
+        createdAt: now,
+        libType: 'GG20',
+        isEncrypted: false,
+        type: 'fast',
+        id: legacyPublicKeys.ecdsa,
+        name: 'Legacy Fast',
+        isBackedUp: false,
+        order: 0,
+        lastModified: now,
+        currency: 'usd',
+        chains: [Chain.QBTC.toString()],
+        tokens: {},
+        vultFileContent,
+      }
+
+      const fastSigningService = new FastSigningService(context.serverManager, context.wasmProvider)
+      const vaultContext = {
+        storage: context.storage,
+        config: context.config,
+        serverManager: context.serverManager,
+        passwordCache: context.passwordCache,
+        wasmProvider: context.wasmProvider,
+        pushNotificationService: context.pushNotificationService,
+      }
+
+      const restored = FastVault.fromStorage(vaultData, fastSigningService, vaultContext)
+
+      const core = coreVaultOf(restored)
+      expect(core.publicKeyMldsa).toBe(MOCK_MLDSA_PUBLIC_KEY_HEX)
+      expect(core.keyShareMldsa).toBe('mock_mldsa_keyshare')
+
+      const address = await restored.address(Chain.QBTC)
+      expect(CHAIN_VALIDATORS.QBTC?.(address)).toBe(true)
+    })
+
+    it('SecureVault.fromStorage preserves constructor-parsed ML-DSA when VaultData omits them', async () => {
+      const now = Date.now()
+      const secureSigners = ['test-device-a', 'test-device-b']
+      const vultFileContent = buildUnencryptedVultBase64({
+        name: 'Legacy Secure',
+        publicKeys: legacyPublicKeys,
+        signers: secureSigners,
+        hexChainCode: legacyHexChainCode,
+        localPartyId: 'test-device-a',
+        publicKeyMldsa44: MOCK_MLDSA_PUBLIC_KEY_HEX,
+        keyShareMldsa: 'mock_mldsa_keyshare',
+        ecdsaShare: 'mock_ecdsa_keyshare',
+        eddsaShare: 'mock_eddsa_keyshare',
+      })
+
+      const vaultData: VaultData = {
+        publicKeys: legacyPublicKeys,
+        hexChainCode: legacyHexChainCode,
+        signers: secureSigners,
+        localPartyId: 'test-device-a',
+        createdAt: now,
+        libType: 'GG20',
+        isEncrypted: false,
+        type: 'secure',
+        id: legacyPublicKeys.ecdsa,
+        name: 'Legacy Secure',
+        isBackedUp: false,
+        order: 0,
+        lastModified: now,
+        currency: 'usd',
+        chains: [Chain.QBTC.toString()],
+        tokens: {},
+        vultFileContent,
+      }
+
+      const vaultContext = {
+        storage: context.storage,
+        config: context.config,
+        serverManager: context.serverManager,
+        passwordCache: context.passwordCache,
+        wasmProvider: context.wasmProvider,
+        pushNotificationService: context.pushNotificationService,
+      }
+
+      const restored = SecureVault.fromStorage(vaultData, vaultContext)
+
+      const core = coreVaultOf(restored)
+      expect(core.publicKeyMldsa).toBe(MOCK_MLDSA_PUBLIC_KEY_HEX)
+      expect(core.keyShareMldsa).toBe('mock_mldsa_keyshare')
+
+      const address = await restored.address(Chain.QBTC)
+      expect(CHAIN_VALIDATORS.QBTC?.(address)).toBe(true)
+    })
   })
 
   /**

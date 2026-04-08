@@ -43,6 +43,8 @@ const external = [
   'ripple-binary-codec',
   // 7z-wasm uses Emscripten-style WASM loading - must stay external so it can find its .wasm file
   '7z-wasm',
+  '@vultisig/mpc-types',
+  '@vultisig/mpc-native',
 ]
 
 // Rewrite WASM import paths for bundled output
@@ -133,7 +135,7 @@ const createPlugins = (platformOptions = {}) => {
     }),
     replace({ preventAssignment: true, ...replaceOptions }),
     esbuild({
-      include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
+      include: ['./src/**/*', '../core/**/*', '../lib/**/*', '../mpc-wasm/**/*', '../mpc-types/**/*'],
       exclude: ['**/*.test.*', '**/*.stories.*', '**/node_modules/**'],
       target: 'es2021',
       minify: false,
@@ -221,16 +223,91 @@ const configs = {
       format: 'es',
       sourcemap: true,
       inlineDynamicImports: true,
-      paths: wasmPathsResolver,
     },
-    external,
-    plugins: createPlugins({
-      preferBuiltins: false,
-      replaceOptions: {
+    // RN-specific externals: add RN deps, keep WASM external patterns
+    external: [
+      ...external,
+      '@vultisig/mpc-types',
+      '@vultisig/mpc-native',
+      '@vultisig/mpc-wasm',
+      '@react-native-async-storage/async-storage',
+      /^@noble\//,
+    ],
+    plugins: [
+      alias({
+        entries: [
+          // Polyfills for Node.js crypto (must come before generic package aliases)
+          {
+            find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/encryptWithAesGcm$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts'),
+          },
+          {
+            find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/decryptWithAesGcm$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts'),
+          },
+          {
+            find: /^@vultisig\/core-mpc\/getMessageHash$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+          },
+          {
+            find: /\.\.\/getMessageHash$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+          },
+          // Resolve workspace packages to source TS for bundling
+          {
+            find: /^@vultisig\/core-chain\/(.*)/,
+            replacement: path.resolve(currentDir, '../core/chain/$1'),
+          },
+          {
+            find: /^@vultisig\/core-mpc\/(.*)/,
+            replacement: path.resolve(currentDir, '../core/mpc/$1'),
+          },
+          {
+            find: /^@vultisig\/core-config(.*)/,
+            replacement: path.resolve(currentDir, '../core/config$1'),
+          },
+          {
+            find: /^@vultisig\/lib-utils\/(.*)/,
+            replacement: path.resolve(currentDir, '../lib/utils/$1'),
+          },
+        ],
+      }),
+      resolve({
+        preferBuiltins: false,
+        extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+        exportConditions: ['module', 'import', 'default'],
+        skip: [
+          'axios',
+          'viem',
+          'zod',
+          'uuid',
+          '@trustwallet/wallet-core',
+          'tiny-secp256k1',
+          '@solana/web3.js',
+          '@cosmjs/stargate',
+          '@cosmjs/amino',
+        ],
+      }),
+      replace({
+        preventAssignment: true,
         'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'),
         'typeof window': JSON.stringify('undefined'),
-      },
-    }),
+      }),
+      esbuild({
+        include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
+        exclude: ['**/*.test.*', '**/node_modules/**'],
+        target: 'es2021',
+        minify: false,
+        tsconfig: './tsconfig.json',
+      }),
+      json(),
+      commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
+      terser({
+        format: { comments: false },
+        compress: { passes: 1, drop_debugger: true },
+        mangle: { keep_fnames: true, keep_classnames: true },
+      }),
+    ],
     onwarn,
   },
   electron: {

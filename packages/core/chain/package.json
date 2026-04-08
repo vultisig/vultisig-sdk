@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -109,6 +109,11 @@
       "import": "./dist/chains/cosmos/client.js",
       "default": "./dist/chains/cosmos/client.js"
     },
+    "./chains/cosmos/computeCosmosTxReceiptFeeAmount": {
+      "types": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.d.ts",
+      "import": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js",
+      "default": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js"
+    },
     "./chains/cosmos/cosmosFeeCoinDenom": {
       "types": "./dist/chains/cosmos/cosmosFeeCoinDenom.d.ts",
       "import": "./dist/chains/cosmos/cosmosFeeCoinDenom.js",
@@ -148,6 +153,11 @@
       "types": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
+    },
+    "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
+      "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
+      "import": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js",
+      "default": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js"
     },
     "./chains/cosmos/tendermintRpcUrl": {
       "types": "./dist/chains/cosmos/tendermintRpcUrl.d.ts",
@@ -269,11 +279,6 @@
       "import": "./dist/chains/evm/tx/fee/tw/getEvmTwFeeFields.js",
       "default": "./dist/chains/evm/tx/fee/tw/getEvmTwFeeFields.js"
     },
-    "./chains/evm/tx/incrementKeysignPayloadNonce": {
-      "types": "./dist/chains/evm/tx/incrementKeysignPayloadNonce.d.ts",
-      "import": "./dist/chains/evm/tx/incrementKeysignPayloadNonce.js",
-      "default": "./dist/chains/evm/tx/incrementKeysignPayloadNonce.js"
-    },
     "./chains/evm/tx/tw/getEvmTwChainId": {
       "types": "./dist/chains/evm/tx/tw/getEvmTwChainId.d.ts",
       "import": "./dist/chains/evm/tx/tw/getEvmTwChainId.js",
@@ -348,6 +353,11 @@
       "types": "./dist/chains/solana/getDynamicPriorityFeePrice.d.ts",
       "import": "./dist/chains/solana/getDynamicPriorityFeePrice.js",
       "default": "./dist/chains/solana/getDynamicPriorityFeePrice.js"
+    },
+    "./chains/solana/jito": {
+      "types": "./dist/chains/solana/jito.d.ts",
+      "import": "./dist/chains/solana/jito.js",
+      "default": "./dist/chains/solana/jito.js"
     },
     "./chains/solana/solanaConfig": {
       "types": "./dist/chains/solana/solanaConfig.d.ts",
@@ -875,26 +885,6 @@
       "import": "./dist/security/blockaid/tx/simulation/core.js",
       "default": "./dist/security/blockaid/tx/simulation/core.js"
     },
-    "./security/blockaid/tx/simulation/input": {
-      "types": "./dist/security/blockaid/tx/simulation/input/index.d.ts",
-      "import": "./dist/security/blockaid/tx/simulation/input/index.js",
-      "default": "./dist/security/blockaid/tx/simulation/input/index.js"
-    },
-    "./security/blockaid/tx/simulation/input/resolver": {
-      "types": "./dist/security/blockaid/tx/simulation/input/resolver.d.ts",
-      "import": "./dist/security/blockaid/tx/simulation/input/resolver.js",
-      "default": "./dist/security/blockaid/tx/simulation/input/resolver.js"
-    },
-    "./security/blockaid/tx/simulation/input/resolvers/evm": {
-      "types": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.d.ts",
-      "import": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.js",
-      "default": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.js"
-    },
-    "./security/blockaid/tx/simulation/input/resolvers/solana": {
-      "types": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.d.ts",
-      "import": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.js",
-      "default": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.js"
-    },
     "./security/blockaid/tx/simulation/resolver": {
       "types": "./dist/security/blockaid/tx/simulation/resolver.d.ts",
       "import": "./dist/security/blockaid/tx/simulation/resolver.js",
@@ -910,11 +900,6 @@
       "import": "./dist/security/blockaid/tx/simulation/resolvers/solana.js",
       "default": "./dist/security/blockaid/tx/simulation/resolvers/solana.js"
     },
-    "./security/blockaid/tx/utils/getCompiledTxsForBlockaidInput": {
-      "types": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.d.ts",
-      "import": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.js",
-      "default": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.js"
-    },
     "./security/blockaid/tx/validation": {
       "types": "./dist/security/blockaid/tx/validation/index.d.ts",
       "import": "./dist/security/blockaid/tx/validation/index.js",
@@ -929,36 +914,6 @@
       "types": "./dist/security/blockaid/tx/validation/core.d.ts",
       "import": "./dist/security/blockaid/tx/validation/core.js",
       "default": "./dist/security/blockaid/tx/validation/core.js"
-    },
-    "./security/blockaid/tx/validation/input": {
-      "types": "./dist/security/blockaid/tx/validation/input/index.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/index.js",
-      "default": "./dist/security/blockaid/tx/validation/input/index.js"
-    },
-    "./security/blockaid/tx/validation/input/resolver": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolver.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolver.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolver.js"
-    },
-    "./security/blockaid/tx/validation/input/resolvers/evm": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolvers/evm.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolvers/evm.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolvers/evm.js"
-    },
-    "./security/blockaid/tx/validation/input/resolvers/solana": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolvers/solana.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolvers/solana.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolvers/solana.js"
-    },
-    "./security/blockaid/tx/validation/input/resolvers/sui": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolvers/sui.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolvers/sui.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolvers/sui.js"
-    },
-    "./security/blockaid/tx/validation/input/resolvers/utxo": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.js"
     },
     "./security/blockaid/tx/validation/resolver": {
       "types": "./dist/security/blockaid/tx/validation/resolver.d.ts",
@@ -1130,11 +1085,6 @@
       "import": "./dist/swap/native/utils/getNativeSwapDecimals.js",
       "default": "./dist/swap/native/utils/getNativeSwapDecimals.js"
     },
-    "./swap/native/utils/nativeSwapQuoteToSwapPayload": {
-      "types": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.d.ts",
-      "import": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.js",
-      "default": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.js"
-    },
     "./swap/NoSwapRoutesError": {
       "types": "./dist/swap/NoSwapRoutesError.d.ts",
       "import": "./dist/swap/NoSwapRoutesError.js",
@@ -1164,11 +1114,6 @@
       "types": "./dist/swap/SwapFee.d.ts",
       "import": "./dist/swap/SwapFee.js",
       "default": "./dist/swap/SwapFee.js"
-    },
-    "./swap/utils/getSwapTrackingUrl": {
-      "types": "./dist/swap/utils/getSwapTrackingUrl.d.ts",
-      "import": "./dist/swap/utils/getSwapTrackingUrl.js",
-      "default": "./dist/swap/utils/getSwapTrackingUrl.js"
     },
     "./tw/signingOutput": {
       "types": "./dist/tw/signingOutput.d.ts",
@@ -1249,11 +1194,6 @@
       "types": "./dist/tx/broadcast/resolvers/utxo.d.ts",
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
-    },
-    "./tx/compile/compileTx": {
-      "types": "./dist/tx/compile/compileTx.d.ts",
-      "import": "./dist/tx/compile/compileTx.js",
-      "default": "./dist/tx/compile/compileTx.js"
     },
     "./tx/fee/evm/baseFee": {
       "types": "./dist/tx/fee/evm/baseFee.d.ts",
@@ -1349,16 +1289,6 @@
       "types": "./dist/tx/hash/resolvers/utxo.d.ts",
       "import": "./dist/tx/hash/resolvers/utxo.js",
       "default": "./dist/tx/hash/resolvers/utxo.js"
-    },
-    "./tx/preSigningHashes": {
-      "types": "./dist/tx/preSigningHashes/index.d.ts",
-      "import": "./dist/tx/preSigningHashes/index.js",
-      "default": "./dist/tx/preSigningHashes/index.js"
-    },
-    "./tx/signature/generateSignature": {
-      "types": "./dist/tx/signature/generateSignature.d.ts",
-      "import": "./dist/tx/signature/generateSignature.js",
-      "default": "./dist/tx/signature/generateSignature.js"
     },
     "./tx/status": {
       "types": "./dist/tx/status/index.d.ts",
