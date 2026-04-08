@@ -12,7 +12,6 @@ import type { Chain } from '@vultisig/core-chain/Chain'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
 import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
-import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
 import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
@@ -227,7 +226,6 @@ export class JoinSecureVaultService {
       qrParams.hexEncryptionKey
     )
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
     let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
     let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
 
@@ -235,7 +233,7 @@ export class JoinSecureVaultService {
       reportProgress({
         step: 'keygen',
         progress: 45,
-        message: 'Generating ECDSA, EdDSA, and ML-DSA keys...',
+        message: 'Generating ECDSA and EdDSA keys...',
       })
 
       await dkls.prepareKeygenSetup()
@@ -250,34 +248,10 @@ export class JoinSecureVaultService {
         qrParams.hexEncryptionKey,
         dkls.getSetupMessage()
       )
-      const batchMldsa = new MldsaKeygen(
-        false,
-        this.relayUrl,
-        qrParams.sessionId,
-        localPartyId,
-        allDevices,
-        qrParams.hexEncryptionKey,
-        {
-          timeoutMs: 30000,
-          messageId: TSS_BATCH_MESSAGE_IDS.mldsa,
-          setupMessageId: TSS_BATCH_MESSAGE_IDS.mldsaSetup,
-        }
-      )
 
-      const batchMldsaPromise = batchMldsa
-        .startKeygenWithRetry()
-        .catch(error => {
-          console.warn(
-            'ML-DSA keygen failed (non-fatal):',
-            error instanceof Error ? error.message : error
-          )
-          return undefined
-        })
-
-      ;[ecdsaResult, eddsaResult, mldsaResult] = await Promise.all([
+      ;[ecdsaResult, eddsaResult] = await Promise.all([
         dkls.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.ecdsa),
         schnorr.startKeygenWithRetry(TSS_BATCH_MESSAGE_IDS.eddsa),
-        batchMldsaPromise,
       ])
     } else {
       reportProgress({
@@ -314,31 +288,6 @@ export class JoinSecureVaultService {
 
       if (signal?.aborted) {
         throw new Error('Operation aborted')
-      }
-
-      reportProgress({
-        step: 'keygen',
-        progress: 80,
-        message: 'Generating ML-DSA keys...',
-      })
-
-      try {
-        const mldsaKeygen = new MldsaKeygen(
-          false,
-          this.relayUrl,
-          qrParams.sessionId,
-          localPartyId,
-          allDevices,
-          qrParams.hexEncryptionKey,
-          { timeoutMs: 30000 }
-        )
-
-        mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-      } catch (error) {
-        console.warn(
-          'ML-DSA keygen failed (non-fatal):',
-          error instanceof Error ? error.message : error
-        )
       }
     }
 
@@ -386,8 +335,6 @@ export class JoinSecureVaultService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult?.publicKey,
-      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,
@@ -505,7 +452,6 @@ export class JoinSecureVaultService {
       qrParams.hexEncryptionKey
     )
 
-    let mldsaResult: { publicKey: string; keyshare: string } | undefined
     const chainPublicKeys: Partial<Record<Chain, string>> = {}
     const chainKeyShares: Partial<Record<Chain, string>> = {}
     let ecdsaResult: { publicKey: string; keyshare: string; chaincode: string }
@@ -515,7 +461,7 @@ export class JoinSecureVaultService {
       reportProgress({
         step: 'keygen',
         progress: 45,
-        message: 'Importing ECDSA, EdDSA, ML-DSA, and chain keys...',
+        message: 'Importing ECDSA, EdDSA, and chain keys...',
       })
 
       const rootSchnorr = new Schnorr(
@@ -528,19 +474,6 @@ export class JoinSecureVaultService {
         [],
         qrParams.hexEncryptionKey,
         new Uint8Array()
-      )
-      const batchMldsa = new MldsaKeygen(
-        false,
-        this.relayUrl,
-        qrParams.sessionId,
-        localPartyId,
-        allDevices,
-        qrParams.hexEncryptionKey,
-        {
-          timeoutMs: 30000,
-          messageId: TSS_BATCH_MESSAGE_IDS.mldsa,
-          setupMessageId: TSS_BATCH_MESSAGE_IDS.mldsaSetup,
-        }
       )
       const chainPrivateKeys =
         qrParams.chains && qrParams.chains.length > 0
@@ -594,37 +527,24 @@ export class JoinSecureVaultService {
         }
       )
 
-      const batchMldsaPromise = batchMldsa
-        .startKeygenWithRetry()
-        .catch(error => {
-          console.warn(
-            'ML-DSA keygen failed (non-fatal):',
-            error instanceof Error ? error.message : error
-          )
-          return undefined
-        })
-
-      const [rootEcdsa, rootEddsa, chainResults, batchMldsaResult] =
-        await Promise.all([
-          dkls.startKeyImportWithRetry(
-            masterKeys.ecdsaPrivateKeyHex,
-            qrParams.hexChainCode,
-            undefined,
-            TSS_BATCH_MESSAGE_IDS.ecdsa
-          ),
-          rootSchnorr.startKeyImportWithRetry(
-            masterKeys.eddsaPrivateKeyHex,
-            qrParams.hexChainCode,
-            TSS_BATCH_MESSAGE_IDS.eddsaImportSetup,
-            TSS_BATCH_MESSAGE_IDS.eddsa
-          ),
-          Promise.all(chainImportPromises),
-          batchMldsaPromise,
-        ])
+      const [rootEcdsa, rootEddsa, chainResults] = await Promise.all([
+        dkls.startKeyImportWithRetry(
+          masterKeys.ecdsaPrivateKeyHex,
+          qrParams.hexChainCode,
+          undefined,
+          TSS_BATCH_MESSAGE_IDS.ecdsa
+        ),
+        rootSchnorr.startKeyImportWithRetry(
+          masterKeys.eddsaPrivateKeyHex,
+          qrParams.hexChainCode,
+          TSS_BATCH_MESSAGE_IDS.eddsaImportSetup,
+          TSS_BATCH_MESSAGE_IDS.eddsa
+        ),
+        Promise.all(chainImportPromises),
+      ])
 
       ecdsaResult = rootEcdsa
       eddsaResult = rootEddsa
-      mldsaResult = batchMldsaResult
       chainResults.forEach(({ chain, result }) => {
         chainPublicKeys[chain] = result.publicKey
         chainKeyShares[chain] = result.keyshare
@@ -667,35 +587,6 @@ export class JoinSecureVaultService {
         masterKeys.eddsaPrivateKeyHex,
         ecdsaResult.chaincode
       )
-
-      if (signal?.aborted) {
-        throw new Error('Operation aborted')
-      }
-
-      reportProgress({
-        step: 'keygen',
-        progress: 70,
-        message: 'Generating ML-DSA keys...',
-      })
-
-      try {
-        const mldsaKeygen = new MldsaKeygen(
-          false,
-          this.relayUrl,
-          qrParams.sessionId,
-          localPartyId,
-          allDevices,
-          qrParams.hexEncryptionKey,
-          { timeoutMs: 30000 }
-        )
-
-        mldsaResult = await mldsaKeygen.startKeygenWithRetry()
-      } catch (error) {
-        console.warn(
-          'ML-DSA keygen failed (non-fatal):',
-          error instanceof Error ? error.message : error
-        )
-      }
 
       if (signal?.aborted) {
         throw new Error('Operation aborted')
@@ -808,8 +699,6 @@ export class JoinSecureVaultService {
         ecdsa: ecdsaResult.keyshare,
         eddsa: eddsaResult.keyshare,
       },
-      publicKeyMldsa: mldsaResult?.publicKey,
-      keyShareMldsa: mldsaResult?.keyshare,
       libType: 'DKLS',
       isBackedUp: false,
       order: 0,

@@ -363,7 +363,6 @@ export class SecureVault extends VaultBase {
         step:
           step.step === 'keygen_ecdsa' ||
           step.step === 'keygen_eddsa' ||
-          step.step === 'keygen_mldsa' ||
           step.step === 'finalizing'
             ? 'keygen'
             : step.step === 'complete'
