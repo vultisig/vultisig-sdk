@@ -71,9 +71,7 @@ export class MockNotificationServer {
         ws.close(1008, 'missing query params')
         return
       }
-      const authorized = this.devices.some(
-        d => d.vaultId === vaultId && d.partyName === partyName && d.token === token
-      )
+      const authorized = this.devices.some(d => d.vaultId === vaultId && d.partyName === partyName && d.token === token)
       if (!authorized) {
         ws.close(1008, 'unauthorized')
         return

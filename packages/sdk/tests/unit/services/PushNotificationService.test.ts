@@ -197,7 +197,9 @@ describe('PushNotificationService', () => {
         deviceType: 'web',
       })
 
-      await expect(service.unregisterVault('vault-123')).rejects.toThrow('Failed to unregister from notification server')
+      await expect(service.unregisterVault('vault-123')).rejects.toThrow(
+        'Failed to unregister from notification server'
+      )
       expect(await service.isVaultRegistered('vault-123')).toBe(true)
     })
 

@@ -26,6 +26,7 @@ export type AgentCommandOptions = {
   viaAgent?: boolean
   sessionId?: string
   verbose?: boolean
+  notificationUrl?: string
 }
 
 export async function executeAgent(ctx: CommandContext, options: AgentCommandOptions): Promise<void> {
@@ -38,6 +39,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     viaAgent: options.viaAgent,
     sessionId: options.sessionId,
     verbose: options.verbose,
+    notificationUrl: options.notificationUrl || process.env.VULTISIG_NOTIFICATION_URL || '',
   }
 
   const session = new AgentSession(vault, config)
@@ -95,11 +97,7 @@ export type AgentAskOptions = {
  * Output format (--json):
  *   {"session_id":"...","response":"...","tool_calls":[...],"transactions":[...]}
  */
-export async function executeAgentAsk(
-  ctx: CommandContext,
-  message: string,
-  options: AgentAskOptions
-): Promise<void> {
+export async function executeAgentAsk(ctx: CommandContext, message: string, options: AgentAskOptions): Promise<void> {
   // Suppress info/warn/success messages — only our structured output goes to stdout
   setSilentMode(true)
 
@@ -114,10 +112,7 @@ export async function executeAgentAsk(
     const vault = await ctx.ensureActiveVault()
 
     const config: AgentConfig = {
-      backendUrl:
-        options.backendUrl ||
-        process.env.VULTISIG_AGENT_URL ||
-        'https://abe.vultisig.com',
+      backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com',
       vaultName: vault.name,
       password: options.password,
       sessionId: options.session,
@@ -268,7 +263,11 @@ export async function executeAgentSessionsDelete(
 // Helpers
 // ============================================================================
 
-async function createAuthenticatedClient(backendUrl: string, vault: VaultBase, password?: string): Promise<AgentClient> {
+async function createAuthenticatedClient(
+  backendUrl: string,
+  vault: VaultBase,
+  password?: string
+): Promise<AgentClient> {
   const client = new AgentClient(backendUrl)
   const auth = await authenticateVault(client, vault, password)
   client.setAuthToken(auth.token)

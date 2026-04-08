@@ -57,27 +57,18 @@ describe.skipIf(!canRunSuite())('Funded E2E: Send — Fast vault', () => {
     const np = secureSharePaths()
     const sdkDestSecure = createFundedSdk()
     await sdkDestSecure.initialize()
-    destSecureVault = await importSecureVaultFromFirstShare(
-      sdkDestSecure,
-      np,
-      process.env.SECURE_VAULT_PASSWORD!
-    )
+    destSecureVault = await importSecureVaultFromFirstShare(sdkDestSecure, np, process.env.SECURE_VAULT_PASSWORD!)
 
     const sdkSource = createFundedSdk()
     await sdkSource.initialize()
-    sourceVault = await importFastVault(
-      sdkSource,
-      process.env.TEST_VAULT_PATH!,
-      process.env.TEST_VAULT_PASSWORD!
-    )
+    sourceVault = await importFastVault(sdkSource, process.env.TEST_VAULT_PATH!, process.env.TEST_VAULT_PASSWORD!)
     if (sourceVault.type !== 'fast') {
       throw new Error('TEST_VAULT_PATH must be a fast vault share')
     }
 
     balanceSnapshot = await sourceVault.balances(SCAN_CHAINS, true)
 
-    signFast = async ({ vault, chain, keysignPayload }) =>
-      signAndBroadcastFast({ vault, chain, keysignPayload })
+    signFast = async ({ vault, chain, keysignPayload }) => signAndBroadcastFast({ vault, chain, keysignPayload })
   }, 300_000)
 
   const receiverForChain = (chain: Chain) => destSecureVault.address(chain)
@@ -138,11 +129,7 @@ describe.skipIf(!canRunSuite())('Funded E2E: Send — Secure vault', () => {
 
     const sdkDestFast = createFundedSdk()
     await sdkDestFast.initialize()
-    destFastVault = await importFastVault(
-      sdkDestFast,
-      process.env.TEST_VAULT_PATH!,
-      process.env.TEST_VAULT_PASSWORD!
-    )
+    destFastVault = await importFastVault(sdkDestFast, process.env.TEST_VAULT_PATH!, process.env.TEST_VAULT_PASSWORD!)
 
     const sdkSource = createFundedSdk()
     await sdkSource.initialize()
