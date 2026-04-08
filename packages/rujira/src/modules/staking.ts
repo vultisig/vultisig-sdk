@@ -125,7 +125,10 @@ export class RujiraStaking {
         throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL request failed: ${response.status}`)
       }
 
-      const json = (await response.json()) as { data: StakingV2Response }
+      const json = (await response.json()) as { data: StakingV2Response; errors?: Array<{ message: string }> }
+      if (json.errors?.length) {
+        throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL errors: ${json.errors[0].message}`)
+      }
       const stakingData = json.data?.node?.stakingV2?.[0]
 
       if (!stakingData) {

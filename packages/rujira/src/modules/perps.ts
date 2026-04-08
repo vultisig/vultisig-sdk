@@ -38,8 +38,6 @@ const PERPS_MARKETS_QUERY = `
       address
       baseAsset { asset }
       quoteAsset { asset }
-      stats { lpApr xlpApr risk }
-      liquidity { totalLp totalXlp }
     }
   }
 `

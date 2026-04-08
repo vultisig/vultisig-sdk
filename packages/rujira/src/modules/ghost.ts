@@ -277,6 +277,9 @@ export class RujiraGhost {
    * Build borrow transaction via credit account dispatch.
    */
   buildBorrow(params: { creditAccount: string; denom: string; amount: string }): GhostCreditTransactionParams {
+    if (!params.amount || BigInt(params.amount) <= 0n) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Borrow amount must be positive')
+    }
     return {
       contractAddress: GHOST_CREDIT_CONTRACT,
       executeMsg: {
@@ -293,6 +296,9 @@ export class RujiraGhost {
    * Build repay transaction via credit account dispatch.
    */
   buildRepay(params: { creditAccount: string; denom: string; amount: string }): GhostCreditTransactionParams {
+    if (!params.amount || BigInt(params.amount) <= 0n) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Repay amount must be positive')
+    }
     return {
       contractAddress: GHOST_CREDIT_CONTRACT,
       executeMsg: {
