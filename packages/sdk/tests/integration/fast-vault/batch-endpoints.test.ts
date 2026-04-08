@@ -10,9 +10,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 
-const queryUrlMock = vi.hoisted(() =>
-  vi.fn(async (_url: string | URL, _opts?: unknown): Promise<void> => undefined)
-)
+const queryUrlMock = vi.hoisted(() => vi.fn(async (_url: string | URL, _opts?: unknown): Promise<void> => undefined))
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: queryUrlMock,

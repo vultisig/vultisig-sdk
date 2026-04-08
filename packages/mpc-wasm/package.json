@@ -16,5 +16,8 @@
   "license": "MIT",
   "dependencies": {
     "@vultisig/mpc-types": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

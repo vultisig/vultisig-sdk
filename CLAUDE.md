@@ -39,8 +39,9 @@ yarn test:e2e           # E2E tests (requires vault file)
 yarn test:all           # All tests
 
 # Quality
-yarn check              # typecheck + lint + knip (parallel, fast)
+yarn check              # typecheck + lint + knip + format:check (parallel, fast)
 yarn check:all          # check + tests
+# Knip: see .config/knip.json (scopes SDK, CLI, Rujira, examples; excludes packages/core and packages/lib sources from file rules because they ship as dist subpath exports)
 yarn format             # Prettier
 yarn lint:fix           # ESLint auto-fix
 yarn typecheck          # TypeScript check

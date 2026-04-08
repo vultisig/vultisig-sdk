@@ -7,6 +7,7 @@ type BuildNativeTonTransferFromMessageInput = {
   to: string
   amount: string
   payload?: string
+  stateInit?: string
   bounceable: boolean
 }
 
@@ -66,6 +67,7 @@ export const buildNativeTonTransferFromMessage = ({
   to,
   amount,
   payload = '',
+  stateInit,
   bounceable,
 }: BuildNativeTonTransferFromMessageInput): TW.TheOpenNetwork.Proto.Transfer => {
   const mode =
@@ -78,6 +80,7 @@ export const buildNativeTonTransferFromMessage = ({
     bounceable,
     comment: '',
     customPayload: payload || undefined,
+    stateInit: stateInit || undefined,
     mode,
   })
 }

@@ -21,6 +21,8 @@ export type AgentConfig = {
   sessionId?: string
   /** Show detailed tool call params and debug output */
   verbose?: boolean
+  /** Notification service URL for push notifications (empty = disabled) */
+  notificationUrl?: string
 }
 
 // ============================================================================
@@ -320,9 +322,28 @@ export type PipeOutputEvent =
   | { type: 'auth'; status: 'authenticated' | 'failed'; error?: string }
   | { type: 'conversation'; id: string }
   | { type: 'text_delta'; delta: string }
-  | { type: 'tool_call'; id: string; action: string; params?: Record<string, unknown>; status: 'running' | 'done' | 'error' }
-  | { type: 'tool_result'; id: string; action: string; success: boolean; data?: Record<string, unknown>; error?: string }
-  | { type: 'tx_status'; tx_hash: string; chain: string; status: 'pending' | 'confirmed' | 'failed'; explorer_url?: string }
+  | {
+      type: 'tool_call'
+      id: string
+      action: string
+      params?: Record<string, unknown>
+      status: 'running' | 'done' | 'error'
+    }
+  | {
+      type: 'tool_result'
+      id: string
+      action: string
+      success: boolean
+      data?: Record<string, unknown>
+      error?: string
+    }
+  | {
+      type: 'tx_status'
+      tx_hash: string
+      chain: string
+      status: 'pending' | 'confirmed' | 'failed'
+      explorer_url?: string
+    }
   | { type: 'assistant'; content: string }
   | { type: 'suggestions'; suggestions: Suggestion[] }
   | { type: 'error'; message: string }
@@ -346,6 +367,7 @@ export type UICallbacks = {
   onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => void
   onError: (message: string) => void
   onDone: () => void
+  onNotification?: (title: string, body: string) => void
   requestPassword: () => Promise<string>
   requestConfirmation: (message: string) => Promise<boolean>
 }

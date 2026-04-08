@@ -45,6 +45,7 @@ export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({
             to: msg.to,
             amount: msg.amount,
             payload: msg.payload,
+            stateInit: msg.stateInit,
             bounceable: isStakeOp ? true : !!bounceable,
           })
         )
