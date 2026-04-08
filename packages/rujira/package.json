@@ -18,6 +18,10 @@
       "import": "./dist/modules/orderbook.js",
       "types": "./dist/modules/orderbook.d.ts"
     },
+    "./staking": {
+      "import": "./dist/modules/staking.js",
+      "types": "./dist/modules/staking.d.ts"
+    },
     "./signer": {
       "import": "./dist/signer/vultisig-provider.js",
       "types": "./dist/signer/vultisig-provider.d.ts"

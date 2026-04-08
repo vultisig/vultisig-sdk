@@ -60,6 +60,8 @@ export { RujiraClient } from './client.js'
 // Module exports
 export { RujiraAssets } from './modules/assets.js'
 export { RujiraOrderbook } from './modules/orderbook.js'
+export type { StakeParams, StakeTransactionParams,StakingPosition, UnstakeParams } from './modules/staking.js'
+export { RujiraStaking } from './modules/staking.js'
 export { RujiraSwap } from './modules/swap.js'
 
 // Signer exports (for Vultisig integration)
