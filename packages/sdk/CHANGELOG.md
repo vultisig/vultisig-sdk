@@ -1,5 +1,15 @@
 # @vultisig/sdk
 
+## 0.13.0
+
+### Minor Changes
+
+- [#179](https://github.com/vultisig/vultisig-sdk/pull/179) [`84a2950`](https://github.com/vultisig/vultisig-sdk/commit/84a295002ed7310320b584fbccb76aaf4a233b31) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add full QBTC (post-quantum Bitcoin) send support: MLDSA fast signing, address derivation, broadcast via Cosmos REST, funded e2e send test, and `scripts/add-mldsa-to-vault.ts` helper. Switch QBTC core resolvers from dead Tendermint RPC to vultisig Cosmos REST API.
+
+### Patch Changes
+
+- [#185](https://github.com/vultisig/vultisig-sdk/pull/185) [`3f46444`](https://github.com/vultisig/vultisig-sdk/commit/3f46444b2a11a41dbbb023919c2f168f9d15cff8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Restore `publicKeyMldsa` and `keyShareMldsa` when hydrating fast and secure vaults from storage. Run the Vitest integration suite on every PR; keep the full agentic stack workflow manual-only.
+
 ## 0.12.0
 
 ### Minor Changes
