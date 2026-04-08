@@ -19,6 +19,7 @@ import type {
   OrderBookEntry,
   OrderResult,
   OrderSide,
+  OrderTarget,
 } from '../types.js'
 import { fromContractSide, toContractSide } from '../types.js'
 import { denomToAsset as sharedDenomToAsset } from '../utils/denom-conversion.js'
@@ -174,7 +175,7 @@ export class RujiraOrderbook {
 
     // Convert SDK side to contract's Side enum format
     const contractSide = toContractSide(params.side)
-    const orderTarget: [ContractSide, string, string | null] = [contractSide, params.price, params.amount]
+    const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, params.amount]
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
@@ -218,7 +219,7 @@ export class RujiraOrderbook {
    */
   async cancelOrder(contractAddress: string, side: OrderSide, price: string): Promise<{ txHash: string }> {
     const contractSide = toContractSide(side)
-    const orderTarget: [ContractSide, string, string | null] = [contractSide, price, null]
+    const orderTarget: OrderTarget = [contractSide, { fixed: price }, null]
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
@@ -250,7 +251,7 @@ export class RujiraOrderbook {
     }
 
     const contractSide = toContractSide(params.side)
-    const orderTarget: [ContractSide, string, string | null] = [contractSide, params.price, params.amount]
+    const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, params.amount]
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
@@ -270,7 +271,7 @@ export class RujiraOrderbook {
     price: string
   ): { contractAddress: string; msg: FinExecuteMsg; funds: Coin[] } {
     const contractSide = toContractSide(side)
-    const orderTarget: [ContractSide, string, string | null] = [contractSide, price, null]
+    const orderTarget: OrderTarget = [contractSide, { fixed: price }, null]
 
     return {
       contractAddress,
