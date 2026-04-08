@@ -221,9 +221,6 @@ export class ChatTUI {
           this.isStreaming = false
           this.currentStreamText = ''
         }
-        this.isProcessing = false
-        // Flush queued notifications
-        this.flushPendingNotifications()
       },
 
       requestPassword: async (): Promise<string> => {
@@ -282,7 +279,11 @@ export class ChatTUI {
       onNotification: (title: string, deeplink: string) => {
         // Only show notifications for the current conversation
         const currentConvId = this.session.getConversationId()
-        if (currentConvId && deeplink && !deeplink.includes(currentConvId)) return
+        if (currentConvId && deeplink) {
+          const segments = deeplink.split('/')
+          const deeplinkConvId = segments[segments.length - 1]
+          if (deeplinkConvId !== currentConvId) return
+        }
 
         if (this.isProcessing) {
           // Queue for display after response cycle ends
@@ -290,6 +291,7 @@ export class ChatTUI {
           return
         }
         this.displayNotification(title)
+        this.showPrompt()
       },
 
       requestConfirmation: async (message: string): Promise<boolean> => {
@@ -311,7 +313,6 @@ export class ChatTUI {
       process.stdout.write(`  ${body}\n`)
     }
     process.stdout.write('\n')
-    this.showPrompt()
   }
 
   private flushPendingNotifications(): void {
@@ -320,6 +321,7 @@ export class ChatTUI {
     for (const { title } of queued) {
       this.displayNotification(title)
     }
+    this.showPrompt()
   }
 
   private async handleMessage(content: string): Promise<void> {

@@ -124,7 +124,7 @@ export class AgentSession {
           globalThis.WebSocket = WebSocket as any
         }
 
-        const token = `cli-${Date.now()}`
+        const token = crypto.randomUUID()
         this.pushService = new PushNotificationService(new MemoryStorage(), this.config.notificationUrl)
 
         await this.pushService.registerDevice({
@@ -144,8 +144,10 @@ export class AgentSession {
           partyName: 'cli-agent',
           token,
         })
-      } catch {
-        // Non-fatal — notifications are optional
+      } catch (err) {
+        if (this.config.verbose) {
+          process.stderr.write(`[session] push notification setup failed: ${err}\n`)
+        }
       }
     }
   }
