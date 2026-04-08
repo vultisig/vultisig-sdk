@@ -110,8 +110,12 @@ export type GhostCreditTransactionParams = {
  * const tx = client.ghost.buildDeposit({ denom: 'btc-btc', amount: '100000' });
  * ```
  */
+// Ghost vault code ID for dynamic discovery
+const GHOST_VAULT_CODE_ID = 114
+
 export class RujiraGhost {
   private readonly client: RujiraClient
+  private discoveredVaults: Record<string, string> | null = null
 
   constructor(client: RujiraClient) {
     this.client = client
@@ -120,10 +124,11 @@ export class RujiraGhost {
   // --- Vault Discovery ---
 
   /**
-   * List all known GHOST lending vaults.
+   * List known GHOST lending vaults (hardcoded, instant).
    */
   listVaults(): GhostVaultInfo[] {
-    return Object.entries(GHOST_VAULTS).map(([denom, address]) => ({
+    const vaults = this.discoveredVaults ?? GHOST_VAULTS
+    return Object.entries(vaults).map(([denom, address]) => ({
       address,
       denom,
       asset: denom
@@ -131,6 +136,44 @@ export class RujiraGhost {
         .map(s => s.toUpperCase())
         .join('-'),
     }))
+  }
+
+  /**
+   * Discover vaults dynamically from chain via code_id query.
+   * Falls back to hardcoded addresses on failure. Cached per instance.
+   */
+  async discoverVaults(): Promise<GhostVaultInfo[]> {
+    if (this.discoveredVaults) return this.listVaults()
+
+    try {
+      const restUrl = this.client.config.restEndpoint
+      const resp = await fetch(`${restUrl}/cosmwasm/wasm/v1/code/${GHOST_VAULT_CODE_ID}/contracts?pagination.limit=100`)
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+
+      const data = (await resp.json()) as { contracts?: string[] }
+      const contracts = data.contracts ?? []
+
+      if (contracts.length > 0) {
+        const vaultMap: Record<string, string> = {}
+        for (const addr of contracts) {
+          try {
+            const config = await this.client.queryContract<{ denom?: string }>(addr, { config: {} })
+            if (config.denom) {
+              vaultMap[config.denom] = addr
+            }
+          } catch {
+            // Skip broken contracts
+          }
+        }
+        if (Object.keys(vaultMap).length > 0) {
+          this.discoveredVaults = vaultMap
+        }
+      }
+    } catch {
+      // Fall through to hardcoded
+    }
+
+    return this.listVaults()
   }
 
   /**
@@ -312,7 +355,8 @@ export class RujiraGhost {
   // --- Internal ---
 
   private resolveVault(denom: string): string {
-    const address = GHOST_VAULTS[denom.toLowerCase()]
+    const vaults = this.discoveredVaults ?? GHOST_VAULTS
+    const address = vaults[denom.toLowerCase()]
     if (!address) {
       const supported = Object.keys(GHOST_VAULTS).join(', ')
       throw new RujiraError(
