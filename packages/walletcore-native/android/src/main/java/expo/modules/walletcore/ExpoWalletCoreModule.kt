@@ -103,11 +103,13 @@ class ExpoWalletCoreModule : Module() {
             AnyAddress.isValidBech32(address, CoinType.createFromValue(coinType), hrp)
         }
 
+        // KNOWN LIMITATION: ss58Prefix parameter is IGNORED on Android.
+        // The Trust Wallet Core Android JNI binding does not expose an SS58-prefix
+        // overload on AnyAddress. This falls back to the generic isValid check, which
+        // uses the coin's default SS58 prefix. This means validation may accept
+        // addresses with a different SS58 prefix than expected.
+        // TODO(walletcore-android): Pass ss58Prefix once the JNI binding supports it.
         Function("anyAddressIsValidSS58") { address: String, coinType: Int, _ss58Prefix: Int ->
-            // TODO: The Trust Wallet Core Android JNI binding does not expose an SS58-prefix
-            // overload on AnyAddress. Falling back to the generic isValid check, which uses
-            // the coin's default SS58 prefix. Pass the _ss58Prefix argument here once the
-            // binding provides AnyAddress.isValidSS58(address, coinType, ss58Prefix).
             AnyAddress.isValid(address, CoinType.createFromValue(coinType))
         }
 
@@ -172,6 +174,16 @@ class ExpoWalletCoreModule : Module() {
         Function("hdWalletGetKeyForCoin") { handle: Int, coinType: Int ->
             val wallet = hdWallets[handle] ?: throw Exception("Invalid HDWallet handle")
             storePrivateKey(wallet.getKeyForCoin(CoinType.createFromValue(coinType)))
+        }
+
+        Function("hdWalletGetKeyDerivation") { handle: Int, coinType: Int, derivationValue: Int ->
+            val wallet = hdWallets[handle] ?: throw Exception("Invalid HDWallet handle")
+            storePrivateKey(wallet.getKeyDerivation(CoinType.createFromValue(coinType), Derivation.createFromValue(derivationValue)))
+        }
+
+        Function("hdWalletGetAddressDerivation") { handle: Int, coinType: Int, derivationValue: Int ->
+            val wallet = hdWallets[handle] ?: throw Exception("Invalid HDWallet handle")
+            wallet.getAddressDerivation(CoinType.createFromValue(coinType), Derivation.createFromValue(derivationValue))
         }
 
         Function("hdWalletGetKey") { handle: Int, coinType: Int, derivationPath: String ->
@@ -259,11 +271,14 @@ class ExpoWalletCoreModule : Module() {
         }
 
         // EthereumAbi
-        // TODO: _params is currently unused — full ABI encoding requires parsing param
-        // types and values from the string and adding them to the EthereumAbiFunction.
-        // This encodes only the 4-byte function selector. A complete implementation
-        // should accept a structured param list (e.g. JSON) and call fn.addParam*().
-        Function("ethereumAbiEncode") { functionName: String, _params: String ->
+        // WARNING: Only the 4-byte function selector is encoded. Full ABI encoding
+        // requires parsing param types/values and calling fn.addParam*(). Throws if
+        // the caller passes non-empty params to avoid silent data loss.
+        // TODO: Accept a structured param list (e.g. JSON) and call fn.addParam*().
+        Function("ethereumAbiEncode") { functionName: String, params: String ->
+            require(params.isEmpty()) {
+                "ethereumAbiEncode does not yet support params — only the 4-byte selector is encoded"
+            }
             val fn = EthereumAbiFunction(functionName)
             val encoded = EthereumAbi.encode(fn)
             android.util.Base64.encodeToString(encoded, android.util.Base64.NO_WRAP)

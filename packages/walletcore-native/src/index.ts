@@ -33,6 +33,8 @@ export interface NativeHDWalletInstance {
   readonly _handle: number
   getMasterKey(curve: number): NativePrivateKeyInstance
   getKeyForCoin(coinType: number): NativePrivateKeyInstance
+  getKeyDerivation(coinType: number, derivation: number): NativePrivateKeyInstance
+  getAddressDerivation(coinType: number, derivation: number): string
   getKey(coinType: number, derivationPath: string): NativePrivateKeyInstance
   getAddressForCoin(coinType: number): string
   getExtendedPrivateKey(purpose: number, coinType: number, version: number): string
@@ -356,6 +358,14 @@ class NativeHDWallet implements NativeHDWalletInstance {
 
   getKeyForCoin(coinType: number): NativePrivateKey {
     return new NativePrivateKey(ExpoWalletCore.hdWalletGetKeyForCoin(this._handle, coinType))
+  }
+
+  getKeyDerivation(coinType: number, derivation: number): NativePrivateKey {
+    return new NativePrivateKey(ExpoWalletCore.hdWalletGetKeyDerivation(this._handle, coinType, derivation))
+  }
+
+  getAddressDerivation(coinType: number, derivation: number): string {
+    return ExpoWalletCore.hdWalletGetAddressDerivation(this._handle, coinType, derivation)
   }
 
   getKey(coinType: number, derivationPath: string): NativePrivateKey {

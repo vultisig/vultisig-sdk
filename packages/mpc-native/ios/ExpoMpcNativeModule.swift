@@ -951,8 +951,11 @@ public class ExpoMpcNativeModule: Module {
         }
 
         Function("freeSchnorrKeyshare") { (handle: Int) in
-            // Note: schnorr_keyshare_free is not exported by the Rust library (cbindgen gap)
-            // This is a known issue — the handle is cleaned up by the Rust allocator
+            // NO-OP: schnorr_keyshare_free is not exported by the Rust/Go library.
+            // The Go runtime's GC manages the underlying memory — there is no C-side
+            // pointer to release. This function exists so the JS layer has a consistent
+            // free() API; it intentionally does nothing on iOS.
+            // TODO: Implement proper cleanup if the Go binding ever exports a free function.
         }
 
         // =====================================================================

@@ -48,6 +48,10 @@ function privateAdd(d: Uint8Array, tweak: Uint8Array): Uint8Array | null {
   try {
     const dN = BigInt('0x' + Buffer.from(d).toString('hex'))
     const tN = BigInt('0x' + Buffer.from(tweak).toString('hex'))
+    // Both dN and tN are read as unsigned 256-bit integers. For secp256k1 scalar
+    // addition, tweak values representing negative scalars (> n/2) work correctly
+    // because (dN + tN) % n produces the same result as modular addition with
+    // signed interpretation — BigInt handles arbitrary precision without overflow.
     const sum = (dN + tN) % secp256k1.CURVE.n
     if (sum === 0n) return null
     const hex = sum.toString(16).padStart(64, '0')
