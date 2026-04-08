@@ -100,6 +100,10 @@ export class RujiraPerps {
         }
       }
 
+      if ((json as any).errors?.length) {
+        throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL errors: ${(json as any).errors[0].message}`)
+      }
+
       return (json.data?.perps ?? []).map(m => ({
         address: m.address,
         name: m.name,
@@ -229,6 +233,9 @@ export class RujiraPerps {
     denom: string
     amount: string
   }): PerpsTransactionParams {
+    if (!params.amount || BigInt(params.amount) <= 0n) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Collateral amount must be positive')
+    }
     return {
       contractAddress: params.market,
       executeMsg: { update_position_add_collateral_impact_leverage: { id: params.positionId } },
@@ -249,6 +256,9 @@ export class RujiraPerps {
     takeProfit?: string
     stopLoss?: string
   }): PerpsTransactionParams {
+    if (!params.collateralAmount || BigInt(params.collateralAmount) <= 0n) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Collateral amount must be positive')
+    }
     return {
       contractAddress: params.market,
       executeMsg: {

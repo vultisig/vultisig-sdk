@@ -180,7 +180,8 @@ export class RujiraGhost {
    * Get vault contract address for an asset.
    */
   getVaultAddress(denom: string): string | null {
-    return GHOST_VAULTS[denom.toLowerCase()] ?? null
+    const vaults = this.discoveredVaults ?? GHOST_VAULTS
+    return vaults[denom.toLowerCase()] ?? null
   }
 
   // --- Vault Queries ---
