@@ -20,10 +20,12 @@ export class ChatTUI {
   private rl: readline.Interface
   private session: AgentSession
   private isStreaming = false
+  private isProcessing = false
   private currentStreamText = ''
   private vaultName: string
   private stopped = false
   private verbose: boolean
+  private pendingNotifications: Array<{ title: string; deeplink: string }> = []
 
   constructor(session: AgentSession, vaultName: string, verbose = false) {
     this.session = session
@@ -275,6 +277,24 @@ export class ChatTUI {
         })
       },
 
+      onNotification: (title: string, deeplink: string) => {
+        // Only show notifications for the current conversation
+        const currentConvId = this.session.getConversationId()
+        if (currentConvId && deeplink) {
+          const segments = deeplink.split('/')
+          const deeplinkConvId = segments[segments.length - 1]
+          if (deeplinkConvId !== currentConvId) return
+        }
+
+        if (this.isProcessing) {
+          // Queue for display after response cycle ends
+          this.pendingNotifications.push({ title, deeplink })
+          return
+        }
+        this.displayNotification(title)
+        this.showPrompt()
+      },
+
       requestConfirmation: async (message: string): Promise<boolean> => {
         return new Promise(resolve => {
           this.rl.question(chalk.yellow(`  ${message} (y/N): `), answer => {
@@ -285,9 +305,30 @@ export class ChatTUI {
     }
   }
 
+  private displayNotification(title: string): void {
+    const [heading, ...bodyLines] = title.split('\n')
+    const body = bodyLines.join('\n').trim()
+    const ts = this.timestamp()
+    process.stdout.write(`\n${chalk.gray(ts)} ${chalk.magenta.bold('Notification')}: ${chalk.bold(heading)}\n`)
+    if (body) {
+      process.stdout.write(`  ${body}\n`)
+    }
+    process.stdout.write('\n')
+  }
+
+  private flushPendingNotifications(): void {
+    if (this.pendingNotifications.length === 0) return
+    const queued = this.pendingNotifications.splice(0)
+    for (const { title } of queued) {
+      this.displayNotification(title)
+    }
+    this.showPrompt()
+  }
+
   private async handleMessage(content: string): Promise<void> {
     const callbacks = this.getCallbacks()
     this.isStreaming = false
+    this.isProcessing = true
 
     try {
       await this.session.sendMessage(content, callbacks)
@@ -297,6 +338,9 @@ export class ChatTUI {
       } else {
         console.log(chalk.red(`  Error: ${err.message}`))
       }
+    } finally {
+      this.isProcessing = false
+      this.flushPendingNotifications()
     }
   }
 
