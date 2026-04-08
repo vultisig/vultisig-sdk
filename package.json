@@ -54,7 +54,7 @@
     "test:changed": "yarn workspace @vultisig/sdk test:changed",
     "knip": "knip --config .config/knip.json",
     "knip:fix": "knip --config .config/knip.json --fix --allow-remove-files",
-    "check": "concurrently --kill-others-on-fail \"yarn typecheck\" \"yarn lint\"",
+    "check": "concurrently --kill-others-on-fail -n typecheck,lint,knip,format \"yarn typecheck\" \"yarn lint\" \"yarn knip\" \"yarn format:check\"",
     "check:all": "yarn check && yarn test",
     "prepare": "husky",
     "cli": "yarn workspace @vultisig/cli dev",

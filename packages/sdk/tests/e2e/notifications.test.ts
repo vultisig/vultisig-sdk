@@ -5,20 +5,14 @@
 import { MockNotificationServer } from '@helpers/mock-notification-server'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  computeNotificationVaultId,
-  MemoryStorage,
-  PushNotificationService,
-  type SigningNotification,
-} from '@/index'
+import { computeNotificationVaultId, MemoryStorage, PushNotificationService, type SigningNotification } from '@/index'
 
 import { testUtils } from '../setup'
 
 /** Deterministic inputs; SHA256(utf8(ecdsa + chainCode)) pre-computed via Node crypto. */
 const VAULT_ID_VECTOR_ECDSA = '04testEcdsaPubKeyHex'
 const VAULT_ID_VECTOR_CHAIN = '00112233445566778899aabbccddeeff'
-const VAULT_ID_VECTOR_EXPECTED =
-  '456168d997f217cd775b746980ec0b41ae48660bab1e8334c10209a6ea6564cc'
+const VAULT_ID_VECTOR_EXPECTED = '456168d997f217cd775b746980ec0b41ae48660bab1e8334c10209a6ea6564cc'
 
 describe('E2E: Push notifications (mock server)', () => {
   const mock = new MockNotificationServer()
@@ -169,10 +163,7 @@ describe('E2E: Push notifications (mock server)', () => {
       })
 
       await testUtils.waitFor(
-        () =>
-          handler.mock.calls.some(
-            (call: [SigningNotification]) => call[0].qrCodeData === 'qr-reconnect'
-          ),
+        () => handler.mock.calls.some((call: [SigningNotification]) => call[0].qrCodeData === 'qr-reconnect'),
         10_000
       )
     })

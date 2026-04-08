@@ -1085,30 +1085,42 @@ const agentCmd = program
   .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
   .option('--session-id <id>', 'Resume an existing session')
   .option('--notification-url <url>', 'Notification service URL for push notifications')
-  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; sessionId?: string; notificationUrl?: string }) => {
-    // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
-    // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
-    const MAX_TTL = 86400000 // 24 hours
-    let passwordTTL: number | undefined
-    if (options.passwordTtl) {
-      const parsed = parseInt(options.passwordTtl, 10)
-      if (Number.isNaN(parsed) || parsed < 0) {
-        throw new Error(`Invalid --password-ttl value: "${options.passwordTtl}". Expected a non-negative integer in milliseconds.`)
+  .action(
+    async (options: {
+      viaAgent?: boolean
+      verbose?: boolean
+      backendUrl?: string
+      password?: string
+      passwordTtl?: string
+      sessionId?: string
+      notificationUrl?: string
+    }) => {
+      // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
+      // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
+      const MAX_TTL = 86400000 // 24 hours
+      let passwordTTL: number | undefined
+      if (options.passwordTtl) {
+        const parsed = parseInt(options.passwordTtl, 10)
+        if (Number.isNaN(parsed) || parsed < 0) {
+          throw new Error(
+            `Invalid --password-ttl value: "${options.passwordTtl}". Expected a non-negative integer in milliseconds.`
+          )
+        }
+        passwordTTL = parsed
+      } else if (options.viaAgent) {
+        passwordTTL = MAX_TTL
       }
-      passwordTTL = parsed
-    } else if (options.viaAgent) {
-      passwordTTL = MAX_TTL
+      const context = await init(program.opts().vault, options.password, passwordTTL)
+      await executeAgent(context, {
+        viaAgent: options.viaAgent,
+        verbose: options.verbose,
+        backendUrl: options.backendUrl,
+        password: options.password,
+        sessionId: options.sessionId,
+        notificationUrl: options.notificationUrl,
+      })
     }
-    const context = await init(program.opts().vault, options.password, passwordTTL)
-    await executeAgent(context, {
-      viaAgent: options.viaAgent,
-      verbose: options.verbose,
-      backendUrl: options.backendUrl,
-      password: options.password,
-      sessionId: options.sessionId,
-      notificationUrl: options.notificationUrl,
-    })
-  })
+  )
 
 // Ask subcommand: one-shot mode for AI coding agents
 agentCmd
@@ -1131,10 +1143,7 @@ agentCmd
       }
     ) => {
       const parentOpts = agentCmd.opts()
-      const context = await init(
-        program.opts().vault,
-        options.password || parentOpts.password
-      )
+      const context = await init(program.opts().vault, options.password || parentOpts.password)
       await executeAgentAsk(context, message, {
         ...options,
         backendUrl: options.backendUrl || parentOpts.backendUrl,

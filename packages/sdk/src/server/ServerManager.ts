@@ -30,13 +30,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { formatMldsaSignature, formatSignature } from '../adapters/formatSignature'
 import { getChainSigningInfo } from '../adapters/getChainSigningInfo'
 import { randomUUID } from '../crypto'
-import {
-  KeygenProgressUpdate,
-  ReshareOptions,
-  ServerStatus,
-  Signature,
-  SigningPayload,
-} from '../types'
+import { KeygenProgressUpdate, ReshareOptions, ServerStatus, Signature, SigningPayload } from '../types'
 import { TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 
 /**
@@ -144,7 +138,11 @@ export class ServerManager {
     }
 
     // Use SDK adapter to extract chain-specific signing information
-    const { signatureAlgorithm, derivePath: rawDerivePath, chainPath: rawChainPath } = getChainSigningInfo(payload, walletCore)
+    const {
+      signatureAlgorithm,
+      derivePath: rawDerivePath,
+      chainPath: rawChainPath,
+    } = getChainSigningInfo(payload, walletCore)
 
     // Key import vaults store chain-specific keyshares; derive path must be 'm'
     const hasChainKeyShare = !!vault.chainKeyShares?.[payload.chain]

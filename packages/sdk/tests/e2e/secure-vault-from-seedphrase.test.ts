@@ -133,74 +133,74 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
     it.skipIf(!RUN_SECURE_VAULT_MPC_E2E)(
       'should create 3 vault shares using 3 SDK instances',
       async () => {
-      if (!TEST_CONFIG.seedphrase) return
+        if (!TEST_CONFIG.seedphrase) return
 
-      console.log('\n2. Creating vault with 3 SDK instances...')
-      console.log('   (SDK 1 initiates, SDK 2 & 3 join via QR payload)')
+        console.log('\n2. Creating vault with 3 SDK instances...')
+        console.log('   (SDK 1 initiates, SDK 2 & 3 join via QR payload)')
 
-      // SDK 1 initiates and captures QR payload
-      let qrPayload: string | undefined
+        // SDK 1 initiates and captures QR payload
+        let qrPayload: string | undefined
 
-      const promise1 = sdk1.createSecureVaultFromSeedphrase({
-        mnemonic: TEST_CONFIG.seedphrase,
-        name: TEST_CONFIG.vaultName,
-        devices: TEST_CONFIG.numDevices,
-        chains: [...TEST_CONFIG.importChains],
-        onQRCodeReady: qr => {
-          console.log('   QR code generated')
-          qrPayload = qr
-        },
-        onDeviceJoined: (_deviceId, total, required) => {
-          console.log(`   SDK 1: Device joined (${total}/${required})`)
-        },
-      })
+        const promise1 = sdk1.createSecureVaultFromSeedphrase({
+          mnemonic: TEST_CONFIG.seedphrase,
+          name: TEST_CONFIG.vaultName,
+          devices: TEST_CONFIG.numDevices,
+          chains: [...TEST_CONFIG.importChains],
+          onQRCodeReady: qr => {
+            console.log('   QR code generated')
+            qrPayload = qr
+          },
+          onDeviceJoined: (_deviceId, total, required) => {
+            console.log(`   SDK 1: Device joined (${total}/${required})`)
+          },
+        })
 
-      // Wait for QR payload to be ready
-      console.log('   Waiting for QR code...')
-      await waitFor(() => qrPayload !== undefined)
-      console.log('   QR payload received, starting joiners')
+        // Wait for QR payload to be ready
+        console.log('   Waiting for QR code...')
+        await waitFor(() => qrPayload !== undefined)
+        console.log('   QR payload received, starting joiners')
 
-      // SDK 2 & 3 join using the QR payload
-      const promise2 = sdk2.joinSecureVault(qrPayload!, {
-        mnemonic: TEST_CONFIG.seedphrase,
-        devices: TEST_CONFIG.numDevices,
-        onDeviceJoined: (_deviceId, total, required) => {
-          console.log(`   SDK 2: Device joined (${total}/${required})`)
-        },
-      })
+        // SDK 2 & 3 join using the QR payload
+        const promise2 = sdk2.joinSecureVault(qrPayload!, {
+          mnemonic: TEST_CONFIG.seedphrase,
+          devices: TEST_CONFIG.numDevices,
+          onDeviceJoined: (_deviceId, total, required) => {
+            console.log(`   SDK 2: Device joined (${total}/${required})`)
+          },
+        })
 
-      const promise3 = sdk3.joinSecureVault(qrPayload!, {
-        mnemonic: TEST_CONFIG.seedphrase,
-        devices: TEST_CONFIG.numDevices,
-        onDeviceJoined: (_deviceId, total, required) => {
-          console.log(`   SDK 3: Device joined (${total}/${required})`)
-        },
-      })
+        const promise3 = sdk3.joinSecureVault(qrPayload!, {
+          mnemonic: TEST_CONFIG.seedphrase,
+          devices: TEST_CONFIG.numDevices,
+          onDeviceJoined: (_deviceId, total, required) => {
+            console.log(`   SDK 3: Device joined (${total}/${required})`)
+          },
+        })
 
-      // Wait for all 3 to complete
-      console.log('   Waiting for all 3 SDKs to complete MPC...')
-      const [result1, result2, result3] = await Promise.all([promise1, promise2, promise3])
+        // Wait for all 3 to complete
+        console.log('   Waiting for all 3 SDKs to complete MPC...')
+        const [result1, result2, result3] = await Promise.all([promise1, promise2, promise3])
 
-      // Store vaults
-      vault1 = result1.vault
-      vault2 = result2.vault
-      vault3 = result3.vault
+        // Store vaults
+        vault1 = result1.vault
+        vault2 = result2.vault
+        vault3 = result3.vault
 
-      // Verify all vaults have the same ID (ECDSA public key)
-      expect(result1.vaultId).toBe(result2.vaultId)
-      expect(result2.vaultId).toBe(result3.vaultId)
+        // Verify all vaults have the same ID (ECDSA public key)
+        expect(result1.vaultId).toBe(result2.vaultId)
+        expect(result2.vaultId).toBe(result3.vaultId)
 
-      console.log(`\n   Summary:`)
-      console.log(`   - Vault ID: ${result1.vaultId.substring(0, 32)}...`)
-      console.log(`   - All 3 SDKs have matching vault IDs`)
+        console.log(`\n   Summary:`)
+        console.log(`   - Vault ID: ${result1.vaultId.substring(0, 32)}...`)
+        console.log(`   - All 3 SDKs have matching vault IDs`)
 
-      // Verify each vault has a unique local party ID
-      const partyIds = [vault1.localPartyId, vault2.localPartyId, vault3.localPartyId]
-      const uniquePartyIds = new Set(partyIds)
-      expect(uniquePartyIds.size).toBe(3)
-      console.log(`   - Each SDK has unique party ID`)
-    },
-    { timeout: 900_000 }
+        // Verify each vault has a unique local party ID
+        const partyIds = [vault1.localPartyId, vault2.localPartyId, vault3.localPartyId]
+        const uniquePartyIds = new Set(partyIds)
+        expect(uniquePartyIds.size).toBe(3)
+        console.log(`   - Each SDK has unique party ID`)
+      },
+      { timeout: 900_000 }
     )
   })
 

@@ -21,5 +21,5 @@ export { validateSeedphrase } from '../../seedphrase/SeedphraseValidator'
 export { SEEDPHRASE_WORD_COUNTS } from '../../seedphrase/types'
 
 // MPC engine access (for advanced usage)
-export type { MpcEngine, MpcKeyshare, MpcMessage,MpcSession } from '@vultisig/mpc-types'
+export type { MpcEngine, MpcKeyshare, MpcMessage, MpcSession } from '@vultisig/mpc-types'
 export { configureMpc, getMpcEngine } from '@vultisig/mpc-types'

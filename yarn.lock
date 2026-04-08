@@ -6821,6 +6821,7 @@ __metadata:
   dependencies:
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
+    "@vultisig/sdk": "workspace:*"
     qrcode.react: "npm:^4.2.0"
     typescript: "npm:^5.9.3"
   peerDependencies:

@@ -395,9 +395,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   async listPendingVaults(): Promise<string[]> {
     await this.ensureInitialized()
     const keys = await this.context.storage.list()
-    return keys
-      .filter(k => k.startsWith('pending:'))
-      .map(k => k.slice('pending:'.length))
+    return keys.filter(k => k.startsWith('pending:')).map(k => k.slice('pending:'.length))
   }
 
   /**
