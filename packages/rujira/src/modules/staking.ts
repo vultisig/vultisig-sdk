@@ -149,8 +149,8 @@ export class RujiraStaking {
         rewards,
         rewardsFormatted: fromBaseUnits(rewards, REVENUE_DECIMALS),
         rewardsTicker: stakingData.pendingRevenue?.asset?.metadata?.symbol || 'USDC',
-        apr: aprValue ? parseFloat(aprValue) : 0,
-        aprPercent: aprValue ? (parseFloat(aprValue) * 100).toFixed(2) : '0.00',
+        apr: aprValue && !Number.isNaN(parseFloat(aprValue)) ? parseFloat(aprValue) : 0,
+        aprPercent: aprValue && !Number.isNaN(parseFloat(aprValue)) ? (parseFloat(aprValue) * 100).toFixed(2) : '0.00',
       }
     } catch (error) {
       throw wrapError(error)

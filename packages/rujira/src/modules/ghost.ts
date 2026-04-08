@@ -365,7 +365,7 @@ export class RujiraGhost {
     const vaults = this.discoveredVaults ?? GHOST_VAULTS
     const address = vaults[denom.toLowerCase()]
     if (!address) {
-      const supported = Object.keys(GHOST_VAULTS).join(', ')
+      const supported = Object.keys(vaults).join(', ')
       throw new RujiraError(
         RujiraErrorCode.INVALID_ASSET,
         `Unknown GHOST vault for denom '${denom}'. Supported: ${supported}`
