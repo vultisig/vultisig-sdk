@@ -149,41 +149,52 @@ export class AgentClient {
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let currentEvent = ''
+    let currentData = ''
+
+    const flushEvent = (): void => {
+      if (currentEvent && currentData) {
+        this.handleSSEEvent(currentEvent, currentData, result, callbacks)
+      }
+      currentEvent = ''
+      currentData = ''
+    }
 
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
 
         // Parse SSE events from buffer
         const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete last line
+        buffer = done ? '' : (lines.pop() ?? '') // Keep incomplete last line between reads
 
-        let currentEvent = ''
-        let currentData = ''
-
-        for (const line of lines) {
+        for (const rawLine of lines) {
+          const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
           if (line.startsWith('event: ')) {
             currentEvent = line.slice(7).trim()
           } else if (line.startsWith('data: ')) {
             currentData += (currentData ? '\n' : '') + line.slice(6)
           } else if (line === '') {
             // Empty line = end of event
-            if (currentEvent && currentData) {
-              this.handleSSEEvent(currentEvent, currentData, result, callbacks)
-            }
-            currentEvent = ''
-            currentData = ''
+            flushEvent()
           } else if (line.startsWith(': ')) {
             // SSE comment (ping), ignore
           }
         }
 
-        // Handle case where event+data were the last lines without trailing newline
-        if (currentEvent && currentData) {
-          this.handleSSEEvent(currentEvent, currentData, result, callbacks)
+        if (done) {
+          if (buffer) {
+            const line = buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim()
+            } else if (line.startsWith('data: ')) {
+              currentData += (currentData ? '\n' : '') + line.slice(6)
+            }
+          }
+          flushEvent()
+          break
         }
       }
     } finally {

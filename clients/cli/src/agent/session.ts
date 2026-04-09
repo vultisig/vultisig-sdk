@@ -18,6 +18,7 @@ import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
+import { resolveResponseText } from './response'
 import type { Action, ActionResult, AgentConfig, ConversationMessage, MessageContext, UICallbacks } from './types'
 import { PASSWORD_REQUIRED_ACTIONS } from './types'
 
@@ -295,8 +296,9 @@ export class AgentSession {
     )
 
     // Emit the full assistant message
-    // Backend may send text via text_delta events (fullText) or a single message event
-    const responseText = streamResult.fullText || (streamResult.message as any)?.content || ''
+    // Prefer the final message event when present; streamed text can be partial
+    // if intermediate chunks were interrupted or dropped upstream.
+    const responseText = resolveResponseText(streamResult)
 
     // Check if the response text contains inline tool calls (XML format from the model)
     const inlineActions = parseInlineToolCalls(responseText)
