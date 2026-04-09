@@ -40,10 +40,16 @@ function readArgValue(args: string[], optionName: string): string | undefined {
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]
     if (arg === optionName) {
-      return args[i + 1]
+      const next = args[i + 1]
+      if (!next || next.startsWith('-')) {
+        return undefined
+      }
+
+      return next
     }
     if (arg.startsWith(`${optionName}=`)) {
-      return arg.slice(optionName.length + 1)
+      const value = arg.slice(optionName.length + 1)
+      return value.trim() === '' ? undefined : value
     }
   }
 

@@ -40,4 +40,16 @@ describe('parseServerEndpointOverridesFromArgv', () => {
       serverUrl: 'http://127.0.0.1:8080',
     })
   })
+
+  it('treats missing --server-url values as undefined', () => {
+    expect(parseServerEndpointOverridesFromArgv(['--server-url'])).toEqual({
+      serverUrl: undefined,
+    })
+    expect(parseServerEndpointOverridesFromArgv(['--server-url', '--silent'])).toEqual({
+      serverUrl: undefined,
+    })
+    expect(parseServerEndpointOverridesFromArgv(['--server-url='])).toEqual({
+      serverUrl: undefined,
+    })
+  })
 })
