@@ -36,10 +36,8 @@ import { VaultManager } from '../../../src/VaultManager'
  * Synthetic public keys and keyshares only — no real key material.
  * Used to build a minimal Vault protobuf that passes fromCommVault().
  */
-const SYNTH_ECDSA_PK =
-  '021111111111111111111111111111111111111111111111111111111111111111'
-const SYNTH_EDDSA_PK =
-  '2222222222222222222222222222222222222222222222222222222222222222'
+const SYNTH_ECDSA_PK = '021111111111111111111111111111111111111111111111111111111111111111'
+const SYNTH_EDDSA_PK = '2222222222222222222222222222222222222222222222222222222222222222'
 
 function buildMinimalSecureVaultBinary(): Uint8Array {
   return toBinary(
@@ -201,9 +199,9 @@ describe('VaultManager', () => {
     })
 
     it('should map invalid inner protobuf to UNSUPPORTED_FORMAT', async () => {
-      const junkInner = Buffer.from(
-        [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
-      )
+      const junkInner = Buffer.from([
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+      ])
       const vult = encodeUnencryptedVult(junkInner)
       await expect(vaultManager.importVault(vult)).rejects.toMatchObject({
         code: VaultImportErrorCode.UNSUPPORTED_FORMAT,
