@@ -6750,6 +6750,7 @@ __metadata:
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"
     "@vultisig/lib-utils": "npm:0.9.1"
+    "@vultisig/mpc-types": "npm:0.1.0"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
     cosmjs-types: "npm:^0.11.0"
@@ -6868,7 +6869,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:packages/mpc-types":
+"@vultisig/mpc-types@npm:0.1.0, @vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:packages/mpc-types":
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   languageName: unknown
