@@ -168,4 +168,16 @@ describe('AgentClient.sendMessageStream', () => {
 
     expect(result.fullText).toBe('hi')
   })
+
+  it('skips malformed JSON data without throwing', async () => {
+    globalThis.fetch = mockFetchSSE([
+      'event: text_delta\ndata: {not valid json}\n\n',
+      'event: text_delta\ndata: {"delta":"recovered"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.fullText).toBe('recovered')
+  })
 })

@@ -153,7 +153,7 @@ export class AgentClient {
     let currentData = ''
 
     /** Strip optional single leading space from an SSE field value per spec. */
-    const stripLeadingSpace = (v: string): string => (v[0] === ' ' ? v.slice(1) : v)
+    const stripLeadingSpace = (v: string): string => (v.length > 0 && v[0] === ' ' ? v.slice(1) : v)
 
     const processLine = (raw: string): void => {
       const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
