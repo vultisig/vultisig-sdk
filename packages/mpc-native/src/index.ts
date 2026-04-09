@@ -23,7 +23,7 @@ function toBase64(bytes: Uint8Array): string {
   // React Native supports btoa but it requires a binary string
   let binary = ''
   for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
+    binary += String.fromCharCode(bytes[i]!)
   }
   return btoa(binary)
 }
@@ -32,6 +32,14 @@ function toHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
+}
+
+function fromHex(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16)
+  }
+  return bytes
 }
 
 function fromBase64(b64: string): Uint8Array {
@@ -124,16 +132,14 @@ class NativeSession<TResult> implements MpcSession<TResult> {
 
     const body = fromBase64(msgB64)
 
-    // Collect receivers — iterate indices until we get an error
+    // Collect receivers — iterate indices until the native layer returns a
+    // falsy sentinel (empty string or null/undefined). The native functions
+    // return "" when the index is out of range, so we stop on that.
     const receivers: string[] = []
-    try {
-      for (let i = 0; ; i++) {
-        const receiver = this.ops.messageReceiver(this.handle, msgB64, i)
-        if (!receiver) break
-        receivers.push(receiver)
-      }
-    } catch {
-      // No more receivers
+    for (let i = 0; ; i++) {
+      const receiver = this.ops.messageReceiver(this.handle, msgB64, i)
+      if (!receiver) break
+      receivers.push(receiver)
     }
 
     return { body, receivers }
@@ -182,8 +188,18 @@ class NativeDklsEngine implements DklsEngine {
       inputMessage: (h, m) => ExpoMpcNative.keygenSessionInputMessage(h, m),
       finish: async (h) => {
         const result = await ExpoMpcNative.finishKeygen(h)
-        const ksHandle = ExpoMpcNative.dklsKeyshareFromBytes(result.keyshare)
-        return new NativeKeyshare(ksHandle, fromBase64(result.keyshare), 'dkls')
+        // finishKeygen returns raw data (hex/base64), not a native handle.
+        // Wrap in a MpcKeyshare-compatible object.
+        const ksBytes = fromBase64(result.keyshare)
+        const pkBytes = fromHex(result.publicKey)
+        const ccBytes = fromHex(result.chainCode)
+        return {
+          publicKey: () => pkBytes,
+          rootChainCode: () => ccBytes,
+          toBytes: () => ksBytes,
+          keyId: () => pkBytes,
+          free: () => {},
+        } as unknown as MpcKeyshare
       },
       free: (h) => ExpoMpcNative.freeKeygenSession(h),
     })
@@ -312,17 +328,29 @@ class NativeDklsEngine implements DklsEngine {
     localPartyId: string,
     keyshare: MpcKeyshare | null
   ): MpcSession<MpcKeyshare | undefined> {
-    const nativeKs = keyshare ? this._ensureNativeKeyshare(keyshare) : null
-    const isTemporary = keyshare !== null && !(keyshare instanceof NativeKeyshare && keyshare.kind === 'dkls')
-    const handle = ExpoMpcNative.createQcSession(
-      toBase64(setup),
-      localPartyId,
-      nativeKs ? nativeKs.handle : null
-    )
-    // Free temporary handle after Go has copied the data during session creation
-    if (isTemporary && nativeKs) {
-      nativeKs.free()
+    // If keyshare is not a native handle (e.g. it was deserialized from bytes),
+    // _ensureNativeKeyshare creates a temporary native handle. We track whether
+    // it was temporary so it can be freed after the session is created —
+    // the session only needs the handle during setup, not for its lifetime.
+    let tempKeyshare: NativeKeyshare | null = null
+    let ksHandle: number | null = null
+    if (keyshare) {
+      const nativeKs = this._ensureNativeKeyshare(keyshare)
+      const isTemporary = !(keyshare instanceof NativeKeyshare && keyshare.kind === 'dkls')
+      ksHandle = nativeKs.handle
+      if (isTemporary) {
+        tempKeyshare = nativeKs
+      }
     }
+
+    let handle: number
+    try {
+      handle = ExpoMpcNative.createQcSession(toBase64(setup), localPartyId, ksHandle)
+    } finally {
+      // Free the temporary native keyshare now that the session has been created
+      tempKeyshare?.free()
+    }
+
     return new NativeSession<MpcKeyshare | undefined>(handle, {
       outputMessage: (h) => ExpoMpcNative.qcSessionOutputMessage(h),
       messageReceiver: (h, m, i) =>
@@ -385,8 +413,16 @@ class NativeDklsEngine implements DklsEngine {
       inputMessage: (h, m) => ExpoMpcNative.keygenSessionInputMessage(h, m),
       finish: async (h) => {
         const result = await ExpoMpcNative.finishKeygen(h)
-        const ksHandle = ExpoMpcNative.dklsKeyshareFromBytes(result.keyshare)
-        return new NativeKeyshare(ksHandle, fromBase64(result.keyshare), 'dkls')
+        const ksBytes = fromBase64(result.keyshare)
+        const pkBytes = fromHex(result.publicKey)
+        const ccBytes = fromHex(result.chainCode)
+        return {
+          publicKey: () => pkBytes,
+          rootChainCode: () => ccBytes,
+          toBytes: () => ksBytes,
+          keyId: () => pkBytes,
+          free: () => {},
+        } as unknown as MpcKeyshare
       },
       free: (h) => ExpoMpcNative.freeKeygenSession(h),
     })
@@ -425,8 +461,16 @@ class NativeSchnorrEngine implements SchnorrEngine {
         ExpoMpcNative.schnorrKeygenSessionInputMessage(h, m),
       finish: async (h) => {
         const result = await ExpoMpcNative.finishSchnorrKeygen(h)
-        const ksHandle = ExpoMpcNative.schnorrKeyshareFromBytes(result.keyshare)
-        return new NativeKeyshare(ksHandle, fromBase64(result.keyshare), 'schnorr')
+        const ksBytes = fromBase64(result.keyshare)
+        const pkBytes = fromHex(result.publicKey)
+        const ccBytes = fromHex(result.chainCode)
+        return {
+          publicKey: () => pkBytes,
+          rootChainCode: () => ccBytes,
+          toBytes: () => ksBytes,
+          keyId: () => pkBytes,
+          free: () => {},
+        } as unknown as MpcKeyshare
       },
       free: (h) => ExpoMpcNative.freeSchnorrKeygenSession(h),
     })
@@ -520,17 +564,29 @@ class NativeSchnorrEngine implements SchnorrEngine {
     localPartyId: string,
     keyshare: MpcKeyshare | null
   ): MpcSession<MpcKeyshare | undefined> {
-    const nativeKs = keyshare ? this._ensureNativeKeyshare(keyshare) : null
-    const isTemporary = keyshare !== null && !(keyshare instanceof NativeKeyshare && keyshare.kind === 'schnorr')
-    const handle = ExpoMpcNative.createSchnorrQcSession(
-      toBase64(setup),
-      localPartyId,
-      nativeKs ? nativeKs.handle : null
-    )
-    // Free temporary handle after Go has copied the data during session creation
-    if (isTemporary && nativeKs) {
-      nativeKs.free()
+    // If keyshare is not a native handle (e.g. it was deserialized from bytes),
+    // _ensureNativeKeyshare creates a temporary native handle. We track whether
+    // it was temporary so it can be freed after the session is created —
+    // the session only needs the handle during setup, not for its lifetime.
+    let tempKeyshare: NativeKeyshare | null = null
+    let ksHandle: number | null = null
+    if (keyshare) {
+      const nativeKs = this._ensureNativeKeyshare(keyshare)
+      const isTemporary = !(keyshare instanceof NativeKeyshare && keyshare.kind === 'schnorr')
+      ksHandle = nativeKs.handle
+      if (isTemporary) {
+        tempKeyshare = nativeKs
+      }
     }
+
+    let handle: number
+    try {
+      handle = ExpoMpcNative.createSchnorrQcSession(toBase64(setup), localPartyId, ksHandle)
+    } finally {
+      // Free the temporary native keyshare now that the session has been created
+      tempKeyshare?.free()
+    }
+
     return new NativeSession<MpcKeyshare | undefined>(handle, {
       outputMessage: (h) => ExpoMpcNative.schnorrQcSessionOutputMessage(h),
       messageReceiver: (h, m, i) =>
@@ -595,8 +651,16 @@ class NativeSchnorrEngine implements SchnorrEngine {
         ExpoMpcNative.schnorrKeygenSessionInputMessage(h, m),
       finish: async (h) => {
         const result = await ExpoMpcNative.finishSchnorrKeygen(h)
-        const ksHandle = ExpoMpcNative.schnorrKeyshareFromBytes(result.keyshare)
-        return new NativeKeyshare(ksHandle, fromBase64(result.keyshare), 'schnorr')
+        const ksBytes = fromBase64(result.keyshare)
+        const pkBytes = fromHex(result.publicKey)
+        const ccBytes = fromHex(result.chainCode)
+        return {
+          publicKey: () => pkBytes,
+          rootChainCode: () => ccBytes,
+          toBytes: () => ksBytes,
+          keyId: () => pkBytes,
+          free: () => {},
+        } as unknown as MpcKeyshare
       },
       free: (h) => ExpoMpcNative.freeSchnorrKeygenSession(h),
     })

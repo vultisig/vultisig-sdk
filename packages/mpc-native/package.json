@@ -18,7 +18,7 @@
     "expo": "^51.0.0"
   },
   "dependencies": {
-    "@vultisig/mpc-types": "workspace:*"
+    "@vultisig/mpc-types": "workspace:^0.1.0"
   },
   "publishConfig": {
     "access": "public"

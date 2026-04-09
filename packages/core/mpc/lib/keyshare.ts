@@ -12,8 +12,8 @@ export const toMpcLibKeyshare = ({
 }: ToMpcLibKeyshareInput) => {
   if (signatureAlgorithm === 'mldsa') {
     throw new Error(
-      'MLDSA uses a dedicated signing path (MldsaKeysign) with its own keyshare format. ' +
-      'Do not route MLDSA keyshares through the pluggable MPC engine.'
+      'MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine. ' +
+      'Route MLDSA keyshares through packages/core/mpc/mldsa/ instead.'
     )
   }
   const engineKey = signatureAlgorithm === 'eddsa' ? 'schnorr' : 'dkls'

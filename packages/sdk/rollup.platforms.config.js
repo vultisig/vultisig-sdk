@@ -224,14 +224,39 @@ const configs = {
       sourcemap: true,
       inlineDynamicImports: true,
     },
-    // RN-specific externals: add RN deps, keep WASM external patterns
+    // RN externals: native modules, Node builtins, and deps that can't run on RN.
+    // Everything else (chain logic, @noble/*, @polkadot/*, @cosmjs/*) is INLINED.
     external: [
-      ...external,
+      // SDK native modules
       '@vultisig/mpc-types',
       '@vultisig/mpc-native',
       '@vultisig/mpc-wasm',
+      '@vultisig/walletcore-native',
       '@react-native-async-storage/async-storage',
-      /^@noble\//,
+      '@trustwallet/wallet-core',
+      // Node builtins (can't run on RN)
+      'crypto',
+      'buffer',
+      'util',
+      'stream',
+      'url',
+      'fs',
+      'fs/promises',
+      'path',
+      'os',
+      // Deps that use Node.js or WASM loading (shimmed via alias)
+      '7z-wasm',
+      'electron',
+      // Network/serialization deps (app provides its own)
+      'axios',
+      'viem',
+      'zod',
+      'uuid',
+      // WASM binaries
+      /\.wasm$/,
+      /lib\/dkls\/vs_wasm/,
+      /lib\/mldsa\/vs_wasm/,
+      /lib\/schnorr\/vs_schnorr_wasm/,
     ],
     plugins: [
       alias({
@@ -252,6 +277,11 @@ const configs = {
           {
             find: /\.\.\/getMessageHash$/,
             replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+          },
+          // Shims for packages that use WASM/Node.js and can't run on RN
+          {
+            find: /^tiny-secp256k1$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
           },
           // Resolve workspace packages to source TS for bundling
           {

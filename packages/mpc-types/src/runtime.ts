@@ -22,6 +22,18 @@ function validateEngine(engine: MpcEngine): void {
   if (!engine.schnorr || typeof engine.schnorr !== 'object') {
     throw new Error('MPC engine is missing required property: schnorr')
   }
+  // Guard against engines that accidentally expose a `mldsa` field aliased to
+  // the DKLS engine — that would silently route Dilithium operations through
+  // ECDSA. MLDSA must use a dedicated signing path (packages/core/mpc/mldsa/).
+  const maybeEngine = engine as unknown as Record<string, unknown>
+  if ('mldsa' in maybeEngine) {
+    if (maybeEngine['mldsa'] === engine.dkls) {
+      throw new Error(
+        'MPC engine: engine.mldsa must not alias engine.dkls. ' +
+        'MLDSA requires a dedicated signing path, not ECDSA/DKLS.'
+      )
+    }
+  }
 }
 
 /**
@@ -33,6 +45,12 @@ function validateEngine(engine: MpcEngine): void {
  */
 export function configureMpc(engine: MpcEngine): void {
   validateEngine(engine)
+  if (mpcEngine !== null) {
+    console.warn(
+      'configureMpc: overwriting an already-configured MPC engine. ' +
+      'This is usually a mistake — ensure configureMpc is called only once per process.'
+    )
+  }
   mpcEngine = engine
 }
 

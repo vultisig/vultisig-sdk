@@ -24,7 +24,8 @@
       "@vultisig/lib-dkls/*": ["packages/lib/dkls/*"],
       "@vultisig/lib-mldsa/*": ["packages/lib/mldsa/*"],
       "@vultisig/lib-schnorr/*": ["packages/lib/schnorr/*"],
-      "@vultisig/sdk": ["packages/sdk/src/index.ts"]
+      "@vultisig/sdk": ["packages/sdk/src/index.ts"],
+      "@vultisig/walletcore-native": ["packages/walletcore-native/src/index.ts"]
     }
   },
   "references": [],
@@ -38,6 +39,7 @@
     "../packages/sdk/src/**/*.tsx",
     "../packages/core/**/*.ts",
     "../packages/lib/**/*.ts",
-    "../packages/rujira/src/**/*.ts"
+    "../packages/rujira/src/**/*.ts",
+    "../packages/walletcore-native/src/**/*.ts"
   ]
 }
