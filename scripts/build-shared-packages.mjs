@@ -32,6 +32,16 @@ const syncTargets = [
     to: 'packages/core/config/dist',
     packageJson: 'packages/core/config/package.json',
   },
+  {
+    from: 'mpc-types/src',
+    to: 'packages/mpc-types/dist',
+    packageJson: 'packages/mpc-types/package.json',
+  },
+  {
+    from: 'mpc-wasm/src',
+    to: 'packages/mpc-wasm/dist',
+    packageJson: 'packages/mpc-wasm/package.json',
+  },
 ]
 
 const tsc = spawnSync('yarn', ['exec', 'tsc', '--project', '.config/tsconfig.shared-publish.json'], {

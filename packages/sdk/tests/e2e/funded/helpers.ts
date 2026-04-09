@@ -71,11 +71,7 @@ export function createFundedSdk(): Vultisig {
   })
 }
 
-export async function importFastVault(
-  sdk: Vultisig,
-  vaultPath: string,
-  password: string
-): Promise<VaultBase> {
+export async function importFastVault(sdk: Vultisig, vaultPath: string, password: string): Promise<VaultBase> {
   const content = await fs.readFile(vaultPath, 'utf-8')
   return sdk.importVault(content, password)
 }
@@ -137,10 +133,7 @@ export async function resolveTokenSendAmount(params: { balance: Balance }): Prom
   return min
 }
 
-export async function resolveNativeSendAmount(params: {
-  vault: VaultBase
-  chain: Chain
-}): Promise<bigint | null> {
+export async function resolveNativeSendAmount(params: { vault: VaultBase; chain: Chain }): Promise<bigint | null> {
   const fixed = TEST_AMOUNTS[params.chain]
   if (fixed === undefined) return null
   const bal = await params.vault.balance(params.chain)

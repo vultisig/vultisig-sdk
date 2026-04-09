@@ -17,7 +17,5 @@ export const getChainBatchMessageIds = (chain: Chain) => ({
   protocolMessageId: `p-${chain}`,
 })
 
-export const resolveTssBatching = (
-  config: Readonly<SdkConfigOptions>,
-  override?: boolean
-): boolean => override ?? config.tssBatching ?? DEFAULT_TSS_BATCHING
+export const resolveTssBatching = (config: Readonly<SdkConfigOptions>, override?: boolean): boolean =>
+  override ?? config.tssBatching ?? DEFAULT_TSS_BATCHING

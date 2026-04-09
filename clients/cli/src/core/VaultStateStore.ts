@@ -113,7 +113,7 @@ export class VaultStateStore {
         if (Date.now() - startTime > LOCK_MAX_WAIT_MS) {
           throw new Error(
             `Timeout after ${LOCK_MAX_WAIT_MS}ms waiting for ${chain} chain lock. ` +
-            `Another process may be stuck. Lock file: ${lockPath}`
+              `Another process may be stuck. Lock file: ${lockPath}`
           )
         }
 

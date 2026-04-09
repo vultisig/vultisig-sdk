@@ -218,3 +218,9 @@ export type {
   WSConnectionState,
   WSConnectOptions,
 } from './types/notifications'
+
+// ============================================================================
+// PUBLIC API - ABI Constants
+// ============================================================================
+
+export { ERC20_ABI, ERC1155_ABI } from './abi'

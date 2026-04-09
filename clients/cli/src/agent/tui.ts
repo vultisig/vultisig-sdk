@@ -20,10 +20,12 @@ export class ChatTUI {
   private rl: readline.Interface
   private session: AgentSession
   private isStreaming = false
+  private isProcessing = false
   private currentStreamText = ''
   private vaultName: string
   private stopped = false
   private verbose: boolean
+  private pendingNotifications: Array<{ title: string; deeplink: string }> = []
 
   constructor(session: AgentSession, vaultName: string, verbose = false) {
     this.session = session
@@ -197,7 +199,8 @@ export class ChatTUI {
       },
 
       onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
-        const statusIcon = status === 'confirmed' ? chalk.green('✓') : status === 'failed' ? chalk.red('✗') : chalk.yellow('⏳')
+        const statusIcon =
+          status === 'confirmed' ? chalk.green('✓') : status === 'failed' ? chalk.red('✗') : chalk.yellow('⏳')
         console.log(`  ${statusIcon} ${chalk.bold('TX')} [${chain}]: ${txHash.slice(0, 12)}...${txHash.slice(-8)}`)
         if (explorerUrl) {
           console.log(`     ${chalk.blue.underline(explorerUrl)}`)
@@ -274,6 +277,24 @@ export class ChatTUI {
         })
       },
 
+      onNotification: (title: string, deeplink: string) => {
+        // Only show notifications for the current conversation
+        const currentConvId = this.session.getConversationId()
+        if (currentConvId && deeplink) {
+          const segments = deeplink.split('/')
+          const deeplinkConvId = segments[segments.length - 1]
+          if (deeplinkConvId !== currentConvId) return
+        }
+
+        if (this.isProcessing) {
+          // Queue for display after response cycle ends
+          this.pendingNotifications.push({ title, deeplink })
+          return
+        }
+        this.displayNotification(title)
+        this.showPrompt()
+      },
+
       requestConfirmation: async (message: string): Promise<boolean> => {
         return new Promise(resolve => {
           this.rl.question(chalk.yellow(`  ${message} (y/N): `), answer => {
@@ -284,9 +305,30 @@ export class ChatTUI {
     }
   }
 
+  private displayNotification(title: string): void {
+    const [heading, ...bodyLines] = title.split('\n')
+    const body = bodyLines.join('\n').trim()
+    const ts = this.timestamp()
+    process.stdout.write(`\n${chalk.gray(ts)} ${chalk.magenta.bold('Notification')}: ${chalk.bold(heading)}\n`)
+    if (body) {
+      process.stdout.write(`  ${body}\n`)
+    }
+    process.stdout.write('\n')
+  }
+
+  private flushPendingNotifications(): void {
+    if (this.pendingNotifications.length === 0) return
+    const queued = this.pendingNotifications.splice(0)
+    for (const { title } of queued) {
+      this.displayNotification(title)
+    }
+    this.showPrompt()
+  }
+
   private async handleMessage(content: string): Promise<void> {
     const callbacks = this.getCallbacks()
     this.isStreaming = false
+    this.isProcessing = true
 
     try {
       await this.session.sendMessage(content, callbacks)
@@ -296,13 +338,20 @@ export class ChatTUI {
       } else {
         console.log(chalk.red(`  Error: ${err.message}`))
       }
+    } finally {
+      this.isProcessing = false
+      this.flushPendingNotifications()
     }
   }
 
   private printHeader(): void {
     console.log('')
     console.log(chalk.bold.cyan(`  ╔═══════════════════════════════════════╗`))
-    console.log(chalk.bold.cyan(`  ║`) + chalk.bold(`     Vultisig Agent - ${this.vaultName}`.padEnd(38).slice(0, 38)) + chalk.bold.cyan(`║`))
+    console.log(
+      chalk.bold.cyan(`  ║`) +
+        chalk.bold(`     Vultisig Agent - ${this.vaultName}`.padEnd(38).slice(0, 38)) +
+        chalk.bold.cyan(`║`)
+    )
     console.log(chalk.bold.cyan(`  ╚═══════════════════════════════════════╝`))
     console.log('')
   }
@@ -361,17 +410,19 @@ export class ChatTUI {
  * Convert basic markdown to terminal-styled text using chalk.
  */
 function renderMarkdown(text: string): string {
-  return text
-    // Bold: **text** or __text__
-    .replace(/\*\*(.+?)\*\*/g, (_m, p1) => chalk.bold(p1))
-    .replace(/__(.+?)__/g, (_m, p1) => chalk.bold(p1))
-    // Italic: *text* or _text_ (but not inside words like contract_address)
-    .replace(/(?<!\w)\*([^*]+?)\*(?!\w)/g, (_m, p1) => chalk.italic(p1))
-    .replace(/(?<!\w)_([^_]+?)_(?!\w)/g, (_m, p1) => chalk.italic(p1))
-    // Inline code: `text`
-    .replace(/`([^`]+?)`/g, (_m, p1) => chalk.cyan(p1))
-    // Links: [text](url)
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, p1, p2) => `${p1} ${chalk.blue.underline(`(${p2})`)}`)
+  return (
+    text
+      // Bold: **text** or __text__
+      .replace(/\*\*(.+?)\*\*/g, (_m, p1) => chalk.bold(p1))
+      .replace(/__(.+?)__/g, (_m, p1) => chalk.bold(p1))
+      // Italic: *text* or _text_ (but not inside words like contract_address)
+      .replace(/(?<!\w)\*([^*]+?)\*(?!\w)/g, (_m, p1) => chalk.italic(p1))
+      .replace(/(?<!\w)_([^_]+?)_(?!\w)/g, (_m, p1) => chalk.italic(p1))
+      // Inline code: `text`
+      .replace(/`([^`]+?)`/g, (_m, p1) => chalk.cyan(p1))
+      // Links: [text](url)
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, p1, p2) => `${p1} ${chalk.blue.underline(`(${p2})`)}`)
+  )
 }
 
 function summarizeData(data: Record<string, unknown>): string {

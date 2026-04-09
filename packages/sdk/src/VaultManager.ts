@@ -11,7 +11,7 @@ import { VaultData } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
-import { VaultImportError, VaultImportErrorCode } from './vault/VaultError'
+import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './vault/VaultError'
 
 /**
  * VaultManager handles vault lifecycle operations
@@ -63,6 +63,16 @@ export class VaultManager {
    * Returns appropriate subclass based on vault type
    */
   createVaultInstance(vaultData: VaultData): VaultBase {
+    // Fail early if vault is encrypted but no password callback provided
+    if (vaultData.isEncrypted && !this.context.config.onPasswordRequired) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Vault "${vaultData.name}" is password-protected but no onPasswordRequired callback was provided. ` +
+          'Pass onPasswordRequired in the Vultisig constructor: ' +
+          'new Vultisig({ onPasswordRequired: async () => password })'
+      )
+    }
+
     const vaultContext = this.createVaultContext()
 
     // Factory pattern - return appropriate subclass based on vault type
@@ -243,7 +253,13 @@ export class VaultManager {
       const vaultData = await this.storage.get<VaultData>(key)
 
       if (vaultData) {
-        vaults.push(this.createVaultInstance(vaultData))
+        try {
+          vaults.push(this.createVaultInstance(vaultData))
+        } catch {
+          // Skip vaults that can't be instantiated (e.g., encrypted vault
+          // without onPasswordRequired). They're still accessible individually
+          // via getVaultById() once the callback is provided.
+        }
       }
     }
 

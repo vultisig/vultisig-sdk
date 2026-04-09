@@ -13,9 +13,19 @@ import { AUTO_EXECUTE_ACTIONS, PASSWORD_REQUIRED_ACTIONS } from './types'
 
 // EVM chains that use nonce-based transaction ordering
 const EVM_CHAINS = new Set<string>([
-  'Ethereum', 'BSC', 'Polygon', 'Avalanche', 'Arbitrum',
-  'Optimism', 'Base', 'Blast', 'Zksync', 'Mantle',
-  'CronosChain', 'Hyperliquid', 'Sei',
+  'Ethereum',
+  'BSC',
+  'Polygon',
+  'Avalanche',
+  'Arbitrum',
+  'Optimism',
+  'Base',
+  'Blast',
+  'Zksync',
+  'Mantle',
+  'CronosChain',
+  'Hyperliquid',
+  'Sei',
 ])
 
 // Public RPC endpoints for refreshing gas estimates before signing.
@@ -60,7 +70,8 @@ export class AgentExecutor {
   /** Held chain lock release functions, keyed by chain name */
   private chainLockReleases = new Map<string, () => Promise<void>>()
   /** Backend client for resolving calldata_id references. */
-  private backendClient: { getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }> } | null = null
+  private backendClient: { getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }> } | null =
+    null
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string) {
     this.vault = vault
@@ -83,7 +94,10 @@ export class AgentExecutor {
    * This allows sign_tx to find and sign it when the backend requests signing.
    */
   storeServerTransaction(txReadyData: any): void {
-    if (this.verbose) process.stderr.write(`[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`)
+    if (this.verbose)
+      process.stderr.write(
+        `[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`
+      )
     const swapTx = txReadyData.swap_tx || txReadyData.send_tx || txReadyData.tx
     if (!swapTx) {
       if (this.verbose) process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx found in data\n`)
@@ -101,7 +115,10 @@ export class AgentExecutor {
       timestamp: Date.now(),
     })
 
-    if (this.verbose) process.stderr.write(`[executor] Stored server tx for chain ${chain}, pendingPayloads size=${this.pendingPayloads.size}\n`)
+    if (this.verbose)
+      process.stderr.write(
+        `[executor] Stored server tx for chain ${chain}, pendingPayloads size=${this.pendingPayloads.size}\n`
+      )
   }
 
   hasPendingTransaction(): boolean {
@@ -385,7 +402,8 @@ export class AgentExecutor {
   }
 
   private async buildSwapTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    if (this.verbose) process.stderr.write(`[build_swap_tx] called with params: ${JSON.stringify(params).slice(0, 500)}\n`)
+    if (this.verbose)
+      process.stderr.write(`[build_swap_tx] called with params: ${JSON.stringify(params).slice(0, 500)}\n`)
     const fromChainName = (params.from_chain || params.chain) as string
     const toChainName = params.to_chain as string
     const fromChain = resolveChain(fromChainName)
@@ -432,8 +450,18 @@ export class AgentExecutor {
       // Store payload only after build fully succeeds (including hash extraction)
       this.pendingPayloads.clear()
       const payloadId = `swap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      this.pendingPayloads.set(payloadId, { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
-      this.pendingPayloads.set('latest', { payload, coin: { chain, address: '', decimals: 18, ticker: fromSymbol }, chain, timestamp: Date.now() })
+      this.pendingPayloads.set(payloadId, {
+        payload,
+        coin: { chain, address: '', decimals: 18, ticker: fromSymbol },
+        chain,
+        timestamp: Date.now(),
+      })
+      this.pendingPayloads.set('latest', {
+        payload,
+        coin: { chain, address: '', decimals: 18, ticker: fromSymbol },
+        chain,
+        timestamp: Date.now(),
+      })
 
       return {
         keysign_payload: payloadId,
@@ -506,7 +534,7 @@ export class AgentExecutor {
       const provided = Object.keys(params).join(', ')
       throw new Error(
         `build_custom_tx requires function_name and params for contract calls. ` +
-        `Got: ${provided}. Missing: function_name, params.`
+          `Got: ${provided}. Missing: function_name, params.`
       )
     }
 
@@ -531,7 +559,10 @@ export class AgentExecutor {
     // ABI-encode the function call
     const calldata = await encodeContractCall(functionName, typedParams || [])
 
-    if (this.verbose) process.stderr.write(`[build_contract_tx] ${functionName}(${(typedParams || []).map(p => p.type).join(',')}) on ${contractAddress} chain=${chain}\n`)
+    if (this.verbose)
+      process.stderr.write(
+        `[build_contract_tx] ${functionName}(${(typedParams || []).map(p => p.type).join(',')}) on ${contractAddress} chain=${chain}\n`
+      )
 
     // Store as server-style tx and sign via the proven signServerTx path
     const serverTxData = {
@@ -562,7 +593,8 @@ export class AgentExecutor {
 
   private async signTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (this.verbose) process.stderr.write(`[sign_tx] params: ${JSON.stringify(params).slice(0, 500)}\n`)
-    if (this.verbose) process.stderr.write(`[sign_tx] pendingPayloads keys: ${[...this.pendingPayloads.keys()].join(', ')}\n`)
+    if (this.verbose)
+      process.stderr.write(`[sign_tx] pendingPayloads keys: ${[...this.pendingPayloads.keys()].join(', ')}\n`)
 
     // Find the pending payload
     const payloadId = (params.keysign_payload || params.payload_id || 'latest') as string
@@ -587,7 +619,8 @@ export class AgentExecutor {
           // Only fall back if the error is from the quote/prepare phase (before signing).
           // Sign/broadcast errors must propagate — retrying could double-submit on-chain.
           if (e._phase === 'prepare') {
-            if (this.verbose) process.stderr.write(`[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`)
+            if (this.verbose)
+              process.stderr.write(`[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`)
           } else {
             throw e
           }
@@ -603,11 +636,7 @@ export class AgentExecutor {
   /**
    * Sign and broadcast an SDK-built transaction (keysign payload from local build methods).
    */
-  private async signSdkTx(
-    payload: any,
-    chain: Chain,
-    _payloadId: string
-  ): Promise<Record<string, unknown>> {
+  private async signSdkTx(payload: any, chain: Chain, _payloadId: string): Promise<Record<string, unknown>> {
     try {
       // Unlock vault if needed
       if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
@@ -705,7 +734,10 @@ export class AgentExecutor {
       const amount = BigInt(swapTx.value || '0')
       const hasCalldata = !!(swapTx.data && swapTx.data !== '0x')
 
-      if (this.verbose) process.stderr.write(`[sign_server_tx] chain=${chain}, to=${swapTx.to}, value=${swapTx.value}, amount=${amount}, hasCalldata=${hasCalldata}\n`)
+      if (this.verbose)
+        process.stderr.write(
+          `[sign_server_tx] chain=${chain}, to=${swapTx.to}, value=${swapTx.value}, amount=${amount}, hasCalldata=${hasCalldata}\n`
+        )
 
       // Unlock vault if needed
       if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
@@ -717,7 +749,7 @@ export class AgentExecutor {
       // Build keysign payload using prepareSendTx - memo field carries EVM calldata
       // For 0-value contract calls (e.g. approve), use a tiny amount to bypass the SDK's
       // refineKeysignAmount check, then patch toAmount back to "0" after building.
-      const buildAmount = (amount === 0n && hasCalldata) ? 1n : amount
+      const buildAmount = amount === 0n && hasCalldata ? 1n : amount
       const keysignPayload = await this.vault.prepareSendTx({
         coin,
         receiver: swapTx.to,
@@ -800,9 +832,7 @@ export class AgentExecutor {
    * Build, sign, and broadcast a Solana swap locally using the SDK's swap flow.
    * Uses swap params from the tx_ready event to call vault.getSwapQuote → prepareSwapTx.
    */
-  private async buildAndSignSolanaSwapLocally(
-    serverTxData: any
-  ): Promise<Record<string, unknown>> {
+  private async buildAndSignSolanaSwapLocally(serverTxData: any): Promise<Record<string, unknown>> {
     const fromChainName = serverTxData.from_chain || serverTxData.chain || 'Solana'
     const toChainName = serverTxData.to_chain as string | undefined
     const fromChain = resolveChain(fromChainName)
@@ -812,12 +842,18 @@ export class AgentExecutor {
     if (!toChain) throw Object.assign(new Error(`Unknown to_chain: ${toChainName}`), { _phase: 'prepare' })
 
     const amountStr = serverTxData.amount as string
-    if (!amountStr) throw Object.assign(new Error('Missing amount in tx_ready data for local Solana swap build'), { _phase: 'prepare' })
+    if (!amountStr)
+      throw Object.assign(new Error('Missing amount in tx_ready data for local Solana swap build'), {
+        _phase: 'prepare',
+      })
 
     const fromToken = serverTxData.from_address as string | undefined
     const toToken = serverTxData.to_address as string | undefined
     const fromDecimals = serverTxData.from_decimals as number | undefined
-    if (fromDecimals == null) throw Object.assign(new Error('Missing from_decimals in tx_ready data for local Solana swap build'), { _phase: 'prepare' })
+    if (fromDecimals == null)
+      throw Object.assign(new Error('Missing from_decimals in tx_ready data for local Solana swap build'), {
+        _phase: 'prepare',
+      })
 
     const fromCoin = { chain: fromChain, token: fromToken || undefined }
     const toCoin = { chain: toChain, token: toToken || undefined }
@@ -825,7 +861,10 @@ export class AgentExecutor {
     // Convert base units to human-readable amount (vault.getSwapQuote expects human-readable)
     const humanAmount = Number(amountStr) / Math.pow(10, fromDecimals)
 
-    if (this.verbose) process.stderr.write(`[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountStr}\n`)
+    if (this.verbose)
+      process.stderr.write(
+        `[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountStr}\n`
+      )
 
     // Unlock vault if needed
     if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
@@ -942,7 +981,10 @@ export class AgentExecutor {
       const pendingNonce = await this.fetchEvmPendingNonce(chain)
       if (pendingNonce !== null && pendingNonce === rpcNonce) {
         // No pending txs — local state is stale (txs were dropped from mempool)
-        if (this.verbose) process.stderr.write(`[nonce] Stale local state for ${chain}: local=${nextNonce}, on-chain=${rpcNonce}, no pending txs — using on-chain nonce\n`)
+        if (this.verbose)
+          process.stderr.write(
+            `[nonce] Stale local state for ${chain}: local=${nextNonce}, on-chain=${rpcNonce}, no pending txs — using on-chain nonce\n`
+          )
         this.stateStore.clearEvmState(chain)
         return
       }
@@ -951,7 +993,10 @@ export class AgentExecutor {
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
       if (pendingNonce === null && nonceGap > 3n) {
-        if (this.verbose) process.stderr.write(`[nonce] Large nonce gap for ${chain} (${nonceGap}) and couldn't verify pending txs — using on-chain nonce ${rpcNonce}\n`)
+        if (this.verbose)
+          process.stderr.write(
+            `[nonce] Large nonce gap for ${chain} (${nonceGap}) and couldn't verify pending txs — using on-chain nonce ${rpcNonce}\n`
+          )
         this.stateStore.clearEvmState(chain)
         return
       }
@@ -987,7 +1032,7 @@ export class AgentExecutor {
         }),
         signal: AbortSignal.timeout(5000),
       })
-      const data = await res.json() as any
+      const data = (await res.json()) as any
       const baseFee = BigInt(data.result?.baseFeePerGas || '0')
       if (baseFee === 0n) return
 
@@ -1001,7 +1046,10 @@ export class AgentExecutor {
 
       if (currentMaxFee < minMaxFee) {
         bs.value.maxFeePerGasWei = minMaxFee.toString()
-        if (this.verbose) process.stderr.write(`[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${minMaxFee} (baseFee=${baseFee})\n`)
+        if (this.verbose)
+          process.stderr.write(
+            `[gas] Bumped ${chain} maxFeePerGas: ${currentMaxFee} → ${minMaxFee} (baseFee=${baseFee})\n`
+          )
       }
     } catch {
       // Non-fatal — keep the original gas estimate
@@ -1030,7 +1078,7 @@ export class AgentExecutor {
         }),
         signal: AbortSignal.timeout(5000),
       })
-      const data = await res.json() as any
+      const data = (await res.json()) as any
       return BigInt(data.result || '0')
     } catch {
       return null
@@ -1136,7 +1184,8 @@ export class AgentExecutor {
       chain,
     })
 
-    if (this.verbose) process.stderr.write(`[sign_typed_data] signed, format=${sigResult.format}, recovery=${sigResult.recovery}\n`)
+    if (this.verbose)
+      process.stderr.write(`[sign_typed_data] signed, format=${sigResult.format}, recovery=${sigResult.recovery}\n`)
 
     const { r, s } = parseDERSignature(sigResult.signature)
     const v = (sigResult.recovery ?? 0) + 27
@@ -1183,12 +1232,14 @@ export class AgentExecutor {
 
   private async listVaults(): Promise<Record<string, unknown>> {
     return {
-      vaults: [{
-        name: this.vault.name,
-        id: this.vault.id,
-        type: this.vault.type,
-        chains: this.vault.chains.map(c => c.toString()),
-      }],
+      vaults: [
+        {
+          name: this.vault.name,
+          id: this.vault.id,
+          type: this.vault.type,
+          chains: this.vault.chains.map(c => c.toString()),
+        },
+      ],
     }
   }
 
@@ -1209,7 +1260,10 @@ export class AgentExecutor {
  * ABI-encode a contract function call from structured params.
  * Produces 4-byte selector + encoded arguments.
  */
-async function encodeContractCall(functionName: string, params: Array<{ type: string; value: string }>): Promise<string> {
+async function encodeContractCall(
+  functionName: string,
+  params: Array<{ type: string; value: string }>
+): Promise<string> {
   // Build the function signature: e.g. "approve(address,uint256)"
   // Strip existing parens if the LLM passed a full signature like "approve(address,uint256)"
   // to avoid doubling: "approve(address,uint256)(address,uint256)"
@@ -1429,10 +1483,7 @@ function hashType(
  * Encode a type string including referenced types, sorted alphabetically.
  * e.g. "Order(uint256 salt,address maker,...)"
  */
-function encodeType(
-  typeName: string,
-  types: Record<string, Array<{ name: string; type: string }>>
-): string {
+function encodeType(typeName: string, types: Record<string, Array<{ name: string; type: string }>>): string {
   const fields = getTypeFields(typeName, types)
   if (!fields) return ''
 
@@ -1535,7 +1586,7 @@ function encodeField(
     return keccak(new TextEncoder().encode(value as string))
   }
   if (type === 'bytes') {
-    const hex = (value as string).startsWith('0x') ? (value as string).slice(2) : value as string
+    const hex = (value as string).startsWith('0x') ? (value as string).slice(2) : (value as string)
     const bytes = hexToBytes(hex)
     return keccak(bytes)
   }
@@ -1565,7 +1616,7 @@ function encodeField(
   const result = new Uint8Array(32)
 
   if (type === 'address') {
-    const addr = (value as string).startsWith('0x') ? (value as string).slice(2) : value as string
+    const addr = (value as string).startsWith('0x') ? (value as string).slice(2) : (value as string)
     const bytes = hexToBytes(addr.toLowerCase())
     result.set(bytes, 32 - bytes.length)
     return result
@@ -1588,7 +1639,7 @@ function encodeField(
 
   if (type.startsWith('bytes')) {
     // Fixed-size bytes (bytes1..bytes32) — right-padded
-    const hex = (value as string).startsWith('0x') ? (value as string).slice(2) : value as string
+    const hex = (value as string).startsWith('0x') ? (value as string).slice(2) : (value as string)
     const bytes = hexToBytes(hex)
     result.set(bytes, 0) // right-padded, not left-padded
     return result

@@ -3,3 +3,5 @@ dist/
 packages/core/
 **/lib/
 archived/
+coverage/
+**/coverage/

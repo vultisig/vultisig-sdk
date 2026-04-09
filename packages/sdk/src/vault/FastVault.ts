@@ -289,10 +289,7 @@ export class FastVault extends VaultBase {
     this.coreVault.keyShareMldsa = result.keyshare
     ;(this.vaultData as { publicKeyMldsa?: string }).publicKeyMldsa = result.publicKey
     ;(this.vaultData as { keyShareMldsa?: string }).keyShareMldsa = result.keyshare
-    ;(this.vaultData as { vultFileContent: string }).vultFileContent = await createVaultBackup(
-      this.coreVault,
-      password
-    )
+    ;(this.vaultData as { vultFileContent: string }).vultFileContent = await createVaultBackup(this.coreVault, password)
 
     await this.save()
     this.emit('postQuantumKeysAdded', { vaultId: this.id })
@@ -504,6 +501,8 @@ export class FastVault extends VaultBase {
     vault.coreVault.localPartyId = vaultData.localPartyId
     vault.coreVault.libType = vaultData.libType
     vault.coreVault.createdAt = vaultData.createdAt
+    vault.coreVault.publicKeyMldsa = vaultData.publicKeyMldsa ?? vault.coreVault.publicKeyMldsa
+    vault.coreVault.keyShareMldsa = vaultData.keyShareMldsa ?? vault.coreVault.keyShareMldsa
 
     return vault
   }

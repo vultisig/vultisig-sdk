@@ -12,6 +12,8 @@ export default defineConfig({
       '@vultisig/lib-dkls': resolve(__dirname, '../../../lib/dkls'),
       '@vultisig/lib-mldsa': resolve(__dirname, '../../../lib/mldsa'),
       '@vultisig/lib-schnorr': resolve(__dirname, '../../../lib/schnorr'),
+      '@vultisig/mpc-types': resolve(__dirname, '../../../mpc-types/src'),
+      '@vultisig/mpc-wasm': resolve(__dirname, '../../../mpc-wasm/src'),
       '@tests': resolve(__dirname, '..'),
       '@fixtures': resolve(__dirname, '../fixtures'),
       '@mocks': resolve(__dirname, './mocks'),

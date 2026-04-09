@@ -86,6 +86,9 @@ credentials.json
 mcp.json
 task.md
 
+# Local agent handoff tasks (do not commit)
+tasks/
+
 # Playwright CLI (local snapshots / session artifacts)
 .playwright-cli/
 
@@ -104,3 +107,5 @@ upstream/
 
 # Local trading bot (not part of SDK)
 packages/trading-bot/
+.beads/
+packages/expo-mpc/
