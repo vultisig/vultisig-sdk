@@ -152,13 +152,27 @@ export class AgentClient {
     let currentEvent = ''
     let currentData = ''
 
-    const flushEvent = (): void => {
-      if (currentData) {
-        // SSE spec: default event type is "message" when no event: field is present
-        this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
+    /** Strip optional single leading space from an SSE field value per spec. */
+    const stripLeadingSpace = (v: string): string => (v[0] === ' ' ? v.slice(1) : v)
+
+    const processLine = (raw: string): void => {
+      const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
+      if (line.startsWith('event:')) {
+        currentEvent = stripLeadingSpace(line.slice(6)).trim()
+      } else if (line.startsWith('data:')) {
+        currentData += (currentData ? '\n' : '') + stripLeadingSpace(line.slice(5))
+      } else if (line === '') {
+        // Empty line = end of event
+        if (currentData) {
+          // SSE spec: default event type is "message" when no event: field is present
+          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
+        }
+        currentEvent = ''
+        currentData = ''
       }
-      currentEvent = ''
-      currentData = ''
+      // Lines starting with ':' are SSE comments (pings) - ignore.
+      // id: and retry: fields are also ignored (no reconnection support).
+      // Bare \r line endings are unsupported (only \n and \r\n).
     }
 
     try {
@@ -174,34 +188,16 @@ export class AgentClient {
         buffer = done ? '' : trailing
 
         for (const rawLine of lines) {
-          const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
-          if (line.startsWith('event:')) {
-            // SSE spec: strip optional single leading space from value
-            const value = line.slice(6)
-            currentEvent = (value.startsWith(' ') ? value.slice(1) : value).trim()
-          } else if (line.startsWith('data:')) {
-            const value = line.slice(5)
-            currentData += (currentData ? '\n' : '') + (value.startsWith(' ') ? value.slice(1) : value)
-          } else if (line === '') {
-            // Empty line = end of event
-            flushEvent()
-          } else if (line.startsWith(':')) {
-            // SSE comment (ping), ignore
-          }
+          processLine(rawLine)
         }
 
         if (done) {
-          if (trailing) {
-            const line = trailing.endsWith('\r') ? trailing.slice(0, -1) : trailing
-            if (line.startsWith('event:')) {
-              const value = line.slice(6)
-              currentEvent = (value.startsWith(' ') ? value.slice(1) : value).trim()
-            } else if (line.startsWith('data:')) {
-              const value = line.slice(5)
-              currentData += (currentData ? '\n' : '') + (value.startsWith(' ') ? value.slice(1) : value)
-            }
+          // Process any trailing content that wasn't newline-terminated
+          if (trailing) processLine(trailing)
+          // Flush any pending event (stream ended without final blank line)
+          if (currentData) {
+            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
           }
-          flushEvent()
           break
         }
       }
@@ -269,7 +265,7 @@ export class AgentClient {
       }
     } catch (e) {
       if (e instanceof SyntaxError) {
-        // Malformed JSON in SSE data, skip
+        if (this.verbose) process.stderr.write(`[SSE] skipping malformed JSON: ${data.slice(0, 200)}\n`)
       } else {
         throw e
       }

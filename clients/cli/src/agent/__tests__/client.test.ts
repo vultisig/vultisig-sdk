@@ -138,4 +138,34 @@ describe('AgentClient.sendMessageStream', () => {
     expect(result.message?.content).toBe('hi')
     expect(onMessage).toHaveBeenCalledTimes(1)
   })
+
+  it('concatenates multi-line data: fields with newline separator', async () => {
+    globalThis.fetch = mockFetchSSE(['event: text_delta\ndata: {"delta":\ndata: "hi"}\n\n'])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    // Multi-line data: fields are joined with \n, producing {"delta":\n"hi"} which is valid JSON
+    expect(result.fullText).toBe('hi')
+  })
+
+  it('fires onError callback for error events', async () => {
+    const onError = vi.fn()
+
+    globalThis.fetch = mockFetchSSE(['event: error\ndata: {"error":"something broke"}\n\n'])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onError })
+
+    expect(onError).toHaveBeenCalledWith('something broke')
+  })
+
+  it('ignores bare colon comment lines', async () => {
+    globalThis.fetch = mockFetchSSE([':\nevent: text_delta\ndata: {"delta":"hi"}\n\n'])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.fullText).toBe('hi')
+  })
 })
