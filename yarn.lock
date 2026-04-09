@@ -7656,6 +7656,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/walletcore-native@workspace:packages/walletcore-native"
   dependencies:
+    "@noble/hashes": "npm:^1.8.0"
     expo: "npm:>=51.0.0"
   peerDependencies:
     expo: ">=51.0.0"
