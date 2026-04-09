@@ -169,9 +169,10 @@ export class AgentClient {
         }
         currentEvent = ''
         currentData = ''
+      } else if (line[0] === ':') {
+        // SSE comment (keep-alive ping) - ignore
       }
-      // Lines starting with ':' are SSE comments (pings) - ignore.
-      // id: and retry: fields are also ignored (no reconnection support).
+      // Unknown fields (id:, retry:, etc.) silently ignored - no reconnection support.
       // Bare \r line endings are unsupported (only \n and \r\n).
     }
 
@@ -228,8 +229,10 @@ export class AgentClient {
 
       switch (event) {
         case 'text_delta':
-          result.fullText += parsed.delta
-          callbacks.onTextDelta?.(parsed.delta)
+          if (typeof parsed.delta === 'string') {
+            result.fullText += parsed.delta
+            callbacks.onTextDelta?.(parsed.delta)
+          }
           break
         case 'tool_progress':
           if (this.verbose) process.stderr.write(`[SSE:tool_progress] raw: ${data.slice(0, 1000)}\n`)
