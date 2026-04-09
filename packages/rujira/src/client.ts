@@ -8,7 +8,10 @@ import { RujiraDiscovery } from './discovery/discovery.js'
 import { RujiraError, RujiraErrorCode, wrapError } from './errors.js'
 import { RujiraAssets } from './modules/assets.js'
 import { RujiraDeposit } from './modules/deposit.js'
+import { RujiraGhost } from './modules/ghost.js'
 import { RujiraOrderbook } from './modules/orderbook.js'
+import { RujiraPerps } from './modules/perps.js'
+import { RujiraStaking } from './modules/staking.js'
 import { RujiraSwap, type RujiraSwapOptions } from './modules/swap.js'
 import { RujiraWithdraw } from './modules/withdraw.js'
 import type { RujiraSigner } from './signer/types.js'
@@ -36,6 +39,9 @@ export class RujiraClient {
   public readonly assets: RujiraAssets
   public readonly deposit: RujiraDeposit
   public readonly withdraw: RujiraWithdraw
+  public readonly staking: RujiraStaking
+  public readonly ghost: RujiraGhost
+  public readonly perps: RujiraPerps
   public readonly discovery: RujiraDiscovery
 
   private queryClient: CosmWasmClient | null = null
@@ -71,6 +77,9 @@ export class RujiraClient {
     this.assets = new RujiraAssets(this)
     this.deposit = new RujiraDeposit(this)
     this.withdraw = new RujiraWithdraw(this)
+    this.staking = new RujiraStaking(this)
+    this.ghost = new RujiraGhost(this)
+    this.perps = new RujiraPerps(this)
 
     this.discovery = new RujiraDiscovery({
       rpcEndpoint: this.config.rpcEndpoint,
