@@ -80,22 +80,34 @@ export const searchToken = async (query: string, limit = 10): Promise<TokenSearc
   const coins = searchResponse.coins.slice(0, limit)
   if (coins.length === 0) return []
 
-  // Fetch detail for each coin concurrently to get contract addresses
-  const details = await Promise.allSettled(
-    coins.map(coin =>
-      queryUrl<CoinGeckoDetailResponse>(
-        `${coingeckoApiUrl}/coins/${coin.id}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`
+  // Batch-fetch detail for all coins in chunks of 5 to avoid rate-limiting.
+  // Each detail call fetches contract addresses across all platforms.
+  const chunkSize = 5
+  const detailMap = new Map<string, CoinGeckoDetailResponse>()
+
+  for (let i = 0; i < coins.length; i += chunkSize) {
+    const chunk = coins.slice(i, i + chunkSize)
+    const results = await Promise.allSettled(
+      chunk.map(coin =>
+        queryUrl<CoinGeckoDetailResponse>(
+          `${coingeckoApiUrl}/coins/${coin.id}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`
+        )
       )
     )
-  )
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j]
+      if (result?.status === 'fulfilled' && result.value && typeof result.value !== 'string') {
+        detailMap.set(chunk[j].id, result.value)
+      }
+    }
+  }
 
-  return coins.map((coin, i) => {
-    const detail = details[i]
+  return coins.map(coin => {
     const deployments: TokenDeployment[] = []
+    const detail = detailMap.get(coin.id)
 
-    if (detail?.status === 'fulfilled' && detail.value && typeof detail.value !== 'string') {
-      const platforms = detail.value.detail_platforms
-      for (const [platform, info] of Object.entries(platforms)) {
+    if (detail) {
+      for (const [platform, info] of Object.entries(detail.detail_platforms)) {
         if (!info.contract_address) continue
         const chain = platformToChain[platform]
         if (!chain) continue

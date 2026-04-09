@@ -6,8 +6,8 @@ import { getWalletCore } from '../../context/wasmRuntime'
 
 type DeriveAddressFromKeysInput = {
   chain: Chain
-  ecdsaPublicKey: string
-  eddsaPublicKey: string
+  ecdsaPublicKey?: string
+  eddsaPublicKey?: string
   hexChainCode: string
 }
 
@@ -58,8 +58,8 @@ export const deriveAddressFromKeys = async (
       walletCore,
       hexChainCode: input.hexChainCode,
       publicKeys: {
-        ecdsa: input.ecdsaPublicKey,
-        eddsa: input.eddsaPublicKey,
+        ecdsa: input.ecdsaPublicKey ?? '',
+        eddsa: input.eddsaPublicKey ?? '',
       },
     })
   } catch (err) {

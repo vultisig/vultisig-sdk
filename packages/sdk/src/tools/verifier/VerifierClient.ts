@@ -35,7 +35,10 @@ type BillingStatus = {
  * ```
  */
 export class VerifierClient {
-  constructor(private readonly baseUrl: string = 'https://api.vultisig.com/verifier') {}
+  constructor(
+    private readonly baseUrl: string = 'https://api.vultisig.com/verifier',
+    private readonly serviceKey: string = 'sdk'
+  ) {}
 
   /**
    * Fetch plugin configuration schema (supported resources, examples).
@@ -68,7 +71,7 @@ export class VerifierClient {
   async checkPluginInstalled(pluginId: string, publicKeyECDSA: string): Promise<PluginInstallStatus> {
     const result = await queryUrl<PluginInstallStatus>(
       `${this.baseUrl}/service/plugins/installed?public_key=${encodeURIComponent(publicKeyECDSA)}&plugin_id=${encodeURIComponent(pluginId)}`,
-      { headers: { 'X-Service-Key': 'sdk' } }
+      { headers: { 'X-Service-Key': this.serviceKey } }
     )
     if (!result || typeof result === 'string') {
       throw new Error(`Failed to check plugin install status: ${pluginId}`)
@@ -82,7 +85,7 @@ export class VerifierClient {
   async checkBillingStatus(publicKeyECDSA: string): Promise<BillingStatus> {
     const result = await queryUrl<BillingStatus>(
       `${this.baseUrl}/service/fee/status?public_key=${encodeURIComponent(publicKeyECDSA)}`,
-      { headers: { 'X-Service-Key': 'sdk' } }
+      { headers: { 'X-Service-Key': this.serviceKey } }
     )
     if (!result || typeof result === 'string') {
       throw new Error(`Failed to check billing status`)

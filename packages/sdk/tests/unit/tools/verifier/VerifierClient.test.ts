@@ -88,8 +88,23 @@ describe('VerifierClient', () => {
   describe('custom base URL', () => {
     it('uses default URL when none provided', () => {
       const defaultClient = new VerifierClient()
-      // Just verify it constructs without error
       expect(defaultClient).toBeDefined()
+    })
+  })
+
+  describe('custom service key', () => {
+    it('uses custom service key in headers', async () => {
+      const customClient = new VerifierClient('http://localhost:8080', 'my-service')
+      mockQueryUrl.mockResolvedValue({ installed: true })
+
+      await customClient.checkPluginInstalled('my-plugin', '04abc123')
+
+      expect(mockQueryUrl).toHaveBeenCalledWith(
+        expect.stringContaining('public_key=04abc123'),
+        expect.objectContaining({
+          headers: { 'X-Service-Key': 'my-service' },
+        })
+      )
     })
   })
 })
