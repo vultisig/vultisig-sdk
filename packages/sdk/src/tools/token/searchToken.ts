@@ -69,11 +69,18 @@ type CoinGeckoDetailResponse = {
  * ```
  */
 export const searchToken = async (query: string, limit = 10): Promise<TokenSearchResult[]> => {
-  const searchResponse = await queryUrl<CoinGeckoSearchResponse>(
-    `${coingeckoApiUrl}/search?query=${encodeURIComponent(query)}`
-  )
+  let searchResponse: CoinGeckoSearchResponse
+  try {
+    const result = await queryUrl<CoinGeckoSearchResponse>(
+      `${coingeckoApiUrl}/search?query=${encodeURIComponent(query)}`
+    )
+    if (!result || typeof result === 'string') return []
+    searchResponse = result
+  } catch {
+    return []
+  }
 
-  if (!searchResponse || typeof searchResponse === 'string') {
+  if (!Array.isArray(searchResponse.coins)) {
     return []
   }
 
