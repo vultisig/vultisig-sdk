@@ -148,25 +148,16 @@ export const keysign = async ({
         continue
       }
 
-      if (
-        session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
-      ) {
+      const accepted = session.inputMessage(
+        fromMpcServerMessage(msg.body, hexEncryptionKey)
+      )
+      if (accepted) {
         processedMessages[cacheKey] = true
         return
       }
-      processedMessages[cacheKey] = true
-      await ignorePromiseOutcome(
-        transformError(
-          deleteMpcRelayMessage({
-            serverUrl,
-            localPartyId,
-            sessionId,
-            messageHash: msg.hash,
-            messageId,
-          }),
-          prefixErrorWith('Failed to delete MPC relay message')
-        )
-      )
+      // Do NOT mark as processed when inputMessage returns false — the
+      // message may need to be retried in a later iteration when the
+      // session is in a different state.
     }
 
     return processInbound()

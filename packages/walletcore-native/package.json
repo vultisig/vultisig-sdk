@@ -11,6 +11,9 @@
     "android",
     "expo-module.config.json"
   ],
+  "dependencies": {
+    "@noble/hashes": "^1.8.0"
+  },
   "peerDependencies": {
     "expo": ">=51.0.0"
   },

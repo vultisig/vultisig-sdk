@@ -32,9 +32,49 @@ class ExpoWalletCoreModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ExpoWalletCore")
 
-        // CoinType
+        // CoinType — map camelCase names from TS to WalletCore enum values.
+        // Uses an explicit mapping (like iOS) instead of valueOf() to avoid
+        // casing mismatches (e.g. "bitcoinCash".uppercase() → "BITCOINCASH" ≠ "BITCOIN_CASH").
         Function("coinTypeValue") { name: String ->
-            CoinType.valueOf(name.uppercase()).value()
+            val mapping = mapOf(
+                "bitcoin" to CoinType.BITCOIN,
+                "litecoin" to CoinType.LITECOIN,
+                "dogecoin" to CoinType.DOGECOIN,
+                "dash" to CoinType.DASH,
+                "ethereum" to CoinType.ETHEREUM,
+                "cosmos" to CoinType.COSMOS,
+                "zcash" to CoinType.ZCASH,
+                "ripple" to CoinType.XRP,
+                "xrp" to CoinType.XRP,
+                "bitcoinCash" to CoinType.BITCOINCASH,
+                "tron" to CoinType.TRON,
+                "terra" to CoinType.TERRA,
+                "polkadot" to CoinType.POLKADOT,
+                "ton" to CoinType.TON,
+                "solana" to CoinType.SOLANA,
+                "thorchain" to CoinType.THORCHAIN,
+                "sui" to CoinType.SUI,
+                "cardano" to CoinType.CARDANO,
+                "smartChain" to CoinType.SMARTCHAIN,
+                "arbitrum" to CoinType.ARBITRUM,
+                "avalancheCChain" to CoinType.AVALANCHECCHAIN,
+                "base" to CoinType.BASE,
+                "polygon" to CoinType.POLYGON,
+                "optimism" to CoinType.OPTIMISM,
+                "cronosChain" to CoinType.CRONOSCHAIN,
+                "blast" to CoinType.BLAST,
+                "zksync" to CoinType.ZKSYNC,
+                "osmosis" to CoinType.OSMOSIS,
+                "terraV2" to CoinType.TERRAV2,
+                "noble" to CoinType.NOBLE,
+                "kujira" to CoinType.KUJIRA,
+                "dydx" to CoinType.DYDX,
+                "akash" to CoinType.AKASH,
+                "mantle" to CoinType.MANTLE,
+                "sei" to CoinType.SEI,
+            )
+            val ct = mapping[name] ?: throw Exception("Unknown CoinType name: $name")
+            ct.value()
         }
 
         // CoinTypeExt
@@ -103,14 +143,15 @@ class ExpoWalletCoreModule : Module() {
             AnyAddress.isValidBech32(address, CoinType.createFromValue(coinType), hrp)
         }
 
-        // KNOWN LIMITATION: ss58Prefix parameter is IGNORED on Android.
         // The Trust Wallet Core Android JNI binding does not expose an SS58-prefix
-        // overload on AnyAddress. This falls back to the generic isValid check, which
-        // uses the coin's default SS58 prefix. This means validation may accept
-        // addresses with a different SS58 prefix than expected.
-        // TODO(walletcore-android): Pass ss58Prefix once the JNI binding supports it.
-        Function("anyAddressIsValidSS58") { address: String, coinType: Int, _ss58Prefix: Int ->
-            AnyAddress.isValid(address, CoinType.createFromValue(coinType))
+        // overload on AnyAddress. Throw rather than returning a potentially incorrect
+        // result, so callers know this code path is not supported yet.
+        Function("anyAddressIsValidSS58") { _address: String, _coinType: Int, _ss58Prefix: Int ->
+            throw Exception(
+                "anyAddressIsValidSS58 is not supported on Android: the JNI binding " +
+                "does not expose an SS58-prefix overload. Use anyAddressIsValid as a " +
+                "fallback (ignores ss58Prefix) or implement a pure-Kotlin SS58 check."
+            )
         }
 
         Function("anyAddressCreateWithString") { address: String, coinType: Int ->

@@ -4,6 +4,7 @@
  * Native WalletCore bridge for React Native / Expo.
  * Provides a JS object matching the WalletCore API shape expected by the SDK.
  */
+import { keccak_256 } from '@noble/hashes/sha3'
 import ExpoWalletCore from './ExpoWalletCoreModule'
 
 // ---------------------------------------------------------------------------
@@ -38,6 +39,25 @@ export interface NativeHDWalletInstance {
   getKey(coinType: number, derivationPath: string): NativePrivateKeyInstance
   getAddressForCoin(coinType: number): string
   getExtendedPrivateKey(purpose: number, coinType: number, version: number): string
+  delete(): void
+}
+
+export interface NativeEthereumAbiFunctionInstance {
+  addParamUInt8(val: number, isOutput: boolean): number
+  addParamUInt16(val: number, isOutput: boolean): number
+  addParamUInt32(val: number, isOutput: boolean): number
+  addParamUInt64(val: number, isOutput: boolean): number
+  addParamUInt256(val: Uint8Array | Buffer, isOutput: boolean): number
+  addParamInt8(val: number, isOutput: boolean): number
+  addParamInt16(val: number, isOutput: boolean): number
+  addParamInt32(val: number, isOutput: boolean): number
+  addParamInt64(val: number, isOutput: boolean): number
+  addParamInt256(val: Uint8Array | Buffer, isOutput: boolean): number
+  addParamBool(val: boolean, isOutput: boolean): number
+  addParamString(val: string, isOutput: boolean): number
+  addParamAddress(val: Uint8Array | Buffer, isOutput: boolean): number
+  addParamBytes(val: Uint8Array | Buffer, isOutput: boolean): number
+  addParamBytesFix(size: number, val: Uint8Array | Buffer, isOutput: boolean): number
   delete(): void
 }
 
@@ -120,7 +140,12 @@ export interface WalletCoreLike {
     toUserFriendly(address: string): string
   }
 
+  EthereumAbiFunction: {
+    createWithString(name: string): NativeEthereumAbiFunctionInstance
+  }
+
   EthereumAbi: {
+    encode(fn: NativeEthereumAbiFunctionInstance): Uint8Array
     encodeTyped(messageJson: string): string
   }
 
@@ -420,6 +445,279 @@ class NativeAnyAddress implements NativeAnyAddressInstance {
 }
 
 // ---------------------------------------------------------------------------
+// ABI encoding helpers — pure JS implementation of Solidity ABI encoding.
+// Used by NativeEthereumAbiFunction to avoid bridging the full stateful
+// EthereumAbiFunction class through native modules.
+// ---------------------------------------------------------------------------
+
+type AbiParam =
+  | { type: 'address'; value: Uint8Array }
+  | { type: 'uint256'; value: Uint8Array }
+  | { type: 'int256'; value: Uint8Array }
+  | { type: 'uint8'; value: number }
+  | { type: 'uint16'; value: number }
+  | { type: 'uint32'; value: number }
+  | { type: 'uint64'; value: number }
+  | { type: 'int8'; value: number }
+  | { type: 'int16'; value: number }
+  | { type: 'int32'; value: number }
+  | { type: 'int64'; value: number }
+  | { type: 'bool'; value: boolean }
+  | { type: 'string'; value: string }
+  | { type: 'bytes'; value: Uint8Array }
+  | { type: `bytes${number}`; value: Uint8Array }
+
+/** Pad a Uint8Array to 32 bytes, left-aligned (for static types). */
+function padLeft(data: Uint8Array, len = 32): Uint8Array {
+  const padded = new Uint8Array(len)
+  padded.set(data, len - data.length)
+  return padded
+}
+
+/** Pad a Uint8Array to a multiple of 32 bytes, right-aligned (for dynamic data). */
+function padRight(data: Uint8Array): Uint8Array {
+  const paddedLen = Math.ceil(data.length / 32) * 32
+  const padded = new Uint8Array(paddedLen)
+  padded.set(data, 0)
+  return padded
+}
+
+function isDynamic(param: AbiParam): boolean {
+  return param.type === 'string' || param.type === 'bytes'
+}
+
+function abiTypeString(param: AbiParam): string {
+  return param.type
+}
+
+function uint256FromNumber(n: number): Uint8Array {
+  const buf = new Uint8Array(32)
+  // Write as big-endian — fit in last 8 bytes for safety
+  let val = BigInt(n)
+  for (let i = 31; i >= 0 && val > 0n; i--) {
+    buf[i] = Number(val & 0xffn)
+    val >>= 8n
+  }
+  return buf
+}
+
+function int256FromNumber(n: number): Uint8Array {
+  let val = BigInt(n)
+  if (val < 0n) {
+    // Two's complement for 256-bit
+    val = (1n << 256n) + val
+  }
+  const buf = new Uint8Array(32)
+  for (let i = 31; i >= 0; i--) {
+    buf[i] = Number(val & 0xffn)
+    val >>= 8n
+  }
+  return buf
+}
+
+/** Compute the 4-byte function selector: keccak256(signature)[:4]. */
+function functionSelector(name: string, params: AbiParam[]): Uint8Array {
+  const sig = `${name}(${params.map(abiTypeString).join(',')})`
+  return keccak_256(new TextEncoder().encode(sig)).slice(0, 4)
+}
+
+/** ABI-encode a function call: selector + encoded parameters. */
+function abiEncode(name: string, params: AbiParam[]): Uint8Array {
+  const selector = functionSelector(name, params)
+
+  // Head: for static types, the encoded value; for dynamic types, an offset pointer.
+  // Tail: dynamic type data appended after the head section.
+  const headParts: Uint8Array[] = []
+  const tailParts: Uint8Array[] = []
+
+  // The head section has 32 bytes per parameter.
+  let dynamicOffset = params.length * 32
+
+  for (const param of params) {
+    if (isDynamic(param)) {
+      // Head slot = offset to tail data
+      headParts.push(uint256FromNumber(dynamicOffset))
+
+      let encoded: Uint8Array
+      if (param.type === 'string') {
+        const strBytes = new TextEncoder().encode(param.value as string)
+        const lenSlot = uint256FromNumber(strBytes.length)
+        const paddedData = padRight(strBytes)
+        encoded = new Uint8Array(lenSlot.length + paddedData.length)
+        encoded.set(lenSlot, 0)
+        encoded.set(paddedData, lenSlot.length)
+      } else {
+        // bytes
+        const bytesVal = param.value as Uint8Array
+        const lenSlot = uint256FromNumber(bytesVal.length)
+        const paddedData = padRight(bytesVal)
+        encoded = new Uint8Array(lenSlot.length + paddedData.length)
+        encoded.set(lenSlot, 0)
+        encoded.set(paddedData, lenSlot.length)
+      }
+      tailParts.push(encoded)
+      dynamicOffset += encoded.length
+    } else {
+      // Static types — encode inline in head
+      let encoded: Uint8Array
+      switch (param.type) {
+        case 'address':
+          // Address is 20 bytes, left-padded to 32
+          encoded = padLeft(param.value as Uint8Array)
+          break
+        case 'uint256':
+          // Already big-endian bytes, pad to 32
+          encoded = padLeft(param.value as Uint8Array)
+          break
+        case 'int256':
+          encoded = padLeft(param.value as Uint8Array)
+          break
+        case 'bool':
+          encoded = uint256FromNumber(param.value ? 1 : 0)
+          break
+        case 'uint8':
+        case 'uint16':
+        case 'uint32':
+        case 'uint64':
+          encoded = uint256FromNumber(param.value as number)
+          break
+        case 'int8':
+        case 'int16':
+        case 'int32':
+        case 'int64':
+          encoded = int256FromNumber(param.value as number)
+          break
+        default:
+          if (param.type.startsWith('bytes')) {
+            // bytesN (fixed-size) — right-padded to 32
+            encoded = padRight(param.value as Uint8Array)
+          } else {
+            throw new Error(`Unsupported ABI param type: ${param.type}`)
+          }
+      }
+      headParts.push(encoded)
+    }
+  }
+
+  // Concatenate: selector + heads + tails
+  const totalLen =
+    selector.length +
+    headParts.reduce((sum, p) => sum + p.length, 0) +
+    tailParts.reduce((sum, p) => sum + p.length, 0)
+
+  const result = new Uint8Array(totalLen)
+  let offset = 0
+  result.set(selector, offset)
+  offset += selector.length
+  for (const part of headParts) {
+    result.set(part, offset)
+    offset += part.length
+  }
+  for (const part of tailParts) {
+    result.set(part, offset)
+    offset += part.length
+  }
+  return result
+}
+
+// ---------------------------------------------------------------------------
+// NativeEthereumAbiFunction — pure JS ABI function encoder
+// ---------------------------------------------------------------------------
+
+class NativeEthereumAbiFunction implements NativeEthereumAbiFunctionInstance {
+  readonly name: string
+  private params: AbiParam[] = []
+
+  constructor(name: string) {
+    this.name = name
+  }
+
+  addParamUInt8(val: number, _isOutput: boolean): number {
+    this.params.push({ type: 'uint8', value: val })
+    return this.params.length - 1
+  }
+
+  addParamUInt16(val: number, _isOutput: boolean): number {
+    this.params.push({ type: 'uint16', value: val })
+    return this.params.length - 1
+  }
+
+  addParamUInt32(val: number, _isOutput: boolean): number {
+    this.params.push({ type: 'uint32', value: val })
+    return this.params.length - 1
+  }
+
+  addParamUInt64(val: number, _isOutput: boolean): number {
+    this.params.push({ type: 'uint64', value: val })
+    return this.params.length - 1
+  }
+
+  addParamUInt256(val: Uint8Array | Buffer, _isOutput: boolean): number {
+    this.params.push({ type: 'uint256', value: Uint8Array.from(val) })
+    return this.params.length - 1
+  }
+
+  addParamInt8(val: number, _isOutput: boolean): number {
+    this.params.push({ type: 'int8', value: val })
+    return this.params.length - 1
+  }
+
+  addParamInt16(val: number, _isOutput: boolean): number {
+    this.params.push({ type: 'int16', value: val })
+    return this.params.length - 1
+  }
+
+  addParamInt32(val: number, _isOutput: boolean): number {
+    this.params.push({ type: 'int32', value: val })
+    return this.params.length - 1
+  }
+
+  addParamInt64(val: number, _isOutput: boolean): number {
+    this.params.push({ type: 'int64', value: val })
+    return this.params.length - 1
+  }
+
+  addParamInt256(val: Uint8Array | Buffer, _isOutput: boolean): number {
+    this.params.push({ type: 'int256', value: Uint8Array.from(val) })
+    return this.params.length - 1
+  }
+
+  addParamBool(val: boolean, _isOutput: boolean): number {
+    this.params.push({ type: 'bool', value: val })
+    return this.params.length - 1
+  }
+
+  addParamString(val: string, _isOutput: boolean): number {
+    this.params.push({ type: 'string', value: val })
+    return this.params.length - 1
+  }
+
+  addParamAddress(val: Uint8Array | Buffer, _isOutput: boolean): number {
+    this.params.push({ type: 'address', value: Uint8Array.from(val) })
+    return this.params.length - 1
+  }
+
+  addParamBytes(val: Uint8Array | Buffer, _isOutput: boolean): number {
+    this.params.push({ type: 'bytes', value: Uint8Array.from(val) })
+    return this.params.length - 1
+  }
+
+  addParamBytesFix(size: number, val: Uint8Array | Buffer, _isOutput: boolean): number {
+    this.params.push({ type: `bytes${size}`, value: Uint8Array.from(val) })
+    return this.params.length - 1
+  }
+
+  /** Encode this function call as ABI calldata. */
+  encode(): Uint8Array {
+    return abiEncode(this.name, this.params)
+  }
+
+  delete(): void {
+    // No-op — pure JS, nothing to free.
+  }
+}
+
+// ---------------------------------------------------------------------------
 // NativeWalletCore — the main facade
 // ---------------------------------------------------------------------------
 
@@ -602,8 +900,18 @@ export class NativeWalletCore {
         },
       },
 
+      // --- EthereumAbiFunction ---
+      EthereumAbiFunction: {
+        createWithString(name: string): NativeEthereumAbiFunction {
+          return new NativeEthereumAbiFunction(name)
+        },
+      },
+
       // --- EthereumAbi ---
       EthereumAbi: {
+        encode(fn: NativeEthereumAbiFunction): Uint8Array {
+          return fn.encode()
+        },
         encodeTyped(messageJson: string): string {
           return ExpoWalletCore.ethereumAbiEncodeTyped(messageJson)
         },
