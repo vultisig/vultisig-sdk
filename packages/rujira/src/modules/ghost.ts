@@ -247,8 +247,8 @@ export class RujiraGhost {
       throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Withdraw amount must be positive')
     }
 
-    // Receipt token denom is typically the vault-specific token
-    // The user sends receipt tokens as funds
+    // Receipt token denom follows the x/ghost-vault/{underlying_denom} format.
+    // Verified on-chain: tx 2677B142... (GHOST withdraw on mainnet thorchain-1)
     return {
       contractAddress: address,
       executeMsg: { withdraw: {} },

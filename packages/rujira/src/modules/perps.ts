@@ -7,7 +7,7 @@ import type { Coin } from '@cosmjs/proto-signing'
 
 import type { RujiraClient } from '../client.js'
 import { RujiraError, RujiraErrorCode, wrapError } from '../errors.js'
-import { isPositiveBigInt } from '../utils/format.js'
+import { isPositiveBigInt, isPositiveNumber } from '../utils/format.js'
 
 // GraphQL endpoint
 const RUJIRA_GRAPHQL_URL = 'https://api.rujira.network/api/graphql'
@@ -169,6 +169,12 @@ export class RujiraPerps {
     takeProfit?: string
     stopLoss?: string
   }): PerpsTransactionParams {
+    if (!params.leverage || !isPositiveNumber(params.leverage)) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_AMOUNT,
+        'Leverage must be a positive number string (e.g. "2", "1.5")'
+      )
+    }
     if (!params.collateralAmount || !isPositiveBigInt(params.collateralAmount)) {
       throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Collateral amount must be a positive integer string')
     }
@@ -257,6 +263,12 @@ export class RujiraPerps {
     takeProfit?: string
     stopLoss?: string
   }): PerpsTransactionParams {
+    if (!params.leverage || !isPositiveNumber(params.leverage)) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_AMOUNT,
+        'Leverage must be a positive number string (e.g. "2", "1.5")'
+      )
+    }
     if (!params.collateralAmount || !isPositiveBigInt(params.collateralAmount)) {
       throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Collateral amount must be a positive integer string')
     }

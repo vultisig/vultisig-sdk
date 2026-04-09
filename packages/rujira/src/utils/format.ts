@@ -251,3 +251,11 @@ export function isPositiveBigInt(value: string): boolean {
     return false
   }
 }
+
+/**
+ * Check if a string is a valid positive number (supports decimals like "1.5").
+ */
+export function isPositiveNumber(value: string): boolean {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0
+}
