@@ -331,7 +331,8 @@ export type SwapRequest =
  * Order target tuple - uses ContractSide for contract communication
  * @internal
  */
-export type OrderTarget = [ContractSide, string, string | null]
+export type OrderPrice = { fixed: string } | { oracle: number }
+export type OrderTarget = [ContractSide, OrderPrice, string | null]
 
 /**
  * Callback data for contract composition
