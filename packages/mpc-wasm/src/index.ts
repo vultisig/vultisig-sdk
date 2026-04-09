@@ -94,7 +94,10 @@ class WasmDklsEngine implements DklsEngine {
   }
 
   createRefreshSession(setup: Uint8Array, localPartyId: string, oldKeyshare: MpcKeyshare): MpcSession<MpcKeyshare> {
-    // Re-create from bytes: MpcKeyshare doesn't expose the raw WASM Keyshare
+    // Roundtrip serialization is required because MpcKeyshare is an opaque wrapper
+    // that does not expose the underlying WASM Keyshare handle. Deserializing from
+    // bytes also validates the keyshare and ensures it is in canonical form before
+    // passing it to the native WASM session constructor.
     const rawKs = DklsKeyshare.fromBytes(oldKeyshare.toBytes())
     const session = DklsKeygenSession.refresh(setup, localPartyId, rawKs)
     return wrapSession(session, s => wrapKeyshare(s.finish()))
@@ -118,8 +121,10 @@ class WasmDklsEngine implements DklsEngine {
   }
 
   createSignSession(setup: Uint8Array, localPartyId: string, keyshare: MpcKeyshare): MpcSession<Uint8Array> {
-    // Re-create from bytes: MpcKeyshare is an opaque wrapper that doesn't expose
-    // the raw WASM Keyshare instance, so we roundtrip through serialization.
+    // Roundtrip serialization is required because MpcKeyshare is an opaque wrapper
+    // that does not expose the underlying WASM Keyshare handle. Deserializing from
+    // bytes also validates the keyshare and ensures it is in canonical form before
+    // passing it to the native WASM session constructor.
     const rawKs = DklsKeyshare.fromBytes(keyshare.toBytes())
     const session = new DklsSignSession(setup, localPartyId, rawKs)
     return wrapSession(session, s => s.finish())

@@ -1,0 +1,68 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'maven-publish'
+
+group = 'expo.modules.walletcore'
+version = '0.1.0'
+
+android {
+    namespace "expo.modules.walletcore"
+
+    compileSdkVersion safeExtGet("compileSdkVersion", 34)
+
+    defaultConfig {
+        minSdkVersion safeExtGet("minSdkVersion", 23)
+        targetSdkVersion safeExtGet("targetSdkVersion", 34)
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.majorVersion
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/java'
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        url = uri("https://maven.pkg.github.com/trustwallet/wallet-core")
+        credentials {
+            username = System.getenv("GITHUB_USER")
+                ?: System.getenv("GITHUB_ACTOR")
+                ?: "token"
+            password = System.getenv("GITHUB_TOKEN")
+                ?: System.getenv("GH_TOKEN")
+                ?: ""
+        }
+        content {
+            includeGroup("com.trustwallet")
+        }
+    }
+}
+
+dependencies {
+    implementation project(':expo-modules-core')
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${safeExtGet('kotlinVersion', '1.8.10')}"
+    implementation 'com.trustwallet:wallet-core:4.3.22'
+}
+
+def safeExtGet(prop, fallback) {
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}

@@ -56,7 +56,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Godkls.dklsKeygenSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "keygenSessionOutputMessage failed for session $sessionHandle: ${e.message}", e)
                 null
             }
         }
@@ -104,7 +104,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Godkls.dklsDecodeMessage(setupBytes)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "dklsDecodeMessage failed: ${e.message}", e)
                 null
             }
         }
@@ -115,7 +115,7 @@ class ExpoMpcNativeModule : Module() {
                 val keyId = Godkls.dklsDecodeKeyId(setupBytes)
                 if (keyId != null && keyId.isNotEmpty()) encode(keyId) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "dklsDecodeKeyId failed: ${e.message}", e)
                 null
             }
         }
@@ -131,7 +131,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Godkls.dklsSignSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "signSessionOutputMessage failed for session $sessionHandle: ${e.message}", e)
                 null
             }
         }
@@ -213,7 +213,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Godkls.dklsQcSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "qcSessionOutputMessage failed for session $sessionHandle: ${e.message}", e)
                 null
             }
         }
@@ -233,7 +233,9 @@ class ExpoMpcNativeModule : Module() {
             try {
                 Godkls.dklsQcSessionFinish(sessionHandle)
             } catch (e: Exception) {
-                android.util.Log.w("ExpoMpcNative", "finishQc: old party (no keyshare) or error: ${e.message}")
+                // -1L signals "old party" (not a reshare recipient) — callers check for this sentinel.
+                // Log at error level so unexpected failures are distinguishable from expected ones.
+                android.util.Log.e("ExpoMpcNative", "finishQc failed for session $sessionHandle: ${e.javaClass.simpleName}: ${e.message}", e)
                 -1L
             }
         }
@@ -293,7 +295,6 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Goschnorr.schnorrKeygenSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
                 null
             }
         }
@@ -341,7 +342,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Goschnorr.schnorrDecodeMessage(setupBytes)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "schnorrDecodeMessage failed: ${e.message}", e)
                 null
             }
         }
@@ -352,7 +353,7 @@ class ExpoMpcNativeModule : Module() {
                 val keyId = Goschnorr.schnorrDecodeKeyId(setupBytes)
                 if (keyId != null && keyId.isNotEmpty()) encode(keyId) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "schnorrDecodeKeyId failed: ${e.message}", e)
                 null
             }
         }
@@ -368,7 +369,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Goschnorr.schnorrSignSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "schnorrSignSessionOutputMessage failed for session $sessionHandle: ${e.message}", e)
                 null
             }
         }
@@ -450,7 +451,7 @@ class ExpoMpcNativeModule : Module() {
                 val msg = Goschnorr.schnorrQcSessionOutputMessage(sessionHandle)
                 if (msg != null && msg.isNotEmpty()) encode(msg) else null
             } catch (e: Exception) {
-                android.util.Log.d("ExpoMpcNative", "No message available: ${e.message}")
+                android.util.Log.e("ExpoMpcNative", "schnorrQcSessionOutputMessage failed for session $sessionHandle: ${e.message}", e)
                 null
             }
         }
@@ -470,7 +471,9 @@ class ExpoMpcNativeModule : Module() {
             try {
                 Goschnorr.schnorrQcSessionFinish(sessionHandle)
             } catch (e: Exception) {
-                android.util.Log.w("ExpoMpcNative", "finishSchnorrQc: old party (no keyshare) or error: ${e.message}")
+                // -1L signals "old party" (not a reshare recipient) — callers check for this sentinel.
+                // Log at error level so unexpected failures are distinguishable from expected ones.
+                android.util.Log.e("ExpoMpcNative", "finishSchnorrQc failed for session $sessionHandle: ${e.javaClass.simpleName}: ${e.message}", e)
                 -1L
             }
         }
