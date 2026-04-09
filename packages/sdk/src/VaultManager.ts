@@ -99,8 +99,16 @@ export class VaultManager {
    */
   async importVault(vultContent: string, password?: string): Promise<VaultBase> {
     try {
-      // Parse to check if it already exists
-      const container = vaultContainerFromString(vultContent.trim())
+      let container
+      try {
+        container = vaultContainerFromString(vultContent.trim())
+      } catch (error) {
+        throw new VaultImportError(
+          VaultImportErrorCode.INVALID_FILE_FORMAT,
+          'Invalid .vult container: file is missing data or is not valid base64/protobuf',
+          error as Error
+        )
+      }
 
       // We need to peek at the public key to check for duplicates
       // This requires partial parsing
@@ -110,18 +118,52 @@ export class VaultManager {
           throw new VaultImportError(VaultImportErrorCode.PASSWORD_REQUIRED, 'Password required for encrypted vault')
         }
         const encryptedData = fromBase64(container.vault)
-        const decryptedBuffer = await decryptWithAesGcm({
-          key: password,
-          value: encryptedData,
-        })
-        vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+        // AES-GCM layout: 12-byte nonce + ciphertext + 16-byte tag
+        if (encryptedData.length < 28) {
+          throw new VaultImportError(
+            VaultImportErrorCode.CORRUPTED_DATA,
+            'Encrypted vault payload is truncated or not a valid ciphertext'
+          )
+        }
+        try {
+          const decryptedBuffer = await decryptWithAesGcm({
+            key: password,
+            value: encryptedData,
+          })
+          vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+        } catch (error) {
+          throw new VaultImportError(
+            VaultImportErrorCode.INVALID_PASSWORD,
+            'Could not decrypt vault with the provided password',
+            error as Error
+          )
+        }
       } else {
         vaultBase64 = container.vault
       }
 
-      const vaultBinary = fromBase64(vaultBase64)
-      const vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
-      const parsedVault = fromCommVault(vaultProtobuf)
+      let vaultProtobuf
+      try {
+        const vaultBinary = fromBase64(vaultBase64)
+        vaultProtobuf = fromBinary(VaultSchema, vaultBinary)
+      } catch (error) {
+        throw new VaultImportError(
+          VaultImportErrorCode.UNSUPPORTED_FORMAT,
+          'Vault payload could not be decoded as a vault message',
+          error as Error
+        )
+      }
+
+      let parsedVault
+      try {
+        parsedVault = fromCommVault(vaultProtobuf)
+      } catch (error) {
+        throw new VaultImportError(
+          VaultImportErrorCode.CORRUPTED_DATA,
+          `Vault data appears incomplete or corrupted: ${(error as Error).message}`,
+          error as Error
+        )
+      }
 
       // Use ECDSA public key as vault ID
       const vaultId = parsedVault.publicKeys.ecdsa
@@ -342,8 +384,8 @@ export class VaultManager {
       return container.isEncrypted
     } catch (error) {
       throw new VaultImportError(
-        VaultImportErrorCode.CORRUPTED_DATA,
-        `Failed to check encryption status: ${(error as Error).message}`,
+        VaultImportErrorCode.INVALID_FILE_FORMAT,
+        `Failed to parse vault container: ${(error as Error).message}`,
         error as Error
       )
     }
