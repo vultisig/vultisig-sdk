@@ -860,6 +860,7 @@ Thorguard NFT holders receive a free tier upgrade (up to gold tier).
 -i, --interactive        Start interactive shell mode
 -o, --output <format>    Output format: table, json (default: table)
 --vault <nameOrId>       Specify vault by name or ID
+--server-url <url>       Base Vultisig API URL for FastVault and relay endpoints
 --silent                 Suppress informational output, show only results
 --debug                  Enable debug output
 -h, --help               Show help
@@ -981,6 +982,9 @@ VULTISIG_VAULT=MyWallet
 
 # Override config directory
 VULTISIG_CONFIG_DIR=/custom/path
+
+# Override FastVault and relay via a shared base URL
+VULTISIG_SERVER_URL=http://127.0.0.1:8080
 
 # Disable colored output
 VULTISIG_NO_COLOR=1

@@ -53,6 +53,7 @@ import {
   executeVerify,
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
+import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
 import {
@@ -103,6 +104,7 @@ program
   .option('-o, --output <format>', 'Output format: table, json (default: table)', 'table')
   .option('-i, --interactive', 'Start interactive shell mode')
   .option('--vault <nameOrId>', 'Specify vault by name or ID')
+  .option('--server-url <url>', 'Base Vultisig API URL for FastVault and relay endpoints')
   .hook('preAction', thisCommand => {
     const opts = thisCommand.opts()
     initOutputMode({ silent: opts.silent, output: opts.output })
@@ -143,8 +145,14 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
       cachePassword(vaultSelector, unlockPassword)
     }
 
+    const globalOptions = program.opts<{
+      serverUrl?: string
+    }>()
+    const serverEndpoints = resolveServerEndpoints(globalOptions)
+
     const sdk = new Vultisig({
       onPasswordRequired: createPasswordCallback(),
+      ...(serverEndpoints ? { serverEndpoints } : {}),
       ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
     })
     await sdk.initialize()
@@ -1251,8 +1259,10 @@ setupCompletionCommand(program)
 // ============================================================================
 
 async function startInteractiveMode(): Promise<void> {
+  const serverEndpoints = resolveServerEndpoints(parseServerEndpointOverridesFromArgv(process.argv.slice(2)))
   const sdk = new Vultisig({
     onPasswordRequired: createPasswordCallback(),
+    ...(serverEndpoints ? { serverEndpoints } : {}),
   })
   await sdk.initialize()
 
