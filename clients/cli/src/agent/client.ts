@@ -153,8 +153,9 @@ export class AgentClient {
     let currentData = ''
 
     const flushEvent = (): void => {
-      if (currentEvent && currentData) {
-        this.handleSSEEvent(currentEvent, currentData, result, callbacks)
+      if (currentData) {
+        // SSE spec: default event type is "message" when no event: field is present
+        this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
       }
       currentEvent = ''
       currentData = ''
@@ -168,29 +169,36 @@ export class AgentClient {
 
         // Parse SSE events from buffer
         const lines = buffer.split('\n')
-        buffer = done ? '' : (lines.pop() ?? '') // Keep incomplete last line between reads
+        // Keep incomplete last line between reads; on done, preserve it for final processing
+        const trailing = lines.pop() ?? ''
+        buffer = done ? '' : trailing
 
         for (const rawLine of lines) {
           const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim()
-          } else if (line.startsWith('data: ')) {
-            currentData += (currentData ? '\n' : '') + line.slice(6)
+          if (line.startsWith('event:')) {
+            // SSE spec: strip optional single leading space from value
+            const value = line.slice(6)
+            currentEvent = (value.startsWith(' ') ? value.slice(1) : value).trim()
+          } else if (line.startsWith('data:')) {
+            const value = line.slice(5)
+            currentData += (currentData ? '\n' : '') + (value.startsWith(' ') ? value.slice(1) : value)
           } else if (line === '') {
             // Empty line = end of event
             flushEvent()
-          } else if (line.startsWith(': ')) {
+          } else if (line.startsWith(':')) {
             // SSE comment (ping), ignore
           }
         }
 
         if (done) {
-          if (buffer) {
-            const line = buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer
-            if (line.startsWith('event: ')) {
-              currentEvent = line.slice(7).trim()
-            } else if (line.startsWith('data: ')) {
-              currentData += (currentData ? '\n' : '') + line.slice(6)
+          if (trailing) {
+            const line = trailing.endsWith('\r') ? trailing.slice(0, -1) : trailing
+            if (line.startsWith('event:')) {
+              const value = line.slice(6)
+              currentEvent = (value.startsWith(' ') ? value.slice(1) : value).trim()
+            } else if (line.startsWith('data:')) {
+              const value = line.slice(5)
+              currentData += (currentData ? '\n' : '') + (value.startsWith(' ') ? value.slice(1) : value)
             }
           }
           flushEvent()
@@ -259,8 +267,12 @@ export class AgentClient {
           // Stream complete
           break
       }
-    } catch {
-      // Ignore malformed SSE data
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        // Malformed JSON in SSE data, skip
+      } else {
+        throw e
+      }
     }
   }
 
