@@ -108,6 +108,7 @@ export const getThorchainLpPosition = async ({
     if (isMidgardNotFoundError(err)) return null
     throw err
   }
-  const found = raw.pools?.find(p => p.pool === pool)
+  const pools = Array.isArray(raw.pools) ? raw.pools : []
+  const found = pools.find(p => p.pool === pool)
   return found ? normalizeMemberPool(found) : null
 }
