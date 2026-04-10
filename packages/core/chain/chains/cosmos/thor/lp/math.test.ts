@@ -63,16 +63,44 @@ describe('getLiquidityUnits', () => {
       })
     ).toBe('0')
   })
+
+  it('rejects non-numeric string inputs with a clear error (not a SyntaxError)', () => {
+    expect(() =>
+      getLiquidityUnits({
+        pool: balancedPool,
+        runeAmountBaseUnit: 'not-a-number',
+        assetAmountBaseUnit: '0',
+      })
+    ).toThrow(/runeAmountBaseUnit.*non-negative integer/)
+  })
+
+  it('rejects negative string inputs', () => {
+    expect(() =>
+      getLiquidityUnits({
+        pool: balancedPool,
+        runeAmountBaseUnit: '-100',
+        assetAmountBaseUnit: '0',
+      })
+    ).toThrow(/non-negative integer/)
+  })
+
+  it('rejects malformed pool state fields', () => {
+    expect(() =>
+      getLiquidityUnits({
+        pool: { runeDepth: 'oops', assetDepth: '1', poolUnits: '1' },
+        runeAmountBaseUnit: '100',
+        assetAmountBaseUnit: '0',
+      })
+    ).toThrow(/pool\.runeDepth/)
+  })
 })
 
 describe('getPoolShare', () => {
-  it('returns zeros for zero units', () => {
+  it('returns zero decimal for zero units', () => {
     const share = getPoolShare({
       pool: balancedPool,
       liquidityUnits: '0',
     })
-    expect(share.runeShareBaseUnit).toBe('0')
-    expect(share.assetShareBaseUnit).toBe('0')
     expect(share.poolShareDecimal).toBe('0')
   })
 
@@ -87,14 +115,21 @@ describe('getPoolShare', () => {
     expect(decimal).toBeLessThan(0.011)
   })
 
-  it('rune and asset share scale proportionally', () => {
+  it('returns 50% for units equal to pool units', () => {
     const share = getPoolShare({
       pool: balancedPool,
       liquidityUnits: balancedPool.poolUnits, // equal to pool → 50%
     })
-    // 50% of depth
-    expect(share.runeShareBaseUnit).toBe('50000000000')
-    expect(share.assetShareBaseUnit).toBe('5000000')
+    expect(share.poolShareDecimal).toBe('0.5')
+  })
+
+  it('does NOT return rune/asset base-unit fields (use estimateLpAdd for those)', () => {
+    const share = getPoolShare({
+      pool: balancedPool,
+      liquidityUnits: '100',
+    })
+    expect('runeShareBaseUnit' in share).toBe(false)
+    expect('assetShareBaseUnit' in share).toBe(false)
   })
 })
 

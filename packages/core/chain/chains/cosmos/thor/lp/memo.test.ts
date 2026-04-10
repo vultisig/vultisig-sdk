@@ -51,6 +51,20 @@ describe('addLpMemo', () => {
     expect(() => addLpMemo({ pool: 'BTC' })).toThrow(/valid THORChain pool id/)
     expect(() => addLpMemo({ pool: '' })).toThrow(/non-empty string/)
   })
+
+  it('rejects pairedAddress containing colons (memo injection guard)', () => {
+    // A malicious or bug-y caller that passes `addr:ss:1000` would otherwise
+    // produce `+:BTC.BTC:addr:ss:1000` which smuggles in an affiliate.
+    expect(() =>
+      addLpMemo({ pool: 'BTC.BTC', pairedAddress: 'addr:ss:1000' })
+    ).toThrow(/must not contain `:`/)
+  })
+
+  it('rejects pairedAddress containing whitespace', () => {
+    expect(() =>
+      addLpMemo({ pool: 'BTC.BTC', pairedAddress: 'bc1q addr' })
+    ).toThrow(/must not contain whitespace/)
+  })
 })
 
 describe('removeLpMemo', () => {
@@ -109,5 +123,25 @@ describe('removeLpMemo', () => {
     const memo = removeLpMemo({ pool: 'BTC.BTC', basisPoints: 10000 })
     expect(memo).not.toContain('vi')
     expect(memo).not.toContain('ss')
+  })
+
+  it('rejects withdrawToAsset containing colons (memo injection guard)', () => {
+    expect(() =>
+      removeLpMemo({
+        pool: 'BTC.BTC',
+        basisPoints: 10000,
+        withdrawToAsset: 'BTC:extra',
+      })
+    ).toThrow(/must not contain `:`/)
+  })
+
+  it('rejects withdrawToAsset containing whitespace', () => {
+    expect(() =>
+      removeLpMemo({
+        pool: 'BTC.BTC',
+        basisPoints: 10000,
+        withdrawToAsset: 'BTC TC',
+      })
+    ).toThrow(/must not contain whitespace/)
   })
 })

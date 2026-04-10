@@ -15,6 +15,29 @@ export type PoolState = {
 }
 
 /**
+ * Assert a numeric input is a non-negative base-unit integer string.
+ *
+ * Public math helpers consume untrusted strings (LLM tool args, API
+ * responses). Raw `BigInt('abc')` throws `SyntaxError: Cannot convert
+ * abc to a BigInt`, which is an unhelpful error for callers and hides
+ * the field name. This validator produces stable SDK-level errors
+ * instead.
+ */
+const assertBaseUnitString = (value: string, fieldName: string): bigint => {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(
+      `${fieldName} must be a non-empty base-unit string, got ${typeof value === 'string' ? JSON.stringify(value) : typeof value}`
+    )
+  }
+  if (!/^\d+$/.test(value)) {
+    throw new Error(
+      `${fieldName} must be a non-negative integer base-unit string, got ${JSON.stringify(value)}`
+    )
+  }
+  return BigInt(value)
+}
+
+/**
  * Calculate the liquidity units earned for a deposit.
  *
  * Formula: `units = P * (R*a + r*A) / (2 * R * A)`
@@ -44,11 +67,11 @@ export const getLiquidityUnits = ({
   assetAmountBaseUnit: string
   runeAmountBaseUnit: string
 }): string => {
-  const P = BigInt(pool.poolUnits)
-  const R = BigInt(pool.runeDepth)
-  const A = BigInt(pool.assetDepth)
-  const r = BigInt(runeAmountBaseUnit)
-  const a = BigInt(assetAmountBaseUnit)
+  const P = assertBaseUnitString(pool.poolUnits, 'pool.poolUnits')
+  const R = assertBaseUnitString(pool.runeDepth, 'pool.runeDepth')
+  const A = assertBaseUnitString(pool.assetDepth, 'pool.assetDepth')
+  const r = assertBaseUnitString(runeAmountBaseUnit, 'runeAmountBaseUnit')
+  const a = assertBaseUnitString(assetAmountBaseUnit, 'assetAmountBaseUnit')
 
   if (R === 0n || A === 0n || P === 0n) {
     // Empty / just-initialized pool — the first-deposit case is handled
@@ -64,11 +87,13 @@ export const getLiquidityUnits = ({
 }
 
 /**
- * Calculate the user's share of a pool given their liquidity units.
+ * Calculate the user's fractional share of a pool AFTER a deposit settles.
  *
- * `poolShareDecimal` is `units / (poolUnits + units)` (the share after
- * the deposit settles). `runeShare` and `assetShare` are proportional to
- * that share against the post-deposit pool depths.
+ * Returns only the decimal share (`units / (poolUnits + units)`). The
+ * rune/asset base-unit shares are NOT computed here because the correct
+ * values depend on the post-deposit pool depths, which this helper does
+ * not take as inputs. For those values, use `estimateLpAdd` which has
+ * the full pool state and deposit amounts.
  *
  * For display only — the on-chain accounting uses the units directly.
  */
@@ -79,26 +104,16 @@ export const getPoolShare = ({
   pool: PoolState
   liquidityUnits: string
 }): {
-  runeShareBaseUnit: string
-  assetShareBaseUnit: string
   poolShareDecimal: string
 } => {
-  const P = BigInt(pool.poolUnits)
-  const R = BigInt(pool.runeDepth)
-  const A = BigInt(pool.assetDepth)
-  const L = BigInt(liquidityUnits)
+  const P = assertBaseUnitString(pool.poolUnits, 'pool.poolUnits')
+  const L = assertBaseUnitString(liquidityUnits, 'liquidityUnits')
 
   if (P === 0n || L === 0n) {
-    return {
-      runeShareBaseUnit: '0',
-      assetShareBaseUnit: '0',
-      poolShareDecimal: '0',
-    }
+    return { poolShareDecimal: '0' }
   }
 
   const totalAfter = P + L
-  const runeShare = (R * L) / totalAfter
-  const assetShare = (A * L) / totalAfter
 
   // Decimal share with 18-digit precision as a string (no floats).
   // We multiply by 1e18, divide, then format as "0.xxx".
@@ -109,8 +124,6 @@ export const getPoolShare = ({
   const fracPart = decimal.slice(-18).replace(/0+$/, '')
 
   return {
-    runeShareBaseUnit: runeShare.toString(),
-    assetShareBaseUnit: assetShare.toString(),
     poolShareDecimal: fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart,
   }
 }
@@ -155,10 +168,10 @@ export const getLpAddSlippage = ({
   assetAmountBaseUnit: string
   runeAmountBaseUnit: string
 }): SlippageResult => {
-  const R = BigInt(pool.runeDepth)
-  const A = BigInt(pool.assetDepth)
-  const r = BigInt(runeAmountBaseUnit)
-  const a = BigInt(assetAmountBaseUnit)
+  const R = assertBaseUnitString(pool.runeDepth, 'pool.runeDepth')
+  const A = assertBaseUnitString(pool.assetDepth, 'pool.assetDepth')
+  const r = assertBaseUnitString(runeAmountBaseUnit, 'runeAmountBaseUnit')
+  const a = assertBaseUnitString(assetAmountBaseUnit, 'assetAmountBaseUnit')
 
   if (R === 0n || A === 0n) {
     return { decimalPercent: '0', slippageInRuneBaseUnit: '0' }
@@ -184,23 +197,24 @@ export const getLpAddSlippage = ({
   const decimalPercent =
     fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart
 
-  // Convert to rune-equivalent for display. The slip applies to the RUNE
-  // side of the rebalancing swap. For an asym RUNE deposit, slip reduces
-  // the effective r by (r * slip). For an asym asset deposit, convert a
-  // to rune via the asset-price-in-rune = R/A.
-  let slippageInRune: bigint
-  if (a === 0n) {
-    // asym rune deposit
-    slippageInRune = (r * scaled) / SCALE
-  } else if (r === 0n) {
-    // asym asset deposit — convert a to rune value then apply slip
-    const aInRune = (a * R) / A
-    slippageInRune = (aInRune * scaled) / SCALE
-  } else {
-    // (mostly) symmetric — slippage approaches zero anyway
-    const totalInRune = r + (a * R) / A
-    slippageInRune = (totalInRune * scaled) / SCALE
-  }
+  // Convert to rune-equivalent for display. The slip applies only to the
+  // imbalanced portion of the deposit — the part that has to be swapped
+  // internally to balance the pool. We compute the imbalance in rune
+  // terms: |R*a - A*r| / (2*A), then apply the slip fraction to it.
+  //
+  // For pure asym RUNE (a=0): imbalance = R*0 - A*r divided by 2*A, abs
+  //   → r/2 (half the deposit gets swapped) → slippageInRune ≈ (r/2) * slip
+  // For pure asym asset (r=0): imbalance = (R*a) / (2*A), the rune-value
+  //   of half the deposit → slippageInRune ≈ (a*R / (2*A)) * slip
+  // For balanced deposit: imbalance = 0 → slippageInRune = 0
+  //
+  // This is a heuristic display value, not an exact chain computation.
+  // It under/overstates real on-chain slip by a constant factor in some
+  // regimes but is directionally correct and never overstates by orders
+  // of magnitude the way "slip * total deposit value" did.
+  const imbalanceNumerator = ra > ar ? ra - ar : ar - ra
+  const imbalanceInRune = A === 0n ? 0n : imbalanceNumerator / (2n * A)
+  const slippageInRune = (imbalanceInRune * scaled) / SCALE
 
   return {
     decimalPercent,
@@ -211,7 +225,14 @@ export const getLpAddSlippage = ({
 export type EstimateLpAddResult = {
   liquidityUnits: string
   poolShareDecimal: string
+  /**
+   * Estimated rune-denominated value of the user's pool share, using
+   * post-deposit (pre-internal-swap) pool depths. This is the amount
+   * they could expect to reclaim on a full withdraw if nothing else
+   * changed.
+   */
   runeShareBaseUnit: string
+  /** Estimated asset-denominated value of the user's pool share. */
   assetShareBaseUnit: string
   slippageDecimal: string
   slippageRuneBaseUnit: string
@@ -262,11 +283,17 @@ export const estimateLpAdd = async ({
       `estimateLpAdd: pool ${pool} response from ${url} missing balance fields`
     )
   }
+  const poolUnitsRaw = raw.pool_units ?? raw.LP_units
+  if (typeof poolUnitsRaw !== 'string' || poolUnitsRaw.length === 0) {
+    throw new Error(
+      `estimateLpAdd: pool ${pool} response from ${url} missing pool_units / LP_units`
+    )
+  }
 
   const poolState: PoolState = {
     assetDepth: raw.balance_asset,
     runeDepth: raw.balance_rune,
-    poolUnits: raw.pool_units ?? raw.LP_units ?? '0',
+    poolUnits: poolUnitsRaw,
   }
 
   const liquidityUnits = getLiquidityUnits({
@@ -286,11 +313,30 @@ export const estimateLpAdd = async ({
     runeAmountBaseUnit,
   })
 
+  // Compute post-deposit base-unit shares from the caller's deposit
+  // amounts. This is the correct frame for display ("you'll own X RUNE +
+  // Y asset's worth"). Uses post-deposit depths R+r and A+a, which is
+  // the pre-internal-swap state — close enough for display purposes and
+  // doesn't require simulating the chain's internal rebalancing swap.
+  const R = BigInt(poolState.runeDepth)
+  const A = BigInt(poolState.assetDepth)
+  const P = BigInt(poolState.poolUnits)
+  const r = BigInt(runeAmountBaseUnit)
+  const a = BigInt(assetAmountBaseUnit)
+  const L = BigInt(liquidityUnits)
+  const totalAfter = P + L
+  const runeDepthAfter = R + r
+  const assetDepthAfter = A + a
+  const runeShareBaseUnit =
+    totalAfter === 0n ? '0' : ((runeDepthAfter * L) / totalAfter).toString()
+  const assetShareBaseUnit =
+    totalAfter === 0n ? '0' : ((assetDepthAfter * L) / totalAfter).toString()
+
   return {
     liquidityUnits,
     poolShareDecimal: share.poolShareDecimal,
-    runeShareBaseUnit: share.runeShareBaseUnit,
-    assetShareBaseUnit: share.assetShareBaseUnit,
+    runeShareBaseUnit,
+    assetShareBaseUnit,
     slippageDecimal: slip.decimalPercent,
     slippageRuneBaseUnit: slip.slippageInRuneBaseUnit,
   }

@@ -1,5 +1,31 @@
 import { assertValidPoolId } from './pools'
 
+/**
+ * Reject memo-segment values that would smuggle additional `:`-separated
+ * fields into the memo (e.g. a pairedAddress like `bc1q:ss:60` that tries
+ * to inject an affiliate). Also rejects whitespace since THORChain memos
+ * are tokenized on `:` and trimmed/rejected when they contain internal
+ * whitespace.
+ */
+const assertMemoSegmentSafe = (
+  value: string,
+  fieldName: string
+): void => {
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string, got ${typeof value}`)
+  }
+  if (value.includes(':')) {
+    throw new Error(
+      `${fieldName} must not contain \`:\` (would inject extra memo segments), got ${JSON.stringify(value)}`
+    )
+  }
+  if (/\s/.test(value)) {
+    throw new Error(
+      `${fieldName} must not contain whitespace, got ${JSON.stringify(value)}`
+    )
+  }
+}
+
 export type AddLpMemoInput = {
   /** Canonical pool id, e.g. `BTC.BTC` or `ETH.USDC-0X...`. */
   pool: string
@@ -41,6 +67,7 @@ export const addLpMemo = ({
 }: AddLpMemoInput): string => {
   assertValidPoolId(pool)
   if (pairedAddress && pairedAddress.length > 0) {
+    assertMemoSegmentSafe(pairedAddress, 'pairedAddress')
     return `+:${pool}:${pairedAddress}`
   }
   return `+:${pool}`
@@ -88,6 +115,7 @@ export const removeLpMemo = ({
     )
   }
   if (withdrawToAsset && withdrawToAsset.length > 0) {
+    assertMemoSegmentSafe(withdrawToAsset, 'withdrawToAsset')
     return `-:${pool}:${basisPoints}:${withdrawToAsset}`
   }
   return `-:${pool}:${basisPoints}`
