@@ -2,6 +2,8 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { assertValidPoolId } from './pools'
+
 const extractPoolStatus = (raw: unknown): string | undefined => {
   if (raw && typeof raw === 'object' && 'status' in raw) {
     const status = (raw as { status: unknown }).status
@@ -22,6 +24,7 @@ const extractPoolStatus = (raw: unknown): string | undefined => {
  * that the pool is paused.
  */
 export const assertPoolDepositable = async (pool: string): Promise<void> => {
+  assertValidPoolId(pool)
   const url = `${cosmosRpcUrl[Chain.THORChain]}/thorchain/pool/${encodeURIComponent(pool)}`
   const raw = await queryUrl<unknown>(url)
   const status = extractPoolStatus(raw)

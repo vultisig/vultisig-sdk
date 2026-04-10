@@ -2,6 +2,7 @@ import {
   VULTISIG_AFFILIATE_LP_BPS,
   VULTISIG_AFFILIATE_NAME,
 } from './affiliate'
+import { assertValidPoolId } from './pools'
 
 export type AddLpMemoInput = {
   /** Canonical pool id, e.g. `BTC.BTC` or `ETH.USDC-0X...`. */
@@ -29,6 +30,7 @@ export type AddLpMemoInput = {
  * asymmetric.
  */
 export const addLpMemo = (input: AddLpMemoInput): string => {
+  assertValidPoolId(input.pool)
   const affiliate = input.affiliate ?? VULTISIG_AFFILIATE_NAME
   const bps = input.affiliateBps ?? VULTISIG_AFFILIATE_LP_BPS
   const paired = input.pairedAddress ?? ''
@@ -54,6 +56,7 @@ export const removeLpMemo = ({
   pool,
   basisPoints,
 }: RemoveLpMemoInput): string => {
+  assertValidPoolId(pool)
   if (
     !Number.isInteger(basisPoints) ||
     basisPoints < 1 ||

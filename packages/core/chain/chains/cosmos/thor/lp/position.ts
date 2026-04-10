@@ -1,6 +1,7 @@
+import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { thorchainMidgardBaseUrl } from './pools'
+import { assertValidPoolId, thorchainMidgardBaseUrl } from './pools'
 
 /**
  * Subset of a Midgard `/v2/member/{address}` pool entry. Midgard returns
@@ -78,26 +79,19 @@ export type GetThorchainLpPositionInput = {
  *   - the address has positions but none in the requested pool.
  */
 /**
- * Detect a 404 error from queryUrl. The current `@vultisig/lib-utils`
- * `queryUrl` + `assertFetchResponse` API surfaces non-2xx responses as
- * generic `Error` instances whose message contains the HTTP status. There
- * is no structured `status` property to read, so we string-match.
- *
- * TODO: when `assertFetchResponse` is hardened to expose a numeric status
- * (or to throw a typed `HttpError`), switch to that — see CodeRabbit
- * feedback on PR vultisig-sdk#236.
+ * Detect a 404 from queryUrl by reading the typed `HttpResponseError.status`
+ * field that `@vultisig/lib-utils` `assertFetchResponse` now throws. The
+ * previous implementation string-matched the error message; that worked
+ * but was brittle to wording changes. See NeoMakinG's PR #236 review note.
  */
-const isMidgardNotFoundError = (err: unknown): boolean => {
-  if (!(err instanceof Error)) return false
-  // Match `HTTP 404 …` or `… 404 Not Found …` to be permissive about the
-  // exact wording assertFetchResponse uses.
-  return /(?:^|\s)(?:HTTP\s+)?404(?:\s|:|$)/.test(err.message)
-}
+const isMidgardNotFoundError = (err: unknown): boolean =>
+  err instanceof HttpResponseError && err.status === 404
 
 export const getThorchainLpPosition = async ({
   thorAddress,
   pool,
 }: GetThorchainLpPositionInput): Promise<ThorchainLpPosition | null> => {
+  assertValidPoolId(pool)
   const url = `${thorchainMidgardBaseUrl}/v2/member/${encodeURIComponent(thorAddress)}`
   let raw: RawMemberResponse
   try {
