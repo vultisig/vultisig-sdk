@@ -19,9 +19,11 @@ import type {
   OrderBookEntry,
   OrderResult,
   OrderSide,
+  OrderTarget,
 } from '../types.js'
 import { fromContractSide, toContractSide } from '../types.js'
 import { denomToAsset as sharedDenomToAsset } from '../utils/denom-conversion.js'
+import { isPositiveBigInt } from '../utils/format.js'
 
 /**
  * Orderbook module for managing limit orders.
@@ -174,7 +176,7 @@ export class RujiraOrderbook {
 
     // Convert SDK side to contract's Side enum format
     const contractSide = toContractSide(params.side)
-    const orderTarget: [ContractSide, string, string | null] = [contractSide, params.price, params.amount]
+    const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, params.amount]
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
@@ -217,9 +219,8 @@ export class RujiraOrderbook {
    * Cancel an open order.
    */
   async cancelOrder(contractAddress: string, side: OrderSide, price: string): Promise<{ txHash: string }> {
-    // Convert SDK side to contract's Side enum format
     const contractSide = toContractSide(side)
-    const orderTarget: [ContractSide, string, string | null] = [contractSide, price, null]
+    const orderTarget: OrderTarget = [contractSide, { fixed: price }, null]
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
@@ -228,6 +229,56 @@ export class RujiraOrderbook {
     const result = await this.client.executeContract(contractAddress, msg, [])
 
     return { txHash: result.transactionHash }
+  }
+
+  /**
+   * Build a limit order transaction without executing.
+   * Returns contract address, message, and funds for external signing.
+   */
+  async buildPlaceOrder(params: LimitOrderParams): Promise<{
+    contractAddress: string
+    msg: FinExecuteMsg
+    funds: Coin[]
+  }> {
+    this.validateOrderParams(params)
+
+    const contractAddress = await this.resolveContract(
+      typeof params.pair === 'string' ? params.pair : params.pair.contractAddress
+    )
+
+    const assetInfo = await this.getOfferAsset(params)
+    if (!assetInfo) {
+      throw new RujiraError(RujiraErrorCode.INVALID_ASSET, 'Could not determine offer asset for order')
+    }
+
+    const contractSide = toContractSide(params.side)
+    const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, params.amount]
+
+    const msg: FinExecuteMsg = {
+      order: [[orderTarget], null],
+    }
+
+    const funds: Coin[] = [{ denom: assetInfo.denom, amount: this.calculateOfferAmount(params) }]
+
+    return { contractAddress, msg, funds }
+  }
+
+  /**
+   * Build a cancel order transaction without executing.
+   */
+  buildCancelOrder(
+    contractAddress: string,
+    side: OrderSide,
+    price: string
+  ): { contractAddress: string; msg: FinExecuteMsg; funds: Coin[] } {
+    const contractSide = toContractSide(side)
+    const orderTarget: OrderTarget = [contractSide, { fixed: price }, null]
+
+    return {
+      contractAddress,
+      msg: { order: [[orderTarget], null] },
+      funds: [],
+    }
   }
 
   /**
@@ -392,8 +443,8 @@ export class RujiraOrderbook {
       throw new RujiraError(RujiraErrorCode.INVALID_PRICE, 'Order price must be positive')
     }
 
-    if (!params.amount || BigInt(params.amount) <= 0n) {
-      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order amount must be positive')
+    if (!params.amount || !isPositiveBigInt(params.amount)) {
+      throw new RujiraError(RujiraErrorCode.INVALID_AMOUNT, 'Order amount must be a positive integer string')
     }
 
     if (!['buy', 'sell'].includes(params.side)) {

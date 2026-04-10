@@ -66,7 +66,7 @@ export const keysign = async ({
     hexEncryptionKey,
     isInitiatingDevice,
   })
-  const session = makeSignSession({
+  const session = await makeSignSession({
     setupMessage,
     localPartyId,
     keyShare,
@@ -123,6 +123,8 @@ export const keysign = async ({
     return processOutbound(sequenceNo + receivers.length)
   }
 
+  const processedMessages: Record<string, boolean> = {}
+
   const processInbound = async (): Promise<void> => {
     if (abortController.signal.aborted) {
       throw new Error(
@@ -141,23 +143,21 @@ export const keysign = async ({
     )
 
     for (const msg of relayMessages) {
-      if (
-        session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
-      ) {
+      const cacheKey = `${sessionId}-${msg.from}-${msg.hash}`
+      if (processedMessages[cacheKey]) {
+        continue
+      }
+
+      const accepted = session.inputMessage(
+        fromMpcServerMessage(msg.body, hexEncryptionKey)
+      )
+      if (accepted) {
+        processedMessages[cacheKey] = true
         return
       }
-      await ignorePromiseOutcome(
-        transformError(
-          deleteMpcRelayMessage({
-            serverUrl,
-            localPartyId,
-            sessionId,
-            messageHash: msg.hash,
-            messageId,
-          }),
-          prefixErrorWith('Failed to delete MPC relay message')
-        )
-      )
+      // Do NOT mark as processed when inputMessage returns false — the
+      // message may need to be retried in a later iteration when the
+      // session is in a different state.
     }
 
     return processInbound()
@@ -181,7 +181,7 @@ export const keysign = async ({
     throw error
   }
 
-  const signature = session.finish()
+  const signature = await session.finish()
 
   const result: KeysignSignature =
     signatureAlgorithm === 'mldsa'

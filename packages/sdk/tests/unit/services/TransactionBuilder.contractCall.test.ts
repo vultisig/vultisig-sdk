@@ -209,8 +209,14 @@ describe('TransactionBuilder.prepareContractCallTx', () => {
 
   it('should work across all EVM chains', async () => {
     const evmChains = [
-      Chain.Ethereum, Chain.Polygon, Chain.BSC, Chain.Avalanche,
-      Chain.Arbitrum, Chain.Optimism, Chain.Base, Chain.Blast,
+      Chain.Ethereum,
+      Chain.Polygon,
+      Chain.BSC,
+      Chain.Avalanche,
+      Chain.Arbitrum,
+      Chain.Optimism,
+      Chain.Base,
+      Chain.Blast,
     ]
 
     for (const chain of evmChains) {

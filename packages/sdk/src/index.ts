@@ -203,6 +203,25 @@ export type { RiskLevel, SiteScanResult, TransactionSimulationResult, Transactio
 export { CosmosMsgType } from './types'
 
 // ============================================================================
+// PUBLIC API - Tools (vault-free chain utilities)
+// ============================================================================
+
+export type { FindSwapQuoteParams } from './tools'
+export {
+  abiDecode,
+  abiEncode,
+  deriveAddressFromKeys,
+  evmCall,
+  evmCheckAllowance,
+  evmTxInfo,
+  findSwapQuote,
+  resolve4ByteSelector,
+  resolveEns,
+  searchToken,
+  VerifierClient,
+} from './tools'
+
+// ============================================================================
 // PUBLIC API - Push Notifications
 // ============================================================================
 
@@ -218,3 +237,9 @@ export type {
   WSConnectionState,
   WSConnectOptions,
 } from './types/notifications'
+
+// ============================================================================
+// PUBLIC API - ABI Constants
+// ============================================================================
+
+export { ERC20_ABI, ERC1155_ABI } from './abi'

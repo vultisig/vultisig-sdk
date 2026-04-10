@@ -10,7 +10,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
-import { beforeEach,describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { VaultError, VaultErrorCode } from '../../src/vault/VaultError'
 
@@ -58,9 +58,7 @@ describe('signMessage EIP-191 multi-byte correctness', () => {
     const naivePrefix = `\x19Ethereum Signed Message:\n${message.length}`
     const naiveHash = keccak_256(new TextEncoder().encode(naivePrefix + message))
 
-    expect(Buffer.from(correctHash).toString('hex')).not.toBe(
-      Buffer.from(naiveHash).toString('hex')
-    )
+    expect(Buffer.from(correctHash).toString('hex')).not.toBe(Buffer.from(naiveHash).toString('hex'))
   })
 
   it('should produce SHA-256 (not keccak) for non-EVM chain messages', async () => {
@@ -74,9 +72,7 @@ describe('signMessage EIP-191 multi-byte correctness', () => {
     const keccakHash = keccak_256(msgBytes)
 
     // They must differ (different algorithms)
-    expect(Buffer.from(sha256Hash).toString('hex')).not.toBe(
-      Buffer.from(keccakHash).toString('hex')
-    )
+    expect(Buffer.from(sha256Hash).toString('hex')).not.toBe(Buffer.from(keccakHash).toString('hex'))
     // SHA-256 output is 32 bytes
     expect(sha256Hash.length).toBe(32)
   })
@@ -193,24 +189,39 @@ function resolveTokenInfo(
   }
 
   const token = getTokens(chain).find(t => t.symbol.toUpperCase() === symbol.toUpperCase())
-  if (token) return { ticker: token.symbol, decimals: token.decimals, contractAddress: token.contractAddress || token.id }
+  if (token)
+    return { ticker: token.symbol, decimals: token.decimals, contractAddress: token.contractAddress || token.id }
 
   const known = (knownTokens[chain] ?? []).find(t => t.ticker.toUpperCase() === symbol.toUpperCase())
   if (known) return { ticker: known.ticker, decimals: known.decimals, contractAddress: known.id }
 
-  throw new VaultError(VaultErrorCode.InvalidConfig, `Token "${symbol}" not found on ${chain}. Add it with vault.addToken() or use a well-known token symbol.`)
+  throw new VaultError(
+    VaultErrorCode.InvalidConfig,
+    `Token "${symbol}" not found on ${chain}. Add it with vault.addToken() or use a well-known token symbol.`
+  )
 }
 
 function parseAmount(amount: string, decimals: number): bigint {
   const trimmed = amount?.trim()
   if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
-  if (isNaN(Number(trimmed)) || Number(trimmed) <= 0) throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
+  if (isNaN(Number(trimmed)) || Number(trimmed) <= 0)
+    throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
   const [whole, fraction = ''] = trimmed.split('.')
   return BigInt(whole + fraction.padEnd(decimals, '0').slice(0, decimals))
 }
 
-function buildAccountCoin(chain: Chain, address: string, t: { ticker: string; decimals: number; contractAddress?: string }) {
-  return { chain, address, decimals: t.decimals, ticker: t.ticker, ...(t.contractAddress ? { id: t.contractAddress } : {}) }
+function buildAccountCoin(
+  chain: Chain,
+  address: string,
+  t: { ticker: string; decimals: number; contractAddress?: string }
+) {
+  return {
+    chain,
+    address,
+    decimals: t.decimals,
+    ticker: t.ticker,
+    ...(t.contractAddress ? { id: t.contractAddress } : {}),
+  }
 }
 
 describe('compound wrappers wiring verification', () => {
@@ -231,12 +242,7 @@ describe('compound wrappers wiring verification', () => {
     const signature = await mock.sign({ transaction: keysignPayload, chain })
     const txHash = await mock.broadcastTx({ chain, keysignPayload, signature })
 
-    expect(mock.callLog).toEqual([
-      'address(Ethereum)',
-      'prepareSendTx',
-      'sign',
-      'broadcastTx',
-    ])
+    expect(mock.callLog).toEqual(['address(Ethereum)', 'prepareSendTx', 'sign', 'broadcastTx'])
     expect(txHash).toBe('0xTxHash')
   })
 
@@ -250,11 +256,7 @@ describe('compound wrappers wiring verification', () => {
     await mock.prepareSendTx({ coin, receiver: '0xRecipient', amount: amountBigInt })
     await mock.transactionBuilder.estimateSendFee({ coin, receiver: '0xRecipient', amount: amountBigInt })
 
-    expect(mock.callLog).toEqual([
-      'address(Ethereum)',
-      'prepareSendTx',
-      'estimateSendFee',
-    ])
+    expect(mock.callLog).toEqual(['address(Ethereum)', 'prepareSendTx', 'estimateSendFee'])
     expect(mock.sign).not.toHaveBeenCalled()
     expect(mock.broadcastTx).not.toHaveBeenCalled()
   })
@@ -270,7 +272,12 @@ describe('compound wrappers wiring verification', () => {
     const toCoin = buildAccountCoin(toChain, toAddress, toToken)
 
     const quote = await mock.getSwapQuote({ fromCoin, toCoin, amount: 1 })
-    const { keysignPayload, approvalPayload } = await mock.prepareSwapTx({ fromCoin, toCoin, amount: 1, swapQuote: quote })
+    const { keysignPayload, approvalPayload } = await mock.prepareSwapTx({
+      fromCoin,
+      toCoin,
+      amount: 1,
+      swapQuote: quote,
+    })
     expect(approvalPayload).toBeUndefined()
 
     const signature = await mock.sign({ transaction: keysignPayload, chain: fromChain })
@@ -306,12 +313,21 @@ describe('compound wrappers wiring verification', () => {
     const toCoin = buildAccountCoin(toChain, toAddress, toToken)
 
     const quote = await mock.getSwapQuote({ fromCoin, toCoin, amount: 1 })
-    const { keysignPayload, approvalPayload } = await mock.prepareSwapTx({ fromCoin, toCoin, amount: 1, swapQuote: quote })
+    const { keysignPayload, approvalPayload } = await mock.prepareSwapTx({
+      fromCoin,
+      toCoin,
+      amount: 1,
+      swapQuote: quote,
+    })
 
     // Approval flow
     expect(approvalPayload).toBeDefined()
     const approvalSig = await mock.sign({ transaction: approvalPayload, chain: fromChain })
-    const approvalHash = await mock.broadcastTx({ chain: fromChain, keysignPayload: approvalPayload, signature: approvalSig })
+    const approvalHash = await mock.broadcastTx({
+      chain: fromChain,
+      keysignPayload: approvalPayload,
+      signature: approvalSig,
+    })
 
     // Wait for confirmation (simulated)
     const confirmResult = await mock.getTxStatus({ chain: fromChain, txHash: approvalHash })
@@ -326,11 +342,11 @@ describe('compound wrappers wiring verification', () => {
       'address(Bitcoin)',
       'getSwapQuote',
       'prepareSwapTx',
-      'sign',        // approval sign
-      'broadcastTx',  // approval broadcast
-      'getTxStatus',  // wait for confirmation
-      'sign',        // swap sign
-      'broadcastTx',  // swap broadcast
+      'sign', // approval sign
+      'broadcastTx', // approval broadcast
+      'getTxStatus', // wait for confirmation
+      'sign', // swap sign
+      'broadcastTx', // swap broadcast
     ])
     expect(mock.sign).toHaveBeenCalledTimes(2)
     expect(mock.broadcastTx).toHaveBeenCalledTimes(2)
@@ -414,7 +430,7 @@ describe('resolveTokenInfo knownTokens fallback', () => {
       decimals: 18, // intentionally wrong decimals to prove priority
       contractAddress: '0xUserCustomUSDC',
     }
-    const getTokens = (chain: Chain) => chain === Chain.Ethereum ? [userUSDC] : []
+    const getTokens = (chain: Chain) => (chain === Chain.Ethereum ? [userUSDC] : [])
 
     const result = resolveTokenInfo(Chain.Ethereum, 'USDC', getTokens)
 
@@ -431,7 +447,7 @@ describe('resolveTokenInfo knownTokens fallback', () => {
       id: '0xUserWETH',
       // no contractAddress field
     }
-    const getTokens = (chain: Chain) => chain === Chain.Ethereum ? [userToken] : []
+    const getTokens = (chain: Chain) => (chain === Chain.Ethereum ? [userToken] : [])
 
     const result = resolveTokenInfo(Chain.Ethereum, 'WETH', getTokens)
 
@@ -483,7 +499,8 @@ describe('waitForConfirmation behavior', () => {
       try {
         const result = await getTxStatus({ chain, txHash })
         if (result.status === 'success') return
-        if (result.status === 'error') throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
+        if (result.status === 'error')
+          throw new VaultError(VaultErrorCode.BroadcastFailed, `Approval tx failed: ${txHash}`)
       } catch (e) {
         if (e instanceof VaultError && e.code !== VaultErrorCode.NetworkError) throw e
       }
@@ -502,7 +519,8 @@ describe('waitForConfirmation behavior', () => {
   })
 
   it('should poll and proceed when status goes from pending to success', async () => {
-    const getTxStatus = vi.fn()
+    const getTxStatus = vi
+      .fn()
       .mockResolvedValueOnce({ status: 'pending' })
       .mockResolvedValueOnce({ status: 'pending' })
       .mockResolvedValueOnce({ status: 'success' })
@@ -542,7 +560,8 @@ describe('waitForConfirmation behavior', () => {
   })
 
   it('should retry through network errors and succeed when status eventually returns success', async () => {
-    const getTxStatus = vi.fn()
+    const getTxStatus = vi
+      .fn()
       .mockRejectedValueOnce(new Error('network timeout'))
       .mockRejectedValueOnce(new Error('connection refused'))
       .mockResolvedValueOnce({ status: 'success' })
@@ -553,7 +572,8 @@ describe('waitForConfirmation behavior', () => {
   })
 
   it('should NOT retry VaultError (re-throws immediately)', async () => {
-    const getTxStatus = vi.fn()
+    const getTxStatus = vi
+      .fn()
       .mockRejectedValueOnce(new VaultError(VaultErrorCode.BroadcastFailed, 'Approval tx failed: 0xBad'))
 
     try {
@@ -569,7 +589,8 @@ describe('waitForConfirmation behavior', () => {
   })
 
   it('should retry through VaultError NetworkError and succeed', async () => {
-    const getTxStatus = vi.fn()
+    const getTxStatus = vi
+      .fn()
       .mockRejectedValueOnce(new VaultError(VaultErrorCode.NetworkError, 'RPC timeout'))
       .mockRejectedValueOnce(new VaultError(VaultErrorCode.NetworkError, 'Connection refused'))
       .mockResolvedValueOnce({ status: 'success' })
@@ -580,9 +601,7 @@ describe('waitForConfirmation behavior', () => {
   })
 
   it('should throw BroadcastFailed after pending then error', async () => {
-    const getTxStatus = vi.fn()
-      .mockResolvedValueOnce({ status: 'pending' })
-      .mockResolvedValueOnce({ status: 'error' })
+    const getTxStatus = vi.fn().mockResolvedValueOnce({ status: 'pending' }).mockResolvedValueOnce({ status: 'error' })
 
     try {
       await waitForConfirmation(getTxStatus, Chain.Ethereum, '0xPendingThenFail', 5000, 50)

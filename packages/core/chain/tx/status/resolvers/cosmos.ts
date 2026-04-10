@@ -1,5 +1,7 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { computeCosmosTxReceiptFeeAmount } from '@vultisig/core-chain/chains/cosmos/computeCosmosTxReceiptFeeAmount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
+import { sumFeeAmountForCosmosChainFeeDenom } from '@vultisig/core-chain/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { decodeTxRaw } from '@cosmjs/proto-signing'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -19,26 +21,41 @@ export const getCosmosTxStatus: TxStatusResolver<CosmosChain> = async ({
   }
 
   const status = tx.code === 0 ? 'success' : 'error'
-  const feeCoin = chainFeeCoin[chain]
 
   const receipt = (() => {
     const gasUsed = tx.gasUsed
-    const gasWanted = tx.gasWanted
-    if (gasUsed == null || gasWanted == null || gasWanted === 0n) {
+    if (gasUsed == null || gasUsed === 0n) {
       return undefined
     }
-    const { data: decoded } = attempt(() => decodeTxRaw(tx.tx))
-    if (!decoded) {
+
+    const decodeResult = attempt(() => decodeTxRaw(tx.tx))
+    if ('error' in decodeResult || !decodeResult.data) {
       return undefined
     }
+
+    const decoded = decodeResult.data
     const fee = decoded.authInfo?.fee
-    const maxFeeAmount =
-      fee?.amount?.[0]?.amount != null ? BigInt(fee.amount[0].amount) : 0n
-    const actualFee =
-      maxFeeAmount > 0n ? (maxFeeAmount * gasUsed) / gasWanted : 0n
-    if (actualFee === 0n) {
+    const maxFeeAmount = sumFeeAmountForCosmosChainFeeDenom({
+      amounts: fee?.amount,
+      chain,
+    })
+
+    if (maxFeeAmount === null || maxFeeAmount === 0n) {
       return undefined
     }
+
+    const actualFee = computeCosmosTxReceiptFeeAmount({
+      gasUsed,
+      gasWantedFromTx: tx.gasWanted ?? 0n,
+      feeGasLimit: fee?.gasLimit ?? 0n,
+      maxFeeAmount,
+    })
+
+    if (actualFee === undefined) {
+      return undefined
+    }
+
+    const feeCoin = chainFeeCoin[chain]
     return {
       feeAmount: actualFee,
       feeDecimals: feeCoin.decimals,

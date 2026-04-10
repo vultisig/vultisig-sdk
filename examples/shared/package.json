@@ -13,6 +13,7 @@
     "./types": "./src/types/index.ts"
   },
   "dependencies": {
+    "@vultisig/sdk": "workspace:*",
     "qrcode.react": "^4.2.0"
   },
   "peerDependencies": {
