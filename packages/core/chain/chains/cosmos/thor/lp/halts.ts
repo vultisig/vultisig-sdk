@@ -1,4 +1,5 @@
 import { getThorchainInboundAddress } from '../getThorchainInboundAddress'
+import { getThorchainMimir, poolPauseMimirKey } from './validation'
 
 export type LpHaltStatus = {
   chain: string
@@ -97,4 +98,37 @@ export const getThorchainLpHaltStatus = async (
     )
   }
   return match
+}
+
+/**
+ * Look up the per-pool LP deposit pause status from mimir.
+ *
+ * THORChain can pause LP deposits for a SPECIFIC pool via the mimir flag
+ * `PAUSELPDEPOSIT-{chain}-{asset}` independently of the chain-level
+ * `chain_lp_actions_paused` flag in `inbound_addresses`. When that flag
+ * is set, `/thorchain/pool/{asset}.status` still reports `Available` and
+ * new LP add transactions are silently accepted into the mempool — but
+ * the THORChain handler rejects them at execution time with an internal
+ * error, wasting the user's native fee.
+ *
+ * Use this helper (or `assertPoolDepositable` which already calls it) as
+ * a pre-flight gate before building an LP add payload to catch that case.
+ *
+ * Returns `{ paused: false }` when the mimir flag is unset or zero.
+ * Returns `{ paused: true, mimirKey, mimirValue }` when paused. Does NOT
+ * throw — the caller decides whether to block, warn, or continue.
+ */
+export const getThorchainLpPoolPauseStatus = async (
+  pool: string
+): Promise<
+  | { paused: false }
+  | { paused: true; mimirKey: string; mimirValue: number }
+> => {
+  const mimir = await getThorchainMimir()
+  const mimirKey = poolPauseMimirKey(pool)
+  const mimirValue = mimir[mimirKey]
+  if (typeof mimirValue === 'number' && mimirValue > 0) {
+    return { paused: true, mimirKey, mimirValue }
+  }
+  return { paused: false }
 }

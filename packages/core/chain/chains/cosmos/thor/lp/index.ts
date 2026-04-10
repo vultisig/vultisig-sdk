@@ -48,7 +48,11 @@ export type {
   ThorchainLpPosition,
 } from './position'
 export { getThorchainLpPosition } from './position'
-export { assertPoolDepositable } from './validation'
+export {
+  assertPoolDepositable,
+  getThorchainMimir,
+  poolPauseMimirKey,
+} from './validation'
 
 // v2 additions
 export type { VaultAddressMap } from './pairing'
@@ -77,4 +81,5 @@ export type { LpHaltStatus } from './halts'
 export {
   getThorchainLpHaltStatus,
   getThorchainLpHaltStatusAll,
+  getThorchainLpPoolPauseStatus,
 } from './halts'
