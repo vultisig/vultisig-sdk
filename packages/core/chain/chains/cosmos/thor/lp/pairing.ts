@@ -39,14 +39,20 @@ export const resolvePairedAddressForLpAdd = ({
 }): string | undefined => {
   assertValidPoolId(pool)
 
+  // Guard against unknown pool prefixes on BOTH sides — the pool id regex
+  // accepts `ZZZ.ABC` but `chainPrefixToChain` is the source of truth for
+  // THORChain-supported chains. If we can't resolve the prefix we refuse
+  // to auto-pair either way; the caller can still fall back to a pure
+  // asym memo if they want.
+  const [chainPrefix] = pool.split('.')
+  if (!chainPrefix) return undefined
+  const assetChain = chainPrefixToChain(chainPrefix)
+  if (!assetChain) return undefined
+
   if (side === 'asset') {
     return vaultAddresses[Chain.THORChain]
   }
 
   // side === 'rune' — need the vault's address on the pool's asset chain
-  const [chainPrefix] = pool.split('.')
-  if (!chainPrefix) return undefined
-  const assetChain = chainPrefixToChain(chainPrefix)
-  if (!assetChain) return undefined
   return vaultAddresses[assetChain]
 }

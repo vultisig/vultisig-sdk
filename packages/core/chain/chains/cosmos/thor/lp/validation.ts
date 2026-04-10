@@ -48,7 +48,20 @@ export const getThorchainMimir = async (): Promise<Record<string, number>> => {
       `getThorchainMimir: unexpected response shape from ${url}`
     )
   }
-  return raw as Record<string, number>
+  // thornode /thorchain/mimir returns numeric values, but the JSON could
+  // deserialize as number or numeric string depending on the upstream
+  // proxy. Normalize to number, drop entries we can't coerce — downstream
+  // callers do `typeof v === 'number' && v > 0` checks anyway, and a NaN
+  // would silently defeat those.
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      out[k] = v
+    } else if (typeof v === 'string' && /^-?\d+$/.test(v)) {
+      out[k] = Number(v)
+    }
+  }
+  return out
 }
 
 /**

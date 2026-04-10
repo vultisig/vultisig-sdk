@@ -1,3 +1,5 @@
+import { Chain } from '@vultisig/core-chain/Chain'
+import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { assertValidPoolId } from './pools'
@@ -263,13 +265,13 @@ export const estimateLpAdd = async ({
   assetAmountBaseUnit: string
   runeAmountBaseUnit: string
   /**
-   * Override for the thornode base URL. Defaults to the mainnet
-   * `thornode.ninerealms.com` used by the rest of the lp module.
+   * Override for the thornode base URL. Defaults to the shared
+   * `cosmosRpcUrl[Chain.THORChain]` used by the rest of the lp module.
    */
   thornodeBaseUrl?: string
 }): Promise<EstimateLpAddResult> => {
   assertValidPoolId(pool)
-  const base = thornodeBaseUrl ?? 'https://thornode.ninerealms.com'
+  const base = thornodeBaseUrl ?? cosmosRpcUrl[Chain.THORChain]
   const url = `${base}/thorchain/pool/${encodeURIComponent(pool)}`
   const raw = await queryUrl<ThornodePoolRaw>(url)
 

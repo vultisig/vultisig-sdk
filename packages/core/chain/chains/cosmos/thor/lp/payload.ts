@@ -108,6 +108,18 @@ export const buildThorchainLpRemovePayload = ({
   basisPoints,
   withdrawToAsset,
 }: BuildThorchainLpRemovePayloadInput): ThorchainLpRemovePayload => {
+  // removeLpMemo validates this too, but fail fast at the payload
+  // boundary so callers see a consistent error shape with the add
+  // builder (which validates amountRuneBaseUnits up-front).
+  if (
+    !Number.isInteger(basisPoints) ||
+    basisPoints < 1 ||
+    basisPoints > 10000
+  ) {
+    throw new Error(
+      `buildThorchainLpRemovePayload: basisPoints must be an integer in [1, 10000], got ${basisPoints}`
+    )
+  }
   const memo = removeLpMemo({ pool, basisPoints, withdrawToAsset })
   return {
     kind: 'thorchain_lp_remove',
