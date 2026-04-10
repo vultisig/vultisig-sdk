@@ -292,7 +292,6 @@ export const AUTO_EXECUTE_ACTIONS = new Set([
   'address_book_add',
   'address_book_remove',
   'get_address_book',
-  'get_market_price',
   'get_balances',
   'get_portfolio',
   'search_token',
@@ -305,7 +304,6 @@ export const AUTO_EXECUTE_ACTIONS = new Set([
   'sign_typed_data',
   'read_evm_contract',
   'scan_tx',
-  'thorchain_query',
 ])
 
 /** Actions that require vault password */
