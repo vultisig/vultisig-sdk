@@ -2,8 +2,12 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-type RawPoolStatus = {
-  status?: string
+const extractPoolStatus = (raw: unknown): string | undefined => {
+  if (raw && typeof raw === 'object' && 'status' in raw) {
+    const status = (raw as { status: unknown }).status
+    return typeof status === 'string' ? status : undefined
+  }
+  return undefined
 }
 
 /**
@@ -11,7 +15,7 @@ type RawPoolStatus = {
  *
  * Hits the thornode `/thorchain/pool/{asset}` endpoint and asserts the
  * `status` field is `Available`. Throws on `Staged`, `Suspended`, or any
- * other non-Available state, and on network failures.
+ * other non-Available state, and on network failures or unexpected payloads.
  *
  * Use this as the fail-fast gate before building an LP add payload — it is
  * cheaper than building the payload first and discovering at broadcast time
@@ -19,10 +23,16 @@ type RawPoolStatus = {
  */
 export const assertPoolDepositable = async (pool: string): Promise<void> => {
   const url = `${cosmosRpcUrl[Chain.THORChain]}/thorchain/pool/${encodeURIComponent(pool)}`
-  const raw = await queryUrl<RawPoolStatus>(url)
-  if (raw.status !== 'Available') {
+  const raw = await queryUrl<unknown>(url)
+  const status = extractPoolStatus(raw)
+  if (status === undefined) {
     throw new Error(
-      `assertPoolDepositable: pool ${pool} status is ${raw.status ?? 'unknown'}, must be Available for LP add`
+      `assertPoolDepositable: pool ${pool} response from ${url} did not include a string \`status\` field`
+    )
+  }
+  if (status !== 'Available') {
+    throw new Error(
+      `assertPoolDepositable: pool ${pool} status is ${status}, must be Available for LP add`
     )
   }
 }

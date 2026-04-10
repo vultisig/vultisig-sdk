@@ -4,7 +4,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
  * Midgard base URL used by every helper in this module. Matches what
  * vultisig-ios and the rujira package use as the default mainnet endpoint.
  */
-export const THORCHAIN_MIDGARD_BASE_URL = 'https://midgard.ninerealms.com'
+export const thorchainMidgardBaseUrl = 'https://midgard.ninerealms.com'
 
 /**
  * Subset of the Midgard `/v2/pools` shape that the agent stack actually
@@ -58,8 +58,13 @@ export const getThorchainPools = async (
   const status = options.status === undefined ? 'available' : options.status
   const url =
     status === null
-      ? `${THORCHAIN_MIDGARD_BASE_URL}/v2/pools`
-      : `${THORCHAIN_MIDGARD_BASE_URL}/v2/pools?status=${encodeURIComponent(status)}`
-  const raw = await queryUrl<RawPool[]>(url)
-  return raw.map(normalizePool)
+      ? `${thorchainMidgardBaseUrl}/v2/pools`
+      : `${thorchainMidgardBaseUrl}/v2/pools?status=${encodeURIComponent(status)}`
+  const raw = await queryUrl<unknown>(url)
+  if (!Array.isArray(raw)) {
+    throw new Error(
+      `getThorchainPools: expected an array from ${url}, got ${typeof raw}`
+    )
+  }
+  return (raw as RawPool[]).map(normalizePool)
 }

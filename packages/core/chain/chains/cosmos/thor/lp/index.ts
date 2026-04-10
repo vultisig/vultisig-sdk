@@ -29,7 +29,7 @@ export type {
   GetThorchainPoolsOptions,
   ThorchainPoolSummary,
 } from './pools'
-export { getThorchainPools, THORCHAIN_MIDGARD_BASE_URL } from './pools'
+export { getThorchainPools, thorchainMidgardBaseUrl } from './pools'
 export type {
   GetThorchainLpPositionInput,
   ThorchainLpPosition,
