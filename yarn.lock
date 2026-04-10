@@ -7408,6 +7408,7 @@ __metadata:
     tabtab: "npm:^3.0.2"
     tsx: "npm:^4.21.0"
     typescript: "npm:^5.9.3"
+    viem: "npm:^2.45.1"
     ws: "npm:^8.19.0"
   bin:
     vsig: ./dist/index.js

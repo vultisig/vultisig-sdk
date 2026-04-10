@@ -217,6 +217,12 @@ export type Transaction = {
   unsigned_tx_hex?: string
   tx_details?: Record<string, unknown>
   keysign_payload?: string
+  /** Server-built swap payload on tx_ready SSE */
+  swap_tx?: Record<string, unknown>
+  /** Server-built send payload on tx_ready SSE */
+  send_tx?: Record<string, unknown>
+  /** Generic server-built tx on tx_ready SSE */
+  tx?: Record<string, unknown>
 }
 
 export type TokenSearchResult = {

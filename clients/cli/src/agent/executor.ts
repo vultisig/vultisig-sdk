@@ -6,6 +6,7 @@
  */
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
+import { formatUnits } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import type { Action, ActionResult } from './types'
@@ -427,14 +428,14 @@ export class AgentExecutor {
       const quote = await this.vault.getSwapQuote({
         fromCoin: fromCoin as any,
         toCoin: toCoin as any,
-        amount: parseFloat(amountStr),
+        amount: amountStr,
       })
 
       // Prepare the actual swap transaction
       const swapResult = await this.vault.prepareSwapTx({
         fromCoin: fromCoin as any,
         toCoin: toCoin as any,
-        amount: parseFloat(amountStr),
+        amount: amountStr,
         swapQuote: quote,
         autoApprove: true,
       })
@@ -858,12 +859,12 @@ export class AgentExecutor {
     const fromCoin = { chain: fromChain, token: fromToken || undefined }
     const toCoin = { chain: toChain, token: toToken || undefined }
 
-    // Convert base units to human-readable amount (vault.getSwapQuote expects human-readable)
-    const humanAmount = Number(amountStr) / Math.pow(10, fromDecimals)
+    // Convert base units to human-readable decimal string (same precision as SDK swap path)
+    const humanAmount = formatUnits(BigInt(amountStr), fromDecimals)
 
     if (this.verbose)
       process.stderr.write(
-        `[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountStr}\n`
+        `[solana_local_swap] from=${fromChainName} to=${toChainName || fromChainName} amount=${amountStr} human=${humanAmount}\n`
       )
 
     // Unlock vault if needed

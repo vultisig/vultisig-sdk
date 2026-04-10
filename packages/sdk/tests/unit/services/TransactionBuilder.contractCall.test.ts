@@ -124,7 +124,7 @@ describe('TransactionBuilder.prepareContractCallTx', () => {
     builder = new TransactionBuilder(mockVaultData, mockWasmProvider)
   })
 
-  it('should encode ERC-20 approve and delegate to prepareSendTx', async () => {
+  it('should encode ERC-20 approve and build send payload with calldata memo', async () => {
     const maxUint256 = 2n ** 256n - 1n
 
     await builder.prepareContractCallTx({
@@ -287,7 +287,7 @@ describe('TransactionBuilder.prepareContractCallTx', () => {
     ).rejects.toThrow()
   })
 
-  it('should pass feeSettings through to prepareSendTx', async () => {
+  it('should pass feeSettings through to the send payload builder', async () => {
     const customFee = { gasPrice: '50000000000' } as any
 
     await builder.prepareContractCallTx({

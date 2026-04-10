@@ -300,7 +300,7 @@ export class SwapService {
    */
   private async checkApprovalRequired(
     fromCoin: AccountCoin,
-    amount: number,
+    amount: string | number,
     quote: SwapQuote
   ): Promise<SwapApprovalInfo | undefined> {
     // Only ERC-20 tokens need approval
@@ -316,7 +316,7 @@ export class SwapService {
 
     // Check current allowance
     const currentAllowance = await this.getAllowance(fromCoin, spender)
-    const requiredAmount = BigInt(Math.floor(amount * 10 ** fromCoin.decimals))
+    const requiredAmount = toChainAmount(amount, fromCoin.decimals)
 
     if (currentAllowance < requiredAmount) {
       return {

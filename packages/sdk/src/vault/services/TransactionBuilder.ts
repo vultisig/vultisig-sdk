@@ -74,6 +74,22 @@ export class TransactionBuilder {
     memo?: string
     feeSettings?: FeeSettings
   }): Promise<KeysignPayload> {
+    if (params.amount <= 0n) {
+      throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
+    }
+    return this.buildSendTxKeysignPayload(params)
+  }
+
+  /**
+   * Build send keysign payload without enforcing a non-zero amount (used for EVM contract calls with `value: 0n`).
+   */
+  private async buildSendTxKeysignPayload(params: {
+    coin: AccountCoin
+    receiver: string
+    amount: bigint
+    memo?: string
+    feeSettings?: FeeSettings
+  }): Promise<KeysignPayload> {
     try {
       // Get WalletCore via WasmProvider
       const walletCore = await this.wasmProvider.getWalletCore()
@@ -120,6 +136,7 @@ export class TransactionBuilder {
 
       return keysignPayload
     } catch (error) {
+      if (error instanceof VaultError) throw error
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Failed to prepare send transaction: ${(error as Error).message}`,
@@ -147,6 +164,22 @@ export class TransactionBuilder {
     try {
       const walletCore = await this.wasmProvider.getWalletCore()
 
+      const isValid = isValidAddress({
+        chain: params.coin.chain,
+        address: params.receiver,
+        walletCore,
+      })
+      if (!isValid) {
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          `Invalid receiver address format for chain ${params.coin.chain}: ${params.receiver}`
+        )
+      }
+
+      if (params.amount <= 0n) {
+        throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
+      }
+
       const isQbtc = params.coin.chain === Chain.QBTC
       const publicKey = isQbtc
         ? null
@@ -173,6 +206,7 @@ export class TransactionBuilder {
         feeSettings: params.feeSettings,
       })
     } catch (error) {
+      if (error instanceof VaultError) throw error
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Failed to estimate send fee: ${(error as Error).message}`,
@@ -239,7 +273,7 @@ export class TransactionBuilder {
         ticker: native.ticker,
       }
 
-      return await this.prepareSendTx({
+      return await this.buildSendTxKeysignPayload({
         coin,
         receiver: contractAddress,
         amount: value,

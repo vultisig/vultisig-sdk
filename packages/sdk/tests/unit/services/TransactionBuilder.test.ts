@@ -40,10 +40,12 @@ vi.mock('@vultisig/core-mpc/keysign/utils/getKeysignChain', () => ({
   getKeysignChain: vi.fn(),
 }))
 
+import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../../../src/context/SdkContext'
 import { TransactionBuilder } from '../../../src/vault/services/TransactionBuilder'
+import { VaultErrorCode } from '../../../src/vault/VaultError'
 
 describe('TransactionBuilder', () => {
   let builder: TransactionBuilder
@@ -89,6 +91,22 @@ describe('TransactionBuilder', () => {
     }
 
     builder = new TransactionBuilder(mockVaultData, mockWasmProvider)
+  })
+
+  describe('prepareSendTx', () => {
+    it('rejects zero amount without building payload', async () => {
+      vi.mocked(buildSendKeysignPayload).mockClear()
+
+      await expect(
+        builder.prepareSendTx({
+          coin: mockCoin,
+          receiver: '0xabcdef1234567890abcdef1234567890abcdef12',
+          amount: 0n,
+        })
+      ).rejects.toMatchObject({ code: VaultErrorCode.InvalidAmount })
+
+      expect(buildSendKeysignPayload).not.toHaveBeenCalled()
+    })
   })
 
   describe('estimateSendFee', () => {
@@ -148,6 +166,21 @@ describe('TransactionBuilder', () => {
           amount: 1000n,
         })
       ).rejects.toThrow('Failed to estimate send fee: Network error')
+    })
+
+    it('rejects zero amount', async () => {
+      const { getSendFeeEstimate } = await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')
+      vi.mocked(getSendFeeEstimate).mockClear()
+
+      await expect(
+        builder.estimateSendFee({
+          coin: mockCoin,
+          receiver: '0xabcdef1234567890abcdef1234567890abcdef12',
+          amount: 0n,
+        })
+      ).rejects.toMatchObject({ code: VaultErrorCode.InvalidAmount })
+
+      expect(getSendFeeEstimate).not.toHaveBeenCalled()
     })
   })
 })
