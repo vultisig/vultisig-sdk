@@ -98,6 +98,15 @@ export class SwapService {
       // Format the result (with optional fiat conversion)
       const result = await this.formatQuoteResult(quote, fromCoin, toCoin, approvalInfo, params.fiatCurrency)
 
+      // Reject quotes with near-zero output (protects against bad provider quotes)
+      const outputHuman = Number(result.estimatedOutput) / 10 ** toCoin.decimals
+      if (outputHuman < 1e-8) {
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          `Swap quote returned near-zero output (${outputHuman} ${toCoin.ticker}) from ${result.provider}. This route is likely invalid.`
+        )
+      }
+
       // Emit event
       this.emitEvent('swapQuoteReceived', { quote: result })
 

@@ -3,13 +3,15 @@
  *
  * Priority order:
  * 1. In-memory cache (set by CLI --password flag or previous prompt)
- * 2. VAULT_PASSWORDS env var (format: "VaultName:password VaultId:password")
- * 3. VAULT_PASSWORD env var (single fallback password)
- * 4. Interactive prompt (if no env password found and not in silent/JSON mode)
+ * 2. OS keyring (stored by `vsig auth setup`)
+ * 3. VAULT_PASSWORDS env var (format: "VaultName:password VaultId:password")
+ * 4. VAULT_PASSWORD env var (single fallback password)
+ * 5. Interactive prompt (if no env password found and not in silent/JSON mode)
  */
 import inquirer from 'inquirer'
 
-import { isJsonOutput, isSilent } from '../lib/output'
+import { isJsonOutput, isNonInteractive, isSilent, requireInteractive } from '../lib/output'
+import { getServerPassword as getKeyringPassword } from './credential-store'
 
 /**
  * In-memory password cache
@@ -86,9 +88,9 @@ export function getPasswordFromEnv(vaultId: string, vaultName?: string): string 
     return vaultPasswords.get(vaultId)!
   }
 
-  // Check single fallback password
-  if (process.env.VAULT_PASSWORD) {
-    return process.env.VAULT_PASSWORD
+  // Check single fallback password (VULTISIG_PASSWORD is the namespaced alias)
+  if (process.env.VAULT_PASSWORD || process.env.VULTISIG_PASSWORD) {
+    return (process.env.VAULT_PASSWORD || process.env.VULTISIG_PASSWORD)!
   }
 
   return null
@@ -98,6 +100,9 @@ export function getPasswordFromEnv(vaultId: string, vaultName?: string): string 
  * Prompt user for password interactively
  */
 export async function promptForPassword(vaultName?: string, vaultId?: string): Promise<string> {
+  requireInteractive(
+    'Use --password flag, VAULT_PASSWORD env var, or "vsig auth setup" to store credentials in keyring.'
+  )
   const displayName = vaultName || vaultId || 'vault'
   const { password } = await inquirer.prompt([
     {
@@ -113,19 +118,32 @@ export async function promptForPassword(vaultName?: string, vaultId?: string): P
 /**
  * Get password using the standard resolution order:
  * 1. In-memory cache (set by CLI --password flag or previous prompt)
- * 2. Environment variables
- * 3. Interactive prompt (only if not in silent/JSON mode)
+ * 2. OS keyring (stored by `vsig auth setup`)
+ * 3. Environment variables
+ * 4. Interactive prompt (only if not in silent/JSON mode)
  *
  * Passwords are cached after resolution to avoid re-prompting in interactive mode.
  */
 export async function getPassword(vaultId: string, vaultName?: string): Promise<string> {
-  // 1. Check in-memory cache first
+  // 1. Check in-memory cache (includes explicit --password flag)
   const cachedPassword = getCachedPassword(vaultId, vaultName)
   if (cachedPassword) {
     return cachedPassword
   }
 
-  // 2. Try environment variables
+  // 2. Check OS keyring (stored by `vsig auth setup`)
+  try {
+    const keyringPassword = await getKeyringPassword(vaultId)
+    if (keyringPassword) {
+      cachePassword(vaultId, keyringPassword)
+      if (vaultName) cachePassword(vaultName, keyringPassword)
+      return keyringPassword
+    }
+  } catch {
+    // keyring not available or access failed — fall through
+  }
+
+  // 3. Try environment variables
   const envPassword = getPasswordFromEnv(vaultId, vaultName)
   if (envPassword) {
     // Cache env password for future calls
@@ -134,12 +152,14 @@ export async function getPassword(vaultId: string, vaultName?: string): Promise<
     return envPassword
   }
 
-  // 3. In silent/JSON mode, we can't prompt - throw an error
-  if (isSilent() || isJsonOutput()) {
-    throw new Error('Password required but not provided. Set VAULT_PASSWORD or VAULT_PASSWORDS environment variable.')
+  // 4. In silent/JSON/non-interactive mode, we can't prompt - throw an error
+  if (isSilent() || isJsonOutput() || isNonInteractive()) {
+    throw new Error(
+      'Password required but not provided. Set VAULT_PASSWORD or VAULT_PASSWORDS environment variable, or use --password flag.'
+    )
   }
 
-  // 4. Fall back to interactive prompt
+  // 5. Fall back to interactive prompt
   const password = await promptForPassword(vaultName, vaultId)
 
   // Cache the prompted password for future calls (critical for interactive mode)
@@ -180,13 +200,7 @@ export async function ensureVaultUnlocked(
     return
   }
 
-  if (password) {
-    // Use CLI-provided password
-    await vault.unlock(password)
-    return
-  }
-
-  // Prompt for password before spinner starts
-  const inputPassword = await promptForPassword(vault.name, vault.id)
-  await vault.unlock(inputPassword)
+  // Use provided password, or resolve from keyring/env/prompt
+  const resolvedPassword = password || (await getPassword(vault.id, vault.name))
+  await vault.unlock(resolvedPassword)
 }

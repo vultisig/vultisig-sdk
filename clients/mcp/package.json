@@ -1,0 +1,58 @@
+{
+  "name": "@vultisig/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Vultisig SDK - Model Context Protocol wrapper over wallet operations",
+  "type": "module",
+  "bin": {
+    "vmcp": "./dist/bin/mcp-server.js",
+    "vultisig-mcp": "./dist/bin/mcp-server.js"
+  },
+  "main": "dist/src/index.js",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "npx tsx src/index.ts",
+    "start": "node dist/bin/mcp-server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "vultisig",
+    "mcp",
+    "model-context-protocol",
+    "wallet",
+    "blockchain"
+  ],
+  "author": {
+    "name": "Vultisig",
+    "email": "info@vultisig.com",
+    "url": "https://vultisig.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vultisig/vultisig-sdk.git",
+    "directory": "clients/mcp"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@napi-rs/keyring": "^1.1.6",
+    "@vultisig/client-shared": "workspace:^",
+    "@vultisig/sdk": "workspace:^",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "esbuild": "^0.27.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.9"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -4,6 +4,7 @@
   "packageManager": "yarn@4.13.0",
   "workspaces": [
     "clients/cli",
+    "clients/mcp",
     "examples/*",
     "packages/sdk",
     "packages/core/chain",
@@ -14,6 +15,7 @@
     "packages/lib/schnorr",
     "packages/lib/utils",
     "packages/rujira",
+    "packages/client-shared",
     "packages/mpc-types",
     "packages/mpc-wasm",
     "packages/mpc-native",

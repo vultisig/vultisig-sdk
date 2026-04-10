@@ -1,11 +1,11 @@
 /**
- * Swap Commands - swap-chains, swap-quote, swap
+ * Swap Commands - thin wrapper around vault.swap()
  */
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import { createSpinner, info, isJsonOutput, outputJson, warn } from '../lib/output'
+import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult, formatBigintAmount } from '../ui'
 
 /**
@@ -46,58 +46,41 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
     throw new Error('Invalid amount')
   }
 
-  // Check swap support
-  const isSupported = await vault.isSwapSupported(options.fromChain, options.toChain)
-  if (!isSupported) {
-    throw new Error(`Swaps from ${options.fromChain} to ${options.toChain} are not supported`)
-  }
-
-  // Resolve max to full balance
-  let resolvedAmount: number
-  if (isMax) {
-    const bal = await vault.balance(options.fromChain, options.fromToken)
-    resolvedAmount = parseFloat(bal.formattedAmount)
-    if (resolvedAmount <= 0) {
-      throw new Error('Zero balance — nothing to swap')
-    }
-  } else {
-    resolvedAmount = options.amount as number
-  }
-
+  // Use vault.swap() dry-run to get the quote
   const spinner = createSpinner('Getting swap quote...')
 
-  const quote = await vault.getSwapQuote({
-    fromCoin: { chain: options.fromChain, token: options.fromToken },
-    toCoin: { chain: options.toChain, token: options.toToken },
-    amount: resolvedAmount,
-    fiatCurrency: 'usd', // Request fiat conversion
+  const result = await vault.swap({
+    fromChain: options.fromChain,
+    fromSymbol: options.fromToken || '',
+    toChain: options.toChain,
+    toSymbol: options.toToken || '',
+    amount: isMax ? 'max' : String(options.amount),
+    dryRun: true,
   })
+
+  if (!result.dryRun) throw new Error('unreachable')
 
   spinner.succeed('Quote received')
 
-  // For max swaps, display the fee-adjusted amount
+  const quote = result.quote
   const fromAmountDisplay = isMax
     ? `${formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)} (max)`
-    : String(resolvedAmount)
+    : String(options.amount)
 
   if (isJsonOutput()) {
     outputJson({
       fromChain: options.fromChain,
       toChain: options.toChain,
-      amount: resolvedAmount,
+      amount: isMax ? 'max' : options.amount,
       isMax,
       quote,
     })
     return quote
   }
 
-  // Get native token for fee display (fees are paid in native token)
   const feeBalance = await vault.balance(options.fromChain)
-
-  // Get discount tier for display
   const discountTier = await vault.getDiscountTier()
 
-  // Use coin info from quote for accurate decimals and symbols
   displaySwapPreview(quote, fromAmountDisplay, quote.fromCoin.ticker, quote.toCoin.ticker, {
     fromDecimals: quote.fromCoin.decimals,
     toDecimals: quote.toCoin.decimals,
@@ -111,20 +94,36 @@ export async function executeSwapQuote(ctx: CommandContext, options: SwapQuoteOp
   return quote
 }
 
+export type SwapDryRunResult = {
+  dryRun: true
+  fromChain: string
+  fromToken: string
+  toChain: string
+  toToken: string
+  inputAmount: string
+  isMax?: boolean
+  estimatedOutput: string
+  provider: string
+  estimatedOutputFiat?: number
+  requiresApproval?: boolean
+  warnings?: string[]
+}
+
 export type SwapOptions = {
   slippage?: number
-  yes?: boolean // Skip confirmation prompt
-  password?: string // Vault password for signing
-  signal?: AbortSignal // Optional abort signal for cancellation
+  yes?: boolean
+  dryRun?: boolean
+  password?: string
+  signal?: AbortSignal
 } & SwapQuoteOptions
 
 /**
- * Execute swap command - perform a cross-chain swap
+ * Execute swap command: preview -> confirm -> vault.swap()
  */
 export async function executeSwap(
   ctx: CommandContext,
   options: SwapOptions
-): Promise<{ txHash: string; quote: SwapQuoteResult }> {
+): Promise<{ txHash: string; quote: SwapQuoteResult } | SwapDryRunResult> {
   const vault = await ctx.ensureActiveVault()
 
   const isMax = options.amount === 'max'
@@ -132,48 +131,69 @@ export async function executeSwap(
     throw new Error('Invalid amount')
   }
 
-  // Check swap support
-  const isSupported = await vault.isSwapSupported(options.fromChain, options.toChain)
-  if (!isSupported) {
-    throw new Error(`Swaps from ${options.fromChain} to ${options.toChain} are not supported`)
-  }
+  const amountStr = isMax ? 'max' : String(options.amount)
 
-  // Resolve max to full balance
-  let resolvedAmount: number
-  if (isMax) {
-    const bal = await vault.balance(options.fromChain, options.fromToken)
-    resolvedAmount = parseFloat(bal.formattedAmount)
-    if (resolvedAmount <= 0) {
-      throw new Error('Zero balance — nothing to swap')
-    }
-  } else {
-    resolvedAmount = options.amount as number
-  }
-
-  // 1. Get swap quote
+  // 1. Dry-run for quote/preview
   const quoteSpinner = createSpinner('Getting swap quote...')
 
-  const quote = await vault.getSwapQuote({
-    fromCoin: { chain: options.fromChain, token: options.fromToken },
-    toCoin: { chain: options.toChain, token: options.toToken },
-    amount: resolvedAmount,
-    fiatCurrency: 'usd', // Request fiat conversion
+  const dryResult = await vault.swap({
+    fromChain: options.fromChain,
+    fromSymbol: options.fromToken || '',
+    toChain: options.toChain,
+    toSymbol: options.toToken || '',
+    amount: amountStr,
+    dryRun: true,
   })
+
+  if (!dryResult.dryRun) throw new Error('unreachable')
 
   quoteSpinner.succeed('Quote received')
 
-  // For max swaps, display the fee-adjusted amount
-  const fromAmountDisplay = isMax
-    ? `${formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals)} (max)`
-    : String(resolvedAmount)
+  const quote = dryResult.quote
+  const fromAmountRaw = isMax ? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals) : String(options.amount)
+  const fromAmountDisplay = isMax ? `${fromAmountRaw} (max)` : fromAmountRaw
 
-  // Get native token for fee display (fees are paid in native token)
+  // If user asked for dry-run only, return preview
+  if (options.dryRun) {
+    const estimatedOutput = formatBigintAmount(quote.estimatedOutput, quote.toCoin.decimals)
+    const result: SwapDryRunResult = {
+      dryRun: true,
+      fromChain: String(options.fromChain),
+      fromToken: quote.fromCoin.ticker,
+      toChain: String(options.toChain),
+      toToken: quote.toCoin.ticker,
+      inputAmount: fromAmountRaw,
+      ...(isMax && { isMax: true }),
+      estimatedOutput,
+      provider: quote.provider,
+    }
+    if (quote.estimatedOutputFiat != null) {
+      result.estimatedOutputFiat = parseFloat(quote.estimatedOutputFiat.toFixed(2))
+    }
+    if (quote.requiresApproval) {
+      result.requiresApproval = true
+    }
+    if (quote.warnings && quote.warnings.length > 0) {
+      result.warnings = [...quote.warnings]
+    }
+    if (isJsonOutput()) {
+      outputJson(result)
+    } else {
+      info(`\nDry-run preview:`)
+      info(`  From:             ${result.inputAmount} ${result.fromToken} (${result.fromChain})`)
+      info(`  To:               ${result.estimatedOutput} ${result.toToken} (${result.toChain})`)
+      info(`  Provider:         ${result.provider}`)
+      if (result.estimatedOutputFiat != null) info(`  Est. value (USD): $${result.estimatedOutputFiat}`)
+      if (result.requiresApproval) info(`  Requires approval: yes`)
+      if (result.warnings?.length) result.warnings.forEach(w => warn(`  Warning: ${w}`))
+    }
+    return result
+  }
+
+  // 2. Show preview
   const feeBalance = await vault.balance(options.fromChain)
-
-  // Get discount tier for display
   const discountTier = await vault.getDiscountTier()
 
-  // 2. Display preview using coin info from quote for accurate decimals (skip in JSON mode)
   if (!isJsonOutput()) {
     displaySwapPreview(quote, fromAmountDisplay, quote.fromCoin.ticker, quote.toCoin.ticker, {
       fromDecimals: quote.fromCoin.decimals,
@@ -184,8 +204,11 @@ export async function executeSwap(
     })
   }
 
-  // 3. Confirm with user (skip if --yes flag is set or JSON mode)
-  if (!options.yes && !isJsonOutput()) {
+  // 3. Confirm (required in all output modes)
+  if (!options.yes) {
+    if (isNonInteractive()) {
+      throw new Error('Swap requires confirmation. Use --yes to skip, or --dry-run to preview.')
+    }
     const confirmed = await confirmSwap()
     if (!confirmed) {
       warn('Swap cancelled')
@@ -193,63 +216,9 @@ export async function executeSwap(
     }
   }
 
-  // 4. Prepare swap transaction
-  const prepSpinner = createSpinner('Preparing swap transaction...')
-
-  const { keysignPayload, approvalPayload } = await vault.prepareSwapTx({
-    fromCoin: { chain: options.fromChain, token: options.fromToken },
-    toCoin: { chain: options.toChain, token: options.toToken },
-    amount: resolvedAmount,
-    swapQuote: quote,
-    autoApprove: false,
-  })
-
-  prepSpinner.succeed('Swap prepared')
-
-  // Pre-unlock vault before signing to avoid password prompt interference with spinner
+  // 4. Unlock and execute via compound method
   await ensureVaultUnlocked(vault, options.password)
 
-  // 5. Handle approval if needed
-  if (approvalPayload) {
-    info('\nToken approval required before swap...')
-
-    const approvalSpinner = createSpinner('Signing approval transaction...')
-
-    vault.on('signingProgress', ({ step }: any) => {
-      approvalSpinner.text = `Approval: ${step.message} (${step.progress}%)`
-    })
-
-    try {
-      const approvalHashes = await vault.extractMessageHashes(approvalPayload)
-      const approvalSig = await vault.sign(
-        {
-          transaction: approvalPayload,
-          chain: options.fromChain,
-          messageHashes: approvalHashes,
-        },
-        { signal: options.signal }
-      )
-
-      approvalSpinner.succeed('Approval signed')
-
-      const broadcastApprovalSpinner = createSpinner('Broadcasting approval...')
-      const approvalTxHash = await vault.broadcastTx({
-        chain: options.fromChain,
-        keysignPayload: approvalPayload,
-        signature: approvalSig,
-      })
-
-      broadcastApprovalSpinner.succeed(`Approval broadcast: ${approvalTxHash}`)
-      info('Waiting for approval to confirm...')
-
-      // Wait a bit for approval to be mined
-      await new Promise(resolve => setTimeout(resolve, 5000))
-    } finally {
-      vault.removeAllListeners('signingProgress')
-    }
-  }
-
-  // 6. Sign main swap transaction
   const signSpinner = createSpinner('Signing swap transaction...')
 
   vault.on('signingProgress', ({ step }: any) => {
@@ -257,42 +226,30 @@ export async function executeSwap(
   })
 
   try {
-    const messageHashes = await vault.extractMessageHashes(keysignPayload)
-    const signature = await vault.sign(
-      {
-        transaction: keysignPayload,
-        chain: options.fromChain,
-        messageHashes,
-      },
-      { signal: options.signal }
-    )
-
-    signSpinner.succeed('Swap transaction signed')
-
-    // 7. Broadcast swap
-    const broadcastSpinner = createSpinner('Broadcasting swap transaction...')
-
-    const txHash = await vault.broadcastTx({
-      chain: options.fromChain,
-      keysignPayload,
-      signature,
+    const result = await vault.swap({
+      fromChain: options.fromChain,
+      fromSymbol: options.fromToken || '',
+      toChain: options.toChain,
+      toSymbol: options.toToken || '',
+      amount: amountStr,
     })
 
-    broadcastSpinner.succeed(`Swap broadcast: ${txHash}`)
+    if (result.dryRun) throw new Error('unreachable')
 
-    // 8. Display result
+    signSpinner.succeed(`Swap broadcast: ${result.txHash}`)
+
     if (isJsonOutput()) {
       outputJson({
-        txHash,
+        txHash: result.txHash,
         fromChain: options.fromChain,
         toChain: options.toChain,
         quote,
       })
     } else {
-      displaySwapResult(options.fromChain, options.toChain, txHash, quote, quote.toCoin.decimals)
+      displaySwapResult(options.fromChain, options.toChain, result.txHash, quote, quote.toCoin.decimals)
     }
 
-    return { txHash, quote }
+    return { txHash: result.txHash, quote }
   } finally {
     vault.removeAllListeners('signingProgress')
   }

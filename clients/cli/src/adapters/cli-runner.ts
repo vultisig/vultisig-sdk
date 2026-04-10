@@ -1,49 +1,36 @@
-/**
- * CLI Runner - Wraps command execution for CLI mode
- *
- * Provides:
- * - Error handling with process exit
- * - Consistent exit codes
- * - Cleanup on completion
- */
-import { isJsonOutput, outputJsonError, printError } from '../lib/output'
-import type { CLIContext } from './cli-context'
+// CLI Runner - Wraps command execution with typed error handling and exit codes
 
-/**
- * Wrap a command handler with CLI exit behavior
- * - Exits with code 0 on success
- * - Exits with code 1 on error (or custom exitCode)
- */
+import { classifyError, toErrorJson, VsigError } from '../core/errors'
+import { isJsonOutput, printError } from '../lib/output'
+
+// Wrap a command handler with CLI exit behavior
+// On VsigError: uses typed exitCode
+// On unknown Error: classifies via classifyError(), then exits with typed code
+// In JSON mode: outputs structured error JSON with versioned envelope
 export function withExit<T extends any[]>(handler: (...args: T) => Promise<void>): (...args: T) => Promise<void> {
   return async (...args: T) => {
     try {
       await handler(...args)
       process.exit(0)
     } catch (err: any) {
-      const exitCode = err.exitCode ?? 1
+      const classified =
+        err instanceof VsigError
+          ? err
+          : err instanceof Error
+            ? classifyError(err)
+            : classifyError(new Error(String(err)))
 
-      // In JSON mode, output structured error
       if (isJsonOutput()) {
-        outputJsonError(err.message, err.code ?? 'GENERAL_ERROR')
-        process.exit(exitCode)
+        process.stdout.write(`${JSON.stringify(toErrorJson(classified), null, 2)}\n`)
+        process.exit(classified.exitCode)
       }
 
-      if (err.exitCode !== undefined) {
-        process.exit(err.exitCode)
+      printError(`\nx ${classified.message}`)
+      if (classified.hint) printError(`  hint: ${classified.hint}`)
+      if (classified.suggestions?.length) {
+        for (const s of classified.suggestions) printError(`  - ${s}`)
       }
-      printError(`\nx ${err.message}`)
-      process.exit(1)
+      process.exit(classified.exitCode)
     }
-  }
-}
-
-/**
- * Run a command with context and automatic cleanup
- */
-export async function runCommand<T>(ctx: CLIContext, handler: () => Promise<T>): Promise<T> {
-  try {
-    return await handler()
-  } finally {
-    // Context cleanup happens in the withExit wrapper
   }
 }

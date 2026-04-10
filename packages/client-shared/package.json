@@ -1,0 +1,32 @@
+{
+  "name": "@vultisig/client-shared",
+  "version": "0.1.0",
+  "description": "Shared client infrastructure for Vultisig CLI and MCP — auth, config, tool descriptions",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "^1.1.6",
+    "@vultisig/sdk": "workspace:^",
+    "inquirer": "^12.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}

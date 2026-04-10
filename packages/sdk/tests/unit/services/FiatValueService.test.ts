@@ -428,11 +428,10 @@ describe('FiatValueService', () => {
       await expect(service.getPrice(Chain.Ethereum, '0xInvalidToken')).rejects.toThrow('Price not found for token')
     })
 
-    it('should throw error for token pricing on non-EVM chains', async () => {
-      // Bitcoin is not an EVM chain
-      await expect(service.getPrice(Chain.Bitcoin, '0xSomeToken')).rejects.toThrow(
-        'Token pricing not supported for Bitcoin'
-      )
+    it('should return 0 for token pricing on non-EVM chains', async () => {
+      // Bitcoin is not an EVM chain — returns 0 instead of throwing
+      const price = await service.getPrice(Chain.Bitcoin, '0xSomeToken')
+      expect(price).toBe(0)
     })
   })
 

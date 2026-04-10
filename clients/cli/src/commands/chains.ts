@@ -38,8 +38,12 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
   }
 
   if (options.add) {
-    await vault.addChain(options.add)
-    success(`\n+ Added chain: ${options.add}`)
+    if (vault.chains.includes(options.add)) {
+      success(`\nChain already active: ${options.add}`)
+    } else {
+      await vault.addChain(options.add)
+      success(`\n+ Added chain: ${options.add}`)
+    }
     const address = await vault.address(options.add)
     info(`Address: ${address}`)
   } else if (options.remove) {
