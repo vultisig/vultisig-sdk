@@ -1,5 +1,31 @@
 # @vultisig/sdk
 
+## 0.14.0
+
+### Minor Changes
+
+- [#222](https://github.com/vultisig/vultisig-sdk/pull/222) [`9e2ffd6`](https://github.com/vultisig/vultisig-sdk/commit/9e2ffd6f6a8e2c8ad507b6ed2e2c1232bf8a98c7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat: add vault-free tools layer for MCP TypeScript rewrite
+
+  New `tools/` module with vault-free chain utilities:
+  - `abiEncode` / `abiDecode` - ABI encoding/decoding via viem
+  - `evmCall` - read-only contract calls (eth_call)
+  - `evmTxInfo` - nonce, gas prices, chainId
+  - `evmCheckAllowance` - ERC-20 approval queries
+  - `resolveEns` - ENS name resolution
+  - `resolve4ByteSelector` - function signature lookup
+  - `searchToken` - CoinGecko search with multi-chain deployment mapping
+  - `deriveAddressFromKeys` - address derivation from raw ECDSA/EdDSA keys
+  - `findSwapQuote` - multi-provider swap quotes (THORChain, MayaChain, 1inch, LiFi, KyberSwap)
+  - `VerifierClient` - Vultisig Verifier REST API client
+
+  Also fixes SUI token balance queries (was ignoring coinType for non-native tokens).
+
+### Patch Changes
+
+- [#210](https://github.com/vultisig/vultisig-sdk/pull/210) [`8bef556`](https://github.com/vultisig/vultisig-sdk/commit/8bef55651cba506a515083765d6f7745cce54abe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Stop generating ML-DSA during secure vault creation, join, seedphrase import, and reshare. ECDSA and EdDSA only during the ceremony, matching mobile apps; ML-DSA remains available as a separate optional step.
+
+- [#205](https://github.com/vultisig/vultisig-sdk/pull/205) [`99296f5`](https://github.com/vultisig/vultisig-sdk/commit/99296f5aaf3f9bfb7fe694de034037683e7435ed) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Classify vault import failures with specific `VaultImportErrorCode` values (`INVALID_FILE_FORMAT`, `INVALID_PASSWORD`, `UNSUPPORTED_FORMAT`, `CORRUPTED_DATA`) instead of wrapping most errors as `CORRUPTED_DATA`. Add unit tests for import edge cases.
+
 ## 0.13.0
 
 ### Minor Changes
