@@ -184,6 +184,41 @@
       "import": "./dist/chains/cosmos/thor/kujira-merge/kujiraCoinsOnThorChain.js",
       "default": "./dist/chains/cosmos/thor/kujira-merge/kujiraCoinsOnThorChain.js"
     },
+    "./chains/cosmos/thor/lp": {
+      "types": "./dist/chains/cosmos/thor/lp/index.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/index.js",
+      "default": "./dist/chains/cosmos/thor/lp/index.js"
+    },
+    "./chains/cosmos/thor/lp/affiliate": {
+      "types": "./dist/chains/cosmos/thor/lp/affiliate.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/affiliate.js",
+      "default": "./dist/chains/cosmos/thor/lp/affiliate.js"
+    },
+    "./chains/cosmos/thor/lp/memo": {
+      "types": "./dist/chains/cosmos/thor/lp/memo.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/memo.js",
+      "default": "./dist/chains/cosmos/thor/lp/memo.js"
+    },
+    "./chains/cosmos/thor/lp/payload": {
+      "types": "./dist/chains/cosmos/thor/lp/payload.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/payload.js",
+      "default": "./dist/chains/cosmos/thor/lp/payload.js"
+    },
+    "./chains/cosmos/thor/lp/pools": {
+      "types": "./dist/chains/cosmos/thor/lp/pools.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/pools.js",
+      "default": "./dist/chains/cosmos/thor/lp/pools.js"
+    },
+    "./chains/cosmos/thor/lp/position": {
+      "types": "./dist/chains/cosmos/thor/lp/position.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/position.js",
+      "default": "./dist/chains/cosmos/thor/lp/position.js"
+    },
+    "./chains/cosmos/thor/lp/validation": {
+      "types": "./dist/chains/cosmos/thor/lp/validation.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/validation.js",
+      "default": "./dist/chains/cosmos/thor/lp/validation.js"
+    },
     "./chains/cosmos/thor/rujira/config": {
       "types": "./dist/chains/cosmos/thor/rujira/config.d.ts",
       "import": "./dist/chains/cosmos/thor/rujira/config.js",
