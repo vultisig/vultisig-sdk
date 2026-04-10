@@ -1674,15 +1674,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
-    this.validateHumanSwapAmount(amount, fromToken.decimals)
+    const normalizedAmount = this.validateHumanSwapAmount(amount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({ fromCoin, toCoin, amount })
+    const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: normalizedAmount })
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
       fromCoin,
       toCoin,
-      amount,
+      amount: normalizedAmount,
       swapQuote: quote,
     })
     if (approvalPayload) {
@@ -1786,8 +1786,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return BigInt(whole + fraction.padEnd(decimals, '0').slice(0, decimals))
   }
 
-  /** Same conversion as swap quote / prepare (`toChainAmount` → `parseUnits`); keeps validation aligned with execution. */
-  private validateHumanSwapAmount(amount: string, decimals: number): void {
+  /** Same conversion as swap quote / prepare (`toChainAmount` → `parseUnits`); returns trimmed decimal string for quote/prepare. */
+  private validateHumanSwapAmount(amount: string, decimals: number): string {
     const trimmed = amount?.trim()
     if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
     let chainAmount: bigint
@@ -1799,6 +1799,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (chainAmount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
     }
+    return trimmed
   }
 
   /** Poll getTxStatus until confirmed or timeout. Used for approval tx before swap. */

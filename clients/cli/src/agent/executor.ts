@@ -859,8 +859,14 @@ export class AgentExecutor {
     const fromCoin = { chain: fromChain, token: fromToken || undefined }
     const toCoin = { chain: toChain, token: toToken || undefined }
 
-    // Convert base units to human-readable decimal string (same precision as SDK swap path)
-    const humanAmount = formatUnits(BigInt(amountStr), fromDecimals)
+    let humanAmount: string
+    try {
+      humanAmount = formatUnits(BigInt(amountStr), fromDecimals)
+    } catch {
+      throw Object.assign(new Error(`Invalid amount in tx_ready data for local Solana swap build: ${amountStr}`), {
+        _phase: 'prepare',
+      })
+    }
 
     if (this.verbose)
       process.stderr.write(
