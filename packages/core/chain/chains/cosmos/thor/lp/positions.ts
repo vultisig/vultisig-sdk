@@ -66,19 +66,22 @@ export const getThorchainLpPositions = async ({
     if (err instanceof HttpResponseError && err.status === 404) return []
     throw err
   }
-  // A 404 means "address has no positions" → empty array (handled above).
-  // A 200 with no `pools` array means the schema drifted — throw so the
-  // caller sees a real error instead of silently treating schema drift as
-  // "no positions".
+  // Shape gates on the 200 response:
+  //   - `raw` must be an object (not null, not a primitive, not an array of
+  //     something unrelated) — otherwise the upstream shape is unrecognizable
+  //     and we throw so the caller sees a real error.
+  //   - `raw.pools` is allowed to be missing (treated as "no positions")
+  //     for backward compat with the pre-404 era, when Midgard would
+  //     return `{}` for known-empty addresses. A missing `pools` key is
+  //     NOT treated as schema drift.
+  //   - `raw.pools` MUST be an array if present — a non-array `pools`
+  //     IS schema drift and we throw.
   if (!raw || typeof raw !== 'object') {
     throw new Error(
       `getThorchainLpPositions: unexpected Midgard response shape from ${url}`
     )
   }
   if (raw.pools === undefined) {
-    // Midgard has occasionally returned `{}` for known-empty addresses in
-    // the past (pre-404 era). Treat an explicitly-missing `pools` key as
-    // empty but require a defined response object above.
     return []
   }
   if (!Array.isArray(raw.pools)) {
