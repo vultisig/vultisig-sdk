@@ -760,6 +760,11 @@
       "import": "./dist/swap/utils/getSwapTrackingUrl.js",
       "default": "./dist/swap/utils/getSwapTrackingUrl.js"
     },
+    "./tx/compile/cardano/buildSignedCardanoTx": {
+      "types": "./dist/tx/compile/cardano/buildSignedCardanoTx.d.ts",
+      "import": "./dist/tx/compile/cardano/buildSignedCardanoTx.js",
+      "default": "./dist/tx/compile/cardano/buildSignedCardanoTx.js"
+    },
     "./tx/compile/compileTx": {
       "types": "./dist/tx/compile/compileTx.d.ts",
       "import": "./dist/tx/compile/compileTx.js",
