@@ -19,8 +19,21 @@ export type ThorchainLpPosition = {
   assetPending: string
   runeAddress: string
   assetAddress: string
-  /** Unix seconds (Midgard returns it as a string). */
+  /**
+   * Unix seconds of the last add. Midgard returns this; thornode does
+   * not, so positions sourced from the thornode fallback leave this as
+   * `'0'` and populate `lastAddHeight` instead.
+   */
   dateLastAdded: string
+  /**
+   * THORChain block height of the last add. Populated from thornode's
+   * `last_add_height` when the position comes from the thornode
+   * fallback path. Empty string when the position comes from Midgard
+   * (which does not expose block height on `/v2/member`). Either field
+   * is sufficient to gate the 1h lockup check — `dateLastAdded` via a
+   * wall-clock window, or `lastAddHeight` via a block-count window.
+   */
+  lastAddHeight: string
   /**
    * True when either side has a non-zero pending amount. Common for
    * asymmetric adds that THORChain has not yet credited.
@@ -63,6 +76,7 @@ const normalizeMemberPool = (raw: RawMemberPool): ThorchainLpPosition => ({
   runeAddress: raw.runeAddress ?? '',
   assetAddress: raw.assetAddress ?? '',
   dateLastAdded: raw.dateLastAdded ?? '0',
+  lastAddHeight: '',
   isPending: isNonZero(raw.runePending) || isNonZero(raw.assetPending),
 })
 
@@ -178,10 +192,15 @@ export const getThorchainLpPositionFromThornode = async ({
     assetPending: pendingAsset,
     runeAddress: raw.rune_address ?? thorAddress,
     assetAddress: raw.asset_address ?? '',
-    dateLastAdded:
+    // Thornode exposes the last-add block height, not a Unix timestamp.
+    // Keep `dateLastAdded` semantically Unix-seconds-or-0 and expose the
+    // block height via the dedicated `lastAddHeight` field so lockup
+    // checks can use either source.
+    dateLastAdded: '0',
+    lastAddHeight:
       typeof raw.last_add_height === 'number'
         ? String(raw.last_add_height)
-        : '0',
+        : '',
     isPending: isNonZero(pendingRune) || isNonZero(pendingAsset),
   }
 }

@@ -39,6 +39,7 @@ const normalizeMemberPool = (raw: RawMemberPool): ThorchainLpPosition => ({
   runeAddress: raw.runeAddress ?? '',
   assetAddress: raw.assetAddress ?? '',
   dateLastAdded: raw.dateLastAdded ?? '0',
+  lastAddHeight: '',
   isPending: isNonZero(raw.runePending) || isNonZero(raw.assetPending),
 })
 

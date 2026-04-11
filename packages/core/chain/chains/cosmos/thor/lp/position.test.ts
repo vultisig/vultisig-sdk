@@ -72,7 +72,11 @@ describe('getThorchainLpPosition', () => {
     expect(pos?.liquidityUnits).toBe('0')
     expect(pos?.runePending).toBe('100000000')
     expect(pos?.isPending).toBe(true)
-    expect(pos?.dateLastAdded).toBe('25712470')
+    // Thornode returns block height, not Unix seconds. dateLastAdded
+    // stays '0' and the block height lives on lastAddHeight so lockup
+    // checks can use either source.
+    expect(pos?.dateLastAdded).toBe('0')
+    expect(pos?.lastAddHeight).toBe('25712470')
   })
 
   it('falls back to thornode when midgard has the address but not the pool', async () => {
