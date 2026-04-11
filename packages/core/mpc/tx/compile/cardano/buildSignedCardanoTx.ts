@@ -90,11 +90,12 @@ export const buildSignedCardanoTx = ({
 }: BuildSignedCardanoTxInput): Uint8Array => {
   const witnessCbor = buildWitnessCbor(publicKey, signature)
 
-  // Signed tx: 0x83 [tx_body, witnesses, null]
+  // Signed tx: 0x84 [tx_body, witnesses, isValid, auxiliary_data]
   return concat([
-    new Uint8Array([0x83]),
+    new Uint8Array([0x84]),
     txBodyCbor,
     witnessCbor,
-    new Uint8Array([0xf6]), // CBOR null
+    new Uint8Array([0xf5]), // CBOR true (is_valid)
+    new Uint8Array([0xf6]), // CBOR null (no auxiliary data)
   ])
 }
