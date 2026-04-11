@@ -16,8 +16,9 @@ export const getCardanoTokenMetadata: TokenMetadataResolver<
   const registry = info.token_registry_metadata
 
   const ticker =
-    registry?.ticker ??
-    (info.asset_name_ascii || assetName.slice(0, 8).toUpperCase())
+    registry?.ticker?.trim() ||
+    info.asset_name_ascii?.trim() ||
+    assetName.slice(0, 8).toUpperCase()
 
   const decimals = registry?.decimals ?? 0
 

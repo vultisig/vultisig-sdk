@@ -10,9 +10,14 @@ export type CardanoAddressAsset = {
   quantity: string
 }
 
-type CardanoAddressAssetResponse = Array<
-  CardanoAddressAsset & { address: string }
->
+type CardanoAddressAssetResponse = Array<{
+  address: string
+  policy_id: string
+  asset_name: string
+  fingerprint: string
+  decimals: number | null
+  quantity: string
+}>
 
 /** Fetches all native tokens held at a Cardano address via the Koios `address_assets` endpoint. */
 export const getCardanoAddressAssets = async (
@@ -30,7 +35,7 @@ export const getCardanoAddressAssets = async (
     policy_id,
     asset_name,
     fingerprint,
-    decimals,
+    decimals: decimals ?? 0,
     quantity,
   }))
 }

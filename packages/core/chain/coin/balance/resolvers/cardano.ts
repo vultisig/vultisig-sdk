@@ -16,9 +16,13 @@ export const getCardanoCoinBalance: CoinBalanceResolver<
 > = async input => {
   if (input.id) {
     const { policyId, assetName } = fromCardanoAssetId(input.id)
+    const normalizedPolicyId = policyId.toLowerCase()
+    const normalizedAssetName = assetName.toLowerCase()
     const assets = await getCardanoAddressAssets(input.address)
     const match = assets.find(
-      a => a.policy_id === policyId && a.asset_name === assetName
+      a =>
+        a.policy_id.toLowerCase() === normalizedPolicyId &&
+        a.asset_name.toLowerCase() === normalizedAssetName
     )
     return match ? BigInt(match.quantity) : 0n
   }
