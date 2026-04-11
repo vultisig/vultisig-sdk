@@ -47,7 +47,10 @@ export type {
   GetThorchainLpPositionInput,
   ThorchainLpPosition,
 } from './position'
-export { getThorchainLpPosition } from './position'
+export {
+  getThorchainLpPosition,
+  getThorchainLpPositionFromThornode,
+} from './position'
 export {
   assertPoolDepositable,
   getThorchainMimir,
