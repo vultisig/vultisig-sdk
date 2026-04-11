@@ -269,6 +269,11 @@
       "import": "./dist/fetch/assertFetchResponse.js",
       "default": "./dist/fetch/assertFetchResponse.js"
     },
+    "./fetch/HttpResponseError": {
+      "types": "./dist/fetch/HttpResponseError.d.ts",
+      "import": "./dist/fetch/HttpResponseError.js",
+      "default": "./dist/fetch/HttpResponseError.js"
+    },
     "./file/initiateFileDownload": {
       "types": "./dist/file/initiateFileDownload.d.ts",
       "import": "./dist/file/initiateFileDownload.js",

@@ -149,41 +149,57 @@ export class AgentClient {
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+    let currentEvent = ''
+    let currentData = ''
+
+    /** Strip optional single leading space from an SSE field value per spec. */
+    const stripLeadingSpace = (v: string): string => (v.length > 0 && v[0] === ' ' ? v.slice(1) : v)
+
+    const processLine = (raw: string): void => {
+      const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
+      if (line.startsWith('event:')) {
+        currentEvent = stripLeadingSpace(line.slice(6)).trim()
+      } else if (line.startsWith('data:')) {
+        currentData += (currentData ? '\n' : '') + stripLeadingSpace(line.slice(5))
+      } else if (line === '') {
+        // Empty line = end of event
+        if (currentData) {
+          // SSE spec: default event type is "message" when no event: field is present
+          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
+        }
+        currentEvent = ''
+        currentData = ''
+      } else if (line[0] === ':') {
+        // SSE comment (keep-alive ping) - ignore
+      }
+      // Unknown fields (id:, retry:, etc.) silently ignored - no reconnection support.
+      // Bare \r line endings are unsupported (only \n and \r\n).
+    }
 
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
 
         // Parse SSE events from buffer
         const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete last line
+        // Keep incomplete last line between reads; on done, preserve it for final processing
+        const trailing = lines.pop() ?? ''
+        buffer = done ? '' : trailing
 
-        let currentEvent = ''
-        let currentData = ''
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim()
-          } else if (line.startsWith('data: ')) {
-            currentData += (currentData ? '\n' : '') + line.slice(6)
-          } else if (line === '') {
-            // Empty line = end of event
-            if (currentEvent && currentData) {
-              this.handleSSEEvent(currentEvent, currentData, result, callbacks)
-            }
-            currentEvent = ''
-            currentData = ''
-          } else if (line.startsWith(': ')) {
-            // SSE comment (ping), ignore
-          }
+        for (const rawLine of lines) {
+          processLine(rawLine)
         }
 
-        // Handle case where event+data were the last lines without trailing newline
-        if (currentEvent && currentData) {
-          this.handleSSEEvent(currentEvent, currentData, result, callbacks)
+        if (done) {
+          // Process any trailing content that wasn't newline-terminated
+          if (trailing) processLine(trailing)
+          // Flush any pending event (stream ended without final blank line)
+          if (currentData) {
+            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
+          }
+          break
         }
       }
     } finally {
@@ -213,8 +229,10 @@ export class AgentClient {
 
       switch (event) {
         case 'text_delta':
-          result.fullText += parsed.delta
-          callbacks.onTextDelta?.(parsed.delta)
+          if (typeof parsed.delta === 'string') {
+            result.fullText += parsed.delta
+            callbacks.onTextDelta?.(parsed.delta)
+          }
           break
         case 'tool_progress':
           if (this.verbose) process.stderr.write(`[SSE:tool_progress] raw: ${data.slice(0, 1000)}\n`)
@@ -248,8 +266,12 @@ export class AgentClient {
           // Stream complete
           break
       }
-    } catch {
-      // Ignore malformed SSE data
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        if (this.verbose) process.stderr.write(`[SSE] skipping malformed JSON: ${data.slice(0, 200)}\n`)
+      } else {
+        throw e
+      }
     }
   }
 

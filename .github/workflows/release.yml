@@ -56,6 +56,7 @@ jobs:
             "packages/mpc-types"
             "packages/mpc-wasm"
             "packages/mpc-native"
+            "packages/walletcore-native"
             "packages/core/config"
             "packages/lib/utils"
             "packages/lib/dkls"

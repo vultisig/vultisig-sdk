@@ -184,6 +184,9 @@ export {
   vultDiscountTiers,
 } from '@vultisig/core-chain/swap/affiliate/config'
 
+// THORChain LP primitives (asym RUNE-side, v1)
+export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
@@ -201,6 +204,25 @@ export type { RiskLevel, SiteScanResult, TransactionSimulationResult, Transactio
 // ============================================================================
 
 export { CosmosMsgType } from './types'
+
+// ============================================================================
+// PUBLIC API - Tools (vault-free chain utilities)
+// ============================================================================
+
+export type { FindSwapQuoteParams } from './tools'
+export {
+  abiDecode,
+  abiEncode,
+  deriveAddressFromKeys,
+  evmCall,
+  evmCheckAllowance,
+  evmTxInfo,
+  findSwapQuote,
+  resolve4ByteSelector,
+  resolveEns,
+  searchToken,
+  VerifierClient,
+} from './tools'
 
 // ============================================================================
 // PUBLIC API - Push Notifications

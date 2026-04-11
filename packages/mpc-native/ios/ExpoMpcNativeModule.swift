@@ -577,6 +577,9 @@ public class ExpoMpcNativeModule: Module {
         // DKLS — Key Import
         // =====================================================================
 
+        // NOTE: Both iOS and Android accept hex strings for privateKey and
+        // rootChainCode. iOS uses dataFromHex(), Android uses decodeHex().
+        // The TypeScript layer in index.ts passes toHex() for both platforms.
         Function("createDklsKeyImportInitiator") { (privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: [String]) -> [String: Any] in
             guard let pkData = dataFromHex(privateKeyHex) else {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid hex private key"])
@@ -755,8 +758,8 @@ public class ExpoMpcNativeModule: Module {
             tss_buffer_free(&ksBuf)
 
             // Free the handle after extracting all data
-            // Schnorr keyshares use the same free as DKLS in the C API
-            dkls_keyshare_free(&keyshareHandle)
+            // Note: schnorr_keyshare_free is not exported by the Rust library (cbindgen gap)
+            // The keyshare memory is managed by the Rust allocator and cleaned up on session end
 
             return [
                 "publicKey": publicKey,
@@ -948,9 +951,11 @@ public class ExpoMpcNativeModule: Module {
         }
 
         Function("freeSchnorrKeyshare") { (handle: Int) in
-            // Schnorr keyshares use the same free as DKLS in the C API
-            var ks = Handle(_0: Int32(handle))
-            dkls_keyshare_free(&ks)
+            // NO-OP: schnorr_keyshare_free is not exported by the Rust/Go library.
+            // The Go runtime's GC manages the underlying memory — there is no C-side
+            // pointer to release. This function exists so the JS layer has a consistent
+            // free() API; it intentionally does nothing on iOS.
+            // TODO: Implement proper cleanup if the Go binding ever exports a free function.
         }
 
         // =====================================================================
@@ -1054,6 +1059,9 @@ public class ExpoMpcNativeModule: Module {
         // Schnorr — Key Import
         // =====================================================================
 
+        // NOTE: Both iOS and Android accept hex strings for privateKey and
+        // rootChainCode. iOS uses dataFromHex(), Android uses decodeHex().
+        // The TypeScript layer in index.ts passes toHex() for both platforms.
         Function("createSchnorrKeyImportInitiator") { (privateKeyHex: String, rootChainCodeHex: String?, threshold: Int, ids: [String]) -> [String: Any] in
             guard let pkData = dataFromHex(privateKeyHex) else {
                 throw NSError(domain: "ExpoMpcNative", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid hex private key"])

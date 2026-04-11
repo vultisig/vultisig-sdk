@@ -7,6 +7,7 @@ export const getSuiCoinBalance: CoinBalanceResolver = async input => {
 
   const { totalBalance } = await rpcClient.getBalance({
     owner: input.address,
+    ...(input.id ? { coinType: input.id } : {}),
   })
 
   return BigInt(totalBalance)

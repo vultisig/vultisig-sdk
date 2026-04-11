@@ -16,7 +16,8 @@
     "packages/rujira",
     "packages/mpc-types",
     "packages/mpc-wasm",
-    "packages/mpc-native"
+    "packages/mpc-native",
+    "packages/walletcore-native"
   ],
   "scripts": {
     "format": "prettier --config .config/.prettierrc --ignore-path .config/.prettierignore --write 'packages/sdk/**/*.{ts,tsx,js,jsx}' 'packages/rujira/**/*.{ts,tsx,js,jsx}' 'clients/**/*.{ts,tsx,js,jsx}' 'examples/**/*.{ts,tsx,js,jsx}'",
@@ -30,7 +31,7 @@
     "pack:shared": "node scripts/pack-shared-packages.mjs",
     "sync-packages": "syncpack fix-mismatches",
     "typecheck": "tsc --project .config/tsconfig.json --noEmit",
-    "test": "yarn workspace @vultisig/sdk test && yarn test:rujira",
+    "test": "yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:core",
     "test:all": "yarn test:unit; yarn test:integration; yarn test:e2e",
     "test:unit": "yarn workspace @vultisig/sdk test:unit",
     "test:integration": "yarn workspace @vultisig/sdk test:integration",
@@ -46,6 +47,7 @@
     "test:e2e:swap-quotes": "yarn workspace @vultisig/sdk test:e2e:swap-quotes",
     "test:e2e:swap-transactions": "yarn workspace @vultisig/sdk test:e2e:swap-transactions",
     "test:e2e:secure-signing": "yarn workspace @vultisig/sdk test:e2e:secure-signing",
+    "test:core": "vitest run --config .config/vitest.core.config.ts",
     "test:rujira": "yarn workspace @vultisig/rujira test",
     "test:watch": "yarn workspace @vultisig/sdk test:watch",
     "test:unit:watch": "yarn workspace @vultisig/sdk test:unit:watch",

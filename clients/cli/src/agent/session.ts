@@ -295,8 +295,9 @@ export class AgentSession {
     )
 
     // Emit the full assistant message
-    // Backend may send text via text_delta events (fullText) or a single message event
-    const responseText = streamResult.fullText || (streamResult.message as any)?.content || ''
+    // Prefer the final message event when present; streamed text can be partial
+    // if intermediate chunks were interrupted or dropped upstream.
+    const responseText = streamResult.message?.content || streamResult.fullText || ''
 
     // Check if the response text contains inline tool calls (XML format from the model)
     const inlineActions = parseInlineToolCalls(responseText)
