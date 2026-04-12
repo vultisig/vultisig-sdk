@@ -158,8 +158,13 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        with:
-          lfs: true
+
+      - name: Ensure mpc-native Android AARs (avoid Git LFS on publish)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MPC_NATIVE_AARS_REPO: ${{ github.repository }}
+          MPC_NATIVE_AARS_DOWNLOAD_TAG: ${{ vars.MPC_NATIVE_AARS_DOWNLOAD_TAG }}
+        run: node scripts/prepare-mpc-native-aars.mjs
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -199,7 +204,7 @@ jobs:
   # ============ JOB 4: Tag + GitHub Release ============
   tag-and-release:
     name: Tag & GitHub Release
-    needs: [build, test]
+    needs: [build, test, publish]
     if: needs.build.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -230,13 +235,19 @@ jobs:
 
   # ============ JOB 5: Deploy Vercel ============
   deploy-vercel:
-    needs: [build, test]
+    needs: [build, test, publish]
+    if: |
+      always() &&
+      (needs.build.outputs.should_publish != 'true' || needs.publish.result == 'success')
     uses: ./.github/workflows/deploy-vercel.yml
     secrets: inherit
 
   # ============ JOB 6: Sync Docs ============
   sync-docs:
-    needs: [build, test]
+    needs: [build, test, publish]
+    if: |
+      always() &&
+      (needs.build.outputs.should_publish != 'true' || needs.publish.result == 'success')
     uses: ./.github/workflows/sync-docs.yml
     with:
       version: ${{ needs.build.outputs.version }}
@@ -244,14 +255,20 @@ jobs:
 
   # ============ JOB 7: Sync Skills ============
   sync-skills:
-    needs: [build, test]
+    needs: [build, test, publish]
+    if: |
+      always() &&
+      (needs.build.outputs.should_publish != 'true' || needs.publish.result == 'success')
     uses: ./.github/workflows/sync-skills.yml
     secrets: inherit
 
   # ============ JOB 8: Discord Notify ============
   notify:
-    needs: [build, test, publish, tag-and-release, deploy-vercel, sync-docs, sync-skills]
-    if: always() && needs.build.outputs.should_publish == 'true'
+    needs: [build, publish, tag-and-release, deploy-vercel, sync-docs, sync-skills]
+    if: |
+      always() &&
+      needs.build.outputs.should_publish == 'true' &&
+      needs.publish.result == 'success'
     uses: ./.github/workflows/notify-discord.yml
     with:
       version: ${{ needs.build.outputs.version }}

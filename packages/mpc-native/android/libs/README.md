@@ -99,7 +99,7 @@ cp goschnorr/build/outputs/aar/goschnorr-release.aar \
    <sdk>/packages/mpc-native/android/libs/goschnorr-release.aar
 ```
 
-These files are tracked via Git LFS.
+These files are tracked via Git LFS in git. The Release workflow does **not** run `git lfs fetch` on the publish job (avoids LFS bandwidth blocking npm). Instead, `scripts/prepare-mpc-native-aars.mjs` keeps real `.aar` (ZIP) files on disk: if the checkout still has LFS pointers, CI downloads the same filenames from a GitHub Release. Set repo Actions variable `MPC_NATIVE_AARS_DOWNLOAD_TAG` to that release tag (assets must be named `dkls-release.aar` and `goschnorr-release.aar`). **Update that tag** whenever you change the binaries in git, or CI may ship an older pair from the release. Alternatively, migrate off LFS by committing the binaries and removing the `filter=lfs` line in the repo root `.gitattributes` for this path.
 
 ## Verification
 
