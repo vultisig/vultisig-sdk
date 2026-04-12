@@ -238,6 +238,7 @@ jobs:
     needs: [build, test, publish]
     if: |
       always() &&
+      needs.test.result == 'success' &&
       (needs.build.outputs.should_publish != 'true' || needs.publish.result == 'success')
     uses: ./.github/workflows/deploy-vercel.yml
     secrets: inherit
@@ -247,6 +248,7 @@ jobs:
     needs: [build, test, publish]
     if: |
       always() &&
+      needs.test.result == 'success' &&
       (needs.build.outputs.should_publish != 'true' || needs.publish.result == 'success')
     uses: ./.github/workflows/sync-docs.yml
     with:
@@ -258,6 +260,7 @@ jobs:
     needs: [build, test, publish]
     if: |
       always() &&
+      needs.test.result == 'success' &&
       (needs.build.outputs.should_publish != 'true' || needs.publish.result == 'success')
     uses: ./.github/workflows/sync-skills.yml
     secrets: inherit
