@@ -101,7 +101,7 @@ cp goschnorr/build/outputs/aar/goschnorr-release.aar \
    <sdk>/packages/mpc-native/android/libs/goschnorr-release.aar
 ```
 
-The Release workflow runs `scripts/prepare-mpc-native-aars.mjs` before `npm publish`: it checks that these files are real ZIP archives. If a checkout ever contains Git LFS pointers again, CI can instead download assets from a GitHub Release (set repo variable `MPC_NATIVE_AARS_DOWNLOAD_TAG`, or env `MPC_NATIVE_AARS_BASE_URL`).
+These files are committed as normal Git blobs, so CI does not depend on GitHub LFS bandwidth.
 
 ## Verification
 
