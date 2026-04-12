@@ -6,6 +6,7 @@ export const chainsWithTokenMetadataDiscovery = [
   ...Object.values(EvmChain),
   OtherChain.Solana,
   OtherChain.Tron,
+  OtherChain.Cardano,
   ...Object.values(CosmosChain),
 ] as const
 

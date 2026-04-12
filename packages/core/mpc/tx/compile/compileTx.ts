@@ -10,6 +10,7 @@ import { signatureFormats } from '@vultisig/core-chain/signing/SignatureFormat'
 import { assertSignature } from '@vultisig/core-chain/utils/assertSignature'
 
 import { getQBTCSignedTransaction } from '../../chains/cosmos/qbtc/QBTCHelper'
+import { buildSignedCardanoTx } from './cardano/buildSignedCardanoTx'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
 import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bittensor'
@@ -99,6 +100,48 @@ export const compileTx = ({
     return TW.Polkadot.Proto.SigningOutput.encode(
       TW.Polkadot.Proto.SigningOutput.create({
         encoded: extrinsic,
+      })
+    ).finish()
+  }
+
+  if (chain === Chain.Cardano) {
+    const hash = hashes[0]
+    const hashHex = Buffer.from(hash).toString('hex')
+
+    const sig = generateSignature({
+      walletCore,
+      signature: keysignSignatures[hashHex],
+      signatureFormat,
+    })
+
+    assertSignature({
+      publicKey,
+      message: hash,
+      signature: sig,
+      signatureFormat,
+    })
+
+    // preOutput.data is the CBOR-encoded tx body
+    const preOutput = TW.TxCompiler.Proto.PreSigningOutput.decode(
+      walletCore.TransactionCompiler.preImageHashes(
+        getCoinType({ chain, walletCore }),
+        txInputData
+      )
+    )
+
+    const spendingKey = new Uint8Array(publicKey.data()).slice(0, 32)
+    const encoded = buildSignedCardanoTx({
+      txBodyCbor: preOutput.data,
+      publicKey: spendingKey,
+      signature: new Uint8Array(sig),
+    })
+
+    return TW.Cardano.Proto.SigningOutput.encode(
+      TW.Cardano.Proto.SigningOutput.create({
+        encoded,
+        // Embed the correct tx hash so downstream code doesn't need to
+        // re-encode the body (cbor-x round-trip can alter bytes).
+        txId: preOutput.dataHash,
       })
     ).finish()
   }

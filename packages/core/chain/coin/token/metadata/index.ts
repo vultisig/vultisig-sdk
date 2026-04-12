@@ -2,6 +2,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { ChainKindWithTokenMetadataDiscovery } from './chains'
 import { TokenMetadataResolver } from './resolver'
+import { getCardanoTokenMetadata } from './resolvers/cardano'
 import { getCosmosTokenMetadata } from './resolvers/cosmos'
 import { getEvmTokenMetadata } from './resolvers/evm'
 import { getSolanaTokenMetadata } from './resolvers/solana'
@@ -15,6 +16,7 @@ const resolvers: Record<
   solana: getSolanaTokenMetadata,
   cosmos: getCosmosTokenMetadata,
   tron: getTronTokenMetadata,
+  cardano: getCardanoTokenMetadata,
 }
 
 export const getTokenMetadata: TokenMetadataResolver = async input => {
