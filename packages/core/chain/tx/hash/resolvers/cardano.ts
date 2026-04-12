@@ -1,15 +1,19 @@
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { blake2b } from '@noble/hashes/blake2.js'
 import { decode, encode } from 'cbor-x'
-import { toHex } from 'viem'
 
 import { TxHashResolver } from '../resolver'
 
-export const getCardanoTxHash: TxHashResolver<OtherChain.Cardano> = ({
-  encoded,
-}) => {
-  const tx = decode(encoded)
-  const bodyCbor = encode(tx[0])
+export const getCardanoTxHash: TxHashResolver<OtherChain.Cardano> = tx => {
+  // Prefer pre-computed txId (set by compileTx to avoid cbor-x
+  // re-encoding which can alter byte representation).
+  if (tx.txId && tx.txId.length > 0) {
+    return Buffer.from(tx.txId).toString('hex')
+  }
+
+  const decoded = decode(tx.encoded)
+  const bodyCbor = encode(decoded[0])
   const digest = blake2b(bodyCbor, { dkLen: 32 })
-  return toHex(digest)
+
+  return Buffer.from(digest).toString('hex')
 }

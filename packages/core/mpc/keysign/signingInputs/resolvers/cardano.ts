@@ -18,7 +18,7 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({
   keysignPayload,
   walletCore,
 }) => {
-  const { sendMaxAmount, ttl } = getBlockchainSpecificValue(
+  const { sendMaxAmount, ttl, byteFee } = getBlockchainSpecificValue(
     keysignPayload.blockchainSpecific,
     'cardano'
   )
@@ -51,6 +51,7 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({
       amount: Long.fromString(keysignPayload.toAmount),
       useMaxAmount: sendMaxAmount,
       tokenAmount: tokenBundle,
+      forceFee: Long.fromString(byteFee.toString()),
     }),
     ttl: Long.fromString(ttl.toString()),
 
