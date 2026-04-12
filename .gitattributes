@@ -2,4 +2,3 @@
 /.yarn/releases/*    binary
 /.yarn/plugins/**/*  binary
 /.pnp.*              binary linguist-generated
-packages/mpc-native/android/libs/*.aar filter=lfs diff=lfs merge=lfs -text

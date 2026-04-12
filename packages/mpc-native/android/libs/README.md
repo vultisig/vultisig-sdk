@@ -2,10 +2,12 @@
 
 Pre-built Android `.aar` files containing Rust MPC libraries (DKLS + Schnorr) with JNI wrappers.
 
-| File | Size | Contents |
-|------|------|----------|
-| `dkls-release.aar` | 1.5MB | DKLS23 threshold ECDSA signing |
-| `goschnorr-release.aar` | 1.5MB | Multi-party Schnorr signing |
+These files are **committed as normal Git blobs** (not Git LFS) so CI and clones do not depend on GitHub LFS bandwidth. They are kept in sync with the main **[vultisig-android](https://github.com/vultisig/vultisig-android)** app: from the repo root run `bash scripts/sync-mpc-native-aars-from-android.sh` (expects a sibling `../android` checkout, or set `ANDROID_APP_LIBS` to `app/libs`).
+
+| File | Size (approx.) | Contents |
+|------|----------------|----------|
+| `dkls-release.aar` | ~9MB | DKLS23 threshold ECDSA signing (multi-ABI; larger than a fully stripped build) |
+| `goschnorr-release.aar` | ~2MB | Multi-party Schnorr signing |
 
 Each `.aar` bundles `.so` files for `arm64-v8a`, `x86_64`, and `armeabi-v7a`, plus SWIG JNI wrappers and a small buffer utility.
 
@@ -99,7 +101,7 @@ cp goschnorr/build/outputs/aar/goschnorr-release.aar \
    <sdk>/packages/mpc-native/android/libs/goschnorr-release.aar
 ```
 
-These files are tracked via Git LFS in git. The Release workflow does **not** run `git lfs fetch` on the publish job (avoids LFS bandwidth blocking npm). Instead, `scripts/prepare-mpc-native-aars.mjs` keeps real `.aar` (ZIP) files on disk: if the checkout still has LFS pointers, CI downloads the same filenames from a GitHub Release. Set repo Actions variable `MPC_NATIVE_AARS_DOWNLOAD_TAG` to that release tag (assets must be named `dkls-release.aar` and `goschnorr-release.aar`). **Update that tag** whenever you change the binaries in git, or CI may ship an older pair from the release. Alternatively, migrate off LFS by committing the binaries and removing the `filter=lfs` line in the repo root `.gitattributes` for this path.
+The Release workflow runs `scripts/prepare-mpc-native-aars.mjs` before `npm publish`: it checks that these files are real ZIP archives. If a checkout ever contains Git LFS pointers again, CI can instead download assets from a GitHub Release (set repo variable `MPC_NATIVE_AARS_DOWNLOAD_TAG`, or env `MPC_NATIVE_AARS_BASE_URL`).
 
 ## Verification
 
