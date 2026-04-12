@@ -20,6 +20,9 @@
   "dependencies": {
     "@vultisig/mpc-types": "workspace:^0.1.0"
   },
+  "scripts": {
+    "prepack": "node ../../scripts/dereference-directory.mjs ios/Frameworks"
+  },
   "publishConfig": {
     "access": "public"
   }
