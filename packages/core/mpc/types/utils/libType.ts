@@ -1,6 +1,6 @@
-import { KeysignLibType, MpcLib } from '@vultisig/core-mpc/mpcLib'
+import { MpcLib } from '@vultisig/core-mpc/mpcLib'
 import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
-import { isKeyImportVault, Vault } from '@vultisig/core-mpc/vault/Vault'
+import { Vault } from '@vultisig/core-mpc/vault/Vault'
 import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 
 const mpcLibToLibType: Record<MpcLib, LibType> = {
@@ -9,34 +9,11 @@ const mpcLibToLibType: Record<MpcLib, LibType> = {
   KeyImport: LibType.KEYIMPORT,
 }
 
-const libTypeToKeysignLibType: Record<LibType, KeysignLibType> = {
-  [LibType.GG20]: 'GG20',
-  [LibType.DKLS]: 'DKLS',
-  [LibType.KEYIMPORT]: 'KeyImport',
-}
+const libTypeToMpcLib: Record<LibType, MpcLib> = mirrorRecord(mpcLibToLibType)
 
 export const fromLibType = (libType: LibType): MpcLib =>
-  mirrorRecord(mpcLibToLibType)[libType]
+  libTypeToMpcLib[libType]
 
-export type ToLibTypeInput = {
-  libType: MpcLib
-  isKeyImport?: boolean
-}
+export const toLibType = (libType: MpcLib): LibType => mpcLibToLibType[libType]
 
-export const toLibType = ({
-  libType,
-  isKeyImport,
-}: ToLibTypeInput): LibType => {
-  if (isKeyImport) {
-    return LibType.KEYIMPORT
-  }
-  return mpcLibToLibType[libType]
-}
-
-export const toKeysignLibType = (vault: Vault): KeysignLibType => {
-  const libType = toLibType({
-    libType: vault.libType,
-    isKeyImport: isKeyImportVault(vault),
-  })
-  return libTypeToKeysignLibType[libType]
-}
+export const toKeysignLibType = (vault: Vault): MpcLib => vault.libType

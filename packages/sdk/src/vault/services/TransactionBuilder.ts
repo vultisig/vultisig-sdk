@@ -307,6 +307,7 @@ export class TransactionBuilder {
           walletCore,
           txInputData,
           chain,
+          keysignPayload,
         })
 
         // Convert Uint8Array hashes to hex strings

@@ -187,7 +187,7 @@ async function main() {
   })
   const msgs = inputs
     .flatMap(txInputData =>
-      getPreSigningHashes({ txInputData, walletCore, chain }).map(h =>
+      getPreSigningHashes({ txInputData, walletCore, chain, keysignPayload }).map(h =>
         Buffer.from(h).toString('hex')
       )
     )
