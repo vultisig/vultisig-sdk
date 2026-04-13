@@ -276,20 +276,6 @@ export class AgentClient {
   }
 
   // ============================================================================
-  // Calldata
-  // ============================================================================
-
-  async getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }> {
-    const res = await fetch(`${this.baseUrl}/agent/calldata/${id}`, {
-      headers: this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {},
-    })
-    if (!res.ok) {
-      throw new Error(`Failed to resolve calldata_id ${id}: ${res.status} ${res.statusText}`)
-    }
-    return res.json() as Promise<{ data: string; to?: string; chain?: string }>
-  }
-
-  // ============================================================================
   // Private helpers
   // ============================================================================
 

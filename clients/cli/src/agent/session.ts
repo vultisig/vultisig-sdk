@@ -74,8 +74,6 @@ export class AgentSession {
         saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
       }
 
-      // Give the executor access to the authenticated client for calldata_id resolution
-      this.executor.setBackendClient(this.client)
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
     }
