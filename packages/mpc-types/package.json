@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mpc-types",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared MPC engine interfaces for Vultisig SDK",
   "type": "module",
   "main": "dist/index.js",
