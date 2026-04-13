@@ -7,6 +7,7 @@ import {
   coinFinderChainKinds,
 } from './CoinFinderChainKind'
 import { FindCoinsResolver } from './resolver'
+import { findCardanoCoins } from './resolvers/cardano'
 import { findCosmosCoins } from './resolvers/cosmos'
 import { findEvmCoins } from './resolvers/evm'
 import { findSolanaCoins } from './resolvers/solana'
@@ -15,6 +16,7 @@ const resolvers: Record<CoinFinderChainKind, FindCoinsResolver<any>> = {
   cosmos: findCosmosCoins,
   evm: findEvmCoins,
   solana: findSolanaCoins,
+  cardano: findCardanoCoins,
 }
 
 export const findCoins: FindCoinsResolver<Chain> = async input => {

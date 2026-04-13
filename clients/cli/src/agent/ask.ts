@@ -59,13 +59,7 @@ export class AskInterface {
         }
       },
 
-      onToolResult: (
-        _id: string,
-        action: string,
-        success: boolean,
-        data?: Record<string, unknown>,
-        error?: string
-      ) => {
+      onToolResult: (_id: string, action: string, success: boolean, data?: Record<string, unknown>, error?: string) => {
         this.toolCalls.push({ action, success, data, error })
         if (this.verbose) {
           const status = success ? 'ok' : `error: ${error}`
@@ -85,12 +79,7 @@ export class AskInterface {
         // Silently ignored in ask mode
       },
 
-      onTxStatus: (
-        txHash: string,
-        chain: string,
-        _status: string,
-        explorerUrl?: string
-      ) => {
+      onTxStatus: (txHash: string, chain: string, _status: string, explorerUrl?: string) => {
         this.transactions.push({ hash: txHash, chain, explorerUrl })
         if (this.verbose) {
           process.stderr.write(`[tx] ${chain}: ${txHash}\n`)
@@ -106,9 +95,7 @@ export class AskInterface {
       },
 
       requestPassword: async (): Promise<string> => {
-        throw new Error(
-          'Password required but not provided. Use --password flag.'
-        )
+        throw new Error('Password required but not provided. Use --password flag.')
       },
 
       requestConfirmation: async (_message: string): Promise<boolean> => {

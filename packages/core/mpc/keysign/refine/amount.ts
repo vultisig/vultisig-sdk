@@ -18,7 +18,7 @@ type RefineKeysignAmountInput = {
 }
 
 export const refineKeysignAmount = (input: RefineKeysignAmountInput) => {
-  if (!input.keysignPayload.toAmount) {
+  if (!input.keysignPayload.toAmount || input.keysignPayload.toAmount === '0') {
     return input.keysignPayload
   }
 

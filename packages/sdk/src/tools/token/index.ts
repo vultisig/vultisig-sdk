@@ -1,0 +1,1 @@
+export { searchToken } from './searchToken'

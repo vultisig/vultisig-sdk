@@ -1,5 +1,48 @@
 # @vultisig/sdk
 
+## 0.14.1
+
+### Patch Changes
+
+- Updated dependencies [[`0775049`](https://github.com/vultisig/vultisig-sdk/commit/07750496b7af1ece840501b8d884087e048c2b2c)]:
+  - @vultisig/mpc-native@0.1.1
+
+## 0.14.0
+
+### Minor Changes
+
+- [#222](https://github.com/vultisig/vultisig-sdk/pull/222) [`9e2ffd6`](https://github.com/vultisig/vultisig-sdk/commit/9e2ffd6f6a8e2c8ad507b6ed2e2c1232bf8a98c7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat: add vault-free tools layer for MCP TypeScript rewrite
+
+  New `tools/` module with vault-free chain utilities:
+  - `abiEncode` / `abiDecode` - ABI encoding/decoding via viem
+  - `evmCall` - read-only contract calls (eth_call)
+  - `evmTxInfo` - nonce, gas prices, chainId
+  - `evmCheckAllowance` - ERC-20 approval queries
+  - `resolveEns` - ENS name resolution
+  - `resolve4ByteSelector` - function signature lookup
+  - `searchToken` - CoinGecko search with multi-chain deployment mapping
+  - `deriveAddressFromKeys` - address derivation from raw ECDSA/EdDSA keys
+  - `findSwapQuote` - multi-provider swap quotes (THORChain, MayaChain, 1inch, LiFi, KyberSwap)
+  - `VerifierClient` - Vultisig Verifier REST API client
+
+  Also fixes SUI token balance queries (was ignoring coinType for non-native tokens).
+
+### Patch Changes
+
+- [#210](https://github.com/vultisig/vultisig-sdk/pull/210) [`8bef556`](https://github.com/vultisig/vultisig-sdk/commit/8bef55651cba506a515083765d6f7745cce54abe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Stop generating ML-DSA during secure vault creation, join, seedphrase import, and reshare. ECDSA and EdDSA only during the ceremony, matching mobile apps; ML-DSA remains available as a separate optional step.
+
+- [#205](https://github.com/vultisig/vultisig-sdk/pull/205) [`99296f5`](https://github.com/vultisig/vultisig-sdk/commit/99296f5aaf3f9bfb7fe694de034037683e7435ed) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Classify vault import failures with specific `VaultImportErrorCode` values (`INVALID_FILE_FORMAT`, `INVALID_PASSWORD`, `UNSUPPORTED_FORMAT`, `CORRUPTED_DATA`) instead of wrapping most errors as `CORRUPTED_DATA`. Add unit tests for import edge cases.
+
+## 0.13.0
+
+### Minor Changes
+
+- [#179](https://github.com/vultisig/vultisig-sdk/pull/179) [`84a2950`](https://github.com/vultisig/vultisig-sdk/commit/84a295002ed7310320b584fbccb76aaf4a233b31) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add full QBTC (post-quantum Bitcoin) send support: MLDSA fast signing, address derivation, broadcast via Cosmos REST, funded e2e send test, and `scripts/add-mldsa-to-vault.ts` helper. Switch QBTC core resolvers from dead Tendermint RPC to vultisig Cosmos REST API.
+
+### Patch Changes
+
+- [#185](https://github.com/vultisig/vultisig-sdk/pull/185) [`3f46444`](https://github.com/vultisig/vultisig-sdk/commit/3f46444b2a11a41dbbb023919c2f168f9d15cff8) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Restore `publicKeyMldsa` and `keyShareMldsa` when hydrating fast and secure vaults from storage. Run the Vitest integration suite on every PR; keep the full agentic stack workflow manual-only.
+
 ## 0.12.0
 
 ### Minor Changes

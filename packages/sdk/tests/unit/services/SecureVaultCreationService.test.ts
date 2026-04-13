@@ -156,7 +156,6 @@ describe('SecureVaultCreationService', () => {
         'waiting_for_devices',
         'keygen_ecdsa',
         'keygen_eddsa',
-        'keygen_mldsa',
         'finalizing',
         'complete',
       ]

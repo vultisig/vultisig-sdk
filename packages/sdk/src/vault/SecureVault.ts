@@ -361,10 +361,7 @@ export class SecureVault extends VaultBase {
       // Step 2: Map progress callbacks
       const mapProgress = (step: SecureVaultCreationStep): VaultCreationStep => ({
         step:
-          step.step === 'keygen_ecdsa' ||
-          step.step === 'keygen_eddsa' ||
-          step.step === 'keygen_mldsa' ||
-          step.step === 'finalizing'
+          step.step === 'keygen_ecdsa' || step.step === 'keygen_eddsa' || step.step === 'finalizing'
             ? 'keygen'
             : step.step === 'complete'
               ? 'complete'
@@ -497,6 +494,8 @@ export class SecureVault extends VaultBase {
     vault.coreVault.localPartyId = vaultData.localPartyId
     vault.coreVault.libType = vaultData.libType
     vault.coreVault.createdAt = vaultData.createdAt
+    vault.coreVault.publicKeyMldsa = vaultData.publicKeyMldsa ?? vault.coreVault.publicKeyMldsa
+    vault.coreVault.keyShareMldsa = vaultData.keyShareMldsa ?? vault.coreVault.keyShareMldsa
 
     return vault
   }

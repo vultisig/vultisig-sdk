@@ -1,5 +1,28 @@
 # @vultisig/cli
 
+## 0.14.2
+
+### Patch Changes
+
+- [#233](https://github.com/vultisig/vultisig-sdk/pull/233) [`a0387b4`](https://github.com/vultisig/vultisig-sdk/commit/a0387b42b816c26fedf71a089fb461257d331be7) Thanks [@rcoderdev](https://github.com/rcoderdev)! - CLI agent executor now surfaces unimplemented and stub actions as failures (`success: false`) instead of returning misleading success. Removed `get_market_price` and `thorchain_query` from the local auto-execute allowlist where there is no implementation.
+
+## 0.14.0
+
+### Patch Changes
+
+- [#205](https://github.com/vultisig/vultisig-sdk/pull/205) [`99296f5`](https://github.com/vultisig/vultisig-sdk/commit/99296f5aaf3f9bfb7fe694de034037683e7435ed) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Classify vault import failures with specific `VaultImportErrorCode` values (`INVALID_FILE_FORMAT`, `INVALID_PASSWORD`, `UNSUPPORTED_FORMAT`, `CORRUPTED_DATA`) instead of wrapping most errors as `CORRUPTED_DATA`. Add unit tests for import edge cases.
+
+- Updated dependencies [[`9e2ffd6`](https://github.com/vultisig/vultisig-sdk/commit/9e2ffd6f6a8e2c8ad507b6ed2e2c1232bf8a98c7), [`8bef556`](https://github.com/vultisig/vultisig-sdk/commit/8bef55651cba506a515083765d6f7745cce54abe), [`99296f5`](https://github.com/vultisig/vultisig-sdk/commit/99296f5aaf3f9bfb7fe694de034037683e7435ed)]:
+  - @vultisig/sdk@0.14.0
+  - @vultisig/rujira@9.0.0
+
+## 0.13.0
+
+### Patch Changes
+
+- Updated dependencies [[`3f46444`](https://github.com/vultisig/vultisig-sdk/commit/3f46444b2a11a41dbbb023919c2f168f9d15cff8), [`84a2950`](https://github.com/vultisig/vultisig-sdk/commit/84a295002ed7310320b584fbccb76aaf4a233b31)]:
+  - @vultisig/sdk@0.13.0
+
 ## 0.12.0
 
 ### Minor Changes

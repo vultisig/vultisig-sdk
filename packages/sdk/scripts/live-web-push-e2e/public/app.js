@@ -83,7 +83,10 @@ navigator.serviceWorker?.addEventListener('message', ev => {
   }
   if (d.hint) log(d.hint, 'warn')
   showInPagePushBanner(d)
-  log('Purple top bar = push handled in-page (always visible). Also trying OS page Notification() — may be invisible if Chrome is focused.', 'warn')
+  log(
+    'Purple top bar = push handled in-page (always visible). Also trying OS page Notification() — may be invisible if Chrome is focused.',
+    'warn'
+  )
   showPageNotificationFallback(d)
 })
 
@@ -158,8 +161,7 @@ document.getElementById('btn-test-os')?.addEventListener('click', () => {
   }
   try {
     const n = new Notification('Vultisig harness — OS notification test', {
-      body:
-        'If this never appears: switch to Finder (blur Chrome), enable Notification Centre + Persistent for Chrome in System Settings, and check Focus / Do Not Disturb.',
+      body: 'If this never appears: switch to Finder (blur Chrome), enable Notification Centre + Persistent for Chrome in System Settings, and check Focus / Do Not Disturb.',
       icon: 'https://vultisig.com/favicon.ico',
       tag: `harness-os-test-${Date.now()}`,
       requireInteraction: true,
@@ -214,7 +216,10 @@ document.getElementById('btn-send').addEventListener('click', async () => {
         }
         await new Promise(res => setTimeout(res, 500))
       }
-      log('No WebSocket confirmation within 90s — check terminal, firewall, or wait 30s after prior notify (dedup).', 'warn')
+      log(
+        'No WebSocket confirmation within 90s — check terminal, firewall, or wait 30s after prior notify (dedup).',
+        'warn'
+      )
     }
     void poll()
   } catch (e) {

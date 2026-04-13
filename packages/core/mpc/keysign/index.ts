@@ -66,7 +66,7 @@ export const keysign = async ({
     hexEncryptionKey,
     isInitiatingDevice,
   })
-  const session = makeSignSession({
+  const session = await makeSignSession({
     setupMessage,
     localPartyId,
     keyShare,
@@ -123,6 +123,8 @@ export const keysign = async ({
     return processOutbound(sequenceNo + receivers.length)
   }
 
+  const processedMessages: Record<string, boolean> = {}
+
   const processInbound = async (): Promise<void> => {
     if (abortController.signal.aborted) {
       throw new Error(
@@ -141,23 +143,21 @@ export const keysign = async ({
     )
 
     for (const msg of relayMessages) {
-      if (
-        session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
-      ) {
+      const cacheKey = `${sessionId}-${msg.from}-${msg.hash}`
+      if (processedMessages[cacheKey]) {
+        continue
+      }
+
+      const accepted = session.inputMessage(
+        fromMpcServerMessage(msg.body, hexEncryptionKey)
+      )
+      if (accepted) {
+        processedMessages[cacheKey] = true
         return
       }
-      await ignorePromiseOutcome(
-        transformError(
-          deleteMpcRelayMessage({
-            serverUrl,
-            localPartyId,
-            sessionId,
-            messageHash: msg.hash,
-            messageId,
-          }),
-          prefixErrorWith('Failed to delete MPC relay message')
-        )
-      )
+      // Do NOT mark as processed when inputMessage returns false — the
+      // message may need to be retried in a later iteration when the
+      // session is in a different state.
     }
 
     return processInbound()
@@ -181,7 +181,7 @@ export const keysign = async ({
     throw error
   }
 
-  const signature = session.finish()
+  const signature = await session.finish()
 
   const result: KeysignSignature =
     signatureAlgorithm === 'mldsa'
@@ -193,15 +193,15 @@ export const keysign = async ({
         })
       : (() => {
           const [rawR, rawS] = [signature.slice(0, 32), signature.slice(32, 64)]
+          // Contract: each MpcEngine's signSession.finish() returns canonical
+          // R || S bytes — DklsEngine (ECDSA) emits big-endian (which
+          // encodeDERSignature consumes directly) and SchnorrEngine (Ed25519)
+          // emits R as a 32-byte compressed point and S as a 32-byte scalar
+          // little-endian (the on-the-wire ed25519-dalek format). Pass
+          // through here; any backend-specific byte-ordering quirks belong
+          // inside that backend's session wrapper, never in this loop.
           const [r, s] = [rawR, rawS]
-            .map(value => Buffer.from(value))
-            .map(value =>
-              match(signatureAlgorithm, {
-                ecdsa: () => value,
-                eddsa: () => value.reverse(),
-              })
-            )
-            .map(value => value.toString('hex'))
+            .map(value => Buffer.from(value).toString('hex'))
 
           const derSignature = encodeDERSignature(rawR, rawS)
           return withoutUndefinedFields({

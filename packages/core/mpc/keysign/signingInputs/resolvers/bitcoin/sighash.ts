@@ -1,30 +1,52 @@
-import { createHash } from 'crypto'
+import { sha256 } from '@noble/hashes/sha256'
 
 import { SignBitcoin } from '../../../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 
+// -- Shared serialization utilities --
+// See https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki
+
 /** Double-SHA256 as used in Bitcoin consensus. */
-const hash256 = (data: Buffer): Buffer =>
-  createHash('sha256')
-    .update(createHash('sha256').update(data).digest())
-    .digest()
+const hash256 = (data: Uint8Array): Buffer =>
+  Buffer.from(sha256(sha256(data)))
 
 /** Serialize a uint32 as 4 bytes little-endian. */
-const writeUInt32LE = (value: number): Buffer => {
+export const writeUInt32LE = (value: number): Buffer => {
   const buf = Buffer.alloc(4)
   buf.writeUInt32LE(value)
   return buf
 }
 
-/** Serialize a int64 as 8 bytes little-endian. */
-const writeInt64LE = (value: bigint): Buffer => {
+/** Serialize a uint64 as 8 bytes little-endian (Bitcoin amounts are unsigned). */
+export const writeUInt64LE = (value: bigint): Buffer => {
   const buf = Buffer.alloc(8)
-  buf.writeBigInt64LE(value)
+  buf.writeBigUInt64LE(value)
+  return buf
+}
+
+/** Encode an integer as a Bitcoin varint (CompactSize). */
+export const writeVarInt = (n: number): Buffer => {
+  if (n < 0 || n > 0xffffffff) {
+    throw new Error(`writeVarInt: value out of range: ${n}`)
+  }
+  if (n < 0xfd) {
+    return Buffer.from([n])
+  }
+  if (n <= 0xffff) {
+    const buf = Buffer.alloc(3)
+    buf[0] = 0xfd
+    buf.writeUInt16LE(n, 1)
+    return buf
+  }
+  const buf = Buffer.alloc(5)
+  buf[0] = 0xfe
+  buf.writeUInt32LE(n, 1)
   return buf
 }
 
 /**
  * Derive BIP-143 scriptCode from a P2WPKH scriptPubKey.
  * 0x0014<20-byte-hash> -> OP_DUP OP_HASH160 <20> <hash> OP_EQUALVERIFY OP_CHECKSIG
+ * The 0x19 length prefix is part of the scriptCode per BIP-143.
  */
 const p2wpkhScriptCode = (scriptPubKey: Buffer): Buffer => {
   const pubkeyHash = scriptPubKey.subarray(2, 22)
@@ -42,23 +64,41 @@ const serializeOutpoint = (hash: string, index: number): Buffer => {
 }
 
 /** Serialize a Bitcoin output (value + scriptPubKey with varint length). */
-const serializeOutput = (amount: bigint, scriptPubKey: Buffer): Buffer => {
-  const scriptLen = Buffer.from([scriptPubKey.length])
-  return Buffer.concat([writeInt64LE(amount), scriptLen, scriptPubKey])
-}
+const serializeOutput = (amount: bigint, scriptPubKey: Buffer): Buffer =>
+  Buffer.concat([writeUInt64LE(amount), writeVarInt(scriptPubKey.length), scriptPubKey])
 
 /**
- * Compute BIP-143 sighashes for all `is_ours` inputs in a SignBitcoin message.
+ * Compute BIP-143 sighashes for all `isOurs` inputs in a SignBitcoin message.
  * Returns one sighash (32 bytes) per input that has `isOurs === true`,
  * in the same order they appear in `signBitcoin.inputs`.
  *
- * Supports P2WPKH and P2SH-P2WPKH script types.
- * P2PKH (legacy) and P2TR (Taproot BIP-341) will be added in follow-up work.
+ * Currently supports P2WPKH and P2SH-P2WPKH script types (SIGHASH_ALL only).
+ *
+ * Follow-up work:
+ * - P2TR (Taproot): requires BIP-341 sighash (tagged hashes, Schnorr signatures,
+ *   commits to ALL input amounts/scriptPubKeys). See https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki
+ *   bitcoinjs-lib provides Transaction.hashForWitnessV1() for this.
+ * - P2PKH (legacy): requires legacy sighash (not BIP-143).
+ *   bitcoinjs-lib provides Transaction.hashForSignature() for this.
+ * - P2WSH: requires BIP-143 with the full witnessScript as scriptCode.
+ * - SIGHASH_SINGLE, SIGHASH_NONE, ANYONECANPAY: require conditional
+ *   hashPrevouts/hashSequence/hashOutputs computation per BIP-143.
+ *
+ * @see https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki
  */
-export const computeBip143Sighashes = (
+export const computePreSigningHashes = (
   signBitcoin: SignBitcoin
 ): Uint8Array[] => {
   const { version, locktime, inputs, outputs } = signBitcoin
+
+  if (inputs.length === 0) {
+    throw new Error('SignBitcoin has no inputs')
+  }
+
+  const oursCount = inputs.filter(i => i.isOurs).length
+  if (oursCount === 0) {
+    throw new Error('No signable inputs (all isOurs === false)')
+  }
 
   // hashPrevouts = double_SHA256(all outpoints serialized)
   const prevoutsData = Buffer.concat(
@@ -84,6 +124,10 @@ export const computeBip143Sighashes = (
 
   for (const input of inputs) {
     if (!input.isOurs) continue
+
+    if (input.amount < 0n) {
+      throw new Error(`Input amount must be non-negative, got ${input.amount}`)
+    }
 
     const scriptPubKey = Buffer.from(input.scriptPubKey, 'hex')
     let scriptCode: Buffer
@@ -114,7 +158,10 @@ export const computeBip143Sighashes = (
     const anyoneCanPay = (sighashType & 0x80) !== 0
 
     if (baseType !== 0x01 || anyoneCanPay) {
-      throw new Error(`Unsupported sighash type for BIP-143: ${sighashType}`)
+      throw new Error(
+        `Unsupported sighash type: 0x${sighashType.toString(16)}. ` +
+          `Only SIGHASH_ALL (0x01) is currently supported.`
+      )
     }
 
     // BIP-143 preimage:
@@ -126,7 +173,7 @@ export const computeBip143Sighashes = (
       hashSequence,
       outpoint,
       scriptCode,
-      writeInt64LE(input.amount),
+      writeUInt64LE(input.amount),
       writeUInt32LE(input.sequence ?? 0xffffffff),
       hashOutputs,
       writeUInt32LE(locktime),
@@ -138,3 +185,4 @@ export const computeBip143Sighashes = (
 
   return sighashes
 }
+

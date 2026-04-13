@@ -53,6 +53,7 @@ import {
   executeVerify,
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
+import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
 import {
@@ -103,6 +104,7 @@ program
   .option('-o, --output <format>', 'Output format: table, json (default: table)', 'table')
   .option('-i, --interactive', 'Start interactive shell mode')
   .option('--vault <nameOrId>', 'Specify vault by name or ID')
+  .option('--server-url <url>', 'Base Vultisig API URL for FastVault and relay endpoints')
   .hook('preAction', thisCommand => {
     const opts = thisCommand.opts()
     initOutputMode({ silent: opts.silent, output: opts.output })
@@ -143,8 +145,14 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
       cachePassword(vaultSelector, unlockPassword)
     }
 
+    const globalOptions = program.opts<{
+      serverUrl?: string
+    }>()
+    const serverEndpoints = resolveServerEndpoints(globalOptions)
+
     const sdk = new Vultisig({
       onPasswordRequired: createPasswordCallback(),
+      ...(serverEndpoints ? { serverEndpoints } : {}),
       ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
     })
     await sdk.initialize()
@@ -1084,29 +1092,43 @@ const agentCmd = program
   .option('--password <password>', 'Vault password for signing operations')
   .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
   .option('--session-id <id>', 'Resume an existing session')
-  .action(async (options: { viaAgent?: boolean; verbose?: boolean; backendUrl?: string; password?: string; passwordTtl?: string; sessionId?: string }) => {
-    // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
-    // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
-    const MAX_TTL = 86400000 // 24 hours
-    let passwordTTL: number | undefined
-    if (options.passwordTtl) {
-      const parsed = parseInt(options.passwordTtl, 10)
-      if (Number.isNaN(parsed) || parsed < 0) {
-        throw new Error(`Invalid --password-ttl value: "${options.passwordTtl}". Expected a non-negative integer in milliseconds.`)
+  .option('--notification-url <url>', 'Notification service URL for push notifications')
+  .action(
+    async (options: {
+      viaAgent?: boolean
+      verbose?: boolean
+      backendUrl?: string
+      password?: string
+      passwordTtl?: string
+      sessionId?: string
+      notificationUrl?: string
+    }) => {
+      // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
+      // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
+      const MAX_TTL = 86400000 // 24 hours
+      let passwordTTL: number | undefined
+      if (options.passwordTtl) {
+        const parsed = parseInt(options.passwordTtl, 10)
+        if (Number.isNaN(parsed) || parsed < 0) {
+          throw new Error(
+            `Invalid --password-ttl value: "${options.passwordTtl}". Expected a non-negative integer in milliseconds.`
+          )
+        }
+        passwordTTL = parsed
+      } else if (options.viaAgent) {
+        passwordTTL = MAX_TTL
       }
-      passwordTTL = parsed
-    } else if (options.viaAgent) {
-      passwordTTL = MAX_TTL
+      const context = await init(program.opts().vault, options.password, passwordTTL)
+      await executeAgent(context, {
+        viaAgent: options.viaAgent,
+        verbose: options.verbose,
+        backendUrl: options.backendUrl,
+        password: options.password,
+        sessionId: options.sessionId,
+        notificationUrl: options.notificationUrl,
+      })
     }
-    const context = await init(program.opts().vault, options.password, passwordTTL)
-    await executeAgent(context, {
-      viaAgent: options.viaAgent,
-      verbose: options.verbose,
-      backendUrl: options.backendUrl,
-      password: options.password,
-      sessionId: options.sessionId,
-    })
-  })
+  )
 
 // Ask subcommand: one-shot mode for AI coding agents
 agentCmd
@@ -1129,10 +1151,7 @@ agentCmd
       }
     ) => {
       const parentOpts = agentCmd.opts()
-      const context = await init(
-        program.opts().vault,
-        options.password || parentOpts.password
-      )
+      const context = await init(program.opts().vault, options.password || parentOpts.password)
       await executeAgentAsk(context, message, {
         ...options,
         backendUrl: options.backendUrl || parentOpts.backendUrl,
@@ -1240,8 +1259,10 @@ setupCompletionCommand(program)
 // ============================================================================
 
 async function startInteractiveMode(): Promise<void> {
+  const serverEndpoints = resolveServerEndpoints(parseServerEndpointOverridesFromArgv(process.argv.slice(2)))
   const sdk = new Vultisig({
     onPasswordRequired: createPasswordCallback(),
+    ...(serverEndpoints ? { serverEndpoints } : {}),
   })
   await sdk.initialize()
 

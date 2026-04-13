@@ -1,7 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { fromBinary } from '@bufbuild/protobuf'
 import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bittensor'
-import { computeBip143Sighashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
+import { computePreSigningHashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
 import { getQBTCPreSignedImageHash } from '../../chains/cosmos/qbtc/QBTCHelper'
 import { without } from '@vultisig/lib-utils/array/without'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -29,16 +29,16 @@ export const getPreSigningHashes = ({
 }: Input) => {
   // PSBT signing: compute BIP-143 sighashes directly from structured data
   if (keysignPayload?.signData.case === 'signBitcoin') {
-    return computeBip143Sighashes(keysignPayload.signData.value)
+    return computePreSigningHashes(keysignPayload.signData.value)
   }
 
   if (chain === Chain.QBTC) {
-    const keysignPayload = fromBinary(KeysignPayloadSchema, txInputData)
+    const qbtcPayload = fromBinary(KeysignPayloadSchema, txInputData)
     const cosmosSpecific = getBlockchainSpecificValue(
-      keysignPayload.blockchainSpecific,
+      qbtcPayload.blockchainSpecific,
       'cosmosSpecific'
     )
-    return getQBTCPreSignedImageHash({ keysignPayload, cosmosSpecific })
+    return getQBTCPreSignedImageHash({ keysignPayload: qbtcPayload, cosmosSpecific })
   }
 
   if (chain === Chain.Bittensor) {

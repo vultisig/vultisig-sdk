@@ -242,7 +242,7 @@ describe('Price Impact Calculation', () => {
       // Direct: executionPrice = output/input = 297000000000/100000000 = 2970
       // impact = |2970 - 3000| / 3000 * 100 = 1%
       const result = calculatePriceImpact({
-        inputAmount: '100000000',   // 1 ETH
+        inputAmount: '100000000', // 1 ETH
         outputAmount: '297000000000', // 2970 RUNE
         orderbook,
         reversedToOrderbook: false,
@@ -265,8 +265,8 @@ describe('Price Impact Calculation', () => {
       // Reversed: executionPrice = input/output = 303000000000/100000000 = 3030
       // impact = |3030 - 3000| / 3000 * 100 = 1%
       const result = calculatePriceImpact({
-        inputAmount: '303000000000',  // 3030 RUNE
-        outputAmount: '100000000',    // 1 ETH
+        inputAmount: '303000000000', // 3030 RUNE
+        outputAmount: '100000000', // 1 ETH
         orderbook,
         reversedToOrderbook: true,
       })

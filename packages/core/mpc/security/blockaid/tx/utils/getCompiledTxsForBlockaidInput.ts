@@ -40,6 +40,13 @@ export const getCompiledTxsForBlockaidInput = ({
     publicKey,
   })
 
+  // SignBitcoin (PSBT) flows use custom sighash/compilation that WalletCore
+  // doesn't understand. Skip Blockaid simulation for PSBT transactions.
+  // TODO: implement Blockaid validation for PSBT flows using compileSignBitcoinTx
+  if (payload.signData.case === 'signBitcoin') {
+    return []
+  }
+
   return inputs.map(txInputData => {
     const preHashes = getPreSigningHashes({
       walletCore,

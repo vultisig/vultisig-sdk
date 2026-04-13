@@ -53,6 +53,10 @@ jobs:
           LOCAL_VERSION=$(node -p "require('./packages/sdk/package.json').version")
           echo "version=$LOCAL_VERSION" >> $GITHUB_OUTPUT
           PACKAGES=(
+            "packages/mpc-types"
+            "packages/mpc-wasm"
+            "packages/mpc-native"
+            "packages/walletcore-native"
             "packages/core/config"
             "packages/lib/utils"
             "packages/lib/dkls"
@@ -108,6 +112,32 @@ jobs:
           path: packages/rujira/dist
           retention-days: 1
 
+      # Assert each shared dist dir is non-empty before upload
+      # (if-no-files-found: error only fires if ALL paths yield zero files)
+      - name: Assert shared dist dirs are non-empty
+        run: |
+          for dir in packages/mpc-types/dist packages/mpc-wasm/dist packages/core/mpc/dist packages/core/chain/dist packages/core/config/dist packages/lib/utils/dist; do
+            if [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
+              echo "::error::$dir is empty — build:shared did not produce output"
+              exit 1
+            fi
+          done
+
+      # KEEP IN SYNC WITH scripts/build-shared-packages.mjs syncTargets
+      - name: Upload shared packages dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-dist
+          path: |
+            packages/mpc-types/dist
+            packages/mpc-wasm/dist
+            packages/core/mpc/dist
+            packages/core/chain/dist
+            packages/core/config/dist
+            packages/lib/utils/dist
+          if-no-files-found: error
+          retention-days: 1
+
   # ============ JOB 2: Run Tests (parallel with build) ============
   test:
     name: Run Tests
@@ -154,6 +184,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          lfs: true
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -182,6 +214,12 @@ jobs:
         with:
           name: rujira-dist
           path: packages/rujira/dist
+
+      - name: Download shared packages dist
+        uses: actions/download-artifact@v4
+        with:
+          name: shared-dist
+          path: packages
 
       - name: Publish to NPM
         run: yarn changeset:publish
