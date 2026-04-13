@@ -198,7 +198,9 @@ export class AgentExecutor {
       case 'read_evm_contract':
         return this.readEvmContract(params)
       default:
-        return { message: `Action type '${action.type}' not implemented locally` }
+        throw new Error(
+          `Action type '${action.type}' is not implemented locally. The backend may handle this action server-side.`
+        )
     }
   }
 
@@ -1210,24 +1212,25 @@ export class AgentExecutor {
   // ============================================================================
 
   private async getAddressBook(): Promise<Record<string, unknown>> {
-    // Address book is typically stored in vault preferences
-    return { entries: [], message: 'Address book retrieved' }
+    throw new Error('get_address_book is not yet implemented locally. The backend may handle this action server-side.')
   }
 
-  private async addAddressBookEntry(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { added: true, name: params.name, address: params.address, chain: params.chain }
+  private async addAddressBookEntry(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('address_book_add is not yet implemented locally. The backend may handle this action server-side.')
   }
 
-  private async removeAddressBookEntry(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { removed: true, address: params.address }
+  private async removeAddressBookEntry(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error(
+      'address_book_remove is not yet implemented locally. The backend may handle this action server-side.'
+    )
   }
 
   // ============================================================================
   // Token Search & Other
   // ============================================================================
 
-  private async searchToken(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { message: `Token search for '${params.query || params.symbol}' - delegated to backend` }
+  private async searchToken(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('search_token is not yet implemented locally. The backend may handle this action server-side.')
   }
 
   private async listVaults(): Promise<Record<string, unknown>> {
@@ -1243,12 +1246,12 @@ export class AgentExecutor {
     }
   }
 
-  private async scanTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { message: `Transaction scan for ${params.tx_hash || 'unknown'} - delegated to backend` }
+  private async scanTx(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('scan_tx is not yet implemented locally. The backend may handle this action server-side.')
   }
 
-  private async readEvmContract(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return { message: `EVM contract read for ${params.contract || 'unknown'} - delegated to backend` }
+  private async readEvmContract(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    throw new Error('read_evm_contract is not yet implemented locally. The backend may handle this action server-side.')
   }
 }
 
