@@ -79,6 +79,41 @@ function wrapSession<TWasm extends WasmSessionLike, TResult>(
   }
 }
 
+/**
+ * Normalize a 64-byte Schnorr (Ed25519) signature emitted by the WASM
+ * `SchnorrSignSession.finish()` — which uses big-endian byte order for both
+ * the R point and the S scalar — into canonical Ed25519 R || S
+ * little-endian bytes that ed25519-dalek and downstream verifiers expect.
+ *
+ * Both the WASM engine and the native `@vultisig/mpc-native` engine MUST
+ * emit the same canonical wire format from their `finish()` so that
+ * `core/mpc/keysign/index.ts` can pass the bytes through without any
+ * backend-specific byte-ordering logic.
+ *
+ * Exported (`_normalizeSchnorrSig`, underscore-prefixed = internal) for
+ * unit testing — see vultisig/vultisig-sdk#252.
+ *
+ * Returns a fresh Uint8Array (does not mutate the input).
+ */
+export function _normalizeSchnorrSig(sig: Uint8Array): Uint8Array {
+  if (sig.length !== 64) {
+    // Signature lengths other than 64 are unexpected for Ed25519. Pass the
+    // bytes through unchanged so callers see the raw output and can fail
+    // loudly downstream rather than us silently corrupting the payload.
+    return sig
+  }
+  const out = new Uint8Array(64)
+  // Reverse R (first 32 bytes) into out[0..32]
+  for (let i = 0; i < 32; i++) {
+    out[i] = sig[31 - i]!
+  }
+  // Reverse S (next 32 bytes) into out[32..64]
+  for (let i = 0; i < 32; i++) {
+    out[32 + i] = sig[63 - i]!
+  }
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // DKLS Engine
 // ---------------------------------------------------------------------------
@@ -196,7 +231,20 @@ class WasmSchnorrEngine implements SchnorrEngine {
     // Re-create from bytes: MpcKeyshare doesn't expose the raw WASM Keyshare
     const rawKs = SchnorrKeyshare.fromBytes(keyshare.toBytes())
     const session = new SchnorrSignSession(setup, localPartyId, rawKs)
-    return wrapSession(session, s => s.finish())
+    // Normalize WASM SchnorrSignSession output to canonical Ed25519 R || S
+    // little-endian bytes so consumers (e.g. core/mpc/keysign/index.ts) can
+    // pass through without backend-specific byte-ordering logic. The raw
+    // wasm-bindgen output is big-endian R || S, which is the historical
+    // reason core/mpc/keysign was reversing both halves unconditionally for
+    // EdDSA. That unconditional reverse corrupted the native MpcEngine
+    // output (which is already canonical), so the reverse moved here:
+    // each engine is responsible for emitting canonical bytes from its
+    // own finish().
+    //
+    // See vultisig/vultisig-sdk#252 (this PR) for the original incident
+    // and on-chain proof — Ed25519 R is a compressed Edwards point and
+    // reversing it corrupts the point representation entirely.
+    return wrapSession(session, s => _normalizeSchnorrSig(s.finish()))
   }
 
   keyshareFromBytes(bytes: Uint8Array): MpcKeyshare {
