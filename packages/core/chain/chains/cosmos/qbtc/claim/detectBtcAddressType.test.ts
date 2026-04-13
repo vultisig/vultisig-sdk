@@ -28,12 +28,14 @@ describe('detectBtcAddressType', () => {
     expect(detectBtcAddressType(addr)).toBe('p2wsh')
   })
 
-  it('detects long bc1q addresses as P2WSH', () => {
-    // Any bc1q address longer than 42 chars is P2WSH
+  it('throws for bc1q addresses with invalid length', () => {
     const addr =
       'bc1qrp33g0q5b5698ahp5jnf017nmnzs75rz9eeee5946d7jjk37n4w4qschxhz'
-    expect(addr.length).toBeGreaterThan(42)
-    expect(detectBtcAddressType(addr)).toBe('p2wsh')
+    expect(addr.length).not.toBe(42)
+    expect(addr.length).not.toBe(62)
+    expect(() => detectBtcAddressType(addr)).toThrow(
+      'Unsupported Bitcoin address format'
+    )
   })
 
   it('detects P2TR addresses starting with bc1p', () => {
