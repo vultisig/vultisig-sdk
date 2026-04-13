@@ -61,6 +61,31 @@ type GenerateClaimProofResponse = {
 
 export type { GenerateClaimProofResponse as ClaimProofResult }
 
+const isHexWithLength = (value: unknown, length: number): value is string =>
+  typeof value === 'string' &&
+  value.length === length &&
+  /^[0-9a-f]+$/i.test(value)
+
+/** Validates the proof service response matches expected field formats. */
+const assertValidClaimProofResponse = (
+  data: GenerateClaimProofResponse
+): void => {
+  if (typeof data.proof !== 'string' || data.proof.length === 0) {
+    throw new Error('Invalid proof service response: missing proof')
+  }
+  if (!isHexWithLength(data.message_hash, 64)) {
+    throw new Error('Invalid proof service response: invalid message_hash')
+  }
+  if (!isHexWithLength(data.address_hash, 40)) {
+    throw new Error('Invalid proof service response: invalid address_hash')
+  }
+  if (!isHexWithLength(data.qbtc_address_hash, 64)) {
+    throw new Error(
+      'Invalid proof service response: invalid qbtc_address_hash'
+    )
+  }
+}
+
 /**
  * Calls the proof service to generate a PLONK ZK proof for the QBTC claim.
  * This proves BTC address ownership without revealing the private key,
@@ -103,7 +128,9 @@ export const generateClaimProof = async ({
       throw new Error(`Proof service error (${response.status}): ${text}`)
     }
 
-    return response.json()
+    const data: GenerateClaimProofResponse = await response.json()
+    assertValidClaimProofResponse(data)
+    return data
   } finally {
     clearTimeout(timeout)
   }

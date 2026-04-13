@@ -140,4 +140,12 @@ describe('generateClaimProof', () => {
       'Proof service error (400): proof verification failed'
     )
   })
+
+  it('throws on invalid response fields', async () => {
+    mockFetch({ ...validResponse, message_hash: 'not-hex' })
+
+    await expect(generateClaimProof(validInput)).rejects.toThrow(
+      'Invalid proof service response: invalid message_hash'
+    )
+  })
 })
