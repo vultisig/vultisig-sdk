@@ -204,6 +204,11 @@
       "import": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js",
       "default": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js"
     },
+    "./chains/cosmos/qbtc/claim/proofService": {
+      "types": "./dist/chains/cosmos/qbtc/claim/proofService.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/proofService.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/proofService.js"
+    },
     "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
       "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
       "import": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js",
