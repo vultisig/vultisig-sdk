@@ -27,6 +27,16 @@ type BuildMsgClaimWithProofInput = {
   qbtcAddressHash: string
 }
 
+const isHex = (value: string) => /^[0-9a-f]+$/i.test(value)
+
+const assertHex = (value: string, name: string, expectedLength: number) => {
+  if (value.length !== expectedLength || !isHex(value)) {
+    throw new Error(
+      `${name} must be ${expectedLength} hex chars, got ${value.length}`
+    )
+  }
+}
+
 /** Validates the claim input against the chain's constraints (Section 5). */
 export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
   const { utxos, proof, messageHash, addressHash, qbtcAddressHash } = input
@@ -37,8 +47,11 @@ export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
 
   const seen = new Set<string>()
   for (const { txid, vout } of utxos) {
-    if (txid.length !== 64) {
-      throw new Error(`Invalid txid length: expected 64, got ${txid.length}`)
+    if (txid.length !== 64 || !isHex(txid)) {
+      throw new Error(`Invalid txid: expected 64 hex chars, got ${txid.length}`)
+    }
+    if (!Number.isInteger(vout) || vout < 0) {
+      throw new Error(`Invalid vout: expected non-negative integer, got ${vout}`)
     }
     const key = `${txid}:${vout}`
     if (seen.has(key)) {
@@ -47,27 +60,15 @@ export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
     seen.add(key)
   }
 
-  if (proof.length < 200) {
-    throw new Error('Proof too small (min 100 bytes / 200 hex chars)')
+  if (!isHex(proof) || proof.length < 200) {
+    throw new Error('Proof too small or not valid hex (min 100 bytes / 200 hex chars)')
   }
   if (proof.length > 100_000) {
     throw new Error('Proof too large (max 50 KB / 100000 hex chars)')
   }
-  if (messageHash.length !== 64) {
-    throw new Error(
-      `message_hash must be 64 hex chars, got ${messageHash.length}`
-    )
-  }
-  if (addressHash.length !== 40) {
-    throw new Error(
-      `address_hash must be 40 hex chars, got ${addressHash.length}`
-    )
-  }
-  if (qbtcAddressHash.length !== 64) {
-    throw new Error(
-      `qbtc_address_hash must be 64 hex chars, got ${qbtcAddressHash.length}`
-    )
-  }
+  assertHex(messageHash, 'message_hash', 64)
+  assertHex(addressHash, 'address_hash', 40)
+  assertHex(qbtcAddressHash, 'qbtc_address_hash', 64)
 }
 
 /** Encodes a single UTXORef as protobuf. */

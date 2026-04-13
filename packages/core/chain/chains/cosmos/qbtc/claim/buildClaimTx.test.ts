@@ -45,7 +45,21 @@ describe('validateClaimInput', () => {
   it('rejects invalid txid length', () => {
     const utxos = [{ txid: 'aa'.repeat(16), vout: 0 }]
     expect(() => validateClaimInput({ ...validInput, utxos })).toThrow(
-      'Invalid txid length'
+      'Invalid txid'
+    )
+  })
+
+  it('rejects non-hex txid', () => {
+    const utxos = [{ txid: 'zz'.repeat(32), vout: 0 }]
+    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow(
+      'Invalid txid'
+    )
+  })
+
+  it('rejects negative vout', () => {
+    const utxos = [{ txid: 'aa'.repeat(32), vout: -1 }]
+    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow(
+      'Invalid vout'
     )
   })
 
