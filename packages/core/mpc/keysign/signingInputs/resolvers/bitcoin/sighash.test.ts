@@ -97,13 +97,14 @@ const getBjsSighash = (
   psbt: Psbt,
   inputIndex: number,
   value: bigint,
-  scriptPubKey: Buffer
+  scriptPubKey: Uint8Array
 ) => {
   const tx = (psbt as any).__CACHE.__TX as Transaction
+  const spkBuf = Buffer.from(scriptPubKey)
   const witnessScript = bscript.compile([
     0x76,
     0xa9,
-    scriptPubKey.subarray(2, 22),
+    spkBuf.subarray(2, 22),
     0x88,
     0xac,
   ])
@@ -119,7 +120,7 @@ describe('computePreSigningHashes', () => {
     psbt.addInput({
       hash: 'aa'.repeat(32),
       index: 0,
-      witnessUtxo: { script: p2wpkh.output!, value: 100000n },
+      witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100000n },
     })
     psbt.addOutput({
       address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
@@ -140,8 +141,8 @@ describe('computePreSigningHashes', () => {
     psbt.addInput({
       hash: 'dd'.repeat(32),
       index: 0,
-      witnessUtxo: { script: p2sh.output!, value: 200000n },
-      redeemScript: p2sh.redeem!.output!,
+      witnessUtxo: { script: Buffer.from(p2sh.output!), value: 200000n },
+      redeemScript: Buffer.from(p2sh.redeem!.output!),
     })
     psbt.addOutput({
       address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
@@ -182,7 +183,7 @@ describe('computePreSigningHashes', () => {
     psbt.addInput({
       hash: 'cc'.repeat(32),
       index: 1,
-      witnessUtxo: { script: p2wpkh.output!, value: 75000n },
+      witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 75000n },
     })
 
     psbt.addOutput({
@@ -208,7 +209,7 @@ describe('computePreSigningHashes', () => {
     psbt.addInput({
       hash: 'ee'.repeat(32),
       index: 0,
-      witnessUtxo: { script: p2wpkh.output!, value: 50000n },
+      witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 50000n },
     })
     psbt.addOutput({
       address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
@@ -231,7 +232,7 @@ describe('computePreSigningHashes', () => {
     psbt.addInput({
       hash: 'ff'.repeat(32),
       index: 0,
-      witnessUtxo: { script: p2wpkh.output!, value: 100000n },
+      witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100000n },
       sequence: 0,
     })
     psbt.addOutput({
