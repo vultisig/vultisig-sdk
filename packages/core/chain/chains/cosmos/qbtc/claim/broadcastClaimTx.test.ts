@@ -60,6 +60,29 @@ describe('broadcastClaimTx', () => {
     )
   })
 
+  it('treats "tx already exists in cache" HTTP error as idempotent success', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response('tx already exists in cache', { status: 400 })
+    ) as typeof fetch
+
+    const result = await broadcastClaimTx(validInput)
+
+    expect(result.txHash).toBe(validInput.txHash)
+  })
+
+  it('throws on missing tx_response.code', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ tx_response: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    ) as typeof fetch
+
+    await expect(broadcastClaimTx(validInput)).rejects.toThrow(
+      'missing tx_response.code'
+    )
+  })
+
   it('throws on non-zero tx response code', async () => {
     globalThis.fetch = vi.fn(async () =>
       new Response(

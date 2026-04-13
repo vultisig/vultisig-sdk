@@ -46,23 +46,34 @@ export const broadcastClaimTx = async ({
     }),
   })
 
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`QBTC claim broadcast failed (${response.status}): ${text}`)
-  }
-
-  const data: BroadcastResponse = await response.json()
-
-  if (data.tx_response?.code && data.tx_response.code !== 0) {
-    throw new Error(
-      `QBTC claim tx error: ${data.tx_response.raw_log || data.tx_response.log}`
-    )
-  }
-
-  return {
+  const idempotentResult: ClaimTxResponse = {
     totalAmountClaimed: 0n,
     utxosClaimed: 0,
     utxosSkipped: 0,
     txHash,
   }
+
+  if (!response.ok) {
+    const text = await response.text()
+    if (text.includes('tx already exists in cache')) {
+      return idempotentResult
+    }
+    throw new Error(`QBTC claim broadcast failed (${response.status}): ${text}`)
+  }
+
+  const data: BroadcastResponse = await response.json()
+
+  if (typeof data.tx_response?.code !== 'number') {
+    throw new Error('QBTC claim broadcast failed: missing tx_response.code')
+  }
+
+  if (data.tx_response.code !== 0) {
+    const log = data.tx_response.raw_log || data.tx_response.log
+    if (log?.includes('tx already exists in cache')) {
+      return idempotentResult
+    }
+    throw new Error(`QBTC claim tx error: ${log}`)
+  }
+
+  return idempotentResult
 }
