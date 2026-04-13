@@ -12,10 +12,14 @@ type ProofServiceHealthResponse = {
 export const checkProofServiceHealth = async ({
   baseUrl = defaultProofServiceUrl,
 }: { baseUrl?: string } = {}): Promise<boolean> => {
-  const response = await fetch(`${baseUrl}/health`)
-  const data: ProofServiceHealthResponse = await response.json()
-
-  return data.status === 'healthy' && data.setup_loaded === true
+  try {
+    const response = await fetch(`${baseUrl}/health`)
+    if (!response.ok) return false
+    const data: ProofServiceHealthResponse = await response.json()
+    return data.status === 'healthy' && data.setup_loaded === true
+  } catch {
+    return false
+  }
 }
 
 type UtxoRef = {
