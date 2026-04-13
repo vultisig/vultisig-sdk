@@ -18,9 +18,12 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # Use RELEASE_TOKEN so git push is not performed with the workflow GITHUB_TOKEN.
+      # GitHub does not run workflows for events triggered by the default token (recursive-run guard).
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
