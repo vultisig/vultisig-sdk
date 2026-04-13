@@ -7023,7 +7023,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-native@workspace:packages/mpc-native"
   dependencies:
-    "@vultisig/mpc-types": "workspace:^0.1.0"
+    "@vultisig/mpc-types": "workspace:^0.1.2"
     expo: "npm:^55.0.0"
   peerDependencies:
     expo: ^55.0.0
@@ -7037,7 +7037,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.1.0, @vultisig/mpc-types@workspace:packages/mpc-types":
+"@vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.1.2, @vultisig/mpc-types@workspace:packages/mpc-types":
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   languageName: unknown
@@ -7067,7 +7067,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:^3.0.9"
   peerDependencies:
-    "@vultisig/sdk": ">=0.14.1"
+    "@vultisig/sdk": ">=0.14.3"
   peerDependenciesMeta:
     "@vultisig/sdk":
       optional: true
