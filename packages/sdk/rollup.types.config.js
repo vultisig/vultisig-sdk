@@ -41,4 +41,16 @@ export default defineConfig([
     },
     plugins: [dts(dtsPluginOptions)],
   },
+  // React Native platform types — RN-specific exports (e.g. keysign) that
+  // aren't reachable from src/index.ts because that entry stays platform
+  // agnostic. Consumers resolving under the "react-native" export condition
+  // (Metro/Expo tsconfig with customConditions) get this file.
+  {
+    input: 'src/platforms/react-native/index.ts',
+    output: {
+      file: 'dist/index.react-native.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
 ])
