@@ -13,6 +13,13 @@ export const getClaimWithProofDisabled = async (): Promise<boolean> => {
   const url = `${qbtcRestUrl}/qbtc/v1/params/ClaimWithProofDisabled`
 
   const { param } = await queryUrl<QbtcParamsResponse>(url)
+  const parsedValue = Number(param.value)
 
-  return Number(param.value) > 0
+  if (!Number.isFinite(parsedValue)) {
+    throw new Error(
+      `Invalid ClaimWithProofDisabled value: ${String(param.value)}`
+    )
+  }
+
+  return parsedValue > 0
 }
