@@ -52,10 +52,16 @@ const assertBaseUnitString = (value: string, fieldName: string): bigint => {
  *
  * Source: docs.thorchain.org continuous-liquidity-pools.md and the
  * THORChain dev handbook. Implemented from the canonical formula, not
- * copied from any third-party codebase. For an asymmetric deposit either
- * `r` or `a` is zero — the formula still holds (the internal 50/50
- * rebalancing happens on-chain and is reflected in the returned units via
- * the pool's existing depth ratio).
+ * copied from any third-party codebase. The on-chain handler multiplies
+ * by a slip-adjustment term (`1 - |rA - aR| / (rA + aR)`) before minting
+ * the final units; this helper intentionally omits that adjustment so UIs
+ * can show a quick estimate. For asymmetric adds the simplified number
+ * can diverge a few percent from mainnet — note that in UX copy if you
+ * display it directly.
+ *
+ * For an asymmetric deposit either `r` or `a` is zero — the formula still
+ * holds (the internal 50/50 rebalancing happens on-chain and is reflected
+ * in the returned units via the pool's existing depth ratio).
  *
  * All inputs / outputs are in 1e8 base units. Returns a non-negative
  * BigInt-safe integer string.

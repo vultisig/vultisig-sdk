@@ -1,8 +1,5 @@
-import { Chain } from '@vultisig/core-chain/Chain'
-import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-
-import type { ThorchainLpPosition } from './position'
+import type { ThorchainLpPosition } from './types'
+import { getThorchainMimir } from './validation'
 
 /**
  * THORChain target block time in seconds. The chain runs on CometBFT /
@@ -11,8 +8,6 @@ import type { ThorchainLpPosition } from './position'
  * that's plenty of precision.
  */
 export const THORCHAIN_BLOCK_TIME_SECONDS = 6
-
-type MimirResponse = Record<string, number>
 
 /**
  * Read the current `LIQUIDITYLOCKUPBLOCKS` mimir value from thornode and
@@ -26,14 +21,8 @@ type MimirResponse = Record<string, number>
  * time error is the real backstop if a withdraw hits too early.
  */
 export const getThorchainLpLockupSeconds = async (): Promise<number> => {
-  const url = `${cosmosRpcUrl[Chain.THORChain]}/thorchain/mimir`
-  const raw = await queryUrl<MimirResponse>(url)
-  if (!raw || typeof raw !== 'object') {
-    throw new Error(
-      `getThorchainLpLockupSeconds: unexpected mimir payload from ${url}`
-    )
-  }
-  const blocks = raw['LIQUIDITYLOCKUPBLOCKS']
+  const mimir = await getThorchainMimir()
+  const blocks = mimir['LIQUIDITYLOCKUPBLOCKS']
   if (typeof blocks !== 'number' || !Number.isFinite(blocks) || blocks < 0) {
     throw new Error(
       `getThorchainLpLockupSeconds: mimir did not include a valid LIQUIDITYLOCKUPBLOCKS value`

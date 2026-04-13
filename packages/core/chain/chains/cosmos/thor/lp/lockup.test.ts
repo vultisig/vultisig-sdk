@@ -48,7 +48,7 @@ describe('getThorchainLpLockupSeconds', () => {
       new Response(JSON.stringify('not an object'), { status: 200 })
     ) as typeof fetch
     await expect(getThorchainLpLockupSeconds()).rejects.toThrow(
-      /unexpected mimir payload/
+      /unexpected response shape/
     )
   })
 })

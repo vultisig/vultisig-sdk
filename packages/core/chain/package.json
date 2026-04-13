@@ -209,11 +209,6 @@
       "import": "./dist/chains/cosmos/thor/lp/index.js",
       "default": "./dist/chains/cosmos/thor/lp/index.js"
     },
-    "./chains/cosmos/thor/lp/affiliate": {
-      "types": "./dist/chains/cosmos/thor/lp/affiliate.d.ts",
-      "import": "./dist/chains/cosmos/thor/lp/affiliate.js",
-      "default": "./dist/chains/cosmos/thor/lp/affiliate.js"
-    },
     "./chains/cosmos/thor/lp/halts": {
       "types": "./dist/chains/cosmos/thor/lp/halts.d.ts",
       "import": "./dist/chains/cosmos/thor/lp/halts.js",

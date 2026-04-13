@@ -1,47 +1,9 @@
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { normalizeMemberPool } from './memberPool'
 import { thorchainMidgardBaseUrl } from './pools'
-import type { ThorchainLpPosition } from './position'
-
-type RawMemberPool = {
-  pool?: string
-  liquidityUnits?: string
-  runeAdded?: string
-  assetAdded?: string
-  runePending?: string
-  assetPending?: string
-  runeAddress?: string
-  assetAddress?: string
-  dateLastAdded?: string
-}
-
-type RawMemberResponse = {
-  pools?: RawMemberPool[]
-}
-
-const isNonZero = (s: string | undefined): boolean => {
-  if (!s) return false
-  try {
-    return BigInt(s) > 0n
-  } catch {
-    return false
-  }
-}
-
-const normalizeMemberPool = (raw: RawMemberPool): ThorchainLpPosition => ({
-  pool: raw.pool ?? '',
-  liquidityUnits: raw.liquidityUnits ?? '0',
-  runeAdded: raw.runeAdded ?? '0',
-  assetAdded: raw.assetAdded ?? '0',
-  runePending: raw.runePending ?? '0',
-  assetPending: raw.assetPending ?? '0',
-  runeAddress: raw.runeAddress ?? '',
-  assetAddress: raw.assetAddress ?? '',
-  dateLastAdded: raw.dateLastAdded ?? '0',
-  lastAddHeight: '',
-  isPending: isNonZero(raw.runePending) || isNonZero(raw.assetPending),
-})
+import type { RawMemberResponse, ThorchainLpPosition } from './types'
 
 /**
  * Fetch every LP position for a THORChain address in a single Midgard call.

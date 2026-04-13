@@ -43,10 +43,8 @@ export {
   isValidPoolId,
   thorchainMidgardBaseUrl,
 } from './pools'
-export type {
-  GetThorchainLpPositionInput,
-  ThorchainLpPosition,
-} from './position'
+export type { GetThorchainLpPositionInput } from './position'
+export type { ThorchainLpPosition } from './types'
 export {
   getThorchainLpPosition,
   getThorchainLpPositionFromThornode,
