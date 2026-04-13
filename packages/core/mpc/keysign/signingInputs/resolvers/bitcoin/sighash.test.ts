@@ -12,6 +12,7 @@ import {
   BitcoinOutputSchema,
   SignBitcoinSchema,
 } from '../../../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { computePreSigningHashes } from './sighash'
 
 /**
@@ -24,73 +25,6 @@ const TEST_PUBKEY = Buffer.from(
   '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
   'hex'
 )
-
-/** Build a SignBitcoin proto from a bitcoinjs-lib Psbt for comparison. */
-const signBitcoinFromPsbt = (psbt: Psbt, senderAddress: string) => {
-  const anyInputHasBip32 = psbt.data.inputs.some(
-    inp =>
-      (inp.bip32Derivation && inp.bip32Derivation.length > 0) ||
-      ((inp as any).tapBip32Derivation &&
-        (inp as any).tapBip32Derivation.length > 0)
-  )
-
-  const inputs = psbt.txInputs.map((txInput, i) => {
-    const inputData = psbt.data.inputs[i]
-    const scriptPubKey = Buffer.from(inputData.witnessUtxo!.script)
-    const inputValue = BigInt(inputData.witnessUtxo!.value)
-
-    let scriptType = 'unknown'
-    if (
-      scriptPubKey.length === 22 &&
-      scriptPubKey[0] === 0x00 &&
-      scriptPubKey[1] === 0x14
-    ) {
-      scriptType = 'p2wpkh'
-    }
-
-    const redeemScript = inputData.redeemScript
-      ? Buffer.from(inputData.redeemScript).toString('hex')
-      : undefined
-    if (redeemScript) {
-      const rs = Buffer.from(redeemScript, 'hex')
-      if (rs.length === 22 && rs[0] === 0x00 && rs[1] === 0x14) {
-        scriptType = 'p2sh-p2wpkh'
-      }
-    }
-
-    const hasBip32 =
-      (inputData.bip32Derivation && inputData.bip32Derivation.length > 0) ||
-      ((inputData as any).tapBip32Derivation &&
-        (inputData as any).tapBip32Derivation.length > 0)
-
-    return create(BitcoinInputSchema, {
-      hash: Buffer.from(txInput.hash).reverse().toString('hex'),
-      index: txInput.index,
-      amount: inputValue,
-      scriptPubKey: scriptPubKey.toString('hex'),
-      scriptType,
-      sighashType: 1,
-      isOurs: anyInputHasBip32 ? !!hasBip32 : true,
-      redeemScript,
-      sequence: txInput.sequence,
-    })
-  })
-
-  const outputs = psbt.txOutputs.map(txOutput =>
-    create(BitcoinOutputSchema, {
-      amount: BigInt(txOutput.value),
-      scriptPubKey: Buffer.from(txOutput.script).toString('hex'),
-      isChange: false,
-    })
-  )
-
-  return create(SignBitcoinSchema, {
-    version: psbt.version,
-    locktime: psbt.locktime,
-    inputs,
-    outputs,
-  })
-}
 
 /** Get bitcoinjs-lib's sighash for comparison. */
 const getBjsSighash = (
@@ -127,7 +61,7 @@ describe('computePreSigningHashes', () => {
       value: 90000n,
     })
 
-    const signBitcoin = signBitcoinFromPsbt(psbt, p2wpkh.address!)
+    const signBitcoin = buildSignBitcoinFromPsbt({ psbt, senderAddress: p2wpkh.address! })
     const [ourHash] = computePreSigningHashes(signBitcoin)
     const bjsHash = getBjsSighash(psbt, 0, 100000n, p2wpkh.output!)
 
@@ -149,7 +83,7 @@ describe('computePreSigningHashes', () => {
       value: 190000n,
     })
 
-    const signBitcoin = signBitcoinFromPsbt(psbt, p2sh.address!)
+    const signBitcoin = buildSignBitcoinFromPsbt({ psbt, senderAddress: p2sh.address! })
 
     // For P2SH-P2WPKH, bitcoinjs-lib uses the redeemScript to derive the witness script
     const tx = (psbt as any).__CACHE.__TX as Transaction
@@ -191,7 +125,7 @@ describe('computePreSigningHashes', () => {
       value: 120000n,
     })
 
-    const signBitcoin = signBitcoinFromPsbt(psbt, p2wpkh.address!)
+    const signBitcoin = buildSignBitcoinFromPsbt({ psbt, senderAddress: p2wpkh.address! })
     // Override isOurs: input 0 = false, input 1 = true
     signBitcoin.inputs[0].isOurs = false
     signBitcoin.inputs[1].isOurs = true
@@ -219,7 +153,7 @@ describe('computePreSigningHashes', () => {
     const opReturnScript = bscript.compile([0x6a, Buffer.from('hello world')])
     psbt.addOutput({ script: opReturnScript, value: 0n })
 
-    const signBitcoin = signBitcoinFromPsbt(psbt, p2wpkh.address!)
+    const signBitcoin = buildSignBitcoinFromPsbt({ psbt, senderAddress: p2wpkh.address! })
     const [ourHash] = computePreSigningHashes(signBitcoin)
     const bjsHash = getBjsSighash(psbt, 0, 50000n, p2wpkh.output!)
 
@@ -240,7 +174,7 @@ describe('computePreSigningHashes', () => {
       value: 90000n,
     })
 
-    const signBitcoin = signBitcoinFromPsbt(psbt, p2wpkh.address!)
+    const signBitcoin = buildSignBitcoinFromPsbt({ psbt, senderAddress: p2wpkh.address! })
     expect(signBitcoin.inputs[0].sequence).toBe(0) // not defaulted to 0xffffffff
 
     const [ourHash] = computePreSigningHashes(signBitcoin)
