@@ -174,6 +174,21 @@
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
     },
+    "./chains/cosmos/qbtc/claim/ClaimableUtxo": {
+      "types": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js"
+    },
+    "./chains/cosmos/qbtc/claim/getClaimableUtxos": {
+      "types": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.js"
+    },
+    "./chains/cosmos/qbtc/claim/getClaimWithProofDisabled": {
+      "types": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js"
+    },
     "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
       "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
       "import": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js",
