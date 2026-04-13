@@ -25,6 +25,9 @@ export const writeUInt64LE = (value: bigint): Buffer => {
 
 /** Encode an integer as a Bitcoin varint (CompactSize). */
 export const writeVarInt = (n: number): Buffer => {
+  if (n < 0 || n > 0xffffffff) {
+    throw new Error(`writeVarInt: value out of range: ${n}`)
+  }
   if (n < 0xfd) {
     return Buffer.from([n])
   }
@@ -122,6 +125,10 @@ export const computePreSigningHashes = (
   for (const input of inputs) {
     if (!input.isOurs) continue
 
+    if (input.amount < 0n) {
+      throw new Error(`Input amount must be non-negative, got ${input.amount}`)
+    }
+
     const scriptPubKey = Buffer.from(input.scriptPubKey, 'hex')
     let scriptCode: Buffer
 
@@ -179,5 +186,3 @@ export const computePreSigningHashes = (
   return sighashes
 }
 
-/** @deprecated Use computePreSigningHashes instead */
-export const computeBip143Sighashes = computePreSigningHashes

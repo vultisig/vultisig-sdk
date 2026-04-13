@@ -93,7 +93,7 @@ export const compileSignBitcoinTx = (
   hashIndex = 0
   const inputResults = signBitcoin.inputs.map(input => {
     if (!input.isOurs) {
-      return { witnessItems: [] as string[] }
+      return { witnessItems: [] as Uint8Array[] }
     }
 
     const hash = hashes[hashIndex++]
@@ -106,20 +106,21 @@ export const compileSignBitcoinTx = (
 
     return {
       witnessItems: [
-        sigWithHashType.toString('base64'),
-        pubKeyBytes.toString('base64'),
+        new Uint8Array(sigWithHashType),
+        new Uint8Array(pubKeyBytes),
       ],
     }
   })
 
   // Wrap in TW.Bitcoin.Proto.SigningOutput with signingResultV2
   // so the extension can extract per-input sigs for PSBT reconstruction.
+  // signingResultV2 is a proper field on SigningOutput (see TW.BitcoinV2.Proto.ISigningOutput)
   const output = TW.Bitcoin.Proto.SigningOutput.create({
     encoded: serialized,
+    signingResultV2: {
+      bitcoin: { inputs: inputResults },
+    },
   })
-  ;(output as any).signingResultV2 = {
-    bitcoin: { inputs: inputResults },
-  }
 
   return TW.Bitcoin.Proto.SigningOutput.encode(output).finish()
 }

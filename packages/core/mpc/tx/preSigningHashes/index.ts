@@ -33,12 +33,12 @@ export const getPreSigningHashes = ({
   }
 
   if (chain === Chain.QBTC) {
-    const keysignPayload = fromBinary(KeysignPayloadSchema, txInputData)
+    const qbtcPayload = fromBinary(KeysignPayloadSchema, txInputData)
     const cosmosSpecific = getBlockchainSpecificValue(
-      keysignPayload.blockchainSpecific,
+      qbtcPayload.blockchainSpecific,
       'cosmosSpecific'
     )
-    return getQBTCPreSignedImageHash({ keysignPayload, cosmosSpecific })
+    return getQBTCPreSignedImageHash({ keysignPayload: qbtcPayload, cosmosSpecific })
   }
 
   if (chain === Chain.Bittensor) {

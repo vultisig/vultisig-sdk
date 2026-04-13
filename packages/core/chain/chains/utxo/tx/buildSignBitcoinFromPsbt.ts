@@ -109,8 +109,8 @@ export const buildSignBitcoinFromPsbt = ({
   const anyInputHasBip32 = psbt.data.inputs.some(
     inp =>
       (inp.bip32Derivation && inp.bip32Derivation.length > 0) ||
-      ((inp as any).tapBip32Derivation &&
-        (inp as any).tapBip32Derivation.length > 0)
+      (inp.tapBip32Derivation &&
+        inp.tapBip32Derivation.length > 0)
   )
 
   const inputs = psbt.txInputs.map((txInput, i) => {
@@ -131,6 +131,15 @@ export const buildSignBitcoinFromPsbt = ({
         const prevTx = Transaction.fromBuffer(
           Buffer.from(inputData.nonWitnessUtxo)
         )
+        // BIP-174: verify nonWitnessUtxo txid matches the input's prevout hash
+        const prevTxId = prevTx.getId()
+        const expectedTxId = Buffer.from(txInput.hash).reverse().toString('hex')
+        if (prevTxId !== expectedTxId) {
+          throw new Error(
+            `Input #${i}: nonWitnessUtxo txid (${prevTxId.slice(0, 16)}...) does not match ` +
+              `input prevout (${expectedTxId.slice(0, 16)}...)`
+          )
+        }
         const prevOutput = prevTx.outs[txInput.index]
         if (prevOutput && BigInt(prevOutput.value) !== inputValue) {
           throw new Error(
@@ -167,8 +176,8 @@ export const buildSignBitcoinFromPsbt = ({
     // This gives a clearer error at decomposition time.
     const hasBip32 =
       (inputData.bip32Derivation && inputData.bip32Derivation.length > 0) ||
-      ((inputData as any).tapBip32Derivation &&
-        (inputData as any).tapBip32Derivation.length > 0)
+      (inputData.tapBip32Derivation &&
+        inputData.tapBip32Derivation.length > 0)
     const isOurs = anyInputHasBip32 ? !!hasBip32 : true
 
     if (isOurs && !SUPPORTED_SCRIPT_TYPES.has(scriptType)) {
@@ -183,10 +192,7 @@ export const buildSignBitcoinFromPsbt = ({
       )
     }
 
-    const sighashType =
-      typeof (inputData as any).sighashType === 'number'
-        ? (inputData as any).sighashType
-        : 1 // SIGHASH_ALL
+    const sighashType = inputData.sighashType ?? 1 // SIGHASH_ALL
 
     const redeemScript = inputData.redeemScript
       ? Buffer.from(inputData.redeemScript).toString('hex')
@@ -224,8 +230,8 @@ export const buildSignBitcoinFromPsbt = ({
     const outputData = psbt.data.outputs[outputIndex]
     const outputHasBip32 =
       (outputData.bip32Derivation && outputData.bip32Derivation.length > 0) ||
-      ((outputData as any).tapBip32Derivation &&
-        (outputData as any).tapBip32Derivation.length > 0)
+      (outputData.tapBip32Derivation &&
+        outputData.tapBip32Derivation.length > 0)
 
     return create(BitcoinOutputSchema, {
       amount: BigInt(txOutput.value),
