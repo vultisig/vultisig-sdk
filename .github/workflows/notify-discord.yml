@@ -16,8 +16,25 @@ jobs:
   notify:
     name: Discord Notify
     runs-on: ubuntu-latest
+    # Soft-fail: if DISCORD_WEBHOOK_URL is missing or Discord is down, we warn
+    # instead of blocking the overall release. A missed notification shouldn't
+    # turn a green release red.
+    continue-on-error: true
     steps:
+      - name: Check DISCORD_WEBHOOK_URL is configured
+        id: check_webhook
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "::warning::DISCORD_WEBHOOK_URL secret is not set, skipping Discord notify. Add it to repo secrets to enable."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Notify Discord
+        if: steps.check_webhook.outputs.skip != 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
           VERSION: ${{ inputs.version }}
