@@ -22,9 +22,9 @@ export const getClaimableUtxos = async ({
     chain: Chain.Bitcoin,
   })
 
-  const { utxo } = response.data[btcAddress]
+  const utxos = response.data[btcAddress]?.utxo ?? []
 
-  return utxo.map(({ transaction_hash, index, value }) => ({
+  return utxos.map(({ transaction_hash, index, value }) => ({
     txid: transaction_hash,
     vout: index,
     amount: value,
