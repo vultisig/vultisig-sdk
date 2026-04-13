@@ -112,6 +112,19 @@ jobs:
           path: packages/rujira/dist
           retention-days: 1
 
+      - name: Upload shared packages dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-dist
+          path: |
+            packages/mpc-types/dist
+            packages/mpc-wasm/dist
+            packages/core/mpc/dist
+            packages/core/chain/dist
+            packages/core/config/dist
+            packages/lib/utils/dist
+          retention-days: 1
+
   # ============ JOB 2: Run Tests (parallel with build) ============
   test:
     name: Run Tests
@@ -188,6 +201,11 @@ jobs:
         with:
           name: rujira-dist
           path: packages/rujira/dist
+
+      - name: Download shared packages dist
+        uses: actions/download-artifact@v4
+        with:
+          name: shared-dist
 
       - name: Publish to NPM
         run: yarn changeset:publish
