@@ -1,17 +1,16 @@
+import { Transaction } from 'bitcoinjs-lib'
 import { TW } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 import { KeysignSignature } from '../../keysign/KeysignSignature'
-import {
-  computePreSigningHashes,
-  writeUInt32LE,
-  writeUInt64LE,
-  writeVarInt,
-} from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
+import { computePreSigningHashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
 import { SignBitcoin } from '../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 
 /**
  * Build a raw signed Bitcoin transaction from SignBitcoin fields + MPC signatures.
+ * Uses bitcoinjs-lib's Transaction class for serialization (proper varint encoding,
+ * witness handling, segwit markers).
+ *
  * Returns an encoded TW.Bitcoin.Proto.SigningOutput so callers can decode it
  * the same way as WalletCore-compiled transactions.
  *
@@ -19,6 +18,8 @@ import { SignBitcoin } from '../../types/vultisig/keysign/v1/wasm_execute_contra
  * this vault. Non-ours inputs get empty witnesses, making the tx invalid on-chain
  * if any exist. Multi-party PSBT support (where non-ours inputs have existing
  * signatures from other parties) is a follow-up.
+ *
+ * @see https://www.npmjs.org/package/bitcoinjs-lib
  */
 export const compileSignBitcoinTx = (
   signBitcoin: SignBitcoin,
@@ -28,59 +29,42 @@ export const compileSignBitcoinTx = (
   const hashes = computePreSigningHashes(signBitcoin)
   const pubKeyBytes = Buffer.from(publicKey.data())
 
-  // Build the raw segwit transaction
-  const parts: Buffer[] = []
+  // Build the transaction using bitcoinjs-lib's Transaction class
+  // which handles varint encoding, segwit markers, and witness serialization.
+  const tx = new Transaction()
+  tx.version = signBitcoin.version
+  tx.locktime = signBitcoin.locktime
 
-  // Version
-  parts.push(writeUInt32LE(signBitcoin.version))
-
-  // Segwit marker + flag
-  parts.push(Buffer.from([0x00, 0x01]))
-
-  // Input count
-  parts.push(writeVarInt(signBitcoin.inputs.length))
-
-  // Inputs (without witness data)
+  // Add inputs
   for (const input of signBitcoin.inputs) {
-    // Outpoint: txid (LE) + vout
-    const txid = Buffer.from(input.hash, 'hex').reverse()
-    parts.push(txid)
-    parts.push(writeUInt32LE(input.index))
-    // scriptSig: empty for native P2WPKH, redeemScript push for P2SH-P2WPKH
+    const txid = Buffer.from(input.hash, 'hex').reverse() // display -> internal byte order
+    tx.addInput(txid, input.index, input.sequence ?? 0xffffffff)
+
+    // P2SH-P2WPKH: set scriptSig to redeemScript push
     if (input.scriptType === 'p2sh-p2wpkh' && input.redeemScript) {
       const redeemScriptBuf = Buffer.from(input.redeemScript, 'hex')
-      const scriptSig = Buffer.concat([
+      tx.ins[tx.ins.length - 1].script = Buffer.concat([
         Buffer.from([redeemScriptBuf.length]),
         redeemScriptBuf,
       ])
-      parts.push(writeVarInt(scriptSig.length))
-      parts.push(scriptSig)
-    } else {
-      parts.push(Buffer.from([0x00]))
     }
-    // Sequence
-    parts.push(writeUInt32LE(input.sequence ?? 0xffffffff))
   }
 
-  // Output count
-  parts.push(writeVarInt(signBitcoin.outputs.length))
-
-  // Outputs
+  // Add outputs
   for (const output of signBitcoin.outputs) {
-    parts.push(writeUInt64LE(output.amount))
-    const script = Buffer.from(output.scriptPubKey, 'hex')
-    parts.push(writeVarInt(script.length))
-    parts.push(script)
+    tx.addOutput(Buffer.from(output.scriptPubKey, 'hex'), output.amount)
   }
 
-  // Witness data for each input
+  // Set witness data for each input
   let hashIndex = 0
-  for (const input of signBitcoin.inputs) {
+  for (let i = 0; i < signBitcoin.inputs.length; i++) {
+    const input = signBitcoin.inputs[i]
+
     if (!input.isOurs) {
       // Non-ours inputs: empty witness stack.
       // This makes the tx invalid if non-ours inputs exist.
       // Multi-party PSBT support (preserving existing signatures) is a follow-up.
-      parts.push(Buffer.from([0x00]))
+      tx.setWitness(i, [])
       continue
     }
 
@@ -97,21 +81,15 @@ export const compileSignBitcoinTx = (
     const sighashByte = input.sighashType ?? 1
     const sigWithHashType = Buffer.concat([derSig, Buffer.from([sighashByte])])
 
-    // P2WPKH witness: 2 items - [signature+hashtype, pubkey]
-    parts.push(Buffer.from([0x02])) // 2 witness items
-    parts.push(writeVarInt(sigWithHashType.length))
-    parts.push(sigWithHashType)
-    parts.push(writeVarInt(pubKeyBytes.length))
-    parts.push(pubKeyBytes)
+    // P2WPKH witness: [signature+hashtype, pubkey]
+    tx.setWitness(i, [sigWithHashType, pubKeyBytes])
   }
 
-  // Locktime
-  parts.push(writeUInt32LE(signBitcoin.locktime))
-
-  const serialized = Buffer.concat(parts)
+  const serialized = tx.toBuffer()
 
   // Build signingResultV2 so rebuildPsbtWithPartialSigsFromWC can extract
   // per-input witness items (DER sig + pubkey) to inject into the PSBT.
+  // See: vultisig-windows/clients/extension/src/utils/functions.ts
   hashIndex = 0
   const inputResults = signBitcoin.inputs.map(input => {
     if (!input.isOurs) {
