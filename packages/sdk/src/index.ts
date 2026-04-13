@@ -184,6 +184,9 @@ export {
   vultDiscountTiers,
 } from '@vultisig/core-chain/swap/affiliate/config'
 
+// THORChain LP primitives (asym RUNE-side, v1)
+export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================

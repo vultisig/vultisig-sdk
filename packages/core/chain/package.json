@@ -74,6 +74,11 @@
       "import": "./dist/chains/bittensor/signing/scale.js",
       "default": "./dist/chains/bittensor/signing/scale.js"
     },
+    "./chains/cardano/asset/cardanoAssetId": {
+      "types": "./dist/chains/cardano/asset/cardanoAssetId.d.ts",
+      "import": "./dist/chains/cardano/asset/cardanoAssetId.js",
+      "default": "./dist/chains/cardano/asset/cardanoAssetId.js"
+    },
     "./chains/cardano/client/config": {
       "types": "./dist/chains/cardano/client/config.d.ts",
       "import": "./dist/chains/cardano/client/config.js",
@@ -84,10 +89,25 @@
       "import": "./dist/chains/cardano/client/currentSlot.js",
       "default": "./dist/chains/cardano/client/currentSlot.js"
     },
+    "./chains/cardano/client/getCardanoAddressAssets": {
+      "types": "./dist/chains/cardano/client/getCardanoAddressAssets.d.ts",
+      "import": "./dist/chains/cardano/client/getCardanoAddressAssets.js",
+      "default": "./dist/chains/cardano/client/getCardanoAddressAssets.js"
+    },
+    "./chains/cardano/client/getCardanoAssetInfo": {
+      "types": "./dist/chains/cardano/client/getCardanoAssetInfo.d.ts",
+      "import": "./dist/chains/cardano/client/getCardanoAssetInfo.js",
+      "default": "./dist/chains/cardano/client/getCardanoAssetInfo.js"
+    },
     "./chains/cardano/config": {
       "types": "./dist/chains/cardano/config.d.ts",
       "import": "./dist/chains/cardano/config.js",
       "default": "./dist/chains/cardano/config.js"
+    },
+    "./chains/cardano/utxo/getCardanoExtendedUtxos": {
+      "types": "./dist/chains/cardano/utxo/getCardanoExtendedUtxos.d.ts",
+      "import": "./dist/chains/cardano/utxo/getCardanoExtendedUtxos.js",
+      "default": "./dist/chains/cardano/utxo/getCardanoExtendedUtxos.js"
     },
     "./chains/cardano/utxo/getCardanoUtxos": {
       "types": "./dist/chains/cardano/utxo/getCardanoUtxos.d.ts",
@@ -183,6 +203,41 @@
       "types": "./dist/chains/cosmos/thor/kujira-merge/kujiraCoinsOnThorChain.d.ts",
       "import": "./dist/chains/cosmos/thor/kujira-merge/kujiraCoinsOnThorChain.js",
       "default": "./dist/chains/cosmos/thor/kujira-merge/kujiraCoinsOnThorChain.js"
+    },
+    "./chains/cosmos/thor/lp": {
+      "types": "./dist/chains/cosmos/thor/lp/index.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/index.js",
+      "default": "./dist/chains/cosmos/thor/lp/index.js"
+    },
+    "./chains/cosmos/thor/lp/affiliate": {
+      "types": "./dist/chains/cosmos/thor/lp/affiliate.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/affiliate.js",
+      "default": "./dist/chains/cosmos/thor/lp/affiliate.js"
+    },
+    "./chains/cosmos/thor/lp/memo": {
+      "types": "./dist/chains/cosmos/thor/lp/memo.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/memo.js",
+      "default": "./dist/chains/cosmos/thor/lp/memo.js"
+    },
+    "./chains/cosmos/thor/lp/payload": {
+      "types": "./dist/chains/cosmos/thor/lp/payload.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/payload.js",
+      "default": "./dist/chains/cosmos/thor/lp/payload.js"
+    },
+    "./chains/cosmos/thor/lp/pools": {
+      "types": "./dist/chains/cosmos/thor/lp/pools.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/pools.js",
+      "default": "./dist/chains/cosmos/thor/lp/pools.js"
+    },
+    "./chains/cosmos/thor/lp/position": {
+      "types": "./dist/chains/cosmos/thor/lp/position.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/position.js",
+      "default": "./dist/chains/cosmos/thor/lp/position.js"
+    },
+    "./chains/cosmos/thor/lp/validation": {
+      "types": "./dist/chains/cosmos/thor/lp/validation.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/validation.js",
+      "default": "./dist/chains/cosmos/thor/lp/validation.js"
     },
     "./chains/cosmos/thor/rujira/config": {
       "types": "./dist/chains/cosmos/thor/rujira/config.d.ts",
@@ -629,6 +684,11 @@
       "import": "./dist/coin/find/resolver.js",
       "default": "./dist/coin/find/resolver.js"
     },
+    "./coin/find/resolvers/cardano": {
+      "types": "./dist/coin/find/resolvers/cardano.d.ts",
+      "import": "./dist/coin/find/resolvers/cardano.js",
+      "default": "./dist/coin/find/resolvers/cardano.js"
+    },
     "./coin/find/resolvers/cosmos": {
       "types": "./dist/coin/find/resolvers/cosmos.d.ts",
       "import": "./dist/coin/find/resolvers/cosmos.js",
@@ -708,6 +768,11 @@
       "types": "./dist/coin/token/metadata/resolver.d.ts",
       "import": "./dist/coin/token/metadata/resolver.js",
       "default": "./dist/coin/token/metadata/resolver.js"
+    },
+    "./coin/token/metadata/resolvers/cardano": {
+      "types": "./dist/coin/token/metadata/resolvers/cardano.d.ts",
+      "import": "./dist/coin/token/metadata/resolvers/cardano.js",
+      "default": "./dist/coin/token/metadata/resolvers/cardano.js"
     },
     "./coin/token/metadata/resolvers/cosmos": {
       "types": "./dist/coin/token/metadata/resolvers/cosmos.d.ts",
