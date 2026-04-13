@@ -123,6 +123,7 @@ jobs:
             packages/core/chain/dist
             packages/core/config/dist
             packages/lib/utils/dist
+          if-no-files-found: error
           retention-days: 1
 
   # ============ JOB 2: Run Tests (parallel with build) ============
@@ -206,6 +207,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: shared-dist
+          path: packages
 
       - name: Publish to NPM
         run: yarn changeset:publish
