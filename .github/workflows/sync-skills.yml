@@ -14,16 +14,35 @@ jobs:
   sync-skills:
     name: Sync Skills
     runs-on: ubuntu-latest
+    # Soft-fail: if DOCS_REPO_PAT is expired/revoked or the downstream
+    # vultisig/website-prod push fails for any reason, we warn instead of
+    # blocking the overall release. Skills sync is a nice-to-have.
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Check DOCS_REPO_PAT is configured
+        id: check_pat
+        env:
+          DOCS_REPO_PAT: ${{ secrets.DOCS_REPO_PAT }}
+        run: |
+          if [ -z "$DOCS_REPO_PAT" ]; then
+            echo "::warning::DOCS_REPO_PAT secret is not set, skipping skills sync. Add it to repo secrets to enable."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        if: steps.check_pat.outputs.skip != 'true'
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        if: steps.check_pat.outputs.skip != 'true'
         with:
           repository: vultisig/website-prod
           token: ${{ secrets.DOCS_REPO_PAT }}
           path: website-repo
 
       - name: Sync skills directory
+        if: steps.check_pat.outputs.skip != 'true'
         run: |
           rm -rf website-repo/public/skills
           cp -r skills website-repo/public/skills
