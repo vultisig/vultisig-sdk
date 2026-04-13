@@ -22,10 +22,6 @@
     "dist",
     "src"
   ],
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "tsc"
-  },
   "license": "MIT",
   "publishConfig": {
     "access": "public"
