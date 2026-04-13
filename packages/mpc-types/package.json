@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mpc-types",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared MPC engine interfaces for Vultisig SDK",
   "type": "module",
   "main": "dist/index.js",
@@ -18,6 +18,10 @@
       "default": "./dist/runtime.js"
     }
   },
+  "files": [
+    "dist",
+    "src"
+  ],
   "license": "MIT",
   "publishConfig": {
     "access": "public"
