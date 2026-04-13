@@ -7590,7 +7590,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/mpc-types@npm:0.1.0, @vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.1.0, @vultisig/mpc-types@workspace:packages/mpc-types":
+"@vultisig/mpc-types@npm:0.1.0":
+  version: 0.1.0
+  resolution: "@vultisig/mpc-types@npm:0.1.0"
+  checksum: 10c0/e840f420e58ccab370634b3fbaef542f9cb1d0740d1a96fb509cac7688f5326b3f1f0b2c416a82513b8c63ed3f05d8fc256062de70c1233c62e18cee1c23e2bd
+  languageName: node
+  linkType: hard
+
+"@vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.1.0, @vultisig/mpc-types@workspace:packages/mpc-types":
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   languageName: unknown
