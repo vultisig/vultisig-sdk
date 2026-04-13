@@ -38,12 +38,17 @@ describe('detectBtcAddressType', () => {
     )
   })
 
-  it('detects P2TR addresses starting with bc1p', () => {
-    expect(
-      detectBtcAddressType(
-        'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297'
-      )
-    ).toBe('p2tr')
+  it('detects P2TR addresses (bc1p, 62 chars)', () => {
+    const addr =
+      'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297'
+    expect(addr.length).toBe(62)
+    expect(detectBtcAddressType(addr)).toBe('p2tr')
+  })
+
+  it('throws for bc1p addresses with invalid length', () => {
+    expect(() => detectBtcAddressType('bc1pshort')).toThrow(
+      'Unsupported Bitcoin address format'
+    )
   })
 
   it('throws for unsupported address format', () => {
