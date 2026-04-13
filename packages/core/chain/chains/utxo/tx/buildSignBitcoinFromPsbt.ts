@@ -224,21 +224,17 @@ export const buildSignBitcoinFromPsbt = ({
       }
     }
 
-    // Change detection: Vultisig uses a single address per UTXO chain (no HD change derivation),
-    // so senderAddress comparison works for Vultisig wallets. For dApp PSBTs, augment with
-    // BIP32 derivation on outputs as secondary signal.
-    const outputData = psbt.data.outputs[outputIndex]
-    const outputHasBip32 =
-      (outputData.bip32Derivation && outputData.bip32Derivation.length > 0) ||
-      (outputData.tapBip32Derivation &&
-        outputData.tapBip32Derivation.length > 0)
-
+    // Change detection: Vultisig uses a single address per UTXO chain (no HD change
+    // derivation), so address comparison is the primary signal. BIP32 derivation on
+    // outputs is NOT used alone because a malicious dApp could inject derivation paths
+    // on attacker outputs to disguise them as change. Address match is unforgeable
+    // since only the vault owner knows the private key for that address.
     return create(BitcoinOutputSchema, {
       amount: BigInt(txOutput.value),
       address: outputAddress,
       opReturnData: opReturn ? getOpReturnHex(script) : undefined,
       scriptPubKey: script.toString('hex'),
-      isChange: outputHasBip32 || outputAddress === senderAddress,
+      isChange: outputAddress !== '' && outputAddress === senderAddress,
     })
   })
 
