@@ -193,15 +193,25 @@ export const keysign = async ({
         })
       : (() => {
           const [rawR, rawS] = [signature.slice(0, 32), signature.slice(32, 64)]
+          // Engines emit canonical R || S bytes — DklsEngine in big-endian
+          // (which derSignature consumes directly) and SchnorrEngine in
+          // little-endian (Ed25519 R is a compressed point, S is a scalar
+          // mod L; both already in the format ed25519-dalek expects).
+          //
+          // The previous unconditional `.reverse()` for eddsa was an
+          // empirical patch that matched WASM behaviour but corrupts the
+          // native MpcEngine output: native (godkls/goschnorr via
+          // @vultisig/mpc-native) returns canonical bytes already, so the
+          // extra reverse produces an invalid R point and Solana / Sui /
+          // TON RPCs reject the broadcast with "signature verification
+          // failed". Reproduced on iPhone 16e against vultisig-sdk main
+          // (2026-04-13) — see vultisig/vultiagent-app#33 review.
+          //
+          // Pass through untouched and let any backend-specific byte-
+          // ordering quirks be handled inside that backend's session
+          // wrapper, not here.
           const [r, s] = [rawR, rawS]
-            .map(value => Buffer.from(value))
-            .map(value =>
-              match(signatureAlgorithm, {
-                ecdsa: () => value,
-                eddsa: () => value.reverse(),
-              })
-            )
-            .map(value => value.toString('hex'))
+            .map(value => Buffer.from(value).toString('hex'))
 
           const derSignature = encodeDERSignature(rawR, rawS)
           return withoutUndefinedFields({
