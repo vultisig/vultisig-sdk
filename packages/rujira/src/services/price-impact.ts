@@ -3,32 +3,32 @@
  * @module services/price-impact
  */
 
-import Big from 'big.js';
+import Big from 'big.js'
 
-import type { OrderBook } from '../types.js';
+import type { OrderBook } from '../types.js'
 
 /**
  * Input for calculatePriceImpact function.
  */
 export type CalculatePriceImpactInput = {
-  inputAmount: string;
-  outputAmount: string;
-  orderbook: OrderBook | null;
+  inputAmount: string
+  outputAmount: string
+  orderbook: OrderBook | null
   /**
    * True when the swap direction is reversed relative to the orderbook's
    * base/quote convention (i.e., swapping quote → base instead of base → quote).
    */
-  reversedToOrderbook: boolean;
-};
+  reversedToOrderbook: boolean
+}
 
 /**
  * Safely parse a string into a Big number, returning null on failure.
  */
 function safeBig(value: string): Big | null {
   try {
-    return Big(value);
+    return Big(value)
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -52,43 +52,43 @@ export function calculatePriceImpact({
   reversedToOrderbook,
 }: CalculatePriceImpactInput): string {
   if (!orderbook) {
-    return 'unknown';
+    return 'unknown'
   }
 
-  const bestBid = orderbook.bids[0]?.price;
-  const bestAsk = orderbook.asks[0]?.price;
+  const bestBid = orderbook.bids[0]?.price
+  const bestAsk = orderbook.asks[0]?.price
 
   if (!bestBid || !bestAsk) {
-    return 'unknown';
+    return 'unknown'
   }
 
-  const bidPrice = safeBig(bestBid);
-  const askPrice = safeBig(bestAsk);
+  const bidPrice = safeBig(bestBid)
+  const askPrice = safeBig(bestAsk)
 
   if (!bidPrice || !askPrice || bidPrice.lte(0) || askPrice.lte(0)) {
-    return 'unknown';
+    return 'unknown'
   }
 
-  const midPrice = bidPrice.plus(askPrice).div(2);
+  const midPrice = bidPrice.plus(askPrice).div(2)
 
-  const input = safeBig(inputAmount);
-  const output = safeBig(outputAmount);
+  const input = safeBig(inputAmount)
+  const output = safeBig(outputAmount)
 
   if (!input || !output || input.lte(0) || output.lte(0)) {
-    return 'unknown';
+    return 'unknown'
   }
 
   // Calculate execution price based on swap direction relative to orderbook:
   // - Direct (selling base): executionPrice = output / input
   // - Reversed (buying base): executionPrice = input / output
-  const executionPrice = reversedToOrderbook ? input.div(output) : output.div(input);
+  const executionPrice = reversedToOrderbook ? input.div(output) : output.div(input)
 
-  const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100);
+  const impact = executionPrice.minus(midPrice).div(midPrice).abs().mul(100)
 
   // If impact is unreasonably high, report as unknown
   if (impact.gt(99)) {
-    return 'unknown';
+    return 'unknown'
   }
 
-  return impact.toFixed(4);
+  return impact.toFixed(4)
 }

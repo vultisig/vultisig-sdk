@@ -98,7 +98,7 @@ yarn format
 # Run unit tests
 yarn test:unit
 
-# Run integration tests
+# Run integration tests (same suite as CI job "Integration Tests (Vitest)")
 yarn test:integration
 
 # Run e2e tests (requires vault file)
@@ -123,6 +123,8 @@ yarn test:all
 | `yarn lint:fix` | Auto-fix linting issues |
 | `yarn format` | Format code with Prettier |
 | `yarn typecheck` | Run TypeScript type checking |
+| `yarn knip` | Find unused exports and unreachable files (see `.config/knip.json`) |
+| `yarn check` | Run typecheck, lint, knip, and Prettier check in parallel |
 | `yarn build:shared` | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages |
 | `yarn docs` | Generate TypeDoc API documentation |
 
@@ -132,7 +134,7 @@ yarn test:all
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
 4. Ensure tests pass (`yarn test`)
-5. Ensure linting passes (`yarn lint`)
+5. Ensure quality checks pass (`yarn check` — same gates as CI: typecheck, lint, knip, Prettier)
 6. **Add a changeset** if your changes affect the published packages (`yarn changeset`)
 7. Commit with a descriptive message
 8. Push to your fork
@@ -160,7 +162,7 @@ WASM binaries ship with `packages/lib/*` and are bundled into `@vultisig/sdk`. R
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| `test.yml` | PR opened/updated | Unit tests, lint, typecheck, Codecov |
+| `test.yml` | PR opened/updated | Unit tests, lint, typecheck, knip, Prettier check, Codecov |
 | `release-pr.yml` | Push to main | Auto-creates "Version Packages" PR when changesets exist |
 | `release.yml` | Merge version PR | npm publish, GitHub release, Vercel deploy, docs sync, Discord notify |
 | `release-manual.yml` | Manual dispatch | Force-run release steps (Vercel, docs sync, Discord) |
@@ -168,9 +170,12 @@ WASM binaries ship with `packages/lib/*` and are bundled into `@vultisig/sdk`. R
 ### Automated Checks
 
 Every PR runs:
-- ESLint + Prettier formatting
+- ESLint
+- Prettier (`yarn format:check` on SDK, Rujira, CLI, examples)
 - TypeScript type checking
+- Knip (unused exports / dead code in analyzed workspaces)
 - Unit tests (387+ tests)
+- Integration tests (`yarn test:integration` — same suite as CI job "Integration Tests (Vitest)")
 - SDK build verification
 
 Pre-commit hooks (via Husky) run lint-staged on changed files.

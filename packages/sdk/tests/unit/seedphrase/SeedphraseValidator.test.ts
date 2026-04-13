@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-import type { WasmProvider } from '../../../src/context/WasmProvider'
+import type { WasmProvider } from '../../../src/context/SdkContext'
 import { cleanMnemonic, SeedphraseValidator } from '../../../src/seedphrase/SeedphraseValidator'
 
 // Create a minimal mock WasmProvider (not used for validation anymore, but required by constructor)

@@ -34,12 +34,7 @@ async function buildNativeCoin(vault: VaultBase, chain: Chain): Promise<AccountC
   }
 }
 
-async function buildTokenCoin(
-  vault: VaultBase,
-  chain: Chain,
-  tokenId: string,
-  balance: Balance
-): Promise<AccountCoin> {
+async function buildTokenCoin(vault: VaultBase, chain: Chain, tokenId: string, balance: Balance): Promise<AccountCoin> {
   return {
     chain,
     id: tokenId,

@@ -52,7 +52,7 @@ export const toCommVault = (vault: Vault): CommVault =>
     keyShares: [
       ...toEntries(vault.keyShares).map(({ key, value }) =>
         create(Vault_KeyShareSchema, {
-          publicKey: vault.publicKeys[key as SignatureAlgorithm],
+          publicKey: vault.publicKeys[key as (typeof signingAlgorithms)[number]],
           keyshare: value,
         })
       ),

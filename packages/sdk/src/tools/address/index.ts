@@ -1,0 +1,1 @@
+export { deriveAddressFromKeys } from './deriveAddressFromKeys'

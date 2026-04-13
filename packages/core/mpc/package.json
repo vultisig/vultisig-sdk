@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -765,6 +765,11 @@
       "import": "./dist/swap/utils/getSwapTrackingUrl.js",
       "default": "./dist/swap/utils/getSwapTrackingUrl.js"
     },
+    "./tx/compile/cardano/buildSignedCardanoTx": {
+      "types": "./dist/tx/compile/cardano/buildSignedCardanoTx.d.ts",
+      "import": "./dist/tx/compile/cardano/buildSignedCardanoTx.js",
+      "default": "./dist/tx/compile/cardano/buildSignedCardanoTx.js"
+    },
     "./tx/compile/compileSignBitcoinTx": {
       "types": "./dist/tx/compile/compileSignBitcoinTx.d.ts",
       "import": "./dist/tx/compile/compileSignBitcoinTx.js",
@@ -967,12 +972,13 @@
     "@noble/hashes": "^2.0.1",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.0",
-    "@vultisig/core-chain": "1.0.0",
+    "@vultisig/core-chain": "1.1.0",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
     "@vultisig/lib-schnorr": "0.9.0",
     "@vultisig/lib-utils": "0.9.1",
+    "@vultisig/mpc-types": "0.1.0",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
     "cosmjs-types": "^0.11.0",

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -74,6 +74,11 @@
       "import": "./dist/chains/bittensor/signing/scale.js",
       "default": "./dist/chains/bittensor/signing/scale.js"
     },
+    "./chains/cardano/asset/cardanoAssetId": {
+      "types": "./dist/chains/cardano/asset/cardanoAssetId.d.ts",
+      "import": "./dist/chains/cardano/asset/cardanoAssetId.js",
+      "default": "./dist/chains/cardano/asset/cardanoAssetId.js"
+    },
     "./chains/cardano/client/config": {
       "types": "./dist/chains/cardano/client/config.d.ts",
       "import": "./dist/chains/cardano/client/config.js",
@@ -84,10 +89,25 @@
       "import": "./dist/chains/cardano/client/currentSlot.js",
       "default": "./dist/chains/cardano/client/currentSlot.js"
     },
+    "./chains/cardano/client/getCardanoAddressAssets": {
+      "types": "./dist/chains/cardano/client/getCardanoAddressAssets.d.ts",
+      "import": "./dist/chains/cardano/client/getCardanoAddressAssets.js",
+      "default": "./dist/chains/cardano/client/getCardanoAddressAssets.js"
+    },
+    "./chains/cardano/client/getCardanoAssetInfo": {
+      "types": "./dist/chains/cardano/client/getCardanoAssetInfo.d.ts",
+      "import": "./dist/chains/cardano/client/getCardanoAssetInfo.js",
+      "default": "./dist/chains/cardano/client/getCardanoAssetInfo.js"
+    },
     "./chains/cardano/config": {
       "types": "./dist/chains/cardano/config.d.ts",
       "import": "./dist/chains/cardano/config.js",
       "default": "./dist/chains/cardano/config.js"
+    },
+    "./chains/cardano/utxo/getCardanoExtendedUtxos": {
+      "types": "./dist/chains/cardano/utxo/getCardanoExtendedUtxos.d.ts",
+      "import": "./dist/chains/cardano/utxo/getCardanoExtendedUtxos.js",
+      "default": "./dist/chains/cardano/utxo/getCardanoExtendedUtxos.js"
     },
     "./chains/cardano/utxo/getCardanoUtxos": {
       "types": "./dist/chains/cardano/utxo/getCardanoUtxos.d.ts",
@@ -108,6 +128,11 @@
       "types": "./dist/chains/cosmos/client.d.ts",
       "import": "./dist/chains/cosmos/client.js",
       "default": "./dist/chains/cosmos/client.js"
+    },
+    "./chains/cosmos/computeCosmosTxReceiptFeeAmount": {
+      "types": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.d.ts",
+      "import": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js",
+      "default": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js"
     },
     "./chains/cosmos/cosmosFeeCoinDenom": {
       "types": "./dist/chains/cosmos/cosmosFeeCoinDenom.d.ts",
@@ -149,6 +174,41 @@
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
     },
+    "./chains/cosmos/qbtc/claim/ClaimableUtxo": {
+      "types": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js"
+    },
+    "./chains/cosmos/qbtc/claim/getClaimableUtxos": {
+      "types": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.js"
+    },
+    "./chains/cosmos/qbtc/claim/getClaimWithProofDisabled": {
+      "types": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js"
+    },
+    "./chains/cosmos/qbtc/claim/BtcAddressType": {
+      "types": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.js"
+    },
+    "./chains/cosmos/qbtc/claim/detectBtcAddressType": {
+      "types": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.js"
+    },
+    "./chains/cosmos/qbtc/claim/computeClaimHashes": {
+      "types": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js"
+    },
+    "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
+      "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
+      "import": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js",
+      "default": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js"
+    },
     "./chains/cosmos/tendermintRpcUrl": {
       "types": "./dist/chains/cosmos/tendermintRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/tendermintRpcUrl.js",
@@ -173,6 +233,66 @@
       "types": "./dist/chains/cosmos/thor/kujira-merge/kujiraCoinsOnThorChain.d.ts",
       "import": "./dist/chains/cosmos/thor/kujira-merge/kujiraCoinsOnThorChain.js",
       "default": "./dist/chains/cosmos/thor/kujira-merge/kujiraCoinsOnThorChain.js"
+    },
+    "./chains/cosmos/thor/lp": {
+      "types": "./dist/chains/cosmos/thor/lp/index.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/index.js",
+      "default": "./dist/chains/cosmos/thor/lp/index.js"
+    },
+    "./chains/cosmos/thor/lp/halts": {
+      "types": "./dist/chains/cosmos/thor/lp/halts.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/halts.js",
+      "default": "./dist/chains/cosmos/thor/lp/halts.js"
+    },
+    "./chains/cosmos/thor/lp/lockup": {
+      "types": "./dist/chains/cosmos/thor/lp/lockup.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/lockup.js",
+      "default": "./dist/chains/cosmos/thor/lp/lockup.js"
+    },
+    "./chains/cosmos/thor/lp/lpChainMap": {
+      "types": "./dist/chains/cosmos/thor/lp/lpChainMap.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/lpChainMap.js",
+      "default": "./dist/chains/cosmos/thor/lp/lpChainMap.js"
+    },
+    "./chains/cosmos/thor/lp/math": {
+      "types": "./dist/chains/cosmos/thor/lp/math.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/math.js",
+      "default": "./dist/chains/cosmos/thor/lp/math.js"
+    },
+    "./chains/cosmos/thor/lp/memo": {
+      "types": "./dist/chains/cosmos/thor/lp/memo.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/memo.js",
+      "default": "./dist/chains/cosmos/thor/lp/memo.js"
+    },
+    "./chains/cosmos/thor/lp/pairing": {
+      "types": "./dist/chains/cosmos/thor/lp/pairing.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/pairing.js",
+      "default": "./dist/chains/cosmos/thor/lp/pairing.js"
+    },
+    "./chains/cosmos/thor/lp/payload": {
+      "types": "./dist/chains/cosmos/thor/lp/payload.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/payload.js",
+      "default": "./dist/chains/cosmos/thor/lp/payload.js"
+    },
+    "./chains/cosmos/thor/lp/pools": {
+      "types": "./dist/chains/cosmos/thor/lp/pools.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/pools.js",
+      "default": "./dist/chains/cosmos/thor/lp/pools.js"
+    },
+    "./chains/cosmos/thor/lp/position": {
+      "types": "./dist/chains/cosmos/thor/lp/position.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/position.js",
+      "default": "./dist/chains/cosmos/thor/lp/position.js"
+    },
+    "./chains/cosmos/thor/lp/positions": {
+      "types": "./dist/chains/cosmos/thor/lp/positions.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/positions.js",
+      "default": "./dist/chains/cosmos/thor/lp/positions.js"
+    },
+    "./chains/cosmos/thor/lp/validation": {
+      "types": "./dist/chains/cosmos/thor/lp/validation.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/validation.js",
+      "default": "./dist/chains/cosmos/thor/lp/validation.js"
     },
     "./chains/cosmos/thor/rujira/config": {
       "types": "./dist/chains/cosmos/thor/rujira/config.d.ts",
@@ -269,11 +389,6 @@
       "import": "./dist/chains/evm/tx/fee/tw/getEvmTwFeeFields.js",
       "default": "./dist/chains/evm/tx/fee/tw/getEvmTwFeeFields.js"
     },
-    "./chains/evm/tx/incrementKeysignPayloadNonce": {
-      "types": "./dist/chains/evm/tx/incrementKeysignPayloadNonce.d.ts",
-      "import": "./dist/chains/evm/tx/incrementKeysignPayloadNonce.js",
-      "default": "./dist/chains/evm/tx/incrementKeysignPayloadNonce.js"
-    },
     "./chains/evm/tx/tw/getEvmTwChainId": {
       "types": "./dist/chains/evm/tx/tw/getEvmTwChainId.d.ts",
       "import": "./dist/chains/evm/tx/tw/getEvmTwChainId.js",
@@ -348,6 +463,11 @@
       "types": "./dist/chains/solana/getDynamicPriorityFeePrice.d.ts",
       "import": "./dist/chains/solana/getDynamicPriorityFeePrice.js",
       "default": "./dist/chains/solana/getDynamicPriorityFeePrice.js"
+    },
+    "./chains/solana/jito": {
+      "types": "./dist/chains/solana/jito.d.ts",
+      "import": "./dist/chains/solana/jito.js",
+      "default": "./dist/chains/solana/jito.js"
     },
     "./chains/solana/solanaConfig": {
       "types": "./dist/chains/solana/solanaConfig.d.ts",
@@ -624,6 +744,11 @@
       "import": "./dist/coin/find/resolver.js",
       "default": "./dist/coin/find/resolver.js"
     },
+    "./coin/find/resolvers/cardano": {
+      "types": "./dist/coin/find/resolvers/cardano.d.ts",
+      "import": "./dist/coin/find/resolvers/cardano.js",
+      "default": "./dist/coin/find/resolvers/cardano.js"
+    },
     "./coin/find/resolvers/cosmos": {
       "types": "./dist/coin/find/resolvers/cosmos.d.ts",
       "import": "./dist/coin/find/resolvers/cosmos.js",
@@ -703,6 +828,11 @@
       "types": "./dist/coin/token/metadata/resolver.d.ts",
       "import": "./dist/coin/token/metadata/resolver.js",
       "default": "./dist/coin/token/metadata/resolver.js"
+    },
+    "./coin/token/metadata/resolvers/cardano": {
+      "types": "./dist/coin/token/metadata/resolvers/cardano.d.ts",
+      "import": "./dist/coin/token/metadata/resolvers/cardano.js",
+      "default": "./dist/coin/token/metadata/resolvers/cardano.js"
     },
     "./coin/token/metadata/resolvers/cosmos": {
       "types": "./dist/coin/token/metadata/resolvers/cosmos.d.ts",
@@ -880,26 +1010,6 @@
       "import": "./dist/security/blockaid/tx/simulation/core.js",
       "default": "./dist/security/blockaid/tx/simulation/core.js"
     },
-    "./security/blockaid/tx/simulation/input": {
-      "types": "./dist/security/blockaid/tx/simulation/input/index.d.ts",
-      "import": "./dist/security/blockaid/tx/simulation/input/index.js",
-      "default": "./dist/security/blockaid/tx/simulation/input/index.js"
-    },
-    "./security/blockaid/tx/simulation/input/resolver": {
-      "types": "./dist/security/blockaid/tx/simulation/input/resolver.d.ts",
-      "import": "./dist/security/blockaid/tx/simulation/input/resolver.js",
-      "default": "./dist/security/blockaid/tx/simulation/input/resolver.js"
-    },
-    "./security/blockaid/tx/simulation/input/resolvers/evm": {
-      "types": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.d.ts",
-      "import": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.js",
-      "default": "./dist/security/blockaid/tx/simulation/input/resolvers/evm.js"
-    },
-    "./security/blockaid/tx/simulation/input/resolvers/solana": {
-      "types": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.d.ts",
-      "import": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.js",
-      "default": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.js"
-    },
     "./security/blockaid/tx/simulation/resolver": {
       "types": "./dist/security/blockaid/tx/simulation/resolver.d.ts",
       "import": "./dist/security/blockaid/tx/simulation/resolver.js",
@@ -915,11 +1025,6 @@
       "import": "./dist/security/blockaid/tx/simulation/resolvers/solana.js",
       "default": "./dist/security/blockaid/tx/simulation/resolvers/solana.js"
     },
-    "./security/blockaid/tx/utils/getCompiledTxsForBlockaidInput": {
-      "types": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.d.ts",
-      "import": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.js",
-      "default": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.js"
-    },
     "./security/blockaid/tx/validation": {
       "types": "./dist/security/blockaid/tx/validation/index.d.ts",
       "import": "./dist/security/blockaid/tx/validation/index.js",
@@ -934,36 +1039,6 @@
       "types": "./dist/security/blockaid/tx/validation/core.d.ts",
       "import": "./dist/security/blockaid/tx/validation/core.js",
       "default": "./dist/security/blockaid/tx/validation/core.js"
-    },
-    "./security/blockaid/tx/validation/input": {
-      "types": "./dist/security/blockaid/tx/validation/input/index.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/index.js",
-      "default": "./dist/security/blockaid/tx/validation/input/index.js"
-    },
-    "./security/blockaid/tx/validation/input/resolver": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolver.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolver.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolver.js"
-    },
-    "./security/blockaid/tx/validation/input/resolvers/evm": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolvers/evm.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolvers/evm.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolvers/evm.js"
-    },
-    "./security/blockaid/tx/validation/input/resolvers/solana": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolvers/solana.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolvers/solana.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolvers/solana.js"
-    },
-    "./security/blockaid/tx/validation/input/resolvers/sui": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolvers/sui.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolvers/sui.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolvers/sui.js"
-    },
-    "./security/blockaid/tx/validation/input/resolvers/utxo": {
-      "types": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.d.ts",
-      "import": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.js",
-      "default": "./dist/security/blockaid/tx/validation/input/resolvers/utxo.js"
     },
     "./security/blockaid/tx/validation/resolver": {
       "types": "./dist/security/blockaid/tx/validation/resolver.d.ts",
@@ -1135,11 +1210,6 @@
       "import": "./dist/swap/native/utils/getNativeSwapDecimals.js",
       "default": "./dist/swap/native/utils/getNativeSwapDecimals.js"
     },
-    "./swap/native/utils/nativeSwapQuoteToSwapPayload": {
-      "types": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.d.ts",
-      "import": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.js",
-      "default": "./dist/swap/native/utils/nativeSwapQuoteToSwapPayload.js"
-    },
     "./swap/NoSwapRoutesError": {
       "types": "./dist/swap/NoSwapRoutesError.d.ts",
       "import": "./dist/swap/NoSwapRoutesError.js",
@@ -1169,11 +1239,6 @@
       "types": "./dist/swap/SwapFee.d.ts",
       "import": "./dist/swap/SwapFee.js",
       "default": "./dist/swap/SwapFee.js"
-    },
-    "./swap/utils/getSwapTrackingUrl": {
-      "types": "./dist/swap/utils/getSwapTrackingUrl.d.ts",
-      "import": "./dist/swap/utils/getSwapTrackingUrl.js",
-      "default": "./dist/swap/utils/getSwapTrackingUrl.js"
     },
     "./tw/signingOutput": {
       "types": "./dist/tw/signingOutput.d.ts",
@@ -1254,11 +1319,6 @@
       "types": "./dist/tx/broadcast/resolvers/utxo.d.ts",
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
-    },
-    "./tx/compile/compileTx": {
-      "types": "./dist/tx/compile/compileTx.d.ts",
-      "import": "./dist/tx/compile/compileTx.js",
-      "default": "./dist/tx/compile/compileTx.js"
     },
     "./tx/fee/evm/baseFee": {
       "types": "./dist/tx/fee/evm/baseFee.d.ts",
@@ -1354,16 +1414,6 @@
       "types": "./dist/tx/hash/resolvers/utxo.d.ts",
       "import": "./dist/tx/hash/resolvers/utxo.js",
       "default": "./dist/tx/hash/resolvers/utxo.js"
-    },
-    "./tx/preSigningHashes": {
-      "types": "./dist/tx/preSigningHashes/index.d.ts",
-      "import": "./dist/tx/preSigningHashes/index.js",
-      "default": "./dist/tx/preSigningHashes/index.js"
-    },
-    "./tx/signature/generateSignature": {
-      "types": "./dist/tx/signature/generateSignature.d.ts",
-      "import": "./dist/tx/signature/generateSignature.js",
-      "default": "./dist/tx/signature/generateSignature.js"
     },
     "./tx/status": {
       "types": "./dist/tx/status/index.d.ts",

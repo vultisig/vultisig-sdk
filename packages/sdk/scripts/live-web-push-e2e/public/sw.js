@@ -64,8 +64,7 @@ self.addEventListener('push', event => {
           shown,
           title,
           bodyText: bodyLine || 'Keysign request',
-          hint:
-            'macOS: Enable Notification Centre + Persistent for Chrome; if Chrome is the focused app you may still get no Desktop banner — switch to Finder. A purple in-page bar should always appear for this harness.',
+          hint: 'macOS: Enable Notification Centre + Persistent for Chrome; if Chrome is the focused app you may still get no Desktop banner — switch to Finder. A purple in-page bar should always appear for this harness.',
         })
       }
     })()

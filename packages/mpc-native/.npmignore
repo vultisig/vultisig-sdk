@@ -1,0 +1,5 @@
+# Override .gitignore for npm publish — include binary frameworks
+# .gitignore excludes xcframework and aar, but npm needs them
+node_modules/
+dist/
+scripts/
