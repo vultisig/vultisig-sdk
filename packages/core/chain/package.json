@@ -189,6 +189,21 @@
       "import": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js",
       "default": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js"
     },
+    "./chains/cosmos/qbtc/claim/BtcAddressType": {
+      "types": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.js"
+    },
+    "./chains/cosmos/qbtc/claim/detectBtcAddressType": {
+      "types": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.js"
+    },
+    "./chains/cosmos/qbtc/claim/computeClaimHashes": {
+      "types": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js"
+    },
     "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
       "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
       "import": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js",
