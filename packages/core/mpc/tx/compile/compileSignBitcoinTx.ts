@@ -2,29 +2,37 @@ import { TW } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 import { KeysignSignature } from '../../keysign/KeysignSignature'
-import { computeBip143Sighashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
+import {
+  computePreSigningHashes,
+  writeUInt32LE,
+  writeUInt64LE,
+  writeVarInt,
+} from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
 import { SignBitcoin } from '../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 
 /**
  * Build a raw signed Bitcoin transaction from SignBitcoin fields + MPC signatures.
  * Returns an encoded TW.Bitcoin.Proto.SigningOutput so callers can decode it
  * the same way as WalletCore-compiled transactions.
+ *
+ * Currently only handles single-signer flows where ALL isOurs inputs belong to
+ * this vault. Non-ours inputs get empty witnesses, making the tx invalid on-chain
+ * if any exist. Multi-party PSBT support (where non-ours inputs have existing
+ * signatures from other parties) is a follow-up.
  */
 export const compileSignBitcoinTx = (
   signBitcoin: SignBitcoin,
   signatures: Record<string, KeysignSignature>,
   publicKey: PublicKey
 ): Uint8Array => {
-  const hashes = computeBip143Sighashes(signBitcoin)
+  const hashes = computePreSigningHashes(signBitcoin)
   const pubKeyBytes = Buffer.from(publicKey.data())
 
   // Build the raw segwit transaction
   const parts: Buffer[] = []
 
   // Version
-  const versionBuf = Buffer.alloc(4)
-  versionBuf.writeUInt32LE(signBitcoin.version)
-  parts.push(versionBuf)
+  parts.push(writeUInt32LE(signBitcoin.version))
 
   // Segwit marker + flag
   parts.push(Buffer.from([0x00, 0x01]))
@@ -37,9 +45,7 @@ export const compileSignBitcoinTx = (
     // Outpoint: txid (LE) + vout
     const txid = Buffer.from(input.hash, 'hex').reverse()
     parts.push(txid)
-    const indexBuf = Buffer.alloc(4)
-    indexBuf.writeUInt32LE(input.index)
-    parts.push(indexBuf)
+    parts.push(writeUInt32LE(input.index))
     // scriptSig: empty for native P2WPKH, redeemScript push for P2SH-P2WPKH
     if (input.scriptType === 'p2sh-p2wpkh' && input.redeemScript) {
       const redeemScriptBuf = Buffer.from(input.redeemScript, 'hex')
@@ -53,9 +59,7 @@ export const compileSignBitcoinTx = (
       parts.push(Buffer.from([0x00]))
     }
     // Sequence
-    const seqBuf = Buffer.alloc(4)
-    seqBuf.writeUInt32LE(input.sequence ?? 0xffffffff)
-    parts.push(seqBuf)
+    parts.push(writeUInt32LE(input.sequence ?? 0xffffffff))
   }
 
   // Output count
@@ -63,9 +67,7 @@ export const compileSignBitcoinTx = (
 
   // Outputs
   for (const output of signBitcoin.outputs) {
-    const valueBuf = Buffer.alloc(8)
-    valueBuf.writeBigInt64LE(output.amount)
-    parts.push(valueBuf)
+    parts.push(writeUInt64LE(output.amount))
     const script = Buffer.from(output.scriptPubKey, 'hex')
     parts.push(writeVarInt(script.length))
     parts.push(script)
@@ -75,7 +77,9 @@ export const compileSignBitcoinTx = (
   let hashIndex = 0
   for (const input of signBitcoin.inputs) {
     if (!input.isOurs) {
-      // Non-ours inputs have empty witness
+      // Non-ours inputs: empty witness stack.
+      // This makes the tx invalid if non-ours inputs exist.
+      // Multi-party PSBT support (preserving existing signatures) is a follow-up.
       parts.push(Buffer.from([0x00]))
       continue
     }
@@ -93,7 +97,7 @@ export const compileSignBitcoinTx = (
     const sighashByte = input.sighashType ?? 1
     const sigWithHashType = Buffer.concat([derSig, Buffer.from([sighashByte])])
 
-    // P2WPKH witness: 2 items — [signature+hashtype, pubkey]
+    // P2WPKH witness: 2 items - [signature+hashtype, pubkey]
     parts.push(Buffer.from([0x02])) // 2 witness items
     parts.push(writeVarInt(sigWithHashType.length))
     parts.push(sigWithHashType)
@@ -102,9 +106,7 @@ export const compileSignBitcoinTx = (
   }
 
   // Locktime
-  const locktimeBuf = Buffer.alloc(4)
-  locktimeBuf.writeUInt32LE(signBitcoin.locktime)
-  parts.push(locktimeBuf)
+  parts.push(writeUInt32LE(signBitcoin.locktime))
 
   const serialized = Buffer.concat(parts)
 
@@ -142,21 +144,4 @@ export const compileSignBitcoinTx = (
   }
 
   return TW.Bitcoin.Proto.SigningOutput.encode(output).finish()
-}
-
-/** Encode an integer as a Bitcoin varint. */
-const writeVarInt = (n: number): Buffer => {
-  if (n < 0xfd) {
-    return Buffer.from([n])
-  }
-  if (n <= 0xffff) {
-    const buf = Buffer.alloc(3)
-    buf[0] = 0xfd
-    buf.writeUInt16LE(n, 1)
-    return buf
-  }
-  const buf = Buffer.alloc(5)
-  buf[0] = 0xfe
-  buf.writeUInt32LE(n, 1)
-  return buf
 }

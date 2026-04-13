@@ -52,9 +52,9 @@ export const compileTx = ({
   }
 
   if (chain === Chain.QBTC) {
-    const keysignPayload = fromBinary(KeysignPayloadSchema, txInputData)
+    const qbtcPayload = fromBinary(KeysignPayloadSchema, txInputData)
     const cosmosSpecific = getBlockchainSpecificValue(
-      keysignPayload.blockchainSpecific,
+      qbtcPayload.blockchainSpecific,
       'cosmosSpecific'
     )
     const hashHexes = getPreSigningHashes({
@@ -66,7 +66,7 @@ export const compileTx = ({
       hashHexes.map(hex => [hex, keysignSignatures[hex]])
     )
     const { serialized } = getQBTCSignedTransaction({
-      keysignPayload,
+      keysignPayload: qbtcPayload,
       cosmosSpecific,
       signatures: qbtcSignatures,
     })

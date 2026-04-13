@@ -7,7 +7,7 @@ import {
   SignatureAlgorithm,
   signingAlgorithms,
 } from '@vultisig/core-chain/signing/SignatureAlgorithm'
-import { Vault } from '@vultisig/core-mpc/vault/Vault'
+import { isKeyImportVault, Vault } from '@vultisig/core-mpc/vault/Vault'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { recordFromKeys } from '@vultisig/lib-utils/record/recordFromKeys'
@@ -74,7 +74,7 @@ export const toCommVault = (vault: Vault): CommVault =>
     publicKeyEcdsa: vault.publicKeys.ecdsa,
     publicKeyEddsa: vault.publicKeys.eddsa,
     publicKeyMldsa44: vault.publicKeyMldsa ?? '',
-    libType: toLibType(vault.libType),
+    libType: toLibType(isKeyImportVault(vault) ? 'KeyImport' : vault.libType),
     chainPublicKeys: toEntries(vault.chainPublicKeys ?? {}).map(
       ({ key, value }) =>
         create(Vault_ChainPublicKeySchema, {
