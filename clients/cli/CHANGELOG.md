@@ -1,5 +1,11 @@
 # @vultisig/cli
 
+## 0.14.2
+
+### Patch Changes
+
+- [#233](https://github.com/vultisig/vultisig-sdk/pull/233) [`a0387b4`](https://github.com/vultisig/vultisig-sdk/commit/a0387b42b816c26fedf71a089fb461257d331be7) Thanks [@rcoderdev](https://github.com/rcoderdev)! - CLI agent executor now surfaces unimplemented and stub actions as failures (`success: false`) instead of returning misleading success. Removed `get_market_price` and `thorchain_query` from the local auto-execute allowlist where there is no implementation.
+
 ## 0.14.0
 
 ### Patch Changes
