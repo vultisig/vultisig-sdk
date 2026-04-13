@@ -1,5 +1,5 @@
 import { _normalizeSchnorrSig } from '@vultisig/mpc-wasm'
-import { describe, expect,it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 /**
  * Regression tests for the WASM SchnorrEngine byte-order normalization.
