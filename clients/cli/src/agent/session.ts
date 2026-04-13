@@ -73,7 +73,6 @@ export class AgentSession {
         this.client.setAuthToken(auth.token)
         saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
       }
-
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
     }

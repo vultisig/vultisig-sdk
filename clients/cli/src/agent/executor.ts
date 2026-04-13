@@ -82,7 +82,6 @@ export class AgentExecutor {
     this.password = password
   }
 
-
   /**
    * Store a server-built transaction (from tx_ready SSE event).
    * This allows sign_tx to find and sign it when the backend requests signing.
