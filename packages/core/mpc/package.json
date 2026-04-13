@@ -434,6 +434,11 @@
       "import": "./dist/keysign/signingInputs/resolver.js",
       "default": "./dist/keysign/signingInputs/resolver.js"
     },
+    "./keysign/signingInputs/resolvers/bitcoin/sighash": {
+      "types": "./dist/keysign/signingInputs/resolvers/bitcoin/sighash.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/bitcoin/sighash.js",
+      "default": "./dist/keysign/signingInputs/resolvers/bitcoin/sighash.js"
+    },
     "./keysign/signingInputs/resolvers/bittensor": {
       "types": "./dist/keysign/signingInputs/resolvers/bittensor.d.ts",
       "import": "./dist/keysign/signingInputs/resolvers/bittensor.js",
@@ -764,6 +769,11 @@
       "types": "./dist/tx/compile/cardano/buildSignedCardanoTx.d.ts",
       "import": "./dist/tx/compile/cardano/buildSignedCardanoTx.js",
       "default": "./dist/tx/compile/cardano/buildSignedCardanoTx.js"
+    },
+    "./tx/compile/compileSignBitcoinTx": {
+      "types": "./dist/tx/compile/compileSignBitcoinTx.d.ts",
+      "import": "./dist/tx/compile/compileSignBitcoinTx.js",
+      "default": "./dist/tx/compile/compileSignBitcoinTx.js"
     },
     "./tx/compile/compileTx": {
       "types": "./dist/tx/compile/compileTx.d.ts",

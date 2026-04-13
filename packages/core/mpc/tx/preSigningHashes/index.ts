@@ -1,6 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { fromBinary } from '@bufbuild/protobuf'
 import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bittensor'
+import { computePreSigningHashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
 import { getQBTCPreSignedImageHash } from '../../chains/cosmos/qbtc/QBTCHelper'
 import { without } from '@vultisig/lib-utils/array/without'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -8,26 +9,36 @@ import { blake2AsU8a } from '@polkadot/util-crypto'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { getPreSigningOutput } from '../../keysign/preSigningOutput'
-import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import {
+  KeysignPayload,
+  KeysignPayloadSchema,
+} from '../../types/vultisig/keysign/v1/keysign_message_pb'
 
 type Input = {
   walletCore: WalletCore
   chain: Chain
   txInputData: Uint8Array
+  keysignPayload?: KeysignPayload
 }
 
 export const getPreSigningHashes = ({
   walletCore,
   txInputData,
   chain,
+  keysignPayload,
 }: Input) => {
+  // PSBT signing: compute BIP-143 sighashes directly from structured data
+  if (keysignPayload?.signData.case === 'signBitcoin') {
+    return computePreSigningHashes(keysignPayload.signData.value)
+  }
+
   if (chain === Chain.QBTC) {
-    const keysignPayload = fromBinary(KeysignPayloadSchema, txInputData)
+    const qbtcPayload = fromBinary(KeysignPayloadSchema, txInputData)
     const cosmosSpecific = getBlockchainSpecificValue(
-      keysignPayload.blockchainSpecific,
+      qbtcPayload.blockchainSpecific,
       'cosmosSpecific'
     )
-    return getQBTCPreSignedImageHash({ keysignPayload, cosmosSpecific })
+    return getQBTCPreSignedImageHash({ keysignPayload: qbtcPayload, cosmosSpecific })
   }
 
   if (chain === Chain.Bittensor) {
