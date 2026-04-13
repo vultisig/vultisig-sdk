@@ -21,6 +21,15 @@ export const computeAddressHash = ({
   compressedPubkey: Uint8Array
   circuit: QbtcClaimCircuit
 }): Uint8Array => {
+  if (
+    compressedPubkey.length !== 33 ||
+    (compressedPubkey[0] !== 0x02 && compressedPubkey[0] !== 0x03)
+  ) {
+    throw new Error(
+      'compressedPubkey must be a 33-byte compressed secp256k1 key'
+    )
+  }
+
   if (circuit === 'schnorr') {
     return compressedPubkey.slice(1, 33)
   }
@@ -57,6 +66,19 @@ export const computeClaimMessageHash = ({
   chainIdHash,
   circuit,
 }: ComputeClaimMessageHashInput): Uint8Array => {
+  const expectedAddressHashLength = circuit === 'schnorr' ? 32 : 20
+  if (addressHash.length !== expectedAddressHashLength) {
+    throw new Error(
+      `addressHash must be ${expectedAddressHashLength} bytes for ${circuit}`
+    )
+  }
+  if (qbtcAddressHash.length !== 32) {
+    throw new Error('qbtcAddressHash must be 32 bytes')
+  }
+  if (chainIdHash.length !== 8) {
+    throw new Error('chainIdHash must be 8 bytes')
+  }
+
   const encoder = new TextEncoder()
   const prefix = encoder.encode(`${circuit}:`)
   const suffix = encoder.encode(claimSuffix)
