@@ -43,10 +43,11 @@ export const compileSignBitcoinTx = (
     // P2SH-P2WPKH: set scriptSig to redeemScript push
     if (input.scriptType === 'p2sh-p2wpkh' && input.redeemScript) {
       const redeemScriptBuf = Buffer.from(input.redeemScript, 'hex')
-      tx.ins[tx.ins.length - 1].script = Buffer.concat([
+      const scriptSig = Buffer.concat([
         Buffer.from([redeemScriptBuf.length]),
         redeemScriptBuf,
       ])
+      tx.setInputScript(tx.ins.length - 1, scriptSig)
     }
   }
 
