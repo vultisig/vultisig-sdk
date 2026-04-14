@@ -3,6 +3,7 @@ import { fromBinary } from '@bufbuild/protobuf'
 import { sha256 } from '@noble/hashes/sha2'
 import { keccak_256 } from '@noble/hashes/sha3'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
+import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
@@ -1673,16 +1674,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
-    this.parseAmount(amount, fromToken.decimals) // validate before lossy Number() conversion
-    const amountNum = Number(amount) // SwapQuoteParams expects number (human-readable)
+    const normalizedAmount = this.validateHumanSwapAmount(amount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: amountNum })
+    const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: normalizedAmount })
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
       fromCoin,
       toCoin,
-      amount: amountNum,
+      amount: normalizedAmount,
       swapQuote: quote,
     })
     if (approvalPayload) {
@@ -1784,6 +1784,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
     const [whole, fraction = ''] = trimmed.split('.')
     return BigInt(whole + fraction.padEnd(decimals, '0').slice(0, decimals))
+  }
+
+  /** Same conversion as swap quote / prepare (`toChainAmount` → `parseUnits`); returns trimmed decimal string for quote/prepare. */
+  private validateHumanSwapAmount(amount: string, decimals: number): string {
+    const trimmed = amount?.trim()
+    if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
+    let chainAmount: bigint
+    try {
+      chainAmount = toChainAmount(trimmed, decimals)
+    } catch {
+      throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
+    }
+    if (chainAmount <= 0n) {
+      throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
+    }
+    return trimmed
   }
 
   /** Poll getTxStatus until confirmed or timeout. Used for approval tx before swap. */

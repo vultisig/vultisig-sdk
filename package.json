@@ -31,7 +31,7 @@
     "pack:shared": "node scripts/pack-shared-packages.mjs",
     "sync-packages": "syncpack fix-mismatches",
     "typecheck": "tsc --project .config/tsconfig.json --noEmit",
-    "test": "yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:core",
+    "test": "yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:core && yarn workspace @vultisig/cli test",
     "test:all": "yarn test:unit; yarn test:integration; yarn test:e2e",
     "test:unit": "yarn workspace @vultisig/sdk test:unit",
     "test:integration": "yarn workspace @vultisig/sdk test:integration",

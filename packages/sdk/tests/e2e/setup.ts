@@ -121,12 +121,17 @@ import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 import { initializeMpcLib } from '@vultisig/core-mpc/lib/initialize'
 import { initializeMldsaLib } from '@vultisig/core-mpc/mldsa/initializeMldsa'
 import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
+import { configureMpc } from '@vultisig/mpc-types'
+import { WasmMpcEngine } from '@vultisig/mpc-wasm'
 
 import { configureWasm } from '../../src/context/wasmRuntime'
 import { configureCrypto } from '../../src/crypto'
 import { NodeCrypto } from '../../src/platforms/node/crypto'
 
 configureCrypto(new NodeCrypto())
+
+// Same as integration tests and `platforms/node` — direct `Vultisig` import skips package side effects.
+configureMpc(new WasmMpcEngine())
 
 // Configure WASM initialization for E2E tests
 // Uses the fetch polyfill above to load .wasm files from filesystem
