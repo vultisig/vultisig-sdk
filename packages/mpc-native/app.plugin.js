@@ -37,11 +37,17 @@ const withMpcNativeAars = config =>
     // mpc-native package's android/libs directory. Resolving from this
     // plugin's own __dirname guarantees the right path regardless of how
     // npm/pnpm/yarn placed the package on disk (file: link, hoisted, etc.)
+    //
+    // Normalize to forward slashes so the path is valid inside a Groovy
+    // string literal on Windows. `path.relative()` uses the platform
+    // separator (`\` on Windows), and backslashes in the injected
+    // `files("$rootDir/../.../dkls-release.aar")` literal would be treated
+    // as Groovy escape sequences — breaking Gradle evaluation at prebuild
+    // time. Forward slashes work on all platforms inside Groovy strings.
     const projectRoot = modConfig.modRequest.projectRoot;
-    const aarsDir = path.relative(
-      projectRoot,
-      path.resolve(__dirname, 'android', 'libs'),
-    );
+    const aarsDir = path
+      .relative(projectRoot, path.resolve(__dirname, 'android', 'libs'))
+      .replace(/\\/g, '/');
 
     // Match the opening `dependencies {` line with any trailing whitespace
     // (LF or CRLF — Windows checkouts via core.autocrlf=true ship CRLF files).

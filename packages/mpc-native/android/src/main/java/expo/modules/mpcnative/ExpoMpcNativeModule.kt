@@ -1,7 +1,6 @@
-@file:OptIn(ExperimentalEncodingApi::class, ExperimentalStdlibApi::class)
-
 package expo.modules.mpcnative
 
+import android.util.Base64 as AndroidBase64
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.exception.CodedException
@@ -90,9 +89,6 @@ import com.silencelaboratories.goschnorr.goschnorr.schnorr_qc_session_finish
 import com.silencelaboratories.goschnorr.goschnorr.schnorr_qc_session_free
 import com.silencelaboratories.goschnorr.goschnorr.schnorr_key_import_initiator_new
 import com.silencelaboratories.goschnorr.goschnorr.schnorr_key_importer_new
-
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 
 class ExpoMpcNativeModule : Module() {
 
@@ -234,18 +230,24 @@ class ExpoMpcNativeModule : Module() {
             val finishErr = dkls_keygen_session_finish(session, keyshare)
             if (finishErr != DKLS_LIB_OK) dklsFail("finishKeygen.session", finishErr)
 
-            val publicKey = encodeHex(readDklsBuffer("keysharePublicKey") { dkls_keyshare_public_key(keyshare, it) })
-            val chainCode = encodeHex(readDklsBuffer("keyshareChaincode") { dkls_keyshare_chaincode(keyshare, it) })
-            val keyshareBytes = readDklsBuffer("keyshareToBytes") { dkls_keyshare_to_bytes(keyshare, it) }
-            dkls_keyshare_free(keyshare)
-            dkls_keygen_session_free(session)
-            dklsHandles.remove(sessionHandle)
-
-            mapOf(
-                "publicKey" to publicKey,
-                "chainCode" to chainCode,
-                "keyshare" to encode(keyshareBytes),
-            )
+            // Post-finish reads can throw (buffer alloc, JNI faults). Wrap the
+            // result construction in try/finally so the keyshare + session + JS
+            // handle are always released — otherwise a failure here would leak
+            // the native session and leave a dangling entry in dklsHandles.
+            try {
+                val publicKey = encodeHex(readDklsBuffer("keysharePublicKey") { dkls_keyshare_public_key(keyshare, it) })
+                val chainCode = encodeHex(readDklsBuffer("keyshareChaincode") { dkls_keyshare_chaincode(keyshare, it) })
+                val keyshareBytes = readDklsBuffer("keyshareToBytes") { dkls_keyshare_to_bytes(keyshare, it) }
+                mapOf(
+                    "publicKey" to publicKey,
+                    "chainCode" to chainCode,
+                    "keyshare" to encode(keyshareBytes),
+                )
+            } finally {
+                dkls_keyshare_free(keyshare)
+                dkls_keygen_session_free(session)
+                dklsHandles.remove(sessionHandle)
+            }
         }
 
         Function("freeKeygenSession") { sessionHandle: Long ->
@@ -429,6 +431,17 @@ class ExpoMpcNativeModule : Module() {
             isFinished[0] != 0
         }
 
+        // The upstream dkls library does not expose a distinct error code for
+        // "old party exits the committee" — from the caller's perspective,
+        // every non-OK return from dkls_qc_session_finish is collapsed to a
+        // single "no new keyshare produced" signal. JS consumers treat -1 as
+        // that signal (keep the existing keyshare, tear down the session).
+        // iOS mirrors this exact shape (see ios/ExpoMpcNativeModule.swift
+        // finishQc: `return -1`) so keeping the two platforms in lockstep is
+        // the more important invariant than surfacing individual native error
+        // codes here — this is the platform-parity contract that the JS-side
+        // reshare flow depends on. Revisit when/if the upstream library gains
+        // a dedicated old-party-exit code.
         Function("finishQc") { sessionHandle: Long ->
             val session = getDkls(sessionHandle)
             val newKeyshare = DklsHandle()
@@ -540,19 +553,23 @@ class ExpoMpcNativeModule : Module() {
             val finishErr = schnorr_keygen_session_finish(session, keyshare)
             if (finishErr != SCHNORR_LIB_OK) schnorrFail("finishSchnorrKeygen.session", finishErr)
 
-            val publicKey = encodeHex(readSchnorrBuffer("schnorrKeysharePublicKey") { schnorr_keyshare_public_key(keyshare, it) })
-            val chainCode = encodeHex(readSchnorrBuffer("schnorrKeyshareChaincode") { schnorr_keyshare_chaincode(keyshare, it) })
-            val keyshareBytes = readSchnorrBuffer("schnorrKeyshareToBytes") { schnorr_keyshare_to_bytes(keyshare, it) }
-            // Schnorr SWIG bindings have no keyshare_free; rely on Handle's SWIG destructor.
-            keyshare.delete()
-            schnorr_keygen_session_free(session)
-            schnorrHandles.remove(sessionHandle)
-
-            mapOf(
-                "publicKey" to publicKey,
-                "chainCode" to chainCode,
-                "keyshare" to encode(keyshareBytes),
-            )
+            // Same try/finally cleanup shape as finishKeygen above — post-finish
+            // reads can throw, don't leak the keyshare/session if they do.
+            try {
+                val publicKey = encodeHex(readSchnorrBuffer("schnorrKeysharePublicKey") { schnorr_keyshare_public_key(keyshare, it) })
+                val chainCode = encodeHex(readSchnorrBuffer("schnorrKeyshareChaincode") { schnorr_keyshare_chaincode(keyshare, it) })
+                val keyshareBytes = readSchnorrBuffer("schnorrKeyshareToBytes") { schnorr_keyshare_to_bytes(keyshare, it) }
+                mapOf(
+                    "publicKey" to publicKey,
+                    "chainCode" to chainCode,
+                    "keyshare" to encode(keyshareBytes),
+                )
+            } finally {
+                // Schnorr SWIG bindings have no keyshare_free; rely on Handle's SWIG destructor.
+                keyshare.delete()
+                schnorr_keygen_session_free(session)
+                schnorrHandles.remove(sessionHandle)
+            }
         }
 
         Function("freeSchnorrKeygenSession") { sessionHandle: Long ->
@@ -736,6 +753,10 @@ class ExpoMpcNativeModule : Module() {
             isFinished[0] != 0
         }
 
+        // See the comment on finishQc above — mirrors iOS's
+        // finishSchnorrQc `return -1` for any non-OK result, because the
+        // upstream goschnorr library doesn't expose a distinct code for
+        // "old party exits". Platform parity is the invariant here.
         Function("finishSchnorrQc") { sessionHandle: Long ->
             val session = getSchnorr(sessionHandle)
             val newKeyshare = SchnorrHandle()
@@ -822,34 +843,34 @@ class ExpoMpcNativeModule : Module() {
         }
     }
 
-    /** Reads an output message from a DKLS session. Returns null on empty or non-OK (session not ready). */
+    /**
+     * Reads an output message from a DKLS session. Returns null for the
+     * benign "no message yet" cases (non-OK err code or empty buffer). Any
+     * real error — including an invalid session handle surfaced by
+     * [getDkls] — propagates as an exception so it can't be silently
+     * misinterpreted as "session not ready" by JS polling code.
+     */
     private inline fun readDklsOutput(op: String, sessionHandle: Long, block: (DklsHandle, DklsBuffer) -> Any): String? {
+        val h = getDkls(sessionHandle)
         val buf = DklsBuffer()
         try {
-            val h = getDkls(sessionHandle)
             val err = block(h, buf)
             if (err != DKLS_LIB_OK) return null
             val data = DklsBufferUtil.get_bytes_from_tss_buffer(buf)
             return if (data.isEmpty()) null else encode(data)
-        } catch (e: Exception) {
-            android.util.Log.e("ExpoMpcNative", "$op failed for session $sessionHandle: ${e.message}", e)
-            return null
         } finally {
             dklsTssBufferFree(buf)
         }
     }
 
     private inline fun readSchnorrOutput(op: String, sessionHandle: Long, block: (SchnorrHandle, SchnorrBuffer) -> Any): String? {
+        val h = getSchnorr(sessionHandle)
         val buf = SchnorrBuffer()
         try {
-            val h = getSchnorr(sessionHandle)
             val err = block(h, buf)
             if (err != SCHNORR_LIB_OK) return null
             val data = SchnorrBufferUtil.get_bytes_from_tss_buffer(buf)
             return if (data.isEmpty()) null else encode(data)
-        } catch (e: Exception) {
-            android.util.Log.e("ExpoMpcNative", "$op failed for session $sessionHandle: ${e.message}", e)
-            return null
         } finally {
             schnorrTssBufferFree(buf)
         }
@@ -893,9 +914,19 @@ class ExpoMpcNativeModule : Module() {
     private fun schnorrFail(op: String, err: Any): Nothing =
         throw CodedException("SchnorrError", "$op failed (code: $err)", null)
 
-    private fun encode(bytes: ByteArray): String = Base64.encode(bytes)
-    private fun decode(b64: String): ByteArray = Base64.decode(b64)
-    private fun encodeHex(bytes: ByteArray): String = bytes.toHexString()
+    // android.util.Base64 (instead of kotlin.io.encoding.Base64) so the module
+    // compiles under any Kotlin from 1.8+ without dragging in the Kotlin 2.2
+    // stdlib encoding API. NO_WRAP avoids the default line-wrapping that
+    // android.util.Base64 applies at 76 chars — the JS-side consumers expect
+    // a single unbroken base64 string.
+    private fun encode(bytes: ByteArray): String =
+        AndroidBase64.encodeToString(bytes, AndroidBase64.NO_WRAP)
+    private fun decode(b64: String): ByteArray =
+        AndroidBase64.decode(b64, AndroidBase64.DEFAULT)
+    // Hand-rolled hex encoder instead of ByteArray.toHexString() (which is a
+    // Kotlin 2.x stdlib addition) so the module compiles under Kotlin 1.8.10.
+    private fun encodeHex(bytes: ByteArray): String =
+        bytes.joinToString("") { "%02x".format(it) }
 
     private fun decodeHex(hex: String): ByteArray {
         val clean = if (hex.startsWith("0x")) hex.substring(2) else hex
