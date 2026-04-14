@@ -1,5 +1,12 @@
 # @vultisig/rujira
 
+## 10.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`9f71a0e`](https://github.com/vultisig/vultisig-sdk/commit/9f71a0e430aadcb96707448c5e5e077aa0b561e0), [`aea1c28`](https://github.com/vultisig/vultisig-sdk/commit/aea1c28051345ddef9c952108b203caa8b7fa032)]:
+  - @vultisig/sdk@0.15.0
+
 ## 9.0.0
 
 ### Patch Changes
