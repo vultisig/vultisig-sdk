@@ -3,7 +3,10 @@ import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
 import { batchReshareWithServer } from '@vultisig/core-mpc/fast/api/batchReshareWithServer'
 import { createVaultWithServer } from '@vultisig/core-mpc/fast/api/createVaultWithServer'
-import { getVaultFromServer } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
+import {
+  getVaultFromServer,
+  type VaultFromServerResponse,
+} from '@vultisig/core-mpc/fast/api/getVaultFromServer'
 import { mldsaWithServer } from '@vultisig/core-mpc/fast/api/mldsaWithServer'
 import { resendVaultShare } from '@vultisig/core-mpc/fast/api/resendVaultShare'
 import { reshareWithServer } from '@vultisig/core-mpc/fast/api/reshareWithServer'
@@ -94,17 +97,20 @@ export class ServerManager {
   }
 
   /**
-   * Get vault from VultiServer using password
+   * Fetch FastVault public metadata after the server validates the backup password.
    *
-   * NOTE: The core getVaultFromServer currently returns minimal data.
-   * This needs to be updated to properly retrieve and decrypt the vault data.
+   * Matches `GET /vault/get/{public_key_ecdsa}`: name, public keys, chain code, and the
+   * server party id. Key shares are not returned; keep a local backup for signing.
    */
-  async getVaultFromServer(vaultId: string, password: string): Promise<CoreVault> {
-    const result = await getVaultFromServer({ vaultId, password })
-
-    // TODO: Properly convert/decrypt the vault data from server response
-    // Currently the core function returns { password } which is incomplete
-    return result as unknown as CoreVault
+  async getVaultFromServer(
+    vaultId: string,
+    password: string
+  ): Promise<VaultFromServerResponse> {
+    return getVaultFromServer({
+      vaultId,
+      password,
+      vaultBaseUrl: this.config.fastVault,
+    })
   }
 
   /**

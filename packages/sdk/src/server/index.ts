@@ -14,6 +14,7 @@
 export { batchReshareWithServer } from '@vultisig/core-mpc/fast/api/batchReshareWithServer'
 export { createVaultWithServer } from '@vultisig/core-mpc/fast/api/createVaultWithServer'
 export { getVaultFromServer } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
+export type { VaultFromServerResponse } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
 export { keyImportWithServer } from '@vultisig/core-mpc/fast/api/keyImportWithServer'
 export { reshareWithServer } from '@vultisig/core-mpc/fast/api/reshareWithServer'
 export { sequentialKeyImportWithServer } from '@vultisig/core-mpc/fast/api/sequentialKeyImportWithServer'
