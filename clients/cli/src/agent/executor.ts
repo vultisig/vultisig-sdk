@@ -836,6 +836,12 @@ export class AgentExecutor {
    * Uses swap params from the tx_ready event to call vault.getSwapQuote → prepareSwapTx.
    */
   private async buildAndSignSolanaSwapLocally(serverTxData: any): Promise<Record<string, unknown>> {
+    if (serverTxData._phase === 'prepare') {
+      throw Object.assign(new Error('tx_ready prepare phase: deferring to server sign path'), {
+        _phase: 'prepare',
+      })
+    }
+
     const fromChainName = serverTxData.from_chain || serverTxData.chain || 'Solana'
     const toChainName = serverTxData.to_chain as string | undefined
     const fromChain = resolveChain(fromChainName)

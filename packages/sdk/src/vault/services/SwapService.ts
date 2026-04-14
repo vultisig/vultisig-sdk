@@ -79,11 +79,13 @@ export class SwapService {
           )
         : null
 
+      const chainAmount = toChainAmount(params.amount, fromCoin.decimals)
+
       // Call core's findSwapQuote
       const quoteInput: FindSwapQuoteInput = {
         from: fromCoin,
         to: toCoin,
-        amount: toChainAmount(params.amount, fromCoin.decimals),
+        amount: chainAmount,
         referral: params.referral,
         vultDiscountTier,
       }
@@ -91,7 +93,7 @@ export class SwapService {
       const quote = await findSwapQuote(quoteInput)
 
       // Check if approval is required (for ERC-20 tokens)
-      const approvalInfo = await this.checkApprovalRequired(fromCoin, params.amount, quote)
+      const approvalInfo = await this.checkApprovalRequired(fromCoin, chainAmount, quote)
 
       // Format the result (with optional fiat conversion)
       const result = await this.formatQuoteResult(quote, fromCoin, toCoin, approvalInfo, params.fiatCurrency)
@@ -300,7 +302,7 @@ export class SwapService {
    */
   private async checkApprovalRequired(
     fromCoin: AccountCoin,
-    amount: string | number,
+    requiredChainAmount: bigint,
     quote: SwapQuote
   ): Promise<SwapApprovalInfo | undefined> {
     // Only ERC-20 tokens need approval
@@ -316,13 +318,12 @@ export class SwapService {
 
     // Check current allowance
     const currentAllowance = await this.getAllowance(fromCoin, spender)
-    const requiredAmount = toChainAmount(amount, fromCoin.decimals)
 
-    if (currentAllowance < requiredAmount) {
+    if (currentAllowance < requiredChainAmount) {
       return {
         spender,
         currentAllowance,
-        requiredAmount,
+        requiredAmount: requiredChainAmount,
       }
     }
 

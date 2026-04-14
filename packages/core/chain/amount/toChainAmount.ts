@@ -1,5 +1,14 @@
 import { parseUnits } from 'viem'
 
+/** Thrown when a human amount string cannot be converted to chain base units. */
+export class ChainAmountParseError extends Error {
+  override readonly name = 'ChainAmountParseError'
+
+  constructor(message: string) {
+    super(message)
+  }
+}
+
 const SCIENTIFIC_DECIMAL = /^([+-]?)(?:(\d+)\.?(\d*)|\.(\d+))[eE]([+-]?\d+)$/i
 
 /** Limits `10n ** |scale|` work and expanded string size for untrusted input. */
@@ -27,7 +36,7 @@ const padFractionDigits = (frac: string, totalLen: bigint): string => {
 const expandScientificNotationToDecimalString = (s: string): string => {
   const m = SCIENTIFIC_DECIMAL.exec(s.trim())
   if (!m) {
-    throw new Error(`Invalid amount: "${s}"`)
+    throw new ChainAmountParseError(`Invalid amount: "${s}"`)
   }
 
   const signNeg = m[1] === '-'
@@ -42,12 +51,12 @@ const expandScientificNotationToDecimalString = (s: string): string => {
   }
 
   if (!/^\d+$/.test(digitStr)) {
-    throw new Error(`Invalid amount: "${s}"`)
+    throw new ChainAmountParseError(`Invalid amount: "${s}"`)
   }
 
   const expStr = m[5] ?? ''
   if (expStr === '' || expStr === '+' || expStr === '-') {
-    throw new Error(`Invalid amount: "${s}"`)
+    throw new ChainAmountParseError(`Invalid amount: "${s}"`)
   }
 
   const allDigits = BigInt(digitStr)
@@ -55,7 +64,7 @@ const expandScientificNotationToDecimalString = (s: string): string => {
   const scale = exp - BigInt(fracLen)
   const scaleAbs = scale < 0n ? -scale : scale
   if (scaleAbs > MAX_SCALE_ABS) {
-    throw new Error(`Amount exponent out of supported range: "${s}"`)
+    throw new ChainAmountParseError(`Amount exponent out of supported range: "${s}"`)
   }
 
   let absResult: string
@@ -82,7 +91,7 @@ export const toChainAmount = (amount: string | number, decimals: number) => {
   if (typeof amount === 'string') {
     const trimmed = amount.trim()
     if (!trimmed) {
-      throw new Error('Amount cannot be empty')
+      throw new ChainAmountParseError('Amount cannot be empty')
     }
     if (/[eE]/.test(trimmed)) {
       const expanded = expandScientificNotationToDecimalString(trimmed)

@@ -256,6 +256,10 @@ export class TransactionBuilder {
       )
     }
 
+    if (value < 0n) {
+      throw new VaultError(VaultErrorCode.InvalidAmount, 'Contract call value cannot be negative')
+    }
+
     try {
       const calldata = encodeFunctionData({
         abi: abi as Abi,

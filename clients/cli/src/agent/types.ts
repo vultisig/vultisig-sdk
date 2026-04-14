@@ -208,6 +208,12 @@ export type InstallRequired = {
   description?: string
 }
 
+/**
+ * Permissive tx_ready payload shape while the backend schema evolves.
+ * TODO: replace with a concrete interface or union when tx_ready stabilizes.
+ */
+export type TxReadyPayloadFields = Record<string, unknown>
+
 export type Transaction = {
   sequence: number
   chain: string
@@ -218,11 +224,11 @@ export type Transaction = {
   tx_details?: Record<string, unknown>
   keysign_payload?: string
   /** Server-built swap payload on tx_ready SSE */
-  swap_tx?: Record<string, unknown>
+  swap_tx?: TxReadyPayloadFields
   /** Server-built send payload on tx_ready SSE */
-  send_tx?: Record<string, unknown>
+  send_tx?: TxReadyPayloadFields
   /** Generic server-built tx on tx_ready SSE */
-  tx?: Record<string, unknown>
+  tx?: TxReadyPayloadFields
 }
 
 export type TokenSearchResult = {
