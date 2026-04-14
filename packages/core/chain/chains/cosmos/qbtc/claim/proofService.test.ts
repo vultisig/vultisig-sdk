@@ -42,6 +42,30 @@ describe('checkProofServiceHealth', () => {
     expect(result).toBe(false)
   })
 
+  it('returns false on network error', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('network error')
+    }) as typeof fetch
+
+    const result = await checkProofServiceHealth({
+      baseUrl: 'http://localhost:8090',
+    })
+
+    expect(result).toBe(false)
+  })
+
+  it('returns false on non-OK response', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response('', { status: 503 })
+    ) as typeof fetch
+
+    const result = await checkProofServiceHealth({
+      baseUrl: 'http://localhost:8090',
+    })
+
+    expect(result).toBe(false)
+  })
+
   it('returns false when setup not loaded', async () => {
     mockFetch({ status: 'healthy', setup_loaded: false })
 
@@ -114,6 +138,14 @@ describe('generateClaimProof', () => {
 
     await expect(generateClaimProof(validInput)).rejects.toThrow(
       'Proof service error (400): proof verification failed'
+    )
+  })
+
+  it('throws on invalid response fields', async () => {
+    mockFetch({ ...validResponse, message_hash: 'not-hex' })
+
+    await expect(generateClaimProof(validInput)).rejects.toThrow(
+      'Invalid proof service response: invalid message_hash'
     )
   })
 })

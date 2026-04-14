@@ -193,15 +193,15 @@ export const keysign = async ({
         })
       : (() => {
           const [rawR, rawS] = [signature.slice(0, 32), signature.slice(32, 64)]
+          // Contract: each MpcEngine's signSession.finish() returns canonical
+          // R || S bytes — DklsEngine (ECDSA) emits big-endian (which
+          // encodeDERSignature consumes directly) and SchnorrEngine (Ed25519)
+          // emits R as a 32-byte compressed point and S as a 32-byte scalar
+          // little-endian (the on-the-wire ed25519-dalek format). Pass
+          // through here; any backend-specific byte-ordering quirks belong
+          // inside that backend's session wrapper, never in this loop.
           const [r, s] = [rawR, rawS]
-            .map(value => Buffer.from(value))
-            .map(value =>
-              match(signatureAlgorithm, {
-                ecdsa: () => value,
-                eddsa: () => value.reverse(),
-              })
-            )
-            .map(value => value.toString('hex'))
+            .map(value => Buffer.from(value).toString('hex'))
 
           const derSignature = encodeDERSignature(rawR, rawS)
           return withoutUndefinedFields({

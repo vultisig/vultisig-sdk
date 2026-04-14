@@ -44,8 +44,8 @@ export type SwapQuoteParams = {
   fromCoin: CoinInput
   /** Destination coin to swap to */
   toCoin: CoinInput
-  /** Amount to swap in human-readable format (e.g., 1.5 for 1.5 ETH) */
-  amount: number
+  /** Amount to swap in human-readable format (e.g., 1.5 for 1.5 ETH or "1.5") */
+  amount: string | number
   /** Optional referral address for affiliate fees */
   referral?: string
   /** Optional fiat currency for fee/output conversion (e.g., 'usd', 'eur') */
@@ -154,7 +154,7 @@ export type SwapTxParams = {
   /** Destination coin to swap to */
   toCoin: CoinInput
   /** Amount to swap in human-readable format */
-  amount: number
+  amount: string | number
   /** Quote obtained from getSwapQuote() */
   swapQuote: SwapQuoteResult
   /**
