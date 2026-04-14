@@ -601,14 +601,15 @@ program
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
-  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('-y, --yes', 'Alias for --confirm')
   .option('--password <password>', 'Vault password for signing')
   .addHelpText(
     'after',
     `
 Examples:
   vultisig send Ethereum 0x1234...abcd 0.1
-  vultisig send Bitcoin bc1q... --max --yes
+  vultisig send Bitcoin bc1q... --max --confirm
   vultisig send Ethereum 0x... 0.5 --dry-run --output json
 
 Environment variables:
@@ -623,7 +624,15 @@ See also: balance, tx-status`
         chainStr: string,
         to: string,
         amount: string | undefined,
-        options: { max?: boolean; token?: string; memo?: string; dryRun?: boolean; yes?: boolean; password?: string }
+        options: {
+          max?: boolean
+          token?: string
+          memo?: string
+          dryRun?: boolean
+          yes?: boolean
+          confirm?: boolean
+          password?: string
+        }
       ) => {
         if (!amount && !options.max) throw new Error('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
@@ -636,7 +645,7 @@ See also: balance, tx-status`
             tokenId: options.token,
             memo: options.memo,
             dryRun: options.dryRun,
-            yes: options.yes,
+            yes: options.yes || options.confirm,
             password: options.password,
           })
         } catch (err: any) {
@@ -1074,14 +1083,15 @@ program
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
   .option('--dry-run', 'Preview swap without signing or broadcasting')
-  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('-y, --yes', 'Alias for --confirm')
   .option('--password <password>', 'Vault password for signing')
   .addHelpText(
     'after',
     `
 Examples:
   vultisig swap Ethereum Bitcoin 0.1
-  vultisig swap Ethereum Bitcoin --max --yes
+  vultisig swap Ethereum Bitcoin --max --confirm
   vultisig swap Ethereum Bitcoin 0.5 --dry-run --output json
 
 See also: swap-quote, swap-chains, balance`
@@ -1099,6 +1109,7 @@ See also: swap-quote, swap-chains, balance`
           slippage?: string
           dryRun?: boolean
           yes?: boolean
+          confirm?: boolean
           password?: string
         }
       ) => {
@@ -1114,7 +1125,7 @@ See also: swap-quote, swap-chains, balance`
             toToken: options.toToken,
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,
             dryRun: options.dryRun,
-            yes: options.yes,
+            yes: options.yes || options.confirm,
             password: options.password,
           })
         } catch (err: any) {

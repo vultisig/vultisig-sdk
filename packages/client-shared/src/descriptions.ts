@@ -44,7 +44,7 @@ export const swapQuote = {
 } as const
 
 export const swap = {
-  description: 'Swap tokens between chains. Previews by default — confirm to execute.',
+  description: 'Swap tokens between chains. Previews by default — pass --confirm to execute.',
   params: {
     from: 'Source chain or chain:token (e.g. Ethereum or Ethereum:USDC)',
     to: 'Destination chain or chain:token',
@@ -54,7 +54,7 @@ export const swap = {
 } as const
 
 export const send = {
-  description: 'Send tokens to an address. Previews by default — confirm to execute.',
+  description: 'Send tokens to an address. Previews by default — pass --confirm to execute.',
   params: {
     chain: 'Chain to send on (e.g. Ethereum)',
     to: 'Recipient address',
