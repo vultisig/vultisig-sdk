@@ -569,11 +569,14 @@ export class AgentExecutor {
       }
 
       // Store as a server-style tx for sign_tx to pick up
-      void this.storeServerTransaction({
+      const stored = this.storeServerTransaction({
         tx: txData,
         chain: params.chain,
         from_chain: params.chain,
       })
+      if (!stored) {
+        throw new Error('Could not stage calldata transaction for signing (invalid or empty tx payload)')
+      }
 
       const chain = resolveChain(params.chain as string) || Chain.Ethereum
       const address = await this.vault.address(chain)
