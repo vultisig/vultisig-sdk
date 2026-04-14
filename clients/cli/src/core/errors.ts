@@ -160,6 +160,14 @@ export function classifyError(err: Error): VsigError {
   if (err instanceof VsigError) return err
 
   if (err instanceof VaultError) {
+    // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
+    // (e.g. unknown chain). Unwrap originalError so we don't mis-tag validation
+    // errors as retryable network errors.
+    if (err.code === VaultErrorCode.BalanceFetchFailed && err.originalError) {
+      const inner = classifyError(err.originalError)
+      if (!(inner instanceof UnknownError)) return inner
+    }
+
     switch (err.code) {
       case VaultErrorCode.UnsupportedChain:
       case VaultErrorCode.ChainNotSupported:
@@ -170,8 +178,25 @@ export function classifyError(err: Error): VsigError {
         return new NetworkError(err.message)
       case VaultErrorCode.InvalidAmount:
         return new InvalidInputError(err.message)
-      case VaultErrorCode.InvalidConfig:
+      case VaultErrorCode.InvalidConfig: {
+        // SDK overloads InvalidConfig for "Unknown chain" — detect and reclassify
+        // so agents get INVALID_INPUT / non-retryable instead of generic USAGE.
+        const lowerMsg = err.message.toLowerCase()
+        if (
+          lowerMsg.includes('unknown chain') ||
+          lowerMsg.includes('unsupported chain') ||
+          lowerMsg.includes('chain not supported')
+        ) {
+          const chainMatch = err.message.match(/chain[:\s]*"([^"]+)"/i)
+          return new InvalidChainError(
+            err.message,
+            undefined,
+            undefined,
+            chainMatch ? { chain: chainMatch[1] } : undefined
+          )
+        }
         return new UsageError(err.message)
+      }
       case VaultErrorCode.UnsupportedToken:
         return new TokenNotFoundError(err.message)
       case VaultErrorCode.BroadcastFailed:

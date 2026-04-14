@@ -285,6 +285,28 @@ describe('classifyError with VaultError', () => {
     expect(result.retryable).toBe(true)
   })
 
+  it('unwraps BalanceFetchFailed to reveal inner invalid-chain error', () => {
+    const inner = new VaultError(VaultErrorCode.InvalidConfig, 'Unknown chain: "ethreum". Available: [Ethereum]')
+    const wrapped = new VaultError(
+      VaultErrorCode.BalanceFetchFailed,
+      'Failed to fetch balance for ethreum: VaultError: Unknown chain: "ethreum"',
+      inner
+    )
+    const result = classifyError(wrapped)
+    expect(result).toBeInstanceOf(InvalidChainError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+    expect(result.context).toEqual({ chain: 'ethreum' })
+  })
+
+  it('maps InvalidConfig with "Unknown chain" message to InvalidChainError', () => {
+    const err = new VaultError(VaultErrorCode.InvalidConfig, 'Unknown chain: "foo". Available: [Ethereum]')
+    const result = classifyError(err)
+    expect(result).toBeInstanceOf(InvalidChainError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+  })
+
   it('maps Timeout to NetworkError with retryable', () => {
     const err = new VaultError(VaultErrorCode.Timeout, 'request timed out')
     const result = classifyError(err)
