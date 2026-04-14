@@ -96,16 +96,23 @@ export class AgentExecutor {
   /**
    * Store a server-built transaction (from tx_ready SSE event).
    * This allows sign_tx to find and sign it when the backend requests signing.
+   *
+   * @returns true when a signable payload was stored; false for MCP errors or missing tx body
    */
-  storeServerTransaction(txReadyData: any): void {
+  storeServerTransaction(txReadyData: any): boolean {
     if (this.verbose)
       process.stderr.write(
         `[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`
       )
-    const swapTx = txReadyData.swap_tx || txReadyData.send_tx || txReadyData.tx
-    if (!swapTx) {
+    const nestedTx = txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx
+    if (nestedTx?.status === 'error' || nestedTx?.error) {
+      if (this.verbose)
+        process.stderr.write(`[executor] skipping error tx_ready: ${nestedTx.error || 'unknown error'}\n`)
+      return false
+    }
+    if (!nestedTx) {
       if (this.verbose) process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx found in data\n`)
-      return
+      return false
     }
 
     const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
@@ -123,6 +130,7 @@ export class AgentExecutor {
       process.stderr.write(
         `[executor] Stored server tx for chain ${chain}, pendingPayloads size=${this.pendingPayloads.size}\n`
       )
+    return true
   }
 
   hasPendingTransaction(): boolean {
@@ -561,7 +569,7 @@ export class AgentExecutor {
       }
 
       // Store as a server-style tx for sign_tx to pick up
-      this.storeServerTransaction({
+      void this.storeServerTransaction({
         tx: txData,
         chain: params.chain,
         from_chain: params.chain,

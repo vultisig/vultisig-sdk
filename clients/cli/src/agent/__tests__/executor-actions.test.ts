@@ -75,4 +75,24 @@ describe('AgentExecutor agent actions', () => {
     expect(r.success).toBe(false)
     expect(r.error).toMatch(/SDK instance|vultisig/i)
   })
+
+  it('storeServerTransaction returns false for MCP error payloads', () => {
+    const ex = new AgentExecutor(minimalVault(), false, undefined, undefined)
+    const ok = ex.storeServerTransaction({
+      tx: { status: 'error', error: 'simulation failed' },
+      chain: 'Ethereum',
+    })
+    expect(ok).toBe(false)
+    expect(ex.hasPendingTransaction()).toBe(false)
+  })
+
+  it('storeServerTransaction returns true and sets pending for a valid nested tx', () => {
+    const ex = new AgentExecutor(minimalVault(), false, undefined, undefined)
+    const ok = ex.storeServerTransaction({
+      send_tx: { to: '0xabc', value: '0', data: '0x' },
+      chain: 'Ethereum',
+    })
+    expect(ok).toBe(true)
+    expect(ex.hasPendingTransaction()).toBe(true)
+  })
 })
