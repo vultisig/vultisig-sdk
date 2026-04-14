@@ -144,18 +144,8 @@ class ExpoWalletCoreModule : Module() {
             AnyAddress.isValidBech32(address, CoinType.createFromValue(coinType), hrp)
         }
 
-        // The Trust Wallet Core Android JNI binding does not expose an SS58-prefix
-        // overload on AnyAddress. Throw rather than returning a potentially incorrect
-        // result, so callers know this code path is not supported yet.
-        Function("anyAddressIsValidSS58") { _address: String, _coinType: Int, _ss58Prefix: Int ->
-            @Suppress("UNREACHABLE_CODE")
-            return@Function false.also {
-                throw Exception(
-                    "anyAddressIsValidSS58 is not supported on Android: the JNI binding " +
-                    "does not expose an SS58-prefix overload. Use anyAddressIsValid as a " +
-                    "fallback (ignores ss58Prefix) or implement a pure-Kotlin SS58 check."
-                )
-            }
+        Function("anyAddressIsValidSS58") { address: String, coinType: Int, ss58Prefix: Int ->
+            AnyAddress.isValidSS58(address, CoinType.createFromValue(coinType), ss58Prefix)
         }
 
         Function("anyAddressCreateWithString") { address: String, coinType: Int ->
