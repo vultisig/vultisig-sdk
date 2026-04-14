@@ -6849,6 +6849,7 @@ __metadata:
     tsx: "npm:^4.21.0"
     typescript: "npm:^5.9.3"
     viem: "npm:^2.45.1"
+    vitest: "npm:^3.2.4"
     ws: "npm:^8.19.0"
   bin:
     vsig: ./dist/index.js

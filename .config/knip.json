@@ -52,7 +52,10 @@
       }
     },
     "clients/cli": {
-      "project": ["tsconfig.json"]
+      "project": ["tsconfig.json"],
+      "vitest": {
+        "config": ["vitest.config.ts"]
+      }
     },
     "packages/rujira": {
       "project": ["tsconfig.json"]
