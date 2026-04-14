@@ -46,7 +46,12 @@ repositories {
 dependencies {
     implementation project(':expo-modules-core')
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${safeExtGet('kotlinVersion', '1.8.10')}"
-    implementation fileTree(dir: 'libs', include: ['*.aar'])
+    // AGP 9+ refuses direct local .aar deps inside an AAR module (would produce
+    // a broken bundled AAR). compileOnly gives the Kotlin wrapper access to the
+    // SWIG classes; the consumer app re-declares the AARs as runtime deps via
+    // an Expo config plugin (see plugins/withMpcNativeAars.js) so the .so JNI
+    // libs actually ship in the APK.
+    compileOnly fileTree(dir: 'libs', include: ['*.aar'])
 }
 
 def safeExtGet(prop, fallback) {
