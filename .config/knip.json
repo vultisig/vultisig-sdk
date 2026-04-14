@@ -11,6 +11,7 @@
   "ignoreFiles": [
     "packages/core/**",
     "packages/lib/**",
+    "packages/mpc-native/app.plugin.js",
     "scripts/**",
     "testdata/**"
   ],
