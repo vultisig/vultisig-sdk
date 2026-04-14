@@ -1,5 +1,14 @@
 # @vultisig/sdk
 
+## 0.14.3
+
+### Patch Changes
+
+- [#258](https://github.com/vultisig/vultisig-sdk/pull/258) [`0413dec`](https://github.com/vultisig/vultisig-sdk/commit/0413deccf249ecb284c5376a2a07e8ab12c47b48) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix: emit dedicated `dist/index.react-native.d.ts` from the react-native platform entry, and wire the `exports` field to resolve it under TypeScript's `react-native` custom condition — downstream consumers can now `import { keysign } from '@vultisig/sdk'` under Metro/Expo without hand-written module augmentations
+
+- Updated dependencies [[`665cf03`](https://github.com/vultisig/vultisig-sdk/commit/665cf037951df40dc35068463c4ddd299cec20dd)]:
+  - @vultisig/mpc-native@0.1.2
+
 ## 0.14.1
 
 ### Patch Changes

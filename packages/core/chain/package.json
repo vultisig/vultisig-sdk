@@ -604,6 +604,11 @@
       "import": "./dist/chains/utxo/send/validateUtxoRequirements.js",
       "default": "./dist/chains/utxo/send/validateUtxoRequirements.js"
     },
+    "./chains/utxo/tx/buildSignBitcoinFromPsbt": {
+      "types": "./dist/chains/utxo/tx/buildSignBitcoinFromPsbt.d.ts",
+      "import": "./dist/chains/utxo/tx/buildSignBitcoinFromPsbt.js",
+      "default": "./dist/chains/utxo/tx/buildSignBitcoinFromPsbt.js"
+    },
     "./chains/utxo/tx/ChainPlainUtxo": {
       "types": "./dist/chains/utxo/tx/ChainPlainUtxo.d.ts",
       "import": "./dist/chains/utxo/tx/ChainPlainUtxo.js",

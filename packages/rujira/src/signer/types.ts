@@ -12,7 +12,7 @@ export type VultisigChain = 'THORChain' | 'MayaChain' | string
 export type VultisigSignature = {
   signature: string
   recovery?: number
-  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519'
+  format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519' | 'MLDSA'
 }
 
 export type SignDirectInput = {

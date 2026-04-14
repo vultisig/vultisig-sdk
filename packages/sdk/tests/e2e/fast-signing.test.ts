@@ -623,7 +623,8 @@ describe('E2E: Fast Signing - Transaction Signing', () => {
   // ============================================================================
 
   describe('Safety Verification', () => {
-    it('Confirms NO transactions were broadcast to blockchain', async () => {
+    // Fast vault signing depends on VultiServer + relay peers; occasional timeouts are environmental.
+    it('Confirms NO transactions were broadcast to blockchain', { retry: 2 }, async () => {
       console.log('\n🔒 Safety Check: Verifying NO transactions were broadcast...')
 
       // Sign one transaction to verify safety (no broadcast)

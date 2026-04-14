@@ -18,6 +18,15 @@ describe('toChainAmount', () => {
     // 1e-8 tokens at 10^-10 resolution → 100 smallest units (matches viem parseUnits)
     expect(toChainAmount(1e-8, 10)).toBe(100n)
   })
+
+  it('parses scientific-notation strings without floating-point mantissa loss', () => {
+    expect(toChainAmount('1e-8', 10)).toBe(toChainAmount('0.00000001', 10))
+    expect(toChainAmount('12.34e2', 3)).toBe(toChainAmount('1234', 3))
+    expect(toChainAmount('.5e1', 1)).toBe(toChainAmount(5, 1))
+    expect(toChainAmount('012.34e-1', 4)).toBe(toChainAmount('1.234', 4))
+    const plain = `1.${'0'.repeat(16)}1`
+    expect(toChainAmount(`${plain}e0`, 18)).toBe(toChainAmount(plain, 18))
+  })
 })
 
 describe('fromChainAmount', () => {
