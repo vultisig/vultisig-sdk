@@ -94,6 +94,7 @@ When creating changesets, use the exact package names from package.json:
 - **Unit**: `tests/unit/` - Fast, isolated (vitest)
 - **Integration**: `tests/integration/` - Service layer; `yarn test:integration` also runs on every PR in GitHub Actions (Test Suite → **Integration Tests (Vitest)**). The separate **Integration Test (agentic stack)** workflow (OpenCode + backend + MCP) is **manual-only** under Actions — not a PR gate.
 - **E2E**: `tests/e2e/` - Full workflows, requires real vault file
+- **Core / shared lib**: colocated `*.test.ts` under `packages/core/` and `packages/lib/` — `yarn test` runs these via `yarn test:core` (Vitest, `.config/vitest.core.config.ts`; no separate build required)
 
 Specific E2E tests: `yarn test:e2e:balance`, `yarn test:e2e:signing`, etc.
 

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mpc-native",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Native MPC engine for Vultisig SDK (React Native / Expo)",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -12,13 +12,16 @@
     "expo-module.config.json"
   ],
   "peerDependencies": {
-    "expo": "^51.0.0"
+    "expo": "^55.0.0"
   },
   "devDependencies": {
-    "expo": "^51.0.0"
+    "expo": "^55.0.0"
   },
   "dependencies": {
-    "@vultisig/mpc-types": "workspace:^0.1.0"
+    "@vultisig/mpc-types": "workspace:^0.1.2"
+  },
+  "scripts": {
+    "prepack": "node ../../scripts/dereference-directory.mjs ios/Frameworks"
   },
   "publishConfig": {
     "access": "public"

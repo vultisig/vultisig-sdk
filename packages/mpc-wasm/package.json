@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mpc-wasm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "WASM-based MPC engine for Vultisig SDK (browser, Node.js, Electron)",
   "type": "module",
   "main": "dist/index.js",

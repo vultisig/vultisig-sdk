@@ -184,6 +184,10 @@ export {
   vultDiscountTiers,
 } from '@vultisig/core-chain/swap/affiliate/config'
 
+// THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
+export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
+export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
