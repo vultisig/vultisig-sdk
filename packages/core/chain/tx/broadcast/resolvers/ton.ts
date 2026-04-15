@@ -17,7 +17,7 @@ export const broadcastTonTx: BroadcastTxResolver<OtherChain.Ton> = async ({
     })
   )
 
-  if (error && !isInError(error, 'duplicate message')) {
+  if (error && !isInError(error, 'duplicate message', 'duplicate msg_seqno')) {
     throw error
   }
 }
