@@ -14,6 +14,7 @@ import { join } from 'node:path'
 
 import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
+import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
@@ -245,6 +246,7 @@ export class AgentSession {
         success: result.success,
         data: result.data || {},
         error: result.error || '',
+        ...(!result.success && result.code ? { code: result.code } : {}),
       }
     }
 
@@ -284,8 +286,8 @@ export class AgentSession {
         onMessage: _msg => {
           // Final message received
         },
-        onError: error => {
-          ui.onError(error)
+        onError: (error, code) => {
+          ui.onError(error, code)
         },
       },
       this.abortController?.signal
@@ -398,6 +400,7 @@ export class AgentSession {
               action_id: action.id,
               success: false,
               error: 'Password not provided',
+              code: AgentErrorCode.PASSWORD_REQUIRED,
             })
             continue
           }
@@ -412,7 +415,7 @@ export class AgentSession {
       results.push(result)
 
       // Notify UI of result
-      ui.onToolResult(action.id, action.type, result.success, result.data, result.error)
+      ui.onToolResult(action.id, action.type, result.success, result.data, result.error, result.code)
 
       // If sign_tx succeeded, emit tx status
       if (action.type === 'sign_tx' && result.success && result.data) {
