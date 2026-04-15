@@ -5,7 +5,7 @@
  * Builds Cosmos protobuf (SignDoc, TxRaw) manually.
  */
 
-import { sha256 } from '@noble/hashes/sha2.js'
+import { sha256 } from '@noble/hashes/sha256'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import {

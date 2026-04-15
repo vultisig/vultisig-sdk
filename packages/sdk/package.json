@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "0.14.3",
+  "version": "0.15.1",
   "description": "TypeScript SDK for secure multi-party computation and blockchain operations",
   "type": "module",
   "main": "dist/index.node.cjs",
@@ -140,7 +140,7 @@
     "@cosmjs/stargate": "^0.37.0",
     "@lifi/sdk": "^3.15.5",
     "@mysten/sui": "^2.3.0",
-    "@noble/hashes": "^2.0.0",
+    "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.4.6",
     "@scure/bip39": "^1.6.0",
     "@solana/spl-token": "^0.4.14",

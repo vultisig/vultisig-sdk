@@ -32,13 +32,15 @@ yarn workspace @vultisig/sdk build:fast   # Fast build (node only)
 yarn workspace @vultisig/sdk dev          # Watch mode
 
 # Test
-yarn test               # SDK unit tests
+yarn test               # SDK + Rujira + core + CLI (`clients/cli`) Vitest
+yarn test:cli           # CLI-only Vitest (`clients/cli/src/**/*.test.ts`)
 yarn test:rujira        # Rujira tests (includes asset tests)
 yarn test:unit:watch    # Unit tests in watch mode
 yarn test:e2e           # E2E tests (requires vault file)
 yarn test:all           # All tests
 
 # Quality
+yarn typecheck          # `tsc` for packages in `.config/tsconfig.json` **and** `yarn workspace @vultisig/cli typecheck` (CLI sources are not in the root tsconfig `include`; both steps are required)
 yarn check              # typecheck + lint + knip + format:check (parallel, fast)
 yarn check:all          # check + tests
 # Knip: see .config/knip.json (scopes SDK, CLI, Rujira, examples; excludes packages/core and packages/lib sources from file rules because they ship as dist subpath exports)
