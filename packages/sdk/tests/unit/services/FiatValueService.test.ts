@@ -32,6 +32,7 @@ vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
 
 import { CacheService } from '../../../src/services/CacheService'
 import { FiatValueService } from '../../../src/services/FiatValueService'
+import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import type { Balance } from '../../../src/types'
 
 describe('FiatValueService', () => {
@@ -47,7 +48,7 @@ describe('FiatValueService', () => {
     vi.clearAllMocks()
 
     // Reset cache
-    cache = new CacheService()
+    cache = new CacheService(new MemoryStorage())
 
     // Mock currency getter
     getCurrency = vi.fn(() => 'usd')
@@ -61,6 +62,7 @@ describe('FiatValueService', () => {
     // Mock balance getter
     getBalance = vi.fn(async () => ({
       amount: '1000000000000000000',
+      formattedAmount: '1',
       decimals: 18,
       symbol: 'ETH',
       chainId: Chain.Ethereum,
@@ -225,6 +227,7 @@ describe('FiatValueService', () => {
 
       const balance: Balance = {
         amount: '1500000000000000000', // 1.5 ETH in wei
+        formattedAmount: '1.5',
         decimals: 18,
         symbol: 'ETH',
         chainId: Chain.Ethereum,
@@ -253,6 +256,7 @@ describe('FiatValueService', () => {
 
       const balance: Balance = {
         amount: '100000000', // 100 USDC (6 decimals)
+        formattedAmount: '100',
         decimals: 6,
         symbol: 'USDC',
         chainId: Chain.Ethereum,
@@ -275,6 +279,7 @@ describe('FiatValueService', () => {
 
       const balance: Balance = {
         amount: '1000000000000000000', // 1 ETH
+        formattedAmount: '1',
         decimals: 18,
         symbol: 'ETH',
         chainId: Chain.Ethereum,
@@ -307,12 +312,14 @@ describe('FiatValueService', () => {
       const balances: Balance[] = [
         {
           amount: '1000000000000000000',
+          formattedAmount: '1',
           decimals: 18,
           symbol: 'ETH',
           chainId: Chain.Ethereum,
         },
         {
           amount: '100000000',
+          formattedAmount: '1',
           decimals: 8,
           symbol: 'BTC',
           chainId: Chain.Bitcoin,
@@ -336,6 +343,7 @@ describe('FiatValueService', () => {
       const balances: Record<string, Balance> = {
         eth: {
           amount: '1000000000000000000',
+          formattedAmount: '1',
           decimals: 18,
           symbol: 'ETH',
           chainId: Chain.Ethereum,
@@ -363,12 +371,14 @@ describe('FiatValueService', () => {
       const balances: Balance[] = [
         {
           amount: '1000000000000000000',
+          formattedAmount: '1',
           decimals: 18,
           symbol: 'ETH',
           chainId: Chain.Ethereum,
         },
         {
           amount: '100000000',
+          formattedAmount: '1',
           decimals: 8,
           symbol: 'BTC',
           chainId: Chain.Bitcoin,
