@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -203,6 +203,21 @@
       "types": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.d.ts",
       "import": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js",
       "default": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js"
+    },
+    "./chains/cosmos/qbtc/claim/proofService": {
+      "types": "./dist/chains/cosmos/qbtc/claim/proofService.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/proofService.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/proofService.js"
+    },
+    "./chains/cosmos/qbtc/claim/buildClaimTx": {
+      "types": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.js"
+    },
+    "./chains/cosmos/qbtc/claim/broadcastClaimTx": {
+      "types": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.js"
     },
     "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
       "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
@@ -1528,7 +1543,7 @@
     "@cosmjs/stargate": "^0.38.1",
     "@lifi/sdk": "^3.16.2",
     "@mysten/sui": "^2.8.0",
-    "@noble/hashes": "^2.0.1",
+    "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.4",
     "@polkadot/util": "^14.0.1",
     "@polkadot/util-crypto": "^14.0.1",

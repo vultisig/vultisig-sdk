@@ -35,6 +35,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
   const config: AgentConfig = {
     backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com',
     vaultName: vault.name,
+    vultisig: ctx.sdk,
     password: options.password,
     viaAgent: options.viaAgent,
     sessionId: options.sessionId,
@@ -114,6 +115,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     const config: AgentConfig = {
       backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com',
       vaultName: vault.name,
+      vultisig: ctx.sdk,
       password: options.password,
       sessionId: options.session,
       verbose: options.verbose,
