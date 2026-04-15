@@ -18,7 +18,7 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   Suggestion,
-  Transaction,
+  TxReadyPayload,
 } from './types'
 
 type JsonErrorBody = { error?: string }
@@ -112,7 +112,7 @@ export class AgentClient {
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
-      onTxReady?: (tx: Transaction) => void
+      onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
       onError?: (error: string) => void
     },
@@ -219,7 +219,7 @@ export class AgentClient {
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
-      onTxReady?: (tx: Transaction) => void
+      onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
       onError?: (error: string) => void
     }
@@ -252,8 +252,11 @@ export class AgentClient {
           break
         case 'tx_ready':
           if (this.verbose) process.stderr.write(`[SSE:tx_ready] raw: ${data.slice(0, 2000)}\n`)
-          result.transactions.push(parsed)
-          callbacks.onTxReady?.(parsed)
+          {
+            const txReady = parsed as TxReadyPayload
+            result.transactions.push(txReady)
+            callbacks.onTxReady?.(txReady)
+          }
           break
         case 'message':
           result.message = parsed.message || parsed
@@ -332,6 +335,6 @@ export type SSEStreamResult = {
   fullText: string
   actions: Action[]
   suggestions: Suggestion[]
-  transactions: Transaction[]
+  transactions: TxReadyPayload[]
   message: ConversationMessage | null
 }

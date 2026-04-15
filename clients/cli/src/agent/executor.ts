@@ -4,8 +4,8 @@
  * Executes actions returned by the agent-backend locally.
  * Handles balance queries, transaction building, signing, and broadcasting.
  */
-import type { VaultBase } from '@vultisig/sdk'
-import { Chain, Vultisig } from '@vultisig/sdk'
+import type { EvmChain, FiatCurrency, VaultBase, Vultisig } from '@vultisig/sdk'
+import { Chain, evmCall, fiatCurrencies, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
@@ -64,6 +64,8 @@ type StoredPayload = {
 
 export class AgentExecutor {
   private vault: VaultBase
+  /** Owning SDK (optional); used for address book backed by app storage */
+  private vultisig: Vultisig | undefined
   private pendingPayloads = new Map<string, StoredPayload>()
   private password: string | null = null
   private verbose: boolean
@@ -71,12 +73,14 @@ export class AgentExecutor {
   /** Held chain lock release functions, keyed by chain name */
   private chainLockReleases = new Map<string, () => Promise<void>>()
   /** Backend client for resolving calldata_id references. */
-  private backendClient: { getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }> } | null =
-    null
+  private backendClient: {
+    getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }>
+  } | null = null
 
-  constructor(vault: VaultBase, verbose = false, vaultId?: string) {
+  constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
     this.verbose = verbose
+    this.vultisig = vultisig
     if (vaultId) {
       this.stateStore = new VaultStateStore(vaultId)
     }
@@ -93,16 +97,23 @@ export class AgentExecutor {
   /**
    * Store a server-built transaction (from tx_ready SSE event).
    * This allows sign_tx to find and sign it when the backend requests signing.
+   *
+   * @returns true when a signable payload was stored; false for MCP errors or missing tx body
    */
-  storeServerTransaction(txReadyData: any): void {
+  storeServerTransaction(txReadyData: any): boolean {
     if (this.verbose)
       process.stderr.write(
         `[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`
       )
-    const swapTx = txReadyData.swap_tx || txReadyData.send_tx || txReadyData.tx
-    if (!swapTx) {
+    const nestedTx = txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx
+    if (nestedTx?.status === 'error' || nestedTx?.error) {
+      if (this.verbose)
+        process.stderr.write(`[executor] skipping error tx_ready: ${nestedTx.error || 'unknown error'}\n`)
+      return false
+    }
+    if (!nestedTx) {
       if (this.verbose) process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx found in data\n`)
-      return
+      return false
     }
 
     const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
@@ -120,6 +131,7 @@ export class AgentExecutor {
       process.stderr.write(
         `[executor] Stored server tx for chain ${chain}, pendingPayloads size=${this.pendingPayloads.size}\n`
       )
+    return true
   }
 
   hasPendingTransaction(): boolean {
@@ -183,7 +195,7 @@ export class AgentExecutor {
       case 'sign_tx':
         return this.signTx(params)
       case 'get_address_book':
-        return this.getAddressBook()
+        return this.getAddressBook(params)
       case 'address_book_add':
         return this.addAddressBookEntry(params)
       case 'address_book_remove':
@@ -236,15 +248,44 @@ export class AgentExecutor {
     return { balances: entries }
   }
 
-  private async getPortfolio(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const balanceRecord = await this.vault.balances()
-    const entries = Object.entries(balanceRecord).map(([key, b]: [string, any]) => ({
-      chain: b.chainId || key.split(':')[0] || '',
+  private async getPortfolio(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const currencyRaw = String(params.currency ?? 'USD')
+      .trim()
+      .toLowerCase()
+    const fiatCurrency: FiatCurrency = (fiatCurrencies as readonly string[]).includes(currencyRaw)
+      ? (currencyRaw as FiatCurrency)
+      : 'usd'
+
+    const portfolio = await this.vault.portfolio(fiatCurrency)
+
+    const chainFilter = params.chain as string | undefined
+    const tickerFilter = params.ticker as string | undefined
+
+    let rows = portfolio.balances.map(b => ({
+      chain: b.chainId || '',
       symbol: b.symbol || '',
       amount: b.formattedAmount || b.amount?.toString() || '0',
-      decimals: b.decimals || 18,
+      decimals: b.decimals ?? 18,
+      raw_amount: b.amount,
+      fiatValue: b.fiatValue,
+      fiatCurrency: b.fiatCurrency ?? portfolio.currency,
     }))
-    return { balances: entries }
+
+    if (chainFilter) {
+      const chain = resolveChain(chainFilter)
+      if (!chain) throw new Error(`Unknown chain: ${chainFilter}`)
+      rows = rows.filter(r => r.chain.toLowerCase() === chain.toLowerCase())
+    }
+
+    if (tickerFilter) {
+      rows = rows.filter(r => r.symbol.toLowerCase() === String(tickerFilter).toLowerCase())
+    }
+
+    return {
+      balances: rows,
+      totalValue: portfolio.totalValue,
+      currency: portfolio.currency,
+    }
   }
 
   // ============================================================================
@@ -368,7 +409,12 @@ export class AgentExecutor {
       const amount = parseAmount(amountStr, balance.decimals)
 
       const memo = params.memo as string | undefined
-      const payload = await this.vault.prepareSendTx({ coin, receiver: toAddress, amount, memo })
+      const payload = await this.vault.prepareSendTx({
+        coin,
+        receiver: toAddress,
+        amount,
+        memo,
+      })
 
       // Patch EVM nonce if local state is ahead of on-chain
       await this.patchEvmNonce(chain, payload)
@@ -378,8 +424,18 @@ export class AgentExecutor {
       // Store payload only after build fully succeeds (including hash extraction)
       this.pendingPayloads.clear()
       const payloadId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      this.pendingPayloads.set(payloadId, { payload, coin, chain, timestamp: Date.now() })
-      this.pendingPayloads.set('latest', { payload, coin, chain, timestamp: Date.now() })
+      this.pendingPayloads.set(payloadId, {
+        payload,
+        coin,
+        chain,
+        timestamp: Date.now(),
+      })
+      this.pendingPayloads.set('latest', {
+        payload,
+        coin,
+        chain,
+        timestamp: Date.now(),
+      })
 
       return {
         keysign_payload: payloadId,
@@ -424,7 +480,10 @@ export class AgentExecutor {
       const toToken = (params.to_contract || params.to_token_id) as string | undefined
 
       const fromCoin = { chain: fromChain, token: fromToken || undefined }
-      const toCoin = { chain: toChain || fromChain, token: toToken || undefined }
+      const toCoin = {
+        chain: toChain || fromChain,
+        token: toToken || undefined,
+      }
 
       // Get quote
       const quote = await this.vault.getSwapQuote({
@@ -511,11 +570,14 @@ export class AgentExecutor {
       }
 
       // Store as a server-style tx for sign_tx to pick up
-      this.storeServerTransaction({
+      const stored = this.storeServerTransaction({
         tx: txData,
         chain: params.chain,
         from_chain: params.chain,
       })
+      if (!stored) {
+        throw new Error('Could not stage calldata transaction for signing (invalid or empty tx payload)')
+      }
 
       const chain = resolveChain(params.chain as string) || Chain.Ethereum
       const address = await this.vault.address(chain)
@@ -682,7 +744,7 @@ export class AgentExecutor {
       // Clean up all pending payloads after successful sign
       this.pendingPayloads.clear()
 
-      const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
+      const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, txHash)
 
       return {
         tx_hash: txHash,
@@ -817,7 +879,7 @@ export class AgentExecutor {
       // Clean up all pending payloads after successful sign
       this.pendingPayloads.clear()
 
-      const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
+      const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, txHash)
 
       return {
         tx_hash: txHash,
@@ -845,10 +907,16 @@ export class AgentExecutor {
     const fromChainName = serverTxData.from_chain || serverTxData.chain || 'Solana'
     const toChainName = serverTxData.to_chain as string | undefined
     const fromChain = resolveChain(fromChainName)
-    if (!fromChain) throw Object.assign(new Error(`Unknown from_chain: ${fromChainName}`), { _phase: 'prepare' })
+    if (!fromChain)
+      throw Object.assign(new Error(`Unknown from_chain: ${fromChainName}`), {
+        _phase: 'prepare',
+      })
 
     const toChain = toChainName ? resolveChain(toChainName) : fromChain
-    if (!toChain) throw Object.assign(new Error(`Unknown to_chain: ${toChainName}`), { _phase: 'prepare' })
+    if (!toChain)
+      throw Object.assign(new Error(`Unknown to_chain: ${toChainName}`), {
+        _phase: 'prepare',
+      })
 
     const amountStr = serverTxData.amount as string
     if (!amountStr)
@@ -931,7 +999,7 @@ export class AgentExecutor {
 
     this.pendingPayloads.clear()
 
-    const explorerUrl = Vultisig.getTxExplorerUrl(chain, txHash)
+    const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, txHash)
 
     return {
       tx_hash: txHash,
@@ -1224,8 +1292,20 @@ export class AgentExecutor {
   // Address Book
   // ============================================================================
 
-  private async getAddressBook(): Promise<Record<string, unknown>> {
-    throw new Error('get_address_book is not yet implemented locally. The backend may handle this action server-side.')
+  private async getAddressBook(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.vultisig) {
+      throw new Error(
+        'get_address_book requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
+      )
+    }
+
+    const chainName = (params.chain as string | undefined) || (params.chain_name as string | undefined)
+    const chain = chainName ? resolveChain(chainName) : undefined
+    if (chainName && !chain) {
+      throw new Error(`Unknown chain: ${chainName}`)
+    }
+
+    return (await this.vultisig.getAddressBook(chain)) as unknown as Record<string, unknown>
   }
 
   private async addAddressBookEntry(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -1242,8 +1322,40 @@ export class AgentExecutor {
   // Token Search & Other
   // ============================================================================
 
-  private async searchToken(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('search_token is not yet implemented locally. The backend may handle this action server-side.')
+  private async searchToken(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const query = String(params.query ?? params.q ?? '')
+      .trim()
+      .toLowerCase()
+    if (!query) {
+      return { tokens: [] as unknown[] }
+    }
+
+    const limit = 20
+    const chainName = params.chain as string | undefined
+
+    const tokenMatchesQuery = (t: { ticker: string; contractAddress?: string; priceProviderId?: string }) => {
+      const tick = t.ticker.toLowerCase()
+      const addr = (t.contractAddress ?? '').toLowerCase()
+      const pid = (t.priceProviderId ?? '').toLowerCase()
+      return tick.includes(query) || addr.includes(query) || pid.includes(query)
+    }
+
+    if (chainName) {
+      const chain = resolveChain(chainName)
+      if (!chain) throw new Error(`Unknown chain: ${chainName}`)
+      const tokens = VultisigSdk.getKnownTokens(chain).filter(tokenMatchesQuery).slice(0, limit)
+      return { tokens }
+    }
+
+    const out: ReturnType<typeof VultisigSdk.getKnownTokens> = []
+    for (const c of Object.values(Chain) as Chain[]) {
+      for (const t of VultisigSdk.getKnownTokens(c)) {
+        if (!tokenMatchesQuery(t)) continue
+        out.push(t)
+        if (out.length >= limit) return { tokens: out }
+      }
+    }
+    return { tokens: out }
   }
 
   private async listVaults(): Promise<Record<string, unknown>> {
@@ -1263,8 +1375,33 @@ export class AgentExecutor {
     throw new Error('scan_tx is not yet implemented locally. The backend may handle this action server-side.')
   }
 
-  private async readEvmContract(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('read_evm_contract is not yet implemented locally. The backend may handle this action server-side.')
+  private async readEvmContract(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const chainName = params.chain as string | undefined
+    if (!chainName) throw new Error('read_evm_contract requires chain')
+
+    const contractRaw =
+      (params.contract_address as string | undefined) || (params.contractAddress as string | undefined)
+    if (!contractRaw) throw new Error('read_evm_contract requires contract_address')
+
+    const functionName = (params.function_name as string | undefined) || (params.functionName as string | undefined)
+    if (!functionName) throw new Error('read_evm_contract requires function_name')
+
+    const chain = resolveChain(chainName)
+    if (!chain) throw new Error(`Unknown chain: ${chainName}`)
+    if (!EVM_CHAINS.has(chain)) {
+      throw new Error(`read_evm_contract only supports EVM chains (got ${chain})`)
+    }
+
+    const callParams = (params.params as Array<{ type: string; value: string }> | undefined) ?? []
+    const data = (await encodeContractCall(functionName, callParams)) as `0x${string}`
+
+    const addr = contractRaw.startsWith('0x') ? contractRaw : `0x${contractRaw}`
+    const to = addr as `0x${string}`
+
+    const from = params.from as `0x${string}` | undefined
+    const result = await evmCall(chain as EvmChain, { to, data, from })
+
+    return { result }
   }
 }
 
@@ -1694,7 +1831,10 @@ function parseDERSignature(sigHex: string): { r: string; s: string } {
   let offset = 0
   if (raw.slice(offset, offset + 2) !== '30') {
     // Not DER, try raw
-    return { r: raw.slice(0, 64).padStart(64, '0'), s: raw.slice(64).padStart(64, '0') }
+    return {
+      r: raw.slice(0, 64).padStart(64, '0'),
+      s: raw.slice(64).padStart(64, '0'),
+    }
   }
   offset += 2
   offset += 2 // skip total length

@@ -4,6 +4,7 @@
  * Types for the agent chat system including SSE events,
  * backend API types, action execution, and UI interfaces.
  */
+import type { Vultisig } from '@vultisig/sdk'
 
 // ============================================================================
 // Configuration
@@ -12,6 +13,8 @@
 export type AgentConfig = {
   backendUrl: string
   vaultName?: string
+  /** SDK instance that owns the vault (address book and other global state) */
+  vultisig?: Vultisig
   password?: string
   /** Skip TUI, use NDJSON pipe interface */
   viaAgent?: boolean
@@ -175,7 +178,7 @@ export type SendMessageResponse = {
   actions?: Action[]
   policy_ready?: PolicyReady
   install_required?: InstallRequired
-  transactions?: Transaction[]
+  transactions?: Array<Transaction | TxReadyPayload>
   tokens?: TokenSearchResult
   usage?: UsageInfo
 }
@@ -209,6 +212,8 @@ export type InstallRequired = {
 }
 
 /**
+ * Summary transaction row from non-streaming JSON responses.
+ *
  * Permissive tx_ready payload shape while the backend schema evolves.
  * TODO: replace with a concrete interface or union when tx_ready stabilizes.
  */
@@ -229,6 +234,24 @@ export type Transaction = {
   send_tx?: TxReadyPayloadFields
   /** Generic server-built tx on tx_ready SSE */
   tx?: TxReadyPayloadFields
+}
+
+/**
+ * SSE `tx_ready` payload — backend may nest swap/send payloads or attach `tx`.
+ * Kept separate from {@link Transaction} so optional nested fields type-check.
+ */
+export type TxReadyPayload = {
+  sequence?: number
+  chain?: string
+  chain_id?: string
+  action?: string
+  signing_mode?: string
+  unsigned_tx_hex?: string
+  tx_details?: Record<string, unknown>
+  keysign_payload?: string
+  swap_tx?: Record<string, unknown>
+  send_tx?: Record<string, unknown>
+  tx?: Record<string, unknown>
 }
 
 export type TokenSearchResult = {
@@ -264,7 +287,7 @@ export type SSEToolProgress = { tool: string; status: 'running' | 'done'; label?
 export type SSETitle = { title: string }
 export type SSEActions = { actions: Action[] }
 export type SSESuggestions = { suggestions: Suggestion[] }
-export type SSETxReady = Transaction
+export type SSETxReady = TxReadyPayload
 export type SSEPolicyReady = PolicyReady
 export type SSEInstallRequired = InstallRequired
 export type SSEMessage = { message: ConversationMessage }
