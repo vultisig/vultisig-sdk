@@ -658,7 +658,7 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
   "session_id": "abc123-def456",
   "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
   "tool_calls": [
-    { "action": "get_balances", "success": true, "data": { "balances": [{ "chain": "Ethereum", "symbol": "ETH", "amount": "1.5" }] } }
+    { "action": "get_balances", "success": true, "data": { "balances": [{ "chain": "Ethereum", "symbol": "ETH", "amount": "1.5", "decimals": 18, "raw_amount": "1500000000000000000" }] } }
   ],
   "transactions": [
     { "hash": "0x9f8e7d6c...", "chain": "ethereum", "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..." }

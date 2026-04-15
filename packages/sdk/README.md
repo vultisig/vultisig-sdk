@@ -190,11 +190,14 @@ await vault.sign(
 ### 6. Import/Export Vaults
 
 ```typescript
-// Check if a vault file is encrypted (sync; pass .vult file content as string)
-const isEncrypted = sdk.isVaultEncrypted(file);
+// Raw .vult contents as a string (e.g. fs.readFileSync('vault.vult', 'utf-8'))
+const vaultContent = '...'
 
-// Import vault from file
-const vault = await sdk.importVault(file, isEncrypted ? "password" : undefined);
+// Check if encrypted (sync)
+const isEncrypted = sdk.isVaultEncrypted(vaultContent);
+
+// Import vault
+const vault = await sdk.importVault(vaultContent, isEncrypted ? "password" : undefined);
 
 // Export vault to backup format (as Blob)
 const backupBlob = await vault.export("BackupPassword123!");
@@ -1040,8 +1043,10 @@ try {
 ```typescript
 import { VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
 
+const vaultContent = '...' // raw .vult file contents (string)
+
 try {
-  const vault = await sdk.importVault(file, password)
+  const vault = await sdk.importVault(vaultContent, password)
 } catch (error) {
   if (error instanceof VaultImportError) {
     if (error.code === VaultImportErrorCode.INVALID_PASSWORD) {
