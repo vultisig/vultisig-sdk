@@ -1,5 +1,50 @@
 # @vultisig/core-mpc
 
+## 1.1.0
+
+### Minor Changes
+
+- [#235](https://github.com/vultisig/vultisig-sdk/pull/235) [`aea1c28`](https://github.com/vultisig/vultisig-sdk/commit/aea1c28051345ddef9c952108b203caa8b7fa032) Thanks [@rcoderdev](https://github.com/rcoderdev)! - ### Swap amounts (backward compatible)
+  - `SwapQuoteParams.amount` and `SwapTxParams.amount` now accept **`string | number`**. Call sites that already pass a **number** require no code changes.
+  - Human-readable swap amounts can be passed as **decimal strings** end-to-end (compound `vault.swap()`, `getSwapQuote`, `prepareSwapTx`, CLI agent), avoiding precision loss from `Number()` / `parseFloat()` on extreme magnitudes or fractional digits.
+  - `toChainAmount` accepts **`string | number`**; whitespace-only / empty strings throw instead of being treated as zero.
+
+  ### Send preparation (stricter validation)
+  - `prepareSendTx` and `estimateSendFee` reject **zero or negative** `amount` in base units. This aligns with real transfers; payloads with `toAmount: "0"` are no longer built for native/token sends.
+  - **Zero-value EVM contract calls** are unchanged: use `prepareContractCallTx` (or `vault.contractCall()`), which still builds via the internal path that allows `value: 0n`.
+
+  ### Other
+  - Swap approval sizing uses `toChainAmount` instead of float scaling for required allowance.
+  - `@vultisig/rujira` (source): `VultisigSignature.format` includes **`MLDSA`** to match SDK `Signature` — type-only widening, no runtime change; Rujira will pick up a **patch** version via normal dependency releases when published next.
+  - CLI: direct **`viem`** dependency; Solana local swap human amount via `formatUnits`; agent SSE `Transaction` typing includes optional `swap_tx` / `send_tx` / `tx`.
+
+  **Semver:** **Minor** for `@vultisig/core-chain`, `@vultisig/core-mpc`, and `@vultisig/sdk` (additive types + intentional validation tightening). **`@vultisig/cli` is linked to the SDK** in Changesets config, so it receives the same minor bump. This is **not** a SemVer **major** for integration purposes: swap inputs are only widened; `prepareSendTx({ amount: 0n })` was never a valid broadcast path.
+
+  **Release tooling note:** `yarn changeset status` may still propose a **major** version for `@vultisig/rujira` when the SDK minors, even though the only Rujira change is adding `'MLDSA'` to a string-literal union (fully backward compatible). Review the Version Packages PR and **downgrade Rujira to patch** if your policy is to reserve majors for real breaking API changes.
+
+  **`@vultisig/sdk` is 0.x:** per [SemVer](https://semver.org/#spec-item-4), minor releases on `0.y.z` may include behavior changes; consumers pinning `^0.14.0` should still accept `0.15.0` but should read changelog for validation tightening.
+
+### Patch Changes
+
+- [#174](https://github.com/vultisig/vultisig-sdk/pull/174) [`c630597`](https://github.com/vultisig/vultisig-sdk/commit/c6305970d1685194f1c6c11d5e8d141e8aa6c9a1) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix: harden PSBT signing (SignBitcoin) - follow-up on PR [#174](https://github.com/vultisig/vultisig-sdk/issues/174)
+  - parameterize network in buildSignBitcoinFromPsbt (was hardcoded to mainnet)
+  - harden detectScriptType: full P2PKH template check, add P2WSH detection
+  - fail early for unsupported script types with descriptive BIP-referenced errors
+  - add fee snipe mitigation (cross-validate witnessUtxo vs nonWitnessUtxo)
+  - rename computeBip143Sighashes -> computePreSigningHashes for extensibility
+  - use @noble/hashes/sha256 instead of Node.js crypto (cross-platform)
+  - use unsigned int64 for Bitcoin amounts (writeBigUInt64LE)
+  - fix varint encoding for output script lengths in sighash computation
+  - refactor compileSignBitcoinTx to use bitcoinjs-lib Transaction class
+  - fix libType regression in commVault.ts for key-import vaults
+  - fix variable shadowing in compileTx.ts
+  - skip Blockaid simulation for PSBT flows (incompatible with WalletCore compiler)
+  - augment change detection with BIP32 derivation on outputs
+  - add 10 unit tests cross-validating sighash against bitcoinjs-lib v7
+
+- Updated dependencies [[`c630597`](https://github.com/vultisig/vultisig-sdk/commit/c6305970d1685194f1c6c11d5e8d141e8aa6c9a1), [`aea1c28`](https://github.com/vultisig/vultisig-sdk/commit/aea1c28051345ddef9c952108b203caa8b7fa032)]:
+  - @vultisig/core-chain@1.2.0
+
 ## 1.0.2
 
 ### Patch Changes

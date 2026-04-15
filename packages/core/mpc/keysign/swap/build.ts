@@ -35,7 +35,7 @@ import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 export type BuildSwapKeysignPayloadInput = {
   fromCoin: AccountCoin
   toCoin: AccountCoin
-  amount: number
+  amount: string | number
   swapQuote: SwapQuote
   vaultId: string
   localPartyId: string

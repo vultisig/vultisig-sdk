@@ -77,6 +77,7 @@ import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 
 import type { WasmProvider } from '../../../src/context/SdkContext'
 import { TransactionBuilder } from '../../../src/vault/services/TransactionBuilder'
+import { VaultErrorCode } from '../../../src/vault/VaultError'
 
 const ERC20_APPROVE_ABI = parseAbi(['function approve(address spender, uint256 amount) returns (bool)'])
 const ERC1155_SET_APPROVAL_ABI = parseAbi(['function setApprovalForAll(address operator, bool approved)'])
@@ -124,7 +125,7 @@ describe('TransactionBuilder.prepareContractCallTx', () => {
     builder = new TransactionBuilder(mockVaultData, mockWasmProvider)
   })
 
-  it('should encode ERC-20 approve and delegate to prepareSendTx', async () => {
+  it('should encode ERC-20 approve and build send payload with calldata memo', async () => {
     const maxUint256 = 2n ** 256n - 1n
 
     await builder.prepareContractCallTx({
@@ -207,6 +208,25 @@ describe('TransactionBuilder.prepareContractCallTx', () => {
     expect(callArgs.coin.decimals).toBe(18)
   })
 
+  it('should reject negative native value for contract calls', async () => {
+    await expect(
+      builder.prepareContractCallTx({
+        chain: Chain.Ethereum,
+        contractAddress: CONTRACT,
+        abi: ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args: [SPENDER, 100n],
+        value: -1n,
+        senderAddress: SENDER,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.InvalidAmount,
+      message: expect.stringContaining('negative'),
+    })
+
+    expect(buildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
   it('should work across all EVM chains', async () => {
     const evmChains = [
       Chain.Ethereum,
@@ -287,7 +307,7 @@ describe('TransactionBuilder.prepareContractCallTx', () => {
     ).rejects.toThrow()
   })
 
-  it('should pass feeSettings through to prepareSendTx', async () => {
+  it('should pass feeSettings through to the send payload builder', async () => {
     const customFee = { gasPrice: '50000000000' } as any
 
     await builder.prepareContractCallTx({
