@@ -1,5 +1,5 @@
 import { OtherChain } from '@vultisig/core-chain/Chain'
-import { blake2b } from '@noble/hashes/blake2.js'
+import { blake2b } from '@noble/hashes/blake2b'
 import { decode, encode } from 'cbor-x'
 
 import { TxHashResolver } from '../resolver'

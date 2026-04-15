@@ -38,7 +38,7 @@ export class AgentSession {
     this.config = config
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
-    this.executor = new AgentExecutor(vault, !!config.verbose, vault.publicKeys.ecdsa)
+    this.executor = new AgentExecutor(vault, !!config.verbose, vault.publicKeys.ecdsa, config.vultisig)
     this.publicKey = vault.publicKeys.ecdsa
 
     if (config.password) {
@@ -248,6 +248,9 @@ export class AgentSession {
       }
     }
 
+    // Count tx_ready payloads actually stored (do not use raw SSE tx count — errors / empty events still append to streamResult.transactions)
+    let serverTxStoredFromStream = 0
+
     // Send via SSE stream
     const streamResult = await this.client.sendMessageStream(
       this.conversationId,
@@ -271,17 +274,11 @@ export class AgentSession {
           ui.onSuggestions(suggestions)
         },
         onTxReady: tx => {
-          // Skip error tx_ready events (MCP build failures)
-          const txData = tx?.swap_tx || tx?.send_tx || tx?.tx
-          if (txData?.status === 'error' || txData?.error) {
-            if (this.config.verbose)
-              process.stderr.write(`[session] skipping error tx_ready: ${txData.error || 'unknown error'}\n`)
-            return
-          }
-          // Store server-built transaction so sign_tx can find it
-          this.executor.storeServerTransaction(tx)
-          if (this.config.password) {
-            this.executor.setPassword(this.config.password)
+          if (this.executor.storeServerTransaction(tx)) {
+            serverTxStoredFromStream++
+            if (this.config.password) {
+              this.executor.setPassword(this.config.password)
+            }
           }
         },
         onMessage: _msg => {
@@ -353,9 +350,11 @@ export class AgentSession {
     }
 
     // Handle transactions from tx_ready events (server-side builds via MCP)
-    if (streamResult.transactions.length > 0 && this.executor.hasPendingTransaction()) {
+    if (serverTxStoredFromStream > 0) {
       if (this.config.verbose)
-        process.stderr.write(`[session] ${streamResult.transactions.length} tx_ready events, signing client-side\n`)
+        process.stderr.write(
+          `[session] ${serverTxStoredFromStream} stored server tx from tx_ready, signing client-side\n`
+        )
       const signAction: Action = {
         id: `tx_sign_${Date.now()}`,
         type: 'sign_tx',
