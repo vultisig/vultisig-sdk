@@ -273,7 +273,11 @@ export class AgentClient {
           // test fixture. Kebab variants (e.g. `data-tx-ready`) will silently
           // miss the switch below — if that regresses, fix the fixture first.
           resolvedEvent = v1Type.slice(5) // data-title → title, etc.
-          if (rawParsed.data && typeof rawParsed.data === 'object') {
+          // Guard against a naked array payload (e.g. `{type:'data-suggestions', data:[...]}`):
+          // `typeof [] === 'object'`, so unwrapping would set `parsed = [...]` and
+          // the switch cases below (which read `parsed.suggestions`, `parsed.actions`, …)
+          // would silently drop the payload. Require a plain object before unwrap.
+          if (rawParsed.data && typeof rawParsed.data === 'object' && !Array.isArray(rawParsed.data)) {
             parsed = rawParsed.data
           }
         } else {
