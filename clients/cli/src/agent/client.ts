@@ -225,9 +225,35 @@ export class AgentClient {
     }
   ): void {
     try {
-      const parsed = JSON.parse(data)
+      const rawParsed = JSON.parse(data)
 
-      switch (event) {
+      // Vercel UI Message Stream v1 adapter: when no `event:` line preceded
+      // the data line, the SSE spec defaults `event` to "message". The new
+      // backend uses bare `data:` lines with the type encoded in the JSON
+      // `type` field. Map v1 types to legacy event names + payload shape so
+      // the existing switch keeps working.
+      let resolvedEvent = event
+      let parsed = rawParsed
+      if (event === 'message' && typeof rawParsed?.type === 'string') {
+        const v1Type = rawParsed.type as string
+        if (v1Type === 'text-delta') {
+          resolvedEvent = 'text_delta'
+        } else if (v1Type === 'finish') {
+          resolvedEvent = 'done'
+        } else if (v1Type === 'error') {
+          resolvedEvent = 'error'
+          parsed = { error: rawParsed.errorText ?? rawParsed.error }
+        } else if (v1Type.startsWith('data-')) {
+          resolvedEvent = v1Type.slice(5) // data-title → title, etc.
+          if (rawParsed.data && typeof rawParsed.data === 'object') {
+            parsed = rawParsed.data
+          }
+        } else {
+          resolvedEvent = v1Type
+        }
+      }
+
+      switch (resolvedEvent) {
         case 'text_delta':
           if (typeof parsed.delta === 'string') {
             result.fullText += parsed.delta
