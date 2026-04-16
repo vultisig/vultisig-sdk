@@ -17,6 +17,9 @@ import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import type { WasmProvider } from '../../context/SdkContext'
+// Import prep helpers from per-file paths, not the `tools/prep` barrel: the
+// barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
+// modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
 import { prepareContractCallTxFromKeys } from '../../tools/prep/contractCall'
 import { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from '../../tools/prep/cosmos'
 import { prepareSendTxFromKeys } from '../../tools/prep/send'
