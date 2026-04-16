@@ -58,6 +58,7 @@ import {
 import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
+import { getMaxSendAmountFromKeys, vaultDataToIdentity } from '../tools/prep'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
@@ -1020,17 +1021,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     feeSettings?: FeeSettings
   }): Promise<MaxSendAmount> {
-    const balanceResult = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
-    const balance = BigInt(balanceResult.amount)
-
-    const fee = await this.transactionBuilder.estimateSendFee({
-      ...params,
-      amount: balance,
-    })
-
-    const maxSendable = getMaxValue(balance, fee)
-
-    return { balance, fee, maxSendable }
+    return getMaxSendAmountFromKeys(vaultDataToIdentity(this.coreVault), params)
   }
 
   /**

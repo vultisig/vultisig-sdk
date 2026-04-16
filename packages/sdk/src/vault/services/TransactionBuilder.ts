@@ -1,13 +1,10 @@
 import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
-import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
-import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
@@ -17,13 +14,18 @@ import { toKeysignLibType } from '@vultisig/core-mpc/types/utils/libType'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { type Abi, encodeFunctionData } from 'viem'
 
 import type { WasmProvider } from '../../context/SdkContext'
+import {
+  prepareContractCallTxFromKeys,
+  prepareSendTxFromKeys,
+  prepareSignAminoTxFromKeys,
+  prepareSignDirectTxFromKeys,
+  vaultDataToIdentity,
+} from '../../tools/prep'
 import type { ContractCallTxParams } from '../../types/contractCall'
 import type { CosmosSigningOptions, SignAminoInput, SignDirectInput } from '../../types/cosmos'
 import { VaultError, VaultErrorCode } from '../VaultError'
-import { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from './cosmos/buildCosmosPayload'
 
 /**
  * TransactionBuilder Service
@@ -77,64 +79,8 @@ export class TransactionBuilder {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
     }
-    return this.buildSendTxKeysignPayload(params)
-  }
-
-  /**
-   * Build send keysign payload without enforcing a non-zero amount (used for EVM contract calls with `value: 0n`).
-   */
-  private async buildSendTxKeysignPayload(params: {
-    coin: AccountCoin
-    receiver: string
-    amount: bigint
-    memo?: string
-    feeSettings?: FeeSettings
-  }): Promise<KeysignPayload> {
     try {
-      // Get WalletCore via WasmProvider
-      const walletCore = await this.wasmProvider.getWalletCore()
-
-      // Validate receiver address format
-      const isValid = isValidAddress({
-        chain: params.coin.chain,
-        address: params.receiver,
-        walletCore,
-      })
-      if (!isValid) {
-        throw new VaultError(
-          VaultErrorCode.InvalidConfig,
-          `Invalid receiver address format for chain ${params.coin.chain}: ${params.receiver}`
-        )
-      }
-
-      const isQbtc = params.coin.chain === Chain.QBTC
-      const publicKey = isQbtc
-        ? null
-        : getPublicKey({
-            chain: params.coin.chain,
-            walletCore,
-            publicKeys: this.vaultData.publicKeys,
-            hexChainCode: this.vaultData.hexChainCode,
-          })
-
-      // Build the keysign payload using core function
-      const keysignPayload = await buildSendKeysignPayload({
-        coin: params.coin,
-        receiver: params.receiver,
-        amount: params.amount,
-        memo: params.memo,
-        vaultId: this.vaultData.publicKeys.ecdsa,
-        localPartyId: this.vaultData.localPartyId,
-        publicKey,
-        hexPublicKeyOverride: isQbtc
-          ? shouldBePresent(this.vaultData.publicKeyMldsa, 'Vault MLDSA public key required for QBTC send')
-          : undefined,
-        walletCore,
-        libType: toKeysignLibType(this.vaultData),
-        feeSettings: params.feeSettings,
-      })
-
-      return keysignPayload
+      return await prepareSendTxFromKeys(vaultDataToIdentity(this.vaultData), params)
     } catch (error) {
       if (error instanceof VaultError) throw error
       throw new VaultError(
@@ -247,43 +193,8 @@ export class TransactionBuilder {
    * ```
    */
   async prepareContractCallTx(params: ContractCallTxParams): Promise<KeysignPayload> {
-    const { chain, contractAddress, abi, functionName, args, value = 0n, senderAddress, feeSettings } = params
-
-    if (!isChainOfKind(chain, 'evm')) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `prepareContractCallTx only supports EVM chains. Got: ${chain}`
-      )
-    }
-
-    if (value < 0n) {
-      throw new VaultError(VaultErrorCode.InvalidAmount, 'Contract call value cannot be negative')
-    }
-
     try {
-      const calldata = encodeFunctionData({
-        abi: abi as Abi,
-        functionName,
-        args: args ?? [],
-      })
-
-      // Use native fee coin so the signing input resolver takes the Transfer
-      // path (which passes memo as tx data), not the ERC20Transfer path.
-      const native = chainFeeCoin[chain]
-      const coin: AccountCoin = {
-        chain,
-        address: senderAddress,
-        decimals: native.decimals,
-        ticker: native.ticker,
-      }
-
-      return await this.buildSendTxKeysignPayload({
-        coin,
-        receiver: contractAddress,
-        amount: value,
-        memo: calldata,
-        feeSettings,
-      })
+      return await prepareContractCallTxFromKeys(vaultDataToIdentity(this.vaultData), params)
     } catch (error) {
       if (error instanceof VaultError) throw error
       throw new VaultError(
@@ -401,33 +312,14 @@ export class TransactionBuilder {
    * ```
    */
   async prepareSignAminoTx(input: SignAminoInput, options?: CosmosSigningOptions): Promise<KeysignPayload> {
+    if (!this.isCosmosChain(input.chain)) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Chain ${input.chain} does not support SignAmino. Use a Cosmos-SDK chain.`
+      )
+    }
     try {
-      // Validate chain is Cosmos-based
-      if (!this.isCosmosChain(input.chain)) {
-        throw new VaultError(
-          VaultErrorCode.InvalidConfig,
-          `Chain ${input.chain} does not support SignAmino. Use a Cosmos-SDK chain.`
-        )
-      }
-
-      const walletCore = await this.wasmProvider.getWalletCore()
-
-      // Get public key for chain
-      const publicKey = getPublicKey({
-        chain: input.chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
-
-      return await buildSignAminoKeysignPayload({
-        ...input,
-        vaultId: this.vaultData.publicKeys.ecdsa,
-        localPartyId: this.vaultData.localPartyId,
-        publicKey,
-        libType: toKeysignLibType(this.vaultData),
-        skipChainSpecificFetch: options?.skipChainSpecificFetch,
-      })
+      return await prepareSignAminoTxFromKeys(vaultDataToIdentity(this.vaultData), input, options)
     } catch (error) {
       if (error instanceof VaultError) throw error
       throw new VaultError(
@@ -468,33 +360,14 @@ export class TransactionBuilder {
    * ```
    */
   async prepareSignDirectTx(input: SignDirectInput, options?: CosmosSigningOptions): Promise<KeysignPayload> {
+    if (!this.isCosmosChain(input.chain)) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Chain ${input.chain} does not support SignDirect. Use a Cosmos-SDK chain.`
+      )
+    }
     try {
-      // Validate chain is Cosmos-based
-      if (!this.isCosmosChain(input.chain)) {
-        throw new VaultError(
-          VaultErrorCode.InvalidConfig,
-          `Chain ${input.chain} does not support SignDirect. Use a Cosmos-SDK chain.`
-        )
-      }
-
-      const walletCore = await this.wasmProvider.getWalletCore()
-
-      // Get public key for chain
-      const publicKey = getPublicKey({
-        chain: input.chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
-
-      return await buildSignDirectKeysignPayload({
-        ...input,
-        vaultId: this.vaultData.publicKeys.ecdsa,
-        localPartyId: this.vaultData.localPartyId,
-        publicKey,
-        libType: toKeysignLibType(this.vaultData),
-        skipChainSpecificFetch: options?.skipChainSpecificFetch,
-      })
+      return await prepareSignDirectTxFromKeys(vaultDataToIdentity(this.vaultData), input, options)
     } catch (error) {
       if (error instanceof VaultError) throw error
       throw new VaultError(
