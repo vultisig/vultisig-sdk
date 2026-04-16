@@ -282,6 +282,7 @@ export class AgentClient {
           }
         } else {
           resolvedEvent = v1Type
+          if (this.verbose) process.stderr.write(`[SSE:unmapped v1 type: ${v1Type}]\n`)
         }
       }
 
