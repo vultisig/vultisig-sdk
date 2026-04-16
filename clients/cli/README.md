@@ -658,7 +658,7 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
   "session_id": "abc123-def456",
   "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
   "tool_calls": [
-    { "action": "getBalance", "success": true, "data": { "chain": "ethereum", "balance": "1.5" } }
+    { "action": "get_balances", "success": true, "data": { "balances": [{ "chain": "Ethereum", "symbol": "ETH", "amount": "1.5", "decimals": 18, "raw_amount": "1500000000000000000" }] } }
   ],
   "transactions": [
     { "hash": "0x9f8e7d6c...", "chain": "ethereum", "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..." }
@@ -742,8 +742,6 @@ The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Desig
 | `ready` | `vault, addresses` | Session initialized, addresses for all chains |
 | `session` | `id` | Conversation ID for resuming later |
 | `history` | `messages[]` | Previous messages when resuming a session |
-| `auth` | `status, error?` | Authentication result (`authenticated` or `failed`) |
-| `conversation` | `id` | Conversation created or resumed |
 | `text_delta` | `delta` | Streaming text chunk from the agent |
 | `tool_call` | `id, action, params?, status` | Action started (`running`) |
 | `tool_result` | `id, action, success, data?, error?, code?` | Action completed (`code` when `success` is false) |
