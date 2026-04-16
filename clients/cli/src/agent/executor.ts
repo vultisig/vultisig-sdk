@@ -607,9 +607,25 @@ export class AgentExecutor {
     if (!amountStr) {
       throw new Error('amount is required (RUNE amount as a decimal string, e.g. "0.25")')
     }
+    if (!/^\d+(\.\d+)?$/.test(amountStr)) {
+      throw new Error('amount must be a positive decimal string (no sign or scientific notation), e.g. "0.25"')
+    }
+    const [, frac = ''] = amountStr.split('.')
+    if (frac.length > 8) {
+      throw new Error('RUNE amount supports at most 8 decimal places')
+    }
+    const amountRuneBaseUnits = parseAmount(amountStr, 8)
+    if (amountRuneBaseUnits <= 0n) {
+      throw new Error('amount must be greater than zero')
+    }
 
     let pairedAddress = (params.paired_address as string | undefined)?.trim() || undefined
-    const autoPair = params.auto_pair !== false && !pairedAddress
+    const autoPairRaw = params.auto_pair ?? params.autoPair
+    const autoPairDisabled =
+      autoPairRaw === false ||
+      autoPairRaw === 0 ||
+      (typeof autoPairRaw === 'string' && ['false', '0'].includes(autoPairRaw.toLowerCase()))
+    const autoPair = !pairedAddress && !autoPairDisabled
     if (autoPair) {
       const vaultAddresses = await this.buildVaultAddressMap()
       pairedAddress =
@@ -620,10 +636,9 @@ export class AgentExecutor {
         }) || undefined
     }
 
-    const amountRuneBaseUnits = parseAmount(amountStr, 8).toString()
     const lpPayload = buildThorchainLpAddPayload({
       pool,
-      amountRuneBaseUnits,
+      amountRuneBaseUnits: amountRuneBaseUnits.toString(),
       ...(pairedAddress ? { pairedAddress } : {}),
     })
 
