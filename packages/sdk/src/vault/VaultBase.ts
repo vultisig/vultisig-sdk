@@ -1021,7 +1021,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     feeSettings?: FeeSettings
   }): Promise<MaxSendAmount> {
-    return getMaxSendAmountFromKeys(vaultDataToIdentity(this.coreVault), params)
+    const walletCore = await this.wasmProvider.getWalletCore()
+    return getMaxSendAmountFromKeys(vaultDataToIdentity(this.coreVault), params, walletCore)
   }
 
   /**

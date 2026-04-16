@@ -144,7 +144,12 @@ describe('prepareSendTxFromKeys', () => {
   it('rejects when amount is zero', async () => {
     await expect(
       prepareSendTxFromKeys(baseIdentity, {
-        coin: { chain: Chain.Ethereum, address: '0xfrom', decimals: 18, ticker: 'ETH' } as any,
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 18,
+          ticker: 'ETH',
+        } as any,
         receiver: '0xto',
         amount: 0n,
       })
@@ -158,7 +163,12 @@ describe('prepareSendTxFromKeys', () => {
 
     await expect(
       prepareSendTxFromKeys(baseIdentity, {
-        coin: { chain: Chain.Ethereum, address: '0xfrom', decimals: 18, ticker: 'ETH' } as any,
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 18,
+          ticker: 'ETH',
+        } as any,
         receiver: 'not-an-address',
         amount: 1n,
       })
@@ -167,10 +177,37 @@ describe('prepareSendTxFromKeys', () => {
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 
+  it('uses the explicit walletCore override and does not call the global getWalletCore', async () => {
+    const overrideWalletCore = { __mock: 'override-walletCore' }
+
+    await prepareSendTxFromKeys(
+      baseIdentity,
+      {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 18,
+          ticker: 'ETH',
+        } as any,
+        receiver: '0xto',
+        amount: 1n,
+      },
+      overrideWalletCore as any
+    )
+
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockBuildSendKeysignPayload.mock.calls[0][0].walletCore).toBe(overrideWalletCore)
+  })
+
   it('rejects QBTC send when identity.publicKeyMldsa is missing', async () => {
     await expect(
       prepareSendTxFromKeys(baseIdentity, {
-        coin: { chain: Chain.QBTC, address: 'qbtc-from', decimals: 8, ticker: 'QBTC' } as any,
+        coin: {
+          chain: Chain.QBTC,
+          address: 'qbtc-from',
+          decimals: 8,
+          ticker: 'QBTC',
+        } as any,
         receiver: 'qbtc-to',
         amount: 100n,
       })

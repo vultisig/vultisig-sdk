@@ -1,3 +1,4 @@
+import type { WalletCore } from '@trustwallet/wallet-core'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
@@ -26,12 +27,17 @@ export type GetMaxSendAmountFromKeysParams = {
  *
  * Fetches the on-chain balance, estimates the send fee at full balance, and
  * returns `balance - fee` (or `0n` if fee exceeds balance).
+ *
+ * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
+ * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected
+ * `WasmProvider` should pass it explicitly.
  */
 export const getMaxSendAmountFromKeys = async (
   identity: VaultIdentity,
-  params: GetMaxSendAmountFromKeysParams
+  params: GetMaxSendAmountFromKeysParams,
+  walletCoreOverride?: WalletCore
 ): Promise<MaxSendAmount> => {
-  const walletCore = await getWalletCore()
+  const walletCore = walletCoreOverride ?? (await getWalletCore())
 
   const isValid = isValidAddress({
     chain: params.coin.chain,

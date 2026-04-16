@@ -177,6 +177,29 @@ describe('getMaxSendAmountFromKeys', () => {
     })
   })
 
+  it('uses the explicit walletCore override and does not call the global getWalletCore', async () => {
+    const overrideWalletCore = { __mock: 'override-walletCore' }
+    mockGetCoinBalance.mockResolvedValue(1_000n)
+    mockGetSendFeeEstimate.mockResolvedValue(100n)
+
+    await getMaxSendAmountFromKeys(
+      baseIdentity,
+      {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          decimals: 18,
+          ticker: 'ETH',
+        } as any,
+        receiver: '0xto',
+      },
+      overrideWalletCore as any
+    )
+
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockGetSendFeeEstimate.mock.calls[0][0].walletCore).toBe(overrideWalletCore)
+  })
+
   it('passes publicKey: null and hexPublicKeyOverride for QBTC', async () => {
     const identity: VaultIdentity = {
       ...baseIdentity,

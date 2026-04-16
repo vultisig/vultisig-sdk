@@ -221,4 +221,23 @@ describe('prepareSwapTxFromKeys', () => {
     expect(call.localPartyId).toBe(customIdentity.localPartyId)
     expect(call.libType).toBe(customIdentity.libType)
   })
+
+  it('uses the explicit walletCore override and does not call the global getWalletCore', async () => {
+    const overrideWalletCore = { __mock: 'override-walletCore' }
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+
+    await prepareSwapTxFromKeys(
+      baseIdentity,
+      {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: swapQuoteStub,
+      },
+      overrideWalletCore as any
+    )
+
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockBuildSwapKeysignPayload.mock.calls[0][0].walletCore).toBe(overrideWalletCore)
+  })
 })

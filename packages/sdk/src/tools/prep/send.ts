@@ -1,3 +1,4 @@
+import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
@@ -24,6 +25,10 @@ export type PrepareSendTxFromKeysParams = {
  * `vault.transactionBuilder.prepareSendTx()` and is intended for MCP servers and
  * other contexts where only the public identity (no key shares) is available.
  *
+ * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
+ * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected
+ * `WasmProvider` should pass it explicitly.
+ *
  * @example
  * ```ts
  * const payload = await prepareSendTxFromKeys(identity, {
@@ -35,13 +40,14 @@ export type PrepareSendTxFromKeysParams = {
  */
 export const prepareSendTxFromKeys = async (
   identity: VaultIdentity,
-  params: PrepareSendTxFromKeysParams
+  params: PrepareSendTxFromKeysParams,
+  walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
   if (params.amount <= 0n) {
     throw new Error('Amount must be greater than zero')
   }
 
-  const walletCore = await getWalletCore()
+  const walletCore = walletCoreOverride ?? (await getWalletCore())
 
   const isValid = isValidAddress({
     chain: params.coin.chain,

@@ -1,4 +1,5 @@
 import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
@@ -16,13 +17,10 @@ import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import type { WasmProvider } from '../../context/SdkContext'
-import {
-  prepareContractCallTxFromKeys,
-  prepareSendTxFromKeys,
-  prepareSignAminoTxFromKeys,
-  prepareSignDirectTxFromKeys,
-  vaultDataToIdentity,
-} from '../../tools/prep'
+import { prepareContractCallTxFromKeys } from '../../tools/prep/contractCall'
+import { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from '../../tools/prep/cosmos'
+import { prepareSendTxFromKeys } from '../../tools/prep/send'
+import { vaultDataToIdentity } from '../../tools/prep/types'
 import type { ContractCallTxParams } from '../../types/contractCall'
 import type { CosmosSigningOptions, SignAminoInput, SignDirectInput } from '../../types/cosmos'
 import { VaultError, VaultErrorCode } from '../VaultError'
@@ -80,7 +78,8 @@ export class TransactionBuilder {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
     }
     try {
-      return await prepareSendTxFromKeys(vaultDataToIdentity(this.vaultData), params)
+      const walletCore = await this.wasmProvider.getWalletCore()
+      return await prepareSendTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
     } catch (error) {
       if (error instanceof VaultError) throw error
       throw new VaultError(
@@ -193,8 +192,18 @@ export class TransactionBuilder {
    * ```
    */
   async prepareContractCallTx(params: ContractCallTxParams): Promise<KeysignPayload> {
+    if (!isChainOfKind(params.chain, 'evm')) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `prepareContractCallTx only supports EVM chains. Got: ${params.chain}`
+      )
+    }
+    if ((params.value ?? 0n) < 0n) {
+      throw new VaultError(VaultErrorCode.InvalidAmount, 'Contract call value cannot be negative')
+    }
     try {
-      return await prepareContractCallTxFromKeys(vaultDataToIdentity(this.vaultData), params)
+      const walletCore = await this.wasmProvider.getWalletCore()
+      return await prepareContractCallTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
     } catch (error) {
       if (error instanceof VaultError) throw error
       throw new VaultError(
@@ -319,7 +328,8 @@ export class TransactionBuilder {
       )
     }
     try {
-      return await prepareSignAminoTxFromKeys(vaultDataToIdentity(this.vaultData), input, options)
+      const walletCore = await this.wasmProvider.getWalletCore()
+      return await prepareSignAminoTxFromKeys(vaultDataToIdentity(this.vaultData), input, options, walletCore)
     } catch (error) {
       if (error instanceof VaultError) throw error
       throw new VaultError(
@@ -367,7 +377,8 @@ export class TransactionBuilder {
       )
     }
     try {
-      return await prepareSignDirectTxFromKeys(vaultDataToIdentity(this.vaultData), input, options)
+      const walletCore = await this.wasmProvider.getWalletCore()
+      return await prepareSignDirectTxFromKeys(vaultDataToIdentity(this.vaultData), input, options, walletCore)
     } catch (error) {
       if (error instanceof VaultError) throw error
       throw new VaultError(

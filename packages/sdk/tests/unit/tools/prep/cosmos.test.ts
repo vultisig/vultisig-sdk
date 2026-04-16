@@ -186,4 +186,26 @@ describe('prepareSignDirectTxFromKeys', () => {
     expect(mockBuildSignDirectKeysignPayload).not.toHaveBeenCalled()
     expect(mockGetWalletCore).not.toHaveBeenCalled()
   })
+
+  it('uses the explicit walletCore override and does not call the global getWalletCore', async () => {
+    const overrideWalletCore = { __mock: 'override-walletCore' }
+    mockBuildSignDirectKeysignPayload.mockResolvedValue(mockPayload)
+
+    await prepareSignDirectTxFromKeys(
+      baseIdentity,
+      {
+        chain: Chain.Cosmos,
+        coin: cosmosCoin,
+        bodyBytes: 'base64BodyBytes',
+        authInfoBytes: 'base64AuthInfoBytes',
+        chainId: 'cosmoshub-4',
+        accountNumber: '12345',
+      } as any,
+      undefined,
+      overrideWalletCore as any
+    )
+
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockGetPublicKey).toHaveBeenCalledWith(expect.objectContaining({ walletCore: overrideWalletCore }))
+  })
 })

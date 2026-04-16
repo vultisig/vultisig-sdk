@@ -31,7 +31,7 @@ import type { WasmProvider } from '../../context/SdkContext'
 import { VaultEvents } from '../../events/types'
 import type { DiscountTierService } from '../../services/DiscountTierService'
 import type { FiatValueService } from '../../services/FiatValueService'
-import { prepareSwapTxFromKeys } from '../../tools/prep'
+import { prepareSwapTxFromKeys } from '../../tools/prep/swap'
 import { vaultDataToIdentity } from '../../tools/prep/types'
 import {
   CoinInput,
@@ -132,12 +132,17 @@ export class SwapService {
       const toCoin = await this.resolveCoinInput(params.toCoin)
 
       // Delegate payload construction to vault-free helper
-      const keysignPayload = await prepareSwapTxFromKeys(vaultDataToIdentity(this.vaultData), {
-        fromCoin,
-        toCoin,
-        amount: params.amount,
-        swapQuote: params.swapQuote.quote,
-      })
+      const walletCore = await this.wasmProvider.getWalletCore()
+      const keysignPayload = await prepareSwapTxFromKeys(
+        vaultDataToIdentity(this.vaultData),
+        {
+          fromCoin,
+          toCoin,
+          amount: params.amount,
+          swapQuote: params.swapQuote.quote,
+        },
+        walletCore
+      )
 
       // Handle approval based on autoApprove setting
       let approvalPayload: KeysignPayload | undefined
@@ -395,11 +400,23 @@ export class SwapService {
         const feePrice = await this.fiatValueService.getPrice(fromCoin.chain, undefined, fiatCurrency)
 
         result.feesFiat = {
-          network: getCoinValue({ amount: fees.network, decimals: feeTokenDecimals, price: feePrice }),
+          network: getCoinValue({
+            amount: fees.network,
+            decimals: feeTokenDecimals,
+            price: feePrice,
+          }),
           affiliate: fees.affiliate
-            ? getCoinValue({ amount: fees.affiliate, decimals: feeTokenDecimals, price: feePrice })
+            ? getCoinValue({
+                amount: fees.affiliate,
+                decimals: feeTokenDecimals,
+                price: feePrice,
+              })
             : undefined,
-          total: getCoinValue({ amount: fees.total, decimals: feeTokenDecimals, price: feePrice }),
+          total: getCoinValue({
+            amount: fees.total,
+            decimals: feeTokenDecimals,
+            price: feePrice,
+          }),
           currency: fiatCurrency,
         }
 

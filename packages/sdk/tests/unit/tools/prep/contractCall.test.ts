@@ -167,6 +167,26 @@ describe('prepareContractCallTxFromKeys', () => {
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 
+  it('uses the explicit walletCore override and does not call the global getWalletCore', async () => {
+    const overrideWalletCore = { __mock: 'override-walletCore' }
+
+    await prepareContractCallTxFromKeys(
+      baseIdentity,
+      {
+        chain: Chain.Ethereum,
+        contractAddress,
+        abi: erc20ApproveAbi,
+        functionName: 'approve',
+        args: [spenderAddress, 1n],
+        senderAddress,
+      },
+      overrideWalletCore as any
+    )
+
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+    expect(mockBuildSendKeysignPayload.mock.calls[0][0].walletCore).toBe(overrideWalletCore)
+  })
+
   it('forwards identity fields (vaultId, localPartyId, libType) to buildSendKeysignPayload', async () => {
     const identity: VaultIdentity = {
       ...baseIdentity,

@@ -1,3 +1,4 @@
+import type { WalletCore } from '@trustwallet/wallet-core'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
@@ -51,17 +52,22 @@ const isCosmosChain = (chain: string): boolean => COSMOS_CHAINS.includes(chain)
  *   fee: { amount: [{ denom: 'uatom', amount: '5000' }], gas: '200000' },
  * })
  * ```
+ *
+ * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
+ * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected
+ * `WasmProvider` should pass it explicitly.
  */
 export const prepareSignAminoTxFromKeys = async (
   identity: VaultIdentity,
   input: SignAminoInput,
-  options?: CosmosSigningOptions
+  options?: CosmosSigningOptions,
+  walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
   if (!isCosmosChain(input.chain)) {
     throw new Error(`Chain ${input.chain} does not support SignAmino. Use a Cosmos-SDK chain.`)
   }
 
-  const walletCore = await getWalletCore()
+  const walletCore = walletCoreOverride ?? (await getWalletCore())
 
   const publicKey = getPublicKey({
     chain: input.chain,
@@ -105,17 +111,22 @@ export const prepareSignAminoTxFromKeys = async (
  *   accountNumber: '12345',
  * })
  * ```
+ *
+ * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
+ * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected
+ * `WasmProvider` should pass it explicitly.
  */
 export const prepareSignDirectTxFromKeys = async (
   identity: VaultIdentity,
   input: SignDirectInput,
-  options?: CosmosSigningOptions
+  options?: CosmosSigningOptions,
+  walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
   if (!isCosmosChain(input.chain)) {
     throw new Error(`Chain ${input.chain} does not support SignDirect. Use a Cosmos-SDK chain.`)
   }
 
-  const walletCore = await getWalletCore()
+  const walletCore = walletCoreOverride ?? (await getWalletCore())
 
   const publicKey = getPublicKey({
     chain: input.chain,

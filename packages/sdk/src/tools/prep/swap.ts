@@ -1,3 +1,4 @@
+import type { WalletCore } from '@trustwallet/wallet-core'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
@@ -30,12 +31,17 @@ export type PrepareSwapTxFromKeysParams = {
  * without extracting it.
  *
  * Note: swaps don't apply to QBTC, so both public keys are always non-null.
+ *
+ * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
+ * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected
+ * `WasmProvider` should pass it explicitly.
  */
 export const prepareSwapTxFromKeys = async (
   identity: VaultIdentity,
-  params: PrepareSwapTxFromKeysParams
+  params: PrepareSwapTxFromKeysParams,
+  walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
-  const walletCore = await getWalletCore()
+  const walletCore = walletCoreOverride ?? (await getWalletCore())
 
   const fromPublicKey = getPublicKey({
     chain: params.fromCoin.chain,

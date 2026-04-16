@@ -1,3 +1,4 @@
+import type { WalletCore } from '@trustwallet/wallet-core'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
@@ -19,10 +20,15 @@ import type { VaultIdentity } from './types'
  *
  * Useful for MCP servers / agent backends that hold raw vault identity
  * (public keys, party id) but no full vault instance.
+ *
+ * `walletCore` is optional; when omitted, falls back to the SDK's globally-configured
+ * `getWalletCore()` (used by MCP / vault-free callers). Wrappers with an injected
+ * `WasmProvider` should pass it explicitly.
  */
 export const prepareContractCallTxFromKeys = async (
   identity: VaultIdentity,
-  params: ContractCallTxParams
+  params: ContractCallTxParams,
+  walletCoreOverride?: WalletCore
 ): Promise<KeysignPayload> => {
   const { chain, contractAddress, abi, functionName, args, value = 0n, senderAddress, feeSettings } = params
 
@@ -48,7 +54,7 @@ export const prepareContractCallTxFromKeys = async (
     ticker: native.ticker,
   }
 
-  const walletCore = await getWalletCore()
+  const walletCore = walletCoreOverride ?? (await getWalletCore())
 
   const publicKey = getPublicKey({
     chain,
