@@ -666,6 +666,36 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
 }
 ```
 
+On failure, stdout is a single JSON object with both a human `error` string and a stable `code` (the `error` field is unchanged for older parsers):
+
+```json
+{ "error": "Agent backend unreachable at https://example.invalid", "code": "BACKEND_UNREACHABLE" }
+```
+
+Each entry in `tool_calls` may include `code` when `success` is false (same values as below).
+
+##### Error codes (`agent ask --json`, `--via-agent`, executor)
+
+Orchestrators should branch on `code`. The message in `error` / `message` stays human-readable and may change between releases.
+
+| Code | Typical meaning |
+|------|-----------------|
+| `BACKEND_UNREACHABLE` | Agent health check failed or backend not responding |
+| `AUTH_FAILED` | Auth/token failure, HTTP 401/403, or wrong vault password |
+| `VAULT_LOCKED` | Encrypted vault needs unlock (password) |
+| `PASSWORD_REQUIRED` | Password was not supplied when required (e.g. pipe mode or signing) |
+| `CONFIRMATION_REQUIRED` | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`) |
+| `ACTION_NOT_IMPLEMENTED` | Local executor does not implement this action type |
+| `INVALID_INPUT` | Bad parameters, unknown chain, malformed NDJSON input, etc. |
+| `NETWORK_ERROR` | RPC/fetch connectivity (includes many SDK `VaultError` network cases) |
+| `TIMEOUT` | Deadline exceeded, or abort where the message indicates a timeout |
+| `TRANSACTION_FAILED` | Build/broadcast/gas errors mapped from the SDK |
+| `SIGNING_FAILED` | MPC/signing failed |
+| `SESSION_NOT_INITIALIZED` | Internal session state error |
+| `UNKNOWN_ERROR` | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here. |
+
+SSE `error` events may optionally include a `code` field from the backend; if it matches one of the values above, it is passed through unchanged. Otherwise the CLI infers a code from the message.
+
 **Agent ask options:**
 - `--session <id>` - Continue an existing conversation
 - `--backend-url <url>` - Agent backend URL (default: https://abe.vultisig.com)
@@ -714,11 +744,11 @@ The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Desig
 | `history` | `messages[]` | Previous messages when resuming a session |
 | `text_delta` | `delta` | Streaming text chunk from the agent |
 | `tool_call` | `id, action, params?, status` | Action started (`running`) |
-| `tool_result` | `id, action, success, data?, error?` | Action completed |
+| `tool_result` | `id, action, success, data?, error?, code?` | Action completed (`code` when `success` is false) |
 | `tx_status` | `tx_hash, chain, status, explorer_url?` | Transaction broadcast/confirmed/failed |
 | `assistant` | `content` | Full assistant response |
 | `suggestions` | `suggestions[]` | Suggested follow-up actions |
-| `error` | `message` | Error (includes `PASSWORD_REQUIRED` and `CONFIRMATION_REQUIRED` signals) |
+| `error` | `message, code` | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
 | `done` | `{}` | Response cycle complete |
 
 **Example session:**
@@ -738,7 +768,7 @@ echo '{"type":"message","content":"What is my ETH balance?"}' | vultisig agent -
 {"type":"done"}
 ```
 
-When the agent needs a password mid-session (e.g. for signing), it emits `{"type":"error","message":"PASSWORD_REQUIRED"}`. Respond with `{"type":"password","password":"..."}` on stdin.
+When the agent needs a password mid-session (e.g. for signing), it emits `{"type":"error","message":"PASSWORD_REQUIRED","code":"PASSWORD_REQUIRED"}`. Respond with `{"type":"password","password":"..."}` on stdin.
 
 #### Session Management
 

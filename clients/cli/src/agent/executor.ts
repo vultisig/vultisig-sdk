@@ -9,6 +9,7 @@ import { Chain, evmCall, fiatCurrencies, Vultisig as VultisigSdk } from '@vultis
 import { formatUnits } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
+import { normalizeAgentError } from './agentErrors'
 import type { Action, ActionResult } from './types'
 import { AUTO_EXECUTE_ACTIONS, PASSWORD_REQUIRED_ACTIONS } from './types'
 
@@ -158,12 +159,14 @@ export class AgentExecutor {
         success: true,
         data,
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const { code, message } = normalizeAgentError(err)
       return {
         action: action.type,
         action_id: action.id,
         success: false,
-        error: err.message || String(err),
+        error: message,
+        code,
       }
     }
   }
