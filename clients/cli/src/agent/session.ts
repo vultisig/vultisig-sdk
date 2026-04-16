@@ -298,21 +298,9 @@ export class AgentSession {
     // if intermediate chunks were interrupted or dropped upstream.
     const responseText = streamResult.message?.content || streamResult.fullText || ''
 
-    // Check if the response text contains inline tool calls (XML format from the model)
-    const inlineActions = parseInlineToolCalls(responseText)
-    if (inlineActions.length > 0) {
-      // Strip the XML from the displayed text
-      const cleanText = responseText
-        .replace(/<invoke\s+name="[^"]*">[\s\S]*?<\/invoke>/g, '')
-        .replace(/<\/?minimax:tool_call>/g, '')
-        .trim()
-      if (cleanText) {
-        ui.onAssistantMessage(cleanText)
-      }
-      // Add inline actions to the stream result
-      streamResult.actions.push(...inlineActions)
-    } else if (responseText) {
-      ui.onAssistantMessage(responseText)
+    const displayText = stripLeakedToolCallTags(responseText)
+    if (displayText) {
+      ui.onAssistantMessage(displayText)
     }
 
     // Filter out sign_tx actions — signing is handled client-side automatically
@@ -452,43 +440,42 @@ export class AgentSession {
 }
 
 /**
- * Parse inline tool calls from assistant text.
- * The backend sometimes sends tool calls as raw XML in the text stream:
- *   <invoke name="add_coin"><parameter name="tokens">[...]</parameter></invoke>
+ * stripLeakedToolCallTags removes model-native tool-call syntax that leaked
+ * into assistant text content, returning only the narrative portion for
+ * display.
+ *
+ * Some models (notably MiniMax M2.x) occasionally regress from OpenAI-style
+ * structured tool_calls back to their native Harmony-style tags:
+ *
+ *   <minimax:tool_call>
+ *     <invoke name="abi_encode">
+ *       <parameter name="signature">transfer(address,uint256)</parameter>
+ *     </invoke>
+ *   </minimax:tool_call>
+ *
+ * These tags are the backend's responsibility to detect and rewrite into
+ * real tool_calls. If one leaks through anyway the CLI should strip it
+ * from the displayed text — showing raw XML to the user is confusing.
+ *
+ * We deliberately do NOT synthesise client-side actions from these tags.
+ * That used to happen (via the old `parseInlineToolCalls` function) and
+ * caused a production incident: MCP tool names inside <invoke> blocks
+ * were routed into the client action executor which doesn't implement
+ * them, failed with "not implemented locally", and eventually led the
+ * model to fabricate hallucinated calldata. The CLI only displays.
+ *
+ * Exported for unit testing.
  */
-function parseInlineToolCalls(text: string): Action[] {
-  const actions: Action[] = []
-  const invokeRegex = /<invoke\s+name="([^"]+)">([\s\S]*?)<\/invoke>/g
-  let match: RegExpExecArray | null
-
-  while ((match = invokeRegex.exec(text)) !== null) {
-    const actionType = match[1]
-    const body = match[2]
-    const params: Record<string, unknown> = {}
-
-    // Parse <parameter name="key">value</parameter> tags
-    const paramRegex = /<parameter\s+name="([^"]+)">([\s\S]*?)<\/parameter>/g
-    let paramMatch: RegExpExecArray | null
-    while ((paramMatch = paramRegex.exec(body)) !== null) {
-      const key = paramMatch[1]
-      const value = paramMatch[2]
-      try {
-        params[key] = JSON.parse(value)
-      } catch {
-        params[key] = value
-      }
-    }
-
-    actions.push({
-      id: `inline_${actionType}_${Date.now()}`,
-      type: actionType,
-      title: actionType,
-      params,
-      auto_execute: true,
-    })
+export function stripLeakedToolCallTags(text: string): string {
+  if (!text) return ''
+  if (!/<invoke\s+name="[^"]*">/.test(text) && !text.includes('minimax:tool_call')) {
+    return text
   }
-
-  return actions
+  return text
+    .replace(/<invoke\s+name="[^"]*">[\s\S]*?<\/invoke>/g, '')
+    .replace(/<\/?minimax:tool_call>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 // ============================================================================
