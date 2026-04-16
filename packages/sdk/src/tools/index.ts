@@ -25,8 +25,8 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
-  type VaultIdentity,
   vaultDataToIdentity,
+  type VaultIdentity,
 } from './prep'
 
 // Atomic chain helpers (re-exported from core for vault-free callers)

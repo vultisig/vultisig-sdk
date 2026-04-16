@@ -33,6 +33,7 @@ import { DiscountTierService } from '../services/DiscountTierService'
 import { FiatValueService } from '../services/FiatValueService'
 import type { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
+import { getMaxSendAmountFromKeys, vaultDataToIdentity } from '../tools/prep'
 // Types
 import {
   Balance,
@@ -58,7 +59,6 @@ import {
 import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
-import { getMaxSendAmountFromKeys, vaultDataToIdentity } from '../tools/prep'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
