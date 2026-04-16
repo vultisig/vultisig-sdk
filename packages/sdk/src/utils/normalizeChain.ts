@@ -1,15 +1,15 @@
-import { Chain } from "@vultisig/core-chain/Chain";
-import { chainFeeCoin } from "@vultisig/core-chain/coin/chainFeeCoin";
+import { Chain } from '@vultisig/core-chain/Chain'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 
 /**
  * Thrown when a chain string cannot be resolved to a known Chain.
  * Error message lists the canonical chain names to help LLM callers recover.
  */
 export class UnknownChainError extends Error {
-  override readonly name = "UnknownChainError";
+  override readonly name = 'UnknownChainError'
 
   constructor(input: string, known: string[]) {
-    super(`Unknown chain "${input}". Known chains: ${known.join(", ")}.`);
+    super(`Unknown chain "${input}". Known chains: ${known.join(', ')}.`)
   }
 }
 
@@ -20,24 +20,24 @@ export class UnknownChainError extends Error {
 //   (e.g. USDC's priceProviderId "usd-coin" lives on many chains, not just Noble).
 // Layer 2: hand-curated nicknames that aren't tickers or canonical enum names.
 // Layer 3: canonical Chain enum values (always win).
-const aliasToChain: Record<string, Chain> = {};
+const aliasToChain: Record<string, Chain> = {}
 
-const ownersByAlias = new Map<string, Set<Chain>>();
+const ownersByAlias = new Map<string, Set<Chain>>()
 const claim = (alias: string, chain: Chain) => {
-  const key = alias.toLowerCase();
-  const owners = ownersByAlias.get(key) ?? new Set<Chain>();
-  owners.add(chain);
-  ownersByAlias.set(key, owners);
-};
+  const key = alias.toLowerCase()
+  const owners = ownersByAlias.get(key) ?? new Set<Chain>()
+  owners.add(chain)
+  ownersByAlias.set(key, owners)
+}
 for (const [chainKey, meta] of Object.entries(chainFeeCoin)) {
-  const chain = chainKey as Chain;
-  claim(meta.ticker, chain);
+  const chain = chainKey as Chain
+  claim(meta.ticker, chain)
 }
 for (const [alias, owners] of ownersByAlias) {
-  if (owners.size !== 1) continue;
+  if (owners.size !== 1) continue
   for (const only of owners) {
-    aliasToChain[alias] = only;
-    break;
+    aliasToChain[alias] = only
+    break
   }
 }
 
@@ -54,11 +54,11 @@ Object.assign(aliasToChain, {
   cronos: Chain.CronosChain,
   thor: Chain.THORChain,
   maya: Chain.MayaChain,
-});
+})
 
 // Also accept each canonical Chain enum value (case-insensitive). Runs last to override.
 for (const value of Object.values(Chain)) {
-  aliasToChain[value.toLowerCase()] = value;
+  aliasToChain[value.toLowerCase()] = value
 }
 
 /**
@@ -77,10 +77,10 @@ for (const value of Object.values(Chain)) {
  * @throws {UnknownChainError} When the input cannot be resolved.
  */
 export const normalizeChain = (input: string | null | undefined): Chain => {
-  const key = input?.trim().toLowerCase() ?? "";
-  const resolved = aliasToChain[key];
-  if (resolved) return resolved;
+  const key = input?.trim().toLowerCase() ?? ''
+  const resolved = aliasToChain[key]
+  if (resolved) return resolved
 
-  const known = Object.values(Chain).map((c) => c.toLowerCase());
-  throw new UnknownChainError(key, known);
-};
+  const known = Object.values(Chain).map(c => c.toLowerCase())
+  throw new UnknownChainError(key, known)
+}
