@@ -268,6 +268,10 @@ export class AgentClient {
           resolvedEvent = 'error'
           parsed = { error: rawParsed.errorText ?? rawParsed.error }
         } else if (v1Type.startsWith('data-')) {
+          // Expects snake_case after `data-` (e.g. `data-tx_ready` → `tx_ready`);
+          // backend contract is pinned by the agent-backend#119 integration
+          // test fixture. Kebab variants (e.g. `data-tx-ready`) will silently
+          // miss the switch below — if that regresses, fix the fixture first.
           resolvedEvent = v1Type.slice(5) // data-title → title, etc.
           if (rawParsed.data && typeof rawParsed.data === 'object') {
             parsed = rawParsed.data
