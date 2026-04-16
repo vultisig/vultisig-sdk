@@ -3,6 +3,7 @@ package expo.modules.walletcore
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import wallet.core.jni.*
+import wallet.core.java.AnySigner
 
 class ExpoWalletCoreModule : Module() {
     // NOTE: nextHandle and the key/wallet maps are accessed from the Expo module
@@ -143,15 +144,8 @@ class ExpoWalletCoreModule : Module() {
             AnyAddress.isValidBech32(address, CoinType.createFromValue(coinType), hrp)
         }
 
-        // The Trust Wallet Core Android JNI binding does not expose an SS58-prefix
-        // overload on AnyAddress. Throw rather than returning a potentially incorrect
-        // result, so callers know this code path is not supported yet.
-        Function("anyAddressIsValidSS58") { _address: String, _coinType: Int, _ss58Prefix: Int ->
-            throw Exception(
-                "anyAddressIsValidSS58 is not supported on Android: the JNI binding " +
-                "does not expose an SS58-prefix overload. Use anyAddressIsValid as a " +
-                "fallback (ignores ss58Prefix) or implement a pure-Kotlin SS58 check."
-            )
+        Function("anyAddressIsValidSS58") { address: String, coinType: Int, ss58Prefix: Int ->
+            AnyAddress.isValidSS58(address, CoinType.createFromValue(coinType), ss58Prefix)
         }
 
         Function("anyAddressCreateWithString") { address: String, coinType: Int ->
@@ -198,7 +192,7 @@ class ExpoWalletCoreModule : Module() {
         // AnySigner
         Function("anySignerPlan") { txInputDataBase64: String, coinType: Int ->
             val txData = android.util.Base64.decode(txInputDataBase64, android.util.Base64.NO_WRAP)
-            val result = AnySigner.plan(txData, CoinType.createFromValue(coinType))
+            val result = AnySigner.nativePlan(txData, coinType)
             android.util.Base64.encodeToString(result, android.util.Base64.NO_WRAP)
         }
 
@@ -338,7 +332,7 @@ class ExpoWalletCoreModule : Module() {
 
         // TONAddressConverter
         Function("tonAddressToUserFriendly") { address: String ->
-            TONAddressConverter.toUserFriendly(address)
+            TONAddressConverter.toUserFriendly(address, false, false)
         }
 
         // SolanaAddress

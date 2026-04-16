@@ -1,5 +1,20 @@
 # @vultisig/sdk
 
+## 0.15.3
+
+### Patch Changes
+
+- [#264](https://github.com/vultisig/vultisig-sdk/pull/264) [`69b23dc`](https://github.com/vultisig/vultisig-sdk/commit/69b23dca4b24c93c8bc2de51883a9b28e60485be) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - React Native platform entry now exports typed wrappers for `getPublicKey`, `deriveAddress`, `isValidAddress`, and `getCoinType` that accept `WalletCoreLike` from `@vultisig/walletcore-native` instead of `WalletCore` from `@trustwallet/wallet-core`. Consumers no longer need `as unknown as` casts at the SDK boundary. Also re-exports the `WalletCoreLike` type for convenience.
+
+## 0.15.2
+
+### Patch Changes
+
+- [#263](https://github.com/vultisig/vultisig-sdk/pull/263) [`6585c38`](https://github.com/vultisig/vultisig-sdk/commit/6585c38431db063f600e133d1a23f84b7c19e934) Thanks [@rcoderdev](https://github.com/rcoderdev)! - fix(cli): align agent executor with backend payloads and harden action handling
+  - model `tx_ready` / non-streaming transaction payloads with `TxReadyPayload`
+  - optional `vultisig` on agent config for shared SDK state (e.g. address book)
+  - executor improvements (chain locks, calldata resolution, EVM gas refresh) and unit tests
+
 ## 0.15.1
 
 ### Patch Changes

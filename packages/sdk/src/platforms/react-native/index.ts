@@ -19,11 +19,13 @@ configureWasm(async () => NativeWalletCore.getInstance())
 // Chain enum and types
 export { Chain } from '@vultisig/core-chain/Chain'
 
+// WalletCore type compatible with both @trustwallet/wallet-core and @vultisig/walletcore-native
+export type { WalletCoreLike } from '@vultisig/walletcore-native'
+
 // Address derivation and chain utilities
-export { getCoinType } from '@vultisig/core-chain/coin/coinType'
-export { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
-export { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
-export { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
+// RN wrappers accept WalletCoreLike from @vultisig/walletcore-native
+// so consumers don't need to cast to @trustwallet/wallet-core's WalletCore.
+export { deriveAddress, getCoinType, getPublicKey, isValidAddress } from './chainHelpers'
 
 // MPC keysign (uses MpcEngine — no direct WASM imports)
 export { keysign } from '@vultisig/core-mpc/keysign'
