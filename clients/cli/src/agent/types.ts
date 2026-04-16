@@ -6,6 +6,8 @@
  */
 import type { Vultisig } from '@vultisig/sdk'
 
+import type { AgentErrorCode } from './agentErrors'
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -169,6 +171,8 @@ export type ActionResultPayload = {
   success: boolean
   data?: Record<string, unknown>
   error?: string
+  /** Present when success is false */
+  code?: AgentErrorCode
 }
 
 export type SendMessageResponse = {
@@ -316,6 +320,8 @@ export type ActionResult = {
   success: boolean
   data?: Record<string, unknown>
   error?: string
+  /** Present when success is false */
+  code?: AgentErrorCode
 }
 
 /** Actions that auto-execute without user confirmation */
@@ -369,6 +375,7 @@ export type PipeOutputEvent =
       success: boolean
       data?: Record<string, unknown>
       error?: string
+      code?: AgentErrorCode
     }
   | {
       type: 'tx_status'
@@ -379,7 +386,7 @@ export type PipeOutputEvent =
     }
   | { type: 'assistant'; content: string }
   | { type: 'suggestions'; suggestions: Suggestion[] }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; code: AgentErrorCode }
   | { type: 'done' }
 
 export type PipeInputCommand =
@@ -394,11 +401,18 @@ export type PipeInputCommand =
 export type UICallbacks = {
   onTextDelta: (delta: string) => void
   onToolCall: (id: string, action: string, params?: Record<string, unknown>) => void
-  onToolResult: (id: string, action: string, success: boolean, data?: Record<string, unknown>, error?: string) => void
+  onToolResult: (
+    id: string,
+    action: string,
+    success: boolean,
+    data?: Record<string, unknown>,
+    error?: string,
+    code?: AgentErrorCode
+  ) => void
   onAssistantMessage: (content: string) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => void
-  onError: (message: string) => void
+  onError: (message: string, code: AgentErrorCode) => void
   onDone: () => void
   onNotification?: (title: string, body: string) => void
   requestPassword: () => Promise<string>

@@ -4,6 +4,7 @@
  * HTTP/SSE client for communicating with the agent-backend server.
  * Supports both JSON and SSE streaming responses.
  */
+import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import type {
   Action,
   AuthTokenRequest,
@@ -21,7 +22,19 @@ import type {
   TxReadyPayload,
 } from './types'
 
-type JsonErrorBody = { error?: string }
+type JsonErrorBody = { error?: string; code?: string }
+
+function sseErrorToMessage(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value)
+  if (value instanceof Error) return value.message
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
 
 export class AgentClient {
   private baseUrl: string
@@ -88,7 +101,9 @@ export class AgentClient {
   }
 
   async deleteConversation(conversationId: string, publicKey: string): Promise<void> {
-    await this.delete(`/agent/conversations/${conversationId}`, { public_key: publicKey })
+    await this.delete(`/agent/conversations/${conversationId}`, {
+      public_key: publicKey,
+    })
   }
 
   // ============================================================================
@@ -114,7 +129,7 @@ export class AgentClient {
       onSuggestions?: (suggestions: Suggestion[]) => void
       onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
-      onError?: (error: string) => void
+      onError?: (error: string, code: AgentErrorCode) => void
     },
     signal?: AbortSignal
   ): Promise<SSEStreamResult> {
@@ -221,7 +236,7 @@ export class AgentClient {
       onSuggestions?: (suggestions: Suggestion[]) => void
       onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
-      onError?: (error: string) => void
+      onError?: (error: string, code: AgentErrorCode) => void
     }
   ): void {
     try {
@@ -288,9 +303,15 @@ export class AgentClient {
           result.message = parsed.message || parsed
           callbacks.onMessage?.(result.message!)
           break
-        case 'error':
-          callbacks.onError?.(parsed.error)
+        case 'error': {
+          const msg = sseErrorToMessage(parsed.error)
+          const codeFromBackend =
+            typeof parsed.code === 'string' && isAgentErrorCode(parsed.code)
+              ? parsed.code
+              : inferAgentErrorCodeFromMessage(msg)
+          callbacks.onError?.(msg, codeFromBackend)
           break
+        }
         case 'done':
           // Stream complete
           break

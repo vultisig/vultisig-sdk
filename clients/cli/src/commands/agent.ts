@@ -17,6 +17,7 @@ import Table from 'cli-table3'
 
 import type { AgentConfig } from '../agent'
 import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, PipeInterface } from '../agent'
+import { normalizeAgentError } from '../agent/agentErrors'
 import type { CommandContext } from '../core'
 import { isJsonOutput, outputJson, printResult, setSilentMode } from '../lib/output'
 
@@ -54,8 +55,9 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
       await session.initialize(callbacks)
       const addresses = session.getVaultAddresses()
       await pipe.start(vault.name, addresses)
-    } catch (err: any) {
-      process.stdout.write(JSON.stringify({ type: 'error', message: err.message }) + '\n')
+    } catch (err: unknown) {
+      const { code, message } = normalizeAgentError(err)
+      process.stdout.write(JSON.stringify({ type: 'error', message, code }) + '\n')
       process.exit(1)
     }
   } else {
@@ -66,8 +68,9 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     try {
       await session.initialize(callbacks)
       await tui.start()
-    } catch (err: any) {
-      console.error(`Agent error: ${err.message}`)
+    } catch (err: unknown) {
+      const { message } = normalizeAgentError(err)
+      console.error(`Agent error: ${message}`)
       process.exit(1)
     }
   }
@@ -155,11 +158,12 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
         }
       }
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const { code, message } = normalizeAgentError(err)
     if (options.json) {
-      process.stdout.write(JSON.stringify({ error: err.message }) + '\n')
+      process.stdout.write(JSON.stringify({ error: message, code }) + '\n')
     } else {
-      process.stderr.write(`Error: ${err.message}\n`)
+      process.stderr.write(`Error: ${message} [${code}]\n`)
     }
     process.exit(1)
   } finally {
