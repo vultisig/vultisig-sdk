@@ -13,6 +13,7 @@ import * as readline from 'node:readline'
 
 import chalk from 'chalk'
 
+import type { AgentErrorCode } from './agentErrors'
 import type { AgentSession } from './session'
 import type { ConversationMessage, Suggestion, UICallbacks } from './types'
 
@@ -163,7 +164,14 @@ export class ChatTUI {
         }
       },
 
-      onToolResult: (_id: string, action: string, success: boolean, data?: Record<string, unknown>, error?: string) => {
+      onToolResult: (
+        _id: string,
+        action: string,
+        success: boolean,
+        data?: Record<string, unknown>,
+        error?: string,
+        code?: AgentErrorCode
+      ) => {
         if (success) {
           if (this.verbose) {
             const summary = data ? summarizeData(data) : ''
@@ -172,7 +180,8 @@ export class ChatTUI {
             console.log(`  ${chalk.green('✓')} ${chalk.green(action)}`)
           }
         } else {
-          console.log(`  ${chalk.red('✗')} ${chalk.red(action)}: ${chalk.red(error || 'failed')}`)
+          const suffix = code && this.verbose ? chalk.gray(` (${code})`) : ''
+          console.log(`  ${chalk.red('✗')} ${chalk.red(action)}: ${chalk.red(error || 'failed')}${suffix}`)
         }
       },
 
@@ -207,12 +216,13 @@ export class ChatTUI {
         }
       },
 
-      onError: (message: string) => {
+      onError: (message: string, code: AgentErrorCode) => {
         if (this.isStreaming) {
           process.stdout.write('\n')
           this.isStreaming = false
         }
-        console.log(`  ${chalk.red('Error')}: ${message}`)
+        const suffix = this.verbose ? chalk.gray(` (${code})`) : ''
+        console.log(`  ${chalk.red('Error')}: ${message}${suffix}`)
       },
 
       onDone: () => {

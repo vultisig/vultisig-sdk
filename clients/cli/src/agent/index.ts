@@ -7,6 +7,7 @@
  * - Pipe (--via-agent): NDJSON over stdin/stdout for agent consumption
  * - Ask (agent ask): One-shot command for AI coding agents
  */
+export { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode, normalizeAgentError } from './agentErrors'
 export type { AskResult } from './ask'
 export { AskInterface } from './ask'
 export { authenticateVault } from './auth'
