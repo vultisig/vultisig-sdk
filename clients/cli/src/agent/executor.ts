@@ -4,6 +4,7 @@
  * Executes actions returned by the agent-backend locally.
  * Handles balance queries, transaction building, signing, and broadcasting.
  */
+import type { GetThorchainPoolsOptions, VaultAddressMap } from '@vultisig/core-chain/chains/cosmos/thor/lp'
 import type { EvmChain, FiatCurrency, VaultBase, Vultisig } from '@vultisig/sdk'
 import { Chain, evmCall, fiatCurrencies, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits } from 'viem'
@@ -214,6 +215,12 @@ export class AgentExecutor {
         return this.scanTx(params)
       case 'read_evm_contract':
         return this.readEvmContract(params)
+      case 'thorchain_pool_info':
+        return this.thorchainPoolInfo(params)
+      case 'thorchain_add_liquidity':
+        return this.thorchainAddLiquidity(params)
+      case 'thorchain_remove_liquidity':
+        return this.thorchainRemoveLiquidity(params)
       default:
         throw new Error(
           `Action type '${action.type}' is not implemented locally. The backend may handle this action server-side.`
@@ -544,6 +551,254 @@ export class AgentExecutor {
       await this.releaseEvmLock(fromChain)
       throw err
     }
+  }
+
+  // ============================================================================
+  // THORChain LP (RUNE-side asym add / remove via prepareSendTx + memo)
+  // ============================================================================
+
+  /**
+   * Pool stats from Midgard (no signing). Optional `pool` filters to one row.
+   */
+  private async thorchainPoolInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const { assertValidPoolId, getThorchainPools, thorchainMidgardBaseUrl } =
+      await import('@vultisig/core-chain/chains/cosmos/thor/lp')
+
+    const statusRaw = params.status
+    let poolFetchOpts: GetThorchainPoolsOptions = {}
+    if (statusRaw === null || String(statusRaw).toLowerCase() === 'all') {
+      poolFetchOpts = { status: null }
+    } else if (statusRaw !== undefined) {
+      poolFetchOpts = { status: String(statusRaw) }
+    }
+
+    const pools = await getThorchainPools(poolFetchOpts)
+
+    const poolArg = params.pool as string | undefined
+    if (poolArg) {
+      const normalized = poolArg.trim().toUpperCase()
+      assertValidPoolId(normalized)
+      const row = pools.find(p => p.asset.toUpperCase() === normalized)
+      return {
+        found: !!row,
+        pool_id: normalized,
+        summary: row ?? null,
+        midgard: thorchainMidgardBaseUrl,
+      }
+    }
+
+    const limitRaw = params.limit
+    const limit = Math.min(500, Math.max(1, typeof limitRaw === 'number' ? limitRaw : Number(limitRaw) || 80))
+    return {
+      pools: pools.slice(0, limit),
+      total: pools.length,
+      midgard: thorchainMidgardBaseUrl,
+    }
+  }
+
+  private async thorchainAddLiquidity(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const { assertValidPoolId, buildThorchainLpAddPayload, resolvePairedAddressForLpAdd } =
+      await import('@vultisig/core-chain/chains/cosmos/thor/lp')
+    const { getThorchainInboundAddress } =
+      await import('@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress')
+
+    const pool = this.normalizeThorchainPoolId(params.pool as string, assertValidPoolId)
+    const amountStr = String(params.amount ?? '').trim()
+    if (!amountStr) {
+      throw new Error('amount is required (RUNE amount as a decimal string, e.g. "0.25")')
+    }
+
+    let pairedAddress = (params.paired_address as string | undefined)?.trim() || undefined
+    const autoPair = params.auto_pair !== false && !pairedAddress
+    if (autoPair) {
+      const vaultAddresses = await this.buildVaultAddressMap()
+      pairedAddress =
+        resolvePairedAddressForLpAdd({
+          pool,
+          side: 'rune',
+          vaultAddresses,
+        }) || undefined
+    }
+
+    const amountRuneBaseUnits = parseAmount(amountStr, 8).toString()
+    const lpPayload = buildThorchainLpAddPayload({
+      pool,
+      amountRuneBaseUnits,
+      ...(pairedAddress ? { pairedAddress } : {}),
+    })
+
+    const receiver = await this.getThorchainNativeInboundAddress(getThorchainInboundAddress)
+    const address = await this.vault.address(Chain.THORChain)
+    const coin: AccountCoin = {
+      chain: Chain.THORChain,
+      address,
+      decimals: 8,
+      ticker: 'RUNE',
+    }
+
+    const payload = await this.vault.prepareSendTx({
+      coin,
+      receiver,
+      amount: BigInt(lpPayload.amount),
+      memo: lpPayload.memo,
+    })
+
+    const messageHashes = await this.vault.extractMessageHashes(payload)
+
+    this.pendingPayloads.clear()
+    const payloadId = `tc_lp_add_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    this.pendingPayloads.set(payloadId, {
+      payload,
+      coin,
+      chain: Chain.THORChain,
+      timestamp: Date.now(),
+    })
+    this.pendingPayloads.set('latest', {
+      payload,
+      coin,
+      chain: Chain.THORChain,
+      timestamp: Date.now(),
+    })
+
+    return {
+      keysign_payload: payloadId,
+      chain: 'THORChain',
+      pool: lpPayload.pool,
+      memo: lpPayload.memo,
+      amount_rune: amountStr,
+      paired_address: pairedAddress,
+      inbound_receiver: receiver,
+      sender: address,
+      message_hashes: messageHashes,
+    }
+  }
+
+  private async thorchainRemoveLiquidity(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const { assertValidPoolId, buildThorchainLpRemovePayload } =
+      await import('@vultisig/core-chain/chains/cosmos/thor/lp')
+    const { getThorchainInboundAddress } =
+      await import('@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress')
+
+    const pool = this.normalizeThorchainPoolId(params.pool as string, assertValidPoolId)
+
+    let basisPoints: number | undefined
+    if (params.basis_points != null) {
+      basisPoints = Number(params.basis_points)
+    } else if (params.basisPoints != null) {
+      basisPoints = Number(params.basisPoints)
+    }
+    if (basisPoints == null && params.withdraw_percent != null) {
+      const pct = Number(params.withdraw_percent)
+      if (Number.isFinite(pct)) {
+        basisPoints = Math.round(pct * 100)
+      }
+    }
+    if (basisPoints == null || !Number.isInteger(basisPoints)) {
+      throw new Error('basis_points (integer 1–10000) or withdraw_percent (0.01–100, maps to basis points) is required')
+    }
+
+    let withdrawToAsset = (params.withdraw_to_asset as string | undefined)?.trim()
+    if (!withdrawToAsset && params.withdrawToAsset) {
+      withdrawToAsset = String(params.withdrawToAsset).trim()
+    }
+    if (withdrawToAsset) {
+      withdrawToAsset = withdrawToAsset.toUpperCase()
+    }
+
+    const lpPayload = buildThorchainLpRemovePayload({
+      pool,
+      basisPoints,
+      ...(withdrawToAsset ? { withdrawToAsset } : {}),
+    })
+
+    const receiver = await this.getThorchainNativeInboundAddress(getThorchainInboundAddress)
+    const address = await this.vault.address(Chain.THORChain)
+    const coin: AccountCoin = {
+      chain: Chain.THORChain,
+      address,
+      decimals: 8,
+      ticker: 'RUNE',
+    }
+
+    const payload = await this.vault.prepareSendTx({
+      coin,
+      receiver,
+      amount: BigInt(lpPayload.amount),
+      memo: lpPayload.memo,
+    })
+
+    const messageHashes = await this.vault.extractMessageHashes(payload)
+
+    this.pendingPayloads.clear()
+    const payloadId = `tc_lp_rm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    this.pendingPayloads.set(payloadId, {
+      payload,
+      coin,
+      chain: Chain.THORChain,
+      timestamp: Date.now(),
+    })
+    this.pendingPayloads.set('latest', {
+      payload,
+      coin,
+      chain: Chain.THORChain,
+      timestamp: Date.now(),
+    })
+
+    return {
+      keysign_payload: payloadId,
+      chain: 'THORChain',
+      pool: lpPayload.pool,
+      memo: lpPayload.memo,
+      basis_points: basisPoints,
+      withdraw_to_asset: withdrawToAsset || undefined,
+      dust_rune_base_units: lpPayload.amount,
+      inbound_receiver: receiver,
+      sender: address,
+      message_hashes: messageHashes,
+    }
+  }
+
+  private normalizeThorchainPoolId(raw: string | undefined, assertValidPoolId: (pool: string) => void): string {
+    const pool = String(raw ?? '').trim()
+    if (!pool) {
+      throw new Error('pool is required (e.g. "BTC.BTC")')
+    }
+    const upper = pool.toUpperCase()
+    assertValidPoolId(upper)
+    return upper
+  }
+
+  private async buildVaultAddressMap(): Promise<VaultAddressMap> {
+    const map: VaultAddressMap = {}
+    for (const c of this.vault.chains) {
+      try {
+        map[c] = await this.vault.address(c)
+      } catch {
+        // omit chains that cannot produce an address
+      }
+    }
+    return map
+  }
+
+  /** THORChain protocol vault for native RUNE deposits (SWAP/LP memos). Matches SDK e2e fixture. */
+  private static readonly THORCHAIN_RUNE_DEPOSIT_ADDRESS = 'thor1g98cy3n9mmjrpn0sxmn63lztelera37n8n67c0'
+
+  private async getThorchainNativeInboundAddress(
+    getInbound: () => Promise<Array<{ chain: string; address?: string }>>
+  ): Promise<string> {
+    const rows = await getInbound()
+    const thor = rows.find(r => r.chain.toUpperCase() === 'THOR')
+    if (thor?.address) {
+      return thor.address
+    }
+    // THORNode mainnet responses no longer always include `chain: "THOR"`; native RUNE
+    // memos still go to the protocol inbound vault address (same as historical clients / SDK tests).
+    if (this.verbose) {
+      process.stderr.write(
+        `[thorchain_lp] THOR inbound row missing; using static RUNE deposit vault ${AgentExecutor.THORCHAIN_RUNE_DEPOSIT_ADDRESS}\n`
+      )
+    }
+    return AgentExecutor.THORCHAIN_RUNE_DEPOSIT_ADDRESS
   }
 
   private async buildTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {

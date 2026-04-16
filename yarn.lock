@@ -7327,6 +7327,7 @@ __metadata:
     "@types/tabtab": "npm:^3.0.4"
     "@types/ws": "npm:^8.18.1"
     "@vultisig/client-shared": "workspace:^"
+    "@vultisig/core-chain": "workspace:^"
     "@vultisig/rujira": "workspace:^"
     "@vultisig/sdk": "workspace:^"
     chalk: "npm:^5.6.2"
