@@ -1,69 +1,63 @@
-import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { getErc20Prices } from '@vultisig/core-chain/coin/price/evm/getErc20Prices'
-import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
-import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
+import { Chain } from "@vultisig/core-chain/Chain";
+import { isChainOfKind } from "@vultisig/core-chain/ChainKind";
+import { chainFeeCoin } from "@vultisig/core-chain/coin/chainFeeCoin";
+import { getErc20Prices } from "@vultisig/core-chain/coin/price/evm/getErc20Prices";
+import { getCoinPrices } from "@vultisig/core-chain/coin/price/getCoinPrices";
+import {
+  fiatCurrencies,
+  type FiatCurrency,
+} from "@vultisig/core-config/FiatCurrency";
 
 /** Thrown when a fiat -> token amount conversion fails. Message is LLM-readable. */
 export class FiatToAmountError extends Error {
-  override readonly name = 'FiatToAmountError'
+  override readonly name = "FiatToAmountError";
 
   constructor(message: string) {
-    super(message)
+    super(message);
   }
 }
+
+const fiatCurrencySet = new Set<string>(fiatCurrencies);
 
 export type FiatToAmountParams = {
   /** Fiat value to convert (e.g. 100 for $100). Must be a positive number or numeric string. */
-  fiatValue: number | string
+  fiatValue: number | string;
   /** Chain the token lives on. */
-  chain: Chain
+  chain: Chain;
   /** Optional token contract address (EVM only). Omit for native coin. */
-  tokenId?: string
+  tokenId?: string;
   /** Token decimals (used to cap fractional-digit precision of the return string). */
-  decimals: number
+  decimals: number;
   /** Fiat currency code (defaults to "USD"). Normalized to lowercase before lookup. */
-  fiatCurrency?: FiatCurrency | string
-}
-
-const EVM_CHAINS = new Set<string>(Object.values(EvmChain))
-
-const isEvmChain = (chain: Chain): chain is EvmChain => EVM_CHAINS.has(chain)
+  fiatCurrency?: FiatCurrency | string;
+};
 
 const parseFiatValue = (v: number | string): number => {
-  const n = typeof v === 'number' ? v : Number(v)
+  const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n) || n <= 0) {
-    throw new FiatToAmountError(`Invalid fiat value "${v}" — must be a positive number.`)
+    throw new FiatToAmountError(
+      `Invalid fiat value "${v}" — must be a positive number.`,
+    );
   }
-  return n
-}
+  return n;
+};
 
-/**
- * Format a JS number as a decimal string with at most `decimals` fractional digits.
- * Avoids scientific notation and trims trailing zeros. Prefers the shortest
- * representation the number implies so "clean" values like 0.05 don't emit
- * float-precision artefacts (e.g. "0.05000000000000001").
- */
+// Prefer value.toString() — JS picks the shortest round-trip representation, so clean
+// values like 0.05 stay "0.05" instead of surfacing float artefacts ("0.050000000000000003").
+// Fall back to toFixed only to expand scientific notation (e.g. 1e-10). Then cap fractional
+// digits and trim trailing zeros.
 const formatDecimalString = (value: number, decimals: number): string => {
   if (!Number.isFinite(value)) {
-    throw new FiatToAmountError(`Non-finite amount computed: ${value}`)
+    throw new FiatToAmountError(`Non-finite amount computed: ${value}`);
   }
-  const cap = Math.max(0, Math.min(decimals, 100))
-
-  let str = value.toString()
-  if (/[eE]/.test(str)) {
-    // Expand scientific notation to a plain decimal string up to `cap` digits.
-    str = value.toFixed(cap)
-  }
-
-  if (!str.includes('.')) return str
-
-  const [whole, fraction = ''] = str.split('.')
-  const truncated = fraction.slice(0, cap)
-  if (truncated === '') return whole
-  const trimmed = truncated.replace(/0+$/, '')
-  return trimmed === '' ? whole : `${whole}.${trimmed}`
-}
+  const str = /[eE]/.test(value.toString())
+    ? value.toFixed(decimals)
+    : value.toString();
+  if (!str.includes(".")) return str;
+  const [whole, fraction] = str.split(".");
+  const trimmed = fraction.slice(0, decimals).replace(/0+$/, "");
+  return trimmed === "" ? whole : `${whole}.${trimmed}`;
+};
 
 /**
  * Convert a fiat value (e.g. USD) to a token amount using the current market price.
@@ -95,50 +89,60 @@ const formatDecimalString = (value: number, decimals: number): string => {
  * })
  * ```
  */
-export const fiatToAmount = async (params: FiatToAmountParams): Promise<string> => {
-  const { fiatValue, chain, tokenId, decimals, fiatCurrency = 'usd' } = params
+export const fiatToAmount = async (
+  params: FiatToAmountParams,
+): Promise<string> => {
+  const { fiatValue, chain, tokenId, decimals, fiatCurrency = "usd" } = params;
 
-  const value = parseFiatValue(fiatValue)
-  const currency = String(fiatCurrency).toLowerCase() as FiatCurrency
+  const value = parseFiatValue(fiatValue);
+  const currency = String(fiatCurrency).toLowerCase();
+  if (!fiatCurrencySet.has(currency)) {
+    throw new FiatToAmountError(
+      `Unsupported fiat currency "${fiatCurrency}". Known: [${fiatCurrencies.join(", ")}].`,
+    );
+  }
+  const normalizedCurrency = currency as FiatCurrency;
 
-  let price: number
+  let price: number;
   try {
     if (tokenId) {
-      if (!isEvmChain(chain)) {
+      if (!isChainOfKind(chain, "evm")) {
         throw new FiatToAmountError(
-          `Token price lookup by contract address is only supported on EVM chains. Got chain "${chain}" with tokenId "${tokenId}".`
-        )
+          `Token price lookup by contract address is only supported on EVM chains. Got chain "${chain}" with tokenId "${tokenId}".`,
+        );
       }
       const prices = await getErc20Prices({
         ids: [tokenId],
         chain,
-        fiatCurrency: currency,
-      })
-      price = prices[tokenId.toLowerCase()] ?? 0
+        fiatCurrency: normalizedCurrency,
+      });
+      price = prices[tokenId.toLowerCase()] ?? 0;
     } else {
-      const feeCoin = chainFeeCoin[chain]
+      const feeCoin = chainFeeCoin[chain];
       if (!feeCoin?.priceProviderId) {
-        throw new FiatToAmountError(`No price provider ID configured for chain "${chain}".`)
+        throw new FiatToAmountError(
+          `No price provider ID configured for chain "${chain}".`,
+        );
       }
       const prices = await getCoinPrices({
         ids: [feeCoin.priceProviderId],
-        fiatCurrency: currency,
-      })
-      price = prices[feeCoin.priceProviderId] ?? 0
+        fiatCurrency: normalizedCurrency,
+      });
+      price = prices[feeCoin.priceProviderId] ?? 0;
     }
   } catch (error) {
-    if (error instanceof FiatToAmountError) throw error
+    if (error instanceof FiatToAmountError) throw error;
     throw new FiatToAmountError(
-      `Failed to fetch price for ${tokenId ? `token ${tokenId}` : 'native token'} on ${chain}: ${(error as Error).message}`
-    )
+      `Failed to fetch price for ${tokenId ? `token ${tokenId}` : "native token"} on ${chain}: ${(error as Error).message}`,
+    );
   }
 
   if (!Number.isFinite(price) || price <= 0) {
     throw new FiatToAmountError(
-      `Price lookup returned no usable price for ${tokenId ? `token ${tokenId}` : 'native token'} on ${chain} (currency: ${currency}).`
-    )
+      `Price lookup returned no usable price for ${tokenId ? `token ${tokenId}` : "native token"} on ${chain} (currency: ${normalizedCurrency}).`,
+    );
   }
 
-  const amount = value / price
-  return formatDecimalString(amount, decimals)
-}
+  const amount = value / price;
+  return formatDecimalString(amount, decimals);
+};
