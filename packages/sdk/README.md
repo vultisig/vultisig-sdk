@@ -190,11 +190,14 @@ await vault.sign(
 ### 6. Import/Export Vaults
 
 ```typescript
-// Check if a vault file is encrypted
-const isEncrypted = await sdk.isVaultFileEncrypted(file);
+// Raw .vult contents as a string (e.g. fs.readFileSync('vault.vult', 'utf-8'))
+const vaultContent = '...'
 
-// Import vault from file
-const vault = await sdk.addVault(file, isEncrypted ? "password" : undefined);
+// Check if encrypted (sync)
+const isEncrypted = sdk.isVaultEncrypted(vaultContent);
+
+// Import vault
+const vault = await sdk.importVault(vaultContent, isEncrypted ? "password" : undefined);
 
 // Export vault to backup format (as Blob)
 const backupBlob = await vault.export("BackupPassword123!");
@@ -710,9 +713,9 @@ Join an existing SecureVault creation session. Auto-detects keygen vs seedphrase
 
 Derive a blockchain address for the given chain (called on Vault instance).
 
-#### `addVault(file, password?): Promise<Vault>`
+#### `importVault(vultContent, password?): Promise<VaultBase>`
 
-Import a vault from a backup file.
+Import a vault from `.vult` file content (string).
 
 #### `vault.export(password?): Promise<Blob>`
 
@@ -954,9 +957,9 @@ Check if the notification server is reachable.
 
 ### Utility Methods
 
-#### `isVaultFileEncrypted(file): Promise<boolean>`
+#### `isVaultEncrypted(vultContent): boolean`
 
-Check if a vault backup file is encrypted.
+Check if vault backup content (string) is encrypted (synchronous).
 
 #### `validateVault(vault): VaultValidationResult`
 
@@ -1040,8 +1043,10 @@ try {
 ```typescript
 import { VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
 
+const vaultContent = '...' // raw .vult file contents (string)
+
 try {
-  const vault = await sdk.addVault(file, password)
+  const vault = await sdk.importVault(vaultContent, password)
 } catch (error) {
   if (error instanceof VaultImportError) {
     if (error.code === VaultImportErrorCode.INVALID_PASSWORD) {

@@ -9,6 +9,7 @@
  */
 import * as readline from 'node:readline'
 
+import { AgentErrorCode, normalizeAgentError } from './agentErrors'
 import type { AgentSession } from './session'
 import type { PipeInputCommand, PipeOutputEvent, Suggestion, UICallbacks } from './types'
 
@@ -77,8 +78,13 @@ export class PipeInterface {
           try {
             const cmd = JSON.parse(nextLine) as PipeInputCommand
             await this.handleCommand(cmd)
-          } catch (err: any) {
-            this.emit({ type: 'error', message: `Invalid input: ${err.message}` })
+          } catch (err: unknown) {
+            const { message, code } = normalizeAgentError(err)
+            this.emit({
+              type: 'error',
+              message: `Invalid input: ${message}`,
+              code: code === AgentErrorCode.UNKNOWN_ERROR ? AgentErrorCode.INVALID_INPUT : code,
+            })
           }
         }
         processing = false
@@ -129,8 +135,23 @@ export class PipeInterface {
         this.emit({ type: 'tool_call', id, action, params, status: 'running' })
       },
 
-      onToolResult: (id: string, action: string, success: boolean, data?: Record<string, unknown>, error?: string) => {
-        this.emit({ type: 'tool_result', id, action, success, data, error })
+      onToolResult: (
+        id: string,
+        action: string,
+        success: boolean,
+        data?: Record<string, unknown>,
+        error?: string,
+        code?: AgentErrorCode
+      ) => {
+        this.emit({
+          type: 'tool_result',
+          id,
+          action,
+          success,
+          data,
+          error,
+          ...(!success && code ? { code } : {}),
+        })
       },
 
       onAssistantMessage: (content: string) => {
@@ -151,8 +172,8 @@ export class PipeInterface {
         })
       },
 
-      onError: (message: string) => {
-        this.emit({ type: 'error', message })
+      onError: (message: string, code: AgentErrorCode) => {
+        this.emit({ type: 'error', message, code })
       },
 
       onDone: () => {
@@ -164,14 +185,18 @@ export class PipeInterface {
         return new Promise(resolve => {
           this.pendingPasswordResolve = resolve
           // Signal that password is needed
-          this.emit({ type: 'error', message: 'PASSWORD_REQUIRED' })
+          this.emit({ type: 'error', message: 'PASSWORD_REQUIRED', code: AgentErrorCode.PASSWORD_REQUIRED })
         })
       },
 
       requestConfirmation: async (message: string): Promise<boolean> => {
         return new Promise(resolve => {
           this.pendingConfirmResolve = resolve
-          this.emit({ type: 'error', message: `CONFIRMATION_REQUIRED: ${message}` })
+          this.emit({
+            type: 'error',
+            message: `CONFIRMATION_REQUIRED: ${message}`,
+            code: AgentErrorCode.CONFIRMATION_REQUIRED,
+          })
         })
       },
     }
@@ -183,8 +208,9 @@ export class PipeInterface {
         const callbacks = this.getCallbacks()
         try {
           await this.session.sendMessage(cmd.content, callbacks)
-        } catch (err: any) {
-          this.emit({ type: 'error', message: err.message })
+        } catch (err: unknown) {
+          const { message, code } = normalizeAgentError(err)
+          this.emit({ type: 'error', message, code })
           this.emit({ type: 'done' })
         }
         break
@@ -207,7 +233,11 @@ export class PipeInterface {
       }
 
       default:
-        this.emit({ type: 'error', message: `Unknown command type: ${(cmd as any).type}` })
+        this.emit({
+          type: 'error',
+          message: `Unknown command type: ${(cmd as { type?: string }).type}`,
+          code: AgentErrorCode.INVALID_INPUT,
+        })
     }
   }
 
