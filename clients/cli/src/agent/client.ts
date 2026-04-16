@@ -259,6 +259,10 @@ export class AgentClient {
         if (v1Type === 'text-delta') {
           resolvedEvent = 'text_delta'
         } else if (v1Type === 'finish') {
+          // Vercel v1 `finish` carries `finishReason` and `usage` (token counts).
+          // We collapse to legacy `done` and drop both; the CLI has no
+          // `UsageInfo` surface today. Revisit when we want to show token
+          // usage / stop reason in the UI — until then keep the collapse.
           resolvedEvent = 'done'
         } else if (v1Type === 'error') {
           resolvedEvent = 'error'
