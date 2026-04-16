@@ -249,6 +249,11 @@ export class AgentClient {
       // the existing switch keeps working.
       let resolvedEvent = event
       let parsed = rawParsed
+      // v1-gate: we treat a default `message` event with a top-level string `type`
+      // field as a Vercel UI Message Stream v1 frame. This is safe today because
+      // `ConversationMessage` (see ./types.ts) has no top-level `type` field — if a
+      // future `type` is added there, this gate will misroute legacy `message`
+      // events into the v1 branch and the parser will need to be re-split.
       if (event === 'message' && typeof rawParsed?.type === 'string') {
         const v1Type = rawParsed.type as string
         if (v1Type === 'text-delta') {
