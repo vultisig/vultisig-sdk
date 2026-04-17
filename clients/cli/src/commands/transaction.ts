@@ -129,19 +129,20 @@ export async function sendTransaction(
     })
 
     if (result.dryRun) throw new Error('unreachable')
+    const broadcast = result as Extract<typeof result, { dryRun: false }>
 
-    signSpinner.succeed(`Transaction broadcast: ${result.txHash}`)
+    signSpinner.succeed(`Transaction broadcast: ${broadcast.txHash}`)
 
     const txResult: TransactionResult = {
-      txHash: result.txHash,
+      txHash: broadcast.txHash,
       chain: params.chain,
-      explorerUrl: Vultisig.getTxExplorerUrl(params.chain, result.txHash),
+      explorerUrl: Vultisig.getTxExplorerUrl(params.chain, broadcast.txHash),
     }
 
     if (isJsonOutput()) {
       outputJson(txResult)
     } else {
-      displayTransactionResult(params.chain, result.txHash)
+      displayTransactionResult(params.chain, broadcast.txHash)
     }
 
     return txResult

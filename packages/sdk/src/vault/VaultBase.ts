@@ -1689,8 +1689,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (amount === 'max') {
       const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
       resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
-      if (BigInt(bal.amount) <= 0n)
-        throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+      if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
     }
     const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 

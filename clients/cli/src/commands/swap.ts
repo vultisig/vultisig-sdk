@@ -235,21 +235,22 @@ export async function executeSwap(
     })
 
     if (result.dryRun) throw new Error('unreachable')
+    const broadcast = result as Extract<typeof result, { dryRun: false }>
 
-    signSpinner.succeed(`Swap broadcast: ${result.txHash}`)
+    signSpinner.succeed(`Swap broadcast: ${broadcast.txHash}`)
 
     if (isJsonOutput()) {
       outputJson({
-        txHash: result.txHash,
+        txHash: broadcast.txHash,
         fromChain: options.fromChain,
         toChain: options.toChain,
         quote,
       })
     } else {
-      displaySwapResult(options.fromChain, options.toChain, result.txHash, quote, quote.toCoin.decimals)
+      displaySwapResult(options.fromChain, options.toChain, broadcast.txHash, quote, quote.toCoin.decimals)
     }
 
-    return { txHash: result.txHash, quote }
+    return { txHash: broadcast.txHash, quote }
   } finally {
     vault.removeAllListeners('signingProgress')
   }
