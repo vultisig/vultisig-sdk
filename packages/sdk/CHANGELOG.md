@@ -1,5 +1,15 @@
 # @vultisig/sdk
 
+## 0.15.4
+
+### Patch Changes
+
+- [#276](https://github.com/vultisig/vultisig-sdk/pull/276) [`59382c1`](https://github.com/vultisig/vultisig-sdk/commit/59382c1859512fbd362962ede5e92b100d3a5921) Thanks [@rcoderdev](https://github.com/rcoderdev)! - feat(cli): structured machine-readable errors for agent ask, pipe, and executor
+  - `agent ask --json` failures include stable `code` with existing `error` string
+  - NDJSON pipe `error` events and failed `tool_result` lines include `code`
+  - executor `ActionResult` failures carry `AgentErrorCode`; SSE errors accept optional backend `code`
+  - document error codes in CLI README
+
 ## 0.15.3
 
 ### Patch Changes

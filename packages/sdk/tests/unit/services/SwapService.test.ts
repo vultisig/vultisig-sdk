@@ -121,11 +121,7 @@ describe('SwapService', () => {
           createWithData: vi.fn(),
         },
       }),
-      initializeDkls: vi.fn().mockResolvedValue(undefined),
-      initializeSchnorr: vi.fn().mockResolvedValue(undefined),
-      initialize: vi.fn().mockResolvedValue(undefined),
-      getStatus: vi.fn().mockReturnValue({ walletCore: true, dkls: true, schnorr: true }),
-    }
+    } as WasmProvider
 
     service = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent, mockWasmProvider)
   })
@@ -379,18 +375,21 @@ describe('SwapService', () => {
 
       const mockQuoteResult: SwapQuoteResult = {
         quote: {
-          general: {
-            dstAmount: '1000000000',
-            provider: '1inch',
-            tx: {
-              evm: {
-                from: '0x...',
-                to: '0x...',
-                data: '0x...',
-                value: '0',
+          quote: {
+            general: {
+              dstAmount: '1000000000',
+              provider: '1inch',
+              tx: {
+                evm: {
+                  from: '0x...',
+                  to: '0x...',
+                  data: '0x...',
+                  value: '0',
+                },
               },
             },
           },
+          discounts: [],
         },
         estimatedOutput: 1000000000n,
         provider: '1inch',
@@ -405,6 +404,8 @@ describe('SwapService', () => {
           decimals: 6,
           tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
         },
+        balance: 10n ** 18n,
+        maxSwapable: 10n ** 18n,
       }
 
       const result = await service.prepareSwapTx({
@@ -441,18 +442,21 @@ describe('SwapService', () => {
     it('should reject expired quotes', async () => {
       const expiredQuote: SwapQuoteResult = {
         quote: {
-          native: {
-            swapChain: 'THORChain',
-            expected_amount_out: '1000000000',
-            expiry: Math.floor(Date.now() / 1000) - 100,
-            fees: { affiliate: '0', asset: '', outbound: '0', total: '0' },
-            memo: '',
-            notes: '',
-            outbound_delay_blocks: 0,
-            outbound_delay_seconds: 0,
-            recommended_min_amount_in: '0',
-            warning: '',
+          quote: {
+            native: {
+              swapChain: 'THORChain',
+              expected_amount_out: '1000000000',
+              expiry: Math.floor(Date.now() / 1000) - 100,
+              fees: { affiliate: '0', asset: '', outbound: '0', total: '0' },
+              memo: '',
+              notes: '',
+              outbound_delay_blocks: 0,
+              outbound_delay_seconds: 0,
+              recommended_min_amount_in: '0',
+              warning: '',
+            },
           },
+          discounts: [],
         },
         estimatedOutput: 1000000000n,
         provider: 'thorchain',
@@ -462,6 +466,8 @@ describe('SwapService', () => {
         warnings: [],
         fromCoin: { chain: Chain.Ethereum, ticker: 'ETH', decimals: 18 },
         toCoin: { chain: Chain.Bitcoin, ticker: 'BTC', decimals: 8 },
+        balance: 10n ** 18n,
+        maxSwapable: 10n ** 18n,
       }
 
       await expect(
@@ -501,18 +507,21 @@ describe('SwapService', () => {
 
       const mockQuoteResult: SwapQuoteResult = {
         quote: {
-          general: {
-            dstAmount: '1000000000000000000',
-            provider: '1inch',
-            tx: {
-              evm: {
-                from: '0x...',
-                to: '0x...',
-                data: '0x...',
-                value: '0',
+          quote: {
+            general: {
+              dstAmount: '1000000000000000000',
+              provider: '1inch',
+              tx: {
+                evm: {
+                  from: '0x...',
+                  to: '0x...',
+                  data: '0x...',
+                  value: '0',
+                },
               },
             },
           },
+          discounts: [],
         },
         estimatedOutput: 1000000000000000000n,
         provider: '1inch',
@@ -532,6 +541,8 @@ describe('SwapService', () => {
           tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
         },
         toCoin: { chain: Chain.Ethereum, ticker: 'ETH', decimals: 18 },
+        balance: 10n ** 18n,
+        maxSwapable: 10n ** 18n,
       }
 
       await service.prepareSwapTx({
