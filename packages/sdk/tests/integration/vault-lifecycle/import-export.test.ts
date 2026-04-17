@@ -146,6 +146,7 @@ describe('Integration: Vault Export', () => {
       serverManager: context.serverManager,
       passwordCache: context.passwordCache,
       wasmProvider: context.wasmProvider,
+      pushNotificationService: context.pushNotificationService,
     }
 
     const vault = FastVault.fromStorage(vaultData, mockFastSigningService, vaultContext)
