@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
 
 /**
@@ -157,7 +158,7 @@ describe('AgentClient.sendMessageStream', () => {
     const client = new AgentClient('http://example.com')
     await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onError })
 
-    expect(onError).toHaveBeenCalledWith('something broke')
+    expect(onError).toHaveBeenCalledWith('something broke', AgentErrorCode.UNKNOWN_ERROR)
   })
 
   it('ignores bare colon comment lines', async () => {

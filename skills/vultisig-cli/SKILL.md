@@ -218,7 +218,7 @@ See [references/rujira.md](references/rujira.md) for detailed Rujira/secured ass
 
 ### Agent Chat (AI-to-AI)
 
-The `agent ask` command lets AI coding agents (Claude Code, Opencode, Cursor, etc.) talk to the Vultisig agent backend for natural-language crypto operations. The agent backend has access to MCP tools for balance queries, transaction building, token lookups, swaps, and more — so the calling agent doesn't need to know chain-specific details.
+The `agent ask` command lets AI coding agents (Claude Code, Opencode, Cursor, etc.) talk to the Vultisig agent backend for natural-language crypto operations. The backend proposes tool calls; the CLI **executor** runs supported actions locally (balances, portfolio, builds, signing, and more). Unsupported actions return `success: false` from the CLI and may only be satisfied server-side.
 
 | Command | Description |
 |---------|-------------|
@@ -240,7 +240,7 @@ Your HYPE balance is 42.567 HYPE on Hyperliquid.
 
 **JSON (`--json`):**
 ```json
-{"session_id":"conv_abc123","response":"Your HYPE balance is ...","tool_calls":[{"action":"evm_get_balance","success":true}],"transactions":[]}
+{"session_id":"conv_abc123","response":"Your HYPE balance is ...","tool_calls":[{"action":"get_balances","success":true}],"transactions":[]}
 ```
 
 **Transaction output (text):**
@@ -276,17 +276,17 @@ vultisig agent ask "Send 0.001 ETH to 0x..." --session "$SESSION" --vault t1 --p
 #### How It Works
 
 1. The CLI authenticates with the agent backend using the vault's MPC key (no extra API keys needed)
-2. Your message is sent to the backend, which routes it to an AI model with crypto MCP tools
-3. The backend executes tool calls (balance checks, transaction building, etc.) server-side
-4. If a transaction is built, the CLI signs it locally using MPC (the server never sees the full key)
-5. The signed transaction is broadcast and the result is returned
+2. Your message is sent to the backend, which routes it to an AI model with MCP-style tools
+3. For each tool call, the CLI executor runs it when implemented (e.g. `get_balances`, `build_send_tx`); otherwise it reports failure back to the backend
+4. When a transaction is ready, the CLI signs and broadcasts locally using MPC (the server never sees the full key)
+5. The result is streamed back and returned in the response
 
 #### Notes
 
 - **No helper scripts needed** — `agent ask` handles the full lifecycle (auth, streaming, tool execution, signing)
-- **Signing is local** — transaction signing happens client-side via MPC; the backend only builds unsigned transactions
+- **Signing is local** — transaction signing happens client-side via MPC; payloads may be built locally or supplied by the backend before signing
 - **Password is required for signing** — use `--password` flag; the CLI will error if a signing operation is needed without it
-- **Backend URL** defaults to `http://localhost:9998` or the `VULTISIG_AGENT_URL` environment variable
+- **Backend URL** defaults to `https://abe.vultisig.com` or the `VULTISIG_AGENT_URL` environment variable
 - **stdout is clean** — all debug output, SDK logs, and MPC progress go to stderr; only the structured response goes to stdout
 
 ### Advanced Operations

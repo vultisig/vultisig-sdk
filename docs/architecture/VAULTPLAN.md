@@ -69,7 +69,7 @@ class Vultisig {
   // === VAULT LIFECYCLE ===
   async createVault(name: string, options?: CreateVaultOptions): Promise<Vault>; // Create new vault (auto-initializes SDK, sets as active)
 
-  async addVault(file: File, password?: string): Promise<Vault>; // Import vault from file (sets as active)
+  async importVault(vultContent: string, password?: string): Promise<Vault>; // Import from .vult content (sets as active)
   async listVaults(): Promise<VaultSummary[]>; // List all stored vaults
   async deleteVault(vault: Vault): Promise<void>; // Delete vault from storage (clears active if needed)
   async clearVaults(): Promise<void>; // Clear all stored vaults
@@ -96,7 +96,8 @@ class Vultisig {
   static validateVaultName(name: string): ValidationResult; // Validate vault name
 
   // === FILE OPERATIONS ===
-  async isVaultFileEncrypted(file: File): Promise<boolean>; // Check if .vult file is encrypted
+  isVaultEncrypted(vultContent: string): boolean; // Sync: whether .vult content is encrypted
+  async isVaultContentEncrypted(vultContent: string): Promise<boolean>; // Async parse when needed
 
   // === SERVER STATUS ===
   async getServerStatus(): Promise<ServerStatus>; // Check server connectivity
@@ -496,14 +497,14 @@ When `is_encrypted = true`, the vault data uses:
 ### File Operations
 
 ```typescript
-// Import vault from .vult file
-const vault = await vultisig.addVault(file, password);
+// Import vault from .vult file content (string)
+const vault = await vultisig.importVault(vultContent, password);
 
 // Export vault to .vult file
 const vaultBlob = await vault.export(password);
 
-// Check if file is encrypted
-const isEncrypted = await vultisig.isVaultFileEncrypted(file);
+// Check if .vult content is encrypted (sync)
+const isEncrypted = vultisig.isVaultEncrypted(vultContent);
 ```
 
 ### Inspection
@@ -618,7 +619,8 @@ await vault.resetToDefaultChains();
 console.log(vault.chains); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
 
 // 7. Import vault inherits SDK default chains (automatically set as active)
-const importedVault = await vultisig.addVault(file, password);
+// vultContent: string — raw .vult file contents (see File Operations above)
+const importedVault = await vultisig.importVault(vultContent, password);
 console.log(importedVault.chains); // ['bitcoin', 'ethereum', 'thorchain', 'solana', 'polygon']
 console.log(vultisig.getActiveVault() === importedVault); // true
 

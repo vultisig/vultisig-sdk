@@ -1,5 +1,18 @@
 # @vultisig/cli
 
+## 0.15.2
+
+### Patch Changes
+
+- [#263](https://github.com/vultisig/vultisig-sdk/pull/263) [`6585c38`](https://github.com/vultisig/vultisig-sdk/commit/6585c38431db063f600e133d1a23f84b7c19e934) Thanks [@rcoderdev](https://github.com/rcoderdev)! - fix(cli): align agent executor with backend payloads and harden action handling
+  - model `tx_ready` / non-streaming transaction payloads with `TxReadyPayload`
+  - optional `vultisig` on agent config for shared SDK state (e.g. address book)
+  - executor improvements (chain locks, calldata resolution, EVM gas refresh) and unit tests
+
+- Updated dependencies [[`6585c38`](https://github.com/vultisig/vultisig-sdk/commit/6585c38431db063f600e133d1a23f84b7c19e934)]:
+  - @vultisig/sdk@0.15.2
+  - @vultisig/rujira@10.0.0
+
 ## 0.15.0
 
 ### Patch Changes
