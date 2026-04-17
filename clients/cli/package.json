@@ -21,7 +21,9 @@
     "cli:interactive": "npx tsx src/index.ts --interactive",
     "repl": "npx tsx src/index.ts --interactive",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude 'tests/e2e/**'",
+    "test:watch": "vitest --exclude 'tests/e2e/**'",
+    "test:e2e": "vitest run tests/e2e/",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

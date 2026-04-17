@@ -72,10 +72,9 @@ describe('stripEmpty', () => {
     expect(stripEmpty({ active: false })).toEqual({ active: false })
   })
 
-  it('does not recurse into nested objects (top-level strip only)', () => {
-    const result = stripEmpty({ outer: { a: null, b: 'yes' } }) as Record<string, unknown>
-    // stripEmpty only strips at each object level via the filter — nested objects pass as non-null values
-    expect(result.outer).toEqual({ a: null, b: 'yes' })
+  it('recurses into nested objects', () => {
+    const result = stripEmpty({ outer: { a: null, b: 'yes', c: '' } }) as Record<string, unknown>
+    expect(result.outer).toEqual({ b: 'yes' })
   })
 
   it('handles arrays of objects', () => {

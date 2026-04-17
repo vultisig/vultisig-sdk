@@ -10,6 +10,7 @@
   "main": "dist/src/index.js",
   "files": [
     "dist",
+    "README.md",
     "LICENSE"
   ],
   "scripts": {
@@ -39,7 +40,7 @@
     "directory": "clients/mcp"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "~1.29.0",
     "@napi-rs/keyring": "^1.1.6",
     "@vultisig/client-shared": "workspace:^",
     "@vultisig/sdk": "workspace:^",
@@ -54,5 +55,9 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

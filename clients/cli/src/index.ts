@@ -1222,6 +1222,7 @@ rujiraCmd
         options: {
           slippageBps?: string
           destination?: string
+          dryRun?: boolean
           yes?: boolean
           password?: string
           rpc?: string
@@ -1262,6 +1263,7 @@ rujiraCmd
         l1Address: string,
         options: {
           maxFeeBps?: string
+          dryRun?: boolean
           yes?: boolean
           password?: string
           rpc?: string
@@ -1547,12 +1549,11 @@ authCmd
 setupCompletionCommand(program)
 
 // Schema discovery (hidden, for machine clients)
-const schemaCmd = program
-  .command('schema')
+program
+  .command('schema', { hidden: true })
   .description('Output machine-readable command schema (JSON introspection for agents)')
   .helpOption(false)
   .action(withExit(async () => executeSchema(program)))
-schemaCmd._hidden = true
 
 // ============================================================================
 // Interactive Mode

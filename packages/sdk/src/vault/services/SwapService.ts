@@ -218,10 +218,10 @@ export class SwapService {
 
   /**
    * Get list of chains that support swapping.
-   * @returns Array of chains that can be used for swaps
+   * @returns Array of chains that can be used for swaps (deduplicated across providers)
    */
   getSupportedChains(): readonly Chain[] {
-    return swapEnabledChains as readonly Chain[]
+    return [...new Set(swapEnabledChains as readonly Chain[])]
   }
 
   /**

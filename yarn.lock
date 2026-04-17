@@ -3974,7 +3974,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@modelcontextprotocol/sdk@npm:^1.12.1":
+"@modelcontextprotocol/sdk@npm:~1.29.0":
   version: 1.29.0
   resolution: "@modelcontextprotocol/sdk@npm:1.29.0"
   dependencies:
@@ -7528,7 +7528,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/mcp@workspace:clients/mcp"
   dependencies:
-    "@modelcontextprotocol/sdk": "npm:^1.12.1"
+    "@modelcontextprotocol/sdk": "npm:~1.29.0"
     "@napi-rs/keyring": "npm:^1.1.6"
     "@types/node": "npm:^25.5.0"
     "@vultisig/client-shared": "workspace:^"

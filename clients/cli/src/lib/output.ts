@@ -100,7 +100,11 @@ export function getOutputFormat(): OutputFormat {
 export function stripEmpty(data: unknown): unknown {
   if (Array.isArray(data)) return data.map(stripEmpty)
   if (data !== null && typeof data === 'object') {
-    return Object.fromEntries(Object.entries(data as Record<string, unknown>).filter(([, v]) => v != null && v !== ''))
+    return Object.fromEntries(
+      Object.entries(data as Record<string, unknown>)
+        .filter(([, v]) => v != null && v !== '')
+        .map(([k, v]) => [k, stripEmpty(v)])
+    )
   }
   return data
 }
@@ -168,6 +172,11 @@ function bigIntReplacer(_key: string, value: unknown): unknown {
 export function outputJson(data: unknown): void {
   const transformed = applyOutputTransforms(data)
   console.log(JSON.stringify({ success: true, v: 1, data: transformed }, bigIntReplacer, 2))
+}
+
+export function outputErrorJson(errJson: unknown): void {
+  const transformed = applyOutputTransforms(errJson)
+  console.log(JSON.stringify(transformed, bigIntReplacer, 2))
 }
 
 // ============================================================================

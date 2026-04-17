@@ -1,7 +1,7 @@
 // CLI Runner - Wraps command execution with typed error handling and exit codes
 
 import { classifyError, toErrorJson, VsigError } from '../core/errors'
-import { isJsonOutput, printError } from '../lib/output'
+import { isJsonOutput, outputErrorJson, printError } from '../lib/output'
 
 // Wrap a command handler with CLI exit behavior
 // On VsigError: uses typed exitCode
@@ -21,7 +21,7 @@ export function withExit<T extends any[]>(handler: (...args: T) => Promise<void>
             : classifyError(new Error(String(err)))
 
       if (isJsonOutput()) {
-        process.stdout.write(`${JSON.stringify(toErrorJson(classified), null, 2)}\n`)
+        outputErrorJson(toErrorJson(classified))
         process.exit(classified.exitCode)
       }
 

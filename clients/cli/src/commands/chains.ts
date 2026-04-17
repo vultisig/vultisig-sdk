@@ -38,16 +38,23 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
   }
 
   if (options.add) {
-    if (vault.chains.includes(options.add)) {
-      success(`\nChain already active: ${options.add}`)
-    } else {
+    const alreadyActive = vault.chains.includes(options.add)
+    if (!alreadyActive) {
       await vault.addChain(options.add)
-      success(`\n+ Added chain: ${options.add}`)
     }
     const address = await vault.address(options.add)
+    if (isJsonOutput()) {
+      outputJson({ chain: options.add, alreadyActive, address, chains: [...vault.chains] })
+      return
+    }
+    success(alreadyActive ? `\nChain already active: ${options.add}` : `\n+ Added chain: ${options.add}`)
     info(`Address: ${address}`)
   } else if (options.remove) {
     await vault.removeChain(options.remove)
+    if (isJsonOutput()) {
+      outputJson({ chain: options.remove, removed: true, chains: [...vault.chains] })
+      return
+    }
     success(`\n+ Removed chain: ${options.remove}`)
   } else {
     const chains = vault.chains

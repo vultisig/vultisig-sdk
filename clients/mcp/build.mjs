@@ -19,6 +19,7 @@ await build({
   },
   external: [
     '@vultisig/sdk',
+    '@vultisig/client-shared',
     '@modelcontextprotocol/sdk',
     '@napi-rs/keyring',
     'inquirer',
