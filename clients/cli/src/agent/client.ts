@@ -240,9 +240,53 @@ export class AgentClient {
     }
   ): void {
     try {
-      const parsed = JSON.parse(data)
+      const rawParsed = JSON.parse(data)
 
-      switch (event) {
+      // Vercel UI Message Stream v1 adapter: when no `event:` line preceded
+      // the data line, the SSE spec defaults `event` to "message". The new
+      // backend uses bare `data:` lines with the type encoded in the JSON
+      // `type` field. Map v1 types to legacy event names + payload shape so
+      // the existing switch keeps working.
+      let resolvedEvent = event
+      let parsed = rawParsed
+      // v1-gate: we treat a default `message` event with a top-level string `type`
+      // field as a Vercel UI Message Stream v1 frame. This is safe today because
+      // `ConversationMessage` (see ./types.ts) has no top-level `type` field — if a
+      // future `type` is added there, this gate will misroute legacy `message`
+      // events into the v1 branch and the parser will need to be re-split.
+      if (event === 'message' && typeof rawParsed?.type === 'string') {
+        const v1Type = rawParsed.type as string
+        if (v1Type === 'text-delta') {
+          resolvedEvent = 'text_delta'
+        } else if (v1Type === 'finish') {
+          // Vercel v1 `finish` carries `finishReason` and `usage` (token counts).
+          // We collapse to legacy `done` and drop both; the CLI has no
+          // `UsageInfo` surface today. Revisit when we want to show token
+          // usage / stop reason in the UI — until then keep the collapse.
+          resolvedEvent = 'done'
+        } else if (v1Type === 'error') {
+          resolvedEvent = 'error'
+          parsed = { error: rawParsed.errorText ?? rawParsed.error }
+        } else if (v1Type.startsWith('data-')) {
+          // Expects snake_case after `data-` (e.g. `data-tx_ready` → `tx_ready`);
+          // backend contract is pinned by the agent-backend#119 integration
+          // test fixture. Kebab variants (e.g. `data-tx-ready`) will silently
+          // miss the switch below — if that regresses, fix the fixture first.
+          resolvedEvent = v1Type.slice(5) // data-title → title, etc.
+          // Guard against a naked array payload (e.g. `{type:'data-suggestions', data:[...]}`):
+          // `typeof [] === 'object'`, so unwrapping would set `parsed = [...]` and
+          // the switch cases below (which read `parsed.suggestions`, `parsed.actions`, …)
+          // would silently drop the payload. Require a plain object before unwrap.
+          if (rawParsed.data && typeof rawParsed.data === 'object' && !Array.isArray(rawParsed.data)) {
+            parsed = rawParsed.data
+          }
+        } else {
+          resolvedEvent = v1Type
+          if (this.verbose) process.stderr.write(`[SSE:unmapped v1 type: ${v1Type}]\n`)
+        }
+      }
+
+      switch (resolvedEvent) {
         case 'text_delta':
           if (typeof parsed.delta === 'string') {
             result.fullText += parsed.delta
