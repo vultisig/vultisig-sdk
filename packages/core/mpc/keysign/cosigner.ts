@@ -34,7 +34,7 @@ globalThis.fetch = async (
         : input.url
   if (url.startsWith('file://')) {
     const buffer = await readFile(fileURLToPath(url))
-    return new Response(buffer, {
+    return new Response(new Uint8Array(buffer), {
       headers: { 'content-type': 'application/wasm' },
     })
   }

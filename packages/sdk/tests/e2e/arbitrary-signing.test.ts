@@ -30,7 +30,7 @@ import { createHash } from 'crypto'
 import { keccak256, Transaction } from 'ethers'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { Chain, VaultBase } from '@/index'
+import { Chain, type Signature, VaultBase } from '@/index'
 
 /**
  * Compute double SHA256 (Bitcoin's hash256)
@@ -299,7 +299,7 @@ describe('E2E: Arbitrary Transaction Signing with ethers.js and bitcoinjs-lib', 
       console.log(`   Signing ${sighashes.length} inputs sequentially...`)
 
       // Sign each sighash sequentially (VultiServer handles one session at a time)
-      const signatures = []
+      const signatures: Signature[] = []
       for (let index = 0; index < sighashes.length; index++) {
         const hash = sighashes[index]
         const sig = await vault.signBytes({

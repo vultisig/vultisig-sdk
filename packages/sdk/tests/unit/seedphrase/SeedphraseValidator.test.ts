@@ -13,9 +13,6 @@ import { cleanMnemonic, SeedphraseValidator } from '../../../src/seedphrase/Seed
 // Create a minimal mock WasmProvider (not used for validation anymore, but required by constructor)
 const createMockWasmProvider = (): WasmProvider => ({
   getWalletCore: vi.fn(),
-  getDkls: vi.fn(),
-  getSchnorr: vi.fn(),
-  ensureInitialized: vi.fn(),
 })
 
 // Valid 12-word test mnemonics (with valid checksums)

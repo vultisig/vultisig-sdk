@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { configureDefaultStorage } from '../../src/context/defaultStorage'
 import { configureWasm } from '../../src/context/wasmRuntime'
 import { MemoryStorage } from '../../src/storage/MemoryStorage'
+import type { Storage } from '../../src/storage/types'
 import { ValidationHelpers } from '../../src/utils/validation'
 import { VaultBase } from '../../src/vault/VaultBase'
 import { SUPPORTED_CHAINS, Vultisig } from '../../src/Vultisig'
@@ -29,7 +30,6 @@ describe('Vultisig', () => {
     // Create SDK instance with test configuration
     sdk = new Vultisig({
       autoInit: false, // Don't auto-initialize to avoid WASM loading in tests
-      autoConnect: false, // Don't auto-connect
       defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
       defaultCurrency: 'USD',
       storage: new MemoryStorage(), // Use memory storage for tests
@@ -317,8 +317,8 @@ describe('Vultisig', () => {
           resolve()
         })
 
-        // Manually emit an error event to test the event system
-        sdk.emit('error', new Error('Test error'))
+        // Manually emit an error event to test the event system (emit is protected on the public class)
+        ;(sdk as unknown as { emit: (e: 'error', err: Error) => void }).emit('error', new Error('Test error'))
       })
     })
   })
@@ -375,7 +375,7 @@ describe('Vultisig', () => {
       }
 
       const sdkWithCustomStorage = new Vultisig({
-        storage: { customStorage: mockStorage },
+        storage: mockStorage as unknown as Storage,
         autoInit: false,
       })
 

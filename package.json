@@ -30,7 +30,7 @@
     "build:shared": "node scripts/build-shared-packages.mjs",
     "pack:shared": "node scripts/pack-shared-packages.mjs",
     "sync-packages": "syncpack fix-mismatches",
-    "typecheck": "tsc --project .config/tsconfig.json --noEmit && yarn workspace @vultisig/cli typecheck",
+    "typecheck": "tsc --project .config/tsconfig.json --noEmit && yarn workspace @vultisig/cli typecheck && yarn workspace @vultisig/sdk typecheck && yarn workspace @vultisig/rujira typecheck && yarn workspace @vultisig/example-browser typecheck && yarn workspace @vultisig/example-electron typecheck",
     "test": "yarn workspace @vultisig/sdk test && yarn test:rujira && yarn test:core && yarn workspace @vultisig/cli test",
     "test:all": "yarn test:unit; yarn test:integration; yarn test:e2e",
     "test:unit": "yarn workspace @vultisig/sdk test:unit",
