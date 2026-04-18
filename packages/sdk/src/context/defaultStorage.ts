@@ -6,15 +6,15 @@
  * to auto-create storage when none is provided.
  */
 
-import type { Storage } from '../storage/types'
+import { runtimeStore } from '@vultisig/mpc-types'
 
-let defaultStorageFactory: (() => Storage) | null = null
+import type { Storage } from '../storage/types'
 
 /**
  * Configure the default storage factory (called by platform entry points on module load)
  */
 export function configureDefaultStorage(factory: () => Storage): void {
-  defaultStorageFactory = factory
+  runtimeStore().storageFactory = factory
 }
 
 /**
@@ -22,6 +22,7 @@ export function configureDefaultStorage(factory: () => Storage): void {
  * @throws Error if storage not configured (wrong import path used)
  */
 export function getDefaultStorage(): Storage {
+  const defaultStorageFactory = runtimeStore().storageFactory as (() => Storage) | null
   if (!defaultStorageFactory) {
     throw new Error(
       'Default storage not configured. Import from @vultisig/sdk (not /node or /browser subpaths directly).'
