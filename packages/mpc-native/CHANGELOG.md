@@ -1,5 +1,12 @@
 # @vultisig/mpc-native
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`78772fd`](https://github.com/vultisig/vultisig-sdk/commit/78772fd061f3061c54802506218e5524a21714bd)]:
+  - @vultisig/mpc-types@0.2.0
+
 ## 0.1.3
 
 ### Patch Changes
