@@ -1,5 +1,12 @@
 # @vultisig/mpc-wasm
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [[`78772fd`](https://github.com/vultisig/vultisig-sdk/commit/78772fd061f3061c54802506218e5524a21714bd)]:
+  - @vultisig/mpc-types@0.2.0
+
 ## 0.1.1
 
 ### Patch Changes

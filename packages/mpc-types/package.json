@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mpc-types",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Shared MPC engine interfaces for Vultisig SDK",
   "type": "module",
   "main": "dist/index.js",
@@ -32,7 +32,7 @@
     "./dist/store.js"
   ],
   "peerDependencies": {
-    "@vultisig/mpc-wasm": ">=0.1.0"
+    "@vultisig/mpc-wasm": ">=0.1.2"
   },
   "peerDependenciesMeta": {
     "@vultisig/mpc-wasm": {
