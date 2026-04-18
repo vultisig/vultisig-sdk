@@ -3,17 +3,16 @@
  * Each platform bundle configures this with their crypto implementation
  */
 
-import type { PlatformCrypto } from '../platforms/types'
+import { runtimeStore } from '@vultisig/mpc-types'
 
-// Module-level state
-let platformCrypto: PlatformCrypto | null = null
+import type { PlatformCrypto } from '../platforms/types'
 
 /**
  * Configure the platform crypto implementation
  * Called automatically by platform bundles at module load time
  */
 export function configureCrypto(crypto: PlatformCrypto): void {
-  platformCrypto = crypto
+  runtimeStore().crypto = crypto
 
   // Validate immediately for React Native (checks polyfills are installed)
   if (crypto.validateCrypto) {
@@ -26,6 +25,7 @@ export function configureCrypto(crypto: PlatformCrypto): void {
  * @throws Error if crypto not configured
  */
 function getCrypto(): PlatformCrypto {
+  const platformCrypto = runtimeStore().crypto as PlatformCrypto | null
   if (!platformCrypto) {
     throw new Error(
       'Crypto not configured. This should be configured automatically by platform bundles. ' +

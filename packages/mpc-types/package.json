@@ -16,12 +16,29 @@
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js",
       "default": "./dist/runtime.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js",
+      "default": "./dist/store.js"
     }
   },
   "files": [
     "dist",
     "src"
   ],
+  "sideEffects": [
+    "./dist/runtime.js",
+    "./dist/store.js"
+  ],
+  "peerDependencies": {
+    "@vultisig/mpc-wasm": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@vultisig/mpc-wasm": {
+      "optional": true
+    }
+  },
   "license": "MIT",
   "publishConfig": {
     "access": "public"

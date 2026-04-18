@@ -6,7 +6,7 @@
  */
 import type { MpcEngine } from './index'
 
-let mpcEngine: MpcEngine | null = null
+import { runtimeStore } from './store'
 
 /**
  * Validate that an engine object satisfies the minimum MpcEngine contract.
@@ -30,7 +30,7 @@ function validateEngine(engine: MpcEngine): void {
     if (maybeEngine['mldsa'] === engine.dkls) {
       throw new Error(
         'MPC engine: engine.mldsa must not alias engine.dkls. ' +
-        'MLDSA requires a dedicated signing path, not ECDSA/DKLS.'
+          'MLDSA requires a dedicated signing path, not ECDSA/DKLS.'
       )
     }
   }
@@ -45,13 +45,14 @@ function validateEngine(engine: MpcEngine): void {
  */
 export function configureMpc(engine: MpcEngine): void {
   validateEngine(engine)
-  if (mpcEngine !== null) {
+  const s = runtimeStore()
+  if (s.mpcEngine !== null) {
     console.warn(
       'configureMpc: overwriting an already-configured MPC engine. ' +
-      'This is usually a mistake — ensure configureMpc is called only once per process.'
+        'This is usually a mistake — ensure configureMpc is called only once per process.'
     )
   }
-  mpcEngine = engine
+  s.mpcEngine = engine
 }
 
 /**
@@ -61,6 +62,7 @@ export function configureMpc(engine: MpcEngine): void {
  * @throws Error if no engine has been configured via {@link configureMpc}.
  */
 export function getMpcEngine(): MpcEngine {
+  const mpcEngine = runtimeStore().mpcEngine as MpcEngine | null
   if (!mpcEngine) {
     throw new Error(
       'MPC engine not configured. Import from a platform entry point ' +
@@ -68,4 +70,28 @@ export function getMpcEngine(): MpcEngine {
     )
   }
   return mpcEngine
+}
+
+/**
+ * Returns the configured engine, or lazily installs {@link WasmMpcEngine} from
+ * `@vultisig/mpc-wasm` when none is set (browser/Node/Electron consumers).
+ */
+export async function ensureMpcEngine(): Promise<MpcEngine> {
+  const s = runtimeStore()
+  if (s.mpcEngine) {
+    return s.mpcEngine as MpcEngine
+  }
+  let mod: { WasmMpcEngine: new () => MpcEngine }
+  try {
+    mod = await import('@vultisig/mpc-wasm')
+  } catch (cause) {
+    throw new Error(
+      'MPC engine not configured and @vultisig/mpc-wasm is not installed. ' +
+        'Either install @vultisig/mpc-wasm, or call configureMpc(...) before any MPC operation. ' +
+        'See https://github.com/vultisig/vultisig-sdk/issues/287.',
+      { cause: cause as Error }
+    )
+  }
+  configureMpc(new mod.WasmMpcEngine())
+  return runtimeStore().mpcEngine as MpcEngine
 }

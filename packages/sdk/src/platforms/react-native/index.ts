@@ -39,4 +39,4 @@ export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 
 // MPC engine access (for advanced usage)
 export type { MpcEngine, MpcKeyshare, MpcMessage, MpcSession } from '@vultisig/mpc-types'
-export { configureMpc, getMpcEngine } from '@vultisig/mpc-types'
+export { configureMpc, ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types'
