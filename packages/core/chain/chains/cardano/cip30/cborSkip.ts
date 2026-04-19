@@ -10,7 +10,7 @@
  * fast with a descriptive error instead of silently returning bogus offsets.
  */
 export const cborSkip = (data: Uint8Array, offset: number): number => {
-  if (offset >= data.length) {
+  if (!Number.isInteger(offset) || offset < 0 || offset >= data.length) {
     throw new Error(
       `cborSkip: offset ${offset} is out of bounds (data length ${data.length})`
     )

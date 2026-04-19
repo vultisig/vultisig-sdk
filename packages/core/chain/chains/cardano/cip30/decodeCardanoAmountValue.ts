@@ -19,12 +19,36 @@ export type CardanoValueRequirement = {
   hasAssets: boolean
 }
 
+const hexPattern = /^[0-9a-fA-F]*$/
+
+/** Cardano coin is always a non-negative uint — reject anything else. */
 const toBigInt = (value: unknown): bigint | null => {
-  if (typeof value === 'bigint') return value
+  if (typeof value === 'bigint') return value >= 0n ? value : null
   if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
     return BigInt(value)
   }
   return null
+}
+
+/**
+ * A valid multiasset is a CBOR map:
+ *
+ *     multiasset<a> = { * policy_id => { * asset_name => a } }
+ *
+ * cbor-x decodes this as a `Map` (because we set `mapsAsObjects: false`), but
+ * we accept a plain non-array object too for robustness against inputs that
+ * went through a re-encode pass elsewhere. Arrays and scalars are rejected.
+ */
+const isMultiassetShape = (value: unknown): boolean =>
+  value instanceof Map ||
+  (typeof value === 'object' && value !== null && !Array.isArray(value))
+
+const multiassetHasEntries = (value: unknown): boolean => {
+  if (value instanceof Map) return value.size > 0
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return Object.keys(value).length > 0
+  }
+  return false
 }
 
 /**
@@ -35,7 +59,15 @@ const toBigInt = (value: unknown): bigint | null => {
  * "no usable filter" and fall back to returning all UTXOs.
  */
 const tryDecode = (amountHex: string): CardanoValueRequirement | null => {
-  const bytes = Uint8Array.from(Buffer.from(stripHexPrefix(amountHex), 'hex'))
+  const stripped = stripHexPrefix(amountHex)
+  // Buffer.from('...', 'hex') silently truncates at the first non-hex byte,
+  // which would let `0xgg` or odd-length inputs squeak past as valid-looking
+  // (but wrong) CBOR. Validate up front.
+  if (stripped.length === 0 || stripped.length % 2 !== 0 || !hexPattern.test(stripped)) {
+    return null
+  }
+
+  const bytes = Uint8Array.from(Buffer.from(stripped, 'hex'))
   if (bytes.length === 0) return null
 
   const decoded = cardanoCborEncoder.decode(bytes)
@@ -44,13 +76,8 @@ const tryDecode = (amountHex: string): CardanoValueRequirement | null => {
     const lovelace = toBigInt(decoded[0])
     if (lovelace === null) return null
     const ma = decoded[1]
-    const hasAssets =
-      ma instanceof Map
-        ? ma.size > 0
-        : typeof ma === 'object' && ma !== null
-          ? Object.keys(ma).length > 0
-          : false
-    return { lovelace, hasAssets }
+    if (!isMultiassetShape(ma)) return null
+    return { lovelace, hasAssets: multiassetHasEntries(ma) }
   }
 
   const lovelace = toBigInt(decoded)
