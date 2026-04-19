@@ -71,8 +71,7 @@ const external = [
 const wasmPathsResolver = id => {
   if (id.match(/lib\/dkls\/vs_wasm/)) return '@vultisig/lib-dkls/vs_wasm'
   if (id.match(/lib\/mldsa\/vs_wasm/)) return '@vultisig/lib-mldsa/vs_wasm'
-  if (id.match(/lib\/schnorr\/vs_schnorr_wasm/))
-    return '@vultisig/lib-schnorr/vs_schnorr_wasm'
+  if (id.match(/lib\/schnorr\/vs_schnorr_wasm/)) return '@vultisig/lib-schnorr/vs_schnorr_wasm'
   return id
 }
 

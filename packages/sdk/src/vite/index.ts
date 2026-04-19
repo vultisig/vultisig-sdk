@@ -43,11 +43,7 @@ import type { Plugin } from 'vite'
  * existing imports.
  */
 
-const WASM_GLUE_PACKAGES = [
-  '@vultisig/lib-dkls',
-  '@vultisig/lib-schnorr',
-  '@vultisig/lib-mldsa',
-] as const
+const WASM_GLUE_PACKAGES = ['@vultisig/lib-dkls', '@vultisig/lib-schnorr', '@vultisig/lib-mldsa'] as const
 
 export default function vultisigSdk(): Plugin {
   return {
