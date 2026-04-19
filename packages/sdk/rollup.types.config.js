@@ -53,4 +53,18 @@ export default defineConfig([
     },
     plugins: [dts(dtsPluginOptions)],
   },
+  // Vite plugin types. The plugin runs in the consumer's build (Node), not in
+  // the shipped SDK runtime, so it gets its own tiny type bundle. `vite` is
+  // an optional peer dep — keep it external so the emitted `.d.ts` re-exports
+  // `import('vite').Plugin` from the consumer's installed version instead of
+  // inlining Vite's entire type graph.
+  {
+    input: 'src/vite/index.ts',
+    output: {
+      file: 'dist/vite/index.d.ts',
+      format: 'es',
+    },
+    external: ['vite'],
+    plugins: [dts(dtsPluginOptions)],
+  },
 ])
