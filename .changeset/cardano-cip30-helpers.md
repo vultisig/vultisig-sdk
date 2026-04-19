@@ -10,6 +10,8 @@ Adds primitives needed by CIP-30 dApp-wallet bridges on top of `@vultisig/core-c
 - `chains/cardano/cip30/cardanoTxBodyHash` — blake2b-256 of the transaction body, extracted from the full tx CBOR **without re-encoding** so the txid matches what dApps sign off on.
 - `chains/cardano/cip30/buildCardanoValue` / `encodeCardanoValue` — build and CBOR-encode a Cardano `value` (coin + multiasset) for `getBalance()`.
 - `chains/cardano/cip30/encodeCardanoUnspentOutput` — CBOR-encode a `transaction_unspent_output` for `getUtxos()`.
+- `chains/cardano/cip30/decodeCardanoAmountValue` — decode the CBOR `value` argument passed to `getUtxos(amount)` into `{ lovelace, hasAssets }`. Returns `null` on malformed input so callers can fall back to returning all UTXOs.
+- `chains/cardano/cip30/selectCardanoUtxosByLovelace` — greedy largest-first coin selection by lovelace; returns `null` when the full set is insufficient. Used by CIP-30 `getUtxos` coin selection.
 - `chains/cardano/cip30/buildCardanoWitnessSet` — CBOR witness set returned by CIP-30 `signTx`.
 - `chains/cardano/cip30/buildCoseStructures` — CIP-8 / COSE_Sign1 + COSE_Key builders for `signData`.
 - `chains/cardano/cip30/cardanoCborPrimitives`, `cborEncoder`, `cborSkip` — minimal, Cardano-correct CBOR primitives (hand-rolled for the integer/bytes-keyed maps that `cbor-x` can't produce, and a byte-range walker used by `cardanoTxBodyHash`).
