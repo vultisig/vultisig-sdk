@@ -34,33 +34,34 @@ const toBigInt = (value: unknown): bigint | null => {
  * `coin / [coin, multiasset]` shape — callers should treat a null result as
  * "no usable filter" and fall back to returning all UTXOs.
  */
+const tryDecode = (amountHex: string): CardanoValueRequirement | null => {
+  const bytes = Uint8Array.from(Buffer.from(stripHexPrefix(amountHex), 'hex'))
+  if (bytes.length === 0) return null
+
+  const decoded = cardanoCborEncoder.decode(bytes)
+
+  if (Array.isArray(decoded) && decoded.length === 2) {
+    const lovelace = toBigInt(decoded[0])
+    if (lovelace === null) return null
+    const ma = decoded[1]
+    const hasAssets =
+      ma instanceof Map
+        ? ma.size > 0
+        : typeof ma === 'object' && ma !== null
+          ? Object.keys(ma).length > 0
+          : false
+    return { lovelace, hasAssets }
+  }
+
+  const lovelace = toBigInt(decoded)
+  if (lovelace === null) return null
+  return { lovelace, hasAssets: false }
+}
+
 export const decodeCardanoAmountValue = (
   amountHex: string
 ): CardanoValueRequirement | null => {
-  const result = attempt(() => {
-    const bytes = Uint8Array.from(
-      Buffer.from(stripHexPrefix(amountHex), 'hex')
-    )
-    if (bytes.length === 0) return null
-
-    const decoded = cardanoCborEncoder.decode(bytes)
-
-    if (Array.isArray(decoded) && decoded.length === 2) {
-      const lovelace = toBigInt(decoded[0])
-      if (lovelace === null) return null
-      const ma = decoded[1]
-      const hasAssets =
-        ma instanceof Map
-          ? ma.size > 0
-          : typeof ma === 'object' && ma !== null
-            ? Object.keys(ma).length > 0
-            : false
-      return { lovelace, hasAssets }
-    }
-
-    const lovelace = toBigInt(decoded)
-    if (lovelace === null) return null
-    return { lovelace, hasAssets: false }
-  })
-  return 'data' in result ? result.data : null
+  const result = attempt(() => tryDecode(amountHex))
+  if ('error' in result) return null
+  return result.data ?? null
 }
