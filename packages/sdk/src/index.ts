@@ -219,15 +219,22 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  Coin,
+  CoinKey,
+  CoinMetadata,
   FindSwapQuoteParams,
   GetMaxSendAmountFromKeysParams,
+  KnownCoin,
+  KnownCoinMetadata,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  TokenMetadataResolver,
   VaultIdentity,
 } from './tools'
 export {
   abiDecode,
   abiEncode,
+  chainFeeCoin,
   deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,
@@ -235,7 +242,11 @@ export {
   findSwapQuote,
   getCoinBalance,
   getMaxSendAmountFromKeys,
+  getNativeSwapDecimals,
   getPublicKey,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
   prepareContractCallTxFromKeys,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
