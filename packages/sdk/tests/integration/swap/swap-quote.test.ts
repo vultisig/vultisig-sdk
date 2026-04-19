@@ -150,6 +150,7 @@ describe('Integration: Swap Quote', () => {
       serverManager: context.serverManager,
       passwordCache: context.passwordCache,
       wasmProvider: context.wasmProvider,
+      pushNotificationService: context.pushNotificationService,
     }
 
     return FastVault.fromStorage(vaultData, fastSigningService, vaultContext)

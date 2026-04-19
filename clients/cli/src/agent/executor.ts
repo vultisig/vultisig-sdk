@@ -73,6 +73,7 @@ export class AgentExecutor {
   private stateStore: VaultStateStore | null = null
   /** Held chain lock release functions, keyed by chain name */
   private chainLockReleases = new Map<string, () => Promise<void>>()
+  private evmLastBroadcast = new Map<string, number>()
   /** Backend client for resolving calldata_id references. */
   private backendClient: {
     getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }>
@@ -738,8 +739,9 @@ export class AgentExecutor {
         signature,
       })
 
-      // Record nonce best-effort — tx is already broadcast so don't
-      // convert a successful send into an error if persistence fails
+      // Record nonce and broadcast timestamp — tx is already broadcast so
+      // don't convert a successful send into an error if persistence fails
+      this.evmLastBroadcast.set(chain.toString(), Date.now())
       try {
         this.recordEvmNonceFromPayload(chain, payload, messageHashes.length)
       } catch (nonceErr) {
@@ -874,7 +876,8 @@ export class AgentExecutor {
         signature,
       })
 
-      // Record nonce best-effort — tx is already broadcast
+      // Record nonce and broadcast timestamp — tx is already broadcast
+      this.evmLastBroadcast.set(chain.toString(), Date.now())
       try {
         this.recordEvmNonceFromPayload(chain, keysignPayload, messageHashes.length)
       } catch (nonceErr) {
@@ -1065,6 +1068,18 @@ export class AgentExecutor {
     const nextNonce = this.stateStore.getNextEvmNonce(chain, rpcNonce)
 
     if (nextNonce !== rpcNonce) {
+      // Grace period: if we broadcast recently, the previous tx is likely still in
+      // the mempool. Don't reset the nonce — trust the local state.
+      const lastBroadcast = this.evmLastBroadcast.get(chain.toString()) ?? 0
+      if (Date.now() - lastBroadcast < 15_000) {
+        if (this.verbose)
+          process.stderr.write(
+            `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${Date.now() - lastBroadcast}ms ago)\n`
+          )
+        bs.value.nonce = nextNonce
+        return
+      }
+
       // Verify there are actually pending txs in the mempool before using a higher nonce.
       // If pending nonce == confirmed nonce, all intermediate txs were evicted.
       const pendingNonce = await this.fetchEvmPendingNonce(chain)

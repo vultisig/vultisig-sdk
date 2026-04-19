@@ -1,7 +1,7 @@
 /**
  * Wires FastVault batching flags to the correct VultiServer entrypoints and payloads.
  */
-import type { MockInstance } from 'vitest'
+import type { Mock, MockInstance } from 'vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as sdkCrypto from '../../../src/crypto'
@@ -25,13 +25,13 @@ const mldsaResult = {
 }
 
 const { setupVaultWithServerMock, createVaultWithServerMock } = vi.hoisted(() => ({
-  setupVaultWithServerMock: vi.fn(async () => undefined),
-  createVaultWithServerMock: vi.fn(async () => undefined),
+  setupVaultWithServerMock: vi.fn(async () => undefined) as Mock<(...args: unknown[]) => Promise<undefined>>,
+  createVaultWithServerMock: vi.fn(async () => undefined) as Mock<(...args: unknown[]) => Promise<undefined>>,
 }))
 
 const { batchReshareMock, reshareWithServerMock } = vi.hoisted(() => ({
-  batchReshareMock: vi.fn(async () => undefined),
-  reshareWithServerMock: vi.fn(async () => undefined),
+  batchReshareMock: vi.fn(async () => undefined) as Mock<(...args: unknown[]) => Promise<undefined>>,
+  reshareWithServerMock: vi.fn(async () => undefined) as Mock<(...args: unknown[]) => Promise<undefined>>,
 }))
 
 vi.mock('@vultisig/core-mpc/fast/api/setupVaultWithServer', () => ({
@@ -111,7 +111,7 @@ const queryUrlMock = vi.hoisted(() =>
 )
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
-  queryUrl: (...args: unknown[]) => queryUrlMock(...args),
+  queryUrl: (...args: unknown[]) => queryUrlMock(...(args as Parameters<typeof queryUrlMock>)),
 }))
 
 describe('ServerManager — TSS batching wiring', () => {
@@ -141,10 +141,9 @@ describe('ServerManager — TSS batching wiring', () => {
       expect(setupVaultWithServerMock).toHaveBeenCalledTimes(1)
       expect(createVaultWithServerMock).not.toHaveBeenCalled()
 
-      const arg = setupVaultWithServerMock.mock.calls[0][0] as {
-        vaultBaseUrl: string
-        protocols: string[]
-      }
+      const calls = setupVaultWithServerMock.mock.calls as unknown as [[{ vaultBaseUrl: string; protocols: string[] }]]
+      expect(calls[0]).toBeDefined()
+      const arg = calls[0][0]
       expect(arg.vaultBaseUrl).toBe(fastVault)
       expect(arg.protocols).toEqual(['ecdsa', 'eddsa'])
     })
@@ -192,15 +191,17 @@ describe('ServerManager — TSS batching wiring', () => {
         password: 'pw',
         email: 'e@e.e',
         tssBatching: true,
+        newThreshold: 2,
+        newParticipants: ['a', 'b'],
       })
 
       expect(batchReshareMock).toHaveBeenCalledTimes(1)
       expect(reshareWithServerMock).not.toHaveBeenCalled()
-      const body = batchReshareMock.mock.calls[0][0] as {
-        vaultBaseUrl: string
-        protocols: string[]
-        hex_chain_code: string
-      }
+      const batchCalls = batchReshareMock.mock.calls as unknown as [
+        [{ vaultBaseUrl: string; protocols: string[]; hex_chain_code: string }],
+      ]
+      expect(batchCalls[0]).toBeDefined()
+      const body = batchCalls[0][0]
       expect(body.vaultBaseUrl).toBe(fastVault)
       expect(body.protocols).toEqual(['ecdsa', 'eddsa'])
       expect(body.hex_chain_code).toBe('0xhcc')
@@ -209,16 +210,29 @@ describe('ServerManager — TSS batching wiring', () => {
     it('calls reshareWithServer when tssBatching is false or omitted', async () => {
       const mgr = new ServerManager({ fastVault })
 
-      await mgr.reshareVault(minimalVault as never, { password: 'pw', tssBatching: false })
+      await mgr.reshareVault(minimalVault as never, {
+        password: 'pw',
+        tssBatching: false,
+        newThreshold: 2,
+        newParticipants: ['a', 'b'],
+      })
       expect(reshareWithServerMock).toHaveBeenCalledTimes(1)
       expect(batchReshareMock).not.toHaveBeenCalled()
-      expect((reshareWithServerMock.mock.calls[0][0] as { vaultBaseUrl: string }).vaultBaseUrl).toBe(fastVault)
+      const reshareCalls0 = reshareWithServerMock.mock.calls as unknown as [[{ vaultBaseUrl: string }]]
+      expect(reshareCalls0[0]).toBeDefined()
+      expect(reshareCalls0[0][0].vaultBaseUrl).toBe(fastVault)
 
       vi.clearAllMocks()
-      await mgr.reshareVault(minimalVault as never, { password: 'pw' })
+      await mgr.reshareVault(minimalVault as never, {
+        password: 'pw',
+        newThreshold: 2,
+        newParticipants: ['a', 'b'],
+      })
       expect(reshareWithServerMock).toHaveBeenCalledTimes(1)
       expect(batchReshareMock).not.toHaveBeenCalled()
-      expect((reshareWithServerMock.mock.calls[0][0] as { vaultBaseUrl: string }).vaultBaseUrl).toBe(fastVault)
+      const reshareCalls1 = reshareWithServerMock.mock.calls as unknown as [[{ vaultBaseUrl: string }]]
+      expect(reshareCalls1[0]).toBeDefined()
+      expect(reshareCalls1[0][0].vaultBaseUrl).toBe(fastVault)
     })
   })
 })

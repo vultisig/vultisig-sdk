@@ -1,5 +1,5 @@
 import { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
-import { getMpcEngine } from '@vultisig/mpc-types'
+import { ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types'
 
 import { toMpcLibKeyshare } from './keyshare'
 
@@ -69,8 +69,9 @@ export const makeSignSession = async ({
   keyShare,
   signatureAlgorithm,
 }: MakeSignSessionInput) => {
+  const mpc = await ensureMpcEngine()
   const engineKey = getEngineKey(signatureAlgorithm)
-  return getMpcEngine()[engineKey].createSignSession(
+  return mpc[engineKey].createSignSession(
     setupMessage,
     localPartyId,
     toMpcLibKeyshare({

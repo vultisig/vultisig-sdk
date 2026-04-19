@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "0.15.3",
+  "version": "0.15.5",
   "description": "TypeScript SDK for secure multi-party computation and blockchain operations",
   "type": "module",
   "main": "dist/index.node.cjs",
@@ -146,6 +146,7 @@
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.0",
+    "@vultisig/mpc-types": "workspace:*",
     "axios": "^1.8.3",
     "bip32": "^5.0.0",
     "bitcoinjs-lib": "^7.0.0",
@@ -196,7 +197,14 @@
       "optional": true
     }
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/index.node.esm.js",
+    "./dist/index.node.cjs",
+    "./dist/index.browser.js",
+    "./dist/index.chrome-extension.js",
+    "./dist/index.react-native.js",
+    "./dist/index.electron-main.cjs"
+  ],
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

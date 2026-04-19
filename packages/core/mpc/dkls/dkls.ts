@@ -1,4 +1,4 @@
-import { getMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mpc-types'
+import { ensureMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mpc-types'
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getKeygenThreshold } from '../getKeygenThreshold'
@@ -185,7 +185,7 @@ export class DKLS {
     }
     if (this.isInitiateDevice) {
       const threshold = getKeygenThreshold(this.keygenCommittee.length)
-      this.setupMessage = getMpcEngine().dkls.keygenSetup(
+      this.setupMessage = (await ensureMpcEngine()).dkls.keygenSetup(
         undefined,
         threshold,
         this.keygenCommittee
@@ -235,7 +235,7 @@ export class DKLS {
           )
         }
       }
-      const engine = getMpcEngine().dkls
+      const engine = (await ensureMpcEngine()).dkls
       let session: MpcSession<MpcKeyshare>
       if ('create' in this.keygenOperation) {
         session = await engine.createKeygenSession(this.setupMessage, this.localPartyId)
@@ -308,7 +308,7 @@ export class DKLS {
     this.isKeygenComplete = false
     this.inboundSequenceNo = 0
     this.onInboundSequenceNoChange?.(this.inboundSequenceNo)
-    const engine = getMpcEngine().dkls
+    const engine = (await ensureMpcEngine()).dkls
     let localKeyshare: MpcKeyshare | null = null
     if (dklsKeyshare !== undefined && dklsKeyshare.length > 0) {
       localKeyshare = engine.keyshareFromBytes(Buffer.from(dklsKeyshare, 'base64'))
@@ -426,7 +426,7 @@ export class DKLS {
     const privateKey = Buffer.from(hexPrivateKey, 'hex')
     const chainCode = Buffer.from(hexChainCode, 'hex')
 
-    const keyImportResult = await getMpcEngine().dkls.createKeyImportInitiator(
+    const keyImportResult = await (await ensureMpcEngine()).dkls.createKeyImportInitiator(
       Uint8Array.from(privateKey),
       Uint8Array.from(chainCode),
       threshold,
@@ -458,7 +458,7 @@ export class DKLS {
   ) {
     console.log('startKeyImport attempt:', attempt)
     this.isKeygenComplete = false
-    const engine = getMpcEngine().dkls
+    const engine = (await ensureMpcEngine()).dkls
     try {
       let session: MpcSession<MpcKeyshare> | null = null
       if (this.isInitiateDevice) {

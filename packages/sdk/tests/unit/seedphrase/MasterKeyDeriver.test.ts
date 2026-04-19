@@ -5,6 +5,7 @@
  * Verifies correct public key types are used for EdDSA vs ECDSA chains.
  */
 
+import { Chain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { WasmProvider } from '../../../src/context/SdkContext'
@@ -85,9 +86,6 @@ const createMockWalletCore = () => {
 
 const createMockWasmProvider = (mockWalletCore: ReturnType<typeof createMockWalletCore>): WasmProvider => ({
   getWalletCore: vi.fn().mockResolvedValue(mockWalletCore.walletCore),
-  getDkls: vi.fn(),
-  getSchnorr: vi.fn(),
-  ensureInitialized: vi.fn(),
 })
 
 describe('MasterKeyDeriver', () => {
@@ -99,7 +97,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Bitcoin', false)
+      await deriver.deriveChainKey(testMnemonic, Chain.Bitcoin, false)
 
       expect(mock.getLastPublicKeyCall()).toBe('secp256k1')
       expect(mock.mockPrivateKey.getPublicKeySecp256k1).toHaveBeenCalledWith(true) // compressed
@@ -110,7 +108,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Ethereum', false)
+      await deriver.deriveChainKey(testMnemonic, Chain.Ethereum, false)
 
       expect(mock.getLastPublicKeyCall()).toBe('secp256k1')
     })
@@ -120,7 +118,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Solana', true)
+      await deriver.deriveChainKey(testMnemonic, Chain.Solana, true)
 
       expect(mock.getLastPublicKeyCall()).toBe('ed25519')
       expect(mock.mockPrivateKey.getPublicKeyEd25519).toHaveBeenCalled()
@@ -131,7 +129,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Sui', true)
+      await deriver.deriveChainKey(testMnemonic, Chain.Sui, true)
 
       expect(mock.getLastPublicKeyCall()).toBe('ed25519')
     })
@@ -141,7 +139,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Polkadot', true)
+      await deriver.deriveChainKey(testMnemonic, Chain.Polkadot, true)
 
       expect(mock.getLastPublicKeyCall()).toBe('ed25519')
     })
@@ -151,7 +149,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Ton', true)
+      await deriver.deriveChainKey(testMnemonic, Chain.Ton, true)
 
       expect(mock.getLastPublicKeyCall()).toBe('ed25519')
     })
@@ -161,7 +159,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Cardano', true)
+      await deriver.deriveChainKey(testMnemonic, Chain.Cardano, true)
 
       expect(mock.getLastPublicKeyCall()).toBe('ed25519Cardano')
       expect(mock.mockPrivateKey.getPublicKeyEd25519Cardano).toHaveBeenCalled()
@@ -172,7 +170,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Cosmos', false)
+      await deriver.deriveChainKey(testMnemonic, Chain.Cosmos, false)
 
       expect(mock.getLastPublicKeyCall()).toBe('secp256k1')
     })
@@ -182,7 +180,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'THORChain', false)
+      await deriver.deriveChainKey(testMnemonic, Chain.THORChain, false)
 
       expect(mock.getLastPublicKeyCall()).toBe('secp256k1')
     })
@@ -194,9 +192,9 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      const result = await deriver.deriveChainKey(testMnemonic, 'Bitcoin', false)
+      const result = await deriver.deriveChainKey(testMnemonic, Chain.Bitcoin, false)
 
-      expect(result).toHaveProperty('chain', 'Bitcoin')
+      expect(result).toHaveProperty('chain', Chain.Bitcoin)
       expect(result).toHaveProperty('privateKeyHex')
       expect(result).toHaveProperty('publicKeyHex')
       expect(result).toHaveProperty('address')
@@ -208,7 +206,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      const result = await deriver.deriveChainKey(testMnemonic, 'Solana', true)
+      const result = await deriver.deriveChainKey(testMnemonic, Chain.Solana, true)
 
       expect(result.isEddsa).toBe(true)
     })
@@ -220,7 +218,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, 'Bitcoin', false)
+      await deriver.deriveChainKey(testMnemonic, Chain.Bitcoin, false)
 
       const hdWallet = mock.walletCore.HDWallet.createWithMnemonic.mock.results[0].value
       expect(hdWallet.delete).toHaveBeenCalled()

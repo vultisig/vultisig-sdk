@@ -6,13 +6,13 @@
  * the SdkContext.wasmProvider which calls getWalletCore().
  */
 
-let walletCoreGetter: (() => Promise<any>) | null = null
+import { runtimeStore } from '@vultisig/mpc-types'
 
 /**
  * Configure the WASM getter (called by platform entry points on module load)
  */
 export function configureWasm(getter: () => Promise<any>): void {
-  walletCoreGetter = getter
+  runtimeStore().walletCore = getter
 }
 
 /**
@@ -20,6 +20,7 @@ export function configureWasm(getter: () => Promise<any>): void {
  * Also initializes DKLS and Schnorr WASM modules.
  */
 export function getWalletCore(): Promise<any> {
+  const walletCoreGetter = runtimeStore().walletCore as (() => Promise<any>) | null
   if (!walletCoreGetter) {
     throw new Error('WASM not configured. Import from @vultisig/sdk/browser or @vultisig/sdk/node')
   }

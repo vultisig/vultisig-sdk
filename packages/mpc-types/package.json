@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/mpc-types",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Shared MPC engine interfaces for Vultisig SDK",
   "type": "module",
   "main": "dist/index.js",
@@ -16,12 +16,29 @@
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js",
       "default": "./dist/runtime.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js",
+      "default": "./dist/store.js"
     }
   },
   "files": [
     "dist",
     "src"
   ],
+  "sideEffects": [
+    "./dist/runtime.js",
+    "./dist/store.js"
+  ],
+  "peerDependencies": {
+    "@vultisig/mpc-wasm": ">=0.1.2"
+  },
+  "peerDependenciesMeta": {
+    "@vultisig/mpc-wasm": {
+      "optional": true
+    }
+  },
   "license": "MIT",
   "publishConfig": {
     "access": "public"
