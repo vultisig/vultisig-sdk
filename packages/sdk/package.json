@@ -8,7 +8,6 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "lib",
     "README.md",
     "LICENSE"
   ],
@@ -53,6 +52,12 @@
     "./chrome-extension": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.chrome-extension.js"
+    },
+    "./vite": {
+      "types": "./dist/vite/index.d.ts",
+      "import": "./dist/vite/index.js",
+      "require": "./dist/vite/index.cjs",
+      "default": "./dist/vite/index.js"
     }
   },
   "scripts": {
@@ -63,13 +68,14 @@
     "build:types": "rollup -c rollup.types.config.js",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
-    "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\" \"yarn build:platform:react-native\"",
+    "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\" \"yarn build:platform:react-native\" \"yarn build:platform:vite\"",
     "build:fast": "yarn clean && BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:node": "BUILD_TARGET=node rollup -c rollup.platforms.config.js",
     "build:platform:browser": "BUILD_TARGET=browser rollup -c rollup.platforms.config.js",
     "build:platform:electron": "BUILD_TARGET=electron rollup -c rollup.platforms.config.js",
     "build:platform:chrome-extension": "BUILD_TARGET=chrome-extension rollup -c rollup.platforms.config.js",
     "build:platform:react-native": "BUILD_TARGET=react-native rollup -c rollup.platforms.config.js",
+    "build:platform:vite": "BUILD_TARGET=vite rollup -c rollup.platforms.config.js",
     "_____QUALITY_____": "",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "lint": "eslint --config ../../.config/eslint.config.mjs src/**/*.{ts,tsx}",
@@ -146,6 +152,9 @@
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.0",
+    "@vultisig/lib-dkls": "workspace:*",
+    "@vultisig/lib-mldsa": "workspace:*",
+    "@vultisig/lib-schnorr": "workspace:*",
     "@vultisig/mpc-types": "workspace:*",
     "axios": "^1.8.3",
     "bip32": "^5.0.0",
@@ -190,10 +199,14 @@
     "vitest": "^3.2.4"
   },
   "peerDependencies": {
-    "@vultisig/mpc-native": "workspace:*"
+    "@vultisig/mpc-native": "workspace:*",
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
   "peerDependenciesMeta": {
     "@vultisig/mpc-native": {
+      "optional": true
+    },
+    "vite": {
       "optional": true
     }
   },
