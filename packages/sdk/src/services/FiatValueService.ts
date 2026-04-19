@@ -465,11 +465,8 @@ export class FiatValueService {
    * @private
    */
   private async fetchTokenPrice(chain: Chain, tokenAddress: string, currency: FiatCurrency): Promise<number> {
-    // Check if chain supports ERC-20 pricing
-    const isEvmChain = this.isEvmChain(chain)
-
-    if (!isEvmChain) {
-      throw new Error(`Token pricing not supported for ${chain} (non-EVM chain)`)
+    if (!this.isEvmChain(chain)) {
+      return 0
     }
 
     // Fetch ERC-20 token price

@@ -21,7 +21,9 @@
     "cli:interactive": "npx tsx src/index.ts --interactive",
     "repl": "npx tsx src/index.ts --interactive",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude 'tests/e2e/**'",
+    "test:watch": "vitest --exclude 'tests/e2e/**'",
+    "test:e2e": "vitest run tests/e2e/",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -53,7 +55,9 @@
     "@cosmjs/encoding": "^0.38.1",
     "@cosmjs/proto-signing": "^0.38.1",
     "@cosmjs/stargate": "^0.38.1",
+    "@napi-rs/keyring": "^1.2.0",
     "@noble/hashes": "^2.0.1",
+    "@vultisig/client-shared": "workspace:^",
     "@vultisig/rujira": "workspace:^",
     "@vultisig/sdk": "workspace:^",
     "chalk": "^5.6.2",

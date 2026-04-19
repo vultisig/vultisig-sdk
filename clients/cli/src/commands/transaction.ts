@@ -1,28 +1,21 @@
 /**
- * Transaction Commands - send transactions
+ * Transaction Commands - thin wrapper around vault.send()
  */
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
-import qrcode from 'qrcode-terminal'
 
-import type { CommandContext, SendParams, TransactionResult } from '../core'
+import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import { createSpinner, info, isJsonOutput, isSilent, outputJson, printResult, warn } from '../lib/output'
-import { confirmTransaction, displayTransactionPreview, displayTransactionResult, formatBigintAmount } from '../ui'
-
-// AccountCoin type from SDK internals
-type AccountCoin = {
-  chain: Chain
-  address: string
-  decimals: number
-  ticker: string
-  id?: string
-}
+import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
+import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
 
 /**
  * Execute send command - send tokens to an address
  */
-export async function executeSend(ctx: CommandContext, params: SendParams): Promise<TransactionResult> {
+export async function executeSend(
+  ctx: CommandContext,
+  params: SendParams
+): Promise<TransactionResult | SendDryRunResult> {
   const vault = await ctx.ensureActiveVault()
 
   if (!Object.values(Chain).includes(params.chain)) {
@@ -38,54 +31,58 @@ export async function executeSend(ctx: CommandContext, params: SendParams): Prom
 }
 
 /**
- * Send transaction with full flow: prepare -> confirm -> sign -> broadcast
+ * Send transaction: preview -> confirm -> vault.send()
  */
-export async function sendTransaction(vault: VaultBase, params: SendParams): Promise<TransactionResult> {
-  // 1. Prepare transaction
+export async function sendTransaction(
+  vault: VaultBase,
+  params: SendParams
+): Promise<TransactionResult | SendDryRunResult> {
+  // 1. Dry-run for preview
   const prepareSpinner = createSpinner('Preparing transaction...')
 
-  const address = await vault.address(params.chain)
-  const balance = await vault.balance(params.chain, params.tokenId)
-
-  const coin: AccountCoin = {
+  const dryResult = await vault.send({
     chain: params.chain,
-    address,
-    decimals: balance.decimals,
-    ticker: balance.symbol,
-    id: params.tokenId,
-  }
-
-  const isMax = params.amount === 'max'
-  let amount: bigint
-  let displayAmount: string
-
-  if (isMax) {
-    const maxInfo = await vault.getMaxSendAmount({ coin, receiver: params.to, memo: params.memo })
-    amount = maxInfo.maxSendable
-    if (amount === 0n) {
-      throw new Error('Insufficient balance to cover network fees')
-    }
-    displayAmount = formatBigintAmount(amount, balance.decimals)
-  } else {
-    const [whole, frac = ''] = params.amount.split('.')
-    if (frac.length > balance.decimals) {
-      throw new Error(`Amount has more than ${balance.decimals} decimal places`)
-    }
-    const paddedFrac = frac.padEnd(balance.decimals, '0')
-    amount = BigInt(whole || '0') * 10n ** BigInt(balance.decimals) + BigInt(paddedFrac || '0')
-    displayAmount = params.amount
-  }
-
-  const payload = await vault.prepareSendTx({
-    coin,
-    receiver: params.to,
-    amount,
+    to: params.to,
+    amount: params.amount,
+    symbol: params.tokenId,
     memo: params.memo,
+    dryRun: true,
   })
 
   prepareSpinner.succeed('Transaction prepared')
 
-  // 2. Get gas estimate
+  if (!dryResult.dryRun) throw new Error('unreachable')
+
+  // If user asked for dry-run only, return preview
+  if (params.dryRun) {
+    const balance = await vault.balance(params.chain, params.tokenId)
+    const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+    const result: SendDryRunResult = {
+      dryRun: true,
+      chain: params.chain,
+      to: params.to,
+      amount: params.amount,
+      symbol: balance.symbol,
+      balance: balance.formattedAmount,
+    }
+    if (hasInsufficientBalance) {
+      result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
+    }
+    if (isJsonOutput()) {
+      outputJson(result)
+    } else {
+      info(`\nDry-run preview:`)
+      info(`  Chain:   ${result.chain}`)
+      info(`  To:      ${result.to}`)
+      info(`  Amount:  ${result.amount} ${result.symbol}`)
+      info(`  Fee:     ${dryResult.fee} ${result.symbol}`)
+      info(`  Balance: ${result.balance} ${result.symbol}`)
+      if (result.warning) warn(`  Warning: ${result.warning}`)
+    }
+    return result
+  }
+
+  // 2. Show preview and get gas estimate
   let gas: Awaited<ReturnType<typeof vault.gas>> | undefined
   try {
     gas = await vault.gas(params.chain)
@@ -93,21 +90,17 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     warn('\nGas estimation unavailable')
   }
 
-  // 3. Show transaction preview (skip in JSON mode)
+  const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
-    displayTransactionPreview(
-      payload.coin.address,
-      params.to,
-      displayAmount,
-      payload.coin.ticker,
-      params.chain,
-      params.memo,
-      gas
-    )
+    const address = await vault.address(params.chain)
+    displayTransactionPreview(address, params.to, dryResult.total, balance.symbol, params.chain, params.memo, gas)
   }
 
-  // 4. Confirm with user (skip if --yes flag is set or JSON mode)
-  if (!params.yes && !isJsonOutput()) {
+  // 3. Confirm (required in all output modes)
+  if (!params.yes) {
+    if (isNonInteractive()) {
+      throw new Error('Transaction requires confirmation. Use --yes to skip, or --dry-run to preview.')
+    }
     const confirmed = await confirmTransaction()
     if (!confirmed) {
       warn('Transaction cancelled')
@@ -115,92 +108,45 @@ export async function sendTransaction(vault: VaultBase, params: SendParams): Pro
     }
   }
 
-  // Pre-unlock vault before signing to avoid password prompt interference with spinner
+  // 4. Unlock and sign via compound method
   await ensureVaultUnlocked(vault, params.password)
 
-  // 5. Sign transaction
-  const isSecureVault = vault.type === 'secure'
-  const signSpinner = createSpinner(isSecureVault ? 'Preparing secure signing session...' : 'Signing transaction...')
+  const signSpinner = createSpinner(
+    vault.type === 'secure' ? 'Preparing secure signing session...' : 'Signing transaction...'
+  )
 
   vault.on('signingProgress', ({ step }: any) => {
     signSpinner.text = `${step.message} (${step.progress}%)`
   })
 
-  // For secure vaults, handle QR code display and device joining
-  if (isSecureVault) {
-    vault.on('qrCodeReady', ({ qrPayload }: { qrPayload: string }) => {
-      if (isJsonOutput()) {
-        // JSON mode: Print QR URL immediately for scripting
-        printResult(qrPayload)
-      } else if (isSilent()) {
-        // Silent mode: Print URL only
-        printResult(`QR Payload: ${qrPayload}`)
-      } else {
-        // Interactive: Display ASCII QR code
-        signSpinner.stop()
-        info('\nScan this QR code with your Vultisig mobile app to sign:')
-        qrcode.generate(qrPayload, { small: true })
-        info(`\nOr use this URL: ${qrPayload}\n`)
-        signSpinner.start('Waiting for devices to join signing session...')
-      }
-    })
-
-    vault.on(
-      'deviceJoined',
-      ({ deviceId, totalJoined, required }: { deviceId: string; totalJoined: number; required: number }) => {
-        if (!isSilent()) {
-          signSpinner.text = `Device joined: ${totalJoined}/${required} (${deviceId})`
-        } else if (!isJsonOutput()) {
-          printResult(`Device joined: ${totalJoined}/${required}`)
-        }
-      }
-    )
-  }
-
   try {
-    const messageHashes = await vault.extractMessageHashes(payload)
-
-    const signature = await vault.sign(
-      {
-        transaction: payload,
-        chain: payload.coin.chain,
-        messageHashes,
-      },
-      { signal: params.signal }
-    )
-
-    signSpinner.succeed('Transaction signed')
-
-    // 6. Broadcast transaction
-    const broadcastSpinner = createSpinner('Broadcasting transaction...')
-
-    const txHash = await vault.broadcastTx({
+    const result = await vault.send({
       chain: params.chain,
-      keysignPayload: payload,
-      signature,
+      to: params.to,
+      amount: params.amount,
+      symbol: params.tokenId,
+      memo: params.memo,
     })
 
-    broadcastSpinner.succeed(`Transaction broadcast: ${txHash}`)
+    if (result.dryRun) throw new Error('unreachable')
+    const broadcast = result as Extract<typeof result, { dryRun: false }>
 
-    const result: TransactionResult = {
-      txHash,
+    signSpinner.succeed(`Transaction broadcast: ${broadcast.txHash}`)
+
+    const txResult: TransactionResult = {
+      txHash: broadcast.txHash,
       chain: params.chain,
-      explorerUrl: Vultisig.getTxExplorerUrl(params.chain, txHash),
+      explorerUrl: Vultisig.getTxExplorerUrl(params.chain, broadcast.txHash),
     }
 
-    // 7. Display result
     if (isJsonOutput()) {
-      outputJson(result)
+      outputJson(txResult)
     } else {
-      displayTransactionResult(params.chain, txHash)
+      displayTransactionResult(params.chain, broadcast.txHash)
     }
 
-    return result
+    return txResult
   } finally {
     vault.removeAllListeners('signingProgress')
-    if (isSecureVault) {
-      vault.removeAllListeners('qrCodeReady')
-      vault.removeAllListeners('deviceJoined')
-    }
   }
 }

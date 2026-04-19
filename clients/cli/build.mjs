@@ -20,10 +20,12 @@ await build({
   external: [
     '@vultisig/sdk',
     '@vultisig/rujira',
+    '@vultisig/client-shared',
     'dotenv',
     'chalk',
     'commander',
     'inquirer',
+    '@napi-rs/keyring',
     'ora',
     'cli-table3',
     'tabtab',

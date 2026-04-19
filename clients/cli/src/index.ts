@@ -3,10 +3,11 @@ import 'dotenv/config'
 
 import { promises as fs } from 'node:fs'
 
+import { descriptions } from '@vultisig/client-shared'
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
-import { program } from 'commander'
+import { InvalidArgumentError, program } from 'commander'
 import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
@@ -18,6 +19,9 @@ import {
   executeAgentAsk,
   executeAgentSessionsDelete,
   executeAgentSessionsList,
+  executeAuthLogout,
+  executeAuthSetup,
+  executeAuthStatus,
   executeBalance,
   executeBroadcast,
   executeChains,
@@ -40,6 +44,7 @@ import {
   executeRujiraRoutes,
   executeRujiraSwap,
   executeRujiraWithdraw,
+  executeSchema,
   executeSend,
   executeServer,
   executeSignBytes,
@@ -53,6 +58,7 @@ import {
   executeVerify,
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
+import { EXIT_CODE_DESCRIPTIONS } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
@@ -65,7 +71,14 @@ import {
   handleCompletion,
   info,
   initOutputMode,
+  isJsonOutput,
+  isNonInteractive,
+  outputJson,
   printResult,
+  requireInteractive,
+  setFields,
+  setNonInteractive,
+  setQuiet,
   setupCompletionCommand,
   setupUserAgent,
   warn,
@@ -101,13 +114,58 @@ program
   .version(formatVersionShort(), '-v, --version', 'Show version')
   .option('--debug', 'Enable debug output')
   .option('--silent', 'Suppress informational output, show only results')
-  .option('-o, --output <format>', 'Output format: table, json (default: table)', 'table')
+  .option(
+    '-o, --output <format>',
+    'Output format: json, table (defaults to json when piped)',
+    (val: string) => {
+      if (!['json', 'table'].includes(val)) throw new InvalidArgumentError('Must be "json" or "table"')
+      return val
+    },
+    process.stdout.isTTY ? 'table' : 'json'
+  )
+  .option('-q, --quiet', 'Strip empty/zero fields from output')
+  .option('--fields <fields>', 'Comma-separated list of fields to include in output')
+  .option('--non-interactive', 'Disable interactive prompts (fail instead of asking)')
+  .option('--ci', 'CI/automation mode (equivalent to --output json --non-interactive --quiet)')
   .option('-i, --interactive', 'Start interactive shell mode')
   .option('--vault <nameOrId>', 'Specify vault by name or ID')
   .option('--server-url <url>', 'Base Vultisig API URL for FastVault and relay endpoints')
+  .addHelpText(
+    'after',
+    '\nExit codes:\n' +
+      Object.entries(EXIT_CODE_DESCRIPTIONS)
+        .map(([k, v]) => `  ${k}  ${v}`)
+        .join('\n') +
+      '\n\nEnvironment variables:\n' +
+      '  VAULT_PASSWORD          Vault password for signing (bypasses prompt)\n' +
+      '  VULTISIG_PASSWORD       Alias for VAULT_PASSWORD\n' +
+      '  VAULT_PASSWORDS         Space-separated VaultName:password pairs\n' +
+      '  VULTISIG_VAULT          Default vault name or ID\n' +
+      '  VULTISIG_CONFIG_DIR     Override config directory (~/.vultisig)\n' +
+      '  VULTISIG_SILENT         Set to 1 for silent mode\n' +
+      '  NO_COLOR                Disable colored output'
+  )
   .hook('preAction', thisCommand => {
     const opts = thisCommand.opts()
+    // --ci implies --output json --non-interactive --quiet
+    if (opts.ci) {
+      const outputExplicit = process.argv.some(a => a === '--output' || a === '-o' || a.startsWith('--output='))
+      opts.output = opts.output === 'table' && !outputExplicit ? 'json' : opts.output
+      opts.quiet = true
+      opts.nonInteractive = true
+    }
     initOutputMode({ silent: opts.silent, output: opts.output })
+    setQuiet(!!opts.quiet)
+    setNonInteractive(!!opts.nonInteractive)
+    const fields = opts.fields as string | undefined
+    setFields(
+      fields
+        ? fields
+            .split(',')
+            .map((f: string) => f.trim())
+            .filter(Boolean)
+        : undefined
+    )
   })
 
 // ============================================================================
@@ -194,6 +252,15 @@ createCmd
   .requiredOption('--password <password>', 'Vault password')
   .requiredOption('--email <email>', 'Email for verification')
   .option('--two-step', 'Create vault without verifying OTP (verify later with "vultisig verify")')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig create fast --name mywallet --password secret --email me@example.com
+  vultisig create fast --name mywallet --password secret --email me@example.com --two-step
+
+See also: verify, auth setup`
+  )
   .action(
     withExit(async (options: { name: string; password: string; email: string; twoStep?: boolean }) => {
       const context = await init(program.opts().vault)
@@ -242,6 +309,13 @@ program
   .command('import <file>')
   .description('Import vault from .vult file')
   .option('--password <password>', 'Password to decrypt the vault file')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig import ~/vault-backup.vult
+  vultisig import ~/vault-backup.vult --password mypassword`
+  )
   .action(
     withExit(async (file: string, options: { password?: string }) => {
       const context = await init(program.opts().vault)
@@ -258,6 +332,7 @@ const createFromSeedphraseCmd = program
  * Prompt for seedphrase with secure input (masked)
  */
 async function promptSeedphrase(): Promise<string> {
+  requireInteractive('Use --mnemonic flag to provide seedphrase non-interactively.')
   info('\nEnter your 12 or 24-word recovery phrase.')
   info('Words will be hidden as you type.\n')
 
@@ -284,6 +359,7 @@ async function promptSeedphrase(): Promise<string> {
  * Prompt for QR code payload from initiator device
  */
 async function promptQrPayload(): Promise<string> {
+  requireInteractive('Use --qr or --qr-file flag to provide QR payload non-interactively.')
   info('\nEnter the QR code payload from the initiator device.')
   info('The payload starts with "vultisig://".\n')
 
@@ -494,9 +570,18 @@ program
 // Command: Show balances
 program
   .command('balance [chain]')
-  .description('Show balance for a chain or all chains')
-  .option('-t, --tokens', 'Include token balances')
+  .description(descriptions.balance.description)
+  .option('-t, --tokens', descriptions.balance.params.includeTokens)
   .option('--raw', 'Show raw values (wei/satoshis) for programmatic use')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig balance
+  vultisig balance Ethereum --tokens
+  vultisig balance --output json --fields chain,amount
+  vultisig balance --output json -q`
+  )
   .action(
     withExit(async (chainStr: string | undefined, options: { tokens?: boolean; raw?: boolean }) => {
       const context = await init(program.opts().vault)
@@ -511,19 +596,43 @@ program
 // Command: Send transaction
 program
   .command('send <chain> <to> [amount]')
-  .description('Send tokens to an address')
+  .description(descriptions.send.description)
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
-  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview transaction without signing or broadcasting')
+  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('-y, --yes', 'Alias for --confirm')
   .option('--password <password>', 'Vault password for signing')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig send Ethereum 0x1234...abcd 0.1
+  vultisig send Bitcoin bc1q... --max --confirm
+  vultisig send Ethereum 0x... 0.5 --dry-run --output json
+
+Environment variables:
+  VAULT_PASSWORD    Vault password (bypasses prompt)
+  VAULT_PASSWORDS   Space-separated VaultName:password pairs
+
+See also: balance, tx-status`
+  )
   .action(
     withExit(
       async (
         chainStr: string,
         to: string,
         amount: string | undefined,
-        options: { max?: boolean; token?: string; memo?: string; yes?: boolean; password?: string }
+        options: {
+          max?: boolean
+          token?: string
+          memo?: string
+          dryRun?: boolean
+          yes?: boolean
+          confirm?: boolean
+          password?: string
+        }
       ) => {
         if (!amount && !options.max) throw new Error('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
@@ -535,7 +644,8 @@ program
             amount: amount ?? 'max',
             tokenId: options.token,
             memo: options.memo,
-            yes: options.yes,
+            dryRun: options.dryRun,
+            yes: options.yes || options.confirm,
             password: options.password,
           })
         } catch (err: any) {
@@ -555,15 +665,23 @@ program
   .description('Execute a CosmWasm smart contract (THORChain, MayaChain)')
   .option('--funds <funds>', 'Funds to send with execution (format: "denom:amount" or "denom:amount,denom2:amount2")')
   .option('--memo <memo>', 'Transaction memo')
+  .option('--dry-run', 'Preview execution without signing or broadcasting')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--password <password>', 'Vault password for signing')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig execute THORChain <contract> '{"swap":{}}' --yes
+  vultisig execute THORChain <contract> '{"deposit":{}}' --funds rune:1000000 --output json`
+  )
   .action(
     withExit(
       async (
         chainStr: string,
         contract: string,
         msg: string,
-        options: { funds?: string; memo?: string; yes?: boolean; password?: string }
+        options: { funds?: string; memo?: string; dryRun?: boolean; yes?: boolean; password?: string }
       ) => {
         const context = await init(program.opts().vault, options.password)
         try {
@@ -573,6 +691,7 @@ program
             msg,
             funds: options.funds,
             memo: options.memo,
+            dryRun: options.dryRun,
             yes: options.yes,
             password: options.password,
           })
@@ -628,6 +747,13 @@ program
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
   .option('--no-wait', 'Return immediately without waiting for confirmation')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig tx-status --chain Ethereum --tx-hash 0xabc...
+  vultisig tx-status --chain Bitcoin --tx-hash abc... --no-wait --output json`
+  )
   .action(
     withExit(async (options: { chain: string; txHash: string; wait: boolean }) => {
       const context = await init(program.opts().vault)
@@ -642,9 +768,16 @@ program
 // Command: Show portfolio value
 program
   .command('portfolio')
-  .description('Show total portfolio value')
+  .description(descriptions.portfolio.description)
   .option('-c, --currency <currency>', 'Fiat currency (usd, eur, gbp, etc.)', 'usd')
   .option('--raw', 'Show raw values (wei/satoshis) for programmatic use')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig portfolio
+  vultisig portfolio --currency eur --output json`
+  )
   .action(
     withExit(async (options: { currency: string; raw?: boolean }) => {
       const context = await init(program.opts().vault)
@@ -695,6 +828,13 @@ program
   .description('Export vault to file')
   .option('--password <password>', 'Password to unlock the vault (for encrypted vaults)')
   .option('--exportPassword <password>', 'Password to encrypt the exported file (defaults to --password)')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig export ~/backup.vult
+  vultisig export ~/backup.vult --password mypass --output json`
+  )
   .action(
     withExit(async (path: string | undefined, options: { password?: string; exportPassword?: string }) => {
       const context = await init(program.opts().vault, options.password)
@@ -709,7 +849,14 @@ program
 // Command: Show addresses
 program
   .command('addresses')
-  .description('Show all vault addresses')
+  .description(descriptions.address.description)
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig addresses
+  vultisig addresses --output json --fields chain,address`
+  )
   .action(
     withExit(async () => {
       const context = await init(program.opts().vault)
@@ -746,6 +893,14 @@ program
   .option('--add <chain>', 'Add a chain')
   .option('--add-all', 'Add all supported chains')
   .option('--remove <chain>', 'Remove a chain')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig chains
+  vultisig chains --add Solana
+  vultisig chains --add-all --output json`
+  )
   .action(
     withExit(async (options: { add?: string; addAll?: boolean; remove?: string }) => {
       const context = await init(program.opts().vault)
@@ -761,6 +916,13 @@ program
 program
   .command('vaults')
   .description('List all stored vaults')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig vaults
+  vultisig vaults --output json`
+  )
   .action(
     withExit(async () => {
       const context = await init(program.opts().vault)
@@ -793,7 +955,7 @@ program
 // Command: Show vault info
 program
   .command('info')
-  .description('Show detailed vault information')
+  .description(descriptions.vaultInfo.description)
   .action(
     withExit(async () => {
       const context = await init(program.opts().vault)
@@ -822,6 +984,15 @@ program
   .description('List and manage tokens for a chain')
   .option('--add <contractAddress>', 'Add a token by contract address')
   .option('--remove <tokenId>', 'Remove a token by ID')
+  .option('--discover', 'Auto-discover tokens with balances on the chain')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig tokens Ethereum
+  vultisig tokens Ethereum --discover --output json
+  vultisig tokens Ethereum --add 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --symbol USDC --decimals 6`
+  )
   .option('--symbol <symbol>', 'Token symbol (for --add)')
   .option('--name <name>', 'Token name (for --add)')
   .option('--decimals <decimals>', 'Token decimals (for --add)', '18')
@@ -829,13 +1000,21 @@ program
     withExit(
       async (
         chainStr: string,
-        options: { add?: string; remove?: string; symbol?: string; name?: string; decimals?: string }
+        options: {
+          add?: string
+          remove?: string
+          discover?: boolean
+          symbol?: string
+          name?: string
+          decimals?: string
+        }
       ) => {
         const context = await init(program.opts().vault)
         await executeTokens(context, {
           chain: findChainByName(chainStr) || (chainStr as Chain),
           add: options.add,
           remove: options.remove,
+          discover: options.discover,
           symbol: options.symbol,
           name: options.name,
           decimals: options.decimals ? parseInt(options.decimals, 10) : undefined,
@@ -851,7 +1030,7 @@ program
 // Command: List supported swap chains
 program
   .command('swap-chains')
-  .description('List chains that support swaps')
+  .description(descriptions.supportedChains.description)
   .action(
     withExit(async () => {
       const context = await init(program.opts().vault)
@@ -862,10 +1041,17 @@ program
 // Command: Get swap quote
 program
   .command('swap-quote <fromChain> <toChain> [amount]')
-  .description('Get a swap quote without executing')
+  .description(descriptions.swapQuote.description)
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig swap-quote Ethereum Bitcoin 0.1
+  vultisig swap-quote Ethereum Bitcoin --max --output json`
+  )
   .action(
     withExit(
       async (
@@ -891,13 +1077,25 @@ program
 // Command: Execute swap
 program
   .command('swap <fromChain> <toChain> [amount]')
-  .description('Swap tokens between chains')
+  .description(descriptions.swap.description)
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
-  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview swap without signing or broadcasting')
+  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('-y, --yes', 'Alias for --confirm')
   .option('--password <password>', 'Vault password for signing')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig swap Ethereum Bitcoin 0.1
+  vultisig swap Ethereum Bitcoin --max --confirm
+  vultisig swap Ethereum Bitcoin 0.5 --dry-run --output json
+
+See also: swap-quote, swap-chains, balance`
+  )
   .action(
     withExit(
       async (
@@ -909,7 +1107,9 @@ program
           fromToken?: string
           toToken?: string
           slippage?: string
+          dryRun?: boolean
           yes?: boolean
+          confirm?: boolean
           password?: string
         }
       ) => {
@@ -924,7 +1124,8 @@ program
             fromToken: options.fromToken,
             toToken: options.toToken,
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,
-            yes: options.yes,
+            dryRun: options.dryRun,
+            yes: options.yes || options.confirm,
             password: options.password,
           })
         } catch (err: any) {
@@ -1007,6 +1208,7 @@ rujiraCmd
   .description('Execute a FIN swap (amount in base units)')
   .option('--slippage-bps <bps>', 'Slippage tolerance in basis points (default: 100 = 1%)', '100')
   .option('--destination <thorAddress>', 'Destination THOR address (default: vault THORChain address)')
+  .option('--dry-run', 'Preview swap quote without executing')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--password <password>', 'Vault password for signing')
   .option('--rpc <url>', 'Override THORChain RPC endpoint')
@@ -1020,6 +1222,7 @@ rujiraCmd
         options: {
           slippageBps?: string
           destination?: string
+          dryRun?: boolean
           yes?: boolean
           password?: string
           rpc?: string
@@ -1033,6 +1236,7 @@ rujiraCmd
           amount,
           slippageBps: options.slippageBps ? parseInt(options.slippageBps, 10) : undefined,
           destination: options.destination,
+          dryRun: options.dryRun,
           yes: options.yes,
           password: options.password,
           rpcEndpoint: options.rpc,
@@ -1046,6 +1250,7 @@ rujiraCmd
   .command('withdraw <asset> <amount> <l1Address>')
   .description('Withdraw secured assets to L1 (amount in base units)')
   .option('--max-fee-bps <bps>', 'Max outbound fee as bps of amount (optional)')
+  .option('--dry-run', 'Preview withdrawal without executing')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--password <password>', 'Vault password for signing')
   .option('--rpc <url>', 'Override THORChain RPC endpoint')
@@ -1058,6 +1263,7 @@ rujiraCmd
         l1Address: string,
         options: {
           maxFeeBps?: string
+          dryRun?: boolean
           yes?: boolean
           password?: string
           rpc?: string
@@ -1070,6 +1276,7 @@ rujiraCmd
           amount,
           l1Address,
           maxFeeBps: options.maxFeeBps ? parseInt(options.maxFeeBps, 10) : undefined,
+          dryRun: options.dryRun,
           yes: options.yes,
           password: options.password,
           rpcEndpoint: options.rpc,
@@ -1138,7 +1345,14 @@ agentCmd
   .option('--backend-url <url>', 'Agent backend URL (default: https://abe.vultisig.com)')
   .option('--password <password>', 'Vault password for signing operations')
   .option('--verbose', 'Show tool calls and debug info on stderr')
-  .option('--json', 'Output structured JSON instead of text')
+  .option('--json', 'Output structured JSON (deprecated: use --output json)')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig agent ask "What is my ETH balance?" --output json
+  vultisig agent ask "Send 0.1 ETH to 0x..." --session abc123 --yes`
+  )
   .action(
     async (
       message: string,
@@ -1251,8 +1465,95 @@ program
     })
   )
 
+// ============================================================================
+// Auth Commands (keyring credential management)
+// ============================================================================
+
+const authCmd = program.command('auth').description('Manage keyring-stored vault credentials')
+
+authCmd
+  .command('setup')
+  .description('Discover .vult files, prompt for passwords, and store credentials in the OS keyring')
+  .option('--vault-file <path>', 'Path to a specific .vult file')
+  .option('--non-interactive', 'Fail instead of prompting (use env vars)')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  vultisig auth setup
+  vultisig auth setup --vault-file ~/vault.vult
+  VAULT_PASSWORD=secret VAULT_DECRYPT_PASSWORD=pass vultisig auth setup --non-interactive`
+  )
+  .action(
+    withExit(async (options: { vaultFile?: string; nonInteractive?: boolean }) => {
+      const result = await executeAuthSetup({
+        vaultFile: options.vaultFile,
+        nonInteractive: options.nonInteractive || isNonInteractive(),
+      })
+      if (isJsonOutput()) {
+        outputJson({
+          stored: true,
+          vaultId: result.vaultId,
+          vaultName: result.vaultName,
+          storageBackend: result.storageBackend,
+        })
+      } else {
+        printResult(
+          chalk.green(`Vault "${result.vaultName}" (${result.vaultId}) credentials stored in ${result.storageBackend}.`)
+        )
+      }
+    })
+  )
+
+authCmd
+  .command('status')
+  .description('List configured vaults and their keyring credential status')
+  .action(
+    withExit(async () => {
+      const vaults = await executeAuthStatus()
+      if (isJsonOutput()) {
+        outputJson({
+          vaults: vaults.map(v => ({ id: v.id, name: v.name, filePath: v.filePath, hasCredentials: v.hasCredentials })),
+        })
+        return
+      }
+      if (vaults.length === 0) {
+        printResult('No vaults configured. Run: vsig auth setup')
+        return
+      }
+      for (const v of vaults) {
+        const status = v.hasCredentials ? chalk.green('authenticated') : chalk.red('no credentials')
+        printResult(`  ${v.name} (${v.id}) - ${status}`)
+        printResult(`    File: ${v.filePath}`)
+      }
+    })
+  )
+
+authCmd
+  .command('logout')
+  .description('Clear keyring credentials for a vault')
+  .option('--vault-id <id>', 'Specific vault ID to clear')
+  .option('--all', 'Clear credentials for all configured vaults')
+  .action(
+    withExit(async (options: { vaultId?: string; all?: boolean }) => {
+      await executeAuthLogout({ vaultId: options.vaultId, all: options.all })
+      if (isJsonOutput()) {
+        outputJson({ cleared: true, vaultId: options.vaultId ?? null, all: !!options.all })
+      } else {
+        printResult(chalk.green('Credentials cleared.'))
+      }
+    })
+  )
+
 // Setup completion command
 setupCompletionCommand(program)
+
+// Schema discovery (hidden, for machine clients)
+program
+  .command('schema', { hidden: true })
+  .description('Output machine-readable command schema (JSON introspection for agents)')
+  .helpOption(false)
+  .action(withExit(async () => executeSchema(program)))
 
 // ============================================================================
 // Interactive Mode
