@@ -7,8 +7,37 @@ export type CardanoNativeAsset = {
   quantity: string
 }
 
+const hexPattern = /^[0-9a-fA-F]*$/
+
 const hexToBytes = (hex: string): Uint8Array =>
   Uint8Array.from(Buffer.from(stripHexPrefix(hex), 'hex'))
+
+const assertEvenHex = (field: string, value: string) => {
+  const stripped = stripHexPrefix(value)
+  if (stripped.length === 0 || stripped.length % 2 !== 0 || !hexPattern.test(stripped)) {
+    throw new Error(
+      `buildCardanoValue: ${field} must be non-empty even-length hex, got ${JSON.stringify(value)}`
+    )
+  }
+}
+
+const assertNonNegativeQuantity = (value: string) => {
+  const parsed = attemptBigInt(value)
+  if (parsed === null || parsed < 0n) {
+    throw new Error(
+      `buildCardanoValue: quantity must be a non-negative integer, got ${JSON.stringify(value)}`
+    )
+  }
+  return parsed
+}
+
+const attemptBigInt = (value: string): bigint | null => {
+  try {
+    return BigInt(value)
+  } catch {
+    return null
+  }
+}
 
 /**
  * Build the in-memory tree representing a Cardano `value` per the CDDL:
@@ -33,6 +62,19 @@ export const buildCardanoValue = (
   const byPolicy = new Map<string, Bucket>()
 
   for (const a of assets) {
+    assertEvenHex('policy_id', a.policy_id)
+    // asset_name may legitimately be empty (per-policy "default" asset), so
+    // only validate the hex shape when a name is provided.
+    if (a.asset_name.length > 0) {
+      const stripped = stripHexPrefix(a.asset_name)
+      if (stripped.length % 2 !== 0 || !hexPattern.test(stripped)) {
+        throw new Error(
+          `buildCardanoValue: asset_name must be even-length hex, got ${JSON.stringify(a.asset_name)}`
+        )
+      }
+    }
+    const quantity = assertNonNegativeQuantity(a.quantity)
+
     const policyKey = a.policy_id.toLowerCase()
     let bucket = byPolicy.get(policyKey)
     if (!bucket) {
@@ -43,7 +85,7 @@ export const buildCardanoValue = (
     const prior = bucket.byName.get(nameKey)
     bucket.byName.set(nameKey, {
       name: hexToBytes(a.asset_name),
-      qty: (prior?.qty ?? 0n) + BigInt(a.quantity),
+      qty: (prior?.qty ?? 0n) + quantity,
     })
   }
 

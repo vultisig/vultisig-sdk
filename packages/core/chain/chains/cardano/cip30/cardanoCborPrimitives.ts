@@ -47,8 +47,20 @@ export const cborMap = (entries: Array<[Uint8Array, Uint8Array]>): Uint8Array =>
     ...entries.flatMap(([k, v]) => [k, v]),
   ])
 
-/** Encode the major-type + argument head (RFC 8949 §3.1). */
+/**
+ * Encode the major-type + argument head (RFC 8949 §3.1).
+ *
+ * `value` must be a non-negative safe integer ≤ 0xFFFFFFFF. Throws otherwise —
+ * the callers here (COSE keys, witness-set indices, small lengths) never need
+ * 64-bit arguments, and silently truncating a bigger value would produce
+ * invalid CBOR that downstream consumers only catch at parse time.
+ */
 const cborHead = (majorType: number, value: number): Uint8Array => {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new Error(
+      `cborHead: value must be a non-negative integer ≤ 2^32-1, got ${value}`
+    )
+  }
   const mt = majorType << 5
   if (value < 24) return Uint8Array.of(mt | value)
   if (value < 0x100) return Uint8Array.of(mt | 24, value)

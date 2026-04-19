@@ -23,8 +23,15 @@ type Input = {
 export const encodeCardanoUnspentOutput = ({
   utxo,
   addressBytes,
-}: Input): Uint8Array =>
-  cardanoCborEncoder.encode([
-    [hexToBytes(utxo.hash), utxo.index],
+}: Input): Uint8Array => {
+  const txHashBytes = hexToBytes(utxo.hash)
+  if (txHashBytes.length !== 32) {
+    throw new Error(
+      `encodeCardanoUnspentOutput: tx_hash must be 32 bytes, got ${txHashBytes.length} (hash=${JSON.stringify(utxo.hash)})`
+    )
+  }
+  return cardanoCborEncoder.encode([
+    [txHashBytes, utxo.index],
     [addressBytes, buildCardanoValue(utxo.amount, utxo.assets)],
   ])
+}

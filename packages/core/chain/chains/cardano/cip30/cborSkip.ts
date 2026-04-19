@@ -5,8 +5,16 @@
  *
  * Supports: unsigned/negative ints, byte/text strings, arrays, maps, tags,
  * and simple values (true/false/null). Does NOT support indefinite-length.
+ *
+ * Every read is bounds-checked so a truncated / malformed CBOR input fails
+ * fast with a descriptive error instead of silently returning bogus offsets.
  */
 export const cborSkip = (data: Uint8Array, offset: number): number => {
+  if (offset >= data.length) {
+    throw new Error(
+      `cborSkip: offset ${offset} is out of bounds (data length ${data.length})`
+    )
+  }
   const initial = data[offset]
   const majorType = initial >> 5
   const additional = initial & 0x1f
@@ -17,7 +25,15 @@ export const cborSkip = (data: Uint8Array, offset: number): number => {
   if (majorType <= 1) return nextOffset
 
   // Major type 2/3: byte/text string — head + N bytes
-  if (majorType <= 3) return nextOffset + Number(value)
+  if (majorType <= 3) {
+    const end = nextOffset + Number(value)
+    if (end > data.length) {
+      throw new Error(
+        `cborSkip: truncated string at offset ${offset} (need ${Number(value)} bytes, have ${data.length - nextOffset})`
+      )
+    }
+    return end
+  }
 
   // Major type 4: array — head + N items
   if (majorType === 4) {
@@ -57,13 +73,27 @@ const readArgument = (
   offset: number,
   additional: number
 ): { value: bigint; nextOffset: number } => {
+  const ensureBytes = (needed: number) => {
+    const end = offset + 1 + needed
+    if (end > data.length) {
+      throw new Error(
+        `cborSkip/readArgument: truncated CBOR head at offset ${offset} (need ${needed} argument bytes, have ${data.length - offset - 1})`
+      )
+    }
+  }
+
   if (additional < 24) return { value: BigInt(additional), nextOffset: offset + 1 }
-  if (additional === 24) return { value: BigInt(data[offset + 1]), nextOffset: offset + 2 }
+  if (additional === 24) {
+    ensureBytes(1)
+    return { value: BigInt(data[offset + 1]), nextOffset: offset + 2 }
+  }
   if (additional === 25) {
+    ensureBytes(2)
     const v = (data[offset + 1] << 8) | data[offset + 2]
     return { value: BigInt(v), nextOffset: offset + 3 }
   }
   if (additional === 26) {
+    ensureBytes(4)
     const v =
       (data[offset + 1] << 24) |
       (data[offset + 2] << 16) |
@@ -72,6 +102,7 @@ const readArgument = (
     return { value: BigInt(v >>> 0), nextOffset: offset + 5 }
   }
   if (additional === 27) {
+    ensureBytes(8)
     const hi =
       (data[offset + 1] << 24) |
       (data[offset + 2] << 16) |
