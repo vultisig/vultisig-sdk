@@ -49,7 +49,7 @@ const WASM_GLUE_PACKAGES = [
   '@vultisig/lib-mldsa',
 ] as const
 
-export function vultisigSdk(): Plugin {
+export default function vultisigSdk(): Plugin {
   return {
     name: 'vultisig-sdk',
     enforce: 'pre',
@@ -62,5 +62,3 @@ export function vultisigSdk(): Plugin {
     },
   }
 }
-
-export default vultisigSdk
