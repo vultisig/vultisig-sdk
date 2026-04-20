@@ -1,5 +1,12 @@
 # @vultisig/core-chain
 
+## 1.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`ed1eb16`](https://github.com/vultisig/vultisig-sdk/commit/ed1eb16b868176b796629e10de95fddcf701c151)]:
+  - @vultisig/lib-utils@0.9.2
+
 ## 1.2.1
 
 ### Patch Changes
