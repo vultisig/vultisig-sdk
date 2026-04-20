@@ -19,6 +19,7 @@ export enum RujiraErrorCode {
   INVALID_ADDRESS = 'INVALID_ADDRESS',
   INVALID_PAIR = 'INVALID_PAIR',
   INVALID_SLIPPAGE = 'INVALID_SLIPPAGE',
+  INVALID_PARAMS = 'INVALID_PARAMS',
 
   // Balance errors
   INSUFFICIENT_BALANCE = 'INSUFFICIENT_BALANCE',
@@ -111,6 +112,7 @@ const USER_FRIENDLY_MESSAGES: Record<RujiraErrorCode, string> = {
   [RujiraErrorCode.INVALID_ADDRESS]: 'Invalid address format.',
   [RujiraErrorCode.INVALID_PAIR]: 'Trading pair not found or not supported.',
   [RujiraErrorCode.INVALID_SLIPPAGE]: 'Invalid slippage tolerance. Must be between 0.01% and 50%.',
+  [RujiraErrorCode.INVALID_PARAMS]: 'Invalid parameters. Please check the input and try again.',
 
   [RujiraErrorCode.INSUFFICIENT_BALANCE]: 'Insufficient balance for this transaction.',
   [RujiraErrorCode.INSUFFICIENT_GAS]: 'Insufficient RUNE for gas fees.',

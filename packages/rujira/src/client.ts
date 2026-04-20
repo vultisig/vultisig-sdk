@@ -11,6 +11,7 @@ import { RujiraDeposit } from './modules/deposit.js'
 import { RujiraGhost } from './modules/ghost.js'
 import { RujiraOrderbook } from './modules/orderbook.js'
 import { RujiraPerps } from './modules/perps.js'
+import { RujiraRange } from './modules/range.js'
 import { RujiraStaking } from './modules/staking.js'
 import { RujiraSwap, type RujiraSwapOptions } from './modules/swap.js'
 import { RujiraWithdraw } from './modules/withdraw.js'
@@ -42,6 +43,7 @@ export class RujiraClient {
   public readonly staking: RujiraStaking
   public readonly ghost: RujiraGhost
   public readonly perps: RujiraPerps
+  public readonly range: RujiraRange
   public readonly discovery: RujiraDiscovery
 
   private queryClient: CosmWasmClient | null = null
@@ -80,6 +82,7 @@ export class RujiraClient {
     this.staking = new RujiraStaking(this)
     this.ghost = new RujiraGhost(this)
     this.perps = new RujiraPerps(this)
+    this.range = new RujiraRange(this)
 
     this.discovery = new RujiraDiscovery({
       rpcEndpoint: this.config.rpcEndpoint,
