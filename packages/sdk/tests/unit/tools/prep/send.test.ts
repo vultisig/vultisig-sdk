@@ -215,4 +215,30 @@ describe('prepareSendTxFromKeys', () => {
 
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
+
+  it('forwards chainPublicKeys to getPublicKey (seedphrase-imported vault)', async () => {
+    const identity: VaultIdentity = {
+      ...baseIdentity,
+      chainPublicKeys: {
+        [Chain.Ethereum]: '03per-chain-ecdsa',
+      },
+    }
+
+    await prepareSendTxFromKeys(identity, {
+      coin: {
+        chain: Chain.Ethereum,
+        address: '0xfrom',
+        decimals: 18,
+        ticker: 'ETH',
+      } as any,
+      receiver: '0xto',
+      amount: 1_000_000_000_000_000_000n,
+    })
+
+    expect(mockGetPublicKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chainPublicKeys: identity.chainPublicKeys,
+      })
+    )
+  })
 })

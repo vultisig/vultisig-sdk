@@ -255,7 +255,6 @@ export {
   resolve4ByteSelector,
   resolveEns,
   searchToken,
-  vaultDataToIdentity,
   VerifierClient,
 } from './tools'
 

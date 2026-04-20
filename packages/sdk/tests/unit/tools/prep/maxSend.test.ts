@@ -29,7 +29,7 @@ vi.mock('@vultisig/mpc-types', () => ({
   getMpcEngine: vi.fn(),
 }))
 
-import { getMaxSendAmountFromKeys } from '@/tools/prep/maxSend'
+import { computeMaxSendFromBalance, getMaxSendAmountFromKeys } from '@/tools/prep/maxSend'
 import type { VaultIdentity } from '@/tools/prep/types'
 
 const baseIdentity: VaultIdentity = {
@@ -128,6 +128,7 @@ describe('getMaxSendAmountFromKeys', () => {
 
   it('rejects when receiver address is invalid', async () => {
     mockIsValidAddress.mockReturnValue(false)
+    mockGetCoinBalance.mockResolvedValue(1_000n)
 
     await expect(
       getMaxSendAmountFromKeys(baseIdentity, {
@@ -141,7 +142,9 @@ describe('getMaxSendAmountFromKeys', () => {
       })
     ).rejects.toThrow('Invalid receiver address for chain Ethereum: not-an-address')
 
-    expect(mockGetCoinBalance).not.toHaveBeenCalled()
+    // Validation happens inside computeMaxSendFromBalance (the canonical check),
+    // which runs after getCoinBalance in the vault-free path. VaultBase.getMaxSendAmount
+    // hoists the check above the balance fetch for the vault path.
     expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
   })
 
@@ -222,5 +225,80 @@ describe('getMaxSendAmountFromKeys', () => {
     const call = mockGetSendFeeEstimate.mock.calls[0][0]
     expect(call.publicKey).toBeNull()
     expect(call.hexPublicKeyOverride).toBe('mldsa-pubkey-hex')
+  })
+
+  it('forwards chainPublicKeys to getPublicKey (seedphrase-imported vault)', async () => {
+    mockGetCoinBalance.mockResolvedValue(1_000n)
+    mockGetSendFeeEstimate.mockResolvedValue(100n)
+
+    const identity: VaultIdentity = {
+      ...baseIdentity,
+      chainPublicKeys: {
+        [Chain.Ethereum]: '03per-chain-ecdsa',
+      },
+    }
+
+    await getMaxSendAmountFromKeys(identity, {
+      coin: {
+        chain: Chain.Ethereum,
+        address: '0xfrom',
+        decimals: 18,
+        ticker: 'ETH',
+      } as any,
+      receiver: '0xto',
+    })
+
+    expect(mockGetPublicKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chainPublicKeys: identity.chainPublicKeys,
+      })
+    )
+  })
+})
+
+describe('computeMaxSendFromBalance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetWalletCore.mockResolvedValue(mockWalletCore)
+    mockIsValidAddress.mockReturnValue(true)
+    mockGetPublicKey.mockReturnValue(mockPublicKey)
+  })
+
+  it('uses the caller-provided balance and does not fetch balance itself', async () => {
+    const providedBalance = 7_000_000n
+    mockGetSendFeeEstimate.mockResolvedValue(1_000_000n)
+
+    const result = await computeMaxSendFromBalance(baseIdentity, {
+      coin: {
+        chain: Chain.Ethereum,
+        address: '0xfrom',
+        decimals: 18,
+        ticker: 'ETH',
+      } as any,
+      receiver: '0xto',
+      balance: providedBalance,
+    })
+
+    expect(mockGetCoinBalance).not.toHaveBeenCalled()
+    expect(mockGetSendFeeEstimate.mock.calls[0][0].amount).toBe(providedBalance)
+    expect(result.balance).toBe(providedBalance)
+    expect(result.maxSendable).toBe(providedBalance - 1_000_000n)
+  })
+
+  it('returns maxSendable === 0n when fee exceeds the provided balance', async () => {
+    mockGetSendFeeEstimate.mockResolvedValue(10_000n)
+
+    const result = await computeMaxSendFromBalance(baseIdentity, {
+      coin: {
+        chain: Chain.Ethereum,
+        address: '0xfrom',
+        decimals: 18,
+        ticker: 'ETH',
+      } as any,
+      receiver: '0xto',
+      balance: 500n,
+    })
+
+    expect(result.maxSendable).toBe(0n)
   })
 })

@@ -1,4 +1,6 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
+import type { Chain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
@@ -10,20 +12,7 @@ import {
 } from '../../vault/services/cosmos/buildCosmosPayload'
 import type { VaultIdentity } from './types'
 
-const COSMOS_CHAINS = [
-  'Cosmos',
-  'Osmosis',
-  'Dydx',
-  'Kujira',
-  'Terra',
-  'TerraClassic',
-  'Noble',
-  'Akash',
-  'THORChain',
-  'MayaChain',
-]
-
-const isCosmosChain = (chain: string): boolean => COSMOS_CHAINS.includes(chain)
+const isCosmosChain = (chain: string): boolean => isChainOfKind(chain as Chain, 'cosmos')
 
 /**
  * Build a SignAmino `KeysignPayload` from raw vault identity fields, without
@@ -77,6 +66,7 @@ export const prepareSignAminoTxFromKeys = async (
       eddsa: identity.eddsaPublicKey,
     },
     hexChainCode: identity.hexChainCode,
+    chainPublicKeys: identity.chainPublicKeys,
   })
 
   return buildSignAminoKeysignPayload({
@@ -136,6 +126,7 @@ export const prepareSignDirectTxFromKeys = async (
       eddsa: identity.eddsaPublicKey,
     },
     hexChainCode: identity.hexChainCode,
+    chainPublicKeys: identity.chainPublicKeys,
   })
 
   return buildSignDirectKeysignPayload({

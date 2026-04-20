@@ -70,6 +70,7 @@ export const prepareSendTxFromKeys = async (
           eddsa: identity.eddsaPublicKey,
         },
         hexChainCode: identity.hexChainCode,
+        chainPublicKeys: identity.chainPublicKeys,
       })
 
   const hexPublicKeyOverride = isQbtc

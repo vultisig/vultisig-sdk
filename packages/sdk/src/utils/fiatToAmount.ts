@@ -108,7 +108,10 @@ export const fiatToAmount = async (params: FiatToAmountParams): Promise<string> 
       price = prices[tokenId.toLowerCase()] ?? 0
     } else {
       const feeCoin = chainFeeCoin[chain]
-      if (!feeCoin?.priceProviderId) {
+      if (!feeCoin) {
+        throw new FiatToAmountError(`Unknown chain "${chain}".`)
+      }
+      if (!feeCoin.priceProviderId) {
         throw new FiatToAmountError(`No price provider ID configured for chain "${chain}".`)
       }
       const prices = await getCoinPrices({

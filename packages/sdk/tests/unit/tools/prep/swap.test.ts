@@ -240,4 +240,38 @@ describe('prepareSwapTxFromKeys', () => {
     expect(mockGetWalletCore).not.toHaveBeenCalled()
     expect(mockBuildSwapKeysignPayload.mock.calls[0][0].walletCore).toBe(overrideWalletCore)
   })
+
+  it('forwards chainPublicKeys to getPublicKey for both fromCoin and toCoin (seedphrase-imported vault)', async () => {
+    const identity: VaultIdentity = {
+      ...baseIdentity,
+      chainPublicKeys: {
+        [Chain.Ethereum]: '03eth-per-chain',
+        [Chain.Bitcoin]: '03btc-per-chain',
+      },
+    }
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+
+    await prepareSwapTxFromKeys(identity, {
+      fromCoin: ethCoin,
+      toCoin: btcCoin,
+      amount: '1',
+      swapQuote: swapQuoteStub,
+    })
+
+    expect(mockGetPublicKey).toHaveBeenCalledTimes(2)
+    expect(mockGetPublicKey).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        chain: Chain.Ethereum,
+        chainPublicKeys: identity.chainPublicKeys,
+      })
+    )
+    expect(mockGetPublicKey).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        chain: Chain.Bitcoin,
+        chainPublicKeys: identity.chainPublicKeys,
+      })
+    )
+  })
 })

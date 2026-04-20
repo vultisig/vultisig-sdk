@@ -51,6 +51,7 @@ export const prepareSwapTxFromKeys = async (
       eddsa: identity.eddsaPublicKey,
     },
     hexChainCode: identity.hexChainCode,
+    chainPublicKeys: identity.chainPublicKeys,
   })
 
   const toPublicKey = getPublicKey({
@@ -61,6 +62,7 @@ export const prepareSwapTxFromKeys = async (
       eddsa: identity.eddsaPublicKey,
     },
     hexChainCode: identity.hexChainCode,
+    chainPublicKeys: identity.chainPublicKeys,
   })
 
   return buildSwapKeysignPayload({

@@ -116,6 +116,28 @@ describe('prepareSignAminoTxFromKeys', () => {
     expect(mockBuildSignAminoKeysignPayload).not.toHaveBeenCalled()
     expect(mockGetWalletCore).not.toHaveBeenCalled()
   })
+
+  it('forwards chainPublicKeys to getPublicKey (seedphrase-imported vault)', async () => {
+    const identity: VaultIdentity = {
+      ...baseIdentity,
+      chainPublicKeys: {
+        [Chain.Cosmos]: '03cosmos-per-chain',
+      },
+    }
+
+    await prepareSignAminoTxFromKeys(identity, {
+      chain: Chain.Cosmos,
+      coin: cosmosCoin,
+      msgs: [{ type: 'cosmos-sdk/MsgVote', value: '{}' }],
+      fee: { amount: [], gas: '0' },
+    } as any)
+
+    expect(mockGetPublicKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chainPublicKeys: identity.chainPublicKeys,
+      })
+    )
+  })
 })
 
 describe('prepareSignDirectTxFromKeys', () => {
@@ -207,5 +229,29 @@ describe('prepareSignDirectTxFromKeys', () => {
 
     expect(mockGetWalletCore).not.toHaveBeenCalled()
     expect(mockGetPublicKey).toHaveBeenCalledWith(expect.objectContaining({ walletCore: overrideWalletCore }))
+  })
+
+  it('forwards chainPublicKeys to getPublicKey (seedphrase-imported vault)', async () => {
+    const identity: VaultIdentity = {
+      ...baseIdentity,
+      chainPublicKeys: {
+        [Chain.Cosmos]: '03cosmos-per-chain',
+      },
+    }
+
+    await prepareSignDirectTxFromKeys(identity, {
+      chain: Chain.Cosmos,
+      coin: cosmosCoin,
+      bodyBytes: 'base64BodyBytes',
+      authInfoBytes: 'base64AuthInfoBytes',
+      chainId: 'cosmoshub-4',
+      accountNumber: '12345',
+    } as any)
+
+    expect(mockGetPublicKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chainPublicKeys: identity.chainPublicKeys,
+      })
+    )
   })
 })

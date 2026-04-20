@@ -32,15 +32,15 @@ npm install @vultisig/sdk
 ### 1. Initialize the SDK
 
 ```typescript
-import { Vultisig } from "@vultisig/sdk";
+import { Vultisig } from '@vultisig/sdk'
 
 // Storage is auto-configured for your platform:
 // - Node.js/Electron: FileStorage (~/.vultisig)
 // - Browser: BrowserStorage (IndexedDB)
-const sdk = new Vultisig();
+const sdk = new Vultisig()
 
 // Initialize WASM modules
-await sdk.initialize();
+await sdk.initialize()
 ```
 
 > **WARNING — Vault Persistence:** Do **not** use `MemoryStorage` in production. It is non-persistent — all vault keyshares are lost when the process exits, resulting in **permanent loss of funds**. The SDK auto-configures persistent storage for your platform. Always back up vaults with `vault.export()`.
@@ -50,27 +50,27 @@ await sdk.initialize();
 ```typescript
 // Create a new vault using VultiServer
 const vaultId = await sdk.createFastVault({
-  name: "My Secure Wallet",
-  email: "user@example.com",
-  password: "SecurePassword123!",
-});
+  name: 'My Secure Wallet',
+  email: 'user@example.com',
+  password: 'SecurePassword123!',
+})
 
 // User will receive a verification code via email
-const code = "1234"; // Get from user input
-const vault = await sdk.verifyVault(vaultId, code);
+const code = '1234' // Get from user input
+const vault = await sdk.verifyVault(vaultId, code)
 ```
 
 ### 3. Derive Blockchain Addresses
 
 ```typescript
 // Derive addresses for different blockchain networks
-const btcAddress = await vault.address("Bitcoin");
-const ethAddress = await vault.address("Ethereum");
-const solAddress = await vault.address("Solana");
+const btcAddress = await vault.address('Bitcoin')
+const ethAddress = await vault.address('Ethereum')
+const solAddress = await vault.address('Solana')
 
-console.log("BTC:", btcAddress); // bc1q...
-console.log("ETH:", ethAddress); // 0x...
-console.log("SOL:", solAddress); // 9WzD...
+console.log('BTC:', btcAddress) // bc1q...
+console.log('ETH:', ethAddress) // 0x...
+console.log('SOL:', solAddress) // 9WzD...
 ```
 
 ### 4. Create a Secure Vault (Multi-Device)
@@ -78,23 +78,23 @@ console.log("SOL:", solAddress); // 9WzD...
 ```typescript
 // Create a secure vault with 2-of-3 threshold
 const { vault, vaultId, sessionId } = await sdk.createSecureVault({
-  name: "Team Wallet",
+  name: 'Team Wallet',
   devices: 3, // Total number of devices
   threshold: 2, // Optional: defaults to ceil((devices+1)/2)
-  password: "optional-password", // Optional: encrypt the vault
-  onQRCodeReady: (qrPayload) => {
+  password: 'optional-password', // Optional: encrypt the vault
+  onQRCodeReady: qrPayload => {
     // Display this QR code for other devices to scan with Vultisig app
-    displayQRCode(qrPayload);
+    displayQRCode(qrPayload)
   },
   onDeviceJoined: (deviceId, totalJoined, required) => {
-    console.log(`Device joined: ${totalJoined}/${required}`);
+    console.log(`Device joined: ${totalJoined}/${required}`)
   },
-  onProgress: (step) => {
-    console.log(`${step.step}: ${step.message}`);
+  onProgress: step => {
+    console.log(`${step.step}: ${step.message}`)
   },
-});
+})
 
-console.log("Vault created:", vault.name);
+console.log('Vault created:', vault.name)
 ```
 
 ### 5. Send a Transaction (Fast Vault)
@@ -105,31 +105,31 @@ Sending a transaction is a 3-step process: **prepare → extract hashes → sign
 // Step 1: Prepare the transaction (handles gas, nonce, UTXO selection automatically)
 const keysignPayload = await vault.prepareSendTx({
   coin: {
-    chain: "Ethereum",
-    address: await vault.address("Ethereum"),
+    chain: 'Ethereum',
+    address: await vault.address('Ethereum'),
     decimals: 18,
-    ticker: "ETH",
+    ticker: 'ETH',
   },
-  receiver: "0x742d35Cc6634C0532925a3b844Bc9e7595f42bE",
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f42bE',
   amount: 1000000000000000000n, // 1 ETH in wei (base units)
-});
+})
 
 // Step 2: Extract message hashes
-const messageHashes = await vault.extractMessageHashes(keysignPayload);
+const messageHashes = await vault.extractMessageHashes(keysignPayload)
 
 // Step 3: Sign
 const signature = await vault.sign({
   transaction: keysignPayload,
-  chain: "Ethereum",
+  chain: 'Ethereum',
   messageHashes,
-});
+})
 
 // Step 4 (optional): Broadcast
 const txHash = await vault.broadcastTx({
-  chain: "Ethereum",
+  chain: 'Ethereum',
   keysignPayload,
   signature,
-});
+})
 ```
 
 For **ERC-20 tokens**, add `id` (the contract address) to the coin:
@@ -137,15 +137,15 @@ For **ERC-20 tokens**, add `id` (the contract address) to the coin:
 ```typescript
 const keysignPayload = await vault.prepareSendTx({
   coin: {
-    chain: "Ethereum",
-    address: await vault.address("Ethereum"),
+    chain: 'Ethereum',
+    address: await vault.address('Ethereum'),
     decimals: 6,
-    ticker: "USDC",
-    id: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    ticker: 'USDC',
+    id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
   },
-  receiver: "0x...",
+  receiver: '0x...',
   amount: 1000000n, // 1 USDC (6 decimals)
-});
+})
 ```
 
 For **Bitcoin/UTXO chains**, UTXO selection and change outputs are handled automatically:
@@ -153,14 +153,14 @@ For **Bitcoin/UTXO chains**, UTXO selection and change outputs are handled autom
 ```typescript
 const keysignPayload = await vault.prepareSendTx({
   coin: {
-    chain: "Bitcoin",
-    address: await vault.address("Bitcoin"),
+    chain: 'Bitcoin',
+    address: await vault.address('Bitcoin'),
     decimals: 8,
-    ticker: "BTC",
+    ticker: 'BTC',
   },
-  receiver: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+  receiver: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
   amount: 50000000n, // 0.5 BTC in satoshis
-});
+})
 ```
 
 ### 5b. Sign with Secure Vault
@@ -170,23 +170,23 @@ Secure vault signing uses the same prepare/sign flow, but requires device coordi
 ```typescript
 const keysignPayload = await vault.prepareSendTx({
   /* same as above */
-});
-const messageHashes = await vault.extractMessageHashes(keysignPayload);
+})
+const messageHashes = await vault.extractMessageHashes(keysignPayload)
 
 await vault.sign(
-  { transaction: keysignPayload, chain: "Ethereum", messageHashes },
+  { transaction: keysignPayload, chain: 'Ethereum', messageHashes },
   {
-    onQRCodeReady: (qrPayload) => {
-      displayQRCode(qrPayload); // Other devices scan this to co-sign
+    onQRCodeReady: qrPayload => {
+      displayQRCode(qrPayload) // Other devices scan this to co-sign
     },
     onDeviceJoined: (deviceId, total, required) => {
-      console.log(`Signing: ${total}/${required} devices ready`);
+      console.log(`Signing: ${total}/${required} devices ready`)
     },
-    onProgress: (step) => {
-      console.log(`Signing progress: ${step.message}`);
+    onProgress: step => {
+      console.log(`Signing progress: ${step.message}`)
     },
-  },
-);
+  }
+)
 ```
 
 ### 6. Import/Export Vaults
@@ -196,16 +196,16 @@ await vault.sign(
 const vaultContent = '...'
 
 // Check if encrypted (sync)
-const isEncrypted = sdk.isVaultEncrypted(vaultContent);
+const isEncrypted = sdk.isVaultEncrypted(vaultContent)
 
 // Import vault
-const vault = await sdk.importVault(vaultContent, isEncrypted ? "password" : undefined);
+const vault = await sdk.importVault(vaultContent, isEncrypted ? 'password' : undefined)
 
 // Export vault to backup format (as Blob)
-const backupBlob = await vault.export("BackupPassword123!");
+const backupBlob = await vault.export('BackupPassword123!')
 
 // Or export as base64 string
-const backupBase64 = await vault.exportAsBase64("BackupPassword123!");
+const backupBase64 = await vault.exportAsBase64('BackupPassword123!')
 ```
 
 ### 7. Create Vault from Seedphrase
@@ -214,95 +214,92 @@ Import an existing wallet from a BIP39 mnemonic. Supports all 10 BIP39 languages
 
 ```typescript
 // Validate the seedphrase first (auto-detects language)
-const validation = await sdk.validateSeedphrase(mnemonic);
+const validation = await sdk.validateSeedphrase(mnemonic)
 if (!validation.valid) {
-  console.error(validation.error);
-  return;
+  console.error(validation.error)
+  return
 }
-console.log(`Detected language: ${validation.detectedLanguage}`); // 'english', 'japanese', etc.
+console.log(`Detected language: ${validation.detectedLanguage}`) // 'english', 'japanese', etc.
 
 // Discover which chains have balances
 const chains = await sdk.discoverChainsFromSeedphrase(
   mnemonic,
   [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain],
-  (progress) => console.log(`${progress.chain}: ${progress.phase}`),
-);
+  progress => console.log(`${progress.chain}: ${progress.phase}`)
+)
 
 for (const result of chains) {
   if (result.hasBalance) {
-    console.log(`${result.chain}: ${result.balance} ${result.symbol}`);
+    console.log(`${result.chain}: ${result.balance} ${result.symbol}`)
   }
 }
 
 // Create FastVault from seedphrase (requires email verification)
 const vaultId = await sdk.createFastVaultFromSeedphrase({
   mnemonic,
-  name: "Imported Wallet",
-  email: "user@example.com",
-  password: "SecurePassword123!",
+  name: 'Imported Wallet',
+  email: 'user@example.com',
+  password: 'SecurePassword123!',
   discoverChains: true, // Auto-enable chains with balances
-  onProgress: (step) => console.log(step.message),
-});
+  onProgress: step => console.log(step.message),
+})
 
 // Verify with email code
-const vault = await sdk.verifyVault(vaultId, verificationCode);
+const vault = await sdk.verifyVault(vaultId, verificationCode)
 ```
 
 ### 8. Token Registry & Prices
 
 ```typescript
-import { Vultisig, Chain, CosmosMsgType } from "@vultisig/sdk";
+import { Vultisig, Chain, CosmosMsgType } from '@vultisig/sdk'
 
 // Look up known tokens (static, no vault needed)
-const tokens = Vultisig.getKnownTokens(Chain.Ethereum);
-const usdc = Vultisig.getKnownToken(
-  Chain.Ethereum,
-  "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-);
+const tokens = Vultisig.getKnownTokens(Chain.Ethereum)
+const usdc = Vultisig.getKnownToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 
 // Get native fee coin info
-const feeCoin = Vultisig.getFeeCoin(Chain.Bitcoin); // { ticker: 'BTC', decimals: 8, ... }
+const feeCoin = Vultisig.getFeeCoin(Chain.Bitcoin) // { ticker: 'BTC', decimals: 8, ... }
 
 // Fetch prices
-const prices = await Vultisig.getCoinPrices({ ids: ["bitcoin", "ethereum"] });
-console.log(`BTC: $${prices.bitcoin}`);
+const prices = await Vultisig.getCoinPrices({ ids: ['bitcoin', 'ethereum'] })
+console.log(`BTC: $${prices.bitcoin}`)
 
 // Discover tokens at vault address
-const discovered = await vault.discoverTokens(Chain.Ethereum);
+const discovered = await vault.discoverTokens(Chain.Ethereum)
 
 // Resolve token metadata (known registry → chain API fallback)
-const token = await vault.resolveToken(Chain.Ethereum, "0x...");
+const token = await vault.resolveToken(Chain.Ethereum, '0x...')
 
 // Cosmos message type constants
-const msgType = CosmosMsgType.MsgSend; // 'cosmos-sdk/MsgSend'
+const msgType = CosmosMsgType.MsgSend // 'cosmos-sdk/MsgSend'
 ```
 
 ### 9. Security Scanning
 
 ```typescript
 // Scan a website for phishing (static, no vault needed)
-const siteScan = await Vultisig.scanSite("https://suspicious-site.com");
-if (siteScan.isMalicious) console.warn("Malicious site!");
+const siteScan = await Vultisig.scanSite('https://suspicious-site.com')
+if (siteScan.isMalicious) console.warn('Malicious site!')
 
 // Validate a transaction before signing
-const validation = await vault.validateTransaction(keysignPayload);
+const validation = await vault.validateTransaction(keysignPayload)
 if (validation?.isRisky) {
-  console.warn(`Risk: ${validation.riskLevel} - ${validation.description}`);
+  console.warn(`Risk: ${validation.riskLevel} - ${validation.description}`)
 }
 
 // Simulate a transaction to preview asset changes
-const simulation = await vault.simulateTransaction(keysignPayload);
+const simulation = await vault.simulateTransaction(keysignPayload)
 ```
 
 ### 10. Fiat On-Ramp (Banxa)
 
 ```typescript
 // Check supported chains
-const chains = Vultisig.getBanxaSupportedChains(); // 23+ chains
+const chains = Vultisig.getBanxaSupportedChains() // 23+ chains
 
 // Generate buy URL for vault address
-const buyUrl = await vault.getBuyUrl(Chain.Bitcoin);
-if (buyUrl) window.open(buyUrl);
+const buyUrl = await vault.getBuyUrl(Chain.Bitcoin)
+if (buyUrl) window.open(buyUrl)
 ```
 
 ### 11. Push Notifications
@@ -316,8 +313,8 @@ await sdk.notifications.registerDevice({
   vaultId: vault.publicKeys.ecdsa,
   partyName: vault.localPartyId,
   token: myPlatformPushToken,
-  deviceType: "ios", // 'ios' | 'android' | 'web'
-});
+  deviceType: 'ios', // 'ios' | 'android' | 'web'
+})
 
 // Step 2: Notify other vault members when initiating a signing session
 await sdk.notifications.notifyVaultMembers({
@@ -325,13 +322,13 @@ await sdk.notifications.notifyVaultMembers({
   vaultName: vault.name,
   localPartyId: vault.localPartyId,
   qrCodeData: keysignQrPayload, // session data for joining
-});
+})
 
 // Step 3: Handle incoming push notifications
-const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
-  console.log(`Signing request for vault: ${notification.vaultName}`);
+const unsubscribe = sdk.notifications.onSigningRequest(notification => {
+  console.log(`Signing request for vault: ${notification.vaultName}`)
   // Use notification.qrCodeData to join the signing session
-});
+})
 ```
 
 #### Consumer Responsibilities
@@ -355,14 +352,14 @@ The SDK handles server communication and state management. Your application is r
 
 ```typescript
 // In your AppDelegate / UNUserNotificationCenter handler:
-sdk.notifications.handleIncomingPush(notification.userInfo);
+sdk.notifications.handleIncomingPush(notification.userInfo)
 ```
 
 **Android** — Use Firebase Cloud Messaging:
 
 ```typescript
 // In your FirebaseMessagingService.onMessageReceived:
-sdk.notifications.handleIncomingPush(remoteMessage.data);
+sdk.notifications.handleIncomingPush(remoteMessage.data)
 ```
 
 **Browser / Extension** — Use WebSocket for real-time delivery (no service worker needed):
@@ -373,37 +370,37 @@ await sdk.notifications.registerDevice({
   vaultId: vault.publicKeys.ecdsa,
   partyName: vault.localPartyId,
   token: myDeviceToken,
-  deviceType: "web",
-});
+  deviceType: 'web',
+})
 
 // Connect WebSocket — notifications delivered via onSigningRequest()
 sdk.notifications.connect({
   vaultId: vault.publicKeys.ecdsa,
   partyName: vault.localPartyId,
   token: myDeviceToken,
-});
+})
 
 // Disconnect when done (also called by sdk.dispose())
-sdk.notifications.disconnect();
+sdk.notifications.disconnect()
 ```
 
 Alternatively, use Web Push API with VAPID key:
 
 ```typescript
-const vapidKey = await sdk.notifications.fetchVapidPublicKey();
+const vapidKey = await sdk.notifications.fetchVapidPublicKey()
 const subscription = await registration.pushManager.subscribe({
   userVisibleOnly: true,
   applicationServerKey: vapidKey,
-});
+})
 await sdk.notifications.registerDevice({
   vaultId: vault.publicKeys.ecdsa,
   partyName: vault.localPartyId,
   token: JSON.stringify(subscription.toJSON()),
-  deviceType: "web",
-});
+  deviceType: 'web',
+})
 
 // In your service worker push event:
-sdk.notifications.handleIncomingPush(event.data.json());
+sdk.notifications.handleIncomingPush(event.data.json())
 ```
 
 **Node.js / CLI** — Use WebSocket delivery (`connect()`) or `parseNotificationPayload()` manually if you implement your own transport.
@@ -413,24 +410,24 @@ sdk.notifications.handleIncomingPush(event.data.json());
 For MCP servers, agents, and other code paths that hold raw public keys but no instantiated vault, the SDK exposes atomic `prepare*FromKeys` helpers that build unsigned `KeysignPayload`s directly from a `VaultIdentity`. These helpers do **not** enable signing — the resulting payload still has to be signed by a vault that holds the key shares. The security boundary is unchanged: only public identity material crosses the API.
 
 ```typescript
-import { prepareSendTxFromKeys, type VaultIdentity } from "@vultisig/sdk";
+import { prepareSendTxFromKeys, type VaultIdentity } from '@vultisig/sdk'
 
 const identity: VaultIdentity = {
-  ecdsaPublicKey: "02abc...",
-  eddsaPublicKey: "d1e2...",
-  hexChainCode: "a1b2...",
-  localPartyId: "server-1", // must match the value the signing devices were registered with
-  libType: "DKLS",
-};
+  ecdsaPublicKey: '02abc...',
+  eddsaPublicKey: 'd1e2...',
+  hexChainCode: 'a1b2...',
+  localPartyId: 'server-1', // must match the value the signing devices were registered with
+  libType: 'DKLS',
+}
 
 const keysignPayload = await prepareSendTxFromKeys(identity, {
-  coin: { chain: "Ethereum", address: "0x...", decimals: 18, ticker: "ETH" },
-  receiver: "0x742d35Cc6634C0532925a3b844Bc9e7595f42bE",
+  coin: { chain: 'Ethereum', address: '0x...', decimals: 18, ticker: 'ETH' },
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f42bE',
   amount: 1000000000000000000n,
-});
+})
 ```
 
-Companion helpers: `prepareSwapTxFromKeys`, `prepareContractCallTxFromKeys`, `prepareSignAminoTxFromKeys`, `prepareSignDirectTxFromKeys`, and `getMaxSendAmountFromKeys`. The atomic chain helpers `getCoinBalance` and `getPublicKey` are also re-exported. Adapter code that already has a `Vault` can use `vaultDataToIdentity(coreVault)` to project it into a `VaultIdentity`.
+Companion helpers: `prepareSwapTxFromKeys`, `prepareContractCallTxFromKeys`, `prepareSignAminoTxFromKeys`, `prepareSignDirectTxFromKeys`, and `getMaxSendAmountFromKeys`. The atomic chain helpers `getCoinBalance` and `getPublicKey` are also re-exported.
 
 ## Supported Blockchains
 
@@ -624,9 +621,9 @@ export default VaultApp
 ```typescript
 const sdk = new Vultisig({
   autoInit: true, // Automatically initialize WASM modules on creation
-  serverUrl: "https://api.vultisig.com", // Custom VultiServer endpoint
-  relayUrl: "https://relay.vultisig.com", // Custom relay endpoint
-});
+  serverUrl: 'https://api.vultisig.com', // Custom VultiServer endpoint
+  relayUrl: 'https://relay.vultisig.com', // Custom relay endpoint
+})
 ```
 
 ### WASM Files
@@ -907,16 +904,14 @@ Check the on-chain status of a previously broadcast transaction. Supports all ch
 **Example:**
 
 ```typescript
-const txHash = await vault.broadcastTx({ chain, keysignPayload, signature });
+const txHash = await vault.broadcastTx({ chain, keysignPayload, signature })
 
 // Poll for confirmation
-const result = await vault.getTxStatus({ chain: Chain.Ethereum, txHash });
-if (result.status === "success") {
-  console.log(
-    `Confirmed! Fee: ${result.receipt?.feeAmount} ${result.receipt?.feeTicker}`,
-  );
-} else if (result.status === "error") {
-  console.log("Transaction failed");
+const result = await vault.getTxStatus({ chain: Chain.Ethereum, txHash })
+if (result.status === 'success') {
+  console.log(`Confirmed! Fee: ${result.receipt?.feeAmount} ${result.receipt?.feeTicker}`)
+} else if (result.status === 'error') {
+  console.log('Transaction failed')
 }
 ```
 
@@ -1021,37 +1016,37 @@ Get vault metadata and information.
 The SDK primarily uses typed errors with machine-readable codes. Check `error.code` for programmatic handling, with a fallback for unexpected errors:
 
 ```typescript
-import { VaultError, VaultErrorCode } from "@vultisig/sdk";
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
 
 try {
   const result = await vault.send({
-    chain: "Ethereum",
-    to: "0x...",
-    amount: "0.5",
-  });
+    chain: 'Ethereum',
+    to: '0x...',
+    amount: '0.5',
+  })
 } catch (error) {
   if (error instanceof VaultError) {
     switch (error.code) {
       case VaultErrorCode.BalanceFetchFailed:
-        console.error("Could not fetch balance — check RPC connectivity");
-        break;
+        console.error('Could not fetch balance — check RPC connectivity')
+        break
       case VaultErrorCode.GasEstimationFailed:
-        console.error("Gas estimation failed — network may be congested");
-        break;
+        console.error('Gas estimation failed — network may be congested')
+        break
       case VaultErrorCode.BroadcastFailed:
-        console.error("Broadcast rejected:", error.message);
-        break;
+        console.error('Broadcast rejected:', error.message)
+        break
       case VaultErrorCode.InvalidAmount:
-        console.error("Invalid amount:", error.message);
-        break;
+        console.error('Invalid amount:', error.message)
+        break
       default:
-        console.error(`[${error.code}] ${error.message}`);
+        console.error(`[${error.code}] ${error.message}`)
     }
     // Access the underlying error if needed
-    if (error.originalError) console.error("Caused by:", error.originalError);
+    if (error.originalError) console.error('Caused by:', error.originalError)
   } else {
     // Some internal paths may throw plain errors
-    console.error("Unexpected error:", (error as Error).message);
+    console.error('Unexpected error:', (error as Error).message)
   }
 }
 ```
@@ -1092,7 +1087,7 @@ try {
 | `UNSUPPORTED_FORMAT`  | Vault format version not supported           |
 
 ```typescript
-import { VaultImportError, VaultImportErrorCode } from "@vultisig/sdk";
+import { VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
 
 const vaultContent = '...' // raw .vult file contents (string)
 
@@ -1101,7 +1096,7 @@ try {
 } catch (error) {
   if (error instanceof VaultImportError) {
     if (error.code === VaultImportErrorCode.INVALID_PASSWORD) {
-      console.error("Wrong password");
+      console.error('Wrong password')
     }
   }
 }
@@ -1113,27 +1108,25 @@ The SDK emits typed events for state changes. Use `vault.on()` to subscribe:
 
 ```typescript
 // Track transaction lifecycle
-vault.on("transactionBroadcast", ({ chain, txHash }) => {
-  console.log(`Broadcast on ${chain}: ${txHash}`);
-});
-vault.on("transactionConfirmed", ({ chain, txHash, receipt }) => {
-  console.log(
-    `Confirmed: ${txHash} (fee: ${receipt?.feeAmount} ${receipt?.feeTicker})`,
-  );
-});
-vault.on("transactionFailed", ({ chain, txHash }) => {
-  console.error(`Failed: ${txHash}`);
-});
+vault.on('transactionBroadcast', ({ chain, txHash }) => {
+  console.log(`Broadcast on ${chain}: ${txHash}`)
+})
+vault.on('transactionConfirmed', ({ chain, txHash, receipt }) => {
+  console.log(`Confirmed: ${txHash} (fee: ${receipt?.feeAmount} ${receipt?.feeTicker})`)
+})
+vault.on('transactionFailed', ({ chain, txHash }) => {
+  console.error(`Failed: ${txHash}`)
+})
 
 // Monitor signing progress
-vault.on("signingProgress", ({ step }) => {
-  console.log(`Signing: ${step.message}`);
-});
+vault.on('signingProgress', ({ step }) => {
+  console.log(`Signing: ${step.message}`)
+})
 
 // React to balance changes
-vault.on("balanceUpdated", ({ chain, balance }) => {
-  console.log(`${chain} balance updated`);
-});
+vault.on('balanceUpdated', ({ chain, balance }) => {
+  console.log(`${chain} balance updated`)
+})
 ```
 
 ### Vault Events
@@ -1184,15 +1177,11 @@ vault.on("balanceUpdated", ({ chain, balance }) => {
 Listen on the SDK instance for global state changes:
 
 ```typescript
-sdk.on("vaultChanged", ({ vaultId }) =>
-  console.log(`Active vault: ${vaultId}`),
-);
-sdk.on("vaultCreationProgress", ({ step, vault }) => console.log(step.message));
-sdk.on("vaultCreationComplete", ({ vault }) =>
-  console.log(`Created: ${vault.name}`),
-);
-sdk.on("disposed", () => console.log("SDK disposed"));
-sdk.on("error", (error) => console.error("SDK error:", error));
+sdk.on('vaultChanged', ({ vaultId }) => console.log(`Active vault: ${vaultId}`))
+sdk.on('vaultCreationProgress', ({ step, vault }) => console.log(step.message))
+sdk.on('vaultCreationComplete', ({ vault }) => console.log(`Created: ${vault.name}`))
+sdk.on('disposed', () => console.log('SDK disposed'))
+sdk.on('error', error => console.error('SDK error:', error))
 ```
 
 ## Examples

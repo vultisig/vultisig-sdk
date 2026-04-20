@@ -3,6 +3,7 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { buildSendKeysignPayload } from '@vultisig/core-mpc/keysign/send/build'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { type Abi, encodeFunctionData } from 'viem'
@@ -40,6 +41,15 @@ export const prepareContractCallTxFromKeys = async (
     throw new Error('Contract call value cannot be negative')
   }
 
+  const walletCore = walletCoreOverride ?? (await getWalletCore())
+
+  if (!isValidAddress({ chain, address: contractAddress, walletCore })) {
+    throw new Error(`Invalid contract address for chain ${chain}: ${contractAddress}`)
+  }
+  if (!isValidAddress({ chain, address: senderAddress, walletCore })) {
+    throw new Error(`Invalid sender address for chain ${chain}: ${senderAddress}`)
+  }
+
   const calldata = encodeFunctionData({
     abi: abi as Abi,
     functionName,
@@ -54,8 +64,6 @@ export const prepareContractCallTxFromKeys = async (
     ticker: native.ticker,
   }
 
-  const walletCore = walletCoreOverride ?? (await getWalletCore())
-
   const publicKey = getPublicKey({
     chain,
     walletCore,
@@ -64,6 +72,7 @@ export const prepareContractCallTxFromKeys = async (
       eddsa: identity.eddsaPublicKey,
     },
     hexChainCode: identity.hexChainCode,
+    chainPublicKeys: identity.chainPublicKeys,
   })
 
   return buildSendKeysignPayload({

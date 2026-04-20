@@ -1,4 +1,4 @@
-import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
@@ -40,6 +40,17 @@ export class TransactionBuilder {
     private wasmProvider: WasmProvider
   ) {}
 
+  private async wrapAsVaultError<T>(opName: string, fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn()
+    } catch (error) {
+      if (error instanceof VaultError) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      const cause = error instanceof Error ? error : new Error(message)
+      throw new VaultError(VaultErrorCode.InvalidConfig, `Failed to prepare ${opName}: ${message}`, cause)
+    }
+  }
+
   /**
    * Prepare a send transaction keysign payload
    *
@@ -80,17 +91,10 @@ export class TransactionBuilder {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
     }
-    try {
-      const walletCore = await this.wasmProvider.getWalletCore()
-      return await prepareSendTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
-    } catch (error) {
-      if (error instanceof VaultError) throw error
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `Failed to prepare send transaction: ${(error as Error).message}`,
-        error as Error
-      )
-    }
+    const walletCore = await this.wasmProvider.getWalletCore()
+    return this.wrapAsVaultError('send transaction', () =>
+      prepareSendTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
+    )
   }
 
   /**
@@ -136,6 +140,7 @@ export class TransactionBuilder {
             walletCore,
             publicKeys: this.vaultData.publicKeys,
             hexChainCode: this.vaultData.hexChainCode,
+            chainPublicKeys: this.vaultData.chainPublicKeys,
           })
 
       return await getSendFeeEstimate({
@@ -204,17 +209,10 @@ export class TransactionBuilder {
     if ((params.value ?? 0n) < 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Contract call value cannot be negative')
     }
-    try {
-      const walletCore = await this.wasmProvider.getWalletCore()
-      return await prepareContractCallTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
-    } catch (error) {
-      if (error instanceof VaultError) throw error
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `Failed to prepare contract call: ${(error as Error).message}`,
-        error as Error
-      )
-    }
+    const walletCore = await this.wasmProvider.getWalletCore()
+    return this.wrapAsVaultError('contract call', () =>
+      prepareContractCallTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
+    )
   }
 
   /**
@@ -324,23 +322,16 @@ export class TransactionBuilder {
    * ```
    */
   async prepareSignAminoTx(input: SignAminoInput, options?: CosmosSigningOptions): Promise<KeysignPayload> {
-    if (!this.isCosmosChain(input.chain)) {
+    if (!isChainOfKind(input.chain as Chain, 'cosmos')) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Chain ${input.chain} does not support SignAmino. Use a Cosmos-SDK chain.`
       )
     }
-    try {
-      const walletCore = await this.wasmProvider.getWalletCore()
-      return await prepareSignAminoTxFromKeys(vaultDataToIdentity(this.vaultData), input, options, walletCore)
-    } catch (error) {
-      if (error instanceof VaultError) throw error
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `Failed to prepare SignAmino transaction: ${(error as Error).message}`,
-        error as Error
-      )
-    }
+    const walletCore = await this.wasmProvider.getWalletCore()
+    return this.wrapAsVaultError('SignAmino transaction', () =>
+      prepareSignAminoTxFromKeys(vaultDataToIdentity(this.vaultData), input, options, walletCore)
+    )
   }
 
   /**
@@ -373,41 +364,15 @@ export class TransactionBuilder {
    * ```
    */
   async prepareSignDirectTx(input: SignDirectInput, options?: CosmosSigningOptions): Promise<KeysignPayload> {
-    if (!this.isCosmosChain(input.chain)) {
+    if (!isChainOfKind(input.chain as Chain, 'cosmos')) {
       throw new VaultError(
         VaultErrorCode.InvalidConfig,
         `Chain ${input.chain} does not support SignDirect. Use a Cosmos-SDK chain.`
       )
     }
-    try {
-      const walletCore = await this.wasmProvider.getWalletCore()
-      return await prepareSignDirectTxFromKeys(vaultDataToIdentity(this.vaultData), input, options, walletCore)
-    } catch (error) {
-      if (error instanceof VaultError) throw error
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `Failed to prepare SignDirect transaction: ${(error as Error).message}`,
-        error as Error
-      )
-    }
-  }
-
-  /**
-   * Check if a chain is a Cosmos-SDK chain
-   */
-  private isCosmosChain(chain: string): chain is CosmosChain {
-    const cosmosChains = [
-      'Cosmos',
-      'Osmosis',
-      'Dydx',
-      'Kujira',
-      'Terra',
-      'TerraClassic',
-      'Noble',
-      'Akash',
-      'THORChain',
-      'MayaChain',
-    ]
-    return cosmosChains.includes(chain)
+    const walletCore = await this.wasmProvider.getWalletCore()
+    return this.wrapAsVaultError('SignDirect transaction', () =>
+      prepareSignDirectTxFromKeys(vaultDataToIdentity(this.vaultData), input, options, walletCore)
+    )
   }
 }

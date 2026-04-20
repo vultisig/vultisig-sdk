@@ -1,10 +1,11 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockBuildSendKeysignPayload, mockGetPublicKey, mockGetWalletCore } = vi.hoisted(() => ({
+const { mockBuildSendKeysignPayload, mockGetPublicKey, mockGetWalletCore, mockIsValidAddress } = vi.hoisted(() => ({
   mockBuildSendKeysignPayload: vi.fn(),
   mockGetPublicKey: vi.fn(),
   mockGetWalletCore: vi.fn(),
+  mockIsValidAddress: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-mpc/keysign/send/build', () => ({
@@ -12,6 +13,9 @@ vi.mock('@vultisig/core-mpc/keysign/send/build', () => ({
 }))
 vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: mockGetPublicKey,
+}))
+vi.mock('@vultisig/core-chain/utils/isValidAddress', () => ({
+  isValidAddress: mockIsValidAddress,
 }))
 vi.mock('@/context/wasmRuntime', () => ({
   getWalletCore: mockGetWalletCore,
@@ -65,6 +69,7 @@ describe('prepareContractCallTxFromKeys', () => {
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
     mockBuildSendKeysignPayload.mockResolvedValue(mockPayload)
+    mockIsValidAddress.mockReturnValue(true)
   })
 
   it('encodes ABI calldata and builds a zero-value send for an EVM token approval', async () => {
@@ -213,5 +218,65 @@ describe('prepareContractCallTxFromKeys', () => {
     // Polygon native is POL/MATIC (decimals 18) per chainFeeCoin
     expect(call.coin.chain).toBe(Chain.Polygon)
     expect(call.coin.decimals).toBe(18)
+  })
+
+  it('rejects when contractAddress is invalid before building payload', async () => {
+    mockIsValidAddress.mockImplementation(({ address }: { address: string }) => address !== 'not-an-address')
+
+    await expect(
+      prepareContractCallTxFromKeys(baseIdentity, {
+        chain: Chain.Ethereum,
+        contractAddress: 'not-an-address',
+        abi: erc20ApproveAbi,
+        functionName: 'approve',
+        args: [spenderAddress, 1n],
+        senderAddress,
+      })
+    ).rejects.toThrow()
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetPublicKey).not.toHaveBeenCalled()
+  })
+
+  it('rejects when senderAddress is invalid before building payload', async () => {
+    mockIsValidAddress.mockImplementation(({ address }: { address: string }) => address !== 'not-an-address')
+
+    await expect(
+      prepareContractCallTxFromKeys(baseIdentity, {
+        chain: Chain.Ethereum,
+        contractAddress,
+        abi: erc20ApproveAbi,
+        functionName: 'approve',
+        args: [spenderAddress, 1n],
+        senderAddress: 'not-an-address',
+      })
+    ).rejects.toThrow()
+
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetPublicKey).not.toHaveBeenCalled()
+  })
+
+  it('forwards chainPublicKeys to getPublicKey (seedphrase-imported vault)', async () => {
+    const identity: VaultIdentity = {
+      ...baseIdentity,
+      chainPublicKeys: {
+        [Chain.Ethereum]: '03per-chain-ecdsa',
+      },
+    }
+
+    await prepareContractCallTxFromKeys(identity, {
+      chain: Chain.Ethereum,
+      contractAddress,
+      abi: erc20ApproveAbi,
+      functionName: 'approve',
+      args: [spenderAddress, 1n],
+      senderAddress,
+    })
+
+    expect(mockGetPublicKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chainPublicKeys: identity.chainPublicKeys,
+      })
+    )
   })
 })
