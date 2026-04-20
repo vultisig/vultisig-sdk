@@ -12,7 +12,7 @@ export { executeAddresses, executeChains } from './chains'
 
 // Token commands
 export type { AddTokenOptions, TokensOptions } from './tokens'
-export { addToken, executeTokens, listTokens, removeToken } from './tokens'
+export { addToken, discoverTokens, executeTokens, listTokens, removeToken } from './tokens'
 
 // Transaction commands
 export { executeSend, sendTransaction } from './transaction'
@@ -61,7 +61,7 @@ export {
 } from './vault-management'
 
 // Swap commands
-export type { SwapOptions, SwapQuoteOptions } from './swap'
+export type { SwapDryRunResult, SwapOptions, SwapQuoteOptions } from './swap'
 export { executeSwap, executeSwapChains, executeSwapQuote } from './swap'
 
 // Settings commands
@@ -81,6 +81,9 @@ export {
 export type { DiscountOptions, DiscountTierInfo } from './discount'
 export { executeDiscount } from './discount'
 
+// Auth commands (keyring credential management)
+export { executeAuthLogout, executeAuthSetup, executeAuthStatus } from './auth'
+
 // Agent chat commands
 export type {
   AgentAskOptions,
@@ -89,3 +92,6 @@ export type {
   AgentSessionsListOptions,
 } from './agent'
 export { executeAgent, executeAgentAsk, executeAgentSessionsDelete, executeAgentSessionsList } from './agent'
+
+// Schema discovery command (hidden)
+export { executeSchema } from './schema'

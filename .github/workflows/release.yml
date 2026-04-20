@@ -46,6 +46,7 @@ jobs:
           yarn build:shared
           yarn build:all
           yarn cli:build
+          yarn mcp:build
 
       - name: Get version and check if new
         id: version
@@ -65,8 +66,10 @@ jobs:
             "packages/core/mpc"
             "packages/core/chain"
             "packages/sdk"
+            "packages/client-shared"
             "packages/rujira"
             "clients/cli"
+            "clients/mcp"
           )
 
           SHOULD_PUBLISH=false
@@ -103,6 +106,20 @@ jobs:
         with:
           name: cli-dist
           path: clients/cli/dist
+          retention-days: 1
+
+      - name: Upload MCP dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-dist
+          path: clients/mcp/dist
+          retention-days: 1
+
+      - name: Upload client-shared dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-shared-dist
+          path: packages/client-shared/dist
           retention-days: 1
 
       - name: Upload rujira dist
@@ -208,6 +225,18 @@ jobs:
         with:
           name: cli-dist
           path: clients/cli/dist
+
+      - name: Download MCP dist
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-dist
+          path: clients/mcp/dist
+
+      - name: Download client-shared dist
+        uses: actions/download-artifact@v4
+        with:
+          name: client-shared-dist
+          path: packages/client-shared/dist
 
       - name: Download rujira dist
         uses: actions/download-artifact@v4

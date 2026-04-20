@@ -132,15 +132,13 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     await session.initialize(callbacks)
     const result = await ask.ask(message)
 
-    if (options.json) {
-      process.stdout.write(
-        JSON.stringify({
-          session_id: result.sessionId,
-          response: result.response,
-          tool_calls: result.toolCalls,
-          transactions: result.transactions,
-        }) + '\n'
-      )
+    if (options.json || isJsonOutput()) {
+      outputJson({
+        session_id: result.sessionId,
+        response: result.response,
+        tool_calls: result.toolCalls,
+        transactions: result.transactions,
+      })
     } else {
       // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
       process.stdout.write(`session:${result.sessionId}\n`)

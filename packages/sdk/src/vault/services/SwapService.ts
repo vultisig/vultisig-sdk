@@ -98,6 +98,15 @@ export class SwapService {
       // Format the result (with optional fiat conversion)
       const result = await this.formatQuoteResult(quote, fromCoin, toCoin, approvalInfo, params.fiatCurrency)
 
+      // Reject quotes with near-zero output (protects against bad provider quotes)
+      const outputHuman = Number(result.estimatedOutput) / 10 ** toCoin.decimals
+      if (outputHuman < 1e-8) {
+        throw new VaultError(
+          VaultErrorCode.InvalidConfig,
+          `Swap quote returned near-zero output (${outputHuman} ${toCoin.ticker}) from ${result.provider}. This route is likely invalid.`
+        )
+      }
+
       // Emit event
       this.emitEvent('swapQuoteReceived', { quote: result })
 
@@ -209,10 +218,10 @@ export class SwapService {
 
   /**
    * Get list of chains that support swapping.
-   * @returns Array of chains that can be used for swaps
+   * @returns Array of chains that can be used for swaps (deduplicated across providers)
    */
   getSupportedChains(): readonly Chain[] {
-    return swapEnabledChains as readonly Chain[]
+    return [...new Set(swapEnabledChains as readonly Chain[])]
   }
 
   /**

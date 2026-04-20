@@ -1,9 +1,3 @@
-/**
- * Output Service - Centralized console output with silent mode support
- *
- * In silent mode, only results and errors are shown.
- * Informational messages, spinners, and success/warn messages are suppressed.
- */
 import chalk from 'chalk'
 import ora, { type Ora } from 'ora'
 
@@ -19,6 +13,9 @@ export type OutputFormat = 'table' | 'json'
 
 let silentMode = false
 let outputFormat: OutputFormat = 'table'
+let nonInteractive = false
+let quietMode = false
+let fieldFilter: string[] | undefined
 
 // ============================================================================
 // Configuration
@@ -32,9 +29,28 @@ export function isSilent(): boolean {
   return silentMode
 }
 
-/**
- * Initialize output mode from CLI flags and environment variables
- */
+export function setNonInteractive(value: boolean): void {
+  nonInteractive = value
+}
+
+export function isNonInteractive(): boolean {
+  return nonInteractive
+}
+
+export function requireInteractive(hint: string): void {
+  if (nonInteractive) {
+    throw new Error(`Interactive prompt required but --non-interactive is set. ${hint}`)
+  }
+}
+
+export function setQuiet(value: boolean): void {
+  quietMode = value
+}
+
+export function setFields(fields: string[] | undefined): void {
+  fieldFilter = fields
+}
+
 export function initOutputMode(options: { silent?: boolean; output?: string }): void {
   outputFormat = (options.output as OutputFormat) ?? 'table'
   silentMode = options.silent ?? process.env.VULTISIG_SILENT === '1'
@@ -45,39 +61,122 @@ export function initOutputMode(options: { silent?: boolean; output?: string }): 
   }
 }
 
-/**
- * Check if output format is JSON
- */
+export function configureOutput(opts: {
+  silent?: boolean
+  format?: OutputFormat
+  nonInteractive?: boolean
+  quiet?: boolean
+  fields?: string[]
+}): void {
+  if (opts.silent !== undefined) silentMode = opts.silent
+  if (opts.format !== undefined) outputFormat = opts.format
+  if (opts.nonInteractive !== undefined) nonInteractive = opts.nonInteractive
+  if (opts.quiet !== undefined) quietMode = opts.quiet
+  if (opts.fields !== undefined) fieldFilter = opts.fields
+
+  if (outputFormat === 'json') silentMode = true
+}
+
+export function resetOutput(): void {
+  silentMode = false
+  outputFormat = 'table'
+  nonInteractive = false
+  quietMode = false
+  fieldFilter = undefined
+}
+
 export function isJsonOutput(): boolean {
   return outputFormat === 'json'
 }
 
-/**
- * Get current output format
- */
 export function getOutputFormat(): OutputFormat {
   return outputFormat
 }
 
-/**
- * JSON replacer that converts BigInt to string
- */
+// ============================================================================
+// Field Filtering & Quiet Mode
+// ============================================================================
+
+export function stripEmpty(data: unknown): unknown {
+  if (Array.isArray(data)) return data.map(stripEmpty)
+  if (data !== null && typeof data === 'object') {
+    return Object.fromEntries(
+      Object.entries(data as Record<string, unknown>)
+        .filter(([, v]) => v != null && v !== '')
+        .map(([k, v]) => [k, stripEmpty(v)])
+    )
+  }
+  return data
+}
+
+export function filterFields(data: unknown, fields: string[]): unknown {
+  if (!fields.length) return data
+  if (Array.isArray(data)) return data.map(item => filterFields(item, fields))
+  if (data !== null && typeof data === 'object') {
+    const entries = Object.entries(data as Record<string, unknown>)
+    const matched = entries.filter(([k]) => fields.includes(k))
+    if (matched.length > 0) return Object.fromEntries(matched)
+    // No top-level keys match — recurse into ALL nested objects/arrays so fields like "amount" resolve inside { balances: [{amount}] }
+    const recursed = entries.map(([k, v]) => [k, filterFields(v, fields)] as const)
+    return Object.fromEntries(recursed)
+  }
+  return data
+}
+
+function collectKeys(data: unknown): Set<string> {
+  const keys = new Set<string>()
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (item !== null && typeof item === 'object') {
+        for (const k of Object.keys(item as Record<string, unknown>)) keys.add(k)
+      }
+    }
+  } else if (data !== null && typeof data === 'object') {
+    for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+      keys.add(k)
+      // Recurse into nested arrays and objects to find all reachable keys
+      if (v !== null && typeof v === 'object') {
+        for (const nested of collectKeys(v)) keys.add(nested)
+      }
+    }
+  }
+  return keys
+}
+
+function warnInvalidFields(data: unknown, fields: string[]): void {
+  const available = collectKeys(data)
+  if (available.size === 0) return
+  const invalid = fields.filter(f => !available.has(f))
+  if (invalid.length > 0) {
+    process.stderr.write(`Warning: unknown field(s): ${invalid.join(', ')}. Available: ${[...available].join(', ')}\n`)
+  }
+}
+
+export function applyOutputTransforms(data: unknown): unknown {
+  let out = quietMode ? stripEmpty(data) : data
+  if (fieldFilter?.length) {
+    warnInvalidFields(out, fieldFilter)
+    out = filterFields(out, fieldFilter)
+  }
+  return out
+}
+
+// ============================================================================
+// JSON Output — v1 envelope: { success: boolean, v: 1, data | error }
+// ============================================================================
+
 function bigIntReplacer(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? value.toString() : value
 }
 
-/**
- * Output structured data as JSON (handles BigInt serialization)
- */
 export function outputJson(data: unknown): void {
-  console.log(JSON.stringify({ success: true, data }, bigIntReplacer, 2))
+  const transformed = applyOutputTransforms(data)
+  console.log(JSON.stringify({ success: true, v: 1, data: transformed }, bigIntReplacer, 2))
 }
 
-/**
- * Output JSON error (for withExit handler)
- */
-export function outputJsonError(message: string, code: string): void {
-  console.log(JSON.stringify({ success: false, error: { message, code } }, bigIntReplacer, 2))
+export function outputErrorJson(errJson: unknown): void {
+  const transformed = applyOutputTransforms(errJson)
+  console.log(JSON.stringify(transformed, bigIntReplacer, 2))
 }
 
 // ============================================================================
@@ -246,7 +345,7 @@ export function createSpinner(text: string): SilentAwareSpinner | Ora {
     activeSpinners.add(spinner)
     return spinner
   }
-  const spinner = wrapOraSpinner(ora(text).start())
+  const spinner = wrapOraSpinner(ora({ text, stream: process.stderr }).start())
   activeSpinners.add(spinner)
   return spinner
 }

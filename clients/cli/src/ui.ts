@@ -17,7 +17,7 @@ import inquirer from 'inquirer'
 export type { PortfolioSummary, SendParams } from './core/types'
 import type { PortfolioSummary } from './core/types'
 // Import output helpers
-import { info, isJsonOutput, printError, printResult, printTable, warn } from './lib/output'
+import { info, isJsonOutput, printError, printResult, printTable, requireInteractive, warn } from './lib/output'
 
 // ============================================================================
 // Display Formatters
@@ -186,6 +186,7 @@ export function displayVaultsList(vaults: VaultBase[], activeVault: VaultBase | 
 // ============================================================================
 
 export async function confirmTransaction(): Promise<boolean> {
+  requireInteractive('Use --yes to skip confirmation, or --password to provide password non-interactively.')
   const { confirmed } = await inquirer.prompt([
     {
       type: 'confirm',
@@ -198,6 +199,7 @@ export async function confirmTransaction(): Promise<boolean> {
 }
 
 export async function promptForPassword(message = 'Enter password:'): Promise<string> {
+  requireInteractive('Use --password flag or VAULT_PASSWORD env var.')
   const { password } = await inquirer.prompt([
     {
       type: 'password',
@@ -402,6 +404,7 @@ export function displaySwapChains(chains: readonly Chain[]): void {
 }
 
 export async function confirmSwap(): Promise<boolean> {
+  requireInteractive('Use --yes to skip confirmation, or --password to provide password non-interactively.')
   const { confirmed } = await inquirer.prompt([
     {
       type: 'confirm',

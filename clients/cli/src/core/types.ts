@@ -13,8 +13,22 @@ export type SendParams = {
   tokenId?: string
   memo?: string
   yes?: boolean // Skip confirmation prompt
+  dryRun?: boolean // Preview transaction without signing/broadcasting
   password?: string // Vault password for signing
   signal?: AbortSignal // Optional abort signal for cancellation
+}
+
+/**
+ * Result of a send dry-run preview
+ */
+export type SendDryRunResult = {
+  dryRun: true
+  chain: string
+  to: string
+  amount: string
+  symbol: string
+  balance: string
+  warning?: string
 }
 
 /**
