@@ -40,7 +40,7 @@ describe('configureMpc duplicate engine detection', () => {
 
   it('throws in non-production when a second distinct engine is registered', () => {
     process.env.NODE_ENV = 'test'
-    delete process.env.VULTISIG_STRICT_SINGLETON
+    Reflect.deleteProperty(process.env, 'VULTISIG_STRICT_SINGLETON')
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -52,8 +52,8 @@ describe('configureMpc duplicate engine detection', () => {
   })
 
   it('throws when NODE_ENV is unset (default-strict browser / plain-ESM path)', () => {
-    delete process.env.NODE_ENV
-    delete process.env.VULTISIG_STRICT_SINGLETON
+    Reflect.deleteProperty(process.env, 'NODE_ENV')
+    Reflect.deleteProperty(process.env, 'VULTISIG_STRICT_SINGLETON')
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -66,7 +66,7 @@ describe('configureMpc duplicate engine detection', () => {
 
   it('does not throw in production when a second distinct engine is registered', () => {
     process.env.NODE_ENV = 'production'
-    delete process.env.VULTISIG_STRICT_SINGLETON
+    Reflect.deleteProperty(process.env, 'VULTISIG_STRICT_SINGLETON')
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
