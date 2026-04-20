@@ -12,7 +12,16 @@ import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import { createSpinner, info, isJsonOutput, isSilent, outputJson, printResult, warn } from '../lib/output'
+import {
+  createSpinner,
+  info,
+  isJsonOutput,
+  isNonInteractive,
+  isSilent,
+  outputJson,
+  printResult,
+  warn,
+} from '../lib/output'
 import { confirmTransaction, displayTransactionResult } from '../ui'
 
 /**
@@ -24,6 +33,7 @@ export type ExecuteParams = {
   msg: string // JSON string
   funds?: string // Format: "denom:amount,denom2:amount2"
   memo?: string
+  dryRun?: boolean
   yes?: boolean
   password?: string
   signal?: AbortSignal
@@ -40,17 +50,22 @@ type ParsedFund = {
 /**
  * Chain-specific configuration for Cosmos chains
  */
-const COSMOS_CHAIN_CONFIG: Record<string, { chainId: string; prefix: string; denom: string; gasLimit: string }> = {
+const COSMOS_CHAIN_CONFIG: Record<
+  string,
+  { chainId: string; prefix: string; denom: string; decimals: number; gasLimit: string }
+> = {
   THORChain: {
     chainId: 'thorchain-1',
     prefix: 'thor',
     denom: 'rune',
+    decimals: 8,
     gasLimit: '500000',
   },
   MayaChain: {
     chainId: 'mayachain-mainnet-v1',
     prefix: 'maya',
     denom: 'cacao',
+    decimals: 10,
     gasLimit: '500000',
   },
 }
@@ -105,7 +120,7 @@ export async function executeExecute(ctx: CommandContext, params: ExecuteParams)
 async function executeContractTransaction(
   vault: VaultBase,
   params: ExecuteParams,
-  chainConfig: { chainId: string; prefix: string; denom: string; gasLimit: string },
+  chainConfig: { chainId: string; prefix: string; denom: string; decimals: number; gasLimit: string },
   msg: object,
   funds: ParsedFund[]
 ): Promise<TransactionResult> {
@@ -116,9 +131,45 @@ async function executeContractTransaction(
 
   prepareSpinner.succeed('Transaction prepared')
 
-  // 2. Show preview
+  // 2. Dry-run: return preview without signing
+  if (params.dryRun) {
+    if (isJsonOutput()) {
+      outputJson({
+        dryRun: true,
+        chain: params.chain,
+        contract: params.contract,
+        msg,
+        funds,
+        address,
+        memo: params.memo,
+      })
+    } else {
+      info('\nContract Execution Preview (dry-run)')
+      info('━'.repeat(50))
+      info(`Chain:      ${params.chain}`)
+      info(`From:       ${address}`)
+      info(`Contract:   ${params.contract}`)
+      info(
+        `Message:    ${JSON.stringify(msg, null, 2).substring(0, 200)}${JSON.stringify(msg).length > 200 ? '...' : ''}`
+      )
+      if (funds.length > 0) {
+        info(`Funds:      ${funds.map(f => `${f.amount} ${f.denom}`).join(', ')}`)
+      }
+      if (params.memo) {
+        info(`Memo:       ${params.memo}`)
+      }
+      info('━'.repeat(50))
+    }
+    return {
+      txHash: '',
+      chain: params.chain,
+      explorerUrl: '',
+    } satisfies TransactionResult
+  }
+
+  // 2b. Show preview
   if (!isJsonOutput()) {
-    info('\n📝 Contract Execution Preview')
+    info('\nContract Execution Preview')
     info('━'.repeat(50))
     info(`Chain:      ${params.chain}`)
     info(`From:       ${address}`)
@@ -135,8 +186,11 @@ async function executeContractTransaction(
     info('━'.repeat(50))
   }
 
-  // 3. Confirm with user
-  if (!params.yes && !isJsonOutput()) {
+  // 3. Confirm with user (required in all output modes)
+  if (!params.yes) {
+    if (isNonInteractive()) {
+      throw new Error('Transaction requires confirmation. Use --yes to skip, or --dry-run to preview.')
+    }
     const confirmed = await confirmTransaction()
     if (!confirmed) {
       warn('Transaction cancelled')
@@ -190,7 +244,7 @@ async function executeContractTransaction(
     const coin = {
       chain: cosmosChain,
       address,
-      decimals: 8, // THORChain uses 8 decimals
+      decimals: chainConfig.decimals,
       ticker: chainConfig.denom.toUpperCase(),
     }
 

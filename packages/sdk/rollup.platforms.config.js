@@ -6,7 +6,6 @@ import replace from '@rollup/plugin-replace'
 import terser from '@rollup/plugin-terser'
 import path from 'path'
 import { defineConfig } from 'rollup'
-import copy from 'rollup-plugin-copy'
 import esbuild from 'rollup-plugin-esbuild'
 import { fileURLToPath } from 'url'
 
@@ -30,10 +29,17 @@ const external = [
   'electron',
   '@react-native-async-storage/async-storage',
   /\.wasm$/,
-  // wasm-bindgen generated JS must be external - bundling breaks externref tables
-  /lib\/dkls\/vs_wasm/,
-  /lib\/mldsa\/vs_wasm/,
-  /lib\/schnorr\/vs_schnorr_wasm/,
+  // wasm-bindgen generated JS must be external - bundling breaks externref tables.
+  // Matches both the in-monorepo absolute path (`packages/lib/dkls/vs_wasm`) and
+  // the bare specifier form we emit via `wasmPathsResolver`
+  // (`@vultisig/lib-dkls/vs_wasm`), which lets consumers install the wasm
+  // packages as transitive deps and keeps `import.meta.url` pointing at them.
+  /(?:^|\/)lib[/-]dkls\/vs_wasm$/,
+  /(?:^|\/)lib[/-]mldsa\/vs_wasm$/,
+  /(?:^|\/)lib[/-]schnorr\/vs_schnorr_wasm$/,
+  '@vultisig/lib-dkls/vs_wasm',
+  '@vultisig/lib-mldsa/vs_wasm',
+  '@vultisig/lib-schnorr/vs_schnorr_wasm',
   'tiny-secp256k1',
   '@solana/web3.js',
   '@cosmjs/stargate',
@@ -47,22 +53,27 @@ const external = [
   '@vultisig/mpc-native',
 ]
 
-// Rewrite WASM import paths for bundled output
-// Converts ../../../lib/dkls/vs_wasm to ./lib/dkls/vs_wasm.js (relative to dist/)
+// Rewrite WASM import paths for bundled output.
+//
+// The wasm-bindgen glue must stay external (bundling breaks externref tables)
+// AND must be imported via bare specifiers so that:
+//
+// 1. Consumers install `@vultisig/lib-{dkls,schnorr,mldsa}` as transitive deps
+//    (declared in package.json) — no manual wasm copy into `dist/lib/`.
+// 2. `new URL('*.wasm', import.meta.url)` inside the glue resolves relative
+//    to the published lib package directory, not relative to whatever bundle
+//    chunk a downstream bundler emits (e.g. `.vite/deps/@vultisig_sdk.js`).
+//
+// Paired with the `@vultisig/sdk/vite` plugin which puts the lib packages in
+// `optimizeDeps.exclude` so Vite's pre-bundler leaves them adjacent to their
+// wasm payloads. Consumers without a bundler (Node ESM) resolve bare
+// specifiers directly from node_modules.
 const wasmPathsResolver = id => {
-  if (id.match(/lib\/dkls\/vs_wasm/)) return './lib/dkls/vs_wasm.js'
-  if (id.match(/lib\/mldsa\/vs_wasm/)) return './lib/mldsa/vs_wasm.js'
-  if (id.match(/lib\/schnorr\/vs_schnorr_wasm/)) return './lib/schnorr/vs_schnorr_wasm.js'
+  if (id.match(/lib\/dkls\/vs_wasm/)) return '@vultisig/lib-dkls/vs_wasm'
+  if (id.match(/lib\/mldsa\/vs_wasm/)) return '@vultisig/lib-mldsa/vs_wasm'
+  if (id.match(/lib\/schnorr\/vs_schnorr_wasm/)) return '@vultisig/lib-schnorr/vs_schnorr_wasm'
   return id
 }
-
-const wasmCopyPlugin = copy({
-  targets: [
-    { src: '../lib/dkls', dest: './dist/lib' },
-    { src: '../lib/mldsa', dest: './dist/lib' },
-    { src: '../lib/schnorr', dest: './dist/lib' },
-  ],
-})
 
 // Centralized warning handler - suppresses expected warnings from WASM loading and dependencies
 const onwarn = (warning, warn) => {
@@ -166,15 +177,12 @@ const configs = {
         paths: wasmPathsResolver,
       },
       external,
-      plugins: [
-        ...createPlugins({
-          preferBuiltins: true,
-          replaceOptions: {
-            'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
-          },
-        }),
-        wasmCopyPlugin,
-      ],
+      plugins: createPlugins({
+        preferBuiltins: true,
+        replaceOptions: {
+          'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+        },
+      }),
       onwarn,
     },
     {
@@ -379,6 +387,53 @@ const configs = {
     }),
     onwarn,
   },
+  // The `@vultisig/sdk/vite` subpath export is a consumer-facing Vite plugin
+  // that configures `optimizeDeps.exclude` so the wasm-bindgen glue packages
+  // stay adjacent to their `.wasm` payloads at runtime. It runs in the
+  // consumer's build (Node), not in the SDK runtime, so it has no runtime
+  // deps and ships in both ESM and CJS for maximum tooling compatibility.
+  vite: [
+    {
+      input: './src/vite/index.ts',
+      output: {
+        file: './dist/vite/index.js',
+        format: 'es',
+        sourcemap: true,
+      },
+      // `vite` is a type-only import (declared as an optional peer dep), so it
+      // disappears at runtime. Mark it external so Rollup doesn't try to
+      // resolve it during the emit.
+      external: ['vite'],
+      plugins: [
+        esbuild({
+          include: /\.ts$/,
+          target: 'es2022',
+          minify: false,
+          tsconfig: './tsconfig.json',
+        }),
+      ],
+      onwarn,
+    },
+    {
+      input: './src/vite/index.ts',
+      output: {
+        file: './dist/vite/index.cjs',
+        format: 'cjs',
+        sourcemap: true,
+        exports: 'named',
+      },
+      external: ['vite'],
+      plugins: [
+        esbuild({
+          include: /\.ts$/,
+          target: 'es2022',
+          minify: false,
+          tsconfig: './tsconfig.json',
+        }),
+      ],
+      onwarn,
+    },
+  ],
 }
 
 // Export based on target
@@ -390,13 +445,14 @@ if (target === 'all') {
     configs['react-native'],
     configs.electron,
     configs['chrome-extension'],
+    ...configs.vite,
   ]
 } else if (configs[target]) {
   const config = configs[target]
   exportConfig = Array.isArray(config) ? config : [config]
 } else {
   throw new Error(
-    `Unknown build target: ${target}. Available targets: node, browser, react-native, electron, chrome-extension, all`
+    `Unknown build target: ${target}. Available targets: node, browser, react-native, electron, chrome-extension, vite, all`
   )
 }
 

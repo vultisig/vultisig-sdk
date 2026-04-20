@@ -191,7 +191,7 @@ describe('SwapService', () => {
       const mockQuote = {
         quote: {
           general: {
-            dstAmount: '1000000000',
+            dstAmount: '50000000000000000', // 0.05 ETH — realistic output
             provider: '1inch' as const,
             tx: {
               evm: {

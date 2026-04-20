@@ -331,7 +331,7 @@ export async function executeVerify(
         ...(!email
           ? [
               {
-                type: 'input',
+                type: 'input' as const,
                 name: 'email',
                 message: 'Email address:',
                 validate: (input: string) => input.includes('@') || 'Please enter a valid email',
@@ -341,7 +341,7 @@ export async function executeVerify(
         ...(!password
           ? [
               {
-                type: 'password',
+                type: 'password' as const,
                 name: 'password',
                 message: 'Vault password:',
                 mask: '*',
@@ -349,7 +349,7 @@ export async function executeVerify(
               },
             ]
           : []),
-      ])
+      ] as unknown as Parameters<typeof inquirer.prompt>[0])
       email = email || answers.email
       password = password || answers.password
     }

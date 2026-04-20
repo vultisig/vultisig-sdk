@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -159,6 +159,51 @@
       "import": "./dist/chains/cosmos/gas.js",
       "default": "./dist/chains/cosmos/gas.js"
     },
+    "./chains/cosmos/qbtc/claim/broadcastClaimTx": {
+      "types": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.js"
+    },
+    "./chains/cosmos/qbtc/claim/BtcAddressType": {
+      "types": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.js"
+    },
+    "./chains/cosmos/qbtc/claim/buildClaimTx": {
+      "types": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.js"
+    },
+    "./chains/cosmos/qbtc/claim/ClaimableUtxo": {
+      "types": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js"
+    },
+    "./chains/cosmos/qbtc/claim/computeClaimHashes": {
+      "types": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js"
+    },
+    "./chains/cosmos/qbtc/claim/detectBtcAddressType": {
+      "types": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.js"
+    },
+    "./chains/cosmos/qbtc/claim/getClaimableUtxos": {
+      "types": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.js"
+    },
+    "./chains/cosmos/qbtc/claim/getClaimWithProofDisabled": {
+      "types": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js"
+    },
+    "./chains/cosmos/qbtc/claim/proofService": {
+      "types": "./dist/chains/cosmos/qbtc/claim/proofService.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/claim/proofService.js",
+      "default": "./dist/chains/cosmos/qbtc/claim/proofService.js"
+    },
     "./chains/cosmos/qbtc/getQbtcAccountInfo": {
       "types": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.d.ts",
       "import": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js",
@@ -173,51 +218,6 @@
       "types": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
-    },
-    "./chains/cosmos/qbtc/claim/ClaimableUtxo": {
-      "types": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/ClaimableUtxo.js"
-    },
-    "./chains/cosmos/qbtc/claim/getClaimableUtxos": {
-      "types": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/getClaimableUtxos.js"
-    },
-    "./chains/cosmos/qbtc/claim/getClaimWithProofDisabled": {
-      "types": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/getClaimWithProofDisabled.js"
-    },
-    "./chains/cosmos/qbtc/claim/BtcAddressType": {
-      "types": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/BtcAddressType.js"
-    },
-    "./chains/cosmos/qbtc/claim/detectBtcAddressType": {
-      "types": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/detectBtcAddressType.js"
-    },
-    "./chains/cosmos/qbtc/claim/computeClaimHashes": {
-      "types": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/computeClaimHashes.js"
-    },
-    "./chains/cosmos/qbtc/claim/proofService": {
-      "types": "./dist/chains/cosmos/qbtc/claim/proofService.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/proofService.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/proofService.js"
-    },
-    "./chains/cosmos/qbtc/claim/buildClaimTx": {
-      "types": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/buildClaimTx.js"
-    },
-    "./chains/cosmos/qbtc/claim/broadcastClaimTx": {
-      "types": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.d.ts",
-      "import": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.js",
-      "default": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.js"
     },
     "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
       "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
@@ -274,6 +274,11 @@
       "import": "./dist/chains/cosmos/thor/lp/math.js",
       "default": "./dist/chains/cosmos/thor/lp/math.js"
     },
+    "./chains/cosmos/thor/lp/memberPool": {
+      "types": "./dist/chains/cosmos/thor/lp/memberPool.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/memberPool.js",
+      "default": "./dist/chains/cosmos/thor/lp/memberPool.js"
+    },
     "./chains/cosmos/thor/lp/memo": {
       "types": "./dist/chains/cosmos/thor/lp/memo.d.ts",
       "import": "./dist/chains/cosmos/thor/lp/memo.js",
@@ -303,6 +308,11 @@
       "types": "./dist/chains/cosmos/thor/lp/positions.d.ts",
       "import": "./dist/chains/cosmos/thor/lp/positions.js",
       "default": "./dist/chains/cosmos/thor/lp/positions.js"
+    },
+    "./chains/cosmos/thor/lp/types": {
+      "types": "./dist/chains/cosmos/thor/lp/types.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/types.js",
+      "default": "./dist/chains/cosmos/thor/lp/types.js"
     },
     "./chains/cosmos/thor/lp/validation": {
       "types": "./dist/chains/cosmos/thor/lp/validation.d.ts",

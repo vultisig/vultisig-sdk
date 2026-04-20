@@ -25,6 +25,6 @@ export const waitForSetupMessage = async (
 ): Promise<string> =>
   retry({
     func: () => getMpcSetupMessage(input),
-    attempts: 10,
-    delay: 1000,
+    attempts: 50,
+    delay: 200,
   })
