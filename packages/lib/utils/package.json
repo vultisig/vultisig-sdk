@@ -179,6 +179,26 @@
       "import": "./dist/encryption/config.js",
       "default": "./dist/encryption/config.js"
     },
+    "./encryption/vaultBackup/decryptVaultBackupWithPassword": {
+      "types": "./dist/encryption/vaultBackup/decryptVaultBackupWithPassword.d.ts",
+      "import": "./dist/encryption/vaultBackup/decryptVaultBackupWithPassword.js",
+      "default": "./dist/encryption/vaultBackup/decryptVaultBackupWithPassword.js"
+    },
+    "./encryption/vaultBackup/encryptVaultBackupWithPassword": {
+      "types": "./dist/encryption/vaultBackup/encryptVaultBackupWithPassword.d.ts",
+      "import": "./dist/encryption/vaultBackup/encryptVaultBackupWithPassword.js",
+      "default": "./dist/encryption/vaultBackup/encryptVaultBackupWithPassword.js"
+    },
+    "./encryption/vaultBackup/vaultBackupConstants": {
+      "types": "./dist/encryption/vaultBackup/vaultBackupConstants.d.ts",
+      "import": "./dist/encryption/vaultBackup/vaultBackupConstants.js",
+      "default": "./dist/encryption/vaultBackup/vaultBackupConstants.js"
+    },
+    "./encryption/vaultBackup/vaultBackupCrypto": {
+      "types": "./dist/encryption/vaultBackup/vaultBackupCrypto.d.ts",
+      "import": "./dist/encryption/vaultBackup/vaultBackupCrypto.js",
+      "default": "./dist/encryption/vaultBackup/vaultBackupCrypto.js"
+    },
     "./enforceRange": {
       "types": "./dist/enforceRange.d.ts",
       "import": "./dist/enforceRange.js",

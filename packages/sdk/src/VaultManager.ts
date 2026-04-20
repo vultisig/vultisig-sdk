@@ -2,7 +2,7 @@ import { fromBinary } from '@bufbuild/protobuf'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
-import { decryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm'
+import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import type { SdkContext, VaultContext } from './context/SdkContext'
@@ -126,10 +126,7 @@ export class VaultManager {
           )
         }
         try {
-          const decryptedBuffer = await decryptWithAesGcm({
-            key: password,
-            value: encryptedData,
-          })
+          const decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)
           vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
         } catch (error) {
           throw new VaultImportError(
