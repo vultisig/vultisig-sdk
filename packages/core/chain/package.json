@@ -79,6 +79,66 @@
       "import": "./dist/chains/cardano/asset/cardanoAssetId.js",
       "default": "./dist/chains/cardano/asset/cardanoAssetId.js"
     },
+    "./chains/cardano/cip30/buildCardanoValue": {
+      "types": "./dist/chains/cardano/cip30/buildCardanoValue.d.ts",
+      "import": "./dist/chains/cardano/cip30/buildCardanoValue.js",
+      "default": "./dist/chains/cardano/cip30/buildCardanoValue.js"
+    },
+    "./chains/cardano/cip30/buildCardanoWitnessSet": {
+      "types": "./dist/chains/cardano/cip30/buildCardanoWitnessSet.d.ts",
+      "import": "./dist/chains/cardano/cip30/buildCardanoWitnessSet.js",
+      "default": "./dist/chains/cardano/cip30/buildCardanoWitnessSet.js"
+    },
+    "./chains/cardano/cip30/buildCoseStructures": {
+      "types": "./dist/chains/cardano/cip30/buildCoseStructures.d.ts",
+      "import": "./dist/chains/cardano/cip30/buildCoseStructures.js",
+      "default": "./dist/chains/cardano/cip30/buildCoseStructures.js"
+    },
+    "./chains/cardano/cip30/cardanoAddressBytes": {
+      "types": "./dist/chains/cardano/cip30/cardanoAddressBytes.d.ts",
+      "import": "./dist/chains/cardano/cip30/cardanoAddressBytes.js",
+      "default": "./dist/chains/cardano/cip30/cardanoAddressBytes.js"
+    },
+    "./chains/cardano/cip30/cardanoCborPrimitives": {
+      "types": "./dist/chains/cardano/cip30/cardanoCborPrimitives.d.ts",
+      "import": "./dist/chains/cardano/cip30/cardanoCborPrimitives.js",
+      "default": "./dist/chains/cardano/cip30/cardanoCborPrimitives.js"
+    },
+    "./chains/cardano/cip30/cardanoTxBodyHash": {
+      "types": "./dist/chains/cardano/cip30/cardanoTxBodyHash.d.ts",
+      "import": "./dist/chains/cardano/cip30/cardanoTxBodyHash.js",
+      "default": "./dist/chains/cardano/cip30/cardanoTxBodyHash.js"
+    },
+    "./chains/cardano/cip30/cborEncoder": {
+      "types": "./dist/chains/cardano/cip30/cborEncoder.d.ts",
+      "import": "./dist/chains/cardano/cip30/cborEncoder.js",
+      "default": "./dist/chains/cardano/cip30/cborEncoder.js"
+    },
+    "./chains/cardano/cip30/cborSkip": {
+      "types": "./dist/chains/cardano/cip30/cborSkip.d.ts",
+      "import": "./dist/chains/cardano/cip30/cborSkip.js",
+      "default": "./dist/chains/cardano/cip30/cborSkip.js"
+    },
+    "./chains/cardano/cip30/decodeCardanoAmountValue": {
+      "types": "./dist/chains/cardano/cip30/decodeCardanoAmountValue.d.ts",
+      "import": "./dist/chains/cardano/cip30/decodeCardanoAmountValue.js",
+      "default": "./dist/chains/cardano/cip30/decodeCardanoAmountValue.js"
+    },
+    "./chains/cardano/cip30/selectCardanoUtxosByLovelace": {
+      "types": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.d.ts",
+      "import": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.js",
+      "default": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.js"
+    },
+    "./chains/cardano/cip30/encodeCardanoUnspentOutput": {
+      "types": "./dist/chains/cardano/cip30/encodeCardanoUnspentOutput.d.ts",
+      "import": "./dist/chains/cardano/cip30/encodeCardanoUnspentOutput.js",
+      "default": "./dist/chains/cardano/cip30/encodeCardanoUnspentOutput.js"
+    },
+    "./chains/cardano/cip30/encodeCardanoValue": {
+      "types": "./dist/chains/cardano/cip30/encodeCardanoValue.d.ts",
+      "import": "./dist/chains/cardano/cip30/encodeCardanoValue.js",
+      "default": "./dist/chains/cardano/cip30/encodeCardanoValue.js"
+    },
     "./chains/cardano/client/config": {
       "types": "./dist/chains/cardano/client/config.d.ts",
       "import": "./dist/chains/cardano/client/config.js",
@@ -103,6 +163,11 @@
       "types": "./dist/chains/cardano/config.d.ts",
       "import": "./dist/chains/cardano/config.js",
       "default": "./dist/chains/cardano/config.js"
+    },
+    "./chains/cardano/submit/submitCardanoCbor": {
+      "types": "./dist/chains/cardano/submit/submitCardanoCbor.d.ts",
+      "import": "./dist/chains/cardano/submit/submitCardanoCbor.js",
+      "default": "./dist/chains/cardano/submit/submitCardanoCbor.js"
     },
     "./chains/cardano/utxo/getCardanoExtendedUtxos": {
       "types": "./dist/chains/cardano/utxo/getCardanoExtendedUtxos.d.ts",
@@ -253,6 +318,11 @@
       "types": "./dist/chains/cosmos/thor/lp/index.d.ts",
       "import": "./dist/chains/cosmos/thor/lp/index.js",
       "default": "./dist/chains/cosmos/thor/lp/index.js"
+    },
+    "./chains/cosmos/thor/lp/affiliate": {
+      "types": "./dist/chains/cosmos/thor/lp/affiliate.d.ts",
+      "import": "./dist/chains/cosmos/thor/lp/affiliate.js",
+      "default": "./dist/chains/cosmos/thor/lp/affiliate.js"
     },
     "./chains/cosmos/thor/lp/halts": {
       "types": "./dist/chains/cosmos/thor/lp/halts.d.ts",

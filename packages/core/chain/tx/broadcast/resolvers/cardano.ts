@@ -1,62 +1,17 @@
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { getCardanoTxHash } from '@vultisig/core-chain/tx/hash/resolvers/cardano'
-import { rootApiUrl } from '@vultisig/core-config'
-import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
+
+import { submitCardanoCbor } from '../../../chains/cardano/submit/submitCardanoCbor'
 
 import { BroadcastTxResolver } from '../resolver'
 import { selectEncodedBytes } from './utxo'
 
-const cardanoBroadcastUrl = `${rootApiUrl}/ada/`
-
-type OgmiosResponse =
-  | {
-      jsonrpc?: string
-      result?: { transaction?: { id?: string } }
-      error?: { code?: number; message?: string }
-    }
-  | string
-
-const normalizeHash = (hash: string): string => hash.replace(/^0x/i, '')
-
-const parseJson = (raw: string): OgmiosResponse | null => {
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
-const extractTxHash = (response: OgmiosResponse | null): string | null => {
-  if (!response) {
-    return null
-  }
-
-  if (typeof response === 'string') {
-    const trimmed = response.trim()
-    return trimmed ? normalizeHash(trimmed) : null
-  }
-
-  const txId = response.result?.transaction?.id
-
-  if (typeof txId === 'string' && txId.trim()) {
-    return normalizeHash(txId.trim())
-  }
-
-  return null
-}
-
-const extractError = (response: OgmiosResponse | null, raw: string): string => {
-  if (!response) {
-    return extractErrorMsg(raw)
-  }
-
-  if (typeof response === 'string') {
-    return extractErrorMsg(response)
-  }
-
-  return extractErrorMsg(response.error ?? raw)
-}
+/**
+ * Ogmios code for "transaction already known / in ledger". When the node
+ * reports this, we hash the tx locally to return the deterministic id.
+ */
+const alreadyCommittedCode = 3117
 
 export const broadcastCardanoTx: BroadcastTxResolver<
   OtherChain.Cardano
@@ -64,43 +19,15 @@ export const broadcastCardanoTx: BroadcastTxResolver<
   const encodedBytes = selectEncodedBytes(chain, tx)
   const cborHex = Buffer.from(encodedBytes).toString('hex')
 
-  // @tony: sticking with the direct fetch here. Our 'queryUrl' auto-runs assertFetchResponse, which throws before we can inspect the raw body or status.
-  const response = await fetch(cardanoBroadcastUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'submitTransaction',
-      params: {
-        transaction: {
-          cbor: cborHex,
-        },
-      },
-      id: 1,
-    }),
-  })
+  const { txHash, errorMessage, rpcErrorCode } = await submitCardanoCbor(cborHex)
 
-  const responseText = await response.text()
-  const parsed = parseJson(responseText)
+  if (txHash) return txHash
 
-  const rpcErrorCode =
-    parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed.error?.code
-      : undefined
-
-  if (rpcErrorCode === 3117) {
-    return normalizeHash(await getCardanoTxHash(tx))
+  if (rpcErrorCode === alreadyCommittedCode) {
+    return (await getCardanoTxHash(tx)).replace(/^0x/i, '')
   }
 
-  const txHash = extractTxHash(parsed) ?? extractTxHash(responseText)
-
-  if (txHash) {
-    return txHash
-  }
-
-  const error = extractError(parsed, responseText)
+  const error = errorMessage ?? 'unknown broadcast failure'
 
   if (
     isInError(
