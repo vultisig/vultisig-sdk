@@ -46,9 +46,7 @@ export class ReactNativeStorage implements Storage {
   async list(): Promise<string[]> {
     try {
       const allKeys = await AsyncStorage.getAllKeys()
-      return allKeys
-        .filter(k => k.startsWith(KEY_PREFIX))
-        .map(k => k.slice(KEY_PREFIX.length))
+      return allKeys.filter(k => k.startsWith(KEY_PREFIX)).map(k => k.slice(KEY_PREFIX.length))
     } catch (error) {
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to list keys', error as Error)
     }
