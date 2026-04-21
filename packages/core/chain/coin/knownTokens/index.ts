@@ -83,6 +83,12 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 6,
       priceProviderId: 'tether',
     },
+    TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8: {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
   },
   [Chain.Solana]: {
     JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: {
