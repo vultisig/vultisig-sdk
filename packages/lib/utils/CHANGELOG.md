@@ -1,5 +1,11 @@
 # @vultisig/lib-utils
 
+## 0.9.3
+
+### Patch Changes
+
+- [#280](https://github.com/vultisig/vultisig-sdk/pull/280) [`5aef564`](https://github.com/vultisig/vultisig-sdk/commit/5aef564309aeeede5da250e03447e0a3da0a12ab) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add THORChain LP agent actions (`thorchain_pool_info`, `thorchain_add_liquidity`, `thorchain_remove_liquidity`) to the CLI executor and document them in AGENTS.md. Fix `@vultisig/lib-utils` ESM imports to directory entrypoints so Node resolves `dist` correctly.
+
 ## 0.9.2
 
 ### Patch Changes
