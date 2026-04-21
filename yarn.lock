@@ -6753,10 +6753,16 @@ __metadata:
     xrpl: "npm:^4.4.1"
     zod: "npm:^4.1.5"
   peerDependencies:
+    "@react-native-async-storage/async-storage": ^2.0.0
     "@vultisig/mpc-native": "workspace:*"
+    expo-crypto: ^13.0.0 || ^14.0.0 || ^15.0.0 || ^55.0.0
     vite: ^5.0.0 || ^6.0.0 || ^7.0.0
   peerDependenciesMeta:
+    "@react-native-async-storage/async-storage":
+      optional: true
     "@vultisig/mpc-native":
+      optional: true
+    expo-crypto:
       optional: true
     vite:
       optional: true

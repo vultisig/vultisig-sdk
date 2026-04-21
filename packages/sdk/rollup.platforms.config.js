@@ -242,6 +242,7 @@ const configs = {
       '@vultisig/walletcore-native',
       '@react-native-async-storage/async-storage',
       '@trustwallet/wallet-core',
+      'expo-crypto',
       // Node builtins (can't run on RN)
       'crypto',
       'buffer',

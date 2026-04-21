@@ -1,20 +1,30 @@
 /**
  * React Native platform entry point
  *
- * Registers the native MPC engine and native WalletCore.
+ * Registers the native MPC engine, native WalletCore, RN crypto, and RN storage.
  * Exports RN-compatible SDK APIs.
  */
 import { NativeMpcEngine } from '@vultisig/mpc-native'
 import { configureMpc } from '@vultisig/mpc-types'
 import { NativeWalletCore } from '@vultisig/walletcore-native'
 
+import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
+import { configureCrypto } from '../../crypto'
+import { ReactNativeCrypto } from './crypto'
+import { ReactNativeStorage } from './storage'
 
 // Register native MPC engine
 configureMpc(new NativeMpcEngine())
 
 // Register native WalletCore as the WalletCore provider
 configureWasm(async () => NativeWalletCore.getInstance())
+
+// Register RN crypto (validates globalThis.crypto polyfill on first use)
+configureCrypto(new ReactNativeCrypto())
+
+// Register AsyncStorage-backed default storage
+configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
 export { Chain } from '@vultisig/core-chain/Chain'
