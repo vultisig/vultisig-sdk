@@ -1,14 +1,13 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 export const getCosmosAccountInfo = async ({
   chain,
   address,
 }: ChainAccount<CosmosChain>) => {
   const client = await getCosmosClient(chain)
-  const accountInfo = shouldBePresent(await client.getAccount(address))
+  const accountInfo = await client.getAccount(address)
   const block = await client.getBlock()
   const blockTimestampStr = block.header.time
   const blockTimestampNs =
@@ -18,7 +17,10 @@ export const getCosmosAccountInfo = async ({
   const latestBlock = `${block.header.height}_${timeoutNs}`
 
   return {
-    ...accountInfo,
+    address,
+    pubkey: accountInfo?.pubkey ?? null,
+    accountNumber: accountInfo?.accountNumber ?? 0,
+    sequence: accountInfo?.sequence ?? 0,
     latestBlock,
   }
 }
