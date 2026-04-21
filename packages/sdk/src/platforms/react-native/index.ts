@@ -79,6 +79,18 @@ export { jsonRpcCall, JsonRpcError, queryUrl } from './rpcFetch'
 export type { RuntimeConfig } from './runtime'
 export { configureRuntime } from './runtime'
 
+// RN-safe MPC ceremony helpers — vendored from app's auth/fastVaultSign
+// and mpc/schnorrSign, wired to SDK's `keysign`. No VultiServer URL
+// hardcoding: consumers pass via opts or configureRuntime() defaults.
+export type { FastVaultSignOptions, RelaySessionOptions, SchnorrSignOptions } from './mpc'
+export {
+  fastVaultSign,
+  joinRelaySession,
+  schnorrSign,
+  startRelaySession,
+  waitForParties,
+} from './mpc'
+
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers
 // ============================================================================
