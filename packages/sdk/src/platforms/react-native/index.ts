@@ -100,7 +100,7 @@ export { chains } from './chains'
 // These helpers work on RN because heavy chain clients (viem, xrpl,
 // @solana/web3.js, @ton/*, @polkadot/util-crypto, bitcoinjs-lib, @cosmjs/*,
 // @mysten/sui/jsonRpc, @lifi/sdk, @bufbuild/protobuf, cbor-x, bip32,
-// tiny-secp256k1, i18next) are externalized in rollup.platforms.config.js.
+// i18next) are externalized in rollup.platforms.config.js.
 // Consumers must install those they actually reach (or metro-stub the rest).
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)

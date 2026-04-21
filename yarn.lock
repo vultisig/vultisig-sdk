@@ -6460,6 +6460,7 @@ __metadata:
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
     7z-wasm: "npm:^1.2.0"
+    "@bitcoinerlab/secp256k1": "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.11.0"
     "@cosmjs/amino": "npm:^0.38.1"
     "@cosmjs/encoding": "npm:^0.38.1"
@@ -6482,7 +6483,6 @@ __metadata:
     date-fns: "npm:^4.1.0"
     ethers: "npm:^6.16.0"
     i18next: "npm:^25.8.18"
-    tiny-secp256k1: "npm:^2.2.4"
     viem: "npm:^2.47.4"
     xrpl: "npm:^4.6.0"
   languageName: unknown
@@ -6698,6 +6698,7 @@ __metadata:
   resolution: "@vultisig/sdk@workspace:packages/sdk"
   dependencies:
     7z-wasm: "npm:^1.2.0"
+    "@bitcoinerlab/secp256k1": "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.11.0"
     "@coral-xyz/anchor": "npm:^0.31.1"
     "@cosmjs/amino": "npm:^0.37.1"
@@ -6752,7 +6753,6 @@ __metadata:
     rollup-plugin-dts: "npm:^6.1.1"
     rollup-plugin-esbuild: "npm:^6.2.1"
     rpc-websockets: "npm:^9.0.2"
-    tiny-secp256k1: "npm:^2.2.4"
     tsx: "npm:^4.19.5"
     typescript: "npm:^5.9.2"
     uuid: "npm:^13.0.0"
@@ -17101,15 +17101,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tiny-secp256k1@npm:^2.2.4":
-  version: 2.2.4
-  resolution: "tiny-secp256k1@npm:2.2.4"
-  dependencies:
-    uint8array-tools: "npm:0.0.7"
-  checksum: 10c0/51645e9f5e45ea8d1a160eb18dc63375359d32390bdeadb33e3e17779c2cde05f69b7a92533e69f6c6138dd48c07c2bff198c23721d5084924336e6c1ebe1f04
-  languageName: node
-  linkType: hard
-
 "tinybench@npm:^2.9.0":
   version: 2.9.0
   resolution: "tinybench@npm:2.9.0"
@@ -17448,13 +17439,6 @@ __metadata:
   version: 2.1.0
   resolution: "uc.micro@npm:2.1.0"
   checksum: 10c0/8862eddb412dda76f15db8ad1c640ccc2f47cdf8252a4a30be908d535602c8d33f9855dfcccb8b8837855c1ce1eaa563f7fa7ebe3c98fd0794351aab9b9c55fa
-  languageName: node
-  linkType: hard
-
-"uint8array-tools@npm:0.0.7":
-  version: 0.0.7
-  resolution: "uint8array-tools@npm:0.0.7"
-  checksum: 10c0/7d67aef80f3b6417c1dacc6505d5d82e3441bc6c1706b43698c5322e6fe7078a13a737efa8fcbd0884bd4b589511cc0a90cf4fe7cdd1b62b16007f1b0811ce36
   languageName: node
   linkType: hard
 
