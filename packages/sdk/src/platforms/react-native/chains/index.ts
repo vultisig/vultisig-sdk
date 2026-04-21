@@ -9,7 +9,8 @@ import * as sui from './sui'
 
 export const chains = { cosmos, sui }
 
-// Re-export type surfaces so `import type { BuildCosmosSendOptions } from '.../chains'` works.
+// Re-export Cosmos type surfaces so consumers can `import type { BuildCosmosSendOptions } from '.../chains'`.
+// Sui module currently exposes only functions; add type re-exports here when the sui/tx.ts module declares them.
 export type {
   BuildCosmosSendOptions,
   BuildCosmosWasmExecuteOptions,
@@ -17,4 +18,3 @@ export type {
   BuildThorchainDepositOptions,
   CosmosTxBuilderResult,
 } from './cosmos'
-export type { BuildSuiTransferOptions, SuiTxBuilderResult } from './sui'
