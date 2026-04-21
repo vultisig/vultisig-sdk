@@ -1,5 +1,1 @@
-export {
-  buildSuiSerializedSignature,
-  buildSuiSigningHash,
-  deriveSuiAddress,
-} from './tx'
+export { buildSuiSerializedSignature, buildSuiSigningHash, deriveSuiAddress } from './tx'

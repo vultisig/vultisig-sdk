@@ -66,10 +66,7 @@ export function buildSuiSigningHash(txBytes: Uint8Array): {
  *   flag(1 byte, 0x00 for Ed25519) || signature(64 bytes) || pubkey(32 bytes).
  * Signature input: raw R||S bytes (64) returned by schnorrSign.
  */
-export function buildSuiSerializedSignature(
-  signature: Uint8Array,
-  eddsaPubKeyHex: string
-): Uint8Array {
+export function buildSuiSerializedSignature(signature: Uint8Array, eddsaPubKeyHex: string): Uint8Array {
   if (signature.length !== 64) {
     throw new Error(`Sui signature must be 64 bytes (R||S), got ${signature.length}`)
   }

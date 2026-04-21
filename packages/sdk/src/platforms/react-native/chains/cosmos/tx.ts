@@ -84,11 +84,7 @@ export function deriveCosmosAddress(
  * Applies a 5-hop BIP32 path `m/44/slip44/0/0/0` — the same path as
  * deriveCosmosAddress. Returned bytes are the 33-byte compressed form.
  */
-export function deriveCosmosPubkey(
-  compressedPubKeyHex: string,
-  hexChainCode: string,
-  slip44: number
-): Uint8Array {
+export function deriveCosmosPubkey(compressedPubKeyHex: string, hexChainCode: string, slip44: number): Uint8Array {
   let pubKeyBytes = hexToBytes(compressedPubKeyHex)
   if (!hexChainCode || hexChainCode.length === 0) return pubKeyBytes
   let chainCode = hexToBytes(hexChainCode)
@@ -169,12 +165,7 @@ function wrapAny(typeUrl: string, value: Uint8Array): Uint8Array {
 // Message builders
 // ---------------------------------------------------------------------------
 
-function buildBankMsgSend(
-  fromAddress: string,
-  toAddress: string,
-  amount: string,
-  denom: string
-): Uint8Array {
+function buildBankMsgSend(fromAddress: string, toAddress: string, amount: string, denom: string): Uint8Array {
   return concat(
     field(1, 2, encodeString(fromAddress)),
     field(2, 2, encodeString(toAddress)),
@@ -182,44 +173,21 @@ function buildBankMsgSend(
   )
 }
 
-function buildThorMsgSend(
-  fromAddress: string,
-  toAddress: string,
-  amount: string,
-  denom: string
-): Uint8Array {
-  const fromBytes = new Uint8Array(
-    bech32.fromWords(bech32.decode(fromAddress as `${string}1${string}`).words)
-  )
-  const toBytes = new Uint8Array(
-    bech32.fromWords(bech32.decode(toAddress as `${string}1${string}`).words)
-  )
-  return concat(
-    field(1, 2, fromBytes),
-    field(2, 2, toBytes),
-    field(3, 2, encodeCoin(denom, amount))
-  )
+function buildThorMsgSend(fromAddress: string, toAddress: string, amount: string, denom: string): Uint8Array {
+  const fromBytes = new Uint8Array(bech32.fromWords(bech32.decode(fromAddress as `${string}1${string}`).words))
+  const toBytes = new Uint8Array(bech32.fromWords(bech32.decode(toAddress as `${string}1${string}`).words))
+  return concat(field(1, 2, fromBytes), field(2, 2, toBytes), field(3, 2, encodeCoin(denom, amount)))
 }
 
-function buildThorMsgDeposit(
-  signerAddress: string,
-  runeAmountBaseUnits: string,
-  memo: string
-): Uint8Array {
-  const signerBytes = new Uint8Array(
-    bech32.fromWords(bech32.decode(signerAddress as `${string}1${string}`).words)
-  )
+function buildThorMsgDeposit(signerAddress: string, runeAmountBaseUnits: string, memo: string): Uint8Array {
+  const signerBytes = new Uint8Array(bech32.fromWords(bech32.decode(signerAddress as `${string}1${string}`).words))
   const runeAsset = concat(
     field(1, 2, encodeString('THOR')),
     field(2, 2, encodeString('RUNE')),
     field(3, 2, encodeString('RUNE'))
   )
   const runeCoin = concat(field(1, 2, runeAsset), field(2, 2, encodeString(runeAmountBaseUnits)))
-  return concat(
-    field(1, 2, runeCoin),
-    field(2, 2, encodeString(memo)),
-    field(3, 2, signerBytes)
-  )
+  return concat(field(1, 2, runeCoin), field(2, 2, encodeString(memo)), field(3, 2, signerBytes))
 }
 
 function buildMsgExecuteContract(
@@ -262,11 +230,7 @@ function buildAuthInfo(
   const pubKeyAny = wrapAny('/cosmos.crypto.secp256k1.PubKey', field(1, 2, pubKeyBytes))
   const singleMode = field(1, 0, varint(1))
   const modeInfoSingle = field(1, 2, singleMode)
-  const signerInfo = concat(
-    field(1, 2, pubKeyAny),
-    field(2, 2, modeInfoSingle),
-    field(3, 0, varint(sequence))
-  )
+  const signerInfo = concat(field(1, 2, pubKeyAny), field(2, 2, modeInfoSingle), field(3, 0, varint(sequence)))
   const fee = concat(field(1, 2, encodeCoin(denom, feeAmount)), field(2, 0, varint(gasLimit)))
   return concat(field(1, 2, signerInfo), field(2, 2, fee))
 }
@@ -302,9 +266,7 @@ export type CosmosTxBuilderResult = {
    * Given the hex-encoded raw signature (r||s, 64 bytes = 128 hex chars),
    * return the broadcastable TxRaw bytes, its base64, and sha256 hash.
    */
-  finalize: (
-    sigHex: string
-  ) => { txRawBytes: Uint8Array; txBytesBase64: string; txHashHex: string }
+  finalize: (sigHex: string) => { txRawBytes: Uint8Array; txBytesBase64: string; txHashHex: string }
 }
 
 export type BuildCosmosSendOptions = {
@@ -330,13 +292,7 @@ export function buildCosmosSendTx(opts: BuildCosmosSendOptions): CosmosTxBuilder
     : buildBankMsgSend(opts.fromAddress, opts.toAddress, opts.amount, opts.denom)
   const msgAny = wrapAny(getMsgSendTypeUrl(opts.chainName), msgSend)
   const txBodyBytes = buildTxBody(msgAny, opts.memo ?? '')
-  const authInfoBytes = buildAuthInfo(
-    opts.pubKeyBytes,
-    opts.sequence,
-    opts.gasLimit,
-    opts.denom,
-    opts.feeAmount
-  )
+  const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.denom, opts.feeAmount)
   const signDocBytes = buildSignDoc(txBodyBytes, authInfoBytes, opts.chainId, opts.accountNumber)
   const signingHashHex = bytesToHex(sha256(signDocBytes))
 
@@ -364,24 +320,11 @@ export type BuildCosmosWasmExecuteOptions = {
   memo?: string
 }
 
-export function buildCosmosWasmExecuteTx(
-  opts: BuildCosmosWasmExecuteOptions
-): CosmosTxBuilderResult {
-  const msgExec = buildMsgExecuteContract(
-    opts.fromAddress,
-    opts.contractAddress,
-    opts.executeMsgJson,
-    opts.funds ?? []
-  )
+export function buildCosmosWasmExecuteTx(opts: BuildCosmosWasmExecuteOptions): CosmosTxBuilderResult {
+  const msgExec = buildMsgExecuteContract(opts.fromAddress, opts.contractAddress, opts.executeMsgJson, opts.funds ?? [])
   const msgAny = wrapAny('/cosmwasm.wasm.v1.MsgExecuteContract', msgExec)
   const txBodyBytes = buildTxBody(msgAny, opts.memo ?? '')
-  const authInfoBytes = buildAuthInfo(
-    opts.pubKeyBytes,
-    opts.sequence,
-    opts.gasLimit,
-    opts.feeDenom,
-    opts.feeAmount
-  )
+  const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.feeDenom, opts.feeAmount)
   const signDocBytes = buildSignDoc(txBodyBytes, authInfoBytes, opts.chainId, opts.accountNumber)
   const signingHashHex = bytesToHex(sha256(signDocBytes))
 
@@ -394,10 +337,7 @@ export function buildCosmosWasmExecuteTx(
   }
 }
 
-export type BuildCw20TransferOptions = Omit<
-  BuildCosmosWasmExecuteOptions,
-  'executeMsgJson'
-> & {
+export type BuildCw20TransferOptions = Omit<BuildCosmosWasmExecuteOptions, 'executeMsgJson'> & {
   recipient: string
   tokenAmount: string
 }
@@ -420,19 +360,11 @@ export type BuildThorchainDepositOptions = {
   feeAmount: string
 }
 
-export function buildThorchainDepositTx(
-  opts: BuildThorchainDepositOptions
-): CosmosTxBuilderResult {
+export function buildThorchainDepositTx(opts: BuildThorchainDepositOptions): CosmosTxBuilderResult {
   const msgDeposit = buildThorMsgDeposit(opts.fromAddress, opts.amountBaseUnits, opts.memo)
   const msgAny = wrapAny('/types.MsgDeposit', msgDeposit)
   const txBodyBytes = buildTxBody(msgAny, '')
-  const authInfoBytes = buildAuthInfo(
-    opts.pubKeyBytes,
-    opts.sequence,
-    opts.gasLimit,
-    opts.feeDenom,
-    opts.feeAmount
-  )
+  const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.feeDenom, opts.feeAmount)
   const signDocBytes = buildSignDoc(txBodyBytes, authInfoBytes, opts.chainId, opts.accountNumber)
   const signingHashHex = bytesToHex(sha256(signDocBytes))
   return {
@@ -454,17 +386,12 @@ function finalizeCosmosTx(
   const r = sigHex.substring(0, 64)
   const s = sigHex.substring(64, 128)
   const sigBytes = hexToBytes(r + s)
-  const txRawBytes = concat(
-    field(1, 2, txBodyBytes),
-    field(2, 2, authInfoBytes),
-    field(3, 2, sigBytes)
-  )
+  const txRawBytes = concat(field(1, 2, txBodyBytes), field(2, 2, authInfoBytes), field(3, 2, sigBytes))
   // Base64 via btoa (available in Hermes/JSC, RN runtime).
   const txBytesBase64 =
     typeof btoa === 'function'
       ? btoa(String.fromCharCode(...txRawBytes))
-      :  
-        (globalThis as any).Buffer.from(txRawBytes).toString('base64')
+      : (globalThis as any).Buffer.from(txRawBytes).toString('base64')
   const txHashHex = bytesToHex(sha256(txRawBytes)).toUpperCase()
   return { txRawBytes, txBytesBase64, txHashHex }
 }

@@ -83,13 +83,7 @@ export { configureRuntime } from './runtime'
 // and mpc/schnorrSign, wired to SDK's `keysign`. No VultiServer URL
 // hardcoding: consumers pass via opts or configureRuntime() defaults.
 export type { FastVaultSignOptions, RelaySessionOptions, SchnorrSignOptions } from './mpc'
-export {
-  fastVaultSign,
-  joinRelaySession,
-  schnorrSign,
-  startRelaySession,
-  waitForParties,
-} from './mpc'
+export { fastVaultSign, joinRelaySession, schnorrSign, startRelaySession, waitForParties } from './mpc'
 
 // RN-safe per-chain bridges — pure-function primitives vendored from the
 // vultiagent-app hand-rolled implementations. Consumers do fetch +
@@ -145,13 +139,7 @@ export type {
   KnownCoinMetadata,
   TokenMetadataResolver,
 } from '../../tools/token'
-export {
-  chainFeeCoin,
-  getTokenMetadata,
-  knownTokens,
-  knownTokensIndex,
-  searchToken,
-} from '../../tools/token'
+export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
 
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
@@ -161,7 +149,7 @@ export { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 
 // Pure helpers — no chain client deps
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
-export { fiatToAmount,FiatToAmountError } from '../../utils/fiatToAmount'
+export { fiatToAmount, FiatToAmountError } from '../../utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { parseKeygenQR } from '../../utils/parseKeygenQR'
 export { ValidationHelpers } from '../../utils/validation'

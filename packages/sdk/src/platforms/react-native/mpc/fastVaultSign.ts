@@ -99,8 +99,7 @@ async function fastVaultSignAttempt(opts: FastVaultSignOptions): Promise<string>
     isEcdsa = true,
   } = opts
 
-  const vultiServerUrl =
-    opts.vultiServerUrl ?? getConfiguredVultiServerUrl() ?? DEFAULT_VULTI_SERVER_URL
+  const vultiServerUrl = opts.vultiServerUrl ?? getConfiguredVultiServerUrl() ?? DEFAULT_VULTI_SERVER_URL
   const relayUrl = opts.relayUrl ?? getConfiguredRelayUrl() ?? DEFAULT_RELAY_URL
 
   const sessionId = randomUUID()
@@ -153,10 +152,7 @@ async function fastVaultSignAttempt(opts: FastVaultSignOptions): Promise<string>
   return sig.r + sig.s
 }
 
-export type SchnorrSignOptions = Omit<
-  FastVaultSignOptions,
-  'serverDerivePath' | 'isEcdsa'
-> & {
+export type SchnorrSignOptions = Omit<FastVaultSignOptions, 'serverDerivePath' | 'isEcdsa'> & {
   derivePath: string
 }
 

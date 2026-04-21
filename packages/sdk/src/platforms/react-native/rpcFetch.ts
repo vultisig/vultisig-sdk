@@ -40,7 +40,7 @@ export async function jsonRpcCall<T = unknown>(
   url: string,
   method: string,
   params: JsonRpcParams = [],
-  options: JsonRpcCallOptions = {},
+  options: JsonRpcCallOptions = {}
 ): Promise<T> {
   const body = JSON.stringify({
     jsonrpc: '2.0',
@@ -72,10 +72,7 @@ export async function jsonRpcCall<T = unknown>(
  * Useful for REST RPC endpoints (Ripple, Tron, Cosmos LCD, etc.) where the
  * endpoint isn't JSON-RPC but still returns JSON.
  */
-export async function queryUrl<T = unknown>(
-  url: string,
-  init: RequestInit = {},
-): Promise<T> {
+export async function queryUrl<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) {
     const preview = await res.text().catch(() => '')

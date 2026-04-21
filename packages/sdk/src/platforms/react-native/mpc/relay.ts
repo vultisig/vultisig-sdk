@@ -13,11 +13,7 @@ export type RelaySessionOptions = {
   signal?: AbortSignal
 }
 
-export async function joinRelaySession(
-  relayUrl: string,
-  sessionId: string,
-  localPartyId: string
-): Promise<void> {
+export async function joinRelaySession(relayUrl: string, sessionId: string, localPartyId: string): Promise<void> {
   const res = await fetch(`${relayUrl}/${sessionId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -48,11 +44,7 @@ export async function waitForParties(
   throw new Error('Timeout waiting for parties to join relay')
 }
 
-export async function startRelaySession(
-  relayUrl: string,
-  sessionId: string,
-  parties: string[]
-): Promise<void> {
+export async function startRelaySession(relayUrl: string, sessionId: string, parties: string[]): Promise<void> {
   const res = await fetch(`${relayUrl}/start/${sessionId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
