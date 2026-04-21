@@ -14,6 +14,7 @@ import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
+import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { vaultConfig } from '@vultisig/core-config'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
@@ -33,6 +34,11 @@ import { DiscountTierService } from '../services/DiscountTierService'
 import { FiatValueService } from '../services/FiatValueService'
 import type { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
+// Import prep helpers from per-file paths, not the `tools/prep` barrel: the
+// barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
+// modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
+import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
+import { vaultDataToIdentity } from '../tools/prep/types'
 // Types
 import {
   Balance,
@@ -1020,17 +1026,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     feeSettings?: FeeSettings
   }): Promise<MaxSendAmount> {
-    const balanceResult = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
-    const balance = BigInt(balanceResult.amount)
-
-    const fee = await this.transactionBuilder.estimateSendFee({
-      ...params,
-      amount: balance,
-    })
-
-    const maxSendable = getMaxValue(balance, fee)
-
-    return { balance, fee, maxSendable }
+    const walletCore = await this.wasmProvider.getWalletCore()
+    // Validate receiver before fetching balance so bad input doesn't waste a
+    // network round-trip. computeMaxSendFromBalance re-validates for the
+    // vault-free path; two checks at different layers is acceptable.
+    if (!isValidAddress({ chain: params.coin.chain, address: params.receiver, walletCore })) {
+      throw new Error(`Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`)
+    }
+    // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
+    // wrapping all fire. The vault-free `getMaxSendAmountFromKeys` skips these
+    // (no cache/events in the MCP / agent context); vault callers must not.
+    const balance = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    return computeMaxSendFromBalance(
+      vaultDataToIdentity(this.coreVault),
+      { ...params, balance: BigInt(balance.amount) },
+      walletCore
+    )
   }
 
   /**
