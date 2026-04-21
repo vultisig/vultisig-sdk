@@ -349,12 +349,22 @@ const POSITION_QUERY = `
   }
 `
 
+// Pair lookup goes through finV3.pairs sorted by volume. We fetch the top N
+// and do (base, quote) matching client-side on symbols AND denoms — tolerating
+// LLM-mangled inputs like "xruji" (stripped "x/ruji") or "thorrune"
+// (stripped "thor.rune") by normalising separators on both sides.
 const PAIR_QUERY = `
-  query FinPairByAssets($base: String!, $quote: String!) {
-    finPair(base: $base, quote: $quote) {
-      address
-      assetBase  { metadata { symbol } variants { native { denom } } }
-      assetQuote { metadata { symbol } variants { native { denom } } }
+  query FinPairsAll {
+    finV3 {
+      pairs(first: 200, sortBy: VOLUME, sortDir: DESC) {
+        edges {
+          node {
+            address
+            assetBase  { metadata { symbol } variants { native { denom } } }
+            assetQuote { metadata { symbol } variants { native { denom } } }
+          }
+        }
+      }
     }
   }
 `
@@ -565,22 +575,49 @@ export class RujiraRange {
     }
     try {
       const data = await gqlFetch<{
-        finPair: {
-          address: string
-          assetBase: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
-          assetQuote: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
-        } | null
-      }>(PAIR_QUERY, { base, quote })
-      if (!data?.finPair) return null
+        finV3: {
+          pairs: {
+            edges: Array<{
+              node: {
+                address: string
+                assetBase: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
+                assetQuote: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
+              }
+            }>
+          }
+        }
+      }>(PAIR_QUERY, {})
+      const edges = data?.finV3?.pairs?.edges ?? []
+      // Accept tickers, bank denoms, FIN-pair denoms ("thor.rune"), and
+      // LLM-mangled forms ("xruji" from "x/ruji", "thorrune" from "thor.rune")
+      // by normalising separators out and matching with suffix tolerance
+      // (normalised "thorrune" ends with normalised "rune" → match).
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+      const matches = (input: string, candidate: string): boolean => {
+        if (!input || !candidate) return false
+        const a = norm(input)
+        const b = norm(candidate)
+        return a === b || a.endsWith(b) || b.endsWith(a)
+      }
+      const match = edges
+        .map(e => e.node)
+        .find(n => {
+          const bs = n.assetBase.metadata?.symbol ?? ''
+          const qs = n.assetQuote.metadata?.symbol ?? ''
+          const bd = n.assetBase.variants?.native?.denom ?? ''
+          const qd = n.assetQuote.variants?.native?.denom ?? ''
+          return (matches(base, bs) || matches(base, bd)) && (matches(quote, qs) || matches(quote, qd))
+        })
+      if (!match) return null
       return {
-        address: data.finPair.address,
+        address: match.address,
         base: {
-          symbol: data.finPair.assetBase.metadata?.symbol ?? base,
-          denom: data.finPair.assetBase.variants?.native?.denom ?? '',
+          symbol: match.assetBase.metadata?.symbol ?? base,
+          denom: match.assetBase.variants?.native?.denom ?? '',
         },
         quote: {
-          symbol: data.finPair.assetQuote.metadata?.symbol ?? quote,
-          denom: data.finPair.assetQuote.variants?.native?.denom ?? '',
+          symbol: match.assetQuote.metadata?.symbol ?? quote,
+          denom: match.assetQuote.variants?.native?.denom ?? '',
         },
       }
     } catch (error) {
