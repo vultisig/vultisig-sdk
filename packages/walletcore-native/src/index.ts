@@ -163,23 +163,14 @@ export interface WalletCoreLike {
 // ---------------------------------------------------------------------------
 
 function toBase64(bytes: Uint8Array | Buffer): string {
-  if (Buffer.isBuffer(bytes)) {
-    return bytes.toString('base64')
-  }
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!)
-  }
-  return btoa(binary)
+  const buf = Buffer.isBuffer(bytes)
+    ? bytes
+    : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  return buf.toString('base64')
 }
 
 function fromBase64(b64: string): Uint8Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return bytes
+  return new Uint8Array(Buffer.from(b64, 'base64'))
 }
 
 // ---------------------------------------------------------------------------
