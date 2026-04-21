@@ -69,5 +69,5 @@ export { VaultManager } from '../../VaultManager'
 export { Vultisig } from '../../Vultisig'
 
 // RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
-export { jsonRpcCall, queryUrl, JsonRpcError } from './rpcFetch'
-export type { JsonRpcParams, JsonRpcResponse, JsonRpcCallOptions } from './rpcFetch'
+export type { JsonRpcCallOptions,JsonRpcParams, JsonRpcResponse } from './rpcFetch'
+export { jsonRpcCall, JsonRpcError,queryUrl } from './rpcFetch'
