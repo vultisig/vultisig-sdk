@@ -31,6 +31,15 @@ export const broadcastPolkadotTx: BroadcastTxResolver<
         `Polkadot broadcast failed: ${response.error.message ?? `code ${response.error.code}`}`
       )
     }
+
+    // Per JSON-RPC 2.0 a valid response must have exactly one of `result` /
+    // `error`. If both are missing (malformed gateway response, truncated
+    // body, …) do not silently assume success — force hash verification.
+    if (!response.result) {
+      throw new Error(
+        'Polkadot broadcast failed: missing extrinsic hash in RPC response'
+      )
+    }
   } catch (error) {
     await verifyBroadcastByHash({ chain, tx, error })
   }
