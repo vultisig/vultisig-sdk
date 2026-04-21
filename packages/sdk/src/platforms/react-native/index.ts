@@ -66,8 +66,82 @@ export { configureMpc, ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types
 export { FastVaultFromSeedphraseService } from '../../services/FastVaultFromSeedphraseService'
 export { FastVault } from '../../vault/FastVault'
 export { VaultManager } from '../../VaultManager'
+export type { VultisigConfig } from '../../Vultisig'
 export { Vultisig } from '../../Vultisig'
 
 // RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
-export type { JsonRpcCallOptions,JsonRpcParams, JsonRpcResponse } from './rpcFetch'
-export { jsonRpcCall, JsonRpcError,queryUrl } from './rpcFetch'
+export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse } from './rpcFetch'
+export { jsonRpcCall, JsonRpcError, queryUrl } from './rpcFetch'
+
+// ============================================================================
+// Chain tools — RN-safe surface re-exported for consumers
+// ============================================================================
+//
+// These helpers work on RN because heavy chain clients (viem, xrpl,
+// @solana/web3.js, @ton/*, @polkadot/util-crypto, bitcoinjs-lib, @cosmjs/*,
+// @mysten/sui/jsonRpc, @lifi/sdk, @bufbuild/protobuf, cbor-x, bip32,
+// tiny-secp256k1, i18next) are externalized in rollup.platforms.config.js.
+// Consumers must install those they actually reach (or metro-stub the rest).
+
+// Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
+export type {
+  GetMaxSendAmountFromKeysParams,
+  PrepareSendTxFromKeysParams,
+  PrepareSwapTxFromKeysParams,
+  VaultIdentity,
+} from '../../tools/prep'
+export {
+  getMaxSendAmountFromKeys,
+  prepareContractCallTxFromKeys,
+  prepareSendTxFromKeys,
+  prepareSignAminoTxFromKeys,
+  prepareSignDirectTxFromKeys,
+  prepareSwapTxFromKeys,
+} from '../../tools/prep'
+
+// EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
+export {
+  abiDecode,
+  abiEncode,
+  evmCall,
+  evmCheckAllowance,
+  evmTxInfo,
+  resolve4ByteSelector,
+  resolveEns,
+} from '../../tools/evm'
+
+// Token utilities
+export type {
+  Coin,
+  CoinKey,
+  CoinMetadata,
+  KnownCoin,
+  KnownCoinMetadata,
+  TokenMetadataResolver,
+} from '../../tools/token'
+export {
+  chainFeeCoin,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  searchToken,
+} from '../../tools/token'
+
+// Address derivation from raw vault identity
+export { deriveAddressFromKeys } from '../../tools/address'
+
+// Atomic chain helpers (balance fetchers, vault-free)
+export { getCoinBalance } from '@vultisig/core-chain/coin/balance'
+
+// Pure helpers — no chain client deps
+export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
+export { fiatToAmount,FiatToAmountError } from '../../utils/fiatToAmount'
+export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
+export { parseKeygenQR } from '../../utils/parseKeygenQR'
+export { ValidationHelpers } from '../../utils/validation'
+
+// Storage
+export { MemoryStorage } from '../../storage/MemoryStorage'
+
+// Event emitter
+export { UniversalEventEmitter } from '../../events/EventEmitter'
