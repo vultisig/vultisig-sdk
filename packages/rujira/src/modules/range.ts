@@ -186,17 +186,39 @@ function assertCoin(label: string, c: Coin): void {
   }
 }
 
+const RANGE_CONFIG_SCALE = 10n ** BigInt(RANGE_CONFIG_DECIMALS)
+const RANGE_WITHDRAW_SHARE_SCALE = 10n ** BigInt(RANGE_WITHDRAW_SHARE_DECIMALS)
+
+// Scale a validated Decimal-string (matched by DECIMAL_12_RE / DECIMAL_4_RE) to a BigInt
+// with `decimals` fractional digits. Avoids parseFloat to preserve precision.
+function decimalToScaled(v: string, decimals: number): bigint {
+  const scale = 10n ** BigInt(decimals)
+  const sign = v.startsWith('-') ? -1n : 1n
+  const unsigned = v.startsWith('-') ? v.slice(1) : v
+  const [whole, fraction = ''] = unsigned.split('.')
+  const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals)
+  return sign * (BigInt(whole || '0') * scale + BigInt(paddedFraction || '0'))
+}
+
 function assertShare(v: string): void {
   assertDecimal4('share', v)
-  // Parse strictly. Reject 0 and >1. Allow "1" and "1.0".
-  const n = Number.parseFloat(v)
-  if (!(n > 0 && n <= 1)) {
+  // 0 < share <= 1, compared in scaled BigInt space (reject 0 and >1).
+  const scaled = decimalToScaled(v, RANGE_WITHDRAW_SHARE_DECIMALS)
+  if (!(scaled > 0n && scaled <= RANGE_WITHDRAW_SHARE_SCALE)) {
     throw new RujiraError(RujiraErrorCode.INVALID_PARAMS, `share must be in (0, 1] (got ${v})`)
   }
 }
 
 function assertPairAddress(a: string): void {
-  if (typeof a !== 'string' || !a.startsWith('thor1') || a.length < 20) {
+  if (typeof a !== 'string') {
+    throw new RujiraError(
+      RujiraErrorCode.INVALID_PARAMS,
+      `pairAddress must be a bech32 thor1... contract address (got ${JSON.stringify(a)})`
+    )
+  }
+  try {
+    validateThorAddress(a)
+  } catch {
     throw new RujiraError(
       RujiraErrorCode.INVALID_PARAMS,
       `pairAddress must be a bech32 thor1... contract address (got ${JSON.stringify(a)})`
@@ -210,18 +232,23 @@ function assertConfig(c: RangeConfig): void {
   assertDecimal12('config.spread', c.spread)
   assertDecimal12('config.skew', c.skew)
   assertDecimal12('config.fee', c.fee)
-  // Structural check: high > low.
-  if (Number.parseFloat(c.high) <= Number.parseFloat(c.low)) {
+  // Scaled BigInt comparisons — avoids parseFloat so 12dp precision is preserved.
+  const high = decimalToScaled(c.high, RANGE_CONFIG_DECIMALS)
+  const low = decimalToScaled(c.low, RANGE_CONFIG_DECIMALS)
+  const spread = decimalToScaled(c.spread, RANGE_CONFIG_DECIMALS)
+  const fee = decimalToScaled(c.fee, RANGE_CONFIG_DECIMALS)
+  if (low <= 0n) {
+    throw new RujiraError(RujiraErrorCode.INVALID_PARAMS, `config.low (${c.low}) must be > 0`)
+  }
+  if (high <= low) {
     throw new RujiraError(RujiraErrorCode.INVALID_PARAMS, `config.high (${c.high}) must be > config.low (${c.low})`)
   }
   // Spread reasonability: 0 < spread < 1 (contract likely enforces, but catch early).
-  const s = Number.parseFloat(c.spread)
-  if (!(s > 0 && s < 1)) {
+  if (!(spread > 0n && spread < RANGE_CONFIG_SCALE)) {
     throw new RujiraError(RujiraErrorCode.INVALID_PARAMS, `config.spread must be in (0, 1) (got ${c.spread})`)
   }
   // Fee must not exceed spread.
-  const f = Number.parseFloat(c.fee)
-  if (f < 0 || f > s) {
+  if (fee < 0n || fee > spread) {
     throw new RujiraError(
       RujiraErrorCode.INVALID_PARAMS,
       `config.fee must be in [0, spread] (got ${c.fee} vs spread ${c.spread})`
@@ -238,12 +265,30 @@ type GraphQLResponse<T> = { data: T; errors?: Array<{ message: string }> }
 async function gqlFetch<T>(query: string, variables: Record<string, unknown>): Promise<T> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), GRAPHQL_TIMEOUT_MS)
-  const response = await fetch(RUJIRA_GRAPHQL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeout))
+  let response: Response
+  try {
+    response = await fetch(RUJIRA_GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    // AbortError from the timeout above would otherwise fall through to wrapError's
+    // default NETWORK_ERROR branch (its "timeout"/"timed out" string match misses
+    // the "The operation was aborted." message). Translate it to a proper TIMEOUT.
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new RujiraError(
+        RujiraErrorCode.TIMEOUT,
+        `GraphQL request timed out after ${GRAPHQL_TIMEOUT_MS}ms`,
+        error,
+        true
+      )
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!response.ok) {
     throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL request failed: ${response.status}`)

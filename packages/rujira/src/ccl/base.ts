@@ -1,3 +1,5 @@
+import { RujiraError, RujiraErrorCode } from '../errors.js'
+
 const NEWTON_ITERATIONS = 6
 
 export abstract class Ccl {
@@ -7,6 +9,12 @@ export abstract class Ccl {
   protected sB: number
 
   constructor(high: number, low: number) {
+    if (!Number.isFinite(high) || !Number.isFinite(low) || low < 0 || high < low) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_PARAMS,
+        `CCL range bounds must be finite and satisfy 0 <= low <= high (got high=${high}, low=${low})`
+      )
+    }
     this.high = high
     this.low = low
     this.sA = Math.sqrt(low)

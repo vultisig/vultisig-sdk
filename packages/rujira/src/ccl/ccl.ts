@@ -22,7 +22,17 @@ export function generateCclDistribution(config: CclRangeConfig): CclDistribution
     balanceRatio: null,
   }
 
-  if (high <= low || low <= 0 || spread >= 1 || delta <= 0) return empty
+  if (
+    ![high, low, price, sigma, spread, delta].every(Number.isFinite) ||
+    high <= low ||
+    low <= 0 ||
+    price <= 0 ||
+    spread < 0 ||
+    spread >= 1 ||
+    delta <= 0
+  ) {
+    return empty
+  }
 
   const ccl = createCcl(high, low, sigma, model)
   const askPrice = ccl.ask(price, spread)
@@ -37,6 +47,7 @@ export function generateCclDistribution(config: CclRangeConfig): CclDistribution
   let p = askPrice
   while (p < high) {
     const next = Math.min(p + p * delta, high)
+    if (next <= p) break
     const pMid = (p + next) / 2
     const w = Math.max(0, ccl.weight(pMid))
     asks.push({ pStart: p, pEnd: next, pMid, weight: w, pct: 0, side: 'ask' })
@@ -49,7 +60,7 @@ export function generateCclDistribution(config: CclRangeConfig): CclDistribution
   while (p > low) {
     const next = Math.max(p - p * delta, low)
 
-    if (next <= 0) break
+    if (next <= 0 || next >= p) break
     const pMid = (next + p) / 2
     const w = Math.max(0, ccl.weight(pMid))
     bids.push({ pStart: next, pEnd: p, pMid, weight: w, pct: 0, side: 'bid' })

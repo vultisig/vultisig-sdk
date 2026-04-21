@@ -7,9 +7,10 @@ import { RujiraRange } from '../modules/range.js'
 const client = {} as RujiraClient
 const range = new RujiraRange(client)
 
-const validPair = 'thor1fin-btc-usdc-contract-address-aaaaaaaaaa'
 // Known-valid thor1 (RUJI staking contract) — we only need a real bech32 checksum.
 const validThor = 'thor13g83nn5ef4qzqeafp0508dnvkvm0zqr3sj7eefcn5umu65gqluusrml5cr'
+// Reusing the same bech32-valid contract-shaped thor1 for pair addresses.
+const validPair = validThor
 
 const baseCoin = { denom: 'btc-btc', amount: '100000000' }
 const quoteCoin = { denom: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', amount: '1000000000' }
