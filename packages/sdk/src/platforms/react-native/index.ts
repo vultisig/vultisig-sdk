@@ -91,6 +91,14 @@ export {
   waitForParties,
 } from './mpc'
 
+// RN-safe per-chain bridges — pure-function primitives vendored from the
+// vultiagent-app hand-rolled implementations. Consumers do fetch +
+// signing + broadcasting; these expose the encoding + address math.
+//
+// Cosmos (bech32 addresses, protobuf tx encoding, THORChain MsgDeposit)
+// Sui (address derivation, intent-hashing, signature serialization)
+export * as chains from './chains'
+
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers
 // ============================================================================
