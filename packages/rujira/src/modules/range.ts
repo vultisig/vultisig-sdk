@@ -332,13 +332,19 @@ type FinRangeRaw = {
 }
 
 function mapRange(r: FinRangeRaw): RangePosition {
+  if (!r.pair?.address) {
+    throw new RujiraError(
+      RujiraErrorCode.INVALID_PARAMS,
+      `FinRange ${r.idx} is missing pair.address (partial/error GraphQL response?)`
+    )
+  }
   const config: RangeConfig | undefined =
     r.high && r.low && r.spread && r.skew !== undefined && r.fee !== undefined
       ? { high: r.high, low: r.low, spread: r.spread, skew: r.skew, fee: r.fee }
       : undefined
   return {
     idx: r.idx,
-    pairAddress: r.pair?.address ?? '',
+    pairAddress: r.pair.address,
     base: r.base,
     quote: r.quote,
     feesBase: r.feesBase,
@@ -480,7 +486,8 @@ export class RujiraRange {
         node?: { fin?: { ranges?: { edges?: Array<{ node: FinRangeRaw }> } } }
       }>(POSITIONS_QUERY, { id: nodeId })
       const edges = data?.node?.fin?.ranges?.edges ?? []
-      return edges.map(e => mapRange(e.node))
+      // Filter out partial/malformed rows before mapping — mapRange throws on missing pair.address.
+      return edges.filter(e => !!e.node?.pair?.address).map(e => mapRange(e.node))
     } catch (error) {
       throw wrapError(error)
     }
@@ -496,7 +503,7 @@ export class RujiraRange {
     try {
       const nodeId = base64Encode(`FinRange:${pairAddress}:${idx}`)
       const data = await gqlFetch<{ node?: FinRangeRaw | null }>(POSITION_QUERY, { id: nodeId })
-      if (!data?.node) return null
+      if (!data?.node || !data.node.pair?.address) return null
       return mapRange(data.node)
     } catch (error) {
       throw wrapError(error)
