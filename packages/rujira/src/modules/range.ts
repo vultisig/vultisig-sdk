@@ -259,21 +259,30 @@ async function gqlFetch<T>(query: string, variables: Record<string, unknown>): P
 // NOTE: FinRange + FinPair schema is taken from rujira-ui `TradeSubscriptions`.
 // If upstream schema changes, these queries must be updated in lockstep.
 
+// Queries follow the schema at api.vultisig.com/ruji/api/graphql as of
+// 2026-04-21. Paths verified via __type introspection:
+//   Account.fin.ranges → FinRangeConnection (Relay edges/node)
+//   FinRange.{idx,base,quote,feesBase,feesQuote,principalUsd,yieldUsd,
+//             high,low,spread,skew,fee,price,valueUsd,pair,analytics}
+// Config fields are FLAT on FinRange (not under a nested config object).
+
 const POSITIONS_QUERY = `
   query RangePositions($id: ID!) {
     node(id: $id) {
       ... on Account {
-        ranges {
-          idx
-          base
-          quote
-          feesBase
-          feesQuote
-          principalUsd
-          yieldUsd
-          config { high low spread skew fee }
-          pair { id address }
-          analytics { moic dpi apr firstDepositDate }
+        fin {
+          ranges(first: 100) {
+            edges {
+              node {
+                id idx base quote
+                feesBase feesQuote
+                principalUsd yieldUsd
+                high low spread skew fee price
+                pair { id address }
+                analytics { moic dpi apr firstDepositDate status }
+              }
+            }
+          }
         }
       }
     }
@@ -284,16 +293,12 @@ const POSITION_QUERY = `
   query RangePosition($id: ID!) {
     node(id: $id) {
       ... on FinRange {
-        idx
-        base
-        quote
-        feesBase
-        feesQuote
-        principalUsd
-        yieldUsd
-        config { high low spread skew fee }
+        id idx base quote
+        feesBase feesQuote
+        principalUsd yieldUsd
+        high low spread skew fee price
         pair { id address }
-        analytics { moic dpi apr firstDepositDate }
+        analytics { moic dpi apr firstDepositDate status }
       }
     }
   }
@@ -317,12 +322,20 @@ type FinRangeRaw = {
   feesQuote: string
   principalUsd?: string
   yieldUsd?: string
-  config?: RangeConfig
+  high?: string
+  low?: string
+  spread?: string
+  skew?: string
+  fee?: string
   pair?: { address: string }
   analytics?: RangeAnalytics
 }
 
 function mapRange(r: FinRangeRaw): RangePosition {
+  const config: RangeConfig | undefined =
+    r.high && r.low && r.spread && r.skew !== undefined && r.fee !== undefined
+      ? { high: r.high, low: r.low, spread: r.spread, skew: r.skew, fee: r.fee }
+      : undefined
   return {
     idx: r.idx,
     pairAddress: r.pair?.address ?? '',
@@ -332,7 +345,7 @@ function mapRange(r: FinRangeRaw): RangePosition {
     feesQuote: r.feesQuote,
     principalUsd: r.principalUsd,
     yieldUsd: r.yieldUsd,
-    config: r.config,
+    config,
     analytics: r.analytics,
   }
 }
@@ -463,9 +476,11 @@ export class RujiraRange {
     validateThorAddress(owner)
     try {
       const nodeId = base64Encode(`Account:${owner}`)
-      const data = await gqlFetch<{ node?: { ranges?: FinRangeRaw[] } }>(POSITIONS_QUERY, { id: nodeId })
-      const ranges = data?.node?.ranges ?? []
-      return ranges.map(mapRange)
+      const data = await gqlFetch<{
+        node?: { fin?: { ranges?: { edges?: Array<{ node: FinRangeRaw }> } } }
+      }>(POSITIONS_QUERY, { id: nodeId })
+      const edges = data?.node?.fin?.ranges?.edges ?? []
+      return edges.map(e => mapRange(e.node))
     } catch (error) {
       throw wrapError(error)
     }
