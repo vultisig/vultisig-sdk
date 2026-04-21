@@ -40,3 +40,9 @@ export { configureWasm, getWalletCore } from '../../context/wasmRuntime'
 // MPC engine access (for advanced usage)
 export type { MpcEngine, MpcKeyshare, MpcMessage, MpcSession } from '@vultisig/mpc-types'
 export { configureMpc, ensureMpcEngine, getMpcEngine } from '@vultisig/mpc-types'
+
+// Vault + fast vault lifecycle classes
+export { FastVaultFromSeedphraseService } from '../../services/FastVaultFromSeedphraseService'
+export { FastVault } from '../../vault/FastVault'
+export { VaultManager } from '../../VaultManager'
+export { Vultisig } from '../../Vultisig'
