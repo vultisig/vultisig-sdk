@@ -73,6 +73,12 @@ export { Vultisig } from '../../Vultisig'
 export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse } from './rpcFetch'
 export { jsonRpcCall, JsonRpcError, queryUrl } from './rpcFetch'
 
+// RN runtime config registry — consumers inject chain RPC URLs and
+// optional server/relay URL overrides at app boot. Vendored RN bridges
+// (cosmos/sui/utxo + MPC helpers) read lazily from this registry.
+export type { RuntimeConfig } from './runtime'
+export { configureRuntime } from './runtime'
+
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers
 // ============================================================================
