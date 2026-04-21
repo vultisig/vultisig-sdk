@@ -2,14 +2,19 @@ import { OtherChain } from '@vultisig/core-chain/Chain'
 import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
 
 import { BroadcastTxResolver } from '../resolver'
+import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 export const broadcastRippleTx: BroadcastTxResolver<
   OtherChain.Ripple
-> = async ({ tx: { encoded } }) => {
+> = async ({ chain, tx }) => {
   const client = await getRippleClient()
 
-  await client.request({
-    command: 'submit',
-    tx_blob: Buffer.from(encoded).toString('hex'),
-  })
+  try {
+    await client.request({
+      command: 'submit',
+      tx_blob: Buffer.from(tx.encoded).toString('hex'),
+    })
+  } catch (error) {
+    await verifyBroadcastByHash({ chain, tx, error })
+  }
 }

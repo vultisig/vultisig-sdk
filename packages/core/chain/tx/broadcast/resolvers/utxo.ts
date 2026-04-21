@@ -8,6 +8,7 @@ import { getChainKind } from '../../../ChainKind'
 import { getBlockchairBaseUrl } from '../../../chains/utxo/client/getBlockchairBaseUrl'
 import { SigningOutput } from '../../../tw/signingOutput'
 import { BroadcastTxResolver } from '../resolver'
+import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 type UtxoBasedDecodedTx =
   | SigningOutput<UtxoChain>
@@ -58,7 +59,11 @@ export const broadcastUtxoTx: BroadcastTxResolver<UtxoBasedChain> = async ({
     return null
   }
 
-  throw new Error(`Failed to broadcast transaction: ${extractErrorMsg(error)}`)
+  const broadcastError = new Error(
+    `Failed to broadcast transaction: ${extractErrorMsg(error)}`
+  )
+  await verifyBroadcastByHash({ chain, tx, error: broadcastError })
+  return null
 }
 
 const hasSigningResultV2 = (
