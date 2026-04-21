@@ -30,6 +30,13 @@ export const derivePublicKey = ({
 
   const pathBuf = getDerivePathBytes(path)
   const derivedKey = derivePubKeyFromPath(pubKeyBuf, chainCodeBuf, pathBuf)
+  if (derivedKey.length === 0) {
+    throw new Error(
+      `derivePublicKey: produced zero-length pubkey for path ${path}. ` +
+        'Likely a bundler/shim misconfiguration (bip32 or @bitcoinerlab/secp256k1 stubbed to Proxy). ' +
+        'See .spikes/spike-y9k-publickey-bug.md.'
+    )
+  }
   return Buffer.from(derivedKey).toString('hex')
 }
 
