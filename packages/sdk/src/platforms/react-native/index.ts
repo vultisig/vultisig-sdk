@@ -67,3 +67,7 @@ export { FastVaultFromSeedphraseService } from '../../services/FastVaultFromSeed
 export { FastVault } from '../../vault/FastVault'
 export { VaultManager } from '../../VaultManager'
 export { Vultisig } from '../../Vultisig'
+
+// RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
+export { jsonRpcCall, queryUrl, JsonRpcError } from './rpcFetch'
+export type { JsonRpcParams, JsonRpcResponse, JsonRpcCallOptions } from './rpcFetch'
