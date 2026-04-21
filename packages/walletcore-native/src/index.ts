@@ -161,6 +161,13 @@ export interface WalletCoreLike {
 // ---------------------------------------------------------------------------
 // Helpers — base64 <-> Uint8Array
 // ---------------------------------------------------------------------------
+//
+// Both helpers assume `Buffer` is globally available. On RN/Hermes that is
+// guaranteed because `@vultisig/sdk`'s react-native entrypoint installs the
+// buffer polyfill before any module graph import runs; on Node it is a
+// builtin. Consumers importing `@vultisig/walletcore-native` directly
+// (without going through @vultisig/sdk's RN entrypoint) must polyfill
+// `globalThis.Buffer` themselves before invoking any WalletCore method.
 
 function toBase64(bytes: Uint8Array | Buffer): string {
   const buf = Buffer.isBuffer(bytes)
