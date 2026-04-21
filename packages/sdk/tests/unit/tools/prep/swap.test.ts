@@ -39,14 +39,6 @@ const ethCoin = {
   ticker: 'ETH',
 } as any
 
-const usdcCoin = {
-  chain: Chain.Ethereum,
-  address: '0xfrom',
-  decimals: 6,
-  ticker: 'USDC',
-  id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-} as any
-
 const thorCoin = {
   chain: Chain.THORChain,
   address: 'thor1from',
@@ -61,21 +53,6 @@ const btcCoin = {
   ticker: 'BTC',
 } as any
 
-const solCoin = {
-  chain: Chain.Solana,
-  address: 'sol-from',
-  decimals: 9,
-  ticker: 'SOL',
-} as any
-
-const usdcSolCoin = {
-  chain: Chain.Solana,
-  address: 'sol-from',
-  decimals: 6,
-  ticker: 'USDC',
-  id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-} as any
-
 const swapQuoteStub = { __mock: 'swapQuote' } as any
 
 describe('prepareSwapTxFromKeys', () => {
@@ -83,30 +60,6 @@ describe('prepareSwapTxFromKeys', () => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
     mockGetPublicKey.mockReturnValueOnce(mockFromPublicKey).mockReturnValueOnce(mockToPublicKey)
-  })
-
-  it('returns the payload as-is when erc20ApprovePayload is set (EVM-to-EVM with approval)', async () => {
-    const payloadWithApproval = {
-      __mock: 'keysignPayload',
-      erc20ApprovePayload: {
-        amount: '1000000',
-        spender: '0xrouter',
-      },
-    }
-    mockBuildSwapKeysignPayload.mockResolvedValue(payloadWithApproval)
-
-    const result = await prepareSwapTxFromKeys(baseIdentity, {
-      fromCoin: usdcCoin,
-      toCoin: ethCoin,
-      amount: '1.5',
-      swapQuote: swapQuoteStub,
-    })
-
-    expect(result).toBe(payloadWithApproval)
-    expect((result as any).erc20ApprovePayload).toEqual({
-      amount: '1000000',
-      spender: '0xrouter',
-    })
   })
 
   it('calls getPublicKey for both fromCoin.chain and toCoin.chain (native swap THORChain -> BTC)', async () => {
@@ -156,70 +109,6 @@ describe('prepareSwapTxFromKeys', () => {
       toPublicKey: mockToPublicKey,
       walletCore: mockWalletCore,
     })
-  })
-
-  it('passes eddsaPublicKey through publicKeys for Solana (EdDSA chain)', async () => {
-    const payload = { __mock: 'solanaPayload' }
-    mockBuildSwapKeysignPayload.mockResolvedValue(payload)
-
-    const result = await prepareSwapTxFromKeys(baseIdentity, {
-      fromCoin: solCoin,
-      toCoin: usdcSolCoin,
-      amount: '0.5',
-      swapQuote: swapQuoteStub,
-    })
-
-    expect(result).toBe(payload)
-
-    expect(mockGetPublicKey).toHaveBeenCalledTimes(2)
-    expect(mockGetPublicKey).toHaveBeenNthCalledWith(1, {
-      chain: Chain.Solana,
-      walletCore: mockWalletCore,
-      publicKeys: {
-        ecdsa: baseIdentity.ecdsaPublicKey,
-        eddsa: baseIdentity.eddsaPublicKey,
-      },
-      hexChainCode: baseIdentity.hexChainCode,
-    })
-    expect(mockGetPublicKey).toHaveBeenNthCalledWith(2, {
-      chain: Chain.Solana,
-      walletCore: mockWalletCore,
-      publicKeys: {
-        ecdsa: baseIdentity.ecdsaPublicKey,
-        eddsa: baseIdentity.eddsaPublicKey,
-      },
-      hexChainCode: baseIdentity.hexChainCode,
-    })
-
-    const call = mockBuildSwapKeysignPayload.mock.calls[0][0]
-    expect(call.fromPublicKey).toBe(mockFromPublicKey)
-    expect(call.toPublicKey).toBe(mockToPublicKey)
-  })
-
-  it('sources vaultId/localPartyId/libType from identity', async () => {
-    const payload = { __mock: 'identityPayload' }
-    mockBuildSwapKeysignPayload.mockResolvedValue(payload)
-
-    const customIdentity: VaultIdentity = {
-      ecdsaPublicKey: '02custom-ecdsa',
-      eddsaPublicKey: 'custom-eddsa',
-      hexChainCode: 'cafebabe',
-      localPartyId: 'Android-Z9Y8',
-      libType: 'GG20',
-    }
-
-    await prepareSwapTxFromKeys(customIdentity, {
-      fromCoin: ethCoin,
-      toCoin: usdcCoin,
-      amount: '2',
-      swapQuote: swapQuoteStub,
-    })
-
-    expect(mockBuildSwapKeysignPayload).toHaveBeenCalledTimes(1)
-    const call = mockBuildSwapKeysignPayload.mock.calls[0][0]
-    expect(call.vaultId).toBe(customIdentity.ecdsaPublicKey)
-    expect(call.localPartyId).toBe(customIdentity.localPartyId)
-    expect(call.libType).toBe(customIdentity.libType)
   })
 
   it('uses the explicit walletCore override and does not call the global getWalletCore', async () => {

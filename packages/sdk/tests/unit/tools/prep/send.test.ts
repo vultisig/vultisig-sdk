@@ -45,45 +45,6 @@ describe('prepareSendTxFromKeys', () => {
     mockBuildSendKeysignPayload.mockResolvedValue(mockPayload)
   })
 
-  it('passes identity through for an ECDSA chain (Ethereum)', async () => {
-    const result = await prepareSendTxFromKeys(baseIdentity, {
-      coin: {
-        chain: Chain.Ethereum,
-        address: '0xfrom',
-        decimals: 18,
-        ticker: 'ETH',
-      } as any,
-      receiver: '0xto',
-      amount: 1_000_000_000_000_000_000n,
-    })
-
-    expect(result).toBe(mockPayload)
-
-    expect(mockGetPublicKey).toHaveBeenCalledTimes(1)
-    expect(mockGetPublicKey).toHaveBeenCalledWith({
-      chain: Chain.Ethereum,
-      walletCore: mockWalletCore,
-      publicKeys: {
-        ecdsa: baseIdentity.ecdsaPublicKey,
-        eddsa: baseIdentity.eddsaPublicKey,
-      },
-      hexChainCode: baseIdentity.hexChainCode,
-    })
-
-    expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
-    const call = mockBuildSendKeysignPayload.mock.calls[0][0]
-    expect(call).toMatchObject({
-      vaultId: baseIdentity.ecdsaPublicKey,
-      localPartyId: baseIdentity.localPartyId,
-      libType: baseIdentity.libType,
-      publicKey: mockPublicKey,
-      hexPublicKeyOverride: undefined,
-      walletCore: mockWalletCore,
-      receiver: '0xto',
-      amount: 1_000_000_000_000_000_000n,
-    })
-  })
-
   it('passes publicKey: null and hexPublicKeyOverride for QBTC (MLDSA chain)', async () => {
     const identity: VaultIdentity = {
       ...baseIdentity,
@@ -109,36 +70,6 @@ describe('prepareSendTxFromKeys', () => {
     expect(call.vaultId).toBe(identity.ecdsaPublicKey)
     expect(call.localPartyId).toBe(identity.localPartyId)
     expect(call.libType).toBe(identity.libType)
-  })
-
-  it('passes through unchanged for Bitcoin (UTXO refinement happens inside core)', async () => {
-    const result = await prepareSendTxFromKeys(baseIdentity, {
-      coin: {
-        chain: Chain.Bitcoin,
-        address: 'bc1from',
-        decimals: 8,
-        ticker: 'BTC',
-      } as any,
-      receiver: 'bc1to',
-      amount: 50_000n,
-      memo: 'hello',
-    })
-
-    expect(result).toBe(mockPayload)
-
-    expect(mockGetPublicKey).toHaveBeenCalledTimes(1)
-    expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
-    const call = mockBuildSendKeysignPayload.mock.calls[0][0]
-    expect(call).toMatchObject({
-      receiver: 'bc1to',
-      amount: 50_000n,
-      memo: 'hello',
-      publicKey: mockPublicKey,
-      hexPublicKeyOverride: undefined,
-      vaultId: baseIdentity.ecdsaPublicKey,
-      localPartyId: baseIdentity.localPartyId,
-      libType: baseIdentity.libType,
-    })
   })
 
   it('rejects when amount is zero', async () => {

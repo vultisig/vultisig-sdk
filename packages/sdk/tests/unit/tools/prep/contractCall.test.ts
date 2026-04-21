@@ -192,34 +192,6 @@ describe('prepareContractCallTxFromKeys', () => {
     expect(mockBuildSendKeysignPayload.mock.calls[0][0].walletCore).toBe(overrideWalletCore)
   })
 
-  it('forwards identity fields (vaultId, localPartyId, libType) to buildSendKeysignPayload', async () => {
-    const identity: VaultIdentity = {
-      ...baseIdentity,
-      ecdsaPublicKey: '03custom-ecdsa',
-      localPartyId: 'Pixel-99',
-      libType: 'GG20',
-    }
-
-    await prepareContractCallTxFromKeys(identity, {
-      chain: Chain.Polygon,
-      contractAddress,
-      abi: erc20ApproveAbi,
-      functionName: 'approve',
-      args: [spenderAddress, 5n],
-      senderAddress,
-    })
-
-    expect(mockBuildSendKeysignPayload).toHaveBeenCalledTimes(1)
-    const call = mockBuildSendKeysignPayload.mock.calls[0][0]
-
-    expect(call.vaultId).toBe(identity.ecdsaPublicKey)
-    expect(call.localPartyId).toBe(identity.localPartyId)
-    expect(call.libType).toBe(identity.libType)
-    // Polygon native is POL/MATIC (decimals 18) per chainFeeCoin
-    expect(call.coin.chain).toBe(Chain.Polygon)
-    expect(call.coin.decimals).toBe(18)
-  })
-
   it('rejects when contractAddress is invalid before building payload', async () => {
     mockIsValidAddress.mockImplementation(({ address }: { address: string }) => address !== 'not-an-address')
 

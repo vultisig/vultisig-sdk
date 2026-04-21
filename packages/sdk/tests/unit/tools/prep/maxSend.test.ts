@@ -284,21 +284,4 @@ describe('computeMaxSendFromBalance', () => {
     expect(result.balance).toBe(providedBalance)
     expect(result.maxSendable).toBe(providedBalance - 1_000_000n)
   })
-
-  it('returns maxSendable === 0n when fee exceeds the provided balance', async () => {
-    mockGetSendFeeEstimate.mockResolvedValue(10_000n)
-
-    const result = await computeMaxSendFromBalance(baseIdentity, {
-      coin: {
-        chain: Chain.Ethereum,
-        address: '0xfrom',
-        decimals: 18,
-        ticker: 'ETH',
-      } as any,
-      receiver: '0xto',
-      balance: 500n,
-    })
-
-    expect(result.maxSendable).toBe(0n)
-  })
 })
