@@ -4,6 +4,17 @@
  * Registers the native MPC engine, native WalletCore, RN crypto, and RN storage.
  * Exports RN-compatible SDK APIs.
  */
+
+// Buffer polyfill MUST happen before any SDK module graph import. Several
+// bundled deps read `globalThis.Buffer` at module-init (e.g. @solana/web3.js,
+// @noble/*, @polkadot/*). Consumers often polyfill Buffer in App.tsx, but
+// because ES module imports are hoisted, the SDK's module bodies can evaluate
+// before App.tsx's polyfill runs. Polyfilling here guarantees ordering.
+import { Buffer as _Buffer } from 'buffer'
+if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).Buffer) {
+  ;(globalThis as { Buffer?: unknown }).Buffer = _Buffer
+}
+
 import { NativeMpcEngine } from '@vultisig/mpc-native'
 import { configureMpc } from '@vultisig/mpc-types'
 import { NativeWalletCore } from '@vultisig/walletcore-native'
