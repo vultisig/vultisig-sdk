@@ -243,16 +243,35 @@ const configs = {
       '@react-native-async-storage/async-storage',
       '@trustwallet/wallet-core',
       'expo-crypto',
-      // Node builtins (can't run on RN)
+      // Node builtins — kept external; consumers must map these to
+      // empty modules via metro.config.js `resolver.extraNodeModules`.
+      // The SDK ships `dist/shims/empty-rn.js` as the canonical target.
       'crypto',
       'buffer',
       'util',
-      'stream',
       'url',
       'fs',
       'fs/promises',
       'path',
       'os',
+      'http',
+      'https',
+      'net',
+      'tls',
+      'zlib',
+      'events',
+      'child_process',
+      'stream',
+      'assert',
+      'querystring',
+      'process',
+      // Network transport deps that statically pull Node-only modules via
+      // named imports (can't be Proxy-shimmed).
+      'rpc-websockets',
+      'ws',
+      'node-fetch',
+      'jayson',
+      'jayson/lib/client/browser',
       // Deps that use Node.js or WASM loading (shimmed via alias)
       '7z-wasm',
       'electron',
