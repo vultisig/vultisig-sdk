@@ -1,4 +1,4 @@
-import { isEmpty } from '../../array/isEmpty'
+import { isEmpty } from '../../array/isEmpty/index.js'
 
 export const asyncFallbackChain = async <T>(
   ...functions: (() => Promise<T>)[]
