@@ -224,7 +224,31 @@ const configs = {
     }),
     onwarn,
   },
-  'react-native': {
+  'react-native': [
+    // RN preamble — tiny side-effect bundle that installs global polyfills
+    // (Buffer + subarray repair) before the rest of the SDK evaluates.
+    // Consumers are expected to `import '@vultisig/sdk/rn-preamble'` as their
+    // first entry statement. See src/platforms/react-native/preamble.ts.
+    {
+      input: './src/platforms/react-native/preamble.ts',
+      output: {
+        file: './dist/index.rn-preamble.js',
+        format: 'es',
+        sourcemap: true,
+      },
+      external: ['buffer'],
+      plugins: [
+        esbuild({
+          include: ['./src/**/*'],
+          exclude: ['**/*.test.*', '**/node_modules/**'],
+          target: 'es2021',
+          minify: false,
+          tsconfig: './tsconfig.json',
+        }),
+      ],
+      onwarn,
+    },
+    {
     input: './src/platforms/react-native/index.ts',
     output: {
       file: './dist/index.react-native.js',
@@ -347,7 +371,8 @@ const configs = {
       }),
     ],
     onwarn,
-  },
+    },
+  ],
   electron: {
     input: './src/platforms/electron-main/index.ts',
     output: {
@@ -442,7 +467,7 @@ if (target === 'all') {
   exportConfig = [
     ...configs.node,
     configs.browser,
-    configs['react-native'],
+    ...configs['react-native'],
     configs.electron,
     configs['chrome-extension'],
     ...configs.vite,
