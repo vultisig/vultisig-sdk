@@ -1,5 +1,5 @@
 import BIP32Factory from 'bip32'
-import * as ecc from '@bitcoinerlab/secp256k1'
+import * as ecc from 'tiny-secp256k1'
 
 type DerivePublicKeyInput = {
   hexRootPubKey: string
@@ -33,7 +33,7 @@ export const derivePublicKey = ({
   if (derivedKey.length === 0) {
     throw new Error(
       `derivePublicKey: produced zero-length pubkey for path ${path}. ` +
-        'Likely a bundler/shim misconfiguration (bip32 or @bitcoinerlab/secp256k1 stubbed to Proxy). ' +
+        'Likely a bundler/shim misconfiguration (bip32 or tiny-secp256k1 stubbed to Proxy). ' +
         'See .spikes/spike-y9k-publickey-bug.md.'
     )
   }

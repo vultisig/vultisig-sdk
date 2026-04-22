@@ -40,6 +40,7 @@ const external = [
   '@vultisig/lib-dkls/vs_wasm',
   '@vultisig/lib-mldsa/vs_wasm',
   '@vultisig/lib-schnorr/vs_schnorr_wasm',
+  'tiny-secp256k1',
   '@solana/web3.js',
   '@cosmjs/stargate',
   '@cosmjs/amino',
@@ -135,6 +136,7 @@ const createPlugins = (platformOptions = {}) => {
         'zod',
         'uuid',
         '@trustwallet/wallet-core',
+        'tiny-secp256k1',
         '@solana/web3.js',
         '@cosmjs/stargate',
         '@cosmjs/amino',
@@ -314,7 +316,6 @@ const configs = {
       'ethers',
       /^ethers\//,
       'bitcoinjs-lib',
-      'bip32',
       'bs58',
       'bs58check',
       'cbor-x',
@@ -350,6 +351,11 @@ const configs = {
           {
             find: /\.\.\/getMessageHash$/,
             replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+          },
+          // Shims for packages that use WASM/Node.js and can't run on RN
+          {
+            find: /^tiny-secp256k1$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
           },
           // Resolve workspace packages to source TS for bundling
           {

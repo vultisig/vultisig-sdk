@@ -99,9 +99,12 @@ export { chains } from './chains'
 //
 // These helpers work on RN because heavy chain clients (viem, xrpl,
 // @solana/web3.js, @ton/*, @polkadot/util-crypto, bitcoinjs-lib, @cosmjs/*,
-// @mysten/sui/jsonRpc, @lifi/sdk, @bufbuild/protobuf, cbor-x, bip32,
-// i18next) are externalized in rollup.platforms.config.js.
-// Consumers must install those they actually reach (or metro-stub the rest).
+// @mysten/sui/jsonRpc, @lifi/sdk, @bufbuild/protobuf, cbor-x, i18next)
+// are externalized in rollup.platforms.config.js. Consumers must install
+// those they actually reach (or metro-stub the rest). `bip32` is inlined
+// from its real (pure-JS) npm package, and `tiny-secp256k1` is inlined
+// via the noble-backed shim at
+// src/platforms/react-native/shims/tiny-secp256k1.ts.
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
