@@ -36,6 +36,14 @@ export {
 export { ValidationHelpers } from './utils/validation'
 
 // ============================================================================
+// PUBLIC API - Conversion / Normalization Utilities (vault-free)
+// ============================================================================
+
+export type { FiatToAmountParams } from './utils/fiatToAmount'
+export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
+export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
+
+// ============================================================================
 // PUBLIC API - Chain Configuration
 // ============================================================================
 
@@ -210,15 +218,40 @@ export { CosmosMsgType } from './types'
 // PUBLIC API - Tools (vault-free chain utilities)
 // ============================================================================
 
-export type { FindSwapQuoteParams } from './tools'
+export type {
+  Coin,
+  CoinKey,
+  CoinMetadata,
+  FindSwapQuoteParams,
+  GetMaxSendAmountFromKeysParams,
+  KnownCoin,
+  KnownCoinMetadata,
+  PrepareSendTxFromKeysParams,
+  PrepareSwapTxFromKeysParams,
+  TokenMetadataResolver,
+  VaultIdentity,
+} from './tools'
 export {
   abiDecode,
   abiEncode,
+  chainFeeCoin,
   deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
   findSwapQuote,
+  getCoinBalance,
+  getMaxSendAmountFromKeys,
+  getNativeSwapDecimals,
+  getPublicKey,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  prepareContractCallTxFromKeys,
+  prepareSendTxFromKeys,
+  prepareSignAminoTxFromKeys,
+  prepareSignDirectTxFromKeys,
+  prepareSwapTxFromKeys,
   resolve4ByteSelector,
   resolveEns,
   searchToken,

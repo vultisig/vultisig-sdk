@@ -24,6 +24,22 @@ import type {
 
 type JsonErrorBody = { error?: string; code?: string }
 
+// Map a v1 frame type to the legacy 'running' | 'done' lifecycle. The v1
+// protocol never sends `status` on tool frames (see protocol_v1.go) so the
+// client derives it from the frame type itself.
+function v1StatusFromType(type: string | null): 'running' | 'done' | undefined {
+  switch (type) {
+    case 'tool-input-start':
+    case 'tool-input-available':
+    case 'tool-input-delta':
+      return 'running'
+    case 'tool-output-available':
+      return 'done'
+    default:
+      return undefined
+  }
+}
+
 function sseErrorToMessage(value: unknown): string {
   if (value == null) return ''
   if (typeof value === 'string') return value
@@ -161,6 +177,12 @@ export class AgentClient {
       message: null,
     }
 
+    // Per-stream map: v1 tool-output-available frames omit toolName (see
+    // protocol_v1.go V1ToolOutputAvailable) — remember the name from the
+    // earlier tool-input-start/available frame keyed by toolCallId so the
+    // terminal 'done' callback still carries the tool name.
+    const toolNameByCallId = new Map<string, string>()
+
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -180,7 +202,7 @@ export class AgentClient {
         // Empty line = end of event
         if (currentData) {
           // SSE spec: default event type is "message" when no event: field is present
-          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
+          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
         }
         currentEvent = ''
         currentData = ''
@@ -212,7 +234,7 @@ export class AgentClient {
           if (trailing) processLine(trailing)
           // Flush any pending event (stream ended without final blank line)
           if (currentData) {
-            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
+            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
           }
           break
         }
@@ -237,92 +259,85 @@ export class AgentClient {
       onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
       onError?: (error: string, code: AgentErrorCode) => void
-    }
+    },
+    toolNameByCallId: Map<string, string>
   ): void {
     try {
-      const rawParsed = JSON.parse(data)
+      const parsed = JSON.parse(data)
 
-      // Vercel UI Message Stream v1 adapter: when no `event:` line preceded
-      // the data line, the SSE spec defaults `event` to "message". The new
-      // backend uses bare `data:` lines with the type encoded in the JSON
-      // `type` field. Map v1 types to legacy event names + payload shape so
-      // the existing switch keeps working.
-      let resolvedEvent = event
-      let parsed = rawParsed
-      // v1-gate: we treat a default `message` event with a top-level string `type`
-      // field as a Vercel UI Message Stream v1 frame. This is safe today because
-      // `ConversationMessage` (see ./types.ts) has no top-level `type` field — if a
-      // future `type` is added there, this gate will misroute legacy `message`
-      // events into the v1 branch and the parser will need to be re-split.
-      if (event === 'message' && typeof rawParsed?.type === 'string') {
-        const v1Type = rawParsed.type as string
-        if (v1Type === 'text-delta') {
-          resolvedEvent = 'text_delta'
-        } else if (v1Type === 'finish') {
-          // Vercel v1 `finish` carries `finishReason` and `usage` (token counts).
-          // We collapse to legacy `done` and drop both; the CLI has no
-          // `UsageInfo` surface today. Revisit when we want to show token
-          // usage / stop reason in the UI — until then keep the collapse.
-          resolvedEvent = 'done'
-        } else if (v1Type === 'error') {
-          resolvedEvent = 'error'
-          parsed = { error: rawParsed.errorText ?? rawParsed.error }
-        } else if (v1Type.startsWith('data-')) {
-          // Expects snake_case after `data-` (e.g. `data-tx_ready` → `tx_ready`);
-          // backend contract is pinned by the agent-backend#119 integration
-          // test fixture. Kebab variants (e.g. `data-tx-ready`) will silently
-          // miss the switch below — if that regresses, fix the fixture first.
-          resolvedEvent = v1Type.slice(5) // data-title → title, etc.
-          // Guard against a naked array payload (e.g. `{type:'data-suggestions', data:[...]}`):
-          // `typeof [] === 'object'`, so unwrapping would set `parsed = [...]` and
-          // the switch cases below (which read `parsed.suggestions`, `parsed.actions`, …)
-          // would silently drop the payload. Require a plain object before unwrap.
-          if (rawParsed.data && typeof rawParsed.data === 'object' && !Array.isArray(rawParsed.data)) {
-            parsed = rawParsed.data
-          }
-        } else {
-          resolvedEvent = v1Type
-          if (this.verbose) process.stderr.write(`[SSE:unmapped v1 type: ${v1Type}]\n`)
-        }
-      }
+      // AI SDK v5 streaming: event type is carried in the JSON `type` field
+      // rather than in an `event:` SSE header. Prefer that when present so the
+      // new backend (v-pxuw) and the legacy event-header tests both work.
+      const v1Type = typeof parsed?.type === 'string' && parsed.type.length > 0 ? parsed.type : null
+      const routingEvent = v1Type ? this.mapV1EventType(v1Type) : event
 
-      switch (resolvedEvent) {
+      // V1 custom-data events carry their payload under `.data`; legacy events
+      // carry it inline. Normalise so case handlers see a single shape.
+      const v1Data = typeof parsed?.type === 'string' && parsed.type.startsWith('data-') ? parsed.data : null
+
+      switch (routingEvent) {
         case 'text_delta':
           if (typeof parsed.delta === 'string') {
             result.fullText += parsed.delta
             callbacks.onTextDelta?.(parsed.delta)
           }
           break
-        case 'tool_progress':
+        case 'tool_progress': {
           if (this.verbose) process.stderr.write(`[SSE:tool_progress] raw: ${data.slice(0, 1000)}\n`)
-          callbacks.onToolProgress?.(parsed.tool, parsed.status, parsed.label)
+          // v1 frames don't carry `status`; derive from the frame type.
+          // tool-output-available also omits toolName, so resolve it from the
+          // per-stream map populated on the tool-input-start frame.
+          const v1Status = v1StatusFromType(v1Type)
+          const status = (parsed.status as 'running' | 'done' | undefined) ?? v1Status
+          const callId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : null
+          const rawInlineName = parsed.tool ?? parsed.toolName
+          const inlineName = typeof rawInlineName === 'string' && rawInlineName.length > 0 ? rawInlineName : undefined
+          if (callId && inlineName) {
+            toolNameByCallId.set(callId, inlineName)
+          }
+          const toolName = inlineName ?? (callId ? toolNameByCallId.get(callId) : undefined)
+          const label = typeof parsed.label === 'string' ? parsed.label : undefined
+          if (status && toolName) {
+            callbacks.onToolProgress?.(toolName, status, label)
+          }
+          if (status === 'done' && callId) toolNameByCallId.delete(callId)
           break
-        case 'title':
-          callbacks.onTitle?.(parsed.title)
+        }
+        case 'title': {
+          const title = v1Data?.title ?? parsed.title
+          if (typeof title === 'string') callbacks.onTitle?.(title)
           break
-        case 'actions':
+        }
+        case 'actions': {
           if (this.verbose) process.stderr.write(`[SSE:actions] raw: ${data.slice(0, 1000)}\n`)
-          result.actions.push(...(parsed.actions || []))
-          callbacks.onActions?.(parsed.actions || [])
+          const actions = v1Data?.actions ?? parsed.actions ?? []
+          result.actions.push(...actions)
+          callbacks.onActions?.(actions)
           break
-        case 'suggestions':
-          result.suggestions.push(...(parsed.suggestions || []))
-          callbacks.onSuggestions?.(parsed.suggestions || [])
+        }
+        case 'suggestions': {
+          const suggestions = v1Data?.suggestions ?? parsed.suggestions ?? []
+          result.suggestions.push(...suggestions)
+          callbacks.onSuggestions?.(suggestions)
           break
+        }
         case 'tx_ready':
           if (this.verbose) process.stderr.write(`[SSE:tx_ready] raw: ${data.slice(0, 2000)}\n`)
           {
-            const txReady = parsed as TxReadyPayload
+            const txReady = (v1Data ?? parsed) as TxReadyPayload
             result.transactions.push(txReady)
             callbacks.onTxReady?.(txReady)
           }
           break
-        case 'message':
-          result.message = parsed.message || parsed
+        case 'message': {
+          const msg = v1Data?.message ?? parsed.message ?? parsed
+          result.message = msg
           callbacks.onMessage?.(result.message!)
           break
+        }
         case 'error': {
-          const msg = sseErrorToMessage(parsed.error)
+          const errorText = typeof parsed.errorText === 'string' ? parsed.errorText : parsed.error
+          const msg = sseErrorToMessage(errorText)
           const codeFromBackend =
             typeof parsed.code === 'string' && isAgentErrorCode(parsed.code)
               ? parsed.code
@@ -340,6 +355,38 @@ export class AgentClient {
       } else {
         throw e
       }
+    }
+  }
+
+  // Maps a V1 `type` field to the legacy event bucket used by handleSSEEvent's
+  // switch. Frame-level types (start, text-start, text-end, finish-step) and
+  // non-critical telemetry (data-tokens, data-usage, data-confirmation) route
+  // to 'ignore' which is a no-op.
+  private mapV1EventType(type: string): string {
+    switch (type) {
+      case 'text-delta':
+        return 'text_delta'
+      case 'tool-input-start':
+      case 'tool-input-available':
+      case 'tool-input-delta':
+      case 'tool-output-available':
+        return 'tool_progress'
+      case 'data-title':
+        return 'title'
+      case 'data-actions':
+        return 'actions'
+      case 'data-suggestions':
+        return 'suggestions'
+      case 'data-tx_ready':
+        return 'tx_ready'
+      case 'data-message':
+        return 'message'
+      case 'error':
+        return 'error'
+      case 'finish':
+        return 'done'
+      default:
+        return 'ignore'
     }
   }
 

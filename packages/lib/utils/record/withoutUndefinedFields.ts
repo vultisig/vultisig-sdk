@@ -1,5 +1,5 @@
 import { WithoutUndefinedFields } from '../types/WithoutUndefinedFields'
-import { getRecordKeys } from './getRecordKeys'
+import { getRecordKeys } from './getRecordKeys/index.js'
 
 export function withoutUndefinedFields<T extends Record<string, any>>(
   record: T

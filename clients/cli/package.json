@@ -58,6 +58,7 @@
     "@napi-rs/keyring": "^1.2.0",
     "@noble/hashes": "^2.0.1",
     "@vultisig/client-shared": "workspace:^",
+    "@vultisig/core-chain": "workspace:^",
     "@vultisig/rujira": "workspace:^",
     "@vultisig/sdk": "workspace:^",
     "chalk": "^5.6.2",

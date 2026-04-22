@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -124,11 +124,6 @@
       "import": "./dist/chains/cardano/cip30/decodeCardanoAmountValue.js",
       "default": "./dist/chains/cardano/cip30/decodeCardanoAmountValue.js"
     },
-    "./chains/cardano/cip30/selectCardanoUtxosByLovelace": {
-      "types": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.d.ts",
-      "import": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.js",
-      "default": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.js"
-    },
     "./chains/cardano/cip30/encodeCardanoUnspentOutput": {
       "types": "./dist/chains/cardano/cip30/encodeCardanoUnspentOutput.d.ts",
       "import": "./dist/chains/cardano/cip30/encodeCardanoUnspentOutput.js",
@@ -138,6 +133,11 @@
       "types": "./dist/chains/cardano/cip30/encodeCardanoValue.d.ts",
       "import": "./dist/chains/cardano/cip30/encodeCardanoValue.js",
       "default": "./dist/chains/cardano/cip30/encodeCardanoValue.js"
+    },
+    "./chains/cardano/cip30/selectCardanoUtxosByLovelace": {
+      "types": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.d.ts",
+      "import": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.js",
+      "default": "./dist/chains/cardano/cip30/selectCardanoUtxosByLovelace.js"
     },
     "./chains/cardano/client/config": {
       "types": "./dist/chains/cardano/client/config.d.ts",
@@ -318,11 +318,6 @@
       "types": "./dist/chains/cosmos/thor/lp/index.d.ts",
       "import": "./dist/chains/cosmos/thor/lp/index.js",
       "default": "./dist/chains/cosmos/thor/lp/index.js"
-    },
-    "./chains/cosmos/thor/lp/affiliate": {
-      "types": "./dist/chains/cosmos/thor/lp/affiliate.d.ts",
-      "import": "./dist/chains/cosmos/thor/lp/affiliate.js",
-      "default": "./dist/chains/cosmos/thor/lp/affiliate.js"
     },
     "./chains/cosmos/thor/lp/halts": {
       "types": "./dist/chains/cosmos/thor/lp/halts.d.ts",
