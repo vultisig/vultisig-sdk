@@ -15,6 +15,22 @@ if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).B
   ;(globalThis as { Buffer?: unknown }).Buffer = _Buffer
 }
 
+// Hermes polyfills — RN-only. These run for side effects at module load so
+// that any chain-lib module body that evaluates `new Intl.PluralRules(...)`
+// or `class X extends Event` can resolve those globals without crashing.
+//
+// - @mysten/sui/dist/client/utils.mjs evaluates `new Intl.PluralRules(...)`
+//   at module top-level. Hermes ships without Intl.PluralRules.
+// - @lifi/sdk's transitive `@wallet-standard/app` declares
+//   `class AppReadyEvent extends Event` at module top-level. Hermes ships
+//   without the `Event`/`EventTarget` DOM globals.
+//
+// Without these, even lazy `import('@mysten/sui/jsonRpc')` /
+// `import('@lifi/sdk')` crashes the first time the module is evaluated.
+import '@formatjs/intl-pluralrules/polyfill'
+import '@formatjs/intl-pluralrules/locale-data/en'
+import 'event-target-polyfill'
+
 import { NativeMpcEngine } from '@vultisig/mpc-native'
 import { configureMpc } from '@vultisig/mpc-types'
 import { NativeWalletCore } from '@vultisig/walletcore-native'
