@@ -8,8 +8,9 @@ import * as cosmos from './cosmos'
 import * as evm from './evm'
 import * as solana from './solana'
 import * as sui from './sui'
+import * as utxo from './utxo'
 
-export const chains = { cosmos, evm, solana, sui }
+export const chains = { cosmos, evm, solana, sui, utxo }
 
 // Re-export Cosmos type surfaces so consumers can `import type { BuildCosmosSendOptions } from '.../chains'`.
 // Sui module currently exposes only functions; add type re-exports here when the sui/tx.ts module declares them.
@@ -28,3 +29,19 @@ export type {
   EvmTxBuilderResult,
 } from './evm'
 export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './solana'
+export type {
+  BroadcastUtxoTxOptions,
+  BuildUtxoSendOptions,
+  DecodedAddress,
+  EstimateUtxoFeeOptions,
+  GetUtxoBalanceOptions,
+  GetUtxosOptions,
+  PlainUtxo,
+  SighashBIP143Options,
+  SighashLegacyOptions,
+  UtxoApiKind,
+  UtxoApiOptions,
+  UtxoChainName,
+  UtxoInput,
+  UtxoTxBuilderResult,
+} from './utxo'
