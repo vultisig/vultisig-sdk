@@ -29,6 +29,17 @@ export abstract class Ccl {
 
   // Newton-Raphson: solve F(s) = x·Y(s) - y·X(s) = 0
   price(base: number, quote: number): number {
+    // Reject non-finite / negative inputs up front so a bad parsed
+    // number from upstream (NaN from a failed parseFloat, or an
+    // Infinity from a bogus scaling) can't propagate through the
+    // solver and produce a NaN price. Exported helpers MUST fail
+    // loudly on invalid inputs — silent NaN is worse than a throw.
+    if (!Number.isFinite(base) || !Number.isFinite(quote) || base < 0 || quote < 0) {
+      throw new RujiraError(
+        RujiraErrorCode.INVALID_PARAMS,
+        `price() requires finite non-negative base/quote (got base=${base}, quote=${quote})`
+      )
+    }
     if (quote === 0) return this.sA * this.sA
     if (base === 0) return this.sB * this.sB
 

@@ -297,6 +297,18 @@ async function gqlFetch<T>(query: string, variables: Record<string, unknown>): P
   if (json.errors?.length) {
     throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL errors: ${json.errors[0].message}`)
   }
+  // Review finding: a malformed backend response (200 OK, no `errors`,
+  // no `data`) would return undefined and downstream callers would
+  // collapse it to "no positions" / "no pair" via their `?? []` / `??
+  // null` fallbacks — masking a real backend/schema break as a silent
+  // empty result. Users would make fund-moving decisions on false
+  // negatives. Reject at the transport boundary instead.
+  if (json.data === undefined || json.data === null) {
+    throw new RujiraError(
+      RujiraErrorCode.NETWORK_ERROR,
+      'GraphQL response missing `data` field (backend or schema error)'
+    )
+  }
   return json.data
 }
 
@@ -593,21 +605,66 @@ export class RujiraRange {
       // by normalising separators out and matching with suffix tolerance
       // (normalised "thorrune" ends with normalised "rune" → match).
       const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-      const matches = (input: string, candidate: string): boolean => {
-        if (!input || !candidate) return false
+      // Three-tier match: exact > prefix > suffix. Exact takes precedence
+      // so ambiguous inputs like "ETH" don't silently match a WETH pair
+      // just because `weth.endsWith("eth")`. We also reject multi-hit
+      // fuzzy ambiguity — if two different pairs would pass the fuzzy
+      // tier, the caller must disambiguate.
+      const matchTier = (input: string, candidate: string): 'exact' | 'fuzzy' | null => {
+        if (!input || !candidate) return null
         const a = norm(input)
         const b = norm(candidate)
-        return a === b || a.endsWith(b) || b.endsWith(a)
+        if (a === b) return 'exact'
+        if (a.endsWith(b) || b.endsWith(a)) return 'fuzzy'
+        return null
       }
-      const match = edges
-        .map(e => e.node)
-        .find(n => {
-          const bs = n.assetBase.metadata?.symbol ?? ''
-          const qs = n.assetQuote.metadata?.symbol ?? ''
-          const bd = n.assetBase.variants?.native?.denom ?? ''
-          const qd = n.assetQuote.variants?.native?.denom ?? ''
-          return (matches(base, bs) || matches(base, bd)) && (matches(quote, qs) || matches(quote, qd))
-        })
+      type Node = typeof edges[number]['node']
+      const scoreNode = (n: Node): 'exact' | 'fuzzy' | null => {
+        const bs = n.assetBase.metadata?.symbol ?? ''
+        const qs = n.assetQuote.metadata?.symbol ?? ''
+        const bd = n.assetBase.variants?.native?.denom ?? ''
+        const qd = n.assetQuote.variants?.native?.denom ?? ''
+        const baseTier = (() => {
+          const s = matchTier(base, bs)
+          const d = matchTier(base, bd)
+          if (s === 'exact' || d === 'exact') return 'exact' as const
+          if (s === 'fuzzy' || d === 'fuzzy') return 'fuzzy' as const
+          return null
+        })()
+        const quoteTier = (() => {
+          const s = matchTier(quote, qs)
+          const d = matchTier(quote, qd)
+          if (s === 'exact' || d === 'exact') return 'exact' as const
+          if (s === 'fuzzy' || d === 'fuzzy') return 'fuzzy' as const
+          return null
+        })()
+        if (!baseTier || !quoteTier) return null
+        // Pair is as weak as its weakest side.
+        return baseTier === 'exact' && quoteTier === 'exact' ? 'exact' : 'fuzzy'
+      }
+      const scored = edges.map(e => e.node).map(n => ({ node: n, tier: scoreNode(n) }))
+      const exact = scored.filter(s => s.tier === 'exact').map(s => s.node)
+      const fuzzy = scored.filter(s => s.tier === 'fuzzy').map(s => s.node)
+
+      let match: Node | undefined
+      if (exact.length === 1) {
+        match = exact[0]
+      } else if (exact.length > 1) {
+        // Multiple exact-match pairs (shouldn't happen on a sane pair
+        // list, but reject rather than pick-first to avoid routing to
+        // the wrong pair).
+        throw new RujiraError(
+          RujiraErrorCode.INVALID_PARAMS,
+          `ambiguous pair: ${base}/${quote} matches ${exact.length} pairs exactly`
+        )
+      } else if (fuzzy.length === 1) {
+        match = fuzzy[0]
+      } else if (fuzzy.length > 1) {
+        throw new RujiraError(
+          RujiraErrorCode.INVALID_PARAMS,
+          `ambiguous pair: ${base}/${quote} matches ${fuzzy.length} pairs fuzzily — use exact denoms or tickers`
+        )
+      }
       if (!match) return null
       return {
         address: match.address,

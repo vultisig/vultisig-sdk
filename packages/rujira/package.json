@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/rujira",
-  "version": "11.1.0",
+  "version": "10.0.0",
   "type": "module",
   "description": "Rujira DEX integration for Vultisig SDK - Modular TypeScript SDK for swaps and limit orders on THORChain",
   "main": "./dist/index.js",
