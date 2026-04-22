@@ -1,14 +1,14 @@
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { getSplAccounts } from '@vultisig/core-chain/chains/solana/spl/getSplAccounts'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
-import { PublicKey } from '@solana/web3.js'
 
 import { CoinBalanceResolver } from '../resolver'
 
 export const getSolanaCoinBalance: CoinBalanceResolver = async input => {
-  const client = getSolanaClient()
+  const client = await getSolanaClient()
 
   if (isFeeCoin(input)) {
+    const { PublicKey } = await import('@solana/web3.js')
     const balance = await client.getBalance(new PublicKey(input.address))
 
     return BigInt(balance)

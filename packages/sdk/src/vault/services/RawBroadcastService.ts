@@ -207,7 +207,7 @@ export class RawBroadcastService {
    * @param rawTx - Base58 or Base64 encoded signed transaction
    */
   private async broadcastSolanaRawTx(rawTx: string): Promise<string> {
-    const client = getSolanaClient()
+    const client = await getSolanaClient()
 
     // Detect format: base58 (no padding, no +/) vs base64 (may have = padding or +/)
     const isBase64 = rawTx.includes('=') || /[+/]/.test(rawTx)

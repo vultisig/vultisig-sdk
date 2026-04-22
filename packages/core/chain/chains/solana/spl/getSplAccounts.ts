@@ -1,10 +1,11 @@
-import { PublicKey } from '@solana/web3.js'
-
 import { getSolanaClient } from '../client'
 import { splTokenProgramId, token2022ProgramId } from '../config'
 
 export const getSplAccounts = async (address: string) => {
-  const client = getSolanaClient()
+  const [client, { PublicKey }] = await Promise.all([
+    getSolanaClient(),
+    import('@solana/web3.js'),
+  ])
   const programs = [splTokenProgramId, token2022ProgramId]
 
   const responses = await Promise.all(

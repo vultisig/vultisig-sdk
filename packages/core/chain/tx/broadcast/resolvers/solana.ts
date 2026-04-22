@@ -21,7 +21,7 @@ export const broadcastSolanaTx: BroadcastTxResolver<
     console.warn('[solana] JITO sendTransaction failed, falling back to standard RPC:', err)
   }
 
-  const client = getSolanaClient()
+  const client = await getSolanaClient()
   try {
     await client.sendRawTransaction(rawTransaction, {
       skipPreflight: false,

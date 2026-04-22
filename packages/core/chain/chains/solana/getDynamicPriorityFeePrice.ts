@@ -3,7 +3,7 @@ import { solanaConfig } from './solanaConfig'
 
 /** Fetches the median of non-zero recent prioritization fees from the Solana RPC. */
 export const getDynamicPriorityFeePrice = async (): Promise<number> => {
-    const client = getSolanaClient()
+    const client = await getSolanaClient()
 
     const recentFees = await client.getRecentPrioritizationFees()
 

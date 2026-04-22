@@ -8,7 +8,6 @@ import {
   KeysignPayload,
   KeysignPayloadSchema,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { Message } from '@solana/web3.js'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getPreSigningOutput } from '../../../preSigningOutput'
@@ -32,7 +31,10 @@ export const refineSolanaChainSpecific = async ({
   walletCore,
 }: RefineSolanaChainSpecificInput): Promise<SolanaSpecific> => {
   const coin = getKeysignCoin(keysignPayload)
-  const client = getSolanaClient()
+  const [client, { Message }] = await Promise.all([
+    getSolanaClient(),
+    import('@solana/web3.js'),
+  ])
 
   const [txInputData] = getEncodedSigningInputs({
     keysignPayload: create(KeysignPayloadSchema, {

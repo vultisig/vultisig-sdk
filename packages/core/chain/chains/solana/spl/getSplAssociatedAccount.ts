@@ -1,5 +1,4 @@
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-import { PublicKey } from '@solana/web3.js'
 
 import { token2022ProgramId } from '../config'
 
@@ -12,7 +11,10 @@ export const getSplAssociatedAccount = async ({
   account,
   token,
 }: Input): Promise<{ address: string; isToken2022: boolean }> => {
-  const client = getSolanaClient()
+  const [client, { PublicKey }] = await Promise.all([
+    getSolanaClient(),
+    import('@solana/web3.js'),
+  ])
 
   const response = await client.getParsedTokenAccountsByOwner(
     new PublicKey(account),
