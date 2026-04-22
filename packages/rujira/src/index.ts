@@ -64,8 +64,6 @@ export { RujiraAssets } from './modules/assets.js'
 export type { GhostTransactionParams, GhostVaultInfo, GhostVaultStatus } from './modules/ghost.js'
 export { RujiraGhost } from './modules/ghost.js'
 export { RujiraOrderbook } from './modules/orderbook.js'
-export type { PerpsMarket, PerpsTransactionParams } from './modules/perps.js'
-export { RujiraPerps } from './modules/perps.js'
 export type {
   RangeAnalytics,
   ClaimParams as RangeClaimParams,

@@ -26,10 +26,6 @@
       "import": "./dist/modules/ghost.js",
       "types": "./dist/modules/ghost.d.ts"
     },
-    "./perps": {
-      "import": "./dist/modules/perps.js",
-      "types": "./dist/modules/perps.d.ts"
-    },
     "./range": {
       "import": "./dist/modules/range.js",
       "types": "./dist/modules/range.d.ts"
