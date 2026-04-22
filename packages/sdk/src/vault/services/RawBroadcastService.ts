@@ -415,7 +415,7 @@ export class RawBroadcastService {
       )
     }
 
-    const client = getSuiClient()
+    const client = await getSuiClient()
     const { data: result, error } = await attempt(
       client.executeTransactionBlock({
         transactionBlock: unsignedTx,

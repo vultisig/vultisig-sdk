@@ -8,7 +8,7 @@ import { TxStatusResolver } from '../resolver'
 export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({
   hash,
 }) => {
-  const client = getSuiClient()
+  const client = await getSuiClient()
 
   const { data, error } = await attempt(
     client.getTransactionBlock({

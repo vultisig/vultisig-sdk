@@ -6,7 +6,7 @@ import { TxHashResolver } from '../resolver'
 export const getSuiTxHash: TxHashResolver<OtherChain.Sui> = async ({
   unsignedTx,
 }) => {
-  const client = getSuiClient()
+  const client = await getSuiClient()
 
   const {
     effects: { transactionDigest },
