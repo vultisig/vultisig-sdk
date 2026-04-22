@@ -39,8 +39,12 @@ export const getErc20Prices = async ({
     vs_currencies: fiatCurrency,
   })
 
-  return queryCoingeickoPrices({
+  const prices = await queryCoingeickoPrices({
     url,
     fiatCurrency,
   })
+
+  // Normalize contract-address keys to lowercase so consumers can do
+  // `prices[addr.toLowerCase()]` without depending on upstream casing.
+  return Object.fromEntries(Object.entries(prices).map(([k, v]) => [k.toLowerCase(), v]))
 }

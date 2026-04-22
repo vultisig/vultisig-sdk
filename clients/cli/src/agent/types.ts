@@ -345,6 +345,9 @@ export const AUTO_EXECUTE_ACTIONS = new Set([
   'sign_typed_data',
   'read_evm_contract',
   'scan_tx',
+  'thorchain_pool_info',
+  'thorchain_add_liquidity',
+  'thorchain_remove_liquidity',
 ])
 
 /** Actions that require vault password */
