@@ -169,14 +169,42 @@ export type {
   PrepareSwapTxFromKeysParams,
   VaultIdentity,
 } from '../../tools/prep'
-export {
-  getMaxSendAmountFromKeys,
-  prepareContractCallTxFromKeys,
-  prepareSendTxFromKeys,
-  prepareSignAminoTxFromKeys,
-  prepareSignDirectTxFromKeys,
-  prepareSwapTxFromKeys,
-} from '../../tools/prep'
+
+export async function getMaxSendAmountFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/maxSend')
+  return mod.getMaxSendAmountFromKeys(...(args as Parameters<typeof mod.getMaxSendAmountFromKeys>))
+}
+
+export async function prepareContractCallTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/contractCall')
+  return mod.prepareContractCallTxFromKeys(
+    ...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>)
+  )
+}
+
+export async function prepareSendTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/send')
+  return mod.prepareSendTxFromKeys(...(args as Parameters<typeof mod.prepareSendTxFromKeys>))
+}
+
+export async function prepareSignAminoTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/cosmos')
+  return mod.prepareSignAminoTxFromKeys(
+    ...(args as Parameters<typeof mod.prepareSignAminoTxFromKeys>)
+  )
+}
+
+export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/cosmos')
+  return mod.prepareSignDirectTxFromKeys(
+    ...(args as Parameters<typeof mod.prepareSignDirectTxFromKeys>)
+  )
+}
+
+export async function prepareSwapTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/swap')
+  return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
+}
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
 export {
@@ -204,13 +232,20 @@ export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchTo
 export { deriveAddressFromKeys } from '../../tools/address'
 
 // Atomic chain helpers (balance fetchers, vault-free)
-export { getCoinBalance } from '@vultisig/core-chain/coin/balance'
+export { getCoinBalance } from './getCoinBalance'
 
 // Pure helpers — no chain client deps
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
-export { fiatToAmount, FiatToAmountError } from '../../utils/fiatToAmount'
+export { FiatToAmountError } from '../../utils/fiatToAmount'
+export async function fiatToAmount(...args: unknown[]) {
+  const mod = await import('../../utils/fiatToAmount')
+  return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
+}
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
-export { parseKeygenQR } from '../../utils/parseKeygenQR'
+export async function parseKeygenQR(...args: unknown[]) {
+  const mod = await import('../../utils/parseKeygenQR')
+  return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))
+}
 export { ValidationHelpers } from '../../utils/validation'
 
 // Storage
