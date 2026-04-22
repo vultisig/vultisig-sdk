@@ -6,15 +6,18 @@
 
 import * as cosmos from './cosmos'
 import * as evm from './evm'
+import * as ripple from './ripple'
 import * as solana from './solana'
 import * as sui from './sui'
 import * as tron from './tron'
 import * as utxo from './utxo'
 
-export const chains = { cosmos, evm, solana, sui, tron, utxo }
+export const chains = { cosmos, evm, ripple, solana, sui, tron, utxo }
 
-// Re-export Cosmos type surfaces so consumers can `import type { BuildCosmosSendOptions } from '.../chains'`.
-// Sui module currently exposes only functions; add type re-exports here when the sui/tx.ts module declares them.
+// Re-export chain-specific type surfaces so consumers can import them from
+// the `chains` barrel without knowing which sub-module they live in. Sui
+// module currently exposes only functions; add type re-exports here when
+// sui/tx.ts declares them.
 export type {
   BuildCosmosSendOptions,
   BuildCosmosWasmExecuteOptions,
@@ -29,6 +32,13 @@ export type {
   BuildEvmSendOptions,
   EvmTxBuilderResult,
 } from './evm'
+export type {
+  BuildXrpSendOptions,
+  BuildXrpSendResult,
+  XrpAccountInfo,
+  XrpPaymentTx,
+  XrpSubmitResult,
+} from './ripple'
 export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './solana'
 export type {
   BroadcastResult as TronBroadcastResult,
