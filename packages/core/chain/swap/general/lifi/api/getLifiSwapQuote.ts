@@ -2,7 +2,7 @@ import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 import {
-  lifiSwapChainId,
+  getLifiSwapChainId,
   LifiSwapEnabledChain,
 } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -10,7 +10,6 @@ import { match } from '@vultisig/lib-utils/match'
 import { memoize } from '@vultisig/lib-utils/memoize'
 import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
-import { createConfig, getQuote } from '@lifi/sdk'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
@@ -20,7 +19,11 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   affiliateBps?: number
 }
 
-const setupLifi = memoize(() => {
+// `@lifi/sdk` evaluates `@wallet-standard/app` at module init, which
+// uses the `Event` global (absent on Hermes). Import dynamically so
+// the module graph only loads when a swap is actually requested.
+const setupLifi = memoize(async () => {
+  const { createConfig } = await import('@lifi/sdk')
   createConfig({
     integrator: lifiConfig.integratorName,
   })
@@ -31,7 +34,12 @@ export const getLifiSwapQuote = async ({
   affiliateBps,
   ...transfer
 }: Input): Promise<GeneralSwapQuote> => {
-  setupLifi()
+  await setupLifi()
+
+  const [{ getQuote }, lifiSwapChainId] = await Promise.all([
+    import('@lifi/sdk'),
+    getLifiSwapChainId(),
+  ])
 
   const [fromChain, toChain] = [transfer.from, transfer.to].map(
     ({ chain }) => lifiSwapChainId[chain]
