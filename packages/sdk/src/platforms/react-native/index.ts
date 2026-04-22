@@ -108,6 +108,7 @@ export { fastVaultSign, joinRelaySession, schnorrSign, startRelaySession, waitFo
 // Cosmos (bech32 addresses, protobuf tx encoding, THORChain MsgDeposit)
 // Sui (address derivation, intent-hashing, signature serialization)
 // EVM (viem-backed tx builders + RPC helpers for all 13 EVM chains)
+// TON (wallet V4R2 BOC cell encoding, toncenter RPC helpers)
 export { chains } from './chains'
 
 // EVM bridge type surface — consumers can import these directly from the RN
@@ -124,6 +125,19 @@ export type {
 // pull @solana/web3.js (and therefore avoids the rpc-websockets / ws cascade
 // that hangs Hermes at module init).
 export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
+
+// TON bridge type surface — reimplementation built on @ton/core only, which
+// is Hermes-safe (uses jssha via @ton/crypto peer dep, not crypto.subtle).
+// Consumers MUST install `@ton/core` as a peer dep; we never reach into
+// `@ton/crypto-primitives`.
+export type {
+  BuildTonJettonTransferOptions,
+  BuildTonSendOptions,
+  TonTxBuilderResult,
+  TonV4R2Wallet,
+  TonWalletInfo,
+  TonWalletStatus,
+} from './chains/ton'
 
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers

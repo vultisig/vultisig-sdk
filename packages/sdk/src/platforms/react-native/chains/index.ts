@@ -9,10 +9,11 @@ import * as evm from './evm'
 import * as ripple from './ripple'
 import * as solana from './solana'
 import * as sui from './sui'
+import * as ton from './ton'
 import * as tron from './tron'
 import * as utxo from './utxo'
 
-export const chains = { cosmos, evm, ripple, solana, sui, tron, utxo }
+export const chains = { cosmos, evm, ripple, solana, sui, ton, tron, utxo }
 
 // Re-export chain-specific type surfaces so consumers can import them from
 // the `chains` barrel without knowing which sub-module they live in. Sui
@@ -40,6 +41,14 @@ export type {
   XrpSubmitResult,
 } from './ripple'
 export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './solana'
+export type {
+  BuildTonJettonTransferOptions,
+  BuildTonSendOptions,
+  TonTxBuilderResult,
+  TonV4R2Wallet,
+  TonWalletInfo,
+  TonWalletStatus,
+} from './ton'
 export type {
   BroadcastResult as TronBroadcastResult,
   BuildTrc20TransferOptions,
