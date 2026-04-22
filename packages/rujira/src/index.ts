@@ -58,10 +58,33 @@ export type { RujiraClientOptions } from './client.js'
 export { RujiraClient } from './client.js'
 
 // Module exports
+export type { CclDistribution, CclDistributionBucket, CclModel, CclRangeConfig } from './ccl/index.js'
+export { CclLinear, CclQuadratic, createCcl, generateCclDistribution } from './ccl/index.js'
 export { RujiraAssets } from './modules/assets.js'
 export type { GhostTransactionParams, GhostVaultInfo, GhostVaultStatus } from './modules/ghost.js'
 export { RujiraGhost } from './modules/ghost.js'
 export { RujiraOrderbook } from './modules/orderbook.js'
+export type {
+  RangeAnalytics,
+  ClaimParams as RangeClaimParams,
+  RangeConfig,
+  CreatePositionParams as RangeCreatePositionParams,
+  DepositParams as RangeDepositParams,
+  FinPair as RangeFinPair,
+  RangeMultiTransactionParams,
+  RangePosition,
+  RangeTransactionParams,
+  TransferParams as RangeTransferParams,
+  WithdrawAllParams as RangeWithdrawAllParams,
+  WithdrawParams as RangeWithdrawParams,
+} from './modules/range.js'
+export {
+  RANGE_APR_SCALE,
+  RANGE_CONFIG_DECIMALS,
+  RANGE_MOIC_SCALE,
+  RANGE_WITHDRAW_SHARE_DECIMALS,
+  RujiraRange,
+} from './modules/range.js'
 export type { StakeParams, StakeTransactionParams, StakingPosition, UnstakeParams } from './modules/staking.js'
 export { RujiraStaking } from './modules/staking.js'
 export { RujiraSwap } from './modules/swap.js'

@@ -50,27 +50,27 @@ await sdk.initialize()
 ```typescript
 // Create a new vault using VultiServer
 const vaultId = await sdk.createFastVault({
-  name: "My Secure Wallet",
-  email: "user@example.com",
-  password: "SecurePassword123!",
-});
+  name: 'My Secure Wallet',
+  email: 'user@example.com',
+  password: 'SecurePassword123!',
+})
 
 // User will receive a verification code via email
-const code = "1234"; // Get from user input
-const vault = await sdk.verifyVault(vaultId, code);
+const code = '1234' // Get from user input
+const vault = await sdk.verifyVault(vaultId, code)
 ```
 
 ### 3. Derive Blockchain Addresses
 
 ```typescript
 // Derive addresses for different blockchain networks
-const btcAddress = await vault.address("Bitcoin");
-const ethAddress = await vault.address("Ethereum");
-const solAddress = await vault.address("Solana");
+const btcAddress = await vault.address('Bitcoin')
+const ethAddress = await vault.address('Ethereum')
+const solAddress = await vault.address('Solana')
 
-console.log("BTC:", btcAddress); // bc1q...
-console.log("ETH:", ethAddress); // 0x...
-console.log("SOL:", solAddress); // 9WzD...
+console.log('BTC:', btcAddress) // bc1q...
+console.log('ETH:', ethAddress) // 0x...
+console.log('SOL:', solAddress) // 9WzD...
 ```
 
 ### 4. Create a Secure Vault (Multi-Device)
@@ -78,23 +78,23 @@ console.log("SOL:", solAddress); // 9WzD...
 ```typescript
 // Create a secure vault with 2-of-3 threshold
 const { vault, vaultId, sessionId } = await sdk.createSecureVault({
-  name: "Team Wallet",
-  devices: 3,                    // Total number of devices
-  threshold: 2,                  // Optional: defaults to ceil((devices+1)/2)
-  password: "optional-password", // Optional: encrypt the vault
-  onQRCodeReady: (qrPayload) => {
+  name: 'Team Wallet',
+  devices: 3, // Total number of devices
+  threshold: 2, // Optional: defaults to ceil((devices+1)/2)
+  password: 'optional-password', // Optional: encrypt the vault
+  onQRCodeReady: qrPayload => {
     // Display this QR code for other devices to scan with Vultisig app
-    displayQRCode(qrPayload);
+    displayQRCode(qrPayload)
   },
   onDeviceJoined: (deviceId, totalJoined, required) => {
-    console.log(`Device joined: ${totalJoined}/${required}`);
+    console.log(`Device joined: ${totalJoined}/${required}`)
   },
-  onProgress: (step) => {
-    console.log(`${step.step}: ${step.message}`);
-  }
-});
+  onProgress: step => {
+    console.log(`${step.step}: ${step.message}`)
+  },
+})
 
-console.log("Vault created:", vault.name);
+console.log('Vault created:', vault.name)
 ```
 
 ### 5. Send a Transaction (Fast Vault)
@@ -168,23 +168,25 @@ const keysignPayload = await vault.prepareSendTx({
 Secure vault signing uses the same prepare/sign flow, but requires device coordination via QR code:
 
 ```typescript
-const keysignPayload = await vault.prepareSendTx({ /* same as above */ })
+const keysignPayload = await vault.prepareSendTx({
+  /* same as above */
+})
 const messageHashes = await vault.extractMessageHashes(keysignPayload)
 
 await vault.sign(
   { transaction: keysignPayload, chain: 'Ethereum', messageHashes },
   {
-    onQRCodeReady: (qrPayload) => {
-      displayQRCode(qrPayload); // Other devices scan this to co-sign
+    onQRCodeReady: qrPayload => {
+      displayQRCode(qrPayload) // Other devices scan this to co-sign
     },
     onDeviceJoined: (deviceId, total, required) => {
-      console.log(`Signing: ${total}/${required} devices ready`);
+      console.log(`Signing: ${total}/${required} devices ready`)
     },
-    onProgress: (step) => {
-      console.log(`Signing progress: ${step.message}`);
+    onProgress: step => {
+      console.log(`Signing progress: ${step.message}`)
     },
   }
-);
+)
 ```
 
 ### 6. Import/Export Vaults
@@ -194,16 +196,16 @@ await vault.sign(
 const vaultContent = '...'
 
 // Check if encrypted (sync)
-const isEncrypted = sdk.isVaultEncrypted(vaultContent);
+const isEncrypted = sdk.isVaultEncrypted(vaultContent)
 
 // Import vault
-const vault = await sdk.importVault(vaultContent, isEncrypted ? "password" : undefined);
+const vault = await sdk.importVault(vaultContent, isEncrypted ? 'password' : undefined)
 
 // Export vault to backup format (as Blob)
-const backupBlob = await vault.export("BackupPassword123!");
+const backupBlob = await vault.export('BackupPassword123!')
 
 // Or export as base64 string
-const backupBase64 = await vault.exportAsBase64("BackupPassword123!");
+const backupBase64 = await vault.exportAsBase64('BackupPassword123!')
 ```
 
 ### 7. Create Vault from Seedphrase
@@ -223,7 +225,7 @@ console.log(`Detected language: ${validation.detectedLanguage}`) // 'english', '
 const chains = await sdk.discoverChainsFromSeedphrase(
   mnemonic,
   [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain],
-  (progress) => console.log(`${progress.chain}: ${progress.phase}`)
+  progress => console.log(`${progress.chain}: ${progress.phase}`)
 )
 
 for (const result of chains) {
@@ -239,7 +241,7 @@ const vaultId = await sdk.createFastVaultFromSeedphrase({
   email: 'user@example.com',
   password: 'SecurePassword123!',
   discoverChains: true, // Auto-enable chains with balances
-  onProgress: (step) => console.log(step.message)
+  onProgress: step => console.log(step.message),
 })
 
 // Verify with email code
@@ -323,7 +325,7 @@ await sdk.notifications.notifyVaultMembers({
 })
 
 // Step 3: Handle incoming push notifications
-const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
+const unsubscribe = sdk.notifications.onSigningRequest(notification => {
   console.log(`Signing request for vault: ${notification.vaultName}`)
   // Use notification.qrCodeData to join the signing session
 })
@@ -333,32 +335,35 @@ const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
 
 The SDK handles server communication and state management. Your application is responsible for platform-specific push integration:
 
-| Responsibility | Owner | Details |
-|---|---|---|
-| Obtain push token | **You** | Use platform APIs (APNs, FCM, Web Push) to get a device token |
-| Register token with server | SDK | `sdk.notifications.registerDevice()` |
-| Send notification to vault members | SDK | `sdk.notifications.notifyVaultMembers()` |
-| Wire platform push handler | **You** | iOS delegate, FCM onMessage, service worker, etc. |
-| Parse incoming notification | SDK | `sdk.notifications.handleIncomingPush(data)` |
-| Display notification to user | **You** | OS notification, in-app alert, etc. |
-| Route user to signing flow | **You** | Use `qrCodeData` from the parsed notification |
-| Persist registration state | SDK | Stored automatically in SDK storage |
+| Responsibility                     | Owner   | Details                                                       |
+| ---------------------------------- | ------- | ------------------------------------------------------------- |
+| Obtain push token                  | **You** | Use platform APIs (APNs, FCM, Web Push) to get a device token |
+| Register token with server         | SDK     | `sdk.notifications.registerDevice()`                          |
+| Send notification to vault members | SDK     | `sdk.notifications.notifyVaultMembers()`                      |
+| Wire platform push handler         | **You** | iOS delegate, FCM onMessage, service worker, etc.             |
+| Parse incoming notification        | SDK     | `sdk.notifications.handleIncomingPush(data)`                  |
+| Display notification to user       | **You** | OS notification, in-app alert, etc.                           |
+| Route user to signing flow         | **You** | Use `qrCodeData` from the parsed notification                 |
+| Persist registration state         | SDK     | Stored automatically in SDK storage                           |
 
 #### Platform Setup
 
 **iOS** — Register for remote notifications, pass APNs device token:
+
 ```typescript
 // In your AppDelegate / UNUserNotificationCenter handler:
 sdk.notifications.handleIncomingPush(notification.userInfo)
 ```
 
 **Android** — Use Firebase Cloud Messaging:
+
 ```typescript
 // In your FirebaseMessagingService.onMessageReceived:
 sdk.notifications.handleIncomingPush(remoteMessage.data)
 ```
 
 **Browser / Extension** — Use WebSocket for real-time delivery (no service worker needed):
+
 ```typescript
 // Register device
 await sdk.notifications.registerDevice({
@@ -380,6 +385,7 @@ sdk.notifications.disconnect()
 ```
 
 Alternatively, use Web Push API with VAPID key:
+
 ```typescript
 const vapidKey = await sdk.notifications.fetchVapidPublicKey()
 const subscription = await registration.pushManager.subscribe({
@@ -399,66 +405,90 @@ sdk.notifications.handleIncomingPush(event.data.json())
 
 **Node.js / CLI** — Use WebSocket delivery (`connect()`) or `parseNotificationPayload()` manually if you implement your own transport.
 
+### 12. Vault-Free Transaction Prep
+
+For MCP servers, agents, and other code paths that hold raw public keys but no instantiated vault, the SDK exposes atomic `prepare*FromKeys` helpers that build unsigned `KeysignPayload`s directly from a `VaultIdentity`. These helpers do **not** enable signing — the resulting payload still has to be signed by a vault that holds the key shares. The security boundary is unchanged: only public identity material crosses the API.
+
+```typescript
+import { prepareSendTxFromKeys, type VaultIdentity } from '@vultisig/sdk'
+
+const identity: VaultIdentity = {
+  ecdsaPublicKey: '02abc...',
+  eddsaPublicKey: 'd1e2...',
+  hexChainCode: 'a1b2...',
+  localPartyId: 'server-1', // must match the value the signing devices were registered with
+  libType: 'DKLS',
+}
+
+const keysignPayload = await prepareSendTxFromKeys(identity, {
+  coin: { chain: 'Ethereum', address: '0x...', decimals: 18, ticker: 'ETH' },
+  receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f42bE',
+  amount: 1000000000000000000n,
+})
+```
+
+Companion helpers: `prepareSwapTxFromKeys`, `prepareContractCallTxFromKeys`, `prepareSignAminoTxFromKeys`, `prepareSignDirectTxFromKeys`, and `getMaxSendAmountFromKeys`. The atomic chain helpers `getCoinBalance` and `getPublicKey` are also re-exported.
+
 ## Supported Blockchains
 
 The SDK supports address derivation and operations for 37 blockchain networks:
 
 **EVM Chains**
 
-| Network | Chain Value | Description |
-|---------|-------------|-------------|
-| Ethereum | `Ethereum` | Ethereum mainnet |
-| Arbitrum | `Arbitrum` | Arbitrum One L2 |
-| Base | `Base` | Base L2 (Coinbase) |
-| Blast | `Blast` | Blast L2 |
-| Optimism | `Optimism` | Optimism L2 |
-| Zksync | `Zksync` | zkSync Era |
-| Mantle | `Mantle` | Mantle L2 |
-| Polygon | `Polygon` | Polygon (MATIC) |
-| BSC | `BSC` | BNB Smart Chain |
-| Avalanche | `Avalanche` | Avalanche C-Chain |
-| CronosChain | `CronosChain` | Cronos |
-| Hyperliquid | `Hyperliquid` | Hyperliquid L1 |
-| Sei | `Sei` | Sei EVM |
+| Network     | Chain Value   | Description        |
+| ----------- | ------------- | ------------------ |
+| Ethereum    | `Ethereum`    | Ethereum mainnet   |
+| Arbitrum    | `Arbitrum`    | Arbitrum One L2    |
+| Base        | `Base`        | Base L2 (Coinbase) |
+| Blast       | `Blast`       | Blast L2           |
+| Optimism    | `Optimism`    | Optimism L2        |
+| Zksync      | `Zksync`      | zkSync Era         |
+| Mantle      | `Mantle`      | Mantle L2          |
+| Polygon     | `Polygon`     | Polygon (MATIC)    |
+| BSC         | `BSC`         | BNB Smart Chain    |
+| Avalanche   | `Avalanche`   | Avalanche C-Chain  |
+| CronosChain | `CronosChain` | Cronos             |
+| Hyperliquid | `Hyperliquid` | Hyperliquid L1     |
+| Sei         | `Sei`         | Sei EVM            |
 
 **UTXO Chains**
 
-| Network | Chain Value | Description |
-|---------|-------------|-------------|
-| Bitcoin | `Bitcoin` | Bitcoin mainnet |
-| Bitcoin Cash | `BitcoinCash` (`'Bitcoin-Cash'`) | Bitcoin Cash |
-| Litecoin | `Litecoin` | Litecoin mainnet |
-| Dogecoin | `Dogecoin` | Dogecoin mainnet |
-| Dash | `Dash` | Dash mainnet |
-| Zcash | `Zcash` | Zcash mainnet |
+| Network      | Chain Value                      | Description      |
+| ------------ | -------------------------------- | ---------------- |
+| Bitcoin      | `Bitcoin`                        | Bitcoin mainnet  |
+| Bitcoin Cash | `BitcoinCash` (`'Bitcoin-Cash'`) | Bitcoin Cash     |
+| Litecoin     | `Litecoin`                       | Litecoin mainnet |
+| Dogecoin     | `Dogecoin`                       | Dogecoin mainnet |
+| Dash         | `Dash`                           | Dash mainnet     |
+| Zcash        | `Zcash`                          | Zcash mainnet    |
 
 **Cosmos Chains**
 
-| Network | Chain Value | Description |
-|---------|-------------|-------------|
-| THORChain | `THORChain` | THORChain mainnet |
-| MayaChain | `MayaChain` | Maya Protocol |
-| Cosmos | `Cosmos` | Cosmos Hub |
-| Osmosis | `Osmosis` | Osmosis DEX |
-| Dydx | `Dydx` | dYdX chain |
-| Kujira | `Kujira` | Kujira chain |
-| Terra | `Terra` | Terra 2.0 |
-| TerraClassic | `TerraClassic` | Terra Classic |
-| Noble | `Noble` | Noble (USDC native) |
-| Akash | `Akash` | Akash Network |
+| Network      | Chain Value    | Description         |
+| ------------ | -------------- | ------------------- |
+| THORChain    | `THORChain`    | THORChain mainnet   |
+| MayaChain    | `MayaChain`    | Maya Protocol       |
+| Cosmos       | `Cosmos`       | Cosmos Hub          |
+| Osmosis      | `Osmosis`      | Osmosis DEX         |
+| Dydx         | `Dydx`         | dYdX chain          |
+| Kujira       | `Kujira`       | Kujira chain        |
+| Terra        | `Terra`        | Terra 2.0           |
+| TerraClassic | `TerraClassic` | Terra Classic       |
+| Noble        | `Noble`        | Noble (USDC native) |
+| Akash        | `Akash`        | Akash Network       |
 
 **Other Chains**
 
-| Network | Chain Value | Description |
-|---------|-------------|-------------|
-| Solana | `Solana` | Solana mainnet |
-| Sui | `Sui` | Sui mainnet |
-| Polkadot | `Polkadot` | Polkadot mainnet |
-| Bittensor | `Bittensor` | Bittensor TAO |
-| Ton | `Ton` | TON blockchain |
-| Ripple | `Ripple` | XRP Ledger |
-| Tron | `Tron` | TRON mainnet |
-| Cardano | `Cardano` | Cardano mainnet |
+| Network   | Chain Value | Description      |
+| --------- | ----------- | ---------------- |
+| Solana    | `Solana`    | Solana mainnet   |
+| Sui       | `Sui`       | Sui mainnet      |
+| Polkadot  | `Polkadot`  | Polkadot mainnet |
+| Bittensor | `Bittensor` | Bittensor TAO    |
+| Ton       | `Ton`       | TON blockchain   |
+| Ripple    | `Ripple`    | XRP Ledger       |
+| Tron      | `Tron`      | TRON mainnet     |
+| Cardano   | `Cardano`   | Cardano mainnet  |
 
 Use `Chain` values in SDK calls: `Chain.Bitcoin`, `Chain.Ethereum`, etc.
 
@@ -466,23 +496,25 @@ Use `Chain` values in SDK calls: `Chain.Bitcoin`, `Chain.Ethereum`, etc.
 
 The SDK supports two vault types for different security and usability requirements:
 
-| Feature | Fast Vault | Secure Vault |
-|---------|------------|--------------|
-| **Threshold** | 2-of-2 | N-of-M (configurable) |
-| **Setup** | Server-assisted, instant | Multi-device, requires pairing |
-| **Signing** | Instant via VultiServer | Requires device coordination |
-| **Use Cases** | Personal wallets, quick setup | Team wallets, high security, custody |
-| **Device Pairing** | None required | QR code with Vultisig mobile app |
-| **Password** | Required | Optional |
+| Feature            | Fast Vault                    | Secure Vault                         |
+| ------------------ | ----------------------------- | ------------------------------------ |
+| **Threshold**      | 2-of-2                        | N-of-M (configurable)                |
+| **Setup**          | Server-assisted, instant      | Multi-device, requires pairing       |
+| **Signing**        | Instant via VultiServer       | Requires device coordination         |
+| **Use Cases**      | Personal wallets, quick setup | Team wallets, high security, custody |
+| **Device Pairing** | None required                 | QR code with Vultisig mobile app     |
+| **Password**       | Required                      | Optional                             |
 
 ### When to Use Each Type
 
 **Fast Vault** - Best for:
+
 - Individual users wanting quick setup
 - Development and testing
 - Situations where server-assisted signing is acceptable
 
 **Secure Vault** - Best for:
+
 - Team or organizational wallets
 - High-value assets requiring multi-party approval
 - Scenarios requiring configurable thresholds (2-of-3, 3-of-5, etc.)
@@ -589,9 +621,9 @@ export default VaultApp
 ```typescript
 const sdk = new Vultisig({
   autoInit: true, // Automatically initialize WASM modules on creation
-  serverUrl: "https://api.vultisig.com", // Custom VultiServer endpoint
-  relayUrl: "https://relay.vultisig.com", // Custom relay endpoint
-});
+  serverUrl: 'https://api.vultisig.com', // Custom VultiServer endpoint
+  relayUrl: 'https://relay.vultisig.com', // Custom relay endpoint
+})
 ```
 
 ### WASM Files
@@ -657,6 +689,7 @@ Create a multi-device secure vault with N-of-M threshold signing.
 Validate a BIP39 mnemonic phrase.
 
 **Returns:**
+
 - `valid: boolean` - Whether the mnemonic is valid
 - `wordCount: number` - Number of words (12 or 24)
 - `invalidWords?: string[]` - Words not in BIP39 wordlist
@@ -667,6 +700,7 @@ Validate a BIP39 mnemonic phrase.
 Discover chains with balances for a seedphrase.
 
 **Parameters:**
+
 - `mnemonic: string` - BIP39 mnemonic phrase
 - `chains?: Chain[]` - Chains to scan (defaults to common chains)
 - `onProgress?: (progress: ChainDiscoveryProgress) => void` - Progress callback
@@ -676,6 +710,7 @@ Discover chains with balances for a seedphrase.
 Create a FastVault from a BIP39 seedphrase. Returns vaultId for email verification.
 
 **Parameters:**
+
 - `options.mnemonic: string` - BIP39 mnemonic (12 or 24 words)
 - `options.name: string` - Vault name
 - `options.email: string` - Email for verification
@@ -689,6 +724,7 @@ Create a FastVault from a BIP39 seedphrase. Returns vaultId for email verificati
 Create a SecureVault from a BIP39 seedphrase with multi-device MPC.
 
 **Parameters:**
+
 - `options.mnemonic: string` - BIP39 mnemonic (12 or 24 words)
 - `options.name: string` - Vault name
 - `options.devices: number` - Number of participating devices
@@ -702,6 +738,7 @@ Create a SecureVault from a BIP39 seedphrase with multi-device MPC.
 Join an existing SecureVault creation session. Auto-detects keygen vs seedphrase mode.
 
 **Parameters:**
+
 - `qrPayload: string` - QR code content from initiator (vultisig://...)
 - `options.mnemonic?: string` - Required for seedphrase-based sessions, ignored for keygen
 - `options.devices: number` - Number of participating devices (required)
@@ -809,6 +846,7 @@ Get the native fee coin info for a chain (e.g., ETH for Ethereum, BTC for Bitcoi
 Fetch current token prices by CoinGecko IDs.
 
 **Parameters:**
+
 - `params.ids: string[]` - CoinGecko price provider IDs
 - `params.fiatCurrency?: string` - Fiat currency code (default: `'usd'`)
 
@@ -821,6 +859,7 @@ Get the list of chains supported by the Banxa fiat on-ramp.
 Scan a website URL for malicious content via Blockaid.
 
 **Returns:**
+
 - `isMalicious: boolean` - Whether the site is flagged as malicious
 - `url: string` - The scanned URL
 
@@ -887,6 +926,7 @@ Accessed via `sdk.notifications`:
 Register a device to receive push notifications for a vault.
 
 **Parameters:**
+
 - `options.vaultId: string` - Vault ID (`publicKeys.ecdsa`)
 - `options.partyName: string` - Local party ID of the device
 - `options.token: string` - Push token from APNs, FCM, or Web Push
@@ -901,6 +941,7 @@ Remove local push registration for a vault.
 Send a push notification to all other registered devices for a vault.
 
 **Parameters:**
+
 - `options.vaultId: string` - Vault ID
 - `options.vaultName: string` - Vault display name
 - `options.localPartyId: string` - Sender's party ID (excluded from recipients)
@@ -935,6 +976,7 @@ Check if any devices are registered for a vault on the server.
 Open a WebSocket connection for real-time notification delivery. Messages are dispatched through `onSigningRequest()` callbacks. Auto-reconnects with exponential backoff (1s → 30s cap). Requires prior `registerDevice()` call.
 
 **Parameters:**
+
 - `options.vaultId: string` - Vault ID (`publicKeys.ecdsa`)
 - `options.partyName: string` - Local party ID of the device
 - `options.token: string` - Same token used for `registerDevice()`
@@ -977,7 +1019,11 @@ The SDK primarily uses typed errors with machine-readable codes. Check `error.co
 import { VaultError, VaultErrorCode } from '@vultisig/sdk'
 
 try {
-  const result = await vault.send({ chain: 'Ethereum', to: '0x...', amount: '0.5' })
+  const result = await vault.send({
+    chain: 'Ethereum',
+    to: '0x...',
+    amount: '0.5',
+  })
 } catch (error) {
   if (error instanceof VaultError) {
     switch (error.code) {
@@ -1009,36 +1055,36 @@ try {
 
 #### `VaultErrorCode`
 
-| Code | When |
-|------|------|
-| `INVALID_CONFIG` | SDK or vault configuration is invalid |
-| `SIGNING_FAILED` | MPC signing round failed |
-| `NOT_IMPLEMENTED` | Feature not yet available for this chain |
-| `ADDRESS_DERIVATION_FAILED` | Could not derive address from public keys |
+| Code                          | When                                                    |
+| ----------------------------- | ------------------------------------------------------- |
+| `INVALID_CONFIG`              | SDK or vault configuration is invalid                   |
+| `SIGNING_FAILED`              | MPC signing round failed                                |
+| `NOT_IMPLEMENTED`             | Feature not yet available for this chain                |
+| `ADDRESS_DERIVATION_FAILED`   | Could not derive address from public keys               |
 | `WALLET_CORE_NOT_INITIALIZED` | WASM modules not loaded — call `sdk.initialize()` first |
-| `UNSUPPORTED_CHAIN` | Chain not supported by this operation |
-| `CHAIN_NOT_SUPPORTED` | Chain not enabled on this vault |
-| `NETWORK_ERROR` | RPC or server request failed |
-| `INVALID_VAULT` | Vault data is corrupted or incomplete |
-| `INVALID_PUBLIC_KEY` | Public key format is invalid |
-| `INVALID_CHAIN_CODE` | Chain code missing or malformed |
-| `BALANCE_FETCH_FAILED` | Balance query failed (RPC timeout, rate limit) |
-| `UNSUPPORTED_TOKEN` | Token not recognized or not supported on this chain |
-| `GAS_ESTIMATION_FAILED` | Could not estimate gas fees |
-| `BROADCAST_FAILED` | Transaction rejected by the network |
-| `CREATE_FAILED` | Vault creation failed (server error, keygen failure) |
-| `TIMEOUT` | Operation timed out |
-| `INVALID_AMOUNT` | Amount is zero, negative, NaN, or exceeds balance |
+| `UNSUPPORTED_CHAIN`           | Chain not supported by this operation                   |
+| `CHAIN_NOT_SUPPORTED`         | Chain not enabled on this vault                         |
+| `NETWORK_ERROR`               | RPC or server request failed                            |
+| `INVALID_VAULT`               | Vault data is corrupted or incomplete                   |
+| `INVALID_PUBLIC_KEY`          | Public key format is invalid                            |
+| `INVALID_CHAIN_CODE`          | Chain code missing or malformed                         |
+| `BALANCE_FETCH_FAILED`        | Balance query failed (RPC timeout, rate limit)          |
+| `UNSUPPORTED_TOKEN`           | Token not recognized or not supported on this chain     |
+| `GAS_ESTIMATION_FAILED`       | Could not estimate gas fees                             |
+| `BROADCAST_FAILED`            | Transaction rejected by the network                     |
+| `CREATE_FAILED`               | Vault creation failed (server error, keygen failure)    |
+| `TIMEOUT`                     | Operation timed out                                     |
+| `INVALID_AMOUNT`              | Amount is zero, negative, NaN, or exceeds balance       |
 
 #### `VaultImportErrorCode`
 
-| Code | When |
-|------|------|
-| `INVALID_FILE_FORMAT` | File is not a valid vault backup |
-| `PASSWORD_REQUIRED` | Vault file is encrypted — provide a password |
-| `INVALID_PASSWORD` | Wrong password for encrypted vault |
-| `CORRUPTED_DATA` | Vault data failed integrity check |
-| `UNSUPPORTED_FORMAT` | Vault format version not supported |
+| Code                  | When                                         |
+| --------------------- | -------------------------------------------- |
+| `INVALID_FILE_FORMAT` | File is not a valid vault backup             |
+| `PASSWORD_REQUIRED`   | Vault file is encrypted — provide a password |
+| `INVALID_PASSWORD`    | Wrong password for encrypted vault           |
+| `CORRUPTED_DATA`      | Vault data failed integrity check            |
+| `UNSUPPORTED_FORMAT`  | Vault format version not supported           |
 
 ```typescript
 import { VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
@@ -1085,46 +1131,46 @@ vault.on('balanceUpdated', ({ chain, balance }) => {
 
 ### Vault Events
 
-| Event | Payload | When |
-|-------|---------|------|
-| `balanceUpdated` | `{ chain, balance, tokenId? }` | Balance fetched or changed |
-| `valuesUpdated` | `{ chain: Chain \| 'all' }` | Fiat values recalculated |
-| `totalValueUpdated` | `{ value }` | Portfolio total recalculated |
-| `transactionSigned` | `{ signature, payload }` | Transaction signed |
-| `transactionBroadcast` | `{ chain, txHash, keysignPayload?, raw? }` | Transaction sent to network |
-| `transactionConfirmed` | `{ chain, txHash, receipt? }` | Transaction confirmed on-chain |
-| `transactionFailed` | `{ chain, txHash }` | Transaction failed on-chain |
-| `signingProgress` | `{ step }` | Signing phase update |
-| `chainAdded` | `{ chain }` | Chain enabled on vault |
-| `chainRemoved` | `{ chain }` | Chain removed from vault |
-| `tokenAdded` | `{ chain, token }` | Token added |
-| `tokenRemoved` | `{ chain, tokenId }` | Token removed |
-| `renamed` | `{ oldName, newName }` | Vault renamed |
-| `saved` | `{ vaultId }` | Vault persisted to storage |
-| `unlocked` | `{ vaultId }` | Encrypted vault unlocked |
-| `locked` | `{}` | Vault locked |
-| `loaded` | `{ vaultId }` | Vault loaded from storage |
-| `deleted` | `{ vaultId }` | Vault deleted from storage |
-| `postQuantumKeysAdded` | `{ vaultId }` | ML-DSA post-quantum keys added (fast vault) |
-| `error` | `Error` | Vault-level error |
+| Event                  | Payload                                    | When                                        |
+| ---------------------- | ------------------------------------------ | ------------------------------------------- |
+| `balanceUpdated`       | `{ chain, balance, tokenId? }`             | Balance fetched or changed                  |
+| `valuesUpdated`        | `{ chain: Chain \| 'all' }`                | Fiat values recalculated                    |
+| `totalValueUpdated`    | `{ value }`                                | Portfolio total recalculated                |
+| `transactionSigned`    | `{ signature, payload }`                   | Transaction signed                          |
+| `transactionBroadcast` | `{ chain, txHash, keysignPayload?, raw? }` | Transaction sent to network                 |
+| `transactionConfirmed` | `{ chain, txHash, receipt? }`              | Transaction confirmed on-chain              |
+| `transactionFailed`    | `{ chain, txHash }`                        | Transaction failed on-chain                 |
+| `signingProgress`      | `{ step }`                                 | Signing phase update                        |
+| `chainAdded`           | `{ chain }`                                | Chain enabled on vault                      |
+| `chainRemoved`         | `{ chain }`                                | Chain removed from vault                    |
+| `tokenAdded`           | `{ chain, token }`                         | Token added                                 |
+| `tokenRemoved`         | `{ chain, tokenId }`                       | Token removed                               |
+| `renamed`              | `{ oldName, newName }`                     | Vault renamed                               |
+| `saved`                | `{ vaultId }`                              | Vault persisted to storage                  |
+| `unlocked`             | `{ vaultId }`                              | Encrypted vault unlocked                    |
+| `locked`               | `{}`                                       | Vault locked                                |
+| `loaded`               | `{ vaultId }`                              | Vault loaded from storage                   |
+| `deleted`              | `{ vaultId }`                              | Vault deleted from storage                  |
+| `postQuantumKeysAdded` | `{ vaultId }`                              | ML-DSA post-quantum keys added (fast vault) |
+| `error`                | `Error`                                    | Vault-level error                           |
 
 ### Secure Vault Events
 
-| Event | Payload | When |
-|-------|---------|------|
-| `qrCodeReady` | `{ qrPayload, action, sessionId }` | QR code ready for device pairing |
-| `deviceJoined` | `{ deviceId, totalJoined, required }` | Device joined signing/keygen session |
-| `allDevicesReady` | `{ devices, sessionId }` | All required devices connected |
-| `keygenProgress` | `{ phase, round?, message? }` | Keygen phase update (`'ecdsa'` → `'eddsa'` → `'complete'`) |
+| Event             | Payload                               | When                                                       |
+| ----------------- | ------------------------------------- | ---------------------------------------------------------- |
+| `qrCodeReady`     | `{ qrPayload, action, sessionId }`    | QR code ready for device pairing                           |
+| `deviceJoined`    | `{ deviceId, totalJoined, required }` | Device joined signing/keygen session                       |
+| `allDevicesReady` | `{ devices, sessionId }`              | All required devices connected                             |
+| `keygenProgress`  | `{ phase, round?, message? }`         | Keygen phase update (`'ecdsa'` → `'eddsa'` → `'complete'`) |
 
 ### Swap Events
 
-| Event | Payload | When |
-|-------|---------|------|
-| `swapQuoteReceived` | `{ quote }` | Swap quote fetched |
-| `swapApprovalRequired` | `{ token, spender, amount, currentAllowance }` | ERC-20 approval needed before swap |
-| `swapApprovalGranted` | `{ token, txHash }` | Approval transaction confirmed |
-| `swapPrepared` | `{ provider, fromAmount, toAmountExpected, requiresApproval }` | Swap transaction ready for signing |
+| Event                  | Payload                                                        | When                               |
+| ---------------------- | -------------------------------------------------------------- | ---------------------------------- |
+| `swapQuoteReceived`    | `{ quote }`                                                    | Swap quote fetched                 |
+| `swapApprovalRequired` | `{ token, spender, amount, currentAllowance }`                 | ERC-20 approval needed before swap |
+| `swapApprovalGranted`  | `{ token, txHash }`                                            | Approval transaction confirmed     |
+| `swapPrepared`         | `{ provider, fromAmount, toAmountExpected, requiresApproval }` | Swap transaction ready for signing |
 
 ### SDK Events
 
@@ -1135,7 +1181,7 @@ sdk.on('vaultChanged', ({ vaultId }) => console.log(`Active vault: ${vaultId}`))
 sdk.on('vaultCreationProgress', ({ step, vault }) => console.log(step.message))
 sdk.on('vaultCreationComplete', ({ vault }) => console.log(`Created: ${vault.name}`))
 sdk.on('disposed', () => console.log('SDK disposed'))
-sdk.on('error', (error) => console.error('SDK error:', error))
+sdk.on('error', error => console.error('SDK error:', error))
 ```
 
 ## Examples

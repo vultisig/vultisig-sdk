@@ -53,12 +53,19 @@ export const getPublicKey = ({
   const derivedPublicKey =
     chainPublicKey ??
     match(keysignType, {
-      ecdsa: () =>
-        derivePublicKey({
+      ecdsa: () => {
+        const path = walletCore.CoinTypeExt.derivationPath(coinType)
+        if (!path) {
+          throw new Error(
+            `WalletCore returned empty derivation path (chain=${chain}, coinType=${coinType})`
+          )
+        }
+        return derivePublicKey({
           hexRootPubKey: publicKeys.ecdsa,
-          hexChainCode: hexChainCode,
-          path: walletCore.CoinTypeExt.derivationPath(coinType),
-        }),
+          hexChainCode,
+          path,
+        })
+      },
       eddsa: () => publicKeys.eddsa,
       mldsa: () => {
         throw new Error('MLDSA public key is not derived via ECDSA/EdDSA paths')

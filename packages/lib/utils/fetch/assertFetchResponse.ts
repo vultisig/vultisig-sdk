@@ -1,5 +1,5 @@
-import { extractErrorMsg } from '../error/extractErrorMsg'
-import { asyncFallbackChain } from '../promise/asyncFallbackChain'
+import { extractErrorMsg } from '../error/extractErrorMsg/index.js'
+import { asyncFallbackChain } from '../promise/asyncFallbackChain/index.js'
 import { HttpResponseError } from './HttpResponseError'
 
 /**

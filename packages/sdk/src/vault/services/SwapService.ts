@@ -17,15 +17,12 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
 import { chainsWithTokenMetadataDiscovery } from '@vultisig/core-chain/coin/token/metadata/chains'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
-import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { findSwapQuote, FindSwapQuoteInput } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { swapEnabledChains } from '@vultisig/core-chain/swap/swapEnabledChains'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
-import { buildSwapKeysignPayload } from '@vultisig/core-mpc/keysign/swap/build'
-import { toKeysignLibType } from '@vultisig/core-mpc/types/utils/libType'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
@@ -34,6 +31,11 @@ import type { WasmProvider } from '../../context/SdkContext'
 import { VaultEvents } from '../../events/types'
 import type { DiscountTierService } from '../../services/DiscountTierService'
 import type { FiatValueService } from '../../services/FiatValueService'
+// Import prep helpers from per-file paths, not the `tools/prep` barrel: the
+// barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
+// modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
+import { prepareSwapTxFromKeys } from '../../tools/prep/swap'
+import { vaultDataToIdentity } from '../../tools/prep/types'
 import {
   CoinInput,
   isAccountCoin,
@@ -128,41 +130,22 @@ export class SwapService {
         throw new VaultError(VaultErrorCode.InvalidConfig, 'Swap quote has expired. Please refresh the quote.')
       }
 
-      // Resolve coin inputs
+      // Resolve coin inputs (vault layer concern — needs getAddress)
       const fromCoin = await this.resolveCoinInput(params.fromCoin)
       const toCoin = await this.resolveCoinInput(params.toCoin)
 
-      // Get wallet core via WasmProvider
+      // Delegate payload construction to vault-free helper
       const walletCore = await this.wasmProvider.getWalletCore()
-
-      // Get public keys for both chains
-      const fromPublicKey = getPublicKey({
-        chain: fromCoin.chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
-
-      const toPublicKey = getPublicKey({
-        chain: toCoin.chain,
-        walletCore,
-        publicKeys: this.vaultData.publicKeys,
-        hexChainCode: this.vaultData.hexChainCode,
-      })
-
-      // Build keysign payload using core function
-      const keysignPayload = await buildSwapKeysignPayload({
-        fromCoin,
-        toCoin,
-        amount: params.amount,
-        swapQuote: params.swapQuote.quote,
-        vaultId: this.vaultData.publicKeys.ecdsa,
-        localPartyId: this.vaultData.localPartyId,
-        fromPublicKey,
-        toPublicKey,
-        libType: toKeysignLibType(this.vaultData),
-        walletCore,
-      })
+      const keysignPayload = await prepareSwapTxFromKeys(
+        vaultDataToIdentity(this.vaultData),
+        {
+          fromCoin,
+          toCoin,
+          amount: params.amount,
+          swapQuote: params.swapQuote.quote,
+        },
+        walletCore
+      )
 
       // Handle approval based on autoApprove setting
       let approvalPayload: KeysignPayload | undefined
@@ -420,11 +403,23 @@ export class SwapService {
         const feePrice = await this.fiatValueService.getPrice(fromCoin.chain, undefined, fiatCurrency)
 
         result.feesFiat = {
-          network: getCoinValue({ amount: fees.network, decimals: feeTokenDecimals, price: feePrice }),
+          network: getCoinValue({
+            amount: fees.network,
+            decimals: feeTokenDecimals,
+            price: feePrice,
+          }),
           affiliate: fees.affiliate
-            ? getCoinValue({ amount: fees.affiliate, decimals: feeTokenDecimals, price: feePrice })
+            ? getCoinValue({
+                amount: fees.affiliate,
+                decimals: feeTokenDecimals,
+                price: feePrice,
+              })
             : undefined,
-          total: getCoinValue({ amount: fees.total, decimals: feeTokenDecimals, price: feePrice }),
+          total: getCoinValue({
+            amount: fees.total,
+            decimals: feeTokenDecimals,
+            price: feePrice,
+          }),
           currency: fiatCurrency,
         }
 

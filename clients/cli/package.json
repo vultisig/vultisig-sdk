@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/cli",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Command-line wallet for Vultisig - multi-chain MPC wallet management",
   "type": "module",
   "bin": {
@@ -58,6 +58,7 @@
     "@napi-rs/keyring": "^1.2.0",
     "@noble/hashes": "^2.0.1",
     "@vultisig/client-shared": "workspace:^",
+    "@vultisig/core-chain": "workspace:^",
     "@vultisig/rujira": "workspace:^",
     "@vultisig/sdk": "workspace:^",
     "chalk": "^5.6.2",

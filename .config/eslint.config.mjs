@@ -16,6 +16,8 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort'
 import unusedImportsPlugin from 'eslint-plugin-unused-imports'
 import globals from 'globals'
 
+import { mpcSingletonRestrictedSyntax } from './eslint-rules/mpcSingletonSyntax.mjs'
+
 const filePath = fileURLToPath(import.meta.url)
 const baseDirectory = path.dirname(filePath)
 
@@ -35,7 +37,15 @@ export default [
       '**/coverage',
       '**/*_pb.ts',
       '**/lib/**',
-      'packages/core/**',
+      // Ignore every packages/core sibling of `mpc`. Enumerated (not blanket
+      // with negation) because ESLint 9's flat-config `ignores` does not
+      // reliably re-include files that were globally ignored. Adding a new
+      // packages/core/<x> package? Add it here AND wire it into the lint
+      // scripts in package.json if it should be linted.
+      'packages/core/chain/**',
+      'packages/core/config/**',
+      'packages/core/mpc/**/*.test.ts',
+      'packages/core/mpc/**/tests/**',
       'packages/lib/**',
       'archived/**',
       // WASM files copied by build tools
@@ -115,6 +125,27 @@ export default [
     files: ['**/*.d.ts'],
     rules: {
       '@typescript-eslint/consistent-type-definitions': 'off',
+    },
+  },
+  {
+    files: ['packages/core/mpc/**/*.ts'],
+    ignores: ['**/*.test.ts', '**/*_pb.ts', '**/keysign/tests/**'],
+    rules: {
+      'simple-import-sort/imports': 'off',
+      'simple-import-sort/exports': 'off',
+      '@typescript-eslint/consistent-type-definitions': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'unused-imports/no-unused-imports': 'off',
+      'react-hooks/rules-of-hooks': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      'no-restricted-syntax': ['error', ...mpcSingletonRestrictedSyntax],
+    },
+  },
+  {
+    files: ['packages/mpc-types/src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-definitions': 'off',
+      'no-restricted-syntax': ['error', ...mpcSingletonRestrictedSyntax],
     },
   },
   // ...storybook.configs['flat/recommended'], // TEMPORARILY DISABLED

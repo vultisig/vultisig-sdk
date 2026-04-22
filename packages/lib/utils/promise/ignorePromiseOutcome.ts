@@ -1,5 +1,5 @@
 import { attempt } from '../attempt'
-import { extractErrorMsg } from '../error/extractErrorMsg'
+import { extractErrorMsg } from '../error/extractErrorMsg/index.js'
 
 export const ignorePromiseOutcome = async <T>(
   promise: Promise<T>
