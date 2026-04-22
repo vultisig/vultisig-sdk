@@ -91,7 +91,18 @@ export { fastVaultSign, joinRelaySession, schnorrSign, startRelaySession, waitFo
 //
 // Cosmos (bech32 addresses, protobuf tx encoding, THORChain MsgDeposit)
 // Sui (address derivation, intent-hashing, signature serialization)
+// EVM (viem-backed tx builders + RPC helpers for all 13 EVM chains)
 export { chains } from './chains'
+
+// EVM bridge type surface — consumers can import these directly from the RN
+// entry without reaching through `chains.evm.*`.
+export type {
+  BuildErc20ApproveOptions,
+  BuildErc20TransferOptions,
+  BuildEvmContractCallOptions,
+  BuildEvmSendOptions,
+  EvmTxBuilderResult,
+} from './chains/evm'
 
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers
