@@ -41,7 +41,9 @@
     },
     "./react-native": {
       "types": "./dist/index.react-native.d.ts",
-      "import": "./dist/index.react-native.js"
+      "react-native": "./dist/index.react-native.js",
+      "import": "./dist/index.react-native.js",
+      "default": "./dist/index.react-native.js"
     },
     "./electron": {
       "types": "./dist/index.node.d.ts",
