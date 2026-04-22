@@ -35,9 +35,7 @@ type RpcSendTxOpts = {
 export async function getSolanaRecentBlockhash(
   rpcUrl: string
 ): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
-  const res = await jsonRpcCall<RpcBlockhash>(rpcUrl, 'getLatestBlockhash', [
-    { commitment: 'confirmed' },
-  ])
+  const res = await jsonRpcCall<RpcBlockhash>(rpcUrl, 'getLatestBlockhash', [{ commitment: 'confirmed' }])
   return {
     blockhash: res.value.blockhash,
     lastValidBlockHeight: res.value.lastValidBlockHeight,
@@ -49,14 +47,8 @@ export async function getSolanaRecentBlockhash(
  * yet exist (consistent with `Connection.getBalance` on an uninitialized
  * account).
  */
-export async function getSolanaBalance(
-  address: string,
-  rpcUrl: string
-): Promise<bigint> {
-  const res = await jsonRpcCall<RpcBalance>(rpcUrl, 'getBalance', [
-    address,
-    { commitment: 'confirmed' },
-  ])
+export async function getSolanaBalance(address: string, rpcUrl: string): Promise<bigint> {
+  const res = await jsonRpcCall<RpcBalance>(rpcUrl, 'getBalance', [address, { commitment: 'confirmed' }])
   return BigInt(res.value ?? 0)
 }
 

@@ -33,7 +33,7 @@
  */
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
-import { keccak256, serializeTransaction, encodeFunctionData, erc20Abi } from 'viem'
+import { encodeFunctionData, erc20Abi, keccak256, serializeTransaction } from 'viem'
 
 // ---------------------------------------------------------------------------
 // Tx fee format — mirrors packages/core/chain/chains/evm/tx/fee/index.ts
@@ -135,16 +135,10 @@ export type BuildErc20ApproveOptions = Omit<BuildEvmContractCallOptions, 'toAddr
 // Calldata encoders — pure, useful standalone
 // ---------------------------------------------------------------------------
 
-export const encodeErc20Transfer = (
-  recipient: `0x${string}`,
-  amount: bigint
-): `0x${string}` =>
+export const encodeErc20Transfer = (recipient: `0x${string}`, amount: bigint): `0x${string}` =>
   encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [recipient, amount] })
 
-export const encodeErc20Approve = (
-  spender: `0x${string}`,
-  amount: bigint
-): `0x${string}` =>
+export const encodeErc20Approve = (spender: `0x${string}`, amount: bigint): `0x${string}` =>
   encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [spender, amount] })
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,14 @@
 export type {
+  BroadcastUtxoTxOptions,
+  EstimateUtxoFeeOptions,
+  GetUtxoBalanceOptions,
+  GetUtxosOptions,
+  PlainUtxo,
+  UtxoApiKind,
+  UtxoApiOptions,
+} from './rpc'
+export { broadcastUtxoTx, estimateUtxoFee, getUtxoBalance, getUtxos } from './rpc'
+export type {
   BuildUtxoSendOptions,
   DecodedAddress,
   SighashBIP143Options,
@@ -15,13 +25,3 @@ export {
   getSighashLegacy,
   getUtxoChainSpec,
 } from './tx'
-export type {
-  BroadcastUtxoTxOptions,
-  EstimateUtxoFeeOptions,
-  GetUtxoBalanceOptions,
-  GetUtxosOptions,
-  PlainUtxo,
-  UtxoApiKind,
-  UtxoApiOptions,
-} from './rpc'
-export { broadcastUtxoTx, estimateUtxoFee, getUtxoBalance, getUtxos } from './rpc'

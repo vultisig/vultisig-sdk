@@ -123,10 +123,7 @@ export type {
 // Solana bridge type surface — pure primitive reimplementation that does NOT
 // pull @solana/web3.js (and therefore avoids the rpc-websockets / ws cascade
 // that hangs Hermes at module init).
-export type {
-  BuildSolanaSendOptions,
-  SolanaTxBuilderResult,
-} from './chains/solana'
+export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
 
 // ============================================================================
 // Chain tools — RN-safe surface re-exported for consumers

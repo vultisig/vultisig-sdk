@@ -9,20 +9,20 @@
  * Coverage: Bitcoin, Litecoin, Dogecoin, Dash, Bitcoin-Cash, Zcash.
  */
 export type {
+  BroadcastUtxoTxOptions,
   BuildUtxoSendOptions,
   DecodedAddress,
-  SighashBIP143Options,
-  SighashLegacyOptions,
-  UtxoChainName,
-  UtxoInput,
-  UtxoTxBuilderResult,
-  BroadcastUtxoTxOptions,
   EstimateUtxoFeeOptions,
   GetUtxoBalanceOptions,
   GetUtxosOptions,
   PlainUtxo,
+  SighashBIP143Options,
+  SighashLegacyOptions,
   UtxoApiKind,
   UtxoApiOptions,
+  UtxoChainName,
+  UtxoInput,
+  UtxoTxBuilderResult,
 } from '../../../../chains/utxo'
 export {
   broadcastUtxoTx,

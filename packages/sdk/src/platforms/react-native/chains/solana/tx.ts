@@ -164,8 +164,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]!)
   }
-  const b64encode = (globalThis as unknown as { btoa?: (s: string) => string })
-    .btoa
+  const b64encode = (globalThis as unknown as { btoa?: (s: string) => string }).btoa
   if (b64encode) return b64encode(binary)
   throw new Error('no base64 encoder available (install `buffer` polyfill)')
 }
@@ -191,9 +190,7 @@ function bytesToBase64(bytes: Uint8Array): string {
  * await broadcastSolanaTx(rawTxBase64, rpcUrl)
  * ```
  */
-export function buildSolanaSendTx(
-  opts: BuildSolanaSendOptions
-): SolanaTxBuilderResult {
+export function buildSolanaSendTx(opts: BuildSolanaSendOptions): SolanaTxBuilderResult {
   const fromBytes = decodeBase58Pubkey(opts.from, 'from')
   const toBytes = decodeBase58Pubkey(opts.to, 'to')
   const blockhashBytes = decodeBase58Pubkey(opts.recentBlockhash, 'recentBlockhash')
@@ -201,9 +198,7 @@ export function buildSolanaSendTx(
   // Detect self-transfer: Solana messages dedupe account keys. If from == to,
   // we only list the key once (still signer + writable), and both instruction
   // account indexes point at 0.
-  const selfTransfer =
-    fromBytes.length === toBytes.length &&
-    fromBytes.every((b, i) => b === toBytes[i])
+  const selfTransfer = fromBytes.length === toBytes.length && fromBytes.every((b, i) => b === toBytes[i])
 
   // Account ordering: writable-signer, then writable-nonsigner, then
   // readonly-nonsigner. Header counts derive from this ordering.
@@ -223,9 +218,7 @@ export function buildSolanaSendTx(
   const instructionData = concatBytes(encodeU32LE(2), encodeU64LE(opts.lamports))
 
   const programIdIndex = selfTransfer ? 1 : 2
-  const instructionAccounts = selfTransfer
-    ? new Uint8Array([0, 0])
-    : new Uint8Array([0, 1])
+  const instructionAccounts = selfTransfer ? new Uint8Array([0, 0]) : new Uint8Array([0, 1])
 
   const instruction = concatBytes(
     new Uint8Array([programIdIndex]),
@@ -250,16 +243,10 @@ export function buildSolanaSendTx(
   const finalize = (sigHex: string): { rawTxBase64: string; signature: string } => {
     const sigBytes = hexToBytes(sigHex)
     if (sigBytes.length !== 64) {
-      throw new Error(
-        `expected 64-byte ed25519 signature (128 hex chars), got ${sigBytes.length}`
-      )
+      throw new Error(`expected 64-byte ed25519 signature (128 hex chars), got ${sigBytes.length}`)
     }
     // Serialized transaction = [shortvec: numSigs][sig × numSigs][message]
-    const txBytes = concatBytes(
-      encodeShortVec(1),
-      sigBytes,
-      message
-    )
+    const txBytes = concatBytes(encodeShortVec(1), sigBytes, message)
     return {
       rawTxBase64: bytesToBase64(txBytes),
       signature: bs58.encode(sigBytes),

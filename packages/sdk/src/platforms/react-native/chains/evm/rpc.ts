@@ -16,17 +16,12 @@
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { memoize } from '@vultisig/lib-utils/memoize'
-import {
-  createPublicClient,
-  erc20Abi,
-  http,
-  type PublicClient,
-} from 'viem'
+import { createPublicClient, erc20Abi, http, type PublicClient } from 'viem'
 
 import { getEvmChainId } from './tx'
 
 const clientCache = memoize(
-  (rpcUrl: string, chainId: number): PublicClient =>
+  (rpcUrl: string, _chainId: number): PublicClient =>
     createPublicClient({
       transport: http(rpcUrl),
       // Passing `chain: { id: chainId, ... }` is not required for plain RPC
@@ -36,8 +31,7 @@ const clientCache = memoize(
     }) as unknown as PublicClient
 )
 
-const getClient = (chain: EvmChain, rpcUrl: string): PublicClient =>
-  clientCache(rpcUrl, getEvmChainId(chain))
+const getClient = (chain: EvmChain, rpcUrl: string): PublicClient => clientCache(rpcUrl, getEvmChainId(chain))
 
 // ---------------------------------------------------------------------------
 // Public helpers
@@ -48,11 +42,7 @@ const getClient = (chain: EvmChain, rpcUrl: string): PublicClient =>
  * counted, with a `'latest'` fallback for chains that don't support the
  * pending tag (zkSync Era, Hyperliquid, some alt-EVMs).
  */
-export const getEvmNonce = async (
-  rpcUrl: string,
-  chain: EvmChain,
-  address: `0x${string}`
-): Promise<number> => {
+export const getEvmNonce = async (rpcUrl: string, chain: EvmChain, address: `0x${string}`): Promise<number> => {
   const client = getClient(chain, rpcUrl)
   try {
     return await client.getTransactionCount({ address, blockTag: 'pending' })
@@ -88,10 +78,8 @@ export const getEvmSuggestedFees = async (
  * Legacy `eth_gasPrice`. Only use this for chains whose fee format is
  * `'legacy'` (BSC, Sei). For everything else, prefer `getEvmSuggestedFees`.
  */
-export const getEvmGasPrice = async (
-  rpcUrl: string,
-  chain: EvmChain
-): Promise<bigint> => getClient(chain, rpcUrl).getGasPrice()
+export const getEvmGasPrice = async (rpcUrl: string, chain: EvmChain): Promise<bigint> =>
+  getClient(chain, rpcUrl).getGasPrice()
 
 /**
  * Estimate gas for a pending tx. Returns the RPC's estimate unmodified;
@@ -117,10 +105,8 @@ export const estimateEvmGas = async (
 }
 
 /** Fetch the on-chain chainId — useful for sanity-checking the RPC endpoint. */
-export const getEvmChainIdFromRpc = async (
-  rpcUrl: string,
-  chain: EvmChain
-): Promise<number> => getClient(chain, rpcUrl).getChainId()
+export const getEvmChainIdFromRpc = async (rpcUrl: string, chain: EvmChain): Promise<number> =>
+  getClient(chain, rpcUrl).getChainId()
 
 /**
  * Broadcast a pre-signed raw EVM transaction. Returns the tx hash.
@@ -170,11 +156,7 @@ export const getErc20Decimals = async (
   })
 }
 
-export const getErc20Symbol = async (
-  rpcUrl: string,
-  chain: EvmChain,
-  tokenAddress: `0x${string}`
-): Promise<string> => {
+export const getErc20Symbol = async (rpcUrl: string, chain: EvmChain, tokenAddress: `0x${string}`): Promise<string> => {
   const client = getClient(chain, rpcUrl)
   return client.readContract({
     address: tokenAddress,

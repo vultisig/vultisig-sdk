@@ -27,7 +27,6 @@
 import { secp256k1 as secp } from '@noble/curves/secp256k1.js'
 import { blake2b } from '@noble/hashes/blake2.js'
 import { hmac } from '@noble/hashes/hmac.js'
-import { ripemd160 } from '@noble/hashes/legacy.js'
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import { bech32 } from '@scure/base'
 import bs58check from 'bs58check'
@@ -38,13 +37,7 @@ import bs58check from 'bs58check'
 // typed overload.
 // ---------------------------------------------------------------------------
 
-export type UtxoChainName =
-  | 'Bitcoin'
-  | 'Litecoin'
-  | 'Dogecoin'
-  | 'Dash'
-  | 'Bitcoin-Cash'
-  | 'Zcash'
+export type UtxoChainName = 'Bitcoin' | 'Litecoin' | 'Dogecoin' | 'Dash' | 'Bitcoin-Cash' | 'Zcash'
 
 type UtxoScriptKind = 'p2pkh' | 'p2wpkh'
 
@@ -285,16 +278,10 @@ export function getSighashBIP143(opts: SighashBIP143Options): Uint8Array {
   const input = inputs[inputIndex]
   if (!input) throw new Error(`invalid inputIndex=${inputIndex}`)
 
-  const hashPrevouts = doubleSha256(
-    concat(...inputs.map(i => concat(reverseHexBytes(i.hash), writeU32LE(i.index))))
-  )
+  const hashPrevouts = doubleSha256(concat(...inputs.map(i => concat(reverseHexBytes(i.hash), writeU32LE(i.index)))))
   const hashSequence = doubleSha256(concat(...inputs.map(() => writeU32LE(0xffffffff))))
   const hashOutputs = doubleSha256(outputsRaw)
-  const scriptCode = concat(
-    new Uint8Array([0x76, 0xa9, 0x14]),
-    pubKeyHash,
-    new Uint8Array([0x88, 0xac])
-  )
+  const scriptCode = concat(new Uint8Array([0x76, 0xa9, 0x14]), pubKeyHash, new Uint8Array([0x88, 0xac]))
 
   return doubleSha256(
     concat(
@@ -387,11 +374,7 @@ function getSighashZcash(
     zcashPersonalization('ZcashSequencHash')
   )
   const hashOutputs = blake2b256(outputsRaw, zcashPersonalization('ZcashOutputsHash'))
-  const scriptCode = concat(
-    new Uint8Array([0x76, 0xa9, 0x14]),
-    pubKeyHash,
-    new Uint8Array([0x88, 0xac])
-  )
+  const scriptCode = concat(new Uint8Array([0x76, 0xa9, 0x14]), pubKeyHash, new Uint8Array([0x88, 0xac]))
   const preimage = concat(
     writeU32LE(ZCASH_V4_VERSION),
     writeU32LE(ZCASH_SAPLING_VERSION_GROUP_ID),
@@ -442,8 +425,7 @@ function serializeOutputs(
 // Signature DER encoding (strict BIP66-style minimal encoding, low-S normalized)
 // ---------------------------------------------------------------------------
 
-const SECP256K1_ORDER =
-  0xffffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
+const SECP256K1_ORDER = 0xffffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
 const SECP256K1_HALF_ORDER = SECP256K1_ORDER / 2n
 
 function derEncodeRS(rHex: string, sHex: string): Uint8Array {
@@ -462,12 +444,7 @@ function derEncodeRS(rHex: string, sHex: string): Uint8Array {
   if ((s[0]! & 0x80) !== 0) s = concat(new Uint8Array([0x00]), s)
   const rLen = r.length
   const sLen = s.length
-  return concat(
-    new Uint8Array([0x30, rLen + sLen + 4, 0x02, rLen]),
-    r,
-    new Uint8Array([0x02, sLen]),
-    s
-  )
+  return concat(new Uint8Array([0x30, rLen + sLen + 4, 0x02, rLen]), r, new Uint8Array([0x02, sLen]), s)
 }
 
 // ---------------------------------------------------------------------------
@@ -640,13 +617,7 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   const toScript = buildScriptPubKey(toDec.pubKeyHash, toDec.type)
   const fromScript = buildScriptPubKey(fromDec.pubKeyHash, fromDec.type)
 
-  const { outputsWithCount, outputsRaw } = serializeOutputs(
-    toScript,
-    opts.amount,
-    fromScript,
-    change,
-    spec.dustLimit
-  )
+  const { outputsWithCount, outputsRaw } = serializeOutputs(toScript, opts.amount, fromScript, change, spec.dustLimit)
 
   const isBCH = opts.chain === 'Bitcoin-Cash'
   const isZcash = opts.chain === 'Zcash'
@@ -709,16 +680,12 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const finalize = (sigHexes: string[]): { rawTxHex: string; txHashHex: string } => {
     if (sigHexes.length !== inputs.length) {
-      throw new Error(
-        `expected ${inputs.length} signatures, got ${sigHexes.length}`
-      )
+      throw new Error(`expected ${inputs.length} signatures, got ${sigHexes.length}`)
     }
     const sigs: Uint8Array[] = sigHexes.map(raw => {
       const clean = raw.startsWith('0x') ? raw.slice(2) : raw
       if (clean.length !== 128 && clean.length !== 130) {
-        throw new Error(
-          `signature must be 128 or 130 hex chars (r||s[||v]), got ${clean.length}`
-        )
+        throw new Error(`signature must be 128 or 130 hex chars (r||s[||v]), got ${clean.length}`)
       }
       return derEncodeRS(clean.substring(0, 64), clean.substring(64, 128))
     })
@@ -727,13 +694,7 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
     if (isZcash) {
       rawTx = assembleZcashTx(inputs, sigs, opts.compressedPubKey, outputsWithCount)
     } else if (spec.scriptType === 'p2pkh') {
-      rawTx = assembleP2pkhTx(
-        inputs,
-        sigs,
-        opts.compressedPubKey,
-        outputsWithCount,
-        isBCH ? 0x41 : 0x01
-      )
+      rawTx = assembleP2pkhTx(inputs, sigs, opts.compressedPubKey, outputsWithCount, isBCH ? 0x41 : 0x01)
     } else {
       rawTx = assembleP2wpkhTx(inputs, sigs, opts.compressedPubKey, outputsWithCount)
     }

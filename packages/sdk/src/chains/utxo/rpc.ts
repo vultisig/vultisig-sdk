@@ -79,9 +79,7 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
       value: number
       status?: { confirmed: boolean; block_height?: number }
     }
-    const utxos = await fetchJson<ElectrsUtxo[]>(
-      `${opts.apiUrl}/address/${opts.address}/utxo`
-    )
+    const utxos = await fetchJson<ElectrsUtxo[]>(`${opts.apiUrl}/address/${opts.address}/utxo`)
     return utxos.map(u => ({ hash: u.txid, index: u.vout, value: BigInt(u.value) }))
   }
 
@@ -90,9 +88,7 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
   type BlockchairResp = {
     data: Record<string, { utxo: Array<{ transaction_hash: string; index: number; value: number }> }>
   }
-  const resp = await fetchJson<BlockchairResp>(
-    `${opts.apiUrl}/${slug}/dashboards/address/${opts.address}?limit=100`
-  )
+  const resp = await fetchJson<BlockchairResp>(`${opts.apiUrl}/${slug}/dashboards/address/${opts.address}?limit=100`)
   const entry = resp.data[opts.address]
   if (!entry?.utxo) return []
   return entry.utxo.map(u => ({
@@ -127,9 +123,7 @@ export async function getUtxoBalance(opts: GetUtxoBalanceOptions): Promise<bigin
   type BlockchairResp = {
     data: Record<string, { address: { balance: number } }>
   }
-  const resp = await fetchJson<BlockchairResp>(
-    `${opts.apiUrl}/${slug}/dashboards/address/${opts.address}?limit=0`
-  )
+  const resp = await fetchJson<BlockchairResp>(`${opts.apiUrl}/${slug}/dashboards/address/${opts.address}?limit=0`)
   const entry = resp.data[opts.address]
   return BigInt(entry?.address?.balance ?? 0)
 }
