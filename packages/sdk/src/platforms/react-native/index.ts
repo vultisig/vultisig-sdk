@@ -25,8 +25,18 @@ if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).B
 //   `class AppReadyEvent extends Event` at module top-level. Hermes ships
 //   without the `Event`/`EventTarget` DOM globals.
 //
+// Intl.PluralRules' own ResolveLocale reaches into Intl.Locale, and the
+// ordinal PluralRules constructor used by @mysten/sui also reaches into
+// Intl.NumberFormat — all four sub-APIs are absent on Hermes. Install the
+// full cascade in dependency order: getCanonicalLocales → Locale →
+// NumberFormat → PluralRules.
+//
 // Without these, even lazy `import('@mysten/sui/jsonRpc')` /
 // `import('@lifi/sdk')` crashes the first time the module is evaluated.
+import '@formatjs/intl-getcanonicallocales/polyfill'
+import '@formatjs/intl-locale/polyfill'
+import '@formatjs/intl-numberformat/polyfill'
+import '@formatjs/intl-numberformat/locale-data/en'
 import '@formatjs/intl-pluralrules/polyfill'
 import '@formatjs/intl-pluralrules/locale-data/en'
 import 'event-target-polyfill'

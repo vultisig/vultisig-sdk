@@ -2858,12 +2858,55 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@formatjs/intl-enumerator@npm:1.8.12":
+  version: 1.8.12
+  resolution: "@formatjs/intl-enumerator@npm:1.8.12"
+  dependencies:
+    "@formatjs/ecma402-abstract": "npm:2.3.6"
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/b9bab6cfa24d4d669dc395be677499b7e942d3e203cee43f62a5a37bf4b9e3506d47f516c3fadbd2c1cfb13747bc40d7a3741ecbeb7dfefb2ced63d11bf8d37c
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-getcanonicallocales@npm:2.5.6, @formatjs/intl-getcanonicallocales@npm:^2.5.0":
+  version: 2.5.6
+  resolution: "@formatjs/intl-getcanonicallocales@npm:2.5.6"
+  dependencies:
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/3a776ddc9893982f52f9f1540da2a205af8cf1533b7a40b791496e41ad263b3d3e019d37cf100cb531779f42ec48f4f566ddbded4625fa56362c78b918bcad06
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-locale@npm:^4.2.0":
+  version: 4.2.13
+  resolution: "@formatjs/intl-locale@npm:4.2.13"
+  dependencies:
+    "@formatjs/ecma402-abstract": "npm:2.3.6"
+    "@formatjs/intl-enumerator": "npm:1.8.12"
+    "@formatjs/intl-getcanonicallocales": "npm:2.5.6"
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/19898e008459e5ad68f631fb18ae2accb9e4ab444bb94fbe52b1b427996968357f986e7effabf463e5d99eed9fc79eb7feccaae0eeda3608a19ff6e13a0829ef
+  languageName: node
+  linkType: hard
+
 "@formatjs/intl-localematcher@npm:0.6.2":
   version: 0.6.2
   resolution: "@formatjs/intl-localematcher@npm:0.6.2"
   dependencies:
     tslib: "npm:^2.8.0"
   checksum: 10c0/22a17a4c67160b6c9f52667914acfb7b79cd6d80630d4ac6d4599ce447cb89d2a64f7d58fa35c3145ddb37fef893f0a45b9a55e663a4eb1f2ae8b10a89fac235
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-numberformat@npm:^8.15.0":
+  version: 8.15.6
+  resolution: "@formatjs/intl-numberformat@npm:8.15.6"
+  dependencies:
+    "@formatjs/ecma402-abstract": "npm:2.3.6"
+    "@formatjs/intl-localematcher": "npm:0.6.2"
+    decimal.js: "npm:^10.4.3"
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/cdee6aaa8a7f9c0b19631b8414fe877034c666dffac6fa3cdbff539d75cc83b8120520ee69541675310f662f89a403ba663895b5e3846423d3b310d8e81d6329
   languageName: node
   linkType: hard
 
@@ -6776,6 +6819,9 @@ __metadata:
     "@cosmjs/proto-signing": "npm:^0.37.1"
     "@cosmjs/stargate": "npm:^0.37.0"
     "@cosmjs/tendermint-rpc": "npm:^0.37.1"
+    "@formatjs/intl-getcanonicallocales": "npm:^2.5.0"
+    "@formatjs/intl-locale": "npm:^4.2.0"
+    "@formatjs/intl-numberformat": "npm:^8.15.0"
     "@formatjs/intl-pluralrules": "npm:^5.4.0"
     "@lifi/sdk": "npm:^3.15.5"
     "@mysten/sui": "npm:^2.3.0"
