@@ -334,4 +334,4 @@ export interface MpcEngine {
 
 // Runtime configuration
 export { configureMpc, ensureMpcEngine, getMpcEngine } from './runtime'
-export { runtimeStore, __resetRuntimeStoreForTesting } from './store'
+export { __resetRuntimeStoreForTesting, runtimeStore } from './store'
