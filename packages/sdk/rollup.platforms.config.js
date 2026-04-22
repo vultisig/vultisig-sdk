@@ -249,128 +249,128 @@ const configs = {
       onwarn,
     },
     {
-    input: './src/platforms/react-native/index.ts',
-    output: {
-      file: './dist/index.react-native.js',
-      format: 'es',
-      sourcemap: true,
-      inlineDynamicImports: true,
-    },
-    // RN externals: native modules, Node builtins, and deps that can't run on RN.
-    // Everything else (chain logic, @noble/*, @polkadot/*, @cosmjs/*) is INLINED.
-    external: [
-      // SDK native modules
-      '@vultisig/mpc-types',
-      '@vultisig/mpc-native',
-      '@vultisig/mpc-wasm',
-      '@vultisig/walletcore-native',
-      '@react-native-async-storage/async-storage',
-      '@trustwallet/wallet-core',
-      // Node builtins (can't run on RN)
-      'crypto',
-      'buffer',
-      'util',
-      'stream',
-      'url',
-      'fs',
-      'fs/promises',
-      'path',
-      'os',
-      // Deps that use Node.js or WASM loading (shimmed via alias)
-      '7z-wasm',
-      'electron',
-      // Network/serialization deps (app provides its own)
-      'axios',
-      'viem',
-      'zod',
-      'uuid',
-      // WASM binaries
-      /\.wasm$/,
-      /lib\/dkls\/vs_wasm/,
-      /lib\/mldsa\/vs_wasm/,
-      /lib\/schnorr\/vs_schnorr_wasm/,
-    ],
-    plugins: [
-      alias({
-        entries: [
-          // Polyfills for Node.js crypto (must come before generic package aliases)
-          {
-            find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/encryptWithAesGcm$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts'),
-          },
-          {
-            find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/decryptWithAesGcm$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts'),
-          },
-          {
-            find: /^@vultisig\/core-mpc\/getMessageHash$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
-          },
-          {
-            find: /\.\.\/getMessageHash$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
-          },
-          // Shims for packages that use WASM/Node.js and can't run on RN
-          {
-            find: /^tiny-secp256k1$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
-          },
-          // Resolve workspace packages to source TS for bundling
-          {
-            find: /^@vultisig\/core-chain\/(.*)/,
-            replacement: path.resolve(currentDir, '../core/chain/$1'),
-          },
-          {
-            find: /^@vultisig\/core-mpc\/(.*)/,
-            replacement: path.resolve(currentDir, '../core/mpc/$1'),
-          },
-          {
-            find: /^@vultisig\/core-config(.*)/,
-            replacement: path.resolve(currentDir, '../core/config$1'),
-          },
-          {
-            find: /^@vultisig\/lib-utils\/(.*)/,
-            replacement: path.resolve(currentDir, '../lib/utils/$1'),
-          },
-        ],
-      }),
-      resolve({
-        preferBuiltins: false,
-        extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
-        exportConditions: ['module', 'import', 'default'],
-        skip: [
-          'axios',
-          'viem',
-          'zod',
-          'uuid',
-          '@trustwallet/wallet-core',
-          'tiny-secp256k1',
-          '@solana/web3.js',
-          '@cosmjs/stargate',
-          '@cosmjs/amino',
-        ],
-      }),
-      replace({
-        preventAssignment: true,
-        'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'),
-        'typeof window': JSON.stringify('undefined'),
-      }),
-      esbuild({
-        include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
-        exclude: ['**/*.test.*', '**/node_modules/**'],
-        target: 'es2021',
-        minify: false,
-        tsconfig: './tsconfig.json',
-      }),
-      json(),
-      commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
-      terser({
-        format: { comments: false },
-        compress: { passes: 1, drop_debugger: true },
-        mangle: { keep_fnames: true, keep_classnames: true },
-      }),
-    ],
-    onwarn,
+      input: './src/platforms/react-native/index.ts',
+      output: {
+        file: './dist/index.react-native.js',
+        format: 'es',
+        sourcemap: true,
+        inlineDynamicImports: true,
+      },
+      // RN externals: native modules, Node builtins, and deps that can't run on RN.
+      // Everything else (chain logic, @noble/*, @polkadot/*, @cosmjs/*) is INLINED.
+      external: [
+        // SDK native modules
+        '@vultisig/mpc-types',
+        '@vultisig/mpc-native',
+        '@vultisig/mpc-wasm',
+        '@vultisig/walletcore-native',
+        '@react-native-async-storage/async-storage',
+        '@trustwallet/wallet-core',
+        // Node builtins (can't run on RN)
+        'crypto',
+        'buffer',
+        'util',
+        'stream',
+        'url',
+        'fs',
+        'fs/promises',
+        'path',
+        'os',
+        // Deps that use Node.js or WASM loading (shimmed via alias)
+        '7z-wasm',
+        'electron',
+        // Network/serialization deps (app provides its own)
+        'axios',
+        'viem',
+        'zod',
+        'uuid',
+        // WASM binaries
+        /\.wasm$/,
+        /lib\/dkls\/vs_wasm/,
+        /lib\/mldsa\/vs_wasm/,
+        /lib\/schnorr\/vs_schnorr_wasm/,
+      ],
+      plugins: [
+        alias({
+          entries: [
+            // Polyfills for Node.js crypto (must come before generic package aliases)
+            {
+              find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/encryptWithAesGcm$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts'),
+            },
+            {
+              find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/decryptWithAesGcm$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts'),
+            },
+            {
+              find: /^@vultisig\/core-mpc\/getMessageHash$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+            },
+            {
+              find: /\.\.\/getMessageHash$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+            },
+            // Shims for packages that use WASM/Node.js and can't run on RN
+            {
+              find: /^tiny-secp256k1$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
+            },
+            // Resolve workspace packages to source TS for bundling
+            {
+              find: /^@vultisig\/core-chain\/(.*)/,
+              replacement: path.resolve(currentDir, '../core/chain/$1'),
+            },
+            {
+              find: /^@vultisig\/core-mpc\/(.*)/,
+              replacement: path.resolve(currentDir, '../core/mpc/$1'),
+            },
+            {
+              find: /^@vultisig\/core-config(.*)/,
+              replacement: path.resolve(currentDir, '../core/config$1'),
+            },
+            {
+              find: /^@vultisig\/lib-utils\/(.*)/,
+              replacement: path.resolve(currentDir, '../lib/utils/$1'),
+            },
+          ],
+        }),
+        resolve({
+          preferBuiltins: false,
+          extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+          exportConditions: ['module', 'import', 'default'],
+          skip: [
+            'axios',
+            'viem',
+            'zod',
+            'uuid',
+            '@trustwallet/wallet-core',
+            'tiny-secp256k1',
+            '@solana/web3.js',
+            '@cosmjs/stargate',
+            '@cosmjs/amino',
+          ],
+        }),
+        replace({
+          preventAssignment: true,
+          'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'),
+          'typeof window': JSON.stringify('undefined'),
+        }),
+        esbuild({
+          include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
+          exclude: ['**/*.test.*', '**/node_modules/**'],
+          target: 'es2021',
+          minify: false,
+          tsconfig: './tsconfig.json',
+        }),
+        json(),
+        commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
+        terser({
+          format: { comments: false },
+          compress: { passes: 1, drop_debugger: true },
+          mangle: { keep_fnames: true, keep_classnames: true },
+        }),
+      ],
+      onwarn,
     },
   ],
   electron: {

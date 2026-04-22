@@ -32,11 +32,7 @@ if (typeof (globalThis as { Buffer?: unknown }).Buffer === 'undefined') {
 //    Wrap the view as a real Buffer sharing the same memory so Node-shaped
 //    assumptions downstream keep working.
 const originalSubarray = Buffer.prototype.subarray
-Buffer.prototype.subarray = function patchedSubarray(
-  this: Buffer,
-  start?: number,
-  end?: number,
-) {
+Buffer.prototype.subarray = function patchedSubarray(this: Buffer, start?: number, end?: number) {
   const view = originalSubarray.call(this, start, end)
   return Buffer.from(view.buffer, view.byteOffset, view.byteLength)
 }
