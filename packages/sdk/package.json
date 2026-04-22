@@ -174,6 +174,8 @@
     "@scure/bip39": "^1.6.0",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
+    "@ton/core": "^0.63.1",
+    "@ton/crypto": "^3.3.0",
     "@trustwallet/wallet-core": "^4.6.0",
     "@vultisig/lib-dkls": "workspace:*",
     "@vultisig/lib-mldsa": "workspace:*",
