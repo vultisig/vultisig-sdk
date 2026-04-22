@@ -4,6 +4,7 @@
 // Using explicit `import *` + `export const` survives the bundler intact and
 // yields `chains.cosmos.buildCosmosSendTx` at the consumer.
 
+import * as cardano from './cardano'
 import * as cosmos from './cosmos'
 import * as evm from './evm'
 import * as ripple from './ripple'
@@ -13,7 +14,7 @@ import * as ton from './ton'
 import * as tron from './tron'
 import * as utxo from './utxo'
 
-export const chains = { cosmos, evm, ripple, solana, sui, ton, tron, utxo }
+export const chains = { cardano, cosmos, evm, ripple, solana, sui, ton, tron, utxo }
 
 // Re-export chain-specific type surfaces so consumers can import them from
 // the `chains` barrel without knowing which sub-module they live in. Sui
