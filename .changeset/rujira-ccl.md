@@ -11,8 +11,8 @@ on 2026-04-20. This release adds SDK support for range-position management on
 New surface:
 
 - **`client.range: RujiraRange`** — pure builders (no signer needed):
-  - `buildCreatePosition({ pairAddress, config, funds })`
-  - `buildDeposit({ pairAddress, idx, funds })`
+  - `buildCreatePosition({ pairAddress, config, base, quote })`
+  - `buildDeposit({ pairAddress, idx, base, quote })`
   - `buildWithdraw({ pairAddress, idx, share })`
   - `buildClaim({ pairAddress, idx })`
   - `buildTransfer({ pairAddress, idx, to })`

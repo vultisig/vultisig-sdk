@@ -265,18 +265,44 @@ type GraphQLResponse<T> = { data: T; errors?: Array<{ message: string }> }
 async function gqlFetch<T>(query: string, variables: Record<string, unknown>): Promise<T> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), GRAPHQL_TIMEOUT_MS)
-  let response: Response
+  // Wrap the ENTIRE fetch + body read in one try block so the timeout
+  // covers both phases. Previously `clearTimeout` ran in `finally` right
+  // after `fetch` resolved (headers only), leaving `response.json()` with
+  // no deadline. A slow body stream past GRAPHQL_TIMEOUT_MS would hang
+  // indefinitely — defeating the guard on the exact case we were trying
+  // to protect against.
   try {
-    response = await fetch(RUJIRA_GRAPHQL_URL, {
+    const response = await fetch(RUJIRA_GRAPHQL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, variables }),
       signal: controller.signal,
     })
+    if (!response.ok) {
+      throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL request failed: ${response.status}`)
+    }
+    const json = (await response.json()) as GraphQLResponse<T>
+    if (json.errors?.length) {
+      throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL errors: ${json.errors[0].message}`)
+    }
+    // Review finding: a malformed backend response (200 OK, no `errors`,
+    // no `data`) would return undefined and downstream callers would
+    // collapse it to "no positions" / "no pair" via their `?? []` / `??
+    // null` fallbacks — masking a real backend/schema break as a silent
+    // empty result. Users would make fund-moving decisions on false
+    // negatives. Reject at the transport boundary instead.
+    if (json.data === undefined || json.data === null) {
+      throw new RujiraError(
+        RujiraErrorCode.NETWORK_ERROR,
+        'GraphQL response missing `data` field (backend or schema error)'
+      )
+    }
+    return json.data
   } catch (error) {
     // AbortError from the timeout above would otherwise fall through to wrapError's
     // default NETWORK_ERROR branch (its "timeout"/"timed out" string match misses
     // the "The operation was aborted." message). Translate it to a proper TIMEOUT.
+    // Now covers both `fetch` and `response.json()` abort paths.
     if (error instanceof Error && error.name === 'AbortError') {
       throw new RujiraError(
         RujiraErrorCode.TIMEOUT,
@@ -289,27 +315,6 @@ async function gqlFetch<T>(query: string, variables: Record<string, unknown>): P
   } finally {
     clearTimeout(timeout)
   }
-
-  if (!response.ok) {
-    throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL request failed: ${response.status}`)
-  }
-  const json = (await response.json()) as GraphQLResponse<T>
-  if (json.errors?.length) {
-    throw new RujiraError(RujiraErrorCode.NETWORK_ERROR, `GraphQL errors: ${json.errors[0].message}`)
-  }
-  // Review finding: a malformed backend response (200 OK, no `errors`,
-  // no `data`) would return undefined and downstream callers would
-  // collapse it to "no positions" / "no pair" via their `?? []` / `??
-  // null` fallbacks — masking a real backend/schema break as a silent
-  // empty result. Users would make fund-moving decisions on false
-  // negatives. Reject at the transport boundary instead.
-  if (json.data === undefined || json.data === null) {
-    throw new RujiraError(
-      RujiraErrorCode.NETWORK_ERROR,
-      'GraphQL response missing `data` field (backend or schema error)'
-    )
-  }
-  return json.data
 }
 
 // Query shapes — keep narrow, only fields we surface.
