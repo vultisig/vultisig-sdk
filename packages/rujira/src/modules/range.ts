@@ -618,7 +618,7 @@ export class RujiraRange {
         if (a.endsWith(b) || b.endsWith(a)) return 'fuzzy'
         return null
       }
-      type Node = typeof edges[number]['node']
+      type Node = (typeof edges)[number]['node']
       const scoreNode = (n: Node): 'exact' | 'fuzzy' | null => {
         const bs = n.assetBase.metadata?.symbol ?? ''
         const qs = n.assetQuote.metadata?.symbol ?? ''
