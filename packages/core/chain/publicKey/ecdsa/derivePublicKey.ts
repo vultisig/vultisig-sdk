@@ -32,9 +32,10 @@ export const derivePublicKey = ({
   const derivedKey = derivePubKeyFromPath(pubKeyBuf, chainCodeBuf, pathBuf)
   if (derivedKey.length === 0) {
     throw new Error(
-      `derivePublicKey: produced zero-length pubkey for path ${path}. ` +
-        'Likely a bundler/shim misconfiguration (bip32 or tiny-secp256k1 stubbed to Proxy). ' +
-        'See .spikes/spike-y9k-publickey-bug.md.'
+      `derivePublicKey: produced a zero-length public key for path ${path}. ` +
+        'This indicates that `bip32` or `tiny-secp256k1` is being stubbed out by your bundler ' +
+        '(commonly a Metro `resolveRequest` / `SDK_EXTERNAL_STUBS` list). ' +
+        'The Vultisig SDK inlines these into its React Native bundle — do not stub them in consumer metro config.'
     )
   }
   return Buffer.from(derivedKey).toString('hex')
