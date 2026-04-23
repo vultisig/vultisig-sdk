@@ -85,6 +85,60 @@ const onwarn = (warning, warn) => {
   warn(warning)
 }
 
+// Path-based platform overrides for the React Native bundle.
+//
+// Rollup's `@rollup/plugin-alias` only matches at module-ID resolution time,
+// so it can intercept a bare specifier like
+// `@vultisig/core-chain/chains/solana/client` but never a relative
+// `./client` written inside the core package. That previously forced us to
+// rewrite core callsites to use bare specifiers just so the alias could
+// match — polluting the platform-agnostic `packages/core` with build-tool
+// plumbing.
+//
+// Instead, this plugin runs in `resolveId` AFTER the alias + node-resolve
+// chain has produced a final absolute path on disk. It pattern-matches on
+// the resolved path suffix, so it doesn't care whether the callsite used a
+// relative path (`./client`, `../client`), a workspace bare specifier
+// (`@vultisig/core-chain/chains/solana/client`), or anything else that
+// eventually resolves to the same file. One mapping, all callsites covered.
+//
+// The overrides exist because the real modules would evaluate Hermes-hostile
+// deps (`@solana/web3.js`, `@mysten/sui/jsonRpc`, `@lifi/sdk`) at module-init
+// time. The RN-specific versions defer those imports to inside async function
+// bodies so the module graph stays cold until the first real call.
+const rnOverrideMap = {
+  'packages/core/chain/chains/solana/client.ts': 'src/platforms/react-native/overrides/solanaClient.ts',
+  'packages/core/chain/chains/sui/client.ts': 'src/platforms/react-native/overrides/suiClient.ts',
+  'packages/core/chain/swap/general/lifi/LifiSwapEnabledChains.ts':
+    'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts',
+  'packages/core/chain/chains/solana/spl/getSplAccounts.ts':
+    'src/platforms/react-native/overrides/getSplAccounts.ts',
+  'packages/core/chain/chains/solana/spl/getSplAssociatedAccount.ts':
+    'src/platforms/react-native/overrides/getSplAssociatedAccount.ts',
+  'packages/core/chain/coin/balance/resolvers/solana.ts':
+    'src/platforms/react-native/overrides/resolverSolana.ts',
+  'packages/core/mpc/keysign/chainSpecific/resolvers/solana/refine.ts':
+    'src/platforms/react-native/overrides/refineSolanaChainSpecific.ts',
+  'packages/core/chain/swap/general/lifi/api/getLifiSwapQuote.ts':
+    'src/platforms/react-native/overrides/getLifiSwapQuote.ts',
+}
+
+const rnOverridePlugin = () => ({
+  name: 'vultisig-rn-path-override',
+  async resolveId(source, importer, options) {
+    if (options?.isEntry) return null
+    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
+    if (!resolved || resolved.external) return null
+    const id = resolved.id.replace(/\\/g, '/')
+    for (const [suffix, override] of Object.entries(rnOverrideMap)) {
+      if (id.endsWith('/' + suffix) || id.endsWith(suffix)) {
+        return path.resolve(currentDir, override)
+      }
+    }
+    return null
+  },
+})
+
 const createPlugins = (platformOptions = {}) => {
   const { preferBuiltins = false, browser = false, replaceOptions = {} } = platformOptions
 
@@ -333,6 +387,7 @@ const configs = {
       /lib\/schnorr\/vs_schnorr_wasm/,
     ],
     plugins: [
+      rnOverridePlugin(),
       alias({
         entries: [
           // Polyfills for Node.js crypto (must come before generic package aliases)
@@ -356,58 +411,6 @@ const configs = {
           {
             find: /^tiny-secp256k1$/,
             replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
-          },
-          // Platform-specific overrides for core-chain modules that would
-          // otherwise evaluate Hermes-hostile deps (`@solana/web3.js`,
-          // `@mysten/sui/jsonRpc`, `@lifi/sdk`) at module-init. These MUST
-          // appear before the generic `@vultisig/core-chain/(.*)` alias so
-          // rollup matches them first. Non-RN bundles continue to use the
-          // original core modules with their sync signatures intact.
-          {
-            find: /^@vultisig\/core-chain\/chains\/solana\/client$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/solanaClient.ts'),
-          },
-          {
-            find: /^@vultisig\/core-chain\/chains\/sui\/client$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/suiClient.ts'),
-          },
-          {
-            find: /^@vultisig\/core-chain\/swap\/general\/lifi\/LifiSwapEnabledChains$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts'),
-          },
-          // Solana SPL + balance-resolver overrides: core modules statically
-          // import `PublicKey` from `@solana/web3.js`, which triggers Hermes-
-          // hostile `rpc-websockets` / `ws` module-init. RN overrides defer
-          // the `@solana/web3.js` import to inside the async function body.
-          {
-            find: /^@vultisig\/core-chain\/chains\/solana\/spl\/getSplAccounts$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/getSplAccounts.ts'),
-          },
-          {
-            find: /^@vultisig\/core-chain\/chains\/solana\/spl\/getSplAssociatedAccount$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/getSplAssociatedAccount.ts'),
-          },
-          {
-            find: /^@vultisig\/core-chain\/coin\/balance\/resolvers\/solana$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/resolverSolana.ts'),
-          },
-          // Solana keysign refiner override — same `@solana/web3.js` hazard.
-          // The core callsite was migrated from a relative `./refine` import
-          // to a bare specifier (`@vultisig/core-mpc/keysign/.../refine`) so
-          // this alias can intercept it for RN only.
-          {
-            find: /^@vultisig\/core-mpc\/keysign\/chainSpecific\/resolvers\/solana\/refine$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/refineSolanaChainSpecific.ts'),
-          },
-          // LI.FI quote builder override — `@lifi/sdk`'s barrel evaluates
-          // `@wallet-standard/app` at module-init which references the
-          // `Event` / `EventTarget` DOM globals. These are patched by the
-          // RN entry's `event-target-polyfill`, but only once the entry's
-          // body starts executing — which is too late for an external
-          // static import. Lazy-loading keeps the module graph cold.
-          {
-            find: /^@vultisig\/core-chain\/swap\/general\/lifi\/api\/getLifiSwapQuote$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/getLifiSwapQuote.ts'),
           },
           // Resolve workspace packages to source TS for bundling
           {
