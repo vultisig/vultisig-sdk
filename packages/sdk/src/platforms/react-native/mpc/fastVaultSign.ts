@@ -148,7 +148,22 @@ async function fastVaultSignAttempt(opts: FastVaultSignOptions): Promise<string>
   })
 
   const sig = result as { r: string; s: string; recovery_id?: string }
-  if (isEcdsa) return sig.r + sig.s + (sig.recovery_id || '00')
+  if (isEcdsa) {
+    // For ECDSA, `recovery_id` is required — EVM signatures compute
+    // `v = recovery_id + chainId * 2 + 35`. A silent fallback to `'00'`
+    // would produce a signature that recovers the wrong signer and would
+    // be rejected by the chain (or credit funds to a different address),
+    // so fail loud here instead.
+    if (!sig.recovery_id || sig.recovery_id.length === 0) {
+      throw new Error(
+        'fastVaultSign: MPC engine returned ECDSA signature without recovery_id — ' +
+          'refusing to fall back to v=0 (would produce a tx that recovers the wrong signer)'
+      )
+    }
+    // Normalise single-char recovery_id to two hex chars (e.g. "0" → "00", "1" → "01").
+    const rid = sig.recovery_id.length === 1 ? '0' + sig.recovery_id : sig.recovery_id
+    return sig.r + sig.s + rid
+  }
   return sig.r + sig.s
 }
 
