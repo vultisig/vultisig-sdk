@@ -51,6 +51,13 @@ export type BroadcastResult = {
   code?: string
   /** Human-readable message (hex-encoded on some gateways). */
   message?: string
+  /**
+   * TronGrid bare-error shape (capital `E`) — returned for inputs the gateway
+   * fails to even parse (e.g. malformed hex). Not paired with `result`/`code`.
+   * Lowercase variant included for defensive coverage of mirror gateways.
+   */
+  Error?: string
+  error?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -255,8 +262,12 @@ export async function broadcastTronTx(
     { transaction: signedTxHex },
     signal
   )
-  if (res.result === false || (res.code && res.code !== 'SUCCESS')) {
-    const msg = res.message ?? res.code ?? 'unknown'
+  // TronGrid returns a bare `{Error: "..."}` (capital `E`, no `result`, no
+  // `code`) for inputs it can't even parse — e.g. malformed hex. Treat that
+  // shape as a failure too. Some mirror gateways use lowercase `error`.
+  const tronError = res.Error ?? res.error
+  if (tronError || res.result === false || (res.code && res.code !== 'SUCCESS')) {
+    const msg = tronError ?? res.message ?? res.code ?? 'unknown'
     throw new Error(`tron broadcast failed: ${msg}`)
   }
   return res
