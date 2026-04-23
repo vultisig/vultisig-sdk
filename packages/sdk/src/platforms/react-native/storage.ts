@@ -55,10 +55,17 @@ export class ReactNativeStorage implements Storage {
   async clear(): Promise<void> {
     try {
       const keys = await this.list()
-      // `multiRemove` (not `removeMany` — which does not exist on
-      // @react-native-async-storage/async-storage) takes a plain string[]
-      // and removes all entries in one round-trip.
-      await AsyncStorage.multiRemove(keys.map(prefixed))
+      // `multiRemove` is the correct method on
+      // @react-native-async-storage/async-storage `^2.x` — the consumer
+      // target (vultiagent-app). The package renamed it to `removeMany`
+      // in `^3.x`, so we cast through `unknown` to keep this file
+      // typecheckable regardless of which version the dev install pulled
+      // down. The runtime dispatch still targets the 2.x-compatible name
+      // since `peerDependencies` pin to `^2.0.0`.
+      const asyncStorage = AsyncStorage as unknown as {
+        multiRemove: (keys: string[]) => Promise<void>
+      }
+      await asyncStorage.multiRemove(keys.map(prefixed))
     } catch (error) {
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }

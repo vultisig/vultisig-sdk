@@ -79,7 +79,12 @@ describe('ReactNativeStorage', () => {
     // consumer the moment they invoked `storage.clear()`. Assert that the
     // correct API (`multiRemove`) is actually reached.
     const mod = await import('@react-native-async-storage/async-storage')
-    const AsyncStorage = mod.default
+    // The runtime mock above declares `multiRemove`, but the installed 3.x
+    // `.d.ts` only exposes `removeMany`. Cast to the 2.x-compatible shape
+    // so the test still compiles regardless of which types shipped.
+    const AsyncStorage = mod.default as unknown as {
+      multiRemove: (keys: string[]) => Promise<void>
+    }
     const spy = vi.mocked(AsyncStorage.multiRemove)
     spy.mockClear()
 
