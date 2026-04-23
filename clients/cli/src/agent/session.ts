@@ -518,7 +518,23 @@ export class AgentSession {
       const results = await this.executeActions([action], ui)
       const result = results[0]
       if (result) {
-        this.pendingToolResults.push(actionResultToRecentAction(result))
+        const recent = actionResultToRecentAction(result)
+        // Echo protocol markers from input into the result so the
+        // backend can route the outcome to the right follow-up handler
+        // (e.g. __pm_auto_submit → autoSubmitPolymarketOrder). Without
+        // this, markers get stripped on the way back because
+        // recent_actions has no equivalent of the legacy action_id ↔
+        // originalAction.Params lookup path the backend uses for mobile.
+        // Only echo keys we know are protocol-level (prefixed `__` or
+        // present in a short known list) — arbitrary input echoing
+        // would bloat recent_actions and leak model args back.
+        if (recent.data === undefined) recent.data = {}
+        for (const key of Object.keys(input)) {
+          if (key.startsWith('__') || key === 'pm_order_ref') {
+            recent.data[key] = input[key]
+          }
+        }
+        this.pendingToolResults.push(recent)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
