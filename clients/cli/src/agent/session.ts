@@ -24,15 +24,20 @@ import { PASSWORD_REQUIRED_ACTIONS } from './types'
 
 /**
  * Registry mapping client-side tool names to an Action.type that the
- * executor already knows how to handle. The executor's switch in
- * executor.ts:executeAction covers every case here; this table is the
- * bridge from post-PR-#119 `tool-input-available` events to the
- * pre-existing execution logic.
+ * executor already knows how to handle. Every entry here must have a
+ * corresponding `case` in `executor.ts:executeAction` — the registry
+ * lies silently if an entry points at a missing executor case, because
+ * the executor's default branch throws and the dispatcher catches it,
+ * turning a capability drift into a runtime error sent back to the LLM.
  *
  * Must stay aligned with the backend's `clientSideToolNames` map
- * (agent-backend/internal/service/agent/tools.go). Adding a tool on the
- * backend without a corresponding entry here produces a visible
- * "unimplemented client-side tool" warning — not a silent no-op.
+ * (agent-backend/internal/service/agent/tools.go). Backend entries
+ * missing from this registry produce a visible
+ * `[cli] unimplemented client-side tool: $name` warning plus a failure
+ * RecentAction — never a silent no-op. That's the correct behaviour for
+ * mobile-only tools that shouldn't surface on CLI (e.g. create_vault —
+ * needs VultiServer round-trips or multi-device flow, not a
+ * one-shot tool call; users should use `vsig vault` instead).
  *
  * `sign_tx` is deliberately absent — it has its own dedicated trigger
  * via the tx_ready SSE channel (see onTxReady handler below).
@@ -43,18 +48,43 @@ const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
   remove_coin: 'remove_coin',
   add_chain: 'add_chain',
   remove_chain: 'remove_chain',
-  create_vault: 'create_vault',
   address_book_add: 'address_book_add',
   address_book_remove: 'address_book_remove',
+  // create_vault: intentionally not here. FastVault needs VultiServer
+  // session orchestration and SecureVault needs multi-device signing —
+  // neither suits a one-shot agent tool call. CLI users should run
+  // `vsig vault` directly. Backend may still emit this for mobile; CLI
+  // surfaces it as an unimplemented-tool error.
+  // plugin_install / create_policy / delete_policy: also mobile-only
+  // client-side tools. Same treatment.
 }
+
+/**
+ * Exported for tests — asserting the registry's tool-name membership
+ * against the backend's canonical list is a drift guard.
+ */
+export const __clientSideToolDispatchForTests__ = CLIENT_SIDE_TOOL_DISPATCH
+
+/**
+ * Cap on `processMessageLoop` recursion depth. Each iteration is one
+ * backend round-trip; the backend has its own decision-loop cap at 8,
+ * so in practice we expect well under 10. This is a defense-in-depth
+ * belt so a misbehaving backend or an always-failing executor can't
+ * spin the CLI forever.
+ */
+const MAX_MESSAGE_LOOP_DEPTH = 16
 
 /**
  * Convert a CLI-internal ActionResult to the post-#119 wire shape.
  * Errors are embedded in `data` so the RecentAction carries a single
  * `{tool, success, data}` tuple instead of spreading error across a
  * top-level field.
+ *
+ * Exported for test coverage — the conversion has success/failure
+ * branches and field-merge logic that unit tests must exercise
+ * directly to catch drift.
  */
-function actionResultToRecentAction(r: ActionResult): RecentAction {
+export function actionResultToRecentAction(r: ActionResult): RecentAction {
   if (r.success) {
     return { tool: r.action, success: true, data: r.data ?? {} }
   }
@@ -265,8 +295,19 @@ export class AgentSession {
    * Core message processing loop.
    * Sends content or action results, executes returned actions, repeats.
    */
-  private async processMessageLoop(content: string | null, ui: UICallbacks): Promise<void> {
+  private async processMessageLoop(content: string | null, ui: UICallbacks, depth: number = 0): Promise<void> {
     if (!this.conversationId) return
+
+    if (depth > MAX_MESSAGE_LOOP_DEPTH) {
+      process.stderr.write(
+        `[session] processMessageLoop exceeded MAX_MESSAGE_LOOP_DEPTH (${MAX_MESSAGE_LOOP_DEPTH}); stopping to avoid runaway loop. pendingToolResults=${this.pendingToolResults.length}\n`
+      )
+      // Discard any unsent results so they don't leak into the next
+      // top-level sendMessage invocation.
+      this.pendingToolResults = []
+      ui.onDone()
+      return
+    }
 
     // Build request
     const request: any = {
@@ -389,7 +430,7 @@ export class AgentSession {
         const signResult = signResults[0]
         if (signResult) {
           this.pendingToolResults.push(actionResultToRecentAction(signResult))
-          await this.processMessageLoop(null, ui)
+          await this.processMessageLoop(null, ui, depth + 1)
           return
         }
       }
@@ -398,7 +439,7 @@ export class AgentSession {
         for (const result of results) {
           this.pendingToolResults.push(actionResultToRecentAction(result))
         }
-        await this.processMessageLoop(null, ui)
+        await this.processMessageLoop(null, ui, depth + 1)
         return
       }
     }
@@ -423,7 +464,7 @@ export class AgentSession {
         for (const result of results) {
           this.pendingToolResults.push(actionResultToRecentAction(result))
         }
-        await this.processMessageLoop(null, ui)
+        await this.processMessageLoop(null, ui, depth + 1)
         return
       }
     }
@@ -431,7 +472,7 @@ export class AgentSession {
     // If any pending tool results accumulated from client-side tool
     // calls on this stream, recurse so the backend can see them.
     if (this.pendingToolResults.length > 0) {
-      await this.processMessageLoop(null, ui)
+      await this.processMessageLoop(null, ui, depth + 1)
       return
     }
 

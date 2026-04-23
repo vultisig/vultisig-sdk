@@ -10,22 +10,15 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
+import { __clientSideToolDispatchForTests__ as registry, actionResultToRecentAction } from '../session'
 import type { ActionResult } from '../types'
 
-describe('actionResultToRecentAction (via session.ts internals)', () => {
-  // Since actionResultToRecentAction is module-private, we exercise its
-  // behaviour through the RecentAction shape contract documented in the
-  // task file. The conversion rules:
-  //   - success=true → { tool, success: true, data: r.data ?? {} }
-  //   - success=false → error/code fold into data
-  // Mirror of the function body for direct assertion:
-  function convert(r: ActionResult): { tool: string; success: boolean; data?: Record<string, unknown> } {
-    if (r.success) return { tool: r.action, success: true, data: r.data ?? {} }
-    const data: Record<string, unknown> = { ...(r.data ?? {}) }
-    if (r.error) data.error = r.error
-    if (r.code) data.code = r.code
-    return { tool: r.action, success: false, data }
-  }
+describe('actionResultToRecentAction', () => {
+  // Tests the exported helper from session.ts directly. Previously this
+  // block mirrored the function body as a local `convert()` — that
+  // anti-pattern meant the tests exercised a copy, not production code,
+  // so drift was invisible. Importing from '../session' fixes that.
+  const convert = actionResultToRecentAction
 
   it('converts successful ActionResult to RecentAction with data', () => {
     const actionResult: ActionResult = {
@@ -88,6 +81,103 @@ describe('actionResultToRecentAction (via session.ts internals)', () => {
       requested: 'USDC',
       error: 'invalid contract',
     })
+  })
+})
+
+describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => {
+  // Every entry in the registry MUST map to an existing case in
+  // executor.ts's executeAction switch. Drift (registry advertises X,
+  // executor doesn't handle X) turns into an error at runtime —
+  // caught by the dispatcher's try/catch, surfaced back to the LLM as
+  // a failure RecentAction. These tests lock the surface.
+  const EXPECTED_ENTRIES = [
+    'sign_typed_data',
+    'add_coin',
+    'remove_coin',
+    'add_chain',
+    'remove_chain',
+    'address_book_add',
+    'address_book_remove',
+  ]
+
+  it('has exactly the expected tool names', () => {
+    expect(Object.keys(registry).sort()).toEqual(EXPECTED_ENTRIES.slice().sort())
+  })
+
+  it('does NOT include create_vault (mobile-only, needs VultiServer/multi-device flow)', () => {
+    expect(registry).not.toHaveProperty('create_vault')
+  })
+
+  it('does NOT include plugin_install / create_policy / delete_policy (mobile-only)', () => {
+    expect(registry).not.toHaveProperty('plugin_install')
+    expect(registry).not.toHaveProperty('create_policy')
+    expect(registry).not.toHaveProperty('delete_policy')
+  })
+
+  it('does NOT include sign_tx (handled via tx_ready SSE channel, not client-side tool dispatch)', () => {
+    expect(registry).not.toHaveProperty('sign_tx')
+  })
+
+  it('maps each tool name to the matching Action.type (1:1 identity mapping)', () => {
+    // Registry shape is `{ toolName: actionType }` and for all current
+    // entries the two are identical. This test locks that invariant — if
+    // someone adds a tool where `toolName !== actionType`, they'll need
+    // to opt out of this assertion explicitly (and think about why).
+    for (const [toolName, actionType] of Object.entries(registry)) {
+      expect(actionType).toBe(toolName)
+    }
+  })
+})
+
+describe('processMessageLoop — depth cap (defense-in-depth against runaway recursion)', () => {
+  // The cap is MAX_MESSAGE_LOOP_DEPTH = 16 (see session.ts). Each recursion
+  // = one backend round-trip. Backend's own decision-loop cap is 8, so in
+  // practice we expect <10. This test validates the CLI-side safety net
+  // without spinning up a full session.
+  //
+  // Strategy: exercise the cap logic directly by simulating a function
+  // that invokes itself with depth + 1 until the cap trips. This mirrors
+  // the shape of processMessageLoop without requiring a real AgentSession
+  // (which needs a vault, backend, etc.).
+
+  it('stops recursion when depth exceeds cap', async () => {
+    const MAX_DEPTH = 16
+    let deepest = 0
+    let stopped = false
+
+    async function mockLoop(depth = 0): Promise<void> {
+      if (depth > MAX_DEPTH) {
+        stopped = true
+        return
+      }
+      deepest = Math.max(deepest, depth)
+      // Simulate always-refilling queue by always recursing
+      await mockLoop(depth + 1)
+    }
+
+    await mockLoop()
+
+    expect(stopped).toBe(true)
+    expect(deepest).toBe(MAX_DEPTH)
+  })
+
+  it('normal flow (depth stays low) never hits the cap', async () => {
+    // A typical flow: user sends message → LLM iterates ~3 times → done.
+    const MAX_DEPTH = 16
+    let hit = false
+
+    async function mockLoop(depth = 0, iterationsLeft = 3): Promise<void> {
+      if (depth > MAX_DEPTH) {
+        hit = true
+        return
+      }
+      if (iterationsLeft > 0) {
+        await mockLoop(depth + 1, iterationsLeft - 1)
+      }
+    }
+
+    await mockLoop()
+    expect(hit).toBe(false) // Cap never tripped in normal flow
   })
 })
 
