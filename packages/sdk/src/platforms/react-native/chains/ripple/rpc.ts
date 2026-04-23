@@ -11,6 +11,13 @@ type RippleResponse<T> = {
   result: T & { status?: string; error?: string; error_message?: string }
 }
 
+/**
+ * Expected-error codes surfaced by XRPL that represent a normal business
+ * outcome (not a protocol error). Callers branch on these instead of
+ * treating every `status: 'error'` as a thrown exception.
+ */
+const EXPECTED_RIPPLE_ERRORS = new Set(['actNotFound'])
+
 async function rippleCall<T>(
   rpcUrl: string,
   method: string,
@@ -31,7 +38,11 @@ async function rippleCall<T>(
   if (!result) {
     throw new Error(`XRP RPC missing result: ${JSON.stringify(payload)}`)
   }
-  if (result.status === 'error') {
+  // XRPL returns `status: "error"` for several expected cases — notably
+  // `actNotFound` for unfunded accounts. Treat those as a valid response
+  // (the caller inspects `result.error` to branch) and only throw for
+  // genuinely unexpected protocol-level errors.
+  if (result.status === 'error' && !EXPECTED_RIPPLE_ERRORS.has(result.error ?? '')) {
     throw new Error(`XRP RPC error: ${result.error ?? 'unknown'} — ${result.error_message ?? ''}`)
   }
   return result
