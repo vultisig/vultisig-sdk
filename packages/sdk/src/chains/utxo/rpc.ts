@@ -164,7 +164,7 @@ export async function estimateUtxoFee(opts: EstimateUtxoFeeOptions): Promise<num
     return Math.max(1, Math.floor(base / 10))
   }
   // Electrs baseline + 25% buffer to match app behaviour.
-  return Math.max(1, Math.ceil((base * 25) / 10))
+  return Math.max(1, Math.ceil((base * 125) / 100))
 }
 
 export type BroadcastUtxoTxOptions = UtxoApiOptions & {
