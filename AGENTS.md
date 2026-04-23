@@ -68,6 +68,9 @@ When using `agent ask` or `--via-agent`, the agent backend proposes actions; the
 | `build_tx` | Build a generic transaction | local |
 | `list_vaults` | List available vaults | local |
 | `thorchain_query` | Query THORChain state | backend |
+| `thorchain_pool_info` | THORChain pool stats from Midgard (no signing) | local |
+| `thorchain_add_liquidity` | Build RUNE-side LP add (`prepareSendTx` + `sign_tx`) | local |
+| `thorchain_remove_liquidity` | Build LP withdraw memo + dust RUNE send (`prepareSendTx` + `sign_tx`) | local |
 
 ## Key Resources
 
