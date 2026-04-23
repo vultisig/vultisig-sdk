@@ -140,12 +140,8 @@ export class AgentClient {
     callbacks: {
       onTextDelta?: (delta: string) => void
       onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
-      /**
-       * Fired when a `tool-input-available` event carries `clientExecuted: true`.
-       * The client is expected to execute the tool and ship the result back
-       * via `context.recent_actions` on the next outbound request. See
-       * session.ts for the dispatch registry and queue.
-       */
+      // Fired for `tool-input-available` with `clientExecuted: true`.
+      // Client runs the tool and ships the result via recent_actions.
       onClientSideToolCall?: (
         toolCallId: string,
         toolName: string,
@@ -264,12 +260,8 @@ export class AgentClient {
     callbacks: {
       onTextDelta?: (delta: string) => void
       onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
-      /**
-       * Fired when a `tool-input-available` event carries `clientExecuted: true`.
-       * The client is expected to execute the tool and ship the result back
-       * via `context.recent_actions` on the next outbound request. See
-       * session.ts for the dispatch registry and queue.
-       */
+      // Fired for `tool-input-available` with `clientExecuted: true`.
+      // Client runs the tool and ships the result via recent_actions.
       onClientSideToolCall?: (
         toolCallId: string,
         toolName: string,
@@ -320,11 +312,9 @@ export class AgentClient {
           const toolName = inlineName ?? (callId ? toolNameByCallId.get(callId) : undefined)
           const label = typeof parsed.label === 'string' ? parsed.label : undefined
 
-          // If this is a client-executed tool on the tool-input-available frame,
-          // fire the dedicated callback so the session can dispatch execution.
-          // Strict boolean check — missing field or non-true values fall through
-          // to display-only progress handling (backward-compatible with older
-          // backends that don't emit the flag).
+          // Client-executed tools get a dedicated callback. Strict boolean
+          // check — absent/non-true falls through to display-only progress
+          // (backward-compat for older backends).
           if (
             v1Type === 'tool-input-available' &&
             parsed.clientExecuted === true &&
@@ -337,9 +327,7 @@ export class AgentClient {
               rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
                 ? (rawInput as Record<string, unknown>)
                 : {}
-            // Fire-and-forget: session.ts handles awaiting / queueing. We
-            // still emit onToolProgress so display/verbose logs are
-            // consistent with MCP tools.
+            // Fire-and-forget; session.ts awaits/queues.
             void callbacks.onClientSideToolCall(callId, toolName, input)
           }
 

@@ -120,20 +120,11 @@ export type MessageContext = {
   addresses?: Record<string, string>
   coins?: CoinInfo[]
   address_book?: AddressBookEntry[]
-  /**
-   * Client-side tool results from the previous turn, flushed on the next
-   * outbound request. Replaces the legacy top-level `action_result` field
-   * (post-PR-#119 contract). Backend reads these as tool outputs for the
-   * LLM's next iteration.
-   */
+  // Client-side tool results from the previous turn. Post-PR-#119 return
+  // channel (replaces top-level action_result).
   recent_actions?: RecentAction[]
 }
 
-/**
- * Result of a client-side tool call the CLI executed locally. Sent back
- * to the backend in `context.recent_actions` on the next HTTP round-trip
- * so the LLM can see the outcome.
- */
 export type RecentAction = {
   tool: string
   success: boolean

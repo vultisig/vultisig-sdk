@@ -30,26 +30,11 @@ import type {
 } from './types'
 import { PASSWORD_REQUIRED_ACTIONS } from './types'
 
-/**
- * Registry mapping client-side tool names to an Action.type that the
- * executor already knows how to handle. Every entry here must have a
- * corresponding `case` in `executor.ts:executeAction` — the registry
- * lies silently if an entry points at a missing executor case, because
- * the executor's default branch throws and the dispatcher catches it,
- * turning a capability drift into a runtime error sent back to the LLM.
- *
- * Must stay aligned with the backend's `clientSideToolNames` map
- * (agent-backend/internal/service/agent/tools.go). Backend entries
- * missing from this registry produce a visible
- * `[cli] unimplemented client-side tool: $name` warning plus a failure
- * RecentAction — never a silent no-op. That's the correct behaviour for
- * mobile-only tools that shouldn't surface on CLI (e.g. create_vault —
- * needs VultiServer round-trips or multi-device flow, not a
- * one-shot tool call; users should use `vsig vault` instead).
- *
- * `sign_tx` is deliberately absent — it has its own dedicated trigger
- * via the tx_ready SSE channel (see onTxReady handler below).
- */
+// Client-side tool name → Action.type routed through executor.executeAction.
+// Must stay aligned with the backend's `clientSideToolNames`. Unknown tools
+// surface as `[cli] unimplemented client-side tool` (not silent).
+// `sign_tx` uses the tx_ready channel instead; create_vault / plugin_install /
+// create_policy / delete_policy are mobile-only.
 export const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
   sign_typed_data: 'sign_typed_data',
   add_coin: 'add_coin',
@@ -58,34 +43,13 @@ export const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
   remove_chain: 'remove_chain',
   address_book_add: 'address_book_add',
   address_book_remove: 'address_book_remove',
-  // create_vault: intentionally not here. FastVault needs VultiServer
-  // session orchestration and SecureVault needs multi-device signing —
-  // neither suits a one-shot agent tool call. CLI users should run
-  // `vsig vault` directly. Backend may still emit this for mobile; CLI
-  // surfaces it as an unimplemented-tool error.
-  // plugin_install / create_policy / delete_policy: also mobile-only
-  // client-side tools. Same treatment.
 }
 
-/**
- * Cap on `processMessageLoop` recursion depth. Each iteration is one
- * backend round-trip; the backend has its own decision-loop cap at 8,
- * so in practice we expect well under 10. This is a defense-in-depth
- * belt so a misbehaving backend or an always-failing executor can't
- * spin the CLI forever.
- */
+// 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
 
-/**
- * Convert a CLI-internal ActionResult to the post-#119 wire shape.
- * Errors are embedded in `data` so the RecentAction carries a single
- * `{tool, success, data}` tuple instead of spreading error across a
- * top-level field.
- *
- * Exported for test coverage — the conversion has success/failure
- * branches and field-merge logic that unit tests must exercise
- * directly to catch drift.
- */
+// Exported for tests. Folds error/code into data so the RecentAction wire
+// shape is a single {tool, success, data} tuple.
 export function actionResultToRecentAction(r: ActionResult): RecentAction {
   if (r.success) {
     return { tool: r.action, success: true, data: r.data ?? {} }
@@ -107,13 +71,7 @@ export class AgentSession {
   private abortController: AbortController | null = null
   private historyMessages: ConversationMessage[] = []
   private pushService: PushNotificationService | null = null
-  /**
-   * Queue of tool results from the current stream, flushed into
-   * `context.recent_actions` on the next HTTP request. Per-session; not
-   * shared across sessions. See the Queue Lifecycle section in
-   * `.claude/knowledge/tasks/230426-pr2-cli-migrate-to-clientside-tools.md`
-   * for the full semantics.
-   */
+  // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
 
   constructor(vault: VaultBase, config: AgentConfig) {
@@ -302,11 +260,9 @@ export class AgentSession {
 
     if (depth > MAX_MESSAGE_LOOP_DEPTH) {
       process.stderr.write(
-        `[session] processMessageLoop exceeded MAX_MESSAGE_LOOP_DEPTH (${MAX_MESSAGE_LOOP_DEPTH}); stopping to avoid runaway loop. pendingToolResults=${this.pendingToolResults.length}\n`
+        `[session] processMessageLoop exceeded MAX_MESSAGE_LOOP_DEPTH (${MAX_MESSAGE_LOOP_DEPTH}); stopping. pendingToolResults=${this.pendingToolResults.length}\n`
       )
-      // Discard any unsent results so they don't leak into the next
-      // top-level sendMessage invocation.
-      this.pendingToolResults = []
+      this.pendingToolResults = [] // don't leak into next sendMessage
       ui.onDone()
       return
     }
@@ -326,9 +282,7 @@ export class AgentSession {
       request.content = content
     }
 
-    // Flush any pending tool results from the previous stream into
-    // context.recent_actions. This is the post-PR-#119 return channel;
-    // replaces the legacy `action_result` top-level field.
+    // Flush the post-#119 return channel (replaces the old action_result field).
     if (this.pendingToolResults.length > 0) {
       request.context.recent_actions = this.pendingToolResults.splice(0)
       if (this.config.verbose) {
@@ -336,10 +290,8 @@ export class AgentSession {
       }
     }
 
-    // Count tx_ready payloads actually stored (do not use raw SSE tx count — errors / empty events still append to streamResult.transactions)
+    // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
     let serverTxStoredFromStream = 0
-    // Track client-side tool call promises so we can await them before
-    // deciding whether to recurse. They push onto pendingToolResults.
     const pendingDispatches: Promise<void>[] = []
 
     // Send via SSE stream
@@ -388,16 +340,12 @@ export class AgentSession {
       this.abortController?.signal
     )
 
-    // Wait for any client-side tool dispatches that fired during the
-    // stream to finish before deciding the next step. Each dispatch
-    // pushes onto pendingToolResults.
+    // Wait for client-side dispatches (they push onto pendingToolResults).
     if (pendingDispatches.length > 0) {
       await Promise.all(pendingDispatches)
     }
 
-    // Emit the full assistant message
-    // Prefer the final message event when present; streamed text can be partial
-    // if intermediate chunks were interrupted or dropped upstream.
+    // Final message event wins over streamed deltas (which may be partial).
     const responseText = streamResult.message?.content || streamResult.fullText || ''
 
     const displayText = stripLeakedToolCallTags(responseText)
@@ -405,11 +353,8 @@ export class AgentSession {
       ui.onAssistantMessage(displayText)
     }
 
-    // Legacy data-actions fallback: if any actions came through the
-    // old channel (still emitted for e.g. schedule_task confirmation
-    // previews), execute them here and enqueue the results so they
-    // flush via recent_actions on the next turn. Filter out sign_tx —
-    // it has its own synthetic path below.
+    // data-actions fallback — still fires for schedule_task preview etc.
+    // sign_tx is excluded; it has its own synth path below.
     const legacyActions = streamResult.actions.filter(a => a.type !== 'sign_tx')
     if (legacyActions.length > 0) {
       const results = await this.executeActions(legacyActions, ui)
@@ -444,9 +389,7 @@ export class AgentSession {
       }
     }
 
-    // Handle transactions from tx_ready events (server-side builds via MCP).
-    // This path is unchanged structurally — tx_ready triggers synth
-    // sign_tx via executeActions. Result goes through recent_actions.
+    // tx_ready → synth sign_tx → executeActions. Result threaded via recent_actions.
     if (serverTxStoredFromStream > 0) {
       if (this.config.verbose)
         process.stderr.write(
@@ -469,8 +412,7 @@ export class AgentSession {
       }
     }
 
-    // If any pending tool results accumulated from client-side tool
-    // calls on this stream, recurse so the backend can see them.
+    // Client-side tool results accumulated — recurse to deliver them.
     if (this.pendingToolResults.length > 0) {
       await this.processMessageLoop(null, ui, depth + 1)
       return
@@ -479,16 +421,9 @@ export class AgentSession {
     ui.onDone()
   }
 
-  /**
-   * Dispatch a client-executed tool call via the executor. Looks up the
-   * tool name in CLIENT_SIDE_TOOL_DISPATCH, synthesises an Action, and
-   * runs it through the existing executeAction machinery so password
-   * gating, auto-confirmation, and error wrapping all reuse proven
-   * paths.
-   *
-   * Missing registry entry produces a visible warning + a failure
-   * RecentAction — never a silent no-op.
-   */
+  // Routes client-side tool calls through executeAction. Missing registry
+  // entries surface as a visible `[cli] unimplemented` warning + failure
+  // RecentAction (never silent).
   private async dispatchClientSideTool(
     toolCallId: string,
     toolName: string,
@@ -519,15 +454,8 @@ export class AgentSession {
       const result = results[0]
       if (result) {
         const recent = actionResultToRecentAction(result)
-        // Echo protocol markers from input into the result so the
-        // backend can route the outcome to the right follow-up handler
-        // (e.g. __pm_auto_submit → autoSubmitPolymarketOrder). Without
-        // this, markers get stripped on the way back because
-        // recent_actions has no equivalent of the legacy action_id ↔
-        // originalAction.Params lookup path the backend uses for mobile.
-        // Only echo keys we know are protocol-level (prefixed `__` or
-        // present in a short known list) — arbitrary input echoing
-        // would bloat recent_actions and leak model args back.
+        // Echo protocol markers (__*, pm_order_ref) back so server-side
+        // handlers like autoSubmitPolymarketOrder can find them.
         if (recent.data === undefined) recent.data = {}
         for (const key of Object.keys(input)) {
           if (key.startsWith('__') || key === 'pm_order_ref') {

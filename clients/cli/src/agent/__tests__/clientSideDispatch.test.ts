@@ -1,11 +1,5 @@
-/**
- * Unit tests for PR 2's client-side tool dispatch additions:
- *   - RecentAction shape conversion from ActionResult
- *   - SSE parser routing tool-input-available events with clientExecuted
- *
- * Does NOT touch executor internals (that requires a vault + SDK dist).
- * Integration-style behaviour is covered by the E2E suite.
- */
+// Unit tests for client-side tool dispatch (RecentAction conversion,
+// registry drift guard, depth cap, SSE parser routing).
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
@@ -14,10 +8,6 @@ import { actionResultToRecentAction, CLIENT_SIDE_TOOL_DISPATCH as registry } fro
 import type { ActionResult } from '../types'
 
 describe('actionResultToRecentAction', () => {
-  // Tests the exported helper from session.ts directly. Previously this
-  // block mirrored the function body as a local `convert()` — that
-  // anti-pattern meant the tests exercised a copy, not production code,
-  // so drift was invisible. Importing from '../session' fixes that.
   const convert = actionResultToRecentAction
 
   it('converts successful ActionResult to RecentAction with data', () => {
@@ -85,11 +75,7 @@ describe('actionResultToRecentAction', () => {
 })
 
 describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => {
-  // Every entry in the registry MUST map to an existing case in
-  // executor.ts's executeAction switch. Drift (registry advertises X,
-  // executor doesn't handle X) turns into an error at runtime —
-  // caught by the dispatcher's try/catch, surfaced back to the LLM as
-  // a failure RecentAction. These tests lock the surface.
+  // Locks the registry surface — drift is caught at test time, not runtime.
   const EXPECTED_ENTRIES = [
     'sign_typed_data',
     'add_coin',
@@ -119,53 +105,33 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => 
   })
 
   it('maps each tool name to the matching Action.type (1:1 identity mapping)', () => {
-    // Registry shape is `{ toolName: actionType }` and for all current
-    // entries the two are identical. This test locks that invariant — if
-    // someone adds a tool where `toolName !== actionType`, they'll need
-    // to opt out of this assertion explicitly (and think about why).
     for (const [toolName, actionType] of Object.entries(registry)) {
       expect(actionType).toBe(toolName)
     }
   })
 })
 
-describe('processMessageLoop — depth cap (defense-in-depth against runaway recursion)', () => {
-  // The cap is MAX_MESSAGE_LOOP_DEPTH = 16 (see session.ts). Each recursion
-  // = one backend round-trip. Backend's own decision-loop cap is 8, so in
-  // practice we expect <10. This test validates the CLI-side safety net
-  // without spinning up a full session.
-  //
-  // Strategy: exercise the cap logic directly by simulating a function
-  // that invokes itself with depth + 1 until the cap trips. This mirrors
-  // the shape of processMessageLoop without requiring a real AgentSession
-  // (which needs a vault, backend, etc.).
+describe('processMessageLoop — depth cap', () => {
+  const MAX_DEPTH = 16
 
   it('stops recursion when depth exceeds cap', async () => {
-    const MAX_DEPTH = 16
     let deepest = 0
     let stopped = false
-
     async function mockLoop(depth = 0): Promise<void> {
       if (depth > MAX_DEPTH) {
         stopped = true
         return
       }
       deepest = Math.max(deepest, depth)
-      // Simulate always-refilling queue by always recursing
       await mockLoop(depth + 1)
     }
-
     await mockLoop()
-
     expect(stopped).toBe(true)
     expect(deepest).toBe(MAX_DEPTH)
   })
 
   it('normal flow (depth stays low) never hits the cap', async () => {
-    // A typical flow: user sends message → LLM iterates ~3 times → done.
-    const MAX_DEPTH = 16
     let hit = false
-
     async function mockLoop(depth = 0, iterationsLeft = 3): Promise<void> {
       if (depth > MAX_DEPTH) {
         hit = true
@@ -175,9 +141,8 @@ describe('processMessageLoop — depth cap (defense-in-depth against runaway rec
         await mockLoop(depth + 1, iterationsLeft - 1)
       }
     }
-
     await mockLoop()
-    expect(hit).toBe(false) // Cap never tripped in normal flow
+    expect(hit).toBe(false)
   })
 })
 
@@ -187,8 +152,8 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     return c
   }
 
-  // Helper: exercise handleSSEEvent via its private access. Uses type
-  // assertion to call the private method for unit testing.
+  // Exercises the private handleSSEEvent via type-assertion — tests the
+  // dispatch routing without spinning up a full stream.
   function feedEvent(client: AgentClient, eventJson: string, callbacks: Record<string, any>): void {
     const result = {
       fullText: '',
@@ -220,7 +185,6 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
 
     expect(onClientSideToolCall).toHaveBeenCalledOnce()
     expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'add_coin', { tokens: [{ chain: 'Base', ticker: 'USDC' }] })
-    // onToolProgress still fires for verbose display consistency
     expect(onToolProgress).toHaveBeenCalled()
   })
 
@@ -248,7 +212,6 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     const client = makeClient()
     const onClientSideToolCall = vi.fn()
 
-    // Values that must NOT be treated as truthy: string "true", 1, "yes"
     for (const v of ['true', 1, 'yes', {}]) {
       feedEvent(
         client,
