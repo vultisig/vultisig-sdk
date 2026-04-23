@@ -79,9 +79,12 @@ export type BuildTronSendOptions = {
    * decoded from hex to bytes).
    */
   refBlockHash: Uint8Array
-  /** Expiration unix timestamp (ms). Default: `timestamp + 60_000`. */
+  /**
+   * Expiration unix timestamp (ms). Required — callers typically compute as
+   * `timestamp + 60_000n` at build time so replay windows stay short.
+   */
   expiration: bigint
-  /** Transaction timestamp (ms). Default: `Date.now()`. */
+  /** Transaction timestamp (ms). Required — typically `BigInt(Date.now())`. */
   timestamp: bigint
 }
 
@@ -96,16 +99,18 @@ export type BuildTrc20TransferOptions = {
   amount: bigint
   /**
    * Fee limit in SUN. Required by Tron for contract calls; typical value is
-   * ~100 TRX (100_000_000n SUN) for TRC-20 transfers.
+   * ~100 TRX (100_000_000n SUN) for TRC-20 transfers. Must be > 0n — a zero
+   * feeLimit would be silently dropped from the raw data, causing the node to
+   * reject the tx with a cryptic OUT_OF_ENERGY error.
    */
   feeLimit: bigint
   /** ref_block_bytes — see `BuildTronSendOptions`. */
   refBlockBytes: Uint8Array
   /** ref_block_hash — see `BuildTronSendOptions`. */
   refBlockHash: Uint8Array
-  /** Expiration (ms). */
+  /** Expiration (ms). Required — see `BuildTronSendOptions`. */
   expiration: bigint
-  /** Timestamp (ms). */
+  /** Timestamp (ms). Required — see `BuildTronSendOptions`. */
   timestamp: bigint
 }
 
@@ -301,6 +306,13 @@ export function buildTronSendTx(opts: BuildTronSendOptions): TronTxBuilderResult
 
 export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBuilderResult {
   validateRefs(opts.refBlockBytes, opts.refBlockHash)
+  // feeLimit must be > 0 — buildRawData silently drops a zero feeLimit, and a
+  // TRC-20 TriggerSmartContract with no fee_limit is rejected by TronGrid with
+  // OUT_OF_ENERGY. Reject loudly so the caller sees the error here, not after
+  // broadcast.
+  if (opts.feeLimit <= 0n) {
+    throw new Error(`buildTrc20TransferTx: feeLimit must be > 0, got ${opts.feeLimit}`)
+  }
   const callData = buildTrc20CallData(opts.to, opts.amount)
   const contractValue = buildTriggerSmartContract(opts.from, opts.tokenAddress, callData)
   const rawData = buildRawData({

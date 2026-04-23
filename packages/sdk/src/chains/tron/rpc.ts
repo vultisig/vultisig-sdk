@@ -112,9 +112,14 @@ export async function getTronBlockRefs(apiUrl: string, signal?: AbortSignal): Pr
   const blockTimestamp = res.block_header.raw_data.timestamp
   const blockIdHex = res.blockID
 
+  // ref_block_bytes is the low 2 bytes of the block height. Masking with
+  // 0xffff first and using unsigned right shift keeps the high byte correct
+  // even if the block height ever exceeds 2^31 (currently it's ~76M, but the
+  // protocol has no upper bound).
   const refBlockBytes = new Uint8Array(2)
-  refBlockBytes[0] = (blockNumber >> 8) & 0xff
-  refBlockBytes[1] = blockNumber & 0xff
+  const low16 = blockNumber & 0xffff
+  refBlockBytes[0] = (low16 >>> 8) & 0xff
+  refBlockBytes[1] = low16 & 0xff
 
   // `ref_block_hash` is bytes 8..16 of the block id.
   if (blockIdHex.length < 32) {

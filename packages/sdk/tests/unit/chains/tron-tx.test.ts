@@ -141,7 +141,7 @@ describe('tron / buildTrc20CallData', () => {
 })
 
 describe('tron / buildTrc20TransferTx', () => {
-  it('includes the fee_limit field (tag 0x90 0x01)', () => {
+  it('includes the fee_limit field (tag 0x9001 + varint value)', () => {
     const tx = buildTrc20TransferTx({
       from: FROM,
       to: TO,
@@ -153,7 +153,26 @@ describe('tron / buildTrc20TransferTx', () => {
       expiration: 1_700_000_000_000n,
       timestamp: 1_699_999_940_000n,
     })
-    // fee_limit is field 18 (tag = 18<<3 | 0 = 144 = 0x90, encoded as 0x9001).
-    expect(tx.unsignedRawHex).toContain('9001')
+    // fee_limit: tag = 18<<3|0 = 144 = 0x90, encoded varint 0x9001;
+    // value 100_000_000 = 0x05f5e100, varint = 80 c2 d7 2f.
+    // Assert the exact contiguous subsequence so unrelated-byte overlap can't
+    // mask a missing or corrupted feeLimit field.
+    expect(tx.unsignedRawHex).toContain('900180c2d72f')
+  })
+
+  it('rejects feeLimit === 0n (silent-drop would produce an OUT_OF_ENERGY tx)', () => {
+    expect(() =>
+      buildTrc20TransferTx({
+        from: FROM,
+        to: TO,
+        tokenAddress: USDT,
+        amount: 1n,
+        feeLimit: 0n, // bug scenario
+        refBlockBytes: REF_BLOCK_BYTES,
+        refBlockHash: REF_BLOCK_HASH,
+        expiration: 1_700_000_000_000n,
+        timestamp: 1_699_999_940_000n,
+      })
+    ).toThrow(/feeLimit must be > 0/)
   })
 })
