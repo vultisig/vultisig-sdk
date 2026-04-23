@@ -141,7 +141,7 @@ function hexToBytes(hex: string): Uint8Array {
  */
 export function tronAddressToBytes(address: string): Uint8Array {
   // `bs58check` v4 published both named and default exports; handle both.
-   
+
   const mod = bs58check as unknown as { decode?: (s: string) => Uint8Array } & {
     default?: { decode: (s: string) => Uint8Array }
   }
@@ -170,7 +170,7 @@ function buildTransferContract(from: string, to: string, amount: bigint): Uint8A
   )
 }
 
-function buildTrc20CallData(to: string, amount: bigint): Uint8Array {
+export function buildTrc20CallData(to: string, amount: bigint): Uint8Array {
   // ERC-20 `transfer(address,uint256)` selector is 0xa9059cbb.
   const SELECTOR = new Uint8Array([0xa9, 0x05, 0x9c, 0xbb])
 
@@ -326,6 +326,3 @@ export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBui
 
   return { signingHashHex, unsignedRawHex, finalize }
 }
-
-// Re-exported for tests / app adapters that want the raw call-data helper.
-export { buildTrc20CallData }

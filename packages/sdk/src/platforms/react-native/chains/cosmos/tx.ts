@@ -395,12 +395,3 @@ function finalizeCosmosTx(
   const txHashHex = bytesToHex(sha256(txRawBytes)).toUpperCase()
   return { txRawBytes, txBytesBase64, txHashHex }
 }
-
-// Exports for parity testing
-export {
-  buildBankMsgSend as _buildBankMsgSend,
-  buildCw20TransferMsg as _buildCw20TransferMsg,
-  buildMsgExecuteContract as _buildMsgExecuteContract,
-  buildThorMsgDeposit as _buildThorMsgDeposit,
-  buildThorMsgSend as _buildThorMsgSend,
-}

@@ -55,7 +55,11 @@ const evmChainIds: Record<EvmChain, number> = {
   CronosChain: 25,
 }
 
-export const getEvmChainId = (chain: EvmChain): number => evmChainIds[chain]
+/**
+ * Returns the numeric EVM chainId (e.g. 1 for Ethereum). For the hex-string
+ * form, use `@vultisig/core-chain/chains/evm/chainInfo#getEvmChainId`.
+ */
+export const getEvmNumericChainId = (chain: EvmChain): number => evmChainIds[chain]
 
 // ---------------------------------------------------------------------------
 // Types
@@ -98,7 +102,7 @@ export type BuildEvmSendOptions = {
   valueWei: bigint
   nonce: number
   gasLimit: bigint
-  /** Optional override for the on-chain chainId (defaults to `getEvmChainId(chain)`). */
+  /** Optional override for the on-chain chainId (defaults to `getEvmNumericChainId(chain)`). */
   chainId?: number
 } & FeeFields
 
@@ -181,7 +185,7 @@ export function buildEvmSendTx(opts: BuildEvmSendOptions): EvmTxBuilderResult {
  * to it after encoding the appropriate calldata.
  */
 export function buildEvmContractCallTx(opts: BuildEvmContractCallOptions): EvmTxBuilderResult {
-  const chainId = opts.chainId ?? getEvmChainId(opts.chain)
+  const chainId = opts.chainId ?? getEvmNumericChainId(opts.chain)
   const value = opts.valueWei ?? 0n
   const isLegacy = opts.gasPrice !== undefined
 

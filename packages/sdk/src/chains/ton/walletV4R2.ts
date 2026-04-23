@@ -12,8 +12,8 @@
  * implementation — any difference means the derived address changes and
  * funds stop flowing.
  */
-import type { Cell, StateInit } from '@ton/core'
-import { Address, beginCell, contractAddress, storeStateInit } from '@ton/core'
+import type { StateInit } from '@ton/core'
+import { Address, beginCell, Cell, contractAddress, storeStateInit } from '@ton/core'
 
 /**
  * Wallet V4R2 compiled code cell, base64. This is the exact string baked
@@ -27,20 +27,11 @@ const WALLET_V4R2_CODE_BASE64 =
 export const TON_V4R2_SUB_WALLET_ID = 698983191
 
 /**
- * Lazily decode and cache the V4R2 code cell. `Cell.fromBoc` runs the cell
- * parser once and returns the same object on subsequent calls, which means
- * `contractAddress` and `storeStateInit` see the same instance (avoids
- * O(N) recomputation of the cell's repr hash across tx builds).
+ * Decoded V4R2 code cell. Parsed once at module-init so `contractAddress` and
+ * `storeStateInit` see the same instance across tx builds (avoids recomputing
+ * the cell's repr hash).
  */
-let cachedV4R2Code: Cell | null = null
-function getV4R2Code(): Cell {
-  if (!cachedV4R2Code) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires -- lazy require to keep Cell parse off module-init
-    const core = require('@ton/core') as typeof import('@ton/core')
-    cachedV4R2Code = core.Cell.fromBoc(Buffer.from(WALLET_V4R2_CODE_BASE64, 'base64'))[0]
-  }
-  return cachedV4R2Code
-}
+const WALLET_V4R2_CODE_CELL = Cell.fromBoc(Buffer.from(WALLET_V4R2_CODE_BASE64, 'base64'))[0]
 
 /**
  * Build the V4R2 data cell:
@@ -52,12 +43,7 @@ function buildV4R2DataCell(publicKey: Uint8Array, walletId: number): Cell {
   if (publicKey.length !== 32) {
     throw new Error(`TON Ed25519 pubkey must be 32 bytes, got ${publicKey.length}`)
   }
-  return beginCell()
-    .storeUint(0, 32)
-    .storeUint(walletId, 32)
-    .storeBuffer(Buffer.from(publicKey))
-    .storeBit(0)
-    .endCell()
+  return beginCell().storeUint(0, 32).storeUint(walletId, 32).storeBuffer(Buffer.from(publicKey)).storeBit(0).endCell()
 }
 
 export type TonV4R2Wallet = {
@@ -81,9 +67,8 @@ export function buildV4R2Wallet(opts: {
 }): TonV4R2Wallet {
   const workchain = opts.workchain ?? 0
   const walletId = opts.walletId ?? TON_V4R2_SUB_WALLET_ID + workchain
-  const code = getV4R2Code()
   const data = buildV4R2DataCell(opts.publicKeyEd25519, walletId)
-  const init: StateInit = { code, data }
+  const init: StateInit = { code: WALLET_V4R2_CODE_CELL, data }
   const address = contractAddress(workchain, init)
   return {
     address,

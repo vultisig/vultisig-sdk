@@ -13,7 +13,7 @@ export {
   buildEvmSendTx,
   encodeErc20Approve,
   encodeErc20Transfer,
-  getEvmChainId,
+  getEvmNumericChainId,
 } from './tx'
 
 // RPC helpers — accept explicit `rpcUrl` so consumers keep control

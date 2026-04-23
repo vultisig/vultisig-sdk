@@ -18,7 +18,7 @@ import { EvmChain } from '@vultisig/core-chain/Chain'
 import { memoize } from '@vultisig/lib-utils/memoize'
 import { createPublicClient, erc20Abi, http, type PublicClient } from 'viem'
 
-import { getEvmChainId } from './tx'
+import { getEvmNumericChainId } from './tx'
 
 const clientCache = memoize(
   (rpcUrl: string, _chainId: number): PublicClient =>
@@ -31,7 +31,7 @@ const clientCache = memoize(
     }) as unknown as PublicClient
 )
 
-const getClient = (chain: EvmChain, rpcUrl: string): PublicClient => clientCache(rpcUrl, getEvmChainId(chain))
+const getClient = (chain: EvmChain, rpcUrl: string): PublicClient => clientCache(rpcUrl, getEvmNumericChainId(chain))
 
 // ---------------------------------------------------------------------------
 // Public helpers
