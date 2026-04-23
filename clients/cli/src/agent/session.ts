@@ -42,7 +42,7 @@ import { PASSWORD_REQUIRED_ACTIONS } from './types'
  * `sign_tx` is deliberately absent — it has its own dedicated trigger
  * via the tx_ready SSE channel (see onTxReady handler below).
  */
-const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
+export const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
   sign_typed_data: 'sign_typed_data',
   add_coin: 'add_coin',
   remove_coin: 'remove_coin',
@@ -58,12 +58,6 @@ const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
   // plugin_install / create_policy / delete_policy: also mobile-only
   // client-side tools. Same treatment.
 }
-
-/**
- * Exported for tests — asserting the registry's tool-name membership
- * against the backend's canonical list is a drift guard.
- */
-export const __clientSideToolDispatchForTests__ = CLIENT_SIDE_TOOL_DISPATCH
 
 /**
  * Cap on `processMessageLoop` recursion depth. Each iteration is one

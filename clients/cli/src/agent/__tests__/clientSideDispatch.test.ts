@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
-import { __clientSideToolDispatchForTests__ as registry, actionResultToRecentAction } from '../session'
+import { CLIENT_SIDE_TOOL_DISPATCH as registry, actionResultToRecentAction } from '../session'
 import type { ActionResult } from '../types'
 
 describe('actionResultToRecentAction', () => {
