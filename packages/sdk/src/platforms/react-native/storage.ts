@@ -55,7 +55,10 @@ export class ReactNativeStorage implements Storage {
   async clear(): Promise<void> {
     try {
       const keys = await this.list()
-      await AsyncStorage.removeMany(keys.map(prefixed))
+      // `multiRemove` (not `removeMany` — which does not exist on
+      // @react-native-async-storage/async-storage) takes a plain string[]
+      // and removes all entries in one round-trip.
+      await AsyncStorage.multiRemove(keys.map(prefixed))
     } catch (error) {
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }
