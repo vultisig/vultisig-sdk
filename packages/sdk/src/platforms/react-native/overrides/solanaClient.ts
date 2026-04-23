@@ -29,8 +29,32 @@ const loadClient = (): Promise<Connection> => {
   return clientPromise
 }
 
+// Set of non-method property accesses that must return a non-function value
+// (or undefined) to avoid the proxy being mistaken for a thenable / iterable.
+// Returning a function for `then` here would make the proxy thenable: any code
+// path that does `await proxy` or `Promise.resolve(proxy)` would call `.then`,
+// which would in turn `.then` on the returned function's result (another
+// lazy-call wrapper), causing an unbounded chain.
+const NON_METHOD_PROPS = new Set<string | symbol>([
+  'then',
+  'catch',
+  'finally',
+  'toJSON',
+  'toString',
+  'valueOf',
+  Symbol.toPrimitive,
+  Symbol.toStringTag,
+  Symbol.iterator,
+  Symbol.asyncIterator,
+])
+
 const solanaClientProxy = new Proxy({} as Connection, {
   get(_target, prop) {
+    // Short-circuit symbol accesses + known non-method properties: returning a
+    // function here would make the proxy accidentally thenable / iterable.
+    if (typeof prop === 'symbol' || NON_METHOD_PROPS.has(prop)) {
+      return undefined
+    }
     // Every real Connection method is async; forward via lazy client load.
     return (...args: unknown[]) =>
       loadClient().then(client => {

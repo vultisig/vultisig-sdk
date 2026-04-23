@@ -28,8 +28,27 @@ const loadClient = (): Promise<SuiJsonRpcClient> => {
   return clientPromise
 }
 
+// Same rationale as solanaClient: returning a function for `then` would make
+// the proxy thenable and cause `await proxy` to hang / recurse. Symbol probes
+// (Symbol.toPrimitive, Symbol.iterator, etc) similarly must return undefined.
+const NON_METHOD_PROPS = new Set<string | symbol>([
+  'then',
+  'catch',
+  'finally',
+  'toJSON',
+  'toString',
+  'valueOf',
+  Symbol.toPrimitive,
+  Symbol.toStringTag,
+  Symbol.iterator,
+  Symbol.asyncIterator,
+])
+
 const suiClientProxy = new Proxy({} as SuiJsonRpcClient, {
   get(_target, prop) {
+    if (typeof prop === 'symbol' || NON_METHOD_PROPS.has(prop)) {
+      return undefined
+    }
     return (...args: unknown[]) =>
       loadClient().then(client => {
         const fn = (client as unknown as Record<string | symbol, unknown>)[prop]
