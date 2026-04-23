@@ -476,6 +476,28 @@ function assembleP2pkhTx(
   return concat(...parts)
 }
 
+/**
+ * Serialize the BIP141 "base" (witness-stripped) form of a P2WPKH tx:
+ *   version(4) || inputs || outputs || locktime(4)
+ * This is what the tx's **txid** is hashed over — NOT the broadcastable form
+ * (which includes the segwit marker + flag + witness stack, and hashes to
+ * the wtxid). Callers need this separately to compute a txid that matches
+ * block-explorer and mempool lookups.
+ */
+function serializeP2wpkhBaseTx(inputs: UtxoInput[], outputsWithCount: Uint8Array): Uint8Array {
+  const parts: Uint8Array[] = [
+    writeU32LE(2), // version=2
+    writeVarInt(inputs.length),
+  ]
+  for (const input of inputs) {
+    parts.push(reverseHexBytes(input.hash), writeU32LE(input.index))
+    parts.push(writeVarInt(0)) // empty scriptSig for P2WPKH
+    parts.push(writeU32LE(0xffffffff))
+  }
+  parts.push(outputsWithCount, writeU32LE(0)) // locktime=0
+  return concat(...parts)
+}
+
 function assembleP2wpkhTx(
   inputs: UtxoInput[],
   signatures: Uint8Array[],
@@ -691,19 +713,28 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
     })
 
     let rawTx: Uint8Array
+    // txid is computed from the BIP141 "base" form — version || inputs ||
+    // outputs || locktime — with no segwit marker, flag, or witness stack.
+    // For P2PKH / BCH / Zcash the broadcastable bytes are already in that
+    // shape, so we just hash `rawTx`. For P2WPKH we must serialize the
+    // witness-stripped form explicitly; using the broadcastable bytes would
+    // yield the wtxid, which callers can't look up on block explorers.
+    let baseTxForTxid: Uint8Array
     if (isZcash) {
       rawTx = assembleZcashTx(inputs, sigs, opts.compressedPubKey, outputsWithCount)
+      baseTxForTxid = rawTx
     } else if (spec.scriptType === 'p2pkh') {
       rawTx = assembleP2pkhTx(inputs, sigs, opts.compressedPubKey, outputsWithCount, isBCH ? 0x41 : 0x01)
+      baseTxForTxid = rawTx
     } else {
       rawTx = assembleP2wpkhTx(inputs, sigs, opts.compressedPubKey, outputsWithCount)
+      baseTxForTxid = serializeP2wpkhBaseTx(inputs, outputsWithCount)
     }
     const rawTxHex = bytesToHex(rawTx)
-    // txid = reverseHex(sha256d(stripped tx)). For segwit, stripped excludes
-    // witness data; callers that need the txid can derive it by re-running the
-    // tx builder without the witness — for now we expose the full sha256d of
-    // the broadcastable bytes, which callers can use as a broadcast reference.
-    const txHashHex = bytesToHex(doubleSha256(rawTx).reverse())
+    // txid = reverseHex(sha256d(baseTx)) per BIP141. The reverse is because
+    // Bitcoin displays txids in "big-endian" byte order but hashes them in
+    // little-endian internally.
+    const txHashHex = bytesToHex(doubleSha256(baseTxForTxid).reverse())
     return { rawTxHex, txHashHex }
   }
 
