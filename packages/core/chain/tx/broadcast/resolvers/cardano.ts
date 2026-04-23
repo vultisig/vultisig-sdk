@@ -5,6 +5,7 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { submitCardanoCbor } from '../../../chains/cardano/submit/submitCardanoCbor'
 
 import { BroadcastTxResolver } from '../resolver'
+import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 import { selectEncodedBytes } from './utxo'
 
 /**
@@ -41,5 +42,7 @@ export const broadcastCardanoTx: BroadcastTxResolver<
     return null
   }
 
-  throw new Error(`Failed to broadcast transaction: ${error}`)
+  const broadcastError = new Error(`Failed to broadcast transaction: ${error}`)
+  await verifyBroadcastByHash({ chain, tx, error: broadcastError })
+  return null
 }
