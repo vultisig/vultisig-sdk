@@ -11,7 +11,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     setItem: async () => {},
     removeItem: async () => {},
     getAllKeys: async () => [],
-    removeMany: async () => {},
+    multiRemove: async () => {},
     clear: async () => {},
   },
 }))

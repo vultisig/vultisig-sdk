@@ -45,9 +45,7 @@ describe('fastVaultSign — ECDSA recovery_id handling', () => {
       // no recovery_id — this is the bug scenario
     } as never)
 
-    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(
-      /recovery_id/
-    )
+    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/recovery_id/)
   })
 
   it('throws when recovery_id is an empty string', async () => {
@@ -61,9 +59,7 @@ describe('fastVaultSign — ECDSA recovery_id handling', () => {
       recovery_id: '',
     } as never)
 
-    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(
-      /recovery_id/
-    )
+    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/recovery_id/)
   })
 
   it('normalises single-char recovery_id to two hex chars', async () => {
@@ -93,5 +89,33 @@ describe('fastVaultSign — ECDSA recovery_id handling', () => {
 
     const sig = await fastVaultSign({ ...BASE_OPTS, isEcdsa: false })
     expect(sig).toBe('aa'.repeat(32) + 'bb'.repeat(32))
+  })
+
+  it('rejects non-hex recovery_id (would silently coerce to NaN otherwise)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 }))
+    )
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'aa'.repeat(32),
+      s: 'bb'.repeat(32),
+      recovery_id: 'xy', // non-hex — must not fall through to `r || s || 'xy'`
+    } as never)
+
+    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/recovery_id/)
+  })
+
+  it('rejects out-of-range recovery_id (must be 0-3)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 }))
+    )
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'aa'.repeat(32),
+      s: 'bb'.repeat(32),
+      recovery_id: '04', // ECDSA recovery_id is always 0-3
+    } as never)
+
+    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/recovery_id/)
   })
 })

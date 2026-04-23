@@ -91,11 +91,14 @@ export async function fastVaultSign(opts: FastVaultSignOptions): Promise<string>
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err))
       const msg = lastErr.message.toLowerCase()
+      // Use word-boundary regex for HTTP 5xx so error strings like
+      // "port 5001 closed" or "txid ...5000..." don't accidentally match.
+      const has5xx = /\b5\d{2}\b/.test(msg)
       const retryable =
         msg.includes('timeout') ||
         msg.includes('deadline') ||
         msg.includes('unreachable') ||
-        msg.includes('500') ||
+        has5xx ||
         msg.includes('keysign failed')
       if (attempt < maxAttempts && retryable) {
         await sleep(2000)
@@ -177,14 +180,23 @@ async function fastVaultSignAttempt(opts: FastVaultSignOptions): Promise<string>
     // would produce a signature that recovers the wrong signer and would
     // be rejected by the chain (or credit funds to a different address),
     // so fail loud here instead.
-    if (!sig.recovery_id || sig.recovery_id.length === 0) {
+    // Validate recovery_id is 1-2 hex chars parsing to 0-3. A silent fallback
+    // to '00' (or a non-hex string being coerced) would produce a signature
+    // that recovers the wrong signer — which on EVM credits funds to a
+    // different address.
+    const rawRid = sig.recovery_id
+    if (!rawRid || typeof rawRid !== 'string' || !/^[0-9a-fA-F]{1,2}$/.test(rawRid)) {
       throw new Error(
-        'fastVaultSign: MPC engine returned ECDSA signature without recovery_id — ' +
+        'fastVaultSign: MPC engine returned ECDSA signature without a valid recovery_id — ' +
           'refusing to fall back to v=0 (would produce a tx that recovers the wrong signer)'
       )
     }
+    const ridNum = parseInt(rawRid, 16)
+    if (!Number.isInteger(ridNum) || ridNum < 0 || ridNum > 3) {
+      throw new Error(`fastVaultSign: recovery_id out of range (got ${rawRid}, expected 0-3)`)
+    }
     // Normalise single-char recovery_id to two hex chars (e.g. "0" → "00", "1" → "01").
-    const rid = sig.recovery_id.length === 1 ? '0' + sig.recovery_id : sig.recovery_id
+    const rid = rawRid.length === 1 ? '0' + rawRid : rawRid
     return sig.r + sig.s + rid
   }
   return sig.r + sig.s
