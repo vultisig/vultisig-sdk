@@ -27,17 +27,13 @@ describe('decodeAddressToPubKeyHash — CashAddr checksum', () => {
     // no longer produces 0. Before the fix, this decoded to random bytes
     // and looked like a valid P2PKH.
     const tampered = 'bitcoincash:qr95sy3j9xwd2ap32xkykttr4cvcu7as4y0qverfux'
-    expect(() => decodeAddressToPubKeyHash(tampered, 'Bitcoin-Cash')).toThrow(
-      /Cannot decode/
-    )
+    expect(() => decodeAddressToPubKeyHash(tampered, 'Bitcoin-Cash')).toThrow(/Cannot decode/)
   })
 
   it('rejects a CashAddr with mid-string transposition (valid base32, bad checksum)', () => {
     // Swap two mid-payload symbols: `y0q` → `0yq`.
     const transposed = 'bitcoincash:qr95sy3j9xwd2ap32xkykttr4cvcu7as40yqverfuy'
-    expect(() => decodeAddressToPubKeyHash(transposed, 'Bitcoin-Cash')).toThrow(
-      /Cannot decode/
-    )
+    expect(() => decodeAddressToPubKeyHash(transposed, 'Bitcoin-Cash')).toThrow(/Cannot decode/)
   })
 
   it('rejects a CashAddr with an out-of-alphabet character', () => {

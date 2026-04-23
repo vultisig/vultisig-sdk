@@ -19,12 +19,8 @@ describe('configureRuntime — URL validation', () => {
 
   it('rejects a non-http(s) scheme', async () => {
     const { configureRuntime } = await import('../../../../src/platforms/react-native/runtime')
-    expect(() => configureRuntime({ vultiServerUrl: 'javascript:alert(1)' })).toThrow(
-      /http\(s\)|must be http/
-    )
-    expect(() => configureRuntime({ vultiServerUrl: 'file:///tmp/evil' })).toThrow(
-      /http\(s\)|must be http/
-    )
+    expect(() => configureRuntime({ vultiServerUrl: 'javascript:alert(1)' })).toThrow(/http\(s\)|must be http/)
+    expect(() => configureRuntime({ vultiServerUrl: 'file:///tmp/evil' })).toThrow(/http\(s\)|must be http/)
   })
 
   it('rejects a string that is not a URL at all', async () => {
@@ -35,9 +31,8 @@ describe('configureRuntime — URL validation', () => {
   })
 
   it('accepts well-formed http and https URLs', async () => {
-    const { configureRuntime, getConfiguredVultiServerUrl, getConfiguredRelayUrl } = await import(
-      '../../../../src/platforms/react-native/runtime'
-    )
+    const { configureRuntime, getConfiguredVultiServerUrl, getConfiguredRelayUrl } =
+      await import('../../../../src/platforms/react-native/runtime')
     expect(() =>
       configureRuntime({
         vultiServerUrl: 'https://api.vultisig.com/vault',

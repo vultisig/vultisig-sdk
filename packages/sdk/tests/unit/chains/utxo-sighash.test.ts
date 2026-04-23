@@ -6,8 +6,26 @@
  * offline via bitcoinjs-lib's `hashForWitnessV0` — any divergence means the
  * signed raw tx changes and funds stop flowing.
  *
- * Fixture regeneration script: `packages/sdk/gen-utxo-fixtures.cjs` (not
- * checked in — see reviewer note in PR #306).
+ * Fixture regeneration recipe (run in a throwaway Node env with
+ * `npm i bitcoinjs-lib` installed):
+ *
+ *   const { Transaction } = require('bitcoinjs-lib')
+ *   const tx = new Transaction()
+ *   tx.version = 2
+ *   // addInput(hash, index) — hash is little-endian Buffer
+ *   tx.addInput(Buffer.from('11'.repeat(32), 'hex').reverse(), 0)
+ *   tx.addInput(Buffer.from('22'.repeat(32), 'hex').reverse(), 1)
+ *   // addOutput(scriptPubKey, value)
+ *   tx.addOutput(Buffer.from('0014' + '22'.repeat(20), 'hex'), 120_000n)
+ *   tx.addOutput(Buffer.from('0014' + '33'.repeat(20), 'hex'), 79_000n)
+ *   const scriptCode = Buffer.from('76a914' + '11'.repeat(20) + '88ac', 'hex')
+ *   const h0 = tx.hashForWitnessV0(0, scriptCode, 100_000n, Transaction.SIGHASH_ALL)
+ *   const h1 = tx.hashForWitnessV0(1, scriptCode, 100_000n, Transaction.SIGHASH_ALL)
+ *   // h0, h1 are the reference sighashes; paste as EXPECTED_* constants below.
+ *
+ * If these vectors ever fail, re-run the recipe rather than editing the
+ * expected values blindly — the hand-rolled BIP143 in src/chains/utxo/tx.ts
+ * must match bitcoinjs-lib byte-for-byte for funds to flow.
  */
 import { describe, expect, it } from 'vitest'
 

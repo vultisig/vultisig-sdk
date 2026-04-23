@@ -19,7 +19,11 @@ import { buildUtxoSendTx } from '../../../src/chains/utxo/tx'
 // Compressed pubkey for the throwaway hash-target below (arbitrary, doesn't
 // need to match the signatures — we only want the assembled raw bytes).
 const COMPRESSED_PUBKEY = Uint8Array.from(
-  '02'.repeat(1).concat('aa'.repeat(32)).match(/.{2}/g)!.map(b => parseInt(b, 16))
+  '02'
+    .repeat(1)
+    .concat('aa'.repeat(32))
+    .match(/.{2}/g)!
+    .map(b => parseInt(b, 16))
 )
 
 // Deterministic sig bytes — 64 chars r + 64 chars s + 2 chars v. DER encoding

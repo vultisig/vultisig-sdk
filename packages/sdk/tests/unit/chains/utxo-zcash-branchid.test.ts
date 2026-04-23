@@ -10,9 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { buildUtxoSendTx, ZCASH_BRANCH_ID_NU6_1 } from '../../../src/chains/utxo'
 
 const COMPRESSED_PUBKEY = Uint8Array.from(
-  '02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'.match(/.{2}/g)!.map(b =>
-    parseInt(b, 16)
-  )
+  '02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'.match(/.{2}/g)!.map(b => parseInt(b, 16))
 )
 
 describe('Zcash — branchId parametrization', () => {
@@ -29,9 +27,7 @@ describe('Zcash — branchId parametrization', () => {
       fromAddress: 't1PoLLLwEcVhqMBhk53tANtSepnPXAQJkPM',
       toAddress: 't1PoLLLwEcVhqMBhk53tANtSepnPXAQJkPM',
       amount: 100_000n,
-      utxos: [
-        { hash: 'ff'.repeat(32), index: 0, value: 1_000_000n },
-      ],
+      utxos: [{ hash: 'ff'.repeat(32), index: 0, value: 1_000_000n }],
       feeRate: 1,
       compressedPubKey: COMPRESSED_PUBKEY,
     }
@@ -46,9 +42,7 @@ describe('Zcash — branchId parametrization', () => {
       fromAddress: 't1PoLLLwEcVhqMBhk53tANtSepnPXAQJkPM',
       toAddress: 't1PoLLLwEcVhqMBhk53tANtSepnPXAQJkPM',
       amount: 100_000n,
-      utxos: [
-        { hash: 'ff'.repeat(32), index: 0, value: 1_000_000n },
-      ],
+      utxos: [{ hash: 'ff'.repeat(32), index: 0, value: 1_000_000n }],
       feeRate: 1,
       compressedPubKey: COMPRESSED_PUBKEY,
     }
