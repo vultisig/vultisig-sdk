@@ -177,9 +177,7 @@ export async function getMaxSendAmountFromKeys(...args: unknown[]) {
 
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/contractCall')
-  return mod.prepareContractCallTxFromKeys(
-    ...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>)
-  )
+  return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
 }
 
 export async function prepareSendTxFromKeys(...args: unknown[]) {
@@ -189,16 +187,12 @@ export async function prepareSendTxFromKeys(...args: unknown[]) {
 
 export async function prepareSignAminoTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/cosmos')
-  return mod.prepareSignAminoTxFromKeys(
-    ...(args as Parameters<typeof mod.prepareSignAminoTxFromKeys>)
-  )
+  return mod.prepareSignAminoTxFromKeys(...(args as Parameters<typeof mod.prepareSignAminoTxFromKeys>))
 }
 
 export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/cosmos')
-  return mod.prepareSignDirectTxFromKeys(
-    ...(args as Parameters<typeof mod.prepareSignDirectTxFromKeys>)
-  )
+  return mod.prepareSignDirectTxFromKeys(...(args as Parameters<typeof mod.prepareSignDirectTxFromKeys>))
 }
 
 export async function prepareSwapTxFromKeys(...args: unknown[]) {

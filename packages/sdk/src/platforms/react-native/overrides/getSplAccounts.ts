@@ -7,10 +7,7 @@
 // `@solana/web3.js` inside the async body so the dep only evaluates when
 // the function is actually invoked.
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-import {
-  splTokenProgramId,
-  token2022ProgramId,
-} from '@vultisig/core-chain/chains/solana/config'
+import { splTokenProgramId, token2022ProgramId } from '@vultisig/core-chain/chains/solana/config'
 
 export const getSplAccounts = async (address: string) => {
   const client = getSolanaClient()

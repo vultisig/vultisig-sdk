@@ -7,12 +7,8 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildTrc20CallData,
-  buildTrc20TransferTx,
-  buildTronSendTx,
-} from '../../../src/chains/tron/tx'
 import { encodeInt64Varint, encodeVarint } from '../../../src/chains/tron/proto'
+import { buildTrc20CallData, buildTrc20TransferTx, buildTronSendTx } from '../../../src/chains/tron/tx'
 
 // Valid Tron base58check addresses (0x41 || 20-byte payload, bs58check-encoded).
 const FROM = 'T9yED5xMV5ARV98BexN97aLZ1UUq7eKSxm'

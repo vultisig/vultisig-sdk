@@ -10,19 +10,16 @@
 // Public surface mirrors core exactly: a single
 // `refineSolanaChainSpecific(input): Promise<SolanaSpecific>` export.
 import { create } from '@bufbuild/protobuf'
+import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
-import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { getPreSigningOutput } from '@vultisig/core-mpc/keysign/preSigningOutput'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
+import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { SolanaSpecific } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import {
-  KeysignPayload,
-  KeysignPayloadSchema,
-} from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { WalletCore } from '@trustwallet/wallet-core'
+import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 const rentExemptionAccountSize = 165
 const microLamportsPerLamport = 1_000_000n
@@ -71,9 +68,7 @@ export const refineSolanaChainSpecific = async ({
 
   const getRentExemptionFee = async () => {
     if (!isFeeCoin(coin) && !chainSpecific.toTokenAssociatedAddress) {
-      const rentExemption = await client.getMinimumBalanceForRentExemption(
-        rentExemptionAccountSize
-      )
+      const rentExemption = await client.getMinimumBalanceForRentExemption(rentExemptionAccountSize)
       return BigInt(rentExemption)
     }
 
@@ -83,9 +78,7 @@ export const refineSolanaChainSpecific = async ({
   const baseFee = await getBaseFee()
   const rentExemptionFee = await getRentExemptionFee()
 
-  const priorityFeeAmount =
-    (BigInt(priorityFeePrice) * BigInt(solanaConfig.priorityFeeLimit)) /
-    microLamportsPerLamport
+  const priorityFeeAmount = (BigInt(priorityFeePrice) * BigInt(solanaConfig.priorityFeeLimit)) / microLamportsPerLamport
 
   const totalFee = baseFee + rentExemptionFee + priorityFeeAmount
 

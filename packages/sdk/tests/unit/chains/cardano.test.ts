@@ -40,11 +40,7 @@ describe('cardano / buildCardanoWitnessSet', () => {
     //     82                   array(2)
     //       5820 <32*11>       bytes(32)
     //       5840 <64*22>       bytes(64)
-    const expected =
-      'a10081825820' +
-      '11'.repeat(32) +
-      '5840' +
-      '22'.repeat(64)
+    const expected = 'a10081825820' + '11'.repeat(32) + '5840' + '22'.repeat(64)
 
     expect(bytesToHex(witness)).toBe(expected)
   })
@@ -68,12 +64,7 @@ describe('cardano / buildSignedCardanoTx', () => {
     //   <witness set>             a1 00 81 82 5820 <pk> 5840 <sig>
     //   f5                        true
     //   f6                        null
-    const expected =
-      '84' +
-      MINIMAL_BODY_HEX +
-      'a10081825820' + '11'.repeat(32) + '5840' + '22'.repeat(64) +
-      'f5' +
-      'f6'
+    const expected = '84' + MINIMAL_BODY_HEX + 'a10081825820' + '11'.repeat(32) + '5840' + '22'.repeat(64) + 'f5' + 'f6'
 
     expect(bytesToHex(signed)).toBe(expected)
   })

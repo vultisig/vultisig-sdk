@@ -36,8 +36,7 @@ import { encode as xrplEncode, encodeForSigning } from 'ripple-binary-codec'
 // secp256k1 low-S normalization (XRP requires canonical signatures)
 // ---------------------------------------------------------------------------
 
-const SECP256K1_ORDER =
-  0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
+const SECP256K1_ORDER = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
 const SECP256K1_HALF_ORDER = SECP256K1_ORDER / 2n
 
 // ---------------------------------------------------------------------------
@@ -77,11 +76,7 @@ function sha512Half(data: Uint8Array): Uint8Array {
 // BIP32 child pubkey derivation (identical path to cosmos/tx.ts)
 // ---------------------------------------------------------------------------
 
-function deriveChildPubkey(
-  compressedPubKeyHex: string,
-  hexChainCode: string,
-  path: number[]
-): Uint8Array {
+function deriveChildPubkey(compressedPubKeyHex: string, hexChainCode: string, path: number[]): Uint8Array {
   let pubKeyBytes = hexToBytes(compressedPubKeyHex)
   if (!hexChainCode || hexChainCode.length === 0) return pubKeyBytes
   let chainCode = hexToBytes(hexChainCode)
@@ -118,15 +113,8 @@ function deriveChildPubkey(
  *
  * Address = base58check(0x00 || ripemd160(sha256(pubkey))).
  */
-export function deriveXrpAddress(
-  compressedPubKeyHex: string,
-  hexChainCode = ''
-): string {
-  const pubKeyBytes = deriveChildPubkey(
-    compressedPubKeyHex,
-    hexChainCode,
-    [44, 144, 0, 0, 0]
-  )
+export function deriveXrpAddress(compressedPubKeyHex: string, hexChainCode = ''): string {
+  const pubKeyBytes = deriveChildPubkey(compressedPubKeyHex, hexChainCode, [44, 144, 0, 0, 0])
   const sha = sha256(pubKeyBytes)
   const accountID = ripemd160(sha)
   return encodeAccountID(accountID)
@@ -137,15 +125,8 @@ export function deriveXrpAddress(
  * field of an XRP Payment transaction. Uses the same BIP32 path as
  * deriveXrpAddress.
  */
-export function deriveXrpPubkey(
-  compressedPubKeyHex: string,
-  hexChainCode = ''
-): Uint8Array {
-  return deriveChildPubkey(
-    compressedPubKeyHex,
-    hexChainCode,
-    [44, 144, 0, 0, 0]
-  )
+export function deriveXrpPubkey(compressedPubKeyHex: string, hexChainCode = ''): Uint8Array {
+  return deriveChildPubkey(compressedPubKeyHex, hexChainCode, [44, 144, 0, 0, 0])
 }
 
 // ---------------------------------------------------------------------------
@@ -253,14 +234,11 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
     const sHexRaw = sigHex.substring(64, 128)
     // Normalize S to low-S form (BIP-62 / XRP canonical sig rule)
     const sBI = BigInt('0x' + sHexRaw)
-    const normalizedS =
-      sBI > SECP256K1_HALF_ORDER ? SECP256K1_ORDER - sBI : sBI
+    const normalizedS = sBI > SECP256K1_HALF_ORDER ? SECP256K1_ORDER - sBI : sBI
     const sHex = normalizedS.toString(16).padStart(64, '0')
     const derSig = derEncode(rHex, sHex)
     const signedTx: XrpPaymentTx = { ...tx, TxnSignature: derSig.toUpperCase() }
-    const signedBlobHex = xrplEncode(
-      signedTx as unknown as Parameters<typeof xrplEncode>[0]
-    )
+    const signedBlobHex = xrplEncode(signedTx as unknown as Parameters<typeof xrplEncode>[0])
     const txHash = getRippleTxHash(signedBlobHex)
     return { signedBlobHex, txHash, signedTx }
   }
@@ -324,14 +302,7 @@ function derEncode(rHex: string, sHex: string): string {
   if ((s[0] ?? 0) >= 0x80) s = concat(new Uint8Array([0x00]), s)
   const rLen = r.length
   const sLen = s.length
-  return bytesToHex(
-    concat(
-      new Uint8Array([0x30, rLen + sLen + 4, 0x02, rLen]),
-      r,
-      new Uint8Array([0x02, sLen]),
-      s
-    )
-  )
+  return bytesToHex(concat(new Uint8Array([0x30, rLen + sLen + 4, 0x02, rLen]), r, new Uint8Array([0x02, sLen]), s))
 }
 
 function utf8ToHex(s: string): string {

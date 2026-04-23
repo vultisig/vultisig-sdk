@@ -48,16 +48,16 @@ describe('tron / broadcastTronTx error parsing', () => {
 
   it('throws on `{result: false, message}` (validation rejection)', async () => {
     stubFetch({ result: false, message: 'sigerror', code: 'SIGERROR' })
-    await expect(
-      broadcastTronTx('00'.repeat(10), 'https://api.trongrid.io')
-    ).rejects.toThrow(/tron broadcast failed: sigerror/)
+    await expect(broadcastTronTx('00'.repeat(10), 'https://api.trongrid.io')).rejects.toThrow(
+      /tron broadcast failed: sigerror/
+    )
   })
 
   it('throws on non-SUCCESS `{code}` only', async () => {
     stubFetch({ code: 'BANDWITH_ERROR' })
-    await expect(
-      broadcastTronTx('00'.repeat(10), 'https://api.trongrid.io')
-    ).rejects.toThrow(/tron broadcast failed: BANDWITH_ERROR/)
+    await expect(broadcastTronTx('00'.repeat(10), 'https://api.trongrid.io')).rejects.toThrow(
+      /tron broadcast failed: BANDWITH_ERROR/
+    )
   })
 
   it('throws on TronGrid bare `{Error: "..."}` (capital E, malformed input)', async () => {
@@ -65,15 +65,15 @@ describe('tron / broadcastTronTx error parsing', () => {
     stubFetch({
       Error: 'class org.tron.core.exception.BadItemException : java.lang.NullPointerException',
     })
-    await expect(
-      broadcastTronTx('deadbeef', 'https://api.trongrid.io')
-    ).rejects.toThrow(/tron broadcast failed: class org\.tron\.core\.exception\.BadItemException/)
+    await expect(broadcastTronTx('deadbeef', 'https://api.trongrid.io')).rejects.toThrow(
+      /tron broadcast failed: class org\.tron\.core\.exception\.BadItemException/
+    )
   })
 
   it('throws on lowercase `{error: "..."}` (mirror gateway variant)', async () => {
     stubFetch({ error: 'invalid signature' })
-    await expect(
-      broadcastTronTx('00'.repeat(10), 'https://api.trongrid.io')
-    ).rejects.toThrow(/tron broadcast failed: invalid signature/)
+    await expect(broadcastTronTx('00'.repeat(10), 'https://api.trongrid.io')).rejects.toThrow(
+      /tron broadcast failed: invalid signature/
+    )
   })
 })

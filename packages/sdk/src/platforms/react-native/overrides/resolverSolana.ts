@@ -9,8 +9,8 @@
 // the async resolver keeps module-init cheap and only pulls web3.js
 // when the resolver actually runs.
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import type { CoinBalanceResolver } from '@vultisig/core-chain/coin/balance/resolver'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 
 import { getSplAccounts } from './getSplAccounts'
 
@@ -26,12 +26,9 @@ export const getSolanaCoinBalance: CoinBalanceResolver = async input => {
 
   const accounts = await getSplAccounts(input.address)
 
-  const tokenAccount = accounts.find(
-    account => account.account.data.parsed.info.mint === input.id
-  )
+  const tokenAccount = accounts.find(account => account.account.data.parsed.info.mint === input.id)
 
-  const tokenAmount =
-    tokenAccount?.account?.data?.parsed?.info?.tokenAmount?.amount
+  const tokenAmount = tokenAccount?.account?.data?.parsed?.info?.tokenAmount?.amount
 
   return BigInt(tokenAmount ?? 0)
 }

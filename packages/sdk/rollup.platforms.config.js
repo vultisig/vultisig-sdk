@@ -111,12 +111,10 @@ const rnOverrideMap = {
   'packages/core/chain/chains/sui/client.ts': 'src/platforms/react-native/overrides/suiClient.ts',
   'packages/core/chain/swap/general/lifi/LifiSwapEnabledChains.ts':
     'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts',
-  'packages/core/chain/chains/solana/spl/getSplAccounts.ts':
-    'src/platforms/react-native/overrides/getSplAccounts.ts',
+  'packages/core/chain/chains/solana/spl/getSplAccounts.ts': 'src/platforms/react-native/overrides/getSplAccounts.ts',
   'packages/core/chain/chains/solana/spl/getSplAssociatedAccount.ts':
     'src/platforms/react-native/overrides/getSplAssociatedAccount.ts',
-  'packages/core/chain/coin/balance/resolvers/solana.ts':
-    'src/platforms/react-native/overrides/resolverSolana.ts',
+  'packages/core/chain/coin/balance/resolvers/solana.ts': 'src/platforms/react-native/overrides/resolverSolana.ts',
   'packages/core/mpc/keysign/chainSpecific/resolvers/solana/refine.ts':
     'src/platforms/react-native/overrides/refineSolanaChainSpecific.ts',
   'packages/core/chain/swap/general/lifi/api/getLifiSwapQuote.ts':

@@ -11,12 +11,7 @@
 import { beginCell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildTonSendTx,
-  deriveTonAddress,
-  TON_V4R2_SUB_WALLET_ID,
-  validateTonMemo,
-} from '../../../src/chains/ton'
+import { buildTonSendTx, deriveTonAddress, TON_V4R2_SUB_WALLET_ID, validateTonMemo } from '../../../src/chains/ton'
 import { buildV4R2Wallet } from '../../../src/chains/ton/walletV4R2'
 
 // Deterministic 32-byte Ed25519 pubkey (all 0x01s) — avoids seed randomness
@@ -118,9 +113,7 @@ describe('chains/ton', () => {
     // referenced cell containing code+data). This is the cheapest way to
     // sanity-check inclusion without dragging a full BOC parser into the
     // unit harness.
-    expect(deploySeqno0.signedBocBase64.length).toBeGreaterThan(
-      subsequentSeqno1.signedBocBase64.length
-    )
+    expect(deploySeqno0.signedBocBase64.length).toBeGreaterThan(subsequentSeqno1.signedBocBase64.length)
   })
 
   it('finalize rejects signatures of the wrong length', () => {

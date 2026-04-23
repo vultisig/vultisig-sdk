@@ -15,20 +15,16 @@
 // Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
 // export returning `Promise<GeneralSwapQuote>`.
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
-import {
-  lifiSwapChainId,
-  LifiSwapEnabledChain,
-} from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
+import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
 import { memoize } from '@vultisig/lib-utils/memoize'
 import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
-
-import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
-import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   amount: bigint
@@ -42,25 +38,15 @@ const setupLifi = memoize(async () => {
   })
 })
 
-export const getLifiSwapQuote = async ({
-  amount,
-  affiliateBps,
-  ...transfer
-}: Input): Promise<GeneralSwapQuote> => {
+export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: Input): Promise<GeneralSwapQuote> => {
   await setupLifi()
 
   const { getQuote } = await import('@lifi/sdk')
 
-  const [fromChain, toChain] = [transfer.from, transfer.to].map(
-    ({ chain }) => lifiSwapChainId[chain]
-  )
+  const [fromChain, toChain] = [transfer.from, transfer.to].map(({ chain }) => lifiSwapChainId[chain])
 
-  const [fromToken, toToken] = [transfer.from, transfer.to].map(
-    ({ id, chain }) => id ?? chainFeeCoin[chain].ticker
-  )
-  const [fromAddress, toAddress] = [transfer.from, transfer.to].map(
-    ({ address }) => address
-  )
+  const [fromToken, toToken] = [transfer.from, transfer.to].map(({ id, chain }) => id ?? chainFeeCoin[chain].ticker)
+  const [fromAddress, toAddress] = [transfer.from, transfer.to].map(({ address }) => address)
 
   const quote = await getQuote({
     fromChain,
@@ -77,55 +63,47 @@ export const getLifiSwapQuote = async ({
 
   const chainKind = getChainKind(transfer.from.chain)
 
-  const { value, gasLimit, data, from, to } =
-    shouldBePresent(transactionRequest)
+  const { value, gasLimit, data, from, to } = shouldBePresent(transactionRequest)
 
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
-    tx: match<DeriveChainKind<LifiSwapEnabledChain>, GeneralSwapQuote['tx']>(
-      chainKind,
-      {
-        solana: () => {
-          const { gasCosts, feeCosts } = estimate
-          const [networkFee] = shouldBePresent(gasCosts)
+    tx: match<DeriveChainKind<LifiSwapEnabledChain>, GeneralSwapQuote['tx']>(chainKind, {
+      solana: () => {
+        const { gasCosts, feeCosts } = estimate
+        const [networkFee] = shouldBePresent(gasCosts)
 
-          const fees = shouldBePresent(feeCosts)
+        const fees = shouldBePresent(feeCosts)
 
-          const swapFee = shouldBePresent(
-            fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
-          )
+        const swapFee = shouldBePresent(fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0])
 
-          const swapFeeAssetId =
-            [fromToken, toToken].find(
-              token => token === swapFee.token.address
-            ) || chainFeeCoin[transfer.from.chain].id
+        const swapFeeAssetId =
+          [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
 
-          return {
-            solana: {
-              data: shouldBePresent(data),
-              networkFee: BigInt(networkFee.amount),
-              swapFee: {
-                amount: BigInt(swapFee.amount),
-                decimals: swapFee.token.decimals,
-                chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
-                id: swapFeeAssetId,
-              },
+        return {
+          solana: {
+            data: shouldBePresent(data),
+            networkFee: BigInt(networkFee.amount),
+            swapFee: {
+              amount: BigInt(swapFee.amount),
+              decimals: swapFee.token.decimals,
+              chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+              id: swapFeeAssetId,
             },
-          }
-        },
-        evm: () => {
-          return {
-            evm: {
-              from: shouldBePresent(from),
-              to: shouldBePresent(to),
-              data: shouldBePresent(data),
-              value: BigInt(shouldBePresent(value)).toString(),
-              gasLimit: gasLimit ? BigInt(gasLimit) : undefined,
-            },
-          }
-        },
-      }
-    ),
+          },
+        }
+      },
+      evm: () => {
+        return {
+          evm: {
+            from: shouldBePresent(from),
+            to: shouldBePresent(to),
+            data: shouldBePresent(data),
+            value: BigInt(shouldBePresent(value)).toString(),
+            gasLimit: gasLimit ? BigInt(gasLimit) : undefined,
+          },
+        }
+      },
+    }),
   }
 }

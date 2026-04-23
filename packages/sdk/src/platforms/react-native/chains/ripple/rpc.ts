@@ -32,9 +32,7 @@ async function rippleCall<T>(
     throw new Error(`XRP RPC missing result: ${JSON.stringify(payload)}`)
   }
   if (result.status === 'error') {
-    throw new Error(
-      `XRP RPC error: ${result.error ?? 'unknown'} — ${result.error_message ?? ''}`
-    )
+    throw new Error(`XRP RPC error: ${result.error ?? 'unknown'} — ${result.error_message ?? ''}`)
   }
   return result
 }
@@ -103,11 +101,7 @@ export async function getXrpAccountInfo(
  * Convenience wrapper — returns balance in drops (string) for the given
  * address. Returns `"0"` for unfunded accounts.
  */
-export async function getXrpBalance(
-  address: string,
-  rpcUrl: string,
-  signal?: AbortSignal
-): Promise<string> {
+export async function getXrpBalance(address: string, rpcUrl: string, signal?: AbortSignal): Promise<string> {
   const info = await getXrpAccountInfo(address, rpcUrl, signal)
   return info.balanceDrops
 }
@@ -127,22 +121,12 @@ type LedgerResult = {
  * (e.g., +4) and set that as `LastLedgerSequence` on the tx so it expires
  * if not validated within a handful of ledgers.
  */
-export async function getXrpLedgerCurrentIndex(
-  rpcUrl: string,
-  signal?: AbortSignal
-): Promise<number> {
-  const result = await rippleCall<LedgerResult>(
-    rpcUrl,
-    'ledger',
-    { ledger_index: 'current' },
-    signal
-  )
+export async function getXrpLedgerCurrentIndex(rpcUrl: string, signal?: AbortSignal): Promise<number> {
+  const result = await rippleCall<LedgerResult>(rpcUrl, 'ledger', { ledger_index: 'current' }, signal)
   const idx =
     result.ledger_current_index ??
     result.ledger_index ??
-    (typeof result.ledger?.ledger_index === 'string'
-      ? Number(result.ledger.ledger_index)
-      : result.ledger?.ledger_index)
+    (typeof result.ledger?.ledger_index === 'string' ? Number(result.ledger.ledger_index) : result.ledger?.ledger_index)
   if (typeof idx !== 'number' || !Number.isFinite(idx)) {
     throw new Error(`XRP ledger response missing current index: ${JSON.stringify(result)}`)
   }
@@ -177,18 +161,11 @@ export async function submitXrpTx(
   rpcUrl: string,
   signal?: AbortSignal
 ): Promise<XrpSubmitResult> {
-  const result = await rippleCall<SubmitResult>(
-    rpcUrl,
-    'submit',
-    { tx_blob: signedBlobHex },
-    signal
-  )
+  const result = await rippleCall<SubmitResult>(rpcUrl, 'submit', { tx_blob: signedBlobHex }, signal)
   const engineResult = result.engine_result ?? ''
   const engineResultMessage = result.engine_result_message ?? ''
   if (engineResult !== 'tesSUCCESS' && engineResult !== 'terQUEUED') {
-    throw new Error(
-      `XRP submit rejected: ${engineResult || 'unknown'} — ${engineResultMessage}`
-    )
+    throw new Error(`XRP submit rejected: ${engineResult || 'unknown'} — ${engineResultMessage}`)
   }
   return {
     engineResult,

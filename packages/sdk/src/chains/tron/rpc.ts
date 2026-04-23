@@ -197,7 +197,7 @@ export async function estimateTrc20Energy(
   // We accept `to` as a Tron base58 address and strip the 0x41 prefix here.
   // The endpoint accepts both `Txxx` and `41xxx` styles as owner/contract
   // but the parameter payload must be 32-byte left-padded.
-   
+
   const bs58checkMod = bs58check as unknown as { decode?: (s: string) => Uint8Array } & {
     default?: { decode: (s: string) => Uint8Array }
   }

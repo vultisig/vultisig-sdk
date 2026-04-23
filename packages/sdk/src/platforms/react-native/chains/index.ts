@@ -34,13 +34,7 @@ export type {
   BuildEvmSendOptions,
   EvmTxBuilderResult,
 } from './evm'
-export type {
-  BuildXrpSendOptions,
-  BuildXrpSendResult,
-  XrpAccountInfo,
-  XrpPaymentTx,
-  XrpSubmitResult,
-} from './ripple'
+export type { BuildXrpSendOptions, BuildXrpSendResult, XrpAccountInfo, XrpPaymentTx, XrpSubmitResult } from './ripple'
 export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './solana'
 export type {
   BuildTonJettonTransferOptions,
@@ -51,12 +45,12 @@ export type {
   TonWalletStatus,
 } from './ton'
 export type {
-  BroadcastResult as TronBroadcastResult,
   BuildTrc20TransferOptions,
   BuildTronSendOptions,
   EstimateTrc20EnergyOptions,
   TronAccountInfo,
   TronBlockRefs,
+  BroadcastResult as TronBroadcastResult,
   TronTxBuilderResult,
 } from './tron'
 export type {

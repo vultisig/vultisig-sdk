@@ -53,10 +53,7 @@ function toBigInt(value: unknown): bigint {
  * Fetch balance (nanotons) for a user-friendly (EQ.../UQ...) address.
  * Accepts any toncenter-compatible gateway (v2 `getAddressBalance`).
  */
-export async function getTonBalance(
-  address: string,
-  gatewayUrl: string
-): Promise<bigint> {
+export async function getTonBalance(address: string, gatewayUrl: string): Promise<bigint> {
   const url = `${gatewayUrl}/v2/getAddressBalance?address=${encodeURIComponent(address)}`
   const res = await fetch(url)
   if (!res.ok) {
@@ -75,17 +72,10 @@ export async function getTonBalance(
  * matches the observable on-chain state for a never-deployed wallet and
  * lets the caller attach a StateInit on the first transfer.
  */
-export async function getTonWalletInfo(
-  address: string,
-  gatewayUrl: string
-): Promise<TonWalletInfo> {
+export async function getTonWalletInfo(address: string, gatewayUrl: string): Promise<TonWalletInfo> {
   const [extRes, v3Res] = await Promise.all([
-    fetch(
-      `${gatewayUrl}/v2/getExtendedAddressInformation?address=${encodeURIComponent(address)}`
-    ).catch(() => null),
-    fetch(
-      `${gatewayUrl}/v3/addressInformation?address=${encodeURIComponent(address)}&use_v2=false`
-    ).catch(() => null),
+    fetch(`${gatewayUrl}/v2/getExtendedAddressInformation?address=${encodeURIComponent(address)}`).catch(() => null),
+    fetch(`${gatewayUrl}/v3/addressInformation?address=${encodeURIComponent(address)}&use_v2=false`).catch(() => null),
   ])
 
   let seqno = 0
@@ -111,10 +101,7 @@ export async function getTonWalletInfo(
  * by toncenter. Throws on HTTP or TonCenter-reported errors so callers can
  * surface them verbatim.
  */
-export async function broadcastTonTx(
-  signedBocBase64: string,
-  gatewayUrl: string
-): Promise<{ hash?: string }> {
+export async function broadcastTonTx(signedBocBase64: string, gatewayUrl: string): Promise<{ hash?: string }> {
   const res = await fetch(`${gatewayUrl}/v2/sendBocReturnHash`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

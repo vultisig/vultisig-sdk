@@ -12,9 +12,9 @@
 // `@solana/web3.js` only when a real method (e.g. `getBalance`,
 // `sendRawTransaction`) is invoked. Every Connection method is already
 // async, so the extra `await` for the deferred import flattens naturally.
+import type { Connection } from '@solana/web3.js'
 import { rootApiUrl } from '@vultisig/core-config'
 import { memoize } from '@vultisig/lib-utils/memoize'
-import type { Connection } from '@solana/web3.js'
 
 export const solanaRpcUrl = `${rootApiUrl}/solana/`
 
@@ -24,9 +24,7 @@ export const solanaRpcUrl = `${rootApiUrl}/solana/`
 let clientPromise: Promise<Connection> | undefined
 const loadClient = (): Promise<Connection> => {
   if (!clientPromise) {
-    clientPromise = import('@solana/web3.js').then(
-      ({ Connection }) => new Connection(solanaRpcUrl)
-    )
+    clientPromise = import('@solana/web3.js').then(({ Connection }) => new Connection(solanaRpcUrl))
   }
   return clientPromise
 }

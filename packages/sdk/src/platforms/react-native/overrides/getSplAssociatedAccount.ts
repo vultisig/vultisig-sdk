@@ -19,17 +19,13 @@ export const getSplAssociatedAccount = async ({
   const client = getSolanaClient()
   const { PublicKey } = await import('@solana/web3.js')
 
-  const response = await client.getParsedTokenAccountsByOwner(
-    new PublicKey(account),
-    { mint: new PublicKey(token) }
-  )
+  const response = await client.getParsedTokenAccountsByOwner(new PublicKey(account), { mint: new PublicKey(token) })
 
   if (!response.value || response.value.length === 0) {
     throw new Error('No associated token account found')
   }
 
-  const isToken2022 =
-    response.value[0].account.owner.toBase58() === token2022ProgramId
+  const isToken2022 = response.value[0].account.owner.toBase58() === token2022ProgramId
 
   return {
     address: response.value[0].pubkey.toBase58(),

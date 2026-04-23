@@ -11,8 +11,8 @@
 // `@mysten/sui/jsonRpc` only when a real method is invoked. Every
 // SuiJsonRpcClient method is async, so the extra `await` for the
 // deferred import flattens naturally.
-import { memoize } from '@vultisig/lib-utils/memoize'
 import type { SuiJsonRpcClient } from '@mysten/sui/jsonRpc'
+import { memoize } from '@vultisig/lib-utils/memoize'
 
 let clientPromise: Promise<SuiJsonRpcClient> | undefined
 const loadClient = (): Promise<SuiJsonRpcClient> => {
