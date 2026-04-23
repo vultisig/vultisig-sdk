@@ -163,6 +163,49 @@ export function deriveUtxoPubkey(
 // Address decoding
 // ---------------------------------------------------------------------------
 
+/**
+ * BCH CashAddr polymod checksum.
+ *
+ * Spec: https://reference.cash/protocol/blockchain/encoding/cashaddr
+ *
+ * The checksum is computed over `lower5(prefix) || 0 || payload5 || checksum5`
+ * (payload5 already contains the 8 trailing checksum symbols). A valid address
+ * produces polymod === 0. Bit-fiddling follows the reference C implementation:
+ * 5-symbol state, pre-multiply by 0x20, XOR each input symbol, and conditionally
+ * XOR the five generator polynomials based on the high bit of `c0`.
+ *
+ * We use `BigInt` because the generator coefficients exceed 32 bits and JS
+ * `number` bit-ops truncate to i32 — that silently drops the checksum's
+ * top bits and would accept invalid addresses.
+ */
+function cashAddrPolymod(values: number[]): bigint {
+  const GEN: bigint[] = [
+    0x98f2bc8e61n,
+    0x79b76d99e2n,
+    0xf33e5fb3c4n,
+    0xae2eabe2a8n,
+    0x1e4f43e470n,
+  ]
+  let c: bigint = 1n
+  for (const v of values) {
+    const c0 = c >> 35n
+    c = ((c & 0x07ffffffffn) << 5n) ^ BigInt(v)
+    for (let i = 0; i < 5; i++) {
+      if (((c0 >> BigInt(i)) & 1n) === 1n) c ^= GEN[i]!
+    }
+  }
+  return c ^ 1n
+}
+
+function verifyCashAddrChecksum(prefix: string, data5: number[]): boolean {
+  // Low-5-bit representation of the prefix characters (ASCII & 0x1f).
+  const prefixLower5 = Array.from(prefix, ch => ch.charCodeAt(0) & 0x1f)
+  // Polymod input: lower5(prefix) || [0] || data5 (data5 already includes the
+  // 8-symbol trailing checksum, so we don't pad separately).
+  const values = [...prefixLower5, 0, ...data5]
+  return cashAddrPolymod(values) === 0n
+}
+
 export type DecodedAddress = {
   pubKeyHash: Uint8Array
   type: UtxoScriptKind
@@ -197,7 +240,15 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
         if (idx === -1) throw new Error('invalid cashaddr char')
         data5.push(idx)
       }
-      const payload5 = data5.slice(0, -8) // strip 8-byte checksum
+      // Verify the polymod checksum BEFORE stripping it. Skipping this step
+      // means any mistyped address with valid base32 chars decodes to a
+      // garbage pubKeyHash and the tx is signed to an address the user
+      // never intended. Reference:
+      //   https://reference.cash/protocol/blockchain/encoding/cashaddr
+      if (!verifyCashAddrChecksum(prefix, data5)) {
+        throw new Error('CashAddr checksum mismatch')
+      }
+      const payload5 = data5.slice(0, -8) // strip 8-symbol checksum (now verified)
       let acc = 0
       let bits = 0
       const result: number[] = []
