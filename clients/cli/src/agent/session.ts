@@ -19,7 +19,15 @@ import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
-import type { Action, ActionResult, AgentConfig, ConversationMessage, MessageContext, RecentAction, UICallbacks } from './types'
+import type {
+  Action,
+  ActionResult,
+  AgentConfig,
+  ConversationMessage,
+  MessageContext,
+  RecentAction,
+  UICallbacks,
+} from './types'
 import { PASSWORD_REQUIRED_ACTIONS } from './types'
 
 /**
@@ -324,9 +332,7 @@ export class AgentSession {
     if (this.pendingToolResults.length > 0) {
       request.context.recent_actions = this.pendingToolResults.splice(0)
       if (this.config.verbose) {
-        process.stderr.write(
-          `[session] flushed ${request.context.recent_actions.length} recent_actions into request\n`
-        )
+        process.stderr.write(`[session] flushed ${request.context.recent_actions.length} recent_actions into request\n`)
       }
     }
 

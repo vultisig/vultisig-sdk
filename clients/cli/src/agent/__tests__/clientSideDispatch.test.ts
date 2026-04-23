@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
-import { CLIENT_SIDE_TOOL_DISPATCH as registry, actionResultToRecentAction } from '../session'
+import { actionResultToRecentAction, CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
 import type { ActionResult } from '../types'
 
 describe('actionResultToRecentAction', () => {
@@ -219,11 +219,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     )
 
     expect(onClientSideToolCall).toHaveBeenCalledOnce()
-    expect(onClientSideToolCall).toHaveBeenCalledWith(
-      'c1',
-      'add_coin',
-      { tokens: [{ chain: 'Base', ticker: 'USDC' }] }
-    )
+    expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'add_coin', { tokens: [{ chain: 'Base', ticker: 'USDC' }] })
     // onToolProgress still fires for verbose display consistency
     expect(onToolProgress).toHaveBeenCalled()
   })

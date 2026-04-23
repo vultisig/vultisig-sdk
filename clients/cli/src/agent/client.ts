@@ -146,7 +146,11 @@ export class AgentClient {
        * via `context.recent_actions` on the next outbound request. See
        * session.ts for the dispatch registry and queue.
        */
-      onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void | Promise<void>
+      onClientSideToolCall?: (
+        toolCallId: string,
+        toolName: string,
+        input: Record<string, unknown>
+      ) => void | Promise<void>
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
@@ -266,7 +270,11 @@ export class AgentClient {
        * via `context.recent_actions` on the next outbound request. See
        * session.ts for the dispatch registry and queue.
        */
-      onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void | Promise<void>
+      onClientSideToolCall?: (
+        toolCallId: string,
+        toolName: string,
+        input: Record<string, unknown>
+      ) => void | Promise<void>
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
@@ -325,9 +333,10 @@ export class AgentClient {
             callbacks.onClientSideToolCall
           ) {
             const rawInput = parsed.input
-            const input = rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
-              ? (rawInput as Record<string, unknown>)
-              : {}
+            const input =
+              rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
+                ? (rawInput as Record<string, unknown>)
+                : {}
             // Fire-and-forget: session.ts handles awaiting / queueing. We
             // still emit onToolProgress so display/verbose logs are
             // consistent with MCP tools.
