@@ -61,6 +61,27 @@ function randomUUID(): string {
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
+/**
+ * Validate a URL before POSTing the vault password to it. `configureRuntime`
+ * already validates values installed via the registry, but `opts.vultiServerUrl`
+ * and `opts.relayUrl` let callers override per-request — we must re-validate
+ * here so the password never reaches a URL the SDK hasn't accepted.
+ */
+function assertHttpUrl(field: 'vultiServerUrl' | 'relayUrl', value: string): void {
+  if (value.length === 0) {
+    throw new Error(`fastVaultSign: ${field} must not be empty`)
+  }
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error(`fastVaultSign: ${field}=${JSON.stringify(value)} is not a valid URL`)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`fastVaultSign: ${field} must be http(s), got ${parsed.protocol}`)
+  }
+}
+
 export async function fastVaultSign(opts: FastVaultSignOptions): Promise<string> {
   const maxAttempts = opts.maxAttempts ?? 2
   let lastErr: Error | undefined
@@ -101,6 +122,8 @@ async function fastVaultSignAttempt(opts: FastVaultSignOptions): Promise<string>
 
   const vultiServerUrl = opts.vultiServerUrl ?? getConfiguredVultiServerUrl() ?? DEFAULT_VULTI_SERVER_URL
   const relayUrl = opts.relayUrl ?? getConfiguredRelayUrl() ?? DEFAULT_RELAY_URL
+  assertHttpUrl('vultiServerUrl', vultiServerUrl)
+  assertHttpUrl('relayUrl', relayUrl)
 
   const sessionId = randomUUID()
   const hexEncryptionKey = randomHex(32)

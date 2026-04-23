@@ -26,10 +26,37 @@ export type RuntimeConfig = {
 let state: RuntimeConfig = {}
 
 /**
+ * Validate a user-supplied URL — must parse, must be http(s), must not be
+ * empty. `fastVaultSign` POSTs the unlocked vault password to
+ * `${vultiServerUrl}/sign`, so silently accepting `''` or an attacker-
+ * controlled scheme would exfiltrate the password on first use. Fail at
+ * config time so the bug surfaces at app boot, not during signing.
+ */
+function assertHttpUrl(field: 'vultiServerUrl' | 'relayUrl', value: string): void {
+  if (value.length === 0) {
+    throw new Error(`configureRuntime: ${field} must not be empty`)
+  }
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error(`configureRuntime: ${field}=${JSON.stringify(value)} is not a valid URL`)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`configureRuntime: ${field} must be http(s), got ${parsed.protocol}`)
+  }
+}
+
+/**
  * Register consumer-injected runtime config. Safe to call multiple times
  * (later calls override earlier). Undefined fields do not clear prior values.
+ *
+ * Throws if `vultiServerUrl` or `relayUrl` is present but not a valid
+ * http(s) URL — a bad value here is a fund-safety issue (see `assertHttpUrl`).
  */
 export function configureRuntime(config: RuntimeConfig): void {
+  if (config.vultiServerUrl !== undefined) assertHttpUrl('vultiServerUrl', config.vultiServerUrl)
+  if (config.relayUrl !== undefined) assertHttpUrl('relayUrl', config.relayUrl)
   state = {
     ...state,
     ...Object.fromEntries(Object.entries(config).filter(([, v]) => v !== undefined)),
