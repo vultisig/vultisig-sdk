@@ -121,6 +121,25 @@ const rnOverrideMap = {
     'src/platforms/react-native/overrides/getLifiSwapQuote.ts',
 }
 
+// Minimum path-segment depth that every override-map key MUST have. The
+// override fires on `id.endsWith(suffix)`, so a shallow suffix (say,
+// `client.ts`) would collide with every other `client.ts` in the module
+// graph and redirect them all to a Solana-specific override. Require at
+// least 4 segments — all current entries satisfy this — so a future
+// contributor who shortens an entry fails loud at build time rather than
+// silently misrouting a chain's client code.
+const MIN_OVERRIDE_SUFFIX_DEPTH = 4
+for (const suffix of Object.keys(rnOverrideMap)) {
+  const segments = suffix.split('/').filter(Boolean).length
+  if (segments < MIN_OVERRIDE_SUFFIX_DEPTH) {
+    throw new Error(
+      `rnOverrideMap: suffix ${JSON.stringify(suffix)} has only ${segments} segments — ` +
+        `minimum is ${MIN_OVERRIDE_SUFFIX_DEPTH} to avoid collisions with unrelated modules ` +
+        `that happen to share the trailing path components.`
+    )
+  }
+}
+
 const rnOverridePlugin = () => ({
   name: 'vultisig-rn-path-override',
   async resolveId(source, importer, options) {
@@ -130,6 +149,11 @@ const rnOverridePlugin = () => ({
     const id = resolved.id.replace(/\\/g, '/')
     for (const [suffix, override] of Object.entries(rnOverrideMap)) {
       if (id.endsWith('/' + suffix) || id.endsWith(suffix)) {
+        // Log once per distinct (source, override) pair so reviewers can
+        // audit which real-world imports the override actually intercepts.
+        // Uses `this.info` so it goes through Rollup's warning pipeline
+        // instead of stdout (keeps `rollup -w` output clean-able).
+        this.info?.(`[vultisig-rn-path-override] ${source} → ${override}`)
         return path.resolve(currentDir, override)
       }
     }

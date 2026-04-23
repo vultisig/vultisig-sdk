@@ -35,4 +35,5 @@ export {
   getUtxoBalance,
   getUtxoChainSpec,
   getUtxos,
+  ZCASH_BRANCH_ID_NU6_1,
 } from '../../../../chains/utxo'

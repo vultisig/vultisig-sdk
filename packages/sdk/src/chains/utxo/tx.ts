@@ -384,12 +384,20 @@ export function getSighashLegacy(opts: SighashLegacyOptions): Uint8Array {
 // Zcash-specific constants + sighash (ZIP-243 with BLAKE2b personalization)
 // ---------------------------------------------------------------------------
 
-// NU6.1 consensus branch ID (current epoch). Update with network upgrades.
-const ZCASH_BRANCH_ID = 0x4dec4df0
+/**
+ * Default Zcash consensus branch ID (NU6.1, the epoch active at the time
+ * of writing). Consumers SHOULD override via `buildUtxoSendTx({zcashBranchId})`
+ * for pre-activation signing — relying on a compiled-in default means every
+ * Zcash network upgrade turns into a shipped-SDK-release blocker.
+ *
+ * Look up the current value at tx-build time from a Zcash node:
+ *   zcash-cli getblockchaininfo | jq '.consensus.nextblock'
+ */
+export const ZCASH_BRANCH_ID_NU6_1 = 0x4dec4df0
 const ZCASH_V4_VERSION = 0x80000004 // overwintered v4
 const ZCASH_SAPLING_VERSION_GROUP_ID = 0x892f2085
 
-function zcashPersonalization(prefix: string): Uint8Array {
+function zcashPersonalization(prefix: string, branchId: number): Uint8Array {
   const prefixBytes = new TextEncoder().encode(prefix)
   if (prefixBytes.length === 16) {
     // 16-byte "ZcashPrevoutHash" / "ZcashSequencHash" / "ZcashOutputsHash"
@@ -398,10 +406,10 @@ function zcashPersonalization(prefix: string): Uint8Array {
   // 12-byte prefix + 4-byte branchId LE (e.g. "ZcashSigHash" + branchId)
   const pers = new Uint8Array(16)
   pers.set(prefixBytes.slice(0, 12))
-  pers[12] = ZCASH_BRANCH_ID & 0xff
-  pers[13] = (ZCASH_BRANCH_ID >> 8) & 0xff
-  pers[14] = (ZCASH_BRANCH_ID >> 16) & 0xff
-  pers[15] = (ZCASH_BRANCH_ID >> 24) & 0xff
+  pers[12] = branchId & 0xff
+  pers[13] = (branchId >> 8) & 0xff
+  pers[14] = (branchId >> 16) & 0xff
+  pers[15] = (branchId >> 24) & 0xff
   return pers
 }
 
@@ -413,18 +421,19 @@ function getSighashZcash(
   inputs: UtxoInput[],
   outputsRaw: Uint8Array,
   inputIndex: number,
-  pubKeyHash: Uint8Array
+  pubKeyHash: Uint8Array,
+  branchId: number
 ): Uint8Array {
   const input = inputs[inputIndex]!
   const hashPrevouts = blake2b256(
     concat(...inputs.map(i => concat(reverseHexBytes(i.hash), writeU32LE(i.index)))),
-    zcashPersonalization('ZcashPrevoutHash')
+    zcashPersonalization('ZcashPrevoutHash', branchId)
   )
   const hashSequence = blake2b256(
     concat(...inputs.map(() => writeU32LE(0xffffffff))),
-    zcashPersonalization('ZcashSequencHash')
+    zcashPersonalization('ZcashSequencHash', branchId)
   )
-  const hashOutputs = blake2b256(outputsRaw, zcashPersonalization('ZcashOutputsHash'))
+  const hashOutputs = blake2b256(outputsRaw, zcashPersonalization('ZcashOutputsHash', branchId))
   const scriptCode = concat(new Uint8Array([0x76, 0xa9, 0x14]), pubKeyHash, new Uint8Array([0x88, 0xac]))
   const preimage = concat(
     writeU32LE(ZCASH_V4_VERSION),
@@ -446,7 +455,7 @@ function getSighashZcash(
     writeU64LE(input.value),
     writeU32LE(0xffffffff)
   )
-  return blake2b256(preimage, zcashPersonalization('ZcashSigHash'))
+  return blake2b256(preimage, zcashPersonalization('ZcashSigHash', branchId))
 }
 
 // ---------------------------------------------------------------------------
@@ -631,6 +640,14 @@ export type BuildUtxoSendOptions = {
   feeRate: number
   /** Compressed pubkey (33 bytes) used for scriptSig / witness */
   compressedPubKey: Uint8Array
+  /**
+   * Zcash consensus branch ID (ignored for non-Zcash chains). Defaults to
+   * `ZCASH_BRANCH_ID_NU6_1` at the time of release. Consumers SHOULD fetch
+   * the current value from a zcash-cli `getblockchaininfo` at tx-build time
+   * — hardcoding means every future consensus upgrade requires a shipped
+   * SDK release.
+   */
+  zcashBranchId?: number
 }
 
 export type UtxoTxBuilderResult = {
@@ -694,12 +711,13 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const isBCH = opts.chain === 'Bitcoin-Cash'
   const isZcash = opts.chain === 'Zcash'
+  const zcashBranchId = opts.zcashBranchId ?? ZCASH_BRANCH_ID_NU6_1
 
   const signingHashes: Uint8Array[] = []
   for (let i = 0; i < inputs.length; i++) {
     let h: Uint8Array
     if (isZcash) {
-      h = getSighashZcash(inputs, outputsRaw, i, fromDec.pubKeyHash)
+      h = getSighashZcash(inputs, outputsRaw, i, fromDec.pubKeyHash, zcashBranchId)
     } else if (isBCH) {
       h = getSighashBIP143({
         inputs,

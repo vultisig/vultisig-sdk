@@ -27,11 +27,27 @@ const WALLET_V4R2_CODE_BASE64 =
 export const TON_V4R2_SUB_WALLET_ID = 698983191
 
 /**
- * Decoded V4R2 code cell. Parsed once at module-init so `contractAddress` and
- * `storeStateInit` see the same instance across tx builds (avoids recomputing
- * the cell's repr hash).
+ * Decoded V4R2 code cell — parsed lazily on first use, then memoised.
+ *
+ * We avoid parsing at module-init because `Cell.fromBoc` needs a working
+ * `Buffer` global, and the SDK's RN entry installs that polyfill in a
+ * top-level statement (`react-native/index.ts:14-16`). Although ES module
+ * imports evaluate depth-first — meaning the polyfill's module body runs
+ * before this module's body under a standards-conformant loader — bundlers
+ * and Hermes have had historical edge cases where a top-level `Buffer.from`
+ * inside a transitively imported module evaluates before the parent entry's
+ * polyfill statement (e.g. when this module is pulled in via a dynamic
+ * import chain that resolves before the entry finishes its sync init). The
+ * cost of the lazy getter is one extra branch per first call; correctness
+ * is worth it.
  */
-const WALLET_V4R2_CODE_CELL = Cell.fromBoc(Buffer.from(WALLET_V4R2_CODE_BASE64, 'base64'))[0]
+let cachedV4R2CodeCell: Cell | undefined
+function getWalletV4R2CodeCell(): Cell {
+  if (!cachedV4R2CodeCell) {
+    cachedV4R2CodeCell = Cell.fromBoc(Buffer.from(WALLET_V4R2_CODE_BASE64, 'base64'))[0]!
+  }
+  return cachedV4R2CodeCell
+}
 
 /**
  * Build the V4R2 data cell:
@@ -68,7 +84,7 @@ export function buildV4R2Wallet(opts: {
   const workchain = opts.workchain ?? 0
   const walletId = opts.walletId ?? TON_V4R2_SUB_WALLET_ID + workchain
   const data = buildV4R2DataCell(opts.publicKeyEd25519, walletId)
-  const init: StateInit = { code: WALLET_V4R2_CODE_CELL, data }
+  const init: StateInit = { code: getWalletV4R2CodeCell(), data }
   const address = contractAddress(workchain, init)
   return {
     address,

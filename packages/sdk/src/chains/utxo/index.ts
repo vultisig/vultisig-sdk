@@ -24,4 +24,5 @@ export {
   getSighashBIP143,
   getSighashLegacy,
   getUtxoChainSpec,
+  ZCASH_BRANCH_ID_NU6_1,
 } from './tx'
