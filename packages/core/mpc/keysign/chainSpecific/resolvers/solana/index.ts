@@ -17,7 +17,7 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<
 > = async ({ keysignPayload, walletCore }) => {
   const coin = getKeysignCoin<OtherChain.Solana>(keysignPayload)
   const receiver = shouldBePresent(keysignPayload.toAddress)
-  const client = await getSolanaClient()
+  const client = getSolanaClient()
 
   const priorityFeePrice = await withFallback(
     attempt(getDynamicPriorityFeePrice()),

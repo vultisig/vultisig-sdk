@@ -8,7 +8,7 @@ import { TxStatusResolver } from '../resolver'
 export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({
   hash,
 }) => {
-  const client = await getSolanaClient()
+  const client = getSolanaClient()
 
   const { data: tx, error } = await attempt(
     client.getTransaction(hash, {

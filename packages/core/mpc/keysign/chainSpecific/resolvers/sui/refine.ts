@@ -26,7 +26,7 @@ export const refineSuiChainSpecific = async ({
   chainSpecific,
   walletCore,
 }: RefineSuiChainSpecificInput): Promise<SuiSpecific> => {
-  const client = await getSuiClient()
+  const client = getSuiClient()
 
   const [txInputData] = getEncodedSigningInputs({
     keysignPayload: create(KeysignPayloadSchema, {

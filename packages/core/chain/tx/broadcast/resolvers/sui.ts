@@ -9,8 +9,7 @@ export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({
   tx,
 }) => {
   try {
-    const client = await getSuiClient()
-    return await client.executeTransactionBlock({
+    return await getSuiClient().executeTransactionBlock({
       transactionBlock: tx.unsignedTx,
       signature: [tx.signature],
     })

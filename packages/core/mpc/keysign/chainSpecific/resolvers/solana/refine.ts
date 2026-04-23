@@ -31,10 +31,8 @@ export const refineSolanaChainSpecific = async ({
   walletCore,
 }: RefineSolanaChainSpecificInput): Promise<SolanaSpecific> => {
   const coin = getKeysignCoin(keysignPayload)
-  const [client, { Message }] = await Promise.all([
-    getSolanaClient(),
-    import('@solana/web3.js'),
-  ])
+  const client = getSolanaClient()
+  const { Message } = await import('@solana/web3.js')
 
   const [txInputData] = getEncodedSigningInputs({
     keysignPayload: create(KeysignPayloadSchema, {

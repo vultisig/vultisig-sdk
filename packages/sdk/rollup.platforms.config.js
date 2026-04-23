@@ -357,6 +357,24 @@ const configs = {
             find: /^tiny-secp256k1$/,
             replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
           },
+          // Platform-specific overrides for core-chain modules that would
+          // otherwise evaluate Hermes-hostile deps (`@solana/web3.js`,
+          // `@mysten/sui/jsonRpc`, `@lifi/sdk`) at module-init. These MUST
+          // appear before the generic `@vultisig/core-chain/(.*)` alias so
+          // rollup matches them first. Non-RN bundles continue to use the
+          // original core modules with their sync signatures intact.
+          {
+            find: /^@vultisig\/core-chain\/chains\/solana\/client$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/solanaClient.ts'),
+          },
+          {
+            find: /^@vultisig\/core-chain\/chains\/sui\/client$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/suiClient.ts'),
+          },
+          {
+            find: /^@vultisig\/core-chain\/swap\/general\/lifi\/LifiSwapEnabledChains$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts'),
+          },
           // Resolve workspace packages to source TS for bundling
           {
             find: /^@vultisig\/core-chain\/(.*)/,

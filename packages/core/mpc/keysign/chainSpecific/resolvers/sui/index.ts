@@ -17,7 +17,7 @@ export const getSuiChainSpecific: GetChainSpecificResolver<
 > = async ({ keysignPayload, walletCore }) => {
   const coin = getKeysignCoin(keysignPayload)
   const { address } = coin
-  const client = await getSuiClient()
+  const client = getSuiClient()
 
   const { data } = await client.getAllCoins({
     owner: address,

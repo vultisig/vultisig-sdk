@@ -11,10 +11,8 @@ export const getSplAssociatedAccount = async ({
   account,
   token,
 }: Input): Promise<{ address: string; isToken2022: boolean }> => {
-  const [client, { PublicKey }] = await Promise.all([
-    getSolanaClient(),
-    import('@solana/web3.js'),
-  ])
+  const client = getSolanaClient()
+  const { PublicKey } = await import('@solana/web3.js')
 
   const response = await client.getParsedTokenAccountsByOwner(
     new PublicKey(account),

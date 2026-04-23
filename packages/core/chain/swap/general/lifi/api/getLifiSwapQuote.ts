@@ -2,7 +2,7 @@ import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 import {
-  getLifiSwapChainId,
+  lifiSwapChainId,
   LifiSwapEnabledChain,
 } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -36,10 +36,7 @@ export const getLifiSwapQuote = async ({
 }: Input): Promise<GeneralSwapQuote> => {
   await setupLifi()
 
-  const [{ getQuote }, lifiSwapChainId] = await Promise.all([
-    import('@lifi/sdk'),
-    getLifiSwapChainId(),
-  ])
+  const { getQuote } = await import('@lifi/sdk')
 
   const [fromChain, toChain] = [transfer.from, transfer.to].map(
     ({ chain }) => lifiSwapChainId[chain]

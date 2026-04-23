@@ -5,7 +5,7 @@ import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { CoinBalanceResolver } from '../resolver'
 
 export const getSolanaCoinBalance: CoinBalanceResolver = async input => {
-  const client = await getSolanaClient()
+  const client = getSolanaClient()
 
   if (isFeeCoin(input)) {
     const { PublicKey } = await import('@solana/web3.js')
