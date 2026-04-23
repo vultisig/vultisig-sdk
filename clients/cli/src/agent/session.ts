@@ -19,8 +19,50 @@ import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
-import type { Action, ActionResult, AgentConfig, ConversationMessage, MessageContext, UICallbacks } from './types'
+import type { Action, ActionResult, AgentConfig, ConversationMessage, MessageContext, RecentAction, UICallbacks } from './types'
 import { PASSWORD_REQUIRED_ACTIONS } from './types'
+
+/**
+ * Registry mapping client-side tool names to an Action.type that the
+ * executor already knows how to handle. The executor's switch in
+ * executor.ts:executeAction covers every case here; this table is the
+ * bridge from post-PR-#119 `tool-input-available` events to the
+ * pre-existing execution logic.
+ *
+ * Must stay aligned with the backend's `clientSideToolNames` map
+ * (agent-backend/internal/service/agent/tools.go). Adding a tool on the
+ * backend without a corresponding entry here produces a visible
+ * "unimplemented client-side tool" warning — not a silent no-op.
+ *
+ * `sign_tx` is deliberately absent — it has its own dedicated trigger
+ * via the tx_ready SSE channel (see onTxReady handler below).
+ */
+const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
+  sign_typed_data: 'sign_typed_data',
+  add_coin: 'add_coin',
+  remove_coin: 'remove_coin',
+  add_chain: 'add_chain',
+  remove_chain: 'remove_chain',
+  create_vault: 'create_vault',
+  address_book_add: 'address_book_add',
+  address_book_remove: 'address_book_remove',
+}
+
+/**
+ * Convert a CLI-internal ActionResult to the post-#119 wire shape.
+ * Errors are embedded in `data` so the RecentAction carries a single
+ * `{tool, success, data}` tuple instead of spreading error across a
+ * top-level field.
+ */
+function actionResultToRecentAction(r: ActionResult): RecentAction {
+  if (r.success) {
+    return { tool: r.action, success: true, data: r.data ?? {} }
+  }
+  const data: Record<string, unknown> = { ...(r.data ?? {}) }
+  if (r.error) data.error = r.error
+  if (r.code) data.code = r.code
+  return { tool: r.action, success: false, data }
+}
 
 export class AgentSession {
   private client: AgentClient
@@ -33,6 +75,14 @@ export class AgentSession {
   private abortController: AbortController | null = null
   private historyMessages: ConversationMessage[] = []
   private pushService: PushNotificationService | null = null
+  /**
+   * Queue of tool results from the current stream, flushed into
+   * `context.recent_actions` on the next HTTP request. Per-session; not
+   * shared across sessions. See the Queue Lifecycle section in
+   * `.claude/knowledge/tasks/230426-pr2-cli-migrate-to-clientside-tools.md`
+   * for the full semantics.
+   */
+  private pendingToolResults: RecentAction[] = []
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -194,7 +244,7 @@ export class AgentSession {
     }
 
     try {
-      await this.processMessageLoop(content, null, ui)
+      await this.processMessageLoop(content, ui)
     } catch (err: any) {
       // Re-authenticate on 401/403 and retry once
       if (err.message?.includes('401') || err.message?.includes('403')) {
@@ -202,7 +252,7 @@ export class AgentSession {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
         saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-        await this.processMessageLoop(content, null, ui)
+        await this.processMessageLoop(content, ui)
       } else {
         throw err
       }
@@ -215,17 +265,13 @@ export class AgentSession {
    * Core message processing loop.
    * Sends content or action results, executes returned actions, repeats.
    */
-  private async processMessageLoop(
-    content: string | null,
-    actionResults: ActionResult[] | null,
-    ui: UICallbacks
-  ): Promise<void> {
+  private async processMessageLoop(content: string | null, ui: UICallbacks): Promise<void> {
     if (!this.conversationId) return
 
     // Build request
     const request: any = {
       public_key: this.publicKey,
-      context: this.cachedContext,
+      context: this.cachedContext ? { ...this.cachedContext } : {},
     }
 
     // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
@@ -237,21 +283,23 @@ export class AgentSession {
       request.content = content
     }
 
-    if (actionResults && actionResults.length > 0) {
-      // Send the first action result (backend expects one at a time)
-      const result = actionResults[0]
-      request.action_result = {
-        action: result.action,
-        action_id: result.action_id,
-        success: result.success,
-        data: result.data || {},
-        error: result.error || '',
-        ...(!result.success && result.code ? { code: result.code } : {}),
+    // Flush any pending tool results from the previous stream into
+    // context.recent_actions. This is the post-PR-#119 return channel;
+    // replaces the legacy `action_result` top-level field.
+    if (this.pendingToolResults.length > 0) {
+      request.context.recent_actions = this.pendingToolResults.splice(0)
+      if (this.config.verbose) {
+        process.stderr.write(
+          `[session] flushed ${request.context.recent_actions.length} recent_actions into request\n`
+        )
       }
     }
 
     // Count tx_ready payloads actually stored (do not use raw SSE tx count — errors / empty events still append to streamResult.transactions)
     let serverTxStoredFromStream = 0
+    // Track client-side tool call promises so we can await them before
+    // deciding whether to recurse. They push onto pendingToolResults.
+    const pendingDispatches: Promise<void>[] = []
 
     // Send via SSE stream
     const streamResult = await this.client.sendMessageStream(
@@ -266,11 +314,17 @@ export class AgentSession {
             ui.onToolResult(`mcp-${tool}`, tool, true, { label })
           }
         },
+        onClientSideToolCall: (toolCallId, toolName, input) => {
+          pendingDispatches.push(this.dispatchClientSideTool(toolCallId, toolName, input, ui))
+        },
         onTitle: _title => {
           // Title updates handled internally
         },
         onActions: _actions => {
-          // Collected in streamResult
+          // Legacy data-actions channel: backend no longer emits for
+          // client-side tools post-#119; any late-arriving legacy
+          // payloads are collected in streamResult for the fallback
+          // below.
         },
         onSuggestions: suggestions => {
           ui.onSuggestions(suggestions)
@@ -293,6 +347,13 @@ export class AgentSession {
       this.abortController?.signal
     )
 
+    // Wait for any client-side tool dispatches that fired during the
+    // stream to finish before deciding the next step. Each dispatch
+    // pushes onto pendingToolResults.
+    if (pendingDispatches.length > 0) {
+      await Promise.all(pendingDispatches)
+    }
+
     // Emit the full assistant message
     // Prefer the final message event when present; streamed text can be partial
     // if intermediate chunks were interrupted or dropped upstream.
@@ -303,11 +364,14 @@ export class AgentSession {
       ui.onAssistantMessage(displayText)
     }
 
-    // Filter out sign_tx actions — signing is handled client-side automatically
-    const actions = streamResult.actions.filter(a => a.type !== 'sign_tx')
-
-    if (actions.length > 0) {
-      const results = await this.executeActions(actions, ui)
+    // Legacy data-actions fallback: if any actions came through the
+    // old channel (still emitted for e.g. schedule_task confirmation
+    // previews), execute them here and enqueue the results so they
+    // flush via recent_actions on the next turn. Filter out sign_tx —
+    // it has its own synthetic path below.
+    const legacyActions = streamResult.actions.filter(a => a.type !== 'sign_tx')
+    if (legacyActions.length > 0) {
+      const results = await this.executeActions(legacyActions, ui)
 
       // If a build_* action succeeded and produced a pending tx, auto-sign client-side
       const hasBuildSuccess = results.some(r => r.success && r.action.startsWith('build_'))
@@ -322,24 +386,26 @@ export class AgentSession {
           auto_execute: true,
         }
         const signResults = await this.executeActions([signAction], ui)
-        // Only report the sign result — never send intermediate build results
-        // to avoid the LLM seeing "build succeeded" without a tx_hash and retrying
         const signResult = signResults[0]
         if (signResult) {
-          await this.processMessageLoop(null, [signResult], ui)
+          this.pendingToolResults.push(actionResultToRecentAction(signResult))
+          await this.processMessageLoop(null, ui)
           return
         }
       }
 
       if (results.length > 0) {
         for (const result of results) {
-          await this.processMessageLoop(null, [result], ui)
+          this.pendingToolResults.push(actionResultToRecentAction(result))
         }
+        await this.processMessageLoop(null, ui)
         return
       }
     }
 
-    // Handle transactions from tx_ready events (server-side builds via MCP)
+    // Handle transactions from tx_ready events (server-side builds via MCP).
+    // This path is unchanged structurally — tx_ready triggers synth
+    // sign_tx via executeActions. Result goes through recent_actions.
     if (serverTxStoredFromStream > 0) {
       if (this.config.verbose)
         process.stderr.write(
@@ -355,13 +421,72 @@ export class AgentSession {
       const results = await this.executeActions([signAction], ui)
       if (results.length > 0) {
         for (const result of results) {
-          await this.processMessageLoop(null, [result], ui)
+          this.pendingToolResults.push(actionResultToRecentAction(result))
         }
+        await this.processMessageLoop(null, ui)
         return
       }
     }
 
+    // If any pending tool results accumulated from client-side tool
+    // calls on this stream, recurse so the backend can see them.
+    if (this.pendingToolResults.length > 0) {
+      await this.processMessageLoop(null, ui)
+      return
+    }
+
     ui.onDone()
+  }
+
+  /**
+   * Dispatch a client-executed tool call via the executor. Looks up the
+   * tool name in CLIENT_SIDE_TOOL_DISPATCH, synthesises an Action, and
+   * runs it through the existing executeAction machinery so password
+   * gating, auto-confirmation, and error wrapping all reuse proven
+   * paths.
+   *
+   * Missing registry entry produces a visible warning + a failure
+   * RecentAction — never a silent no-op.
+   */
+  private async dispatchClientSideTool(
+    toolCallId: string,
+    toolName: string,
+    input: Record<string, unknown>,
+    ui: UICallbacks
+  ): Promise<void> {
+    const actionType = CLIENT_SIDE_TOOL_DISPATCH[toolName]
+    if (!actionType) {
+      process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
+      this.pendingToolResults.push({
+        tool: toolName,
+        success: false,
+        data: { error: `unimplemented in CLI: ${toolName}` },
+      })
+      return
+    }
+
+    const action: Action = {
+      id: toolCallId,
+      type: actionType,
+      title: toolName,
+      params: input,
+      auto_execute: true,
+    }
+
+    try {
+      const results = await this.executeActions([action], ui)
+      const result = results[0]
+      if (result) {
+        this.pendingToolResults.push(actionResultToRecentAction(result))
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      this.pendingToolResults.push({
+        tool: toolName,
+        success: false,
+        data: { error: message },
+      })
+    }
   }
 
   /**

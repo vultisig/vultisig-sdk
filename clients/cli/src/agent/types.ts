@@ -120,6 +120,24 @@ export type MessageContext = {
   addresses?: Record<string, string>
   coins?: CoinInfo[]
   address_book?: AddressBookEntry[]
+  /**
+   * Client-side tool results from the previous turn, flushed on the next
+   * outbound request. Replaces the legacy top-level `action_result` field
+   * (post-PR-#119 contract). Backend reads these as tool outputs for the
+   * LLM's next iteration.
+   */
+  recent_actions?: RecentAction[]
+}
+
+/**
+ * Result of a client-side tool call the CLI executed locally. Sent back
+ * to the backend in `context.recent_actions` on the next HTTP round-trip
+ * so the LLM can see the outcome.
+ */
+export type RecentAction = {
+  tool: string
+  success: boolean
+  data?: Record<string, unknown>
 }
 
 export type BalanceInfo = {
@@ -155,7 +173,6 @@ export type SendMessageRequest = {
   context?: MessageContext
   tools?: ToolDefinition[]
   selected_suggestion_id?: string
-  action_result?: ActionResultPayload
   /** Signals that the caller is an AI agent; backend adjusts prompt accordingly */
   via_agent?: boolean
 }
@@ -163,16 +180,6 @@ export type SendMessageRequest = {
 export type ToolDefinition = {
   name: string
   params: string
-}
-
-export type ActionResultPayload = {
-  action: string
-  action_id?: string
-  success: boolean
-  data?: Record<string, unknown>
-  error?: string
-  /** Present when success is false */
-  code?: AgentErrorCode
 }
 
 export type SendMessageResponse = {
