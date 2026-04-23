@@ -1,3 +1,19 @@
+// RN override for `@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote`.
+//
+// `@lifi/sdk`'s barrel statically evaluates `@wallet-standard/app`, which
+// declares `class AppReadyEvent extends Event` at module top-level. Hermes
+// ships without the `Event` / `EventTarget` DOM globals; even with the
+// `event-target-polyfill` installed in the RN entry, it only takes effect
+// *after* the entry's polyfill import runs. Since `@lifi/sdk` is an
+// external module in the RN bundle, metro would resolve it and evaluate
+// its module body *before* the bundle body — racing against the polyfill.
+//
+// This override reaches `@lifi/sdk` via `await import()` inside the async
+// body so the module never evaluates unless a swap quote is actually
+// requested, by which point the polyfills are fully in place.
+//
+// Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
+// export returning `Promise<GeneralSwapQuote>`.
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
@@ -10,17 +26,17 @@ import { match } from '@vultisig/lib-utils/match'
 import { memoize } from '@vultisig/lib-utils/memoize'
 import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
-import { createConfig, getQuote } from '@lifi/sdk'
 
-import { AccountCoinKey } from '../../../../coin/AccountCoin'
-import { GeneralSwapQuote } from '../../GeneralSwapQuote'
+import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
+import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   amount: bigint
   affiliateBps?: number
 }
 
-const setupLifi = memoize(() => {
+const setupLifi = memoize(async () => {
+  const { createConfig } = await import('@lifi/sdk')
   createConfig({
     integrator: lifiConfig.integratorName,
   })
@@ -31,7 +47,9 @@ export const getLifiSwapQuote = async ({
   affiliateBps,
   ...transfer
 }: Input): Promise<GeneralSwapQuote> => {
-  setupLifi()
+  await setupLifi()
+
+  const { getQuote } = await import('@lifi/sdk')
 
   const [fromChain, toChain] = [transfer.from, transfer.to].map(
     ({ chain }) => lifiSwapChainId[chain]

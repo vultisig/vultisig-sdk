@@ -375,6 +375,40 @@ const configs = {
             find: /^@vultisig\/core-chain\/swap\/general\/lifi\/LifiSwapEnabledChains$/,
             replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts'),
           },
+          // Solana SPL + balance-resolver overrides: core modules statically
+          // import `PublicKey` from `@solana/web3.js`, which triggers Hermes-
+          // hostile `rpc-websockets` / `ws` module-init. RN overrides defer
+          // the `@solana/web3.js` import to inside the async function body.
+          {
+            find: /^@vultisig\/core-chain\/chains\/solana\/spl\/getSplAccounts$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/getSplAccounts.ts'),
+          },
+          {
+            find: /^@vultisig\/core-chain\/chains\/solana\/spl\/getSplAssociatedAccount$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/getSplAssociatedAccount.ts'),
+          },
+          {
+            find: /^@vultisig\/core-chain\/coin\/balance\/resolvers\/solana$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/resolverSolana.ts'),
+          },
+          // Solana keysign refiner override — same `@solana/web3.js` hazard.
+          // The core callsite was migrated from a relative `./refine` import
+          // to a bare specifier (`@vultisig/core-mpc/keysign/.../refine`) so
+          // this alias can intercept it for RN only.
+          {
+            find: /^@vultisig\/core-mpc\/keysign\/chainSpecific\/resolvers\/solana\/refine$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/refineSolanaChainSpecific.ts'),
+          },
+          // LI.FI quote builder override — `@lifi/sdk`'s barrel evaluates
+          // `@wallet-standard/app` at module-init which references the
+          // `Event` / `EventTarget` DOM globals. These are patched by the
+          // RN entry's `event-target-polyfill`, but only once the entry's
+          // body starts executing — which is too late for an external
+          // static import. Lazy-loading keeps the module graph cold.
+          {
+            find: /^@vultisig\/core-chain\/swap\/general\/lifi\/api\/getLifiSwapQuote$/,
+            replacement: path.resolve(currentDir, 'src/platforms/react-native/overrides/getLifiSwapQuote.ts'),
+          },
           // Resolve workspace packages to source TS for bundling
           {
             find: /^@vultisig\/core-chain\/(.*)/,

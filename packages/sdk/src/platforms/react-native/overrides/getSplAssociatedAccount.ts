@@ -1,7 +1,11 @@
+// RN override for `@vultisig/core-chain/chains/solana/spl/getSplAssociatedAccount`.
+//
+// Same rationale as the `getSplAccounts` override: `@solana/web3.js` evaluation
+// drags in `ws` / `rpc-websockets` which Hermes can't handle. We preserve the
+// public signature exactly (`{account, token} -> {address, isToken2022}`)
+// and defer the `@solana/web3.js` import to inside the async body.
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-import { PublicKey } from '@solana/web3.js'
-
-import { token2022ProgramId } from '../config'
+import { token2022ProgramId } from '@vultisig/core-chain/chains/solana/config'
 
 type Input = {
   account: string
@@ -13,6 +17,7 @@ export const getSplAssociatedAccount = async ({
   token,
 }: Input): Promise<{ address: string; isToken2022: boolean }> => {
   const client = getSolanaClient()
+  const { PublicKey } = await import('@solana/web3.js')
 
   const response = await client.getParsedTokenAccountsByOwner(
     new PublicKey(account),

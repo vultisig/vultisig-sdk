@@ -9,7 +9,7 @@ import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
-import { refineSolanaChainSpecific } from './refine'
+import { refineSolanaChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific/resolvers/solana/refine'
 import { getDynamicPriorityFeePrice } from '@vultisig/core-chain/chains/solana/getDynamicPriorityFeePrice'
 
 export const getSolanaChainSpecific: GetChainSpecificResolver<
