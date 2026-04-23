@@ -45,6 +45,7 @@ describe('actionResultToRecentAction (via session.ts internals)', () => {
   it('converts successful ActionResult with no data to RecentAction with empty data', () => {
     const actionResult: ActionResult = {
       action: 'create_vault',
+      action_id: 'call-2',
       success: true,
     }
     const recent = convert(actionResult)
@@ -58,6 +59,7 @@ describe('actionResultToRecentAction (via session.ts internals)', () => {
   it('converts failed ActionResult, folding error into data', () => {
     const actionResult: ActionResult = {
       action: 'sign_typed_data',
+      action_id: 'call-3',
       success: false,
       error: 'Password required',
       code: AgentErrorCode.PASSWORD_REQUIRED,
@@ -76,6 +78,7 @@ describe('actionResultToRecentAction (via session.ts internals)', () => {
   it('preserves existing data fields when folding error', () => {
     const actionResult: ActionResult = {
       action: 'add_coin',
+      action_id: 'call-4',
       success: false,
       data: { requested: 'USDC' },
       error: 'invalid contract',
