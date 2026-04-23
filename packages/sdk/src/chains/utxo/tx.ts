@@ -68,6 +68,12 @@ export const getUtxoChainSpec = (chain: UtxoChainName): UtxoChainSpec => UTXO_SP
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex
+  if (clean.length % 2 !== 0) {
+    throw new Error(`hexToBytes: odd-length hex string (${clean.length} chars)`)
+  }
+  if (clean.length > 0 && !/^[0-9a-fA-F]+$/.test(clean)) {
+    throw new Error('hexToBytes: non-hex characters in input')
+  }
   const bytes = new Uint8Array(clean.length / 2)
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(clean.substring(i * 2, i * 2 + 2), 16)
@@ -179,13 +185,7 @@ export function deriveUtxoPubkey(
  * top bits and would accept invalid addresses.
  */
 function cashAddrPolymod(values: number[]): bigint {
-  const GEN: bigint[] = [
-    0x98f2bc8e61n,
-    0x79b76d99e2n,
-    0xf33e5fb3c4n,
-    0xae2eabe2a8n,
-    0x1e4f43e470n,
-  ]
+  const GEN: bigint[] = [0x98f2bc8e61n, 0x79b76d99e2n, 0xf33e5fb3c4n, 0xae2eabe2a8n, 0x1e4f43e470n]
   let c: bigint = 1n
   for (const v of values) {
     const c0 = c >> 35n

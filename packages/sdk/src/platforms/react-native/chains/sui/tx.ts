@@ -18,6 +18,12 @@ import { blake2b } from '@noble/hashes/blake2.js'
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex
+  if (clean.length % 2 !== 0) {
+    throw new Error(`hexToBytes: odd-length hex string (${clean.length} chars)`)
+  }
+  if (clean.length > 0 && !/^[0-9a-fA-F]+$/.test(clean)) {
+    throw new Error('hexToBytes: non-hex characters in input')
+  }
   const bytes = new Uint8Array(clean.length / 2)
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(clean.substring(i * 2, i * 2 + 2), 16)
@@ -35,6 +41,9 @@ function bytesToHex(bytes: Uint8Array): string {
  */
 export function deriveSuiAddress(eddsaPubKeyHex: string): string {
   const pubKeyBytes = hexToBytes(eddsaPubKeyHex)
+  if (pubKeyBytes.length !== 32) {
+    throw new Error(`deriveSuiAddress: EdDSA pubkey must be 32 bytes, got ${pubKeyBytes.length}`)
+  }
   const data = new Uint8Array(33)
   data[0] = 0x00
   data.set(pubKeyBytes, 1)

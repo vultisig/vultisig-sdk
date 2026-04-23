@@ -29,6 +29,12 @@ import { bech32 } from '@scure/base'
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex
+  if (clean.length % 2 !== 0) {
+    throw new Error(`hexToBytes: odd-length hex string (${clean.length} chars)`)
+  }
+  if (clean.length > 0 && !/^[0-9a-fA-F]+$/.test(clean)) {
+    throw new Error('hexToBytes: non-hex characters in input')
+  }
   const bytes = new Uint8Array(clean.length / 2)
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(clean.substring(i * 2, i * 2 + 2), 16)
@@ -381,17 +387,40 @@ function finalizeCosmosTx(
   authInfoBytes: Uint8Array,
   sigHex: string
 ): { txRawBytes: Uint8Array; txBytesBase64: string; txHashHex: string } {
-  // Cosmos signatures are raw r||s (64 bytes). If caller passes 65 bytes
-  // (including recovery_id), strip the last byte.
-  const r = sigHex.substring(0, 64)
-  const s = sigHex.substring(64, 128)
+  // Cosmos signatures are raw r||s (64 bytes = 128 hex chars). A truncated
+  // signature would decode to a shorter Uint8Array and silently produce a
+  // malformed tx — reject early so the caller sees a clear error.
+  const cleanSig = sigHex.startsWith('0x') ? sigHex.slice(2) : sigHex
+  if (cleanSig.length !== 128 && cleanSig.length !== 130) {
+    throw new Error(
+      `Cosmos finalize: expected 128-hex-char (r||s) or 130-hex-char (r||s||v) signature, got ${cleanSig.length}`
+    )
+  }
+  const r = cleanSig.substring(0, 64)
+  const s = cleanSig.substring(64, 128)
   const sigBytes = hexToBytes(r + s)
   const txRawBytes = concat(field(1, 2, txBodyBytes), field(2, 2, authInfoBytes), field(3, 2, sigBytes))
   // Base64 via btoa (available in Hermes/JSC, RN runtime).
+  //
+  // `String.fromCharCode(...txRawBytes)` spreads the Uint8Array across the
+  // argument list; for a large tx that can exceed the JS engine's argument
+  // limit (~65k on V8, lower on Hermes) and crash with a stack-overflow /
+  // "too many arguments" error. Build the binary string in chunks instead.
   const txBytesBase64 =
     typeof btoa === 'function'
-      ? btoa(String.fromCharCode(...txRawBytes))
+      ? btoa(bytesToBinaryString(txRawBytes))
       : (globalThis as any).Buffer.from(txRawBytes).toString('base64')
   const txHashHex = bytesToHex(sha256(txRawBytes)).toUpperCase()
   return { txRawBytes, txBytesBase64, txHashHex }
+}
+
+/** Convert a Uint8Array to a binary latin-1 string without spreading (which
+ *  would crash on large inputs due to JS argument-count limits). */
+function bytesToBinaryString(bytes: Uint8Array): string {
+  const CHUNK = 0x8000 // 32 kB
+  let out = ''
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    out += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return out
 }

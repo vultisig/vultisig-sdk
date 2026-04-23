@@ -45,6 +45,12 @@ const SECP256K1_HALF_ORDER = SECP256K1_ORDER / 2n
 
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') ? hex.slice(2) : hex
+  if (clean.length % 2 !== 0) {
+    throw new Error(`hexToBytes: odd-length hex string (${clean.length} chars)`)
+  }
+  if (clean.length > 0 && !/^[0-9a-fA-F]+$/.test(clean)) {
+    throw new Error('hexToBytes: non-hex characters in input')
+  }
   const bytes = new Uint8Array(clean.length / 2)
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(clean.substring(i * 2, i * 2 + 2), 16)
@@ -230,8 +236,15 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
   const signingHashHex = bytesToHex(signingHashBytes)
 
   const finalize = (sigHex: string) => {
-    const rHex = sigHex.substring(0, 64)
-    const sHexRaw = sigHex.substring(64, 128)
+    // Enforce exact 128-hex-char (64 byte) r||s. A truncated signature silently
+    // produces a malformed DER blob that XRPL accepts at submit-time but rejects
+    // at validation — caller's funds end up locked in a failed submit attempt.
+    const cleanSig = sigHex.startsWith('0x') ? sigHex.slice(2) : sigHex
+    if (cleanSig.length !== 128) {
+      throw new Error(`Ripple finalize: expected 128-hex-char (r||s) signature, got ${cleanSig.length}`)
+    }
+    const rHex = cleanSig.substring(0, 64)
+    const sHexRaw = cleanSig.substring(64, 128)
     // Normalize S to low-S form (BIP-62 / XRP canonical sig rule)
     const sBI = BigInt('0x' + sHexRaw)
     const normalizedS = sBI > SECP256K1_HALF_ORDER ? SECP256K1_ORDER - sBI : sBI
