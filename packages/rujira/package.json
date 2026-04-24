@@ -2,7 +2,7 @@
   "name": "@vultisig/rujira",
   "version": "12.1.0",
   "type": "module",
-  "description": "Rujira DEX SDK for Vultisig — THORChain-native swaps, limit orders, staking, ghost perps. Built for MPC wallets and AI agents. TypeScript, modular, self-custody.",
+  "description": "Rujira DEX SDK for Vultisig — THORChain-native swaps, limit orders, staking. Built for MPC wallets and AI agents. TypeScript, modular, self-custody.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -92,7 +92,6 @@
     "limit-order",
     "cross-chain-swap",
     "rune",
-    "ghost-perps",
     "cosmwasm",
     "cosmos-sdk",
     "defi-sdk",
