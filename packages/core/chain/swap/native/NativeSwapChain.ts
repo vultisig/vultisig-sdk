@@ -5,10 +5,17 @@ import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 export const nativeSwapChains = [Chain.THORChain, Chain.MayaChain] as const
 export type NativeSwapChain = (typeof nativeSwapChains)[number]
 
+/** THORChain rapid swap (`streaming_interval=0`). Streaming retry uses interval `1`. */
 export const nativeSwapStreamingInterval: Record<NativeSwapChain, number> = {
-  [Chain.THORChain]: 1,
+  [Chain.THORChain]: 0,
   [Chain.MayaChain]: 3,
 }
+
+/**
+ * THORChain-only: when a rapid quote's `fees.total_bps` exceeds this, fetch a streaming quote and pick the better outcome.
+ * Set to `Number.MAX_SAFE_INTEGER` to disable streaming fallback without removing code.
+ */
+export const THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS = 300
 
 export const nativeSwapApiBaseUrl: Record<NativeSwapChain, string> = {
   [Chain.THORChain]: `${cosmosRpcUrl[Chain.THORChain]}/thorchain`,

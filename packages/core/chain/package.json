@@ -1300,6 +1300,11 @@
       "import": "./dist/swap/native/utils/getNativeSwapDecimals.js",
       "default": "./dist/swap/native/utils/getNativeSwapDecimals.js"
     },
+    "./swap/native/utils/parseThorchainSwapMemoStreaming": {
+      "types": "./dist/swap/native/utils/parseThorchainSwapMemoStreaming.d.ts",
+      "import": "./dist/swap/native/utils/parseThorchainSwapMemoStreaming.js",
+      "default": "./dist/swap/native/utils/parseThorchainSwapMemoStreaming.js"
+    },
     "./swap/NoSwapRoutesError": {
       "types": "./dist/swap/NoSwapRoutesError.d.ts",
       "import": "./dist/swap/NoSwapRoutesError.js",
