@@ -6,7 +6,7 @@ export const nativeSwapChains = [Chain.THORChain, Chain.MayaChain] as const
 export type NativeSwapChain = (typeof nativeSwapChains)[number]
 
 export const nativeSwapStreamingInterval: Record<NativeSwapChain, number> = {
-  [Chain.THORChain]: 1,
+  [Chain.THORChain]: 0,
   [Chain.MayaChain]: 3,
 }
 
