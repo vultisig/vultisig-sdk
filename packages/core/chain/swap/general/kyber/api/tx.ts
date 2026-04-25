@@ -6,8 +6,10 @@ import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
+import { SwapFee } from '../../SwapFee'
 import { KyberSwapEnabledChain } from '../chains'
 import {
+  getKyberSwapAffiliateParams,
   kyberSwapAffiliateConfig,
   kyberSwapSlippageTolerance,
   kyberSwapTxLifespan,
@@ -16,11 +18,12 @@ import { getKyberSwapBaseUrl } from './baseUrl'
 
 type GetKyberSwapTxInput = {
   from: AccountCoin<KyberSwapEnabledChain>
+  to: AccountCoin<KyberSwapEnabledChain>
   routeSummary: any
   routerAddress: string
   amount: bigint
   enableGasEstimation: boolean
-  isAffiliate: boolean
+  affiliateBps?: number
 }
 
 type KyberSwapBuildResponse = {
@@ -34,13 +37,32 @@ type KyberSwapBuildResponse = {
   }
 }
 
+const getKyberSwapAffiliateFee = ({
+  amountOut,
+  to,
+  affiliateBps,
+}: {
+  amountOut: string
+  to: AccountCoin<KyberSwapEnabledChain>
+  affiliateBps?: number
+}): SwapFee | undefined =>
+  affiliateBps !== undefined && affiliateBps > 0
+    ? {
+        chain: to.chain,
+        id: to.id,
+        decimals: to.decimals,
+        amount: (BigInt(amountOut) * BigInt(affiliateBps)) / 10000n,
+      }
+    : undefined
+
 export const getKyberSwapTx = async ({
   from,
+  to,
   routeSummary,
   routerAddress,
   amount,
   enableGasEstimation,
-  isAffiliate,
+  affiliateBps,
 }: GetKyberSwapTxInput): Promise<GeneralSwapQuote> => {
   const buildPayload = {
     routeSummary,
@@ -55,7 +77,7 @@ export const getKyberSwapTx = async ({
       )
     ),
     enableGasEstimation,
-    ...(isAffiliate ? kyberSwapAffiliateConfig : {}),
+    ...getKyberSwapAffiliateParams(affiliateBps),
     ignoreCappedSlippage: false,
   }
 
@@ -92,7 +114,6 @@ export const getKyberSwapTx = async ({
   }
 
   const { amountOut, data, gas } = buildResponse.data
-
   return {
     dstAmount: amountOut,
     provider: 'kyber',
@@ -103,6 +124,11 @@ export const getKyberSwapTx = async ({
         data,
         value: isFeeCoin(from) ? amount.toString() : '0',
         gasLimit: gas ? BigInt(gas) : undefined,
+        affiliateFee: getKyberSwapAffiliateFee({
+          amountOut,
+          to,
+          affiliateBps,
+        }),
       },
     },
   }
