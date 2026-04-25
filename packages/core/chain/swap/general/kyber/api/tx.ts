@@ -3,6 +3,7 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 
+import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
@@ -45,15 +46,22 @@ const getKyberSwapAffiliateFee = ({
   amountOut: string
   to: AccountCoin<KyberSwapEnabledChain>
   affiliateBps?: number
-}): SwapFee | undefined =>
-  affiliateBps !== undefined && affiliateBps > 0
-    ? {
-        chain: to.chain,
-        id: to.id,
-        decimals: to.decimals,
-        amount: (BigInt(amountOut) * BigInt(affiliateBps)) / 10000n,
-      }
-    : undefined
+}): SwapFee | undefined => {
+  if (affiliateBps === undefined || affiliateBps <= 0) {
+    return undefined
+  }
+
+  const netAmountOut = BigInt(amountOut)
+  const feeRate = BigInt(affiliateBps)
+  const grossAmountOut = (netAmountOut * 10000n) / (10000n - feeRate)
+
+  return {
+    chain: to.chain,
+    id: to.id ?? evmNativeCoinAddress,
+    decimals: to.decimals,
+    amount: grossAmountOut - netAmountOut,
+  }
+}
 
 export const getKyberSwapTx = async ({
   from,

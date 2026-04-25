@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getSwapAffiliateBps } from '@vultisig/core-chain/swap/affiliate'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +11,8 @@ vi.mock('@vultisig/core-chain/swap/general/kyber/api/quote', () => ({
 
 describe('findSwapQuote Kyber affiliate fee', () => {
   it('passes effective affiliate BPS after VULT discount', async () => {
+    const expectedBps = getSwapAffiliateBps('gold')
+
     vi.mocked(getKyberSwapQuote).mockResolvedValue({
       dstAmount: '10000000',
       provider: 'kyber',
@@ -49,7 +52,7 @@ describe('findSwapQuote Kyber affiliate fee', () => {
       from,
       to,
       amount: 1_000_000n,
-      affiliateBps: 30,
+      affiliateBps: expectedBps,
     })
     expect(quote.discounts).toEqual([{ vult: { tier: 'gold' } }])
   })

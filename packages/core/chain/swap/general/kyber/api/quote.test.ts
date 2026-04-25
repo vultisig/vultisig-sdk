@@ -70,7 +70,7 @@ describe('getKyberSwapQuote', () => {
       chain: Chain.Ethereum,
       id: '0xdst',
       decimals: 6,
-      amount: 50_000n,
+      amount: 50_251n,
     })
   })
 })
