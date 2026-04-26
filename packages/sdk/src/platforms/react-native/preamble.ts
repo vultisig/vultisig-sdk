@@ -20,10 +20,12 @@
 import { Buffer } from 'buffer'
 
 // 1. Install globalThis.Buffer.
-//    Several bundled chain libs read it at module-init.
-if (typeof (globalThis as { Buffer?: unknown }).Buffer === 'undefined') {
-  ;(globalThis as { Buffer?: unknown }).Buffer = Buffer
-}
+//    Use the existing global Buffer if a consumer set one before us; fall back
+//    to our imported polyfill. Patch the chosen instance so all transitive
+//    consumers reading globalThis.Buffer see the repaired prototype.
+const globalWithBuffer = globalThis as { Buffer?: typeof Buffer }
+const RuntimeBuffer = globalWithBuffer.Buffer ?? Buffer
+globalWithBuffer.Buffer = RuntimeBuffer
 
 // 2. Repair Buffer.prototype.subarray.
 //    The RN `buffer` polyfill returns a plain Uint8Array from subarray, which
@@ -31,8 +33,12 @@ if (typeof (globalThis as { Buffer?: unknown }).Buffer === 'undefined') {
 //    them. @ton/core (and likely others) call `.copy()` on subarray results.
 //    Wrap the view as a real Buffer sharing the same memory so Node-shaped
 //    assumptions downstream keep working.
-const originalSubarray = Buffer.prototype.subarray
-Buffer.prototype.subarray = function patchedSubarray(this: Buffer, start?: number, end?: number) {
+const originalSubarray = RuntimeBuffer.prototype.subarray
+RuntimeBuffer.prototype.subarray = function patchedSubarray(
+  this: Buffer,
+  start?: number,
+  end?: number,
+) {
   const view = originalSubarray.call(this, start, end)
-  return Buffer.from(view.buffer, view.byteOffset, view.byteLength)
+  return RuntimeBuffer.from(view.buffer, view.byteOffset, view.byteLength)
 }

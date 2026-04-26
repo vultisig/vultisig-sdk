@@ -6728,6 +6728,7 @@ __metadata:
     bip32: "npm:^5.0.0"
     bitcoinjs-lib: "npm:^7.0.0"
     bs58: "npm:^6.0.0"
+    buffer: "npm:^6.0.3"
     cbor-x: "npm:^1.6.0"
     concurrently: "npm:^9.2.1"
     date-fns: "npm:^4.1.0"
