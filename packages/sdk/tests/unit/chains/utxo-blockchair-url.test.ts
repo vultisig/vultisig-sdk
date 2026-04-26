@@ -10,12 +10,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  broadcastUtxoTx,
-  estimateUtxoFee,
-  getUtxoBalance,
-  getUtxos,
-} from '../../../src/chains/utxo/rpc'
+import { broadcastUtxoTx, estimateUtxoFee, getUtxoBalance, getUtxos } from '../../../src/chains/utxo/rpc'
 
 const API_URL = 'https://api.vultisig.com/blockchair/bitcoin'
 const ADDRESS = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4'
