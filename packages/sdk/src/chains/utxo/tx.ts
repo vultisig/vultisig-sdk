@@ -39,7 +39,7 @@ import bs58check from 'bs58check'
 
 export type UtxoChainName = 'Bitcoin' | 'Litecoin' | 'Dogecoin' | 'Dash' | 'Bitcoin-Cash' | 'Zcash'
 
-type UtxoScriptKind = 'p2pkh' | 'p2wpkh'
+type UtxoScriptKind = 'p2pkh' | 'p2wpkh' | 'p2sh'
 
 type UtxoChainSpec = {
   scriptType: UtxoScriptKind
@@ -271,11 +271,26 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
   // base58check (DOGE D..., Zcash t1..., legacy BTC 1...)
   try {
     const decoded = bs58check.decode(address)
-    // Zcash t-addresses use a 2-byte version prefix (0x1c, 0xb8).
-    if (chain === 'Zcash' && decoded.length === 22 && decoded[0] === 0x1c && decoded[1] === 0xb8) {
-      return { pubKeyHash: decoded.slice(2), type: 'p2pkh' }
+    // Zcash t-addresses use a 2-byte version prefix:
+    //   0x1c, 0xb8 → t1... (P2PKH)
+    //   0x1c, 0xbd → t3... (P2SH)
+    if (chain === 'Zcash' && decoded.length === 22 && decoded[0] === 0x1c) {
+      if (decoded[1] === 0xb8) return { pubKeyHash: decoded.slice(2), type: 'p2pkh' }
+      if (decoded[1] === 0xbd) return { pubKeyHash: decoded.slice(2), type: 'p2sh' }
     }
-    return { pubKeyHash: decoded.slice(1), type: 'p2pkh' }
+    // Single-byte version prefixes:
+    //   BTC:  0x00 (P2PKH, 1...) | 0x05 (P2SH, 3...)
+    //   LTC:  0x30 (P2PKH, L...) | 0x32 (P2SH, M...) — modern LTC P2SH; 0x05 also accepted by some hosts
+    //   DOGE: 0x1e (P2PKH, D...) | 0x16 (P2SH, A.../9...)
+    //   DASH: 0x4c (P2PKH, X...) | 0x10 (P2SH, 7...)
+    // Any unknown version byte falls through to P2PKH for backward compat with
+    // the previous behaviour — known-P2SH gets explicit handling so the SDK
+    // doesn't silently re-encode a P2SH deposit address as P2PKH (which would
+    // lock funds).
+    const version = decoded[0]
+    const P2SH_VERSIONS = new Set<number>([0x05, 0x32, 0x16, 0x10])
+    const type: UtxoScriptKind = P2SH_VERSIONS.has(version!) ? 'p2sh' : 'p2pkh'
+    return { pubKeyHash: decoded.slice(1), type }
   } catch {
     /* not base58 */
   }
@@ -287,6 +302,10 @@ function buildScriptPubKey(pubKeyHash: Uint8Array, type: UtxoScriptKind): Uint8A
   if (type === 'p2pkh') {
     // OP_DUP OP_HASH160 <20-byte-hash> OP_EQUALVERIFY OP_CHECKSIG
     return concat(new Uint8Array([0x76, 0xa9, 0x14]), pubKeyHash, new Uint8Array([0x88, 0xac]))
+  }
+  if (type === 'p2sh') {
+    // OP_HASH160 <20-byte-script-hash> OP_EQUAL
+    return concat(new Uint8Array([0xa9, 0x14]), pubKeyHash, new Uint8Array([0x87]))
   }
   // OP_0 <20-byte-hash>
   return concat(new Uint8Array([0x00, 0x14]), pubKeyHash)
