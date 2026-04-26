@@ -183,7 +183,9 @@ export type BuildXrpSendResult = {
   encodedForSigningHex: string
   /**
    * Finalize by attaching a DER-encoded signature to the tx.
-   * `sigHex` is the 128-char R||S hex returned by fastVaultSign (ECDSA MPC).
+   * `sigHex` is the R||S hex returned by fastVaultSign (ECDSA MPC) — either
+   * 128 chars (r||s) or 130 chars (r||s||recovery_id). XRP's DER encoding
+   * ignores the recovery byte, so it is dropped when present.
    */
   finalize: (sigHex: string) => {
     /** Serialized signed tx blob (hex) — pass to submitXrpTx. */
@@ -236,12 +238,15 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
   const signingHashHex = bytesToHex(signingHashBytes)
 
   const finalize = (sigHex: string) => {
-    // Enforce exact 128-hex-char (64 byte) r||s. A truncated signature silently
-    // produces a malformed DER blob that XRPL accepts at submit-time but rejects
-    // at validation — caller's funds end up locked in a failed submit attempt.
+    // Accept 128-hex-char (r||s) or 130-hex-char (r||s||recovery_id) signatures.
+    // fastVaultSign now appends the recovery byte for ECDSA results; XRP's DER
+    // encoding does not consume it, so we strip the trailing 2 hex chars when
+    // present. A truncated (<128) signature silently produces a malformed DER
+    // blob that XRPL accepts at submit-time but rejects at validation —
+    // caller's funds end up locked in a failed submit attempt.
     const cleanSig = sigHex.startsWith('0x') ? sigHex.slice(2) : sigHex
-    if (cleanSig.length !== 128) {
-      throw new Error(`Ripple finalize: expected 128-hex-char (r||s) signature, got ${cleanSig.length}`)
+    if (cleanSig.length !== 128 && cleanSig.length !== 130) {
+      throw new Error(`Ripple finalize: expected 128 or 130 hex char (r||s[||v]) signature, got ${cleanSig.length}`)
     }
     const rHex = cleanSig.substring(0, 64)
     const sHexRaw = cleanSig.substring(64, 128)
