@@ -47,15 +47,6 @@ export type PlainUtxo = {
   value: bigint
 }
 
-const BLOCKCHAIR_CHAIN_SLUGS: Record<UtxoChainName, string> = {
-  Bitcoin: 'bitcoin',
-  Litecoin: 'litecoin',
-  Dogecoin: 'dogecoin',
-  'Bitcoin-Cash': 'bitcoin-cash',
-  Dash: 'dash',
-  Zcash: 'zcash',
-}
-
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) {
@@ -83,12 +74,13 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
     return utxos.map(u => ({ hash: u.txid, index: u.vout, value: BigInt(u.value) }))
   }
 
-  // blockchair
-  const slug = BLOCKCHAIR_CHAIN_SLUGS[opts.chain]
+  // blockchair — `apiUrl` is already chain-scoped per the contract at the top
+  // of this file (`${rootApiUrl}/blockchair/{chain}`). Appending the slug
+  // again would produce e.g. `/blockchair/bitcoin/bitcoin/...` and 404.
   type BlockchairResp = {
     data: Record<string, { utxo: Array<{ transaction_hash: string; index: number; value: number }> }>
   }
-  const resp = await fetchJson<BlockchairResp>(`${opts.apiUrl}/${slug}/dashboards/address/${opts.address}?limit=100`)
+  const resp = await fetchJson<BlockchairResp>(`${opts.apiUrl}/dashboards/address/${opts.address}?limit=100`)
   const entry = resp.data[opts.address]
   if (!entry?.utxo) return []
   return entry.utxo.map(u => ({
@@ -119,11 +111,11 @@ export async function getUtxoBalance(opts: GetUtxoBalanceOptions): Promise<bigin
     return BigInt(confirmed)
   }
 
-  const slug = BLOCKCHAIR_CHAIN_SLUGS[opts.chain]
+  // `apiUrl` already includes the chain slug — see contract above.
   type BlockchairResp = {
     data: Record<string, { address: { balance: number } }>
   }
-  const resp = await fetchJson<BlockchairResp>(`${opts.apiUrl}/${slug}/dashboards/address/${opts.address}?limit=0`)
+  const resp = await fetchJson<BlockchairResp>(`${opts.apiUrl}/dashboards/address/${opts.address}?limit=0`)
   const entry = resp.data[opts.address]
   return BigInt(entry?.address?.balance ?? 0)
 }
@@ -152,11 +144,11 @@ export async function estimateUtxoFee(opts: EstimateUtxoFeeOptions): Promise<num
     return Math.max(1, Math.ceil(next))
   }
 
-  const slug = BLOCKCHAIR_CHAIN_SLUGS[opts.chain]
+  // `apiUrl` already includes the chain slug — see contract above.
   type BlockchairStats = {
     data: { suggested_transaction_fee_per_byte_sat?: number }
   }
-  const resp = await fetchJson<BlockchairStats>(`${opts.apiUrl}/${slug}/stats`)
+  const resp = await fetchJson<BlockchairStats>(`${opts.apiUrl}/stats`)
   const base = resp.data.suggested_transaction_fee_per_byte_sat ?? 1
   if (opts.chain === 'Dogecoin') {
     // Blockchair reports ~500,000 sats/byte for DOGE — 10x too high for our
@@ -189,13 +181,12 @@ export async function broadcastUtxoTx(opts: BroadcastUtxoTxOptions): Promise<str
     return body.trim()
   }
 
-  // blockchair
-  const slug = BLOCKCHAIR_CHAIN_SLUGS[opts.chain]
+  // blockchair — `apiUrl` already includes the chain slug per contract above.
   type BlockchairBroadcast = {
     data?: { transaction_hash?: string } | null
     context?: { error?: string }
   }
-  const resp = await fetchJson<BlockchairBroadcast>(`${opts.apiUrl}/${slug}/push/transaction`, {
+  const resp = await fetchJson<BlockchairBroadcast>(`${opts.apiUrl}/push/transaction`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ data: opts.rawTxHex }),
