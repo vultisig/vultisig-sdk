@@ -16,10 +16,15 @@ export type KyberSwapAffiliateParams = typeof kyberSwapAffiliateConfig & {
   feeReceiver: string
 }
 
+export const hasAffiliateBps = (
+  affiliateBps?: number
+): affiliateBps is number =>
+  affiliateBps !== undefined && affiliateBps > 0 && affiliateBps < 10000
+
 export const getKyberSwapAffiliateParams = (
   affiliateBps?: number
-): Partial<KyberSwapAffiliateParams> =>
-  affiliateBps !== undefined && affiliateBps > 0
+): KyberSwapAffiliateParams | Record<string, never> =>
+  hasAffiliateBps(affiliateBps)
     ? {
         ...kyberSwapAffiliateConfig,
         feeAmount: affiliateBps,
