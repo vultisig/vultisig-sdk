@@ -16,7 +16,10 @@ export default defineConfig({
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
             return 'vendor'
           }
-          if (id.includes('@vultisig/sdk') || id.includes('node_modules/@vultisig')) {
+          if (
+            id.includes('@vultisig/sdk') ||
+            (id.includes('node_modules/@vultisig') && !id.includes('node_modules/@vultisig/lib-'))
+          ) {
             return 'sdk'
           }
         },

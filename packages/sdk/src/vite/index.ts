@@ -191,8 +191,9 @@ export default function vultisig(userOptions: VultisigViteOptions = {}): PluginO
       if (!sevenZipWasm) return
       const file = resolveSevenZipWasmFile()
       if (!file) {
-        process.stderr.write('[vultisig-sdk] Failed to resolve 7z-wasm/7zz.wasm (7z decompression may break)\n')
-        return
+        this.error(
+          '[vultisig-sdk] Failed to resolve 7z-wasm/7zz.wasm. Set `sevenZipWasm: false` only if you host `/7zz.wasm` yourself.'
+        )
       }
 
       this.emitFile({
