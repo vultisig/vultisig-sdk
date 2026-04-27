@@ -1,5 +1,12 @@
 # @vultisig/examples-shared
 
+## 0.1.15
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vultisig/sdk@0.19.1
+
 ## 0.1.14
 
 ### Patch Changes
