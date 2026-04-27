@@ -1,5 +1,13 @@
 # @vultisig/example-browser
 
+## 0.1.31
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vultisig/sdk@0.19.1
+  - @vultisig/examples-shared@0.1.15
+
 ## 0.1.30
 
 ### Patch Changes

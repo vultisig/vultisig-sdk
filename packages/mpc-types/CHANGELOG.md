@@ -1,5 +1,16 @@
 # @vultisig/mpc-types
 
+## 0.2.2
+
+### Patch Changes
+
+- [#344](https://github.com/vultisig/vultisig-sdk/pull/344) [`e3fa32b`](https://github.com/vultisig/vultisig-sdk/commit/e3fa32b9f29e3a07880ecba117cf40e6dd396a4b) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON` env-var fallback alongside `VULTISIG_STRICT_SINGLETON` so Expo / React Native consumers can bypass the dev-mode duplicate-MPC-engine guard via Metro-inlined env vars (Expo only inlines `EXPO_PUBLIC_*`). `VULTISIG_STRICT_SINGLETON` retains precedence; production builds (`NODE_ENV=production`) are unaffected.
+
+  Originally landed via vultisig/vultisig-sdk#306 R8 (commit 964df08), but the corresponding changeset was missed at release time — this republish ships the fix to npm.
+
+- Updated dependencies []:
+  - @vultisig/mpc-wasm@0.1.4
+
 ## 0.2.1
 
 ### Patch Changes
