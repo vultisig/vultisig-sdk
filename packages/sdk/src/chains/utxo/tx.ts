@@ -307,8 +307,21 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
   }
 
   // base58check (DOGE D..., Zcash t1..., legacy BTC 1...)
+  // Decode the base58check payload OUTSIDE the chain-specific branching so we
+  // can distinguish "not a base58check string" (fall through to bottom-of-fn
+  // throw) from "decoded fine but payload length doesn't match a 20-byte
+  // pubKeyHash" (raise an explicit, chain-aware error). Burying the latter
+  // under a generic catch silently re-routes wrong-chain-paste cases (e.g. a
+  // 22-byte Zcash t-address under chain='Dogecoin') back to the same vague
+  // "Cannot decode address" message instead of surfacing the length mismatch.
+  let base58Decoded: Uint8Array | undefined
   try {
-    const decoded = bs58check.decode(address)
+    base58Decoded = bs58check.decode(address)
+  } catch {
+    /* not base58 — fall through to bottom-of-function throw */
+  }
+  if (base58Decoded) {
+    const decoded = base58Decoded
     // Zcash t-addresses use a 2-byte version prefix:
     //   0x1c, 0xb8 → t1... (P2PKH)
     //   0x1c, 0xbd → t3... (P2SH)
@@ -328,9 +341,21 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
     const version = decoded[0]
     const P2SH_VERSIONS = new Set<number>([0x05, 0x32, 0x16, 0x10])
     const type: UtxoScriptKind = P2SH_VERSIONS.has(version!) ? 'p2sh' : 'p2pkh'
-    return { pubKeyHash: decoded.slice(1), type }
-  } catch {
-    /* not base58 */
+    // Validate the resulting pubKeyHash is exactly 20 bytes (RIPEMD160). The
+    // base58check fallback is reached when the chain-specific branches above
+    // (e.g. Zcash's 22-byte 0x1c-prefix) don't match. A wrong-chain paste —
+    // e.g. a Zcash t-address (22-byte payload) decoded under chain='Dogecoin'
+    // — would fall through here and return a 21-byte slice. `buildScriptPubKey`
+    // hardcodes `OP_PUSH_20`, so the resulting locking script
+    // (`76 a9 14 <20 of 21 bytes> <leftover> 88 ac`) is non-standard and
+    // unspendable: funds sent to it lock on chain. Reject explicitly.
+    const pubKeyHash = decoded.slice(1)
+    if (pubKeyHash.length !== 20) {
+      throw new Error(
+        `Cannot decode address: ${address} — payload length ${pubKeyHash.length} bytes for chain ${chain} (expected 20)`
+      )
+    }
+    return { pubKeyHash, type }
   }
 
   throw new Error(`Cannot decode address: ${address}`)

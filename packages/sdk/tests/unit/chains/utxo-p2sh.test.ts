@@ -254,6 +254,65 @@ describe('decodeAddressToPubKeyHash — P2WSH rejection (32-byte witness v0)', (
   })
 })
 
+describe('decodeAddressToPubKeyHash — wrong-chain paste rejects 21-byte payload (CR R8 #1)', () => {
+  // Pre-fix: a Zcash t-address (2-byte version `0x1c, 0xb8` + 20-byte hash =
+  // 22-byte total payload) decoded under chain='Dogecoin' bypassed the Zcash
+  // branch (chain check), missed P2SH_VERSIONS (0x1c is not in the set), and
+  // fell through to `return { pubKeyHash: decoded.slice(1), type: 'p2pkh' }`
+  // with a 21-byte pubKeyHash. `buildScriptPubKey` hardcodes `OP_PUSH_20` so
+  // the resulting `76 a9 14 <20 bytes> <leftover> 88 ac` locking script is
+  // non-standard and unspendable — funds sent to it lock permanently.
+  // The decoder now throws when the post-version slice isn't exactly 20 bytes.
+  const buildZcashTAddress = (versionLowByte: number, hash20Hex: string): string => {
+    const hash = Uint8Array.from(hash20Hex.match(/.{2}/g)!.map(b => parseInt(b, 16)))
+    const payload = new Uint8Array(22)
+    payload[0] = 0x1c
+    payload[1] = versionLowByte
+    payload.set(hash, 2)
+    return bs58check.encode(payload)
+  }
+
+  it('throws when a Zcash t1-address is decoded as Dogecoin (22-byte payload → 21-byte slice)', () => {
+    const zcashTAddr = buildZcashTAddress(0xb8, HASH_20) // t1...
+    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Dogecoin')).toThrow(
+      /payload length 21 bytes for chain Dogecoin/
+    )
+  })
+
+  it('throws when a Zcash t1-address is decoded as Bitcoin-Cash', () => {
+    const zcashTAddr = buildZcashTAddress(0xb8, HASH_20)
+    // Note: BCH branch is CashAddr (`bitcoincash:...`); a base58 t-address
+    // doesn't match the CashAddr prefix, so it falls into the base58 fallback
+    // exactly as the Dogecoin case does.
+    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Bitcoin-Cash')).toThrow(
+      /payload length 21 bytes for chain Bitcoin-Cash/
+    )
+  })
+
+  it('throws when a Zcash t1-address is decoded as Dash', () => {
+    const zcashTAddr = buildZcashTAddress(0xb8, HASH_20)
+    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Dash')).toThrow(
+      /payload length 21 bytes for chain Dash/
+    )
+  })
+
+  it('still decodes a Zcash t1-address normally under chain=Zcash (Zcash branch handles before fallback)', () => {
+    const zcashTAddr = buildZcashTAddress(0xb8, HASH_20)
+    const { type, pubKeyHash } = decodeAddressToPubKeyHash(zcashTAddr, 'Zcash')
+    expect(type).toBe('p2pkh')
+    expect(pubKeyHash.length).toBe(20)
+    expect(hex(pubKeyHash)).toBe(HASH_20)
+  })
+
+  it('still decodes a Zcash t3-address (P2SH) normally under chain=Zcash', () => {
+    const zcashT3Addr = buildZcashTAddress(0xbd, HASH_20) // t3...
+    const { type, pubKeyHash } = decodeAddressToPubKeyHash(zcashT3Addr, 'Zcash')
+    expect(type).toBe('p2sh')
+    expect(pubKeyHash.length).toBe(20)
+    expect(hex(pubKeyHash)).toBe(HASH_20)
+  })
+})
+
 describe('locking script for P2SH outputs (smoke through buildUtxoSendTx)', () => {
   it('produces OP_HASH160 <hash> OP_EQUAL for a P2SH destination', async () => {
     // We import buildUtxoSendTx lazily so the top-level decoder tests stay
