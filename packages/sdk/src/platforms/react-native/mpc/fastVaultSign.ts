@@ -257,9 +257,7 @@ export async function schnorrSign(opts: SchnorrSignOptions): Promise<Uint8Array>
   // response, but the strict regex here protects against any future code
   // path that reaches `schnorrSign` with a non-canonical hex string.
   if (sigHex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(sigHex)) {
-    throw new Error(
-      `schnorrSign: invalid hex signature (length=${sigHex.length}, even=${sigHex.length % 2 === 0})`
-    )
+    throw new Error(`schnorrSign: invalid hex signature (length=${sigHex.length}, even=${sigHex.length % 2 === 0})`)
   }
   // Buffer is polyfilled at platforms/react-native/index.ts module-init.
   const buf = Buffer.from(sigHex, 'hex')

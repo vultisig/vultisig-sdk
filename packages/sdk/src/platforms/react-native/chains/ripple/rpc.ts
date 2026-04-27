@@ -36,9 +36,7 @@ async function rippleCall<T>(
     // failure reason (auth, throttle, geo block). Without it, ops sees a bare
     // 403/429/5xx and has to re-run by hand to diagnose.
     const preview = await res.text().catch(() => '')
-    throw new Error(
-      `XRP RPC HTTP ${res.status} ${res.statusText} from ${rpcUrl}: ${preview.slice(0, 256)}`
-    )
+    throw new Error(`XRP RPC HTTP ${res.status} ${res.statusText} from ${rpcUrl}: ${preview.slice(0, 256)}`)
   }
   const payload = (await res.json()) as RippleResponse<T>
   const result = payload.result

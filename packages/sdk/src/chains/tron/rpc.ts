@@ -91,7 +91,10 @@ async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Pr
     if (signal.aborted) controller.abort(signal.reason)
     else signal.addEventListener('abort', onExternalAbort, { once: true })
   }
-  const timeoutId = setTimeout(() => controller.abort(new Error(`postJson timeout after ${POST_JSON_TIMEOUT_MS}ms: ${url}`)), POST_JSON_TIMEOUT_MS)
+  const timeoutId = setTimeout(
+    () => controller.abort(new Error(`postJson timeout after ${POST_JSON_TIMEOUT_MS}ms: ${url}`)),
+    POST_JSON_TIMEOUT_MS
+  )
   try {
     const res = await fetch(url, {
       method: 'POST',

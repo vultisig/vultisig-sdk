@@ -12,9 +12,8 @@ vi.mock('../../../../src/platforms/react-native/mpc/relay', () => ({
 }))
 
 const { keysign } = await import('@vultisig/core-mpc/keysign')
-const { fastVaultSign, schnorrSign, INTERNAL_FOR_TESTING } = await import(
-  '../../../../src/platforms/react-native/mpc/fastVaultSign'
-)
+const { fastVaultSign, schnorrSign, INTERNAL_FOR_TESTING } =
+  await import('../../../../src/platforms/react-native/mpc/fastVaultSign')
 
 const BASE_OPTS = {
   keyshareBase64: 'ZmFrZQ==',
@@ -133,7 +132,10 @@ describe('fastVaultSign — r/s shape validation (CR R7 #5)', () => {
   })
 
   it('throws when r is shorter than 32 bytes (truncated)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 }))
+    )
     vi.mocked(keysign).mockResolvedValueOnce({
       r: 'aa'.repeat(31), // 62 hex chars — short
       s: 'bb'.repeat(32),
@@ -143,7 +145,10 @@ describe('fastVaultSign — r/s shape validation (CR R7 #5)', () => {
   })
 
   it('throws when s contains non-hex characters', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 }))
+    )
     vi.mocked(keysign).mockResolvedValueOnce({
       r: 'aa'.repeat(32),
       s: 'zz'.repeat(32), // non-hex
@@ -153,7 +158,10 @@ describe('fastVaultSign — r/s shape validation (CR R7 #5)', () => {
   })
 
   it('throws when r is longer than 32 bytes (oversized)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 }))
+    )
     vi.mocked(keysign).mockResolvedValueOnce({
       r: 'aa'.repeat(33),
       s: 'bb'.repeat(32),
@@ -162,8 +170,11 @@ describe('fastVaultSign — r/s shape validation (CR R7 #5)', () => {
     await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/invalid r\/s/)
   })
 
-  it('also enforces r/s shape on EdDSA (path doesn\'t bypass the check)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+  it("also enforces r/s shape on EdDSA (path doesn't bypass the check)", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 }))
+    )
     vi.mocked(keysign).mockResolvedValueOnce({
       r: 'aa'.repeat(32),
       s: 'bb'.repeat(31), // truncated s
@@ -183,7 +194,10 @@ describe('schnorrSign — hex validation + Buffer.from path (CR R7 #4)', () => {
   })
 
   it('returns a 64-byte Uint8Array on a well-formed signature', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 }))
+    )
     vi.mocked(keysign).mockResolvedValueOnce({
       r: 'a1'.repeat(32),
       s: 'b2'.repeat(32),
