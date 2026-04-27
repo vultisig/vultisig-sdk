@@ -14,7 +14,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { broadcastTronTx } from '../../../src/chains/tron/rpc'
+import { broadcastTronTx, estimateTrc20Energy } from '../../../src/chains/tron/rpc'
 
 type FetchInit = RequestInit | undefined
 
@@ -74,6 +74,60 @@ describe('tron / broadcastTronTx error parsing', () => {
     stubFetch({ error: 'invalid signature' })
     await expect(broadcastTronTx('00'.repeat(10), 'https://api.trongrid.io')).rejects.toThrow(
       /tron broadcast failed: invalid signature/
+    )
+  })
+})
+
+describe('tron / estimateTrc20Energy error parsing', () => {
+  // Mirrors the broadcastTronTx test surface: same 5 shapes, but on
+  // `triggerconstantcontract`. Returning `0` for any of these would let the
+  // caller broadcast a TRC-20 transfer with zero energy budget; the network
+  // rejects it but only after the user has signed and paid bandwidth.
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // `from` and `tokenAddress` are passed straight through to the request body,
+  // but `to` is bs58check-decoded and must start with the Tron 0x41 version
+  // byte. Use TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t (canonical TRC20 USDT
+  // contract) as a verified real address — keeps the test free of decoding
+  // surprises and lets us focus on response-shape parsing.
+  const baseOpts = {
+    from: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    tokenAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    to: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    amount: 1_000_000n,
+  }
+
+  it('returns energy_required on success', async () => {
+    stubFetch({ result: { result: true }, energy_required: 14_000 })
+    const out = await estimateTrc20Energy(baseOpts, 'https://api.trongrid.io')
+    expect(out).toBe(14_000)
+  })
+
+  it('throws on `{result: {result: false, message}}` (existing branch)', async () => {
+    stubFetch({ result: { result: false, message: 'BANDWITH_ERROR' } })
+    await expect(estimateTrc20Energy(baseOpts, 'https://api.trongrid.io')).rejects.toThrow(
+      /triggerconstantcontract failed: BANDWITH_ERROR/
+    )
+  })
+
+  it('throws on TronGrid bare `{Error: "..."}` (capital E)', async () => {
+    // Without this branch, energy_required/energy_used are both undefined and
+    // `?? 0` would silently return 0 — the user signs a tx the network drops.
+    stubFetch({ Error: 'contract validate error : Invalid contract address' })
+    await expect(estimateTrc20Energy(baseOpts, 'https://api.trongrid.io')).rejects.toThrow(
+      /triggerconstantcontract failed: contract validate error : Invalid contract address/
+    )
+  })
+
+  it('throws on lowercase `{error: "..."}` (mirror gateway)', async () => {
+    stubFetch({ error: 'rate limited' })
+    await expect(estimateTrc20Energy(baseOpts, 'https://api.trongrid.io')).rejects.toThrow(
+      /triggerconstantcontract failed: rate limited/
     )
   })
 })

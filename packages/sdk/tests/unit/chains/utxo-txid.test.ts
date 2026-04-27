@@ -36,10 +36,15 @@ const DUMMY_SIG =
 
 describe('buildUtxoSendTx / finalize — BIP141 txid', () => {
   it('BTC (P2WPKH): txid is computed from the witness-stripped base tx, not the broadcastable segwit bytes', async () => {
+    // Use a real BIP141 P2WPKH address (20-byte witness program) — the prior
+    // fixture was a P2WSH (`bc1q...zej`, 32-byte program) which the SDK now
+    // explicitly rejects (CR item #5: P2WSH spend support not shipped). This
+    // test only cares about BIP141 txid stripping which applies identically
+    // to P2WPKH and P2WSH, so swapping the address is purely a fixture fix.
     const builder = buildUtxoSendTx({
       chain: 'Bitcoin',
-      fromAddress: 'bc1qwqdg6squsna38e46795at95yu9atm8azzmyvckulcc7kytlcckxswvvzej',
-      toAddress: 'bc1qwqdg6squsna38e46795at95yu9atm8azzmyvckulcc7kytlcckxswvvzej',
+      fromAddress: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+      toAddress: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
       amount: 10_000n,
       utxos: [
         {

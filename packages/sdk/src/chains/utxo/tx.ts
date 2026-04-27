@@ -218,14 +218,38 @@ export type DecodedAddress = {
  */
 export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName): DecodedAddress {
   // bech32 (BTC bc1q..., LTC ltc1q...)
+  // We deliberately try bech32 first; non-bech32 addresses fall through to
+  // CashAddr / base58 below. We DO NOT swallow the 32-byte (P2WSH) error
+  // because the caller asked us to encode a script that this SDK can't yet
+  // build — silently treating the 32-byte witness program as a 20-byte
+  // P2WPKH would lock funds under a hash matching no spendable script.
+  let bech32Decoded: ReturnType<typeof bech32.decode> | undefined
   try {
-    const decoded = bech32.decode(address as `${string}1${string}`)
-    if (decoded.words[0] === 0) {
-      const pubKeyHash = new Uint8Array(bech32.fromWords(decoded.words.slice(1)))
-      return { pubKeyHash, type: 'p2wpkh' }
-    }
+    bech32Decoded = bech32.decode(address as `${string}1${string}`)
   } catch {
-    /* not bech32 */
+    /* not bech32 — fall through to other encodings */
+  }
+  if (bech32Decoded) {
+    if (bech32Decoded.words[0] === 0) {
+      const program = new Uint8Array(bech32.fromWords(bech32Decoded.words.slice(1)))
+      if (program.length === 20) {
+        return { pubKeyHash: program, type: 'p2wpkh' }
+      }
+      if (program.length === 32) {
+        // BIP-141 witness v0 with a 32-byte program is P2WSH. Building a
+        // P2WPKH locking script over a 32-byte hash silently encodes the
+        // wrong scriptPubKey (`OP_0 <32-byte>` is valid but is a P2WSH
+        // commit, not P2WPKH); the SDK would then treat it as P2WPKH at
+        // sighash time, mis-derive the scriptCode, and produce a tx that
+        // can't be unlocked. Reject explicitly so the caller surfaces the
+        // gap rather than locking funds.
+        throw new Error(
+          `Cannot decode address: ${address} — P2WSH (32-byte witness v0) is not supported by this SDK build`
+        )
+      }
+      throw new Error(`Cannot decode address: ${address} — unexpected witness v0 program length ${program.length}`)
+    }
+    // witness v1+ (taproot etc) is not supported here either
   }
 
   // CashAddr (BCH bitcoincash:q...)
@@ -260,8 +284,22 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
           result.push((acc >> bits) & 0xff)
         }
       }
-      if (result.length >= 21 && result[0] === 0x00) {
-        return { pubKeyHash: new Uint8Array(result.slice(1, 21)), type: 'p2pkh' }
+      // CashAddr type byte (high nibble of result[0]):
+      //   0x00 → P2PKH (q...)
+      //   0x08 → P2SH  (p...)
+      // see https://reference.cash/protocol/blockchain/encoding/cashaddr
+      if (result.length >= 21) {
+        if (result[0] === 0x00) {
+          return { pubKeyHash: new Uint8Array(result.slice(1, 21)), type: 'p2pkh' }
+        }
+        if (result[0] === 0x08) {
+          // BCH P2SH — without this branch the address falls all the way to
+          // the bottom-of-function `Cannot decode` throw. Worse, if a future
+          // change ever made the fallthrough silent, a `bitcoincash:p...`
+          // deposit address would re-encode as P2PKH and lock funds. Add the
+          // branch + a regression test pinning the hash slice.
+          return { pubKeyHash: new Uint8Array(result.slice(1, 21)), type: 'p2sh' }
+        }
       }
     }
   } catch {
@@ -723,6 +761,18 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const toDec = decodeAddressToPubKeyHash(opts.toAddress, opts.chain)
   const fromDec = decodeAddressToPubKeyHash(opts.fromAddress, opts.chain)
+  // P2SH spending requires the redeem script in the sighash scriptCode and a
+  // matching scriptSig. Vultisig vaults derive P2PKH/P2WPKH addresses only, so
+  // `fromAddress` is never legitimately P2SH in production — but the decoder
+  // newly accepts BCH `bitcoincash:p...` and BTC/LTC/DOGE/DASH base58 P2SH
+  // (CR items #2 and #6). Without an explicit guard here the builder would
+  // emit a P2PKH-shaped sighash for a P2SH input, the user signs garbage,
+  // and the resulting tx fails at broadcast time. Throw fast instead.
+  if (fromDec.type === 'p2sh') {
+    throw new Error(
+      `buildUtxoSendTx: P2SH spending is not supported (fromAddress=${opts.fromAddress}). Vultisig vaults derive P2PKH/P2WPKH addresses only.`
+    )
+  }
   const toScript = buildScriptPubKey(toDec.pubKeyHash, toDec.type)
   const fromScript = buildScriptPubKey(fromDec.pubKeyHash, fromDec.type)
 

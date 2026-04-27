@@ -86,6 +86,144 @@ describe('decodeAddressToPubKeyHash — P2SH version-byte detection', () => {
     expect(type).toBe('p2sh')
     expect(hex(pubKeyHash)).toBe(HASH_20)
   })
+
+  // BCH CashAddr P2SH (`bitcoincash:p...`). The CashAddr type byte for P2SH
+  // is 0x08 (high nibble of result[0]); without an explicit branch, the
+  // decoder fell through to the bottom-of-function `Cannot decode` throw —
+  // we'd reject every BCH P2SH deposit with no diagnostic. Worse, if the
+  // fallthrough were ever made silent, a P2SH address would re-encode as
+  // P2PKH and lock funds.
+  it('decodes BCH CashAddr P2SH (bitcoincash:p...) as type p2sh', () => {
+    // Real-world BCH CashAddr P2SH encoding produced by the reference
+    // bchaddrjs implementation for hash20 = 'cb481232' + zero-pad.
+    //
+    // We construct the fixture address from the same primitives the SDK
+    // uses (CHARSET + 5-bit→8-bit pack + polymod) so the test is fully
+    // self-contained and doesn't pull in @ton-style libraries.
+    const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+    const buildCashAddr = (typeByte: number, hash20: Uint8Array): string => {
+      const versionByte = typeByte // 0x00 P2PKH, 0x08 P2SH
+      const payload8 = new Uint8Array(21)
+      payload8[0] = versionByte
+      payload8.set(hash20, 1)
+      // pack 8-bit → 5-bit
+      const data5: number[] = []
+      let acc = 0
+      let bits = 0
+      for (const b of payload8) {
+        acc = (acc << 8) | b
+        bits += 8
+        while (bits >= 5) {
+          bits -= 5
+          data5.push((acc >> bits) & 0x1f)
+        }
+      }
+      if (bits > 0) data5.push((acc << (5 - bits)) & 0x1f)
+      // checksum (cashaddr polymod over [prefixLower5, 0, data5, 0,0,0,0,0,0,0,0])
+      const prefixLower5 = Array.from('bitcoincash', c => c.charCodeAt(0) & 0x1f)
+      const values = [...prefixLower5, 0, ...data5, 0, 0, 0, 0, 0, 0, 0, 0]
+      const GEN = [0x98f2bc8e61n, 0x79b76d99e2n, 0xf33e5fb3c4n, 0xae2eabe2a8n, 0x1e4f43e470n]
+      let chk = 1n
+      for (const v of values) {
+        const top = chk >> 35n
+        chk = ((chk & 0x07ffffffffn) << 5n) ^ BigInt(v)
+        for (let i = 0; i < 5; i++) {
+          if ((top >> BigInt(i)) & 1n) chk ^= GEN[i]!
+        }
+      }
+      const polymod = chk ^ 1n
+      const checksum5: number[] = []
+      for (let i = 0; i < 8; i++) {
+        checksum5.push(Number((polymod >> BigInt(5 * (7 - i))) & 0x1fn))
+      }
+      const fullData5 = [...data5, ...checksum5]
+      const payload = fullData5.map(d => CHARSET[d]).join('')
+      return `bitcoincash:${payload}`
+    }
+
+    const hash20 = Uint8Array.from(HASH_20.match(/.{2}/g)!.map(b => parseInt(b, 16)))
+    const p2shAddr = buildCashAddr(0x08, hash20)
+    expect(p2shAddr.startsWith('bitcoincash:p')).toBe(true)
+
+    const { type, pubKeyHash } = decodeAddressToPubKeyHash(p2shAddr, 'Bitcoin-Cash')
+    expect(type).toBe('p2sh')
+    expect(hex(pubKeyHash)).toBe(HASH_20)
+
+    // And confirm P2PKH still works alongside the new branch.
+    const p2pkhAddr = buildCashAddr(0x00, hash20)
+    expect(p2pkhAddr.startsWith('bitcoincash:q')).toBe(true)
+    const p2pkh = decodeAddressToPubKeyHash(p2pkhAddr, 'Bitcoin-Cash')
+    expect(p2pkh.type).toBe('p2pkh')
+    expect(hex(p2pkh.pubKeyHash)).toBe(HASH_20)
+  })
+})
+
+describe('buildUtxoSendTx — rejects P2SH fromAddress (CR item #6 follow-up)', () => {
+  // The decoder accepts BCH `bitcoincash:p...` (CashAddr P2SH, type byte
+  // 0x08) and BTC/LTC/DOGE/DASH base58 P2SH (version 0x05/0x32/0x16/0x10),
+  // which is correct for `toAddress`. But `fromAddress` decoding to P2SH
+  // would silently route through the P2PKH/P2WPKH-shaped sighash path —
+  // signing garbage that won't broadcast. Vultisig vaults derive only
+  // P2PKH/P2WPKH addresses, so any P2SH `fromAddress` is a caller bug;
+  // `buildUtxoSendTx` must throw fast rather than build an invalid spend.
+  it('throws when fromAddress decodes to P2SH (BTC 3...)', async () => {
+    const { buildUtxoSendTx } = await import('../../../src/chains/utxo/tx')
+    const compressedPubKey = new Uint8Array(33)
+    compressedPubKey[0] = 0x02
+    expect(() =>
+      buildUtxoSendTx({
+        chain: 'Bitcoin',
+        fromAddress: '35hK24tcLEWcgNA4JxpvbkNkoAcDGqQPsP', // BTC P2SH (3...)
+        toAddress: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+        amount: 100_000n,
+        utxos: [{ hash: '00'.repeat(32), index: 0, value: 200_000n }],
+        feeRate: 1,
+        compressedPubKey,
+      })
+    ).toThrow(/P2SH spending is not supported/)
+  })
+
+  it('throws when fromAddress decodes to DOGE P2SH (A.../version 0x16)', async () => {
+    const { buildUtxoSendTx } = await import('../../../src/chains/utxo/tx')
+    const compressedPubKey = new Uint8Array(33)
+    compressedPubKey[0] = 0x02
+    // Synthetic DOGE P2SH `from` address — `to` is a valid DOGE P2PKH so
+    // we hit the P2SH-from guard before any other decode/encode path.
+    const dogeP2shAddr = synthAddress(0x16, HASH_20)
+    expect(() =>
+      buildUtxoSendTx({
+        chain: 'Dogecoin',
+        fromAddress: dogeP2shAddr,
+        toAddress: 'DH5yaieqoZN36fDVciNyRueRGvGLR3mr7L', // valid DOGE P2PKH
+        amount: 100_000n,
+        utxos: [{ hash: '00'.repeat(32), index: 0, value: 200_000n }],
+        feeRate: 1,
+        compressedPubKey,
+      })
+    ).toThrow(/P2SH spending is not supported/)
+  })
+})
+
+describe('decodeAddressToPubKeyHash — P2WSH rejection (32-byte witness v0)', () => {
+  // P2WSH addresses (`bc1q...` 62-char) carry a 32-byte witness program.
+  // The previous decoder branch returned `{type: 'p2wpkh'}` regardless of
+  // program length, so the SDK would build an OP_0 <32-byte> locking
+  // script and a P2WPKH-shaped sighash that can't be unlocked — funds
+  // permanently stuck. We reject explicitly until P2WSH spend support
+  // ships.
+  it('throws on Bitcoin P2WSH (32-byte witness v0)', () => {
+    // Real-world P2WSH from the BIP-141 spec example (script hash of
+    // OP_1 OP_CHECKSIG-equivalent test vector).
+    const p2wshAddr = 'bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3'
+    expect(() => decodeAddressToPubKeyHash(p2wshAddr, 'Bitcoin')).toThrow(/P2WSH/)
+  })
+
+  it('still accepts Bitcoin P2WPKH (20-byte witness v0)', () => {
+    const p2wpkhAddr = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4'
+    const { type, pubKeyHash } = decodeAddressToPubKeyHash(p2wpkhAddr, 'Bitcoin')
+    expect(type).toBe('p2wpkh')
+    expect(pubKeyHash.length).toBe(20)
+  })
 })
 
 describe('locking script for P2SH outputs (smoke through buildUtxoSendTx)', () => {

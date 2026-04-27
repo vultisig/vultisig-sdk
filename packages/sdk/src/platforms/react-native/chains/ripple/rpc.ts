@@ -76,8 +76,17 @@ type AccountInfoResult = {
 }
 
 /**
- * Fetch sequence + balance for an XRP address. Throws if the address is not
- * found OR if the account is unfunded (caller decides how to handle that).
+ * Fetch sequence + balance for an XRP address.
+ *
+ * Returns `funded: false` (with `sequence: 0` and `balanceDrops: '0'`) when
+ * the address is not yet activated on-chain (`actNotFound`) or when the
+ * server returns an empty `account_data` envelope. Activation requires a
+ * minimum reserve of XRP, so an unfunded account is the expected first-time
+ * state for a fresh receive address — the caller decides whether to proceed
+ * with a top-up tx or abort.
+ *
+ * Throws only for transport-level / unexpected RPC failures (everything
+ * other than `actNotFound`), which `rippleCall` surfaces directly.
  */
 export async function getXrpAccountInfo(
   address: string,

@@ -1,12 +1,17 @@
 /**
  * TON bridge unit tests.
  *
- * These are cross-checks against the reference `@ton/ton` library: we
- * build the same native transfer via our hand-rolled `buildTonSendTx`
- * and via `WalletContractV4.createTransfer` and assert byte-for-byte
- * equality on both the signing hash and the resulting external BOC. Any
- * drift in cell reference counts, varint encoding, or wallet code cell
- * triggers a test failure before it reaches on-chain signing.
+ * These tests validate the SDK's inline TON implementation by re-building
+ * the same native transfer twice — once via our hand-rolled
+ * `buildTonSendTx` / `buildV4R2Wallet` path, and once via `@ton/core`
+ * primitives (`beginCell`, `internal`, `storeMessageRelaxed`, etc.) — and
+ * assert byte-for-byte equality on the signing hash, the wallet address,
+ * and the resulting external BOC. Both sides reference the same V4R2
+ * wallet code cell (encoded as a base64 BOC inside `walletV4R2.ts`); the
+ * test guards against drift in cell reference counts, varint encoding, and
+ * builder layout that would change the on-chain hash. We do not import
+ * `@ton/ton` (the higher-level `WalletContractV4` wrapper) — `@ton/core`
+ * is sufficient for the cross-check at the cell level.
  */
 import { beginCell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 import { describe, expect, it } from 'vitest'

@@ -36,6 +36,19 @@ export type FastVaultSignOptions = {
 const DEFAULT_VULTI_SERVER_URL = 'https://api.vultisig.com/vault'
 const DEFAULT_RELAY_URL = 'https://api.vultisig.com/router'
 
+// Exported for unit tests so the missing-crypto fallback (CR item #9) can be
+// exercised directly. Not part of the public SDK surface — the
+// `INTERNAL_FOR_TESTING` constant naming follows the rest of the SDK's
+// test-only export convention.
+export const INTERNAL_FOR_TESTING = {
+  get randomUUID() {
+    return randomUUID
+  },
+  get randomHex() {
+    return randomHex
+  },
+}
+
 function randomHex(byteLength: number): string {
   const bytes = new Uint8Array(byteLength)
   const rng = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => void } }).crypto
@@ -49,10 +62,19 @@ function randomHex(byteLength: number): string {
 function randomUUID(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
   if (c?.randomUUID) return c.randomUUID()
-  // fallback v4 from crypto bytes
-  const b = new Uint8Array(16)
+  // Fallback: derive a v4 UUID from `crypto.getRandomValues` bytes. If
+  // neither `crypto.randomUUID` nor `crypto.getRandomValues` is wired up,
+  // throw consistently with `randomHex` rather than silently emitting a
+  // UUID derived from an all-zero buffer (collision risk → server-side
+  // session reuse → cross-tenant signing surface). Hermes RN ships
+  // `crypto.getRandomValues` via expo-crypto in production, but a
+  // misconfigured embedder could miss it.
   const rng = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => void } }).crypto
-  rng?.getRandomValues?.(b)
+  if (!rng?.getRandomValues) {
+    throw new Error('globalThis.crypto.getRandomValues not available — install expo-crypto or equivalent polyfill')
+  }
+  const b = new Uint8Array(16)
+  rng.getRandomValues(b)
   b[6] = (b[6]! & 0x0f) | 0x40
   b[8] = (b[8]! & 0x3f) | 0x80
   const hex = Array.from(b, x => x.toString(16).padStart(2, '0')).join('')

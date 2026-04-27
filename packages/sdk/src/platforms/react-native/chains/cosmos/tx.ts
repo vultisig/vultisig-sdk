@@ -118,7 +118,25 @@ export function deriveCosmosPubkey(compressedPubKeyHex: string, hexChainCode: st
 // Protobuf helpers (minimal varint + length-delimited encoding)
 // ---------------------------------------------------------------------------
 
+// Exported for unit tests so the bound-check (CR item #7) can be exercised
+// directly. Not part of the public SDK surface — naming convention matches
+// other test-only exports in the SDK.
+export function varintForTesting(n: number): Uint8Array {
+  return varint(n)
+}
+
 function varint(n: number): Uint8Array {
+  // Bound-check: `>>>=` operates on 32-bit unsigned integers, so any value
+  // above 2^32-1 silently wraps and we emit a varint that decodes to a
+  // different number than `n`. Every call-site here is `field-number << 3 |
+  // wireType` (≤ 2^7) or a length prefix derived from `Uint8Array.length`
+  // (capped at 2^32-1 in practice), but we still guard the boundary so a
+  // future caller passing a JS-`number` that came from BigInt arithmetic
+  // can't silently corrupt the protobuf body. We also reject non-integers
+  // and negatives — both produce nonsense varints.
+  if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) {
+    throw new Error(`varint: value out of range (got ${n})`)
+  }
   const bytes: number[] = []
   while (n > 0x7f) {
     bytes.push((n & 0x7f) | 0x80)

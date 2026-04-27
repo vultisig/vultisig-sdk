@@ -137,6 +137,13 @@ export async function getTronBlockRefs(apiUrl: string, signal?: AbortSignal): Pr
 type RawAccountResponse = {
   address?: string
   balance?: number | string
+  // TronGrid sometimes returns `{Error: "..."}` (capital E) on HTTP 200 for
+  // gateway-side rejections. Mirror gateways occasionally use lowercase.
+  // Without a check here, the helper treats those responses as a never-funded
+  // account and returns `balance: 0n` — masking outages and surfacing as
+  // "user has no funds" in the UI.
+  Error?: string
+  error?: string
 }
 
 type RawAccountResourceResponse = {
@@ -144,11 +151,16 @@ type RawAccountResourceResponse = {
   freeNetLimit?: number
   EnergyUsed?: number
   EnergyLimit?: number
+  // Same defensive shape as RawAccountResponse — see comment above.
+  Error?: string
+  error?: string
 }
 
 /**
  * Fetch account balance + bandwidth/energy resources for a Tron address.
- * Safe to call on a never-funded address (returns zeroes).
+ * Safe to call on a never-funded address (returns zeroes for the
+ * `getaccount` body, which legitimately lacks `balance`). Throws when
+ * TronGrid surfaces a bare-error envelope on either call.
  */
 export async function getTronAccount(address: string, apiUrl: string, signal?: AbortSignal): Promise<TronAccountInfo> {
   const base = apiUrl.replace(/\/$/, '')
@@ -156,6 +168,18 @@ export async function getTronAccount(address: string, apiUrl: string, signal?: A
     postJson<RawAccountResponse>(`${base}/wallet/getaccount`, { address, visible: true }, signal),
     postJson<RawAccountResourceResponse>(`${base}/wallet/getaccountresource`, { address, visible: true }, signal),
   ])
+  // Defensive parsing: never-funded accounts return `{}` (no `Error`, no
+  // `balance`) — that's expected and yields zeroes. A bare-error shape is a
+  // gateway-side rejection (rate limit, malformed input, internal error)
+  // that must NOT silently degrade to "balance 0".
+  const acctErr = acct.Error ?? acct.error
+  if (acctErr) {
+    throw new Error(`getTronAccount/getaccount failed: ${acctErr}`)
+  }
+  const resErr = res.Error ?? res.error
+  if (resErr) {
+    throw new Error(`getTronAccount/getaccountresource failed: ${resErr}`)
+  }
   return {
     address,
     balance: acct.balance != null ? BigInt(acct.balance) : 0n,
@@ -181,6 +205,13 @@ type RawEnergyEstimate = {
   result?: { result?: boolean; message?: string }
   energy_required?: number
   energy_used?: number
+  // TronGrid emits a bare `{Error: "..."}` (capital E) on inputs it can't even
+  // parse — e.g. malformed hex or invalid contract address. Some mirror
+  // gateways use lowercase `error`. Either shape signals upstream rejection,
+  // and silently returning `0` would let the caller broadcast the underlying
+  // tx with no fee budget.
+  Error?: string
+  error?: string
 }
 
 /**
@@ -241,6 +272,15 @@ export async function estimateTrc20Energy(
     },
     signal
   )
+  // Mirror broadcastTronTx defensive parsing: TronGrid sometimes emits
+  // `{Error: "..."}` / `{error: "..."}` with no `result` envelope. Returning
+  // `0` for these would let the caller send a TRC-20 transfer with zero
+  // energy budget, which TronGrid then drops at broadcast time — wasted
+  // bandwidth and a confusing UX. Throw so the caller surfaces the failure.
+  const tronError = res.Error ?? res.error
+  if (tronError) {
+    throw new Error(`triggerconstantcontract failed: ${tronError}`)
+  }
   if (res.result && res.result.result === false) {
     const msg = res.result.message ?? 'unknown'
     throw new Error(`triggerconstantcontract failed: ${msg}`)
