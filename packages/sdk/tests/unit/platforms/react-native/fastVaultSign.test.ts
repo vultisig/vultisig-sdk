@@ -12,7 +12,9 @@ vi.mock('../../../../src/platforms/react-native/mpc/relay', () => ({
 }))
 
 const { keysign } = await import('@vultisig/core-mpc/keysign')
-const { fastVaultSign, INTERNAL_FOR_TESTING } = await import('../../../../src/platforms/react-native/mpc/fastVaultSign')
+const { fastVaultSign, schnorrSign, INTERNAL_FOR_TESTING } = await import(
+  '../../../../src/platforms/react-native/mpc/fastVaultSign'
+)
 
 const BASE_OPTS = {
   keyshareBase64: 'ZmFrZQ==',
@@ -118,6 +120,92 @@ describe('fastVaultSign — ECDSA recovery_id handling', () => {
 
     await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/recovery_id/)
   })
+})
+
+describe('fastVaultSign — r/s shape validation (CR R7 #5)', () => {
+  // Pre-fix: r/s were concatenated without shape validation. A malformed MPC
+  // engine response (truncated r, oversized s, non-hex bytes) would assemble
+  // into a wrong-length signature that downstream verifiers may either
+  // accept against a different curve point or reject opaquely.
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.mocked(keysign).mockReset()
+  })
+
+  it('throws when r is shorter than 32 bytes (truncated)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'aa'.repeat(31), // 62 hex chars — short
+      s: 'bb'.repeat(32),
+      recovery_id: '00',
+    } as never)
+    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/invalid r\/s/)
+  })
+
+  it('throws when s contains non-hex characters', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'aa'.repeat(32),
+      s: 'zz'.repeat(32), // non-hex
+      recovery_id: '00',
+    } as never)
+    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/invalid r\/s/)
+  })
+
+  it('throws when r is longer than 32 bytes (oversized)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'aa'.repeat(33),
+      s: 'bb'.repeat(32),
+      recovery_id: '00',
+    } as never)
+    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: true })).rejects.toThrow(/invalid r\/s/)
+  })
+
+  it('also enforces r/s shape on EdDSA (path doesn\'t bypass the check)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'aa'.repeat(32),
+      s: 'bb'.repeat(31), // truncated s
+    } as never)
+    await expect(fastVaultSign({ ...BASE_OPTS, isEcdsa: false })).rejects.toThrow(/invalid r\/s/)
+  })
+})
+
+describe('schnorrSign — hex validation + Buffer.from path (CR R7 #4)', () => {
+  // schnorrSign wraps fastVaultSign(isEcdsa: false) and converts r||s hex →
+  // Uint8Array. Pre-fix the manual loop silently truncated on odd length and
+  // produced NaN bytes for non-hex chars; we now validate the hex shape and
+  // use `Buffer.from(_, 'hex')` (Buffer is polyfilled at RN entry).
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.mocked(keysign).mockReset()
+  })
+
+  it('returns a 64-byte Uint8Array on a well-formed signature', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    vi.mocked(keysign).mockResolvedValueOnce({
+      r: 'a1'.repeat(32),
+      s: 'b2'.repeat(32),
+    } as never)
+    const out = await schnorrSign({
+      ...BASE_OPTS,
+      derivePath: BASE_OPTS.serverDerivePath,
+    } as never)
+    expect(out).toBeInstanceOf(Uint8Array)
+    expect(out.length).toBe(64)
+    // First byte = 0xa1, byte 32 = 0xb2 — proves Buffer.from interpreted hex
+    // pairs correctly without spilling.
+    expect(out[0]).toBe(0xa1)
+    expect(out[32]).toBe(0xb2)
+  })
+
+  // The malformed-hex paths can't be exercised end-to-end through fastVaultSign
+  // because the r/s shape guard in fastVaultSign now rejects bad hex first.
+  // That's correct defense-in-depth: the schnorrSign-level validator is a
+  // belt-and-braces guard for any future caller path that bypasses
+  // fastVaultSign's shape check. The "well-formed signature" assertion above
+  // is sufficient to lock in the Buffer.from migration.
 })
 
 describe('fastVaultSign — randomUUID fallback (CR item #9)', () => {

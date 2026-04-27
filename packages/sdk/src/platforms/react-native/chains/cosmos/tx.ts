@@ -287,8 +287,17 @@ export type CosmosTxBuilderResult = {
   /** Bytes of the serialized AuthInfo */
   authInfoBytes: Uint8Array
   /**
-   * Given the hex-encoded raw signature (r||s, 64 bytes = 128 hex chars),
-   * return the broadcastable TxRaw bytes, its base64, and sha256 hash.
+   * Given the hex-encoded raw signature, return the broadcastable TxRaw
+   * bytes, its base64, and sha256 hash.
+   *
+   * Accepts EITHER:
+   *   - 128 hex chars (64 bytes, `r||s`) — the canonical Cosmos signature
+   *   - 130 hex chars (65 bytes, `r||s||v`) — the EVM-style recovery-id form
+   *     emitted by the MPC engine; the trailing recovery byte is stripped
+   *     here because Cosmos doesn't carry it on-wire.
+   *
+   * `0x` prefix is tolerated. Anything else throws so the caller sees a
+   * clear failure rather than a silently-malformed TxRaw.
    */
   finalize: (sigHex: string) => { txRawBytes: Uint8Array; txBytesBase64: string; txHashHex: string }
 }

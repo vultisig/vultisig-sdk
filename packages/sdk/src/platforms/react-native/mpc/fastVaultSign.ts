@@ -196,6 +196,16 @@ async function fastVaultSignAttempt(opts: FastVaultSignOptions): Promise<string>
   })
 
   const sig = result as { r: string; s: string; recovery_id?: string }
+  // Validate r and s shape BEFORE assembling the final signature. The MPC
+  // engine *should* always emit 32-byte (64-hex-char) r/s, but a malformed
+  // engine response would otherwise concatenate cleanly into a wrong-length
+  // signature that downstream verifiers may reject in confusing ways (or
+  // worse, accept against a different curve point). Fail loud here.
+  if (!/^[0-9a-fA-F]{64}$/.test(sig.r) || !/^[0-9a-fA-F]{64}$/.test(sig.s)) {
+    throw new Error(
+      `fastVaultSign: MPC engine returned invalid r/s (expected 64 hex chars each, got r.length=${sig.r?.length} s.length=${sig.s?.length})`
+    )
+  }
   if (isEcdsa) {
     // For ECDSA, `recovery_id` is required — EVM signatures compute
     // `v = recovery_id + chainId * 2 + 35`. A silent fallback to `'00'`
@@ -239,9 +249,19 @@ export async function schnorrSign(opts: SchnorrSignOptions): Promise<Uint8Array>
     localDerivePath: opts.derivePath,
     isEcdsa: false,
   })
-  const bytes = new Uint8Array(sigHex.length / 2)
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(sigHex.substring(i * 2, i * 2 + 2), 16)
+  // Validate hex shape first — `Buffer.from(x, 'hex')` silently truncates at
+  // the first non-hex character and stops on odd length, both of which would
+  // produce a shorter-than-expected signature that downstream verifiers may
+  // reject opaquely (or, worse, treat as a different signature). Belt-and-
+  // braces: `fastVaultSign` already validates r/s shape on the engine
+  // response, but the strict regex here protects against any future code
+  // path that reaches `schnorrSign` with a non-canonical hex string.
+  if (sigHex.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(sigHex)) {
+    throw new Error(
+      `schnorrSign: invalid hex signature (length=${sigHex.length}, even=${sigHex.length % 2 === 0})`
+    )
   }
-  return bytes
+  // Buffer is polyfilled at platforms/react-native/index.ts module-init.
+  const buf = Buffer.from(sigHex, 'hex')
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
 }

@@ -14,7 +14,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { broadcastTronTx, estimateTrc20Energy } from '../../../src/chains/tron/rpc'
+import { broadcastTronTx, estimateTrc20Energy, getTronBlockRefs } from '../../../src/chains/tron/rpc'
 
 type FetchInit = RequestInit | undefined
 
@@ -108,6 +108,15 @@ describe('tron / estimateTrc20Energy error parsing', () => {
     expect(out).toBe(14_000)
   })
 
+  it('falls back to energy_used when energy_required is absent', async () => {
+    // TronGrid mirrors / older nodes occasionally omit `energy_required` and
+    // only emit `energy_used`. The helper's documented behaviour is to use
+    // `energy_required ?? energy_used` — pin that explicitly.
+    stubFetch({ result: { result: true }, energy_used: 12_500 })
+    const out = await estimateTrc20Energy(baseOpts, 'https://api.trongrid.io')
+    expect(out).toBe(12_500)
+  })
+
   it('throws on `{result: {result: false, message}}` (existing branch)', async () => {
     stubFetch({ result: { result: false, message: 'BANDWITH_ERROR' } })
     await expect(estimateTrc20Energy(baseOpts, 'https://api.trongrid.io')).rejects.toThrow(
@@ -128,6 +137,43 @@ describe('tron / estimateTrc20Energy error parsing', () => {
     stubFetch({ error: 'rate limited' })
     await expect(estimateTrc20Energy(baseOpts, 'https://api.trongrid.io')).rejects.toThrow(
       /triggerconstantcontract failed: rate limited/
+    )
+  })
+})
+
+describe('tron / getTronBlockRefs error parsing (CR R7 #8)', () => {
+  // Same defensive shape as broadcastTronTx / estimateTrc20Energy. Without
+  // these guards, a `{Error: "..."}` envelope bubbles up as a TypeError
+  // ("cannot read properties of undefined (block_header)") that masks the
+  // gateway's actual error message.
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('throws on TronGrid bare `{Error: "..."}` (capital E)', async () => {
+    stubFetch({ Error: 'gateway throttled' })
+    await expect(getTronBlockRefs('https://api.trongrid.io')).rejects.toThrow(
+      /getTronBlockRefs failed: gateway throttled/
+    )
+  })
+
+  it('throws on lowercase `{error: "..."}` (mirror gateway variant)', async () => {
+    stubFetch({ error: 'upstream timeout' })
+    await expect(getTronBlockRefs('https://api.trongrid.io')).rejects.toThrow(
+      /getTronBlockRefs failed: upstream timeout/
+    )
+  })
+
+  it('throws with response preview when block_header is missing', async () => {
+    // Defensive: if a future gateway version drops `Error`/`error` and just
+    // returns an envelope with no block_header, we should still throw a
+    // legible error rather than a bare TypeError.
+    stubFetch({ blockID: 'abcd' })
+    await expect(getTronBlockRefs('https://api.trongrid.io')).rejects.toThrow(
+      /getTronBlockRefs: response missing block_header\.raw_data/
     )
   })
 })

@@ -773,6 +773,19 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
       `buildUtxoSendTx: P2SH spending is not supported (fromAddress=${opts.fromAddress}). Vultisig vaults derive P2PKH/P2WPKH addresses only.`
     )
   }
+  // Cross-type guard: the address decoder is permissive (e.g. legacy `1...`
+  // BTC, segwit `bc1...`, BCH cashaddr, base58 P2SH) but the chain config
+  // pins exactly one `scriptType` per chain. If a caller passes an address
+  // whose decoded type doesn't match the chain's expected scriptType, the
+  // sighash branch chooses the WRONG sighash variant (legacy vs BIP143) and
+  // emits a hash that signs garbage. Throw fast so the caller fixes the
+  // address rather than silently producing an unspendable tx.
+  if (fromDec.type !== spec.scriptType) {
+    throw new Error(
+      `buildUtxoSendTx: fromAddress decodes to ${fromDec.type} but chain ${opts.chain} expects ${spec.scriptType} ` +
+        `(fromAddress=${opts.fromAddress}). Pass an address that matches the chain's scriptType.`
+    )
+  }
   const toScript = buildScriptPubKey(toDec.pubKeyHash, toDec.type)
   const fromScript = buildScriptPubKey(fromDec.pubKeyHash, fromDec.type)
 

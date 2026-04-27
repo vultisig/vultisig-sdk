@@ -31,7 +31,14 @@ async function rippleCall<T>(
     signal,
   })
   if (!res.ok) {
-    throw new Error(`XRP RPC HTTP ${res.status} ${res.statusText} from ${rpcUrl}`)
+    // Include a truncated body preview — XRPL gateways behind rate-limiters /
+    // CDNs frequently return HTML or JSON error envelopes that carry the real
+    // failure reason (auth, throttle, geo block). Without it, ops sees a bare
+    // 403/429/5xx and has to re-run by hand to diagnose.
+    const preview = await res.text().catch(() => '')
+    throw new Error(
+      `XRP RPC HTTP ${res.status} ${res.statusText} from ${rpcUrl}: ${preview.slice(0, 256)}`
+    )
   }
   const payload = (await res.json()) as RippleResponse<T>
   const result = payload.result
@@ -155,6 +162,30 @@ export async function getXrpLedgerCurrentIndex(rpcUrl: string, signal?: AbortSig
 
 // ---------------------------------------------------------------------------
 // submit — broadcast a signed tx blob
+//
+// LIMITATION — engine-result handling (CR R7 #1):
+// XRPL `submit` returns one of several engine-result classes (`tes*`, `tec*`,
+// `ter*`, `tem*`, `tef*`, `tel*`). This helper currently treats everything
+// other than `tesSUCCESS`/`terQUEUED` as fatal — including `tec*` codes.
+//
+// That's a half-truth: `tec*` codes mean "applied on-ledger, op failed" —
+// the tx WAS included in a validated ledger and the sequence number IS
+// consumed. A caller that catches the thrown error and naïvely retries with
+// the same `Sequence` will produce a `tefPAST_SEQ` (or worse, a fund-loss
+// race if a fee has changed) on the second attempt.
+//
+// Callers that want safe retry semantics MUST verify on-chain inclusion (a
+// `tx` lookup against the signed blob's hash on the ledger, e.g. via the
+// `tx` JSON-RPC method) before re-broadcasting with the same sequence. The
+// submit helper alone cannot disambiguate "tx never landed" from "tx landed
+// but failed (tec*)".
+//
+// Pre-adoption upgrade path: introduce a `verifyBroadcastByHash` helper and
+// integrate it directly in `submitXrpTx` so the helper returns
+// `{ engineResult, accepted, onLedger }` and callers can branch without a
+// second round-trip. Deferred because `submitXrpTx` is currently unused by
+// app code (broadcast is performed via the platform-agnostic `broadcastXrpTx`
+// path).
 // ---------------------------------------------------------------------------
 
 export type XrpSubmitResult = {
@@ -175,6 +206,16 @@ type SubmitResult = {
  * Submit a signed tx blob. `tesSUCCESS` and `terQUEUED` are treated as
  * provisional-success — the caller should still poll for ledger inclusion.
  * Anything else throws.
+ *
+ * NOTE — `tec*` engine results: a thrown error here does NOT prove the tx
+ * stayed off-ledger. `tec*` codes mean the tx was applied on-ledger with the
+ * sequence consumed but the operation itself failed. Callers that want to
+ * retry on error MUST first verify non-inclusion against the ledger (e.g. a
+ * `tx` JSON-RPC lookup of the signed blob's hash) — otherwise they risk
+ * re-using a consumed sequence (which produces a `tefPAST_SEQ` at best,
+ * fund-loss races at worst). See the block comment above for the full
+ * upgrade path. This helper is currently unused by app code; the limitation
+ * is documented rather than fixed in-place.
  */
 export async function submitXrpTx(
   signedBlobHex: string,

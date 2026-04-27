@@ -204,6 +204,34 @@ describe('buildUtxoSendTx — rejects P2SH fromAddress (CR item #6 follow-up)', 
   })
 })
 
+describe('buildUtxoSendTx — fromDec.type vs spec.scriptType cross-type guard (CR R7 #14)', () => {
+  // The chain config pins exactly one scriptType per chain (BTC=p2wpkh,
+  // DOGE=p2pkh, etc). The decoder is permissive — it accepts legacy `1...`
+  // (P2PKH) or segwit `bc1q...` (P2WPKH) for Bitcoin equally. Without an
+  // explicit cross-type guard, a legacy-from on a segwit chain would route
+  // through the WRONG sighash variant (legacy-style, not BIP143) and emit a
+  // hash that signs garbage — broadcast-time failure, no diagnostic.
+  it('throws when fromAddress is BTC P2PKH (1...) but chain expects p2wpkh', async () => {
+    const { buildUtxoSendTx } = await import('../../../src/chains/utxo/tx')
+    const compressedPubKey = new Uint8Array(33)
+    compressedPubKey[0] = 0x02
+    expect(() =>
+      buildUtxoSendTx({
+        chain: 'Bitcoin', // spec.scriptType = 'p2wpkh'
+        fromAddress: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa', // Satoshi's P2PKH
+        toAddress: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+        amount: 100_000n,
+        utxos: [{ hash: '00'.repeat(32), index: 0, value: 200_000n }],
+        feeRate: 1,
+        compressedPubKey,
+      })
+    ).toThrow(/decodes to p2pkh but chain Bitcoin expects p2wpkh/)
+  })
+
+  // Note: the matching-scriptType happy path is already exercised by the
+  // existing 'locking script for P2SH outputs' test below (BTC + bc1q...).
+})
+
 describe('decodeAddressToPubKeyHash — P2WSH rejection (32-byte witness v0)', () => {
   // P2WSH addresses (`bc1q...` 62-char) carry a 32-byte witness program.
   // The previous decoder branch returned `{type: 'p2wpkh'}` regardless of

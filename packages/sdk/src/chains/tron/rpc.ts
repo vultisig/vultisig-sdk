@@ -74,18 +74,40 @@ function hexToBytes(hex: string): Uint8Array {
   return out
 }
 
+/**
+ * Default per-request timeout (ms). TronGrid free-tier occasionally hangs on
+ * `triggerconstantcontract` / `getnowblock` for 30+ seconds — without a
+ * timeout, a fast-vault sign flow blocks indefinitely on the broadcast leg.
+ */
+const POST_JSON_TIMEOUT_MS = 15_000
+
 async function postJson<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body ?? {}),
-    signal,
-  })
-  if (!res.ok) {
-    const preview = await res.text().catch(() => '')
-    throw new Error(`HTTP ${res.status} ${res.statusText} from ${url}: ${preview.slice(0, 200)}`)
+  // Hermes-compatible timeout: `AbortSignal.timeout()` is Node 17.3+ and not
+  // available on older RN/Hermes runtimes. Build the same behaviour with
+  // AbortController + setTimeout, and forward the caller's abort if any.
+  const controller = new AbortController()
+  const onExternalAbort = () => controller.abort(signal?.reason)
+  if (signal) {
+    if (signal.aborted) controller.abort(signal.reason)
+    else signal.addEventListener('abort', onExternalAbort, { once: true })
   }
-  return (await res.json()) as T
+  const timeoutId = setTimeout(() => controller.abort(new Error(`postJson timeout after ${POST_JSON_TIMEOUT_MS}ms: ${url}`)), POST_JSON_TIMEOUT_MS)
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      const preview = await res.text().catch(() => '')
+      throw new Error(`HTTP ${res.status} ${res.statusText} from ${url}: ${preview.slice(0, 200)}`)
+    }
+    return (await res.json()) as T
+  } finally {
+    clearTimeout(timeoutId)
+    if (signal) signal.removeEventListener('abort', onExternalAbort)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +122,12 @@ type RawNowBlockResponse = {
       timestamp: number
     }
   }
+  // TronGrid bare-error envelope (see RawAccountResponse for full rationale).
+  // Without this guard, `res.block_header.raw_data` throws a TypeError that
+  // doesn't carry the gateway's actual error message — masking outages and
+  // surfacing as confusing stack traces in production.
+  Error?: string
+  error?: string
 }
 
 /**
@@ -108,6 +136,16 @@ type RawNowBlockResponse = {
  */
 export async function getTronBlockRefs(apiUrl: string, signal?: AbortSignal): Promise<TronBlockRefs> {
   const res = await postJson<RawNowBlockResponse>(`${apiUrl.replace(/\/$/, '')}/wallet/getnowblock`, {}, signal)
+  // Mirror the defensive shape from `getTronAccount` / `broadcastTronTx`:
+  // capital-`E` `Error` is the bare-error envelope TronGrid returns when it
+  // cannot even parse the request; lowercase covers mirror gateways.
+  const tronError = res.Error ?? res.error
+  if (tronError) {
+    throw new Error(`getTronBlockRefs failed: ${tronError}`)
+  }
+  if (!res.block_header?.raw_data) {
+    throw new Error(`getTronBlockRefs: response missing block_header.raw_data: ${JSON.stringify(res).slice(0, 200)}`)
+  }
   const blockNumber = res.block_header.raw_data.number
   const blockTimestamp = res.block_header.raw_data.timestamp
   const blockIdHex = res.blockID
