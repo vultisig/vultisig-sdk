@@ -233,31 +233,15 @@ export class AgentSession {
       // Use stale context
     }
 
-    // CR2: snapshot the queue so a 401/403 retry can replay the same
-    // recent_actions instead of re-dispatching tools that already mutated
-    // vault state. Auth middleware fails the request before the handler
-    // runs, so the backend hasn't touched these results — safe to restore.
-    const savedToolResults = [...this.pendingToolResults]
     try {
       await this.processMessageLoop(content, ui)
     } catch (err: any) {
-      // Re-authenticate on 401/403 and retry once
-      if (err.message?.includes('401') || err.message?.includes('403')) {
-        clearCachedToken(this.publicKey)
-        const auth = await authenticateVault(this.client, this.vault, this.config.password)
-        this.client.setAuthToken(auth.token)
-        saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-        // Restore the snapshot in case processMessageLoop already spliced.
-        this.pendingToolResults = savedToolResults
-        await this.processMessageLoop(content, ui)
-      } else {
-        // SF: any non-auth failure (5xx, AbortError, network) may have left
-        // pendingToolResults populated — clear so the next user turn doesn't
-        // silently inherit stale tool results and trigger phantom auto-submit
-        // or hallucinated success messages.
-        this.pendingToolResults = []
-        throw err
-      }
+      // SF: any failure that escaped processMessageLoop's internal 401
+      // retry — clear the queue so the next user turn doesn't silently
+      // inherit stale tool results and trigger phantom auto-submit or
+      // hallucinated success messages.
+      this.pendingToolResults = []
+      throw err
     } finally {
       this.abortController = null
     }
@@ -294,8 +278,12 @@ export class AgentSession {
       request.content = content
     }
 
-    // Flush the post-#119 return channel (replaces the old action_result field).
+    // CR2: snapshot the batch BEFORE the splice so an HTTP failure can
+    // restore the queue and let the caller retry without re-dispatching
+    // tools that already mutated vault state.
+    let flushedThisCall: RecentAction[] = []
     if (this.pendingToolResults.length > 0) {
+      flushedThisCall = [...this.pendingToolResults]
       request.context.recent_actions = this.pendingToolResults.splice(0)
       if (this.config.verbose) {
         process.stderr.write(`[session] flushed ${request.context.recent_actions.length} recent_actions into request\n`)
@@ -310,53 +298,90 @@ export class AgentSession {
     // single-slot password resolver hangs when two dispatches both prompt.
     let dispatchChain: Promise<void> = Promise.resolve()
 
-    // Send via SSE stream
-    const streamResult = await this.client.sendMessageStream(
-      this.conversationId,
-      request,
-      {
-        onTextDelta: delta => ui.onTextDelta(delta),
-        onToolProgress: (tool, status, label) => {
-          if (status === 'running') {
-            ui.onToolCall(`mcp-${tool}`, tool)
-          } else {
-            ui.onToolResult(`mcp-${tool}`, tool, true, { label })
-          }
-        },
-        onClientSideToolCall: (toolCallId, toolName, input) => {
-          const dispatch = dispatchChain.then(() => this.dispatchClientSideTool(toolCallId, toolName, input, ui))
-          dispatchChain = dispatch.catch(() => {})
-          pendingDispatches.push(dispatch)
-        },
-        onTitle: _title => {
-          // Title updates handled internally
-        },
-        onActions: _actions => {
-          // Legacy data-actions channel: backend no longer emits for
-          // client-side tools post-#119; any late-arriving legacy
-          // payloads are collected in streamResult for the fallback
-          // below.
-        },
-        onSuggestions: suggestions => {
-          ui.onSuggestions(suggestions)
-        },
-        onTxReady: tx => {
-          if (this.executor.storeServerTransaction(tx)) {
-            serverTxStoredFromStream++
-            if (this.config.password) {
-              this.executor.setPassword(this.config.password)
-            }
-          }
-        },
-        onMessage: _msg => {
-          // Final message received
-        },
-        onError: (error, code) => {
-          ui.onError(error, code)
-        },
+    // Send via SSE stream. CR2: 401/403 retry happens at the request
+    // boundary so the retry replays the EXACT same request body (same
+    // content, same recent_actions) — moving it up to sendMessage's catch
+    // would re-deliver the original user message and cause the LLM to
+    // re-emit tool calls (runaway loop). Non-auth errors restore the
+    // spliced batch so callers can retry the queue.
+    const callbacks = {
+      onTextDelta: (delta: string) => ui.onTextDelta(delta),
+      onToolProgress: (tool: string, status: 'running' | 'done', label?: string) => {
+        if (status === 'running') {
+          ui.onToolCall(`mcp-${tool}`, tool)
+        } else {
+          ui.onToolResult(`mcp-${tool}`, tool, true, { label })
+        }
       },
-      this.abortController?.signal
-    )
+      onClientSideToolCall: (toolCallId: string, toolName: string, input: Record<string, unknown>) => {
+        const dispatch = dispatchChain.then(() => this.dispatchClientSideTool(toolCallId, toolName, input, ui))
+        dispatchChain = dispatch.catch(() => {})
+        pendingDispatches.push(dispatch)
+      },
+      onTitle: (_title: string) => {
+        // Title updates handled internally
+      },
+      onActions: (_actions: Action[]) => {
+        // Legacy data-actions channel: backend no longer emits for
+        // client-side tools post-#119; any late-arriving legacy
+        // payloads are collected in streamResult for the fallback
+        // below.
+      },
+      onSuggestions: (suggestions: any[]) => {
+        ui.onSuggestions(suggestions)
+      },
+      onTxReady: (tx: any) => {
+        if (this.executor.storeServerTransaction(tx)) {
+          serverTxStoredFromStream++
+          if (this.config.password) {
+            this.executor.setPassword(this.config.password)
+          }
+        }
+      },
+      onMessage: (_msg: any) => {
+        // Final message received
+      },
+      onError: (error: string, code: AgentErrorCode) => {
+        ui.onError(error, code)
+      },
+    }
+
+    // CR2: 401/403 retry at the request boundary so the replay uses the
+    // EXACT same request body (same content, same recent_actions). Doing
+    // this in sendMessage's catch would re-deliver the original user
+    // message and trigger an LLM-loop where it re-emits the same tool
+    // calls forever.
+    let streamResult
+    let authRetried = false
+    while (true) {
+      try {
+        streamResult = await this.client.sendMessageStream(
+          this.conversationId,
+          request,
+          callbacks,
+          this.abortController?.signal
+        )
+        break
+      } catch (err: any) {
+        const isAuthErr = err.message?.includes('401') || err.message?.includes('403')
+        if (isAuthErr && !authRetried) {
+          authRetried = true
+          clearCachedToken(this.publicKey)
+          const auth = await authenticateVault(this.client, this.vault, this.config.password)
+          this.client.setAuthToken(auth.token)
+          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+          continue
+        }
+        // Non-401 or already retried: restore the spliced batch so the
+        // caller (or next user turn) can resume from the same queue
+        // state. SF in sendMessage's catch will clear if the user
+        // doesn't retry.
+        if (flushedThisCall.length > 0) {
+          this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
+        }
+        throw err
+      }
+    }
 
     // Wait for client-side dispatches (they push onto pendingToolResults).
     if (pendingDispatches.length > 0) {
