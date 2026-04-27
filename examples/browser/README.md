@@ -20,25 +20,31 @@ Browser-based example application demonstrating the Vultisig SDK for fast vault 
 
 ### Prerequisites
 
-- Node.js 18+
-- Yarn
+- Node.js 20+
+- Yarn 4.x (via Corepack or your preferred install)
+- A built SDK bundle (`packages/sdk/dist/`), generated from the repo root with `yarn build:sdk`
 
 ### Installation
 
+From the repository root:
+
 ```bash
-cd examples/browser
 yarn install
+yarn build:sdk
 ```
 
-### Development
+Then start the browser example:
 
 ```bash
+cd examples/browser
 yarn dev
 ```
 
 Open http://localhost:3000
 
 ### Build
+
+> Note: `yarn build` also assumes the root SDK bundle already exists at `packages/sdk/dist/`. If you see missing WASM or SDK artifact errors, run `yarn build:sdk` from the repository root first.
 
 ```bash
 yarn build

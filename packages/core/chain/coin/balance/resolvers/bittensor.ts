@@ -1,5 +1,8 @@
+import { blake2b } from '@noble/hashes/blake2b'
+import { bytesToHex } from '@noble/hashes/utils'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import bs58 from 'bs58'
 
 import { CoinBalanceResolver } from '../resolver'
 
@@ -14,14 +17,24 @@ type RpcResponse<T> = {
 const systemAccountPrefix =
   '0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9'
 
-export const getBittensorCoinBalance: CoinBalanceResolver = async input => {
-  // Compute blake2_128_concat storage key for the account
-  const { blake2AsHex } = await import('@polkadot/util-crypto')
-  const { decodeAddress } = await import('@polkadot/util-crypto')
+const ss58AddressByteLength = 35
+const ss58PublicKeyOffset = 1
+const ss58PublicKeyEnd = 33
 
-  const pubkey = decodeAddress(input.address)
-  const hash = blake2AsHex(pubkey, 128).slice(2) // 16 bytes = 128 bits, remove 0x
-  const accountId = Buffer.from(pubkey).toString('hex')
+const decodeSs58PublicKey = (address: string): Uint8Array => {
+  const decoded = bs58.decode(address)
+  if (decoded.length !== ss58AddressByteLength) {
+    throw new Error(
+      `Invalid SS58 address length: expected ${ss58AddressByteLength} bytes, got ${decoded.length}`
+    )
+  }
+  return decoded.slice(ss58PublicKeyOffset, ss58PublicKeyEnd)
+}
+
+export const getBittensorCoinBalance: CoinBalanceResolver = async input => {
+  const pubkey = decodeSs58PublicKey(input.address)
+  const hash = bytesToHex(blake2b(pubkey, { dkLen: 16 }))
+  const accountId = bytesToHex(pubkey)
   const storageKey = systemAccountPrefix + hash + accountId
 
   const response = await queryUrl<RpcResponse<string | null>>(bittensorRpcUrl, {

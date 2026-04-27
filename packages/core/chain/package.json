@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -453,6 +453,21 @@
       "types": "./dist/chains/evm/contract/call/signatures.d.ts",
       "import": "./dist/chains/evm/contract/call/signatures.js",
       "default": "./dist/chains/evm/contract/call/signatures.js"
+    },
+    "./chains/evm/contract/universalRouter/decode": {
+      "types": "./dist/chains/evm/contract/universalRouter/decode.d.ts",
+      "import": "./dist/chains/evm/contract/universalRouter/decode.js",
+      "default": "./dist/chains/evm/contract/universalRouter/decode.js"
+    },
+    "./chains/evm/contract/universalRouter/opcodes": {
+      "types": "./dist/chains/evm/contract/universalRouter/opcodes.d.ts",
+      "import": "./dist/chains/evm/contract/universalRouter/opcodes.js",
+      "default": "./dist/chains/evm/contract/universalRouter/opcodes.js"
+    },
+    "./chains/evm/contract/universalRouter/types": {
+      "types": "./dist/chains/evm/contract/universalRouter/types.d.ts",
+      "import": "./dist/chains/evm/contract/universalRouter/types.js",
+      "default": "./dist/chains/evm/contract/universalRouter/types.js"
     },
     "./chains/evm/erc20/getErc20Allowance": {
       "types": "./dist/chains/evm/erc20/getErc20Allowance.d.ts",
@@ -1409,6 +1424,11 @@
       "types": "./dist/tx/broadcast/resolvers/utxo.d.ts",
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
+    },
+    "./tx/broadcast/verifyBroadcastByHash": {
+      "types": "./dist/tx/broadcast/verifyBroadcastByHash.d.ts",
+      "import": "./dist/tx/broadcast/verifyBroadcastByHash.js",
+      "default": "./dist/tx/broadcast/verifyBroadcastByHash.js"
     },
     "./tx/fee/evm/baseFee": {
       "types": "./dist/tx/fee/evm/baseFee.d.ts",
