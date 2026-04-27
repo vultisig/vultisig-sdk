@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -978,7 +978,7 @@
     "@vultisig/lib-mldsa": "0.9.0",
     "@vultisig/lib-schnorr": "0.9.0",
     "@vultisig/lib-utils": "0.9.3",
-    "@vultisig/mpc-types": "0.2.1",
+    "@vultisig/mpc-types": "0.2.2",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
     "cosmjs-types": "^0.11.0",
