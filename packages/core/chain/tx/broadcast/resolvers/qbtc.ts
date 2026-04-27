@@ -4,10 +4,13 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 
 import { BroadcastTxResolver } from '../resolver'
+import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 export const broadcastQbtcTx: BroadcastTxResolver<typeof Chain.QBTC> = async ({
-  tx: { serialized },
+  chain,
+  tx,
 }) => {
+  const { serialized } = tx
   const { tx_bytes } = JSON.parse(serialized) as { tx_bytes: string }
 
   const resp = await fetch(`${qbtcRestUrl}/cosmos/tx/v1beta1/txs`, {
@@ -24,7 +27,9 @@ export const broadcastQbtcTx: BroadcastTxResolver<typeof Chain.QBTC> = async ({
     if (isInError(text, 'tx already exists in cache')) {
       return
     }
-    throw new Error(`QBTC broadcast failed (${resp.status}): ${text}`)
+    const err = new Error(`QBTC broadcast failed (${resp.status}): ${text}`)
+    await verifyBroadcastByHash({ chain, tx, error: err })
+    return
   }
 
   const data = (await resp.json()) as {
@@ -38,7 +43,13 @@ export const broadcastQbtcTx: BroadcastTxResolver<typeof Chain.QBTC> = async ({
     }
   })
 
-  if (error && !isInError(error, 'tx already exists in cache')) {
-    throw error
+  if (!error) {
+    return
   }
+
+  if (isInError(error, 'tx already exists in cache')) {
+    return
+  }
+
+  await verifyBroadcastByHash({ chain, tx, error })
 }

@@ -4,11 +4,12 @@ import { sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
 import base58 from 'bs58'
 
 import { BroadcastTxResolver } from '../resolver'
+import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 export const broadcastSolanaTx: BroadcastTxResolver<
   OtherChain.Solana
-> = async ({ tx: { encoded } }) => {
-  const rawTransaction = base58.decode(encoded)
+> = async ({ chain, tx }) => {
+  const rawTransaction = base58.decode(tx.encoded)
 
   // Route all Solana transactions through JITO's sendTransaction endpoint
   // for free MEV protection (private mempool). Falls back to standard RPC
@@ -21,9 +22,13 @@ export const broadcastSolanaTx: BroadcastTxResolver<
   }
 
   const client = getSolanaClient()
-  await client.sendRawTransaction(rawTransaction, {
-    skipPreflight: false,
-    preflightCommitment: 'confirmed',
-    maxRetries: 3,
-  })
+  try {
+    await client.sendRawTransaction(rawTransaction, {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+      maxRetries: 3,
+    })
+  } catch (error) {
+    await verifyBroadcastByHash({ chain, tx, error })
+  }
 }

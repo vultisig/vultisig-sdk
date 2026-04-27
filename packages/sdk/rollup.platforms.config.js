@@ -85,6 +85,82 @@ const onwarn = (warning, warn) => {
   warn(warning)
 }
 
+// Path-based platform overrides for the React Native bundle.
+//
+// Rollup's `@rollup/plugin-alias` only matches at module-ID resolution time,
+// so it can intercept a bare specifier like
+// `@vultisig/core-chain/chains/solana/client` but never a relative
+// `./client` written inside the core package. That previously forced us to
+// rewrite core callsites to use bare specifiers just so the alias could
+// match — polluting the platform-agnostic `packages/core` with build-tool
+// plumbing.
+//
+// Instead, this plugin runs in `resolveId` AFTER the alias + node-resolve
+// chain has produced a final absolute path on disk. It pattern-matches on
+// the resolved path suffix, so it doesn't care whether the callsite used a
+// relative path (`./client`, `../client`), a workspace bare specifier
+// (`@vultisig/core-chain/chains/solana/client`), or anything else that
+// eventually resolves to the same file. One mapping, all callsites covered.
+//
+// The overrides exist because the real modules would evaluate Hermes-hostile
+// deps (`@solana/web3.js`, `@mysten/sui/jsonRpc`, `@lifi/sdk`) at module-init
+// time. The RN-specific versions defer those imports to inside async function
+// bodies so the module graph stays cold until the first real call.
+const rnOverrideMap = {
+  'packages/core/chain/chains/solana/client.ts': 'src/platforms/react-native/overrides/solanaClient.ts',
+  'packages/core/chain/chains/sui/client.ts': 'src/platforms/react-native/overrides/suiClient.ts',
+  'packages/core/chain/swap/general/lifi/LifiSwapEnabledChains.ts':
+    'src/platforms/react-native/overrides/lifiSwapEnabledChains.ts',
+  'packages/core/chain/chains/solana/spl/getSplAccounts.ts': 'src/platforms/react-native/overrides/getSplAccounts.ts',
+  'packages/core/chain/chains/solana/spl/getSplAssociatedAccount.ts':
+    'src/platforms/react-native/overrides/getSplAssociatedAccount.ts',
+  'packages/core/chain/coin/balance/resolvers/solana.ts': 'src/platforms/react-native/overrides/resolverSolana.ts',
+  'packages/core/mpc/keysign/chainSpecific/resolvers/solana/refine.ts':
+    'src/platforms/react-native/overrides/refineSolanaChainSpecific.ts',
+  'packages/core/chain/swap/general/lifi/api/getLifiSwapQuote.ts':
+    'src/platforms/react-native/overrides/getLifiSwapQuote.ts',
+}
+
+// Minimum path-segment depth that every override-map key MUST have. The
+// override fires on `id.endsWith(suffix)`, so a shallow suffix (say,
+// `client.ts`) would collide with every other `client.ts` in the module
+// graph and redirect them all to a Solana-specific override. Require at
+// least 4 segments — all current entries satisfy this — so a future
+// contributor who shortens an entry fails loud at build time rather than
+// silently misrouting a chain's client code.
+const MIN_OVERRIDE_SUFFIX_DEPTH = 4
+for (const suffix of Object.keys(rnOverrideMap)) {
+  const segments = suffix.split('/').filter(Boolean).length
+  if (segments < MIN_OVERRIDE_SUFFIX_DEPTH) {
+    throw new Error(
+      `rnOverrideMap: suffix ${JSON.stringify(suffix)} has only ${segments} segments — ` +
+        `minimum is ${MIN_OVERRIDE_SUFFIX_DEPTH} to avoid collisions with unrelated modules ` +
+        `that happen to share the trailing path components.`
+    )
+  }
+}
+
+const rnOverridePlugin = () => ({
+  name: 'vultisig-rn-path-override',
+  async resolveId(source, importer, options) {
+    if (options?.isEntry) return null
+    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
+    if (!resolved || resolved.external) return null
+    const id = resolved.id.replace(/\\/g, '/')
+    for (const [suffix, override] of Object.entries(rnOverrideMap)) {
+      if (id.endsWith('/' + suffix) || id.endsWith(suffix)) {
+        // Log once per distinct (source, override) pair so reviewers can
+        // audit which real-world imports the override actually intercepts.
+        // Uses `this.info` so it goes through Rollup's warning pipeline
+        // instead of stdout (keeps `rollup -w` output clean-able).
+        this.info?.(`[vultisig-rn-path-override] ${source} → ${override}`)
+        return path.resolve(currentDir, override)
+      }
+    }
+    return null
+  },
+})
+
 const createPlugins = (platformOptions = {}) => {
   const { preferBuiltins = false, browser = false, replaceOptions = {} } = platformOptions
 
@@ -266,16 +342,36 @@ const configs = {
         '@vultisig/walletcore-native',
         '@react-native-async-storage/async-storage',
         '@trustwallet/wallet-core',
-        // Node builtins (can't run on RN)
+        'expo-crypto',
+        // Node builtins — kept external; consumers must map these to
+        // empty modules via metro.config.js `resolver.extraNodeModules`.
+        // The SDK ships `dist/shims/empty-rn.js` as the canonical target.
         'crypto',
         'buffer',
         'util',
-        'stream',
         'url',
         'fs',
         'fs/promises',
         'path',
         'os',
+        'http',
+        'https',
+        'net',
+        'tls',
+        'zlib',
+        'events',
+        'child_process',
+        'stream',
+        'assert',
+        'querystring',
+        'process',
+        // Network transport deps that statically pull Node-only modules via
+        // named imports (can't be Proxy-shimmed).
+        'rpc-websockets',
+        'ws',
+        'node-fetch',
+        'jayson',
+        'jayson/lib/client/browser',
         // Deps that use Node.js or WASM loading (shimmed via alias)
         '7z-wasm',
         'electron',
@@ -284,6 +380,52 @@ const configs = {
         'viem',
         'zod',
         'uuid',
+        // Heavy chain clients — deliberately kept out of the RN bundle;
+        // RN consumers either use the SDK's fetch-based wrappers (PR-B) or
+        // provide their own implementation. These drag in WS/HTTP/Node APIs.
+        '@mysten/sui',
+        /^@mysten\/sui\//,
+        '@polkadot/api',
+        /^@polkadot\/api\//,
+        '@polkadot/rpc-provider',
+        /^@polkadot\/rpc-provider\//,
+        '@polkadot/util',
+        '@polkadot/util-crypto',
+        '@polkadot/x-fetch',
+        '@polkadot/x-ws',
+        '@polkadot/x-randomvalues',
+        '@polkadot/x-textencoder',
+        '@polkadot/x-textdecoder',
+        '@polkadot/wasm-crypto-init',
+        '@cosmjs/stargate',
+        '@cosmjs/amino',
+        '@cosmjs/proto-signing',
+        '@cosmjs/tendermint-rpc',
+        /^@cosmjs\//,
+        '@bufbuild/protobuf',
+        /^@bufbuild\//,
+        '@solana/web3.js',
+        '@solana/spl-token',
+        /^@solana\//,
+        '@coral-xyz/anchor',
+        /^@coral-xyz\//,
+        '@lifi/sdk',
+        'xrpl',
+        'ripple-binary-codec',
+        'ripple-address-codec',
+        'ethers',
+        /^ethers\//,
+        'bitcoinjs-lib',
+        'bs58',
+        'bs58check',
+        'cbor-x',
+        'cbor-extract',
+        'i18next',
+        'i18next-http-backend',
+        '@ton/core',
+        '@ton/crypto',
+        '@ton/crypto-primitives',
+        /^@ton\//,
         // WASM binaries
         /\.wasm$/,
         /lib\/dkls\/vs_wasm/,
@@ -291,6 +433,7 @@ const configs = {
         /lib\/schnorr\/vs_schnorr_wasm/,
       ],
       plugins: [
+        rnOverridePlugin(),
         alias({
           entries: [
             // Polyfills for Node.js crypto (must come before generic package aliases)
@@ -344,7 +487,6 @@ const configs = {
             'zod',
             'uuid',
             '@trustwallet/wallet-core',
-            'tiny-secp256k1',
             '@solana/web3.js',
             '@cosmjs/stargate',
             '@cosmjs/amino',
@@ -412,11 +554,9 @@ const configs = {
     }),
     onwarn,
   },
-  // The `@vultisig/sdk/vite` subpath export is a consumer-facing Vite plugin
-  // that configures `optimizeDeps.exclude` so the wasm-bindgen glue packages
-  // stay adjacent to their `.wasm` payloads at runtime. It runs in the
-  // consumer's build (Node), not in the SDK runtime, so it has no runtime
-  // deps and ships in both ESM and CJS for maximum tooling compatibility.
+  // The `@vultisig/sdk/vite` subpath export is a consumer-facing preset (wasm,
+  // optional node polyfills, shim resolution, 7z copy, optimizeDeps). It runs in
+  // the consumer's build (Node). ESM and CJS emit for `default` and `require` consumers.
   vite: [
     {
       input: './src/vite/index.ts',

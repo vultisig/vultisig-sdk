@@ -1,5 +1,19 @@
 # @vultisig/client-shared
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`c5f9c7b`](https://github.com/vultisig/vultisig-sdk/commit/c5f9c7bcac80d30f0b5e086c9e6860eaa0cf79a9)]:
+  - @vultisig/sdk@0.19.0
+
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`2018787`](https://github.com/vultisig/vultisig-sdk/commit/2018787f8101ea9a98e975c0e7477245c3f86fad), [`f52057b`](https://github.com/vultisig/vultisig-sdk/commit/f52057b4af859018d1c180fa6db9ce15e153409f)]:
+  - @vultisig/sdk@0.18.0
+
 ## 0.2.1
 
 ### Patch Changes

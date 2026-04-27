@@ -4,6 +4,7 @@ import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { BroadcastTxResolver } from '../resolver'
+import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 type RpcResponse = {
   result?: string
@@ -12,8 +13,10 @@ type RpcResponse = {
 
 export const broadcastBittensorTx: BroadcastTxResolver<
   OtherChain.Bittensor
-> = async ({ tx: { encoded } }) => {
-  const hexWithPrefix = ensureHexPrefix(Buffer.from(encoded).toString('hex'))
+> = async ({ chain, tx }) => {
+  const hexWithPrefix = ensureHexPrefix(
+    Buffer.from(tx.encoded).toString('hex')
+  )
 
   const response = await queryUrl<RpcResponse>(bittensorRpcUrl, {
     body: {
@@ -30,8 +33,9 @@ export const broadcastBittensorTx: BroadcastTxResolver<
     if (message.includes('Already Imported')) {
       return
     }
-    throw new Error(
+    const err = new Error(
       `Bittensor broadcast failed: ${message || `code ${response.error.code}`}`
     )
+    await verifyBroadcastByHash({ chain, tx, error: err })
   }
 }
