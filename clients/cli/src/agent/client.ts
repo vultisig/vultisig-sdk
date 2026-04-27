@@ -142,11 +142,10 @@ export class AgentClient {
       onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
       // Fired for `tool-input-available` with `clientExecuted: true`.
       // Client runs the tool and ships the result via recent_actions.
-      onClientSideToolCall?: (
-        toolCallId: string,
-        toolName: string,
-        input: Record<string, unknown>
-      ) => void | Promise<void>
+      // Sync-only: callers must dispatch async work themselves (push to a
+      // promise queue) — keeps `void`'d call at the SSE boundary safe from
+      // unhandled rejections.
+      onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
@@ -262,11 +261,10 @@ export class AgentClient {
       onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
       // Fired for `tool-input-available` with `clientExecuted: true`.
       // Client runs the tool and ships the result via recent_actions.
-      onClientSideToolCall?: (
-        toolCallId: string,
-        toolName: string,
-        input: Record<string, unknown>
-      ) => void | Promise<void>
+      // Sync-only: callers must dispatch async work themselves (push to a
+      // promise queue) — keeps `void`'d call at the SSE boundary safe from
+      // unhandled rejections.
+      onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
@@ -327,8 +325,9 @@ export class AgentClient {
               rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
                 ? (rawInput as Record<string, unknown>)
                 : {}
-            // Fire-and-forget; session.ts awaits/queues.
-            void callbacks.onClientSideToolCall(callId, toolName, input)
+            // Sync callback (signature enforces void return); session.ts
+            // queues the async dispatch onto its own chain.
+            callbacks.onClientSideToolCall(callId, toolName, input)
           }
 
           if (status && toolName) {

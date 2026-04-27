@@ -233,6 +233,11 @@ export class AgentSession {
       // Use stale context
     }
 
+    // CR2: snapshot the queue so a 401/403 retry can replay the same
+    // recent_actions instead of re-dispatching tools that already mutated
+    // vault state. Auth middleware fails the request before the handler
+    // runs, so the backend hasn't touched these results — safe to restore.
+    const savedToolResults = [...this.pendingToolResults]
     try {
       await this.processMessageLoop(content, ui)
     } catch (err: any) {
@@ -242,8 +247,15 @@ export class AgentSession {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
         saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+        // Restore the snapshot in case processMessageLoop already spliced.
+        this.pendingToolResults = savedToolResults
         await this.processMessageLoop(content, ui)
       } else {
+        // SF: any non-auth failure (5xx, AbortError, network) may have left
+        // pendingToolResults populated — clear so the next user turn doesn't
+        // silently inherit stale tool results and trigger phantom auto-submit
+        // or hallucinated success messages.
+        this.pendingToolResults = []
         throw err
       }
     } finally {
@@ -293,6 +305,10 @@ export class AgentSession {
     // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
     let serverTxStoredFromStream = 0
     const pendingDispatches: Promise<void>[] = []
+    // Serialize client-side tool dispatches in SSE arrival order. Without
+    // this, ordering-sensitive flows (add_chain → add_coin) race and the
+    // single-slot password resolver hangs when two dispatches both prompt.
+    let dispatchChain: Promise<void> = Promise.resolve()
 
     // Send via SSE stream
     const streamResult = await this.client.sendMessageStream(
@@ -308,7 +324,9 @@ export class AgentSession {
           }
         },
         onClientSideToolCall: (toolCallId, toolName, input) => {
-          pendingDispatches.push(this.dispatchClientSideTool(toolCallId, toolName, input, ui))
+          const dispatch = dispatchChain.then(() => this.dispatchClientSideTool(toolCallId, toolName, input, ui))
+          dispatchChain = dispatch.catch(() => {})
+          pendingDispatches.push(dispatch)
         },
         onTitle: _title => {
           // Title updates handled internally
