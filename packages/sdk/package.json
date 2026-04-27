@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "0.19.1",
+  "version": "0.20.0",
   "description": "The self-custody MPC wallet SDK for AI agents. Bitcoin, Ethereum, Solana & 36+ chains via DKLS23 threshold signatures. TypeScript, multi-platform (Node, browser, React Native).",
   "type": "module",
   "main": "dist/index.node.cjs",
