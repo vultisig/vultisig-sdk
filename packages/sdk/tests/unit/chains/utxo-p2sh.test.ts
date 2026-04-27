@@ -291,9 +291,7 @@ describe('decodeAddressToPubKeyHash — wrong-chain paste rejects 21-byte payloa
 
   it('throws when a Zcash t1-address is decoded as Dash', () => {
     const zcashTAddr = buildZcashTAddress(0xb8, HASH_20)
-    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Dash')).toThrow(
-      /payload length 21 bytes for chain Dash/
-    )
+    expect(() => decodeAddressToPubKeyHash(zcashTAddr, 'Dash')).toThrow(/payload length 21 bytes for chain Dash/)
   })
 
   it('still decodes a Zcash t1-address normally under chain=Zcash (Zcash branch handles before fallback)', () => {
