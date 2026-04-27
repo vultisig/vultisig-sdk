@@ -41,7 +41,15 @@
     },
     "./react-native": {
       "types": "./dist/index.react-native.d.ts",
-      "import": "./dist/index.react-native.js"
+      "react-native": "./dist/index.react-native.js",
+      "import": "./dist/index.react-native.js",
+      "default": "./dist/index.react-native.js"
+    },
+    "./rn-preamble": {
+      "types": "./dist/index.rn-preamble.d.ts",
+      "react-native": "./dist/index.rn-preamble.js",
+      "import": "./dist/index.rn-preamble.js",
+      "default": "./dist/index.rn-preamble.js"
     },
     "./electron": {
       "types": "./dist/index.node.d.ts",
@@ -264,6 +272,7 @@
     "./dist/index.browser.js",
     "./dist/index.chrome-extension.js",
     "./dist/index.react-native.js",
+    "./dist/index.rn-preamble.js",
     "./dist/index.electron-main.cjs"
   ],
   "publishConfig": {
