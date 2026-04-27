@@ -203,9 +203,13 @@ export const parseBlockaidEvmSimulation = async (
       return null
     }
 
+    // Address is the primary identity for a token; symbol is just metadata
+    // and Blockaid sometimes returns inconsistent casing (`USDC` vs `usdc`)
+    // for the same contract. Reject refund-shaped pairs by address alone so
+    // we don't render a nonsense `A → A` swap when the in-side fallback
+    // matches the out-side asset.
     const inAddress = inDiff.asset.address?.toLowerCase()
-    const isSameAsset = outAddress === inAddress && outDiff.asset.symbol === inDiff.asset.symbol
-    if (isSameAsset) {
+    if (outAddress === inAddress) {
       return null
     }
 

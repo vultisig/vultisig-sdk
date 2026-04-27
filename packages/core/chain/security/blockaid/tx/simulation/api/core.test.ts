@@ -152,4 +152,25 @@ describe('parseBlockaidEvmSimulation', () => {
 
     expect(result).toBeNull()
   })
+
+  it('returns null when in/out share an address but Blockaid returns inconsistent symbol metadata', async () => {
+    // Address is the canonical token identity. Blockaid occasionally returns
+    // the same contract with mismatched symbols (different casing, stale
+    // metadata, etc.) — those still represent a refund-shaped self-swap.
+    const tokenAUppercaseSymbol = asset({
+      address: TOKEN_A.address,
+      symbol: 'TOKENA',
+      name: 'Token A (alt metadata)',
+    })
+
+    const result = await parseBlockaidEvmSimulation(
+      buildSimulation([
+        diff({ asset: TOKEN_A, out: [side('1')] }),
+        diff({ asset: tokenAUppercaseSymbol, in: [side('1')] }),
+      ]),
+      EvmChain.Ethereum
+    )
+
+    expect(result).toBeNull()
+  })
 })
