@@ -2844,6 +2844,91 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@formatjs/ecma402-abstract@npm:2.3.6":
+  version: 2.3.6
+  resolution: "@formatjs/ecma402-abstract@npm:2.3.6"
+  dependencies:
+    "@formatjs/fast-memoize": "npm:2.2.7"
+    "@formatjs/intl-localematcher": "npm:0.6.2"
+    decimal.js: "npm:^10.4.3"
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/63be2a73d3168bf45ab5d50db58376e852db5652d89511ae6e44f1fa03ad96ebbfe9b06a1dfaa743db06e40eb7f33bd77530b9388289855cca79a0e3fc29eacf
+  languageName: node
+  linkType: hard
+
+"@formatjs/fast-memoize@npm:2.2.7":
+  version: 2.2.7
+  resolution: "@formatjs/fast-memoize@npm:2.2.7"
+  dependencies:
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/f5eabb0e4ab7162297df8252b4cfde194b23248120d9df267592eae2be2d2f7c4f670b5a70523d91b4ecdc35d40e65823bb8eeba8dd79fbf8601a972bf3b8866
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-enumerator@npm:1.8.12":
+  version: 1.8.12
+  resolution: "@formatjs/intl-enumerator@npm:1.8.12"
+  dependencies:
+    "@formatjs/ecma402-abstract": "npm:2.3.6"
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/b9bab6cfa24d4d669dc395be677499b7e942d3e203cee43f62a5a37bf4b9e3506d47f516c3fadbd2c1cfb13747bc40d7a3741ecbeb7dfefb2ced63d11bf8d37c
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-getcanonicallocales@npm:2.5.6, @formatjs/intl-getcanonicallocales@npm:^2.5.0":
+  version: 2.5.6
+  resolution: "@formatjs/intl-getcanonicallocales@npm:2.5.6"
+  dependencies:
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/3a776ddc9893982f52f9f1540da2a205af8cf1533b7a40b791496e41ad263b3d3e019d37cf100cb531779f42ec48f4f566ddbded4625fa56362c78b918bcad06
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-locale@npm:^4.2.0":
+  version: 4.2.13
+  resolution: "@formatjs/intl-locale@npm:4.2.13"
+  dependencies:
+    "@formatjs/ecma402-abstract": "npm:2.3.6"
+    "@formatjs/intl-enumerator": "npm:1.8.12"
+    "@formatjs/intl-getcanonicallocales": "npm:2.5.6"
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/19898e008459e5ad68f631fb18ae2accb9e4ab444bb94fbe52b1b427996968357f986e7effabf463e5d99eed9fc79eb7feccaae0eeda3608a19ff6e13a0829ef
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-localematcher@npm:0.6.2":
+  version: 0.6.2
+  resolution: "@formatjs/intl-localematcher@npm:0.6.2"
+  dependencies:
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/22a17a4c67160b6c9f52667914acfb7b79cd6d80630d4ac6d4599ce447cb89d2a64f7d58fa35c3145ddb37fef893f0a45b9a55e663a4eb1f2ae8b10a89fac235
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-numberformat@npm:^8.15.0":
+  version: 8.15.6
+  resolution: "@formatjs/intl-numberformat@npm:8.15.6"
+  dependencies:
+    "@formatjs/ecma402-abstract": "npm:2.3.6"
+    "@formatjs/intl-localematcher": "npm:0.6.2"
+    decimal.js: "npm:^10.4.3"
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/cdee6aaa8a7f9c0b19631b8414fe877034c666dffac6fa3cdbff539d75cc83b8120520ee69541675310f662f89a403ba663895b5e3846423d3b310d8e81d6329
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-pluralrules@npm:^5.4.0":
+  version: 5.4.6
+  resolution: "@formatjs/intl-pluralrules@npm:5.4.6"
+  dependencies:
+    "@formatjs/ecma402-abstract": "npm:2.3.6"
+    "@formatjs/intl-localematcher": "npm:0.6.2"
+    decimal.js: "npm:^10.4.3"
+    tslib: "npm:^2.8.0"
+  checksum: 10c0/95dd6fb3e9bd84ce44cc194f6f815d690703bd60b75bf2ae895535d2d9a1a675765879de9b54f854882fc1335cbfac6a535873d5b2d75cc5ca93c6ca172aa272
+  languageName: node
+  linkType: hard
+
 "@gar/promise-retry@npm:^1.0.0":
   version: 1.0.3
   resolution: "@gar/promise-retry@npm:1.0.3"
@@ -5735,6 +5820,35 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@ton/core@npm:^0.63.1":
+  version: 0.63.1
+  resolution: "@ton/core@npm:0.63.1"
+  peerDependencies:
+    "@ton/crypto": ">=3.2.0"
+  checksum: 10c0/6839440c900efec8411b82a4861c0977de8bfbc96fb8b83f20aac6cddfa58aff48a410dd71951dd647618c7749b79bc82ab45ada21d1da1b916c8bb52562c6e3
+  languageName: node
+  linkType: hard
+
+"@ton/crypto-primitives@npm:2.1.0":
+  version: 2.1.0
+  resolution: "@ton/crypto-primitives@npm:2.1.0"
+  dependencies:
+    jssha: "npm:3.2.0"
+  checksum: 10c0/9869a393297930ae8dfd784b0c2c4f3c9eff6341b82c75b103990281855392fbf01780251e32d8afd86a82f3eaa388bfe35b9634a0b64d7f05d65c658855870b
+  languageName: node
+  linkType: hard
+
+"@ton/crypto@npm:^3.3.0":
+  version: 3.3.0
+  resolution: "@ton/crypto@npm:3.3.0"
+  dependencies:
+    "@ton/crypto-primitives": "npm:2.1.0"
+    jssha: "npm:3.2.0"
+    tweetnacl: "npm:1.0.3"
+  checksum: 10c0/2fc008d4ada55f483ef7aba63a0690e09a307be340876ed95e7202253d8373daa1d07253dc031889067c578c95f0d08073903fdbc9cce643106d5ccd68095000
+  languageName: node
+  linkType: hard
+
 "@trustwallet/wallet-core@npm:^4.6.0":
   version: 4.6.4
   resolution: "@trustwallet/wallet-core@npm:4.6.4"
@@ -6476,7 +6590,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:1.4.0, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:1.4.1, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -6526,7 +6640,7 @@ __metadata:
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.0"
-    "@vultisig/core-chain": "npm:1.4.0"
+    "@vultisig/core-chain": "npm:1.4.1"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
@@ -6704,7 +6818,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:^3.0.9"
   peerDependencies:
-    "@vultisig/sdk": ">=0.18.0"
+    "@vultisig/sdk": ">=0.19.0"
   peerDependenciesMeta:
     "@vultisig/sdk":
       optional: true
@@ -6719,6 +6833,10 @@ __metadata:
     "@bufbuild/protobuf": "npm:^2.11.0"
     "@coral-xyz/anchor": "npm:^0.31.1"
     "@cosmjs/stargate": "npm:^0.37.0"
+    "@formatjs/intl-getcanonicallocales": "npm:^2.5.0"
+    "@formatjs/intl-locale": "npm:^4.2.0"
+    "@formatjs/intl-numberformat": "npm:^8.15.0"
+    "@formatjs/intl-pluralrules": "npm:^5.4.0"
     "@lifi/sdk": "npm:^3.15.5"
     "@mysten/sui": "npm:^2.3.0"
     "@noble/hashes": "npm:^1.8.0"
@@ -6734,6 +6852,8 @@ __metadata:
     "@scure/bip39": "npm:^1.6.0"
     "@solana/spl-token": "npm:^0.4.14"
     "@solana/web3.js": "npm:^1.98.4"
+    "@ton/core": "npm:^0.63.1"
+    "@ton/crypto": "npm:^3.3.0"
     "@trustwallet/wallet-core": "npm:^4.6.0"
     "@types/chrome": "npm:^0.1.27"
     "@types/events": "npm:^3"
@@ -6748,6 +6868,7 @@ __metadata:
     bip32: "npm:^5.0.0"
     bitcoinjs-lib: "npm:^7.0.0"
     bs58: "npm:^6.0.0"
+    bs58check: "npm:^4.0.0"
     buffer: "npm:^6.0.3"
     cbor-x: "npm:^1.6.0"
     concurrently: "npm:^9.2.1"
@@ -6756,6 +6877,7 @@ __metadata:
     dotenv: "npm:^17.2.3"
     electron: "npm:^39.2.3"
     ethers: "npm:^6.15.0"
+    event-target-polyfill: "npm:^0.0.3"
     events: "npm:^3.3.0"
     fake-indexeddb: "npm:^6.2.5"
     i18next: "npm:^25.8.4"
@@ -6765,6 +6887,8 @@ __metadata:
     node-localstorage: "npm:^3.0.5"
     path-browserify: "npm:^1.0.1"
     process: "npm:^0.11.10"
+    ripple-address-codec: "npm:^5.0.0"
+    ripple-binary-codec: "npm:^2.7.0"
     rollup: "npm:^4.32.1"
     rollup-plugin-copy: "npm:^3.5.0"
     rollup-plugin-dts: "npm:^6.1.1"
@@ -6783,10 +6907,16 @@ __metadata:
     xrpl: "npm:^4.4.1"
     zod: "npm:^4.1.5"
   peerDependencies:
+    "@react-native-async-storage/async-storage": ^2.0.0
     "@vultisig/mpc-native": "workspace:*"
+    expo-crypto: ^13.0.0 || ^14.0.0 || ^15.0.0 || ^55.0.0
     vite: ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
   peerDependenciesMeta:
+    "@react-native-async-storage/async-storage":
+      optional: true
     "@vultisig/mpc-native":
+      optional: true
+    expo-crypto:
       optional: true
     vite:
       optional: true
@@ -9085,6 +9215,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"decimal.js@npm:^10.4.3":
+  version: 10.6.0
+  resolution: "decimal.js@npm:10.6.0"
+  checksum: 10c0/07d69fbcc54167a340d2d97de95f546f9ff1f69d2b45a02fd7a5292412df3cd9eb7e23065e532a318f5474a2e1bccf8392fdf0443ef467f97f3bf8cb0477e5aa
+  languageName: node
+  linkType: hard
+
 "decompress-response@npm:^6.0.0":
   version: 6.0.0
   resolution: "decompress-response@npm:6.0.0"
@@ -10278,6 +10415,13 @@ __metadata:
     tslib: "npm:2.7.0"
     ws: "npm:8.17.1"
   checksum: 10c0/65c0ff7016b1592b1961c3b68508902b89fc75e1ad025bab3a722df1b5699fd077551875a7285e65b2d0cfea9a85b2459bb84010a0fa4e4494d231848aee3a73
+  languageName: node
+  linkType: hard
+
+"event-target-polyfill@npm:^0.0.3":
+  version: 0.0.3
+  resolution: "event-target-polyfill@npm:0.0.3"
+  checksum: 10c0/90d210c5606e0e24386fd4e7a06859d8d5668eafa44c04d4554b84790b70f0a0a1af4bf0f7231267fd0328b24b5da4fd297e15e107d744e27cb771ff250b48cd
   languageName: node
   linkType: hard
 
@@ -12730,6 +12874,13 @@ __metadata:
     graceful-fs:
       optional: true
   checksum: 10c0/e1abf000ecee9942d4d028a8e02dc752617face227d72afd1cfb2187e2433079e625bf82b807a313689db71b6472c6b2b389a2340d2798737b1199a39631c28a
+  languageName: node
+  linkType: hard
+
+"jssha@npm:3.2.0":
+  version: 3.2.0
+  resolution: "jssha@npm:3.2.0"
+  checksum: 10c0/eba7fb986a6ed12238d57b959c522fae90ff25a9e427d70aeffaf698d4ffadc7a994af7cb28e121139b1a54e38e0bd9b08f2da4ea7979c72653ccba2fb558924
   languageName: node
   linkType: hard
 
@@ -17631,6 +17782,13 @@ __metadata:
   version: 0.0.1
   resolution: "tty-browserify@npm:0.0.1"
   checksum: 10c0/5e34883388eb5f556234dae75b08e069b9e62de12bd6d87687f7817f5569430a6dfef550b51dbc961715ae0cd0eb5a059e6e3fc34dc127ea164aa0f9b5bb033d
+  languageName: node
+  linkType: hard
+
+"tweetnacl@npm:1.0.3":
+  version: 1.0.3
+  resolution: "tweetnacl@npm:1.0.3"
+  checksum: 10c0/069d9df51e8ad4a89fbe6f9806c68e06c65be3c7d42f0701cc43dba5f0d6064686b238bbff206c5addef8854e3ce00c643bff59432ea2f2c639feab0ee1a93f9
   languageName: node
   linkType: hard
 

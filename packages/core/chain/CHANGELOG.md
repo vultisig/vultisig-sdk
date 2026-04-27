@@ -1,5 +1,13 @@
 # @vultisig/core-chain
 
+## 1.4.1
+
+### Patch Changes
+
+- [#342](https://github.com/vultisig/vultisig-sdk/pull/342) [`77410fb`](https://github.com/vultisig/vultisig-sdk/commit/77410fb28f53dd558f05e5634aadba6a9547ee0f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(security/blockaid): pair swap diffs across all asset diffs in EVM simulations
+
+  `parseBlockaidEvmSimulation` previously destructured only `assetDiffs[0]` and `assetDiffs[1]`. For router-mediated flows like `permitAndCall`, Blockaid returns three diffs with the user's `in` side at `assetDiffs[2]` and an empty intermediate leg at `assetDiffs[1]`, causing the parser to bail and the simulation hero to render nothing. The parser now scans all diffs for the user-side `out` and `in` legs (preferring an in-asset different from the out-asset), matching the iOS `BlockaidSimulationParser` behaviour.
+
 ## 1.4.0
 
 ### Minor Changes
