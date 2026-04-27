@@ -1,5 +1,17 @@
 # @vultisig/sdk
 
+## 0.18.0
+
+### Minor Changes
+
+- [#326](https://github.com/vultisig/vultisig-sdk/pull/326) [`f52057b`](https://github.com/vultisig/vultisig-sdk/commit/f52057b4af859018d1c180fa6db9ce15e153409f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expand `@vultisig/sdk/vite` into a browser preset: wasm plugin, polyfill shim resolution, `optimizeDeps` tuning, and serve/emit `7zz.wasm` at `/7zz.wasm` without writing into consumers' `public/` folders. Update docs and the browser example.
+
+### Patch Changes
+
+- [#307](https://github.com/vultisig/vultisig-sdk/pull/307) [`2018787`](https://github.com/vultisig/vultisig-sdk/commit/2018787f8101ea9a98e975c0e7477245c3f86fad) Thanks [@premiumjibles](https://github.com/premiumjibles)! - fix(sdk/vault): wrap invalid-receiver error in VaultError
+
+  `getMaxSendAmount` now throws `VaultError(InvalidConfig)` instead of a generic `Error` when the receiver address fails validation. Matches how the rest of `VaultBase`'s address validation surfaces errors, so consumers checking `error.code` or `instanceof VaultError` catch it correctly.
+
 ## 0.17.1
 
 ### Patch Changes

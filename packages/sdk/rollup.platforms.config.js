@@ -529,11 +529,9 @@ const configs = {
     }),
     onwarn,
   },
-  // The `@vultisig/sdk/vite` subpath export is a consumer-facing Vite plugin
-  // that configures `optimizeDeps.exclude` so the wasm-bindgen glue packages
-  // stay adjacent to their `.wasm` payloads at runtime. It runs in the
-  // consumer's build (Node), not in the SDK runtime, so it has no runtime
-  // deps and ships in both ESM and CJS for maximum tooling compatibility.
+  // The `@vultisig/sdk/vite` subpath export is a consumer-facing preset (wasm,
+  // optional node polyfills, shim resolution, 7z copy, optimizeDeps). It runs in
+  // the consumer's build (Node). ESM and CJS emit for `default` and `require` consumers.
   vite: [
     {
       input: './src/vite/index.ts',
