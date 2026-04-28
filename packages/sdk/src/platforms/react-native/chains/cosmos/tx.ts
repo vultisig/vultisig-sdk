@@ -567,6 +567,17 @@ export function buildCosmosStakingTx(opts: BuildCosmosStakingOptions): CosmosTxB
         const inner = buildMsgWithdrawDelegatorReward(msg.delegatorAddress, msg.validatorAddress)
         return wrapAny(COSMOS_STAKING_TYPE_URLS.withdraw_rewards, inner)
       }
+      default: {
+        // Belt-and-braces: TS narrows `msg.type` exhaustively against the
+        // CosmosStakingMsg union, but untyped JS callers (or a future variant
+        // added to the union without updating this switch) would silently fall
+        // through and produce `undefined` Anys downstream — corrupting the
+        // signed tx. Fail loud with the offending type instead.
+        const exhaustive: never = msg
+        throw new Error(
+          `buildCosmosStakingTx: unsupported msg type ${(exhaustive as { type?: string }).type ?? 'unknown'}`
+        )
+      }
     }
   })
   const txBodyBytes = buildTxBodyMulti(msgAnys, opts.memo ?? '')
