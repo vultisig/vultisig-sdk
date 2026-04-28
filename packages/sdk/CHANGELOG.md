@@ -1,5 +1,29 @@
 # @vultisig/sdk
 
+## 0.21.0
+
+### Minor Changes
+
+- [#350](https://github.com/vultisig/vultisig-sdk/pull/350) [`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat: cosmos-sdk staking module - generic Delegate/Undelegate/BeginRedelegate/WithdrawDelegatorReward + LCD queries
+
+  Adds the cosmos-sdk staking + distribution module to the SDK, generic across every ibcEnabled cosmos chain we support (Cosmos Hub, Osmosis, Kujira, Terra, TerraClassic, Akash, Noble, Dydx).
+
+  **Signing primitives** (`@vultisig/sdk` -> `chains.cosmos.buildCosmosStakingTx`):
+  - `MsgDelegate`, `MsgUndelegate`, `MsgBeginRedelegate`, `MsgWithdrawDelegatorReward`
+  - Hand-rolled RN-safe protobuf (no cosmjs runtime dep) mirroring the existing `buildCosmosWasmExecuteTx` pattern
+  - Multi-msg batch txs supported (e.g. claim rewards from many validators in one tx)
+  - Byte-for-byte round-trip verified against `cosmjs-types` canonical decoder
+
+  **LCD query helpers** (`@vultisig/sdk` top-level + `@vultisig/core-chain/chains/cosmos/staking/lcdQueries`):
+  - `getCosmosDelegations(chain, address)` -> per-validator balance + shares
+  - `getCosmosUnbondingDelegations(chain, address)` -> pending unbondings with completion time
+  - `getCosmosDelegatorRewards(chain, address)` -> per-validator rewards + total
+  - `getCosmosVestingAccount(chain, address)` -> Periodic / Continuous / Delayed detection (returns null otherwise)
+
+  ship-once, unlock-many: adding a future cosmos chain is a config-only change.
+
+  34 new unit tests including 4 real cosmoshub fixtures captured from `cosmos1a8l3srqyk5krvzhkt7cyzy52yxcght6322w2qy`.
+
 ## 0.20.0
 
 ### Minor Changes
@@ -9,8 +33,7 @@
   Two changes land together because both address making the RN build correctly consumable without the consumer having to hand-roll workarounds.
   1. **`./react-native` subpath export conditions**
 
-  The `./react-native` subpath previously declared only `types` and `import`. Bundlers that prefer a `react-native` condition (Expo Metro on iOS/Android sets `unstable_conditionsByPlatform: { android: ['react-native'], ios: ['react-native'] }`) fall through the `./react-native` subpath when the SDK is resolved through a symlinked location (e.g. `npm install file:../vultisig-sdk/packages/sdk`, `pnpm add @vultisig/sdk@link:...`), producing `Unable to resolve "@vultisig/sdk/react-native"` at bundle time. Published-and-installed SDKs sidestepped the bug because the resolver cached a direct file path without re-walking conditions through the symlink. Mirror the conditions already present on the root `.` export so `./react-native` works identically in both linked and installed modes.
-  2. **New `./rn-preamble` side-effect subpath**
+  The `./react-native` subpath previously declared only `types` and `import`. Bundlers that prefer a `react-native` condition (Expo Metro on iOS/Android sets `unstable_conditionsByPlatform: { android: ['react-native'], ios: ['react-native'] }`) fall through the `./react-native` subpath when the SDK is resolved through a symlinked location (e.g. `npm install file:../vultisig-sdk/packages/sdk`, `pnpm add @vultisig/sdk@link:...`), producing `Unable to resolve "@vultisig/sdk/react-native"` at bundle time. Published-and-installed SDKs sidestepped the bug because the resolver cached a direct file path without re-walking conditions through the symlink. Mirror the conditions already present on the root `.` export so `./react-native` works identically in both linked and installed modes. 2. **New `./rn-preamble` side-effect subpath**
 
   Adds `@vultisig/sdk/rn-preamble` — a tiny side-effect module consumers import as the **first statement** in their RN app entry to install `globalThis.Buffer` and repair `Buffer.prototype.subarray` (RN's polyfill returns a plain `Uint8Array`, which breaks `.copy()` on downstream consumers like `@ton/core`). Previously consumers had to hand-write these polyfills, and getting the import order wrong crashed Hermes at boot with `Property 'Buffer' doesn't exist` — before the SDK's own RN entry could install its polyfill, because Metro hoists `require()` calls and transitive chain-lib module bodies evaluate before the SDK entry's statements run. The preamble is designed specifically to be the first `require` Metro hoists, so its body completes before anything else imports.
 

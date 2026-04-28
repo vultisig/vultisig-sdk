@@ -1,5 +1,12 @@
 # @vultisig/client-shared
 
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [[`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3)]:
+  - @vultisig/sdk@0.21.0
+
 ## 0.2.4
 
 ### Patch Changes
