@@ -178,7 +178,7 @@
     "@mysten/sui": "^2.3.0",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.4.6",
-    "@scure/bip39": "^1.6.0",
+    "@scure/bip39": "^2.2.0",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "@ton/core": "^0.63.1",
