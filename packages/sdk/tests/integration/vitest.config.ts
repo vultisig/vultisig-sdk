@@ -30,19 +30,16 @@ export default defineConfig({
     testTimeout: 60000, // 60 seconds for integration tests (may need network/WASM)
     hookTimeout: 60000,
     teardownTimeout: 10000,
-    deps: {
-      external: ['@trustwallet/wallet-core'],
+    server: {
+      deps: {
+        external: ['@trustwallet/wallet-core'],
+      },
     },
     // Reporter configuration
     reporters: ['verbose'],
     // Parallel execution
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: false,
-        isolate: true,
-      },
-    },
+    isolate: true,
     // Retry failed tests once (helps with flaky tests)
     retry: 1,
   },
