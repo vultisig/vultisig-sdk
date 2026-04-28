@@ -32,7 +32,14 @@ describe('CosmosMsgType', () => {
     expect(CosmosMsgType.ThorchainMsgLeavePoolUrl).toBe('/thorchain.v1.MsgLeavePool')
   })
 
-  it('should have exactly 11 message types', () => {
-    expect(Object.keys(CosmosMsgType)).toHaveLength(11)
+  it('should have correct cosmos staking + distribution module types', () => {
+    expect(CosmosMsgType.MsgDelegateUrl).toBe('/cosmos.staking.v1beta1.MsgDelegate')
+    expect(CosmosMsgType.MsgUndelegateUrl).toBe('/cosmos.staking.v1beta1.MsgUndelegate')
+    expect(CosmosMsgType.MsgBeginRedelegateUrl).toBe('/cosmos.staking.v1beta1.MsgBeginRedelegate')
+    expect(CosmosMsgType.MsgWithdrawDelegatorRewardUrl).toBe('/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward')
+  })
+
+  it('should have exactly 15 message types', () => {
+    expect(Object.keys(CosmosMsgType)).toHaveLength(15)
   })
 })
