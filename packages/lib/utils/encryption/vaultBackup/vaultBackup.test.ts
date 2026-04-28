@@ -64,6 +64,27 @@ describe('vault backup password crypto', () => {
     expect(DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS).toBe(600_000)
   })
 
+  /**
+   * Locks PBKDF2 + AES-GCM bytes for fixed inputs (same layout as Android
+   * `Pbkdf2AesEncryption` and iOS `Pbkdf2VaultBackupEncryption`).
+   * If this fails after an intentional crypto change, recompute with Node and
+   * confirm Android/iOS still match before updating the hex.
+   */
+  it(
+    'golden vector (deterministic blob)',
+    () => {
+      const expectedHex =
+        '564c5402030303030303030303030303030303030404040404040404040404041b0a21328e42d6527c5ba6f5817300bc2c6f'
+      const blob = encryptVaultBackupWithPassword('golden-cross-platform', Buffer.from('xy'), {
+        salt: Buffer.alloc(VAULT_BACKUP_SALT_LEN, 3),
+        iv: Buffer.alloc(VAULT_BACKUP_IV_LEN, 4),
+      })
+      expect(blob.toString('hex')).toBe(expectedHex)
+      expect(decryptVaultBackupWithPassword('golden-cross-platform', blob).toString()).toBe('xy')
+    },
+    120_000
+  )
+
   it('encrypted output has stable header offsets (Android / iOS compatibility)', () => {
     const blob = encryptVaultBackupWithPassword('pw', Buffer.from('d'), {
       iterations: layoutTestIterations,
