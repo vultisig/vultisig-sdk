@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "exclude": [
     "dependencies",
     "devDependencies",
@@ -22,8 +22,7 @@
       "nsExports",
       "nsTypes",
       "duplicates",
-      "enumMembers",
-      "classMembers"
+      "enumMembers"
     ],
     "packages/lib/**": [
       "exports",
@@ -31,8 +30,7 @@
       "nsExports",
       "nsTypes",
       "duplicates",
-      "enumMembers",
-      "classMembers"
+      "enumMembers"
     ],
     "packages/sdk/src/types/index.ts": ["exports", "types", "nsExports", "nsTypes"],
     "packages/sdk/src/vault/index.ts": ["exports", "types", "nsExports", "nsTypes"],
