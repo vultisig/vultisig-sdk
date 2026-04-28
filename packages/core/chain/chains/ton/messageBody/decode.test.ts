@@ -303,6 +303,32 @@ describe('decodeTonMessageBody', () => {
     expect(decodeTonMessageBody(body)).toBeNull()
   })
 
+  it('decodes a jetton transfer prefixed with a 0x00000000 text-comment header', () => {
+    const inner = buildJettonTransferBody({
+      queryId: 12345n,
+      amount: 100_000_000n,
+      destination: RECIPIENT,
+      responseDestination: RESPONSE,
+      forwardTonAmount: 1_000_000n,
+    })
+
+    const body = beginCell()
+      .storeUint(0, 32)
+      .storeSlice(inner.beginParse())
+      .endCell()
+      .toBoc()
+      .toString('base64')
+
+    expect(decodeTonMessageBody(body)).toEqual({
+      kind: 'jettonTransfer',
+      queryId: 12345n,
+      amount: 100_000_000n,
+      destination: RECIPIENT.toString(),
+      responseDestination: RESPONSE.toString(),
+      forwardTonAmount: 1_000_000n,
+    })
+  })
+
   it('returns null when jetton transfer body is truncated', () => {
     const body = beginCell()
       .storeUint(TonOp.JETTON_TRANSFER, 32)

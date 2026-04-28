@@ -256,18 +256,28 @@ export const decodeTonMessageBody = (
   const slice = safeDecode(() => cell.beginParse())
   if (!slice) return null
 
+  const dispatch = (op: number): TonMessageBodyIntent | null => {
+    if (op === TonOp.JETTON_TRANSFER) return parseJettonTransfer(slice)
+    if (op === TonOp.NFT_TRANSFER) return parseNftTransfer(slice)
+    if (op === TonOp.EXCESSES) return parseExcesses(slice)
+    if (op === TonOp.PTON_TRANSFER) return parsePtonTransferSwap(slice)
+    if (op === TonOp.DEDUST_NATIVE_SWAP) {
+      return parseDedustSwap(cell, { offerAsset: 'ton', offerAmount: 0n })
+    }
+    return null
+  }
+
   if (slice.remainingBits < 32) return null
 
   const op = safeDecode(() => slice.loadUint(32))
   if (op === null) return null
 
-  if (op === TonOp.JETTON_TRANSFER) return parseJettonTransfer(slice)
-  if (op === TonOp.NFT_TRANSFER) return parseNftTransfer(slice)
-  if (op === TonOp.EXCESSES) return parseExcesses(slice)
-  if (op === TonOp.PTON_TRANSFER) return parsePtonTransferSwap(slice)
-  if (op === TonOp.DEDUST_NATIVE_SWAP) {
-    return parseDedustSwap(cell, { offerAsset: 'ton', offerAmount: 0n })
+  if (op === 0) {
+    if (slice.remainingBits < 32) return null
+    const nestedOp = safeDecode(() => slice.loadUint(32))
+    if (nestedOp === null) return null
+    return dispatch(nestedOp)
   }
 
-  return null
+  return dispatch(op)
 }
