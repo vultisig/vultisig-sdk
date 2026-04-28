@@ -3,10 +3,7 @@ import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
 import { batchReshareWithServer } from '@vultisig/core-mpc/fast/api/batchReshareWithServer'
 import { createVaultWithServer } from '@vultisig/core-mpc/fast/api/createVaultWithServer'
-import {
-  getVaultFromServer,
-  type VaultFromServerResponse,
-} from '@vultisig/core-mpc/fast/api/getVaultFromServer'
+import { getVaultFromServer, type VaultFromServerResponse } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
 import { mldsaWithServer } from '@vultisig/core-mpc/fast/api/mldsaWithServer'
 import { resendVaultShare } from '@vultisig/core-mpc/fast/api/resendVaultShare'
 import { reshareWithServer } from '@vultisig/core-mpc/fast/api/reshareWithServer'
@@ -102,10 +99,7 @@ export class ServerManager {
    * Matches `GET /vault/get/{public_key_ecdsa}`: name, public keys, chain code, and the
    * server party id. Key shares are not returned; keep a local backup for signing.
    */
-  async getVaultFromServer(
-    vaultId: string,
-    password: string
-  ): Promise<VaultFromServerResponse> {
+  async getVaultFromServer(vaultId: string, password: string): Promise<VaultFromServerResponse> {
     return getVaultFromServer({
       vaultId,
       password,
