@@ -19,17 +19,33 @@ export type EncryptVaultBackupWithPasswordOptions = {
   iv?: Buffer
 }
 
+function getRnGetRandomValues(): (arr: Uint8Array) => void {
+  const rng = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => void } }).crypto
+  if (!rng?.getRandomValues) {
+    throw new Error('globalThis.crypto.getRandomValues not available — install expo-crypto or equivalent polyfill')
+  }
+  return rng.getRandomValues.bind(rng)
+}
+
 export const encryptVaultBackupWithPassword = (
   password: string,
   plaintext: Buffer,
   options?: EncryptVaultBackupWithPasswordOptions
 ): Buffer => {
   const iterations = options?.iterations ?? DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS
+  let getRandomValues: ((a: Uint8Array) => void) | undefined
+  const fillRandom = (out: Uint8Array) => {
+    if (getRandomValues === undefined) {
+      getRandomValues = getRnGetRandomValues()
+    }
+    getRandomValues(out)
+  }
+
   const salt =
     options?.salt ??
     (() => {
       const b = new Uint8Array(VAULT_BACKUP_SALT_LEN)
-      globalThis.crypto.getRandomValues(b)
+      fillRandom(b)
       return Buffer.from(b)
     })()
   if (salt.length !== VAULT_BACKUP_SALT_LEN) {
@@ -39,13 +55,16 @@ export const encryptVaultBackupWithPassword = (
     throw new Error(`Vault backup IV must be ${VAULT_BACKUP_IV_LEN} bytes`)
   }
 
-  const key = pbkdf2(sha256, utf8ToBytes(password), salt, { c: iterations, dkLen: 32 })
+  const key = pbkdf2(sha256, utf8ToBytes(password), salt, {
+    c: iterations,
+    dkLen: 32,
+  })
   try {
     const nonce =
       options?.iv ??
       (() => {
         const n = new Uint8Array(VAULT_BACKUP_IV_LEN)
-        globalThis.crypto.getRandomValues(n)
+        fillRandom(n)
         return Buffer.from(n)
       })()
     const aes = gcm(key, new Uint8Array(nonce))

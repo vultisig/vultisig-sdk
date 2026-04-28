@@ -3,7 +3,17 @@ import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
+import {
+  VAULT_BACKUP_BLOB_MAGIC,
+  VAULT_BACKUP_MAGIC_LEN,
+  VAULT_BACKUP_PBKDF2_HEADER_LEN,
+} from '@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
+
+/** Legacy SHA-256(password)+AES-GCM: 12-byte nonce + ciphertext + 16-byte tag (minimum empty plaintext ⇒ 28 bytes). */
+const MIN_LEGACY_ENCRYPTED_VAULT_LEN = 28
+
+const GCM_AUTH_TAG_BYTES = 16
 
 import type { SdkContext, VaultContext } from './context/SdkContext'
 import { FastSigningService } from './services/FastSigningService'
@@ -121,6 +131,24 @@ export class VaultManager {
         if (encryptedData.length === 0) {
           throw new VaultImportError(VaultImportErrorCode.CORRUPTED_DATA, 'Encrypted vault payload is empty')
         }
+
+        const isPbkdf2Format =
+          encryptedData.length >= VAULT_BACKUP_MAGIC_LEN &&
+          encryptedData.subarray(0, VAULT_BACKUP_MAGIC_LEN).equals(VAULT_BACKUP_BLOB_MAGIC)
+        if (isPbkdf2Format) {
+          if (encryptedData.length < VAULT_BACKUP_PBKDF2_HEADER_LEN + GCM_AUTH_TAG_BYTES) {
+            throw new VaultImportError(
+              VaultImportErrorCode.CORRUPTED_DATA,
+              'Encrypted vault payload is truncated or not a valid ciphertext'
+            )
+          }
+        } else if (encryptedData.length < MIN_LEGACY_ENCRYPTED_VAULT_LEN) {
+          throw new VaultImportError(
+            VaultImportErrorCode.CORRUPTED_DATA,
+            'Encrypted vault payload is truncated or not a valid ciphertext'
+          )
+        }
+
         try {
           const decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)
           vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
