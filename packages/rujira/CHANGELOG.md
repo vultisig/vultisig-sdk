@@ -1,5 +1,56 @@
 # @vultisig/rujira
 
+## 16.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3)]:
+  - @vultisig/sdk@0.21.0
+
+## 15.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`1d1c02c`](https://github.com/vultisig/vultisig-sdk/commit/1d1c02c37e58340b0617eec3a5e44909efc9b452)]:
+  - @vultisig/sdk@0.20.0
+
+## 14.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`c5f9c7b`](https://github.com/vultisig/vultisig-sdk/commit/c5f9c7bcac80d30f0b5e086c9e6860eaa0cf79a9)]:
+  - @vultisig/sdk@0.19.0
+
+## 13.0.0
+
+### Major Changes
+
+- [#299](https://github.com/vultisig/vultisig-sdk/pull/299) [`4af5bb8`](https://github.com/vultisig/vultisig-sdk/commit/4af5bb8043da7dab15b5e1a135e5195d2dd1d7cc) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(rujira)!: drop RujiraPerps
+
+  **BREAKING CHANGE.** The `RujiraPerps` module is removed. Its only
+  consumer was vultisig-mcp-ts' `src/tools/rujira/perps.ts`, which
+  [mcp-ts#36](https://github.com/vultisig/mcp-ts/pull/36) deleted
+  (commit `e5ecb58`). No known external consumers.
+
+  Removed:
+  - `RujiraPerps` class export
+  - `PerpsMarket` type export
+  - `PerpsTransactionParams` type export
+  - `client.perps` field on `RujiraClient`
+  - `@vultisig/rujira/perps` subpath export
+
+  No replacement API. Consumers that still need perps-style interactions
+  should open an issue — the module was a thin wrapper around on-chain
+  calls that can be reconstructed if there's demand.
+
+  All other Rujira surfaces (swap, orderbook, staking, ghost, deposit,
+  withdraw, discovery) are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`2018787`](https://github.com/vultisig/vultisig-sdk/commit/2018787f8101ea9a98e975c0e7477245c3f86fad), [`f52057b`](https://github.com/vultisig/vultisig-sdk/commit/f52057b4af859018d1c180fa6db9ce15e153409f)]:
+  - @vultisig/sdk@0.18.0
+
 ## 12.1.0
 
 ### Minor Changes
