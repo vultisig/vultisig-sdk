@@ -4,6 +4,4 @@ import { Connection } from '@solana/web3.js'
 
 export const solanaRpcUrl = `${rootApiUrl}/solana/`
 
-export const getSolanaClient = memoize(() => {
-  return new Connection(solanaRpcUrl)
-})
+export const getSolanaClient = memoize(() => new Connection(solanaRpcUrl))
