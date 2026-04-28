@@ -158,7 +158,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
       // Offer retry options
       const { action } = await inquirer.prompt([
         {
-          type: 'list',
+          type: 'select',
           name: 'action',
           message: `What would you like to do? (${MAX_VERIFY_ATTEMPTS - attempts} attempts remaining)`,
           choices: [
@@ -820,7 +820,7 @@ export async function executeCreateFromSeedphraseFast(
 
       const { action } = await inquirer.prompt([
         {
-          type: 'list',
+          type: 'select',
           name: 'action',
           message: `What would you like to do? (${MAX_VERIFY_ATTEMPTS - attempts} attempts remaining)`,
           choices: [
