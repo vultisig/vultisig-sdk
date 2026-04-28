@@ -132,6 +132,7 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
 
     it.skipIf(!RUN_SECURE_VAULT_MPC_E2E)(
       'should create 3 vault shares using 3 SDK instances',
+      { timeout: 900_000 },
       async () => {
         if (!TEST_CONFIG.seedphrase) return
 
@@ -199,8 +200,7 @@ describe('E2E: SecureVault from Seedphrase (3 SDK Instances)', () => {
         const uniquePartyIds = new Set(partyIds)
         expect(uniquePartyIds.size).toBe(3)
         console.log(`   - Each SDK has unique party ID`)
-      },
-      { timeout: 900_000 }
+      }
     )
   })
 

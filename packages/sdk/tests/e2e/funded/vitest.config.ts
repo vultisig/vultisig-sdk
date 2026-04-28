@@ -27,12 +27,7 @@ export default defineConfig({
     globals: true,
 
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: false,
-        maxForks: 1,
-      },
-    },
+    maxWorkers: 1,
 
     setupFiles: [resolve(e2eDir, 'setup.ts'), resolve(__dirname, '../../setup.ts')],
   },
