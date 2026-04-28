@@ -1,18 +1,37 @@
 import crypto from 'crypto'
 
-/** AES-256-GCM: 12-byte nonce + ciphertext + 16-byte tag (same layout as encryptWithAesGcm). */
-export const aes256GcmEncrypt = (cipherKey: Buffer, plaintext: Buffer): Buffer => {
-  const nonce = crypto.randomBytes(12)
+const GCM_TAG_LEN = 16
+
+/**
+ * AES-256-GCM encrypt; returns IV and sealed blob (ciphertext || auth tag).
+ * Layout matches Android `PBKDF2_MAGIC + salt + iv + cipher.doFinal(plaintext)`.
+ */
+export const aes256GcmSeal = (
+  cipherKey: Buffer,
+  plaintext: Buffer,
+  iv?: Buffer
+): { iv: Buffer; sealed: Buffer } => {
+  const nonce = iv ?? crypto.randomBytes(12)
+  if (nonce.length !== 12) {
+    throw new Error('AES-GCM IV must be 12 bytes')
+  }
   const cipher = crypto.createCipheriv('aes-256-gcm', cipherKey, nonce)
   const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
   const authTag = cipher.getAuthTag()
-  return Buffer.concat([nonce, ciphertext, authTag])
+  const sealed = Buffer.concat([ciphertext, authTag])
+  return { iv: nonce, sealed }
 }
 
-export const aes256GcmDecrypt = (cipherKey: Buffer, value: Buffer): Buffer => {
-  const decipher = crypto.createDecipheriv('aes-256-gcm', cipherKey, value.subarray(0, 12))
-  const ciphertext = value.subarray(12, -16)
-  const authTag = value.subarray(-16)
+export const aes256GcmOpen = (cipherKey: Buffer, iv: Buffer, sealed: Buffer): Buffer => {
+  if (iv.length !== 12) {
+    throw new Error('AES-GCM IV must be 12 bytes')
+  }
+  if (sealed.length < GCM_TAG_LEN) {
+    throw new Error('Invalid sealed ciphertext')
+  }
+  const authTag = sealed.subarray(-GCM_TAG_LEN)
+  const ciphertext = sealed.subarray(0, -GCM_TAG_LEN)
+  const decipher = crypto.createDecipheriv('aes-256-gcm', cipherKey, iv)
   decipher.setAuthTag(authTag)
   return Buffer.concat([decipher.update(ciphertext), decipher.final()])
 }

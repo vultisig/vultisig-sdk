@@ -118,11 +118,10 @@ export class VaultManager {
           throw new VaultImportError(VaultImportErrorCode.PASSWORD_REQUIRED, 'Password required for encrypted vault')
         }
         const encryptedData = fromBase64(container.vault)
-        // AES-GCM layout: 12-byte nonce + ciphertext + 16-byte tag
-        if (encryptedData.length < 28) {
+        if (encryptedData.length === 0) {
           throw new VaultImportError(
             VaultImportErrorCode.CORRUPTED_DATA,
-            'Encrypted vault payload is truncated or not a valid ciphertext'
+            'Encrypted vault payload is empty'
           )
         }
         try {

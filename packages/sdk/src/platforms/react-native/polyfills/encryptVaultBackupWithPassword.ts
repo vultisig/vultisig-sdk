@@ -9,12 +9,14 @@ import { utf8ToBytes } from '@noble/hashes/utils'
 import {
   DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
   VAULT_BACKUP_BLOB_MAGIC,
+  VAULT_BACKUP_IV_LEN,
   VAULT_BACKUP_SALT_LEN,
 } from '@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants'
 
 export type EncryptVaultBackupWithPasswordOptions = {
   iterations?: number
   salt?: Buffer
+  iv?: Buffer
 }
 
 export const encryptVaultBackupWithPassword = (
@@ -33,12 +35,23 @@ export const encryptVaultBackupWithPassword = (
   if (salt.length !== VAULT_BACKUP_SALT_LEN) {
     throw new Error(`Vault backup salt must be ${VAULT_BACKUP_SALT_LEN} bytes`)
   }
+  if (options?.iv !== undefined && options.iv.length !== VAULT_BACKUP_IV_LEN) {
+    throw new Error(`Vault backup IV must be ${VAULT_BACKUP_IV_LEN} bytes`)
+  }
+
   const key = pbkdf2(sha256, utf8ToBytes(password), salt, { c: iterations, dkLen: 32 })
-  const nonce = new Uint8Array(12)
-  globalThis.crypto.getRandomValues(nonce)
-  const aes = gcm(key, nonce)
-  const ciphertext = aes.encrypt(new Uint8Array(plaintext))
-  const iterBuf = Buffer.allocUnsafe(4)
-  iterBuf.writeUInt32BE(iterations, 0)
-  return Buffer.concat([VAULT_BACKUP_BLOB_MAGIC, salt, iterBuf, Buffer.from(nonce), Buffer.from(ciphertext)])
+  try {
+    const nonce =
+      options?.iv ??
+      (() => {
+        const n = new Uint8Array(VAULT_BACKUP_IV_LEN)
+        globalThis.crypto.getRandomValues(n)
+        return Buffer.from(n)
+      })()
+    const aes = gcm(key, new Uint8Array(nonce))
+    const ciphertextWithTag = aes.encrypt(new Uint8Array(plaintext))
+    return Buffer.concat([VAULT_BACKUP_BLOB_MAGIC, salt, nonce, Buffer.from(ciphertextWithTag)])
+  } finally {
+    key.fill(0)
+  }
 }
