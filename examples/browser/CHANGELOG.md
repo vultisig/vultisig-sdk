@@ -1,5 +1,37 @@
 # @vultisig/example-browser
 
+## 0.1.33
+
+### Patch Changes
+
+- Updated dependencies [[`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3)]:
+  - @vultisig/sdk@0.21.0
+  - @vultisig/examples-shared@0.1.17
+
+## 0.1.32
+
+### Patch Changes
+
+- Updated dependencies [[`1d1c02c`](https://github.com/vultisig/vultisig-sdk/commit/1d1c02c37e58340b0617eec3a5e44909efc9b452)]:
+  - @vultisig/sdk@0.20.0
+  - @vultisig/examples-shared@0.1.16
+
+## 0.1.31
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vultisig/sdk@0.19.1
+  - @vultisig/examples-shared@0.1.15
+
+## 0.1.30
+
+### Patch Changes
+
+- Updated dependencies [[`c5f9c7b`](https://github.com/vultisig/vultisig-sdk/commit/c5f9c7bcac80d30f0b5e086c9e6860eaa0cf79a9)]:
+  - @vultisig/sdk@0.19.0
+  - @vultisig/examples-shared@0.1.14
+
 ## 0.1.29
 
 ### Patch Changes

@@ -196,6 +196,32 @@ export {
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 
+// Cosmos staking + distribution module (LCD queries — read-only, generic over
+// every ibcEnabled cosmos chain). Signing primitives ship via
+// `chains.cosmos.buildCosmosStakingTx` from the platform-specific entry point.
+export type {
+  ContinuousVestingAccount,
+  Coin as CosmosStakingCoin,
+  DelayedVestingAccount,
+  Delegation,
+  DelegatorReward,
+  DelegatorRewardsResponse,
+  PeriodicVestingAccount,
+  UnbondingDelegation,
+  UnbondingEntry,
+  VestingAccount,
+} from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
+export {
+  getAuthAccountUrl,
+  getCosmosDelegations,
+  getCosmosDelegatorRewards,
+  getCosmosUnbondingDelegations,
+  getCosmosVestingAccount,
+  getDelegationsUrl,
+  getDelegatorRewardsUrl,
+  getUnbondingDelegationsUrl,
+} from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
