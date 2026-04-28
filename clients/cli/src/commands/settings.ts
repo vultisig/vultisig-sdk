@@ -123,7 +123,7 @@ export async function executeAddressBook(
     const prompts = []
     if (!chain) {
       prompts.push({
-        type: 'list',
+        type: 'select',
         name: 'chain',
         message: 'Select chain:',
         choices: Object.values(Chain),
