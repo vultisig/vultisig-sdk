@@ -1,8 +1,8 @@
 {
   "name": "@vultisig/rujira",
-  "version": "12.1.0",
+  "version": "15.0.0",
   "type": "module",
-  "description": "Rujira DEX integration for Vultisig SDK - Modular TypeScript SDK for swaps and limit orders on THORChain",
+  "description": "Rujira DEX SDK for Vultisig — THORChain-native swaps, limit orders, staking. Built for MPC wallets and AI agents. TypeScript, modular, self-custody.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -76,7 +76,7 @@
     "vitest": "^3.0.9"
   },
   "peerDependencies": {
-    "@vultisig/sdk": ">=0.17.1"
+    "@vultisig/sdk": ">=0.20.0"
   },
   "peerDependenciesMeta": {
     "@vultisig/sdk": {
@@ -87,10 +87,21 @@
     "vultisig",
     "rujira",
     "thorchain",
+    "thorchain-swap",
+    "thorchain-dex",
+    "limit-order",
+    "cross-chain-swap",
+    "rune",
+    "cosmwasm",
+    "cosmos-sdk",
+    "defi-sdk",
+    "dex-sdk",
+    "mpc-wallet-sdk",
+    "ai-agent-dex",
+    "typescript-dex",
+    "defi",
     "dex",
     "swap",
-    "defi",
-    "cosmwasm",
     "cosmos",
     "crypto",
     "wallet"
