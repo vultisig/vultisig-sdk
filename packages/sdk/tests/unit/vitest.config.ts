@@ -40,13 +40,18 @@ export default defineConfig({
     // Allow importing from workspace packages - inline ESM-only deps
     deps: {
       interopDefault: true,
-      inline: [/@cosmjs/, /@scure/],
+    },
+    server: {
+      deps: {
+        inline: [/@cosmjs/, /@scure/],
+      },
     },
     // Coverage configuration for Phase 1: 30% target
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
       reportsDirectory: './coverage',
+      include: ['src/**/*.{js,ts,tsx}'],
       exclude: [
         '**/node_modules/**',
         '**/dist/**',
@@ -64,19 +69,13 @@ export default defineConfig({
         functions: 30,
         lines: 30,
       },
-      all: true,
       clean: true,
     },
     // Reporter configuration
     reporters: ['verbose'],
     // Parallel execution - use forks for better ESM compatibility
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: false,
-        isolate: true,
-      },
-    },
+    isolate: true,
     // Retry failed tests once (helps with flaky WASM/network tests)
     retry: 1,
   },

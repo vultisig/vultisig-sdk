@@ -73,7 +73,7 @@
     "@types/node": "^25.5.0",
     "@vultisig/sdk": "workspace:*",
     "typescript": "^5.9.3",
-    "vitest": "^3.0.9"
+    "vitest": "^4.1.5"
   },
   "peerDependencies": {
     "@vultisig/sdk": ">=0.21.0"

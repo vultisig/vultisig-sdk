@@ -66,24 +66,31 @@ vi.mock('@vultisig/core-mpc/utils/generateHexChainCode', () => ({
   generateHexChainCode: vi.fn(() => '11'.repeat(32)),
 }))
 
+// vitest 4 constructor-pattern fix (see top of file).
 vi.mock('@vultisig/core-mpc/dkls/dkls', () => ({
-  DKLS: vi.fn().mockImplementation(() => ({
-    prepareKeygenSetup: vi.fn().mockResolvedValue(undefined),
-    getSetupMessage: vi.fn(() => new Uint8Array([1, 2])),
-    startKeygenWithRetry: vi.fn().mockResolvedValue(keygenResult),
-  })),
+  DKLS: vi.fn(function (this: object) {
+    Object.assign(this, {
+      prepareKeygenSetup: vi.fn().mockResolvedValue(undefined),
+      getSetupMessage: vi.fn(() => new Uint8Array([1, 2])),
+      startKeygenWithRetry: vi.fn().mockResolvedValue(keygenResult),
+    })
+  }),
 }))
 
 vi.mock('@vultisig/core-mpc/schnorr/schnorrKeygen', () => ({
-  Schnorr: vi.fn().mockImplementation(() => ({
-    startKeygenWithRetry: vi.fn().mockResolvedValue(eddsaResult),
-  })),
+  Schnorr: vi.fn(function (this: object) {
+    Object.assign(this, {
+      startKeygenWithRetry: vi.fn().mockResolvedValue(eddsaResult),
+    })
+  }),
 }))
 
 vi.mock('@vultisig/core-mpc/mldsa/mldsaKeygen', () => ({
-  MldsaKeygen: vi.fn().mockImplementation(() => ({
-    startKeygenWithRetry: vi.fn().mockResolvedValue(mldsaResult),
-  })),
+  MldsaKeygen: vi.fn(function (this: object) {
+    Object.assign(this, {
+      startKeygenWithRetry: vi.fn().mockResolvedValue(mldsaResult),
+    })
+  }),
 }))
 
 const queryUrlMock = vi.hoisted(() =>
