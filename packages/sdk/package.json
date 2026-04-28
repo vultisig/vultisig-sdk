@@ -200,7 +200,7 @@
     "ethers": "^6.15.0",
     "event-target-polyfill": "^0.0.3",
     "events": "^3.3.0",
-    "i18next": "^25.8.4",
+    "i18next": "^26.0.8",
     "i18next-http-backend": "^3.0.2",
     "isomorphic-fetch": "^3.0.0",
     "node-fetch": "^3.3.2",
