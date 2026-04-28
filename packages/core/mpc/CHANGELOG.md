@@ -1,5 +1,26 @@
 # @vultisig/core-mpc
 
+## 1.1.9
+
+### Patch Changes
+
+- Updated dependencies [[`e3fa32b`](https://github.com/vultisig/vultisig-sdk/commit/e3fa32b9f29e3a07880ecba117cf40e6dd396a4b)]:
+  - @vultisig/mpc-types@0.2.2
+
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [[`77410fb`](https://github.com/vultisig/vultisig-sdk/commit/77410fb28f53dd558f05e5634aadba6a9547ee0f)]:
+  - @vultisig/core-chain@1.4.1
+
+## 1.1.7
+
+### Patch Changes
+
+- Updated dependencies [[`ef2ffbe`](https://github.com/vultisig/vultisig-sdk/commit/ef2ffbecf5f2b3af69172d34f3fda25055f4e112), [`d9399c7`](https://github.com/vultisig/vultisig-sdk/commit/d9399c77a932f0ecc9a2e6acec5d8457aa199444), [`6f1f8b2`](https://github.com/vultisig/vultisig-sdk/commit/6f1f8b2d9a69b8542da776f69fbddba6eb35bd3e)]:
+  - @vultisig/core-chain@1.4.0
+
 ## 1.1.6
 
 ### Patch Changes

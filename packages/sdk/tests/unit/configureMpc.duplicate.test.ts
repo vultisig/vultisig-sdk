@@ -99,4 +99,32 @@ describe('configureMpc duplicate engine detection', () => {
     expect(() => configureMpc(b)).toThrow(/configureMpc: duplicate MPC engine instance/)
     expect(getMpcEngine()).toBe(a)
   })
+
+  it('respects EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON=0 fallback for Expo / RN consumers', () => {
+    process.env.NODE_ENV = 'test'
+    Reflect.deleteProperty(process.env, 'VULTISIG_STRICT_SINGLETON')
+    process.env.EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON = '0'
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const a = minimalEngine('a')
+    const b = minimalEngine('b')
+    configureMpc(a)
+    expect(() => configureMpc(b)).not.toThrow()
+    expect(getMpcEngine()).toBe(b)
+  })
+
+  it('lets VULTISIG_STRICT_SINGLETON take precedence over the EXPO_PUBLIC alias', () => {
+    process.env.NODE_ENV = 'test'
+    process.env.VULTISIG_STRICT_SINGLETON = '1'
+    process.env.EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON = '0'
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const a = minimalEngine('a')
+    const b = minimalEngine('b')
+    configureMpc(a)
+    expect(() => configureMpc(b)).toThrow(/configureMpc: duplicate MPC engine instance/)
+    expect(getMpcEngine()).toBe(a)
+  })
 })
