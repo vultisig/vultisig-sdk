@@ -37,7 +37,7 @@ type KeysignInput = {
   isInitiatingDevice: boolean
 }
 
-const maxInboundWaitTime: Minutes = 1
+const maxInboundWaitTime: Minutes = 3
 
 export const keysign = async ({
   keyShare,
@@ -160,6 +160,7 @@ export const keysign = async ({
       // session is in a different state.
     }
 
+    await sleep(100)
     return processInbound()
   }
 

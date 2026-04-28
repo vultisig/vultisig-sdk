@@ -154,9 +154,6 @@ export class ServerManager {
     const hexEncryptionKey = getHexEncodedRandomBytes(32)
     const signingLocalPartyId = vault.localPartyId || generateLocalPartyId('sdk')
 
-    console.log(`🔑 Generated signing party ID: ${signingLocalPartyId}`)
-    console.log(`📡 Calling FastVault API with session ID: ${sessionId}`)
-
     // Step 1: Coordinating - Call FastVault API
     reportProgress({
       step: 'coordinating',
@@ -228,10 +225,7 @@ export class ServerManager {
       chain: payload.chain,
       vaultBaseUrl: this.config.fastVault,
     })
-    console.log(`✅ Server acknowledged session: ${sessionId}`)
-
-    // Step 3: Wait for server to ACTUALLY join
-    console.log('⏳ Waiting for server to join session...')
+    // Step 3: Wait for server to join
     reportProgress({
       step: 'coordinating',
       progress: 50,
@@ -243,8 +237,6 @@ export class ServerManager {
 
     const devices = await this.waitForPeers(sessionId, signingLocalPartyId, signal, onProgress)
     const peers = devices.filter(device => device !== signingLocalPartyId)
-    console.log(`✅ All participants ready: [${devices.join(', ')}]`)
-
     reportProgress({
       step: 'coordinating',
       progress: 60,
@@ -255,16 +247,12 @@ export class ServerManager {
     })
 
     // Step 4: Start MPC session
-    console.log('📡 Starting MPC session with devices list...')
     await startMpcSession({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
     })
-    console.log('✅ MPC session started')
-
     // Step 5: Signing - Perform MPC keysign
-    console.log('🔐 Starting MPC keysign process...')
     reportProgress({
       step: 'signing',
       progress: 70,
@@ -283,7 +271,6 @@ export class ServerManager {
     // Sign all messages (UTXO can have multiple, EVM typically has one)
     const signatureResults: Record<string, KeysignSignature> = {}
     for (const msg of messages) {
-      console.log(`🔏 Signing message: ${msg}`)
       const sig = await keysign({
         keyShare,
         signatureAlgorithm,
@@ -296,7 +283,6 @@ export class ServerManager {
         hexEncryptionKey,
         isInitiatingDevice: true,
       })
-      console.log(`✅ Signature obtained for message`)
       signatureResults[msg] = sig
     }
 
@@ -322,7 +308,6 @@ export class ServerManager {
     }
 
     // Step 7: Complete - Format signature results
-    console.log(`🔄 Formatting signature results...`)
     reportProgress({
       step: 'complete',
       progress: 90,
@@ -775,8 +760,8 @@ export class ServerManager {
     signal?: AbortSignal,
     onProgress?: (step: import('../types').SigningStep) => void
   ): Promise<string[]> {
-    const maxWaitTime = 30000
-    const checkInterval = 2000
+    const maxWaitTime = 120000
+    const checkInterval = 500
     const startTime = Date.now()
 
     while (Date.now() - startTime < maxWaitTime) {

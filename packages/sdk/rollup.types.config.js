@@ -53,4 +53,28 @@ export default defineConfig([
     },
     plugins: [dts(dtsPluginOptions)],
   },
+  // RN preamble — side-effect import, no runtime exports. Emits an almost-
+  // empty .d.ts so `import '@vultisig/sdk/rn-preamble'` type-checks cleanly.
+  {
+    input: 'src/platforms/react-native/preamble.ts',
+    output: {
+      file: 'dist/index.rn-preamble.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
+  // Vite plugin types. The plugin runs in the consumer's build (Node), not in
+  // the shipped SDK runtime, so it gets its own tiny type bundle. `vite` is
+  // an optional peer dep — keep it external so the emitted `.d.ts` re-exports
+  // `import('vite').Plugin` from the consumer's installed version instead of
+  // inlining Vite's entire type graph.
+  {
+    input: 'src/vite/index.ts',
+    output: {
+      file: 'dist/vite/index.d.ts',
+      format: 'es',
+    },
+    external: ['vite'],
+    plugins: [dts(dtsPluginOptions)],
+  },
 ])

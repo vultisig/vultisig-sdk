@@ -1,5 +1,106 @@
 # @vultisig/core-mpc
 
+## 1.1.9
+
+### Patch Changes
+
+- Updated dependencies [[`e3fa32b`](https://github.com/vultisig/vultisig-sdk/commit/e3fa32b9f29e3a07880ecba117cf40e6dd396a4b)]:
+  - @vultisig/mpc-types@0.2.2
+
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [[`77410fb`](https://github.com/vultisig/vultisig-sdk/commit/77410fb28f53dd558f05e5634aadba6a9547ee0f)]:
+  - @vultisig/core-chain@1.4.1
+
+## 1.1.7
+
+### Patch Changes
+
+- Updated dependencies [[`ef2ffbe`](https://github.com/vultisig/vultisig-sdk/commit/ef2ffbecf5f2b3af69172d34f3fda25055f4e112), [`d9399c7`](https://github.com/vultisig/vultisig-sdk/commit/d9399c77a932f0ecc9a2e6acec5d8457aa199444), [`6f1f8b2`](https://github.com/vultisig/vultisig-sdk/commit/6f1f8b2d9a69b8542da776f69fbddba6eb35bd3e)]:
+  - @vultisig/core-chain@1.4.0
+
+## 1.1.6
+
+### Patch Changes
+
+- Updated dependencies [[`54731db`](https://github.com/vultisig/vultisig-sdk/commit/54731dbc0ded30adc7f76bbc5e3e532ef9414bb2)]:
+  - @vultisig/mpc-types@0.2.1
+
+## 1.1.5
+
+### Patch Changes
+
+- Updated dependencies [[`5aef564`](https://github.com/vultisig/vultisig-sdk/commit/5aef564309aeeede5da250e03447e0a3da0a12ab)]:
+  - @vultisig/lib-utils@0.9.3
+  - @vultisig/core-chain@1.3.1
+
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`824e58c`](https://github.com/vultisig/vultisig-sdk/commit/824e58cded1ca80e29a2e19e2bda6957f2da71ad)]:
+  - @vultisig/core-chain@1.3.0
+
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [[`ed1eb16`](https://github.com/vultisig/vultisig-sdk/commit/ed1eb16b868176b796629e10de95fddcf701c151)]:
+  - @vultisig/lib-utils@0.9.2
+  - @vultisig/core-chain@1.2.2
+
+## 1.1.2
+
+### Patch Changes
+
+- [#204](https://github.com/vultisig/vultisig-sdk/pull/204) [`0388700`](https://github.com/vultisig/vultisig-sdk/commit/03887009b7579fc0b193d068d4a205cdd3b7c214) Thanks [@premiumjibles](https://github.com/premiumjibles)! - feat(cli): agent-friendly CLI + new @vultisig/mcp package
+
+  ## @vultisig/cli
+  - Auto-TTY JSON output (`--output`, `--ci`, `--quiet`, `--fields`, `--non-interactive`)
+  - Versioned `{ success, v: 1, data }` envelope and typed error envelope with exit codes 0-7
+  - Safety: fixed `swap`/`send`/`execute`/`rujira swap`/`rujira withdraw` auto-executing in JSON mode; `--yes` now required uniformly
+  - `--dry-run` coverage across all mutating commands
+  - `vsig schema` machine-readable command introspection
+  - Auth: replaced `keytar` with `@napi-rs/keyring`, encrypted-file fallback for headless environments (AES-256-GCM + async scrypt)
+
+  ## @vultisig/client-shared (new package)
+
+  Shared client infrastructure for `@vultisig/cli` and `@vultisig/mcp`: auth setup, config store, credential store (keyring + file fallback), tool descriptions, vault discovery.
+
+  ## @vultisig/sdk
+  - `VaultBase.send()` and `VaultBase.swap()` accept `amount: 'max'`
+  - `SwapService` rejects quotes with near-zero output to guard against bad provider routes
+  - `FiatValueService.fetchTokenPrice` returns `0` for non-EVM chains instead of throwing (effective behavior identical — `getPortfolioValue` already caught the throw)
+  - `ServerManager`: removed stdout `console.log` calls that corrupted JSON output; raised `waitForPeers` timeout from 30s to 120s and tightened poll interval from 2s to 500ms
+
+  ## @vultisig/core-chain
+  - Narrowed EVM broadcast retry list to strings that genuinely indicate "same tx already in mempool under this hash" (`already known`, `transaction already exists`, `tx already in mempool`). Dropped strings that can silently swallow real broadcast failures (`nonce too low`, `transaction is temporarily banned`, `future transaction tries to replace pending`, `could not replace existing tx`)
+
+  ## @vultisig/core-mpc
+  - `maxInboundWaitTime` raised from 1 to 3 minutes for flaky networks
+  - Added 100ms sleep in `processInbound` recursion to prevent hot-looping on empty inbound
+  - Setup message polling: same 10-second budget, polls 5× more often (50 × 200ms vs 10 × 1000ms)
+
+- Updated dependencies [[`0388700`](https://github.com/vultisig/vultisig-sdk/commit/03887009b7579fc0b193d068d4a205cdd3b7c214)]:
+  - @vultisig/core-chain@1.2.1
+
+## 1.1.1
+
+### Patch Changes
+
+- [`78772fd`](https://github.com/vultisig/vultisig-sdk/commit/78772fd061f3061c54802506218e5524a21714bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix MPC engine singleton so direct `@vultisig/core-mpc` / `@vultisig/mpc-types` / `@vultisig/mpc-wasm` imports register correctly across bundler chunks and Vite `optimizeDeps` scenarios.
+  - Runtime singletons (MPC engine, WASM WalletCore getter, default storage factory, platform crypto) now live in a `globalThis`-anchored store keyed by `Symbol.for('vultisig.runtime.store.v1')`, eliminating duplicate-module-instance bugs.
+  - `ensureMpcEngine()` added (async) — lazily registers the default `WasmMpcEngine` when no engine has been configured, so consumers that import only `@vultisig/core-mpc` no longer need to bootstrap the SDK.
+  - `@vultisig/sdk` `sideEffects` narrowed from `false` to an allowlist of platform entry dist files, preventing tree-shakers from dropping the platform bootstrap.
+  - `@vultisig/mpc-wasm` declared as an optional peer dependency of `@vultisig/mpc-types`.
+
+  Closes [#287](https://github.com/vultisig/vultisig-sdk/issues/287).
+
+- Updated dependencies [[`78772fd`](https://github.com/vultisig/vultisig-sdk/commit/78772fd061f3061c54802506218e5524a21714bd)]:
+  - @vultisig/mpc-types@0.2.0
+
 ## 1.1.0
 
 ### Minor Changes

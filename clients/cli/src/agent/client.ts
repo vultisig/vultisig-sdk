@@ -4,6 +4,7 @@
  * HTTP/SSE client for communicating with the agent-backend server.
  * Supports both JSON and SSE streaming responses.
  */
+import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import type {
   Action,
   AuthTokenRequest,
@@ -18,10 +19,38 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   Suggestion,
-  Transaction,
+  TxReadyPayload,
 } from './types'
 
-type JsonErrorBody = { error?: string }
+type JsonErrorBody = { error?: string; code?: string }
+
+// Map a v1 frame type to the legacy 'running' | 'done' lifecycle. The v1
+// protocol never sends `status` on tool frames (see protocol_v1.go) so the
+// client derives it from the frame type itself.
+function v1StatusFromType(type: string | null): 'running' | 'done' | undefined {
+  switch (type) {
+    case 'tool-input-start':
+    case 'tool-input-available':
+    case 'tool-input-delta':
+      return 'running'
+    case 'tool-output-available':
+      return 'done'
+    default:
+      return undefined
+  }
+}
+
+function sseErrorToMessage(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value)
+  if (value instanceof Error) return value.message
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
 
 export class AgentClient {
   private baseUrl: string
@@ -88,7 +117,9 @@ export class AgentClient {
   }
 
   async deleteConversation(conversationId: string, publicKey: string): Promise<void> {
-    await this.delete(`/agent/conversations/${conversationId}`, { public_key: publicKey })
+    await this.delete(`/agent/conversations/${conversationId}`, {
+      public_key: publicKey,
+    })
   }
 
   // ============================================================================
@@ -109,12 +140,18 @@ export class AgentClient {
     callbacks: {
       onTextDelta?: (delta: string) => void
       onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
+      // Fired for `tool-input-available` with `clientExecuted: true`.
+      // Client runs the tool and ships the result via recent_actions.
+      // Sync-only: callers must dispatch async work themselves (push to a
+      // promise queue) — keeps `void`'d call at the SSE boundary safe from
+      // unhandled rejections.
+      onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
-      onTxReady?: (tx: Transaction) => void
+      onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
-      onError?: (error: string) => void
+      onError?: (error: string, code: AgentErrorCode) => void
     },
     signal?: AbortSignal
   ): Promise<SSEStreamResult> {
@@ -146,6 +183,12 @@ export class AgentClient {
       message: null,
     }
 
+    // Per-stream map: v1 tool-output-available frames omit toolName (see
+    // protocol_v1.go V1ToolOutputAvailable) — remember the name from the
+    // earlier tool-input-start/available frame keyed by toolCallId so the
+    // terminal 'done' callback still carries the tool name.
+    const toolNameByCallId = new Map<string, string>()
+
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -165,7 +208,7 @@ export class AgentClient {
         // Empty line = end of event
         if (currentData) {
           // SSE spec: default event type is "message" when no event: field is present
-          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
+          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
         }
         currentEvent = ''
         currentData = ''
@@ -197,7 +240,7 @@ export class AgentClient {
           if (trailing) processLine(trailing)
           // Flush any pending event (stream ended without final blank line)
           if (currentData) {
-            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks)
+            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
           }
           break
         }
@@ -216,52 +259,125 @@ export class AgentClient {
     callbacks: {
       onTextDelta?: (delta: string) => void
       onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
+      // Fired for `tool-input-available` with `clientExecuted: true`.
+      // Client runs the tool and ships the result via recent_actions.
+      // Sync-only: callers must dispatch async work themselves (push to a
+      // promise queue) — keeps `void`'d call at the SSE boundary safe from
+      // unhandled rejections.
+      onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
-      onTxReady?: (tx: Transaction) => void
+      onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
-      onError?: (error: string) => void
-    }
+      onError?: (error: string, code: AgentErrorCode) => void
+    },
+    toolNameByCallId: Map<string, string>
   ): void {
     try {
       const parsed = JSON.parse(data)
 
-      switch (event) {
+      // AI SDK v5 streaming: event type is carried in the JSON `type` field
+      // rather than in an `event:` SSE header. Prefer that when present so the
+      // new backend (v-pxuw) and the legacy event-header tests both work.
+      const v1Type = typeof parsed?.type === 'string' && parsed.type.length > 0 ? parsed.type : null
+      const routingEvent = v1Type ? this.mapV1EventType(v1Type) : event
+
+      // V1 custom-data events carry their payload under `.data`; legacy events
+      // carry it inline. Normalise so case handlers see a single shape.
+      const v1Data = typeof parsed?.type === 'string' && parsed.type.startsWith('data-') ? parsed.data : null
+
+      switch (routingEvent) {
         case 'text_delta':
           if (typeof parsed.delta === 'string') {
             result.fullText += parsed.delta
             callbacks.onTextDelta?.(parsed.delta)
           }
           break
-        case 'tool_progress':
+        case 'tool_progress': {
           if (this.verbose) process.stderr.write(`[SSE:tool_progress] raw: ${data.slice(0, 1000)}\n`)
-          callbacks.onToolProgress?.(parsed.tool, parsed.status, parsed.label)
+          // v1 frames don't carry `status`; derive from the frame type.
+          // tool-output-available also omits toolName, so resolve it from the
+          // per-stream map populated on the tool-input-start frame.
+          const v1Status = v1StatusFromType(v1Type)
+          const status = (parsed.status as 'running' | 'done' | undefined) ?? v1Status
+          const callId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : null
+          const rawInlineName = parsed.tool ?? parsed.toolName
+          const inlineName = typeof rawInlineName === 'string' && rawInlineName.length > 0 ? rawInlineName : undefined
+          if (callId && inlineName) {
+            toolNameByCallId.set(callId, inlineName)
+          }
+          const toolName = inlineName ?? (callId ? toolNameByCallId.get(callId) : undefined)
+          const label = typeof parsed.label === 'string' ? parsed.label : undefined
+
+          // Client-executed tools get a dedicated callback. Strict boolean
+          // check — absent/non-true falls through to display-only progress
+          // (backward-compat for older backends).
+          if (
+            v1Type === 'tool-input-available' &&
+            parsed.clientExecuted === true &&
+            callId &&
+            toolName &&
+            callbacks.onClientSideToolCall
+          ) {
+            const rawInput = parsed.input
+            const input =
+              rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
+                ? (rawInput as Record<string, unknown>)
+                : {}
+            // Sync callback (signature enforces void return); session.ts
+            // queues the async dispatch onto its own chain.
+            callbacks.onClientSideToolCall(callId, toolName, input)
+          }
+
+          if (status && toolName) {
+            callbacks.onToolProgress?.(toolName, status, label)
+          }
+          if (status === 'done' && callId) toolNameByCallId.delete(callId)
           break
-        case 'title':
-          callbacks.onTitle?.(parsed.title)
+        }
+        case 'title': {
+          const title = v1Data?.title ?? parsed.title
+          if (typeof title === 'string') callbacks.onTitle?.(title)
           break
-        case 'actions':
+        }
+        case 'actions': {
           if (this.verbose) process.stderr.write(`[SSE:actions] raw: ${data.slice(0, 1000)}\n`)
-          result.actions.push(...(parsed.actions || []))
-          callbacks.onActions?.(parsed.actions || [])
+          const actions = v1Data?.actions ?? parsed.actions ?? []
+          result.actions.push(...actions)
+          callbacks.onActions?.(actions)
           break
-        case 'suggestions':
-          result.suggestions.push(...(parsed.suggestions || []))
-          callbacks.onSuggestions?.(parsed.suggestions || [])
+        }
+        case 'suggestions': {
+          const suggestions = v1Data?.suggestions ?? parsed.suggestions ?? []
+          result.suggestions.push(...suggestions)
+          callbacks.onSuggestions?.(suggestions)
           break
+        }
         case 'tx_ready':
           if (this.verbose) process.stderr.write(`[SSE:tx_ready] raw: ${data.slice(0, 2000)}\n`)
-          result.transactions.push(parsed)
-          callbacks.onTxReady?.(parsed)
+          {
+            const txReady = (v1Data ?? parsed) as TxReadyPayload
+            result.transactions.push(txReady)
+            callbacks.onTxReady?.(txReady)
+          }
           break
-        case 'message':
-          result.message = parsed.message || parsed
+        case 'message': {
+          const msg = v1Data?.message ?? parsed.message ?? parsed
+          result.message = msg
           callbacks.onMessage?.(result.message!)
           break
-        case 'error':
-          callbacks.onError?.(parsed.error)
+        }
+        case 'error': {
+          const errorText = typeof parsed.errorText === 'string' ? parsed.errorText : parsed.error
+          const msg = sseErrorToMessage(errorText)
+          const codeFromBackend =
+            typeof parsed.code === 'string' && isAgentErrorCode(parsed.code)
+              ? parsed.code
+              : inferAgentErrorCodeFromMessage(msg)
+          callbacks.onError?.(msg, codeFromBackend)
           break
+        }
         case 'done':
           // Stream complete
           break
@@ -272,6 +388,38 @@ export class AgentClient {
       } else {
         throw e
       }
+    }
+  }
+
+  // Maps a V1 `type` field to the legacy event bucket used by handleSSEEvent's
+  // switch. Frame-level types (start, text-start, text-end, finish-step) and
+  // non-critical telemetry (data-tokens, data-usage, data-confirmation) route
+  // to 'ignore' which is a no-op.
+  private mapV1EventType(type: string): string {
+    switch (type) {
+      case 'text-delta':
+        return 'text_delta'
+      case 'tool-input-start':
+      case 'tool-input-available':
+      case 'tool-input-delta':
+      case 'tool-output-available':
+        return 'tool_progress'
+      case 'data-title':
+        return 'title'
+      case 'data-actions':
+        return 'actions'
+      case 'data-suggestions':
+        return 'suggestions'
+      case 'data-tx_ready':
+        return 'tx_ready'
+      case 'data-message':
+        return 'message'
+      case 'error':
+        return 'error'
+      case 'finish':
+        return 'done'
+      default:
+        return 'ignore'
     }
   }
 
@@ -332,6 +480,6 @@ export type SSEStreamResult = {
   fullText: string
   actions: Action[]
   suggestions: Suggestion[]
-  transactions: Transaction[]
+  transactions: TxReadyPayload[]
   message: ConversationMessage | null
 }

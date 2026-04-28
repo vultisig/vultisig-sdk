@@ -412,8 +412,8 @@ describe('allBalances', () => {
 
     expect(Array.isArray(result)).toBe(true)
     expect(result).toHaveLength(2)
-    expect(result[0].symbol).toBe('ETH')
-    expect(result[1].symbol).toBe('BTC')
+    expect((result[0] as { symbol: string }).symbol).toBe('ETH')
+    expect((result[1] as { symbol: string }).symbol).toBe('BTC')
   })
 
   it('should pass includeTokens parameter to balances', async () => {
@@ -480,8 +480,8 @@ describe('portfolio', () => {
     const balanceMap = await vault.balancesWithPrices(vault._userChains, true, 'usd')
     const balances = Object.values(balanceMap)
 
-    expect(balances[0].fiatValue).toBe(3000)
-    expect(balances[1].fiatValue).toBe(60000)
+    expect((balances[0] as { fiatValue: number }).fiatValue).toBe(3000)
+    expect((balances[1] as { fiatValue: number }).fiatValue).toBe(60000)
   })
 })
 

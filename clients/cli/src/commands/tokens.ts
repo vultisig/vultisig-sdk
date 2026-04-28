@@ -1,17 +1,28 @@
 /**
  * Token Commands - token management
  */
-import type { Chain } from '@vultisig/sdk'
+import type { Chain, DiscoveredToken } from '@vultisig/sdk'
 import chalk from 'chalk'
 import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
-import { createSpinner, info, isJsonOutput, outputJson, printResult, printTable, success, warn } from '../lib/output'
+import {
+  createSpinner,
+  info,
+  isJsonOutput,
+  outputJson,
+  printResult,
+  printTable,
+  requireInteractive,
+  success,
+  warn,
+} from '../lib/output'
 
 export type TokensOptions = {
   chain: Chain
   add?: string // contract address
   remove?: string // token ID
+  discover?: boolean
   // Options for non-interactive token addition
   symbol?: string
   name?: string
@@ -32,6 +43,11 @@ export type AddTokenOptions = {
 export async function executeTokens(ctx: CommandContext, options: TokensOptions): Promise<void> {
   // Ensure vault is active before any operation
   await ctx.ensureActiveVault()
+
+  if (options.discover) {
+    await discoverTokens(ctx, options.chain)
+    return
+  }
 
   if (options.add) {
     // Use CLI options if provided, otherwise prompt
@@ -68,6 +84,7 @@ export async function executeTokens(ctx: CommandContext, options: TokensOptions)
     }
 
     if (prompts.length > 0) {
+      requireInteractive('Provide --symbol, --name, and --decimals flags for non-interactive token addition.')
       const answers = await inquirer.prompt(prompts)
       symbol = symbol || answers.symbol?.trim()
       name = name || answers.name?.trim()
@@ -115,6 +132,70 @@ export async function removeToken(ctx: CommandContext, chain: Chain, tokenId: st
 
   await vault.removeToken(chain, tokenId)
   success(`\n+ Removed token ${tokenId} from ${chain}`)
+}
+
+/**
+ * Discover tokens with balances on a chain and add them to the vault
+ */
+export async function discoverTokens(ctx: CommandContext, chain: Chain): Promise<void> {
+  const vault = await ctx.ensureActiveVault()
+
+  const spinner = createSpinner(`Discovering tokens on ${chain}...`)
+  let discovered: DiscoveredToken[]
+  try {
+    discovered = await vault.discoverTokens(chain)
+  } catch (err) {
+    spinner.fail(`Token discovery failed for ${chain}`)
+    throw err
+  }
+
+  if (discovered.length === 0) {
+    spinner.succeed(`No new tokens found on ${chain}`)
+    if (isJsonOutput()) {
+      outputJson({ chain, discovered: [], count: 0 })
+    }
+    return
+  }
+
+  // Merge with existing tokens (no duplicates by contractAddress)
+  const existingTokens = vault.getTokens(chain)
+  const existingAddresses = new Set(existingTokens.map(t => t.contractAddress ?? t.id))
+
+  const newTokens = discovered.filter(d => d.contractAddress && !existingAddresses.has(d.contractAddress))
+
+  for (const d of newTokens) {
+    await vault.addToken(chain, {
+      id: d.contractAddress,
+      symbol: d.ticker,
+      name: d.ticker,
+      decimals: d.decimals,
+      contractAddress: d.contractAddress,
+      chainId: chain,
+      isNative: false,
+    })
+  }
+
+  const allTokens = vault.getTokens(chain)
+
+  spinner.succeed(`Discovered ${newTokens.length} new token(s) on ${chain}`)
+
+  if (isJsonOutput()) {
+    outputJson({
+      chain,
+      discovered: newTokens.map(d => ({
+        symbol: d.ticker,
+        contractAddress: d.contractAddress,
+        decimals: d.decimals,
+      })),
+      count: newTokens.length,
+    })
+    return
+  }
+
+  for (const d of newTokens) {
+    printResult(`  ${d.ticker} (${d.contractAddress})`)
+  }
+  info(chalk.gray(`\n${allTokens.length} total token(s) tracked on ${chain}`))
 }
 
 /**

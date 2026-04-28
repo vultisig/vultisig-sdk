@@ -189,7 +189,7 @@ describe('E2E: prepareSendTx() - Transaction Preparation', () => {
         // Validate ERC-20 token handling
         expect(payload).toBeDefined()
         expect(payload.coin).toBeDefined()
-        expect(payload.coin.ticker).toBe('USDC')
+        expect(payload.coin!.ticker).toBe('USDC')
         expect(payload.toAddress).toBe('0x742D35cC6634C0532925A3b844bc9E7595f0BEb8')
         expect(payload.toAmount).toBe('1000000')
         expect(payload.blockchainSpecific).toBeDefined()

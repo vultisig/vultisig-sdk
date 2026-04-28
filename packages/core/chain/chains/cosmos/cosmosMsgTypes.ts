@@ -10,4 +10,9 @@ export enum CosmosMsgType {
   THORCHAIN_MSG_LEAVE_POOL = 'thorchain/MsgLeavePool',
   THORCHAIN_MSG_LEAVE_POOL_URL = '/thorchain.v1.MsgLeavePool',
   THORCHAIN_MSG_SEND_URL = '/types.MsgSend',
+  // cosmos-sdk staking + distribution module (proto direct-sign)
+  MSG_DELEGATE_URL = '/cosmos.staking.v1beta1.MsgDelegate',
+  MSG_UNDELEGATE_URL = '/cosmos.staking.v1beta1.MsgUndelegate',
+  MSG_BEGIN_REDELEGATE_URL = '/cosmos.staking.v1beta1.MsgBeginRedelegate',
+  MSG_WITHDRAW_DELEGATOR_REWARD_URL = '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward',
 }

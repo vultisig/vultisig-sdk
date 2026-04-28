@@ -36,6 +36,14 @@ export {
 export { ValidationHelpers } from './utils/validation'
 
 // ============================================================================
+// PUBLIC API - Conversion / Normalization Utilities (vault-free)
+// ============================================================================
+
+export type { FiatToAmountParams } from './utils/fiatToAmount'
+export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
+export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
+
+// ============================================================================
 // PUBLIC API - Chain Configuration
 // ============================================================================
 
@@ -188,6 +196,32 @@ export {
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'
 
+// Cosmos staking + distribution module (LCD queries — read-only, generic over
+// every ibcEnabled cosmos chain). Signing primitives ship via
+// `chains.cosmos.buildCosmosStakingTx` from the platform-specific entry point.
+export type {
+  ContinuousVestingAccount,
+  Coin as CosmosStakingCoin,
+  DelayedVestingAccount,
+  Delegation,
+  DelegatorReward,
+  DelegatorRewardsResponse,
+  PeriodicVestingAccount,
+  UnbondingDelegation,
+  UnbondingEntry,
+  VestingAccount,
+} from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
+export {
+  getAuthAccountUrl,
+  getCosmosDelegations,
+  getCosmosDelegatorRewards,
+  getCosmosUnbondingDelegations,
+  getCosmosVestingAccount,
+  getDelegationsUrl,
+  getDelegatorRewardsUrl,
+  getUnbondingDelegationsUrl,
+} from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
@@ -210,15 +244,40 @@ export { CosmosMsgType } from './types'
 // PUBLIC API - Tools (vault-free chain utilities)
 // ============================================================================
 
-export type { FindSwapQuoteParams } from './tools'
+export type {
+  Coin,
+  CoinKey,
+  CoinMetadata,
+  FindSwapQuoteParams,
+  GetMaxSendAmountFromKeysParams,
+  KnownCoin,
+  KnownCoinMetadata,
+  PrepareSendTxFromKeysParams,
+  PrepareSwapTxFromKeysParams,
+  TokenMetadataResolver,
+  VaultIdentity,
+} from './tools'
 export {
   abiDecode,
   abiEncode,
+  chainFeeCoin,
   deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
   findSwapQuote,
+  getCoinBalance,
+  getMaxSendAmountFromKeys,
+  getNativeSwapDecimals,
+  getPublicKey,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  prepareContractCallTxFromKeys,
+  prepareSendTxFromKeys,
+  prepareSignAminoTxFromKeys,
+  prepareSignDirectTxFromKeys,
+  prepareSwapTxFromKeys,
   resolve4ByteSelector,
   resolveEns,
   searchToken,

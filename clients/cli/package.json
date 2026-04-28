@@ -1,7 +1,7 @@
 {
   "name": "@vultisig/cli",
-  "version": "0.15.0",
-  "description": "Command-line wallet for Vultisig - multi-chain MPC wallet management",
+  "version": "0.21.0",
+  "description": "The self-custody MPC wallet CLI for AI coding agents (Claude Code, Cursor, OpenCode). Natural-language agent mode, 36+ chains, DKLS23 threshold signatures. Seedless.",
   "type": "module",
   "bin": {
     "vsig": "./dist/index.js",
@@ -21,16 +21,34 @@
     "cli:interactive": "npx tsx src/index.ts --interactive",
     "repl": "npx tsx src/index.ts --interactive",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --exclude 'tests/e2e/**'",
+    "test:watch": "vitest --exclude 'tests/e2e/**'",
+    "test:e2e": "vitest run tests/e2e/",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
     "vultisig",
-    "wallet",
+    "mpc-wallet-cli",
+    "ai-agent-cli",
+    "claude-code",
+    "cursor",
+    "opencode",
+    "agent-ask",
+    "mpc",
+    "threshold-signatures",
+    "tss",
+    "self-custody",
+    "seedless",
+    "multi-chain-wallet",
+    "thorchain-cli",
+    "bitcoin-cli",
+    "crypto-cli",
+    "vsig",
+    "wallet-cli",
     "cli",
+    "wallet",
     "blockchain",
     "crypto",
-    "mpc",
     "multi-party-computation"
   ],
   "author": {
@@ -53,7 +71,10 @@
     "@cosmjs/encoding": "^0.38.1",
     "@cosmjs/proto-signing": "^0.38.1",
     "@cosmjs/stargate": "^0.38.1",
+    "@napi-rs/keyring": "^1.2.0",
     "@noble/hashes": "^2.0.1",
+    "@vultisig/client-shared": "workspace:^",
+    "@vultisig/core-chain": "workspace:^",
     "@vultisig/rujira": "workspace:^",
     "@vultisig/sdk": "workspace:^",
     "chalk": "^5.6.2",
@@ -63,7 +84,7 @@
     "ora": "^9.3.0",
     "qrcode-terminal": "^0.12.0",
     "tabtab": "^3.0.2",
-    "viem": "^2.45.1",
+    "viem": "^2.48.4",
     "ws": "^8.19.0"
   },
   "devDependencies": {
@@ -74,7 +95,7 @@
     "esbuild": "^0.27.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.5"
   },
   "engines": {
     "node": ">=20.0.0"

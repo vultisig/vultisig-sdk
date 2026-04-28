@@ -1,5 +1,182 @@
 # @vultisig/sdk
 
+## 0.21.0
+
+### Minor Changes
+
+- [#350](https://github.com/vultisig/vultisig-sdk/pull/350) [`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat: cosmos-sdk staking module - generic Delegate/Undelegate/BeginRedelegate/WithdrawDelegatorReward + LCD queries
+
+  Adds the cosmos-sdk staking + distribution module to the SDK, generic across every ibcEnabled cosmos chain we support (Cosmos Hub, Osmosis, Kujira, Terra, TerraClassic, Akash, Noble, Dydx).
+
+  **Signing primitives** (`@vultisig/sdk` -> `chains.cosmos.buildCosmosStakingTx`):
+  - `MsgDelegate`, `MsgUndelegate`, `MsgBeginRedelegate`, `MsgWithdrawDelegatorReward`
+  - Hand-rolled RN-safe protobuf (no cosmjs runtime dep) mirroring the existing `buildCosmosWasmExecuteTx` pattern
+  - Multi-msg batch txs supported (e.g. claim rewards from many validators in one tx)
+  - Byte-for-byte round-trip verified against `cosmjs-types` canonical decoder
+
+  **LCD query helpers** (`@vultisig/sdk` top-level + `@vultisig/core-chain/chains/cosmos/staking/lcdQueries`):
+  - `getCosmosDelegations(chain, address)` -> per-validator balance + shares
+  - `getCosmosUnbondingDelegations(chain, address)` -> pending unbondings with completion time
+  - `getCosmosDelegatorRewards(chain, address)` -> per-validator rewards + total
+  - `getCosmosVestingAccount(chain, address)` -> Periodic / Continuous / Delayed detection (returns null otherwise)
+
+  ship-once, unlock-many: adding a future cosmos chain is a config-only change.
+
+  34 new unit tests including 4 real cosmoshub fixtures captured from `cosmos1a8l3srqyk5krvzhkt7cyzy52yxcght6322w2qy`.
+
+## 0.20.0
+
+### Minor Changes
+
+- [#310](https://github.com/vultisig/vultisig-sdk/pull/310) [`1d1c02c`](https://github.com/vultisig/vultisig-sdk/commit/1d1c02c37e58340b0617eec3a5e44909efc9b452) Thanks [@premiumjibles](https://github.com/premiumjibles)! - feat(sdk/rn): make React Native consumption ergonomic
+
+  Two changes land together because both address making the RN build correctly consumable without the consumer having to hand-roll workarounds.
+  1. **`./react-native` subpath export conditions**
+
+  The `./react-native` subpath previously declared only `types` and `import`. Bundlers that prefer a `react-native` condition (Expo Metro on iOS/Android sets `unstable_conditionsByPlatform: { android: ['react-native'], ios: ['react-native'] }`) fall through the `./react-native` subpath when the SDK is resolved through a symlinked location (e.g. `npm install file:../vultisig-sdk/packages/sdk`, `pnpm add @vultisig/sdk@link:...`), producing `Unable to resolve "@vultisig/sdk/react-native"` at bundle time. Published-and-installed SDKs sidestepped the bug because the resolver cached a direct file path without re-walking conditions through the symlink. Mirror the conditions already present on the root `.` export so `./react-native` works identically in both linked and installed modes. 2. **New `./rn-preamble` side-effect subpath**
+
+  Adds `@vultisig/sdk/rn-preamble` — a tiny side-effect module consumers import as the **first statement** in their RN app entry to install `globalThis.Buffer` and repair `Buffer.prototype.subarray` (RN's polyfill returns a plain `Uint8Array`, which breaks `.copy()` on downstream consumers like `@ton/core`). Previously consumers had to hand-write these polyfills, and getting the import order wrong crashed Hermes at boot with `Property 'Buffer' doesn't exist` — before the SDK's own RN entry could install its polyfill, because Metro hoists `require()` calls and transitive chain-lib module bodies evaluate before the SDK entry's statements run. The preamble is designed specifically to be the first `require` Metro hoists, so its body completes before anything else imports.
+
+  Consumer usage:
+
+  ```ts
+  // index.ts (RN app entry — must be the first line)
+  import "@vultisig/sdk/rn-preamble";
+
+  // ...all other imports follow
+  ```
+
+  Additive: no existing export or subpath is changed; consumers who don't use the preamble are unaffected.
+
+## 0.19.1
+
+### Patch Changes
+
+- Updated dependencies [[`e3fa32b`](https://github.com/vultisig/vultisig-sdk/commit/e3fa32b9f29e3a07880ecba117cf40e6dd396a4b)]:
+  - @vultisig/mpc-types@0.2.2
+
+## 0.19.0
+
+### Minor Changes
+
+- [#306](https://github.com/vultisig/vultisig-sdk/pull/306) [`c5f9c7b`](https://github.com/vultisig/vultisig-sdk/commit/c5f9c7bcac80d30f0b5e086c9e6860eaa0cf79a9) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add a React Native platform entry for @vultisig/sdk — new subpath export `@vultisig/sdk/react-native`, Hermes-safe tx builders + RPC helpers for 9 chains (EVM, Solana, Cosmos, Sui, TON, Tron, Ripple, UTXO, Cardano), `fastVaultSign` + relay orchestrators, and `configureRuntime` for consumer-injected endpoints. No breaking change for browser / node / electron / chrome-extension / vite consumers — all core chain/swap/balance helpers keep their original sync signatures; RN-only lazy loading is isolated in `packages/sdk/src/platforms/react-native/overrides/` and applied via rollup path-based intercept on the RN build target only. Bumped to `minor` per "new public API surface = minor" semver convention so consumers' `^0.x` ranges accept this only after they opt in.
+
+  **Signature-meaningful fund-safety fixes (applied in R2 + R4 review rounds):**
+  - `buildUtxoSendTx().finalize()` now returns a BIP141-compliant **txid** (computed from the witness-stripped base tx) for P2WPKH chains. Previously returned the wtxid, which is unusable for block-explorer / mempool lookups. Callers that persisted the old `txHashHex` for segwit chains (BTC, LTC) were recording the wrong hash.
+  - `fastVaultSign` now throws if the MPC engine returns an ECDSA signature without a `recovery_id` (previously silently wrote `v=0`, producing a tx that recovers the wrong EVM signer).
+  - `configureRuntime` now validates `vultiServerUrl` / `relayUrl` as http(s) URLs (previously accepted any string including `''`, silently exposing vault passwords to misconfigured endpoints).
+  - `ReactNativeStorage.clear()` now calls `AsyncStorage.multiRemove` (was `removeMany`, which does not exist on `^2.x` — the shipped-consumer version — and threw at runtime on every `clear()` call).
+  - BCH CashAddr decoder now verifies the polymod checksum before stripping it (previously accepted any typo'd address with valid base32 chars, producing a garbage pubKeyHash and signing the tx to an unrelated address).
+  - Ripple `account_info` for unfunded accounts now returns `funded: false` instead of throwing on XRPL's `actNotFound` response.
+  - Zcash sighash `branchId` is now a per-call parameter (defaulting to NU6.1) so future consensus upgrades don't require a shipped SDK release.
+  - XRP `buildXrpSendTx().finalize()` now accepts both 128-char (`r||s`) and 130-char (`r||s||recovery_id`) hex signatures — `fastVaultSign` returns the 130-char shape for ECDSA, so every `build_xrp_send → fastVaultSign → finalize` flow previously threw at submit time.
+  - UTXO base58 decoder now identifies P2SH addresses by version byte (`0x05` BTC, `0x32` LTC, `0x16` DOGE, `0x10` DASH, Zcash `t3...`) and emits the `OP_HASH160 <hash> OP_EQUAL` locking script; previously every base58 destination was re-encoded as P2PKH, so funds sent to a `3...` exchange deposit were locked under a hash that matched no spendable key.
+  - Blockchair URL helpers (`getUtxos`, `getUtxoBalance`, `estimateUtxoFee`, `broadcastUtxoTx`) now respect the documented contract that `apiUrl` is already chain-scoped — previously they appended the slug a second time, producing `/blockchair/bitcoin/bitcoin/...` and 404s on every Blockchair-backed UTXO call.
+  - `configureMpc` duplicate-engine guard now also reads `EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON` as a fallback so Expo / React Native consumers can opt out of the dev throw without a custom Babel transform (Expo only inlines `EXPO_PUBLIC_*` env vars into the JS bundle). `VULTISIG_STRICT_SINGLETON` still wins when both are set.
+
+## 0.18.0
+
+### Minor Changes
+
+- [#326](https://github.com/vultisig/vultisig-sdk/pull/326) [`f52057b`](https://github.com/vultisig/vultisig-sdk/commit/f52057b4af859018d1c180fa6db9ce15e153409f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expand `@vultisig/sdk/vite` into a browser preset: wasm plugin, polyfill shim resolution, `optimizeDeps` tuning, and serve/emit `7zz.wasm` at `/7zz.wasm` without writing into consumers' `public/` folders. Update docs and the browser example.
+
+### Patch Changes
+
+- [#307](https://github.com/vultisig/vultisig-sdk/pull/307) [`2018787`](https://github.com/vultisig/vultisig-sdk/commit/2018787f8101ea9a98e975c0e7477245c3f86fad) Thanks [@premiumjibles](https://github.com/premiumjibles)! - fix(sdk/vault): wrap invalid-receiver error in VaultError
+
+  `getMaxSendAmount` now throws `VaultError(InvalidConfig)` instead of a generic `Error` when the receiver address fails validation. Matches how the rest of `VaultBase`'s address validation surfaces errors, so consumers checking `error.code` or `instanceof VaultError` catch it correctly.
+
+## 0.17.1
+
+### Patch Changes
+
+- Updated dependencies [[`54731db`](https://github.com/vultisig/vultisig-sdk/commit/54731dbc0ded30adc7f76bbc5e3e532ef9414bb2)]:
+  - @vultisig/mpc-types@0.2.1
+
+## 0.17.0
+
+### Minor Changes
+
+- [#284](https://github.com/vultisig/vultisig-sdk/pull/284) [`219cb00`](https://github.com/vultisig/vultisig-sdk/commit/219cb00898deeaac418945a89c1d243f25aae152) Thanks [@premiumjibles](https://github.com/premiumjibles)! - feat(sdk): vault-free prep surface + LLM/agent utilities + token-resolution primitives
+  - Vault-free `prepare*FromKeys` helpers that build unsigned `KeysignPayload`s from a `VaultIdentity` (raw public keys + identity metadata, no key shares): `prepareSendTxFromKeys`, `prepareSwapTxFromKeys`, `prepareContractCallTxFromKeys`, `prepareSignAminoTxFromKeys`, `prepareSignDirectTxFromKeys`, `getMaxSendAmountFromKeys`. Atomic chain helpers `getCoinBalance` and `getPublicKey` are also re-exported. `VaultBase`, `TransactionBuilder`, and `SwapService` delegate to these internally.
+  - LLM/agent utilities: `fiatToAmount` + `FiatToAmountError`, `normalizeChain` + `UnknownChainError`.
+  - Token-resolution primitives: `chainFeeCoin`, `knownTokens`, `knownTokensIndex`, `getTokenMetadata`, `getNativeSwapDecimals`, and supporting types `Coin`, `CoinKey`, `CoinMetadata`, `KnownCoin`, `KnownCoinMetadata`, `TokenMetadataResolver`, `VaultIdentity`.
+
+## 0.16.0
+
+### Minor Changes
+
+- [#204](https://github.com/vultisig/vultisig-sdk/pull/204) [`0388700`](https://github.com/vultisig/vultisig-sdk/commit/03887009b7579fc0b193d068d4a205cdd3b7c214) Thanks [@premiumjibles](https://github.com/premiumjibles)! - feat(cli): agent-friendly CLI + new @vultisig/mcp package
+
+  ## @vultisig/cli
+  - Auto-TTY JSON output (`--output`, `--ci`, `--quiet`, `--fields`, `--non-interactive`)
+  - Versioned `{ success, v: 1, data }` envelope and typed error envelope with exit codes 0-7
+  - Safety: fixed `swap`/`send`/`execute`/`rujira swap`/`rujira withdraw` auto-executing in JSON mode; `--yes` now required uniformly
+  - `--dry-run` coverage across all mutating commands
+  - `vsig schema` machine-readable command introspection
+  - Auth: replaced `keytar` with `@napi-rs/keyring`, encrypted-file fallback for headless environments (AES-256-GCM + async scrypt)
+
+  ## @vultisig/client-shared (new package)
+
+  Shared client infrastructure for `@vultisig/cli` and `@vultisig/mcp`: auth setup, config store, credential store (keyring + file fallback), tool descriptions, vault discovery.
+
+  ## @vultisig/sdk
+  - `VaultBase.send()` and `VaultBase.swap()` accept `amount: 'max'`
+  - `SwapService` rejects quotes with near-zero output to guard against bad provider routes
+  - `FiatValueService.fetchTokenPrice` returns `0` for non-EVM chains instead of throwing (effective behavior identical — `getPortfolioValue` already caught the throw)
+  - `ServerManager`: removed stdout `console.log` calls that corrupted JSON output; raised `waitForPeers` timeout from 30s to 120s and tightened poll interval from 2s to 500ms
+
+  ## @vultisig/core-chain
+  - Narrowed EVM broadcast retry list to strings that genuinely indicate "same tx already in mempool under this hash" (`already known`, `transaction already exists`, `tx already in mempool`). Dropped strings that can silently swallow real broadcast failures (`nonce too low`, `transaction is temporarily banned`, `future transaction tries to replace pending`, `could not replace existing tx`)
+
+  ## @vultisig/core-mpc
+  - `maxInboundWaitTime` raised from 1 to 3 minutes for flaky networks
+  - Added 100ms sleep in `processInbound` recursion to prevent hot-looping on empty inbound
+  - Setup message polling: same 10-second budget, polls 5× more often (50 × 200ms vs 10 × 1000ms)
+
+- [#290](https://github.com/vultisig/vultisig-sdk/pull/290) [`83fe4c3`](https://github.com/vultisig/vultisig-sdk/commit/83fe4c3c58637aea4823d0eaa7f21d4c5cdf3dc7) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add `@vultisig/sdk/vite` helper plugin so Vite consumers exclude wasm glue packages from `optimizeDeps`, and harden dist ESM relative import rewriting with tests.
+
+## 0.15.5
+
+### Patch Changes
+
+- [`78772fd`](https://github.com/vultisig/vultisig-sdk/commit/78772fd061f3061c54802506218e5524a21714bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix MPC engine singleton so direct `@vultisig/core-mpc` / `@vultisig/mpc-types` / `@vultisig/mpc-wasm` imports register correctly across bundler chunks and Vite `optimizeDeps` scenarios.
+  - Runtime singletons (MPC engine, WASM WalletCore getter, default storage factory, platform crypto) now live in a `globalThis`-anchored store keyed by `Symbol.for('vultisig.runtime.store.v1')`, eliminating duplicate-module-instance bugs.
+  - `ensureMpcEngine()` added (async) — lazily registers the default `WasmMpcEngine` when no engine has been configured, so consumers that import only `@vultisig/core-mpc` no longer need to bootstrap the SDK.
+  - `@vultisig/sdk` `sideEffects` narrowed from `false` to an allowlist of platform entry dist files, preventing tree-shakers from dropping the platform bootstrap.
+  - `@vultisig/mpc-wasm` declared as an optional peer dependency of `@vultisig/mpc-types`.
+
+  Closes [#287](https://github.com/vultisig/vultisig-sdk/issues/287).
+
+- Updated dependencies [[`78772fd`](https://github.com/vultisig/vultisig-sdk/commit/78772fd061f3061c54802506218e5524a21714bd)]:
+  - @vultisig/mpc-types@0.2.0
+  - @vultisig/mpc-native@0.1.4
+
+## 0.15.4
+
+### Patch Changes
+
+- [#276](https://github.com/vultisig/vultisig-sdk/pull/276) [`59382c1`](https://github.com/vultisig/vultisig-sdk/commit/59382c1859512fbd362962ede5e92b100d3a5921) Thanks [@rcoderdev](https://github.com/rcoderdev)! - feat(cli): structured machine-readable errors for agent ask, pipe, and executor
+  - `agent ask --json` failures include stable `code` with existing `error` string
+  - NDJSON pipe `error` events and failed `tool_result` lines include `code`
+  - executor `ActionResult` failures carry `AgentErrorCode`; SSE errors accept optional backend `code`
+  - document error codes in CLI README
+
+## 0.15.3
+
+### Patch Changes
+
+- [#264](https://github.com/vultisig/vultisig-sdk/pull/264) [`69b23dc`](https://github.com/vultisig/vultisig-sdk/commit/69b23dca4b24c93c8bc2de51883a9b28e60485be) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - React Native platform entry now exports typed wrappers for `getPublicKey`, `deriveAddress`, `isValidAddress`, and `getCoinType` that accept `WalletCoreLike` from `@vultisig/walletcore-native` instead of `WalletCore` from `@trustwallet/wallet-core`. Consumers no longer need `as unknown as` casts at the SDK boundary. Also re-exports the `WalletCoreLike` type for convenience.
+
+## 0.15.2
+
+### Patch Changes
+
+- [#263](https://github.com/vultisig/vultisig-sdk/pull/263) [`6585c38`](https://github.com/vultisig/vultisig-sdk/commit/6585c38431db063f600e133d1a23f84b7c19e934) Thanks [@rcoderdev](https://github.com/rcoderdev)! - fix(cli): align agent executor with backend payloads and harden action handling
+  - model `tx_ready` / non-streaming transaction payloads with `TxReadyPayload`
+  - optional `vultisig` on agent config for shared SDK state (e.g. address book)
+  - executor improvements (chain locks, calldata resolution, EVM gas refresh) and unit tests
+
 ## 0.15.1
 
 ### Patch Changes

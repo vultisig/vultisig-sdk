@@ -5,6 +5,7 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 
 import { BroadcastTxResolver } from '../resolver'
+import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 export const broadcastEvmTx: BroadcastTxResolver<EvmChain> = async ({
   chain,
@@ -20,19 +21,20 @@ export const broadcastEvmTx: BroadcastTxResolver<EvmChain> = async ({
     })
   )
 
+  if (!error) {
+    return
+  }
+
   if (
-    error &&
-    !isInError(
+    isInError(
       error,
       'already known',
-      'transaction is temporarily banned',
-      'nonce too low',
       'transaction already exists',
-      'future transaction tries to replace pending',
-      'could not replace existing tx',
       'tx already in mempool'
     )
   ) {
-    throw error
+    return
   }
+
+  await verifyBroadcastByHash({ chain, tx, error })
 }

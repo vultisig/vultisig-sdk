@@ -32,13 +32,15 @@ yarn workspace @vultisig/sdk build:fast   # Fast build (node only)
 yarn workspace @vultisig/sdk dev          # Watch mode
 
 # Test
-yarn test               # SDK unit tests
+yarn test               # SDK + Rujira + core + CLI (`clients/cli`) Vitest
+yarn test:cli           # CLI-only Vitest (`clients/cli/src/**/*.test.ts`)
 yarn test:rujira        # Rujira tests (includes asset tests)
 yarn test:unit:watch    # Unit tests in watch mode
 yarn test:e2e           # E2E tests (requires vault file)
 yarn test:all           # All tests
 
 # Quality
+yarn typecheck          # `tsc` for packages in `.config/tsconfig.json` **and** `yarn workspace @vultisig/cli typecheck` (CLI sources are not in the root tsconfig `include`; both steps are required)
 yarn check              # typecheck + lint + knip + format:check (parallel, fast)
 yarn check:all          # check + tests
 # Knip: see .config/knip.json (scopes SDK, CLI, Rujira, examples; excludes packages/core and packages/lib sources from file rules because they ship as dist subpath exports)
@@ -53,11 +55,14 @@ yarn update             # Update all deps to latest (yarn + ncu + install)
 ## Architecture
 
 ### Two Vault Types
+
 - **FastVault**: 2-of-2 threshold, server-assisted signing (VultiServer), always encrypted
 - **SecureVault**: N-of-M threshold, multi-device signing via relay, configurable encryption
 
 ### Multi-Platform Builds
+
 SDK builds to 6 bundles via Rollup:
+
 - Node.js ESM/CJS
 - Browser
 - React Native
@@ -65,11 +70,13 @@ SDK builds to 6 bundles via Rollup:
 - Chrome Extension
 
 ### Key Entry Points
+
 - `Vultisig` class - Main SDK entry point
 - `FastVault`, `SecureVault` - Vault implementations
 - `Chain` enum - All supported chains
 - Types exported from `src/types/index.ts`
 - Compound wrappers on `VaultBase`: `signMessage()`, `allBalances()`, `portfolio()`, `send()`, `swap()` — single-call operations with human-readable amounts, auto token resolution from knownTokens registry (`send`/`swap` support dryRun)
+- Vault-free prep helpers in `packages/sdk/src/tools/prep/` (`prepareSendTxFromKeys`, `prepareSwapTxFromKeys`, `prepareContractCallTxFromKeys`, `prepareSignAminoTxFromKeys`, `prepareSignDirectTxFromKeys`, `getMaxSendAmountFromKeys`) — build unsigned `KeysignPayload`s from a `VaultIdentity` (raw public keys, no key shares) for MCP servers/agents; `VaultBase` and `TransactionBuilder` delegate to these internally
 
 ## Code Conventions
 
@@ -82,6 +89,7 @@ SDK builds to 6 bundles via Rollup:
 ## Changesets
 
 When creating changesets, use the exact package names from package.json:
+
 - `@vultisig/sdk` - Main SDK (packages/sdk)
 - `@vultisig/cli` - CLI tool (clients/cli)
 - `@vultisig/rujira` - Rujira DEX integration (packages/rujira)
@@ -101,16 +109,19 @@ Specific E2E tests: `yarn test:e2e:balance`, `yarn test:e2e:signing`, etc.
 ## Common Tasks
 
 ### Adding a new chain feature
+
 1. Check if chain logic exists in `packages/core/chain/`
 2. Add SDK-level support in `packages/sdk/src/`
 3. Add tests in `packages/sdk/tests/`
 
 ### Debugging vault operations
+
 - FastVault signing: `src/server/FastSigningService.ts`
 - SecureVault signing: `src/services/RelaySigningService.ts`
 - Vault creation: `src/services/SecureVaultCreationService.ts`
 
 ### Working with seedphrases
+
 - Validation: `src/seedphrase/SeedphraseValidator.ts`
 - Languages: `src/seedphrase/languages/` (10 supported)
 - Discovery: `src/seedphrase/ChainDiscoveryService.ts`

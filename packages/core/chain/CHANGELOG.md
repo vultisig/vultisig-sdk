@@ -1,5 +1,132 @@
 # @vultisig/core-chain
 
+## 1.4.1
+
+### Patch Changes
+
+- [#342](https://github.com/vultisig/vultisig-sdk/pull/342) [`77410fb`](https://github.com/vultisig/vultisig-sdk/commit/77410fb28f53dd558f05e5634aadba6a9547ee0f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(security/blockaid): pair swap diffs across all asset diffs in EVM simulations
+
+  `parseBlockaidEvmSimulation` previously destructured only `assetDiffs[0]` and `assetDiffs[1]`. For router-mediated flows like `permitAndCall`, Blockaid returns three diffs with the user's `in` side at `assetDiffs[2]` and an empty intermediate leg at `assetDiffs[1]`, causing the parser to bail and the simulation hero to render nothing. The parser now scans all diffs for the user-side `out` and `in` legs (preferring an in-asset different from the out-asset), matching the iOS `BlockaidSimulationParser` behaviour.
+
+## 1.4.0
+
+### Minor Changes
+
+- [#309](https://github.com/vultisig/vultisig-sdk/pull/309) [`6f1f8b2`](https://github.com/vultisig/vultisig-sdk/commit/6f1f8b2d9a69b8542da776f69fbddba6eb35bd3e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(chain): Uniswap Universal Router command decoder
+
+  Decodes `execute(bytes commands, bytes[] inputs, uint256 deadline)` calldata into an aggregate swap intent (from token, to token, amount in, amount out min). Exposed at `@vultisig/core-chain/chains/evm/contract/universalRouter/{decode,opcodes,types}`.
+
+  Covers V2 / V3 / V4 swaps (exact-in and exact-out), WRAP_ETH and UNWRAP_WETH framing, split-route aggregation across identical pairs, and the CONTRACT_BALANCE sentinel. Unknown opcodes (Permit2, sweep, transfer) are skipped rather than rejected so the router's usual bundling doesn't drop the whole decode.
+
+  Returns `null` for non-Universal-Router calldata. Native ETH is represented by the zero address — callers should translate to the chain's fee coin when displaying.
+
+### Patch Changes
+
+- [#325](https://github.com/vultisig/vultisig-sdk/pull/325) [`ef2ffbe`](https://github.com/vultisig/vultisig-sdk/commit/ef2ffbecf5f2b3af69172d34f3fda25055f4e112) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(bittensor): drop polkadot dynamic import in balance resolver
+
+  The Bittensor balance resolver dynamically imported `@polkadot/util-crypto`
+  just to base58-decode an SS58 address, blake2_128-hash the pubkey, and
+  hex-encode it. In browser/extension bundles this dynamic import pulls in
+  a chunk that double-bundles BN.js; the second copy throws
+  `TypeError: Cannot assign to read only property 'toString' of object '#<o>'`
+  during module init, so every TAO balance fetch fails with no useful
+  network/console signal — the chain page only renders "Failed to load".
+
+  The resolver now uses the libraries already in `@vultisig/core-chain`'s
+  direct dependency set: `@noble/hashes` for `blake2b` and `bytesToHex`, and
+  `bs58` for the SS58 base58 decode. No polkadot, no `Buffer`, no dynamic
+  imports. Bittensor uses SS58 prefix 42 (1-byte network prefix + 32-byte
+  pubkey + 2-byte checksum = 35 bytes); we slice `[1, 33)` to recover the
+  pubkey, then build the storage key and call `state_getStorage` exactly
+  as before.
+
+  Behaviour for valid SS58 addresses is unchanged. Invalid-length
+  addresses now throw a clearer `Invalid SS58 address length` error
+  instead of a polkadot decoding error.
+
+- [#302](https://github.com/vultisig/vultisig-sdk/pull/302) [`d9399c7`](https://github.com/vultisig/vultisig-sdk/commit/d9399c77a932f0ecc9a2e6acec5d8457aa199444) Thanks [@rcoderdev](https://github.com/rcoderdev)! - fix(chain): hash-verify broadcast errors on all chains
+
+  In MPC keysign every participating device broadcasts the same signed
+  transaction. When a peer wins the RPC race, the slower device gets an
+  "already known / duplicate / in mempool" error — the tx is on-chain, but
+  fragile per-chain error-string matching made the slower device fail the
+  signing flow anyway.
+
+  Broadcast resolvers now share a `verifyBroadcastByHash` safety net: on
+  any broadcast error, re-hash the signed output and check `getTxStatus`;
+  if the tx is pending or confirmed, swallow the error. Existing string
+  matches stay as a fast path to avoid an extra RPC roundtrip on the
+  common case. The five resolvers that previously had no duplicate
+  detection at all (Solana, Tron, Sui, Ripple, Polkadot) now tolerate
+  duplicate broadcasts; Polkadot additionally surfaces JSON-RPC errors
+  that were previously silently ignored.
+
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`5aef564`](https://github.com/vultisig/vultisig-sdk/commit/5aef564309aeeede5da250e03447e0a3da0a12ab)]:
+  - @vultisig/lib-utils@0.9.3
+
+## 1.3.0
+
+### Minor Changes
+
+- [#291](https://github.com/vultisig/vultisig-sdk/pull/291) [`824e58c`](https://github.com/vultisig/vultisig-sdk/commit/824e58cded1ca80e29a2e19e2bda6957f2da71ad) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(chain/cardano): CIP-30 CBOR helpers and a reusable submit helper
+
+  Adds primitives needed by CIP-30 dApp-wallet bridges on top of `@vultisig/core-chain`:
+  - `chains/cardano/cip30/cardanoAddressBytes` — decode a Cardano bech32 address into raw bytes (CIP-30 carries addresses as hex of these bytes, not bech32).
+  - `chains/cardano/cip30/cardanoTxBodyHash` — blake2b-256 of the transaction body, extracted from the full tx CBOR **without re-encoding** so the txid matches what dApps sign off on.
+  - `chains/cardano/cip30/buildCardanoValue` / `encodeCardanoValue` — build and CBOR-encode a Cardano `value` (coin + multiasset) for `getBalance()`.
+  - `chains/cardano/cip30/encodeCardanoUnspentOutput` — CBOR-encode a `transaction_unspent_output` for `getUtxos()`.
+  - `chains/cardano/cip30/decodeCardanoAmountValue` — decode the CBOR `value` argument passed to `getUtxos(amount)` into `{ lovelace, hasAssets }`. Returns `null` on malformed input so callers can fall back to returning all UTXOs.
+  - `chains/cardano/cip30/selectCardanoUtxosByLovelace` — greedy largest-first coin selection by lovelace; returns `null` when the full set is insufficient. Used by CIP-30 `getUtxos` coin selection.
+  - `chains/cardano/cip30/buildCardanoWitnessSet` — CBOR witness set returned by CIP-30 `signTx`.
+  - `chains/cardano/cip30/buildCoseStructures` — CIP-8 / COSE_Sign1 + COSE_Key builders for `signData`.
+  - `chains/cardano/cip30/cardanoCborPrimitives`, `cborEncoder`, `cborSkip` — minimal, Cardano-correct CBOR primitives (hand-rolled for the integer/bytes-keyed maps that `cbor-x` can't produce, and a byte-range walker used by `cardanoTxBodyHash`).
+  - `chains/cardano/submit/submitCardanoCbor` — low-level Cardano broadcast helper that exposes `{ txHash, errorMessage, rpcErrorCode, rawResponse }` so callers can distinguish already-committed (Ogmios code 3117), mempool conflicts, etc.
+
+  The existing `broadcastCardanoTx` resolver is refactored to delegate to `submitCardanoCbor`, preserving the already-committed fallback behavior.
+
+## 1.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`ed1eb16`](https://github.com/vultisig/vultisig-sdk/commit/ed1eb16b868176b796629e10de95fddcf701c151)]:
+  - @vultisig/lib-utils@0.9.2
+
+## 1.2.1
+
+### Patch Changes
+
+- [#204](https://github.com/vultisig/vultisig-sdk/pull/204) [`0388700`](https://github.com/vultisig/vultisig-sdk/commit/03887009b7579fc0b193d068d4a205cdd3b7c214) Thanks [@premiumjibles](https://github.com/premiumjibles)! - feat(cli): agent-friendly CLI + new @vultisig/mcp package
+
+  ## @vultisig/cli
+  - Auto-TTY JSON output (`--output`, `--ci`, `--quiet`, `--fields`, `--non-interactive`)
+  - Versioned `{ success, v: 1, data }` envelope and typed error envelope with exit codes 0-7
+  - Safety: fixed `swap`/`send`/`execute`/`rujira swap`/`rujira withdraw` auto-executing in JSON mode; `--yes` now required uniformly
+  - `--dry-run` coverage across all mutating commands
+  - `vsig schema` machine-readable command introspection
+  - Auth: replaced `keytar` with `@napi-rs/keyring`, encrypted-file fallback for headless environments (AES-256-GCM + async scrypt)
+
+  ## @vultisig/client-shared (new package)
+
+  Shared client infrastructure for `@vultisig/cli` and `@vultisig/mcp`: auth setup, config store, credential store (keyring + file fallback), tool descriptions, vault discovery.
+
+  ## @vultisig/sdk
+  - `VaultBase.send()` and `VaultBase.swap()` accept `amount: 'max'`
+  - `SwapService` rejects quotes with near-zero output to guard against bad provider routes
+  - `FiatValueService.fetchTokenPrice` returns `0` for non-EVM chains instead of throwing (effective behavior identical — `getPortfolioValue` already caught the throw)
+  - `ServerManager`: removed stdout `console.log` calls that corrupted JSON output; raised `waitForPeers` timeout from 30s to 120s and tightened poll interval from 2s to 500ms
+
+  ## @vultisig/core-chain
+  - Narrowed EVM broadcast retry list to strings that genuinely indicate "same tx already in mempool under this hash" (`already known`, `transaction already exists`, `tx already in mempool`). Dropped strings that can silently swallow real broadcast failures (`nonce too low`, `transaction is temporarily banned`, `future transaction tries to replace pending`, `could not replace existing tx`)
+
+  ## @vultisig/core-mpc
+  - `maxInboundWaitTime` raised from 1 to 3 minutes for flaky networks
+  - Added 100ms sleep in `processInbound` recursion to prevent hot-looping on empty inbound
+  - Setup message polling: same 10-second budget, polls 5× more often (50 × 200ms vs 10 × 1000ms)
+
 ## 1.2.0
 
 ### Minor Changes

@@ -1,5 +1,147 @@
 # @vultisig/cli
 
+## 0.21.0
+
+### Minor Changes
+
+- [#350](https://github.com/vultisig/vultisig-sdk/pull/350) [`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat: cosmos-sdk staking module - generic Delegate/Undelegate/BeginRedelegate/WithdrawDelegatorReward + LCD queries
+
+  Adds the cosmos-sdk staking + distribution module to the SDK, generic across every ibcEnabled cosmos chain we support (Cosmos Hub, Osmosis, Kujira, Terra, TerraClassic, Akash, Noble, Dydx).
+
+  **Signing primitives** (`@vultisig/sdk` -> `chains.cosmos.buildCosmosStakingTx`):
+  - `MsgDelegate`, `MsgUndelegate`, `MsgBeginRedelegate`, `MsgWithdrawDelegatorReward`
+  - Hand-rolled RN-safe protobuf (no cosmjs runtime dep) mirroring the existing `buildCosmosWasmExecuteTx` pattern
+  - Multi-msg batch txs supported (e.g. claim rewards from many validators in one tx)
+  - Byte-for-byte round-trip verified against `cosmjs-types` canonical decoder
+
+  **LCD query helpers** (`@vultisig/sdk` top-level + `@vultisig/core-chain/chains/cosmos/staking/lcdQueries`):
+  - `getCosmosDelegations(chain, address)` -> per-validator balance + shares
+  - `getCosmosUnbondingDelegations(chain, address)` -> pending unbondings with completion time
+  - `getCosmosDelegatorRewards(chain, address)` -> per-validator rewards + total
+  - `getCosmosVestingAccount(chain, address)` -> Periodic / Continuous / Delayed detection (returns null otherwise)
+
+  ship-once, unlock-many: adding a future cosmos chain is a config-only change.
+
+  34 new unit tests including 4 real cosmoshub fixtures captured from `cosmos1a8l3srqyk5krvzhkt7cyzy52yxcght6322w2qy`.
+
+### Patch Changes
+
+- Updated dependencies [[`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3)]:
+  - @vultisig/sdk@0.21.0
+  - @vultisig/client-shared@0.2.5
+  - @vultisig/rujira@16.0.0
+
+## 0.20.0
+
+### Patch Changes
+
+- Updated dependencies [[`1d1c02c`](https://github.com/vultisig/vultisig-sdk/commit/1d1c02c37e58340b0617eec3a5e44909efc9b452)]:
+  - @vultisig/sdk@0.20.0
+  - @vultisig/client-shared@0.2.4
+  - @vultisig/rujira@15.0.0
+
+## 0.19.0
+
+### Patch Changes
+
+- Updated dependencies [[`77410fb`](https://github.com/vultisig/vultisig-sdk/commit/77410fb28f53dd558f05e5634aadba6a9547ee0f), [`c5f9c7b`](https://github.com/vultisig/vultisig-sdk/commit/c5f9c7bcac80d30f0b5e086c9e6860eaa0cf79a9)]:
+  - @vultisig/core-chain@1.4.1
+  - @vultisig/sdk@0.19.0
+  - @vultisig/client-shared@0.2.3
+  - @vultisig/rujira@14.0.0
+
+## 0.18.0
+
+### Patch Changes
+
+- Updated dependencies [[`ef2ffbe`](https://github.com/vultisig/vultisig-sdk/commit/ef2ffbecf5f2b3af69172d34f3fda25055f4e112), [`d9399c7`](https://github.com/vultisig/vultisig-sdk/commit/d9399c77a932f0ecc9a2e6acec5d8457aa199444), [`4af5bb8`](https://github.com/vultisig/vultisig-sdk/commit/4af5bb8043da7dab15b5e1a135e5195d2dd1d7cc), [`2018787`](https://github.com/vultisig/vultisig-sdk/commit/2018787f8101ea9a98e975c0e7477245c3f86fad), [`f52057b`](https://github.com/vultisig/vultisig-sdk/commit/f52057b4af859018d1c180fa6db9ce15e153409f), [`6f1f8b2`](https://github.com/vultisig/vultisig-sdk/commit/6f1f8b2d9a69b8542da776f69fbddba6eb35bd3e)]:
+  - @vultisig/core-chain@1.4.0
+  - @vultisig/rujira@13.0.0
+  - @vultisig/sdk@0.18.0
+  - @vultisig/client-shared@0.2.2
+
+## 0.17.0
+
+### Minor Changes
+
+- [#280](https://github.com/vultisig/vultisig-sdk/pull/280) [`5aef564`](https://github.com/vultisig/vultisig-sdk/commit/5aef564309aeeede5da250e03447e0a3da0a12ab) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add THORChain LP agent actions (`thorchain_pool_info`, `thorchain_add_liquidity`, `thorchain_remove_liquidity`) to the CLI executor and document them in AGENTS.md. Fix `@vultisig/lib-utils` ESM imports to directory entrypoints so Node resolves `dist` correctly.
+
+### Patch Changes
+
+- Updated dependencies [[`219cb00`](https://github.com/vultisig/vultisig-sdk/commit/219cb00898deeaac418945a89c1d243f25aae152)]:
+  - @vultisig/sdk@0.17.0
+  - @vultisig/core-chain@1.3.1
+  - @vultisig/client-shared@0.2.1
+  - @vultisig/rujira@12.0.0
+
+## 0.16.0
+
+### Minor Changes
+
+- [#204](https://github.com/vultisig/vultisig-sdk/pull/204) [`0388700`](https://github.com/vultisig/vultisig-sdk/commit/03887009b7579fc0b193d068d4a205cdd3b7c214) Thanks [@premiumjibles](https://github.com/premiumjibles)! - feat(cli): agent-friendly CLI + new @vultisig/mcp package
+
+  ## @vultisig/cli
+  - Auto-TTY JSON output (`--output`, `--ci`, `--quiet`, `--fields`, `--non-interactive`)
+  - Versioned `{ success, v: 1, data }` envelope and typed error envelope with exit codes 0-7
+  - Safety: fixed `swap`/`send`/`execute`/`rujira swap`/`rujira withdraw` auto-executing in JSON mode; `--yes` now required uniformly
+  - `--dry-run` coverage across all mutating commands
+  - `vsig schema` machine-readable command introspection
+  - Auth: replaced `keytar` with `@napi-rs/keyring`, encrypted-file fallback for headless environments (AES-256-GCM + async scrypt)
+
+  ## @vultisig/client-shared (new package)
+
+  Shared client infrastructure for `@vultisig/cli` and `@vultisig/mcp`: auth setup, config store, credential store (keyring + file fallback), tool descriptions, vault discovery.
+
+  ## @vultisig/sdk
+  - `VaultBase.send()` and `VaultBase.swap()` accept `amount: 'max'`
+  - `SwapService` rejects quotes with near-zero output to guard against bad provider routes
+  - `FiatValueService.fetchTokenPrice` returns `0` for non-EVM chains instead of throwing (effective behavior identical — `getPortfolioValue` already caught the throw)
+  - `ServerManager`: removed stdout `console.log` calls that corrupted JSON output; raised `waitForPeers` timeout from 30s to 120s and tightened poll interval from 2s to 500ms
+
+  ## @vultisig/core-chain
+  - Narrowed EVM broadcast retry list to strings that genuinely indicate "same tx already in mempool under this hash" (`already known`, `transaction already exists`, `tx already in mempool`). Dropped strings that can silently swallow real broadcast failures (`nonce too low`, `transaction is temporarily banned`, `future transaction tries to replace pending`, `could not replace existing tx`)
+
+  ## @vultisig/core-mpc
+  - `maxInboundWaitTime` raised from 1 to 3 minutes for flaky networks
+  - Added 100ms sleep in `processInbound` recursion to prevent hot-looping on empty inbound
+  - Setup message polling: same 10-second budget, polls 5× more often (50 × 200ms vs 10 × 1000ms)
+
+- [#290](https://github.com/vultisig/vultisig-sdk/pull/290) [`83fe4c3`](https://github.com/vultisig/vultisig-sdk/commit/83fe4c3c58637aea4823d0eaa7f21d4c5cdf3dc7) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add `@vultisig/sdk/vite` helper plugin so Vite consumers exclude wasm glue packages from `optimizeDeps`, and harden dist ESM relative import rewriting with tests.
+
+### Patch Changes
+
+- Updated dependencies [[`0388700`](https://github.com/vultisig/vultisig-sdk/commit/03887009b7579fc0b193d068d4a205cdd3b7c214), [`83fe4c3`](https://github.com/vultisig/vultisig-sdk/commit/83fe4c3c58637aea4823d0eaa7f21d4c5cdf3dc7)]:
+  - @vultisig/client-shared@0.2.0
+  - @vultisig/sdk@0.16.0
+  - @vultisig/rujira@11.0.0
+
+## 0.15.4
+
+### Patch Changes
+
+- [#276](https://github.com/vultisig/vultisig-sdk/pull/276) [`59382c1`](https://github.com/vultisig/vultisig-sdk/commit/59382c1859512fbd362962ede5e92b100d3a5921) Thanks [@rcoderdev](https://github.com/rcoderdev)! - feat(cli): structured machine-readable errors for agent ask, pipe, and executor
+  - `agent ask --json` failures include stable `code` with existing `error` string
+  - NDJSON pipe `error` events and failed `tool_result` lines include `code`
+  - executor `ActionResult` failures carry `AgentErrorCode`; SSE errors accept optional backend `code`
+  - document error codes in CLI README
+
+- Updated dependencies [[`59382c1`](https://github.com/vultisig/vultisig-sdk/commit/59382c1859512fbd362962ede5e92b100d3a5921)]:
+  - @vultisig/sdk@0.15.4
+  - @vultisig/rujira@10.0.0
+
+## 0.15.2
+
+### Patch Changes
+
+- [#263](https://github.com/vultisig/vultisig-sdk/pull/263) [`6585c38`](https://github.com/vultisig/vultisig-sdk/commit/6585c38431db063f600e133d1a23f84b7c19e934) Thanks [@rcoderdev](https://github.com/rcoderdev)! - fix(cli): align agent executor with backend payloads and harden action handling
+  - model `tx_ready` / non-streaming transaction payloads with `TxReadyPayload`
+  - optional `vultisig` on agent config for shared SDK state (e.g. address book)
+  - executor improvements (chain locks, calldata resolution, EVM gas refresh) and unit tests
+
+- Updated dependencies [[`6585c38`](https://github.com/vultisig/vultisig-sdk/commit/6585c38431db063f600e133d1a23f84b7c19e934)]:
+  - @vultisig/sdk@0.15.2
+  - @vultisig/rujira@10.0.0
+
 ## 0.15.0
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/lib-utils",
-  "version": "0.9.1",
+  "version": "0.9.3",
   "description": "Shared utilities for Vultisig core packages",
   "license": "MIT",
   "repository": {
@@ -656,6 +656,6 @@
   },
   "dependencies": {
     "long": "^5.3.2",
-    "viem": "^2.47.4"
+    "viem": "^2.48.4"
   }
 }

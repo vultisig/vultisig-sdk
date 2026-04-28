@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
 
 /**
@@ -157,7 +158,7 @@ describe('AgentClient.sendMessageStream', () => {
     const client = new AgentClient('http://example.com')
     await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onError })
 
-    expect(onError).toHaveBeenCalledWith('something broke')
+    expect(onError).toHaveBeenCalledWith('something broke', AgentErrorCode.UNKNOWN_ERROR)
   })
 
   it('ignores bare colon comment lines', async () => {
@@ -179,5 +180,96 @@ describe('AgentClient.sendMessageStream', () => {
     const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
 
     expect(result.fullText).toBe('recovered')
+  })
+
+  // AI SDK v5 streaming: backend sends each event as a raw `data:` line with
+  // the event type in the JSON payload, not via an `event:` header. This is
+  // the format v-pxuw's agent-backend emits.
+  it('routes AI SDK v5 (type-in-payload) events to the right callbacks', async () => {
+    const onTextDelta = vi.fn()
+    const onTitle = vi.fn()
+    const onMessage = vi.fn()
+
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      'data: {"type":"text-start","id":"text-1"}\n\n',
+      'data: {"type":"text-delta","id":"text-1","delta":"Hello "}\n\n',
+      'data: {"type":"text-delta","id":"text-1","delta":"world"}\n\n',
+      'data: {"type":"text-end","id":"text-1"}\n\n',
+      'data: {"type":"data-title","data":{"title":"Greeting"}}\n\n',
+      'data: {"type":"data-message","data":{"message":{"id":"m-1","conversation_id":"c1","role":"assistant","content":"Hello world","content_type":"text","created_at":"2026-04-17T00:00:00Z"}}}\n\n',
+      'data: {"type":"data-usage","data":{"total_tokens":10}}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream(
+      'c1',
+      { public_key: 'pk', content: 'hi' },
+      { onTextDelta, onTitle, onMessage }
+    )
+
+    expect(result.fullText).toBe('Hello world')
+    expect(result.message?.content).toBe('Hello world')
+    expect(onTextDelta).toHaveBeenCalledTimes(2)
+    expect(onTextDelta).toHaveBeenNthCalledWith(1, 'Hello ')
+    expect(onTextDelta).toHaveBeenNthCalledWith(2, 'world')
+    expect(onTitle).toHaveBeenCalledWith('Greeting')
+    expect(onMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('derives tool_progress status from v1 frame type and resolves toolName via toolCallId cache', async () => {
+    const onToolProgress = vi.fn()
+
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"tool-input-start","toolCallId":"call-1","toolName":"get_balance"}\n\n',
+      'data: {"type":"tool-output-available","toolCallId":"call-1","output":{"ok":true}}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onToolProgress })
+
+    expect(onToolProgress).toHaveBeenCalledTimes(2)
+    expect(onToolProgress).toHaveBeenNthCalledWith(1, 'get_balance', 'running', undefined)
+    expect(onToolProgress).toHaveBeenNthCalledWith(2, 'get_balance', 'done', undefined)
+  })
+
+  it('legacy tool_progress events with inline status still route unchanged', async () => {
+    const onToolProgress = vi.fn()
+
+    globalThis.fetch = mockFetchSSE([
+      'event: tool_progress\ndata: {"tool":"get_balance","status":"running","label":"fetching"}\n\n',
+      'event: tool_progress\ndata: {"tool":"get_balance","status":"done"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onToolProgress })
+
+    expect(onToolProgress).toHaveBeenCalledTimes(2)
+    expect(onToolProgress).toHaveBeenNthCalledWith(1, 'get_balance', 'running', 'fetching')
+    expect(onToolProgress).toHaveBeenNthCalledWith(2, 'get_balance', 'done', undefined)
+  })
+
+  it('ignores v1 tool_progress frames where tool is not a string', async () => {
+    const onToolProgress = vi.fn()
+
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"tool-input-start","toolCallId":"call-bad","tool":{"nested":"object"}}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onToolProgress })
+
+    expect(onToolProgress).not.toHaveBeenCalled()
+  })
+
+  it('handles v1 error events via errorText', async () => {
+    const onError = vi.fn()
+    globalThis.fetch = mockFetchSSE(['data: {"type":"error","errorText":"boom"}\n\n'])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onError })
+
+    expect(onError).toHaveBeenCalledWith('boom', AgentErrorCode.UNKNOWN_ERROR)
   })
 })

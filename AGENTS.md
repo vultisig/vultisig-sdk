@@ -46,28 +46,31 @@ console.log(`TX: ${result.txHash}`)
 
 ## Available Actions
 
-When using `agent ask` or `--via-agent`, the agent backend can execute these actions locally on the CLI:
+When using `agent ask` or `--via-agent`, the agent backend proposes actions; the CLI **executor** runs the ones implemented in `clients/cli/src/agent/executor.ts`. Actions with no local implementation return a structured failure (`success: false`) and may still be handled by the backend in other modes.
 
-| Action | Description |
-|--------|-------------|
-| `get_balances` | Fetch balances for all chains |
-| `get_portfolio` | Multi-chain portfolio with fiat values |
-| `get_market_price` | Token price lookup (backend-side) |
-| `search_token` | Search token registry |
-| `build_send_tx` | Build a send transaction |
-| `build_swap_tx` | Build a swap transaction |
-| `build_custom_tx` | Build a custom contract call |
-| `sign_tx` | Sign and broadcast (auto-triggered after build) |
-| `sign_typed_data` | EIP-712 typed data signing |
-| `read_evm_contract` | Read EVM contract state |
-| `scan_tx` | Security scan via Blockaid |
-| `add_chain` / `remove_chain` | Enable/disable chains |
-| `add_coin` / `remove_coin` | Add/remove tokens |
-| `address_book_add` / `address_book_remove` | Manage saved addresses |
-| `get_address_book` | List saved addresses |
-| `build_tx` | Build a generic transaction |
-| `list_vaults` | List available vaults |
-| `thorchain_query` | Query THORChain state (backend-side) |
+| Action | Description | Runs where |
+|--------|-------------|------------|
+| `get_balances` | Fetch balances for all chains | local |
+| `get_portfolio` | Multi-chain portfolio with fiat values | local |
+| `get_market_price` | Token price lookup | backend |
+| `search_token` | Search known token registry (SDK) | local |
+| `build_send_tx` | Build a send transaction | local |
+| `build_swap_tx` | Build a swap transaction | local |
+| `build_custom_tx` | Build a custom contract call | local |
+| `sign_tx` | Sign and broadcast (auto-triggered after build); may sign a server-built payload after `tx_ready` | both |
+| `sign_typed_data` | EIP-712 typed data signing | local |
+| `read_evm_contract` | Read EVM contract state | local |
+| `scan_tx` | Security scan via Blockaid | backend |
+| `add_chain` / `remove_chain` | Enable/disable chains | local |
+| `add_coin` / `remove_coin` | Add/remove tokens | local |
+| `address_book_add` / `address_book_remove` | Manage saved addresses | backend |
+| `get_address_book` | List saved addresses (requires CLI `AgentConfig.vultisig`) | local |
+| `build_tx` | Build a generic transaction | local |
+| `list_vaults` | List available vaults | local |
+| `thorchain_query` | Query THORChain state | backend |
+| `thorchain_pool_info` | THORChain pool stats from Midgard (no signing) | local |
+| `thorchain_add_liquidity` | Build RUNE-side LP add (`prepareSendTx` + `sign_tx`) | local |
+| `thorchain_remove_liquidity` | Build LP withdraw memo + dust RUNE send (`prepareSendTx` + `sign_tx`) | local |
 
 ## Key Resources
 

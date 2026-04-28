@@ -1,10 +1,18 @@
-import { ripemd160 } from '@noble/hashes/legacy.js'
-import { sha256 } from '@noble/hashes/sha2.js'
+import { ripemd160 } from '@noble/hashes/ripemd160'
+import { sha256 } from '@noble/hashes/sha256'
 
 import { btcAddressTypeCircuit, QbtcClaimCircuit } from './BtcAddressType'
 import { detectBtcAddressType } from './detectBtcAddressType'
 
 const claimSuffix = 'qbtc-claim-v1'
+
+/**
+ * Domain-separation prefix for the ECDSA + Hash160 claim circuit
+ * (`BTCPubKeyOwnershipCircuit` post btcq-org/qbtc#148). Covers P2PKH,
+ * P2WPKH, P2SH-P2WPKH, and P2WSH. Must match `ClaimTagECDSAHash160` on the
+ * chain side (`x/qbtc/zk/message.go`).
+ */
+const ecdsaHash160Tag = 'ecdsa-hash160:'
 
 /** Hash160 = RIPEMD160(SHA256(data)), the standard Bitcoin hash. */
 const hash160 = (data: Uint8Array): Uint8Array => ripemd160(sha256(data))
@@ -55,10 +63,12 @@ type ComputeClaimMessageHashInput = {
  * Computes the final MessageHash for the QBTC claim.
  *
  * ```
- * MessageHash = SHA256(prefix + addressHash + qbtcAddressHash + chainIdHash + "qbtc-claim-v1")
+ * MessageHash = SHA256("ecdsa-hash160:" + addressHash + qbtcAddressHash + chainIdHash + "qbtc-claim-v1")
  * ```
  *
- * Where prefix is `"ecdsa:"` or `"schnorr:"` depending on the BTC address type.
+ * The domain-separation prefix must match `ClaimTagECDSAHash160` on the
+ * chain (`x/qbtc/zk/message.go`). Schnorr/Taproot claims will use a
+ * distinct tag once the chain defines one — see btcq-org/qbtc#148.
  */
 export const computeClaimMessageHash = ({
   addressHash,
@@ -66,11 +76,14 @@ export const computeClaimMessageHash = ({
   chainIdHash,
   circuit,
 }: ComputeClaimMessageHashInput): Uint8Array => {
-  const expectedAddressHashLength = circuit === 'schnorr' ? 32 : 20
-  if (addressHash.length !== expectedAddressHashLength) {
+  if (circuit === 'schnorr') {
     throw new Error(
-      `addressHash must be ${expectedAddressHashLength} bytes for ${circuit}`
+      'Schnorr / Taproot claim circuit is not yet supported on the QBTC chain'
     )
+  }
+
+  if (addressHash.length !== 20) {
+    throw new Error('addressHash must be 20 bytes for ecdsa-hash160')
   }
   if (qbtcAddressHash.length !== 32) {
     throw new Error('qbtcAddressHash must be 32 bytes')
@@ -80,7 +93,7 @@ export const computeClaimMessageHash = ({
   }
 
   const encoder = new TextEncoder()
-  const prefix = encoder.encode(`${circuit}:`)
+  const prefix = encoder.encode(ecdsaHash160Tag)
   const suffix = encoder.encode(claimSuffix)
 
   const message = new Uint8Array(

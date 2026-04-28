@@ -17,6 +17,7 @@ import Table from 'cli-table3'
 
 import type { AgentConfig } from '../agent'
 import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, PipeInterface } from '../agent'
+import { normalizeAgentError } from '../agent/agentErrors'
 import type { CommandContext } from '../core'
 import { isJsonOutput, outputJson, printResult, setSilentMode } from '../lib/output'
 
@@ -35,6 +36,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
   const config: AgentConfig = {
     backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com',
     vaultName: vault.name,
+    vultisig: ctx.sdk,
     password: options.password,
     viaAgent: options.viaAgent,
     sessionId: options.sessionId,
@@ -53,8 +55,9 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
       await session.initialize(callbacks)
       const addresses = session.getVaultAddresses()
       await pipe.start(vault.name, addresses)
-    } catch (err: any) {
-      process.stdout.write(JSON.stringify({ type: 'error', message: err.message }) + '\n')
+    } catch (err: unknown) {
+      const { code, message } = normalizeAgentError(err)
+      process.stdout.write(JSON.stringify({ type: 'error', message, code }) + '\n')
       process.exit(1)
     }
   } else {
@@ -65,8 +68,9 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     try {
       await session.initialize(callbacks)
       await tui.start()
-    } catch (err: any) {
-      console.error(`Agent error: ${err.message}`)
+    } catch (err: unknown) {
+      const { message } = normalizeAgentError(err)
+      console.error(`Agent error: ${message}`)
       process.exit(1)
     }
   }
@@ -114,6 +118,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     const config: AgentConfig = {
       backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com',
       vaultName: vault.name,
+      vultisig: ctx.sdk,
       password: options.password,
       sessionId: options.session,
       verbose: options.verbose,
@@ -127,15 +132,13 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     await session.initialize(callbacks)
     const result = await ask.ask(message)
 
-    if (options.json) {
-      process.stdout.write(
-        JSON.stringify({
-          session_id: result.sessionId,
-          response: result.response,
-          tool_calls: result.toolCalls,
-          transactions: result.transactions,
-        }) + '\n'
-      )
+    if (options.json || isJsonOutput()) {
+      outputJson({
+        session_id: result.sessionId,
+        response: result.response,
+        tool_calls: result.toolCalls,
+        transactions: result.transactions,
+      })
     } else {
       // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
       process.stdout.write(`session:${result.sessionId}\n`)
@@ -153,11 +156,12 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
         }
       }
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const { code, message } = normalizeAgentError(err)
     if (options.json) {
-      process.stdout.write(JSON.stringify({ error: err.message }) + '\n')
+      process.stdout.write(JSON.stringify({ error: message, code }) + '\n')
     } else {
-      process.stderr.write(`Error: ${err.message}\n`)
+      process.stderr.write(`Error: ${message} [${code}]\n`)
     }
     process.exit(1)
   } finally {

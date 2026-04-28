@@ -1,4 +1,4 @@
-import { getMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mpc-types'
+import { ensureMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mpc-types'
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
 import { getKeygenThreshold } from '../getKeygenThreshold'
@@ -182,7 +182,7 @@ export class Schnorr {
     console.log('session id:', this.sessionId)
     this.isKeygenComplete = false
     try {
-      const engine = getMpcEngine().schnorr
+      const engine = (await ensureMpcEngine()).schnorr
       let session: MpcSession<MpcKeyshare>
       if ('create' in this.keygenOperation) {
         session = await engine.createKeygenSession(this.setupMessage, this.localPartyId)
@@ -245,7 +245,7 @@ export class Schnorr {
   ) {
     console.log('startReshare schnorr, attempt:', attempt)
     this.isKeygenComplete = false
-    const engine = getMpcEngine().schnorr
+    const engine = (await ensureMpcEngine()).schnorr
     let localKeyshare: MpcKeyshare | null = null
     if (rawSchnorrKeyshare !== undefined && rawSchnorrKeyshare.length > 0) {
       localKeyshare = engine.keyshareFromBytes(
@@ -362,7 +362,7 @@ export class Schnorr {
       return
     }
 
-    const engine = getMpcEngine().schnorr
+    const engine = (await ensureMpcEngine()).schnorr
     const privateKey = Buffer.from(hexPrivateKey, 'hex')
     const chainCode = Buffer.from(hexChainCode, 'hex')
     const importResult = await engine.createKeyImportInitiator(
@@ -398,7 +398,7 @@ export class Schnorr {
     console.log('startKeyImport schnorr, attempt:', attempt)
     this.isKeygenComplete = false
     try {
-      const engine = getMpcEngine().schnorr
+      const engine = (await ensureMpcEngine()).schnorr
       let session: MpcSession<MpcKeyshare> | null = null
       const effectiveSetupId = setupMessageId ?? 'eddsa_key_import'
       if (this.isInitiateDevice) {

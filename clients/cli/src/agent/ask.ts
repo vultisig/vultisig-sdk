@@ -11,6 +11,7 @@
  *   vultisig agent ask "What is my HYPE balance?" --vault t1 --password 1
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
+import type { AgentErrorCode } from './agentErrors'
 import type { AgentSession } from './session'
 import type { Suggestion, UICallbacks } from './types'
 
@@ -22,6 +23,7 @@ export type AskResult = {
     success: boolean
     data?: Record<string, unknown>
     error?: string
+    code?: AgentErrorCode
   }>
   transactions: Array<{
     hash: string
@@ -59,10 +61,17 @@ export class AskInterface {
         }
       },
 
-      onToolResult: (_id: string, action: string, success: boolean, data?: Record<string, unknown>, error?: string) => {
-        this.toolCalls.push({ action, success, data, error })
+      onToolResult: (
+        _id: string,
+        action: string,
+        success: boolean,
+        data?: Record<string, unknown>,
+        error?: string,
+        code?: AgentErrorCode
+      ) => {
+        this.toolCalls.push({ action, success, data, error, code })
         if (this.verbose) {
-          const status = success ? 'ok' : `error: ${error}`
+          const status = success ? 'ok' : `error: ${error}${code ? ` [${code}]` : ''}`
           process.stderr.write(`[tool] ${action}: ${status}\n`)
         }
       },
@@ -86,8 +95,8 @@ export class AskInterface {
         }
       },
 
-      onError: (message: string) => {
-        process.stderr.write(`[error] ${message}\n`)
+      onError: (message: string, code: AgentErrorCode) => {
+        process.stderr.write(`[error] ${message} [${code}]\n`)
       },
 
       onDone: () => {

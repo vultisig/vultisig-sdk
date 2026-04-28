@@ -84,11 +84,7 @@ describe('TransactionBuilder', () => {
           createWithData: vi.fn(),
         },
       }),
-      initializeDkls: vi.fn().mockResolvedValue(undefined),
-      initializeSchnorr: vi.fn().mockResolvedValue(undefined),
-      initialize: vi.fn().mockResolvedValue(undefined),
-      getStatus: vi.fn().mockReturnValue({ walletCore: true, dkls: true, schnorr: true }),
-    }
+    } as WasmProvider
 
     builder = new TransactionBuilder(mockVaultData, mockWasmProvider)
   })

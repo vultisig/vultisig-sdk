@@ -1,4 +1,4 @@
-import { extractErrorMsg } from './extractErrorMsg'
+import { extractErrorMsg } from './extractErrorMsg/index.js'
 
 export const isInError = (error: unknown, ...msgs: string[]): boolean => {
   const errorMessage = extractErrorMsg(error).toLowerCase()

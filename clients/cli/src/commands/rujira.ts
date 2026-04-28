@@ -2,7 +2,13 @@
  * Rujira Commands - FIN swap, secured assets, deposit/withdraw helpers
  */
 
-import { getRoutesSummary, listEasyRoutes, RujiraClient, VultisigRujiraProvider } from '@vultisig/rujira'
+import {
+  getRoutesSummary,
+  listEasyRoutes,
+  RujiraClient,
+  VultisigRujiraProvider,
+  type VultisigVault,
+} from '@vultisig/rujira'
 
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
@@ -17,7 +23,7 @@ export type RujiraBaseOptions = {
 async function createRujiraClient(ctx: CommandContext, options: RujiraBaseOptions = {}): Promise<RujiraClient> {
   const vault = await ctx.ensureActiveVault()
 
-  const provider = new VultisigRujiraProvider(vault)
+  const provider = new VultisigRujiraProvider(vault as VultisigVault)
 
   const client = new RujiraClient({
     signer: provider,
@@ -191,6 +197,7 @@ export type RujiraSwapOptions = RujiraBaseOptions & {
   amount: string
   slippageBps?: number
   yes?: boolean
+  dryRun?: boolean
   destination?: string
 }
 
@@ -214,22 +221,34 @@ export async function executeRujiraSwap(ctx: CommandContext, options: RujiraSwap
   })
   quoteSpinner.succeed('Quote received')
 
-  if (isJsonOutput()) {
-    const result = await client.swap.execute(quote, { slippageBps: options.slippageBps })
-    outputJson({ quote, result })
+  // Dry-run: return quote without executing
+  if (options.dryRun) {
+    if (isJsonOutput()) {
+      outputJson({ dryRun: true, quote })
+    } else {
+      printResult('FIN Swap Preview (dry-run)')
+      printResult(`  From:        ${options.fromAsset}`)
+      printResult(`  To:          ${options.toAsset}`)
+      printResult(`  Amount (in): ${options.amount}`)
+      printResult(`  Expected out:${quote.expectedOutput}`)
+      printResult(`  Min out:     ${quote.minimumOutput}`)
+      printResult(`  Contract:    ${quote.contractAddress}`)
+    }
     return
   }
 
-  printResult('FIN Swap Preview')
-  printResult(`  From:        ${options.fromAsset}`)
-  printResult(`  To:          ${options.toAsset}`)
-  printResult(`  Amount (in): ${options.amount}`)
-  printResult(`  Expected out:${quote.expectedOutput}`)
-  printResult(`  Min out:     ${quote.minimumOutput}`)
-  printResult(`  Contract:    ${quote.contractAddress}`)
+  if (!isJsonOutput()) {
+    printResult('FIN Swap Preview')
+    printResult(`  From:        ${options.fromAsset}`)
+    printResult(`  To:          ${options.toAsset}`)
+    printResult(`  Amount (in): ${options.amount}`)
+    printResult(`  Expected out:${quote.expectedOutput}`)
+    printResult(`  Min out:     ${quote.minimumOutput}`)
+    printResult(`  Contract:    ${quote.contractAddress}`)
 
-  if (quote.warning) {
-    warn(quote.warning)
+    if (quote.warning) {
+      warn(quote.warning)
+    }
   }
 
   if (!options.yes) {
@@ -241,7 +260,11 @@ export async function executeRujiraSwap(ctx: CommandContext, options: RujiraSwap
   const result = await client.swap.execute(quote, { slippageBps: options.slippageBps })
   execSpinner.succeed('Swap submitted')
 
-  printResult(`Tx Hash: ${result.txHash}`)
+  if (isJsonOutput()) {
+    outputJson({ quote, result })
+  } else {
+    printResult(`Tx Hash: ${result.txHash}`)
+  }
 }
 
 // ============================================================================
@@ -253,6 +276,7 @@ export type RujiraWithdrawOptions = RujiraBaseOptions & {
   amount: string
   l1Address: string
   yes?: boolean
+  dryRun?: boolean
   maxFeeBps?: number
 }
 
@@ -273,18 +297,29 @@ export async function executeRujiraWithdraw(ctx: CommandContext, options: Rujira
   })
   prepSpinner.succeed('Withdrawal prepared')
 
-  if (isJsonOutput()) {
-    const result = await client.withdraw.execute(prepared)
-    outputJson({ prepared, result })
+  // Dry-run: return prepared data without executing
+  if (options.dryRun) {
+    if (isJsonOutput()) {
+      outputJson({ dryRun: true, prepared })
+    } else {
+      printResult('Withdraw Preview (dry-run)')
+      printResult(`  Asset:       ${prepared.asset}`)
+      printResult(`  Amount:      ${prepared.amount}`)
+      printResult(`  Destination: ${prepared.destination}`)
+      printResult(`  Memo:        ${prepared.memo}`)
+      printResult(`  Est. fee:    ${prepared.estimatedFee}`)
+    }
     return
   }
 
-  printResult('Withdraw Preview')
-  printResult(`  Asset:       ${prepared.asset}`)
-  printResult(`  Amount:      ${prepared.amount}`)
-  printResult(`  Destination: ${prepared.destination}`)
-  printResult(`  Memo:        ${prepared.memo}`)
-  printResult(`  Est. fee:    ${prepared.estimatedFee}`)
+  if (!isJsonOutput()) {
+    printResult('Withdraw Preview')
+    printResult(`  Asset:       ${prepared.asset}`)
+    printResult(`  Amount:      ${prepared.amount}`)
+    printResult(`  Destination: ${prepared.destination}`)
+    printResult(`  Memo:        ${prepared.memo}`)
+    printResult(`  Est. fee:    ${prepared.estimatedFee}`)
+  }
 
   if (!options.yes) {
     warn('This command will broadcast a THORChain MsgDeposit withdrawal. Re-run with -y/--yes to proceed.')
@@ -295,5 +330,9 @@ export async function executeRujiraWithdraw(ctx: CommandContext, options: Rujira
   const result = await client.withdraw.execute(prepared)
   execSpinner.succeed('Withdrawal submitted')
 
-  printResult(`Tx Hash: ${result.txHash}`)
+  if (isJsonOutput()) {
+    outputJson({ prepared, result })
+  } else {
+    printResult(`Tx Hash: ${result.txHash}`)
+  }
 }

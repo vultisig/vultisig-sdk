@@ -1,5 +1,113 @@
 # @vultisig/rujira
 
+## 16.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3)]:
+  - @vultisig/sdk@0.21.0
+
+## 15.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`1d1c02c`](https://github.com/vultisig/vultisig-sdk/commit/1d1c02c37e58340b0617eec3a5e44909efc9b452)]:
+  - @vultisig/sdk@0.20.0
+
+## 14.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`c5f9c7b`](https://github.com/vultisig/vultisig-sdk/commit/c5f9c7bcac80d30f0b5e086c9e6860eaa0cf79a9)]:
+  - @vultisig/sdk@0.19.0
+
+## 13.0.0
+
+### Major Changes
+
+- [#299](https://github.com/vultisig/vultisig-sdk/pull/299) [`4af5bb8`](https://github.com/vultisig/vultisig-sdk/commit/4af5bb8043da7dab15b5e1a135e5195d2dd1d7cc) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(rujira)!: drop RujiraPerps
+
+  **BREAKING CHANGE.** The `RujiraPerps` module is removed. Its only
+  consumer was vultisig-mcp-ts' `src/tools/rujira/perps.ts`, which
+  [mcp-ts#36](https://github.com/vultisig/mcp-ts/pull/36) deleted
+  (commit `e5ecb58`). No known external consumers.
+
+  Removed:
+  - `RujiraPerps` class export
+  - `PerpsMarket` type export
+  - `PerpsTransactionParams` type export
+  - `client.perps` field on `RujiraClient`
+  - `@vultisig/rujira/perps` subpath export
+
+  No replacement API. Consumers that still need perps-style interactions
+  should open an issue — the module was a thin wrapper around on-chain
+  calls that can be reconstructed if there's demand.
+
+  All other Rujira surfaces (swap, orderbook, staking, ghost, deposit,
+  withdraw, discovery) are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`2018787`](https://github.com/vultisig/vultisig-sdk/commit/2018787f8101ea9a98e975c0e7477245c3f86fad), [`f52057b`](https://github.com/vultisig/vultisig-sdk/commit/f52057b4af859018d1c180fa6db9ce15e153409f)]:
+  - @vultisig/sdk@0.18.0
+
+## 12.1.0
+
+### Minor Changes
+
+- [#300](https://github.com/vultisig/vultisig-sdk/pull/300) [`2da432d`](https://github.com/vultisig/vultisig-sdk/commit/2da432d3e972802ee246584971c5abca05b49797) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(rujira): CCL (Custom Concentrated Liquidity) support
+
+  Rujira shipped [Custom Concentrated Liquidity](https://rujira.network/trade) on RUJI Trade
+  on 2026-04-20. This release adds SDK support for range-position management on
+  `rujira-fin` pair contracts via a new `range` ExecuteMsg variant.
+
+  New surface:
+  - **`client.range: RujiraRange`** — pure builders (no signer needed):
+    - `buildCreatePosition({ pairAddress, config, base, quote })`
+    - `buildDeposit({ pairAddress, idx, base, quote })`
+    - `buildWithdraw({ pairAddress, idx, share })`
+    - `buildClaim({ pairAddress, idx })`
+    - `buildTransfer({ pairAddress, idx, to })`
+    - `buildWithdrawAll({ pairAddress, idx })` — returns `RangeMultiTransactionParams`
+      with `[claim, withdraw('1')]`. Callers MUST sign + broadcast both msgs in a
+      single cosmos tx for atomicity (`wasm_execute_multi`).
+  - **GraphQL helpers** (against `api.vultisig.com/ruji/api/graphql`):
+    - `client.range.getPositions(owner)` — list all range positions
+    - `client.range.getPosition(pairAddress, idx)` — single position analytics
+    - `client.range.getPairAddress(base, quote)` — resolve FIN pair contract
+      from tickers / denoms (exact-match preferred, single-candidate fuzzy
+      match fallback; ambiguous hits throw `INVALID_PARAMS`)
+  - **`@vultisig/rujira/ccl` subpath export** — CCL math module ported from
+    rujira-ui (MIT): linear + quadratic weight models, √price Newton-Raphson
+    price recovery, bucket distribution generator. 90 tests pass.
+  - **`@vultisig/rujira/range` subpath export** — just the RujiraRange class
+    - types for consumers that want to avoid pulling the full entry point.
+  - **`RujiraErrorCode.INVALID_PARAMS`** — new error code for the input
+    validation surface (Decimal12 for config fields, Decimal4 + `(0, 1]` for
+    withdraw share, `idx` strictly `/^\d+$/`, `thor1` prefix on pair addresses).
+
+  No change to existing `swap` / `orderbook` / `staking` / `ghost` / `deposit` /
+  `withdraw` / `discovery` surfaces.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @vultisig/sdk@0.17.1
+
+## 12.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`219cb00`](https://github.com/vultisig/vultisig-sdk/commit/219cb00898deeaac418945a89c1d243f25aae152)]:
+  - @vultisig/sdk@0.17.0
+
+## 11.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`0388700`](https://github.com/vultisig/vultisig-sdk/commit/03887009b7579fc0b193d068d4a205cdd3b7c214), [`83fe4c3`](https://github.com/vultisig/vultisig-sdk/commit/83fe4c3c58637aea4823d0eaa7f21d4c5cdf3dc7)]:
+  - @vultisig/sdk@0.16.0
+
 ## 10.0.0
 
 ### Patch Changes

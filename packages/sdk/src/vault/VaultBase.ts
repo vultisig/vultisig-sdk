@@ -14,6 +14,7 @@ import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
 import type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
+import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { vaultConfig } from '@vultisig/core-config'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
@@ -33,6 +34,11 @@ import { DiscountTierService } from '../services/DiscountTierService'
 import { FiatValueService } from '../services/FiatValueService'
 import type { PasswordCacheService } from '../services/PasswordCacheService'
 import type { Storage } from '../storage/types'
+// Import prep helpers from per-file paths, not the `tools/prep` barrel: the
+// barrel pulls in cosmos.ts → buildCosmosPayload → @vultisig/core-chain THORChain
+// modules at module-load time, which breaks vitest setups that mock chainFeeCoin.
+import { computeMaxSendFromBalance } from '../tools/prep/maxSend'
+import { vaultDataToIdentity } from '../tools/prep/types'
 // Types
 import {
   Balance,
@@ -1020,17 +1026,25 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     memo?: string
     feeSettings?: FeeSettings
   }): Promise<MaxSendAmount> {
-    const balanceResult = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
-    const balance = BigInt(balanceResult.amount)
-
-    const fee = await this.transactionBuilder.estimateSendFee({
-      ...params,
-      amount: balance,
-    })
-
-    const maxSendable = getMaxValue(balance, fee)
-
-    return { balance, fee, maxSendable }
+    const walletCore = await this.wasmProvider.getWalletCore()
+    // Validate receiver before fetching balance so bad input doesn't waste a
+    // network round-trip. computeMaxSendFromBalance re-validates for the
+    // vault-free path; two checks at different layers is acceptable.
+    if (!isValidAddress({ chain: params.coin.chain, address: params.receiver, walletCore })) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`
+      )
+    }
+    // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
+    // wrapping all fire. The vault-free `getMaxSendAmountFromKeys` skips these
+    // (no cache/events in the MCP / agent context); vault callers must not.
+    const balance = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    return computeMaxSendFromBalance(
+      vaultDataToIdentity(this.coreVault),
+      { ...params, balance: BigInt(balance.amount) },
+      walletCore
+    )
   }
 
   /**
@@ -1629,7 +1643,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { balances, totalValue: total.toFixed(2), currency }
   }
 
-  /** Send tokens. Set dryRun for fee estimate without signing. */
+  /** Send tokens. Use amount "max" to send entire balance minus fees. Set dryRun for fee estimate without signing. */
   async send(params: {
     chain: Chain
     to: string
@@ -1640,8 +1654,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }): Promise<SendResult> {
     const { chain, to, amount, symbol, memo, dryRun } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
-    const amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
+
+    let amountBigInt: bigint
+    if (amount === 'max') {
+      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo })
+      if (maxInfo.maxSendable <= 0n)
+        throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
+      amountBigInt = maxInfo.maxSendable
+    } else {
+      amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
+    }
+
     const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo })
 
     if (dryRun) {
@@ -1654,11 +1678,12 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       }
     }
 
-    const signature = await this.sign({ transaction: keysignPayload, chain })
+    const messageHashes = await this.extractMessageHashes(keysignPayload)
+    const signature = await this.sign({ transaction: keysignPayload, chain, messageHashes })
     return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
   }
 
-  /** Swap tokens. Set dryRun for quote without signing. */
+  /** Swap tokens. Use amount "max" to swap entire balance. Set dryRun for quote without signing. */
   async swap(params: {
     fromChain: Chain
     fromSymbol: string
@@ -1674,7 +1699,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
-    const normalizedAmount = this.validateHumanSwapAmount(amount, fromToken.decimals)
+    let resolvedAmount = amount
+    if (amount === 'max') {
+      const bal = await this.balanceService.getBalance(fromChain, fromToken.contractAddress)
+      resolvedAmount = this.formatUnits(BigInt(bal.amount), fromToken.decimals)
+      if (BigInt(bal.amount) <= 0n) throw new VaultError(VaultErrorCode.InvalidAmount, 'Zero balance — nothing to swap')
+    }
+    const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
     const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: normalizedAmount })
     if (dryRun) return { dryRun: true, quote }
@@ -1686,7 +1717,12 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       swapQuote: quote,
     })
     if (approvalPayload) {
-      const approvalSig = await this.sign({ transaction: approvalPayload, chain: fromChain })
+      const approvalHashes = await this.extractMessageHashes(approvalPayload)
+      const approvalSig = await this.sign({
+        transaction: approvalPayload,
+        chain: fromChain,
+        messageHashes: approvalHashes,
+      })
       const approvalHash = await this.broadcastTx({
         chain: fromChain,
         keysignPayload: approvalPayload,
@@ -1695,7 +1731,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       await this.waitForConfirmation(fromChain, approvalHash)
     }
 
-    const signature = await this.sign({ transaction: keysignPayload, chain: fromChain })
+    const messageHashes = await this.extractMessageHashes(keysignPayload)
+    const signature = await this.sign({ transaction: keysignPayload, chain: fromChain, messageHashes })
     return {
       dryRun: false,
       txHash: await this.broadcastTx({ chain: fromChain, keysignPayload, signature }),
@@ -1734,7 +1771,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (dryRun) return { dryRun: true, keysignPayload }
 
     const { chain } = params
-    const signature = await this.sign({ transaction: keysignPayload, chain })
+    const messageHashes = await this.extractMessageHashes(keysignPayload)
+    const signature = await this.sign({ transaction: keysignPayload, chain, messageHashes })
     return { dryRun: false, txHash: await this.broadcastTx({ chain, keysignPayload, signature }), chain }
   }
 
