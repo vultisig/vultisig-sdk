@@ -229,6 +229,50 @@ function buildMsgExecuteContract(
   return concat(...parts)
 }
 
+// cosmos.staking.v1beta1.MsgDelegate (also identical wire format to MsgUndelegate)
+//   string delegator_address = 1;
+//   string validator_address = 2;
+//   cosmos.base.v1beta1.Coin amount = 3;
+function buildMsgDelegateOrUndelegate(
+  delegatorAddress: string,
+  validatorAddress: string,
+  amount: string,
+  denom: string
+): Uint8Array {
+  return concat(
+    field(1, 2, encodeString(delegatorAddress)),
+    field(2, 2, encodeString(validatorAddress)),
+    field(3, 2, encodeCoin(denom, amount))
+  )
+}
+
+// cosmos.staking.v1beta1.MsgBeginRedelegate
+//   string delegator_address = 1;
+//   string validator_src_address = 2;
+//   string validator_dst_address = 3;
+//   cosmos.base.v1beta1.Coin amount = 4;
+function buildMsgBeginRedelegate(
+  delegatorAddress: string,
+  validatorSrcAddress: string,
+  validatorDstAddress: string,
+  amount: string,
+  denom: string
+): Uint8Array {
+  return concat(
+    field(1, 2, encodeString(delegatorAddress)),
+    field(2, 2, encodeString(validatorSrcAddress)),
+    field(3, 2, encodeString(validatorDstAddress)),
+    field(4, 2, encodeCoin(denom, amount))
+  )
+}
+
+// cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward
+//   string delegator_address = 1;
+//   string validator_address = 2;
+function buildMsgWithdrawDelegatorReward(delegatorAddress: string, validatorAddress: string): Uint8Array {
+  return concat(field(1, 2, encodeString(delegatorAddress)), field(2, 2, encodeString(validatorAddress)))
+}
+
 function buildCw20TransferMsg(recipient: string, amount: string): string {
   return JSON.stringify({ transfer: { recipient, amount } })
 }
@@ -240,6 +284,15 @@ function getMsgSendTypeUrl(chain: string): string {
 
 function buildTxBody(msgAny: Uint8Array, memo: string): Uint8Array {
   let body = field(1, 2, msgAny)
+  if (memo) body = concat(body, field(2, 2, encodeString(memo)))
+  return body
+}
+
+// Multi-msg variant: cosmos TxBody.messages is `repeated google.protobuf.Any`,
+// so we just emit field 1 once per Any. Used by staking flows where a single tx
+// can withdraw rewards from many validators or batch un/redelegate ops.
+function buildTxBodyMulti(msgAnys: Uint8Array[], memo: string): Uint8Array {
+  let body = concat(...msgAnys.map(m => field(1, 2, m)))
   if (memo) body = concat(body, field(2, 2, encodeString(memo)))
   return body
 }
@@ -397,6 +450,126 @@ export function buildThorchainDepositTx(opts: BuildThorchainDepositOptions): Cos
   const msgDeposit = buildThorMsgDeposit(opts.fromAddress, opts.amountBaseUnits, opts.memo)
   const msgAny = wrapAny('/types.MsgDeposit', msgDeposit)
   const txBodyBytes = buildTxBody(msgAny, '')
+  const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.feeDenom, opts.feeAmount)
+  const signDocBytes = buildSignDoc(txBodyBytes, authInfoBytes, opts.chainId, opts.accountNumber)
+  const signingHashHex = bytesToHex(sha256(signDocBytes))
+  return {
+    signingHashHex,
+    signDocBytes,
+    txBodyBytes,
+    authInfoBytes,
+    finalize: sigHex => finalizeCosmosTx(txBodyBytes, authInfoBytes, sigHex),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cosmos staking module (generic, all ibcEnabled cosmos chains)
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical proto type URLs for cosmos-sdk staking + distribution module msgs.
+ * Use SIGN_MODE_DIRECT (proto). Amino path is intentionally not provided —
+ * matches the existing tx.ts convention (Send / Wasm / THORDeposit are all
+ * direct-only here too).
+ */
+export const COSMOS_STAKING_TYPE_URLS = {
+  delegate: '/cosmos.staking.v1beta1.MsgDelegate',
+  undelegate: '/cosmos.staking.v1beta1.MsgUndelegate',
+  redelegate: '/cosmos.staking.v1beta1.MsgBeginRedelegate',
+  withdraw_rewards: '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward',
+} as const
+
+/**
+ * Discriminated union of cosmos staking msgs the builder accepts.
+ *
+ * Address fields are bech32 strings as they appear on-chain:
+ *   - `delegatorAddress`: account hrp (e.g. `cosmos1...`, `terra1...`, `osmo1...`)
+ *   - `validatorAddress` / `validatorSrcAddress` / `validatorDstAddress`:
+ *     valoper hrp (e.g. `cosmosvaloper1...`, `terravaloper1...`).
+ *
+ * `amount` is the integer base-unit string (e.g. `'1000000'` for 1 ATOM at 6dp).
+ * `denom` is the chain's fee/stake denom (e.g. `uatom`, `uluna`, `uosmo`).
+ */
+export type CosmosStakingMsg =
+  | {
+      type: 'delegate'
+      delegatorAddress: string
+      validatorAddress: string
+      amount: string
+      denom: string
+    }
+  | {
+      type: 'undelegate'
+      delegatorAddress: string
+      validatorAddress: string
+      amount: string
+      denom: string
+    }
+  | {
+      type: 'redelegate'
+      delegatorAddress: string
+      validatorSrcAddress: string
+      validatorDstAddress: string
+      amount: string
+      denom: string
+    }
+  | {
+      type: 'withdraw_rewards'
+      delegatorAddress: string
+      validatorAddress: string
+    }
+
+export type BuildCosmosStakingOptions = {
+  chainId: string
+  /**
+   * One or more staking msgs to include in a SINGLE atomic tx. Multi-msg is
+   * load-bearing for two flows:
+   *   1. Withdraw rewards from many validators in one tx (saves gas + UX clicks).
+   *   2. Batch undelegate across many validators (e.g. unwinding a position).
+   * Order is preserved on-wire.
+   */
+  msgs: CosmosStakingMsg[]
+  sequence: number
+  accountNumber: number
+  /** Compressed pubkey (33 bytes) — derive via deriveCosmosPubkey. */
+  pubKeyBytes: Uint8Array
+  gasLimit: number
+  feeDenom: string
+  feeAmount: string
+  memo?: string
+}
+
+export function buildCosmosStakingTx(opts: BuildCosmosStakingOptions): CosmosTxBuilderResult {
+  if (opts.msgs.length === 0) {
+    throw new Error('buildCosmosStakingTx: msgs[] cannot be empty')
+  }
+  const msgAnys = opts.msgs.map(msg => {
+    switch (msg.type) {
+      case 'delegate': {
+        const inner = buildMsgDelegateOrUndelegate(msg.delegatorAddress, msg.validatorAddress, msg.amount, msg.denom)
+        return wrapAny(COSMOS_STAKING_TYPE_URLS.delegate, inner)
+      }
+      case 'undelegate': {
+        const inner = buildMsgDelegateOrUndelegate(msg.delegatorAddress, msg.validatorAddress, msg.amount, msg.denom)
+        return wrapAny(COSMOS_STAKING_TYPE_URLS.undelegate, inner)
+      }
+      case 'redelegate': {
+        const inner = buildMsgBeginRedelegate(
+          msg.delegatorAddress,
+          msg.validatorSrcAddress,
+          msg.validatorDstAddress,
+          msg.amount,
+          msg.denom
+        )
+        return wrapAny(COSMOS_STAKING_TYPE_URLS.redelegate, inner)
+      }
+      case 'withdraw_rewards': {
+        const inner = buildMsgWithdrawDelegatorReward(msg.delegatorAddress, msg.validatorAddress)
+        return wrapAny(COSMOS_STAKING_TYPE_URLS.withdraw_rewards, inner)
+      }
+    }
+  })
+  const txBodyBytes = buildTxBodyMulti(msgAnys, opts.memo ?? '')
   const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.feeDenom, opts.feeAmount)
   const signDocBytes = buildSignDoc(txBodyBytes, authInfoBytes, opts.chainId, opts.accountNumber)
   const signingHashHex = bytesToHex(sha256(signDocBytes))
