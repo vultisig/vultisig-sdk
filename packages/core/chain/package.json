@@ -284,6 +284,11 @@
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
     },
+    "./chains/cosmos/staking/lcdQueries": {
+      "types": "./dist/chains/cosmos/staking/lcdQueries.d.ts",
+      "import": "./dist/chains/cosmos/staking/lcdQueries.js",
+      "default": "./dist/chains/cosmos/staking/lcdQueries.js"
+    },
     "./chains/cosmos/sumFeeAmountForCosmosChainFeeDenom": {
       "types": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.d.ts",
       "import": "./dist/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom.js",

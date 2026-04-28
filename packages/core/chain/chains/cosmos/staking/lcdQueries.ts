@@ -192,7 +192,12 @@ export async function getCosmosDelegatorRewards(
   }
   const raw = await lcdGet<Raw>(getDelegatorRewardsUrl(chain, delegatorAddress), opts)
   return {
-    rewards: raw.rewards.map(r => ({ validatorAddress: r.validator_address, reward: r.reward })),
+    // `?? []` on both fields: an address with zero unclaimed rewards (rare
+    // but valid - e.g. brand-new delegator who hasn't accrued anything yet,
+    // or one who claimed in the same block) returns a body where `rewards`
+    // (and sometimes `total`) is missing entirely on some chain firmwares.
+    // Without the fallback the .map call would throw on undefined.
+    rewards: (raw.rewards ?? []).map(r => ({ validatorAddress: r.validator_address, reward: r.reward })),
     total: raw.total ?? [],
   }
 }
