@@ -119,10 +119,7 @@ export class VaultManager {
         }
         const encryptedData = fromBase64(container.vault)
         if (encryptedData.length === 0) {
-          throw new VaultImportError(
-            VaultImportErrorCode.CORRUPTED_DATA,
-            'Encrypted vault payload is empty'
-          )
+          throw new VaultImportError(VaultImportErrorCode.CORRUPTED_DATA, 'Encrypted vault payload is empty')
         }
         try {
           const decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)
