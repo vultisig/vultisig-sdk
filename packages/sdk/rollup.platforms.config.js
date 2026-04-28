@@ -300,196 +300,221 @@ const configs = {
     }),
     onwarn,
   },
-  'react-native': {
-    input: './src/platforms/react-native/index.ts',
-    output: {
-      file: './dist/index.react-native.js',
-      format: 'es',
-      sourcemap: true,
-      inlineDynamicImports: true,
+  'react-native': [
+    // RN preamble — tiny side-effect bundle that installs global polyfills
+    // (Buffer + subarray repair) before the rest of the SDK evaluates.
+    // Consumers are expected to `import '@vultisig/sdk/rn-preamble'` as their
+    // first entry statement. See src/platforms/react-native/preamble.ts.
+    {
+      input: './src/platforms/react-native/preamble.ts',
+      output: {
+        file: './dist/index.rn-preamble.js',
+        format: 'es',
+        sourcemap: true,
+      },
+      external: ['buffer'],
+      plugins: [
+        esbuild({
+          include: ['./src/**/*'],
+          exclude: ['**/*.test.*', '**/node_modules/**'],
+          target: 'es2021',
+          minify: false,
+          tsconfig: './tsconfig.json',
+        }),
+      ],
+      onwarn,
     },
-    // RN externals: native modules, Node builtins, and deps that can't run on RN.
-    // Everything else (chain logic, @noble/*, @polkadot/*, @cosmjs/*) is INLINED.
-    external: [
-      // SDK native modules
-      '@vultisig/mpc-types',
-      '@vultisig/mpc-native',
-      '@vultisig/mpc-wasm',
-      '@vultisig/walletcore-native',
-      '@react-native-async-storage/async-storage',
-      '@trustwallet/wallet-core',
-      'expo-crypto',
-      // Node builtins — kept external; consumers must map these to
-      // empty modules via metro.config.js `resolver.extraNodeModules`.
-      // The SDK ships `dist/shims/empty-rn.js` as the canonical target.
-      'crypto',
-      'buffer',
-      'util',
-      'url',
-      'fs',
-      'fs/promises',
-      'path',
-      'os',
-      'http',
-      'https',
-      'net',
-      'tls',
-      'zlib',
-      'events',
-      'child_process',
-      'stream',
-      'assert',
-      'querystring',
-      'process',
-      // Network transport deps that statically pull Node-only modules via
-      // named imports (can't be Proxy-shimmed).
-      'rpc-websockets',
-      'ws',
-      'node-fetch',
-      'jayson',
-      'jayson/lib/client/browser',
-      // Deps that use Node.js or WASM loading (shimmed via alias)
-      '7z-wasm',
-      'electron',
-      // Network/serialization deps (app provides its own)
-      'axios',
-      'viem',
-      'zod',
-      'uuid',
-      // Heavy chain clients — deliberately kept out of the RN bundle;
-      // RN consumers either use the SDK's fetch-based wrappers (PR-B) or
-      // provide their own implementation. These drag in WS/HTTP/Node APIs.
-      '@mysten/sui',
-      /^@mysten\/sui\//,
-      '@polkadot/api',
-      /^@polkadot\/api\//,
-      '@polkadot/rpc-provider',
-      /^@polkadot\/rpc-provider\//,
-      '@polkadot/util',
-      '@polkadot/util-crypto',
-      '@polkadot/x-fetch',
-      '@polkadot/x-ws',
-      '@polkadot/x-randomvalues',
-      '@polkadot/x-textencoder',
-      '@polkadot/x-textdecoder',
-      '@polkadot/wasm-crypto-init',
-      '@cosmjs/stargate',
-      '@cosmjs/amino',
-      '@cosmjs/proto-signing',
-      '@cosmjs/tendermint-rpc',
-      /^@cosmjs\//,
-      '@bufbuild/protobuf',
-      /^@bufbuild\//,
-      '@solana/web3.js',
-      '@solana/spl-token',
-      /^@solana\//,
-      '@coral-xyz/anchor',
-      /^@coral-xyz\//,
-      '@lifi/sdk',
-      'xrpl',
-      'ripple-binary-codec',
-      'ripple-address-codec',
-      'ethers',
-      /^ethers\//,
-      'bitcoinjs-lib',
-      'bs58',
-      'bs58check',
-      'cbor-x',
-      'cbor-extract',
-      'i18next',
-      'i18next-http-backend',
-      '@ton/core',
-      '@ton/crypto',
-      '@ton/crypto-primitives',
-      /^@ton\//,
-      // WASM binaries
-      /\.wasm$/,
-      /lib\/dkls\/vs_wasm/,
-      /lib\/mldsa\/vs_wasm/,
-      /lib\/schnorr\/vs_schnorr_wasm/,
-    ],
-    plugins: [
-      rnOverridePlugin(),
-      alias({
-        entries: [
-          // Polyfills for Node.js crypto (must come before generic package aliases)
-          {
-            find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/encryptWithAesGcm$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts'),
-          },
-          {
-            find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/decryptWithAesGcm$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts'),
-          },
-          {
-            find: /^@vultisig\/core-mpc\/getMessageHash$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
-          },
-          {
-            find: /\.\.\/getMessageHash$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
-          },
-          // Shims for packages that use WASM/Node.js and can't run on RN
-          {
-            find: /^tiny-secp256k1$/,
-            replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
-          },
-          // Resolve workspace packages to source TS for bundling
-          {
-            find: /^@vultisig\/core-chain\/(.*)/,
-            replacement: path.resolve(currentDir, '../core/chain/$1'),
-          },
-          {
-            find: /^@vultisig\/core-mpc\/(.*)/,
-            replacement: path.resolve(currentDir, '../core/mpc/$1'),
-          },
-          {
-            find: /^@vultisig\/core-config(.*)/,
-            replacement: path.resolve(currentDir, '../core/config$1'),
-          },
-          {
-            find: /^@vultisig\/lib-utils\/(.*)/,
-            replacement: path.resolve(currentDir, '../lib/utils/$1'),
-          },
-        ],
-      }),
-      resolve({
-        preferBuiltins: false,
-        extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
-        exportConditions: ['module', 'import', 'default'],
-        skip: [
-          'axios',
-          'viem',
-          'zod',
-          'uuid',
-          '@trustwallet/wallet-core',
-          '@solana/web3.js',
-          '@cosmjs/stargate',
-          '@cosmjs/amino',
-        ],
-      }),
-      replace({
-        preventAssignment: true,
-        'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'),
-        'typeof window': JSON.stringify('undefined'),
-      }),
-      esbuild({
-        include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
-        exclude: ['**/*.test.*', '**/node_modules/**'],
-        target: 'es2021',
-        minify: false,
-        tsconfig: './tsconfig.json',
-      }),
-      json(),
-      commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
-      terser({
-        format: { comments: false },
-        compress: { passes: 1, drop_debugger: true },
-        mangle: { keep_fnames: true, keep_classnames: true },
-      }),
-    ],
-    onwarn,
-  },
+    {
+      input: './src/platforms/react-native/index.ts',
+      output: {
+        file: './dist/index.react-native.js',
+        format: 'es',
+        sourcemap: true,
+        inlineDynamicImports: true,
+      },
+      // RN externals: native modules, Node builtins, and deps that can't run on RN.
+      // Everything else (chain logic, @noble/*, @polkadot/*, @cosmjs/*) is INLINED.
+      external: [
+        // SDK native modules
+        '@vultisig/mpc-types',
+        '@vultisig/mpc-native',
+        '@vultisig/mpc-wasm',
+        '@vultisig/walletcore-native',
+        '@react-native-async-storage/async-storage',
+        '@trustwallet/wallet-core',
+        'expo-crypto',
+        // Node builtins — kept external; consumers must map these to
+        // empty modules via metro.config.js `resolver.extraNodeModules`.
+        // The SDK ships `dist/shims/empty-rn.js` as the canonical target.
+        'crypto',
+        'buffer',
+        'util',
+        'url',
+        'fs',
+        'fs/promises',
+        'path',
+        'os',
+        'http',
+        'https',
+        'net',
+        'tls',
+        'zlib',
+        'events',
+        'child_process',
+        'stream',
+        'assert',
+        'querystring',
+        'process',
+        // Network transport deps that statically pull Node-only modules via
+        // named imports (can't be Proxy-shimmed).
+        'rpc-websockets',
+        'ws',
+        'node-fetch',
+        'jayson',
+        'jayson/lib/client/browser',
+        // Deps that use Node.js or WASM loading (shimmed via alias)
+        '7z-wasm',
+        'electron',
+        // Network/serialization deps (app provides its own)
+        'axios',
+        'viem',
+        'zod',
+        'uuid',
+        // Heavy chain clients — deliberately kept out of the RN bundle;
+        // RN consumers either use the SDK's fetch-based wrappers (PR-B) or
+        // provide their own implementation. These drag in WS/HTTP/Node APIs.
+        '@mysten/sui',
+        /^@mysten\/sui\//,
+        '@polkadot/api',
+        /^@polkadot\/api\//,
+        '@polkadot/rpc-provider',
+        /^@polkadot\/rpc-provider\//,
+        '@polkadot/util',
+        '@polkadot/util-crypto',
+        '@polkadot/x-fetch',
+        '@polkadot/x-ws',
+        '@polkadot/x-randomvalues',
+        '@polkadot/x-textencoder',
+        '@polkadot/x-textdecoder',
+        '@polkadot/wasm-crypto-init',
+        '@cosmjs/stargate',
+        '@cosmjs/amino',
+        '@cosmjs/proto-signing',
+        '@cosmjs/tendermint-rpc',
+        /^@cosmjs\//,
+        '@bufbuild/protobuf',
+        /^@bufbuild\//,
+        '@solana/web3.js',
+        '@solana/spl-token',
+        /^@solana\//,
+        '@coral-xyz/anchor',
+        /^@coral-xyz\//,
+        '@lifi/sdk',
+        'xrpl',
+        'ripple-binary-codec',
+        'ripple-address-codec',
+        'ethers',
+        /^ethers\//,
+        'bitcoinjs-lib',
+        'bs58',
+        'bs58check',
+        'cbor-x',
+        'cbor-extract',
+        'i18next',
+        'i18next-http-backend',
+        '@ton/core',
+        '@ton/crypto',
+        '@ton/crypto-primitives',
+        /^@ton\//,
+        // WASM binaries
+        /\.wasm$/,
+        /lib\/dkls\/vs_wasm/,
+        /lib\/mldsa\/vs_wasm/,
+        /lib\/schnorr\/vs_schnorr_wasm/,
+      ],
+      plugins: [
+        rnOverridePlugin(),
+        alias({
+          entries: [
+            // Polyfills for Node.js crypto (must come before generic package aliases)
+            {
+              find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/encryptWithAesGcm$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/encryptWithAesGcm.ts'),
+            },
+            {
+              find: /^@vultisig\/lib-utils\/encryption\/aesGcm\/decryptWithAesGcm$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts'),
+            },
+            {
+              find: /^@vultisig\/core-mpc\/getMessageHash$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+            },
+            {
+              find: /\.\.\/getMessageHash$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
+            },
+            // Shims for packages that use WASM/Node.js and can't run on RN
+            {
+              find: /^tiny-secp256k1$/,
+              replacement: path.resolve(currentDir, 'src/platforms/react-native/shims/tiny-secp256k1.ts'),
+            },
+            // Resolve workspace packages to source TS for bundling
+            {
+              find: /^@vultisig\/core-chain\/(.*)/,
+              replacement: path.resolve(currentDir, '../core/chain/$1'),
+            },
+            {
+              find: /^@vultisig\/core-mpc\/(.*)/,
+              replacement: path.resolve(currentDir, '../core/mpc/$1'),
+            },
+            {
+              find: /^@vultisig\/core-config(.*)/,
+              replacement: path.resolve(currentDir, '../core/config$1'),
+            },
+            {
+              find: /^@vultisig\/lib-utils\/(.*)/,
+              replacement: path.resolve(currentDir, '../lib/utils/$1'),
+            },
+          ],
+        }),
+        resolve({
+          preferBuiltins: false,
+          extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+          exportConditions: ['module', 'import', 'default'],
+          skip: [
+            'axios',
+            'viem',
+            'zod',
+            'uuid',
+            '@trustwallet/wallet-core',
+            '@solana/web3.js',
+            '@cosmjs/stargate',
+            '@cosmjs/amino',
+          ],
+        }),
+        replace({
+          preventAssignment: true,
+          'process.env.VULTISIG_PLATFORM': JSON.stringify('react-native'),
+          'typeof window': JSON.stringify('undefined'),
+        }),
+        esbuild({
+          include: ['./src/**/*', '../core/**/*', '../lib/**/*'],
+          exclude: ['**/*.test.*', '**/node_modules/**'],
+          target: 'es2021',
+          minify: false,
+          tsconfig: './tsconfig.json',
+        }),
+        json(),
+        commonjs({ include: [/node_modules/], transformMixedEsModules: true }),
+        terser({
+          format: { comments: false },
+          compress: { passes: 1, drop_debugger: true },
+          mangle: { keep_fnames: true, keep_classnames: true },
+        }),
+      ],
+      onwarn,
+    },
+  ],
   electron: {
     input: './src/platforms/electron-main/index.ts',
     output: {
@@ -582,7 +607,7 @@ if (target === 'all') {
   exportConfig = [
     ...configs.node,
     configs.browser,
-    configs['react-native'],
+    ...configs['react-native'],
     configs.electron,
     configs['chrome-extension'],
     ...configs.vite,
