@@ -22,9 +22,11 @@ export const chains = { cardano, cosmos, evm, ripple, solana, sui, ton, tron, ut
 // sui/tx.ts declares them.
 export type {
   BuildCosmosSendOptions,
+  BuildCosmosStakingOptions,
   BuildCosmosWasmExecuteOptions,
   BuildCw20TransferOptions,
   BuildThorchainDepositOptions,
+  CosmosStakingMsg,
   CosmosTxBuilderResult,
 } from './cosmos'
 export type {
