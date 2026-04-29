@@ -31,7 +31,11 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<
   // accounts on this transaction. The global feed is dominated by vote
   // txs and underestimates fees for hot accounts (e.g. a THORChain
   // inbound vault during LP add).
-  const writableAccounts: PublicKey[] = [new PublicKey(receiver)]
+  //
+  // For native SOL the recipient lamports change, so it's writable.
+  // For SPL the SystemProgram never touches the recipient's main
+  // wallet — only the sender/recipient ATAs are writable.
+  const writableAccounts: PublicKey[] = []
 
   if (coin.id) {
     const fromAccount = await getSplAssociatedAccount({
@@ -52,6 +56,8 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<
       chainSpecific.toTokenAssociatedAddress = data.address
       writableAccounts.push(new PublicKey(data.address))
     }
+  } else {
+    writableAccounts.push(new PublicKey(receiver))
   }
 
   const priorityFeePrice = await withFallback(
