@@ -1,7 +1,7 @@
 import { Address, Cell, Slice } from '@ton/core'
 
 import {
-  DEDUST_FACTORIES,
+  DEDUST_NATIVE_VAULTS,
   isKnownRouterAddress,
   STONFI_V2_PTON_WALLETS,
   STONFI_V2_ROUTERS,
@@ -104,9 +104,40 @@ const parseStonfiV2Swap = (
 
     slice.loadUintBig(64)
 
+    // additional_data ref shape (STON.fi v2 swap body — same layout used
+    // by both `createSwapBody` and `createCrossSwapBody` in the SDK):
+    //   min_out:Coins
+    //   receiver:MsgAddressInt
+    //   custom_payload_fwd_gas:Coins
+    //   custom_payload:(Maybe ^Cell)
+    //   refund_fwd_gas:Coins
+    //   refund_payload:(Maybe ^Cell)
+    //   referral_value:uint16
+    //   referral_address:MsgAddressInt
+    //
+    // Source: @ston-fi/sdk@2.x BaseRouterV2_1.createSwapBody
+    // (chunk-YSE6O2GU.cjs:96), confirmed against the v2 router smart-contract
+    // docs. We must consume ALL fields — without them, a body with a valid
+    // prefix (op + addresses + min_out + receiver) and garbage tail decodes
+    // as a "swap" because parseStonfiV2Swap stops after receiver. Codex
+    // adversarial review on PR #352 flagged this as fail-open.
+    //
+    // Reading all 8 fields turns "garbage tail" into a parse error caught
+    // by safeDecode. We DO NOT require the slice to be fully consumed
+    // afterwards — STON.fi may extend the cell shape with appended fields
+    // in a future protocol revision, and we want forward-compat over a
+    // brittle exact-shape assertion. The threshold is that an attacker
+    // must successfully encode all 8 typed fields before junk space, which
+    // is materially harder than just appending bits.
     const additionalData = slice.loadRef().beginParse()
     const minOut = additionalData.loadCoins()
     const receiverAddress = loadAddress(additionalData)
+    additionalData.loadCoins() // custom_payload_fwd_gas
+    loadMaybeRef(additionalData) // custom_payload
+    additionalData.loadCoins() // refund_fwd_gas
+    loadMaybeRef(additionalData) // refund_payload
+    additionalData.loadUint(16) // referral_value (BPS)
+    additionalData.loadMaybeAddress() // referral_address — addr_none on no-referral swaps; loadMaybeAddress tolerates that, plain loadAddress would throw and safeDecode would misclassify a real no-referral swap as a non-swap
 
     return {
       kind: 'swap',
@@ -122,7 +153,18 @@ const parseStonfiV2Swap = (
 
 const parseDedustSwapStep = (slice: Slice) => {
   const targetAddress = loadAddress(slice)
-  slice.loadBit()
+  // SwapStepParams: kind:SwapKind limit:Coins next:(Maybe ^SwapStep)
+  // SwapKind is a 1-bit prefix: given_in$0 | given_out$1, and per
+  // https://docs.dedust.io/reference/tlb-schemes the docs explicitly state
+  // given_out is "Not implemented." Fail closed on kind=1 so a body with
+  // garbage in the SwapKind slot (or one crafted to look like a swap but
+  // actually using an unsupported kind) doesn't surface as `swap`. Codex
+  // adversarial review on PR #352 flagged the original `slice.loadBit()`-
+  // and-discard as a should-fix.
+  const kind = slice.loadBit()
+  if (kind) {
+    throw new Error('DeDust SwapKind given_out (kind=1) is not implemented')
+  }
   const minOut = slice.loadCoins()
   loadMaybeRef(slice)
 
@@ -300,7 +342,10 @@ export type DecodeTonMessageBodyInput = {
  * prevent the keysign UI from labeling such a body as a "swap":
  *
  * - `DEDUST_NATIVE_SWAP` is dispatched only when `outerDestination` is a
- *   known DeDust factory.
+ *   known DeDust **native vault** (NOT the factory — the factory only
+ *   receives `create_vault`/`create_pool` ops; `swap#ea06185d` lives on
+ *   the per-asset vault contracts per
+ *   https://docs.dedust.io/reference/tlb-schemes).
  * - `PTON_TRANSFER` (STON.fi v2 TON-side swap) is dispatched only when
  *   `outerDestination` is a known STON.fi v2 pTON wallet.
  * - STON.fi v2 jetton-swap detection inside `JETTON_TRANSFER` is gated on
@@ -336,7 +381,7 @@ export const decodeTonMessageBody = ({
       return parsePtonTransferSwap(slice)
     }
     if (op === TonOp.DEDUST_NATIVE_SWAP) {
-      if (!isKnownRouterAddress(outerDestination, DEDUST_FACTORIES)) {
+      if (!isKnownRouterAddress(outerDestination, DEDUST_NATIVE_VAULTS)) {
         return null
       }
       return parseDedustSwap(cell, { offerAsset: 'ton', offerAmount: 0n })

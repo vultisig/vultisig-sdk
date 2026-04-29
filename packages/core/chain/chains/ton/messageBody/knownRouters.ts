@@ -19,8 +19,25 @@ import { Address } from '@ton/core'
  * '
  * ```
  *
- * DeDust factory address is documented at
- * <https://docs.dedust.io/reference/factory>.
+ * The DeDust mainnet **native vault** address is the destination of
+ * `swap#ea06185d` per https://docs.dedust.io/reference/tlb-schemes (the
+ * factory at `EQBfBWT7…` only receives `create_vault` / `create_pool` ops).
+ * The native vault is a singleton on mainnet; its address is computed
+ * deterministically from the factory's `get_vault_address(asset.native())`
+ * TVM call. Verified live against mainnet via:
+ *
+ * ```ts
+ * import { TonClient4 } from '@ton/ton'
+ * import { Factory, MAINNET_FACTORY_ADDR } from '@dedust/sdk'
+ * const factory = new TonClient4({ endpoint: 'https://mainnet-v4.tonhubapi.com' })
+ *   .open(Factory.createFromAddress(MAINNET_FACTORY_ADDR))
+ * console.log((await factory.getNativeVault()).address.toString())
+ * // → EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_
+ * ```
+ *
+ * A future revision could resolve the address dynamically via the same
+ * factory call so we don't need to chase a redeploy, but the current
+ * mainnet vault is the only one in production.
  */
 
 const stonfiV2RouterAddresses = [
@@ -125,8 +142,14 @@ const stonfiV2PtonWalletAddresses = [
   'EQDwVbvZWrXEWQ_lL_69WehyNkNKm4pkswOSeJQtzx1gcHMF',
 ] as const
 
-const dedustFactoryAddresses = [
-  'EQBfBWT7X2BHg9tXAxzhz2aKiNTU1tpt5NsiK0uSDW_YAJ67',
+/**
+ * DeDust mainnet TON Native Vault — the contract that receives the
+ * `swap#ea06185d` op for native-TON-in swaps. NOT the factory: the factory
+ * only handles `create_vault` / `create_pool`. See file-level comment for
+ * the dynamic-resolution recipe.
+ */
+const dedustNativeVaultAddresses = [
+  'EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_',
 ] as const
 
 const normalizeAddress = (address: string): string =>
@@ -145,9 +168,14 @@ export const STONFI_V2_PTON_WALLETS: ReadonlySet<string> = buildAddressSet(
   stonfiV2PtonWalletAddresses
 )
 
-/** DeDust factory addresses on TON mainnet (native-TON-swap destinations). */
-export const DEDUST_FACTORIES: ReadonlySet<string> =
-  buildAddressSet(dedustFactoryAddresses)
+/**
+ * DeDust mainnet TON Native Vault addresses — the destinations for the
+ * `swap#ea06185d` op when offering native TON. Used to gate
+ * DEDUST_NATIVE_SWAP classification so the keysign UI only labels a
+ * message as a "swap" when it's actually addressed to a real vault.
+ */
+export const DEDUST_NATIVE_VAULTS: ReadonlySet<string> =
+  buildAddressSet(dedustNativeVaultAddresses)
 
 /**
  * Returns whether `address` matches any entry in `routerSet`. Both sides are

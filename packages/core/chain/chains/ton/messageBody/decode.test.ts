@@ -12,6 +12,12 @@ const STONFI_V2_ROUTER = Address.parse(
 const STONFI_V2_PTON_WALLET = Address.parse(
   'EQAmV2BzRi6c-S1263Ar9HhyCLrvtMEae_qfEzhxnK7qSpr0'
 )
+// DeDust mainnet TON Native Vault. swap#ea06185d is sent here, NOT to the
+// factory (verified live via factory.getNativeVault() — see knownRouters.ts).
+// The factory at EQBfBWT7… only receives create_vault / create_pool ops.
+const DEDUST_NATIVE_VAULT = Address.parse(
+  'EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_'
+)
 const DEDUST_FACTORY = Address.parse(
   'EQBfBWT7X2BHg9tXAxzhz2aKiNTU1tpt5NsiK0uSDW_YAJ67'
 )
@@ -88,10 +94,37 @@ const buildExcessesBody = (queryId: bigint) =>
     .storeUint(queryId, 64)
     .endCell()
 
-const buildStonfiSwapPayload = () => {
-  const additionalData = beginCell()
-    .storeCoins(1_147_730_000n)
-    .storeAddress(RECIPIENT)
+// STON.fi v2 swap body. Mirrors the encoding produced by
+// @ston-fi/sdk@2.x BaseRouterV2_1.createSwapBody — the inner additional_data
+// ref carries 8 fields (min_out / receiver / custom_payload_fwd_gas /
+// custom_payload / refund_fwd_gas / refund_payload / referral_value /
+// referral_address). The decoder consumes them all to fail closed on
+// prefix-shaped fakes; tests must produce the full shape.
+const buildStonfiSwapPayload = (overrides: {
+  truncateAdditionalData?: boolean
+} = {}) => {
+  const additionalDataBuilder = beginCell()
+    .storeCoins(1_147_730_000n) // min_out
+    .storeAddress(RECIPIENT) // receiver
+
+  if (overrides.truncateAdditionalData) {
+    return beginCell()
+      .storeUint(TonOp.STONFI_V2_SWAP, 32)
+      .storeAddress(TOKEN_WALLET)
+      .storeAddress(RESPONSE)
+      .storeAddress(EXCESSES)
+      .storeUint(123n, 64)
+      .storeRef(additionalDataBuilder.endCell())
+      .endCell()
+  }
+
+  const additionalData = additionalDataBuilder
+    .storeCoins(0n) // custom_payload_fwd_gas
+    .storeBit(false) // custom_payload (Maybe ^Cell, absent)
+    .storeCoins(0n) // refund_fwd_gas
+    .storeBit(false) // refund_payload (Maybe ^Cell, absent)
+    .storeUint(10, 16) // referral_value (BPS, 10 = SDK default)
+    .storeAddress(null) // referral_address (addr_none — no referral)
     .endCell()
 
   return beginCell()
@@ -242,10 +275,10 @@ describe('decodeTonMessageBody', () => {
     expect(decode(body, ATTACKER)).toBeNull()
   })
 
-  it('decodes a DeDust native TON swap when outer destination is a known factory', () => {
+  it('decodes a DeDust native TON swap when outer destination is the native vault', () => {
     const body = buildDedustNativeSwapBody().toBoc().toString('base64')
 
-    expect(decode(body, DEDUST_FACTORY)).toEqual({
+    expect(decode(body, DEDUST_NATIVE_VAULT)).toEqual({
       kind: 'swap',
       provider: 'dedust',
       offerAsset: 'ton',
@@ -258,10 +291,74 @@ describe('decodeTonMessageBody', () => {
     })
   })
 
-  it('rejects DEDUST_NATIVE_SWAP opcode when outer destination is not a known factory', () => {
+  it('rejects DEDUST_NATIVE_SWAP opcode when outer destination is the factory (NOT the vault)', () => {
+    // Codex flagged on PR #352 review: the original binding was to the
+    // factory, but `swap#ea06185d` is a vault-side op per the DeDust TLB
+    // schema (https://docs.dedust.io/reference/tlb-schemes). A real
+    // user-signed native swap goes to the native vault; a body addressed
+    // to the factory is either a different op (create_vault/create_pool)
+    // or an attacker spoof. Either way, must NOT classify as `swap`.
+    const body = buildDedustNativeSwapBody().toBoc().toString('base64')
+
+    expect(decode(body, DEDUST_FACTORY)).toBeNull()
+  })
+
+  it('rejects DEDUST_NATIVE_SWAP opcode when outer destination is not a known vault', () => {
     const body = buildDedustNativeSwapBody().toBoc().toString('base64')
 
     expect(decode(body, ATTACKER)).toBeNull()
+  })
+
+  it('rejects a DeDust native swap with SwapKind=given_out (kind=1, not implemented)', () => {
+    // Per https://docs.dedust.io/reference/tlb-schemes, given_out is not
+    // implemented on mainnet. A body that flips the SwapKind bit must fail
+    // closed so the keysign UI doesn't surface a swap label for an
+    // unsupported encoding (or for a body crafted with garbage in that
+    // slot). Codex finding on PR #352 review.
+    const body = beginCell()
+      .storeUint(TonOp.DEDUST_NATIVE_SWAP, 32)
+      .storeUint(777n, 64)
+      .storeCoins(500_000_000n)
+      .storeAddress(POOL)
+      .storeBit(true) // SwapKind=1 (given_out) — invalid
+      .storeCoins(42_000n)
+      .storeBit(false)
+      .storeUint(0, 32)
+      .storeAddress(RECIPIENT)
+      .storeAddress(null)
+      .storeBit(false)
+      .storeBit(false)
+      .endCell()
+      .toBoc()
+      .toString('base64')
+
+    expect(decode(body, DEDUST_NATIVE_VAULT)).toBeNull()
+  })
+
+  it('rejects a STON.fi v2 swap with truncated additional_data (only min_out + receiver)', () => {
+    // Codex flagged on PR #352 review: parseStonfiV2Swap originally read
+    // only min_out and receiver, then returned. A body with valid prefix
+    // and garbage tail mislabeled as `swap`. Decoder now consumes ALL 8
+    // fields of the cross-swap additional_data so prefix-shaped fakes
+    // fail closed.
+    const body = buildJettonTransferBody({
+      queryId: 1n,
+      amount: 100n,
+      destination: STONFI_V2_ROUTER,
+      responseDestination: RESPONSE,
+      forwardTonAmount: 1_000n,
+      forwardPayload: buildStonfiSwapPayload({ truncateAdditionalData: true }),
+    })
+      .toBoc()
+      .toString('base64')
+
+    const intent = decode(body, RECIPIENT)
+    // Falls back to plain jetton-transfer classification (router gate
+    // still allows the inner classify attempt; the inner parseStonfiV2Swap
+    // throws on the missing custom_payload_fwd_gas/etc. Coins read,
+    // safeDecode catches it, and the surrounding parseJettonTransfer
+    // returns the jettonTransfer result instead).
+    expect(intent?.kind).toBe('jettonTransfer')
   })
 
   it('accepts hex BOC payloads', () => {
