@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "prepare:sdk": "node scripts/ensure-local-sdk-build.mjs",
+    "dev": "yarn prepare:sdk && vite",
+    "build": "yarn prepare:sdk && tsc && vite build",
+    "preview": "yarn prepare:sdk && vite preview",
+    "typecheck": "yarn prepare:sdk && tsc --noEmit"
   },
   "dependencies": {
     "@vultisig/examples-shared": "workspace:*",

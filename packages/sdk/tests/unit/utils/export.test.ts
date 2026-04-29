@@ -22,10 +22,9 @@ vi.mock('@vultisig/core-mpc/types/utils/commVault', () => ({
   })),
 }))
 
-vi.mock('@vultisig/lib-utils/encryption/aesGcm/encryptWithAesGcm', () => ({
-  encryptWithAesGcm: vi.fn(({ key, value }) => {
-    // Return a mock encrypted value
-    return Buffer.from(`encrypted_${key}_${value.toString()}`)
+vi.mock('@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword', () => ({
+  encryptVaultBackupWithPassword: vi.fn((password: string, value: Buffer) => {
+    return Buffer.from(`encrypted_${password}_${value.toString()}`)
   }),
 }))
 

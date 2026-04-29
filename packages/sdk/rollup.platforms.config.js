@@ -446,6 +446,20 @@ const configs = {
               replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/decryptWithAesGcm.ts'),
             },
             {
+              find: /^@vultisig\/lib-utils\/encryption\/vaultBackup\/encryptVaultBackupWithPassword$/,
+              replacement: path.resolve(
+                currentDir,
+                'src/platforms/react-native/polyfills/encryptVaultBackupWithPassword.ts'
+              ),
+            },
+            {
+              find: /^@vultisig\/lib-utils\/encryption\/vaultBackup\/decryptVaultBackupWithPassword$/,
+              replacement: path.resolve(
+                currentDir,
+                'src/platforms/react-native/polyfills/decryptVaultBackupWithPassword.ts'
+              ),
+            },
+            {
               find: /^@vultisig\/core-mpc\/getMessageHash$/,
               replacement: path.resolve(currentDir, 'src/platforms/react-native/polyfills/getMessageHash.ts'),
             },
@@ -585,7 +599,7 @@ const configs = {
         file: './dist/vite/index.cjs',
         format: 'cjs',
         sourcemap: true,
-        exports: 'named',
+        exports: 'auto',
       },
       external: ['vite'],
       plugins: [

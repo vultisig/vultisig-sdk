@@ -59,7 +59,7 @@ import {
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
-import { decryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm'
+import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { initWasm } from '@trustwallet/wallet-core'
@@ -75,10 +75,7 @@ async function loadVaultShare(vaultPath: string, password: string) {
 
   let vaultBase64: string
   if (container.isEncrypted) {
-    const decrypted = await decryptWithAesGcm({
-      key: password,
-      value: fromBase64(container.vault),
-    })
+    const decrypted = decryptVaultBackupWithPassword(password, fromBase64(container.vault))
     vaultBase64 = Buffer.from(decrypted).toString('base64')
   } else {
     vaultBase64 = container.vault
