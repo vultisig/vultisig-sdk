@@ -51,6 +51,20 @@ describe('Terra Classic tax LCD URLs', () => {
       /\/terra\/treasury\/v1beta1\/tax_caps\/uusd$/
     )
   })
+
+  it('URL-encodes denoms that contain forward slashes (ibc/<hash>)', () => {
+    // Without encoding, the slash would be interpreted as a path segment
+    // separator and the LCD would 404 → silently undertaxed denom.
+    expect(getTerraClassicTaxCapsUrl('ibc/27394FB092D2ECCD56123C74F36E4C1F92')).toMatch(
+      /\/tax_caps\/ibc%2F27394FB092D2ECCD56123C74F36E4C1F92$/
+    )
+  })
+
+  it('URL-encodes factory denoms (factory/<addr>/<subdenom>)', () => {
+    expect(getTerraClassicTaxCapsUrl('factory/terra1abc/shr')).toMatch(
+      /\/tax_caps\/factory%2Fterra1abc%2Fshr$/
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -70,10 +84,11 @@ describe('getTerraClassicTaxRate', () => {
     expect(rate).toBe(12_000_000_000_000_000n)
   })
 
-  it('returns 0n if the LCD response is missing the tax_rate field', async () => {
+  it('throws when the LCD returns 200 with the tax_rate field missing (fail-closed)', async () => {
     const fetchImpl = mkFetch(() => okJson({}))
-    const rate = await getTerraClassicTaxRate({ fetchImpl })
-    expect(rate).toBe(0n)
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
+      /missing field on 200/
+    )
   })
 
   it('throws on non-2xx responses', async () => {
@@ -95,6 +110,21 @@ describe('getTerraClassicTaxRate', () => {
     await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
       /negative Dec rejected/
     )
+  })
+
+  it('throws when the parsed rate exceeds 100% (10^18 on the Dec scale)', async () => {
+    // A hostile or buggy LCD returning 1000.0 (i.e. 100,000% rate) would
+    // otherwise be applied verbatim and drain transfers.
+    const fetchImpl = mkFetch(() => okJson({ tax_rate: '1000.0' }))
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
+      /rate above 100%/
+    )
+  })
+
+  it('accepts the boundary rate of exactly 100% (10^18)', async () => {
+    const fetchImpl = mkFetch(() => okJson({ tax_rate: '1.000000000000000000' }))
+    const rate = await getTerraClassicTaxRate({ fetchImpl })
+    expect(rate).toBe(TERRA_CLASSIC_TAX_DEC_SCALE)
   })
 
   it('passes through abort signal', async () => {

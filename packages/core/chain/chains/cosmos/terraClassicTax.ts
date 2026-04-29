@@ -46,7 +46,11 @@ export const getTerraClassicTaxRateUrl = (): string =>
   `${cosmosRpcUrl[Chain.TerraClassic]}/terra/treasury/v1beta1/tax_rate`
 
 export const getTerraClassicTaxCapsUrl = (denom: string): string =>
-  `${cosmosRpcUrl[Chain.TerraClassic]}/terra/treasury/v1beta1/tax_caps/${denom}`
+  // URL-encode the denom: `ibc/<HASH>` and `factory/<addr>/<subdenom>` carry
+  // forward-slashes that would otherwise become extra path segments and the
+  // LCD would 404 (silently undertaxing those denoms once the rate is
+  // nonzero).
+  `${cosmosRpcUrl[Chain.TerraClassic]}/terra/treasury/v1beta1/tax_caps/${encodeURIComponent(denom)}`
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -99,21 +103,33 @@ const parseDecToFixed18 = (s: string): bigint => {
   // the on-chain Dec only stores 18 digits anyway, so anything past that
   // is encoder error rather than precision loss we should preserve).
   const fracTruncated = fracPart.slice(0, 18).padEnd(18, '0')
-  return BigInt(intPart) * TERRA_CLASSIC_TAX_DEC_SCALE + BigInt(fracTruncated)
+  const value =
+    BigInt(intPart) * TERRA_CLASSIC_TAX_DEC_SCALE + BigInt(fracTruncated)
+  // Cap at 100% (Dec value `1.0` on the 18-decimal scale = `10^18`). A
+  // hostile or buggy LCD returning `tax_rate: '1000.0'` would otherwise
+  // drain the user — real Terra rates are < 5%.
+  if (value > TERRA_CLASSIC_TAX_DEC_SCALE) {
+    throw new Error(`tax_rate: rate above 100% rejected (${trimmed})`)
+  }
+  return value
 }
 
 /**
  * Fetches the current Terra Classic stability tax rate as an 18-decimal
  * fixed-point bigint (e.g. `0n` if paused, `12_000_000_000_000_000n` if
- * 1.2%). Returns `0n` when the LCD response shape is missing the
- * `tax_rate` field — defensive against schema drift.
+ * 1.2%). Throws when the LCD response is HTTP 200 but missing `tax_rate` —
+ * fail-closed, because silently treating "missing" as `0n` would
+ * undercalculate fees if a flaky LCD started returning `{}` after the chain
+ * un-pauses the tax (causing post-sign "insufficient fee" rejections).
  */
 export async function getTerraClassicTaxRate(
   opts: FetchOpts = {}
 ): Promise<bigint> {
   type Raw = { tax_rate?: string }
   const raw = await lcdGetJson<Raw>(getTerraClassicTaxRateUrl(), opts)
-  if (raw.tax_rate === undefined || raw.tax_rate === null) return 0n
+  if (raw.tax_rate === undefined || raw.tax_rate === null) {
+    throw new Error('tax_rate: missing field on 200 response')
+  }
   return parseDecToFixed18(raw.tax_rate)
 }
 

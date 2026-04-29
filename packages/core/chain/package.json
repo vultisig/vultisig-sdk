@@ -279,6 +279,11 @@
       "import": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js",
       "default": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js"
     },
+    "./chains/cosmos/qbtc/protoEncoding": {
+      "types": "./dist/chains/cosmos/qbtc/protoEncoding.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/protoEncoding.js",
+      "default": "./dist/chains/cosmos/qbtc/protoEncoding.js"
+    },
     "./chains/cosmos/qbtc/tendermintRpcUrl": {
       "types": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
