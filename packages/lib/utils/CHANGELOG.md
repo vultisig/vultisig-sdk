@@ -1,5 +1,11 @@
 # @vultisig/lib-utils
 
+## 0.10.0
+
+### Minor Changes
+
+- [#293](https://github.com/vultisig/vultisig-sdk/pull/293) [`a3a331a`](https://github.com/vultisig/vultisig-sdk/commit/a3a331a875ebc6868b11c6901c8ed99dde51a4ff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Password-protected vault backups use PBKDF2-HMAC-SHA256 with a random salt (600k iterations by default) and a versioned blob prefix; legacy SHA-256-only backups still decrypt.
+
 ## 0.9.3
 
 ### Patch Changes

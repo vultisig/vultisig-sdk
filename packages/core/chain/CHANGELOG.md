@@ -1,5 +1,12 @@
 # @vultisig/core-chain
 
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies [[`a3a331a`](https://github.com/vultisig/vultisig-sdk/commit/a3a331a875ebc6868b11c6901c8ed99dde51a4ff)]:
+  - @vultisig/lib-utils@0.10.0
+
 ## 1.4.1
 
 ### Patch Changes
