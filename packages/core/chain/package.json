@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1672,7 +1672,7 @@
     "@ton/crypto": "^3.3.0",
     "@trustwallet/wallet-core": "^4.6.0",
     "@vultisig/core-config": "0.9.1",
-    "@vultisig/lib-utils": "0.9.3",
+    "@vultisig/lib-utils": "0.10.0",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
