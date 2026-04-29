@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/client-shared",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Shared client infrastructure for Vultisig CLI and MCP — auth, config, tool descriptions",
   "license": "MIT",
   "repository": {
@@ -32,7 +32,7 @@
   "dependencies": {
     "@napi-rs/keyring": "^1.1.6",
     "@vultisig/sdk": "workspace:^",
-    "inquirer": "^12.6.0"
+    "inquirer": "^13.4.2"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
