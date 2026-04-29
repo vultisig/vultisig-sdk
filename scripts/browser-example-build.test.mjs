@@ -10,6 +10,11 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const browserExampleRoot = path.join(repoRoot, 'examples/browser')
 const requireFromBrowserExample = createRequire(path.join(repoRoot, 'examples/browser/package.json'))
 
+/** Strip ANSI so Vite TTY output like `Local\u001b[22m:` still parses. */
+function stripAnsi(text) {
+  return text.replace(/\u001b\[[\d;]*m/g, '')
+}
+
 function run(command, args) {
   const result = spawnSync(command, args, {
     cwd: repoRoot,
@@ -43,7 +48,8 @@ function startDevServer() {
 
     const onData = chunk => {
       output += chunk.toString()
-      const match = output.match(/Local:\s+(http:\/\/127\.0\.0\.1:\d+\/)/)
+      const plain = stripAnsi(output)
+      const match = plain.match(/Local:\s+(http:\/\/127\.0\.0\.1:\d+\/)/)
       if (!match) return
 
       clearTimeout(timeout)
