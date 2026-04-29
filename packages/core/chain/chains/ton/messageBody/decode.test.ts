@@ -4,15 +4,40 @@ import { describe, expect, it } from 'vitest'
 import { decodeTonMessageBody, tonPayloadToBase64 } from './decode'
 import { TonOp } from './opcodes'
 
+// Real mainnet addresses from knownRouters.ts. Tests pin these so the
+// router-binding logic can't silently break by accepting arbitrary destinations.
+const STONFI_V2_ROUTER = Address.parse(
+  'EQAiLV677BgHNXEUuDJ3Cw8K5WOiJSO86xh8YQq2LthJEoED'
+)
+const STONFI_V2_PTON_WALLET = Address.parse(
+  'EQAmV2BzRi6c-S1263Ar9HhyCLrvtMEae_qfEzhxnK7qSpr0'
+)
+const DEDUST_FACTORY = Address.parse(
+  'EQBfBWT7X2BHg9tXAxzhz2aKiNTU1tpt5NsiK0uSDW_YAJ67'
+)
+
 const RECIPIENT = Address.parse(
   'EQD__________________________________________0vo'
 )
 const RESPONSE = Address.parse(
   'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
 )
+const ATTACKER = Address.parseRaw(`0:${'4'.padStart(64, '0')}`)
 const POOL = Address.parseRaw(`0:${'1'.padStart(64, '0')}`)
 const TOKEN_WALLET = Address.parseRaw(`0:${'2'.padStart(64, '0')}`)
 const EXCESSES = Address.parseRaw(`0:${'3'.padStart(64, '0')}`)
+
+const decode = (
+  payload: string | null | undefined,
+  outerDestination: Address | string | null = RECIPIENT
+) =>
+  decodeTonMessageBody({
+    payload,
+    outerDestination:
+      outerDestination instanceof Address
+        ? outerDestination.toString()
+        : outerDestination,
+  })
 
 const buildJettonTransferBody = (args: {
   queryId: bigint
@@ -89,20 +114,6 @@ const buildStonfiPtonTransferBody = () =>
     .storeRef(buildStonfiSwapPayload())
     .endCell()
 
-const buildDedustJettonSwapPayload = () =>
-  beginCell()
-    .storeUint(TonOp.DEDUST_JETTON_SWAP, 32)
-    .storeAddress(POOL)
-    .storeBit(false)
-    .storeCoins(42_000n)
-    .storeBit(false)
-    .storeUint(0, 32)
-    .storeAddress(RECIPIENT)
-    .storeAddress(null)
-    .storeBit(false)
-    .storeBit(false)
-    .endCell()
-
 const buildDedustNativeSwapBody = () =>
   beginCell()
     .storeUint(TonOp.DEDUST_NATIVE_SWAP, 32)
@@ -121,13 +132,13 @@ const buildDedustNativeSwapBody = () =>
 
 describe('decodeTonMessageBody', () => {
   it('returns null for empty input', () => {
-    expect(decodeTonMessageBody(null)).toBeNull()
-    expect(decodeTonMessageBody(undefined)).toBeNull()
-    expect(decodeTonMessageBody('')).toBeNull()
+    expect(decode(null)).toBeNull()
+    expect(decode(undefined)).toBeNull()
+    expect(decode('')).toBeNull()
   })
 
   it('returns null for non-BOC garbage', () => {
-    expect(decodeTonMessageBody('not-a-boc')).toBeNull()
+    expect(decode('not-a-boc')).toBeNull()
   })
 
   it('decodes a jetton transfer', () => {
@@ -139,9 +150,7 @@ describe('decodeTonMessageBody', () => {
       forwardTonAmount: 1_000_000n,
     }).toBoc().toString('base64')
 
-    const intent = decodeTonMessageBody(body)
-
-    expect(intent).toEqual({
+    expect(decode(body)).toEqual({
       kind: 'jettonTransfer',
       queryId: 12345n,
       amount: 100_000_000n,
@@ -160,7 +169,7 @@ describe('decodeTonMessageBody', () => {
       forwardTonAmount: 0n,
     }).toBoc().toString('base64')
 
-    const intent = decodeTonMessageBody(body)
+    const intent = decode(body)
 
     expect(intent).not.toBeNull()
     if (intent?.kind !== 'jettonTransfer') throw new Error('wrong kind')
@@ -168,11 +177,11 @@ describe('decodeTonMessageBody', () => {
     expect(intent.forwardTonAmount).toBe(0n)
   })
 
-  it('decodes a STON.fi v2 jetton swap transfer', () => {
+  it('decodes a STON.fi v2 jetton swap when destination is a known router', () => {
     const body = buildJettonTransferBody({
       queryId: 12345n,
       amount: 100_000_000n,
-      destination: RECIPIENT,
+      destination: STONFI_V2_ROUTER,
       responseDestination: RESPONSE,
       forwardTonAmount: 1_000_000n,
       forwardPayload: buildStonfiSwapPayload(),
@@ -180,7 +189,7 @@ describe('decodeTonMessageBody', () => {
       .toBoc()
       .toString('base64')
 
-    expect(decodeTonMessageBody(body)).toEqual({
+    expect(decode(body)).toEqual({
       kind: 'swap',
       provider: 'stonfi',
       offerAsset: 'jetton',
@@ -193,10 +202,28 @@ describe('decodeTonMessageBody', () => {
     })
   })
 
-  it('decodes a STON.fi v2 pTON transfer swap', () => {
+  it('does NOT classify a STON.fi-shaped payload sent to an unknown destination as a swap', () => {
+    const body = buildJettonTransferBody({
+      queryId: 12345n,
+      amount: 100_000_000n,
+      destination: ATTACKER,
+      responseDestination: RESPONSE,
+      forwardTonAmount: 1_000_000n,
+      forwardPayload: buildStonfiSwapPayload(),
+    })
+      .toBoc()
+      .toString('base64')
+
+    const intent = decode(body)
+    expect(intent?.kind).toBe('jettonTransfer')
+    if (intent?.kind !== 'jettonTransfer') throw new Error('wrong kind')
+    expect(intent.destination).toBe(ATTACKER.toString())
+  })
+
+  it('decodes a STON.fi v2 pTON transfer swap when outer destination is a known pTON wallet', () => {
     const body = buildStonfiPtonTransferBody().toBoc().toString('base64')
 
-    expect(decodeTonMessageBody(body)).toEqual({
+    expect(decode(body, STONFI_V2_PTON_WALLET)).toEqual({
       kind: 'swap',
       provider: 'stonfi',
       offerAsset: 'ton',
@@ -209,35 +236,16 @@ describe('decodeTonMessageBody', () => {
     })
   })
 
-  it('decodes a DeDust jetton swap transfer', () => {
-    const body = buildJettonTransferBody({
-      queryId: 12345n,
-      amount: 100_000_000n,
-      destination: RECIPIENT,
-      responseDestination: RESPONSE,
-      forwardTonAmount: 1_000_000n,
-      forwardPayload: buildDedustJettonSwapPayload(),
-    })
-      .toBoc()
-      .toString('base64')
+  it('rejects PTON_TRANSFER opcode when outer destination is not a known pTON wallet', () => {
+    const body = buildStonfiPtonTransferBody().toBoc().toString('base64')
 
-    expect(decodeTonMessageBody(body)).toEqual({
-      kind: 'swap',
-      provider: 'dedust',
-      offerAsset: 'jetton',
-      offerAmount: 100_000_000n,
-      minOut: 42_000n,
-      receiverAddress: RECIPIENT.toString(),
-      refundAddress: null,
-      excessesAddress: null,
-      targetAddress: POOL.toString(),
-    })
+    expect(decode(body, ATTACKER)).toBeNull()
   })
 
-  it('decodes a DeDust native TON swap', () => {
+  it('decodes a DeDust native TON swap when outer destination is a known factory', () => {
     const body = buildDedustNativeSwapBody().toBoc().toString('base64')
 
-    expect(decodeTonMessageBody(body)).toEqual({
+    expect(decode(body, DEDUST_FACTORY)).toEqual({
       kind: 'swap',
       provider: 'dedust',
       offerAsset: 'ton',
@@ -250,10 +258,16 @@ describe('decodeTonMessageBody', () => {
     })
   })
 
+  it('rejects DEDUST_NATIVE_SWAP opcode when outer destination is not a known factory', () => {
+    const body = buildDedustNativeSwapBody().toBoc().toString('base64')
+
+    expect(decode(body, ATTACKER)).toBeNull()
+  })
+
   it('accepts hex BOC payloads', () => {
     const body = buildStonfiPtonTransferBody().toBoc().toString('hex')
 
-    const intent = decodeTonMessageBody(body)
+    const intent = decode(body, STONFI_V2_PTON_WALLET)
 
     expect(intent?.kind).toBe('swap')
     if (intent?.kind !== 'swap') throw new Error('wrong kind')
@@ -268,9 +282,7 @@ describe('decodeTonMessageBody', () => {
       forwardAmount: 50_000n,
     }).toBoc().toString('base64')
 
-    const intent = decodeTonMessageBody(body)
-
-    expect(intent).toEqual({
+    expect(decode(body)).toEqual({
       kind: 'nftTransfer',
       queryId: 99n,
       newOwner: RECIPIENT.toString(),
@@ -281,7 +293,7 @@ describe('decodeTonMessageBody', () => {
 
   it('decodes an excesses notification', () => {
     const body = buildExcessesBody(7n).toBoc().toString('base64')
-    expect(decodeTonMessageBody(body)).toEqual({
+    expect(decode(body)).toEqual({
       kind: 'excesses',
       queryId: 7n,
     })
@@ -295,12 +307,12 @@ describe('decodeTonMessageBody', () => {
       .toBoc()
       .toString('base64')
 
-    expect(decodeTonMessageBody(body)).toBeNull()
+    expect(decode(body)).toBeNull()
   })
 
   it('returns null for a body too short to hold an opcode', () => {
     const body = beginCell().storeUint(0, 8).endCell().toBoc().toString('base64')
-    expect(decodeTonMessageBody(body)).toBeNull()
+    expect(decode(body)).toBeNull()
   })
 
   it('decodes a jetton transfer prefixed with a 0x00000000 text-comment header', () => {
@@ -319,7 +331,7 @@ describe('decodeTonMessageBody', () => {
       .toBoc()
       .toString('base64')
 
-    expect(decodeTonMessageBody(body)).toEqual({
+    expect(decode(body)).toEqual({
       kind: 'jettonTransfer',
       queryId: 12345n,
       amount: 100_000_000n,
@@ -338,7 +350,7 @@ describe('decodeTonMessageBody', () => {
       .toBoc()
       .toString('base64')
 
-    expect(decodeTonMessageBody(body)).toBeNull()
+    expect(decode(body)).toBeNull()
   })
 
   it('returns null when jetton transfer has Either-Cell discriminator set but no ref', () => {
@@ -355,7 +367,7 @@ describe('decodeTonMessageBody', () => {
       .toBoc()
       .toString('base64')
 
-    expect(decodeTonMessageBody(body)).toBeNull()
+    expect(decode(body)).toBeNull()
   })
 
   it('returns null when jetton transfer is truncated mid-Either-Cell', () => {
@@ -372,7 +384,7 @@ describe('decodeTonMessageBody', () => {
       .toBoc()
       .toString('base64')
 
-    expect(decodeTonMessageBody(body)).toBeNull()
+    expect(decode(body)).toBeNull()
   })
 
   it('returns null when NFT transfer is truncated before forward_payload', () => {
@@ -388,7 +400,7 @@ describe('decodeTonMessageBody', () => {
       .toBoc()
       .toString('base64')
 
-    expect(decodeTonMessageBody(body)).toBeNull()
+    expect(decode(body)).toBeNull()
   })
 
   it('treats hex strings with each TON BOC magic prefix as hex', () => {

@@ -644,6 +644,11 @@
       "import": "./dist/chains/ton/messageBody/decode.js",
       "default": "./dist/chains/ton/messageBody/decode.js"
     },
+    "./chains/ton/messageBody/knownRouters": {
+      "types": "./dist/chains/ton/messageBody/knownRouters.d.ts",
+      "import": "./dist/chains/ton/messageBody/knownRouters.js",
+      "default": "./dist/chains/ton/messageBody/knownRouters.js"
+    },
     "./chains/ton/messageBody/opcodes": {
       "types": "./dist/chains/ton/messageBody/opcodes.d.ts",
       "import": "./dist/chains/ton/messageBody/opcodes.js",

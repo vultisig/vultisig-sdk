@@ -1,5 +1,11 @@
 import { Address, Cell, Slice } from '@ton/core'
 
+import {
+  DEDUST_FACTORIES,
+  isKnownRouterAddress,
+  STONFI_V2_PTON_WALLETS,
+  STONFI_V2_ROUTERS,
+} from './knownRouters'
 import { TonOp } from './opcodes'
 import { TonMessageBodyIntent, TonSwapIntent } from './types'
 
@@ -172,11 +178,17 @@ const parseDedustSwap = (
     }
   })
 
-const parseSwapPayload = (
+/**
+ * Swap classification of the inner `forward_payload` of a STON.fi v2 jetton
+ * transfer. Caller MUST already have verified that the jetton transfer's
+ * inner destination is a known STON.fi v2 router; without that binding the
+ * STON.fi swap opcode is forgeable and can be used to mislabel a transfer to
+ * an attacker as a swap.
+ */
+const parseStonfiSwapPayload = (
   payload: Cell,
   offer: TonSwapOffer
-): TonSwapIntent | null =>
-  parseStonfiV2Swap(payload, offer) ?? parseDedustSwap(payload, offer)
+): TonSwapIntent | null => parseStonfiV2Swap(payload, offer)
 
 const parsePtonTransferSwap = (slice: Slice): TonSwapIntent | null =>
   safeDecode(() => {
@@ -187,7 +199,7 @@ const parsePtonTransferSwap = (slice: Slice): TonSwapIntent | null =>
     const forwardPayload = loadForwardPayload(slice)
     if (!forwardPayload) return null
 
-    return parseSwapPayload(forwardPayload, {
+    return parseStonfiSwapPayload(forwardPayload, {
       offerAsset: 'ton',
       offerAmount,
     })
@@ -203,12 +215,21 @@ const parseJettonTransfer = (slice: Slice): TonMessageBodyIntent | null => {
     loadMaybeRef(slice)
     const forwardTonAmount = slice.loadCoins()
     const forwardPayload = loadForwardPayload(slice)
-    const swapIntent = forwardPayload
-      ? parseSwapPayload(forwardPayload, {
-          offerAsset: 'jetton',
-          offerAmount: amount,
-        })
-      : null
+
+    const innerDestination = formatAddress(destination)
+
+    // Swap classification is gated on the jetton transfer's inner destination
+    // being a known STON.fi v2 router. DeDust jetton swaps are intentionally
+    // not classified — DeDust uses one vault per jetton, and the vault set is
+    // not statically enumerable. Callers needing DeDust jetton-swap detection
+    // must verify the destination via DeDust factory `get_vault_address`.
+    const swapIntent =
+      forwardPayload && isKnownRouterAddress(innerDestination, STONFI_V2_ROUTERS)
+        ? parseStonfiSwapPayload(forwardPayload, {
+            offerAsset: 'jetton',
+            offerAmount: amount,
+          })
+        : null
 
     if (swapIntent) return swapIntent
 
@@ -216,7 +237,7 @@ const parseJettonTransfer = (slice: Slice): TonMessageBodyIntent | null => {
       kind: 'jettonTransfer',
       queryId,
       amount,
-      destination: formatAddress(destination),
+      destination: innerDestination,
       responseDestination: responseDestination
         ? formatAddress(responseDestination)
         : null,
@@ -256,19 +277,45 @@ const parseExcesses = (slice: Slice): TonMessageBodyIntent | null => {
 }
 
 /**
+ * Input to {@link decodeTonMessageBody}. `outerDestination` is the `to` field
+ * of the outgoing TON message (`TonMessage.to` in the keysign payload). It is
+ * required to bind opcode-based swap classification to known router contracts.
+ */
+export type DecodeTonMessageBodyInput = {
+  payload: string | null | undefined
+  outerDestination: string | null | undefined
+}
+
+/**
  * Decode the body BOC of a TON internal message into a structured intent.
  *
  * Accepts the base64 BOC carried in `TonMessage.payload` (Vultisig's keysign
- * payload schema). Returns `null` when the value is empty, not a parseable
- * BOC, has no opcode header, or carries an opcode this decoder doesn't yet
- * handle — callers should fall back to displaying the raw TON transfer.
+ * payload schema) along with the outer message destination. Returns `null`
+ * when the payload is empty, not a parseable BOC, has no opcode header, or
+ * carries an opcode this decoder doesn't yet handle — callers should fall
+ * back to displaying the raw TON transfer.
+ *
+ * **Router binding.** Opcodes are contract-local in TON, so an attacker can
+ * craft a body whose leading 32 bits collide with a known DEX swap opcode. To
+ * prevent the keysign UI from labeling such a body as a "swap":
+ *
+ * - `DEDUST_NATIVE_SWAP` is dispatched only when `outerDestination` is a
+ *   known DeDust factory.
+ * - `PTON_TRANSFER` (STON.fi v2 TON-side swap) is dispatched only when
+ *   `outerDestination` is a known STON.fi v2 pTON wallet.
+ * - STON.fi v2 jetton-swap detection inside `JETTON_TRANSFER` is gated on
+ *   the inner `destination` field being a known STON.fi v2 router.
+ *
+ * DeDust jetton-swap detection is intentionally not provided — DeDust vaults
+ * are per-jetton and not statically enumerable.
  *
  * Note: dApps sometimes prefix a jetton transfer body with an empty 32-bit
  * "text comment" header (op = 0). In that case, we look at the next 32 bits.
  */
-export const decodeTonMessageBody = (
-  payloadBase64: string | null | undefined
-): TonMessageBodyIntent | null => {
+export const decodeTonMessageBody = ({
+  payload: payloadBase64,
+  outerDestination,
+}: DecodeTonMessageBodyInput): TonMessageBodyIntent | null => {
   const payload = tonPayloadToBase64(payloadBase64)
   if (!payload) return null
 
@@ -282,8 +329,16 @@ export const decodeTonMessageBody = (
     if (op === TonOp.JETTON_TRANSFER) return parseJettonTransfer(slice)
     if (op === TonOp.NFT_TRANSFER) return parseNftTransfer(slice)
     if (op === TonOp.EXCESSES) return parseExcesses(slice)
-    if (op === TonOp.PTON_TRANSFER) return parsePtonTransferSwap(slice)
+    if (op === TonOp.PTON_TRANSFER) {
+      if (!isKnownRouterAddress(outerDestination, STONFI_V2_PTON_WALLETS)) {
+        return null
+      }
+      return parsePtonTransferSwap(slice)
+    }
     if (op === TonOp.DEDUST_NATIVE_SWAP) {
+      if (!isKnownRouterAddress(outerDestination, DEDUST_FACTORIES)) {
+        return null
+      }
       return parseDedustSwap(cell, { offerAsset: 'ton', offerAmount: 0n })
     }
     return null
