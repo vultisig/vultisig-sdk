@@ -1,7 +1,7 @@
 import { Address, beginCell, Cell } from '@ton/core'
 import { describe, expect, it } from 'vitest'
 
-import { decodeTonMessageBody } from './decode'
+import { decodeTonMessageBody, tonPayloadToBase64 } from './decode'
 import { TonOp } from './opcodes'
 
 const RECIPIENT = Address.parse(
@@ -339,5 +339,67 @@ describe('decodeTonMessageBody', () => {
       .toString('base64')
 
     expect(decodeTonMessageBody(body)).toBeNull()
+  })
+
+  it('returns null when jetton transfer has Either-Cell discriminator set but no ref', () => {
+    const body = beginCell()
+      .storeUint(TonOp.JETTON_TRANSFER, 32)
+      .storeUint(1n, 64)
+      .storeCoins(42n)
+      .storeAddress(RECIPIENT)
+      .storeAddress(RESPONSE)
+      .storeBit(0) // custom_payload absent
+      .storeCoins(0n) // forward_ton_amount
+      .storeBit(1) // forward_payload says ref — but we never store one
+      .endCell()
+      .toBoc()
+      .toString('base64')
+
+    expect(decodeTonMessageBody(body)).toBeNull()
+  })
+
+  it('returns null when jetton transfer is truncated mid-Either-Cell', () => {
+    const body = beginCell()
+      .storeUint(TonOp.JETTON_TRANSFER, 32)
+      .storeUint(1n, 64)
+      .storeCoins(42n)
+      .storeAddress(RECIPIENT)
+      .storeAddress(RESPONSE)
+      .storeBit(0) // custom_payload absent
+      .storeCoins(0n) // forward_ton_amount
+      // forward_payload discriminator missing entirely
+      .endCell()
+      .toBoc()
+      .toString('base64')
+
+    expect(decodeTonMessageBody(body)).toBeNull()
+  })
+
+  it('returns null when NFT transfer is truncated before forward_payload', () => {
+    const body = beginCell()
+      .storeUint(TonOp.NFT_TRANSFER, 32)
+      .storeUint(1n, 64)
+      .storeAddress(RECIPIENT)
+      .storeAddress(RESPONSE)
+      .storeBit(0) // custom_payload absent
+      .storeCoins(0n) // forward_amount
+      // forward_payload discriminator missing entirely
+      .endCell()
+      .toBoc()
+      .toString('base64')
+
+    expect(decodeTonMessageBody(body)).toBeNull()
+  })
+
+  it('treats hex strings with each TON BOC magic prefix as hex', () => {
+    // tonPayloadToBase64 returns a base64-converted string when the input is a
+    // valid hex BOC, otherwise it passes the input through unchanged. The
+    // helper is exercised here to confirm all three @ton/core magic prefixes
+    // are recognised, not just b5ee9c72.
+    const tail = '00'.repeat(8)
+    expect(tonPayloadToBase64('b5ee9c72' + tail)).not.toBe('b5ee9c72' + tail)
+    expect(tonPayloadToBase64('68ff65f3' + tail)).not.toBe('68ff65f3' + tail)
+    expect(tonPayloadToBase64('acc3a728' + tail)).not.toBe('acc3a728' + tail)
+    expect(tonPayloadToBase64('deadbeef' + tail)).toBe('deadbeef' + tail)
   })
 })

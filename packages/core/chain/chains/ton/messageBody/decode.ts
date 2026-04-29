@@ -18,10 +18,15 @@ const safeDecode = <T>(fn: () => T): T | null => {
   }
 }
 
-const isHexBoc = (payload: string) =>
-  payload.length % 2 === 0 &&
-  payload.toLowerCase().startsWith('b5ee9c') &&
-  /^[\da-f]+$/i.test(payload)
+const HEX_BOC_MAGIC_PREFIXES = ['b5ee9c72', '68ff65f3', 'acc3a728'] as const
+
+const isHexBoc = (payload: string) => {
+  if (payload.length % 2 !== 0) return false
+  if (!/^[\da-f]+$/i.test(payload)) return false
+
+  const lower = payload.toLowerCase()
+  return HEX_BOC_MAGIC_PREFIXES.some(magic => lower.startsWith(magic))
+}
 
 export const tonPayloadToBase64 = (payload?: string | null): string | null => {
   if (!payload) return null
@@ -40,19 +45,32 @@ const loadMaybeAddress = (slice: Slice): string | null => {
 }
 
 const loadMaybeRef = (slice: Slice): Cell | null => {
-  if (slice.remainingBits < 1) return null
+  if (slice.remainingBits < 1) {
+    throw new Error('Maybe-^Cell discriminator missing')
+  }
 
   const hasRef = slice.loadBit()
-  if (!hasRef || slice.remainingRefs < 1) return null
+  if (!hasRef) return null
+
+  if (slice.remainingRefs < 1) {
+    throw new Error('Maybe-^Cell discriminator set but no ref available')
+  }
 
   return slice.loadRef()
 }
 
 const loadForwardPayload = (slice: Slice): Cell | null => {
-  if (slice.remainingBits < 1) return null
+  if (slice.remainingBits < 1) {
+    throw new Error('Either-Cell discriminator missing')
+  }
 
   const isRef = slice.loadBit()
-  if (isRef) return slice.remainingRefs > 0 ? slice.loadRef() : null
+  if (isRef) {
+    if (slice.remainingRefs < 1) {
+      throw new Error('Either-Cell discriminator set but no ref available')
+    }
+    return slice.loadRef()
+  }
 
   return slice.asCell()
 }
@@ -214,6 +232,10 @@ const parseNftTransfer = (slice: Slice): TonMessageBodyIntent | null => {
     const responseDestination = slice.loadMaybeAddress()
     loadMaybeRef(slice)
     const forwardAmount = slice.loadCoins()
+    // forward_payload:(Either Cell ^Cell) — required by TEP-62; we don't
+    // surface its content, but we must consume it to reject bodies truncated
+    // before this field.
+    loadForwardPayload(slice)
     return {
       kind: 'nftTransfer',
       queryId,
