@@ -54,6 +54,7 @@ export const getSolanaSendSigningInput = ({
         amount: Long.fromString(amount.toString()),
         decimals: coin.decimals,
         tokenProgramId,
+        memo: keysignPayload.memo,
       }
 
       if (!toTokenAssociatedAddress) {
