@@ -200,7 +200,7 @@
     "ethers": "^6.15.0",
     "event-target-polyfill": "^0.0.3",
     "events": "^3.3.0",
-    "i18next": "^25.8.4",
+    "i18next": "^26.0.8",
     "i18next-http-backend": "^3.0.2",
     "isomorphic-fetch": "^3.0.0",
     "node-fetch": "^3.3.2",
@@ -221,7 +221,7 @@
   },
   "devDependencies": {
     "@rollup/plugin-alias": "^6.0.0",
-    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-commonjs": "^29.0.2",
     "@rollup/plugin-inject": "^5.0.5",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.0",
@@ -232,7 +232,7 @@
     "@types/events": "^3",
     "@types/node": "^22.13.10",
     "@types/path-browserify": "^1",
-    "@vitest/coverage-v8": "3.2.4",
+    "@vitest/coverage-v8": "4.1.5",
     "concurrently": "^9.2.1",
     "dotenv": "^17.2.3",
     "electron": "^39.2.3",
@@ -244,7 +244,7 @@
     "rollup-plugin-esbuild": "^6.2.1",
     "tsx": "^4.19.5",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.5"
   },
   "peerDependencies": {
     "@react-native-async-storage/async-storage": "^2.0.0",

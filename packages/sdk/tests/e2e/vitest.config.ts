@@ -27,12 +27,7 @@ export default defineConfig({
 
     // One file per fork so WASM / signing state does not accumulate across 14 suites (avoids multi-GB heap OOM).
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: false,
-        maxForks: 1,
-      },
-    },
+    maxWorkers: 1,
 
     // Setup files
     setupFiles: [

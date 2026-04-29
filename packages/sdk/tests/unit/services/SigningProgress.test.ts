@@ -20,70 +20,75 @@ import { ServerManager } from '../../../src/server/ServerManager'
 import { FastSigningService } from '../../../src/services/FastSigningService'
 import type { SigningStep } from '../../../src/types'
 
-// Mock ServerManager methods
+// Mock ServerManager methods.
+// vitest 4: vi.fn().mockImplementation(() => obj) is no longer constructable
+// via `new`. Use vi.fn(function() { Object.assign(this, obj) }) so
+// `new ServerManager()` produces an instance with the mocked methods.
 vi.mock('../../../src/server/ServerManager', () => {
   return {
-    ServerManager: vi.fn().mockImplementation(() => ({
-      coordinateFastSigning: vi.fn().mockImplementation(async options => {
-        // Simulate progress reporting
-        if (options.onProgress) {
-          options.onProgress({
-            step: 'coordinating',
-            progress: 30,
-            message: 'Connecting to VultiServer...',
-            mode: 'fast',
-            participantCount: 2,
-            participantsReady: 1,
-          })
-          options.onProgress({
-            step: 'coordinating',
-            progress: 50,
-            message: 'Waiting for all participants...',
-            mode: 'fast',
-            participantCount: 2,
-            participantsReady: 1,
-          })
-          options.onProgress({
-            step: 'coordinating',
-            progress: 60,
-            message: 'All participants ready...',
-            mode: 'fast',
-            participantCount: 2,
-            participantsReady: 2,
-          })
-          options.onProgress({
-            step: 'signing',
-            progress: 70,
-            message: 'Performing cryptographic signing...',
-            mode: 'fast',
-            participantCount: 2,
-            participantsReady: 2,
-          })
-          options.onProgress({
-            step: 'complete',
-            progress: 90,
-            message: 'Formatting signature...',
-            mode: 'fast',
-            participantCount: 2,
-            participantsReady: 2,
-          })
-          options.onProgress({
-            step: 'complete',
-            progress: 100,
-            message: 'Signature complete',
-            mode: 'fast',
-            participantCount: 2,
-            participantsReady: 2,
-          })
-        }
+    ServerManager: vi.fn(function (this: object) {
+      Object.assign(this, {
+        coordinateFastSigning: vi.fn().mockImplementation(async options => {
+          // Simulate progress reporting
+          if (options.onProgress) {
+            options.onProgress({
+              step: 'coordinating',
+              progress: 30,
+              message: 'Connecting to VultiServer...',
+              mode: 'fast',
+              participantCount: 2,
+              participantsReady: 1,
+            })
+            options.onProgress({
+              step: 'coordinating',
+              progress: 50,
+              message: 'Waiting for all participants...',
+              mode: 'fast',
+              participantCount: 2,
+              participantsReady: 1,
+            })
+            options.onProgress({
+              step: 'coordinating',
+              progress: 60,
+              message: 'All participants ready...',
+              mode: 'fast',
+              participantCount: 2,
+              participantsReady: 2,
+            })
+            options.onProgress({
+              step: 'signing',
+              progress: 70,
+              message: 'Performing cryptographic signing...',
+              mode: 'fast',
+              participantCount: 2,
+              participantsReady: 2,
+            })
+            options.onProgress({
+              step: 'complete',
+              progress: 90,
+              message: 'Formatting signature...',
+              mode: 'fast',
+              participantCount: 2,
+              participantsReady: 2,
+            })
+            options.onProgress({
+              step: 'complete',
+              progress: 100,
+              message: 'Signature complete',
+              mode: 'fast',
+              participantCount: 2,
+              participantsReady: 2,
+            })
+          }
 
-        // Return mock signature
-        return {
-          signature: 'mock_signature',
-          format: 'ECDSA',
-        }
-      }),
-    })),
+          // Return mock signature
+          return {
+            signature: 'mock_signature',
+            format: 'ECDSA',
+          }
+        }),
+      })
+    }),
   }
 })
 
