@@ -403,15 +403,26 @@ describe('decodeTonMessageBody', () => {
     expect(decode(body)).toBeNull()
   })
 
-  it('treats hex strings with each TON BOC magic prefix as hex', () => {
-    // tonPayloadToBase64 returns a base64-converted string when the input is a
-    // valid hex BOC, otherwise it passes the input through unchanged. The
-    // helper is exercised here to confirm all three @ton/core magic prefixes
-    // are recognised, not just b5ee9c72.
+  it('round-trips hex BOC fixtures through base64 for each magic prefix', () => {
+    // The default @ton/core magic (b5ee9c72) is exercised end-to-end against a
+    // real BOC payload, including the full decodeTonMessageBody pipeline.
+    const realHexBoc = buildExcessesBody(7n).toBoc().toString('hex')
+    expect(realHexBoc.slice(0, 8)).toBe('b5ee9c72')
+    expect(decode(realHexBoc)).toEqual({ kind: 'excesses', queryId: 7n })
+
+    // For the alternate magics @ton/core does not emit (68ff65f3, acc3a728),
+    // verify tonPayloadToBase64 still recognises the input as hex by round-
+    // tripping the bytes: hex → base64 → bytes must equal the original hex.
     const tail = '00'.repeat(8)
-    expect(tonPayloadToBase64('b5ee9c72' + tail)).not.toBe('b5ee9c72' + tail)
-    expect(tonPayloadToBase64('68ff65f3' + tail)).not.toBe('68ff65f3' + tail)
-    expect(tonPayloadToBase64('acc3a728' + tail)).not.toBe('acc3a728' + tail)
+    for (const magic of ['b5ee9c72', '68ff65f3', 'acc3a728']) {
+      const hex = magic + tail
+      const base64 = tonPayloadToBase64(hex)
+      expect(base64).not.toBe(hex)
+      if (base64 === null) throw new Error('expected base64 conversion')
+      expect(Buffer.from(base64, 'base64').toString('hex')).toBe(hex)
+    }
+
+    // Strings without a known magic prefix must pass through unchanged.
     expect(tonPayloadToBase64('deadbeef' + tail)).toBe('deadbeef' + tail)
   })
 })
