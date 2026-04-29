@@ -299,6 +299,11 @@
       "import": "./dist/chains/cosmos/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/tendermintRpcUrl.js"
     },
+    "./chains/cosmos/terraClassicTax": {
+      "types": "./dist/chains/cosmos/terraClassicTax.d.ts",
+      "import": "./dist/chains/cosmos/terraClassicTax.js",
+      "default": "./dist/chains/cosmos/terraClassicTax.js"
+    },
     "./chains/cosmos/thor/getThorchainInboundAddress": {
       "types": "./dist/chains/cosmos/thor/getThorchainInboundAddress.d.ts",
       "import": "./dist/chains/cosmos/thor/getThorchainInboundAddress.js",
