@@ -6,10 +6,8 @@ import { oneInchSwapEnabledChains } from '@vultisig/core-chain/swap/general/oneI
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
-import { attempt } from '@vultisig/lib-utils/attempt'
 import { bigIntToNumber } from '@vultisig/lib-utils/bigint/bigIntToNumber'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
-import { asyncFallbackChain } from '@vultisig/lib-utils/promise/asyncFallbackChain'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
@@ -33,6 +31,45 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
 }
 
 type SwapQuoteFetcher = () => Promise<SwapQuote>
+
+type RankedSwapQuote = {
+  quote: SwapQuote
+  outputAmount: bigint
+}
+
+function getComparableOutputAmount(q: SwapQuote): bigint {
+  if ('native' in q.quote) {
+    return BigInt(q.quote.native.expected_amount_out)
+  }
+  return BigInt(q.quote.general.dstAmount)
+}
+
+function selectBestEligibleQuote(
+  settled: PromiseSettledResult<RankedSwapQuote>[]
+): SwapQuote | null {
+  let best: SwapQuote | null = null
+  let bestAmount: bigint | null = null
+  let bestIndex = Number.POSITIVE_INFINITY
+
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i]
+    if (result.status !== 'fulfilled') {
+      continue
+    }
+    const { outputAmount, quote } = result.value
+    if (
+      bestAmount === null ||
+      outputAmount > bestAmount ||
+      (outputAmount === bestAmount && i < bestIndex)
+    ) {
+      best = quote
+      bestAmount = outputAmount
+      bestIndex = i
+    }
+  }
+
+  return best
+}
 
 export const findSwapQuote = async ({
   from,
@@ -164,11 +201,24 @@ export const findSwapQuote = async ({
     throw new NoSwapRoutesError()
   }
 
-  const { data, error } = await attempt(asyncFallbackChain(...fetchers))
+  const settled = await Promise.allSettled(
+    fetchers.map(fetcher =>
+      Promise.resolve()
+        .then(fetcher)
+        .then(quote => ({
+          quote,
+          outputAmount: getComparableOutputAmount(quote),
+        }))
+    )
+  )
+  const best = selectBestEligibleQuote(settled)
 
-  if (data) {
-    return data
+  if (best) {
+    return best
   }
+
+  const last = settled[settled.length - 1]
+  const error = last.status === 'rejected' ? last.reason : new Error('No quote')
 
   if (isInError(error, 'dust threshold')) {
     throw new Error(
