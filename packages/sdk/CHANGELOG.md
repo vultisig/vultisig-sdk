@@ -1,5 +1,15 @@
 # @vultisig/sdk
 
+## 0.22.0
+
+### Minor Changes
+
+- [#293](https://github.com/vultisig/vultisig-sdk/pull/293) [`a3a331a`](https://github.com/vultisig/vultisig-sdk/commit/a3a331a875ebc6868b11c6901c8ed99dde51a4ff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Password-protected vault backups use PBKDF2-HMAC-SHA256 with a random salt (600k iterations by default) and a versioned blob prefix; legacy SHA-256-only backups still decrypt.
+
+### Patch Changes
+
+- [#354](https://github.com/vultisig/vultisig-sdk/pull/354) [`feac01f`](https://github.com/vultisig/vultisig-sdk/commit/feac01f3225738a14c0123e1c3d70e46b97760fd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix the CommonJS export shape for the `@vultisig/sdk/vite` preset and harden browser Vite support so SDK wasm assets, Node globals, and local example builds resolve correctly in dev and production.
+
 ## 0.21.0
 
 ### Minor Changes
