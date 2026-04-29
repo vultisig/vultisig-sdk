@@ -585,7 +585,7 @@ const configs = {
         file: './dist/vite/index.cjs',
         format: 'cjs',
         sourcemap: true,
-        exports: 'named',
+        exports: 'auto',
       },
       external: ['vite'],
       plugins: [

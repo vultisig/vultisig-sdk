@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import type { ServerResponse } from 'node:http'
 import { createRequire } from 'node:module'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,20 +10,28 @@ import wasm from 'vite-plugin-wasm'
 const WASM_GLUE = ['@vultisig/lib-dkls', '@vultisig/lib-schnorr', '@vultisig/lib-mldsa'] as const
 const ADDITIONAL_WASM_EXCLUDES = ['7z-wasm'] as const
 
+const sdkPackageJson = fileURLToPath(new URL('../../package.json', import.meta.url))
+const requireFromSdk = createRequire(sdkPackageJson)
+
 const DEFAULT_ALIASES: Readonly<Record<string, string>> = {
-  crypto: 'crypto-browserify',
-  stream: 'stream-browserify',
-  buffer: 'buffer',
-  util: 'util',
-  path: 'path-browserify',
-  events: 'events',
+  crypto: requireFromSdk.resolve('crypto-browserify'),
+  'node:crypto': requireFromSdk.resolve('crypto-browserify'),
+  stream: requireFromSdk.resolve('stream-browserify'),
+  'node:stream': requireFromSdk.resolve('stream-browserify'),
+  buffer: requireFromSdk.resolve('buffer/'),
+  'node:buffer': requireFromSdk.resolve('buffer/'),
+  util: requireFromSdk.resolve('util/'),
+  'node:util': requireFromSdk.resolve('util/'),
+  path: requireFromSdk.resolve('path-browserify'),
+  'node:path': requireFromSdk.resolve('path-browserify'),
+  events: requireFromSdk.resolve('events/'),
+  'node:events': requireFromSdk.resolve('events/'),
+  process: requireFromSdk.resolve('process/browser'),
+  'node:process': requireFromSdk.resolve('process/browser'),
   'node-fetch': 'isomorphic-fetch',
 }
 
 const DEFAULT_OPT_INCLUDE = ['buffer', 'process', 'crypto-browserify', 'stream-browserify', 'events'] as const
-
-const sdkPackageJson = fileURLToPath(new URL('../../package.json', import.meta.url))
-const requireFromSdk = createRequire(sdkPackageJson)
 
 const nodePolyfillsPackageDir = path.dirname(path.dirname(requireFromSdk.resolve('vite-plugin-node-polyfills')))
 
@@ -38,6 +47,12 @@ export type VultisigViteOptions = {
    * @default true
    */
   sevenZipWasm?: boolean
+  /**
+   * Serve `wallet-core.wasm` from `@trustwallet/wallet-core` in dev and emit it
+   * next to Vite chunks during build so the Emscripten loader can fetch it.
+   * @default true
+   */
+  walletCoreWasm?: boolean
   /**
    * Apply `vite-plugin-node-polyfills` with the settings the SDK browser build expects.
    *
@@ -61,6 +76,18 @@ export type VultisigViteOptions = {
   aliases?: Record<string, string>
   /** Shallow-merged with plugin defaults; use to extend `include` / `exclude` / `rolldownOptions` (Vite 8+). */
   optimizeDeps?: UserConfig['optimizeDeps']
+  /**
+   * Define Node's `global` identifier as `globalThis` for browserified dependencies
+   * that still reference `global.crypto` during Vite dependency optimization.
+   * @default true
+   */
+  defineGlobal?: boolean
+  /**
+   * Inject a lightweight `process` global before the app module runs.
+   * Some browserified dependencies still read it at module init time.
+   * @default true
+   */
+  browserGlobals?: boolean
   /** Log one line when 7z wasm is served/emitted; resolution failures are always printed. @default false */
   debug?: boolean
 }
@@ -89,15 +116,20 @@ export type VultisigViteOptions = {
 export default function vultisig(userOptions: VultisigViteOptions = {}): PluginOption {
   const {
     sevenZipWasm = true,
+    walletCoreWasm = true,
     nodePolyfills: useNodePolyfills = false,
     shimResolver: useShimResolver = true,
     aliases: userAliases = {},
     optimizeDeps: userOptimize = {},
+    defineGlobal = true,
+    browserGlobals = true,
     debug = false,
   } = userOptions
 
   let configRoot = process.cwd()
+  let command: ResolvedConfig['command'] = 'build'
   let sevenZipWasmFile: string | undefined
+  let walletCoreWasmFile: string | undefined
   const mergedAliases: Record<string, string> = { ...DEFAULT_ALIASES, ...userAliases }
   const excludeList = [...WASM_GLUE, ...ADDITIONAL_WASM_EXCLUDES, ...(userOptimize.exclude ?? [])]
   const includeList = [...DEFAULT_OPT_INCLUDE, ...(userOptimize.include ?? [])]
@@ -121,6 +153,32 @@ export default function vultisig(userOptions: VultisigViteOptions = {}): PluginO
     return undefined
   }
 
+  const resolveWalletCoreWasmFile = () => {
+    if (walletCoreWasmFile) return walletCoreWasmFile
+    const requireFromRoot = createRequire(path.join(configRoot, 'package.json'))
+    const resolvers = [requireFromRoot, requireFromSdk]
+    for (const resolver of resolvers) {
+      try {
+        const pkgDir = path.dirname(resolver.resolve('@trustwallet/wallet-core/package.json'))
+        const file = path.join(pkgDir, 'dist/lib/wallet-core.wasm')
+        if (existsSync(file)) {
+          walletCoreWasmFile = file
+          return file
+        }
+      } catch {
+        // Try the next resolver; consumers may rely on the SDK's transitive dependency.
+      }
+    }
+    return undefined
+  }
+
+  const serveWasmFile = (res: ServerResponse, file: string) => {
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'application/wasm')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.end(readFileSync(file))
+  }
+
   const configPlugin: Plugin = {
     name: 'vultisig-sdk:config',
     enforce: 'pre',
@@ -129,12 +187,35 @@ export default function vultisig(userOptions: VultisigViteOptions = {}): PluginO
         resolve: {
           alias: { ...mergedAliases },
         },
+        define: defineGlobal ? { global: 'globalThis', 'process.env': '{}', 'process.env.NODE_DEBUG': '""' } : {},
         optimizeDeps: {
           ...userOptimize,
           include: includeList,
           exclude: excludeList,
         },
       }
+    },
+  }
+
+  const browserGlobalsPlugin: Plugin = {
+    name: 'vultisig-sdk:browser-globals',
+    enforce: 'pre',
+    transformIndexHtml() {
+      if (!browserGlobals) return []
+      return [
+        {
+          tag: 'script',
+          children: [
+            'globalThis.process ??= {}',
+            'globalThis.process.env ??= {}',
+            'globalThis.process.browser ??= true',
+            'globalThis.process.version ??= ""',
+            'globalThis.process.versions ??= {}',
+            'globalThis.process.nextTick ??= ((callback, ...args) => queueMicrotask(() => callback(...args)))',
+          ].join('\n'),
+          injectTo: 'head-prepend',
+        },
+      ]
     },
   }
 
@@ -156,58 +237,94 @@ export default function vultisig(userOptions: VultisigViteOptions = {}): PluginO
     },
   }
 
-  const sevenZipPlugin: Plugin = {
-    name: 'vultisig-sdk:7z-wasm',
+  const wasmAssetsPlugin: Plugin = {
+    name: 'vultisig-sdk:wasm-assets',
     enforce: 'pre',
     configResolved(c: ResolvedConfig) {
       configRoot = c.root
+      command = c.command
     },
     configureServer(server) {
-      if (!sevenZipWasm) return
       server.middlewares.use((req, res, next) => {
-        if (req.url?.split('?')[0] !== '/7zz.wasm') {
-          next()
+        const url = req.url?.split('?')[0] ?? ''
+        if (sevenZipWasm && url === '/7zz.wasm') {
+          const file = resolveSevenZipWasmFile()
+          if (!file) {
+            process.stderr.write('[vultisig-sdk] Failed to resolve 7z-wasm/7zz.wasm for dev server\n')
+            res.statusCode = 404
+            res.end('7zz.wasm not found')
+            return
+          }
+
+          if (debug) {
+            process.stderr.write(`[vultisig-sdk] Serving 7zz.wasm from ${file}\n`)
+          }
+          serveWasmFile(res, file)
           return
         }
 
-        const file = resolveSevenZipWasmFile()
-        if (!file) {
-          process.stderr.write('[vultisig-sdk] Failed to resolve 7z-wasm/7zz.wasm for dev server\n')
-          res.statusCode = 404
-          res.end('7zz.wasm not found')
+        if (walletCoreWasm && url.endsWith('/wallet-core.wasm')) {
+          const file = resolveWalletCoreWasmFile()
+          if (!file) {
+            process.stderr.write(
+              '[vultisig-sdk] Failed to resolve @trustwallet/wallet-core/dist/lib/wallet-core.wasm for dev server\n'
+            )
+            res.statusCode = 404
+            res.end('wallet-core.wasm not found')
+            return
+          }
+
+          if (debug) {
+            process.stderr.write(`[vultisig-sdk] Serving wallet-core.wasm from ${file}\n`)
+          }
+          serveWasmFile(res, file)
           return
         }
 
-        if (debug) {
-          process.stderr.write(`[vultisig-sdk] Serving 7zz.wasm from ${file}\n`)
-        }
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'application/wasm')
-        res.setHeader('Cache-Control', 'no-cache')
-        res.end(readFileSync(file))
+        next()
+        return
       })
     },
     buildStart() {
-      if (!sevenZipWasm) return
-      const file = resolveSevenZipWasmFile()
-      if (!file) {
+      if (command !== 'build') return
+      if (sevenZipWasm) {
+        const file = resolveSevenZipWasmFile()
+        if (!file) {
+          this.error(
+            '[vultisig-sdk] Failed to resolve 7z-wasm/7zz.wasm. Set `sevenZipWasm: false` only if you host `/7zz.wasm` yourself.'
+          )
+        }
+
+        this.emitFile({
+          type: 'asset',
+          fileName: '7zz.wasm',
+          source: readFileSync(file),
+        })
+        if (debug) {
+          process.stderr.write(`[vultisig-sdk] Emitted 7zz.wasm from ${file}\n`)
+        }
+      }
+
+      if (!walletCoreWasm) return
+      const walletCoreFile = resolveWalletCoreWasmFile()
+      if (!walletCoreFile) {
         this.error(
-          '[vultisig-sdk] Failed to resolve 7z-wasm/7zz.wasm. Set `sevenZipWasm: false` only if you host `/7zz.wasm` yourself.'
+          '[vultisig-sdk] Failed to resolve @trustwallet/wallet-core/dist/lib/wallet-core.wasm. Set `walletCoreWasm: false` only if you host it yourself.'
         )
       }
 
       this.emitFile({
         type: 'asset',
-        fileName: '7zz.wasm',
-        source: readFileSync(file),
+        fileName: 'assets/wallet-core.wasm',
+        source: readFileSync(walletCoreFile),
       })
       if (debug) {
-        process.stderr.write(`[vultisig-sdk] Emitted 7zz.wasm from ${file}\n`)
+        process.stderr.write(`[vultisig-sdk] Emitted wallet-core.wasm from ${walletCoreFile}\n`)
       }
     },
   }
 
-  const out: Plugin[] = [configPlugin, wasm() as unknown as Plugin]
+  const out: Plugin[] = [configPlugin, browserGlobalsPlugin, wasm() as unknown as Plugin]
   if (useShimResolver) out.push(shimPlugin)
   if (useNodePolyfills) {
     const { nodePolyfills: nodePolyfillsFactory } = requireFromSdk('vite-plugin-node-polyfills') as {
@@ -221,6 +338,6 @@ export default function vultisig(userOptions: VultisigViteOptions = {}): PluginO
       }) as Plugin
     )
   }
-  out.push(sevenZipPlugin)
+  out.push(wasmAssetsPlugin)
   return out
 }
