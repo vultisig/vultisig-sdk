@@ -127,6 +127,30 @@ describe('getTerraClassicTaxRate', () => {
     expect(rate).toBe(TERRA_CLASSIC_TAX_DEC_SCALE)
   })
 
+  it('rejects rates with more than 18 fractional digits (no truncation, fail-closed)', async () => {
+    // Codex round-1 P1: previous behavior truncated past 18 digits, so
+    // `1.0000000000000000001` (semantically > 100%) was parsed as
+    // exactly 10^18 and slipped past the cap guard. Now reject outright.
+    const fetchImpl = mkFetch(() => okJson({ tax_rate: '1.0000000000000000001' }))
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
+      /malformed Dec/
+    )
+  })
+
+  it('rejects multi-decimal-point Dec strings', async () => {
+    const fetchImpl = mkFetch(() => okJson({ tax_rate: '1.0.0' }))
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
+      /malformed Dec/
+    )
+  })
+
+  it('rejects trailing dot Dec strings', async () => {
+    const fetchImpl = mkFetch(() => okJson({ tax_rate: '1.' }))
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
+      /malformed Dec/
+    )
+  })
+
   it('passes through abort signal', async () => {
     const fetchImpl = vi.fn(async (_url: string | URL, init?: RequestInit) => {
       expect(init?.signal).toBeDefined()
@@ -159,10 +183,22 @@ describe('getTerraClassicTaxCap', () => {
     expect(cap).toBeNull()
   })
 
-  it('returns null when the response shape is missing tax_cap', async () => {
+  it('throws (fail-closed) when 200 response is missing tax_cap (preserves cap, no fail-open overcharge)', async () => {
+    // Codex round-1 P1: previous behavior returned null (treated as
+    // uncapped), letting a flaky/tampered LCD turn a capped denom into
+    // an uncapped one. Now the missing-field case is reserved to 404
+    // explicit-not-found ONLY; 200 with no tax_cap fails closed.
     const fetchImpl = mkFetch(() => okJson({}))
-    const cap = await getTerraClassicTaxCap('uusd', { fetchImpl })
-    expect(cap).toBeNull()
+    await expect(getTerraClassicTaxCap('uusd', { fetchImpl })).rejects.toThrow(
+      /200 response missing tax_cap/
+    )
+  })
+
+  it('throws (fail-closed) when 200 response sets tax_cap to null', async () => {
+    const fetchImpl = mkFetch(() => okJson({ tax_cap: null }))
+    await expect(getTerraClassicTaxCap('uusd', { fetchImpl })).rejects.toThrow(
+      /200 response missing tax_cap/
+    )
   })
 
   it('throws on non-404 errors', async () => {

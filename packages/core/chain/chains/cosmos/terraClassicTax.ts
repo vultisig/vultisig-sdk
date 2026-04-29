@@ -95,16 +95,22 @@ const parseDecToFixed18 = (s: string): bigint => {
   const negative = trimmed.startsWith('-')
   if (negative) throw new Error(`tax_rate: negative Dec rejected (${trimmed})`)
 
-  const [intPart, fracPart = ''] = trimmed.split('.')
-  if (!/^[0-9]+$/.test(intPart) || !/^[0-9]*$/.test(fracPart)) {
-    throw new Error(`tax_rate: malformed Dec "${trimmed}"`)
+  // Validate strict Dec shape — single decimal point at most, and
+  // reject 19+ fractional digits outright. Truncating past 18 digits
+  // would let `1.0000000000000000001` (semantically > 100%) parse as
+  // exactly `10^18` and pass the cap guard below — fail-closed instead.
+  // Codex round-1 P1.
+  if (!/^[0-9]+(\.[0-9]{1,18})?$/.test(trimmed)) {
+    throw new Error(
+      `tax_rate: malformed Dec "${trimmed}" (expected digits with at most 18 fractional digits)`
+    )
   }
-  // Truncate fractional digits beyond 18 (would overflow the Dec scale —
-  // the on-chain Dec only stores 18 digits anyway, so anything past that
-  // is encoder error rather than precision loss we should preserve).
-  const fracTruncated = fracPart.slice(0, 18).padEnd(18, '0')
+  const [intPart, fracPart = ''] = trimmed.split('.')
+  // intPart is guaranteed non-empty by the regex; fracPart is in [0, 18]
+  // digits so no truncation is needed (it's exactly representable).
+  const fracPadded = fracPart.padEnd(18, '0')
   const value =
-    BigInt(intPart) * TERRA_CLASSIC_TAX_DEC_SCALE + BigInt(fracTruncated)
+    BigInt(intPart) * TERRA_CLASSIC_TAX_DEC_SCALE + BigInt(fracPadded)
   // Cap at 100% (Dec value `1.0` on the 18-decimal scale = `10^18`). A
   // hostile or buggy LCD returning `tax_rate: '1000.0'` would otherwise
   // drain the user — real Terra rates are < 5%.
@@ -140,26 +146,33 @@ export async function getTerraClassicTaxRate(
  * amount — when the chain re-enables the tax, large `uusd` transfers in
  * particular hit the cap rather than the rate.
  *
- * Returns `null` when the LCD has no entry for the denom — caller should
- * treat this as "no per-denom cap" (the math helper interprets a missing
- * cap as `+∞`).
+ * Returns `null` ONLY for HTTP 404 ("no entry for this denom") — the
+ * caller treats `null` as "no per-denom cap" (the math helper interprets
+ * a missing cap as `+∞`).
+ *
+ * Fails closed (throws) on any other shape we don't recognize — including
+ * a `200` response with the `tax_cap` field missing or null. A flaky or
+ * tampered LCD that drops the field would otherwise turn a capped denom
+ * into an uncapped one and overcharge the user. Codex round-1 P1.
  */
 export async function getTerraClassicTaxCap(
   denom: string,
   opts: FetchOpts = {}
 ): Promise<bigint | null> {
-  type Raw = { tax_cap?: string }
+  type Raw = { tax_cap?: string | null }
   let raw: Raw
   try {
     raw = await lcdGetJson<Raw>(getTerraClassicTaxCapsUrl(denom), opts)
   } catch (e) {
-    // Some LCDs return 404 for unknown denoms instead of an empty payload —
-    // surface as `null` (no cap) rather than bubbling, since "no cap on this
-    // denom" is the semantically correct interpretation.
+    // 404 ⇒ "no entry for this denom" (semantically uncapped).
     if (e instanceof Error && e.message.startsWith('LCD 404')) return null
     throw e
   }
-  if (raw.tax_cap === undefined || raw.tax_cap === null) return null
+  if (raw.tax_cap === undefined || raw.tax_cap === null) {
+    throw new Error(
+      `tax_cap: 200 response missing tax_cap for ${denom} — refusing to fail-open and overcharge`
+    )
+  }
   if (!/^[0-9]+$/.test(raw.tax_cap)) {
     throw new Error(`tax_cap: malformed bigint "${raw.tax_cap}"`)
   }

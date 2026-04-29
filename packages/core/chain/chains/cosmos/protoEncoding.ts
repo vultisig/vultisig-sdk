@@ -75,16 +75,22 @@ export const varintBig = (value: bigint): Uint8Array => {
  * 29 bits (proto spec MAX_FIELD_NUMBER = 2^29 - 1).
  */
 const encodeFieldTag = (fieldNumber: number, wireType: WireType): Uint8Array => {
+  // The legal proto field-number range is [1, 2^29 - 1]. JS bitwise ops
+  // operate on signed 32-bit integers, so `fieldNumber << 3` overflows
+  // the signed lane once fieldNumber >= 2^28 — the resulting tag would
+  // be wrong (or negative) for the upper half of the legal range.
+  // Compute in bigint space to keep the full range correct, even though
+  // the only current call sites use low field numbers.
   if (
     !Number.isInteger(fieldNumber) ||
     fieldNumber < 1 ||
-    fieldNumber >= 1 << 29
+    fieldNumber >= 2 ** 29
   ) {
     throw new RangeError(
       `encodeFieldTag: fieldNumber must be in [1, 2^29 - 1], got ${fieldNumber}`
     )
   }
-  return varintBig(BigInt((fieldNumber << 3) | wireType))
+  return varintBig((BigInt(fieldNumber) << 3n) | BigInt(wireType))
 }
 
 /**
