@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -91,6 +91,15 @@ async function assertWasmResponse(baseUrl, pathname) {
   assert.equal(response.headers.get('content-type'), 'application/wasm', `expected ${pathname} wasm MIME type`)
   assert.ok((await response.arrayBuffer()).byteLength > 0, `expected ${pathname} to have a non-empty body`)
 }
+
+test('browser example prepare recreates missing shared package artifacts', { timeout: 180_000 }, () => {
+  const mpcWasmDist = path.join(repoRoot, 'packages/mpc-wasm/dist')
+  rmSync(mpcWasmDist, { recursive: true, force: true })
+
+  run('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk'])
+
+  assert.ok(existsSync(path.join(mpcWasmDist, 'index.js')), 'expected prepare:sdk to rebuild mpc-wasm dist')
+})
 
 test('browser example builds against the local SDK workspace package', { timeout: 180_000 }, () => {
   run('yarn', ['workspace', '@vultisig/example-browser', 'build'])

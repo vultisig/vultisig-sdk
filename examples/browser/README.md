@@ -40,11 +40,20 @@ cd examples/browser
 yarn dev
 ```
 
-The example checks the local workspace SDK before Vite starts and rebuilds `packages/sdk/dist/` when the SDK sources are newer than the generated artifacts.
+The example checks local workspace artifacts before Vite starts. It rebuilds shared package outputs such as `packages/mpc-wasm/dist/` when they are missing or stale, then rebuilds `packages/sdk/dist/` when SDK sources are newer than the generated artifacts.
 
 Open http://localhost:3000
 
 ### Build
+
+From the repository root:
+
+```bash
+yarn workspace @vultisig/example-browser build
+yarn workspace @vultisig/example-browser preview
+```
+
+Or from this folder:
 
 ```bash
 yarn build
