@@ -11,11 +11,10 @@ import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
-import { refineSolanaChainSpecific } from './refine'
 
 export const getSolanaChainSpecific: GetChainSpecificResolver<
   'solanaSpecific'
-> = async ({ keysignPayload, walletCore }) => {
+> = async ({ keysignPayload }) => {
   const coin = getKeysignCoin<OtherChain.Solana>(keysignPayload)
   const receiver = shouldBePresent(keysignPayload.toAddress)
   const client = getSolanaClient()
@@ -67,15 +66,5 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<
 
   chainSpecific.priorityFee = priorityFeePrice.toString()
 
-  return withFallback(
-    attempt(
-      refineSolanaChainSpecific({
-        keysignPayload,
-        chainSpecific,
-        priorityFeePrice,
-        walletCore,
-      })
-    ),
-    chainSpecific
-  )
+  return chainSpecific
 }
