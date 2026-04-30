@@ -1,5 +1,13 @@
 # @vultisig/sdk
 
+## 0.22.1
+
+### Patch Changes
+
+- [#361](https://github.com/vultisig/vultisig-sdk/pull/361) [`a52980c`](https://github.com/vultisig/vultisig-sdk/commit/a52980c490633da7d7ae36128bc491f8ca3ff565) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Build shared workspace packages before bundling the SDK (`yarn build:sdk`). The browser example prepare step now rebuilds shared `dist` outputs when missing or stale, and shared utilities now import `Buffer` explicitly so browser apps do not crash during module evaluation.
+
+- [#364](https://github.com/vultisig/vultisig-sdk/pull/364) [`d49b3e8`](https://github.com/vultisig/vultisig-sdk/commit/d49b3e82e153cf77282cbf06fdf72d9bb37cc836) Thanks [@premiumjibles](https://github.com/premiumjibles)! - `@vultisig/sdk`: re-export `getTxStatus` from `@vultisig/core-chain/tx/status` as a top-level standalone helper alongside `getCoinBalance` and `getPublicKey`. The dispatcher is stateless (`{ chain, hash }` → `TxStatusResult`) and was already compiled into every platform bundle, but was previously only reachable via the `vault.getTxStatus(...)` instance method on `VaultBase`. Vault-free callers (CLI, RN apps that store vault data outside `VaultManager`) can now poll receipts without instantiating an abstract `VaultBase` subclass purely to use a stateless lookup. `TxStatusResult` / `TxReceiptInfo` were already exported as types — this just adds the runtime function.
+
 ## 0.22.0
 
 ### Minor Changes
