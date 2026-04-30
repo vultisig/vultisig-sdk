@@ -6931,6 +6931,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/lib-utils@workspace:packages/lib/utils"
   dependencies:
+    buffer: "npm:^6.0.3"
     long: "npm:^5.3.2"
     viem: "npm:^2.48.4"
   languageName: unknown

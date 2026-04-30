@@ -675,6 +675,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
+    "buffer": "^6.0.3",
     "long": "^5.3.2",
     "viem": "^2.48.4"
   }
