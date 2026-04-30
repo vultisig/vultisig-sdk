@@ -16,10 +16,10 @@ const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const FROM_ATA = '7uQp24mcoUe9MxPCabwq8b13mFrjVXfh2ZvYqsVYKkpd'
 const TO_ATA = '4XqMxvLmUMxR1L6r7XZ5GnWy3Pna7BUuzrcLvm5Twr2T'
 
-const buildSolanaSpecific = () =>
+const buildSolanaSpecific = (priorityFee = '1000000') =>
   create(SolanaSpecificSchema, {
     recentBlockHash: BLOCKHASH,
-    priorityFee: '1000000',
+    priorityFee,
     computeLimit: '100000',
   })
 
@@ -27,12 +27,14 @@ const buildPayload = ({
   contractAddress,
   fromTokenAssociatedAddress,
   toTokenAssociatedAddress,
+  priorityFee,
 }: {
   contractAddress?: string
   fromTokenAssociatedAddress?: string
   toTokenAssociatedAddress?: string
+  priorityFee?: string
 }) => {
-  const solanaSpecific = buildSolanaSpecific()
+  const solanaSpecific = buildSolanaSpecific(priorityFee)
   if (fromTokenAssociatedAddress) {
     solanaSpecific.fromTokenAssociatedAddress = fromTokenAssociatedAddress
   }
@@ -98,5 +100,40 @@ describe('getSolanaSendSigningInput memo handling', () => {
     })
 
     expect(input.createAndTransferTokenTransaction?.memo).toBe(MEMO)
+  })
+})
+
+describe('getSolanaSendSigningInput priority fee plumbing', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it('passes chainSpecific.priorityFee through as setComputeUnitPrice arg', () => {
+    const input = getSolanaSendSigningInput({
+      keysignPayload: buildPayload({ priorityFee: '5000000' }),
+      walletCore,
+    })
+
+    expect(input.priorityFeePrice?.price?.toString()).toBe('5000000')
+  })
+
+  it('floors priorityFee at solanaConfig.priorityFeePrice when below', () => {
+    const input = getSolanaSendSigningInput({
+      keysignPayload: buildPayload({ priorityFee: '100' }),
+      walletCore,
+    })
+
+    expect(input.priorityFeePrice?.price?.toString()).toBe('1000000')
+  })
+
+  it('falls back to floor when priorityFee is empty', () => {
+    const input = getSolanaSendSigningInput({
+      keysignPayload: buildPayload({ priorityFee: '' }),
+      walletCore,
+    })
+
+    expect(input.priorityFeePrice?.price?.toString()).toBe('1000000')
   })
 })
