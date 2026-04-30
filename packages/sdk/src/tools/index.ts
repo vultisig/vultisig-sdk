@@ -32,3 +32,4 @@ export {
 // Atomic chain helpers (re-exported from core for vault-free callers)
 export { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 export { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+export { getTxStatus } from '@vultisig/core-chain/tx/status'
