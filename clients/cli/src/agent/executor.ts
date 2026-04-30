@@ -1340,8 +1340,18 @@ export class AgentExecutor {
     if (nextNonce !== rpcNonce) {
       // Grace period: if we broadcast recently, the previous tx is likely still in
       // the mempool. Don't reset the nonce — trust the local state.
+      //
+      // 30s sized to cover the natural latency of LLM-mediated multi-tx flows
+      // (turn 1 sign + broadcast + agent-backend round-trip + turn 2 sign typically
+      // 20–35s end-to-end). The original 15s assumption — "one Ethereum block,
+      // tx is mined or evicted by then" — undersizes for this flow because the
+      // RPC's mempool view of a just-broadcast tx isn't necessarily visible via
+      // getTransactionCount(pending) for ~30s, even when broadcast went through
+      // the same RPC. Tradeoff: a genuinely-evicted tx within the 30s window
+      // would cause the next sign to use a stuck nonce instead of recovering;
+      // STATE_TTL_MS (10 min) bounds the worst case. See vultisig-sdk#357.
       const lastBroadcast = this.evmLastBroadcast.get(chain.toString()) ?? 0
-      if (Date.now() - lastBroadcast < 15_000) {
+      if (Date.now() - lastBroadcast < 30_000) {
         if (this.verbose)
           process.stderr.write(
             `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${Date.now() - lastBroadcast}ms ago)\n`
