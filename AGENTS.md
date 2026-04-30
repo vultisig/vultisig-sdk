@@ -115,4 +115,16 @@ The CLI in `clients/cli/` exercises the actual public-API surface contract. Inte
 
 ### CR comments are receipts too
 
-Before any merge: `gh api /repos/vultisig/vultisig-sdk/pulls/<n>/comments --paginate | jq '[.[] | select(.user.login == "coderabbitai[bot]")]'`. Every CR finding gets a fix-commit or in-thread reply. NO merge with open CR threads.
+Before any merge, scan **both** the inline-review-comments endpoint AND the issue-conversation endpoint — CodeRabbit posts findings to both:
+
+```bash
+# Line-anchored review comments (most CR findings live here)
+gh api /repos/vultisig/vultisig-sdk/pulls/<n>/comments --paginate \
+  | jq '[.[] | select(.user.login == "coderabbitai[bot]")]'
+
+# Conversation-thread comments (CR's top-level summaries + some Major flags land here)
+gh api /repos/vultisig/vultisig-sdk/issues/<n>/comments --paginate \
+  | jq '[.[] | select(.user.login == "coderabbitai[bot]")]'
+```
+
+Every CR finding from either endpoint gets a fix-commit or in-thread reply. NO merge with open CR threads.
