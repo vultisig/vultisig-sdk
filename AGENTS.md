@@ -82,3 +82,51 @@ When using `agent ask` or `--via-agent`, the agent backend proposes actions; the
 | [Architecture](docs/architecture/ARCHITECTURE.md) | Design patterns and internals |
 | [CLAUDE.md](CLAUDE.md) | Contributor guide for AI coding agents |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, workflow, PR process |
+
+## Receipts expected on PRs
+
+Every vultisig-sdk PR MUST land with layered receipts proportional to what the diff touches. The SDK is upstream of every consumer (mcp-ts, vultiagent-app, vultisig-ios, vultisig-windows), so SDK-internal unit tests are NOT sufficient - they don't catch contract drift between repos.
+
+### Layered receipts
+
+1. **Static (mandatory always)**: `yarn build:all` clean, `yarn lint` clean, `yarn test` passes across all workspaces. (No top-level `yarn build` script exists - see `package.json` for the actual targets: `build:all`, `build:sdk`, `build:sdk:bundle`, `build:rujira`, `build:shared`, `build:client-shared`, `cli:build`.)
+2. **Repo-internal CLI runtime (mandatory for any user-visible change)**: build the SDK + the bundled CLI client (`clients/cli/`), run it against a real backend (mock backends suffer from the same contract-drift problem unit tests do, so they don't count as a receipt), exercise the changed code path. Example:
+   ```bash
+   yarn build:sdk
+   yarn cli:build
+   node clients/cli/dist/index.js agent ask "<test prompt>" --json
+   ```
+   Capture stdout, paste relevant excerpt into the PR body.
+3. **Cross-repo (mandatory for any change consumed by mcp-ts or vultiagent-app)**: pack a tarball with `yarn workspace @vultisig/sdk pack` and install the resulting `.tgz` into the consumer (works across npm/yarn/pnpm without footguns - `npm link` / `pnpm link` have different semantics, and Metro+EAS in vultiagent-app don't love symlinks). Exercise the consumer's flow end-to-end. Capture either a curl receipt (mcp-ts) or a screenshot (vultiagent-app).
+4. **Math / encoding (mandatory for any signing / address / calldata change)**: regression test + comparison vs a known-good on-chain vector (etherscan / blockchair URL).
+
+### Why CLI testing > SDK unit tests
+
+The CLI in `clients/cli/` exercises the actual public-API surface contract. Internal `packages/sdk/` unit tests can pass while the public API silently breaks (typing drift, default param change, dropped re-export). Always run the CLI as the source-of-truth integration test.
+
+### Receipt shape per finding class
+
+| Finding class | Required receipt |
+|---|---|
+| Fund-safety / amount / chain-id | full-form comparison vs on-chain lookup |
+| Public-API shape change | CLI invocation + stdout excerpt + a Changesets entry (run `yarn changeset` to scaffold a `.changeset/<slug>.md`; `@vultisig/sdk` + `@vultisig/cli` are linked per `.changeset/config.json`, so they bump together). Hand-edited `CHANGELOG.md` entries are not the convention here. |
+| Cross-repo consumer break | file:// pin + downstream exercise (curl mcp-ts or app screenshot) |
+| Signing / encoding / address derivation | regression test pinning a known-good vector |
+
+### CR comments are receipts too
+
+Before any merge, scan **all three** GitHub endpoints CodeRabbit posts to - inline review comments, issue-conversation comments, AND PR review summaries (the "Actionable comments posted: N" bodies, where Nitpicks live nested):
+
+```bash
+for ep in pulls/<n>/comments issues/<n>/comments pulls/<n>/reviews; do
+  echo "=== $ep ==="
+  gh api "/repos/vultisig/vultisig-sdk/$ep" --paginate \
+    | jq '[.[] | select(.user.login == "coderabbitai[bot]")]'
+done
+```
+
+- `pulls/<n>/comments` - line-anchored inline review comments (most CR findings live here)
+- `issues/<n>/comments` - conversation-thread comments (CR's top-level summaries + some Major flags)
+- `pulls/<n>/reviews` - PR review submissions where CR drops "Actionable comments posted: N" with nested Nitpicks/Duplicates that are easy to miss
+
+Every CR finding from any endpoint gets a fix-commit or in-thread reply. NO merge with open CR threads.
