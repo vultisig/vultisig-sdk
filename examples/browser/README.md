@@ -20,21 +20,27 @@ Browser-based example application demonstrating the Vultisig SDK for fast vault 
 
 ### Prerequisites
 
-- Node.js 18+
-- Yarn
+- Node.js 20+
+- Yarn 4.x (via Corepack or your preferred install)
+- A full repository checkout so Yarn can link workspace packages
 
 ### Installation
 
+From the repository root:
+
+```bash
+yarn install
+yarn workspace @vultisig/example-browser dev
+```
+
+You can also start it from this folder:
+
 ```bash
 cd examples/browser
-yarn install
-```
-
-### Development
-
-```bash
 yarn dev
 ```
+
+The example checks the local workspace SDK before Vite starts and rebuilds `packages/sdk/dist/` when the SDK sources are newer than the generated artifacts.
 
 Open http://localhost:3000
 
@@ -94,12 +100,14 @@ yarn preview
 ### Send Transaction
 
 **Fast Vault:**
+
 1. Select chain and enter recipient address
 2. Enter amount to send
 3. Click "Send Transaction"
 4. Transaction is signed instantly and broadcast
 
 **Secure Vault:**
+
 1. Select chain and enter recipient address
 2. Enter amount to send
 3. Click "Send Transaction"
@@ -114,6 +122,7 @@ yarn preview
 Your VULT discount tier is displayed in the vault Overview tab. The tier is based on your VULT token and Thorguard NFT holdings on Ethereum.
 
 **Tier Levels:**
+
 - **Bronze** - 1,500+ VULT (0.45% fee)
 - **Silver** - 3,000+ VULT (0.40% fee)
 - **Gold** - 7,500+ VULT (0.30% fee)

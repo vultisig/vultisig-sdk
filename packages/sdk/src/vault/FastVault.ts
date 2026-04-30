@@ -3,7 +3,7 @@ import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
-import { decryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm'
+import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
@@ -232,10 +232,7 @@ export class FastVault extends VaultBase {
 
       // Decrypt vault
       const encryptedData = fromBase64(container.vault)
-      const decryptedBuffer = await decryptWithAesGcm({
-        key: password,
-        value: encryptedData,
-      })
+      const decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)
       vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
     } else {
       // Vault is not encrypted - use content directly

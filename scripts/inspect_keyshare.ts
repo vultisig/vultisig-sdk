@@ -16,7 +16,7 @@ import { fromBinary } from "@bufbuild/protobuf";
 import { VaultContainerSchema } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb";
 import { VaultSchema } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb";
 import { fromBase64 } from "@vultisig/lib-utils/fromBase64";
-import { decryptWithAesGcm } from "@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm";
+import { decryptVaultBackupWithPassword } from "@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword";
 
 import type { VaultContainer } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb";
 import type { Vault } from "@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb";
@@ -207,10 +207,7 @@ function main(): void {
       try {
         // Decrypt the vault data using imported utility
         const encryptedData = fromBase64(container.vault);
-        const decryptedData = decryptWithAesGcm({
-          key: password,
-          value: encryptedData,
-        });
+        const decryptedData = decryptVaultBackupWithPassword(password, encryptedData);
         vaultBuffer = fromBase64(decryptedData.toString("base64"));
       } catch (error) {
         console.error(

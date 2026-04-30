@@ -16,6 +16,11 @@ export const CosmosMsgType = {
   ThorchainMsgSendUrl: '/types.MsgSend',
   ThorchainMsgLeavePool: 'thorchain/MsgLeavePool',
   ThorchainMsgLeavePoolUrl: '/thorchain.v1.MsgLeavePool',
+  // cosmos-sdk staking + distribution module (proto direct-sign typeUrls)
+  MsgDelegateUrl: '/cosmos.staking.v1beta1.MsgDelegate',
+  MsgUndelegateUrl: '/cosmos.staking.v1beta1.MsgUndelegate',
+  MsgBeginRedelegateUrl: '/cosmos.staking.v1beta1.MsgBeginRedelegate',
+  MsgWithdrawDelegatorRewardUrl: '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward',
 } as const
 
 export type CosmosMsgType = (typeof CosmosMsgType)[keyof typeof CosmosMsgType]
