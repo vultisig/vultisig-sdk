@@ -4,7 +4,6 @@
  * Executes actions returned by the agent-backend locally.
  * Handles balance queries, transaction building, signing, and broadcasting.
  */
-import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import type { GetThorchainPoolsOptions, VaultAddressMap } from '@vultisig/core-chain/chains/cosmos/thor/lp'
 import type { EvmChain, FiatCurrency, VaultBase, Vultisig } from '@vultisig/sdk'
 import { Chain, evmCall, fiatCurrencies, Vultisig as VultisigSdk } from '@vultisig/sdk'
@@ -1341,8 +1340,18 @@ export class AgentExecutor {
     if (nextNonce !== rpcNonce) {
       // Grace period: if we broadcast recently, the previous tx is likely still in
       // the mempool. Don't reset the nonce — trust the local state.
+      //
+      // 30s sized to cover the natural latency of LLM-mediated multi-tx flows
+      // (turn 1 sign + broadcast + agent-backend round-trip + turn 2 sign typically
+      // 20–35s end-to-end). The original 15s assumption — "one Ethereum block,
+      // tx is mined or evicted by then" — undersizes for this flow because the
+      // RPC's mempool view of a just-broadcast tx isn't necessarily visible via
+      // getTransactionCount(pending) for ~30s, even when broadcast went through
+      // the same RPC. Tradeoff: a genuinely-evicted tx within the 30s window
+      // would cause the next sign to use a stuck nonce instead of recovering;
+      // STATE_TTL_MS (10 min) bounds the worst case. See vultisig-sdk#357.
       const lastBroadcast = this.evmLastBroadcast.get(chain.toString()) ?? 0
-      if (Date.now() - lastBroadcast < 15_000) {
+      if (Date.now() - lastBroadcast < 30_000) {
         if (this.verbose)
           process.stderr.write(
             `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${Date.now() - lastBroadcast}ms ago)\n`
@@ -1433,38 +1442,28 @@ export class AgentExecutor {
   }
 
   /**
-   * Fetch the pending nonce via the same RPC client used to broadcast
-   * (`getEvmClient(chain)` from @vultisig/core-chain).
-   *
-   * Why the same client: `patchEvmNonce`'s eviction-detection compares this
-   * value against the just-broadcast nonce to decide whether the local
-   * pending state is stale. If we asked a *different* RPC than the one
-   * broadcast went to, we'd be querying a mempool that may not have peered
-   * the broadcast yet — common when the leg-1 → leg-2 gap exceeds the 15s
-   * grace period (which is the normal latency for server-mediated multi-tx
-   * flows: ~25–45s end-to-end). The previous implementation queried
-   * `EVM_GAS_RPC['Ethereum']` (= eth.llamarpc.com) while broadcast went to
-   * viem's default for `mainnet` (= eth.merkle.io), causing intermittent
-   * false-positive "evicted" detection → state-clear → leg-2 nonce
-   * collision. See vultisig-sdk#357 for the full receipts (3 Morpho
-   * deposit runs, 1 reverted on-chain, 2 deposits silently dropped from
-   * mempool).
-   *
-   * Returns null on non-EVM chain or any RPC error — preserves the prior
-   * graceful-fallback contract: when this returns null and the local-state
-   * gap is small, patchEvmNonce keeps the local nonce.
+   * Fetch the pending nonce from RPC (eth_getTransactionCount with "pending" tag).
+   * Returns null if the RPC call fails (non-fatal).
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
-    if (!EVM_CHAINS.has(chain as string)) return null
+    const rpcUrl = EVM_GAS_RPC[chain as string]
+    if (!rpcUrl) return null
 
     try {
       const address = await this.vault.address(chain)
-      const client = getEvmClient(chain as EvmChain)
-      const count = await client.getTransactionCount({
-        address: address as `0x${string}`,
-        blockTag: 'pending',
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getTransactionCount',
+          params: [address, 'pending'],
+          id: 1,
+        }),
+        signal: AbortSignal.timeout(5000),
       })
-      return BigInt(count)
+      const data = (await res.json()) as any
+      return BigInt(data.result || '0')
     } catch {
       return null
     }
