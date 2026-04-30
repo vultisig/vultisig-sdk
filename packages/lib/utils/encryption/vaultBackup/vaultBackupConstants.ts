@@ -1,3 +1,5 @@
+import { Buffer } from 'buffer'
+
 /**
  * Password-protected vault backup blob (PBKDF2-HMAC-SHA256 + AES-256-GCM).
  *
