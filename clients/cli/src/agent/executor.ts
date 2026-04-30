@@ -4,6 +4,7 @@
  * Executes actions returned by the agent-backend locally.
  * Handles balance queries, transaction building, signing, and broadcasting.
  */
+import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import type { GetThorchainPoolsOptions, VaultAddressMap } from '@vultisig/core-chain/chains/cosmos/thor/lp'
 import type { EvmChain, FiatCurrency, VaultBase, Vultisig } from '@vultisig/sdk'
 import { Chain, evmCall, fiatCurrencies, Vultisig as VultisigSdk } from '@vultisig/sdk'
@@ -1432,28 +1433,38 @@ export class AgentExecutor {
   }
 
   /**
-   * Fetch the pending nonce from RPC (eth_getTransactionCount with "pending" tag).
-   * Returns null if the RPC call fails (non-fatal).
+   * Fetch the pending nonce via the same RPC client used to broadcast
+   * (`getEvmClient(chain)` from @vultisig/core-chain).
+   *
+   * Why the same client: `patchEvmNonce`'s eviction-detection compares this
+   * value against the just-broadcast nonce to decide whether the local
+   * pending state is stale. If we asked a *different* RPC than the one
+   * broadcast went to, we'd be querying a mempool that may not have peered
+   * the broadcast yet — common when the leg-1 → leg-2 gap exceeds the 15s
+   * grace period (which is the normal latency for server-mediated multi-tx
+   * flows: ~25–45s end-to-end). The previous implementation queried
+   * `EVM_GAS_RPC['Ethereum']` (= eth.llamarpc.com) while broadcast went to
+   * viem's default for `mainnet` (= eth.merkle.io), causing intermittent
+   * false-positive "evicted" detection → state-clear → leg-2 nonce
+   * collision. See vultisig-sdk#357 for the full receipts (3 Morpho
+   * deposit runs, 1 reverted on-chain, 2 deposits silently dropped from
+   * mempool).
+   *
+   * Returns null on non-EVM chain or any RPC error — preserves the prior
+   * graceful-fallback contract: when this returns null and the local-state
+   * gap is small, patchEvmNonce keeps the local nonce.
    */
   private async fetchEvmPendingNonce(chain: Chain): Promise<bigint | null> {
-    const rpcUrl = EVM_GAS_RPC[chain as string]
-    if (!rpcUrl) return null
+    if (!EVM_CHAINS.has(chain as string)) return null
 
     try {
       const address = await this.vault.address(chain)
-      const res = await fetch(rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'eth_getTransactionCount',
-          params: [address, 'pending'],
-          id: 1,
-        }),
-        signal: AbortSignal.timeout(5000),
+      const client = getEvmClient(chain as EvmChain)
+      const count = await client.getTransactionCount({
+        address: address as `0x${string}`,
+        blockTag: 'pending',
       })
-      const data = (await res.json()) as any
-      return BigInt(data.result || '0')
+      return BigInt(count)
     } catch {
       return null
     }
