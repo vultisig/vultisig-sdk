@@ -82,3 +82,37 @@ When using `agent ask` or `--via-agent`, the agent backend proposes actions; the
 | [Architecture](docs/architecture/ARCHITECTURE.md) | Design patterns and internals |
 | [CLAUDE.md](CLAUDE.md) | Contributor guide for AI coding agents |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, workflow, PR process |
+
+## Receipts expected on PRs
+
+Every vultisig-sdk PR MUST land with layered receipts proportional to what the diff touches. The SDK is upstream of every consumer (mcp-ts, vultiagent-app, vultisig-ios, vultisig-windows), so SDK-internal unit tests are NOT sufficient - they don't catch contract drift between repos.
+
+### Layered receipts
+
+1. **Static (mandatory always)**: `yarn build` clean, lint clean, unit tests pass across all workspaces.
+2. **Repo-internal CLI runtime (mandatory for any user-visible change)**: build the SDK + the bundled CLI client (`clients/cli/`), run it against a real or mock backend, exercise the changed code path. Example:
+   ```bash
+   cd packages/sdk && yarn build
+   cd ../../clients/cli && yarn build
+   node dist/index.js agent ask "<test prompt>" --json
+   ```
+   Capture stdout, paste relevant excerpt into the PR body.
+3. **Cross-repo (mandatory for any change consumed by mcp-ts or vultiagent-app)**: build a tarball, file:// pin (or `npm link`) into the consumer, exercise the consumer's flow end-to-end. Capture either a curl receipt (mcp-ts) or a screenshot (vultiagent-app).
+4. **Math / encoding (mandatory for any signing / address / calldata change)**: regression test + comparison vs a known-good on-chain vector (etherscan / blockchair URL).
+
+### Why CLI testing > SDK unit tests
+
+The CLI in `clients/cli/` exercises the actual public-API surface contract. Internal `packages/sdk/` unit tests can pass while the public API silently breaks (typing drift, default param change, dropped re-export). Always run the CLI as the source-of-truth integration test.
+
+### Receipt shape per finding class
+
+| Finding class | Required receipt |
+|---|---|
+| Fund-safety / amount / chain-id | full-form comparison vs on-chain lookup |
+| Public-API shape change | CLI invocation + stdout excerpt + version-bump entry in CHANGELOG |
+| Cross-repo consumer break | file:// pin + downstream exercise (curl mcp-ts or app screenshot) |
+| Signing / encoding / address derivation | regression test pinning a known-good vector |
+
+### CR comments are receipts too
+
+Before any merge: `gh api /repos/vultisig/vultisig-sdk/pulls/<n>/comments --paginate | jq '[.[] | select(.user.login == "coderabbitai[bot]")]'`. Every CR finding gets a fix-commit or in-thread reply. NO merge with open CR threads.
