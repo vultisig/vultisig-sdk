@@ -1,5 +1,6 @@
 import { create } from '@bufbuild/protobuf'
 import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import {
   nativeSwapPayloadCase,
@@ -7,6 +8,7 @@ import {
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
+import { parseThorchainSwapMemoStreaming } from '@vultisig/core-chain/swap/native/utils/parseThorchainSwapMemoStreaming'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 import { addMinutes } from 'date-fns'
 
@@ -29,7 +31,15 @@ export const nativeSwapQuoteToSwapPayload = ({
 }: Input): CommKeysignSwapPayload => {
   const isAffiliate = !!quote.fees.affiliate && Number(quote.fees.affiliate) > 0
 
-  const streamingInterval = nativeSwapStreamingInterval[quote.swapChain]
+  const { streamingInterval, streamingQuantity } =
+    quote.swapChain === Chain.THORChain
+      ? parseThorchainSwapMemoStreaming(quote.memo)
+      : {
+          streamingInterval: String(
+            nativeSwapStreamingInterval[quote.swapChain]
+          ),
+          streamingQuantity: '0',
+        }
 
   const toDecimals = getNativeSwapDecimals(toCoin)
 
@@ -51,8 +61,8 @@ export const nativeSwapQuoteToSwapPayload = ({
           convertDuration(addMinutes(Date.now(), 15).getTime(), 'ms', 's')
         )
       ),
-      streamingInterval: streamingInterval.toString(),
-      streamingQuantity: '0',
+      streamingInterval,
+      streamingQuantity,
       toAmountLimit: '0',
       isAffiliate,
     }),
