@@ -271,6 +271,7 @@ export {
   getNativeSwapDecimals,
   getPublicKey,
   getTokenMetadata,
+  getTxStatus,
   knownTokens,
   knownTokensIndex,
   prepareContractCallTxFromKeys,
