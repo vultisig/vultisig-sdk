@@ -13,7 +13,7 @@ import {
   protoBytes,
   protoString,
   protoVarint,
-} from '@vultisig/core-chain/chains/cosmos/qbtc/protoEncoding'
+} from '@vultisig/core-chain/chains/cosmos/protoEncoding'
 
 import { KeysignSignature } from '../../../keysign/KeysignSignature'
 import { CosmosSpecific } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'

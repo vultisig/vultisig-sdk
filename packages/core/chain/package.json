@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -224,6 +224,11 @@
       "import": "./dist/chains/cosmos/gas.js",
       "default": "./dist/chains/cosmos/gas.js"
     },
+    "./chains/cosmos/protoEncoding": {
+      "types": "./dist/chains/cosmos/protoEncoding.d.ts",
+      "import": "./dist/chains/cosmos/protoEncoding.js",
+      "default": "./dist/chains/cosmos/protoEncoding.js"
+    },
     "./chains/cosmos/qbtc/claim/broadcastClaimTx": {
       "types": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.d.ts",
       "import": "./dist/chains/cosmos/qbtc/claim/broadcastClaimTx.js",
@@ -298,6 +303,11 @@
       "types": "./dist/chains/cosmos/tendermintRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/tendermintRpcUrl.js"
+    },
+    "./chains/cosmos/terraClassicTax": {
+      "types": "./dist/chains/cosmos/terraClassicTax.d.ts",
+      "import": "./dist/chains/cosmos/terraClassicTax.js",
+      "default": "./dist/chains/cosmos/terraClassicTax.js"
     },
     "./chains/cosmos/thor/getThorchainInboundAddress": {
       "types": "./dist/chains/cosmos/thor/getThorchainInboundAddress.d.ts",
@@ -1339,6 +1349,11 @@
       "types": "./dist/swap/native/utils/getNativeSwapDecimals.d.ts",
       "import": "./dist/swap/native/utils/getNativeSwapDecimals.js",
       "default": "./dist/swap/native/utils/getNativeSwapDecimals.js"
+    },
+    "./swap/native/utils/parseThorchainSwapMemoStreaming": {
+      "types": "./dist/swap/native/utils/parseThorchainSwapMemoStreaming.d.ts",
+      "import": "./dist/swap/native/utils/parseThorchainSwapMemoStreaming.js",
+      "default": "./dist/swap/native/utils/parseThorchainSwapMemoStreaming.js"
     },
     "./swap/NoSwapRoutesError": {
       "types": "./dist/swap/NoSwapRoutesError.d.ts",
