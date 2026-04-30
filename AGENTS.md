@@ -89,15 +89,15 @@ Every vultisig-sdk PR MUST land with layered receipts proportional to what the d
 
 ### Layered receipts
 
-1. **Static (mandatory always)**: `yarn build` clean, lint clean, unit tests pass across all workspaces.
-2. **Repo-internal CLI runtime (mandatory for any user-visible change)**: build the SDK + the bundled CLI client (`clients/cli/`), run it against a real or mock backend, exercise the changed code path. Example:
+1. **Static (mandatory always)**: `yarn build:all` clean, `yarn lint` clean, `yarn test` passes across all workspaces. (No top-level `yarn build` script exists - see `package.json` for the actual targets: `build:all`, `build:sdk`, `build:sdk:bundle`, `build:rujira`, `build:shared`, `build:client-shared`, `cli:build`.)
+2. **Repo-internal CLI runtime (mandatory for any user-visible change)**: build the SDK + the bundled CLI client (`clients/cli/`), run it against a real backend (mock backends suffer from the same contract-drift problem unit tests do, so they don't count as a receipt), exercise the changed code path. Example:
    ```bash
-   cd packages/sdk && yarn build
-   cd ../../clients/cli && yarn build
-   node dist/index.js agent ask "<test prompt>" --json
+   yarn build:sdk
+   yarn cli:build
+   node clients/cli/dist/index.js agent ask "<test prompt>" --json
    ```
    Capture stdout, paste relevant excerpt into the PR body.
-3. **Cross-repo (mandatory for any change consumed by mcp-ts or vultiagent-app)**: build a tarball, file:// pin (or `npm link`) into the consumer, exercise the consumer's flow end-to-end. Capture either a curl receipt (mcp-ts) or a screenshot (vultiagent-app).
+3. **Cross-repo (mandatory for any change consumed by mcp-ts or vultiagent-app)**: pack a tarball with `yarn workspace @vultisig/sdk pack` and install the resulting `.tgz` into the consumer (works across npm/yarn/pnpm without footguns - `npm link` / `pnpm link` have different semantics, and Metro+EAS in vultiagent-app don't love symlinks). Exercise the consumer's flow end-to-end. Capture either a curl receipt (mcp-ts) or a screenshot (vultiagent-app).
 4. **Math / encoding (mandatory for any signing / address / calldata change)**: regression test + comparison vs a known-good on-chain vector (etherscan / blockchair URL).
 
 ### Why CLI testing > SDK unit tests
@@ -109,22 +109,24 @@ The CLI in `clients/cli/` exercises the actual public-API surface contract. Inte
 | Finding class | Required receipt |
 |---|---|
 | Fund-safety / amount / chain-id | full-form comparison vs on-chain lookup |
-| Public-API shape change | CLI invocation + stdout excerpt + version-bump entry in CHANGELOG |
+| Public-API shape change | CLI invocation + stdout excerpt + a Changesets entry (run `yarn changeset` to scaffold a `.changeset/<slug>.md`; `@vultisig/sdk` + `@vultisig/cli` are linked per `.changeset/config.json`, so they bump together). Hand-edited `CHANGELOG.md` entries are not the convention here. |
 | Cross-repo consumer break | file:// pin + downstream exercise (curl mcp-ts or app screenshot) |
 | Signing / encoding / address derivation | regression test pinning a known-good vector |
 
 ### CR comments are receipts too
 
-Before any merge, scan **both** the inline-review-comments endpoint AND the issue-conversation endpoint — CodeRabbit posts findings to both:
+Before any merge, scan **all three** GitHub endpoints CodeRabbit posts to - inline review comments, issue-conversation comments, AND PR review summaries (the "Actionable comments posted: N" bodies, where Nitpicks live nested):
 
 ```bash
-# Line-anchored review comments (most CR findings live here)
-gh api /repos/vultisig/vultisig-sdk/pulls/<n>/comments --paginate \
-  | jq '[.[] | select(.user.login == "coderabbitai[bot]")]'
-
-# Conversation-thread comments (CR's top-level summaries + some Major flags land here)
-gh api /repos/vultisig/vultisig-sdk/issues/<n>/comments --paginate \
-  | jq '[.[] | select(.user.login == "coderabbitai[bot]")]'
+for ep in pulls/<n>/comments issues/<n>/comments pulls/<n>/reviews; do
+  echo "=== $ep ==="
+  gh api "/repos/vultisig/vultisig-sdk/$ep" --paginate \
+    | jq '[.[] | select(.user.login == "coderabbitai[bot]")]'
+done
 ```
 
-Every CR finding from either endpoint gets a fix-commit or in-thread reply. NO merge with open CR threads.
+- `pulls/<n>/comments` - line-anchored inline review comments (most CR findings live here)
+- `issues/<n>/comments` - conversation-thread comments (CR's top-level summaries + some Major flags)
+- `pulls/<n>/reviews` - PR review submissions where CR drops "Actionable comments posted: N" with nested Nitpicks/Duplicates that are easy to miss
+
+Every CR finding from any endpoint gets a fix-commit or in-thread reply. NO merge with open CR threads.
