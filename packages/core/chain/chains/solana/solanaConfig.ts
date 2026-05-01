@@ -9,7 +9,15 @@ export const solanaConfig = {
 
   // Rent-exempt minimum for a 165-byte SPL token associated account, used
   // when emitting `createAssociatedTokenAccount` alongside an SPL transfer.
-  // Constant on mainnet/devnet/testnet — rent rate is hardcoded in the
-  // Solana runtime.
+  //
+  // Derivation: (128-byte account header + 165-byte SPL Token data)
+  //             × RENT_PER_BYTE_PER_YEAR (3480 lamports)
+  //             × 2-year threshold
+  //           = 293 × 3480 × 2
+  //           = 2,039,280 lamports
+  //
+  // Constant on mainnet/devnet/testnet today — rent rate is hardcoded in
+  // the Solana runtime. If Solana ever bumps RENT_PER_BYTE_PER_YEAR or
+  // the 2-year threshold, re-derive from the formula above.
   ataRentLamports: 2_039_280,
 }
