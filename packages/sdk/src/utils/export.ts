@@ -3,7 +3,7 @@ import { toCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { VaultContainerSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { Vault } from '@vultisig/core-mpc/vault/Vault'
-import { encryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/encryptWithAesGcm'
+import { encryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
 
 /**
  * Create vault backup data with optional password encryption
@@ -19,10 +19,7 @@ export const createVaultBackup = async (vault: Vault, password?: string): Promis
 
   if (password) {
     vaultContainer.isEncrypted = true
-    const encryptedVault = encryptWithAesGcm({
-      key: password,
-      value: Buffer.from(vaultData),
-    })
+    const encryptedVault = encryptVaultBackupWithPassword(password, Buffer.from(vaultData))
     vaultContainer.vault = encryptedVault.toString('base64')
   } else {
     vaultContainer.isEncrypted = false

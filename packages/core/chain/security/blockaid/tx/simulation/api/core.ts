@@ -2,10 +2,7 @@ import { EvmChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
-import {
-  BlockaidEvmSimulationInfo,
-  BlockaidSolanaSimulationInfo,
-} from '../core'
+import { BlockaidEvmSimulationInfo, BlockaidSolanaSimulationInfo } from '../core'
 
 export type BlockaidSolanaSimulation = {
   account_summary: {
@@ -86,9 +83,7 @@ export const parseBlockaidSolanaSimulation = async (
   // The native SOL is likely the transaction fee, not part of the swap itself.
   let relevantDiffs = assetDiffs
   if (assetDiffs.length === 3) {
-    const nativeSolIndex = assetDiffs.findIndex(
-      diff => diff.asset.type === 'SOL' || diff.asset_type === 'SOL'
-    )
+    const nativeSolIndex = assetDiffs.findIndex(diff => diff.asset.type === 'SOL' || diff.asset_type === 'SOL')
     if (nativeSolIndex !== -1) {
       relevantDiffs = assetDiffs.filter((_, index) => index !== nativeSolIndex)
     }
@@ -137,13 +132,9 @@ export const parseBlockaidSolanaSimulation = async (
       return {
         swap: {
           fromMint:
-            outAsset.type === 'SOL'
-              ? 'So11111111111111111111111111111111111111112'
-              : shouldBePresent(outAsset.address),
+            outAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(outAsset.address),
           toMint:
-            inAsset.type === 'SOL'
-              ? 'So11111111111111111111111111111111111111112'
-              : shouldBePresent(inAsset.address),
+            inAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(inAsset.address),
           fromAmount: BigInt(shouldBePresent(outValue).raw_value),
           toAmount: BigInt(shouldBePresent(inValue).raw_value),
           toAssetDecimal: inAsset.decimals,
@@ -153,9 +144,7 @@ export const parseBlockaidSolanaSimulation = async (
       return {
         transfer: {
           fromMint:
-            outAsset.type === 'SOL'
-              ? 'So11111111111111111111111111111111111111112'
-              : shouldBePresent(outAsset.address),
+            outAsset.type === 'SOL' ? 'So11111111111111111111111111111111111111112' : shouldBePresent(outAsset.address),
           fromAmount: BigInt(shouldBePresent(outValue).raw_value),
         },
       }
@@ -169,9 +158,7 @@ export const parseBlockaidEvmSimulation = async (
   chain: EvmChain
 ): Promise<BlockaidEvmSimulationInfo> => {
   if (!isChainOfKind(chain, 'evm')) {
-    throw new Error(
-      `parseBlockaidEvmSimulation only supports EVM chains, got: ${chain}`
-    )
+    throw new Error(`parseBlockaidEvmSimulation only supports EVM chains, got: ${chain}`)
   }
 
   const assetDiffs = simulation.account_summary.assets_diffs
@@ -196,32 +183,40 @@ export const parseBlockaidEvmSimulation = async (
       },
     }
   } else if (assetDiffs.length > 1) {
-    const [potentialOutAsset, potentialInAsset] = assetDiffs
-    const { inAsset, inValue } =
-      potentialInAsset.in.length > 0
-        ? {
-            inAsset: potentialInAsset.asset,
-            inValue: potentialInAsset.in,
-          }
-        : {
-            inAsset: potentialOutAsset.asset,
-            inValue: potentialOutAsset.in,
-          }
-
-    const { outAsset, outValue } =
-      potentialOutAsset.out.length > 0
-        ? {
-            outAsset: potentialOutAsset.asset,
-            outValue: potentialOutAsset.out,
-          }
-        : {
-            outAsset: potentialInAsset.asset,
-            outValue: potentialInAsset.out,
-          }
-
-    if (outValue.length === 0 || inValue.length === 0) {
+    // Router-mediated flows (e.g. `permitAndCall`) often return three diffs
+    // with an intermediate permit/allowance leg between the user's `out` and
+    // `in` sides. Scan all diffs instead of using positional destructuring so
+    // the user-side pair is recovered regardless of order, and prefer an
+    // in-side asset that differs from the out-side asset (case-insensitive,
+    // since EIP-55 checksums vary by casing). Mirrors the iOS parser.
+    const outDiff = assetDiffs.find(diff => diff.out.length > 0)
+    if (!outDiff) {
       return null
     }
+
+    const outAddress = outDiff.asset.address?.toLowerCase()
+    const inDiff =
+      assetDiffs.find(diff => diff.in.length > 0 && diff.asset.address?.toLowerCase() !== outAddress) ??
+      assetDiffs.find(diff => diff.in.length > 0)
+
+    if (!inDiff) {
+      return null
+    }
+
+    // Address is the primary identity for a token; symbol is just metadata
+    // and Blockaid sometimes returns inconsistent casing (`USDC` vs `usdc`)
+    // for the same contract. Reject refund-shaped pairs by address alone so
+    // we don't render a nonsense `A → A` swap when the in-side fallback
+    // matches the out-side asset.
+    const inAddress = inDiff.asset.address?.toLowerCase()
+    if (outAddress === inAddress) {
+      return null
+    }
+
+    const outAsset = outDiff.asset
+    const outValue = outDiff.out
+    const inAsset = inDiff.asset
+    const inValue = inDiff.in
 
     return {
       swap: {

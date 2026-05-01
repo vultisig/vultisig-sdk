@@ -59,13 +59,18 @@ function duplicateConfigureOriginHint(): string {
  * VULTISIG_STRICT_SINGLETON=0 is set. The previous implementation defaulted to
  * silent whenever `process` was undefined, which hid duplicates in plain-ESM
  * browser bundles (exactly where the original bug surfaced).
+ *
+ * `EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON` is honoured as a fallback so Expo /
+ * React Native consumers can disable the dev throw without a custom Babel
+ * transform (Expo only inlines `EXPO_PUBLIC_*` env vars into the JS bundle).
+ * `VULTISIG_STRICT_SINGLETON` still wins when both are set.
  */
 function shouldThrowOnDuplicateMpcConfigure(): boolean {
   let strict: string | undefined
   let nodeEnv: string | undefined
   try {
     if (typeof process !== 'undefined' && process.env) {
-      strict = process.env.VULTISIG_STRICT_SINGLETON
+      strict = process.env.VULTISIG_STRICT_SINGLETON ?? process.env.EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON
       nodeEnv = process.env.NODE_ENV
     }
   } catch {
@@ -144,7 +149,7 @@ export function configureMpc(engine: MpcEngine): void {
     if (shouldThrowOnDuplicateMpcConfigure()) {
       throw new Error(
         'configureMpc: duplicate MPC engine instance. ' +
-          `Set process.env.VULTISIG_STRICT_SINGLETON=0 to allow overwrite when needed. ${MPC_SINGLETON_POSTMORTEM}`
+          `Set process.env.VULTISIG_STRICT_SINGLETON=0 (or EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON=0 for Expo / React Native consumers) to allow overwrite when needed. ${MPC_SINGLETON_POSTMORTEM}`
       )
     }
     console.warn(

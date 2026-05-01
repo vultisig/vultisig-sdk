@@ -626,21 +626,53 @@ const sdk = new Vultisig({
 })
 ```
 
-### WASM Files
+### Web apps: Vite
 
-The SDK requires three WASM files to be available in your application's public directory:
+Install the peer dependency `vite` and add the SDK preset. It excludes wasm glue packages from the dev pre-bundler, wires wasm handling, browser shim aliases, and a lightweight `process` preamble, serves `7zz.wasm` and `wallet-core.wasm` in dev, and emits both wasm assets into the build output. It does not write SDK artifacts into your source `public/` directory.
 
-- `wallet-core.wasm` - Trust Wallet Core for address derivation
-- `dkls.wasm` - ECDSA threshold signatures (DKLS protocol)
-- `schnorr.wasm` - EdDSA threshold signatures (Schnorr protocol)
+With `@vitejs/plugin-react` (or your UI plugin), a minimal `vite.config` looks like this:
 
-These files are included in the npm package. Copy them to your public directory:
+```ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import vultisig from '@vultisig/sdk/vite'
 
-```bash
-cp node_modules/@vultisig/sdk/dist/*.wasm public/
+export default defineConfig({
+  plugins: [react(), vultisig()],
+})
 ```
 
-For Node.js and Electron, WASM files are loaded automatically from the package.
+MPC WebAssembly (DKLS, Schnorr, ML-DSA) is loaded from the `@vultisig/lib-*` packages that ship with `@vultisig/sdk` — keep those packages in `node_modules` and do **not** pre-bundle them; the plugin sets `optimizeDeps.exclude` for you. You do not need to copy those `.wasm` files into `public/`.
+
+`7z-wasm` is also excluded from pre-bundling so fetches line up with the package layout. `@trustwallet/wallet-core` is intentionally left available for Vite to pre-bundle because the package is CommonJS and browser dev servers need Vite's CJS interop for exports such as `initWasm`; the preset serves its `wallet-core.wasm` payload wherever the loader requests it in dev and emits it next to built chunks. Install the usual browser shims the preset pre-bundles (for example `buffer`, `process`, `crypto-browserify`, `stream-browserify`, `events`, `util`, `path-browserify`); the [browser example](../../examples/browser) shows a full dependency set.
+
+`import vultisig from '@vultisig/sdk/vite'` returns a [Vite `PluginOption`](https://vite.dev/config/shared-options.html#plugins) (a small preset of plugins that Vite flattens in place). Use `plugins: [react(), vultisig()]` or `plugins: [vultisig()]` without spreading. Options: `sevenZipWasm`, `walletCoreWasm`, `nodePolyfills`, `shimResolver`, `aliases`, `optimizeDeps`, `defineGlobal`, `browserGlobals`, `debug`.
+
+`defineGlobal` defaults to **true** and adds Vite `define` values for browserified dependencies that still read `global` or `process.env` at module evaluation time. Vite applies `define` as a source replacement, so apps that intentionally read custom `process.env.*` values from client code should use `import.meta.env` or set `defineGlobal: false` and provide equivalent globals themselves. `browserGlobals` also defaults to **true** and injects the minimal runtime `process` preamble through Vite's `index.html` transform; non-HTML library/SSR entry setups should either keep their own preamble or disable it.
+
+`nodePolyfills` defaults to **false** so Vite 8 (Rolldown) works out of the box. On **Vite 5/6/7**, you can set `nodePolyfills: true` to enable the full `vite-plugin-node-polyfills` / `node-stdlib-browser` layer if you need it.
+
+### Web apps: Next.js, Webpack, and other bundlers
+
+There is no first-party Next or Webpack plugin. You need the same **ideas** as the Vite preset:
+
+1. **Do not** pre-bundle (or mangle) `@vultisig/lib-dkls`, `@vultisig/lib-schnorr`, `@vultisig/lib-mldsa`, `@trustwallet/wallet-core`, or `7z-wasm` in a way that moves their `.wasm` or glue JS away from each other, or `import.meta.url` to the wasm will break.
+2. **Serve** the 7z payload at `/7zz.wasm` and the Trust Wallet Core payload where its Emscripten loader requests `wallet-core.wasm`, or change your code path to match how you host static assets.
+3. Provide **Node polyfills** (Buffer, `process`, `crypto`/`stream` shims) in the same spirit as the Vite `vite-plugin-node-polyfills` block.
+
+`next.config` usually uses `transpilePackages: ['@vultisig/sdk', ...]`, `webpack.config.externals` or `serverExternalPackages` for server builds, and a build-time static asset emission/copy step for `7zz.wasm`. Exact values depend on your Next major version and app router; treat this as a checklist, not a drop-in.
+
+### WASM files (all platforms)
+
+| What                                 | Where it comes from in the browser                                                                                                                                          |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DKLS / Schnorr / ML-DSA              | Installed packages `@vultisig/lib-dkls`, `@vultisig/lib-schnorr`, `@vultisig/lib-mldsa` (transitive dependencies of `@vultisig/sdk`), loaded next to the wasm-bindgen glue. |
+| Trust Wallet Core                    | Package `@trustwallet/wallet-core` (SDK dependency). The Vite plugin serves it in dev and emits `assets/wallet-core.wasm` for production builds.                            |
+| 7z (compressed QR / keygen payloads) | `7z-wasm` on npm; the file must be fetchable as `/7zz.wasm` unless you change `getSevenZip` in a fork. The Vite plugin serves it in dev and emits it into the build output. |
+
+**Do not** use `cp node_modules/@vultisig/sdk/dist/*.wasm public/` for modern releases — those binaries are not shipped that way. Use the Vite plugin (above) or host the `7z-wasm` asset from your built/static output.
+
+For Node.js and Electron, WASM and native libs are loaded from the package tree automatically.
 
 ## API Reference
 

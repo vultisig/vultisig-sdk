@@ -204,7 +204,7 @@ export class RujiraDiscovery {
     const fin: Record<string, string> = {}
 
     const baseUrl = this.rpcEndpoint.replace(':26657', '').replace('rpc', 'thornode')
-    const restUrl = baseUrl.includes('thornode') ? baseUrl : 'https://thornode.ninerealms.com'
+    const restUrl = baseUrl.includes('thornode') ? baseUrl : 'https://thornode.thorchain.network'
 
     try {
       // Paginate through all contracts for this code ID

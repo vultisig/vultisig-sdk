@@ -9,11 +9,16 @@ const { mockDeriveAddress, mockDerivePhantom, mockGetCoinBalance } = vi.hoisted(
   mockGetCoinBalance: vi.fn(),
 }))
 
+// vitest 4: vi.fn().mockImplementation(() => obj) is no longer constructable
+// via `new`. Use vi.fn(function() { Object.assign(this, obj) }) instead so
+// `new MasterKeyDeriver()` produces an instance with the mocked methods.
 vi.mock('@/seedphrase/MasterKeyDeriver', () => ({
-  MasterKeyDeriver: vi.fn().mockImplementation(() => ({
-    deriveAddress: mockDeriveAddress,
-    deriveSolanaAddressWithPhantomPath: mockDerivePhantom,
-  })),
+  MasterKeyDeriver: vi.fn(function (this: object) {
+    Object.assign(this, {
+      deriveAddress: mockDeriveAddress,
+      deriveSolanaAddressWithPhantomPath: mockDerivePhantom,
+    })
+  }),
 }))
 
 vi.mock('@vultisig/core-chain/coin/balance', () => ({

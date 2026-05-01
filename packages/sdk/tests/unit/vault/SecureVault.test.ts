@@ -3,40 +3,46 @@ import { describe, expect, it, vi } from 'vitest'
 import { SecureVault } from '../../../src/vault/SecureVault'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
-// Mock the SecureVaultCreationService
+// vitest 4: vi.fn().mockImplementation(() => obj) is no longer constructable
+// via `new`. Use vi.fn(function() { Object.assign(this, obj) }) so
+// `new SecureVaultCreationService()` produces an instance with mocked methods.
 vi.mock('../../../src/services/SecureVaultCreationService', () => ({
-  SecureVaultCreationService: vi.fn().mockImplementation(() => ({
-    createVault: vi.fn().mockRejectedValue(new Error('Network error - mocked')),
-    calculateThreshold: vi.fn((devices: number) => Math.ceil((devices + 1) / 2)),
-    generateSessionParams: vi.fn(() => ({
-      sessionId: 'mock-session-id',
-      hexEncryptionKey: 'a'.repeat(64),
-      hexChainCode: 'b'.repeat(64),
-      localPartyId: 'mock-party-id',
-    })),
-  })),
+  SecureVaultCreationService: vi.fn(function (this: object) {
+    Object.assign(this, {
+      createVault: vi.fn().mockRejectedValue(new Error('Network error - mocked')),
+      calculateThreshold: vi.fn((devices: number) => Math.ceil((devices + 1) / 2)),
+      generateSessionParams: vi.fn(() => ({
+        sessionId: 'mock-session-id',
+        hexEncryptionKey: 'a'.repeat(64),
+        hexChainCode: 'b'.repeat(64),
+        localPartyId: 'mock-party-id',
+      })),
+    })
+  }),
 }))
 
-// Mock the RelaySigningService
+// Mock the RelaySigningService — same vitest 4 constructor-pattern fix.
 vi.mock('../../../src/services/RelaySigningService', () => ({
-  RelaySigningService: vi.fn().mockImplementation(() => ({
-    signWithRelay: vi.fn().mockResolvedValue({
-      signature: 'mock-signature-der',
-      recovery: 0,
-      format: 'ECDSA',
-    }),
-    signBytesWithRelay: vi.fn().mockResolvedValue({
-      signature: 'mock-signature-der',
-      recovery: 1,
-      format: 'ECDSA',
-    }),
-    generateSessionParams: vi.fn(() => ({
-      sessionId: 'mock-session-id',
-      hexEncryptionKey: 'a'.repeat(64),
-      localPartyId: 'mock-party-id',
-    })),
-    generateQRPayload: vi.fn().mockResolvedValue('vultisig://mock-qr-payload'),
-  })),
+  RelaySigningService: vi.fn(function (this: object) {
+    Object.assign(this, {
+      signWithRelay: vi.fn().mockResolvedValue({
+        signature: 'mock-signature-der',
+        recovery: 0,
+        format: 'ECDSA',
+      }),
+      signBytesWithRelay: vi.fn().mockResolvedValue({
+        signature: 'mock-signature-der',
+        recovery: 1,
+        format: 'ECDSA',
+      }),
+      generateSessionParams: vi.fn(() => ({
+        sessionId: 'mock-session-id',
+        hexEncryptionKey: 'a'.repeat(64),
+        localPartyId: 'mock-party-id',
+      })),
+      generateQRPayload: vi.fn().mockResolvedValue('vultisig://mock-qr-payload'),
+    })
+  }),
 }))
 
 describe('SecureVault', () => {

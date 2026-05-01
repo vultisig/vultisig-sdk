@@ -1,5 +1,92 @@
 # @vultisig/core-chain
 
+## 1.5.0
+
+### Minor Changes
+
+- [#320](https://github.com/vultisig/vultisig-sdk/pull/320) [`c33d1f0`](https://github.com/vultisig/vultisig-sdk/commit/c33d1f02b6740ef1c7db16cdc1f7290ec7b2f1f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - feat(chain): THORChain rapid quote with streaming fallback above 3% fee bps
+
+  THORChain swap quotes now request rapid (`streaming_interval=0`) first. When `fees.total_bps` exceeds 300, a second streaming quote is fetched (`interval=1`, optional `streaming_quantity` from `max_streaming_quantity`); the better `expected_amount_out` wins, with silent fallback to rapid on errors. `THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS` disables the extra fetch when set to `Number.MAX_SAFE_INTEGER`. Keysign payload reads THOR streaming fields from the quote memo so they match the selected route.
+
+### Patch Changes
+
+- Updated dependencies [[`a52980c`](https://github.com/vultisig/vultisig-sdk/commit/a52980c490633da7d7ae36128bc491f8ca3ff565)]:
+  - @vultisig/lib-utils@0.10.1
+
+## 1.4.3
+
+### Patch Changes
+
+- [#360](https://github.com/vultisig/vultisig-sdk/pull/360) [`e52914b`](https://github.com/vultisig/vultisig-sdk/commit/e52914ba87f2d740847fc0de3a49827b0da3e0ba) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - `@vultisig/core-chain`: lift the qbtc protobuf wire-format helpers to a shared `chains/cosmos/protoEncoding` module (extending it with lower-level `varintBig` / `protoField` primitives that don't apply proto3 default-elision, alongside the existing default-eliding `protoVarint` / `protoBytes` / `protoString`), and add `chains/cosmos/terraClassicTax` with LCD fetchers (`getTerraClassicTaxRate`, `getTerraClassicTaxCap`) plus the pure `applyTerraClassicTax` helper for the cosmos-sdk Dec-fixed-point math. Tax rate is `0` on the live chain today (governance-paused) but the helpers are ready for callers that need to be correct when it reactivates. The previous `qbtc/protoEncoding` package export is replaced by `cosmos/protoEncoding`; the qbtc consumers were updated in lockstep, no behavior change.
+
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies [[`a3a331a`](https://github.com/vultisig/vultisig-sdk/commit/a3a331a875ebc6868b11c6901c8ed99dde51a4ff)]:
+  - @vultisig/lib-utils@0.10.0
+
+## 1.4.1
+
+### Patch Changes
+
+- [#342](https://github.com/vultisig/vultisig-sdk/pull/342) [`77410fb`](https://github.com/vultisig/vultisig-sdk/commit/77410fb28f53dd558f05e5634aadba6a9547ee0f) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(security/blockaid): pair swap diffs across all asset diffs in EVM simulations
+
+  `parseBlockaidEvmSimulation` previously destructured only `assetDiffs[0]` and `assetDiffs[1]`. For router-mediated flows like `permitAndCall`, Blockaid returns three diffs with the user's `in` side at `assetDiffs[2]` and an empty intermediate leg at `assetDiffs[1]`, causing the parser to bail and the simulation hero to render nothing. The parser now scans all diffs for the user-side `out` and `in` legs (preferring an in-asset different from the out-asset), matching the iOS `BlockaidSimulationParser` behaviour.
+
+## 1.4.0
+
+### Minor Changes
+
+- [#309](https://github.com/vultisig/vultisig-sdk/pull/309) [`6f1f8b2`](https://github.com/vultisig/vultisig-sdk/commit/6f1f8b2d9a69b8542da776f69fbddba6eb35bd3e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(chain): Uniswap Universal Router command decoder
+
+  Decodes `execute(bytes commands, bytes[] inputs, uint256 deadline)` calldata into an aggregate swap intent (from token, to token, amount in, amount out min). Exposed at `@vultisig/core-chain/chains/evm/contract/universalRouter/{decode,opcodes,types}`.
+
+  Covers V2 / V3 / V4 swaps (exact-in and exact-out), WRAP_ETH and UNWRAP_WETH framing, split-route aggregation across identical pairs, and the CONTRACT_BALANCE sentinel. Unknown opcodes (Permit2, sweep, transfer) are skipped rather than rejected so the router's usual bundling doesn't drop the whole decode.
+
+  Returns `null` for non-Universal-Router calldata. Native ETH is represented by the zero address — callers should translate to the chain's fee coin when displaying.
+
+### Patch Changes
+
+- [#325](https://github.com/vultisig/vultisig-sdk/pull/325) [`ef2ffbe`](https://github.com/vultisig/vultisig-sdk/commit/ef2ffbecf5f2b3af69172d34f3fda25055f4e112) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(bittensor): drop polkadot dynamic import in balance resolver
+
+  The Bittensor balance resolver dynamically imported `@polkadot/util-crypto`
+  just to base58-decode an SS58 address, blake2_128-hash the pubkey, and
+  hex-encode it. In browser/extension bundles this dynamic import pulls in
+  a chunk that double-bundles BN.js; the second copy throws
+  `TypeError: Cannot assign to read only property 'toString' of object '#<o>'`
+  during module init, so every TAO balance fetch fails with no useful
+  network/console signal — the chain page only renders "Failed to load".
+
+  The resolver now uses the libraries already in `@vultisig/core-chain`'s
+  direct dependency set: `@noble/hashes` for `blake2b` and `bytesToHex`, and
+  `bs58` for the SS58 base58 decode. No polkadot, no `Buffer`, no dynamic
+  imports. Bittensor uses SS58 prefix 42 (1-byte network prefix + 32-byte
+  pubkey + 2-byte checksum = 35 bytes); we slice `[1, 33)` to recover the
+  pubkey, then build the storage key and call `state_getStorage` exactly
+  as before.
+
+  Behaviour for valid SS58 addresses is unchanged. Invalid-length
+  addresses now throw a clearer `Invalid SS58 address length` error
+  instead of a polkadot decoding error.
+
+- [#302](https://github.com/vultisig/vultisig-sdk/pull/302) [`d9399c7`](https://github.com/vultisig/vultisig-sdk/commit/d9399c77a932f0ecc9a2e6acec5d8457aa199444) Thanks [@rcoderdev](https://github.com/rcoderdev)! - fix(chain): hash-verify broadcast errors on all chains
+
+  In MPC keysign every participating device broadcasts the same signed
+  transaction. When a peer wins the RPC race, the slower device gets an
+  "already known / duplicate / in mempool" error — the tx is on-chain, but
+  fragile per-chain error-string matching made the slower device fail the
+  signing flow anyway.
+
+  Broadcast resolvers now share a `verifyBroadcastByHash` safety net: on
+  any broadcast error, re-hash the signed output and check `getTxStatus`;
+  if the tx is pending or confirmed, swallow the error. Existing string
+  matches stay as a fast path to avoid an extra RPC roundtrip on the
+  common case. The five resolvers that previously had no duplicate
+  detection at all (Solana, Tron, Sui, Ripple, Polkadot) now tolerate
+  duplicate broadcasts; Polkadot additionally surfaces JSON-RPC errors
+  that were previously silently ignored.
+
 ## 1.3.1
 
 ### Patch Changes

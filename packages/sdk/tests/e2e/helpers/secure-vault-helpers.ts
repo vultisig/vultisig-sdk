@@ -19,7 +19,7 @@ import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
-import { decryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm'
+import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 import { randomUUID } from 'crypto'
 import fs from 'fs/promises'
@@ -94,10 +94,7 @@ export async function loadVaultShare(vaultPath: string, password: string): Promi
       throw new Error('Password required for encrypted vault')
     }
     const encryptedData = fromBase64(container.vault)
-    const decryptedBuffer = await decryptWithAesGcm({
-      key: password,
-      value: encryptedData,
-    })
+    const decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)
     vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
   } else {
     vaultBase64 = container.vault

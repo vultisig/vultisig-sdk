@@ -140,6 +140,12 @@ export class AgentClient {
     callbacks: {
       onTextDelta?: (delta: string) => void
       onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
+      // Fired for `tool-input-available` with `clientExecuted: true`.
+      // Client runs the tool and ships the result via recent_actions.
+      // Sync-only: callers must dispatch async work themselves (push to a
+      // promise queue) — keeps `void`'d call at the SSE boundary safe from
+      // unhandled rejections.
+      onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
@@ -253,6 +259,12 @@ export class AgentClient {
     callbacks: {
       onTextDelta?: (delta: string) => void
       onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
+      // Fired for `tool-input-available` with `clientExecuted: true`.
+      // Client runs the tool and ships the result via recent_actions.
+      // Sync-only: callers must dispatch async work themselves (push to a
+      // promise queue) — keeps `void`'d call at the SSE boundary safe from
+      // unhandled rejections.
+      onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
       onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
@@ -297,6 +309,27 @@ export class AgentClient {
           }
           const toolName = inlineName ?? (callId ? toolNameByCallId.get(callId) : undefined)
           const label = typeof parsed.label === 'string' ? parsed.label : undefined
+
+          // Client-executed tools get a dedicated callback. Strict boolean
+          // check — absent/non-true falls through to display-only progress
+          // (backward-compat for older backends).
+          if (
+            v1Type === 'tool-input-available' &&
+            parsed.clientExecuted === true &&
+            callId &&
+            toolName &&
+            callbacks.onClientSideToolCall
+          ) {
+            const rawInput = parsed.input
+            const input =
+              rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
+                ? (rawInput as Record<string, unknown>)
+                : {}
+            // Sync callback (signature enforces void return); session.ts
+            // queues the async dispatch onto its own chain.
+            callbacks.onClientSideToolCall(callId, toolName, input)
+          }
+
           if (status && toolName) {
             callbacks.onToolProgress?.(toolName, status, label)
           }

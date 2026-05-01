@@ -1031,7 +1031,10 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // network round-trip. computeMaxSendFromBalance re-validates for the
     // vault-free path; two checks at different layers is acceptable.
     if (!isValidAddress({ chain: params.coin.chain, address: params.receiver, walletCore })) {
-      throw new Error(`Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`)
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`
+      )
     }
     // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
     // wrapping all fire. The vault-free `getMaxSendAmountFromKeys` skips these

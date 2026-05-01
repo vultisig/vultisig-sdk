@@ -6,7 +6,7 @@ import {
   SuiSpecificSchema,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
-import { type CoinStruct } from '@mysten/sui/jsonRpc'
+import type { CoinStruct } from '@mysten/sui/jsonRpc'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'

@@ -38,9 +38,9 @@ export type RujiraConfig = {
 export const MAINNET_CONFIG: RujiraConfig = {
   network: 'mainnet',
   chainId: 'thorchain-1',
-  rpcEndpoint: 'https://rpc.ninerealms.com',
-  restEndpoint: 'https://thornode.ninerealms.com',
-  midgardEndpoint: 'https://midgard.ninerealms.com/v2',
+  rpcEndpoint: 'https://rpc.thorchain.network',
+  restEndpoint: 'https://thornode.thorchain.network',
+  midgardEndpoint: 'https://midgard.thorchain.network/v2',
   graphqlWsEndpoint: 'wss://api.rujira.network/socket',
   gasPrice: DEFAULT_GAS_PRICE,
   gasLimit: 500000,

@@ -40,20 +40,30 @@ yarn add @vultisig/sdk
 - **Electron**: Version 20 or higher (for desktop applications)
 - **TypeScript**: Optional but recommended
 
-### Browser Setup: WASM Files
+### Browser setup: Vite and WASM
 
-For browser environments, you need to serve the WASM files from your public directory:
+**Vite (recommended for SPAs):** add `@vultisig/sdk/vite` to `plugins` as a single entry (Vite flattens nested plugin lists). The preset serves `7zz.wasm` in dev, emits it into the build output, and keeps wasm packages out of `optimizeDeps` so `import.meta.url` resolves. It does not write SDK artifacts into your source `public/` directory. Example:
 
-1. Copy WASM files to your public directory:
-   ```bash
-   cp node_modules/@vultisig/sdk/dist/*.wasm public/
-   ```
+```ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import vultisig from '@vultisig/sdk/vite'
 
-2. The SDK will automatically load these files from the root path (`/`)
+export default defineConfig({
+  plugins: [react(), vultisig()],
+})
+```
+
+MPC WebAssembly (DKLS, Schnorr, ML-DSA) and Trust Wallet Core load from your installed npm packages, not from hand-copied `sdk/dist` paths. The old `cp node_modules/@vultisig/sdk/dist/*.wasm public/` recipe does **not** match current package layout.
+
+`nodePolyfills` in `vultisig()` defaults to `false` for Vite 8 (Rolldown) compatibility; on older Vite versions you can pass `nodePolyfills: true` to enable the full `vite-plugin-node-polyfills` layer.
+
+**Next.js / Webpack:** there is no official plugin. Keep `@vultisig/lib-*`, `@trustwallet/wallet-core`, and `7z-wasm` from being re-bundled in a way that breaks wasm paths; emit or host `7zz.wasm` at `/7zz.wasm` (or adjust your hosting) and add Node shims (Buffer, `process`, `crypto`/`stream` browserify) comparable to the Vite example. See the SDK README “Web apps: Next.js, Webpack” section.
 
 ### Basic Initialization
 
 The SDK automatically uses the appropriate storage for your platform:
+
 - **Node.js**: `FileStorage` (stores in `~/.vultisig` by default)
 - **Browser**: `BrowserStorage` (uses IndexedDB with localStorage fallback)
 - **Electron**: `FileStorage` (same as Node.js, shared with CLI)
@@ -61,7 +71,7 @@ The SDK automatically uses the appropriate storage for your platform:
 ```typescript
 import { Vultisig } from '@vultisig/sdk'
 
-const sdk = new Vultisig()  // Storage is auto-configured for your platform
+const sdk = new Vultisig() // Storage is auto-configured for your platform
 
 await sdk.initialize()
 
@@ -77,7 +87,7 @@ sdk.dispose()
 import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
-  storage: new MemoryStorage(),  // TESTING ONLY — not persistent, will lose vault data
+  storage: new MemoryStorage(), // TESTING ONLY — not persistent, will lose vault data
 })
 
 await sdk.initialize()
@@ -102,8 +112,8 @@ const sdk = new Vultisig({
   },
 
   passwordCache: {
-    defaultTTL: 300000  // Cache password for 5 minutes
-  }
+    defaultTTL: 300000, // Cache password for 5 minutes
+  },
 })
 
 await sdk.initialize()
@@ -111,12 +121,12 @@ await sdk.initialize()
 // Step 2: Create a fast vault (server-assisted, always encrypted)
 // Returns the vaultId - vault is returned from verifyVault()
 const vaultId = await sdk.createFastVault({
-  name: "My Wallet",
-  email: "user@example.com",
-  password: "SecurePassword123!",
-  onProgress: (step) => {
+  name: 'My Wallet',
+  email: 'user@example.com',
+  password: 'SecurePassword123!',
+  onProgress: step => {
     console.log(`${step.message} (${step.progress}%)`)
-  }
+  },
 })
 
 // Step 3: Verify with email code and get the vault
@@ -153,12 +163,12 @@ The SDK supports two types of vaults:
 - **FastVault**: 2-of-2 MPC with VultiServer assistance. Always encrypted with password. Best for quick setup and individual use.
 - **SecureVault**: Multi-device N-of-M MPC with configurable thresholds. Optionally encrypted. Best for maximum security, teams, and multi-device scenarios.
 
-| Feature | FastVault | SecureVault |
-|---------|-----------|-------------|
-| **Threshold** | 2-of-2 (fixed) | N-of-M (configurable) |
-| **Setup** | Server-assisted, instant | Multi-device, requires QR pairing |
-| **Signing** | Instant via VultiServer | Requires device coordination |
-| **Password** | Required | Optional |
+| Feature       | FastVault                     | SecureVault                          |
+| ------------- | ----------------------------- | ------------------------------------ |
+| **Threshold** | 2-of-2 (fixed)                | N-of-M (configurable)                |
+| **Setup**     | Server-assisted, instant      | Multi-device, requires QR pairing    |
+| **Signing**   | Instant via VultiServer       | Requires device coordination         |
+| **Password**  | Required                      | Optional                             |
 | **Use Cases** | Personal wallets, development | Team wallets, high security, custody |
 
 ### Supported Chains
@@ -205,7 +215,7 @@ import * as fs from 'fs'
 
 // Create SDK with in-memory storage (no persistence)
 const sdk = new Vultisig({
-  storage: new MemoryStorage()
+  storage: new MemoryStorage(),
 })
 await sdk.initialize()
 
@@ -223,6 +233,7 @@ sdk.dispose()
 ```
 
 **Use cases for stateless usage:**
+
 - **One-off signing**: Sign a transaction without persisting vault state
 - **Address derivation**: Generate addresses without storing vault data
 - **Testing**: Unit and integration tests without filesystem side effects
@@ -230,6 +241,7 @@ sdk.dispose()
 - **CLI tools**: Command-line utilities that operate on vault files
 
 **What works in stateless mode:**
+
 - ✅ Address derivation
 - ✅ Balance checking
 - ✅ Transaction signing (FastVault)
@@ -238,6 +250,7 @@ sdk.dispose()
 - ✅ Token/chain management (in-memory only)
 
 **What doesn't persist:**
+
 - ❌ Vault preferences (chains, tokens, currency)
 - ❌ Cached balances/addresses (recreated each session)
 - ❌ Password cache (must provide password each time)
@@ -269,18 +282,18 @@ import { Vultisig, MemoryStorage } from '@vultisig/sdk'
 const sdk = new Vultisig({
   storage: new MemoryStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       // Show modal to user
       const modal = createPasswordModal({
         title: `Enter password for ${vaultName}`,
-        onSubmit: (password) => {
+        onSubmit: password => {
           closeModal()
           resolve(password)
-        }
+        },
       })
       modal.show()
     })
-  }
+  },
 })
 ```
 
@@ -295,16 +308,16 @@ const sdk = new Vultisig({
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     const rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     })
 
-    return new Promise((resolve) => {
-      rl.question(`Enter password for ${vaultName}: `, (password) => {
+    return new Promise(resolve => {
+      rl.question(`Enter password for ${vaultName}: `, password => {
         rl.close()
         resolve(password)
       })
     })
-  }
+  },
 })
 ```
 
@@ -316,7 +329,7 @@ const sdk = new Vultisig({
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     // Retrieve from OS keychain, secure enclave, etc.
     return await secureStorage.getPassword(vaultId)
-  }
+  },
 })
 ```
 
@@ -328,8 +341,8 @@ Cache passwords to avoid repeated prompts during a session:
 const sdk = new Vultisig({
   storage: new MemoryStorage(),
   passwordCache: {
-    defaultTTL: 300000  // Cache for 5 minutes (in milliseconds)
-  }
+    defaultTTL: 300000, // Cache for 5 minutes (in milliseconds)
+  },
 })
 ```
 
@@ -337,16 +350,24 @@ Common TTL configurations:
 
 ```typescript
 // 5 minutes (recommended for balance of security and UX)
-passwordCache: { defaultTTL: 300000 }
+passwordCache: {
+  defaultTTL: 300000
+}
 
 // 15 minutes
-passwordCache: { defaultTTL: 900000 }
+passwordCache: {
+  defaultTTL: 900000
+}
 
 // 1 hour
-passwordCache: { defaultTTL: 3600000 }
+passwordCache: {
+  defaultTTL: 3600000
+}
 
 // Session only (no expiry, cleared on app close)
-passwordCache: { defaultTTL: Infinity }
+passwordCache: {
+  defaultTTL: Infinity
+}
 ```
 
 ### Manual Lock/Unlock
@@ -446,12 +467,12 @@ Create a new vault with server assistance:
 ```typescript
 // Step 1: Create vault - returns vaultId (vault not returned yet)
 const vaultId = await sdk.createFastVault({
-  name: "My Wallet",
-  email: "user@example.com",
-  password: "SecurePassword123!",
-  onProgress: (step) => {
+  name: 'My Wallet',
+  email: 'user@example.com',
+  password: 'SecurePassword123!',
+  onProgress: step => {
     console.log(`Progress: ${step.message} (${step.progress}%)`)
-  }
+  },
 })
 
 // Step 2: Verify with email code - returns the vault
@@ -479,30 +500,30 @@ Secure vaults use multi-device MPC with configurable N-of-M thresholds. Creation
 ```typescript
 // Create a 2-of-3 secure vault
 const { vault, vaultId, sessionId } = await sdk.createSecureVault({
-  name: "Team Wallet",
-  devices: 3,                    // Total number of devices
-  threshold: 2,                  // Signing threshold (defaults to ceil((devices+1)/2))
-  password: "OptionalPassword",  // Optional encryption password
+  name: 'Team Wallet',
+  devices: 3, // Total number of devices
+  threshold: 2, // Signing threshold (defaults to ceil((devices+1)/2))
+  password: 'OptionalPassword', // Optional encryption password
 
   // Called when QR code is ready for device pairing
-  onQRCodeReady: (qrPayload) => {
+  onQRCodeReady: qrPayload => {
     // Display this QR for other devices to scan with Vultisig app
-    displayQRCode(qrPayload);
+    displayQRCode(qrPayload)
   },
 
   // Called each time a device joins
   onDeviceJoined: (deviceId, totalJoined, required) => {
-    console.log(`Device joined: ${totalJoined}/${required}`);
+    console.log(`Device joined: ${totalJoined}/${required}`)
   },
 
   // Called with creation progress updates
-  onProgress: (step) => {
-    console.log(`${step.step}: ${step.message} (${step.progress}%)`);
-  }
-});
+  onProgress: step => {
+    console.log(`${step.step}: ${step.message} (${step.progress}%)`)
+  },
+})
 
-console.log('Secure vault created:', vault.name);
-console.log('Vault ID:', vaultId);
+console.log('Secure vault created:', vault.name)
+console.log('Vault ID:', vaultId)
 ```
 
 **Creation Flow:**
@@ -519,32 +540,32 @@ console.log('Vault ID:', vaultId);
 The threshold determines how many devices must participate in signing:
 
 | Devices | Default Threshold | Can Sign With |
-|---------|-------------------|---------------|
-| 2 | 2 | Both devices |
-| 3 | 2 | Any 2 of 3 |
-| 4 | 3 | Any 3 of 4 |
-| 5 | 4 | Any 4 of 5 |
+| ------- | ----------------- | ------------- |
+| 2       | 2                 | Both devices  |
+| 3       | 2                 | Any 2 of 3    |
+| 4       | 3                 | Any 3 of 4    |
+| 5       | 4                 | Any 4 of 5    |
 
 Formula: `threshold = Math.ceil((devices * 2) / 3)`
 
 **Cancellation Support:**
 
 ```typescript
-const controller = new AbortController();
+const controller = new AbortController()
 
 // Allow user to cancel
-cancelButton.onclick = () => controller.abort();
+cancelButton.onclick = () => controller.abort()
 
 try {
   const { vault } = await sdk.createSecureVault({
-    name: "Team Wallet",
+    name: 'Team Wallet',
     devices: 3,
     signal: controller.signal,
-    onQRCodeReady: displayQRCode
-  });
+    onQRCodeReady: displayQRCode,
+  })
 } catch (error) {
   if (error.name === 'AbortError') {
-    console.log('Vault creation cancelled');
+    console.log('Vault creation cancelled')
   }
 }
 ```
@@ -558,34 +579,34 @@ Signing with a secure vault requires coordination with other devices. The thresh
 const keysignPayload = await vault.prepareSendTx({
   coin,
   receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
-  amount: '100000000000000000'
-});
+  amount: '100000000000000000',
+})
 
 // Sign with device coordination
 const signature = await vault.sign(keysignPayload, {
   // Called when QR is ready for devices to join signing session
-  onQRCodeReady: (qrPayload) => {
-    displayQRCode(qrPayload);
-    console.log('Scan with other devices to approve transaction');
+  onQRCodeReady: qrPayload => {
+    displayQRCode(qrPayload)
+    console.log('Scan with other devices to approve transaction')
   },
 
   // Called as devices join the signing session
   onDeviceJoined: (deviceId, total, required) => {
-    console.log(`Signing: ${total}/${required} devices ready`);
+    console.log(`Signing: ${total}/${required} devices ready`)
   },
 
   // Called with signing progress updates
-  onProgress: (step) => {
-    console.log(`${step.step}: ${step.message}`);
-  }
-});
+  onProgress: step => {
+    console.log(`${step.step}: ${step.message}`)
+  },
+})
 
 // Broadcast once signature is obtained
 const txHash = await vault.broadcastTx({
   chain: Chain.Ethereum,
   keysignPayload,
-  signature
-});
+  signature,
+})
 ```
 
 **Signing Flow:**
@@ -601,15 +622,18 @@ const txHash = await vault.broadcastTx({
 
 ```typescript
 // Sign pre-hashed data (useful for custom transaction construction)
-const signature = await vault.signBytes({
-  chain: Chain.Ethereum,
-  messages: [transactionHash]  // Uint8Array, Buffer, or hex string
-}, {
-  onQRCodeReady: displayQRCode,
-  onDeviceJoined: (id, total, required) => {
-    console.log(`${total}/${required} ready`);
+const signature = await vault.signBytes(
+  {
+    chain: Chain.Ethereum,
+    data: transactionHash, // Uint8Array, Buffer, or hex string
+  },
+  {
+    onQRCodeReady: displayQRCode,
+    onDeviceJoined: (id, total, required) => {
+      console.log(`${total}/${required} ready`)
+    },
   }
-});
+)
 ```
 
 **Timeout Behavior:**
@@ -630,10 +654,7 @@ const vultContent = fs.readFileSync('MyWallet-local-party-1-share1of2.vult', 'ut
 const isEncrypted = sdk.isVaultEncrypted(vultContent)
 
 // Import with password if needed
-const vault = await sdk.importVault(
-  vultContent,
-  isEncrypted ? 'VaultPassword123!' : undefined
-)
+const vault = await sdk.importVault(vultContent, isEncrypted ? 'VaultPassword123!' : undefined)
 
 console.log('Vault imported:', vault.name)
 ```
@@ -750,7 +771,7 @@ Before importing, you can scan chains to find existing balances:
 const { results, usePhantomSolanaPath } = await sdk.discoverChainsFromSeedphrase(
   mnemonic,
   [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain, Chain.Solana],
-  (progress) => {
+  progress => {
     console.log(`${progress.phase}: ${progress.chain}`)
     console.log(`Progress: ${progress.chainsProcessed}/${progress.chainsTotal}`)
     console.log(`Found balances on: ${progress.chainsWithBalance.join(', ')}`)
@@ -773,6 +794,7 @@ if (usePhantomSolanaPath) {
 ```
 
 **Progress Phases:**
+
 - `validating` - Validating the mnemonic
 - `deriving` - Deriving addresses for each chain
 - `fetching` - Fetching balances from blockchain
@@ -805,12 +827,12 @@ const vaultId = await sdk.createFastVaultFromSeedphrase({
   // usePhantomSolanaPath: true,
 
   // Progress callbacks
-  onProgress: (step) => {
+  onProgress: step => {
     console.log(`${step.step}: ${step.message} (${step.progress}%)`)
   },
-  onChainDiscovery: (progress) => {
+  onChainDiscovery: progress => {
     console.log(`Discovering ${progress.chain}: ${progress.phase}`)
-  }
+  },
 })
 
 // Complete with email verification
@@ -832,27 +854,27 @@ Import a seedphrase with multi-device MPC (N-of-M threshold):
 const { vault, vaultId, sessionId } = await sdk.createSecureVaultFromSeedphrase({
   mnemonic: 'abandon abandon abandon...',
   name: 'Team Wallet',
-  devices: 3,      // Total devices
-  threshold: 2,    // Signing threshold
+  devices: 3, // Total devices
+  threshold: 2, // Signing threshold
   password: 'OptionalPassword',
   discoverChains: true,
 
   // Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true)
   // usePhantomSolanaPath: true,
 
-  onProgress: (step) => {
+  onProgress: step => {
     console.log(`${step.step}: ${step.message}`)
   },
-  onQRCodeReady: (qrPayload) => {
+  onQRCodeReady: qrPayload => {
     // Display QR for other devices to scan
     displayQRCode(qrPayload)
   },
   onDeviceJoined: (deviceId, total, required) => {
     console.log(`Device joined: ${total}/${required}`)
   },
-  onChainDiscovery: (progress) => {
+  onChainDiscovery: progress => {
     console.log(`Discovering: ${progress.message}`)
-  }
+  },
 })
 
 console.log('SecureVault imported:', vault.name)
@@ -871,17 +893,19 @@ const promise1 = sdk1.createSecureVault({
   name: 'Shared Vault',
   devices: 3,
   password: 'optional',
-  onQRCodeReady: (qr) => { qrPayload = qr }
+  onQRCodeReady: qr => {
+    qrPayload = qr
+  },
 })
 
 // Device 2 joins (no mnemonic needed for keygen)
 const promise2 = sdk2.joinSecureVault(qrPayload, {
-  devices: 3
+  devices: 3,
 })
 
 // Device 3 joins
 const promise3 = sdk3.joinSecureVault(qrPayload, {
-  devices: 3
+  devices: 3,
 })
 
 // Wait for all to complete
@@ -898,19 +922,21 @@ const promise1 = sdk1.createSecureVaultFromSeedphrase({
   mnemonic: seedphrase,
   name: 'Shared Wallet',
   devices: 3,
-  onQRCodeReady: (qr) => { qrPayload = qr }
+  onQRCodeReady: qr => {
+    qrPayload = qr
+  },
 })
 
 // Device 2 joins (mnemonic required - must match!)
 const promise2 = sdk2.joinSecureVault(qrPayload, {
   mnemonic: seedphrase,
-  devices: 3
+  devices: 3,
 })
 
 // Device 3 joins
 const promise3 = sdk3.joinSecureVault(qrPayload, {
   mnemonic: seedphrase,
-  devices: 3
+  devices: 3,
 })
 
 const [result1, result2, result3] = await Promise.all([promise1, promise2, promise3])
@@ -920,14 +946,14 @@ const [result1, result2, result3] = await Promise.all([promise1, promise2, promi
 
 ### Creation Flow Comparison
 
-| Feature | FastVault from Seedphrase | SecureVault from Seedphrase |
-|---------|---------------------------|------------------------------|
-| **Method** | `createFastVaultFromSeedphrase()` | `createSecureVaultFromSeedphrase()` |
-| **Threshold** | 2-of-2 (with VultiServer) | N-of-M (configurable) |
-| **Verification** | Email code required | Device pairing via QR or `joinSecureVault()` |
-| **Password** | Required | Optional |
-| **Signing** | Instant | Requires device coordination |
-| **Joiner Method** | N/A (server auto-joins) | `joinSecureVault()` |
+| Feature           | FastVault from Seedphrase         | SecureVault from Seedphrase                  |
+| ----------------- | --------------------------------- | -------------------------------------------- |
+| **Method**        | `createFastVaultFromSeedphrase()` | `createSecureVaultFromSeedphrase()`          |
+| **Threshold**     | 2-of-2 (with VultiServer)         | N-of-M (configurable)                        |
+| **Verification**  | Email code required               | Device pairing via QR or `joinSecureVault()` |
+| **Password**      | Required                          | Optional                                     |
+| **Signing**       | Instant                           | Requires device coordination                 |
+| **Joiner Method** | N/A (server auto-joins)           | `joinSecureVault()`                          |
 
 ### Security Considerations
 
@@ -954,11 +980,7 @@ const btcAddress = await vault.address(Chain.Bitcoin)
 console.log('Bitcoin:', btcAddress) // "bc1q..."
 
 // Multiple addresses
-const addresses = await vault.addresses([
-  Chain.Bitcoin,
-  Chain.Ethereum,
-  Chain.Solana
-])
+const addresses = await vault.addresses([Chain.Bitcoin, Chain.Ethereum, Chain.Solana])
 
 console.log(addresses)
 // {
@@ -1017,16 +1039,21 @@ const { signature: solSig } = await vault.signMessage('verify me', Chain.Solana)
 
 // Swap tokens (handles quote, approval, and broadcast)
 const swap = await vault.swap({
-  fromChain: Chain.Ethereum, fromSymbol: 'ETH',
-  toChain: Chain.Bitcoin, toSymbol: 'BTC',
+  fromChain: Chain.Ethereum,
+  fromSymbol: 'ETH',
+  toChain: Chain.Bitcoin,
+  toSymbol: 'BTC',
   amount: '0.5',
 })
 
 // Swap dry run
 const quote = await vault.swap({
-  fromChain: Chain.Ethereum, fromSymbol: 'ETH',
-  toChain: Chain.Bitcoin, toSymbol: 'BTC',
-  amount: '0.5', dryRun: true,
+  fromChain: Chain.Ethereum,
+  fromSymbol: 'ETH',
+  toChain: Chain.Bitcoin,
+  toSymbol: 'BTC',
+  amount: '0.5',
+  dryRun: true,
 })
 
 // Portfolio overview
@@ -1053,7 +1080,7 @@ const coin = new AccountCoin({
   address: await vault.address(Chain.Ethereum),
   decimals: 18,
   priceUSD: '3000.00',
-  isNativeToken: true
+  isNativeToken: true,
 })
 
 // Step 2: Prepare transaction
@@ -1064,7 +1091,7 @@ const keysignPayload = await vault.prepareSendTx({
   memo: 'Payment for services',
   feeSettings: {
     gasPrice: '50000000000', // 50 gwei (optional, uses estimate if not provided)
-  }
+  },
 })
 
 // Step 3: Sign transaction (may trigger password prompt)
@@ -1074,7 +1101,7 @@ const signature = await vault.sign(keysignPayload)
 const txHash = await vault.broadcastTx({
   chain: Chain.Ethereum,
   keysignPayload,
-  signature
+  signature,
 })
 
 console.log('Transaction broadcast:', txHash)
@@ -1107,8 +1134,8 @@ const { balance, fee, maxSendable } = await vault.getMaxSendAmount({
   receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0',
 })
 
-console.log('Balance:', balance)        // e.g., 5000000000000000000n (5 ETH)
-console.log('Fee:', fee)                // e.g., 21000000000000n
+console.log('Balance:', balance) // e.g., 5000000000000000000n (5 ETH)
+console.log('Fee:', fee) // e.g., 21000000000000n
 console.log('Max sendable:', maxSendable) // e.g., 4999979000000000000n
 
 // Use maxSendable as the amount for a "send max" transaction
@@ -1165,7 +1192,7 @@ const tx = Transaction.from({
   maxPriorityFeePerGas: 2000000000n,
   nonce: 42,
   chainId: 1,
-  type: 2  // EIP-1559
+  type: 2, // EIP-1559
 })
 
 // Step 2: Get the unsigned transaction hash
@@ -1174,7 +1201,7 @@ const unsignedHash = keccak256(tx.unsignedSerialized)
 // Step 3: Sign the hash with signBytes
 const signature = await vault.signBytes({
   data: unsignedHash,
-  chain: Chain.Ethereum
+  chain: Chain.Ethereum,
 })
 
 // Step 4: Apply signature to transaction
@@ -1182,13 +1209,13 @@ const signedTx = tx.clone()
 signedTx.signature = {
   r: '0x' + signature.signature.slice(0, 64),
   s: '0x' + signature.signature.slice(64, 128),
-  v: signature.recovery! + 27
+  v: signature.recovery! + 27,
 }
 
 // Step 5: Broadcast using SDK
 const txHash = await vault.broadcastRawTx({
   chain: Chain.Ethereum,
-  rawTx: signedTx.serialized
+  rawTx: signedTx.serialized,
 })
 console.log('Transaction hash:', txHash)
 ```
@@ -1204,25 +1231,25 @@ const psbt = new bitcoin.Psbt({ network: bitcoin.networks.bitcoin })
 psbt.addInput({
   hash: 'previous-txid...',
   index: 0,
-  witnessUtxo: { script: Buffer.from('...'), value: 100000 }
+  witnessUtxo: { script: Buffer.from('...'), value: 100000 },
 })
 psbt.addOutput({
   address: 'bc1q...',
-  value: 90000
+  value: 90000,
 })
 
 // Step 2: Get sighash for each input
 const sighash = psbt.getTxForSigning().hashForWitnessV0(
-  0,  // input index
-  Buffer.from('...'),  // scriptCode
-  100000,  // value
+  0, // input index
+  Buffer.from('...'), // scriptCode
+  100000, // value
   bitcoin.Transaction.SIGHASH_ALL
 )
 
 // Step 3: Sign with signBytes
 const signature = await vault.signBytes({
   data: sighash,
-  chain: Chain.Bitcoin
+  chain: Chain.Bitcoin,
 })
 
 // Step 4: Apply signature to PSBT
@@ -1233,7 +1260,7 @@ psbt.finalizeAllInputs()
 const rawTx = psbt.extractTransaction().toHex()
 const txHash = await vault.broadcastRawTx({
   chain: Chain.Bitcoin,
-  rawTx
+  rawTx,
 })
 console.log('Transaction hash:', txHash)
 ```
@@ -1242,8 +1269,8 @@ console.log('Transaction hash:', txHash)
 
 ```typescript
 type Signature = {
-  signature: string   // Hex-encoded signature (r || s for ECDSA, full sig for EdDSA)
-  recovery?: number   // Recovery byte for ECDSA (0 or 1), undefined for EdDSA
+  signature: string // Hex-encoded signature (r || s for ECDSA, full sig for EdDSA)
+  recovery?: number // Recovery byte for ECDSA (0 or 1), undefined for EdDSA
 }
 ```
 
@@ -1256,27 +1283,28 @@ The `broadcastRawTx()` method broadcasts pre-signed raw transactions to the bloc
 ```typescript
 const txHash = await vault.broadcastRawTx({
   chain: Chain.Ethereum,
-  rawTx: '0x02f8...'  // hex-encoded signed transaction
+  rawTx: '0x02f8...', // hex-encoded signed transaction
 })
 ```
 
 **Supported Input Formats:**
 
-| Chain Family | Input Format |
-|--------------|--------------|
-| EVM (Ethereum, Polygon, BSC, etc.) | Hex-encoded signed tx (with/without 0x) |
-| UTXO (Bitcoin, Litecoin, etc.) | Hex-encoded raw tx |
-| Solana | Base58 or Base64 encoded tx bytes |
+| Chain Family                              | Input Format                             |
+| ----------------------------------------- | ---------------------------------------- |
+| EVM (Ethereum, Polygon, BSC, etc.)        | Hex-encoded signed tx (with/without 0x)  |
+| UTXO (Bitcoin, Litecoin, etc.)            | Hex-encoded raw tx                       |
+| Solana                                    | Base58 or Base64 encoded tx bytes        |
 | Cosmos (Cosmos, Osmosis, THORChain, etc.) | JSON `{tx_bytes}` or raw base64 protobuf |
-| TON | BOC (Bag of Cells) as base64 string |
-| Polkadot | Hex-encoded extrinsic |
-| Ripple | Hex-encoded tx blob |
-| Sui | JSON `{unsignedTx, signature}` |
-| Tron | JSON tx object |
+| TON                                       | BOC (Bag of Cells) as base64 string      |
+| Polkadot                                  | Hex-encoded extrinsic                    |
+| Ripple                                    | Hex-encoded tx blob                      |
+| Sui                                       | JSON `{unsignedTx, signature}`           |
+| Tron                                      | JSON tx object                           |
 
 **Error Handling:**
 
 The method throws `VaultError` with these codes:
+
 - `BroadcastFailed` - Transaction failed to broadcast (may include "already submitted" errors)
 - `UnsupportedChain` - Chain not yet supported for raw broadcast
 
@@ -1322,6 +1350,7 @@ const checkStatus = async () => {
 **Supported chains:** All chain families (EVM, UTXO, Cosmos, Solana, Sui, Polkadot, Ripple, Tron, Cardano, TON).
 
 **Return type (`TxStatusResult`):**
+
 - `status: 'pending' | 'success' | 'error'` - Current on-chain status
 - `receipt?: TxReceiptInfo` - Fee details when available:
   - `feeAmount: bigint` - Fee paid in base units
@@ -1365,14 +1394,16 @@ const payload = await vault.prepareSignAminoTx({
     decimals: 6,
     ticker: 'ATOM',
   },
-  msgs: [{
-    type: 'cosmos-sdk/MsgVote',
-    value: JSON.stringify({
-      proposal_id: '123',
-      voter: cosmosAddress,
-      option: 'VOTE_OPTION_YES',
-    }),
-  }],
+  msgs: [
+    {
+      type: 'cosmos-sdk/MsgVote',
+      value: JSON.stringify({
+        proposal_id: '123',
+        voter: cosmosAddress,
+        option: 'VOTE_OPTION_YES',
+      }),
+    },
+  ],
   fee: {
     amount: [{ denom: 'uatom', amount: '5000' }],
     gas: '200000',
@@ -1451,18 +1482,18 @@ const signature = await vault.sign(payload)
 
 #### Supported Cosmos Chains
 
-| Chain | Chain ID | Native Denom |
-|-------|----------|--------------|
-| Cosmos | cosmoshub-4 | uatom |
-| Osmosis | osmosis-1 | uosmo |
-| THORChain | thorchain-1 | rune |
-| MayaChain | mayachain-1 | cacao |
-| Dydx | dydx-mainnet-1 | adydx |
-| Kujira | kaiyo-1 | ukuji |
-| Terra | phoenix-1 | uluna |
-| TerraClassic | columbus-5 | uluna |
-| Noble | noble-1 | uusdc |
-| Akash | akashnet-2 | uakt |
+| Chain        | Chain ID       | Native Denom |
+| ------------ | -------------- | ------------ |
+| Cosmos       | cosmoshub-4    | uatom        |
+| Osmosis      | osmosis-1      | uosmo        |
+| THORChain    | thorchain-1    | rune         |
+| MayaChain    | mayachain-1    | cacao        |
+| Dydx         | dydx-mainnet-1 | adydx        |
+| Kujira       | kaiyo-1        | ukuji        |
+| Terra        | phoenix-1      | uluna        |
+| TerraClassic | columbus-5     | uluna        |
+| Noble        | noble-1        | uusdc        |
+| Akash        | akashnet-2     | uakt         |
 
 #### Common Message Types
 
@@ -1516,7 +1547,7 @@ await vault.addToken(Chain.Ethereum, {
   name: 'Tether USD',
   decimals: 6,
   contractAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
-  chainId: 'ethereum'
+  chainId: 'ethereum',
 })
 
 // Get tokens for a chain
@@ -1542,12 +1573,7 @@ Manage which chains are active for the vault:
 await vault.addChain(Chain.Polygon)
 
 // Add multiple chains
-await vault.setChains([
-  Chain.Bitcoin,
-  Chain.Ethereum,
-  Chain.Polygon,
-  Chain.Solana
-])
+await vault.setChains([Chain.Bitcoin, Chain.Ethereum, Chain.Polygon, Chain.Solana])
 
 // Remove a chain
 await vault.removeChain(Chain.Litecoin)
@@ -1585,11 +1611,11 @@ The SDK supports token swaps across multiple chains and protocols, including cro
 
 ### Supported Swap Routes
 
-| Route Type | Provider | Example |
-| ---------- | -------- | ------- |
-| Cross-chain (BTC, ETH, Cosmos) | THORChain | BTC → ETH, ETH → ATOM |
-| Same-chain EVM | 1inch | ETH → USDC on Ethereum |
-| Cross-chain EVM | LiFi | Polygon → Arbitrum |
+| Route Type                     | Provider  | Example                |
+| ------------------------------ | --------- | ---------------------- |
+| Cross-chain (BTC, ETH, Cosmos) | THORChain | BTC → ETH, ETH → ATOM  |
+| Same-chain EVM                 | 1inch     | ETH → USDC on Ethereum |
+| Cross-chain EVM                | LiFi      | Polygon → Arbitrum     |
 
 ### Checking Swap Support
 
@@ -1612,16 +1638,16 @@ Get a quote before executing a swap:
 const quote = await vault.getSwapQuote({
   fromCoin: { chain: Chain.Ethereum },
   toCoin: { chain: Chain.Bitcoin },
-  amount: 0.1  // 0.1 ETH
+  amount: 0.1, // 0.1 ETH
 })
 
-console.log(`Provider: ${quote.provider}`)           // e.g., 'thorchain'
-console.log(`Output: ${quote.estimatedOutput} BTC`)  // e.g., '0.00234 BTC'
+console.log(`Provider: ${quote.provider}`) // e.g., 'thorchain'
+console.log(`Output: ${quote.estimatedOutput} BTC`) // e.g., '0.00234 BTC'
 console.log(`Expires: ${new Date(quote.expiresAt)}`)
 console.log(`Fees: ${quote.fees.total}`)
 
 // Balance + max swappable amount (included automatically)
-console.log(`Balance: ${quote.balance}`)         // Source coin balance in base units
+console.log(`Balance: ${quote.balance}`) // Source coin balance in base units
 console.log(`Max swapable: ${quote.maxSwapable}`) // balance - network fee (native), or full balance (tokens)
 
 // Check if approval is needed (ERC-20 tokens)
@@ -1639,10 +1665,10 @@ For ERC-20 tokens, specify the token contract address:
 const quote = await vault.getSwapQuote({
   fromCoin: {
     chain: Chain.Ethereum,
-    token: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'  // USDC
+    token: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
   },
-  toCoin: { chain: Chain.Ethereum },  // Native ETH
-  amount: 100  // 100 USDC
+  toCoin: { chain: Chain.Ethereum }, // Native ETH
+  amount: 100, // 100 USDC
 })
 
 // Or use full AccountCoin format
@@ -1653,15 +1679,15 @@ const quote = await vault.getSwapQuote({
     address: ethAddress,
     id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
     ticker: 'USDC',
-    decimals: 6
+    decimals: 6,
   },
   toCoin: {
     chain: Chain.Ethereum,
     address: ethAddress,
     ticker: 'ETH',
-    decimals: 18
+    decimals: 18,
   },
-  amount: 100
+  amount: 100,
 })
 ```
 
@@ -1674,7 +1700,7 @@ Complete swap flow with signing and broadcasting:
 const quote = await vault.getSwapQuote({
   fromCoin: { chain: Chain.Ethereum },
   toCoin: { chain: Chain.Bitcoin },
-  amount: 0.1
+  amount: 0.1,
 })
 
 // Step 2: Prepare transaction
@@ -1682,7 +1708,7 @@ const { keysignPayload, approvalPayload } = await vault.prepareSwapTx({
   fromCoin: { chain: Chain.Ethereum },
   toCoin: { chain: Chain.Bitcoin },
   amount: 0.1,
-  swapQuote: quote
+  swapQuote: quote,
 })
 
 // Step 3: Handle approval if needed (ERC-20 tokens only)
@@ -1691,7 +1717,7 @@ if (approvalPayload) {
   const approvalTxHash = await vault.broadcastTx({
     chain: Chain.Ethereum,
     keysignPayload: approvalPayload,
-    signature: approvalSignature
+    signature: approvalSignature,
   })
   console.log('Approval tx:', approvalTxHash)
   // Wait for approval confirmation before proceeding
@@ -1702,7 +1728,7 @@ const signature = await vault.sign(keysignPayload)
 const txHash = await vault.broadcastTx({
   chain: Chain.Ethereum,
   keysignPayload,
-  signature
+  signature,
 })
 
 console.log('Swap tx:', txHash)
@@ -1720,11 +1746,11 @@ const allowance = await vault.getTokenAllowance(
   {
     chain: Chain.Ethereum,
     address: ethAddress,
-    id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',  // USDC
+    id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC
     ticker: 'USDC',
-    decimals: 6
+    decimals: 6,
   },
-  '0x1111111254fb6c44bAC0beD2854e76F90643097d'  // 1inch router
+  '0x1111111254fb6c44bAC0beD2854e76F90643097d' // 1inch router
 )
 
 console.log(`Current USDC allowance: ${allowance}`)
@@ -1745,7 +1771,7 @@ vault.on('swapQuoteReceived', ({ quote }) => {
 const quote = await vault.getSwapQuote({
   fromCoin: { chain: Chain.Ethereum },
   toCoin: { chain: Chain.Bitcoin },
-  amount: 0.1
+  amount: 0.1,
 })
 ```
 
@@ -1758,7 +1784,7 @@ try {
   const quote = await vault.getSwapQuote({
     fromCoin: { chain: Chain.Ethereum },
     toCoin: { chain: Chain.Bitcoin },
-    amount: 0.001  // Very small amount
+    amount: 0.001, // Very small amount
   })
 } catch (error) {
   if (error.message.includes('No swap route')) {
@@ -1777,15 +1803,15 @@ The SDK automatically applies affiliate fee discounts based on your VULT token a
 
 #### Discount Tier Levels
 
-| Tier | Min VULT | Affiliate Fee |
-|------|----------|---------------|
-| None | 0 | 0.50% (50 bps) |
-| Bronze | 1,500 | 0.45% (45 bps) |
-| Silver | 3,000 | 0.40% (40 bps) |
-| Gold | 7,500 | 0.30% (30 bps) |
-| Platinum | 15,000 | 0.25% (25 bps) |
-| Diamond | 100,000 | 0.15% (15 bps) |
-| Ultimate | 1,000,000 | 0.00% (0 bps) |
+| Tier     | Min VULT  | Affiliate Fee  |
+| -------- | --------- | -------------- |
+| None     | 0         | 0.50% (50 bps) |
+| Bronze   | 1,500     | 0.45% (45 bps) |
+| Silver   | 3,000     | 0.40% (40 bps) |
+| Gold     | 7,500     | 0.30% (30 bps) |
+| Platinum | 15,000    | 0.25% (25 bps) |
+| Diamond  | 100,000   | 0.15% (15 bps) |
+| Ultimate | 1,000,000 | 0.00% (0 bps)  |
 
 **Thorguard NFT Bonus:** Holders of the Thorguard NFT receive a free tier upgrade (one level higher), except for platinum tier and above.
 
@@ -1829,10 +1855,7 @@ for (const token of tokens) {
 }
 
 // Look up a specific token by contract address (case-insensitive)
-const usdc = Vultisig.getKnownToken(
-  Chain.Ethereum,
-  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
-)
+const usdc = Vultisig.getKnownToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 if (usdc) {
   console.log(`${usdc.ticker} - ${usdc.decimals} decimals`)
 }
@@ -1869,16 +1892,10 @@ Resolve token metadata by contract address. Checks the built-in registry first (
 
 ```typescript
 // Known token → instant, no network call
-const usdc = await vault.resolveToken(
-  Chain.Ethereum,
-  '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
-)
+const usdc = await vault.resolveToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 
 // Unknown token → fetches from chain API
-const customToken = await vault.resolveToken(
-  Chain.Ethereum,
-  '0x6982508145454Ce325dDbE47a25d4ec3d2311933'
-)
+const customToken = await vault.resolveToken(Chain.Ethereum, '0x6982508145454Ce325dDbE47a25d4ec3d2311933')
 console.log(`${customToken.ticker} - ${customToken.decimals} decimals`)
 ```
 
@@ -1890,17 +1907,17 @@ The SDK exports `CosmosMsgType` constants for constructing Cosmos transactions:
 import { CosmosMsgType } from '@vultisig/sdk'
 
 // Amino-style type strings
-CosmosMsgType.MsgSend              // 'cosmos-sdk/MsgSend'
-CosmosMsgType.ThorchainMsgSend     // 'thorchain/MsgSend'
-CosmosMsgType.MsgExecuteContract   // 'wasm/MsgExecuteContract'
-CosmosMsgType.ThorchainMsgDeposit  // 'thorchain/MsgDeposit'
+CosmosMsgType.MsgSend // 'cosmos-sdk/MsgSend'
+CosmosMsgType.ThorchainMsgSend // 'thorchain/MsgSend'
+CosmosMsgType.MsgExecuteContract // 'wasm/MsgExecuteContract'
+CosmosMsgType.ThorchainMsgDeposit // 'thorchain/MsgDeposit'
 
 // URL-style type strings (for SignDirect / protobuf)
-CosmosMsgType.MsgSendUrl              // '/cosmos.bank.v1beta1.MsgSend'
-CosmosMsgType.MsgTransferUrl          // '/ibc.applications.transfer.v1.MsgTransfer'
-CosmosMsgType.MsgExecuteContractUrl   // '/cosmwasm.wasm.v1.MsgExecuteContract'
-CosmosMsgType.ThorchainMsgDepositUrl  // '/types.MsgDeposit'
-CosmosMsgType.ThorchainMsgSendUrl     // '/types.MsgSend'
+CosmosMsgType.MsgSendUrl // '/cosmos.bank.v1beta1.MsgSend'
+CosmosMsgType.MsgTransferUrl // '/ibc.applications.transfer.v1.MsgTransfer'
+CosmosMsgType.MsgExecuteContractUrl // '/cosmwasm.wasm.v1.MsgExecuteContract'
+CosmosMsgType.ThorchainMsgDepositUrl // '/types.MsgDeposit'
+CosmosMsgType.ThorchainMsgSendUrl // '/types.MsgSend'
 ```
 
 ---
@@ -1914,15 +1931,15 @@ import { Vultisig } from '@vultisig/sdk'
 
 // Fetch prices (static method, no vault needed)
 const prices = await Vultisig.getCoinPrices({
-  ids: ['bitcoin', 'ethereum', 'solana']
+  ids: ['bitcoin', 'ethereum', 'solana'],
 })
-console.log(`BTC: $${prices.bitcoin}`)  // BTC: $50000
+console.log(`BTC: $${prices.bitcoin}`) // BTC: $50000
 console.log(`ETH: $${prices.ethereum}`) // ETH: $3000
 
 // Use a different fiat currency
 const eurPrices = await Vultisig.getCoinPrices({
   ids: ['bitcoin'],
-  fiatCurrency: 'eur'
+  fiatCurrency: 'eur',
 })
 ```
 
@@ -2049,7 +2066,7 @@ Register a callback, then forward raw push data from your platform's handler:
 
 ```typescript
 // Register handler
-const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
+const unsubscribe = sdk.notifications.onSigningRequest(notification => {
   console.log(`Signing request for vault: ${notification.vaultName}`)
   // Use notification.qrCodeData to join the signing session
 })
@@ -2063,15 +2080,15 @@ unsubscribe()
 
 ### Consumer Responsibilities
 
-| Responsibility | Owner |
-|---|---|
-| Obtain push token (APNs / FCM / Web Push) | **Consumer** |
-| Register token with notification server | SDK |
-| Trigger notification to vault members | SDK |
+| Responsibility                                       | Owner        |
+| ---------------------------------------------------- | ------------ |
+| Obtain push token (APNs / FCM / Web Push)            | **Consumer** |
+| Register token with notification server              | SDK          |
+| Trigger notification to vault members                | SDK          |
 | Wire platform push handler to `handleIncomingPush()` | **Consumer** |
-| Parse incoming notification data | SDK |
-| Display notification to user | **Consumer** |
-| Route to signing flow using `qrCodeData` | **Consumer** |
+| Parse incoming notification data                     | SDK          |
+| Display notification to user                         | **Consumer** |
+| Route to signing flow using `qrCodeData`             | **Consumer** |
 
 ### WebSocket Real-Time Delivery
 
@@ -2082,7 +2099,7 @@ For environments where platform push isn't available (browser extensions, Electr
 await sdk.notifications.registerDevice({
   vaultId: vault.publicKeys.ecdsa,
   partyName: vault.localPartyId,
-  token: myDeviceToken,       // Any stable unique identifier
+  token: myDeviceToken, // Any stable unique identifier
   deviceType: 'web',
 })
 
@@ -2090,17 +2107,17 @@ await sdk.notifications.registerDevice({
 sdk.notifications.connect({
   vaultId: vault.publicKeys.ecdsa,
   partyName: vault.localPartyId,
-  token: myDeviceToken,       // Same token used for registerDevice()
+  token: myDeviceToken, // Same token used for registerDevice()
 })
 
 // Step 3: Handle notifications (same callback as platform push)
-const unsubscribe = sdk.notifications.onSigningRequest((notification) => {
+const unsubscribe = sdk.notifications.onSigningRequest(notification => {
   console.log(`Signing request for vault: ${notification.vaultName}`)
   // Use notification.qrCodeData to join the signing session
 })
 
 // Step 4: Monitor connection state (optional)
-const unsubState = sdk.notifications.onConnectionStateChange((state) => {
+const unsubState = sdk.notifications.onConnectionStateChange(state => {
   // state: 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
   console.log('WebSocket state:', state)
 })
@@ -2176,7 +2193,7 @@ import { Vultisig, Chain } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
   // Required: Storage implementation
-  storage: new FileStorage(),  // Or MemoryStorage, or custom implementation
+  storage: new FileStorage(), // Or MemoryStorage, or custom implementation
 
   // Optional: Default chains for new vaults
   defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
@@ -2191,20 +2208,20 @@ const sdk = new Vultisig({
 
   // Optional: Password cache settings
   passwordCache: {
-    defaultTTL: 300000  // 5 minutes
+    defaultTTL: 300000, // 5 minutes
   },
 
   // Optional: Cache configuration
   cacheConfig: {
-    balanceTTL: 300000,  // 5 minutes (default)
-    priceTTL: 300000,    // 5 minutes (default)
+    balanceTTL: 300000, // 5 minutes (default)
+    priceTTL: 300000, // 5 minutes (default)
   },
 
   // Optional: Custom server endpoints (advanced)
   serverEndpoints: {
     fastVault: 'https://custom-api.example.com',
-    messageRelay: 'https://custom-relay.example.com'
-  }
+    messageRelay: 'https://custom-relay.example.com',
+  },
 })
 
 await sdk.initialize()
@@ -2282,7 +2299,7 @@ class CustomStorage implements Storage {
 
 // Use custom storage
 const sdk = new Vultisig({
-  storage: new CustomStorage('./vaults')
+  storage: new CustomStorage('./vaults'),
 })
 
 await sdk.initialize()
@@ -2334,9 +2351,9 @@ Configure cache TTLs:
 const sdk = new Vultisig({
   storage: new FileStorage(),
   cacheConfig: {
-    balanceTTL: 300000,  // 5 minutes (default)
-    priceTTL: 300000,    // 5 minutes (default)
-  }
+    balanceTTL: 300000, // 5 minutes (default)
+    priceTTL: 300000, // 5 minutes (default)
+  },
 })
 ```
 
@@ -2348,8 +2365,8 @@ Passwords are cached to avoid repeated prompts (see [Password Management](#passw
 const sdk = new Vultisig({
   storage: new FileStorage(),
   passwordCache: {
-    defaultTTL: 300000  // 5 minutes
-  }
+    defaultTTL: 300000, // 5 minutes
+  },
 })
 
 // Manually clear password cache
@@ -2492,7 +2509,7 @@ vault.on('keygenProgress', ({ phase, message }) => {
 })
 
 // Error Events
-vault.on('error', (error) => {
+vault.on('error', error => {
   console.error('Vault error:', error.message)
 })
 ```
@@ -2531,7 +2548,7 @@ function BalanceDisplay({ vault, chain }) {
 **Unsubscribe from Events:**
 
 ```typescript
-const handler = (data) => console.log(data)
+const handler = data => console.log(data)
 
 vault.on('balanceUpdated', handler)
 
@@ -2549,13 +2566,13 @@ vault.off('balanceUpdated', handler)
 class Vultisig {
   // Constructor - storage uses platform default if not provided
   constructor(config?: {
-    storage?: Storage              // Optional - uses FileStorage (Node) or BrowserStorage (browser)
+    storage?: Storage // Optional - uses FileStorage (Node) or BrowserStorage (browser)
     defaultChains?: Chain[]
     defaultCurrency?: string
     onPasswordRequired?: (vaultId: string, vaultName: string) => Promise<string>
     passwordCache?: { defaultTTL: number }
-    cacheConfig?: { balanceTTL?: number, priceTTL?: number, maxMemoryCacheSize?: number }
-    serverEndpoints?: { fastVault?: string, messageRelay?: string }
+    cacheConfig?: { balanceTTL?: number; priceTTL?: number; maxMemoryCacheSize?: number }
+    serverEndpoints?: { fastVault?: string; messageRelay?: string }
   })
 
   // Initialization
@@ -2576,14 +2593,14 @@ class Vultisig {
   // Create multi-device secure vault with N-of-M threshold
   createSecureVault(options: {
     name: string
-    password?: string              // Optional encryption
-    devices: number                // Number of participating devices
-    threshold?: number             // Signing threshold (defaults to ceil(devices*2/3))
+    password?: string // Optional encryption
+    devices: number // Number of participating devices
+    threshold?: number // Signing threshold (defaults to ceil(devices*2/3))
     signal?: AbortSignal
     onProgress?: (step: VaultCreationStep) => void
     onQRCodeReady?: (qrPayload: string) => void
     onDeviceJoined?: (deviceId: string, total: number, required: number) => void
-  }): Promise<{ vault: SecureVault, vaultId: string, sessionId: string }>
+  }): Promise<{ vault: SecureVault; vaultId: string; sessionId: string }>
 
   // Vault management
   importVault(vultContent: string, password?: string): Promise<VaultBase>
@@ -2613,7 +2630,7 @@ class Vultisig {
   static getBanxaSupportedChains(): Chain[]
 
   // Price feeds (static)
-  static getCoinPrices(params: { ids: string[], fiatCurrency?: string }): Promise<Record<string, number>>
+  static getCoinPrices(params: { ids: string[]; fiatCurrency?: string }): Promise<Record<string, number>>
 
   // Security (static)
   static scanSite(url: string): Promise<SiteScanResult>
@@ -2624,7 +2641,7 @@ class Vultisig {
     mnemonic: string,
     chains?: Chain[],
     onProgress?: (progress: ChainDiscoveryProgress) => void
-  ): Promise<ChainDiscoveryAggregate>  // Returns { results, usePhantomSolanaPath }
+  ): Promise<ChainDiscoveryAggregate> // Returns { results, usePhantomSolanaPath }
   createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<string>
   createSecureVaultFromSeedphrase(options: CreateSecureVaultFromSeedphraseOptions): Promise<{
     vault: SecureVault
@@ -2632,7 +2649,10 @@ class Vultisig {
     sessionId: string
     discoveredChains?: ChainDiscoveryResult[]
   }>
-  joinSecureVault(qrPayload: string, options: JoinSecureVaultOptions): Promise<{
+  joinSecureVault(
+    qrPayload: string,
+    options: JoinSecureVaultOptions
+  ): Promise<{
     vault: SecureVault
     vaultId: string
   }>
@@ -2640,12 +2660,12 @@ class Vultisig {
   // Address book
   getAddressBook(chain?: Chain): Promise<AddressBook>
   addAddressBookEntry(entries: AddressBookEntry[]): Promise<void>
-  removeAddressBookEntry(addresses: Array<{ chain: Chain, address: string }>): Promise<void>
+  removeAddressBookEntry(addresses: Array<{ chain: Chain; address: string }>): Promise<void>
   updateAddressBookEntry(chain: Chain, address: string, name: string): Promise<void>
 
   // Vault verification (returns the vault on success)
   verifyVault(vaultId: string, code: string): Promise<FastVault>
-  resendVaultVerification(options: { vaultId: string, email: string, password: string }): Promise<void>
+  resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void>
 }
 ```
 
@@ -2669,7 +2689,7 @@ class VaultBase {
   exists(): Promise<boolean>
   loadPreferences(): Promise<void>
   rename(newName: string): Promise<void>
-  export(password?: string): Promise<{ filename: string, data: string }>
+  export(password?: string): Promise<{ filename: string; data: string }>
   delete(): Promise<void>
   lock(): void
   unlock(password: string): Promise<void>
@@ -2689,19 +2709,38 @@ class VaultBase {
 
   // Compound wrappers (recommended for most use cases)
   signMessage(message: string, chain?: Chain, options?: { signal?: AbortSignal }): Promise<MessageSignature>
-  send(params: { chain: Chain, to: string, amount: string, symbol?: string, memo?: string, dryRun?: boolean }): Promise<SendResult>
-  swap(params: { fromChain: Chain, fromSymbol: string, toChain: Chain, toSymbol: string, amount: string, dryRun?: boolean }): Promise<CompoundSwapResult>
+  send(params: {
+    chain: Chain
+    to: string
+    amount: string
+    symbol?: string
+    memo?: string
+    dryRun?: boolean
+  }): Promise<SendResult>
+  swap(params: {
+    fromChain: Chain
+    fromSymbol: string
+    toChain: Chain
+    toSymbol: string
+    amount: string
+    dryRun?: boolean
+  }): Promise<CompoundSwapResult>
   portfolio(fiatCurrency?: FiatCurrency): Promise<Portfolio>
 
   // Low-level transactions
   prepareSendTx(params: SendTxParams): Promise<KeysignPayload>
-  getMaxSendAmount(params: { coin: AccountCoin, receiver: string, memo?: string, feeSettings?: FeeSettings }): Promise<MaxSendAmount>
+  getMaxSendAmount(params: {
+    coin: AccountCoin
+    receiver: string
+    memo?: string
+    feeSettings?: FeeSettings
+  }): Promise<MaxSendAmount>
   extractMessageHashes(keysignPayload: KeysignPayload): Promise<string[]>
   sign(payload: SigningPayload, options?: SigningOptions): Promise<Signature>
   signBytes(options: SignBytesOptions, signingOptions?: SigningOptions): Promise<Signature>
   broadcastTx(params: BroadcastParams): Promise<string>
-  broadcastRawTx(params: { chain: Chain, rawTx: string }): Promise<string>
-  getTxStatus(params: { chain: Chain, txHash: string }): Promise<TxStatusResult>
+  broadcastRawTx(params: { chain: Chain; rawTx: string }): Promise<string>
+  getTxStatus(params: { chain: Chain; txHash: string }): Promise<TxStatusResult>
   gas<C extends Chain>(chain: C): Promise<GasInfoForChain<C>>
 
   // Cosmos Signing (SignAmino & SignDirect)
@@ -2838,7 +2877,7 @@ enum Chain {
   Ton = 'Ton',
   Ripple = 'Ripple',
   Tron = 'Tron',
-  Cardano = 'Cardano'
+  Cardano = 'Cardano',
 }
 ```
 
@@ -2880,9 +2919,9 @@ new Vultisig({
 ```typescript
 // SignAmino input for Cosmos SDK chains
 interface SignAminoInput {
-  chain: CosmosChain           // 'Cosmos', 'Osmosis', 'THORChain', etc.
+  chain: CosmosChain // 'Cosmos', 'Osmosis', 'THORChain', etc.
   coin: AccountCoin
-  msgs: CosmosMsgInput[]       // Array of messages to sign
+  msgs: CosmosMsgInput[] // Array of messages to sign
   fee: CosmosFeeInput
   memo?: string
 }
@@ -2891,17 +2930,17 @@ interface SignAminoInput {
 interface SignDirectInput {
   chain: CosmosChain
   coin: AccountCoin
-  bodyBytes: string            // Base64-encoded TxBody
-  authInfoBytes: string        // Base64-encoded AuthInfo
-  chainId: string              // e.g., 'cosmoshub-4'
+  bodyBytes: string // Base64-encoded TxBody
+  authInfoBytes: string // Base64-encoded AuthInfo
+  chainId: string // e.g., 'cosmoshub-4'
   accountNumber: string
   memo?: string
 }
 
 // Cosmos message format
 interface CosmosMsgInput {
-  type: string                 // e.g., 'cosmos-sdk/MsgSend'
-  value: string                // JSON-stringified message value
+  type: string // e.g., 'cosmos-sdk/MsgSend'
+  value: string // JSON-stringified message value
 }
 
 // Cosmos fee format
@@ -2914,13 +2953,13 @@ interface CosmosFeeInput {
 
 // Cosmos coin amount
 interface CosmosCoinAmount {
-  denom: string                // e.g., 'uatom'
-  amount: string               // e.g., '1000000'
+  denom: string // e.g., 'uatom'
+  amount: string // e.g., '1000000'
 }
 
 // Options for Cosmos signing
 interface CosmosSigningOptions {
-  skipChainSpecificFetch?: boolean  // Skip account/sequence fetch
+  skipChainSpecificFetch?: boolean // Skip account/sequence fetch
 }
 ```
 
@@ -2957,7 +2996,7 @@ type ChainDiscoveryResult = {
 // Aggregate result from discoverChainsFromSeedphrase()
 type ChainDiscoveryAggregate = {
   results: ChainDiscoveryResult[]
-  usePhantomSolanaPath: boolean  // True if Phantom's Solana derivation path should be used
+  usePhantomSolanaPath: boolean // True if Phantom's Solana derivation path should be used
 }
 
 type CreateFastVaultFromSeedphraseOptions = {
@@ -3014,17 +3053,7 @@ type JoinSecureVaultOptions = {
 
 ### Browser
 
-**WASM Files**: Must be served from the root path:
-
-```bash
-# Copy to public directory
-cp node_modules/@vultisig/sdk/dist/*.wasm public/
-
-# Ensure your dev server serves these files from /
-# Vite: automatically serves from public/
-# Create React App: automatically serves from public/
-# Next.js: place in public/ directory
-```
+**Vite + WASM:** use `plugins: [react(), vultisig()]` from `@vultisig/sdk/vite` so 7z wasm and `optimizeDeps` are configured without writing into your source `public/` directory (see _Browser setup: Vite and WASM_ above). **Next / Webpack:** there is no official plugin; avoid breaking wasm path resolution, serve `7zz.wasm` from your built/static output, and add the usual browser polyfills. Do **not** use `cp node_modules/@vultisig/sdk/dist/*.wasm public/`; current releases load MPC wasm from the `@vultisig/lib-*` packages instead.
 
 **IndexedDB Storage**: For persistent storage, use IndexedDB (see [examples/browser](../examples/browser) for implementation).
 
@@ -3033,11 +3062,12 @@ cp node_modules/@vultisig/sdk/dist/*.wasm public/
 ```typescript
 import { Vultisig, Chain } from '@vultisig/sdk'
 
-const sdk = new Vultisig()  // Uses BrowserStorage (IndexedDB) by default
+const sdk = new Vultisig() // Uses BrowserStorage (IndexedDB) by default
 await sdk.initialize()
 ```
 
 **Security Considerations**:
+
 - Use `type="password"` for password inputs
 - Consider using Web Crypto API for sensitive data
 - Implement Content Security Policy (CSP)
@@ -3049,7 +3079,7 @@ await sdk.initialize()
 ```typescript
 import { Vultisig, Chain } from '@vultisig/sdk'
 
-const sdk = new Vultisig()  // Uses FileStorage (~/.vultisig) by default
+const sdk = new Vultisig() // Uses FileStorage (~/.vultisig) by default
 await sdk.initialize()
 // ... use the SDK ...
 sdk.dispose()
@@ -3095,7 +3125,7 @@ let sdk: Vultisig
 
 app.whenReady().then(async () => {
   // Initialize SDK in main process
-  sdk = new Vultisig()  // Uses FileStorage (~/.vultisig)
+  sdk = new Vultisig() // Uses FileStorage (~/.vultisig)
   await sdk.initialize()
 
   // Expose SDK operations via IPC
@@ -3148,21 +3178,10 @@ vsig vault create --name "My Wallet"
 # Open Electron app → same vault is available!
 ```
 
-**WASM Files**:
-
-Include WASM files in your Electron build:
-
-```json
-// electron-builder.json
-{
-  "files": [
-    "dist/**/*",
-    "node_modules/@vultisig/sdk/dist/**/*.wasm"
-  ]
-}
-```
+**WASM files in packaged Electron apps:** include the SDK’s node_modules tree (or the wasm you rely on) so packaged builds still resolve the same files as in development, for example the `@vultisig/lib-*` and `@trustwallet/wallet-core` contents your version depends on, plus `7z-wasm` if you use the browser-style path in a renderer. Adjust paths to match your `electron-builder` (or other packager) layout; there is no single `sdk/dist/**/*.wasm` glob for this anymore.
 
 **Security Best Practices**:
+
 - Always use `contextIsolation: true` (Electron default)
 - Never use `nodeIntegration: true` in renderer
 - Keep all vault operations in main process

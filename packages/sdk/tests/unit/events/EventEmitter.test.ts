@@ -572,6 +572,12 @@ describe('UniversalEventEmitter', () => {
     it('should not warn when under new max limit', () => {
       const warnSpy = vi.spyOn(console, 'warn')
       emitter.setMaxListeners(20)
+      // vitest 4: re-spying on console.warn here returns a fresh spy
+      // that captures real calls, not the silenced mock from beforeEach.
+      // mockClear after setMaxListeners so we only assert on warns from
+      // the on() loop below — setMaxListeners itself can emit one
+      // (legitimately, on per-event-name registration paths).
+      warnSpy.mockClear()
 
       // Register 15 listeners (under new limit)
       for (let i = 0; i < 15; i++) {

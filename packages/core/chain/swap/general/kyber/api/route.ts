@@ -5,12 +5,17 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 import { KyberSwapEnabledChain } from '../chains'
-import { kyberSwapAffiliateConfig, kyberSwapSlippageTolerance } from '../config'
+import {
+  KyberSwapAffiliateParams,
+  getKyberSwapAffiliateParams,
+  kyberSwapAffiliateConfig,
+  kyberSwapSlippageTolerance,
+} from '../config'
 import { getKyberSwapBaseUrl } from './baseUrl'
 
 type Input = Record<TransferDirection, AccountCoin<KyberSwapEnabledChain>> & {
   amount: bigint
-  isAffiliate: boolean
+  affiliateBps?: number
 }
 
 type KyberSwapRoute = {
@@ -32,15 +37,13 @@ type KyberSwapRouteParams = {
   saveGas: boolean
   gasInclude: boolean
   slippageTolerance: number
-  source?: string
-  referral?: string
-}
+} & Partial<KyberSwapAffiliateParams>
 
 export const getKyberSwapRoute = async ({
   from,
   to,
   amount,
-  isAffiliate,
+  affiliateBps,
 }: Input): Promise<KyberSwapRoute> => {
   const [tokenIn, tokenOut] = [from, to].map(
     ({ id }) => id || evmNativeCoinAddress
@@ -53,7 +56,7 @@ export const getKyberSwapRoute = async ({
     saveGas: true,
     gasInclude: true,
     slippageTolerance: kyberSwapSlippageTolerance,
-    ...(isAffiliate ? kyberSwapAffiliateConfig : {}),
+    ...getKyberSwapAffiliateParams(affiliateBps),
   }
 
   const routeUrl = addQueryParams(

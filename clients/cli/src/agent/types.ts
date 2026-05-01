@@ -120,6 +120,15 @@ export type MessageContext = {
   addresses?: Record<string, string>
   coins?: CoinInfo[]
   address_book?: AddressBookEntry[]
+  // Client-side tool results from the previous turn. Post-PR-#119 return
+  // channel (replaces top-level action_result).
+  recent_actions?: RecentAction[]
+}
+
+export type RecentAction = {
+  tool: string
+  success: boolean
+  data?: Record<string, unknown>
 }
 
 export type BalanceInfo = {
@@ -155,7 +164,6 @@ export type SendMessageRequest = {
   context?: MessageContext
   tools?: ToolDefinition[]
   selected_suggestion_id?: string
-  action_result?: ActionResultPayload
   /** Signals that the caller is an AI agent; backend adjusts prompt accordingly */
   via_agent?: boolean
 }
@@ -163,16 +171,6 @@ export type SendMessageRequest = {
 export type ToolDefinition = {
   name: string
   params: string
-}
-
-export type ActionResultPayload = {
-  action: string
-  action_id?: string
-  success: boolean
-  data?: Record<string, unknown>
-  error?: string
-  /** Present when success is false */
-  code?: AgentErrorCode
 }
 
 export type SendMessageResponse = {

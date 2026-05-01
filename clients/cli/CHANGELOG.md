@@ -1,5 +1,79 @@
 # @vultisig/cli
 
+## 0.22.0
+
+### Minor Changes
+
+- [#293](https://github.com/vultisig/vultisig-sdk/pull/293) [`a3a331a`](https://github.com/vultisig/vultisig-sdk/commit/a3a331a875ebc6868b11c6901c8ed99dde51a4ff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Password-protected vault backups use PBKDF2-HMAC-SHA256 with a random salt (600k iterations by default) and a versioned blob prefix; legacy SHA-256-only backups still decrypt.
+
+### Patch Changes
+
+- Updated dependencies [[`feac01f`](https://github.com/vultisig/vultisig-sdk/commit/feac01f3225738a14c0123e1c3d70e46b97760fd), [`a3a331a`](https://github.com/vultisig/vultisig-sdk/commit/a3a331a875ebc6868b11c6901c8ed99dde51a4ff)]:
+  - @vultisig/sdk@0.22.0
+  - @vultisig/client-shared@0.2.6
+  - @vultisig/rujira@17.0.0
+  - @vultisig/core-chain@1.4.2
+
+## 0.21.0
+
+### Minor Changes
+
+- [#350](https://github.com/vultisig/vultisig-sdk/pull/350) [`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat: cosmos-sdk staking module - generic Delegate/Undelegate/BeginRedelegate/WithdrawDelegatorReward + LCD queries
+
+  Adds the cosmos-sdk staking + distribution module to the SDK, generic across every ibcEnabled cosmos chain we support (Cosmos Hub, Osmosis, Kujira, Terra, TerraClassic, Akash, Noble, Dydx).
+
+  **Signing primitives** (`@vultisig/sdk` -> `chains.cosmos.buildCosmosStakingTx`):
+  - `MsgDelegate`, `MsgUndelegate`, `MsgBeginRedelegate`, `MsgWithdrawDelegatorReward`
+  - Hand-rolled RN-safe protobuf (no cosmjs runtime dep) mirroring the existing `buildCosmosWasmExecuteTx` pattern
+  - Multi-msg batch txs supported (e.g. claim rewards from many validators in one tx)
+  - Byte-for-byte round-trip verified against `cosmjs-types` canonical decoder
+
+  **LCD query helpers** (`@vultisig/sdk` top-level + `@vultisig/core-chain/chains/cosmos/staking/lcdQueries`):
+  - `getCosmosDelegations(chain, address)` -> per-validator balance + shares
+  - `getCosmosUnbondingDelegations(chain, address)` -> pending unbondings with completion time
+  - `getCosmosDelegatorRewards(chain, address)` -> per-validator rewards + total
+  - `getCosmosVestingAccount(chain, address)` -> Periodic / Continuous / Delayed detection (returns null otherwise)
+
+  ship-once, unlock-many: adding a future cosmos chain is a config-only change.
+
+  34 new unit tests including 4 real cosmoshub fixtures captured from `cosmos1a8l3srqyk5krvzhkt7cyzy52yxcght6322w2qy`.
+
+### Patch Changes
+
+- Updated dependencies [[`bad88d8`](https://github.com/vultisig/vultisig-sdk/commit/bad88d8d87229284c739995c027eb33d3ffc19e3)]:
+  - @vultisig/sdk@0.21.0
+  - @vultisig/client-shared@0.2.5
+  - @vultisig/rujira@16.0.0
+
+## 0.20.0
+
+### Patch Changes
+
+- Updated dependencies [[`1d1c02c`](https://github.com/vultisig/vultisig-sdk/commit/1d1c02c37e58340b0617eec3a5e44909efc9b452)]:
+  - @vultisig/sdk@0.20.0
+  - @vultisig/client-shared@0.2.4
+  - @vultisig/rujira@15.0.0
+
+## 0.19.0
+
+### Patch Changes
+
+- Updated dependencies [[`77410fb`](https://github.com/vultisig/vultisig-sdk/commit/77410fb28f53dd558f05e5634aadba6a9547ee0f), [`c5f9c7b`](https://github.com/vultisig/vultisig-sdk/commit/c5f9c7bcac80d30f0b5e086c9e6860eaa0cf79a9)]:
+  - @vultisig/core-chain@1.4.1
+  - @vultisig/sdk@0.19.0
+  - @vultisig/client-shared@0.2.3
+  - @vultisig/rujira@14.0.0
+
+## 0.18.0
+
+### Patch Changes
+
+- Updated dependencies [[`ef2ffbe`](https://github.com/vultisig/vultisig-sdk/commit/ef2ffbecf5f2b3af69172d34f3fda25055f4e112), [`d9399c7`](https://github.com/vultisig/vultisig-sdk/commit/d9399c77a932f0ecc9a2e6acec5d8457aa199444), [`4af5bb8`](https://github.com/vultisig/vultisig-sdk/commit/4af5bb8043da7dab15b5e1a135e5195d2dd1d7cc), [`2018787`](https://github.com/vultisig/vultisig-sdk/commit/2018787f8101ea9a98e975c0e7477245c3f86fad), [`f52057b`](https://github.com/vultisig/vultisig-sdk/commit/f52057b4af859018d1c180fa6db9ce15e153409f), [`6f1f8b2`](https://github.com/vultisig/vultisig-sdk/commit/6f1f8b2d9a69b8542da776f69fbddba6eb35bd3e)]:
+  - @vultisig/core-chain@1.4.0
+  - @vultisig/rujira@13.0.0
+  - @vultisig/sdk@0.18.0
+  - @vultisig/client-shared@0.2.2
+
 ## 0.17.0
 
 ### Minor Changes

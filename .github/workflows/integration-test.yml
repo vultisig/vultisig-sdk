@@ -55,13 +55,13 @@ jobs:
     steps:
       # ── Checkout repos ──
       - name: Checkout vultisig-sdk
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: vultisig-sdk
           fetch-depth: 0
 
       - name: Checkout agent-backend
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: vultisig/agent-backend
           ref: main
@@ -69,7 +69,7 @@ jobs:
           path: agent-backend
 
       - name: Checkout MCP
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: vultisig/mcp
           ref: main
@@ -78,7 +78,7 @@ jobs:
 
       # ── Setup Go ──
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.25.5'
           cache: true
@@ -88,7 +88,7 @@ jobs:
 
       # ── Setup Node.js ──
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 

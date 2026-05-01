@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "exclude": [
     "dependencies",
     "devDependencies",
@@ -22,8 +22,7 @@
       "nsExports",
       "nsTypes",
       "duplicates",
-      "enumMembers",
-      "classMembers"
+      "enumMembers"
     ],
     "packages/lib/**": [
       "exports",
@@ -31,13 +30,13 @@
       "nsExports",
       "nsTypes",
       "duplicates",
-      "enumMembers",
-      "classMembers"
+      "enumMembers"
     ],
     "packages/sdk/src/types/index.ts": ["exports", "types", "nsExports", "nsTypes"],
     "packages/sdk/src/vault/index.ts": ["exports", "types", "nsExports", "nsTypes"],
     "packages/sdk/src/seedphrase/index.ts": ["exports", "types"],
-    "packages/sdk/src/storage/types.ts": ["enumMembers"]
+    "packages/sdk/src/storage/types.ts": ["enumMembers"],
+    "clients/mcp/src/types.ts": ["types", "nsTypes"]
   },
   "treatConfigHintsAsErrors": false,
   "workspaces": {
@@ -53,6 +52,13 @@
       }
     },
     "clients/cli": {
+      "project": ["tsconfig.json"],
+      "vitest": {
+        "config": ["vitest.config.ts"]
+      }
+    },
+    "clients/mcp": {
+      "entry": ["bin/mcp-server.ts"],
       "project": ["tsconfig.json"],
       "vitest": {
         "config": ["vitest.config.ts"]

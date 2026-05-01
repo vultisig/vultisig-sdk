@@ -1,26 +1,33 @@
 import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 
+import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
+import { SwapFee } from '../../../SwapFee'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import { KyberSwapEnabledChain } from '../chains'
 import {
+  getKyberSwapAffiliateParams,
+  hasAffiliateBps,
   kyberSwapAffiliateConfig,
   kyberSwapSlippageTolerance,
   kyberSwapTxLifespan,
 } from '../config'
 import { getKyberSwapBaseUrl } from './baseUrl'
 
-type GetKyberSwapTxInput = {
-  from: AccountCoin<KyberSwapEnabledChain>
+type GetKyberSwapTxInput = Record<
+  TransferDirection,
+  AccountCoin<KyberSwapEnabledChain>
+> & {
   routeSummary: any
   routerAddress: string
   amount: bigint
   enableGasEstimation: boolean
-  isAffiliate: boolean
+  affiliateBps?: number
 }
 
 type KyberSwapBuildResponse = {
@@ -34,13 +41,39 @@ type KyberSwapBuildResponse = {
   }
 }
 
+const getKyberSwapAffiliateFee = ({
+  amountOut,
+  to,
+  affiliateBps,
+}: {
+  amountOut: string
+  to: AccountCoin<KyberSwapEnabledChain>
+  affiliateBps?: number
+}): SwapFee | undefined => {
+  if (!hasAffiliateBps(affiliateBps)) {
+    return undefined
+  }
+
+  const netAmountOut = BigInt(amountOut)
+  const feeRate = BigInt(affiliateBps)
+  const grossAmountOut = (netAmountOut * 10000n) / (10000n - feeRate)
+
+  return {
+    chain: to.chain,
+    id: to.id ?? evmNativeCoinAddress,
+    decimals: to.decimals,
+    amount: grossAmountOut - netAmountOut,
+  }
+}
+
 export const getKyberSwapTx = async ({
   from,
+  to,
   routeSummary,
   routerAddress,
   amount,
   enableGasEstimation,
-  isAffiliate,
+  affiliateBps,
 }: GetKyberSwapTxInput): Promise<GeneralSwapQuote> => {
   const buildPayload = {
     routeSummary,
@@ -55,7 +88,7 @@ export const getKyberSwapTx = async ({
       )
     ),
     enableGasEstimation,
-    ...(isAffiliate ? kyberSwapAffiliateConfig : {}),
+    ...getKyberSwapAffiliateParams(affiliateBps),
     ignoreCappedSlippage: false,
   }
 
@@ -92,7 +125,6 @@ export const getKyberSwapTx = async ({
   }
 
   const { amountOut, data, gas } = buildResponse.data
-
   return {
     dstAmount: amountOut,
     provider: 'kyber',
@@ -103,6 +135,11 @@ export const getKyberSwapTx = async ({
         data,
         value: isFeeCoin(from) ? amount.toString() : '0',
         gasLimit: gas ? BigInt(gas) : undefined,
+        affiliateFee: getKyberSwapAffiliateFee({
+          amountOut,
+          to,
+          affiliateBps,
+        }),
       },
     },
   }

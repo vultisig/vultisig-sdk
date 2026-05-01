@@ -3,7 +3,7 @@ import {
   protoBytes,
   protoString,
   protoVarint,
-} from '@vultisig/core-chain/chains/cosmos/qbtc/protoEncoding'
+} from '@vultisig/core-chain/chains/cosmos/protoEncoding'
 
 const msgClaimWithProofTypeURL = '/qbtc.qbtc.v1.MsgClaimWithProof'
 

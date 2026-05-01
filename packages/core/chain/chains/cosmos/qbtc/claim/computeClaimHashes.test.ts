@@ -69,7 +69,7 @@ describe('computeChainIdHash', () => {
 })
 
 describe('computeClaimMessageHash', () => {
-  it('uses ecdsa: prefix for ECDSA circuit', () => {
+  it('uses "ecdsa-hash160:" prefix for ECDSA circuit', () => {
     const addressHash = new Uint8Array(20).fill(0xaa)
     const qbtcAddressHash = new Uint8Array(32).fill(0xbb)
     const chainIdHash = new Uint8Array(8).fill(0xcc)
@@ -83,10 +83,11 @@ describe('computeClaimMessageHash', () => {
 
     expect(result.length).toBe(32)
 
-    // Verify by manually constructing the same input
+    // Verify by manually constructing the same input — must match
+    // ClaimTagECDSAHash160 ("ecdsa-hash160:") on the chain side.
     const encoder = new TextEncoder()
     const input = new Uint8Array([
-      ...encoder.encode('ecdsa:'),
+      ...encoder.encode('ecdsa-hash160:'),
       ...addressHash,
       ...qbtcAddressHash,
       ...chainIdHash,
@@ -95,27 +96,19 @@ describe('computeClaimMessageHash', () => {
     expect(bytesToHex(result)).toBe(bytesToHex(sha256(input)))
   })
 
-  it('uses schnorr: prefix for Schnorr circuit', () => {
+  it('rejects Schnorr circuit (not yet supported on-chain)', () => {
     const addressHash = new Uint8Array(32).fill(0xaa)
     const qbtcAddressHash = new Uint8Array(32).fill(0xbb)
     const chainIdHash = new Uint8Array(8).fill(0xcc)
 
-    const result = computeClaimMessageHash({
-      addressHash,
-      qbtcAddressHash,
-      chainIdHash,
-      circuit: 'schnorr',
-    })
-
-    const encoder = new TextEncoder()
-    const input = new Uint8Array([
-      ...encoder.encode('schnorr:'),
-      ...addressHash,
-      ...qbtcAddressHash,
-      ...chainIdHash,
-      ...encoder.encode('qbtc-claim-v1'),
-    ])
-    expect(bytesToHex(result)).toBe(bytesToHex(sha256(input)))
+    expect(() =>
+      computeClaimMessageHash({
+        addressHash,
+        qbtcAddressHash,
+        chainIdHash,
+        circuit: 'schnorr',
+      })
+    ).toThrow(/Schnorr/)
   })
 })
 
@@ -134,18 +127,15 @@ describe('computeAllClaimHashes', () => {
     expect(result.messageHash.length).toBe(32)
   })
 
-  it('computes all hashes for a P2TR address', () => {
-    const result = computeAllClaimHashes({
-      btcAddress:
-        'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297',
-      compressedPubkey: testCompressedPubkey,
-      qbtcAddress: 'qbtc1test',
-      chainId: 'qbtc-1',
-    })
-
-    expect(result.circuit).toBe('schnorr')
-    expect(result.addressHash.length).toBe(32)
-    expect(result.qbtcAddressHash.length).toBe(32)
-    expect(result.messageHash.length).toBe(32)
+  it('rejects P2TR addresses until the chain defines a Schnorr tag', () => {
+    expect(() =>
+      computeAllClaimHashes({
+        btcAddress:
+          'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297',
+        compressedPubkey: testCompressedPubkey,
+        qbtcAddress: 'qbtc1test',
+        chainId: 'qbtc-1',
+      })
+    ).toThrow(/Schnorr/)
   })
 })
