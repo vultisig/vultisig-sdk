@@ -92,9 +92,8 @@ describe('getDynamicPriorityFeePrice', () => {
 
     it(`MIN_SAMPLE_SIZE is exposed for test pin (currently ${MIN})`, () => {
         // Pin the threshold so a future regression that drops the guard
-        // tripps loud. Round-1 paaao PR at HEAD shipped with no guard;
+        // trips loud. Round-1 paaao PR at HEAD shipped with no guard;
         // this test would have caught that.
-        expect(_MIN_SAMPLE_SIZE_FOR_TEST).toBeGreaterThanOrEqual(3)
-        expect(_MIN_SAMPLE_SIZE_FOR_TEST).toBeLessThanOrEqual(20)
+        expect(_MIN_SAMPLE_SIZE_FOR_TEST).toBe(5)
     })
 })
