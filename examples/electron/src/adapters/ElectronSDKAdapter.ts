@@ -195,12 +195,8 @@ export class ElectronSDKAdapter implements ISDKAdapter {
     },
     operation: () => Promise<T>
   ): Promise<T> {
-    const progressCallback = callbacks.onProgress
-      ? (step: ProgressStep) => callbacks.onProgress?.(step)
-      : undefined
-    const qrCallback = callbacks.onQRCodeReady
-      ? (qrPayload: string) => callbacks.onQRCodeReady?.(qrPayload)
-      : undefined
+    const progressCallback = callbacks.onProgress ? (step: ProgressStep) => callbacks.onProgress?.(step) : undefined
+    const qrCallback = callbacks.onQRCodeReady ? (qrPayload: string) => callbacks.onQRCodeReady?.(qrPayload) : undefined
     const deviceCallback = callbacks.onDeviceJoined
       ? ({ deviceId, totalJoined, required }: DeviceJoinedData) =>
           callbacks.onDeviceJoined?.(deviceId, totalJoined, required)
