@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'

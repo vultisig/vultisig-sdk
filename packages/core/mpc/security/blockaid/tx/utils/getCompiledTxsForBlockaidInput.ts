@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { signatureFormats } from '@vultisig/core-chain/signing/SignatureFormat'

@@ -195,6 +195,8 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
         email: string
         discoverChains?: boolean
         chains?: string[]
+        usePhantomSolanaPath?: boolean
+        tssBatching?: boolean
       }
     ) => {
       const sdk = getSDK()
@@ -221,6 +223,8 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
         threshold?: number
         discoverChains?: boolean
         chains?: string[]
+        usePhantomSolanaPath?: boolean
+        tssBatching?: boolean
       }
     ) => {
       const sdk = getSDK()

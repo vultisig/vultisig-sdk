@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { UtxoChain } from '@vultisig/core-chain/Chain'
 import { minUtxo } from '@vultisig/core-chain/chains/utxo/minUtxo'
 import { utxoChainScriptType } from '@vultisig/core-chain/chains/utxo/tx/UtxoScriptType'
