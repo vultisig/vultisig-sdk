@@ -82,12 +82,12 @@ describe('knownTokens — Solana SPL fast-path (Bug J)', () => {
   // future refactor can't accidentally lowercase them.
   describe('canonical case preserved in source ids', () => {
     it('USDC mint id matches Circle canonical case', () => {
-      const usdc = knownTokens[Chain.Solana].find(c => c.id.toLowerCase() === SOLANA_USDC_MINT.toLowerCase())
+      const usdc = knownTokens[Chain.Solana].find(c => c.id?.toLowerCase() === SOLANA_USDC_MINT.toLowerCase())
       expect(usdc?.id).toBe('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
     })
 
     it('USDT mint id matches Tether canonical case', () => {
-      const usdt = knownTokens[Chain.Solana].find(c => c.id.toLowerCase() === SOLANA_USDT_MINT.toLowerCase())
+      const usdt = knownTokens[Chain.Solana].find(c => c.id?.toLowerCase() === SOLANA_USDT_MINT.toLowerCase())
       expect(usdt?.id).toBe('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB')
     })
   })
