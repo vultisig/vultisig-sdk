@@ -85,6 +85,25 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
     },
   },
   [Chain.Solana]: {
+    // QA dogfood Bug J (paaao 2026-05-02): USDC and USDT on Solana
+    // were missing from the knownTokens fast-path lookup, so the
+    // agent had to fall back to CoinGecko search every time the user
+    // referenced "USDC on Solana" — slower + flakier than the EVM
+    // chains where Circle USDC is hard-coded. Bake the canonical
+    // SPL mint addresses in directly. Mints are public, well-known,
+    // and ratified by the issuers (Circle for USDC, Tether for USDT).
+    EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+    Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: {
+      ticker: 'USDT',
+      logo: 'usdt',
+      decimals: 6,
+      priceProviderId: 'tether',
+    },
     JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: {
       ticker: 'JUP',
       logo: 'https://static.jup.ag/jup/icon.png',
