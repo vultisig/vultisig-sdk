@@ -43,7 +43,7 @@ export default defineConfig({
     },
     server: {
       deps: {
-        inline: [/@cosmjs/, /@scure/],
+        inline: [/@cosmjs/, /@scure/, /@vultisig\/mpc-types/],
       },
     },
     // Coverage configuration for Phase 1: 30% target
