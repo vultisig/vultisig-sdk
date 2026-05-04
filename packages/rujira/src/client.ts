@@ -82,7 +82,6 @@ export class RujiraClient {
     this.range = new RujiraRange(this)
 
     this.discovery = new RujiraDiscovery({
-      rpcEndpoint: this.config.rpcEndpoint,
       debug: this.debug,
     })
   }
