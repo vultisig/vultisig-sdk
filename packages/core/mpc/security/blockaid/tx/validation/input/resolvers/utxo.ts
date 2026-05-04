@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { UtxoChain } from '@vultisig/core-chain/Chain'
 import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
 import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'

@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { fromBinary } from '@bufbuild/protobuf'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'

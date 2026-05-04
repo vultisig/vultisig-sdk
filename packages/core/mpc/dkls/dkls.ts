@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { ensureMpcEngine, type MpcKeyshare, type MpcSession } from '@vultisig/mpc-types'
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 

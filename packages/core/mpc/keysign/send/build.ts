@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'

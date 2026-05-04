@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'

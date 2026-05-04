@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { encodeDERSignature } from '@vultisig/core-mpc/derSignature'
 import { getMessageHash } from '@vultisig/core-mpc/getMessageHash'

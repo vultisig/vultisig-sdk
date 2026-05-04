@@ -247,6 +247,8 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       email: options.email,
       discoverChains: options.discoverChains,
       chains: options.chains as Chain[],
+      usePhantomSolanaPath: options.usePhantomSolanaPath,
+      tssBatching: options.tssBatching,
       onProgress: step => {
         const progressStep: ProgressStep = {
           message: step.message,
@@ -274,6 +276,8 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       threshold: options.threshold,
       discoverChains: options.discoverChains,
       chains: options.chains as Chain[],
+      usePhantomSolanaPath: options.usePhantomSolanaPath,
+      tssBatching: options.tssBatching,
       onProgress: step => {
         const progressStep: ProgressStep = {
           message: step.message,

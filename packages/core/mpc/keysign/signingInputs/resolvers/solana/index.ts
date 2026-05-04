@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
