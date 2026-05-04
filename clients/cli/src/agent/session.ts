@@ -79,6 +79,9 @@ export class AgentSession {
     this.config = config
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
+    if (config.profile) {
+      this.client.setProfile(config.profile)
+    }
     this.executor = new AgentExecutor(vault, !!config.verbose, vault.publicKeys.ecdsa, config.vultisig)
     this.publicKey = vault.publicKeys.ecdsa
 
