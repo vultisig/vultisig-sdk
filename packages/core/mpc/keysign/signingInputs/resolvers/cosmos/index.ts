@@ -255,7 +255,25 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
           ],
           txMemo: memo,
         }
-      } else if (memo && memo.startsWith('merge:')) {
+      }
+
+      // Fail closed: same fail-open hazard as the ibcEnabled branch
+      // (codex pre-merge pass). A GENERIC_CONTRACT tx that did not
+      // produce a wasm message means the upstream caller built an
+      // inconsistent payload (transactionType says contract, but
+      // contractPayload is missing or empty). On vaultBased the
+      // fallback would be merge:/unmerge:/THORChainDeposit/
+      // THORChainSend depending on the memo + isDeposit/swapPayload
+      // shape — none of those are what the user signed off on for a
+      // GENERIC_CONTRACT tx. Refuse rather than dispatch a different
+      // message type.
+      if (txType === TransactionType.GENERIC_CONTRACT) {
+        throw new Error(
+          'Cosmos signing input (vaultBased): GENERIC_CONTRACT requires a non-empty wasmExecuteContractPayload (senderAddress, contractAddress, executeMsg). Refusing to fall back to merge:/unmerge:/THORChainDeposit/THORChainSend.'
+        )
+      }
+
+      if (memo && memo.startsWith('merge:')) {
         const fullDenom = memo.toLowerCase().replace('merge:', '')
 
         return {
@@ -277,7 +295,9 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
           ],
           txMemo: memo,
         }
-      } else if (memo?.startsWith('unmerge:')) {
+      }
+
+      if (memo?.startsWith('unmerge:')) {
         const memoParts = memo.toLowerCase().split(':')
         if (memoParts.length !== 3 || !memoParts[2]) {
           throw new Error(
