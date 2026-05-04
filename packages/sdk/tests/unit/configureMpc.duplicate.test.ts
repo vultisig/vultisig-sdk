@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MpcEngine } from '../../../mpc-types/src/index'
-import {
-  configureMpc,
-  getMpcEngine,
-  WASM_MPC_ENGINE_KIND,
-} from '../../../mpc-types/src/runtime'
+import { configureMpc, getMpcEngine, WASM_MPC_ENGINE_KIND } from '../../../mpc-types/src/runtime'
 import { __resetRuntimeStoreForTesting } from '../../../mpc-types/src/store'
 // Import configureMpc from mpc-types source so Vitest does not load two copies of runtime.ts.
 
