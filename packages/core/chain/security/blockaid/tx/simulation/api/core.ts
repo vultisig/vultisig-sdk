@@ -163,8 +163,13 @@ type EvmAssetSide = EvmAssetDiff['in'][number]
 
 const NATIVE_GROUP_KEY = 'native'
 
-const groupKeyForAsset = (asset: EvmAssetDiff['asset']): string =>
-  asset.address?.toLowerCase() ?? NATIVE_GROUP_KEY
+// Returns null for malformed ERC20 entries (missing address) so the caller
+// can skip them instead of silently merging into the native bucket.
+const groupKeyForAsset = (asset: EvmAssetDiff['asset']): string | null => {
+  if (asset.type === 'NATIVE') return NATIVE_GROUP_KEY
+  const address = asset.address?.toLowerCase()
+  return address ?? null
+}
 
 const sumRaw = (sides: EvmAssetSide[]): bigint =>
   sides.reduce((total, side) => total + BigInt(side.raw_value), 0n)
@@ -181,16 +186,24 @@ const usdValueForSides = (sides: EvmAssetSide[]): number => {
   return hasPrice ? total : 0
 }
 
+// `Coin.id` is token-only (see core/chain/coin/Coin.ts), and Blockaid sometimes
+// returns the same contract with mismatched casing across diffs; lowercase the
+// ERC20 address so downstream lookups don't depend on whichever case landed first.
 const buildCoinFromAsset = (
   asset: EvmAssetDiff['asset'],
   chain: EvmChain
-): Coin => ({
-  decimals: asset.decimals,
-  logo: asset.logo_url,
-  ticker: asset.symbol,
-  id: asset.address,
-  chain,
-})
+): Coin => {
+  const base: Coin = {
+    decimals: asset.decimals,
+    logo: asset.logo_url,
+    ticker: asset.symbol,
+    chain,
+  }
+  if (asset.type === 'ERC20' && asset.address) {
+    return { ...base, id: asset.address.toLowerCase() }
+  }
+  return base
+}
 
 /**
  * Parse a Blockaid EVM simulation into the user's net balance changes.
@@ -224,6 +237,7 @@ export const parseBlockaidEvmSimulation = async (
 
   for (const diff of simulation.account_summary.assets_diffs) {
     const key = groupKeyForAsset(diff.asset)
+    if (key === null) continue
     const sentRaw = sumRaw(diff.out)
     const receivedRaw = sumRaw(diff.in)
     const sentUsd = usdValueForSides(diff.out)

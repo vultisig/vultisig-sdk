@@ -262,4 +262,65 @@ describe('parseBlockaidEvmSimulation', () => {
 
     expect(result?.changes[0].usdValue).toBe(3)
   })
+
+  it('omits coin.id for native assets', async () => {
+    const nativeAsset = asset({
+      type: 'NATIVE',
+      address: undefined,
+      symbol: 'ETH',
+      decimals: 18,
+    })
+    const result = await parseBlockaidEvmSimulation(
+      buildSimulation([
+        diff({ asset_type: 'NATIVE', asset: nativeAsset, out: [side('1000')] }),
+      ]),
+      EvmChain.Ethereum
+    )
+
+    expect(result?.changes).toHaveLength(1)
+    expect(result?.changes[0].coin).not.toHaveProperty('id')
+    expect(result?.changes[0].coin).toMatchObject({
+      ticker: 'ETH',
+      chain: EvmChain.Ethereum,
+    })
+  })
+
+  it('lowercases ERC20 address in emitted coin.id regardless of input casing', async () => {
+    const tokenAChecksum = asset({
+      address: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      symbol: 'A',
+    })
+    const result = await parseBlockaidEvmSimulation(
+      buildSimulation([diff({ asset: tokenAChecksum, out: [side('1')] })]),
+      EvmChain.Ethereum
+    )
+
+    expect(result?.changes[0].coin.id).toBe(
+      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    )
+  })
+
+  it('skips malformed ERC20 entries without an address (does not group with native)', async () => {
+    const nativeAsset = asset({
+      type: 'NATIVE',
+      address: undefined,
+      symbol: 'ETH',
+      decimals: 18,
+    })
+    const malformedErc20 = asset({ address: undefined, symbol: 'BROKEN' })
+    const result = await parseBlockaidEvmSimulation(
+      buildSimulation([
+        diff({ asset_type: 'NATIVE', asset: nativeAsset, out: [side('100')] }),
+        diff({ asset: malformedErc20, in: [side('999')] }),
+      ]),
+      EvmChain.Ethereum
+    )
+
+    expect(result?.changes).toHaveLength(1)
+    expect(result?.changes[0]).toMatchObject({
+      direction: 'send',
+      amount: 100n,
+    })
+    expect(result?.changes[0].coin.ticker).toBe('ETH')
+  })
 })
