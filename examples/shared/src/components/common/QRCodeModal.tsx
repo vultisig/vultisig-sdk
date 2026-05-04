@@ -1,6 +1,7 @@
 import { QRCodeSVG } from 'qrcode.react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
+import { copyToClipboard } from '../../utils/copyToClipboard'
 import Button from './Button'
 import Modal from './Modal'
 
@@ -27,16 +28,27 @@ export default function QRCodeModal({
   onCancel,
   children,
 }: QRCodeModalProps) {
-  const [copied, setCopied] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const copyStatusResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copyStatusResetTimer.current) {
+        clearTimeout(copyStatusResetTimer.current)
+      }
+    }
+  }, [])
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(qrData)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
+    const copied = await copyToClipboard(qrData)
+    setCopyStatus(copied ? 'copied' : 'failed')
+    if (copyStatusResetTimer.current) {
+      clearTimeout(copyStatusResetTimer.current)
     }
+    copyStatusResetTimer.current = setTimeout(() => {
+      setCopyStatus('idle')
+      copyStatusResetTimer.current = null
+    }, 5000)
   }
 
   const handleCancel = () => {
@@ -72,11 +84,16 @@ export default function QRCodeModal({
               className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded px-3 py-2 font-mono truncate"
             />
             <button
+              type="button"
               onClick={handleCopy}
               className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded border border-gray-200 transition-colors"
             >
-              {copied ? 'Copied!' : 'Copy'}
+              {copyStatus === 'copied' ? 'Copied!' : copyStatus === 'failed' ? 'Copy failed' : 'Copy'}
             </button>
+          </div>
+          <div className="min-h-5 mt-1 text-center text-sm" role="status" aria-live="polite">
+            {copyStatus === 'copied' && <span className="text-green-600">Copied!</span>}
+            {copyStatus === 'failed' && <span className="text-red-600">Copy failed</span>}
           </div>
           <p className="text-xs text-gray-500 mt-1 text-center">Or copy this URL for manual entry</p>
         </div>

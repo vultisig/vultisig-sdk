@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { Keyshare, SignSession } from '@vultisig/lib-mldsa/vs_wasm'
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 

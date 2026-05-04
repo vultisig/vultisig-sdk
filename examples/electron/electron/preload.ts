@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     email: string
     discoverChains?: boolean
     chains?: string[]
+    usePhantomSolanaPath?: boolean
+    tssBatching?: boolean
   }) => ipcRenderer.invoke('vault:createFastFromSeedphrase', options),
   createSecureVaultFromSeedphrase: (options: {
     mnemonic: string
@@ -40,6 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     threshold?: number
     discoverChains?: boolean
     chains?: string[]
+    usePhantomSolanaPath?: boolean
+    tssBatching?: boolean
   }) => ipcRenderer.invoke('vault:createSecureFromSeedphrase', options),
   joinSecureVault: (qrPayload: string, options: { mnemonic?: string; password?: string; devices?: number }) =>
     ipcRenderer.invoke('vault:joinSecure', qrPayload, options),

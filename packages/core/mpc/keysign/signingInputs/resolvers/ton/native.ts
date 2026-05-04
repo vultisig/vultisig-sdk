@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { numberToEvenHex } from '@vultisig/lib-utils/hex/numberToHex'
 import { TW } from '@trustwallet/wallet-core'

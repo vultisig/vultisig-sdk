@@ -64,6 +64,8 @@ declare global {
         email: string
         discoverChains?: boolean
         chains?: string[]
+        usePhantomSolanaPath?: boolean
+        tssBatching?: boolean
       }): Promise<{ vaultId: string }>
       createSecureVaultFromSeedphrase(options: {
         mnemonic: string
@@ -73,6 +75,8 @@ declare global {
         threshold?: number
         discoverChains?: boolean
         chains?: string[]
+        usePhantomSolanaPath?: boolean
+        tssBatching?: boolean
       }): Promise<CreateSecureVaultResult>
       joinSecureVault(
         qrPayload: string,
@@ -183,6 +187,34 @@ export class ElectronSDKAdapter implements ISDKAdapter {
   private txFailedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
   private errorCallbacks = new Set<(error: Error) => void>()
 
+  private async withOperationCallbacks<T>(
+    callbacks: {
+      onProgress?: (step: ProgressStep) => void
+      onQRCodeReady?: (qrPayload: string) => void
+      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+    },
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const progressCallback = callbacks.onProgress ? (step: ProgressStep) => callbacks.onProgress?.(step) : undefined
+    const qrCallback = callbacks.onQRCodeReady ? (qrPayload: string) => callbacks.onQRCodeReady?.(qrPayload) : undefined
+    const deviceCallback = callbacks.onDeviceJoined
+      ? ({ deviceId, totalJoined, required }: DeviceJoinedData) =>
+          callbacks.onDeviceJoined?.(deviceId, totalJoined, required)
+      : undefined
+
+    if (progressCallback) this.progressCallbacks.add(progressCallback)
+    if (qrCallback) this.qrCallbacks.add(qrCallback)
+    if (deviceCallback) this.deviceCallbacks.add(deviceCallback)
+
+    try {
+      return await operation()
+    } finally {
+      if (progressCallback) this.progressCallbacks.delete(progressCallback)
+      if (qrCallback) this.qrCallbacks.delete(qrCallback)
+      if (deviceCallback) this.deviceCallbacks.delete(deviceCallback)
+    }
+  }
+
   constructor() {
     // Subscribe to IPC events and forward to callbacks
     window.electronAPI.onVaultCreationProgress(({ step }) => {
@@ -236,11 +268,13 @@ export class ElectronSDKAdapter implements ISDKAdapter {
   }
 
   async createFastVault(options: CreateFastVaultOptions): Promise<{ vaultId: string }> {
-    return window.electronAPI.createFastVault({
-      name: options.name,
-      password: options.password,
-      email: options.email,
-    })
+    return this.withOperationCallbacks(options, () =>
+      window.electronAPI.createFastVault({
+        name: options.name,
+        password: options.password,
+        email: options.email,
+      })
+    )
   }
 
   async verifyVault(vaultId: string, code: string): Promise<VaultInfo> {
@@ -252,12 +286,14 @@ export class ElectronSDKAdapter implements ISDKAdapter {
   }
 
   async createSecureVault(options: CreateSecureVaultOptions): Promise<CreateSecureVaultResult> {
-    return window.electronAPI.createSecureVault({
-      name: options.name,
-      password: options.password,
-      devices: options.devices,
-      threshold: options.threshold,
-    })
+    return this.withOperationCallbacks(options, () =>
+      window.electronAPI.createSecureVault({
+        name: options.name,
+        password: options.password,
+        devices: options.devices,
+        threshold: options.threshold,
+      })
+    )
   }
 
   async importVault(content: string, password?: string): Promise<VaultInfo> {
@@ -278,36 +314,46 @@ export class ElectronSDKAdapter implements ISDKAdapter {
   }
 
   async createFastVaultFromSeedphrase(options: CreateFastVaultFromSeedphraseOptions): Promise<{ vaultId: string }> {
-    return window.electronAPI.createFastVaultFromSeedphrase({
-      mnemonic: options.mnemonic,
-      name: options.name,
-      password: options.password,
-      email: options.email,
-      discoverChains: options.discoverChains,
-      chains: options.chains,
-    })
+    return this.withOperationCallbacks(options, () =>
+      window.electronAPI.createFastVaultFromSeedphrase({
+        mnemonic: options.mnemonic,
+        name: options.name,
+        password: options.password,
+        email: options.email,
+        discoverChains: options.discoverChains,
+        chains: options.chains,
+        usePhantomSolanaPath: options.usePhantomSolanaPath,
+        tssBatching: options.tssBatching,
+      })
+    )
   }
 
   async createSecureVaultFromSeedphrase(
     options: CreateSecureVaultFromSeedphraseOptions
   ): Promise<CreateSecureVaultResult> {
-    return window.electronAPI.createSecureVaultFromSeedphrase({
-      mnemonic: options.mnemonic,
-      name: options.name,
-      password: options.password,
-      devices: options.devices,
-      threshold: options.threshold,
-      discoverChains: options.discoverChains,
-      chains: options.chains,
-    })
+    return this.withOperationCallbacks(options, () =>
+      window.electronAPI.createSecureVaultFromSeedphrase({
+        mnemonic: options.mnemonic,
+        name: options.name,
+        password: options.password,
+        devices: options.devices,
+        threshold: options.threshold,
+        discoverChains: options.discoverChains,
+        chains: options.chains,
+        usePhantomSolanaPath: options.usePhantomSolanaPath,
+        tssBatching: options.tssBatching,
+      })
+    )
   }
 
   async joinSecureVault(qrPayload: string, options: JoinSecureVaultOptions): Promise<JoinSecureVaultResult> {
-    return window.electronAPI.joinSecureVault(qrPayload, {
-      mnemonic: options.mnemonic,
-      password: options.password,
-      devices: options.devices ?? 2,
-    })
+    return this.withOperationCallbacks(options, () =>
+      window.electronAPI.joinSecureVault(qrPayload, {
+        mnemonic: options.mnemonic,
+        password: options.password,
+        devices: options.devices ?? 2,
+      })
+    )
   }
 
   // ===== Vault Operations =====

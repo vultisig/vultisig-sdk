@@ -84,7 +84,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
   }
 
   const handleMaxSend = async () => {
-    if (!formData.chain || !formData.recipient) return
+    if (!formData.chain || !formData.recipient.trim()) return
     setIsLoadingMax(true)
     setError(null)
     try {
@@ -99,7 +99,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
       }
       const maxInfo = await sdk.getMaxSendAmount(vault.id, {
         coin,
-        receiver: formData.recipient,
+        receiver: formData.recipient.trim(),
         memo: formData.memo || undefined,
       })
       setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, balance.decimals) }))
@@ -115,6 +115,21 @@ export default function VaultSend({ vault }: VaultSendProps) {
     setError(null)
     setResult(null)
     setProgress(null)
+
+    const chain = formData.chain
+    const decimals = selectedToken?.decimals ?? getChainDecimals(chain)
+    const parsedAmount = parseSendAmountToBigInt(formData.amount, decimals)
+    if (!parsedAmount.ok) {
+      setError(parsedAmount.message)
+      return
+    }
+
+    const recipient = formData.recipient.trim()
+    if (!recipient) {
+      setError('Enter a recipient address.')
+      return
+    }
+
     setIsLoading(true)
 
     // Reset secure vault signing state
@@ -154,8 +169,6 @@ export default function VaultSend({ vault }: VaultSendProps) {
     }
 
     try {
-      const chain = formData.chain
-
       // Get address for the chain
       const address = await sdk.getAddress(vault.id, chain)
       setProgress('Preparing transaction...')
@@ -164,23 +177,18 @@ export default function VaultSend({ vault }: VaultSendProps) {
       const coin: CoinInfo = {
         chain,
         address,
-        decimals: selectedToken?.decimals ?? getChainDecimals(chain),
+        decimals,
         ticker: selectedToken?.symbol ?? getChainTicker(chain),
         id: selectedToken?.id,
       }
 
-      // Parse amount
-      const decimals = coin.decimals
-      const amountParts = formData.amount.split('.')
-      const wholePart = amountParts[0] || '0'
-      const fractionalPart = (amountParts[1] || '').padEnd(decimals, '0').slice(0, decimals)
-      const amountBigInt = BigInt(wholePart + fractionalPart)
+      const amountBigInt = parsedAmount.value
 
       // Prepare transaction (creates KeysignPayload)
       setProgress('Building transaction...')
       const keysignPayload = await sdk.prepareSendTx(vault.id, {
         coin,
-        receiver: formData.recipient,
+        receiver: recipient,
         amount: amountBigInt,
         memo: formData.memo || undefined,
       })
@@ -259,6 +267,11 @@ export default function VaultSend({ vault }: VaultSendProps) {
     label: chain,
   }))
 
+  const sendDecimals = selectedToken?.decimals ?? getChainDecimals(formData.chain)
+  const amountParseState = parseSendAmountToBigInt(formData.amount, sendDecimals)
+  const recipientOk = formData.recipient.trim().length > 0
+  const canSend = Boolean(formData.chain) && recipientOk && amountParseState.ok
+
   return (
     <>
       {/* Signing Modal for secure vaults */}
@@ -323,17 +336,30 @@ export default function VaultSend({ vault }: VaultSendProps) {
                   onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
                   placeholder="0.0"
                   required
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  aria-invalid={!amountParseState.ok && formData.amount.trim().length > 0}
+                  aria-describedby={!amountParseState.ok ? 'send-amount-hint' : undefined}
+                  className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    !amountParseState.ok && formData.amount.trim().length > 0 ? 'border-error' : 'border-gray-300'
+                  }`}
                 />
                 <button
                   type="button"
                   onClick={handleMaxSend}
-                  disabled={!formData.chain || !formData.recipient || isLoadingMax || isLoading}
+                  disabled={!formData.chain || !recipientOk || isLoadingMax || isLoading}
                   className="px-3 py-2 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isLoadingMax ? '...' : 'Max'}
                 </button>
               </div>
+              {!amountParseState.ok && (
+                <p
+                  id="send-amount-hint"
+                  role="status"
+                  className={`mt-1 text-sm ${amountParseState.code === 'empty' ? 'text-gray-600' : 'text-error'}`}
+                >
+                  {amountParseState.message}
+                </p>
+              )}
             </div>
 
             <Input
@@ -421,13 +447,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
               </div>
             )}
 
-            <Button
-              type="submit"
-              variant="primary"
-              fullWidth
-              isLoading={isLoading}
-              disabled={!formData.chain || !formData.recipient || !formData.amount}
-            >
+            <Button type="submit" variant="primary" fullWidth isLoading={isLoading} disabled={!canSend}>
               Send Transaction
             </Button>
           </form>
@@ -435,6 +455,46 @@ export default function VaultSend({ vault }: VaultSendProps) {
       </div>
     </>
   )
+}
+
+type ParsedSendAmount = { ok: true; value: bigint } | { ok: false; message: string; code: 'empty' | 'invalid' | 'zero' }
+
+/** Parses a human-entered amount into the smallest unit for `prepareSendTx`. */
+function parseSendAmountToBigInt(raw: string, decimals: number): ParsedSendAmount {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    return { ok: false, message: 'Enter how much to send.', code: 'empty' }
+  }
+  if (trimmed.startsWith('-')) {
+    return { ok: false, message: 'Amount must be greater than zero.', code: 'invalid' }
+  }
+  const dotCount = (trimmed.match(/\./g) ?? []).length
+  if (dotCount > 1) {
+    return { ok: false, message: 'Use at most one decimal point.', code: 'invalid' }
+  }
+  if (!/^\d*\.?\d*$/.test(trimmed)) {
+    return { ok: false, message: 'Use only digits and at most one decimal point.', code: 'invalid' }
+  }
+  const amountParts = trimmed.split('.')
+  const wholePart = amountParts[0] || '0'
+  const fracRaw = amountParts[1] ?? ''
+  if (fracRaw.length > decimals) {
+    return {
+      ok: false,
+      message: `This token allows up to ${decimals} decimal places.`,
+      code: 'invalid',
+    }
+  }
+  try {
+    const fractionalPart = fracRaw.padEnd(decimals, '0').slice(0, decimals)
+    const amountBigInt = BigInt(wholePart + fractionalPart)
+    if (amountBigInt <= 0n) {
+      return { ok: false, message: 'Amount must be greater than zero.', code: 'zero' }
+    }
+    return { ok: true, value: amountBigInt }
+  } catch {
+    return { ok: false, message: 'Enter a valid amount.', code: 'invalid' }
+  }
 }
 
 function formatAmount(amount: string | bigint, decimals: number): string {
