@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { Transaction } from 'bitcoinjs-lib'
 import { TW } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'

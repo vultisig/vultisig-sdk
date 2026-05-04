@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import {
   getEvmTwFeeFields,

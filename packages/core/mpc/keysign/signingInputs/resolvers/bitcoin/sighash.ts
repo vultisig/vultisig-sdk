@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { sha256 } from '@noble/hashes/sha256'
 
 import { SignBitcoin } from '../../../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
