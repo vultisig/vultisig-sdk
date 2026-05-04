@@ -115,8 +115,6 @@ const rnOverrideMap = {
   'packages/core/chain/chains/solana/spl/getSplAssociatedAccount.ts':
     'src/platforms/react-native/overrides/getSplAssociatedAccount.ts',
   'packages/core/chain/coin/balance/resolvers/solana.ts': 'src/platforms/react-native/overrides/resolverSolana.ts',
-  'packages/core/mpc/keysign/chainSpecific/resolvers/solana/refine.ts':
-    'src/platforms/react-native/overrides/refineSolanaChainSpecific.ts',
   'packages/core/chain/swap/general/lifi/api/getLifiSwapQuote.ts':
     'src/platforms/react-native/overrides/getLifiSwapQuote.ts',
 }
