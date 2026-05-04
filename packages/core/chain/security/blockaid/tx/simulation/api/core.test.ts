@@ -19,11 +19,12 @@ const asset = (overrides: Partial<Asset> = {}): Asset => ({
   ...overrides,
 })
 
-const side = (rawValue: string): Side => ({
-  usd_price: 1,
+const side = (rawValue: string, overrides: Partial<Side> = {}): Side => ({
+  usd_price: 0,
   summary: '',
-  value: 1,
+  value: 0,
   raw_value: rawValue,
+  ...overrides,
 })
 
 const diff = (parts: Partial<AssetDiff> & Pick<AssetDiff, 'asset'>): AssetDiff => ({
@@ -55,29 +56,30 @@ const TOKEN_B = asset({
 })
 
 describe('parseBlockaidEvmSimulation', () => {
-  it('returns a transfer for a single-diff simulation', async () => {
+  it('emits a single send change for a single-diff out simulation', async () => {
     const result = await parseBlockaidEvmSimulation(
       buildSimulation([diff({ asset: TOKEN_A, out: [side('1000')] })]),
       EvmChain.Ethereum
     )
 
     expect(result).toEqual({
-      transfer: {
-        fromCoin: {
-          decimals: TOKEN_A.decimals,
-          logo: TOKEN_A.logo_url,
-          ticker: TOKEN_A.symbol,
-          id: TOKEN_A.address,
-          chain: EvmChain.Ethereum,
+      changes: [
+        {
+          direction: 'send',
+          coin: {
+            decimals: TOKEN_A.decimals,
+            logo: TOKEN_A.logo_url,
+            ticker: TOKEN_A.symbol,
+            id: TOKEN_A.address,
+            chain: EvmChain.Ethereum,
+          },
+          amount: 1000n,
         },
-        fromAmount: 1000n,
-      },
+      ],
     })
   })
 
-  it('pairs swap diffs across a router-mediated permitAndCall flow (3 diffs)', async () => {
-    // Reproduces the issue: user sends Token A, receives Token B, with an
-    // empty intermediate router/permit leg between them.
+  it('returns net send + receive across a router-mediated permitAndCall flow (3 diffs)', async () => {
     const result = await parseBlockaidEvmSimulation(
       buildSimulation([
         diff({ asset: TOKEN_A, out: [side('5000')] }),
@@ -87,33 +89,47 @@ describe('parseBlockaidEvmSimulation', () => {
       EvmChain.Ethereum
     )
 
-    expect(result).toMatchObject({
-      swap: {
-        fromCoin: { id: TOKEN_A.address, ticker: 'A' },
-        toCoin: { id: TOKEN_B.address, ticker: 'B' },
-        fromAmount: 5000n,
-        toAmount: 42n,
-      },
+    expect(result).toEqual({
+      changes: [
+        expect.objectContaining({
+          direction: 'send',
+          coin: expect.objectContaining({ id: TOKEN_A.address, ticker: 'A' }),
+          amount: 5000n,
+        }),
+        expect.objectContaining({
+          direction: 'receive',
+          coin: expect.objectContaining({ id: TOKEN_B.address, ticker: 'B' }),
+          amount: 42n,
+        }),
+      ],
     })
   })
 
-  it('preserves the standard 2-diff swap shape', async () => {
+  it('emits two changes for the standard 2-diff swap shape', async () => {
     const result = await parseBlockaidEvmSimulation(
       buildSimulation([diff({ asset: TOKEN_A, out: [side('100')] }), diff({ asset: TOKEN_B, in: [side('200')] })]),
       EvmChain.Ethereum
     )
 
-    expect(result).toMatchObject({
-      swap: {
-        fromCoin: { id: TOKEN_A.address },
-        toCoin: { id: TOKEN_B.address },
-        fromAmount: 100n,
-        toAmount: 200n,
-      },
+    expect(result).toEqual({
+      changes: [
+        expect.objectContaining({
+          direction: 'send',
+          coin: expect.objectContaining({ id: TOKEN_A.address }),
+          amount: 100n,
+        }),
+        expect.objectContaining({
+          direction: 'receive',
+          coin: expect.objectContaining({ id: TOKEN_B.address }),
+          amount: 200n,
+        }),
+      ],
     })
   })
 
-  it('treats EIP-55 checksum casing as the same asset when picking the in-side', async () => {
+  it('groups EIP-55 checksum casing as the same asset and nets across legs', async () => {
+    // The checksum-case A leg cancels the original-case A leg (same address,
+    // different display casing), so the net effect is just the +B leg.
     const tokenAChecksum = asset({
       address: '0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
       symbol: 'A',
@@ -127,21 +143,38 @@ describe('parseBlockaidEvmSimulation', () => {
       EvmChain.Ethereum
     )
 
-    expect(result).toMatchObject({
-      swap: {
-        fromCoin: { id: TOKEN_A.address },
-        toCoin: { id: TOKEN_B.address },
-      },
+    expect(result).toEqual({
+      changes: [
+        expect.objectContaining({
+          direction: 'receive',
+          coin: expect.objectContaining({ id: TOKEN_B.address }),
+          amount: 2n,
+        }),
+      ],
     })
   })
 
-  it('returns null when there is no out-side diff', async () => {
+  it('returns null when there is no out-side diff and no in-side diff', async () => {
+    const result = await parseBlockaidEvmSimulation(
+      buildSimulation([diff({ asset: TOKEN_A }), diff({ asset: TOKEN_B })]),
+      EvmChain.Ethereum
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it('emits two receives when only the in-side has values across two assets', async () => {
     const result = await parseBlockaidEvmSimulation(
       buildSimulation([diff({ asset: TOKEN_A, in: [side('1')] }), diff({ asset: TOKEN_B, in: [side('2')] })]),
       EvmChain.Ethereum
     )
 
-    expect(result).toBeNull()
+    expect(result).toEqual({
+      changes: [
+        expect.objectContaining({ direction: 'receive', amount: 1n }),
+        expect.objectContaining({ direction: 'receive', amount: 2n }),
+      ],
+    })
   })
 
   it('returns null when the only in-side diff is the same asset as the out-side (refund-shaped)', async () => {
@@ -172,5 +205,61 @@ describe('parseBlockaidEvmSimulation', () => {
     )
 
     expect(result).toBeNull()
+  })
+
+  it('emits net send when an asset has both out and in legs and out > in', async () => {
+    // User sends 10 A and receives 1 A as refund — net send of 9 A.
+    const result = await parseBlockaidEvmSimulation(
+      buildSimulation([
+        diff({ asset: TOKEN_A, out: [side('10')] }),
+        diff({ asset: TOKEN_A, in: [side('1')] }),
+      ]),
+      EvmChain.Ethereum
+    )
+
+    expect(result).toEqual({
+      changes: [
+        expect.objectContaining({
+          direction: 'send',
+          coin: expect.objectContaining({ id: TOKEN_A.address }),
+          amount: 9n,
+        }),
+      ],
+    })
+  })
+
+  it('emits multiple changes for a multicall-style simulation (4 diffs)', async () => {
+    const TOKEN_C = asset({
+      address: '0xcccccccccccccccccccccccccccccccccccccccc',
+      symbol: 'C',
+      decimals: 8,
+    })
+    const result = await parseBlockaidEvmSimulation(
+      buildSimulation([
+        diff({ asset: TOKEN_A, out: [side('100')] }),
+        diff({ asset: TOKEN_B, out: [side('200')] }),
+        diff({ asset: TOKEN_C, in: [side('300')] }),
+        diff({ asset: asset({ address: '0xdddd' }), in: [side('400')] }),
+      ]),
+      EvmChain.Ethereum
+    )
+
+    expect(result?.changes).toHaveLength(4)
+    expect(result?.changes.filter(c => c.direction === 'send')).toHaveLength(2)
+    expect(result?.changes.filter(c => c.direction === 'receive')).toHaveLength(2)
+  })
+
+  it('aggregates usdValue from in/out side prices when present', async () => {
+    const result = await parseBlockaidEvmSimulation(
+      buildSimulation([
+        diff({
+          asset: TOKEN_A,
+          out: [side('1000', { usd_price: 1.5, value: 2 })],
+        }),
+      ]),
+      EvmChain.Ethereum
+    )
+
+    expect(result?.changes[0].usdValue).toBe(3)
   })
 })
