@@ -243,12 +243,13 @@ export async function ensureMpcEngine(): Promise<MpcEngine> {
   try {
     mod = await import('@vultisig/mpc-wasm')
   } catch (cause) {
-    throw new Error(
+    const error = new Error(
       'MPC engine not configured and @vultisig/mpc-wasm is not installed. ' +
         'Either install @vultisig/mpc-wasm, or call configureMpc(...) before any MPC operation. ' +
-        'See https://github.com/vultisig/vultisig-sdk/issues/287.',
-      { cause: cause as Error }
+        'See https://github.com/vultisig/vultisig-sdk/issues/287.'
     )
+    Object.assign(error, { cause })
+    throw error
   }
   configureMpc(new mod.WasmMpcEngine())
   return runtimeStore().mpcEngine as MpcEngine
