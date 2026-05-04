@@ -12,11 +12,6 @@ function createMockVault() {
     threshold: 2,
     createdAt: 1700000000000,
     allBalances: vi.fn().mockResolvedValue([{ chain: 'Ethereum', amount: '1.0' }]),
-    portfolio: vi.fn().mockResolvedValue({
-      balances: [{ chain: 'Ethereum', fiatValue: 2000 }],
-      totalValue: '2000.00',
-      currency: 'usd',
-    }),
     address: vi.fn().mockResolvedValue('0xabc123'),
     getSupportedSwapChains: vi.fn().mockReturnValue(['Ethereum', 'Bitcoin']),
     send: vi.fn().mockResolvedValue({ dryRun: true, fee: '0.001', total: '1.001' }),
@@ -27,19 +22,18 @@ function createMockVault() {
 }
 
 describe('tool registration', () => {
-  it('registers all 8 tools with defi profile', () => {
+  it('registers all 7 tools with defi profile', () => {
     const vault = createMockVault()
     const tools = getTools(vault, 'defi')
     const names = Object.keys(tools)
     expect(names).toContain('get_balances')
-    expect(names).toContain('get_portfolio')
     expect(names).toContain('get_address')
     expect(names).toContain('vault_info')
     expect(names).toContain('supported_chains')
     expect(names).toContain('swap_quote')
     expect(names).toContain('send')
     expect(names).toContain('swap')
-    expect(names).toHaveLength(8)
+    expect(names).toHaveLength(7)
   })
 
   it('each tool has description, inputSchema, and handler', () => {
@@ -58,9 +52,8 @@ describe('profile filtering', () => {
     const vault = createMockVault()
     const tools = getTools(vault, 'harness')
     const names = Object.keys(tools)
-    expect(names).toHaveLength(6)
+    expect(names).toHaveLength(5)
     expect(names).toContain('get_balances')
-    expect(names).toContain('get_portfolio')
     expect(names).toContain('get_address')
     expect(names).toContain('vault_info')
     expect(names).toContain('supported_chains')
@@ -69,7 +62,7 @@ describe('profile filtering', () => {
     expect(names).not.toContain('swap')
   })
 
-  it('defi profile has all 8 tools including send and swap', () => {
+  it('defi profile has all 7 tools including send and swap', () => {
     const vault = createMockVault()
     const tools = getTools(vault, 'defi')
     const names = Object.keys(tools)
@@ -78,8 +71,8 @@ describe('profile filtering', () => {
   })
 
   it('getToolNames returns correct names per profile', () => {
-    expect(getToolNames('harness')).toHaveLength(6)
-    expect(getToolNames('defi')).toHaveLength(8)
+    expect(getToolNames('harness')).toHaveLength(5)
+    expect(getToolNames('defi')).toHaveLength(7)
     expect(getToolNames('harness')).not.toContain('send')
     expect(getToolNames('defi')).toContain('send')
   })
@@ -87,7 +80,7 @@ describe('profile filtering', () => {
   it('defaults to defi when no profile specified', () => {
     const vault = createMockVault()
     const tools = getTools(vault)
-    expect(Object.keys(tools)).toHaveLength(8)
+    expect(Object.keys(tools)).toHaveLength(7)
   })
 })
 
