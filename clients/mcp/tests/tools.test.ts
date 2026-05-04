@@ -12,11 +12,6 @@ function createMockVault() {
     threshold: 2,
     createdAt: 1700000000000,
     allBalances: vi.fn().mockResolvedValue([{ chain: 'Ethereum', amount: '1.0' }]),
-    portfolio: vi.fn().mockResolvedValue({
-      balances: [{ chain: 'Ethereum', fiatValue: 2000 }],
-      totalValue: '2000.00',
-      currency: 'usd',
-    }),
     address: vi.fn().mockResolvedValue('0xabc123'),
     getSupportedSwapChains: vi.fn().mockReturnValue(['Ethereum', 'Bitcoin']),
     send: vi.fn().mockResolvedValue({ dryRun: true, fee: '0.001', total: '1.001' }),
