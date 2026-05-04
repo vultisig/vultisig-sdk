@@ -21,6 +21,8 @@
     },
     "./compression/getSevenZip": {
       "types": "./dist/compression/getSevenZip.d.ts",
+      "browser": "./dist/compression/getSevenZip.browser.js",
+      "node": "./dist/compression/getSevenZip.node.js",
       "import": "./dist/compression/getSevenZip.js",
       "default": "./dist/compression/getSevenZip.js"
     },

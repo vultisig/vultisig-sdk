@@ -33,6 +33,9 @@ type AppState = {
   error: string | null
 }
 
+/** Dev StrictMode runs mount effects twice; avoid double SDK adapter init + duplicate event log lines. */
+let appInitStarted = false
+
 function App() {
   const [appState, setAppState] = useState<AppState>({
     sdkAdapter: null,
@@ -63,6 +66,11 @@ function App() {
 
   // Initialize app and load vaults from SDK
   useEffect(() => {
+    if (appInitStarted) {
+      return
+    }
+    appInitStarted = true
+
     const init = async () => {
       try {
         const sdk = getSDK()
@@ -100,7 +108,7 @@ function App() {
       }
     }
 
-    init()
+    void init()
   }, [addEvent])
 
   // Subscribe to SDK adapter events
