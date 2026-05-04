@@ -93,6 +93,7 @@ describe('generateClaimProof', () => {
     message_hash: 'aa'.repeat(32),
     address_hash: 'bb'.repeat(20),
     qbtc_address_hash: 'cc'.repeat(32),
+    pub_key_hash_sha256: 'ee'.repeat(32),
     utxos: [{ txid: 'dd'.repeat(32), vout: 0 }],
     claimer_address: 'qbtc1abc',
   }
@@ -128,7 +129,16 @@ describe('generateClaimProof', () => {
     expect(result.message_hash).toBe(validResponse.message_hash)
     expect(result.address_hash).toBe(validResponse.address_hash)
     expect(result.qbtc_address_hash).toBe(validResponse.qbtc_address_hash)
+    expect(result.pub_key_hash_sha256).toBe(validResponse.pub_key_hash_sha256)
     expect(result.claimer_address).toBe('qbtc1abc')
+  })
+
+  it('throws when pub_key_hash_sha256 is missing or wrong length', async () => {
+    mockFetch({ ...validResponse, pub_key_hash_sha256: 'aa' })
+
+    await expect(generateClaimProof(validInput)).rejects.toThrow(
+      'Invalid proof service response: invalid pub_key_hash_sha256'
+    )
   })
 
   it('throws on non-OK response', async () => {
