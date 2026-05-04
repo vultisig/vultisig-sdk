@@ -1,5 +1,17 @@
 # @vultisig/core-chain
 
+## 1.5.1
+
+### Patch Changes
+
+- [#319](https://github.com/vultisig/vultisig-sdk/pull/319) [`03007d7`](https://github.com/vultisig/vultisig-sdk/commit/03007d7293b2f51f6269d39bf3725715182f933e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - fix(chain): THORChain native swap `streaming_interval` 0 (Rapid Swaps)
+
+  THORChain can serve swaps in a single block and auto-stream when needed.
+  Using `1` forced streaming; `0` lets the protocol choose. MayaChain
+  unchanged (`3`).
+
+  Refs: https://github.com/vultisig/vultisig-windows/issues/3613
+
 ## 1.5.0
 
 ### Minor Changes

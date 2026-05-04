@@ -1,3 +1,5 @@
+import { Buffer } from 'buffer'
+
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 import { decryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/decryptWithAesGcm'
 import { encryptWithAesGcm } from '@vultisig/lib-utils/encryption/aesGcm/encryptWithAesGcm'

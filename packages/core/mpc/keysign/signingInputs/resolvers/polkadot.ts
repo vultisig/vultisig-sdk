@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'

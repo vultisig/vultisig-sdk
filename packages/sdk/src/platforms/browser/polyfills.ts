@@ -7,14 +7,14 @@ import type { PlatformPolyfills } from '../types'
 export class BrowserPolyfills implements PlatformPolyfills {
   async initialize(): Promise<void> {
     // Polyfill Buffer if needed
-    if (typeof window !== 'undefined' && typeof window.Buffer === 'undefined') {
+    if (typeof globalThis.Buffer === 'undefined') {
       const { Buffer } = await import('buffer')
-      window.Buffer = Buffer
+      ;(globalThis as any).Buffer = Buffer
     }
 
     // Polyfill process if needed
-    if (typeof window !== 'undefined' && typeof window.process === 'undefined') {
-      window.process = { env: {} } as any
+    if (typeof globalThis.process === 'undefined') {
+      ;(globalThis as any).process = { env: {} }
     }
   }
 }

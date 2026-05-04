@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { EvmChain } from '@vultisig/core-chain/Chain'
 import { getEvmTwFeeFields } from '@vultisig/core-chain/chains/evm/tx/fee/tw/getEvmTwFeeFields'
 import { getEvmTwChainId } from '@vultisig/core-chain/chains/evm/tx/tw/getEvmTwChainId'
