@@ -43,7 +43,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     sessionId: options.sessionId,
     verbose: options.verbose,
     notificationUrl: options.notificationUrl || process.env.VULTISIG_NOTIFICATION_URL || '',
-    profile: options.profile || process.env.VULTISIG_AGENT_PROFILE || '',
+    profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
   }
 
   const session = new AgentSession(vault, config)
@@ -126,7 +126,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
       sessionId: options.session,
       verbose: options.verbose,
       askMode: true,
-      profile: options.profile || process.env.VULTISIG_AGENT_PROFILE || '',
+      profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
     }
 
     const session = new AgentSession(vault, config)

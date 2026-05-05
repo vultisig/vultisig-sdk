@@ -1372,7 +1372,7 @@ agentCmd
     `
 Examples:
   vultisig agent ask "What is my ETH balance?" --output json
-  vultisig agent ask "Send 0.1 ETH to 0x..." --session abc123 --yes
+  vultisig agent ask "Send 0.1 ETH to 0x..." --session abc123
   vultisig agent ask "..." --profile station-wallet`
   )
   .action(
@@ -1394,7 +1394,7 @@ Examples:
         backendUrl: options.backendUrl || parentOpts.backendUrl,
         password: options.password || parentOpts.password,
         verbose: options.verbose || parentOpts.verbose,
-        profile: options.profile || parentOpts.profile,
+        profile: options.profile ?? parentOpts.profile,
       })
     }
   )
