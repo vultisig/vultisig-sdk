@@ -119,6 +119,10 @@ export default [
         },
       ],
       '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
+
+      // ESLint 10 added these to recommended; opt-out until codebase adopts them
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
     },
   }, // Override for declaration files where interfaces are required for module augmentation
   {
