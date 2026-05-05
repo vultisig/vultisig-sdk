@@ -215,37 +215,37 @@ jobs:
       - run: yarn install --immutable
 
       - name: Download SDK dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sdk-dist
           path: packages/sdk/dist
 
       - name: Download CLI dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cli-dist
           path: clients/cli/dist
 
       - name: Download MCP dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: mcp-dist
           path: clients/mcp/dist
 
       - name: Download client-shared dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: client-shared-dist
           path: packages/client-shared/dist
 
       - name: Download rujira dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rujira-dist
           path: packages/rujira/dist
 
       - name: Download shared packages dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: shared-dist
           path: packages
