@@ -6890,7 +6890,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vite: "npm:^8.0.0"
     vite-plugin-electron: "npm:^0.29.1"
-    vite-plugin-electron-renderer: "npm:^0.14.6"
+    vite-plugin-electron-renderer: "npm:^0.14.7"
     wait-on: "npm:^9.0.4"
   languageName: unknown
   linkType: soft
@@ -18559,10 +18559,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite-plugin-electron-renderer@npm:^0.14.6":
-  version: 0.14.6
-  resolution: "vite-plugin-electron-renderer@npm:0.14.6"
-  checksum: 10c0/1a36ec13d0cd3eecf53772251efd9d100604ae844da7bca17f4f33efab6eedc762ce4d16b8ba4842a85c87789fe07416ef98a5fc4308088c1b1ff297262556f2
+"vite-plugin-electron-renderer@npm:^0.14.7":
+  version: 0.14.7
+  resolution: "vite-plugin-electron-renderer@npm:0.14.7"
+  checksum: 10c0/f75e4a0fc6b6979877e7385e83a1ea7bd04ce17772de6a8dcb68bafbe389ac24b8c61932c5530a458bae45b3bdba74398e0e64db5eca9aeb369f89ef1aff3e6f
   languageName: node
   linkType: hard
 
