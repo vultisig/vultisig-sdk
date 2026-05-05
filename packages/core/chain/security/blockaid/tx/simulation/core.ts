@@ -17,19 +17,13 @@ export type BlockaidSolanaSimulationInfo =
       }
     }
 
-export type BlockaidEvmSimulationInfo =
-  | {
-      swap: {
-        fromCoin: Coin
-        fromAmount: bigint
-        toCoin: Coin
-        toAmount: bigint
-      }
-    }
-  | {
-      transfer: {
-        fromCoin: Coin
-        fromAmount: bigint
-      }
-    }
-  | null
+export type BlockaidEvmBalanceChange = {
+  direction: 'send' | 'receive'
+  coin: Coin
+  amount: bigint
+  usdValue?: number
+}
+
+export type BlockaidEvmSimulationInfo = {
+  changes: BlockaidEvmBalanceChange[]
+} | null

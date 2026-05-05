@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import {
   assembleBittensorExtrinsic,

@@ -10,7 +10,13 @@ const cosmosGasLimitRecord: Record<CosmosChain, bigint> = {
   [Chain.Noble]: 200000n,
   [Chain.Akash]: 200000n,
   [Chain.Terra]: 300000n,
-  [Chain.TerraClassic]: 300000n,
+  // TerraClassic default covers both bank.MsgSend (uluna ~80k) and
+  // ibc.MsgTransfer (~150-200k), with margin for chain load. uusd
+  // (USTC) MsgSend has its own 1M override below for the burn-tax /
+  // treasury post-handler path; IBC `MsgTransfer` is exempt from the
+  // burn tax (per classic-terra/core fee_tax.go::FilterMsgAndComputeTax)
+  // so it falls through to this default.
+  [Chain.TerraClassic]: 400000n,
   [Chain.THORChain]: 20000000n,
   [Chain.MayaChain]: 2000000000n,
 }

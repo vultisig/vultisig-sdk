@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { SignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
 import { toMpcLibKeyshare } from '../../lib/keyshare'

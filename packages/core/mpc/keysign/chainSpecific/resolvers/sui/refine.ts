@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'

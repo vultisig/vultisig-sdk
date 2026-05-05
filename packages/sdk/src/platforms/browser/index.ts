@@ -17,6 +17,8 @@
  * ```
  */
 
+import './preamble'
+
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'
 import initDkls from '@vultisig/lib-dkls/vs_wasm'
 import initMldsa from '@vultisig/lib-mldsa/vs_wasm'

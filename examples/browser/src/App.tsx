@@ -61,8 +61,11 @@ function App() {
     []
   )
 
-  // Initialize app and load vaults from SDK
+  // Initialize app and load vaults from SDK (StrictMode-safe: abort in-flight work on cleanup)
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     const init = async () => {
       try {
         const sdk = getSDK()
@@ -71,6 +74,10 @@ function App() {
 
         // Load all existing vaults
         const existingVaults = await sdkAdapter.listVaults()
+        if (signal.aborted) {
+          return
+        }
+
         const openVaultsMap = new Map<string, VaultInfo>()
         existingVaults.forEach((vault: VaultInfo) => {
           openVaultsMap.set(vault.id, vault)
@@ -79,6 +86,9 @@ function App() {
         // Set first vault as active if any exist
         if (existingVaults.length > 0) {
           await sdkAdapter.setActiveVault(existingVaults[0].id)
+        }
+        if (signal.aborted) {
+          return
         }
 
         setAppState(prev => ({
@@ -91,6 +101,9 @@ function App() {
 
         addEvent('success', 'sdk', `SDK initialized, ${existingVaults.length} vault(s) loaded`)
       } catch (error) {
+        if (signal.aborted) {
+          return
+        }
         setAppState(prev => ({
           ...prev,
           isLoading: false,
@@ -100,7 +113,8 @@ function App() {
       }
     }
 
-    init()
+    void init()
+    return () => controller.abort()
   }, [addEvent])
 
   // Subscribe to SDK adapter events

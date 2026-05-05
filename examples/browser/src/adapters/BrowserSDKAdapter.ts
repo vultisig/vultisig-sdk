@@ -206,7 +206,13 @@ export class BrowserSDKAdapter implements ISDKAdapter {
             })
           }
         : undefined,
-      onQRCodeReady: options.onQRCodeReady,
+      onQRCodeReady: (qrPayload: string) => {
+        if (import.meta.env.DEV) {
+          ;(window as Window & { __VULTISIG_LAST_KEYGEN_QR__?: string }).__VULTISIG_LAST_KEYGEN_QR__ = qrPayload
+          console.info('VULTISIG_KEYGEN_QR', qrPayload)
+        }
+        options.onQRCodeReady?.(qrPayload)
+      },
       onDeviceJoined: options.onDeviceJoined,
     })
     this.vaultCache.set(result.vault.id, result.vault)
@@ -247,6 +253,8 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       email: options.email,
       discoverChains: options.discoverChains,
       chains: options.chains as Chain[],
+      usePhantomSolanaPath: options.usePhantomSolanaPath,
+      tssBatching: options.tssBatching,
       onProgress: step => {
         const progressStep: ProgressStep = {
           message: step.message,
@@ -274,6 +282,8 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       threshold: options.threshold,
       discoverChains: options.discoverChains,
       chains: options.chains as Chain[],
+      usePhantomSolanaPath: options.usePhantomSolanaPath,
+      tssBatching: options.tssBatching,
       onProgress: step => {
         const progressStep: ProgressStep = {
           message: step.message,

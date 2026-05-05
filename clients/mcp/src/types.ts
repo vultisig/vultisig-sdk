@@ -6,12 +6,6 @@ export type Balance = {
   [key: string]: unknown
 }
 
-export type Portfolio = {
-  balances: Balance[]
-  totalValue: string
-  currency: string
-}
-
 export type SendResult = {
   dryRun: boolean
   fee?: string
@@ -44,7 +38,6 @@ export type Vault = {
   threshold: number
   createdAt: number
   allBalances(includeTokens?: boolean): Promise<Balance[]>
-  portfolio(fiatCurrency?: string): Promise<Portfolio>
   address(chain: string): Promise<string>
   getSupportedSwapChains(): readonly string[]
   send(params: {

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.2.1",
+  "version": "1.2.4",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -21,6 +21,8 @@
     },
     "./compression/getSevenZip": {
       "types": "./dist/compression/getSevenZip.d.ts",
+      "browser": "./dist/compression/getSevenZip.browser.js",
+      "node": "./dist/compression/getSevenZip.node.js",
       "import": "./dist/compression/getSevenZip.js",
       "default": "./dist/compression/getSevenZip.js"
     },
@@ -972,15 +974,16 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.0",
-    "@vultisig/core-chain": "1.4.3",
+    "@vultisig/core-chain": "1.5.1",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
     "@vultisig/lib-schnorr": "0.9.0",
-    "@vultisig/lib-utils": "0.10.0",
-    "@vultisig/mpc-types": "0.2.2",
+    "@vultisig/lib-utils": "0.10.1",
+    "@vultisig/mpc-types": "0.2.3",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
+    "buffer": "^6.0.3",
     "cosmjs-types": "^0.11.0",
     "long": "^5.3.2",
     "viem": "^2.48.4"

@@ -1,5 +1,35 @@
 # @vultisig/core-mpc
 
+## 1.2.4
+
+### Patch Changes
+
+- [#371](https://github.com/vultisig/vultisig-sdk/pull/371) [`b713743`](https://github.com/vultisig/vultisig-sdk/commit/b7137437547afc8189af207f210be57f50973dc7) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Install `globalThis.Buffer` before the browser SDK module graph evaluates (`preamble.ts`), align browser `polyfills` with `globalThis`, add explicit `buffer` imports across MPC modules that use `Buffer`, and depend on `buffer` from `@vultisig/core-mpc`. Harden the browser/electron examples: seedphrase import batching/progress and adapter flags, clipboard helper with bounded timeouts, QR/address copy feedback, and send-form amount validation with trimmed recipients.
+
+- [#376](https://github.com/vultisig/vultisig-sdk/pull/376) [`502c7ec`](https://github.com/vultisig/vultisig-sdk/commit/502c7ec37e7853543c22311af0ada995fa2c47e2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Split `getSevenZip` into browser and Node builds so browser bundles never pull `node:module`, wire conditional `exports` via `generate-shared-exports`, and improve the browser partner example (StrictMode-safe init, dev QR logging, copyable QR textarea, Vite env types).
+
+- Updated dependencies [[`ed6955f`](https://github.com/vultisig/vultisig-sdk/commit/ed6955fe6d218b3b13314db32f8d43c67a41fb48)]:
+  - @vultisig/mpc-types@0.2.3
+
+## 1.2.3
+
+### Patch Changes
+
+- Updated dependencies [[`03007d7`](https://github.com/vultisig/vultisig-sdk/commit/03007d7293b2f51f6269d39bf3725715182f933e)]:
+  - @vultisig/core-chain@1.5.1
+
+## 1.2.2
+
+### Patch Changes
+
+- [#320](https://github.com/vultisig/vultisig-sdk/pull/320) [`c33d1f0`](https://github.com/vultisig/vultisig-sdk/commit/c33d1f02b6740ef1c7db16cdc1f7290ec7b2f1f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - feat(chain): THORChain rapid quote with streaming fallback above 3% fee bps
+
+  THORChain swap quotes now request rapid (`streaming_interval=0`) first. When `fees.total_bps` exceeds 300, a second streaming quote is fetched (`interval=1`, optional `streaming_quantity` from `max_streaming_quantity`); the better `expected_amount_out` wins, with silent fallback to rapid on errors. `THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS` disables the extra fetch when set to `Number.MAX_SAFE_INTEGER`. Keysign payload reads THOR streaming fields from the quote memo so they match the selected route.
+
+- Updated dependencies [[`a52980c`](https://github.com/vultisig/vultisig-sdk/commit/a52980c490633da7d7ae36128bc491f8ca3ff565), [`c33d1f0`](https://github.com/vultisig/vultisig-sdk/commit/c33d1f02b6740ef1c7db16cdc1f7290ec7b2f1f5)]:
+  - @vultisig/lib-utils@0.10.1
+  - @vultisig/core-chain@1.5.0
+
 ## 1.2.1
 
 ### Patch Changes

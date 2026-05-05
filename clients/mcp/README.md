@@ -25,8 +25,8 @@ vmcp --vault <id-or-path> --profile harness
 
 | Profile   | Tools                                                                               |
 | --------- | ----------------------------------------------------------------------------------- |
-| `defi` (default) | `get_balances`, `get_portfolio`, `get_address`, `vault_info`, `supported_chains`, `swap_quote`, `send`, `swap` |
-| `harness` | `get_balances`, `get_portfolio`, `get_address`, `vault_info`, `supported_chains`, `swap_quote` (read-only)       |
+| `defi` (default) | `get_balances`, `get_address`, `vault_info`, `supported_chains`, `swap_quote`, `send`, `swap` |
+| `harness` | `get_balances`, `get_address`, `vault_info`, `supported_chains`, `swap_quote` (read-only)       |
 
 ## Confirmation model (important)
 
