@@ -6,7 +6,6 @@
  */
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import type {
-  Action,
   AuthTokenRequest,
   AuthTokenResponse,
   ConversationMessage,
@@ -147,7 +146,6 @@ export class AgentClient {
       // unhandled rejections.
       onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
-      onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
       onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
@@ -177,7 +175,6 @@ export class AgentClient {
 
     const result: SSEStreamResult = {
       fullText: '',
-      actions: [],
       suggestions: [],
       transactions: [],
       message: null,
@@ -266,7 +263,6 @@ export class AgentClient {
       // unhandled rejections.
       onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
-      onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
       onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
@@ -341,13 +337,6 @@ export class AgentClient {
           if (typeof title === 'string') callbacks.onTitle?.(title)
           break
         }
-        case 'actions': {
-          if (this.verbose) process.stderr.write(`[SSE:actions] raw: ${data.slice(0, 1000)}\n`)
-          const actions = v1Data?.actions ?? parsed.actions ?? []
-          result.actions.push(...actions)
-          callbacks.onActions?.(actions)
-          break
-        }
         case 'suggestions': {
           const suggestions = v1Data?.suggestions ?? parsed.suggestions ?? []
           result.suggestions.push(...suggestions)
@@ -406,8 +395,6 @@ export class AgentClient {
         return 'tool_progress'
       case 'data-title':
         return 'title'
-      case 'data-actions':
-        return 'actions'
       case 'data-suggestions':
         return 'suggestions'
       case 'data-tx_ready':
@@ -478,7 +465,6 @@ export class AgentClient {
 
 export type SSEStreamResult = {
   fullText: string
-  actions: Action[]
   suggestions: Suggestion[]
   transactions: TxReadyPayload[]
   message: ConversationMessage | null

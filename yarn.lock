@@ -6831,7 +6831,7 @@ __metadata:
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"
     "@vultisig/lib-utils": "npm:0.10.1"
-    "@vultisig/mpc-types": "npm:0.2.2"
+    "@vultisig/mpc-types": "npm:0.2.3"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
     buffer: "npm:^6.0.3"
@@ -6970,11 +6970,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/mpc-types@npm:0.2.2, @vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.2.0, @vultisig/mpc-types@workspace:packages/mpc-types":
+"@vultisig/mpc-types@npm:0.2.3, @vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.2.0, @vultisig/mpc-types@workspace:packages/mpc-types":
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   peerDependencies:
-    "@vultisig/mpc-wasm": ">=0.1.4"
+    "@vultisig/mpc-wasm": ">=0.1.5"
   peerDependenciesMeta:
     "@vultisig/mpc-wasm":
       optional: true
@@ -7005,7 +7005,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:^4.1.5"
   peerDependencies:
-    "@vultisig/sdk": ">=0.22.1"
+    "@vultisig/sdk": ">=0.22.3"
   peerDependenciesMeta:
     "@vultisig/sdk":
       optional: true
@@ -10380,12 +10380,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-simple-import-sort@npm:^12.1.1":
-  version: 12.1.1
-  resolution: "eslint-plugin-simple-import-sort@npm:12.1.1"
+"eslint-plugin-simple-import-sort@npm:^13.0.0":
+  version: 13.0.0
+  resolution: "eslint-plugin-simple-import-sort@npm:13.0.0"
   peerDependencies:
     eslint: ">=5.0.0"
-  checksum: 10c0/0ad1907ad9ddbadd1db655db0a9d0b77076e274b793a77b982c8525d808d868e6ecfce24f3a411e8a1fa551077387f9ebb38c00956073970ebd7ee6a029ce2b3
+  checksum: 10c0/f561f3483c1c18dfa2705326d38d62c62d4aeb5947ed6d1f028299c5dc668586b5ef144926e68fe187b3a937ee0159738dcbca8c286fe56f489de52fd8f9e678
   languageName: node
   linkType: hard
 
@@ -18879,7 +18879,7 @@ __metadata:
     eslint-plugin-prettier: "npm:^5.5.5"
     eslint-plugin-react: "npm:^7.37.5"
     eslint-plugin-react-hooks: "npm:^7.0.1"
-    eslint-plugin-simple-import-sort: "npm:^12.1.1"
+    eslint-plugin-simple-import-sort: "npm:^13.0.0"
     eslint-plugin-storybook: "npm:^10.3.0"
     eslint-plugin-unused-imports: "npm:^4.4.1"
     globals: "npm:^17.4.0"
