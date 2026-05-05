@@ -50,7 +50,7 @@ export type ToolDef = {
 
 export type Profile = 'harness' | 'defi'
 
-const READ_ONLY_TOOLS = ['get_balances', 'get_portfolio', 'get_address', 'vault_info', 'supported_chains', 'swap_quote']
+const READ_ONLY_TOOLS = ['get_balances', 'get_address', 'vault_info', 'supported_chains', 'swap_quote']
 const WRITE_TOOLS = ['send', 'swap']
 
 export function getTools(vault: Vault, profile: Profile = 'defi'): Record<string, ToolDef> {
@@ -71,24 +71,6 @@ export function getTools(vault: Vault, profile: Profile = 'defi'): Record<string
           if (!chainFilter) return balances
           const target = resolveChain(chainFilter, knownChains)
           return balances.filter(b => b.chain === target)
-        }),
-    },
-
-    get_portfolio: {
-      description: descriptions.portfolio.description,
-      inputSchema: z.object({
-        chain: z.string().optional().describe(descriptions.portfolio.params.chain),
-      }),
-      handler: args =>
-        wrapHandler(async () => {
-          const portfolio = await vault.portfolio()
-          const chainFilter = args.chain as string | undefined
-          if (!chainFilter) return portfolio
-          const target = resolveChain(chainFilter, knownChains)
-          return {
-            ...portfolio,
-            balances: portfolio.balances.filter(b => b.chain === target),
-          }
         }),
     },
 

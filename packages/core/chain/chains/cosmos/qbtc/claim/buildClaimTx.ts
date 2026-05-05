@@ -25,6 +25,13 @@ type BuildMsgClaimWithProofInput = {
   addressHash: string
   /** 64-char hex QBTCAddressHash. */
   qbtcAddressHash: string
+  /**
+   * 64-char hex SHA256 of the 33-byte SEC-compressed BTC pubkey. The chain
+   * runs RIPEMD160 over this natively to bind the proof to the BTC address
+   * (the in-circuit Hash160 was removed in btcq-org/qbtc#148).
+   * Returned by the proof service as `pub_key_hash_sha256`.
+   */
+  pubKeyHashSha256: string
 }
 
 const isHex = (value: string) => /^[0-9a-f]+$/i.test(value)
@@ -39,7 +46,14 @@ const assertHex = (value: string, name: string, expectedLength: number) => {
 
 /** Validates the claim input against the chain's constraints (Section 5). */
 export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
-  const { utxos, proof, messageHash, addressHash, qbtcAddressHash } = input
+  const {
+    utxos,
+    proof,
+    messageHash,
+    addressHash,
+    qbtcAddressHash,
+    pubKeyHashSha256,
+  } = input
 
   if (utxos.length === 0 || utxos.length > 50) {
     throw new Error(`UTXOs count must be 1-50, got ${utxos.length}`)
@@ -69,6 +83,7 @@ export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
   assertHex(messageHash, 'message_hash', 64)
   assertHex(addressHash, 'address_hash', 40)
   assertHex(qbtcAddressHash, 'qbtc_address_hash', 64)
+  assertHex(pubKeyHashSha256, 'pub_key_hash_sha256', 64)
 }
 
 /** Encodes a single UTXORef as protobuf. */
@@ -87,7 +102,8 @@ const buildMsgClaimWithProof = (
     protoString(3, input.proof),
     protoString(4, input.messageHash),
     protoString(5, input.addressHash),
-    protoString(6, input.qbtcAddressHash)
+    protoString(6, input.qbtcAddressHash),
+    protoString(7, input.pubKeyHashSha256)
   )
 }
 
