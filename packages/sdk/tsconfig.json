@@ -9,6 +9,7 @@
     "declarationMap": true,
     "emitDeclarationOnly": false,
     "outDir": "./dist",
+    "rootDir": "..",
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
