@@ -1317,6 +1317,7 @@ const agentCmd = program
   .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
   .option('--session-id <id>', 'Resume an existing session')
   .option('--notification-url <url>', 'Notification service URL for push notifications')
+  .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
   .action(
     async (options: {
       viaAgent?: boolean
@@ -1326,6 +1327,7 @@ const agentCmd = program
       passwordTtl?: string
       sessionId?: string
       notificationUrl?: string
+      profile?: string
     }) => {
       // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
       // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
@@ -1350,6 +1352,7 @@ const agentCmd = program
         password: options.password,
         sessionId: options.sessionId,
         notificationUrl: options.notificationUrl,
+        profile: options.profile,
       })
     }
   )
@@ -1363,12 +1366,14 @@ agentCmd
   .option('--password <password>', 'Vault password for signing operations')
   .option('--verbose', 'Show tool calls and debug info on stderr')
   .option('--json', 'Output structured JSON (deprecated: use --output json)')
+  .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
   .addHelpText(
     'after',
     `
 Examples:
   vultisig agent ask "What is my ETH balance?" --output json
-  vultisig agent ask "Send 0.1 ETH to 0x..." --session abc123 --yes`
+  vultisig agent ask "Send 0.1 ETH to 0x..." --session abc123
+  vultisig agent ask "..." --profile station-wallet`
   )
   .action(
     async (
@@ -1379,6 +1384,7 @@ Examples:
         password?: string
         verbose?: boolean
         json?: boolean
+        profile?: string
       }
     ) => {
       const parentOpts = agentCmd.opts()
@@ -1388,6 +1394,7 @@ Examples:
         backendUrl: options.backendUrl || parentOpts.backendUrl,
         password: options.password || parentOpts.password,
         verbose: options.verbose || parentOpts.verbose,
+        profile: options.profile ?? parentOpts.profile,
       })
     }
   )
