@@ -5,10 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { fixupConfigRules, fixupPluginRules } from '@eslint/compat'
 import { FlatCompat } from '@eslint/eslintrc'
 import js from '@eslint/js'
-import typescriptEslint from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
-import jsxA11Y from 'eslint-plugin-jsx-a11y'
-import react from 'eslint-plugin-react'
 import reactHooks from 'eslint-plugin-react-hooks'
 import simpleImportSort from 'eslint-plugin-simple-import-sort'
 // TEMPORARILY DISABLED: storybook plugin has missing dependency
@@ -64,9 +61,9 @@ export default [
   ),
   {
     plugins: {
-      react,
-      '@typescript-eslint': typescriptEslint,
-      'jsx-a11y': jsxA11Y,
+      // react, jsx-a11y and @typescript-eslint are already registered by
+      // fixupConfigRules(compat.extends(...)) above — re-declaring them here
+      // causes ESLint 10 to throw "Cannot redefine plugin".
       'react-hooks': fixupPluginRules(reactHooks),
       'simple-import-sort': simpleImportSort,
       'unused-imports': fixupPluginRules(unusedImportsPlugin),
