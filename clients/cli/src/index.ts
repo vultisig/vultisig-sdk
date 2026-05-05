@@ -232,6 +232,23 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
     if (vault) {
       await ctx.setActiveVault(vault)
       setupVaultEvents(vault)
+
+      // Cache --password against the resolved vault's id+name so the SDK's
+      // onPasswordRequired callback (called when its PasswordCacheService
+      // 5-min TTL expires mid-session) finds the user-supplied password
+      // instead of dropping to an interactive prompt. Mirrors what
+      // session.ts/initialize already does with this.config.password —
+      // unlock the resolved vault unconditionally — so this just makes
+      // the no-TTL fallback consistent. The earlier
+      // `cachePassword(vaultSelector, ...)` covers the explicit-vault
+      // case before SDK init; this covers the active-vault fallback path
+      // (no --vault, no VULTISIG_VAULT) and the partial-id-prefix case
+      // where vaultSelector !== vault.id and getCachedPassword(vault.id)
+      // would otherwise miss.
+      if (unlockPassword) {
+        cachePassword(vault.id, unlockPassword)
+        if (vault.name) cachePassword(vault.name, unlockPassword)
+      }
     }
   }
   return ctx

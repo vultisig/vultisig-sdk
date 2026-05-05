@@ -3679,106 +3679,106 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-darwin-arm64@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-darwin-arm64@npm:1.2.0"
+"@napi-rs/keyring-darwin-arm64@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-darwin-arm64@npm:1.3.0"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-darwin-x64@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-darwin-x64@npm:1.2.0"
+"@napi-rs/keyring-darwin-x64@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-darwin-x64@npm:1.3.0"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-freebsd-x64@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-freebsd-x64@npm:1.2.0"
+"@napi-rs/keyring-freebsd-x64@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-freebsd-x64@npm:1.3.0"
   conditions: os=freebsd & cpu=x64
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-linux-arm-gnueabihf@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-linux-arm-gnueabihf@npm:1.2.0"
+"@napi-rs/keyring-linux-arm-gnueabihf@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-linux-arm-gnueabihf@npm:1.3.0"
   conditions: os=linux & cpu=arm
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-linux-arm64-gnu@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-linux-arm64-gnu@npm:1.2.0"
+"@napi-rs/keyring-linux-arm64-gnu@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-linux-arm64-gnu@npm:1.3.0"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-linux-arm64-musl@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-linux-arm64-musl@npm:1.2.0"
+"@napi-rs/keyring-linux-arm64-musl@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-linux-arm64-musl@npm:1.3.0"
   conditions: os=linux & cpu=arm64 & libc=musl
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-linux-riscv64-gnu@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-linux-riscv64-gnu@npm:1.2.0"
+"@napi-rs/keyring-linux-riscv64-gnu@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-linux-riscv64-gnu@npm:1.3.0"
   conditions: os=linux & cpu=riscv64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-linux-x64-gnu@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-linux-x64-gnu@npm:1.2.0"
+"@napi-rs/keyring-linux-x64-gnu@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-linux-x64-gnu@npm:1.3.0"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-linux-x64-musl@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-linux-x64-musl@npm:1.2.0"
+"@napi-rs/keyring-linux-x64-musl@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-linux-x64-musl@npm:1.3.0"
   conditions: os=linux & cpu=x64 & libc=musl
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-win32-arm64-msvc@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-win32-arm64-msvc@npm:1.2.0"
+"@napi-rs/keyring-win32-arm64-msvc@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-win32-arm64-msvc@npm:1.3.0"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-win32-ia32-msvc@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-win32-ia32-msvc@npm:1.2.0"
+"@napi-rs/keyring-win32-ia32-msvc@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-win32-ia32-msvc@npm:1.3.0"
   conditions: os=win32 & cpu=ia32
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring-win32-x64-msvc@npm:1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring-win32-x64-msvc@npm:1.2.0"
+"@napi-rs/keyring-win32-x64-msvc@npm:1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring-win32-x64-msvc@npm:1.3.0"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"@napi-rs/keyring@npm:^1.1.6, @napi-rs/keyring@npm:^1.2.0":
-  version: 1.2.0
-  resolution: "@napi-rs/keyring@npm:1.2.0"
+"@napi-rs/keyring@npm:^1.3.0":
+  version: 1.3.0
+  resolution: "@napi-rs/keyring@npm:1.3.0"
   dependencies:
-    "@napi-rs/keyring-darwin-arm64": "npm:1.2.0"
-    "@napi-rs/keyring-darwin-x64": "npm:1.2.0"
-    "@napi-rs/keyring-freebsd-x64": "npm:1.2.0"
-    "@napi-rs/keyring-linux-arm-gnueabihf": "npm:1.2.0"
-    "@napi-rs/keyring-linux-arm64-gnu": "npm:1.2.0"
-    "@napi-rs/keyring-linux-arm64-musl": "npm:1.2.0"
-    "@napi-rs/keyring-linux-riscv64-gnu": "npm:1.2.0"
-    "@napi-rs/keyring-linux-x64-gnu": "npm:1.2.0"
-    "@napi-rs/keyring-linux-x64-musl": "npm:1.2.0"
-    "@napi-rs/keyring-win32-arm64-msvc": "npm:1.2.0"
-    "@napi-rs/keyring-win32-ia32-msvc": "npm:1.2.0"
-    "@napi-rs/keyring-win32-x64-msvc": "npm:1.2.0"
+    "@napi-rs/keyring-darwin-arm64": "npm:1.3.0"
+    "@napi-rs/keyring-darwin-x64": "npm:1.3.0"
+    "@napi-rs/keyring-freebsd-x64": "npm:1.3.0"
+    "@napi-rs/keyring-linux-arm-gnueabihf": "npm:1.3.0"
+    "@napi-rs/keyring-linux-arm64-gnu": "npm:1.3.0"
+    "@napi-rs/keyring-linux-arm64-musl": "npm:1.3.0"
+    "@napi-rs/keyring-linux-riscv64-gnu": "npm:1.3.0"
+    "@napi-rs/keyring-linux-x64-gnu": "npm:1.3.0"
+    "@napi-rs/keyring-linux-x64-musl": "npm:1.3.0"
+    "@napi-rs/keyring-win32-arm64-msvc": "npm:1.3.0"
+    "@napi-rs/keyring-win32-ia32-msvc": "npm:1.3.0"
+    "@napi-rs/keyring-win32-x64-msvc": "npm:1.3.0"
   dependenciesMeta:
     "@napi-rs/keyring-darwin-arm64":
       optional: true
@@ -3804,7 +3804,7 @@ __metadata:
       optional: true
     "@napi-rs/keyring-win32-x64-msvc":
       optional: true
-  checksum: 10c0/3170d7e3f9cf2468eb535378187a3c5b4ec8e1d61eba0e11cda87f6764c6e1ce7fa53ece91d903462f101894958b9478a4c2e0c43bf267d73964c2b5e65e4b7b
+  checksum: 10c0/1fdfcd04ab530e00354381a030a74f48a813fbcabcbbfb8ad5bcc49c2ff7990f76ebcdc2b3665aa1a1d12e32d9e14a420521540b037989d51037f9403d751c65
   languageName: node
   linkType: hard
 
@@ -6036,12 +6036,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@trustwallet/wallet-core@npm:^4.6.0":
-  version: 4.6.4
-  resolution: "@trustwallet/wallet-core@npm:4.6.4"
+"@trustwallet/wallet-core@npm:^4.6.7":
+  version: 4.6.7
+  resolution: "@trustwallet/wallet-core@npm:4.6.7"
   dependencies:
     protobufjs: "npm:>=6.11.3"
-  checksum: 10c0/773257b2e0f3db64100a3bb4f0cbee3712c5511964dc9f6aabe5fab688f91a95c2009e5e598cf568671fccf77115e7f857718270bbb9de33a1cd6571fa7634d0
+  checksum: 10c0/f77613ecfd6a6483ad241c6a9d5a500117dd7523ee78109b2284e1f4b1f289086a9285fa36c2528bc7c1b39ec89834f30a44cfe8f166b3ca2bdb495e8b0dd834
   languageName: node
   linkType: hard
 
@@ -6732,7 +6732,7 @@ __metadata:
     "@cosmjs/encoding": "npm:^0.38.1"
     "@cosmjs/proto-signing": "npm:^0.38.1"
     "@cosmjs/stargate": "npm:^0.38.1"
-    "@napi-rs/keyring": "npm:^1.2.0"
+    "@napi-rs/keyring": "npm:^1.3.0"
     "@noble/hashes": "npm:^2.0.1"
     "@types/inquirer": "npm:^9.0.9"
     "@types/node": "npm:^25.5.0"
@@ -6765,7 +6765,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/client-shared@workspace:packages/client-shared"
   dependencies:
-    "@napi-rs/keyring": "npm:^1.1.6"
+    "@napi-rs/keyring": "npm:^1.3.0"
     "@types/node": "npm:^25.5.0"
     "@vultisig/sdk": "workspace:^"
     inquirer: "npm:^13.4.2"
@@ -6792,7 +6792,7 @@ __metadata:
     "@solana/web3.js": "npm:^1.98.4"
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
-    "@trustwallet/wallet-core": "npm:^4.6.0"
+    "@trustwallet/wallet-core": "npm:^4.6.7"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-utils": "npm:0.10.1"
     bip32: "npm:^5.0.1"
@@ -6824,14 +6824,14 @@ __metadata:
     "@mysten/sui": "npm:^2.8.0"
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
-    "@trustwallet/wallet-core": "npm:^4.6.0"
+    "@trustwallet/wallet-core": "npm:^4.6.7"
     "@vultisig/core-chain": "npm:1.5.1"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"
     "@vultisig/lib-utils": "npm:0.10.1"
-    "@vultisig/mpc-types": "npm:0.2.2"
+    "@vultisig/mpc-types": "npm:0.2.3"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
     buffer: "npm:^6.0.3"
@@ -6890,7 +6890,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vite: "npm:^8.0.0"
     vite-plugin-electron: "npm:^0.29.1"
-    vite-plugin-electron-renderer: "npm:^0.14.6"
+    vite-plugin-electron-renderer: "npm:^0.14.7"
     wait-on: "npm:^9.0.4"
   languageName: unknown
   linkType: soft
@@ -6943,7 +6943,7 @@ __metadata:
   resolution: "@vultisig/mcp@workspace:clients/mcp"
   dependencies:
     "@modelcontextprotocol/sdk": "npm:~1.29.0"
-    "@napi-rs/keyring": "npm:^1.1.6"
+    "@napi-rs/keyring": "npm:^1.3.0"
     "@types/node": "npm:^25.5.0"
     "@vultisig/client-shared": "workspace:^"
     "@vultisig/sdk": "workspace:^"
@@ -6970,11 +6970,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/mpc-types@npm:0.2.2, @vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.2.0, @vultisig/mpc-types@workspace:packages/mpc-types":
+"@vultisig/mpc-types@npm:0.2.3, @vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.2.0, @vultisig/mpc-types@workspace:packages/mpc-types":
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   peerDependencies:
-    "@vultisig/mpc-wasm": ">=0.1.4"
+    "@vultisig/mpc-wasm": ">=0.1.5"
   peerDependenciesMeta:
     "@vultisig/mpc-wasm":
       optional: true
@@ -7005,7 +7005,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:^4.1.5"
   peerDependencies:
-    "@vultisig/sdk": ">=0.22.1"
+    "@vultisig/sdk": ">=0.22.3"
   peerDependenciesMeta:
     "@vultisig/sdk":
       optional: true
@@ -7041,7 +7041,7 @@ __metadata:
     "@solana/web3.js": "npm:^1.98.4"
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
-    "@trustwallet/wallet-core": "npm:^4.6.0"
+    "@trustwallet/wallet-core": "npm:^4.6.7"
     "@types/chrome": "npm:^0.1.27"
     "@types/events": "npm:^3"
     "@types/node": "npm:^22.13.10"
@@ -10380,12 +10380,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-simple-import-sort@npm:^12.1.1":
-  version: 12.1.1
-  resolution: "eslint-plugin-simple-import-sort@npm:12.1.1"
+"eslint-plugin-simple-import-sort@npm:^13.0.0":
+  version: 13.0.0
+  resolution: "eslint-plugin-simple-import-sort@npm:13.0.0"
   peerDependencies:
     eslint: ">=5.0.0"
-  checksum: 10c0/0ad1907ad9ddbadd1db655db0a9d0b77076e274b793a77b982c8525d808d868e6ecfce24f3a411e8a1fa551077387f9ebb38c00956073970ebd7ee6a029ce2b3
+  checksum: 10c0/f561f3483c1c18dfa2705326d38d62c62d4aeb5947ed6d1f028299c5dc668586b5ef144926e68fe187b3a937ee0159738dcbca8c286fe56f489de52fd8f9e678
   languageName: node
   linkType: hard
 
@@ -18559,10 +18559,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite-plugin-electron-renderer@npm:^0.14.6":
-  version: 0.14.6
-  resolution: "vite-plugin-electron-renderer@npm:0.14.6"
-  checksum: 10c0/1a36ec13d0cd3eecf53772251efd9d100604ae844da7bca17f4f33efab6eedc762ce4d16b8ba4842a85c87789fe07416ef98a5fc4308088c1b1ff297262556f2
+"vite-plugin-electron-renderer@npm:^0.14.7":
+  version: 0.14.7
+  resolution: "vite-plugin-electron-renderer@npm:0.14.7"
+  checksum: 10c0/f75e4a0fc6b6979877e7385e83a1ea7bd04ce17772de6a8dcb68bafbe389ac24b8c61932c5530a458bae45b3bdba74398e0e64db5eca9aeb369f89ef1aff3e6f
   languageName: node
   linkType: hard
 
@@ -18879,7 +18879,7 @@ __metadata:
     eslint-plugin-prettier: "npm:^5.5.5"
     eslint-plugin-react: "npm:^7.37.5"
     eslint-plugin-react-hooks: "npm:^7.0.1"
-    eslint-plugin-simple-import-sort: "npm:^12.1.1"
+    eslint-plugin-simple-import-sort: "npm:^13.0.0"
     eslint-plugin-storybook: "npm:^10.3.0"
     eslint-plugin-unused-imports: "npm:^4.4.1"
     globals: "npm:^17.4.0"

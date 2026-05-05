@@ -9,6 +9,7 @@ const validInput = {
   messageHash: 'bb'.repeat(32),
   addressHash: 'cc'.repeat(20),
   qbtcAddressHash: 'dd'.repeat(32),
+  pubKeyHashSha256: 'ee'.repeat(32),
 }
 
 describe('validateClaimInput', () => {
@@ -91,6 +92,12 @@ describe('validateClaimInput', () => {
     expect(() =>
       validateClaimInput({ ...validInput, qbtcAddressHash: 'aa'.repeat(16) })
     ).toThrow('qbtc_address_hash must be 64 hex chars')
+  })
+
+  it('rejects invalid pubKeyHashSha256 length', () => {
+    expect(() =>
+      validateClaimInput({ ...validInput, pubKeyHashSha256: 'aa'.repeat(16) })
+    ).toThrow('pub_key_hash_sha256 must be 64 hex chars')
   })
 })
 

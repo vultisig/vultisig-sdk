@@ -30,7 +30,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@napi-rs/keyring": "^1.1.6",
+    "@napi-rs/keyring": "^1.3.0",
     "@vultisig/sdk": "workspace:^",
     "inquirer": "^13.4.2"
   },

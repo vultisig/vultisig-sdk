@@ -1,5 +1,9 @@
-import { __resetRuntimeStoreForTesting, configureMpc, getMpcEngine, type MpcEngine } from '@vultisig/mpc-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { MpcEngine } from '../../../mpc-types/src/index'
+import { configureMpc, getMpcEngine, WASM_MPC_ENGINE_KIND } from '../../../mpc-types/src/runtime'
+import { __resetRuntimeStoreForTesting } from '../../../mpc-types/src/store'
+// Import configureMpc from mpc-types source so Vitest does not load two copies of runtime.ts.
 
 function minimalEngine(id: string): MpcEngine {
   return {
@@ -15,6 +19,7 @@ describe('configureMpc duplicate engine detection', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     process.env = { ...envSnapshot }
+    __resetRuntimeStoreForTesting()
   })
 
   afterEach(() => {
@@ -31,6 +36,47 @@ describe('configureMpc duplicate engine detection', () => {
     expect(getMpcEngine()).toBe(engine)
     expect(err).not.toHaveBeenCalled()
     expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('ignores a second distinct engine when both carry the WasmMPC brand', () => {
+    process.env.NODE_ENV = 'test'
+    Reflect.deleteProperty(process.env, 'VULTISIG_STRICT_SINGLETON')
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const branded = (id: string) => ({
+      _mpcEngineKind: WASM_MPC_ENGINE_KIND,
+      initialize: async () => {},
+      dkls: { _id: id } as unknown as MpcEngine['dkls'],
+      schnorr: { _id: id } as unknown as MpcEngine['schnorr'],
+    })
+
+    const a = branded('a')
+    const b = branded('b')
+    configureMpc(a as MpcEngine)
+    configureMpc(b as MpcEngine)
+    expect(getMpcEngine()).toBe(a)
+    expect(err).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalled()
+  })
+
+  it('still throws for two tagged Wasm engines when VULTISIG_STRICT_SINGLETON=1', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.VULTISIG_STRICT_SINGLETON = '1'
+    Reflect.deleteProperty(process.env, 'EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const branded = (id: string) => ({
+      _mpcEngineKind: WASM_MPC_ENGINE_KIND,
+      initialize: async () => {},
+      dkls: { _id: id } as unknown as MpcEngine['dkls'],
+      schnorr: { _id: id } as unknown as MpcEngine['schnorr'],
+    })
+    const a = branded('a')
+    const b = branded('b')
+    configureMpc(a as MpcEngine)
+    expect(() => configureMpc(b as MpcEngine)).toThrow(/configureMpc: duplicate MPC engine instance/)
+    expect(getMpcEngine()).toBe(a)
   })
 
   it('throws in non-production when a second distinct engine is registered', () => {

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -56,6 +56,21 @@ export function applySharedExports(packageJsonPath, distDir) {
   const exportsField = Object.fromEntries(
     [...byKey.entries()].sort(([a], [b]) => a.localeCompare(b))
   )
+
+  const sevenShim = path.join(distDir, 'compression/getSevenZip.js')
+  const sevenBrowser = path.join(distDir, 'compression/getSevenZip.browser.js')
+  const sevenNode = path.join(distDir, 'compression/getSevenZip.node.js')
+  if (existsSync(sevenShim) && existsSync(sevenBrowser) && existsSync(sevenNode)) {
+    delete exportsField['./compression/getSevenZip.browser']
+    delete exportsField['./compression/getSevenZip.node']
+    exportsField['./compression/getSevenZip'] = {
+      types: './dist/compression/getSevenZip.d.ts',
+      browser: './dist/compression/getSevenZip.browser.js',
+      node: './dist/compression/getSevenZip.node.js',
+      import: './dist/compression/getSevenZip.js',
+      default: './dist/compression/getSevenZip.js',
+    }
+  }
 
   pkg.exports = exportsField
   writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`)
