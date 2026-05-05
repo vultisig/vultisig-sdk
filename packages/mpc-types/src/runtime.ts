@@ -9,6 +9,12 @@ import { runtimeStore } from './store'
 
 const MPC_ENGINE_INSTANCE_ID = Symbol.for('vultisig.mpcEngine.instanceId')
 
+/**
+ * Tag on the default WASM MPC engine (`@vultisig/mpc-wasm`) so `configureMpc` can treat a
+ * second instance as a benign duplicate when bundlers load the platform entry in multiple chunks.
+ */
+export const WASM_MPC_ENGINE_KIND = 'vultisigWasmMpcEngine' as const
+
 const MPC_SINGLETON_POSTMORTEM =
   'https://github.com/vultisig/vultisig-windows/issues/3777 (MPC runtime singleton / duplicate engine)'
 
@@ -44,6 +50,16 @@ function engineConstructorName(engine: object): string {
   const ctor = (engine as { constructor?: { name?: string } }).constructor
   const name = ctor?.name
   return typeof name === 'string' && name.length > 0 ? name : 'Object'
+}
+
+function isTaggedWasmMpcEngine(engine: object): boolean {
+  try {
+    return (
+      (engine as { _mpcEngineKind?: string })._mpcEngineKind === WASM_MPC_ENGINE_KIND
+    )
+  } catch {
+    return false
+  }
 }
 
 function duplicateConfigureOriginHint(): string {
@@ -83,6 +99,20 @@ function shouldThrowOnDuplicateMpcConfigure(): boolean {
     return true
   }
   return nodeEnv !== 'production'
+}
+
+/** `VULTISIG_STRICT_SINGLETON=1` / Expo alias — not the default dev NODE_ENV strictness. */
+function isExplicitStrictSingletonDuplicateMode(): boolean {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      const strict =
+        process.env.VULTISIG_STRICT_SINGLETON ?? process.env.EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON
+      return strict === '1'
+    }
+  } catch {
+    // ignore
+  }
+  return false
 }
 
 function reportDuplicateMpcEngine(existing: object, incoming: MpcEngine): void {
@@ -144,6 +174,29 @@ export function configureMpc(engine: MpcEngine): void {
   if (prev === engine) {
     return
   }
+  // Dual tagged WasmMpcEngine: keep the first registration when not in strict duplicate
+  // mode. (Non-tagged duplicate engines below still follow the legacy rule: production
+  // overwrites with the incoming engine.)
+  if (
+    prev !== null &&
+    isTaggedWasmMpcEngine(prev as object) &&
+    isTaggedWasmMpcEngine(engine as object)
+  ) {
+    if (isExplicitStrictSingletonDuplicateMode()) {
+      reportDuplicateMpcEngine(prev as object, engine)
+      throw new Error(
+        'configureMpc: duplicate MPC engine instance. ' +
+          `Unset process.env.VULTISIG_STRICT_SINGLETON=1 (or EXPO_PUBLIC_VULTISIG_STRICT_SINGLETON=1 for Expo / React Native consumers) to allow duplicate WasmMpcEngine registrations to warn and keep the first engine. ${MPC_SINGLETON_POSTMORTEM}`
+      )
+    }
+    // Two WasmMpcEngine instances (e.g. duplicate Vite/Rollup chunks each importing the
+    // platform entry) are redundant — keep the first registered engine.
+    console.warn(
+      'configureMpc: ignoring duplicate WasmMpcEngine registration (bundler duplicate chunk / repeated platform init). ' +
+        MPC_SINGLETON_POSTMORTEM
+    )
+    return
+  }
   if (prev !== null) {
     reportDuplicateMpcEngine(prev as object, engine)
     if (shouldThrowOnDuplicateMpcConfigure()) {
@@ -190,12 +243,13 @@ export async function ensureMpcEngine(): Promise<MpcEngine> {
   try {
     mod = await import('@vultisig/mpc-wasm')
   } catch (cause) {
-    throw new Error(
+    const error = new Error(
       'MPC engine not configured and @vultisig/mpc-wasm is not installed. ' +
         'Either install @vultisig/mpc-wasm, or call configureMpc(...) before any MPC operation. ' +
-        'See https://github.com/vultisig/vultisig-sdk/issues/287.',
-      { cause: cause as Error }
+        'See https://github.com/vultisig/vultisig-sdk/issues/287.'
     )
+    Object.assign(error, { cause })
+    throw error
   }
   configureMpc(new mod.WasmMpcEngine())
   return runtimeStore().mpcEngine as MpcEngine
