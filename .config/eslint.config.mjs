@@ -2,7 +2,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { fixupPluginRules } from '@eslint/compat'
+import { fixupConfigRules, fixupPluginRules } from '@eslint/compat'
 import { FlatCompat } from '@eslint/eslintrc'
 import js from '@eslint/js'
 import typescriptEslint from '@typescript-eslint/eslint-plugin'
@@ -53,12 +53,14 @@ export default [
       '**/public/wallet-core.wasm',
     ],
   },
-  ...compat.extends(
-    'eslint:recommended',
-    'plugin:react/recommended',
-    'plugin:@typescript-eslint/recommended',
-    'plugin:jsx-a11y/recommended',
-    'prettier' // eslint-config-prettier: disables ESLint rules that conflict with Prettier
+  ...fixupConfigRules(
+    compat.extends(
+      'eslint:recommended',
+      'plugin:react/recommended',
+      'plugin:@typescript-eslint/recommended',
+      'plugin:jsx-a11y/recommended',
+      'prettier' // eslint-config-prettier: disables ESLint rules that conflict with Prettier
+    )
   ),
   {
     plugins: {
@@ -119,6 +121,10 @@ export default [
         },
       ],
       '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
+
+      // ESLint 10 added these to recommended; opt-out until codebase adopts them
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
     },
   }, // Override for declaration files where interfaces are required for module augmentation
   {
