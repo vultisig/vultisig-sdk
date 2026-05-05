@@ -104,7 +104,7 @@
     "@changesets/cli": "^2.30.0",
     "@eslint/compat": "^2.0.3",
     "@eslint/eslintrc": "^3.3.5",
-    "@eslint/js": "^9.22.0",
+    "@eslint/js": "^10.0.1",
     "@google-cloud/translate": "^9.3.0",
     "@react-native-async-storage/async-storage": "^3.0.1",
     "@rollup/plugin-commonjs": "^29.0.2",
