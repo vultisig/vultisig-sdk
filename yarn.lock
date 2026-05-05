@@ -6831,7 +6831,7 @@ __metadata:
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"
     "@vultisig/lib-utils": "npm:0.10.1"
-    "@vultisig/mpc-types": "npm:0.2.2"
+    "@vultisig/mpc-types": "npm:0.2.3"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
     buffer: "npm:^6.0.3"
@@ -6970,7 +6970,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/mpc-types@npm:0.2.2, @vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.2.0, @vultisig/mpc-types@workspace:packages/mpc-types":
+"@vultisig/mpc-types@npm:0.2.3, @vultisig/mpc-types@workspace:*, @vultisig/mpc-types@workspace:^0.2.0, @vultisig/mpc-types@workspace:packages/mpc-types":
   version: 0.0.0-use.local
   resolution: "@vultisig/mpc-types@workspace:packages/mpc-types"
   peerDependencies:
@@ -7005,7 +7005,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:^4.1.5"
   peerDependencies:
-    "@vultisig/sdk": ">=0.22.1"
+    "@vultisig/sdk": ">=0.22.2"
   peerDependenciesMeta:
     "@vultisig/sdk":
       optional: true
