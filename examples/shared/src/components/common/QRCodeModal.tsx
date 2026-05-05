@@ -76,12 +76,13 @@ export default function QRCodeModal({
 
         {/* Copyable URL */}
         <div className="w-full">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
+          <div className="flex items-start gap-2">
+            <textarea
               value={qrData}
               readOnly
-              className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded px-3 py-2 font-mono truncate"
+              rows={4}
+              spellCheck={false}
+              className="flex-1 min-h-[5.5rem] text-xs bg-gray-50 border border-gray-200 rounded px-3 py-2 font-mono break-all resize-y max-h-40"
             />
             <button
               type="button"

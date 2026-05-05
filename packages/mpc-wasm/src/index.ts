@@ -5,31 +5,31 @@
  * Wraps the existing wasm-bindgen JS wrappers (vs_wasm.js, vs_schnorr_wasm.js).
  * Used by browser, Node.js, Electron, and Chrome Extension platforms.
  */
-import type {
-  MpcEngine,
-  DklsEngine,
-  SchnorrEngine,
-  MpcSession,
-  MpcKeyshare,
-  MpcMessage,
+import {
+  WASM_MPC_ENGINE_KIND,
+  type DklsEngine,
+  type MpcEngine,
+  type MpcKeyshare,
+  type MpcMessage,
+  type MpcSession,
+  type SchnorrEngine,
 } from '@vultisig/mpc-types'
 
 import initDkls, {
   KeygenSession as DklsKeygenSession,
-  SignSession as DklsSignSession,
-  Keyshare as DklsKeyshare,
-  QcSession as DklsQcSession,
   KeyImportInitiator as DklsKeyImportInitiator,
   KeyImportSession as DklsKeyImportSession,
+  Keyshare as DklsKeyshare,
+  QcSession as DklsQcSession,
+  SignSession as DklsSignSession,
 } from '@vultisig/lib-dkls/vs_wasm'
-
 import initSchnorr, {
   KeygenSession as SchnorrKeygenSession,
-  SignSession as SchnorrSignSession,
-  Keyshare as SchnorrKeyshare,
-  QcSession as SchnorrQcSession,
   KeyImportInitiator as SchnorrKeyImportInitiator,
   KeyImportSession as SchnorrKeyImportSession,
+  Keyshare as SchnorrKeyshare,
+  QcSession as SchnorrQcSession,
+  SignSession as SchnorrSignSession,
 } from '@vultisig/lib-schnorr/vs_schnorr_wasm'
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ function wrapKeyshare(ks: DklsKeyshare | SchnorrKeyshare): MpcKeyshare {
 // ---------------------------------------------------------------------------
 
 /** A WASM session object that follows the message-loop pattern. */
-interface WasmSessionLike {
+type WasmSessionLike = {
   outputMessage(): { body: Uint8Array; receivers: string[] } | undefined
   inputMessage(msg: Uint8Array): boolean
   free?(): void
@@ -285,6 +285,8 @@ class WasmSchnorrEngine implements SchnorrEngine {
 // ---------------------------------------------------------------------------
 
 export class WasmMpcEngine implements MpcEngine {
+  readonly _mpcEngineKind = WASM_MPC_ENGINE_KIND
+
   readonly dkls: DklsEngine = new WasmDklsEngine()
   readonly schnorr: SchnorrEngine = new WasmSchnorrEngine()
 

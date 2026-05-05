@@ -1,5 +1,14 @@
 # @vultisig/mpc-wasm
 
+## 0.1.5
+
+### Patch Changes
+
+- [#379](https://github.com/vultisig/vultisig-sdk/pull/379) [`ed6955f`](https://github.com/vultisig/vultisig-sdk/commit/ed6955fe6d218b3b13314db32f8d43c67a41fb48) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Treat a second `WasmMpcEngine` `configureMpc` registration as a no-op when bundlers evaluate the platform entry in multiple chunks (Chrome extension / Vite), preventing dev-time throws and broken signing.
+
+- Updated dependencies [[`ed6955f`](https://github.com/vultisig/vultisig-sdk/commit/ed6955fe6d218b3b13314db32f8d43c67a41fb48)]:
+  - @vultisig/mpc-types@0.2.3
+
 ## 0.1.4
 
 ### Patch Changes

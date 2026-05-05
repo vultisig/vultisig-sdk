@@ -206,7 +206,13 @@ export class BrowserSDKAdapter implements ISDKAdapter {
             })
           }
         : undefined,
-      onQRCodeReady: options.onQRCodeReady,
+      onQRCodeReady: (qrPayload: string) => {
+        if (import.meta.env.DEV) {
+          ;(window as Window & { __VULTISIG_LAST_KEYGEN_QR__?: string }).__VULTISIG_LAST_KEYGEN_QR__ = qrPayload
+          console.info('VULTISIG_KEYGEN_QR', qrPayload)
+        }
+        options.onQRCodeReady?.(qrPayload)
+      },
       onDeviceJoined: options.onDeviceJoined,
     })
     this.vaultCache.set(result.vault.id, result.vault)
