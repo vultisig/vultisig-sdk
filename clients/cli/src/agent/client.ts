@@ -54,6 +54,7 @@ function sseErrorToMessage(value: unknown): string {
 export class AgentClient {
   private baseUrl: string
   private authToken: string | null = null
+  private profile: string = ''
   verbose = false
 
   constructor(baseUrl: string) {
@@ -64,6 +65,16 @@ export class AgentClient {
     this.authToken = token
   }
 
+  /** Set the billing-profile slug sent as X-Vultisig-Abe-Profile on every
+   *  request. Empty falls back to the backend's default profile. */
+  setProfile(profile: string): void {
+    this.profile = profile
+  }
+
+  private profileHeader(): Record<string, string> {
+    return this.profile ? { 'X-Vultisig-Abe-Profile': this.profile } : {}
+  }
+
   // ============================================================================
   // Authentication
   // ============================================================================
@@ -71,7 +82,7 @@ export class AgentClient {
   async authenticate(req: AuthTokenRequest): Promise<AuthTokenResponse> {
     const res = await fetch(`${this.baseUrl}/auth/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
       body: JSON.stringify(req),
     })
     if (!res.ok) {
@@ -159,6 +170,7 @@ export class AgentClient {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
         ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+        ...this.profileHeader(),
       },
       body: JSON.stringify(req),
       signal,
@@ -420,6 +432,7 @@ export class AgentClient {
       headers: {
         'Content-Type': 'application/json',
         ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+        ...this.profileHeader(),
       },
       body: JSON.stringify(body),
     })
@@ -438,6 +451,7 @@ export class AgentClient {
       headers: {
         'Content-Type': 'application/json',
         ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+        ...this.profileHeader(),
       },
       body: JSON.stringify(body),
     })

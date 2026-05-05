@@ -28,6 +28,7 @@ export type AgentCommandOptions = {
   sessionId?: string
   verbose?: boolean
   notificationUrl?: string
+  profile?: string
 }
 
 export async function executeAgent(ctx: CommandContext, options: AgentCommandOptions): Promise<void> {
@@ -42,6 +43,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     sessionId: options.sessionId,
     verbose: options.verbose,
     notificationUrl: options.notificationUrl || process.env.VULTISIG_NOTIFICATION_URL || '',
+    profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
   }
 
   const session = new AgentSession(vault, config)
@@ -86,6 +88,7 @@ export type AgentAskOptions = {
   session?: string
   verbose?: boolean
   json?: boolean
+  profile?: string
 }
 
 /**
@@ -123,6 +126,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
       sessionId: options.session,
       verbose: options.verbose,
       askMode: true,
+      profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
     }
 
     const session = new AgentSession(vault, config)

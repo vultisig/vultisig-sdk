@@ -28,6 +28,9 @@ export type AgentConfig = {
   verbose?: boolean
   /** Notification service URL for push notifications (empty = disabled) */
   notificationUrl?: string
+  /** Billing profile api_id slug — sent as X-Vultisig-Abe-Profile header.
+   *  Empty falls back to the backend's default profile. */
+  profile?: string
 }
 
 // ============================================================================
