@@ -1,5 +1,15 @@
 # @vultisig/core-chain
 
+## 1.5.2
+
+### Patch Changes
+
+- [#356](https://github.com/vultisig/vultisig-sdk/pull/356) [`b97da23`](https://github.com/vultisig/vultisig-sdk/commit/b97da233b3fdaeeb75e3a0c986d7fd15e0d743e4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Rank swap quotes by comparable destination-token amount across eligible providers instead of using the first successful provider. Native THORChain/Maya quotes are re-based from swap API precision (`getNativeSwapDecimals`) to the destination coin decimals before comparison with aggregator `dstAmount`.
+
+- [#383](https://github.com/vultisig/vultisig-sdk/pull/383) [`745172f`](https://github.com/vultisig/vultisig-sdk/commit/745172f3ee511bc4e95914986bfbdb8acf794b1e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Migrate THORChain Midgard, THORNode REST, and Tendermint RPC endpoints from the legacy `*.thorchain.network` hosts to the Liquify gateway (`gateway.liquify.com/chain/thorchain_midgard`, `…/thorchain_api`, `…/thorchain_rpc`). Updated `cosmosRpcUrl.THORChain`, `tendermintRpcUrl.THORChain`, `thorchainMidgardBaseUrl`, and the rujira `MAINNET_CONFIG` endpoints accordingly.
+
+  In `RujiraDiscovery.discoverViaChain()`, replaced the brittle `rpc → thornode` string substitution with a direct read of `MAINNET_CONFIG.restEndpoint`. Under the new gateway routing the substitution silently produced an invalid host (`thorchain_thornode`) and the fallback branch was unreachable. Removed the now-unused `rpcEndpoint` option from `DiscoveryOptions` and the corresponding plumbing in `RujiraClient`.
+
 ## 1.5.1
 
 ### Patch Changes
