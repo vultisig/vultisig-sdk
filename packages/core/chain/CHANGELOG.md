@@ -1,5 +1,36 @@
 # @vultisig/core-chain
 
+## 1.5.1
+
+### Patch Changes
+
+- [#319](https://github.com/vultisig/vultisig-sdk/pull/319) [`03007d7`](https://github.com/vultisig/vultisig-sdk/commit/03007d7293b2f51f6269d39bf3725715182f933e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - fix(chain): THORChain native swap `streaming_interval` 0 (Rapid Swaps)
+
+  THORChain can serve swaps in a single block and auto-stream when needed.
+  Using `1` forced streaming; `0` lets the protocol choose. MayaChain
+  unchanged (`3`).
+
+  Refs: https://github.com/vultisig/vultisig-windows/issues/3613
+
+## 1.5.0
+
+### Minor Changes
+
+- [#320](https://github.com/vultisig/vultisig-sdk/pull/320) [`c33d1f0`](https://github.com/vultisig/vultisig-sdk/commit/c33d1f02b6740ef1c7db16cdc1f7290ec7b2f1f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - feat(chain): THORChain rapid quote with streaming fallback above 3% fee bps
+
+  THORChain swap quotes now request rapid (`streaming_interval=0`) first. When `fees.total_bps` exceeds 300, a second streaming quote is fetched (`interval=1`, optional `streaming_quantity` from `max_streaming_quantity`); the better `expected_amount_out` wins, with silent fallback to rapid on errors. `THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS` disables the extra fetch when set to `Number.MAX_SAFE_INTEGER`. Keysign payload reads THOR streaming fields from the quote memo so they match the selected route.
+
+### Patch Changes
+
+- Updated dependencies [[`a52980c`](https://github.com/vultisig/vultisig-sdk/commit/a52980c490633da7d7ae36128bc491f8ca3ff565)]:
+  - @vultisig/lib-utils@0.10.1
+
+## 1.4.3
+
+### Patch Changes
+
+- [#360](https://github.com/vultisig/vultisig-sdk/pull/360) [`e52914b`](https://github.com/vultisig/vultisig-sdk/commit/e52914ba87f2d740847fc0de3a49827b0da3e0ba) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - `@vultisig/core-chain`: lift the qbtc protobuf wire-format helpers to a shared `chains/cosmos/protoEncoding` module (extending it with lower-level `varintBig` / `protoField` primitives that don't apply proto3 default-elision, alongside the existing default-eliding `protoVarint` / `protoBytes` / `protoString`), and add `chains/cosmos/terraClassicTax` with LCD fetchers (`getTerraClassicTaxRate`, `getTerraClassicTaxCap`) plus the pure `applyTerraClassicTax` helper for the cosmos-sdk Dec-fixed-point math. Tax rate is `0` on the live chain today (governance-paused) but the helpers are ready for callers that need to be correct when it reactivates. The previous `qbtc/protoEncoding` package export is replaced by `cosmos/protoEncoding`; the qbtc consumers were updated in lockstep, no behavior change.
+
 ## 1.4.2
 
 ### Patch Changes

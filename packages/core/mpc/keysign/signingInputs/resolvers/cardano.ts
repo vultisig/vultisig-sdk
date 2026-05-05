@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { fromCardanoAssetId } from '@vultisig/core-chain/chains/cardano/asset/cardanoAssetId'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -42,9 +42,10 @@ function startDevServer() {
     child.once('close', resolve)
   })
   const waitForUrl = new Promise((resolve, reject) => {
+    const startTimeoutMs = 180_000
     const timeout = setTimeout(() => {
       reject(new Error(`Timed out waiting for browser example dev server\n\n${output.trim()}`))
-    }, 60_000)
+    }, startTimeoutMs)
 
     const onData = chunk => {
       output += chunk.toString()
@@ -92,6 +93,15 @@ async function assertWasmResponse(baseUrl, pathname) {
   assert.ok((await response.arrayBuffer()).byteLength > 0, `expected ${pathname} to have a non-empty body`)
 }
 
+test('browser example prepare recreates missing shared package artifacts', { timeout: 180_000 }, () => {
+  const mpcWasmDist = path.join(repoRoot, 'packages/mpc-wasm/dist')
+  rmSync(mpcWasmDist, { recursive: true, force: true })
+
+  run('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk'])
+
+  assert.ok(existsSync(path.join(mpcWasmDist, 'index.js')), 'expected prepare:sdk to rebuild mpc-wasm dist')
+})
+
 test('browser example builds against the local SDK workspace package', { timeout: 180_000 }, () => {
   run('yarn', ['workspace', '@vultisig/example-browser', 'build'])
 
@@ -105,7 +115,7 @@ test('browser example builds against the local SDK workspace package', { timeout
   )
 })
 
-test('browser example dev server serves SDK wasm assets', { timeout: 90_000 }, async () => {
+test('browser example dev server serves SDK wasm assets', { timeout: 240_000 }, async () => {
   const server = startDevServer()
   try {
     const baseUrl = await server.waitForUrl

@@ -5,8 +5,8 @@
  * Handles balance queries, transaction building, signing, and broadcasting.
  */
 import type { GetThorchainPoolsOptions, VaultAddressMap } from '@vultisig/core-chain/chains/cosmos/thor/lp'
-import type { EvmChain, FiatCurrency, VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, evmCall, fiatCurrencies, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import type { EvmChain, VaultBase, Vultisig } from '@vultisig/sdk'
+import { Chain, evmCall, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
@@ -180,8 +180,6 @@ export class AgentExecutor {
     switch (action.type) {
       case 'get_balances':
         return this.getBalances(params)
-      case 'get_portfolio':
-        return this.getPortfolio(params)
       case 'add_chain':
         return this.addChain(params)
       case 'remove_chain':
@@ -257,46 +255,6 @@ export class AgentExecutor {
     }
 
     return { balances: entries }
-  }
-
-  private async getPortfolio(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const currencyRaw = String(params.currency ?? 'USD')
-      .trim()
-      .toLowerCase()
-    const fiatCurrency: FiatCurrency = (fiatCurrencies as readonly string[]).includes(currencyRaw)
-      ? (currencyRaw as FiatCurrency)
-      : 'usd'
-
-    const portfolio = await this.vault.portfolio(fiatCurrency)
-
-    const chainFilter = params.chain as string | undefined
-    const tickerFilter = params.ticker as string | undefined
-
-    let rows = portfolio.balances.map(b => ({
-      chain: b.chainId || '',
-      symbol: b.symbol || '',
-      amount: b.formattedAmount || b.amount?.toString() || '0',
-      decimals: b.decimals ?? 18,
-      raw_amount: b.amount,
-      fiatValue: b.fiatValue,
-      fiatCurrency: b.fiatCurrency ?? portfolio.currency,
-    }))
-
-    if (chainFilter) {
-      const chain = resolveChain(chainFilter)
-      if (!chain) throw new Error(`Unknown chain: ${chainFilter}`)
-      rows = rows.filter(r => r.chain.toLowerCase() === chain.toLowerCase())
-    }
-
-    if (tickerFilter) {
-      rows = rows.filter(r => r.symbol.toLowerCase() === String(tickerFilter).toLowerCase())
-    }
-
-    return {
-      balances: rows,
-      totalValue: portfolio.totalValue,
-      currency: portfolio.currency,
-    }
   }
 
   // ============================================================================
@@ -1340,8 +1298,18 @@ export class AgentExecutor {
     if (nextNonce !== rpcNonce) {
       // Grace period: if we broadcast recently, the previous tx is likely still in
       // the mempool. Don't reset the nonce — trust the local state.
+      //
+      // 30s sized to cover the natural latency of LLM-mediated multi-tx flows
+      // (turn 1 sign + broadcast + agent-backend round-trip + turn 2 sign typically
+      // 20–35s end-to-end). The original 15s assumption — "one Ethereum block,
+      // tx is mined or evicted by then" — undersizes for this flow because the
+      // RPC's mempool view of a just-broadcast tx isn't necessarily visible via
+      // getTransactionCount(pending) for ~30s, even when broadcast went through
+      // the same RPC. Tradeoff: a genuinely-evicted tx within the 30s window
+      // would cause the next sign to use a stuck nonce instead of recovering;
+      // STATE_TTL_MS (10 min) bounds the worst case. See vultisig-sdk#357.
       const lastBroadcast = this.evmLastBroadcast.get(chain.toString()) ?? 0
-      if (Date.now() - lastBroadcast < 15_000) {
+      if (Date.now() - lastBroadcast < 30_000) {
         if (this.verbose)
           process.stderr.write(
             `[nonce] Keeping local nonce ${nextNonce} for ${chain} (broadcast ${Date.now() - lastBroadcast}ms ago)\n`

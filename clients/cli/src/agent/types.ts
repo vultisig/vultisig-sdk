@@ -332,7 +332,6 @@ export const AUTO_EXECUTE_ACTIONS = new Set([
   'address_book_remove',
   'get_address_book',
   'get_balances',
-  'get_portfolio',
   'search_token',
   'list_vaults',
   'build_swap_tx',

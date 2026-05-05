@@ -10,6 +10,7 @@
     "noEmit": false,
     "emitDeclarationOnly": false,
     "outDir": "./dist",
+    "rootDir": "./src",
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,

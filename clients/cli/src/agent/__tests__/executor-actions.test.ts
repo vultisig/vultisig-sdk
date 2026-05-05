@@ -31,24 +31,6 @@ function minimalVault(): VaultBase {
 }
 
 describe('AgentExecutor agent actions', () => {
-  it('get_portfolio returns totalValue and fiatValue from vault.portfolio', async () => {
-    const vault = minimalVault()
-    const ex = new AgentExecutor(vault, false, undefined, undefined)
-    const r = await ex.executeAction({
-      id: '1',
-      type: 'get_portfolio',
-      title: 't',
-      description: 'd',
-      params: { currency: 'USD' },
-    })
-    expect(r.success).toBe(true)
-    const d = r.data as { totalValue: string; balances: Array<{ fiatValue?: number; symbol: string }> }
-    expect(d.totalValue).toBe('100.00')
-    expect(d.balances[0].fiatValue).toBe(100)
-    expect(d.balances[0].symbol).toBe('ETH')
-    expect(vault.portfolio).toHaveBeenCalled()
-  })
-
   it('search_token returns registry matches for Ethereum', async () => {
     const ex = new AgentExecutor(minimalVault(), false, undefined, undefined)
     const r = await ex.executeAction({

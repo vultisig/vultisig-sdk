@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import crypto from 'crypto'
 
 const GCM_TAG_LEN = 16

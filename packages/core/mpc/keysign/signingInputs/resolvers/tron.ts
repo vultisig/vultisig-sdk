@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'

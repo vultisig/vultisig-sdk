@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import base58 from 'bs58'

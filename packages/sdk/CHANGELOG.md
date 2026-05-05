@@ -1,5 +1,36 @@
 # @vultisig/sdk
 
+## 0.22.3
+
+### Patch Changes
+
+- [#405](https://github.com/vultisig/vultisig-sdk/pull/405) [`441f5bb`](https://github.com/vultisig/vultisig-sdk/commit/441f5bb9022321023a65d28a5941717ac7542bee) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(ustc): dynamic burn-tax for TerraClassic USTC sends, case-insensitive coin id check
+
+  Replaces the hardcoded 1,000,000 uusd fee surcharge with a live LCD `tax_rate` + optional `tax_cap` query for TerraClassic USTC (uusd) sends.
+  - `computeUstcBurnTaxAmount()` fetches on-chain rate and cap, returns '0' when rate is zero (current post-UST-collapse governance state)
+  - Fail-open on LCD outage: falls back to '0' so sends are never blocked when burn tax is zero; ante handler rejects if rate is non-zero and LCD is down
+  - Case-insensitive `coin.id?.toLowerCase() === 'uusd'` guard to match `areEqualCoins` behavior
+  - 5 unit tests covering: rate=0, rate=1.2%, rate+cap, LCD outage, LUNC non-USTC exclusion
+
+## 0.22.2
+
+### Patch Changes
+
+- [#371](https://github.com/vultisig/vultisig-sdk/pull/371) [`b713743`](https://github.com/vultisig/vultisig-sdk/commit/b7137437547afc8189af207f210be57f50973dc7) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Install `globalThis.Buffer` before the browser SDK module graph evaluates (`preamble.ts`), align browser `polyfills` with `globalThis`, add explicit `buffer` imports across MPC modules that use `Buffer`, and depend on `buffer` from `@vultisig/core-mpc`. Harden the browser/electron examples: seedphrase import batching/progress and adapter flags, clipboard helper with bounded timeouts, QR/address copy feedback, and send-form amount validation with trimmed recipients.
+
+- [#379](https://github.com/vultisig/vultisig-sdk/pull/379) [`ed6955f`](https://github.com/vultisig/vultisig-sdk/commit/ed6955fe6d218b3b13314db32f8d43c67a41fb48) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Treat a second `WasmMpcEngine` `configureMpc` registration as a no-op when bundlers evaluate the platform entry in multiple chunks (Chrome extension / Vite), preventing dev-time throws and broken signing.
+
+- Updated dependencies [[`ed6955f`](https://github.com/vultisig/vultisig-sdk/commit/ed6955fe6d218b3b13314db32f8d43c67a41fb48)]:
+  - @vultisig/mpc-types@0.2.3
+
+## 0.22.1
+
+### Patch Changes
+
+- [#361](https://github.com/vultisig/vultisig-sdk/pull/361) [`a52980c`](https://github.com/vultisig/vultisig-sdk/commit/a52980c490633da7d7ae36128bc491f8ca3ff565) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Build shared workspace packages before bundling the SDK (`yarn build:sdk`). The browser example prepare step now rebuilds shared `dist` outputs when missing or stale, and shared utilities now import `Buffer` explicitly so browser apps do not crash during module evaluation.
+
+- [#364](https://github.com/vultisig/vultisig-sdk/pull/364) [`d49b3e8`](https://github.com/vultisig/vultisig-sdk/commit/d49b3e82e153cf77282cbf06fdf72d9bb37cc836) Thanks [@premiumjibles](https://github.com/premiumjibles)! - `@vultisig/sdk`: re-export `getTxStatus` from `@vultisig/core-chain/tx/status` as a top-level standalone helper alongside `getCoinBalance` and `getPublicKey`. The dispatcher is stateless (`{ chain, hash }` → `TxStatusResult`) and was already compiled into every platform bundle, but was previously only reachable via the `vault.getTxStatus(...)` instance method on `VaultBase`. Vault-free callers (CLI, RN apps that store vault data outside `VaultManager`) can now poll receipts without instantiating an abstract `VaultBase` subclass purely to use a stateless lookup. `TxStatusResult` / `TxReceiptInfo` were already exported as types — this just adds the runtime function.
+
 ## 0.22.0
 
 ### Minor Changes
