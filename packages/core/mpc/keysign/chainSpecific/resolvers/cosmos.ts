@@ -51,7 +51,7 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<
   // dynamically. Encoded in baseDenom so the sync signing-inputs resolver
   // can use it without an async LCD call. Falls back to '0' when the tax
   // rate is zero (current on-chain state post-UST-collapse governance).
-  const isUstcSend = coin.chain === Chain.TerraClassic && coin.id === 'uusd'
+  const isUstcSend = coin.chain === Chain.TerraClassic && coin.id?.toLowerCase() === 'uusd'
   let burnTaxBaseDenom = ''
   if (isUstcSend) {
     try {
