@@ -47,7 +47,8 @@ repositories {
             username = System.getenv("GITHUB_USER")
                 ?: System.getenv("GITHUB_ACTOR")
                 ?: "token"
-            password = System.getenv("GITHUB_TOKEN")
+            password = System.getenv("TRUSTWALLET_PAT")
+                ?: System.getenv("GITHUB_TOKEN")
                 ?: System.getenv("GH_TOKEN")
                 ?: ""
         }
