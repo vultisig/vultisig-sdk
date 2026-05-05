@@ -37,6 +37,8 @@ import { getCosmosChainSpecific } from './cosmos.js'
 // Helpers
 // ---------------------------------------------------------------------------
 
+const mockWalletCore = {} as any
+
 // Keysign protobuf Coin uses `contractAddress` for the denom id.
 // fromCommCoin maps it to AccountCoin.id = contractAddress || undefined.
 function makeUstcPayload(toAmount: string) {
@@ -81,6 +83,7 @@ describe('getCosmosChainSpecific — USTC burn-tax baseDenom encoding', () => {
     const result = await getCosmosChainSpecific({
       keysignPayload: makeUstcPayload('10000000'),
       transactionType: 0 as any,
+      walletCore: mockWalletCore,
     })
 
     expect(result.ibcDenomTraces?.baseDenom).toBe('0')
@@ -96,6 +99,7 @@ describe('getCosmosChainSpecific — USTC burn-tax baseDenom encoding', () => {
     const result = await getCosmosChainSpecific({
       keysignPayload: makeUstcPayload('10000000'),
       transactionType: 0 as any,
+      walletCore: mockWalletCore,
     })
 
     expect(result.ibcDenomTraces?.baseDenom).toBe('120000')
@@ -108,6 +112,7 @@ describe('getCosmosChainSpecific — USTC burn-tax baseDenom encoding', () => {
     const result = await getCosmosChainSpecific({
       keysignPayload: makeUstcPayload('10000000'),
       transactionType: 0 as any,
+      walletCore: mockWalletCore,
     })
 
     expect(result.ibcDenomTraces?.baseDenom).toBe('50000')
@@ -119,6 +124,7 @@ describe('getCosmosChainSpecific — USTC burn-tax baseDenom encoding', () => {
     const result = await getCosmosChainSpecific({
       keysignPayload: makeUstcPayload('10000000'),
       transactionType: 0 as any,
+      walletCore: mockWalletCore,
     })
 
     // $0.02 under-fee better than blocked tx when rate is currently 0.
@@ -129,6 +135,7 @@ describe('getCosmosChainSpecific — USTC burn-tax baseDenom encoding', () => {
     const result = await getCosmosChainSpecific({
       keysignPayload: makeLuncPayload('10000000'),
       transactionType: 0 as any,
+      walletCore: mockWalletCore,
     })
 
     expect(getTerraClassicTaxRate).not.toHaveBeenCalled()
