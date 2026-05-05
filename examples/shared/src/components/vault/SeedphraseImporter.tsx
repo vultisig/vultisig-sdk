@@ -107,6 +107,7 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
     }
 
     setIsLoading(true)
+    setKeygenProgress(null)
 
     try {
       const result = await sdk.createFastVaultFromSeedphrase({
@@ -116,6 +117,8 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
         password: formData.password,
         discoverChains,
         usePhantomSolanaPath,
+        tssBatching: true,
+        onProgress: setKeygenProgress,
       })
 
       setVaultId(result.vaultId)
@@ -295,6 +298,11 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
             {isValidWordCount && validation?.valid && ' ✓'}
           </span>
         </div>
+        {wordCount > 0 && !isValidWordCount && (
+          <div className="text-error text-sm bg-red-50 p-3 rounded mt-2">
+            Recovery phrase must be exactly 12 or 24 words.
+          </div>
+        )}
       </div>
 
       <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -370,10 +378,23 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
         required
       />
 
+      {isLoading && keygenProgress && (
+        <div className="text-sm bg-blue-50 border border-blue-100 rounded p-3" role="status" aria-live="polite">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <span className="font-medium text-blue-900">Importing seedphrase</span>
+            <span className="text-blue-700">{keygenProgress.progress}%</span>
+          </div>
+          <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden mb-2">
+            <div className="h-full bg-primary transition-all" style={{ width: `${keygenProgress.progress}%` }} />
+          </div>
+          <p className="text-blue-800">{keygenProgress.message}</p>
+        </div>
+      )}
+
       {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
 
       <div className="flex gap-2">
-        <Button variant="secondary" onClick={() => setStep('seedphrase')}>
+        <Button type="button" variant="secondary" disabled={isLoading} onClick={() => setStep('seedphrase')}>
           Back
         </Button>
         <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>
@@ -425,7 +446,7 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
       {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
 
       <div className="flex gap-2">
-        <Button variant="secondary" onClick={() => setStep('seedphrase')}>
+        <Button type="button" variant="secondary" disabled={isLoading} onClick={() => setStep('seedphrase')}>
           Back
         </Button>
         <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>

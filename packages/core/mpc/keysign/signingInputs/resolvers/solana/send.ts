@@ -1,5 +1,6 @@
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 import Long from 'long'
 
@@ -23,9 +24,17 @@ export const getSolanaSendSigningInput = ({
     toTokenAssociatedAddress,
     programId,
     computeLimit,
+    priorityFee,
   } = getBlockchainSpecificValue(
     keysignPayload.blockchainSpecific,
     'solanaSpecific'
+  )
+
+  // Floor at the config minimum so co-signers all encode the same
+  // `setComputeUnitPrice` instruction when the wire value is missing.
+  const priorityFeePrice = maxBigInt(
+    priorityFee ? BigInt(priorityFee) : 0n,
+    BigInt(solanaConfig.priorityFeePrice)
   )
 
   const amount = BigInt(keysignPayload.toAmount)
@@ -54,6 +63,7 @@ export const getSolanaSendSigningInput = ({
         amount: Long.fromString(amount.toString()),
         decimals: coin.decimals,
         tokenProgramId,
+        memo: keysignPayload.memo,
       }
 
       if (!toTokenAssociatedAddress) {
@@ -89,7 +99,7 @@ export const getSolanaSendSigningInput = ({
     recentBlockhash: recentBlockHash,
     sender,
     priorityFeePrice: TW.Solana.Proto.PriorityFeePrice.create({
-      price: Long.fromString(solanaConfig.priorityFeePrice.toString()),
+      price: Long.fromString(priorityFeePrice.toString()),
     }),
     priorityFeeLimit: TW.Solana.Proto.PriorityFeeLimit.create({
       limit: computeLimit

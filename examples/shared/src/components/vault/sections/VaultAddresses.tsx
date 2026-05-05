@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { useSDKAdapter } from '../../../adapters'
 import type { VaultInfo } from '../../../types'
+import { copyToClipboard } from '../../../utils/copyToClipboard'
 import Button from '../../common/Button'
 import Spinner from '../../common/Spinner'
 
@@ -20,6 +21,9 @@ export default function VaultAddresses({ vault }: VaultAddressesProps) {
   const [addresses, setAddresses] = useState<AddressEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
+  const [copyFailedAddress, setCopyFailedAddress] = useState<string | null>(null)
+  const [copyStatusMessage, setCopyStatusMessage] = useState<string | null>(null)
+  const copyStatusResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load addresses for all chains
   useEffect(() => {
@@ -42,13 +46,38 @@ export default function VaultAddresses({ vault }: VaultAddressesProps) {
     loadAddresses()
   }, [sdk, vault.id])
 
+  useEffect(() => {
+    return () => {
+      if (copyStatusResetTimer.current) {
+        clearTimeout(copyStatusResetTimer.current)
+      }
+    }
+  }, [])
+
   const handleCopy = async (address: string) => {
-    try {
-      await navigator.clipboard.writeText(address)
+    if (copyStatusResetTimer.current) {
+      clearTimeout(copyStatusResetTimer.current)
+      copyStatusResetTimer.current = null
+    }
+    setCopyFailedAddress(null)
+    const copied = await copyToClipboard(address)
+
+    if (copied) {
       setCopiedAddress(address)
-      setTimeout(() => setCopiedAddress(null), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
+      setCopyStatusMessage('Copied!')
+      copyStatusResetTimer.current = setTimeout(() => {
+        setCopiedAddress(null)
+        setCopyStatusMessage(null)
+        copyStatusResetTimer.current = null
+      }, 5000)
+    } else {
+      setCopyFailedAddress(address)
+      setCopyStatusMessage('Copy failed')
+      copyStatusResetTimer.current = setTimeout(() => {
+        setCopyFailedAddress(null)
+        setCopyStatusMessage(null)
+        copyStatusResetTimer.current = null
+      }, 5000)
     }
   }
 
@@ -85,6 +114,10 @@ export default function VaultAddresses({ vault }: VaultAddressesProps) {
         <h2 className="text-xl font-semibold">Wallet Addresses</h2>
         <span className="text-sm text-gray-500">{addresses.length} chain(s)</span>
       </div>
+      <div className="min-h-5 text-sm" role="status" aria-live="polite">
+        {copyStatusMessage === 'Copied!' && <span className="text-green-600">{copyStatusMessage}</span>}
+        {copyStatusMessage === 'Copy failed' && <span className="text-red-600">{copyStatusMessage}</span>}
+      </div>
 
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full">
@@ -110,8 +143,20 @@ export default function VaultAddresses({ vault }: VaultAddressesProps) {
                   </code>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Button variant="secondary" size="small" onClick={() => handleCopy(address)}>
-                    {copiedAddress === address ? (
+                  <Button type="button" variant="secondary" size="small" onClick={() => handleCopy(address)}>
+                    {copyFailedAddress === address ? (
+                      <>
+                        <svg
+                          className="w-4 h-4 mr-1 text-red-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Copy failed
+                      </>
+                    ) : copiedAddress === address ? (
                       <>
                         <svg
                           className="w-4 h-4 mr-1 text-green-600"
@@ -121,7 +166,7 @@ export default function VaultAddresses({ vault }: VaultAddressesProps) {
                         >
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
-                        Copied
+                        Copied!
                       </>
                     ) : (
                       <>

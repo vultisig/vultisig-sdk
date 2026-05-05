@@ -16,6 +16,8 @@
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
 
+import { Buffer } from 'buffer'
+
 /**
  * Node.js fetch does not support file:// URLs, but WASM wrappers
  * (dkls, schnorr, 7z-wasm) use `fetch(new URL('x.wasm', import.meta.url))`

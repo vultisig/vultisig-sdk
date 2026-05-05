@@ -14,6 +14,7 @@ export type NativeSwapQuote = {
   outbound_delay_blocks: number
   outbound_delay_seconds: number
   recommended_min_amount_in: string
+  max_streaming_quantity?: number
   slippage_bps?: number
   total_swap_seconds?: number
   warning: string

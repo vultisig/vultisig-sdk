@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { Buffer } from 'buffer'
 import {
   Transaction,
   Psbt,

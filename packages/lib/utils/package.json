@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/lib-utils",
-  "version": "0.9.3",
+  "version": "0.10.1",
   "description": "Shared utilities for Vultisig core packages",
   "license": "MIT",
   "repository": {
@@ -675,6 +675,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
+    "buffer": "^6.0.3",
     "long": "^5.3.2",
     "viem": "^2.48.4"
   }

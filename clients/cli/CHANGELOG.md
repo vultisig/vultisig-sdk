@@ -1,5 +1,19 @@
 # @vultisig/cli
 
+## 0.22.0
+
+### Minor Changes
+
+- [#293](https://github.com/vultisig/vultisig-sdk/pull/293) [`a3a331a`](https://github.com/vultisig/vultisig-sdk/commit/a3a331a875ebc6868b11c6901c8ed99dde51a4ff) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Password-protected vault backups use PBKDF2-HMAC-SHA256 with a random salt (600k iterations by default) and a versioned blob prefix; legacy SHA-256-only backups still decrypt.
+
+### Patch Changes
+
+- Updated dependencies [[`feac01f`](https://github.com/vultisig/vultisig-sdk/commit/feac01f3225738a14c0123e1c3d70e46b97760fd), [`a3a331a`](https://github.com/vultisig/vultisig-sdk/commit/a3a331a875ebc6868b11c6901c8ed99dde51a4ff)]:
+  - @vultisig/sdk@0.22.0
+  - @vultisig/client-shared@0.2.6
+  - @vultisig/rujira@17.0.0
+  - @vultisig/core-chain@1.4.2
+
 ## 0.21.0
 
 ### Minor Changes
