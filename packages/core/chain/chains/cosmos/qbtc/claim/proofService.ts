@@ -53,6 +53,13 @@ type GenerateClaimProofResponse = {
   address_hash: string
   /** 64-char hex QBTCAddressHash. */
   qbtc_address_hash: string
+  /**
+   * 64-char hex SHA256 of the SEC-compressed BTC pubkey. Required by
+   * `MsgClaimWithProof` (proto field 7) since btcq-org/qbtc#148 — the
+   * chain runs RIPEMD160 over this natively to bind the proof to the
+   * BTC address.
+   */
+  pub_key_hash_sha256: string
   /** UTXOs included in the proof. */
   utxos: UtxoRef[]
   /** QBTC claimer address. */
@@ -82,6 +89,11 @@ const assertValidClaimProofResponse = (
   if (!isHexWithLength(data.qbtc_address_hash, 64)) {
     throw new Error(
       'Invalid proof service response: invalid qbtc_address_hash'
+    )
+  }
+  if (!isHexWithLength(data.pub_key_hash_sha256, 64)) {
+    throw new Error(
+      'Invalid proof service response: invalid pub_key_hash_sha256'
     )
   }
 }

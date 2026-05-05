@@ -2,7 +2,12 @@ import { EvmChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
-import { BlockaidEvmSimulationInfo, BlockaidSolanaSimulationInfo } from '../core'
+import { Coin } from '../../../../../coin/Coin'
+import {
+  BlockaidEvmBalanceChange,
+  BlockaidEvmSimulationInfo,
+  BlockaidSolanaSimulationInfo,
+} from '../core'
 
 export type BlockaidSolanaSimulation = {
   account_summary: {
@@ -153,6 +158,67 @@ export const parseBlockaidSolanaSimulation = async (
   throw new Error('Invalid simulation data')
 }
 
+type EvmAssetDiff = BlockaidEVMSimulation['account_summary']['assets_diffs'][number]
+type EvmAssetSide = EvmAssetDiff['in'][number]
+
+const NATIVE_GROUP_KEY = 'native'
+
+// Returns null for malformed ERC20 entries (missing address) so the caller
+// can skip them instead of silently merging into the native bucket.
+const groupKeyForAsset = (asset: EvmAssetDiff['asset']): string | null => {
+  if (asset.type === 'NATIVE') return NATIVE_GROUP_KEY
+  const address = asset.address?.toLowerCase()
+  return address ?? null
+}
+
+const sumRaw = (sides: EvmAssetSide[]): bigint =>
+  sides.reduce((total, side) => total + BigInt(side.raw_value), 0n)
+
+const usdValueForSides = (sides: EvmAssetSide[]): number => {
+  let total = 0
+  let hasPrice = false
+  for (const side of sides) {
+    if (typeof side.usd_price === 'number' && side.usd_price > 0) {
+      hasPrice = true
+    }
+    total += side.value * side.usd_price
+  }
+  return hasPrice ? total : 0
+}
+
+// `Coin.id` is token-only (see core/chain/coin/Coin.ts), and Blockaid sometimes
+// returns the same contract with mismatched casing across diffs; lowercase the
+// ERC20 address so downstream lookups don't depend on whichever case landed first.
+const buildCoinFromAsset = (
+  asset: EvmAssetDiff['asset'],
+  chain: EvmChain
+): Coin => {
+  const base: Coin = {
+    decimals: asset.decimals,
+    logo: asset.logo_url,
+    ticker: asset.symbol,
+    chain,
+  }
+  if (asset.type === 'ERC20' && asset.address) {
+    return { ...base, id: asset.address.toLowerCase() }
+  }
+  return base
+}
+
+/**
+ * Parse a Blockaid EVM simulation into the user's net balance changes.
+ *
+ * Blockaid returns one entry per asset under `assets_diffs`, with separate
+ * `in` and `out` arrays that can each have multiple legs (router-mediated
+ * `permitAndCall` flows, multicalls, multi-hop swaps, etc.). We group all
+ * legs by canonical asset (lowercased address; native uses a sentinel key),
+ * sum each side, and emit one change per asset with the net direction.
+ *
+ * Refund-shaped pairs (same asset on both `in` and `out`) cancel out to a
+ * net of zero and are skipped — both casing-variant duplicates from
+ * Blockaid metadata noise and real same-asset refunds collapse to the
+ * accurate "no change" outcome.
+ */
 export const parseBlockaidEvmSimulation = async (
   simulation: BlockaidEVMSimulation,
   chain: EvmChain
@@ -161,83 +227,54 @@ export const parseBlockaidEvmSimulation = async (
     throw new Error(`parseBlockaidEvmSimulation only supports EVM chains, got: ${chain}`)
   }
 
-  const assetDiffs = simulation.account_summary.assets_diffs
+  type Group = {
+    asset: EvmAssetDiff['asset']
+    netRaw: bigint
+    netUsd: number
+  }
 
-  if (assetDiffs.length === 1) {
-    const [potentialOutAsset] = assetDiffs
+  const groups = new Map<string, Group>()
 
-    if (potentialOutAsset.out.length === 0) {
-      return null
-    }
+  for (const diff of simulation.account_summary.assets_diffs) {
+    const key = groupKeyForAsset(diff.asset)
+    if (key === null) continue
+    const sentRaw = sumRaw(diff.out)
+    const receivedRaw = sumRaw(diff.in)
+    const sentUsd = usdValueForSides(diff.out)
+    const receivedUsd = usdValueForSides(diff.in)
 
-    return {
-      transfer: {
-        fromCoin: {
-          decimals: potentialOutAsset.asset.decimals,
-          logo: potentialOutAsset.asset.logo_url,
-          ticker: potentialOutAsset.asset.symbol,
-          id: potentialOutAsset.asset.address,
-          chain: chain,
-        },
-        fromAmount: shouldBePresent(BigInt(potentialOutAsset.out[0].raw_value)),
-      },
-    }
-  } else if (assetDiffs.length > 1) {
-    // Router-mediated flows (e.g. `permitAndCall`) often return three diffs
-    // with an intermediate permit/allowance leg between the user's `out` and
-    // `in` sides. Scan all diffs instead of using positional destructuring so
-    // the user-side pair is recovered regardless of order, and prefer an
-    // in-side asset that differs from the out-side asset (case-insensitive,
-    // since EIP-55 checksums vary by casing). Mirrors the iOS parser.
-    const outDiff = assetDiffs.find(diff => diff.out.length > 0)
-    if (!outDiff) {
-      return null
-    }
-
-    const outAddress = outDiff.asset.address?.toLowerCase()
-    const inDiff =
-      assetDiffs.find(diff => diff.in.length > 0 && diff.asset.address?.toLowerCase() !== outAddress) ??
-      assetDiffs.find(diff => diff.in.length > 0)
-
-    if (!inDiff) {
-      return null
-    }
-
-    // Address is the primary identity for a token; symbol is just metadata
-    // and Blockaid sometimes returns inconsistent casing (`USDC` vs `usdc`)
-    // for the same contract. Reject refund-shaped pairs by address alone so
-    // we don't render a nonsense `A → A` swap when the in-side fallback
-    // matches the out-side asset.
-    const inAddress = inDiff.asset.address?.toLowerCase()
-    if (outAddress === inAddress) {
-      return null
-    }
-
-    const outAsset = outDiff.asset
-    const outValue = outDiff.out
-    const inAsset = inDiff.asset
-    const inValue = inDiff.in
-
-    return {
-      swap: {
-        fromCoin: {
-          decimals: outAsset.decimals,
-          logo: outAsset.logo_url,
-          ticker: outAsset.symbol,
-          id: outAsset.address,
-          chain: chain,
-        },
-        toCoin: {
-          chain: chain,
-          decimals: inAsset.decimals,
-          logo: inAsset.logo_url,
-          ticker: inAsset.symbol,
-          id: inAsset.address,
-        },
-        fromAmount: shouldBePresent(BigInt(outValue[0].raw_value)),
-        toAmount: shouldBePresent(BigInt(inValue[0].raw_value)),
-      },
+    const existing = groups.get(key)
+    if (existing) {
+      existing.netRaw += receivedRaw - sentRaw
+      existing.netUsd += receivedUsd - sentUsd
+    } else {
+      groups.set(key, {
+        asset: diff.asset,
+        netRaw: receivedRaw - sentRaw,
+        netUsd: receivedUsd - sentUsd,
+      })
     }
   }
-  return null
+
+  const changes: BlockaidEvmBalanceChange[] = []
+  for (const { asset, netRaw, netUsd } of groups.values()) {
+    if (netRaw === 0n) continue
+    const direction: 'send' | 'receive' = netRaw > 0n ? 'receive' : 'send'
+    const amount = netRaw > 0n ? netRaw : -netRaw
+    const change: BlockaidEvmBalanceChange = {
+      direction,
+      coin: buildCoinFromAsset(asset, chain),
+      amount: shouldBePresent(amount),
+    }
+    if (netUsd !== 0) {
+      change.usdValue = Math.abs(netUsd)
+    }
+    changes.push(change)
+  }
+
+  if (changes.length === 0) {
+    return null
+  }
+
+  return { changes }
 }
