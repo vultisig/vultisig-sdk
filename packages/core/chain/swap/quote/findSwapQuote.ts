@@ -18,6 +18,7 @@ import { SwapDiscount } from '../discount/SwapDiscount'
 import { getKyberSwapQuote } from '../general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '../general/kyber/chains'
 import { getNativeSwapQuote } from '../native/api/getNativeSwapQuote'
+import { getNativeSwapDecimals } from '../native/utils/getNativeSwapDecimals'
 import {
   nativeSwapChains,
   nativeSwapEnabledChainsRecord,
@@ -37,9 +38,38 @@ type RankedSwapQuote = {
   outputAmount: bigint
 }
 
-function getComparableOutputAmount(q: SwapQuote): bigint {
+/** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
+function rebaseDecimals(
+  value: bigint,
+  fromDecimals: number,
+  toDecimals: number
+): bigint {
+  if (fromDecimals === toDecimals) {
+    return value
+  }
+  if (toDecimals > fromDecimals) {
+    return value * 10n ** BigInt(toDecimals - fromDecimals)
+  }
+  return value / 10n ** BigInt(fromDecimals - toDecimals)
+}
+
+/**
+ * Comparable destination amount in the destination token's smallest units (same
+ * scale as `general.dstAmount`).
+ *
+ * Native swap APIs report `expected_amount_out` in chain-specific precision
+ * (`getNativeSwapDecimals`); aggregators use the destination token's decimals.
+ * Without re-basing, THORChain (8-decimal canonical) and Kyber (token decimals)
+ * are not comparable as raw bigints.
+ *
+ * TODO(#353 follow-up): subtract route-specific gas / outbound fees for true net
+ * output; today this ranks gross destination amount after decimal alignment only.
+ */
+function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
   if ('native' in q.quote) {
-    return BigInt(q.quote.native.expected_amount_out)
+    const nativePrecision = getNativeSwapDecimals(to)
+    const raw = BigInt(q.quote.native.expected_amount_out)
+    return rebaseDecimals(raw, nativePrecision, to.decimals)
   }
   return BigInt(q.quote.general.dstAmount)
 }
@@ -57,6 +87,8 @@ function selectBestEligibleQuote(
       continue
     }
     const { outputAmount, quote } = result.value
+    // Tie-break: lower index wins. Fetchers are ordered by `shouldPreferGeneralSwap`
+    // (general-first vs native-first), so this preserves that preference when amounts tie.
     if (
       bestAmount === null ||
       outputAmount > bestAmount ||
@@ -202,14 +234,13 @@ export const findSwapQuote = async ({
   }
 
   const settled = await Promise.allSettled(
-    fetchers.map(fetcher =>
-      Promise.resolve()
-        .then(fetcher)
-        .then(quote => ({
-          quote,
-          outputAmount: getComparableOutputAmount(quote),
-        }))
-    )
+    fetchers.map(async fetcher => {
+      const quote = await fetcher()
+      return {
+        quote,
+        outputAmount: getComparableOutputAmount(quote, to),
+      }
+    })
   )
   const best = selectBestEligibleQuote(settled)
 
@@ -217,14 +248,21 @@ export const findSwapQuote = async ({
     return best
   }
 
-  const last = settled[settled.length - 1]
-  const error = last.status === 'rejected' ? last.reason : new Error('No quote')
-
-  if (isInError(error, 'dust threshold')) {
-    throw new Error(
-      'Swap amount too small. Please increase the amount to proceed.'
-    )
+  for (const result of settled) {
+    if (result.status === 'rejected' && isInError(result.reason, 'dust threshold')) {
+      throw new Error(
+        'Swap amount too small. Please increase the amount to proceed.'
+      )
+    }
   }
 
-  throw error
+  for (const result of settled) {
+    if (result.status === 'rejected') {
+      throw result.reason
+    }
+  }
+
+  // Defensive: when fetchers are non-empty, `best` is null only if every
+  // fetcher rejected, and the loop above throws the first reason.
+  throw new Error('No quote')
 }

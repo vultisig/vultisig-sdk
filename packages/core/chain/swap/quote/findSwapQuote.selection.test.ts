@@ -88,9 +88,12 @@ describe('findSwapQuote parallel selection', () => {
   it('picks a later preferred provider when its comparable output amount is higher', async () => {
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
-    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('100', 'kyber'))
+    // Destination has 6 decimals. Kyber dstAmount is already in token decimals.
+    // Native THORChain amounts are 8-decimal canonical → rebase to 6: divide by 1e2.
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('150', 'kyber'))
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
-      minimalNativeQuote(swapChain, '500')
+      // 20_000 in 8-decimal → 200.0 in 6-decimal units; beats Kyber 150.
+      minimalNativeQuote(swapChain, '20000')
     )
 
     const quote = await findSwapQuote({
@@ -102,9 +105,31 @@ describe('findSwapQuote parallel selection', () => {
     if (!('native' in quote.quote)) {
       throw new Error('Expected native quote')
     }
-    expect(quote.quote.native.expected_amount_out).toBe('500')
+    expect(quote.quote.native.expected_amount_out).toBe('20000')
     expect(getKyberSwapQuote).toHaveBeenCalledTimes(1)
     expect(getNativeSwapQuote).toHaveBeenCalled()
+  })
+
+  it('ranks by destination-decimal-normalized output (higher raw native can still lose)', async () => {
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    // 1 USDC (6 decimals) on the general side.
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'kyber'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
+      // 50_000_000 in 8-decimal is > 1_000_000 raw, but 50_000_000 / 1e2 = 500_000 < 1_000_000 comparable.
+      minimalNativeQuote(swapChain, '50000000')
+    )
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    expect('general' in quote.quote).toBe(true)
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('kyber')
   })
 
   it('does not let a failing provider hide a succeeding one', async () => {
@@ -165,7 +190,8 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.general.provider).toBe('kyber')
   })
 
-  it('when all providers fail, propagates the last fetcher error (legacy asyncFallbackChain behavior)', async () => {
+  it('when all providers fail, propagates the first fetcher-order rejection', async () => {
+    const mayaError = 'maya last error'
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('first fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('second fail'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('third fail'))
@@ -173,7 +199,7 @@ describe('findSwapQuote parallel selection', () => {
       if (swapChain === Chain.THORChain) {
         throw new Error('thor fail')
       }
-      throw new Error('maya last error')
+      throw new Error(mayaError)
     })
 
     await expect(
@@ -181,10 +207,10 @@ describe('findSwapQuote parallel selection', () => {
         ...evmSameChainCoins,
         amount: 1n,
       })
-    ).rejects.toThrow('maya last error')
+    ).rejects.toThrow('first fail')
   })
 
-  it('maps dust threshold on the last fetcher error to the user-facing message', async () => {
+  it('maps dust threshold on any provider to the user-facing message (Maya in this setup)', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
@@ -194,6 +220,20 @@ describe('findSwapQuote parallel selection', () => {
       }
       throw new Error('quote below dust threshold')
     })
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+  })
+
+  it('maps dust threshold from an earlier provider (not only the last) to the user-facing message', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('quote below dust threshold'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
 
     await expect(
       findSwapQuote({
