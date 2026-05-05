@@ -1,5 +1,12 @@
 # @vultisig/examples-shared
 
+## 0.1.21
+
+### Patch Changes
+
+- Updated dependencies [[`441f5bb`](https://github.com/vultisig/vultisig-sdk/commit/441f5bb9022321023a65d28a5941717ac7542bee)]:
+  - @vultisig/sdk@0.22.3
+
 ## 0.1.20
 
 ### Patch Changes
