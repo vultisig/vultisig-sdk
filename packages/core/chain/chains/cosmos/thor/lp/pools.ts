@@ -4,7 +4,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
  * Midgard base URL used by every helper in this module. Matches what
  * vultisig-ios and the rujira package use as the default mainnet endpoint.
  */
-export const thorchainMidgardBaseUrl = 'https://midgard.thorchain.network'
+export const thorchainMidgardBaseUrl = 'https://gateway.liquify.com/chain/thorchain_midgard'
 
 /**
  * Canonical THORChain pool-id format: `CHAIN.ASSET` for native assets
