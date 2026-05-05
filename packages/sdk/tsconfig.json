@@ -9,6 +9,7 @@
     "declarationMap": true,
     "emitDeclarationOnly": false,
     "outDir": "./dist",
+    "rootDir": "..",
     "strict": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
@@ -22,6 +23,7 @@
     "isolatedModules": true,
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
