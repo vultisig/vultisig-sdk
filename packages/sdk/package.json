@@ -243,7 +243,7 @@
     "rollup-plugin-dts": "^6.1.1",
     "rollup-plugin-esbuild": "^6.2.1",
     "tsx": "^4.19.5",
-    "typescript": "^5.9.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
   "peerDependencies": {
