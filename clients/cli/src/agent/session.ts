@@ -460,7 +460,13 @@ export class AgentSession {
     }
 
     ui.onToolCall(toolCallId, toolName, input)
-    const recent = await body()
+    let recent: RecentAction
+    try {
+      recent = await body()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      recent = { tool: toolName, success: false, data: { error: message } }
+    }
     const errorMsg = (recent.data?.error as string | undefined) ?? undefined
     const errorCode = (recent.data?.code as AgentErrorCode | undefined) ?? undefined
     ui.onToolResult(toolCallId, toolName, recent.success, recent.data, errorMsg, errorCode)
