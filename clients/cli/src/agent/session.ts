@@ -435,11 +435,14 @@ export class AgentSession {
     body: () => Promise<RecentAction>,
     input?: Record<string, unknown>
   ): Promise<RecentAction> {
+    // Delay caching the prompted password until after body() succeeds so a
+    // wrong password triggers a re-prompt on the next call rather than
+    // staying silently locked in to a bad value.
+    let promptedPassword: string | undefined
     if (PASSWORD_REQUIRED_TOOLS.has(toolName) && !this.config.password) {
       try {
-        const password = await ui.requestPassword()
-        this.executor.setPassword(password)
-        this.config.password = password
+        promptedPassword = await ui.requestPassword()
+        this.executor.setPassword(promptedPassword)
       } catch {
         const failure: RecentAction = {
           tool: toolName,
@@ -470,6 +473,10 @@ export class AgentSession {
     const errorMsg = (recent.data?.error as string | undefined) ?? undefined
     const errorCode = (recent.data?.code as AgentErrorCode | undefined) ?? undefined
     ui.onToolResult(toolCallId, toolName, recent.success, recent.data, errorMsg, errorCode)
+    // Only persist the prompted password once the tool call proves it's usable.
+    if (promptedPassword && recent.success) {
+      this.config.password = promptedPassword
+    }
     return recent
   }
 
