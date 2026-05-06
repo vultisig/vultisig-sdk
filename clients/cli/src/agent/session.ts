@@ -384,6 +384,12 @@ export class AgentSession {
     // tx_ready → synthetic sign_tx → executor.signTxFromBuffer.
     // Routed straight to the executor (no Action wrapper); result is
     // pushed onto pendingToolResults and recursed for the next turn.
+    //
+    // Backend contract: the agent emits at most one tx_ready per stream
+    // turn. storeServerTransaction overwrites a single 'latest' buffer
+    // slot — if the backend ever emits two tx_ready events in one turn,
+    // only the last would be signed. That is not a currently supported
+    // flow; multi-leg sequences use separate turns via recursion.
     if (serverTxStoredFromStream > 0) {
       if (this.config.verbose)
         process.stderr.write(

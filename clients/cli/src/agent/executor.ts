@@ -203,7 +203,7 @@ export class AgentExecutor {
             id: (t.contract_address || t.contractAddress || '') as string,
             symbol,
             name: (t.name || symbol) as string,
-            decimals: t.decimals || 18,
+            decimals: t.decimals ?? 18,
             contractAddress: (t.contract_address || t.contractAddress) as string,
             chainId: chain.toString(),
           } as any)
@@ -222,7 +222,7 @@ export class AgentExecutor {
         id: (input.contract_address || input.contractAddress || '') as string,
         symbol,
         name: (input.name || symbol) as string,
-        decimals: (input.decimals as number) || 18,
+        decimals: (input.decimals as number) ?? 18,
         contractAddress: (input.contract_address || input.contractAddress) as string,
         chainId: chain.toString(),
       } as any)
