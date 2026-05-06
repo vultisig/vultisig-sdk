@@ -1,9 +1,11 @@
+// Per-tool handler tests for the new tool-path API:
+// each handler takes `(toolCallId, input)` and returns a `RecentAction`.
+// Covers the seven live client-side handlers + signTxFromBuffer.
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentExecutor } from '../executor'
-import type { Action } from '../types'
 
 function createMockVault(): VaultBase {
   const ethereum = Chain.Ethereum
@@ -14,105 +16,27 @@ function createMockVault(): VaultBase {
     id: 'vault-mock-1',
     type: 'secure',
     chains: [ethereum, bitcoin],
-    balances: vi.fn().mockResolvedValue({
-      'Ethereum:ETH': {
-        chainId: 'Ethereum',
-        symbol: 'ETH',
-        formattedAmount: '1.5',
-        decimals: 18,
-        amount: { toString: () => '1500000000000000000' },
-      },
-      'Bitcoin:BTC': {
-        chainId: 'Bitcoin',
-        symbol: 'BTC',
-        formattedAmount: '0.1',
-        decimals: 8,
-        amount: { toString: () => '10000000' },
-      },
-    }),
+    isEncrypted: false,
     address: vi.fn().mockResolvedValue('0xsender'),
     addChain: vi.fn().mockResolvedValue(undefined),
     removeChain: vi.fn().mockResolvedValue(undefined),
-    balance: vi.fn().mockResolvedValue({ decimals: 18, symbol: 'ETH' }),
-    prepareSendTx: vi.fn().mockResolvedValue({ mockKeysignPayload: true }),
-    extractMessageHashes: vi.fn().mockResolvedValue(['0xabc123']),
+    addToken: vi.fn().mockResolvedValue(undefined),
+    removeToken: vi.fn().mockResolvedValue(undefined),
   } as unknown as VaultBase
 }
 
-function action(partial: Pick<Action, 'type'> & Partial<Action>): Action {
-  return {
-    id: partial.id ?? 'a1',
-    type: partial.type,
-    title: partial.title ?? partial.type,
-    params: partial.params,
-    auto_execute: partial.auto_execute,
-  }
-}
-
-describe('AgentExecutor', () => {
-  it('get_balances maps vault.balances() into balances array', async () => {
-    const vault = createMockVault()
-    const executor = new AgentExecutor(vault)
-
-    const result = await executor.executeAction(action({ type: 'get_balances' }))
-
-    expect(result.success).toBe(true)
-    expect(vault.balances).toHaveBeenCalledOnce()
-    const balances = (result.data?.balances as Array<Record<string, unknown>>) ?? []
-    expect(balances).toHaveLength(2)
-    expect(balances.map(b => b.symbol).sort()).toEqual(['BTC', 'ETH'])
-    expect(balances.find(b => b.symbol === 'ETH')?.amount).toBe('1.5')
-  })
-
-  it('get_balances filters by chain', async () => {
-    const vault = createMockVault()
-    const executor = new AgentExecutor(vault)
-
-    const result = await executor.executeAction(action({ type: 'get_balances', params: { chain: 'Ethereum' } }))
-
-    expect(result.success).toBe(true)
-    const balances = result.data?.balances as Array<{ chain: string }>
-    expect(balances).toHaveLength(1)
-    expect(balances[0].chain).toBe('Ethereum')
-  })
-
-  it('get_balances filters by ticker', async () => {
-    const vault = createMockVault()
-    const executor = new AgentExecutor(vault)
-
-    const result = await executor.executeAction(action({ type: 'get_balances', params: { ticker: 'btc' } }))
-
-    expect(result.success).toBe(true)
-    const balances = result.data?.balances as Array<{ symbol: string }>
-    expect(balances).toHaveLength(1)
-    expect(balances[0].symbol).toBe('BTC')
-  })
-
-  it('list_vaults returns current vault summary', async () => {
-    const vault = createMockVault()
-    const executor = new AgentExecutor(vault)
-
-    const result = await executor.executeAction(action({ type: 'list_vaults' }))
-
-    expect(result.success).toBe(true)
-    const vaults = result.data?.vaults as Array<Record<string, unknown>>
-    expect(vaults).toHaveLength(1)
-    expect(vaults[0].name).toBe('mock-vault')
-    expect(vaults[0].id).toBe('vault-mock-1')
-    expect(vaults[0].type).toBe('secure')
-    expect(vaults[0].chains).toEqual(['Ethereum', 'Bitcoin'])
-  })
-
+describe('AgentExecutor — per-tool handlers (new tool-path API)', () => {
   it('add_chain handles single chain', async () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)
 
-    const result = await executor.executeAction(action({ type: 'add_chain', params: { chain: 'Ethereum' } }))
+    const recent = await executor.addChain('call-1', { chain: 'Ethereum' })
 
-    expect(result.success).toBe(true)
+    expect(recent.success).toBe(true)
+    expect(recent.tool).toBe('add_chain')
     expect(vault.addChain).toHaveBeenCalledWith(Chain.Ethereum)
-    expect(result.data?.chain).toBe('Ethereum')
-    expect(result.data?.added).toBe(true)
+    expect(recent.data?.chain).toBe('Ethereum')
+    expect(recent.data?.added).toBe(true)
     expect(vault.address).toHaveBeenCalled()
   })
 
@@ -120,69 +44,138 @@ describe('AgentExecutor', () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)
 
-    const result = await executor.executeAction(
-      action({
-        type: 'add_chain',
-        params: { chains: ['Bitcoin', { chain: 'Ethereum' }] },
-      })
-    )
+    const recent = await executor.addChain('call-2', {
+      chains: ['Bitcoin', { chain: 'Ethereum' }],
+    })
 
-    expect(result.success).toBe(true)
+    expect(recent.success).toBe(true)
     expect(vault.addChain).toHaveBeenCalledTimes(2)
-    const added = result.data?.added as Array<{ chain: string }>
+    const added = recent.data?.added as Array<{ chain: string }>
     expect(added).toHaveLength(2)
     expect(added.map(a => a.chain).sort()).toEqual(['Bitcoin', 'Ethereum'])
   })
 
-  it('unknown action types return success: false', async () => {
-    const vault = createMockVault()
-    const executor = new AgentExecutor(vault)
+  it('add_chain returns failure RecentAction on unknown chain', async () => {
+    const executor = new AgentExecutor(createMockVault())
 
-    const result = await executor.executeAction(action({ type: 'not_a_real_action', id: 'x1' }))
+    const recent = await executor.addChain('call-3', { chain: 'Atlantis' })
 
-    expect(result.success).toBe(false)
-    expect(result.error).toContain('not_a_real_action')
-    expect(result.error).toContain('not implemented locally')
+    expect(recent.success).toBe(false)
+    expect(recent.tool).toBe('add_chain')
+    expect((recent.data as Record<string, unknown>).error).toMatch(/Unknown chain/i)
   })
 
-  it.each(['get_market_price', 'thorchain_query'] as const)(
-    'AUTO_EXECUTE stub %s returns success: false',
-    async actionType => {
-      const vault = createMockVault()
-      const executor = new AgentExecutor(vault)
-
-      const result = await executor.executeAction(action({ type: actionType, params: {} }))
-
-      expect(result.success).toBe(false)
-      expect(result.error).toContain(actionType)
-      expect(result.error).toContain('not implemented locally')
-    }
-  )
-
-  it('build_send_tx stores pending payload and returns keysign info', async () => {
+  it('remove_chain calls vault.removeChain', async () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)
 
-    const result = await executor.executeAction(
-      action({
-        type: 'build_send_tx',
-        params: {
-          chain: 'Ethereum',
-          ticker: 'ETH',
-          to: '0xdestination',
-          amount: '0.25',
-        },
-      })
-    )
+    const recent = await executor.removeChain('call-4', { chain: 'Bitcoin' })
 
-    expect(result.success).toBe(true)
-    expect(vault.prepareSendTx).toHaveBeenCalled()
-    expect(vault.extractMessageHashes).toHaveBeenCalled()
-    expect(typeof result.data?.keysign_payload).toBe('string')
-    expect((result.data?.keysign_payload as string).startsWith('tx_')).toBe(true)
-    expect(result.data?.message_hashes).toEqual(['0xabc123'])
-    expect(result.data?.destination).toBe('0xdestination')
-    expect(result.data?.amount).toBe('0.25')
+    expect(recent.success).toBe(true)
+    expect(recent.tool).toBe('remove_chain')
+    expect(vault.removeChain).toHaveBeenCalledWith(Chain.Bitcoin)
+    expect(recent.data?.removed).toBe(true)
+  })
+
+  it('add_coin handles single token', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const recent = await executor.addCoin('call-5', {
+      chain: 'Ethereum',
+      symbol: 'USDC',
+      contract_address: '0xabc',
+      decimals: 6,
+    })
+
+    expect(recent.success).toBe(true)
+    expect(recent.tool).toBe('add_coin')
+    expect(vault.addToken).toHaveBeenCalled()
+    expect(recent.data?.added).toBe(true)
+    expect(recent.data?.symbol).toBe('USDC')
+  })
+
+  it('add_coin handles batch tokens array', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const recent = await executor.addCoin('call-6', {
+      tokens: [
+        { chain: 'Ethereum', symbol: 'USDC' },
+        { chain: 'Bitcoin', symbol: 'BTC' },
+      ],
+    })
+
+    expect(recent.success).toBe(true)
+    const added = recent.data?.added as Array<{ symbol: string }>
+    expect(added).toHaveLength(2)
+    expect(vault.addToken).toHaveBeenCalledTimes(2)
+  })
+
+  it('remove_coin calls vault.removeToken', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const recent = await executor.removeCoin('call-7', {
+      chain: 'Ethereum',
+      token_id: '0xabc',
+    })
+
+    expect(recent.success).toBe(true)
+    expect(vault.removeToken).toHaveBeenCalledWith(Chain.Ethereum, '0xabc')
+    expect(recent.data?.removed).toBe(true)
+  })
+
+  it('address_book_add returns stub failure RecentAction (not yet implemented locally)', async () => {
+    const executor = new AgentExecutor(createMockVault())
+
+    const recent = await executor.addressBookAdd('call-8', {
+      address: '0x123',
+      chain: 'Ethereum',
+    })
+
+    expect(recent.success).toBe(false)
+    expect(recent.tool).toBe('address_book_add')
+    expect((recent.data as Record<string, unknown>).error).toMatch(/not yet implemented/i)
+  })
+
+  it('address_book_remove returns stub failure RecentAction (not yet implemented locally)', async () => {
+    const executor = new AgentExecutor(createMockVault())
+
+    const recent = await executor.addressBookRemove('call-9', { address: '0x123' })
+
+    expect(recent.success).toBe(false)
+    expect(recent.tool).toBe('address_book_remove')
+    expect((recent.data as Record<string, unknown>).error).toMatch(/not yet implemented/i)
+  })
+
+  it('signTxFromBuffer returns failure RecentAction when no pending payload exists', async () => {
+    const executor = new AgentExecutor(createMockVault())
+
+    const recent = await executor.signTxFromBuffer('tx_sign_test')
+
+    expect(recent.success).toBe(false)
+    expect(recent.tool).toBe('sign_tx')
+    expect((recent.data as Record<string, unknown>).error).toMatch(/no pending transaction/i)
+  })
+
+  it('storeServerTransaction returns false for MCP error payloads', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const ok = executor.storeServerTransaction({
+      tx: { status: 'error', error: 'simulation failed' },
+      chain: 'Ethereum',
+    })
+    expect(ok).toBe(false)
+    expect(executor.hasPendingTransaction()).toBe(false)
+  })
+
+  it('storeServerTransaction returns true and sets pending for a valid nested tx', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const ok = executor.storeServerTransaction({
+      send_tx: { to: '0xabc', value: '0', data: '0x' },
+      chain: 'Ethereum',
+    })
+    expect(ok).toBe(true)
     expect(executor.hasPendingTransaction()).toBe(true)
   })
 })
