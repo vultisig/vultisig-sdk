@@ -31,7 +31,17 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   vultDiscountTier?: VultDiscountTier | null
 }
 
-type SwapQuoteFetcher = () => Promise<SwapQuote>
+type SwapQuoteProviderName =
+  | 'KyberSwap'
+  | '1inch'
+  | 'LiFi'
+  | 'THORChain'
+  | 'MayaChain'
+
+type SwapQuoteFetcher = {
+  providerName: SwapQuoteProviderName
+  fetch: () => Promise<SwapQuote>
+}
 
 type RankedSwapQuote = {
   quote: SwapQuote
@@ -127,27 +137,30 @@ export const findSwapQuote = async ({
   )
 
   const getNativeFetchers = (): SwapQuoteFetcher[] =>
-    matchingSwapChains.map(swapChain => async (): Promise<SwapQuote> => {
-      const fromDecimals = from.decimals
-      const amountNumber = bigIntToNumber(amount, fromDecimals)
-      const native = await getNativeSwapQuote({
-        swapChain,
-        destination: to.address,
-        from,
-        to,
-        amount: amountNumber,
-        referral,
-        affiliateBps,
-      })
+    matchingSwapChains.map(swapChain => ({
+      providerName: swapChain === Chain.THORChain ? 'THORChain' : 'MayaChain',
+      fetch: async (): Promise<SwapQuote> => {
+        const fromDecimals = from.decimals
+        const amountNumber = bigIntToNumber(amount, fromDecimals)
+        const native = await getNativeSwapQuote({
+          swapChain,
+          destination: to.address,
+          from,
+          to,
+          amount: amountNumber,
+          referral,
+          affiliateBps,
+        })
 
-      return {
-        quote: { native },
-        discounts:
-          swapChain === Chain.THORChain
-            ? [...vultDiscount, ...referralDiscount]
-            : vultDiscount,
-      }
-    })
+        return {
+          quote: { native },
+          discounts:
+            swapChain === Chain.THORChain
+              ? [...vultDiscount, ...referralDiscount]
+              : vultDiscount,
+        }
+      },
+    }))
 
   const getGeneralFetchers = (): SwapQuoteFetcher[] => {
     const result: SwapQuoteFetcher[] = []
@@ -161,21 +174,24 @@ export const findSwapQuote = async ({
       isOneOf(toChain, kyberSwapEnabledChains) &&
       fromChain === toChain
     ) {
-      result.push(async (): Promise<SwapQuote> => {
-        const general = await getKyberSwapQuote({
-          from: {
-            ...from,
-            chain: fromChain,
-          },
-          to: {
-            ...to,
-            chain: toChain,
-          },
-          amount: chainAmount,
-          affiliateBps,
-        })
+      result.push({
+        providerName: 'KyberSwap',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getKyberSwapQuote({
+            from: {
+              ...from,
+              chain: fromChain,
+            },
+            to: {
+              ...to,
+              chain: toChain,
+            },
+            amount: chainAmount,
+            affiliateBps,
+          })
 
-        return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount }
+        },
       })
     }
 
@@ -183,16 +199,19 @@ export const findSwapQuote = async ({
       isOneOf(from.chain, oneInchSwapEnabledChains) &&
       from.chain === to.chain
     ) {
-      result.push(async (): Promise<SwapQuote> => {
-        const general = await getOneInchSwapQuote({
-          account: pick(from, ['address', 'chain']),
-          fromCoinId: from.id ?? from.ticker,
-          toCoinId: to.id ?? to.ticker,
-          amount: chainAmount,
-          affiliateBps,
-        })
+      result.push({
+        providerName: '1inch',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getOneInchSwapQuote({
+            account: pick(from, ['address', 'chain']),
+            fromCoinId: from.id ?? from.ticker,
+            toCoinId: to.id ?? to.ticker,
+            amount: chainAmount,
+            affiliateBps,
+          })
 
-        return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount }
+        },
       })
     }
 
@@ -200,21 +219,24 @@ export const findSwapQuote = async ({
       isOneOf(fromChain, lifiSwapEnabledChains) &&
       isOneOf(toChain, lifiSwapEnabledChains)
     ) {
-      result.push(async (): Promise<SwapQuote> => {
-        const general = await getLifiSwapQuote({
-          from: {
-            ...from,
-            chain: fromChain,
-          },
-          to: {
-            ...to,
-            chain: toChain,
-          },
-          amount: chainAmount,
-          affiliateBps,
-        })
+      result.push({
+        providerName: 'LiFi',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getLifiSwapQuote({
+            from: {
+              ...from,
+              chain: fromChain,
+            },
+            to: {
+              ...to,
+              chain: toChain,
+            },
+            amount: chainAmount,
+            affiliateBps,
+          })
 
-        return { quote: { general }, discounts: vultDiscount }
+          return { quote: { general }, discounts: vultDiscount }
+        },
       })
     }
 
@@ -235,7 +257,7 @@ export const findSwapQuote = async ({
 
   const settled = await Promise.allSettled(
     fetchers.map(async fetcher => {
-      const quote = await fetcher()
+      const quote = await fetcher.fetch()
       return {
         quote,
         outputAmount: getComparableOutputAmount(quote, to),
@@ -256,13 +278,17 @@ export const findSwapQuote = async ({
     }
   }
 
-  for (const result of settled) {
-    if (result.status === 'rejected') {
-      throw result.reason
-    }
-  }
+  const failedProviders = settled
+    .map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return null
+      }
 
-  // Defensive: when fetchers are non-empty, `best` is null only if every
-  // fetcher rejected, and the loop above throws the first reason.
-  throw new Error('No quote')
+      return fetchers[index].providerName
+    })
+    .filter((providerName): providerName is SwapQuoteProviderName => providerName !== null)
+
+  throw new Error(
+    `No swap route found after trying ${failedProviders.join(', ')}.`
+  )
 }
