@@ -34,15 +34,14 @@ import { PASSWORD_REQUIRED_ACTIONS } from './types'
 // Must stay aligned with the backend's `clientSideToolNames`. Unknown tools
 // surface as `[cli] unimplemented client-side tool` (not silent).
 // `sign_tx` uses the tx_ready channel instead; create_vault / plugin_install /
-// create_policy / delete_policy are mobile-only.
+// create_policy / delete_policy are mobile-only. The CRUD trio
+// (vault_coin / vault_chain / address_book) carries an `action: 'add'|'remove'`
+// discriminator that the executor switches on internally.
 export const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
   sign_typed_data: 'sign_typed_data',
-  add_coin: 'add_coin',
-  remove_coin: 'remove_coin',
-  add_chain: 'add_chain',
-  remove_chain: 'remove_chain',
-  address_book_add: 'address_book_add',
-  address_book_remove: 'address_book_remove',
+  vault_coin: 'vault_coin',
+  vault_chain: 'vault_chain',
+  address_book: 'address_book',
 }
 
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
@@ -294,8 +293,9 @@ export class AgentSession {
     let serverTxStoredFromStream = 0
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
-    // this, ordering-sensitive flows (add_chain → add_coin) race and the
-    // single-slot password resolver hangs when two dispatches both prompt.
+    // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
+    // and the single-slot password resolver hangs when two dispatches both
+    // prompt.
     let dispatchChain: Promise<void> = Promise.resolve()
 
     // Send via SSE stream. CR2: 401/403 retry happens at the request
