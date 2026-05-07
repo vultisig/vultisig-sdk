@@ -5,10 +5,23 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
-export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({
-  hash,
-}) => {
+export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ hash }) => {
   const client = getSolanaClient()
+
+  const { data: signatureStatuses, error: signatureStatusError } = await attempt(
+    client.getSignatureStatuses([hash], {
+      searchTransactionHistory: true,
+    })
+  )
+  const signatureStatus = signatureStatuses?.value[0]
+
+  if (signatureStatusError || !signatureStatus) {
+    return { status: 'pending', isKnown: false }
+  }
+
+  if (signatureStatus.err) {
+    return { status: 'error', isKnown: true }
+  }
 
   const { data: tx, error } = await attempt(
     client.getTransaction(hash, {
@@ -17,16 +30,16 @@ export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({
   )
 
   if (error || !tx) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: true }
   }
 
   const meta = tx.meta
   if (!meta) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: true }
   }
 
   if (meta.err) {
-    return { status: 'error' }
+    return { status: 'error', isKnown: true }
   }
 
   const feeCoin = chainFeeCoin[Chain.Solana]

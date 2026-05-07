@@ -6,13 +6,8 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
 import { getCosmosTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/cosmos'
 import { without } from '@vultisig/lib-utils/array/without'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { attempt } from '@vultisig/lib-utils/attempt'
 
-export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({
-  address,
-  chain,
-}) => {
+export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({ address, chain }) => {
   // While it should work for other cosmos chains, we only support THORChain for now
   if (chain !== CosmosChain.THORChain) return []
 
@@ -32,11 +27,9 @@ export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({
 
   return without(
     coins.map(({ denom, ticker }) => {
-      const tickerAttempt = attempt(() =>
-        shouldBePresent(denom.split(/[-./]/)[1]?.toUpperCase())
-      )
+      const coinTicker = ticker || denom.split(/[-./]/)[1]?.toUpperCase()
 
-      if ('error' in tickerAttempt) {
+      if (!coinTicker) {
         console.error(`Failed to extract ticker from ${denom}`)
         return
       }
@@ -45,8 +38,8 @@ export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({
         id: denom,
         chain,
         decimals: chainFeeCoin[chain].decimals,
-        ticker: ticker || tickerAttempt.data,
-        logo: tickerAttempt.data.toLowerCase(),
+        ticker: coinTicker,
+        logo: coinTicker.toLowerCase(),
         address,
       }
     }),

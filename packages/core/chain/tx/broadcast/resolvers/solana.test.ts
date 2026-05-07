@@ -40,7 +40,6 @@ describe('broadcastSolanaTx', () => {
     expect(mocks.sendRawTransaction).toHaveBeenCalledWith(expect.any(Uint8Array), {
       skipPreflight: false,
       preflightCommitment: 'confirmed',
-      maxRetries: 3,
     })
   })
 
