@@ -19,10 +19,7 @@ import { getKyberSwapQuote } from '../general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '../general/kyber/chains'
 import { getNativeSwapQuote } from '../native/api/getNativeSwapQuote'
 import { getNativeSwapDecimals } from '../native/utils/getNativeSwapDecimals'
-import {
-  nativeSwapChains,
-  nativeSwapEnabledChainsRecord,
-} from '../native/NativeSwapChain'
+import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '../native/NativeSwapChain'
 import { SwapQuote } from './SwapQuote'
 
 export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
@@ -31,12 +28,7 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   vultDiscountTier?: VultDiscountTier | null
 }
 
-type SwapQuoteProviderName =
-  | 'KyberSwap'
-  | '1inch'
-  | 'LiFi'
-  | 'THORChain'
-  | 'MayaChain'
+type SwapQuoteProviderName = 'KyberSwap' | '1inch' | 'LiFi' | 'THORChain' | 'MayaChain'
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -49,11 +41,7 @@ type RankedSwapQuote = {
 }
 
 /** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
-function rebaseDecimals(
-  value: bigint,
-  fromDecimals: number,
-  toDecimals: number
-): bigint {
+function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
   if (fromDecimals === toDecimals) {
     return value
   }
@@ -84,9 +72,7 @@ function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
   return BigInt(q.quote.general.dstAmount)
 }
 
-function selectBestEligibleQuote(
-  settled: PromiseSettledResult<RankedSwapQuote>[]
-): SwapQuote | null {
+function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
   let best: SwapQuote | null = null
   let bestAmount: bigint | null = null
   let bestIndex = Number.POSITIVE_INFINITY
@@ -99,11 +85,7 @@ function selectBestEligibleQuote(
     const { outputAmount, quote } = result.value
     // Tie-break: lower index wins. Fetchers are ordered by `shouldPreferGeneralSwap`
     // (general-first vs native-first), so this preserves that preference when amounts tie.
-    if (
-      bestAmount === null ||
-      outputAmount > bestAmount ||
-      (outputAmount === bestAmount && i < bestIndex)
-    ) {
+    if (bestAmount === null || outputAmount > bestAmount || (outputAmount === bestAmount && i < bestIndex)) {
       best = quote
       bestAmount = outputAmount
       bestIndex = i
@@ -122,18 +104,14 @@ export const findSwapQuote = async ({
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
   const affiliateBps = getSwapAffiliateBps(vultDiscountTier ?? null)
 
-  const vultDiscount: SwapDiscount[] = vultDiscountTier
-    ? [{ vult: { tier: vultDiscountTier } }]
-    : []
+  const vultDiscount: SwapDiscount[] = vultDiscountTier ? [{ vult: { tier: vultDiscountTier } }] : []
 
   const referralDiscount: SwapDiscount[] = referral ? [{ referral: {} }] : []
 
   const involvedChains = [from.chain, to.chain]
 
   const matchingSwapChains = nativeSwapChains.filter(swapChain =>
-    involvedChains.every(chain =>
-      isOneOf(chain, nativeSwapEnabledChainsRecord[swapChain])
-    )
+    involvedChains.every(chain => isOneOf(chain, nativeSwapEnabledChainsRecord[swapChain]))
   )
 
   const getNativeFetchers = (): SwapQuoteFetcher[] =>
@@ -154,10 +132,7 @@ export const findSwapQuote = async ({
 
         return {
           quote: { native },
-          discounts:
-            swapChain === Chain.THORChain
-              ? [...vultDiscount, ...referralDiscount]
-              : vultDiscount,
+          discounts: swapChain === Chain.THORChain ? [...vultDiscount, ...referralDiscount] : vultDiscount,
         }
       },
     }))
@@ -195,10 +170,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (
-      isOneOf(from.chain, oneInchSwapEnabledChains) &&
-      from.chain === to.chain
-    ) {
+    if (isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
       result.push({
         providerName: '1inch',
         fetch: async (): Promise<SwapQuote> => {
@@ -215,10 +187,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (
-      isOneOf(fromChain, lifiSwapEnabledChains) &&
-      isOneOf(toChain, lifiSwapEnabledChains)
-    ) {
+    if (isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
       result.push({
         providerName: 'LiFi',
         fetch: async (): Promise<SwapQuote> => {
@@ -244,8 +213,7 @@ export const findSwapQuote = async ({
   }
 
   const shouldPreferGeneralSwap =
-    [from.chain, to.chain].every(chain => isChainOfKind(chain, 'evm')) &&
-    [from.id, to.id].some(v => v)
+    [from.chain, to.chain].every(chain => isChainOfKind(chain, 'evm')) && [from.id, to.id].some(v => v)
 
   const fetchers = shouldPreferGeneralSwap
     ? [...getGeneralFetchers(), ...getNativeFetchers()]
@@ -272,9 +240,7 @@ export const findSwapQuote = async ({
 
   for (const result of settled) {
     if (result.status === 'rejected' && isInError(result.reason, 'dust threshold')) {
-      throw new Error(
-        'Swap amount too small. Please increase the amount to proceed.'
-      )
+      throw new Error('Swap amount too small. Please increase the amount to proceed.')
     }
   }
 
@@ -288,7 +254,5 @@ export const findSwapQuote = async ({
     })
     .filter((providerName): providerName is SwapQuoteProviderName => providerName !== null)
 
-  throw new Error(
-    `No swap route found after trying ${failedProviders.join(', ')}.`
-  )
+  throw new Error(`No swap route found after trying ${failedProviders.join(', ')}.`)
 }
