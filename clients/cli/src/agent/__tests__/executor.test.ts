@@ -165,7 +165,7 @@ describe('AgentExecutor', () => {
     expect(removed.map(r => r.chain).sort()).toEqual(['Bitcoin', 'Ethereum'])
   })
 
-  it('vault_chain rejects unknown action', async () => {
+  it('vault_chain rejects unknown action without mutating state', async () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)
 
@@ -173,6 +173,20 @@ describe('AgentExecutor', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/vault_chain.*unknown action/)
+    expect(vault.addChain).not.toHaveBeenCalled()
+    expect(vault.removeChain).not.toHaveBeenCalled()
+  })
+
+  it('vault_coin rejects unknown action without mutating state', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const result = await executor.executeAction(action({ type: 'vault_coin', params: { action: 'wat', coins: [] } }))
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/vault_coin.*unknown action/)
+    expect(vault.addToken).not.toHaveBeenCalled()
+    expect(vault.removeToken).not.toHaveBeenCalled()
   })
 
   // vault_coin — wire shape: { action, coins: [{chain, ticker, contract_address?, decimals?}] }
@@ -322,6 +336,56 @@ describe('AgentExecutor', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/no saved entry named "alice"/)
+  })
+
+  // Two saved entries with the same name on the same chain are reachable
+  // because AddressBookManager dedupes by (chain, address) only. A naive
+  // `find()` would silently delete the first match — that's a real
+  // data-integrity bug since the user can't tell which entry was removed.
+  // Refuse ambiguity instead, listing candidate addresses so the agent
+  // can retry with explicit entry.address.
+  it('address_book action=remove refuses ambiguous name matches', async () => {
+    const vault = createMockVault()
+    const vultisig = createMockVultisig()
+    ;((vultisig as any).getAddressBook as ReturnType<typeof vi.fn>).mockResolvedValue({
+      saved: [
+        { chain: Chain.Ethereum, address: '0xalice1', name: 'alice', source: 'saved', dateAdded: 1 },
+        { chain: Chain.Ethereum, address: '0xalice2', name: 'Alice', source: 'saved', dateAdded: 2 },
+      ],
+      vaults: [],
+    })
+    const executor = new AgentExecutor(vault, false, undefined, vultisig)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'address_book',
+        params: { action: 'remove', entry: { chain: 'Ethereum', name: 'alice' } },
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/ambiguous name "alice"/)
+    expect(result.error).toContain('0xalice1')
+    expect(result.error).toContain('0xalice2')
+    expect((vultisig as any).removeAddressBookEntry).not.toHaveBeenCalled()
+  })
+
+  it('address_book rejects unknown action without mutating state', async () => {
+    const vault = createMockVault()
+    const vultisig = createMockVultisig()
+    const executor = new AgentExecutor(vault, false, undefined, vultisig)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'address_book',
+        params: { action: 'wat', entry: { name: 'alice', chain: 'Ethereum', address: '0xalice' } },
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/address_book.*unknown action/)
+    expect((vultisig as any).addAddressBookEntry).not.toHaveBeenCalled()
+    expect((vultisig as any).removeAddressBookEntry).not.toHaveBeenCalled()
   })
 
   it('address_book add fails when Vultisig instance is not configured', async () => {

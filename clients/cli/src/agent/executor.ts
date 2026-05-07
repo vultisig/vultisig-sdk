@@ -247,12 +247,20 @@ export class AgentExecutor {
   // Chain & Token Management
   // ============================================================================
 
+  // Audit log for state-mutating CRUD tools. Always-on (regardless of
+  // --verbose) so the user sees what the agent persisted to vault state.
+  // Goes to stderr to keep stdout clean for JSON output.
+  private auditLog(tool: string, action: string | undefined, summary: string): void {
+    process.stderr.write(`[agent] ${tool} ${action ?? '?'}: ${summary}\n`)
+  }
+
   // vault_chain dispatcher — backend shape:
   //   { action: "add" | "remove", chains: [{ chain }] }
   // Single-chain (`chain` only) and legacy string arrays are tolerated for
   // forward compatibility / hand-rolled callers.
   private async vaultChain(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const action = params.action as string | undefined
+    this.auditLog('vault_chain', action, summarizeChains(params))
     switch (action) {
       case 'add':
         return this.addChainImpl(params)
@@ -267,6 +275,7 @@ export class AgentExecutor {
   //   { action: "add" | "remove", coins: [{ chain, ticker, contract_address?, decimals?, ... }] }
   private async vaultCoin(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const action = params.action as string | undefined
+    this.auditLog('vault_coin', action, summarizeCoins(params))
     switch (action) {
       case 'add':
         return this.addCoinImpl(params)
@@ -383,7 +392,12 @@ export class AgentExecutor {
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
 
-    const tokenId = (params.contract_address || params.contractAddress || params.token_id || params.id) as string
+    const tokenId = (params.contract_address || params.contractAddress || params.token_id || params.id) as
+      | string
+      | undefined
+    if (!tokenId) {
+      throw new Error(`vault_coin remove: missing contract_address for coin on ${chainName}`)
+    }
     await this.vault.removeToken(chain, tokenId)
     return { chain: chain.toString(), removed: true }
   }
@@ -1609,6 +1623,7 @@ export class AgentExecutor {
   //   { action: "add" | "remove", entry: { name, chain, address } }
   private async addressBook(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const action = params.action as string | undefined
+    this.auditLog('address_book', action, summarizeAddressBookEntry(params))
     switch (action) {
       case 'add':
         return this.addAddressBookImpl(params)
@@ -1664,7 +1679,9 @@ export class AgentExecutor {
 
     // Agent often emits `{chain, name}` without resolving the address itself.
     // Look the entry up by name in the saved book so name-based removal works
-    // without forcing the model to call get_address_book first.
+    // without forcing the model to call get_address_book first. The SDK
+    // dedupes saved entries by (chain, address) only — name is not unique —
+    // so refuse ambiguous matches rather than silently deleting the first.
     let address = entry.address as string | undefined
     if (!address) {
       const name = entry.name as string | undefined
@@ -1673,11 +1690,17 @@ export class AgentExecutor {
       }
       const book = await this.vultisig.getAddressBook(chain)
       const lower = name.toLowerCase()
-      const match = book.saved.find(e => e.name.toLowerCase() === lower && e.chain === chain)
-      if (!match) {
+      const matches = book.saved.filter(e => e.name.toLowerCase() === lower && e.chain === chain)
+      if (matches.length === 0) {
         throw new Error(`address_book remove: no saved entry named "${name}" on ${chainName}`)
       }
-      address = match.address
+      if (matches.length > 1) {
+        const addrs = matches.map(m => m.address).join(', ')
+        throw new Error(
+          `address_book remove: ambiguous name "${name}" on ${chainName} — multiple addresses: ${addrs}. Specify entry.address explicitly.`
+        )
+      }
+      address = matches[0].address
     }
 
     await this.vultisig.removeAddressBookEntry([{ chain, address }])
@@ -1890,6 +1913,49 @@ function parseAmount(amountStr: string, decimals: number): bigint {
   const [whole, frac = ''] = amountStr.split('.')
   const paddedFrac = frac.slice(0, decimals).padEnd(decimals, '0')
   return BigInt(whole || '0') * 10n ** BigInt(decimals) + BigInt(paddedFrac || '0')
+}
+
+// Audit-log summarizers for state-mutating CRUD tools.
+// Short, scannable, mention what would help a user notice a wrong action.
+
+function shortenAddress(addr: string | undefined): string {
+  if (!addr || typeof addr !== 'string' || addr.length < 10) return addr ?? ''
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`
+}
+
+function summarizeChains(params: Record<string, unknown>): string {
+  const chains = params.chains as Array<unknown> | undefined
+  if (Array.isArray(chains) && chains.length > 0) {
+    const names = chains.map(c => (typeof c === 'string' ? c : (c as { chain?: unknown })?.chain)).filter(Boolean)
+    return names.length > 0 ? names.join(', ') : '(empty)'
+  }
+  return (params.chain as string) || '(unknown)'
+}
+
+function summarizeCoins(params: Record<string, unknown>): string {
+  const coins = (params.coins as Array<unknown> | undefined) ?? (params.tokens as Array<unknown> | undefined)
+  if (Array.isArray(coins) && coins.length > 0) {
+    return coins
+      .map(c => {
+        const t = c as { chain?: unknown; ticker?: unknown; symbol?: unknown; contract_address?: unknown; contractAddress?: unknown }
+        const sym = t.ticker || t.symbol || '?'
+        const ca = t.contract_address || t.contractAddress
+        const addrPart = ca ? ` (${shortenAddress(String(ca))})` : ''
+        return `${sym} on ${t.chain ?? '?'}${addrPart}`
+      })
+      .join(', ')
+  }
+  const sym = params.ticker || params.symbol || '?'
+  return `${sym} on ${params.chain ?? '?'}`
+}
+
+function summarizeAddressBookEntry(params: Record<string, unknown>): string {
+  const entry = params.entry as { name?: unknown; chain?: unknown; address?: unknown } | undefined
+  if (!entry) return '(missing entry)'
+  const name = entry.name || '(no name)'
+  const chain = entry.chain ?? '?'
+  const addr = entry.address ? shortenAddress(String(entry.address)) : null
+  return addr ? `${name} (${addr}) on ${chain}` : `${name} on ${chain}`
 }
 
 /**
