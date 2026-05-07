@@ -6,9 +6,7 @@ import base58 from 'bs58'
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
-export const broadcastSolanaTx: BroadcastTxResolver<
-  OtherChain.Solana
-> = async ({ chain, tx }) => {
+export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async ({ chain, tx }) => {
   const rawTransaction = base58.decode(tx.encoded)
 
   // Try JITO first for MEV protection, but still relay through standard RPC.
@@ -25,7 +23,6 @@ export const broadcastSolanaTx: BroadcastTxResolver<
     await client.sendRawTransaction(rawTransaction, {
       skipPreflight: false,
       preflightCommitment: 'confirmed',
-      maxRetries: 3,
     })
   } catch (error) {
     await verifyBroadcastByHash({ chain, tx, error })
