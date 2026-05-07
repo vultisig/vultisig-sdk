@@ -256,8 +256,10 @@ export type MaxSendAmountResult = {
   maxSendable: string
 }
 
-// Fiat currency type
-export type FiatCurrency = 'usd' | 'eur' | 'gbp' | 'jpy' | 'cny' | 'aud' | 'cad' | 'chf' | 'sgd' | 'sek'
+// Fiat currency — single source of truth for runtime checks + typing
+export const FIAT_CURRENCIES = ['usd', 'eur', 'gbp', 'jpy', 'cny', 'aud', 'cad', 'chf', 'sgd', 'sek'] as const
+
+export type FiatCurrency = (typeof FIAT_CURRENCIES)[number]
 
 // Discount tier type (based on VULT token + Thorguard NFT holdings)
 export type DiscountTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'ultimate' | null

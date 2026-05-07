@@ -1,3 +1,4 @@
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
 import { dialog, type IpcMain } from 'electron'
 import * as fs from 'fs/promises'
 
@@ -149,7 +150,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     const sdk = getSDK()
     if (vaultId) {
       const vault = await sdk.getVaultById(vaultId)
-      if (!vault) throw new Error('Vault not found')
+      if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
       await sdk.setActiveVault(vault)
       _event.sender.send('vault:changed', {
         vault: {
@@ -303,14 +304,14 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getAddress', async (_event, vaultId: string, chain: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     return await vault.address(chain as any)
   })
 
   ipcMain.handle('vault:getAllAddresses', async (_event, vaultId: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
 
     const addresses: Record<string, string> = {}
     for (const chain of vault.chains) {
@@ -326,7 +327,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getBalance', async (_event, vaultId: string, chain: string, tokenId?: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const balance = await vault.balance(chain as any, tokenId)
     _event.sender.send('vault:balanceUpdated', { chain, tokenId })
     return {
@@ -340,14 +341,14 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getChains', async (_event, vaultId: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     return vault.chains
   })
 
   ipcMain.handle('vault:addChain', async (_event, vaultId: string, chain: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     await vault.addChain(chain as any)
     _event.sender.send('vault:chainChanged', { chain, action: 'added' })
   })
@@ -355,7 +356,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:removeChain', async (_event, vaultId: string, chain: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     await vault.removeChain(chain as any)
     _event.sender.send('vault:chainChanged', { chain, action: 'removed' })
   })
@@ -363,21 +364,21 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getTokens', async (_event, vaultId: string, chain: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     return vault.getTokens(chain as any)
   })
 
   ipcMain.handle('vault:addToken', async (_event, vaultId: string, chain: string, token: any) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     await vault.addToken(chain as any, token)
   })
 
   ipcMain.handle('vault:removeToken', async (_event, vaultId: string, chain: string, tokenId: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     await vault.removeToken(chain as any, tokenId)
   })
 
@@ -386,7 +387,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:setCurrency', async (_event, vaultId: string, currency: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     vault.setCurrency(currency as any)
   })
 
@@ -395,7 +396,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     async (_event, vaultId: string, chain: string, tokenId?: string, currency?: string) => {
       const sdk = getSDK()
       const vault = await sdk.getVaultById(vaultId)
-      if (!vault) throw new Error('Vault not found')
+      if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
       if (currency) vault.setCurrency(currency as any)
       const value = await vault.getValue(chain as any, tokenId, currency as any)
       return { amount: value.amount, currency: value.currency || currency || 'usd' }
@@ -405,7 +406,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getTotalValue', async (_event, vaultId: string, currency?: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     if (currency) vault.setCurrency(currency as any)
     const value = await vault.getTotalValue(currency as any)
     return { amount: value.amount, currency: value.currency || currency || 'usd' }
@@ -414,7 +415,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:refreshPortfolioPrices', async (_event, vaultId: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     await vault.updateValues('all')
   })
 
@@ -423,14 +424,14 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getDiscountTier', async (_event, vaultId: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     return vault.getDiscountTier()
   })
 
   ipcMain.handle('vault:updateDiscountTier', async (_event, vaultId: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     return vault.updateDiscountTier()
   })
 
@@ -449,7 +450,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getSwapQuote', async (_event, vaultId: string, params: any) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const quote = await vault.getSwapQuote(params)
     // Serialize for IPC (convert BigInt to string)
     return JSON.parse(JSON.stringify(quote, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
@@ -458,7 +459,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:prepareSwapTx', async (_event, vaultId: string, params: any) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const result = await vault.prepareSwapTx(params)
     // Serialize for IPC (convert BigInt to string)
     return JSON.parse(JSON.stringify(result, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
@@ -480,7 +481,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     ) => {
       const sdk = getSDK()
       const vault = await sdk.getVaultById(vaultId)
-      if (!vault) throw new Error('Vault not found')
+      if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
 
       const keysignPayload = await vault.prepareSendTx({
         ...params,
@@ -497,7 +498,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getMaxSendAmount', async (_event, vaultId: string, params: any) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const result = await vault.getMaxSendAmount(params)
     return JSON.parse(JSON.stringify(result, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
   })
@@ -505,14 +506,14 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:extractMessageHashes', async (_event, vaultId: string, keysignPayload: any) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     return vault.extractMessageHashes(keysignPayload)
   })
 
   ipcMain.handle('vault:sign', async (_event, vaultId: string, keysignPayload: any) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
 
     // Subscribe to signing events
     const handleProgress = (data: any) => {
@@ -555,7 +556,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     ) => {
       const sdk = getSDK()
       const vault = await sdk.getVaultById(vaultId)
-      if (!vault) throw new Error('Vault not found')
+      if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
       const txHash = await vault.broadcastTx({
         ...params,
         chain: params.chain as any,
@@ -568,7 +569,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:getTxStatus', async (_event, vaultId: string, chain: string, txHash: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     const result = await vault.getTxStatus({ chain: chain as any, txHash })
     if (result.status === 'success') {
       _event.sender.send('vault:transactionConfirmed', { chain, txHash })
@@ -601,7 +602,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     ) => {
       const sdk = getSDK()
       const vault = await sdk.getVaultById(vaultId)
-      if (!vault) throw new Error('Vault not found')
+      if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
       const result = await vault.export(options?.password)
       // Extract .data to match browser adapter's expected return type
       return result.data
@@ -611,7 +612,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('vault:rename', async (_event, vaultId: string, newName: string) => {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
-    if (!vault) throw new Error('Vault not found')
+    if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
     await vault.rename(newName)
   })
 

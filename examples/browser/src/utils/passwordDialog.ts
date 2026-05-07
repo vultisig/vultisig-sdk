@@ -2,7 +2,25 @@
  * In-page password prompt for `onPasswordRequired` — replaces `window.prompt`
  * so automated browsers and QA can interact, and UX is consistent.
  */
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+
 let dialogChain: Promise<void> = Promise.resolve()
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function isVisibleFocusable(el: HTMLElement): boolean {
+  const style = window.getComputedStyle(el)
+  if (style.visibility === 'hidden' || style.display === 'none') return false
+  return !!(el.offsetWidth || el.offsetHeight || style.position === 'fixed')
+}
+
+function getFocusableElements(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(el => {
+    if (el.closest('[aria-hidden="true"]')) return false
+    return isVisibleFocusable(el)
+  })
+}
 
 export function requestVaultPasswordInPage(vaultId: string, vaultName?: string): Promise<string> {
   const titleName = vaultName?.trim() || vaultId.slice(0, 8)
@@ -10,7 +28,7 @@ export function requestVaultPasswordInPage(vaultId: string, vaultName?: string):
   const run = (): Promise<string> =>
     new Promise((resolve, reject) => {
       if (typeof document === 'undefined') {
-        reject(new Error('Password dialog requires a browser document'))
+        reject(new VaultError(VaultErrorCode.BrowserDocumentRequired, 'Password dialog requires a browser document'))
         return
       }
 
@@ -70,8 +88,10 @@ export function requestVaultPasswordInPage(vaultId: string, vaultName?: string):
       btnOk.style.cssText =
         'padding:8px 16px;border-radius:8px;border:none;background:#2563eb;color:#fff;font-weight:600;cursor:pointer'
 
+      const cancelled = () => new VaultError(VaultErrorCode.PasswordEntryCancelled, 'Password entry was cancelled')
+
       const teardown = (restoreFocus: boolean) => {
-        document.removeEventListener('keydown', onKeyDown)
+        document.removeEventListener('keydown', onKeyDown, true)
         backdrop.removeEventListener('click', onBackdropClick)
         root.remove()
         if (restoreFocus && prevActive?.focus) {
@@ -91,7 +111,7 @@ export function requestVaultPasswordInPage(vaultId: string, vaultName?: string):
 
       const onBackdropClick = (e: MouseEvent) => {
         if (e.target === backdrop) {
-          finishReject(new Error('Password entry was cancelled'))
+          finishReject(cancelled())
         }
       }
 
@@ -99,11 +119,40 @@ export function requestVaultPasswordInPage(vaultId: string, vaultName?: string):
         if (e.key === 'Escape') {
           e.preventDefault()
           e.stopPropagation()
-          finishReject(new Error('Password entry was cancelled'))
+          finishReject(cancelled())
+          return
+        }
+
+        if (e.key !== 'Tab') return
+
+        const focusables = getFocusableElements(panel)
+        if (focusables.length === 0) {
+          e.preventDefault()
+          return
+        }
+
+        if (focusables.length === 1) {
+          e.preventDefault()
+          focusables[0].focus()
+          return
+        }
+
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        const active = document.activeElement as HTMLElement | null
+
+        if (e.shiftKey) {
+          if (active === first || !panel.contains(active)) {
+            e.preventDefault()
+            last.focus()
+          }
+        } else if (active === last || !panel.contains(active)) {
+          e.preventDefault()
+          first.focus()
         }
       }
 
-      btnCancel.onclick = () => finishReject(new Error('Password entry was cancelled'))
+      btnCancel.onclick = () => finishReject(cancelled())
 
       btnOk.onclick = () => {
         const value = input.value
@@ -127,7 +176,7 @@ export function requestVaultPasswordInPage(vaultId: string, vaultName?: string):
       root.append(backdrop)
       document.body.append(root)
 
-      document.addEventListener('keydown', onKeyDown)
+      document.addEventListener('keydown', onKeyDown, true)
       backdrop.addEventListener('click', onBackdropClick)
 
       requestAnimationFrame(() => {

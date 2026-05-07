@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import type { FiatCurrency, VaultInfo } from '../../types'
+import { FIAT_CURRENCIES, type FiatCurrency, type VaultInfo } from '../../types'
 import VaultAddresses from './sections/VaultAddresses'
 import VaultBalance from './sections/VaultBalance'
 import VaultChains from './sections/VaultChains'
@@ -53,7 +53,7 @@ const SECTION_CONFIG: { id: VaultSection; label: string; icon: string }[] = [
 
 const PORTFOLIO_STORAGE_KEY = (vaultId: string) => `vultisig-example-portfolio:${vaultId}`
 
-const FIAT_CODES = new Set<string>(['usd', 'eur', 'gbp', 'jpy', 'cny', 'aud', 'cad', 'chf', 'sgd', 'sek'])
+const FIAT_CODES = new Set<string>(FIAT_CURRENCIES)
 
 function parsePortfolioSnapshot(vaultId: string): PortfolioSnapshot | null {
   if (typeof sessionStorage === 'undefined') return null
