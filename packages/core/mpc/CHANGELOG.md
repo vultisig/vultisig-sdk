@@ -1,5 +1,30 @@
 # @vultisig/core-mpc
 
+## 1.2.6
+
+### Patch Changes
+
+- Updated dependencies [[`198f2af`](https://github.com/vultisig/vultisig-sdk/commit/198f2af1ae22bd379d7eff0c1c428a0ce1043229)]:
+  - @vultisig/core-chain@1.5.3
+
+## 1.2.5
+
+### Patch Changes
+
+- Updated dependencies [[`b97da23`](https://github.com/vultisig/vultisig-sdk/commit/b97da233b3fdaeeb75e3a0c986d7fd15e0d743e4), [`745172f`](https://github.com/vultisig/vultisig-sdk/commit/745172f3ee511bc4e95914986bfbdb8acf794b1e)]:
+  - @vultisig/core-chain@1.5.2
+
+## 1.2.4
+
+### Patch Changes
+
+- [#371](https://github.com/vultisig/vultisig-sdk/pull/371) [`b713743`](https://github.com/vultisig/vultisig-sdk/commit/b7137437547afc8189af207f210be57f50973dc7) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Install `globalThis.Buffer` before the browser SDK module graph evaluates (`preamble.ts`), align browser `polyfills` with `globalThis`, add explicit `buffer` imports across MPC modules that use `Buffer`, and depend on `buffer` from `@vultisig/core-mpc`. Harden the browser/electron examples: seedphrase import batching/progress and adapter flags, clipboard helper with bounded timeouts, QR/address copy feedback, and send-form amount validation with trimmed recipients.
+
+- [#376](https://github.com/vultisig/vultisig-sdk/pull/376) [`502c7ec`](https://github.com/vultisig/vultisig-sdk/commit/502c7ec37e7853543c22311af0ada995fa2c47e2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Split `getSevenZip` into browser and Node builds so browser bundles never pull `node:module`, wire conditional `exports` via `generate-shared-exports`, and improve the browser partner example (StrictMode-safe init, dev QR logging, copyable QR textarea, Vite env types).
+
+- Updated dependencies [[`ed6955f`](https://github.com/vultisig/vultisig-sdk/commit/ed6955fe6d218b3b13314db32f8d43c67a41fb48)]:
+  - @vultisig/mpc-types@0.2.3
+
 ## 1.2.3
 
 ### Patch Changes

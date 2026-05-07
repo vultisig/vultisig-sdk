@@ -1,3 +1,4 @@
+/// <reference types="chrome" />
 /**
  * Chrome Extension storage implementation using chrome.storage.local
  *

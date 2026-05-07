@@ -6,7 +6,6 @@
  */
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import type {
-  Action,
   AuthTokenRequest,
   AuthTokenResponse,
   ConversationMessage,
@@ -55,6 +54,7 @@ function sseErrorToMessage(value: unknown): string {
 export class AgentClient {
   private baseUrl: string
   private authToken: string | null = null
+  private profile: string = ''
   verbose = false
 
   constructor(baseUrl: string) {
@@ -65,6 +65,16 @@ export class AgentClient {
     this.authToken = token
   }
 
+  /** Set the billing-profile slug sent as X-Vultisig-Abe-Profile on every
+   *  request. Empty falls back to the backend's default profile. */
+  setProfile(profile: string): void {
+    this.profile = profile
+  }
+
+  private profileHeader(): Record<string, string> {
+    return this.profile ? { 'X-Vultisig-Abe-Profile': this.profile } : {}
+  }
+
   // ============================================================================
   // Authentication
   // ============================================================================
@@ -72,7 +82,7 @@ export class AgentClient {
   async authenticate(req: AuthTokenRequest): Promise<AuthTokenResponse> {
     const res = await fetch(`${this.baseUrl}/auth/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
       body: JSON.stringify(req),
     })
     if (!res.ok) {
@@ -147,7 +157,6 @@ export class AgentClient {
       // unhandled rejections.
       onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
-      onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
       onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
@@ -161,6 +170,7 @@ export class AgentClient {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
         ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+        ...this.profileHeader(),
       },
       body: JSON.stringify(req),
       signal,
@@ -177,7 +187,6 @@ export class AgentClient {
 
     const result: SSEStreamResult = {
       fullText: '',
-      actions: [],
       suggestions: [],
       transactions: [],
       message: null,
@@ -266,7 +275,6 @@ export class AgentClient {
       // unhandled rejections.
       onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
       onTitle?: (title: string) => void
-      onActions?: (actions: Action[]) => void
       onSuggestions?: (suggestions: Suggestion[]) => void
       onTxReady?: (tx: TxReadyPayload) => void
       onMessage?: (msg: ConversationMessage) => void
@@ -341,13 +349,6 @@ export class AgentClient {
           if (typeof title === 'string') callbacks.onTitle?.(title)
           break
         }
-        case 'actions': {
-          if (this.verbose) process.stderr.write(`[SSE:actions] raw: ${data.slice(0, 1000)}\n`)
-          const actions = v1Data?.actions ?? parsed.actions ?? []
-          result.actions.push(...actions)
-          callbacks.onActions?.(actions)
-          break
-        }
         case 'suggestions': {
           const suggestions = v1Data?.suggestions ?? parsed.suggestions ?? []
           result.suggestions.push(...suggestions)
@@ -406,8 +407,6 @@ export class AgentClient {
         return 'tool_progress'
       case 'data-title':
         return 'title'
-      case 'data-actions':
-        return 'actions'
       case 'data-suggestions':
         return 'suggestions'
       case 'data-tx_ready':
@@ -424,20 +423,6 @@ export class AgentClient {
   }
 
   // ============================================================================
-  // Calldata
-  // ============================================================================
-
-  async getCalldata(id: string): Promise<{ data: string; to?: string; chain?: string }> {
-    const res = await fetch(`${this.baseUrl}/agent/calldata/${id}`, {
-      headers: this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {},
-    })
-    if (!res.ok) {
-      throw new Error(`Failed to resolve calldata_id ${id}: ${res.status} ${res.statusText}`)
-    }
-    return res.json() as Promise<{ data: string; to?: string; chain?: string }>
-  }
-
-  // ============================================================================
   // Private helpers
   // ============================================================================
 
@@ -447,6 +432,7 @@ export class AgentClient {
       headers: {
         'Content-Type': 'application/json',
         ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+        ...this.profileHeader(),
       },
       body: JSON.stringify(body),
     })
@@ -465,6 +451,7 @@ export class AgentClient {
       headers: {
         'Content-Type': 'application/json',
         ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+        ...this.profileHeader(),
       },
       body: JSON.stringify(body),
     })
@@ -478,7 +465,6 @@ export class AgentClient {
 
 export type SSEStreamResult = {
   fullText: string
-  actions: Action[]
   suggestions: Suggestion[]
   transactions: TxReadyPayload[]
   message: ConversationMessage | null

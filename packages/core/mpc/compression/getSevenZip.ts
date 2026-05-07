@@ -1,8 +1,2 @@
-import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
-import SevenZip from '7z-wasm'
-
-export const getSevenZip = memoizeAsync(() => {
-  return SevenZip({
-    locateFile: (file: any) => `/${file}`,
-  }).catch(() => SevenZip())
-})
+/** Re-export for bundlers / default resolution; `package.json` `exports` maps `browser` and `node` to split builds. */
+export { getSevenZip } from './getSevenZip.browser.js'

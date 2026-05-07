@@ -61,9 +61,9 @@ When using `agent ask` or `--via-agent`, the agent backend proposes actions; the
 | `sign_typed_data` | EIP-712 typed data signing | local |
 | `read_evm_contract` | Read EVM contract state | local |
 | `scan_tx` | Security scan via Blockaid | backend |
-| `add_chain` / `remove_chain` | Enable/disable chains | local |
-| `add_coin` / `remove_coin` | Add/remove tokens | local |
-| `address_book_add` / `address_book_remove` | Manage saved addresses | backend |
+| `vault_chain` | Add/remove chains (`{action: "add"\|"remove", chains: [...]}`) | local |
+| `vault_coin` | Add/remove tokens (`{action: "add"\|"remove", coins: [...]}`) | local |
+| `address_book` | Manage saved addresses (`{action: "add"\|"remove", entry: {...}}`) | local |
 | `get_address_book` | List saved addresses (requires CLI `AgentConfig.vultisig`) | local |
 | `build_tx` | Build a generic transaction | local |
 | `list_vaults` | List available vaults | local |

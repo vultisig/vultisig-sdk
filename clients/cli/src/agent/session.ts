@@ -34,15 +34,14 @@ import { PASSWORD_REQUIRED_ACTIONS } from './types'
 // Must stay aligned with the backend's `clientSideToolNames`. Unknown tools
 // surface as `[cli] unimplemented client-side tool` (not silent).
 // `sign_tx` uses the tx_ready channel instead; create_vault / plugin_install /
-// create_policy / delete_policy are mobile-only.
+// create_policy / delete_policy are mobile-only. The CRUD trio
+// (vault_coin / vault_chain / address_book) carries an `action: 'add'|'remove'`
+// discriminator that the executor switches on internally.
 export const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
   sign_typed_data: 'sign_typed_data',
-  add_coin: 'add_coin',
-  remove_coin: 'remove_coin',
-  add_chain: 'add_chain',
-  remove_chain: 'remove_chain',
-  address_book_add: 'address_book_add',
-  address_book_remove: 'address_book_remove',
+  vault_coin: 'vault_coin',
+  vault_chain: 'vault_chain',
+  address_book: 'address_book',
 }
 
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
@@ -79,6 +78,9 @@ export class AgentSession {
     this.config = config
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
+    if (config.profile) {
+      this.client.setProfile(config.profile)
+    }
     this.executor = new AgentExecutor(vault, !!config.verbose, vault.publicKeys.ecdsa, config.vultisig)
     this.publicKey = vault.publicKeys.ecdsa
 
@@ -114,9 +116,6 @@ export class AgentSession {
         this.client.setAuthToken(auth.token)
         saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
       }
-
-      // Give the executor access to the authenticated client for calldata_id resolution
-      this.executor.setBackendClient(this.client)
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
     }
@@ -294,8 +293,9 @@ export class AgentSession {
     let serverTxStoredFromStream = 0
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
-    // this, ordering-sensitive flows (add_chain → add_coin) race and the
-    // single-slot password resolver hangs when two dispatches both prompt.
+    // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
+    // and the single-slot password resolver hangs when two dispatches both
+    // prompt.
     let dispatchChain: Promise<void> = Promise.resolve()
 
     // Send via SSE stream. CR2: 401/403 retry happens at the request
@@ -320,12 +320,6 @@ export class AgentSession {
       },
       onTitle: (_title: string) => {
         // Title updates handled internally
-      },
-      onActions: (_actions: Action[]) => {
-        // Legacy data-actions channel: backend no longer emits for
-        // client-side tools post-#119; any late-arriving legacy
-        // payloads are collected in streamResult for the fallback
-        // below.
       },
       onSuggestions: (suggestions: any[]) => {
         ui.onSuggestions(suggestions)
@@ -394,42 +388,6 @@ export class AgentSession {
     const displayText = stripLeakedToolCallTags(responseText)
     if (displayText) {
       ui.onAssistantMessage(displayText)
-    }
-
-    // data-actions fallback — still fires for schedule_task preview etc.
-    // sign_tx is excluded; it has its own synth path below.
-    const legacyActions = streamResult.actions.filter(a => a.type !== 'sign_tx')
-    if (legacyActions.length > 0) {
-      const results = await this.executeActions(legacyActions, ui)
-
-      // If a build_* action succeeded and produced a pending tx, auto-sign client-side
-      const hasBuildSuccess = results.some(r => r.success && r.action.startsWith('build_'))
-      if (hasBuildSuccess && this.executor.hasPendingTransaction()) {
-        if (this.config.verbose)
-          process.stderr.write(`[session] build_* action produced pending tx, auto-signing client-side\n`)
-        const signAction: Action = {
-          id: `tx_sign_${Date.now()}`,
-          type: 'sign_tx',
-          title: 'Sign transaction',
-          params: {},
-          auto_execute: true,
-        }
-        const signResults = await this.executeActions([signAction], ui)
-        const signResult = signResults[0]
-        if (signResult) {
-          this.pendingToolResults.push(actionResultToRecentAction(signResult))
-          await this.processMessageLoop(null, ui, depth + 1)
-          return
-        }
-      }
-
-      if (results.length > 0) {
-        for (const result of results) {
-          this.pendingToolResults.push(actionResultToRecentAction(result))
-        }
-        await this.processMessageLoop(null, ui, depth + 1)
-        return
-      }
     }
 
     // tx_ready → synth sign_tx → executeActions. Result threaded via recent_actions.

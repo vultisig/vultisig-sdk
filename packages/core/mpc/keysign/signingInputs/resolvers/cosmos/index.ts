@@ -433,7 +433,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
     const getFeeAmounts = () => {
       if (chainKind !== 'ibcEnabled') return
 
-      const { gas } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      const { gas, ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
 
       const amounts: TW.Cosmos.Proto.Amount[] = [
         TW.Cosmos.Proto.Amount.create({
@@ -442,13 +442,20 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({
         }),
       ]
 
+      // Terra Classic stability-tax surcharge for USTC (uusd) sends.
+      // The burn-tax amount is pre-computed dynamically in getCosmosChainSpecific
+      // and stored in ibcDenomTraces.baseDenom so this sync path can use it.
+      // baseDenom is '' for all non-USTC chains; '0' when rate is zero.
       if (areEqualCoins(coin, { chain: Chain.TerraClassic, id: 'uusd' })) {
-        amounts.push(
-          TW.Cosmos.Proto.Amount.create({
-            denom: coin.id,
-            amount: '1000000',
-          })
-        )
+        const burnTaxAmount = BigInt(ibcDenomTraces?.baseDenom || '0')
+        if (burnTaxAmount > 0n) {
+          amounts.push(
+            TW.Cosmos.Proto.Amount.create({
+              denom: coin.id,
+              amount: burnTaxAmount.toString(),
+            })
+          )
+        }
       }
 
       return amounts

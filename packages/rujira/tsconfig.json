@@ -3,6 +3,7 @@
   "compilerOptions": {
     "target": "ES2021",
     "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "types": ["node"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "declaration": true,
@@ -10,6 +11,7 @@
     "noEmit": false,
     "emitDeclarationOnly": false,
     "outDir": "./dist",
+    "rootDir": "./src",
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
@@ -23,6 +25,7 @@
     "isolatedModules": true,
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

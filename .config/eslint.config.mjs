@@ -2,13 +2,10 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { fixupPluginRules } from '@eslint/compat'
+import { fixupConfigRules, fixupPluginRules } from '@eslint/compat'
 import { FlatCompat } from '@eslint/eslintrc'
 import js from '@eslint/js'
-import typescriptEslint from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
-import jsxA11Y from 'eslint-plugin-jsx-a11y'
-import react from 'eslint-plugin-react'
 import reactHooks from 'eslint-plugin-react-hooks'
 import simpleImportSort from 'eslint-plugin-simple-import-sort'
 // TEMPORARILY DISABLED: storybook plugin has missing dependency
@@ -53,18 +50,20 @@ export default [
       '**/public/wallet-core.wasm',
     ],
   },
-  ...compat.extends(
-    'eslint:recommended',
-    'plugin:react/recommended',
-    'plugin:@typescript-eslint/recommended',
-    'plugin:jsx-a11y/recommended',
-    'prettier' // eslint-config-prettier: disables ESLint rules that conflict with Prettier
+  ...fixupConfigRules(
+    compat.extends(
+      'eslint:recommended',
+      'plugin:react/recommended',
+      'plugin:@typescript-eslint/recommended',
+      'plugin:jsx-a11y/recommended',
+      'prettier' // eslint-config-prettier: disables ESLint rules that conflict with Prettier
+    )
   ),
   {
     plugins: {
-      react,
-      '@typescript-eslint': typescriptEslint,
-      'jsx-a11y': jsxA11Y,
+      // react, jsx-a11y and @typescript-eslint are already registered by
+      // fixupConfigRules(compat.extends(...)) above — re-declaring them here
+      // causes ESLint 10 to throw "Cannot redefine plugin".
       'react-hooks': fixupPluginRules(reactHooks),
       'simple-import-sort': simpleImportSort,
       'unused-imports': fixupPluginRules(unusedImportsPlugin),
@@ -119,6 +118,10 @@ export default [
         },
       ],
       '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
+
+      // ESLint 10 added these to recommended; opt-out until codebase adopts them
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
     },
   }, // Override for declaration files where interfaces are required for module augmentation
   {

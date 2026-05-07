@@ -6,14 +6,12 @@ import type { DiscoveredContracts, Market } from './types.js'
 
 export type DiscoveryOptions = {
   graphql?: GraphQLClientOptions
-  rpcEndpoint?: string
   cacheTtl?: number
   debug?: boolean
 }
 
 export class RujiraDiscovery {
   private graphql: GraphQLClient
-  private rpcEndpoint: string
   private cacheTtl: number
   private debug: boolean
   private finCodeId: number
@@ -23,7 +21,6 @@ export class RujiraDiscovery {
   constructor(options: DiscoveryOptions = {}) {
     const networkConfig = MAINNET_CONFIG
 
-    this.rpcEndpoint = options.rpcEndpoint || networkConfig.rpcEndpoint
     this.cacheTtl = options.cacheTtl ?? 5 * 60 * 1000
     this.debug = options.debug || false
     this.finCodeId = networkConfig.contracts.finCodeId
@@ -203,8 +200,15 @@ export class RujiraDiscovery {
   private async discoverViaChain(): Promise<DiscoveredContracts> {
     const fin: Record<string, string> = {}
 
-    const baseUrl = this.rpcEndpoint.replace(':26657', '').replace('rpc', 'thornode')
-    const restUrl = baseUrl.includes('thornode') ? baseUrl : 'https://thornode.thorchain.network'
+    // Read the THORNode REST URL straight from MAINNET_CONFIG instead of
+    // deriving it from rpcEndpoint via string substitution. The previous
+    // logic assumed RPC URLs contained the literal substring 'rpc' which
+    // could be swapped for 'thornode' (e.g. rpc.thorchain.network →
+    // thornode.thorchain.network). With the Liquify gateway the RPC and
+    // REST services live at distinct path segments (`thorchain_rpc` vs
+    // `thorchain_api`), so the substitution silently produced an invalid
+    // host (`thorchain_thornode`) and the fallback branch was unreachable.
+    const restUrl = MAINNET_CONFIG.restEndpoint
 
     try {
       // Paginate through all contracts for this code ID
