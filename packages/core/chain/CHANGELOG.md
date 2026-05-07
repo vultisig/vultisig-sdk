@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 1.5.3
+
+### Patch Changes
+
+- [#416](https://github.com/vultisig/vultisig-sdk/pull/416) [`198f2af`](https://github.com/vultisig/vultisig-sdk/commit/198f2af1ae22bd379d7eff0c1c428a0ce1043229) Thanks [@realpaaao](https://github.com/realpaaao)! - Relay Solana transactions through standard RPC after JITO acceptance to avoid treating JITO-only acceptance as durable broadcast.
+
 ## 1.5.2
 
 ### Patch Changes
