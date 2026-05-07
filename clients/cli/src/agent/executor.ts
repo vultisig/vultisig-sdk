@@ -100,14 +100,27 @@ export class AgentExecutor {
       process.stderr.write(
         `[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`
       )
-    const nestedTx = txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx
+    // mcp-ts execute_swap emits two-leg flows (approvalTxArgs + txArgs).
+    // sdk-cli only handles single-tx envelopes today; reject loudly so we
+    // never half-broadcast the swap leg without the prerequisite approve.
+    // Multi-leg sequencing is tracked under task
+    // 070526-sdk-cli-mcp-ts-envelope-parity.md Phase B.
+    if (txReadyData?.approvalTxArgs) {
+      if (this.verbose)
+        process.stderr.write(
+          `[executor] skipping multi-leg execute_swap envelope (approvalTxArgs present): not yet supported in sdk-cli — Phase B\n`
+        )
+      return false
+    }
+    const nestedTx = extractNestedTx(txReadyData)
     if (nestedTx?.status === 'error' || nestedTx?.error) {
       if (this.verbose)
         process.stderr.write(`[executor] skipping error tx_ready: ${nestedTx.error || 'unknown error'}\n`)
       return false
     }
     if (!nestedTx) {
-      if (this.verbose) process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx found in data\n`)
+      if (this.verbose)
+        process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx/txArgs.tx found in data\n`)
       return false
     }
 
@@ -988,14 +1001,20 @@ export class AgentExecutor {
     defaultChain: Chain,
     params: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const swapTx = serverTxData.swap_tx || serverTxData.send_tx || serverTxData.tx
+    const swapTx = extractNestedTx(serverTxData)
     if (!swapTx?.to) {
       throw new Error('Server transaction missing required fields (to)')
     }
 
-    // Resolve chain from action params, tx data, or stored default
-    const chainName = (params.chain || serverTxData.chain || serverTxData.from_chain) as string | undefined
-    const chainId = (serverTxData.chain_id || swapTx.chainId) as string | number | undefined
+    // Resolve chain from action params, tx data, or stored default.
+    // mcp-ts nests chain / chain_id under txArgs; mcp-go puts them at top level.
+    const chainName = (params.chain || serverTxData.chain || serverTxData.from_chain || serverTxData.txArgs?.chain) as
+      | string
+      | undefined
+    const chainId = (serverTxData.chain_id || serverTxData.txArgs?.chain_id || swapTx.chainId) as
+      | string
+      | number
+      | undefined
     let chain = defaultChain
     if (chainName) {
       chain = resolveChain(chainName) || defaultChain
@@ -1786,12 +1805,40 @@ function resolveChainFromTxReady(txReadyData: any): Chain | null {
     const chain = resolveChainId(txReadyData.chain_id)
     if (chain) return chain
   }
-  const swapTx = txReadyData.swap_tx || txReadyData.send_tx || txReadyData.tx
+  // mcp-ts execute_* envelopes nest chain / chain_id under txArgs.
+  if (txReadyData.txArgs?.chain) {
+    const chain = resolveChain(txReadyData.txArgs.chain)
+    if (chain) return chain
+  }
+  if (txReadyData.txArgs?.chain_id) {
+    const chain = resolveChainId(txReadyData.txArgs.chain_id)
+    if (chain) return chain
+  }
+  const swapTx = extractNestedTx(txReadyData)
   if (swapTx?.chainId) {
     const chain = resolveChainId(swapTx.chainId)
     if (chain) return chain
   }
   return null
+}
+
+/**
+ * Extract the signable transaction object from a tx_ready envelope.
+ *
+ * mcp-go (build_*) emits the tx at top level under one of three keys:
+ *   - swap_tx   (build_swap_tx output)
+ *   - send_tx   (per-chain build_*_send output)
+ *   - tx        (build_evm_tx output)
+ *
+ * mcp-ts (execute_*) wraps the tx one level deeper:
+ *   - txArgs.tx (execute_send / execute_contract_call output)
+ *
+ * Multi-leg envelopes (mcp-ts execute_swap with approvalTxArgs) are NOT
+ * extracted here — see storeServerTransaction's approvalTxArgs guard
+ * and Phase B of 070526-sdk-cli-mcp-ts-envelope-parity.md.
+ */
+export function extractNestedTx(txReadyData: any): any {
+  return txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx || txReadyData?.txArgs?.tx
 }
 
 /**
