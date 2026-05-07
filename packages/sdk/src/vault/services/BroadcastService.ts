@@ -4,7 +4,7 @@ import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPubli
 import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
 import { broadcastTx as coreBroadcastTx } from '@vultisig/core-chain/tx/broadcast'
 import { getTxHash } from '@vultisig/core-chain/tx/hash'
-import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
+import { getEncodedSigningInputsAsync } from '@vultisig/core-mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
 import { compileTx } from '@vultisig/core-mpc/tx/compile/compileTx'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -86,7 +86,7 @@ export class BroadcastService {
       }
 
       // Get transaction input data (same data used during signing)
-      const txInputsArray = getEncodedSigningInputs({
+      const txInputsArray = await getEncodedSigningInputsAsync({
         keysignPayload,
         walletCore,
         publicKey,

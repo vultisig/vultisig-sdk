@@ -7,7 +7,7 @@ import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPubli
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
-import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
+import { getEncodedSigningInputsAsync } from '@vultisig/core-mpc/keysign/signingInputs'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
 import { getKeysignChain } from '@vultisig/core-mpc/keysign/utils/getKeysignChain'
 import { getPreSigningHashes } from '@vultisig/core-mpc/tx/preSigningHashes'
@@ -253,7 +253,7 @@ export class TransactionBuilder {
             })()
 
       // Get encoded signing inputs (compiled transaction data)
-      const txInputsArray = getEncodedSigningInputs({
+      const txInputsArray = await getEncodedSigningInputsAsync({
         keysignPayload,
         walletCore,
         publicKey,

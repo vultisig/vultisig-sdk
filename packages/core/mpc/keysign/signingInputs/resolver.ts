@@ -15,3 +15,16 @@ export type SigningInputsResolver<T extends ChainKind> = Resolver<
   SigningInputsResolverInput<T>,
   SigningInput<T>[]
 >
+
+/**
+ * Variant for resolvers that need to do async work (e.g. fetching per-UTXO
+ * assets from Koios for Cardano CNT sends so the planner can balance the
+ * TokenBundle output). Used by `getCardanoSigningInputs`. The async dispatcher
+ * (`getEncodedSigningInputsAsync`) awaits unconditionally; the sync dispatcher
+ * (`getEncodedSigningInputs`) throws if a resolver returns a Promise so
+ * non-Cardano callers (Blockaid) keep their sync surface.
+ */
+export type AsyncSigningInputsResolver<T extends ChainKind> = Resolver<
+  SigningInputsResolverInput<T>,
+  Promise<SigningInput<T>[]>
+>

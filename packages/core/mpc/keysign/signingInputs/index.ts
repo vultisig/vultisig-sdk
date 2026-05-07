@@ -5,7 +5,7 @@ import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 import { getKeysignChain } from '../utils/getKeysignChain'
 import { signingInputClasses } from './core'
-import { SigningInputsResolver } from './resolver'
+import { AsyncSigningInputsResolver, SigningInputsResolver } from './resolver'
 import { getBittensorSigningInputs } from './resolvers/bittensor'
 import { getCardanoSigningInputs } from './resolvers/cardano'
 import { getCosmosSigningInputs } from './resolvers/cosmos'
@@ -25,7 +25,11 @@ type Input = {
   publicKey?: PublicKey
 }
 
-const resolvers: Record<ChainKind, SigningInputsResolver<any>> = {
+type AnyResolver =
+  | SigningInputsResolver<any>
+  | AsyncSigningInputsResolver<any>
+
+const resolvers: Record<ChainKind, AnyResolver> = {
   bittensor: getBittensorSigningInputs,
   cardano: getCardanoSigningInputs,
   cosmos: getCosmosSigningInputs,
@@ -38,14 +42,12 @@ const resolvers: Record<ChainKind, SigningInputsResolver<any>> = {
   ton: getTonSigningInputs,
   utxo: getUtxoSigningInputs,
   tron: getTronSigningInputs,
-} as Record<ChainKind, SigningInputsResolver<any>>
+} as Record<ChainKind, AnyResolver>
 
-export const getEncodedSigningInputs = (input: Input): Uint8Array[] => {
-  const chain = getKeysignChain(input.keysignPayload)
-  const chainKind = getChainKind(chain)
-
-  const signingInputs = resolvers[chainKind](input as any)
-
+const encodeResolverOutput = (
+  chainKind: ChainKind,
+  signingInputs: any[]
+): Uint8Array[] => {
   // Bittensor returns pre-encoded Uint8Array (custom extrinsic builder, not TW proto)
   if (chainKind === 'bittensor' || chainKind === 'qbtc') {
     return signingInputs as unknown as Uint8Array[]
@@ -55,4 +57,41 @@ export const getEncodedSigningInputs = (input: Input): Uint8Array[] => {
     const SigningInputClass = signingInputClasses[chainKind]
     return SigningInputClass.encode(signingInput).finish()
   })
+}
+
+/**
+ * Sync entry point. Use when you know the chain isn't Cardano — Cardano's
+ * resolver is async (it fetches per-UTXO assets from Koios at sign time so
+ * the planner can balance CNT outputs) and will throw if invoked here.
+ * Blockaid input builders use this because Cardano isn't in the supported
+ * chains for either simulation or validation.
+ */
+export const getEncodedSigningInputs = (input: Input): Uint8Array[] => {
+  const chain = getKeysignChain(input.keysignPayload)
+  const chainKind = getChainKind(chain)
+
+  const result = resolvers[chainKind](input as any)
+  if (typeof (result as any)?.then === 'function') {
+    throw new Error(
+      `getEncodedSigningInputs: chain ${chain} requires async resolution; call getEncodedSigningInputsAsync instead`
+    )
+  }
+
+  return encodeResolverOutput(chainKind, result as any[])
+}
+
+/**
+ * Async entry point. The keysign flow (cosigner, TransactionBuilder, broadcast)
+ * uses this so Cardano's per-UTXO Koios fetch can run; non-Cardano chains
+ * resolve synchronously and the await is a no-op.
+ */
+export const getEncodedSigningInputsAsync = async (
+  input: Input
+): Promise<Uint8Array[]> => {
+  const chain = getKeysignChain(input.keysignPayload)
+  const chainKind = getChainKind(chain)
+
+  const signingInputs = await resolvers[chainKind](input as any)
+
+  return encodeResolverOutput(chainKind, signingInputs as any[])
 }
