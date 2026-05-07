@@ -121,8 +121,7 @@ export default function VaultPortfolio({ vault, snapshot, setSnapshot }: VaultPo
       if (signal.aborted) return
 
       const totalLooksEmpty = total === 0 && Object.keys(byChain).length === 0
-      const allChainsFailed =
-        vault.chains.length > 0 && chainFailures.length === vault.chains.length
+      const allChainsFailed = vault.chains.length > 0 && chainFailures.length === vault.chains.length
       const shouldKeepStale = allChainsFailed && totalLooksEmpty
 
       setSnapshot(prev => {

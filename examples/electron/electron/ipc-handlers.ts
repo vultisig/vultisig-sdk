@@ -45,8 +45,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     ) => {
       const sdk = getSDK()
       const { createTimeoutMs, ...createOptions } = options
-      const signal =
-        createTimeoutMs != null && createTimeoutMs > 0 ? AbortSignal.timeout(createTimeoutMs) : undefined
+      const signal = createTimeoutMs != null && createTimeoutMs > 0 ? AbortSignal.timeout(createTimeoutMs) : undefined
       const vaultId = await sdk.createFastVault({
         ...createOptions,
         signal,
@@ -207,8 +206,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     ) => {
       const sdk = getSDK()
       const { importTimeoutMs, ...createOptions } = options
-      const signal =
-        importTimeoutMs != null && importTimeoutMs > 0 ? AbortSignal.timeout(importTimeoutMs) : undefined
+      const signal = importTimeoutMs != null && importTimeoutMs > 0 ? AbortSignal.timeout(importTimeoutMs) : undefined
       const vaultId = await sdk.createFastVaultFromSeedphrase({
         ...createOptions,
         chains: createOptions.chains as any,

@@ -202,9 +202,7 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
             </div>
           )}
 
-          {error && (
-            <div className="text-error text-sm bg-red-50 p-3 rounded whitespace-pre-wrap">{error}</div>
-          )}
+          {error && <div className="text-error text-sm bg-red-50 p-3 rounded whitespace-pre-wrap">{error}</div>}
 
           {postImportWarnings && postImportWarnings.length > 0 && (
             <div className="text-amber-900 text-sm bg-amber-50 p-3 rounded border border-amber-200">

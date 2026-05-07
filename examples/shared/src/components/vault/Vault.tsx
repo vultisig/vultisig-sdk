@@ -53,18 +53,7 @@ const SECTION_CONFIG: { id: VaultSection; label: string; icon: string }[] = [
 
 const PORTFOLIO_STORAGE_KEY = (vaultId: string) => `vultisig-example-portfolio:${vaultId}`
 
-const FIAT_CODES = new Set<string>([
-  'usd',
-  'eur',
-  'gbp',
-  'jpy',
-  'cny',
-  'aud',
-  'cad',
-  'chf',
-  'sgd',
-  'sek',
-])
+const FIAT_CODES = new Set<string>(['usd', 'eur', 'gbp', 'jpy', 'cny', 'aud', 'cad', 'chf', 'sgd', 'sek'])
 
 function parsePortfolioSnapshot(vaultId: string): PortfolioSnapshot | null {
   if (typeof sessionStorage === 'undefined') return null
@@ -73,9 +62,7 @@ function parsePortfolioSnapshot(vaultId: string): PortfolioSnapshot | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as { currency?: unknown; portfolio?: unknown }
     const currency: FiatCurrency =
-      typeof parsed.currency === 'string' && FIAT_CODES.has(parsed.currency)
-        ? (parsed.currency as FiatCurrency)
-        : 'usd'
+      typeof parsed.currency === 'string' && FIAT_CODES.has(parsed.currency) ? (parsed.currency as FiatCurrency) : 'usd'
     let portfolio: PortfolioData | null = null
     if (
       parsed.portfolio &&
@@ -127,9 +114,7 @@ export default function Vault({ vault, onVaultDeleted, onVaultRenamed, onVaultUp
       case 'balance':
         return <VaultBalance vault={vault} />
       case 'portfolio':
-        return (
-          <VaultPortfolio vault={vault} snapshot={portfolioSnapshot} setSnapshot={setPortfolioSnapshot} />
-        )
+        return <VaultPortfolio vault={vault} snapshot={portfolioSnapshot} setSnapshot={setPortfolioSnapshot} />
       case 'send':
         return <VaultSend vault={vault} />
       case 'swap':
