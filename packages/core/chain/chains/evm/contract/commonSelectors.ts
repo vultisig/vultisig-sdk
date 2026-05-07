@@ -1,7 +1,24 @@
 /**
  * Static lookup table of common EVM function selectors with human-readable
- * action labels. Used as an offline fast-path before falling back to the
- * 4byte directory API when decoding contract calls.
+ * action labels.
+ *
+ * Layering for transaction-intent display:
+ *
+ *   1. Blockaid simulation (security/blockaid/...) — primary source. Provides
+ *      semantic asset diffs, approval exposures, and high-level
+ *      `transaction_actions` (`'swap'`, `'approval'`, `'mint'`, ...). Run by
+ *      consumers (e.g. the Windows extension UI) before this layer. Note that
+ *      Blockaid does NOT decode the called function's name/arguments — only
+ *      its observable effects.
+ *
+ *   2. This static selector table — offline fast-path used by
+ *      `getEvmContractCallInfo` when the caller still needs the function
+ *      name + decoded arguments (e.g. Blockaid is unavailable, the chain is
+ *      unsupported, or the UI shows the raw call alongside Blockaid's
+ *      summary). Resolves instantly with no network round-trip.
+ *
+ *   3. 4byte directory API (`getEvmContractCallSignatures`) — final fallback
+ *      for selectors not in the static table.
  *
  * Selectors are the first 4 bytes of keccak256 over the canonical function
  * signature (no spaces, no parameter names). Lowercase hex with `0x` prefix.
