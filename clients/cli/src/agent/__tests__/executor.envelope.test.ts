@@ -174,4 +174,60 @@ describe('AgentExecutor.storeServerTransaction', () => {
       })
     ).toBe(false)
   })
+
+  // M1 — nested txArgs.tx error path. Locks parity with the top-level
+  // error-rejection above so a future change to extractNestedTx that
+  // accidentally returns the error tx object (instead of treating it as an
+  // error) doesn't regress silently.
+  it('rejects payloads with explicit error in nested txArgs.tx', () => {
+    const executor = makeExecutor()
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: {
+          chain: 'Polygon',
+          chain_id: '137',
+          tx: { status: 'error', error: 'execution reverted' },
+        },
+      })
+    ).toBe(false)
+    expect(executor.hasPendingTransaction()).toBe(false)
+  })
+
+  // M2 — txArgs present but without a tx body. Real shape if mcp-ts adds a
+  // chain-rejection branch returning a stepperConfig + chain echo without
+  // building a tx. Should fall through extractNestedTx returning undefined
+  // and reject at the no-shape-found branch.
+  it('rejects payloads where txArgs is present but has no tx', () => {
+    const executor = makeExecutor()
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', chain_id: '137' },
+      })
+    ).toBe(false)
+    expect(executor.hasPendingTransaction()).toBe(false)
+  })
+
+  // M3 — chain context only inside txArgs (no top-level chain). This is
+  // the actual mcp-ts shape per buildEvmTxArgs in mcp-ts/_base.ts (chain
+  // always lives inside txArgs). Exercises resolveChainFromTxReady's new
+  // txArgs.chain / txArgs.chain_id branches, which are otherwise shadowed
+  // by the top-level chain fixtures above.
+  it('stores mcp-ts envelope with chain only inside txArgs (resolveChainFromTxReady fallback)', () => {
+    const executor = makeExecutor()
+    const env = {
+      // No top-level chain / from_chain / chain_id — chain context must
+      // come from txArgs for the executor to resolve correctly.
+      stepperConfig: { flow: 'send', steps: [] },
+      txArgs: {
+        chain: 'Polygon',
+        chain_id: '137',
+        from: '0xsender',
+        tx: SAMPLE_TX,
+      },
+    }
+    expect(executor.storeServerTransaction(env)).toBe(true)
+    expect(executor.hasPendingTransaction()).toBe(true)
+  })
 })
