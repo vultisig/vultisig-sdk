@@ -6,14 +6,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
-const eslint = join(
-  repoRoot,
-  'node_modules',
-  '.bin',
-  process.platform === 'win32' ? 'eslint.cmd' : 'eslint'
-)
+const eslintCli = join(repoRoot, 'node_modules', 'eslint', 'bin', 'eslint.js')
 
-if (!existsSync(eslint)) {
+if (!existsSync(eslintCli)) {
   process.stderr.write(
     [
       '[vultisig-local-checks] Missing repo-local ESLint.',
@@ -28,7 +23,7 @@ if (!existsSync(eslint)) {
   process.exit(127)
 }
 
-const result = spawnSync(eslint, process.argv.slice(2), {
+const result = spawnSync(process.execPath, [eslintCli, ...process.argv.slice(2)], {
   cwd: repoRoot,
   stdio: 'inherit',
 })

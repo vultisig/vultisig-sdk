@@ -6,12 +6,11 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
-const nodeModulesBin = join(repoRoot, 'node_modules', '.bin')
-const isWindows = process.platform === 'win32'
 const args = new Set(process.argv.slice(2))
 const typescriptOnly = args.has('--typescript-only')
 
-const binaryPath = name => join(nodeModulesBin, isWindows ? `${name}.cmd` : name)
+const eslintCli = join(repoRoot, 'node_modules', 'eslint', 'bin', 'eslint.js')
+const tscJs = join(repoRoot, 'node_modules', 'typescript', 'lib', 'tsc.js')
 
 const setupMessage = tool =>
   [
@@ -24,23 +23,16 @@ const setupMessage = tool =>
     'CI uses Node.js 20 and Yarn 4.13.0. Avoid global binaries such as `tsc` or `eslint` for local verification.',
   ].join('\n')
 
-const assertBinary = name => {
-  const path = binaryPath(name)
-
-  if (!existsSync(path)) {
-    process.stderr.write(`${setupMessage(name)}\n`)
+const assertTypeScriptVersion = () => {
+  if (!existsSync(tscJs)) {
+    process.stderr.write(`${setupMessage('typescript')}\n`)
     process.exit(127)
   }
 
-  return path
-}
-
-const assertTypeScriptVersion = () => {
-  const tsc = assertBinary('tsc')
   let output = ''
 
   try {
-    output = execFileSync(tsc, ['--version'], {
+    output = execFileSync(process.execPath, [tscJs, '--version'], {
       cwd: repoRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -68,7 +60,10 @@ const assertTypeScriptVersion = () => {
 }
 
 if (!typescriptOnly) {
-  assertBinary('eslint')
+  if (!existsSync(eslintCli)) {
+    process.stderr.write(`${setupMessage('eslint')}\n`)
+    process.exit(127)
+  }
 }
 
 assertTypeScriptVersion()
