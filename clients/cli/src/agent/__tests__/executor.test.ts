@@ -278,6 +278,52 @@ describe('AgentExecutor', () => {
     ])
   })
 
+  // The agent often emits `{chain, name}` without resolving the address.
+  // The executor falls back to Vultisig.getAddressBook to look up the
+  // address by name so name-based removal works end-to-end.
+  it('address_book action=remove resolves address by name when entry.address is missing', async () => {
+    const vault = createMockVault()
+    const vultisig = createMockVultisig()
+    ;((vultisig as any).getAddressBook as ReturnType<typeof vi.fn>).mockResolvedValue({
+      saved: [{ chain: Chain.Ethereum, address: '0xalice', name: 'alice', source: 'saved', dateAdded: 1 }],
+      vaults: [],
+    })
+    const executor = new AgentExecutor(vault, false, undefined, vultisig)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'address_book',
+        params: { action: 'remove', entry: { chain: 'Ethereum', name: 'alice' } },
+      })
+    )
+
+    expect(result.success).toBe(true)
+    expect((vultisig as any).getAddressBook).toHaveBeenCalledWith(Chain.Ethereum)
+    expect((vultisig as any).removeAddressBookEntry).toHaveBeenCalledWith([
+      { chain: Chain.Ethereum, address: '0xalice' },
+    ])
+  })
+
+  it('address_book action=remove fails when name does not match any saved entry', async () => {
+    const vault = createMockVault()
+    const vultisig = createMockVultisig()
+    ;((vultisig as any).getAddressBook as ReturnType<typeof vi.fn>).mockResolvedValue({
+      saved: [],
+      vaults: [],
+    })
+    const executor = new AgentExecutor(vault, false, undefined, vultisig)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'address_book',
+        params: { action: 'remove', entry: { chain: 'Ethereum', name: 'alice' } },
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/no saved entry named "alice"/)
+  })
+
   it('address_book add fails when Vultisig instance is not configured', async () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault) // no vultisig

@@ -1654,15 +1654,31 @@ export class AgentExecutor {
         'address_book remove requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
       )
     }
-    const entry = params.entry as { chain?: unknown; address?: unknown } | undefined
+    const entry = params.entry as { chain?: unknown; address?: unknown; name?: unknown } | undefined
     if (!entry || typeof entry !== 'object') {
       throw new Error('address_book remove: missing entry')
     }
     const chainName = entry.chain as string | undefined
     const chain = chainName ? resolveChain(chainName) : undefined
     if (!chain) throw new Error(`address_book remove: unknown chain: ${chainName ?? '(missing)'}`)
-    const address = entry.address as string | undefined
-    if (!address) throw new Error('address_book remove: entry.address is required')
+
+    // Agent often emits `{chain, name}` without resolving the address itself.
+    // Look the entry up by name in the saved book so name-based removal works
+    // without forcing the model to call get_address_book first.
+    let address = entry.address as string | undefined
+    if (!address) {
+      const name = entry.name as string | undefined
+      if (!name) {
+        throw new Error('address_book remove: entry.address or entry.name is required')
+      }
+      const book = await this.vultisig.getAddressBook(chain)
+      const lower = name.toLowerCase()
+      const match = book.saved.find(e => e.name.toLowerCase() === lower && e.chain === chain)
+      if (!match) {
+        throw new Error(`address_book remove: no saved entry named "${name}" on ${chainName}`)
+      }
+      address = match.address
+    }
 
     await this.vultisig.removeAddressBookEntry([{ chain, address }])
     return { removed: { chain: chain.toString(), address } }
