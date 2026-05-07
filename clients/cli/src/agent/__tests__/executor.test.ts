@@ -33,10 +33,20 @@ function createMockVault(): VaultBase {
     address: vi.fn().mockResolvedValue('0xsender'),
     addChain: vi.fn().mockResolvedValue(undefined),
     removeChain: vi.fn().mockResolvedValue(undefined),
+    addToken: vi.fn().mockResolvedValue(undefined),
+    removeToken: vi.fn().mockResolvedValue(undefined),
     balance: vi.fn().mockResolvedValue({ decimals: 18, symbol: 'ETH' }),
     prepareSendTx: vi.fn().mockResolvedValue({ mockKeysignPayload: true }),
     extractMessageHashes: vi.fn().mockResolvedValue(['0xabc123']),
   } as unknown as VaultBase
+}
+
+function createMockVultisig(): ConstructorParameters<typeof AgentExecutor>[3] {
+  return {
+    addAddressBookEntry: vi.fn().mockResolvedValue(undefined),
+    removeAddressBookEntry: vi.fn().mockResolvedValue(undefined),
+    getAddressBook: vi.fn().mockResolvedValue({ saved: [], vaults: [] }),
+  } as unknown as ConstructorParameters<typeof AgentExecutor>[3]
 }
 
 function action(partial: Pick<Action, 'type'> & Partial<Action>): Action {
@@ -103,27 +113,17 @@ describe('AgentExecutor', () => {
     expect(vaults[0].chains).toEqual(['Ethereum', 'Bitcoin'])
   })
 
-  it('add_chain handles single chain', async () => {
-    const vault = createMockVault()
-    const executor = new AgentExecutor(vault)
-
-    const result = await executor.executeAction(action({ type: 'add_chain', params: { chain: 'Ethereum' } }))
-
-    expect(result.success).toBe(true)
-    expect(vault.addChain).toHaveBeenCalledWith(Chain.Ethereum)
-    expect(result.data?.chain).toBe('Ethereum')
-    expect(result.data?.added).toBe(true)
-    expect(vault.address).toHaveBeenCalled()
-  })
-
-  it('add_chain handles batch chains array', async () => {
+  // vault_chain — agent-backend wire shape: { action, chains: [{chain}] }.
+  // The executor also tolerates a single `chain` string for hand-rolled
+  // callers (CLI scripts, REPL).
+  it('vault_chain action=add with chains array adds each chain', async () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)
 
     const result = await executor.executeAction(
       action({
-        type: 'add_chain',
-        params: { chains: ['Bitcoin', { chain: 'Ethereum' }] },
+        type: 'vault_chain',
+        params: { action: 'add', chains: [{ chain: 'Bitcoin' }, { chain: 'Ethereum' }] },
       })
     )
 
@@ -132,6 +132,165 @@ describe('AgentExecutor', () => {
     const added = result.data?.added as Array<{ chain: string }>
     expect(added).toHaveLength(2)
     expect(added.map(a => a.chain).sort()).toEqual(['Bitcoin', 'Ethereum'])
+  })
+
+  it('vault_chain action=add tolerates single chain shape', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const result = await executor.executeAction(
+      action({ type: 'vault_chain', params: { action: 'add', chain: 'Ethereum' } })
+    )
+
+    expect(result.success).toBe(true)
+    expect(vault.addChain).toHaveBeenCalledWith(Chain.Ethereum)
+    expect(result.data?.added).toBe(true)
+    expect(result.data?.chain).toBe('Ethereum')
+  })
+
+  it('vault_chain action=remove removes each chain in batch', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'vault_chain',
+        params: { action: 'remove', chains: [{ chain: 'Bitcoin' }, { chain: 'Ethereum' }] },
+      })
+    )
+
+    expect(result.success).toBe(true)
+    expect(vault.removeChain).toHaveBeenCalledTimes(2)
+    const removed = result.data?.removed as Array<{ chain: string }>
+    expect(removed.map(r => r.chain).sort()).toEqual(['Bitcoin', 'Ethereum'])
+  })
+
+  it('vault_chain rejects unknown action', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const result = await executor.executeAction(action({ type: 'vault_chain', params: { action: 'wat' } }))
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/vault_chain.*unknown action/)
+  })
+
+  // vault_coin — wire shape: { action, coins: [{chain, ticker, contract_address?, decimals?}] }
+  it('vault_coin action=add maps coins[] into vault.addToken calls', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'vault_coin',
+        params: {
+          action: 'add',
+          coins: [
+            { chain: 'Ethereum', ticker: 'USDC', contract_address: '0xa0b8...eb48', decimals: 6 },
+            { chain: 'Bitcoin', ticker: 'BTC' },
+          ],
+        },
+      })
+    )
+
+    expect(result.success).toBe(true)
+    expect(vault.addToken).toHaveBeenCalledTimes(2)
+    const added = result.data?.added as Array<{ chain: string; symbol: string }>
+    expect(added.map(a => `${a.chain}:${a.symbol}`).sort()).toEqual(['Bitcoin:BTC', 'Ethereum:USDC'])
+  })
+
+  it('vault_coin action=remove uses contract_address as token id', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'vault_coin',
+        params: {
+          action: 'remove',
+          coins: [{ chain: 'Ethereum', ticker: 'USDC', contract_address: '0xa0b8...eb48' }],
+        },
+      })
+    )
+
+    expect(result.success).toBe(true)
+    expect(vault.removeToken).toHaveBeenCalledWith(Chain.Ethereum, '0xa0b8...eb48')
+  })
+
+  it('vault_coin action=remove rejects coin missing contract_address', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'vault_coin',
+        params: { action: 'remove', coins: [{ chain: 'Ethereum', ticker: 'USDC' }] },
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/missing contract_address/)
+    expect(vault.removeToken).not.toHaveBeenCalled()
+  })
+
+  // address_book — wire shape: { action, entry: { name, chain, address } }
+  it('address_book action=add forwards to Vultisig.addAddressBookEntry', async () => {
+    const vault = createMockVault()
+    const vultisig = createMockVultisig()
+    const executor = new AgentExecutor(vault, false, undefined, vultisig)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'address_book',
+        params: { action: 'add', entry: { name: 'alice', chain: 'Ethereum', address: '0xalice' } },
+      })
+    )
+
+    expect(result.success).toBe(true)
+    const addFn = (vultisig as any).addAddressBookEntry
+    expect(addFn).toHaveBeenCalledOnce()
+    const [entries] = addFn.mock.calls[0]
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({
+      chain: Chain.Ethereum,
+      address: '0xalice',
+      name: 'alice',
+      source: 'saved',
+    })
+    expect(typeof entries[0].dateAdded).toBe('number')
+  })
+
+  it('address_book action=remove forwards to Vultisig.removeAddressBookEntry', async () => {
+    const vault = createMockVault()
+    const vultisig = createMockVultisig()
+    const executor = new AgentExecutor(vault, false, undefined, vultisig)
+
+    const result = await executor.executeAction(
+      action({
+        type: 'address_book',
+        params: { action: 'remove', entry: { chain: 'Ethereum', address: '0xalice' } },
+      })
+    )
+
+    expect(result.success).toBe(true)
+    expect((vultisig as any).removeAddressBookEntry).toHaveBeenCalledWith([
+      { chain: Chain.Ethereum, address: '0xalice' },
+    ])
+  })
+
+  it('address_book add fails when Vultisig instance is not configured', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault) // no vultisig
+
+    const result = await executor.executeAction(
+      action({
+        type: 'address_book',
+        params: { action: 'add', entry: { name: 'alice', chain: 'Ethereum', address: '0xalice' } },
+      })
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/requires the CLI SDK instance/)
   })
 
   it('unknown action types return success: false', async () => {
