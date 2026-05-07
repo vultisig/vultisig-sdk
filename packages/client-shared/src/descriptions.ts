@@ -25,7 +25,8 @@ export const address = {
 } as const
 
 export const vaultInfo = {
-  description: 'Show vault metadata — name, type, chains, and signer configuration. Call this first to discover available chains.',
+  description:
+    'Show vault metadata — name, type, chains, and signer configuration. Call this first to discover available chains.',
   params: {},
 } as const
 

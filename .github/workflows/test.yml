@@ -117,20 +117,8 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Build packages
-        run: yarn build:all
-
-      - name: Run ESLint
-        run: yarn lint
-
-      - name: Run TypeScript check
-        run: yarn typecheck
-
-      - name: Run Knip
-        run: yarn knip
-
-      - name: Check Prettier formatting
-        run: yarn format:check
+      - name: Run static quality gate
+        run: yarn check:ci
 
   test-summary:
     name: Test Summary
@@ -143,7 +131,7 @@ jobs:
         run: |
           echo "Unit Tests: ${{ needs.test-unit.result }}"
           echo "Integration Tests: ${{ needs.test-integration.result }}"
-          echo "Lint, typecheck, knip, format: ${{ needs.lint-and-type.result }}"
+          echo "Static quality gate: ${{ needs.lint-and-type.result }}"
 
           if [ "${{ needs.test-unit.result }}" != "success" ]; then
             echo "Unit tests failed!"
@@ -156,7 +144,7 @@ jobs:
           fi
 
           if [ "${{ needs.lint-and-type.result }}" != "success" ]; then
-            echo "Lint, typecheck, knip, or Prettier check failed!"
+            echo "Static quality gate failed!"
             exit 1
           fi
 
