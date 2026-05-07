@@ -1,7 +1,7 @@
-import { id } from 'ethers'
+import { id, Interface } from 'ethers'
 import { describe, expect, it } from 'vitest'
 
-import { commonEvmSelectors, lookupCommonEvmSelector } from './commonSelectors'
+import { commonEvmSelectors, type EvmActionLabel, lookupCommonEvmSelector } from './commonSelectors'
 
 describe('commonEvmSelectors', () => {
   it('every entry maps to keccak256(signature)[:4]', () => {
@@ -14,6 +14,33 @@ describe('commonEvmSelectors', () => {
   it('selector keys are lowercase 0x-prefixed 8-hex-char strings', () => {
     for (const selector of Object.keys(commonEvmSelectors)) {
       expect(selector).toMatch(/^0x[0-9a-f]{8}$/)
+    }
+  })
+
+  it('every signature is parseable as a function fragment by ethers', () => {
+    // Guards against e.g. malformed tuple syntax in V3/UR entries that would
+    // hash correctly but fail to decode at runtime.
+    for (const entry of Object.values(commonEvmSelectors)) {
+      expect(() => new Interface([`function ${entry.signature}`])).not.toThrow()
+    }
+  })
+
+  it('every declared action label is used by at least one selector', () => {
+    const declared: EvmActionLabel[] = [
+      'Token Approval',
+      'Token Transfer',
+      'Token Swap',
+      'Wrap ETH',
+      'Unwrap WETH',
+      'Stake',
+      'Claim Rewards',
+      'Exit Stake',
+      'NFT Transfer',
+      'Multicall',
+    ]
+    const used = new Set(Object.values(commonEvmSelectors).map(e => e.actionLabel))
+    for (const label of declared) {
+      expect(used.has(label)).toBe(true)
     }
   })
 })
