@@ -44,7 +44,6 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
     fromTokenId: '',
     toTokenId: '',
     amount: '',
-    slippage: '1',
   })
 
   const [quote, setQuote] = useState<DisplayQuote | null>(null)
@@ -579,26 +578,11 @@ export default function VaultSwap({ vault }: VaultSwapProps) {
               </div>
             )}
 
-            {/* Slippage */}
-            <div>
-              <span className="text-sm text-gray-600 mb-1 block">Slippage Tolerance</span>
-              <div className="flex gap-2">
-                {['0.5', '1', '2', '3'].map(slippage => (
-                  <button
-                    key={slippage}
-                    type="button"
-                    className={`px-3 py-1 rounded text-sm ${
-                      formData.slippage === slippage
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                    onClick={() => setFormData(prev => ({ ...prev, slippage }))}
-                  >
-                    {slippage}%
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Slippage: core findSwapQuote has no user slippage field; quotes carry provider-enforced tolerances. */}
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Slippage is set by the swap provider for the selected route. It cannot be adjusted here; the quote and
+              signed transaction use the tolerances embedded in the route response.
+            </p>
 
             {/* Progress (only for fast vaults - secure vaults use modal) */}
             {!isSecureVault && progress && (

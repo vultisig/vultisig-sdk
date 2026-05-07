@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { useSDKAdapter } from '../../adapters'
-import { type CommonToken, getCommonTokens, isEvmChain } from '../../constants/tokens'
+import { type CommonToken, getCommonTokens, isEvmChain, isValidEvmContractAddress } from '../../constants/tokens'
 import type { TokenInfo, VaultInfo } from '../../types'
 import Button from '../common/Button'
 import Input from '../common/Input'
@@ -88,7 +88,9 @@ export default function AddTokenModal({ isOpen, onClose, chain, vault, onTokenAd
   }
 
   const handleAddCustomToken = async () => {
-    if (!formData.contractAddress) {
+    const contractAddress = formData.contractAddress.trim()
+
+    if (!contractAddress) {
       setError('Contract address is required')
       return
     }
@@ -98,16 +100,21 @@ export default function AddTokenModal({ isOpen, onClose, chain, vault, onTokenAd
       return
     }
 
+    if (isEvmChain(chain) && !isValidEvmContractAddress(contractAddress)) {
+      setError('Enter a valid EVM contract address')
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
     try {
       const token: TokenInfo = {
-        id: formData.contractAddress,
+        id: contractAddress,
         symbol: formData.symbol.toUpperCase(),
         name: formData.name || formData.symbol,
         decimals: parseInt(formData.decimals, 10) || 18,
-        contractAddress: formData.contractAddress,
+        contractAddress,
         chainId: chain,
       }
 

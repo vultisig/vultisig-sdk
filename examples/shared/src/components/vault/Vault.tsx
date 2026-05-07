@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import type { VaultInfo } from '../../types'
+import type { FiatCurrency, VaultInfo } from '../../types'
 import VaultAddresses from './sections/VaultAddresses'
 import VaultBalance from './sections/VaultBalance'
 import VaultChains from './sections/VaultChains'
 import VaultOverview from './sections/VaultOverview'
-import VaultPortfolio from './sections/VaultPortfolio'
+import VaultPortfolio, { type PortfolioData, type PortfolioSnapshot } from './sections/VaultPortfolio'
 import VaultSend from './sections/VaultSend'
 import VaultSwap from './sections/VaultSwap'
 import VaultTokens from './sections/VaultTokens'
@@ -51,8 +51,68 @@ const SECTION_CONFIG: { id: VaultSection; label: string; icon: string }[] = [
   { id: 'swap', label: 'Swap', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
 ]
 
+const PORTFOLIO_STORAGE_KEY = (vaultId: string) => `vultisig-example-portfolio:${vaultId}`
+
+const FIAT_CODES = new Set<string>([
+  'usd',
+  'eur',
+  'gbp',
+  'jpy',
+  'cny',
+  'aud',
+  'cad',
+  'chf',
+  'sgd',
+  'sek',
+])
+
+function parsePortfolioSnapshot(vaultId: string): PortfolioSnapshot | null {
+  if (typeof sessionStorage === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(PORTFOLIO_STORAGE_KEY(vaultId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { currency?: unknown; portfolio?: unknown }
+    const currency: FiatCurrency =
+      typeof parsed.currency === 'string' && FIAT_CODES.has(parsed.currency)
+        ? (parsed.currency as FiatCurrency)
+        : 'usd'
+    let portfolio: PortfolioData | null = null
+    if (
+      parsed.portfolio &&
+      typeof parsed.portfolio === 'object' &&
+      parsed.portfolio !== null &&
+      'total' in parsed.portfolio &&
+      typeof (parsed.portfolio as PortfolioData).total === 'number' &&
+      'byChain' in parsed.portfolio &&
+      typeof (parsed.portfolio as PortfolioData).byChain === 'object' &&
+      (parsed.portfolio as PortfolioData).byChain !== null
+    ) {
+      portfolio = parsed.portfolio as PortfolioData
+    }
+    return { currency, portfolio }
+  } catch {
+    return null
+  }
+}
+
+function persistPortfolioSnapshot(vaultId: string, snapshot: PortfolioSnapshot): void {
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.setItem(PORTFOLIO_STORAGE_KEY(vaultId), JSON.stringify(snapshot))
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 export default function Vault({ vault, onVaultDeleted, onVaultRenamed, onVaultUpdated }: VaultProps) {
   const [activeSection, setActiveSection] = useState<VaultSection>('overview')
+  const [portfolioSnapshot, setPortfolioSnapshot] = useState<PortfolioSnapshot>(() => {
+    return parsePortfolioSnapshot(vault.id) ?? { currency: 'usd', portfolio: null }
+  })
+
+  useEffect(() => {
+    persistPortfolioSnapshot(vault.id, portfolioSnapshot)
+  }, [vault.id, portfolioSnapshot])
 
   const renderSection = () => {
     switch (activeSection) {
@@ -67,7 +127,9 @@ export default function Vault({ vault, onVaultDeleted, onVaultRenamed, onVaultUp
       case 'balance':
         return <VaultBalance vault={vault} />
       case 'portfolio':
-        return <VaultPortfolio vault={vault} />
+        return (
+          <VaultPortfolio vault={vault} snapshot={portfolioSnapshot} setSnapshot={setPortfolioSnapshot} />
+        )
       case 'send':
         return <VaultSend vault={vault} />
       case 'swap':

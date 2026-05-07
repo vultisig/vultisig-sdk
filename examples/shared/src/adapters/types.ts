@@ -86,6 +86,9 @@ export type ISDKAdapter = {
 
   getTotalValue(vaultId: string, currency?: FiatCurrency): Promise<ValueResult>
 
+  /** Clears cached fiat prices and attempts a fresh fetch (used before explicit portfolio refresh). */
+  refreshPortfolioPrices(vaultId: string): Promise<void>
+
   // ===== Swap =====
   getSupportedSwapChains(vaultId: string): Promise<string[]>
 

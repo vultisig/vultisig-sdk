@@ -123,6 +123,13 @@ export class DKLS {
     start: number,
     messageId?: string
   ): Promise<boolean> {
+    // Guard empty relay polls and error retries: without this, `parsedMessages.length === 0`
+    // recurses indefinitely while HTTP stays "healthy" but no MPC messages arrive.
+    if (Date.now() - start > this.timeoutMs * 2) {
+      console.log('timeout')
+      this.isKeygenComplete = true
+      return false
+    }
     try {
       const parsedMessages = await getMpcRelayMessages({
         serverUrl: this.serverURL,
@@ -164,12 +171,6 @@ export class DKLS {
           messageHash: msg.hash,
           messageId,
         })
-      }
-      const end = Date.now()
-      if (end - start > this.timeoutMs * 2) {
-        console.log('timeout')
-        this.isKeygenComplete = true
-        return false
       }
       await sleep(100)
       return await this.processInbound(session, start, messageId)

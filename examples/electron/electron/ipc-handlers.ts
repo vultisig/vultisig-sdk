@@ -40,11 +40,16 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
         name: string
         password: string
         email: string
+        createTimeoutMs?: number
       }
     ) => {
       const sdk = getSDK()
+      const { createTimeoutMs, ...createOptions } = options
+      const signal =
+        createTimeoutMs != null && createTimeoutMs > 0 ? AbortSignal.timeout(createTimeoutMs) : undefined
       const vaultId = await sdk.createFastVault({
-        ...options,
+        ...createOptions,
+        signal,
         onProgress: step => {
           _event.sender.send('vault:creationProgress', { step })
         },
@@ -197,12 +202,17 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
         chains?: string[]
         usePhantomSolanaPath?: boolean
         tssBatching?: boolean
+        importTimeoutMs?: number
       }
     ) => {
       const sdk = getSDK()
+      const { importTimeoutMs, ...createOptions } = options
+      const signal =
+        importTimeoutMs != null && importTimeoutMs > 0 ? AbortSignal.timeout(importTimeoutMs) : undefined
       const vaultId = await sdk.createFastVaultFromSeedphrase({
-        ...options,
-        chains: options.chains as any,
+        ...createOptions,
+        chains: createOptions.chains as any,
+        signal,
         onProgress: step => {
           _event.sender.send('vault:creationProgress', { step })
         },
@@ -401,6 +411,13 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     if (currency) vault.setCurrency(currency as any)
     const value = await vault.getTotalValue(currency as any)
     return { amount: value.amount, currency: value.currency || currency || 'usd' }
+  })
+
+  ipcMain.handle('vault:refreshPortfolioPrices', async (_event, vaultId: string) => {
+    const sdk = getSDK()
+    const vault = await sdk.getVaultById(vaultId)
+    if (!vault) throw new Error('Vault not found')
+    await vault.updateValues('all')
   })
 
   // === DISCOUNT TIER ===

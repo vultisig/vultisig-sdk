@@ -122,6 +122,13 @@ export function isEvmChain(chain: string): boolean {
   return EVM_CHAINS.includes(chain)
 }
 
+/** `0x` + 40 hexadecimal characters (matches repo-wide EVM address checks). */
+const EVM_CONTRACT_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/
+
+export function isValidEvmContractAddress(address: string): boolean {
+  return EVM_CONTRACT_ADDRESS_PATTERN.test(address.trim())
+}
+
 /**
  * Get common tokens for a chain
  */

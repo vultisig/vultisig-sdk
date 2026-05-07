@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react'
 
 import { useSDKAdapter } from '../../../adapters'
 import type { FiatCurrency, VaultInfo } from '../../../types'
@@ -6,13 +6,20 @@ import Button from '../../common/Button'
 import Select from '../../common/Select'
 import Spinner from '../../common/Spinner'
 
-type VaultPortfolioProps = {
-  vault: VaultInfo
-}
-
-type PortfolioData = {
+export type PortfolioData = {
   total: number
   byChain: Record<string, number>
+}
+
+export type PortfolioSnapshot = {
+  currency: FiatCurrency
+  portfolio: PortfolioData | null
+}
+
+type VaultPortfolioProps = {
+  vault: VaultInfo
+  snapshot: PortfolioSnapshot
+  setSnapshot: Dispatch<SetStateAction<PortfolioSnapshot>>
 }
 
 const CURRENCIES = [
@@ -41,13 +48,17 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   sek: 'kr',
 }
 
-export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
+function formatErr(err: unknown): string {
+  return err instanceof Error ? err.message : 'Request failed'
+}
+
+export default function VaultPortfolio({ vault, snapshot, setSnapshot }: VaultPortfolioProps) {
   const sdk = useSDKAdapter()
 
-  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null)
-  const [currency, setCurrency] = useState<FiatCurrency>('usd')
+  const { currency, portfolio } = snapshot
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // Load portfolio on mount and currency change
@@ -59,19 +70,30 @@ export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currency])
 
-  const loadPortfolio = async () => {
+  const loadPortfolio = async (options?: { invalidatePrices?: boolean }) => {
     // Cancel any in-progress fetch
     abortControllerRef.current?.abort()
     abortControllerRef.current = new AbortController()
     const signal = abortControllerRef.current.signal
 
+    const hadPortfolioAtStart = snapshot.portfolio !== null
+    const invalidatePrices = Boolean(options?.invalidatePrices)
+
     setIsLoading(true)
     setError(null)
+    setWarning(null)
 
     try {
       // Set currency preference
       await sdk.setCurrency(vault.id, currency)
       if (signal.aborted) return
+
+      // Explicit refresh: clear price cache first so blocked networks surface as failures
+      // instead of silently reusing cached fiat quotes.
+      if (invalidatePrices) {
+        await sdk.refreshPortfolioPrices(vault.id)
+        if (signal.aborted) return
+      }
 
       // Get total portfolio value (returns Value object with amount string)
       const totalValue = await sdk.getTotalValue(vault.id, currency)
@@ -80,6 +102,7 @@ export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
 
       // Get value by chain
       const byChain: Record<string, number> = {}
+      const chainFailures: string[] = []
       for (const chain of vault.chains) {
         if (signal.aborted) break
         try {
@@ -91,25 +114,51 @@ export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
           }
         } catch (err) {
           console.error(`Failed to get value for ${chain}:`, err)
+          chainFailures.push(chain)
         }
       }
 
-      if (!signal.aborted) {
-        setPortfolio({ total, byChain })
+      if (signal.aborted) return
+
+      const totalLooksEmpty = total === 0 && Object.keys(byChain).length === 0
+      const allChainsFailed =
+        vault.chains.length > 0 && chainFailures.length === vault.chains.length
+      const shouldKeepStale = allChainsFailed && totalLooksEmpty
+
+      setSnapshot(prev => {
+        if (shouldKeepStale) {
+          return prev
+        }
+        return { ...prev, portfolio: { total, byChain } }
+      })
+
+      if (shouldKeepStale) {
+        if (hadPortfolioAtStart) {
+          setWarning(
+            'Could not confirm fresh portfolio prices from the network. Totals below may be stale — use Refresh to retry when connectivity is restored.'
+          )
+        } else {
+          setError('Could not load portfolio. Network or price services may be blocked or unavailable.')
+        }
+        return
+      }
+
+      if (chainFailures.length > 0) {
+        setWarning(
+          `Could not load fiat value for: ${chainFailures.join(', ')}. Totals and breakdown may be incomplete.`
+        )
       }
     } catch (err) {
       if (!signal.aborted) {
-        setError(err instanceof Error ? err.message : 'Failed to load portfolio')
+        setError(formatErr(err))
       }
     } finally {
-      if (!signal.aborted) {
-        setIsLoading(false)
-      }
+      setIsLoading(false)
     }
   }
 
   const handleCurrencyChange = async (newCurrency: string) => {
-    setCurrency(newCurrency as FiatCurrency)
+    setSnapshot(prev => ({ ...prev, currency: newCurrency as FiatCurrency }))
   }
 
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency
@@ -131,7 +180,12 @@ export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
         <h2 className="text-xl font-semibold">Portfolio</h2>
         <div className="flex items-center gap-4">
           <Select options={CURRENCIES} value={currency} onChange={e => handleCurrencyChange(e.target.value)} />
-          <Button variant="secondary" size="small" onClick={loadPortfolio} isLoading={isLoading}>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => loadPortfolio({ invalidatePrices: true })}
+            isLoading={isLoading}
+          >
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -146,6 +200,10 @@ export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
       </div>
 
       {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
+
+      {warning && (
+        <div className="text-amber-900 text-sm bg-amber-50 p-3 rounded border border-amber-200">{warning}</div>
+      )}
 
       {isLoading && !portfolio ? (
         <div className="flex items-center justify-center py-16">
@@ -163,10 +221,20 @@ export default function VaultPortfolio({ vault }: VaultPortfolioProps) {
               />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Portfolio Data</h3>
-          <p className="text-gray-500 mb-4">Load your portfolio to see total value.</p>
-          <Button variant="primary" onClick={loadPortfolio}>
-            Load Portfolio
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            {error ? 'Portfolio unavailable' : 'No Portfolio Data'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {error
+              ? 'Use Refresh to try again after checking your connection or any blocking extensions.'
+              : 'Load your portfolio to see total value.'}
+          </p>
+          <Button
+            variant="primary"
+            onClick={() => loadPortfolio({ invalidatePrices: Boolean(error) })}
+            isLoading={isLoading}
+          >
+            {error ? 'Retry' : 'Load Portfolio'}
           </Button>
         </div>
       ) : (
